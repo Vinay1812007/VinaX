@@ -2487,12 +2487,42 @@ html.light .ai-create-kind { color: rgb(var(--ember-500)); }
 .ai-voice-chips { display: flex; flex-wrap: wrap; gap: 0.375rem; }
 .ai-root .ai-voice-chip,
 .ai-scope .ai-voice-chip { min-height: 2.75rem; padding-inline: 0.875rem; }
+/* 11.2 — a preview button beside every voice. */
+.ai-voice-pick { display: inline-flex; align-items: center; gap: 0.125rem; }
+.ai-voice-pick-row { display: flex; width: 100%; }
+.ai-voice-pick-row .ai-voice-row { flex: 1; min-width: 0; }
+.ai-voice-preview {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  color: var(--ai-text-2);
+  transition: background-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
+}
+.ai-voice-preview:hover { background: var(--ai-hover); color: var(--ai-text); }
+.ai-voice-preview.is-playing { background: var(--ai-pressed); color: var(--ai-text); }
+.ai-voice-preview.is-error { color: var(--ai-rose); }
+.ai-voice-spin {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 9999px;
+  animation: ai-voice-spin 0.8s linear infinite;
+}
+@keyframes ai-voice-spin { to { transform: rotate(360deg); } }
+.ai-voice-preview-note:empty { display: none; }
+.ai-voice-preview-note { margin-top: 0.375rem; }
 
 @media (prefers-reduced-motion: reduce) {
   .ai-create-bar,
   .ai-create-model,
   .ai-create-x,
   .ai-record-dot,
+  .ai-voice-preview,
+  .ai-voice-spin,
   .ai-voice-row {
     animation: none !important;
     transition: none !important;
@@ -2502,6 +2532,8 @@ html.reduce-motion .ai-create-bar,
 html.reduce-motion .ai-create-model,
 html.reduce-motion .ai-create-x,
 html.reduce-motion .ai-record-dot,
+html.reduce-motion .ai-voice-preview,
+html.reduce-motion .ai-voice-spin,
 html.reduce-motion .ai-voice-row {
   animation: none !important;
   transition: none !important;

@@ -72,3 +72,11 @@ export function parseVoiceCatalog(body: unknown): VoiceCatalog {
 
 /** "autumn" → "Autumn" — a voice's name as the picker shows it. */
 export const voiceLabel = (v: string): string => (v ? v.charAt(0).toUpperCase() + v.slice(1) : v);
+
+/** 11.2 — the chosen voice as the voice-chat overlay names it:
+ *  "Autumn · Groq", or "Device voice". */
+export function voicePickLabel(pick: { provider: string; voice: string } | null): string {
+  if (!pick) return 'Device voice';
+  const provider = isProviderId(pick.provider) ? PROVIDER_LABEL[pick.provider] : pick.provider;
+  return `${voiceLabel(pick.voice)} · ${provider}`;
+}

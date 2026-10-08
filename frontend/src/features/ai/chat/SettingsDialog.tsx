@@ -2,7 +2,6 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode 
 import { Sheet } from '@/components/Sheet';
 import { DownloadIcon, XIcon } from '@/components/Icons';
 import { ReplyPrefsBar } from '@/components/ai/AiExtras';
-import { readAloud, readAloudSupported } from '@/features/ai/readAloud';
 import { useCurrentSong } from '@/store/playerStore';
 import { cn } from '@/utils/cn';
 import { ChatStyleMark, ChatStyleSetting } from './ChatStyleScope';
@@ -14,8 +13,9 @@ import { formatBytes, storageUsedBytes } from './storage';
 import type { MediaPick, ModelChoice, Provider } from './types';
 import { MemorySection } from './MemorySection';
 import { recorderSupported } from './useServerDictation';
-import { voiceLabel, type VoiceCatalog } from './voices';
-import { DEVICE_VOICE, formatVoicePick, parseVoicePick } from '../voicePick';
+import { type VoiceCatalog } from './voices';
+import { onRadioKeys, VoicePicker } from './VoicePicker';
+import { DEVICE_VOICE, parseVoicePick } from '../voicePick';
 
 export { DEVICE_VOICE };
 export type { VoiceCatalog };
@@ -24,17 +24,6 @@ export type { VoiceCatalog };
  * 10.3 — a list of choices as one radio group: arrow keys move and choose,
  * like a native radio set; each option is a 44px row or chip.
  */
-function onRadioKeys(e: KeyboardEvent<HTMLElement>): void {
-  if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
-  const radios = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]')];
-  const at = radios.indexOf(document.activeElement as HTMLElement);
-  if (at < 0 || !radios.length) return;
-  e.preventDefault();
-  const fwd = e.key === 'ArrowDown' || e.key === 'ArrowRight';
-  const next = e.key === 'Home' ? 0 : e.key === 'End' ? radios.length - 1 : (at + (fwd ? 1 : -1) + radios.length) % radios.length;
-  radios[next].focus();
-  radios[next].click();
-}
 
 export type SettingsTab = 'general' | 'replies' | 'voice' | 'data' | 'shortcuts';
 const TABS: Array<{ id: SettingsTab; label: string }> = [
@@ -182,7 +171,6 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
   // 10.3 — the saved voice, in the provider|model|voice shape (an older
   // build's model|voice was migrated when the page read it).
   const picked = parseVoicePick(p.voicePick);
-  const pickedKey = picked ? formatVoicePick(picked) : DEVICE_VOICE;
   const voiceProviders = p.voiceCatalog?.providers ?? [];
   const pickListed =
     !picked || voiceProviders.some((vp) => vp.id === picked.provider && vp.models.some((m) => m.id === picked.model && m.voices.includes(picked.voice)));
@@ -366,65 +354,8 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
                 </p>
                 {/* 10.3 — this device's voice, then every voice of every speech
                     model, grouped by provider. Nothing is listed unless the
-                    server serves it. */}
-                <div role="radiogroup" aria-labelledby={`${uid}-voice`} className="ai-voice-list" onKeyDown={onRadioKeys}>
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={pickedKey === DEVICE_VOICE}
-                    tabIndex={pickedKey === DEVICE_VOICE || !pickListed || !voiceProviders.length ? 0 : -1}
-                    className="ai-voice-row"
-                    onClick={() => p.onVoicePick(DEVICE_VOICE)}
-                  >
-                    <span className="ai-voice-radio" aria-hidden />
-                    <span className="min-w-0">
-                      <span className="block text-[14px] font-semibold ai-t1">Device voice</span>
-                      <span className="block text-[12px] ai-t3">Default · works offline</span>
-                    </span>
-                  </button>
-                  {voiceProviders.map((vp) => (
-                    <div key={vp.id} role="group" aria-labelledby={`${uid}-vp-${vp.id}`} className="ai-voice-provider">
-                      <p className="ai-voice-heading">
-                        <ProviderLogo provider={vp.id} size={16} />
-                        <span id={`${uid}-vp-${vp.id}`}>{vp.label}</span>
-                      </p>
-                      {vp.models.map((m) => (
-                        <div key={m.id} role="group" aria-label={`${m.name} voices`} className="ai-voice-model">
-                          <p className="ai-voice-model-name">{m.name}</p>
-                          <div className="ai-voice-chips">
-                            {m.voices.map((v) => {
-                              const key = formatVoicePick({ provider: vp.id, model: m.id, voice: v });
-                              return (
-                                <button
-                                  key={v}
-                                  type="button"
-                                  role="radio"
-                                  aria-checked={pickedKey === key}
-                                  aria-label={`${voiceLabel(v)} · ${m.name} · ${vp.label}`}
-                                  tabIndex={pickedKey === key ? 0 : -1}
-                                  className={cn('ai-chip ai-voice-chip', pickedKey === key && 'ai-chip-solid')}
-                                  onClick={() => p.onVoicePick(key)}
-                                >
-                                  {voiceLabel(v)}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-                <div className="flex items-center gap-2 mt-2">
-                  <button
-                    type="button"
-                    disabled={!readAloudSupported()}
-                    onClick={() => readAloud('ai-voice-preview', 'Hi, this is how I sound when I read a reply aloud.')}
-                    className="ai-btn shrink-0"
-                  >
-                    Preview
-                  </button>
-                </div>
+                    server serves it. 11.2 — every voice has its own preview. */}
+                <VoicePicker catalog={p.voiceCatalog} value={p.voicePick} onChange={p.onVoicePick} labelledBy={`${uid}-voice`} />
                 <p className="mt-1.5 text-[13px] ai-t3 leading-snug">{voiceNote}</p>
               </div>
               <Switch
