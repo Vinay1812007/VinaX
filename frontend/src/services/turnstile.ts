@@ -1,12 +1,13 @@
 /**
  * 11.1.0 — human check (Turnstile) for the few writes a script could abuse.
  *
- * The widget runs in "interaction-only" mode: almost every listener sees
- * nothing at all and gets a token in the background; only when the check
- * needs a tap does a small box appear in the slot it was given (the slot
- * carries data-check="interactive" while it shows).
+ * 11.1.1 — on a form (onboarding) the widget is always on screen: a small
+ * box under the field that ticks itself for almost every listener and asks
+ * for a tap only when the check needs one. With no form on screen it runs
+ * "interaction-only": nothing shows unless a tap is needed. Either way the
+ * slot carries data-check="interactive" while it waits for that tap.
  *
- *   mountHumanCheck(host, action) → { token(), remove() }
+ *   mountHumanCheck(host, action, { visible }) → { token(), remove() }
  *       renders into `host` straight away, so a token is usually ready by the
  *       time the listener presses Continue. token() hands over the current
  *       token (one use each) and starts minting the next one.
@@ -101,7 +102,12 @@ export interface HumanCheck {
 
 const OFF: HumanCheck = { token: () => Promise.resolve(null), remove: () => undefined };
 
-export function mountHumanCheck(host: HTMLElement, action: string): HumanCheck {
+export interface HumanCheckOptions {
+  /** Keep the box on screen (it ticks itself); otherwise it shows only to ask for a tap. */
+  visible?: boolean;
+}
+
+export function mountHumanCheck(host: HTMLElement, action: string, opts: HumanCheckOptions = {}): HumanCheck {
   const key = siteKey();
   if (!key) return OFF;
   let api: TurnstileApi | null = null;
@@ -113,7 +119,8 @@ export function mountHumanCheck(host: HTMLElement, action: string): HumanCheck {
   const flush = (t: string | null): void => {
     for (const w of [...waiters]) w(t);
   };
-  // The host is styled by this: it only takes room while the box is showing.
+  if (opts.visible) host.dataset.visible = 'true';
+  // The host is styled by this: a hidden widget takes room only while it asks for a tap.
   const setInteractive = (on: boolean): void => {
     interactive = on;
     if (on) host.dataset.check = 'interactive';
@@ -128,7 +135,7 @@ export function mountHumanCheck(host: HTMLElement, action: string): HumanCheck {
         ts.render(host, {
           sitekey: key,
           action,
-          appearance: 'interaction-only',
+          appearance: opts.visible ? 'always' : 'interaction-only',
           size: 'flexible',
           theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
           'refresh-expired': 'auto',
@@ -200,6 +207,8 @@ export function mountHumanCheck(host: HTMLElement, action: string): HumanCheck {
       flush(null);
       if (api && id) api.remove(id);
       id = null;
+      delete host.dataset.visible;
+      delete host.dataset.check;
     },
   };
 }

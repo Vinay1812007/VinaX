@@ -147,7 +147,7 @@ Four keys, one per provider; every free model and tool that provider offers runs
 
 ### Human check on usernames
 
-Since 11.1.0 the onboarding username claim (`POST /api/username`) carries a Turnstile token. The widget runs in interaction-only mode, so most listeners see nothing; if the check needs a tap, a small box appears under the username field. A parked claim retried later gets a temporary floating box instead.
+Since 11.1.0 the onboarding username claim (`POST /api/username`) carries a Turnstile token. Since 11.1.1 the widget is always on screen under the username field (`appearance: always`): it ticks itself for most listeners and asks for a tap only when the check needs one. A parked claim retried later, with no form on screen, gets a temporary floating box that shows only if a tap is needed (`interaction-only`).
 
 | Piece | Where |
 | --- | --- |

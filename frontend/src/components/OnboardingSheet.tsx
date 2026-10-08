@@ -271,14 +271,14 @@ export function OnboardingSheet() {
   useFocusTrap(dialogRef, open, () => escapeRef.current());
 
   // 11.1.0 — the human check for the username claim. Mounted as soon as the
-  // first step shows, so the token is normally ready before Continue; the
-  // slot stays empty unless the check needs a tap.
+  // first step shows, so the token is normally ready before Continue.
+  // 11.1.1 — always on screen: the box ticks itself for almost everyone.
   const humanSlotRef = useRef<HTMLDivElement>(null);
   const humanCheckRef = useRef<HumanCheck | null>(null);
   useEffect(() => {
     const slot = humanSlotRef.current;
     if (!open || stage !== 'you' || !slot) return;
-    const check = mountHumanCheck(slot, 'username');
+    const check = mountHumanCheck(slot, 'username', { visible: true });
     humanCheckRef.current = check;
     return () => {
       check.remove();

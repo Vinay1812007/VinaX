@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/services/native', () => ({ isNativePlatform: () => false }));
 
-type Opts = Record<string, (...a: unknown[]) => unknown> & { sitekey?: string; action?: string };
+type Opts = Record<string, (...a: unknown[]) => unknown> & { sitekey?: string; action?: string; appearance?: string };
 let opts: Opts;
 const api = { render: vi.fn(), reset: vi.fn(), remove: vi.fn() };
 
@@ -73,6 +73,22 @@ describe('turnstile wrapper', () => {
     expect(host.dataset.check).toBeUndefined();
     check.remove();
     expect(api.remove).toHaveBeenCalledWith('w1');
+  });
+
+  it('visible: always on screen and marked for layout; default: shows only to ask for a tap', async () => {
+    const { mountHumanCheck } = await load('');
+    const shown = document.createElement('div');
+    const check = mountHumanCheck(shown, 'username', { visible: true });
+    await tick();
+    expect(opts.appearance).toBe('always');
+    expect(shown.dataset.visible).toBe('true');
+    check.remove();
+    expect(shown.dataset.visible).toBeUndefined();
+    const hidden = document.createElement('div');
+    mountHumanCheck(hidden, 'username');
+    await tick();
+    expect(opts.appearance).toBe('interaction-only');
+    expect(hidden.dataset.visible).toBeUndefined();
   });
 
   it('a widget error or removal releases anyone waiting with null', async () => {
