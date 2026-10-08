@@ -28,7 +28,7 @@ const SSE_REPLY =
   'data: {"delta":">>> Show an example | Make it shorter | Why?"}\n\n' +
   'data: {"done":true}\n\n';
 
-/** The live list as GET /api/aimodels returns it (10.3): four providers, in order. */
+/** The live list as GET /api/aimodels returns it (10.3; 11.2 — five providers), in order. */
 const CATALOG = {
   fetchedAt: '2026-10-06T00:00:00.000Z',
   providers: [
@@ -44,6 +44,7 @@ const CATALOG = {
     { id: 'openrouter', label: 'OpenRouter', configured: true, models: [{ id: 'maker/big:free', name: 'Big Model', maker: 'Maker Two', context: 1000000, vision: false }] },
     { id: 'groq', label: 'Groq', configured: true, models: [{ id: 'small-8b', name: 'Small 8B', maker: null, context: 8192, vision: false }] },
     { id: 'gemini', label: 'Gemini', configured: false, models: [] },
+    { id: 'cloudflare', label: 'Cloudflare', configured: false, models: [] },
   ],
 };
 
@@ -234,10 +235,10 @@ test('one model menu lists the live catalogue; a pick goes on the wire; connecto
   const list = page.locator('[role="listbox"][aria-label="Choose model"]');
   await expect(list).toBeVisible();
   // This harness reads RENDERED text, so match headings case-insensitively.
-  for (const heading of [/nvidia/i, /openrouter/i, /groq/i, /gemini/i]) {
+  for (const heading of [/nvidia/i, /openrouter/i, /groq/i, /gemini/i, /cloudflare/i]) {
     await expect(list).toContainText(heading);
   }
-  await expect(list.locator('.ai-model-heading svg[data-provider]')).toHaveCount(4);
+  await expect(list.locator('.ai-model-heading svg[data-provider]')).toHaveCount(5);
   await expect(list).toContainText(/not available right now/i);
   const alpha = list.locator('[role="option"]').filter({ hasText: 'Alpha 70B' });
   await expect(alpha).toContainText(/128k context/i);

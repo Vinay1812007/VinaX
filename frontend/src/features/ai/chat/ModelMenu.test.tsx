@@ -43,18 +43,18 @@ const mount = (over: Partial<Parameters<typeof ModelMenu>[0]> = {}) => {
 };
 
 describe('ModelMenu', () => {
-  it('renders Auto, then four provider sections — logo, name and count — with every model under its original name', () => {
+  it('renders Auto, then five provider sections — logo, name and count — with every model under its original name', () => {
     mount();
     const list = screen.getByRole('listbox', { name: 'Choose model' });
     const groups = within(list).getAllByRole('group');
-    expect(groups).toHaveLength(5);
+    expect(groups).toHaveLength(6);
     expect(groups[0].getAttribute('aria-label')).toBe('Auto');
     const names = groups.slice(1).map((g) => document.getElementById(g.getAttribute('aria-labelledby') ?? '')?.textContent);
-    expect(names).toEqual(['NVIDIA', 'OpenRouter', 'Groq', 'Gemini']);
-    expect(groups.slice(1).map((g) => g.querySelector('.ai-model-count')?.textContent ?? null)).toEqual(['2', '1', '1', null]);
+    expect(names).toEqual(['NVIDIA', 'OpenRouter', 'Groq', 'Gemini', 'Cloudflare']);
+    expect(groups.slice(1).map((g) => g.querySelector('.ai-model-count')?.textContent ?? null)).toEqual(['2', '1', '1', null, null]);
     // Each provider heading carries that provider's logo (decorative: the name is beside it).
     const logos = groups.slice(1).map((g) => g.querySelector('.ai-model-heading svg'));
-    expect(logos.map((l) => l?.getAttribute('data-provider'))).toEqual(['nvidia', 'openrouter', 'groq', 'gemini']);
+    expect(logos.map((l) => l?.getAttribute('data-provider'))).toEqual(['nvidia', 'openrouter', 'groq', 'gemini', 'cloudflare']);
     expect(logos.every((l) => l?.getAttribute('aria-hidden') === 'true')).toBe(true);
 
     const options = within(list).getAllByRole('option');
@@ -121,7 +121,7 @@ describe('ModelMenu', () => {
     const { onPick } = mount({ state: 'failed', providers: [], onRetry, current: { mode: 'model', provider: 'groq', model: 'small-8b' } });
     fireEvent.click(screen.getByText('Auto'));
     expect(onPick).toHaveBeenCalledWith({ mode: 'auto' });
-    expect(screen.getAllByRole('button', { name: /tap to retry/i })).toHaveLength(4);
+    expect(screen.getAllByRole('button', { name: /tap to retry/i })).toHaveLength(5);
     fireEvent.click(screen.getAllByRole('button', { name: /tap to retry/i })[0]);
     expect(onRetry).toHaveBeenCalled();
   });

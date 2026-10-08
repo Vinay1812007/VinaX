@@ -139,9 +139,11 @@ describe('health — the four keys and every lane', () => {
       ['openrouter', 'OPENROUTER_API_KEY', null, false, false],
       ['groq', 'GROQ_API_KEY', 'VINAX_GROQ_API_KEY', true, true],
       ['gemini', 'GEMINI_API_KEY', null, false, false],
+      // 11.2 — Workers AI names its binding, not a secret.
+      ['cloudflare', 'AI', null, false, false],
     ]);
     expect(body.ai[0].lanes).toEqual(['dj', 'chat', 'deep', 'fast', 'home', 'search', 'pro', 'mini', 'vision', 'vision90']);
-    expect(body.lanes.map((l) => l.lane)).toEqual(['dj', 'chat', 'deep', 'fast', 'scholar', 'home', 'search', 'pro', 'mini', 'router', 'maestro', 'vision', 'vision90']);
+    expect(body.lanes.map((l) => l.lane)).toEqual(['dj', 'chat', 'deep', 'fast', 'scholar', 'home', 'search', 'pro', 'mini', 'router', 'maestro', 'vision', 'vision90', 'workers']);
     expect(body.lanes.find((l) => l.lane === 'router')).toMatchObject({ provider: 'openrouter', keySet: false, calls: 0 });
     expect(body.lanes.find((l) => l.lane === 'scholar')).toMatchObject({ provider: 'groq', keySet: true });
     // Four keys → at most two live pings here (two are unset).

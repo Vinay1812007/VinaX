@@ -2,7 +2,7 @@ import { useId, type ReactNode } from 'react';
 import type { ProviderId } from './types';
 
 /**
- * 10.3 — the four provider marks, drawn inline (no remote images: the CSP
+ * 10.3 — the provider marks (11.2: five, with Cloudflare's cloud), drawn inline (no remote images: the CSP
  * allows none, and the menu must not wait on the network). Simplified,
  * single-colour-capable versions of each provider's mark.
  *
@@ -19,6 +19,7 @@ const BRAND: Record<ProviderId, { tile: string; ink: string }> = {
   openrouter: { tile: '#6467F2', ink: '#FFFFFF' },
   groq: { tile: '#F55036', ink: '#FFFFFF' },
   gemini: { tile: '#3C7BEB', ink: '#FFFFFF' },
+  cloudflare: { tile: '#F38020', ink: '#FFFFFF' },
 };
 
 /** Each mark on a 24 grid, in the colour it is given. */
@@ -52,6 +53,9 @@ function Mark({ id, color }: { id: ProviderId; color: string }): ReactNode {
     case 'gemini':
       // The four-point spark.
       return <path fill={color} d="M12 2.5c.6 5 4.4 8.9 9.5 9.5-5.1.6-8.9 4.5-9.5 9.5-.6-5-4.4-8.9-9.5-9.5 5.1-.6 8.9-4.5 9.5-9.5Z" />;
+    case 'cloudflare':
+      // 11.2 — a plain cloud.
+      return <path fill={color} d="M7 18.5h10.6a4.2 4.2 0 0 0 .5-8.37A5.6 5.6 0 0 0 7.4 9.2 4.66 4.66 0 0 0 7 18.5Z" />;
   }
 }
 

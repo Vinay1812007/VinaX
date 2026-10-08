@@ -22,7 +22,7 @@
  * the live free lists in ./catalog.ts first. No call here ever carries a web
  * tool, and no key or provider host ever reaches a response or a log line.
  */
-import { AI_PROVIDERS, LANE_BASE, providerKey, type AiEnv, type AiProvider } from './ai';
+import { KEY_PROVIDERS, LANE_BASE, providerKey, type AiEnv, type AiProvider } from './ai';
 import { NVIDIA_IMAGE_MODELS, findMediaModel, mediaChoices, normaliseProvider, type MediaKind, type MediaModel } from './catalog';
 import { geminiGenerate } from './maestro';
 
@@ -80,7 +80,7 @@ export type MediaPick =
  * free model of the kind right now.
  */
 export async function pickMedia(env: AiEnv, kind: MediaKind, providerRaw: unknown, modelRaw: unknown): Promise<MediaPick> {
-  const anyKey = AI_PROVIDERS.some((p) => providerKey(env, p) !== null);
+  const anyKey = KEY_PROVIDERS.some((p) => providerKey(env, p) !== null);
   if (!anyKey) return { ok: false, status: 503, error: 'not_configured', reason: 'no_key' };
   const wantProvider = providerRaw === undefined || providerRaw === null || providerRaw === '' ? null : normaliseProvider(providerRaw);
   if (wantProvider === null && providerRaw !== undefined && providerRaw !== null && providerRaw !== '') return { ok: false, status: 400, error: 'unknown_model' };
@@ -216,7 +216,7 @@ export async function generateImage(env: AiEnv, provider: AiProvider, model: str
 // ---------------------------------------------------------------------------
 
 /** Per-provider input caps: Groq's is upstream (200, probed live); the others keep one call short. */
-export const SPEECH_INPUT_MAX: Record<AiProvider, number> = { groq: 200, gemini: 1000, openrouter: 1000, nvidia: 0 };
+export const SPEECH_INPUT_MAX: Record<AiProvider, number> = { groq: 200, gemini: 1000, openrouter: 1000, nvidia: 0, cloudflare: 0 };
 export const SPEECH_LEASH_MS = 6_000;
 const SPEECH_LONG_LEASH_MS = 25_000;
 

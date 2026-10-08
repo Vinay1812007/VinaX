@@ -104,7 +104,8 @@ const match = (text: string): MakerFamily | null => {
 /** The maker family of a model: the slug's maker prefix first, then the
  *  catalogue's maker string, then the rest of the slug, then the provider. */
 export function makerFamily(slug: string, maker: string | null | undefined, provider: ProviderId | null | undefined): MakerFamily {
-  const id = (slug || '').toLowerCase();
+  // 11.2 — Workers AI slugs carry a host prefix ("@cf/meta/…"): not a maker.
+  const id = (slug || '').toLowerCase().replace(/^@(?:cf|hf)\//, '');
   const slash = id.indexOf('/');
   const prefix = slash > 0 ? id.slice(0, slash) : '';
   const name = slash > 0 ? id.slice(slash + 1) : id;

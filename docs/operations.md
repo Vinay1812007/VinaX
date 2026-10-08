@@ -38,7 +38,7 @@ Every commit shows a check named "Workers Builds: vinax-api". It comes from the 
 **Probe.**
 
 1. `POST https://www.sirimillavinay.online/api/curate` and `POST …/api/dj` with an empty JSON body. A `404`, a `405` or the app's HTML shell means the deployed Worker does not have the route: it is stale. Any JSON answer, including an error, means the route exists.
-2. `GET …/api/aimodels`. It always lists the four providers with `configured: true|false`; an HTML answer means the same thing as step 1.
+2. `GET …/api/aimodels`. It always lists the five providers with `configured: true|false`; an HTML answer means the same thing as step 1.
 3. Do **not** use `GET /api/version` for this. It reports the newest published Android release (`build`, `version`, `apkUrl`, `sha256`, `minBuild`), not the Worker build.
 4. Compare the Worker's version history in the hosting dashboard with the last backend commit on `main`.
 
@@ -142,7 +142,11 @@ Four keys, one per provider; every free model and tool that provider offers runs
 | Gemini | `GEMINI_API_KEY` | aistudio.google.com → API keys | `VINAX_GGL_GEMINI_API_KEY` |
 | Groq | `GROQ_API_KEY` | console.groq.com → Keys | `VINAX_GROQ_API_KEY` |
 
-- `GET /api/aimodels` shows which providers are configured (`configured: true|false` for each of the four). The console's env checklist shows which name each provider is using.
+- `GET /api/aimodels` shows which providers are configured (`configured: true|false` for each of the five).
+
+### Cloudflare Workers AI (11.2)
+
+The fifth provider needs no key and no secret: it runs on the Worker's AI binding, `[ai] binding = "AI"` in `backend/worker/wrangler.toml`, and is configured whenever that binding is deployed. The free allowance is 10,000 neurons a day for the whole account, reset at 00:00 UTC; every Workers AI model draws on the same pool. Its models appear only as explicit picks in the model menu (never Auto, never a fallback). When the pool is spent the provider answers 429 until the reset and the picked model says so; nothing else is affected. To take it out of the menu, remove the `[ai]` table and deploy. Usage is visible in the Cloudflare dashboard under Workers AI. The console's env checklist shows which name each provider is using.
 - Once a provider is on its current name, its older name can be deleted with `npx wrangler secret delete <NAME> --config worker/wrangler.toml`. Nothing reads any other secret beginning `VINAX_` except `VINAX_MAESTRO_MODEL`; per-model keys left from before 10.3 can be deleted the same way.
 
 ### Human check on usernames
@@ -254,7 +258,7 @@ Artwork is served straight from the catalogue's CDN in pre-sized variants. `/img
 Nothing new to configure: 11.0 adds no secret, no binding, no schedule and no database migration.
 
 1. Confirm **Deploy Worker** is green for the release commit and that its log shows a deploy, then run the probe in "The app is newer than the API".
-2. `GET /api/aimodels` lists the four providers; each one whose key is set shows `configured: true`.
+2. `GET /api/aimodels` lists the five providers (four since 10.3, Cloudflare since 11.2); each one whose key is set shows `configured: true`.
 3. Send one message in VinaX AI on Auto, and one with a model picked from a second provider.
 4. Expect different numbers on dashboards: when every engine is rate-limited, `/api/vinaxai` now answers `429` with a `retry-after` of 5 to 60 seconds, where it used to answer `500`. `/api/assistant`, `/api/dj`, `/api/playlist` and `/api/lyrics-tools` also answer `429` for an upstream rate limit. Other upstream failures are still `500`. An alert keyed on `500`s will fire less; add `429` to anything that tracks AI availability.
 5. Open the status page and the console's Overview once.

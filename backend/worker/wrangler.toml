@@ -175,6 +175,14 @@ name = "ADMIN_AUTH_FAILS"
 namespace_id = "7205"
 simple = { limit = 15, period = 60 }
 
+# 11.2 — Cloudflare Workers AI, VinaX AI's fifth free provider. No key: the
+# binding IS the credential (functions/_lib/workersai.ts). The free allowance
+# is 10,000 neurons a day for the whole account, reset at 00:00 UTC, so the
+# models are offered only as explicit picks in the model menu — never on the
+# Auto ladder. Remove this table to take the provider out of the menu.
+[ai]
+binding = "AI"
+
 [observability]
 enabled = false
 

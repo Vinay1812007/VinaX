@@ -13,9 +13,10 @@
  *  benched in the AI Lab ({ provider, model, kind }). */
 import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { rateLimitAsync } from '../../_lib/ratelimit';
-import { LANE_PROVIDER, LANE_SECONDARY, PROVIDER_ENV, PROVIDER_LANE, isMaestroEndpoint, laneEndpoint, laneModel, providerKey, type AiEnv, type AiProvider, type Lane } from '../../_lib/ai';
+import { LANE_PROVIDER, LANE_SECONDARY, providerEnvName, PROVIDER_LANE, isMaestroEndpoint, laneEndpoint, laneModel, providerKey, type AiEnv, type AiProvider, type Lane } from '../../_lib/ai';
 import { catalogDefaultModel, fetchMedia, fetchTools, findCatalogModel, normaliseProvider } from '../../_lib/catalog';
 import { maestroFetch, maestroLearnedMode } from '../../_lib/maestro';
+import { isWorkersAiEndpoint, workersAiBinding, workersAiFetch } from '../../_lib/workersai';
 
 type Env = AdminEnv & AiEnv;
 
@@ -25,6 +26,9 @@ const BY_KEY: Record<string, AiProvider> = {
   OPENROUTER: 'openrouter',
   GROQ: 'groq',
   GEMINI: 'gemini',
+  // 11.2 — Workers AI (the AI binding; no key).
+  CLOUDFLARE: 'cloudflare',
+  AI: 'cloudflare',
   // Pre-10.3 names of the keys that survived the change.
   GROQ_API_KEY: 'groq',
   OPENROUTER_API_KEY: 'openrouter',
@@ -58,7 +62,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   if (!provider) return json({ error: 'unknown key', keys: Object.keys(BY_KEY) }, 400);
   const suffix = name.toUpperCase();
   const key = providerKey(env, provider);
-  if (!key) return json({ key: suffix, provider, error: 'env not set', env: PROVIDER_ENV[provider] }, 503);
+  if (!key) return json({ key: suffix, provider, error: 'env not set', env: providerEnvName(provider) }, 503);
   const lane = PROVIDER_LANE[provider];
   const wanted = url.searchParams.get('model');
   let model: string;
@@ -81,7 +85,9 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     const probe = { model, messages: [{ role: 'user', content: 'Reply with exactly: OK' }], max_tokens: 8, temperature: 0 };
     const up = isMaestroEndpoint(base)
       ? await maestroFetch(key, model, probe, c.signal, false)
-      : await fetch(base, {
+      : isWorkersAiEndpoint(base)
+        ? await workersAiFetch(workersAiBinding(env), probe, c.signal)
+        : await fetch(base, {
           method: 'POST',
           headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
           body: JSON.stringify(probe),

@@ -66,7 +66,7 @@ const MOCK: Record<string, unknown> = {
   '/api/status': { generatedAt: iso(0), windowDays: 90, overall: 'operational', components: [{ id: 'website', name: 'Website', status: 'up', latencyMs: 120, checkedAt: iso(0.2), uptime90: 99.98, days: Array.from({ length: 30 }, (_, i) => ({ day: iso(24 * i).slice(0, 10), up: i === 5 ? 40 : 48, total: 48 })) }, { id: 'api', name: 'API', status: 'down', latencyMs: null, checkedAt: iso(2), uptime90: 98.1, days: [] }] },
   '/api/trending-searches': { queries: ['Kesariya', 'Naatu Naatu', 'Srivalli'] },
   '/api/site-mode': { mode: 'live' },
-  // 10.3 — the four providers, one key each (API Monitoring reads this list),
+  // 10.3 — the providers, one key each (11.2 — plus Cloudflare, no key) (API Monitoring reads this list),
   // with their media models, tools and the Worker's feature switches.
   '/api/aimodels': {
     fetchedAt: iso(0.1),
@@ -88,6 +88,7 @@ const MOCK: Record<string, unknown> = {
       { id: 'openrouter', label: 'OpenRouter', configured: true, models: [{ id: 'maker/big:free', name: 'Big Model', maker: null, context: null, vision: true }] },
       { id: 'groq', label: 'Groq', configured: true, models: [], media: [{ id: 'tune-1', name: 'Tune One', maker: 'Lab Two', kind: 'music' }], tools: [] },
       { id: 'gemini', label: 'Gemini', configured: false, models: [] },
+      { id: 'cloudflare', label: 'Cloudflare', configured: false, models: [] },
     ],
   },
 };

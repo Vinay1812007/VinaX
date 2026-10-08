@@ -80,6 +80,7 @@ import { houseRules, readConfig } from '../_lib/clientConfig';
 import { placeContextLines, requestPlace } from '../_lib/place';
 import { type SupabaseEnv } from '../_lib/supabase';
 import { codeBlock, maestroFetch, maestroModelFor, outputBlock } from '../_lib/maestro';
+import { isWorkersAiEndpoint, workersAiBinding, workersAiFetch } from '../_lib/workersai';
 
 // Image understanding rides the vision lanes (the 11B default, the 90B deep
 // pair), both on the NVIDIA key since 10.3.
@@ -849,6 +850,11 @@ async function handleChat(
         delete p.stream_options;
         return await maestroFetch(a.key, a.model, p, controller.signal, !a.exact);
       }
+      if (isWorkersAiEndpoint(a.endpoint)) {
+        // 11.2 — Workers AI runs on the Worker's binding, re-framed as
+        // chat-completions SSE (_lib/workersai.ts). Never a fetch: there is no key.
+        return await workersAiFetch(workersAiBinding(env), payloadFor(a.model, a.endpoint, messages, false, false), controller.signal);
+      }
       return await fetch(a.endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${a.key}` },
@@ -905,7 +911,7 @@ async function handleChat(
       // rest of this request and re-ask the SAME pair once, so token accounting
       // can never cost a listener their answer. A degraded key 400s again and
       // the ladder walks on as before.
-      if (res?.status === 400 && !usageDropped.has(a) && !isGroqEndpoint(a.endpoint) && !isMaestroEndpoint(a.endpoint)) {
+      if (res?.status === 400 && !usageDropped.has(a) && !isGroqEndpoint(a.endpoint) && !isMaestroEndpoint(a.endpoint) && !isWorkersAiEndpoint(a.endpoint)) {
         void res.body?.cancel().catch(() => undefined);
         usageDropped.add(a);
         try {

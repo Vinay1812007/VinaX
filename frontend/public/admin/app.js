@@ -1670,17 +1670,20 @@
     { id: 'nvidia', label: 'NVIDIA' },
     { id: 'openrouter', label: 'OpenRouter' },
     { id: 'groq', label: 'Groq' },
-    { id: 'gemini', label: 'Gemini' }
+    { id: 'gemini', label: 'Gemini' },
+    // 11.2 — Workers AI through the Worker's AI binding (no key).
+    { id: 'cloudflare', label: 'Cloudflare' }
   ];
   // The same four marks as the app's model menu (src/features/ai/chat/ProviderLogo.tsx):
   // inline SVG (the console's CSP allows no remote images), the mark on a
   // tile of the provider's colour so it reads on the light and dark themes.
-  var PROVIDER_TILE = { nvidia: ['#76B900', '#0B0F02'], openrouter: ['#6467F2', '#FFFFFF'], groq: ['#F55036', '#FFFFFF'], gemini: ['#3C7BEB', '#FFFFFF'] };
+  var PROVIDER_TILE = { nvidia: ['#76B900', '#0B0F02'], openrouter: ['#6467F2', '#FFFFFF'], groq: ['#F55036', '#FFFFFF'], gemini: ['#3C7BEB', '#FFFFFF'], cloudflare: ['#F38020', '#FFFFFF'] };
   function providerMark(id, c) {
     if (id === 'nvidia') return '<g fill="none" stroke="' + c + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12c2.6-4.3 6-6.5 9.5-6.5s6.9 2.2 9.5 6.5c-2.6 4.3-6 6.5-9.5 6.5S5.1 16.3 2.5 12Z"/><path d="M15.2 12a3.2 3.2 0 1 1-3.2-3.2c1.2 0 2.1.5 2.7 1.3"/></g>';
     if (id === 'openrouter') return '<g fill="none" stroke="' + c + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3.5c3.2 0 3.8-5 7-5H19"/><path d="M6.5 12c3.2 0 3.8 5 7 5H19"/><path d="M16.5 4.5 19 7l-2.5 2.5M16.5 14.5 19 17l-2.5 2.5"/></g>';
     if (id === 'groq') return '<g fill="none" stroke="' + c + '" stroke-width="2.3" stroke-linecap="round"><circle cx="11.5" cy="10.5" r="5"/><path d="M16.5 10.5v4.2a4.8 4.8 0 0 1-4.8 4.8H9.5"/></g>';
     if (id === 'gemini') return '<path fill="' + c + '" d="M12 2.5c.6 5 4.4 8.9 9.5 9.5-5.1.6-8.9 4.5-9.5 9.5-.6-5-4.4-8.9-9.5-9.5 5.1-.6 8.9-4.5 9.5-9.5Z"/>';
+    if (id === 'cloudflare') return '<path fill="' + c + '" d="M7 18.5h10.6a4.2 4.2 0 0 0 .5-8.37A5.6 5.6 0 0 0 7.4 9.2 4.66 4.66 0 0 0 7 18.5Z"/>';
     return '';
   }
   /** Decorative logo (always beside the provider's name). '' for an unknown id. */

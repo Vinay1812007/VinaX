@@ -34,6 +34,7 @@
  * cached 15 minutes, empty when the key is missing, nothing invented, and
  * nothing that fetches the web.
  */
+import { workersAiBinding, workersAiCatalog } from './workersai';
 import { AI_PROVIDERS, LANE_BASE, PROVIDER_LANE, laneCoolingDown, notFreeCooling, providerCoolingDown, providerKey, type AiEnv, type AiProvider } from './ai';
 
 export type CatalogProvider = AiProvider;
@@ -87,6 +88,7 @@ export const WEB_BROWSING_SLUGS: Record<CatalogProvider, readonly string[]> = {
   openrouter: [],
   groq: ['compound', 'compound-mini'],
   gemini: [],
+  cloudflare: [],
 };
 
 /** 10.3 — web-browsing systems by SHAPE, on every provider: OpenRouter's
@@ -145,6 +147,9 @@ const PREFERRED: Record<CatalogProvider, string[]> = {
   openrouter: ['nemotron-3-super', 'nemotron-3-ultra', 'gemma-4-31b', 'nemotron-3.5-lightning', 'nemotron-3-nano-omni', 'gemma-4'],
   groq: ['gpt-oss-20b', 'gpt-oss-120b', 'qwen3.8', 'qwen3.6'],
   gemini: ['gemini-3.8-flash', 'flash'],
+  // 11.2 — never an automatic pick in the assistant (Workers AI is explicit
+  // picks only); this orders only the owner console's default.
+  cloudflare: ['llama-3.3-70b', 'llama-3.1-8b'],
 };
 
 // ---------------------------------------------------------------------------
@@ -354,6 +359,7 @@ export function parseGeminiCatalog(body: unknown): CatalogModel[] {
 
 /** Any provider's model-list body into the chat models VinaX may offer. */
 export function parseCatalog(provider: CatalogProvider, body: unknown): CatalogModel[] {
+  if (provider === 'cloudflare') return []; // 11.2 — curated, never parsed from a list body
   if (provider === 'nvidia') return parseNvidiaCatalog(body);
   if (provider === 'openrouter') return parseOpenRouterCatalog(body);
   if (provider === 'groq') return parseGroqCatalog(body);
@@ -410,6 +416,15 @@ async function providerLists(env: AiEnv, provider: CatalogProvider): Promise<{ m
   if (!key) return null;
   const hit = cache.get(provider);
   if (hit && Date.now() - hit.at < TTL_MS) return hit;
+  if (provider === 'cloudflare') {
+    // 11.2 — the curated Workers AI list (./workersai.ts), checked against the
+    // binding's own listing when it has one. Chat only: no media.
+    const models = (await workersAiCatalog(workersAiBinding(env))).map((m) => ({ id: m.id, name: m.name, maker: m.maker, context: null, vision: false }));
+    if (!models.length) return hit ?? null;
+    const entry = { at: Date.now(), models, media: [] as MediaModel[] };
+    cache.set(provider, entry);
+    return entry;
+  }
   for (const req of listRequests(env, provider, key)) {
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), 8000);
@@ -451,8 +466,10 @@ export async function fullCatalog(env: AiEnv): Promise<Record<CatalogProvider, C
   return Object.fromEntries(AI_PROVIDERS.map((p, i) => [p, lists[i]])) as Record<CatalogProvider, CatalogModel[]>;
 }
 
-/** A slug that could be a model id at all (anything else is never looked up). */
-const SLUG = /^[\w./:-]{1,128}$/;
+/** A slug that could be a model id at all (anything else is never looked up).
+ *  11.2 — an `@` is allowed as the FIRST character only (Workers AI slugs:
+ *  "@cf/meta/…", "@hf/…"); and the slug must still be on a live list. */
+const SLUG = /^@?[\w./:-]{1,128}$/;
 
 /** 10.3 — the catalogue entry for a caller-supplied model, or null. It must be
  *  a model the provider actually lists right now: a slug that is not in the
@@ -727,6 +744,7 @@ const byMediaName = (a: MediaModel, b: MediaModel): number => a.kind.localeCompa
 
 /** Any provider's model-list body into its free media models. */
 export function parseMedia(provider: CatalogProvider, body: unknown): MediaModel[] {
+  if (provider === 'cloudflare') return []; // 11.2 — chat only
   if (provider === 'nvidia') return parseNvidiaMedia(body);
   if (provider === 'openrouter') return parseOpenRouterMedia(body);
   if (provider === 'groq') return parseGroqMedia(body);
