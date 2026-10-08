@@ -22,8 +22,34 @@ export const MEDIA_PICK_KEY: Record<CreateKind | 'transcription', string> = {
   music: 'vinax.aiMusicModel',
   transcription: 'vinax.aiDictation',
 };
-/** The dictation setting's "this device" value (also what an unset key means). */
+/** The dictation setting's "this device" value. 11.3.1 — an unset key no
+ *  longer means this device: it means Auto (the server's first available
+ *  speech-to-text model), because the browser's recognizer can take the mic
+ *  and never return a word. "This device" is stored explicitly. */
 export const DEVICE_DICTATION = 'device';
+
+/** 11.3.1 — what the mic (and live voice chat) listens with: Auto (null),
+ *  this device's recognizer ('device'), or one exact model. */
+export type DictationChoice = MediaPick | 'device' | null;
+
+export function loadDictationChoice(): DictationChoice {
+  try {
+    const raw = localStorage.getItem(MEDIA_PICK_KEY.transcription);
+    if (raw === DEVICE_DICTATION) return 'device';
+    return raw ? revivePick(JSON.parse(raw) as unknown) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveDictationChoice(choice: DictationChoice): void {
+  try {
+    if (choice === null) localStorage.removeItem(MEDIA_PICK_KEY.transcription);
+    else localStorage.setItem(MEDIA_PICK_KEY.transcription, choice === 'device' ? DEVICE_DICTATION : JSON.stringify(choice));
+  } catch {
+    /* private mode: the choice simply does not persist */
+  }
+}
 
 const SLUG_RE = /^[\w./:@+-]{1,160}$/;
 
@@ -204,10 +230,12 @@ export const TRANSCRIBE_MAX_BYTES = 8_000_000;
 export function transcribeRequestBody(
   audio: string,
   mime: string,
-  pick: MediaPick,
+  pick: MediaPick | null,
   language?: string,
-): { audio: string; mime: string; provider: string; model: string; language?: string } {
-  return { audio, mime, provider: pick.provider, model: pick.model, ...(language ? { language } : {}) };
+): { audio: string; mime: string; provider?: string; model?: string; language?: string } {
+  // 11.3.1 — no pick = Auto: the server takes its first available model and
+  // moves to the next on failure.
+  return { audio, mime, ...(pick ? { provider: pick.provider, model: pick.model } : {}), ...(language ? { language } : {}) };
 }
 
 export function blobToDataUrl(blob: Blob): Promise<string> {
@@ -219,9 +247,9 @@ export function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-/** Send one recording to the chosen model. The text, or null on ANY failure
- *  (too large, offline, an error, an empty answer) — never throws. */
-export async function transcribe(blob: Blob, pick: MediaPick, opts: { signal?: AbortSignal; language?: string } = {}): Promise<string | null> {
+/** Send one recording to the chosen model (null = Auto). The text, or null on
+ *  ANY failure (too large, offline, an error, an empty answer) — never throws. */
+export async function transcribe(blob: Blob, pick: MediaPick | null, opts: { signal?: AbortSignal; language?: string } = {}): Promise<string | null> {
   if (!blob.size || blob.size > TRANSCRIBE_MAX_BYTES) return null;
   try {
     const mime = (blob.type || 'audio/webm').split(';')[0];

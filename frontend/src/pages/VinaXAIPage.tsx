@@ -19,7 +19,7 @@ import { layoutAttrs } from '@/features/ai/chat/chatStyle';
 import { ModelMenu } from '@/features/ai/chat/ModelMenu';
 import { SettingsDialog } from '@/features/ai/chat/SettingsDialog';
 import { CreateBar } from '@/features/ai/chat/CreateBar';
-import { createMedia, loadMediaPick, resolveMediaPick, saveMediaPick, type CreateKind } from '@/features/ai/chat/media';
+import { createMedia, loadDictationChoice, loadMediaPick, resolveMediaPick, saveDictationChoice, saveMediaPick, type CreateKind, type DictationChoice } from '@/features/ai/chat/media';
 import { EMPTY_VOICES, parseVoiceCatalog, type VoiceCatalog } from '@/features/ai/chat/voices';
 import { codeConnectorOn, type CodeSupport } from '@/features/ai/connectors';
 import { DEVICE_VOICE, migrateVoicePick, parseVoicePick } from '@/features/ai/voicePick';
@@ -158,7 +158,10 @@ export default function VinaXAIPage(): ReactNode {
     music: loadMediaPick('music'),
   }));
   // 10.3 — the composer mic's engine (Settings → Voice → Dictation).
-  const [dictationPick, setDictationPick] = useState<MediaPick | null>(() => loadMediaPick('transcription'));
+  // 11.3.1 — Auto (null) by default: record and transcribe on the server.
+  const [dictationPick, setDictationPick] = useState<DictationChoice>(loadDictationChoice);
+  const dictationRef = useRef<DictationChoice>(dictationPick);
+  dictationRef.current = dictationPick;
 
   /* ---------- preferences (each on its long-standing key) ---------- */
   const [profile, setProfile] = useState(() => readPref(PREF.profile, ''));
@@ -430,6 +433,9 @@ export default function VinaXAIPage(): ReactNode {
   const stopRef = useRef<() => void>(() => undefined);
   const voice = useLiveVoice({
     getServerVoice: serverVoice,
+    // 11.3.1 — live voice chat hears through the server's speech-to-text
+    // (the dictation choice; Auto unless "This device" is chosen).
+    getTranscriber: () => dictationRef.current,
     onUserFinal: (text) => {
       // 11.0 — speaking over a reply that is still arriving ends that reply
       // first; the new utterance used to be dropped while the turn was busy.
@@ -1120,7 +1126,7 @@ export default function VinaXAIPage(): ReactNode {
           dictationPick={dictationPick}
           onDictationPick={(pk) => {
             setDictationPick(pk);
-            saveMediaPick('transcription', pk);
+            saveDictationChoice(pk);
           }}
           autoRead={autoRead}
           onAutoRead={(on) => {

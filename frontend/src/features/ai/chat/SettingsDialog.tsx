@@ -10,7 +10,8 @@ import { TrashIcon, UploadIcon } from './icons';
 import { choiceLabel, choiceProvider, mediaGroups, type CatalogState } from './models';
 import { ProviderLogo } from './ProviderLogo';
 import { formatBytes, storageUsedBytes } from './storage';
-import type { MediaPick, ModelChoice, Provider } from './types';
+import type { ModelChoice, Provider } from './types';
+import type { DictationChoice } from './media';
 import { MemorySection } from './MemorySection';
 import { recorderSupported } from './useServerDictation';
 import { type VoiceCatalog } from './voices';
@@ -68,8 +69,9 @@ export interface SettingsDialogProps {
   onAutoRead: (on: boolean) => void;
   /** 10.3 — the composer mic's engine: a server transcription model, or null
    *  for this device's dictation (the default). */
-  dictationPick: MediaPick | null;
-  onDictationPick: (pick: MediaPick | null) => void;
+  /** 11.3.1 — Auto (null, the default), this device ('device'), or one model. */
+  dictationPick: DictationChoice;
+  onDictationPick: (pick: DictationChoice) => void;
   // Data
   chatCount: number;
   onExportAll: () => void;
@@ -185,17 +187,16 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
             ? 'No studio voice is available right now — replies are spoken by this device.'
             : 'Studio voices aren’t configured — replies are spoken by this device.';
   const dictationGroups = mediaGroups(p.catalogProviders, 'transcription');
-  const dictationKey = p.dictationPick ? `${p.dictationPick.provider}|${p.dictationPick.model}` : DEVICE_VOICE;
   const canRecord = recorderSupported();
-  const dictationListed = canRecord && dictationGroups.some((g) => g.models.some((m) => `${g.provider}|${m.id}` === dictationKey));
-  const dictationNote =
-    p.catalogState === 'idle' || p.catalogState === 'loading'
-      ? 'Checking which dictation models are available…'
-      : !canRecord
-        ? 'This browser can’t record for a dictation model — the mic uses this device.'
-        : dictationGroups.length
-          ? 'The mic records up to a minute, then turns it into text. If that fails, this device’s dictation takes over.'
-          : 'No dictation model is available right now — the mic uses this device.';
+  // 11.3.1 — Auto is the default and what this browser falls to when it
+  // cannot record (then the mic uses this device anyway).
+  const dictationKey = p.dictationPick === 'device' ? DEVICE_VOICE : p.dictationPick ? `${p.dictationPick.provider}|${p.dictationPick.model}` : 'auto';
+  const dictationListed = dictationKey === 'auto' || dictationKey === DEVICE_VOICE || (canRecord && dictationGroups.some((g) => g.models.some((m) => `${g.provider}|${m.id}` === dictationKey)));
+  const dictationNote = !canRecord
+    ? 'This browser can’t record — the mic and voice chat use this device’s speech recognition.'
+    : dictationKey === DEVICE_VOICE
+      ? 'The mic and voice chat use this browser’s own speech recognition. If it hears you but writes nothing, choose Auto.'
+      : 'The mic records until you tap it again, then turns it into text; voice chat sends each thing you say the same way. If that fails, this device’s recognition takes over.';
 
   return (
     <Sheet
@@ -364,25 +365,41 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
                 label="Read replies aloud automatically"
                 hint="Each finished reply is spoken in the voice above. Tap the speaker on a reply to stop."
               />
-              {/* 10.3 — what the composer's mic uses. Live voice chat always
-                  listens on this device. */}
+              {/* 10.3 — what the composer's mic uses. 11.3.1 — and what live
+                  voice chat listens with. */}
               <div className="ai-set-block">
                 <p id={`${uid}-dict`} className="block text-[14px] font-semibold ai-t1 mb-1.5">
                   Dictation
                 </p>
                 <div role="radiogroup" aria-labelledby={`${uid}-dict`} className="ai-voice-list" onKeyDown={onRadioKeys}>
+                  {canRecord && (
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={dictationKey === 'auto'}
+                      tabIndex={dictationKey === 'auto' || !dictationListed ? 0 : -1}
+                      className="ai-voice-row"
+                      onClick={() => p.onDictationPick(null)}
+                    >
+                      <span className="ai-voice-radio" aria-hidden />
+                      <span className="min-w-0">
+                        <span className="block text-[14px] font-semibold ai-t1">Auto</span>
+                        <span className="block text-[12px] ai-t3">Default · the best available speech-to-text model</span>
+                      </span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     role="radio"
-                    aria-checked={dictationKey === DEVICE_VOICE}
-                    tabIndex={dictationKey === DEVICE_VOICE || !dictationListed ? 0 : -1}
+                    aria-checked={dictationKey === DEVICE_VOICE || (!canRecord && dictationKey === 'auto')}
+                    tabIndex={dictationKey === DEVICE_VOICE || (!canRecord && dictationKey === 'auto') ? 0 : -1}
                     className="ai-voice-row"
-                    onClick={() => p.onDictationPick(null)}
+                    onClick={() => p.onDictationPick('device')}
                   >
                     <span className="ai-voice-radio" aria-hidden />
                     <span className="min-w-0">
-                      <span className="block text-[14px] font-semibold ai-t1">Device</span>
-                      <span className="block text-[12px] ai-t3">Default · words appear as you speak</span>
+                      <span className="block text-[14px] font-semibold ai-t1">This device</span>
+                      <span className="block text-[12px] ai-t3">The browser’s own recognition · words appear as you speak</span>
                     </span>
                   </button>
                   {canRecord &&

@@ -15,7 +15,8 @@ import { ConnectorChips, ConnectorList, useConnectors } from './Connectors';
 import { BookIcon, CheckIcon, ClipIcon, FolderIcon, ImageIcon, MicIcon, SendIcon, StopIcon, UploadIcon } from './icons';
 import type { CreateKind } from './media';
 import { ProviderLogo } from './ProviderLogo';
-import type { AiFeatures, MediaPick, ProviderId } from './types';
+import type { AiFeatures, ProviderId } from './types';
+import type { DictationChoice } from './media';
 import { useDictation } from './useDictation';
 import { formatClock, MAX_RECORD_MS, recorderSupported, useServerDictation, type ServerDictationFailure } from './useServerDictation';
 
@@ -57,7 +58,8 @@ export interface ComposerProps {
   /** 10.3 — whether the model in use can run code (the Run code connector). */
   codeSupport: CodeSupport;
   /** 10.3 — the server dictation model, or null for this device's dictation. */
-  dictationPick: MediaPick | null;
+  /** 11.3.1 — Auto (null), this device ('device'), or one model. */
+  dictationPick: DictationChoice;
   canSpeech: boolean;
   voiceMode: boolean;
   onToggleVoice: () => void;
@@ -166,7 +168,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   // Any failure falls back to this device's dictation with a quiet note.
   const [serverNote, setServerNote] = useState('');
   const recorder = useServerDictation({
-    pick: dictationPick,
+    pick: dictationPick === 'device' ? null : dictationPick,
     onText: (t) => {
       setServerNote('');
       setText((prev) => (prev.trim() ? `${prev.replace(/\s+$/, '')} ${t}` : t));
@@ -194,7 +196,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     const t = window.setTimeout(() => setServerNote(''), 8000);
     return () => window.clearTimeout(t);
   }, [serverNote]);
-  const useServerMic = !!dictationPick && recorderSupported();
+  // 11.3.1 — the server records and transcribes unless this device is chosen.
+  const useServerMic = dictationPick !== 'device' && recorderSupported();
   const showMic = canSpeech || useServerMic;
   const recording = recorder.state === 'recording';
   // 11.0 — the microphone is still opening (permission prompt, slow device).
@@ -584,7 +587,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               </button>
               {menu}
             </div>
-            {canSpeech && (
+            {/* 11.3.1 — voice chat also works without the browser's recognizer
+                when it can record (it listens through the server then). */}
+            {(canSpeech || useServerMic) && (
               <button
                 type="button"
                 onClick={onToggleVoice}

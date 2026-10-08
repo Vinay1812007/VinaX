@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 import { LiveVoiceEngine, type ServerVoiceStatus } from '@/features/voice/liveVoiceEngine';
 import { pickSynthVoice } from '@/features/voice/pickSynthVoice';
 import { createVoiceUiStore, type VoiceUiStore } from './liveVoiceStore';
+import { transcribe, type DictationChoice } from './media';
 
 /** Markdown → what should actually be said aloud. */
 export const speechForSpoken = (md: string): string =>
@@ -49,8 +50,19 @@ export function voiceFallbackNotice(status: ServerVoiceStatus): string {
  * Captions and engine state go to a tiny store so the page never re-renders
  * for them.
  */
+/** 11.3.1 — the engine's `transcribe` option for a dictation choice. */
+function transcriberFor(get?: () => DictationChoice): { transcribe?: (clip: Blob, signal: AbortSignal) => Promise<string | null> } {
+  const choice = get ? get() : 'device';
+  if (choice === 'device') return {};
+  return { transcribe: (clip, signal) => transcribe(clip, choice, { signal }) };
+}
+
 export function useLiveVoice(opts: {
   getServerVoice: () => { provider?: string; model: string; voice: string } | null;
+  /** 11.3.1 — the dictation choice, read when a voice chat starts: Auto or a
+   *  model = listen through the server's speech-to-text; 'device' = the
+   *  browser's recognizer. Absent = the browser's recognizer. */
+  getTranscriber?: () => DictationChoice;
   onUserFinal: (text: string) => void;
   /** Stop the reply in flight (interrupt, end). */
   onStopReply: () => void;
@@ -76,6 +88,7 @@ export function useLiveVoice(opts: {
         // ever talks over itself, flip this to false.
         bargeIn: true,
         getServerVoice: () => optsRef.current.getServerVoice(),
+        ...transcriberFor(optsRef.current.getTranscriber),
       },
       {
         onState: (st) => {

@@ -4,7 +4,7 @@ import type { MediaPick } from './types';
 
 /**
  * 10.3 — the composer's mic when a server dictation model is chosen
- * (Settings → Voice → Dictation): the mic records the listener with the
+ * (Settings → Voice → Dictation). 11.3.1 — and by default (Auto): the mic records the listener with the
  * browser's MediaRecorder (Opus in WebM where it can), at most a minute,
  * with a visible timer and a stop button, then sends the recording to
  * POST /api/transcribe and puts the text in the message box.
@@ -51,6 +51,7 @@ export const formatClock = (ms: number): string => {
 };
 
 export function useServerDictation(opts: {
+  /** The model, or null for Auto (the server's first available). */
   pick: MediaPick | null;
   /** The recognised text (to be added to the box). */
   onText: (text: string) => void;
@@ -115,7 +116,7 @@ export function useServerDictation(opts: {
 
   const start = useCallback((): void => {
     const pick = optsRef.current.pick;
-    if (!pick || !recorderSupported()) {
+    if (!recorderSupported()) {
       optsRef.current.onFallback('unsupported');
       return;
     }
