@@ -30,6 +30,15 @@ const GROUNDING = {
     { web: { uri: 'ftp://example.org/x', title: 'not web' } },
     { web: { uri: 'https://example.com/b', title: 'x'.repeat(200) } },
   ],
+  // 11.2 — chunk 1 repeats chunk 0's page and chunk 2 is not a web page:
+  // indexes are remapped onto the de-duplicated items.
+  groundingSupports: [
+    { segment: { startIndex: 0, endIndex: 5, text: 'Sunny' }, groundingChunkIndices: [0, 1] },
+    { segment: { text: 'Hot.' }, groundingChunkIndices: [2, 3, 99] },
+    { segment: { text: 'Nothing backs this.' }, groundingChunkIndices: [2] },
+    { segment: { text: '' }, groundingChunkIndices: [0] },
+    'junk',
+  ],
 };
 const geminiSse = (text: string, grounded = false): Response =>
   new Response(
@@ -98,7 +107,26 @@ describe('the Gemini transport', () => {
     expect(g.items).toEqual([{ url: 'https://example.org/a', title: 'example.org' }, { url: 'https://example.com/b', title: 'x'.repeat(120) }]);
     expect(g.queries).toEqual(['weather hyderabad today']);
     expect(g.entry).toContain('Search suggestions');
+    expect(g.supports).toEqual([
+      { text: 'Sunny', sources: [0] },
+      { text: 'Hot.', sources: [1] },
+    ]);
     expect(groundingSources({ groundingChunks: Array.from({ length: 12 }, (_, i) => ({ web: { uri: `https://e.org/${i}` } })) })!.items).toHaveLength(8);
+    // 11.2 — a long segment keeps its END (where the sentence stops); supports are capped.
+    const long = groundingSources({
+      groundingChunks: [{ web: { uri: 'https://e.org/1', title: 'e.org' } }],
+      groundingSupports: Array.from({ length: 60 }, (_, i) => ({ segment: { text: `${'a'.repeat(400)} end ${i}.` }, groundingChunkIndices: [0] })),
+    })!;
+    expect(long.supports).toHaveLength(40);
+    expect(long.supports[0].text.length).toBeLessThanOrEqual(300);
+    expect(long.supports[0].text.endsWith(' end 0.')).toBe(true);
+    // A page past the eighth is dropped, and so is a support that only it backs.
+    const many = groundingSources({
+      groundingChunks: Array.from({ length: 10 }, (_, i) => ({ web: { uri: `https://e.org/${i}` } })),
+      groundingSupports: [{ segment: { text: 'Ninth.' }, groundingChunkIndices: [9] }, { segment: { text: 'First and ninth.' }, groundingChunkIndices: [9, 0] }],
+    })!;
+    expect(many.supports).toEqual([{ text: 'First and ninth.', sources: [0] }]);
+    expect(groundingSources({ webSearchQueries: ['q'] })!.supports).toEqual([]);
     expect(groundingSources(null)).toBeNull();
     expect(groundingSources({ groundingChunks: [] })).toBeNull();
   });
@@ -120,6 +148,10 @@ describe('POST /api/vinaxai — grounding', () => {
     const sources = ev.find((e) => e.sources) as { sources: { items: unknown[]; queries: string[]; entry: string } };
     expect(sources.sources.items).toEqual([{ url: 'https://example.org/a', title: 'example.org' }, { url: 'https://example.com/b', title: 'x'.repeat(120) }]);
     expect(sources.sources.entry).toContain('Search suggestions');
+    expect((sources.sources as { supports?: unknown }).supports).toEqual([
+      { text: 'Sunny', sources: [0] },
+      { text: 'Hot.', sources: [1] },
+    ]);
     expect(ev.indexOf(sources) > ev.findIndex((e) => e.delta)).toBe(true);
     expect(ev[ev.length - 1]).toEqual({ done: true });
   });

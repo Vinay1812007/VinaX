@@ -9,7 +9,9 @@
  *                                  `tools` (10.3): tools that were on for it
  *   { delta: "text" }              the next piece of the reply
  *   { sources: { items, queries,   11.0: the pages a web-grounded reply drew
- *                entry } }          on (Gemini 2.5 Flash only); old clients ignore it
+ *                entry, supports } }  on (Gemini 2.5 Flash only); old clients ignore it.
+ *                                  `supports` (11.2): [{ text, sources }] — the
+ *                                  reply's segments each page backs
  *   { done: true, truncated? }     the end; `truncated` = cut short mid-reply
  *
  * Parsing used to live inline in the page's send() loop, tangled with React
@@ -20,7 +22,7 @@
  * know (an older server's extra meta, any other frame kind) are ignored.
  */
 
-import type { MsgSources } from './types';
+import type { MsgSources, MsgSupport } from './types';
 
 export interface StreamState {
   /** The reply so far. */
@@ -81,23 +83,45 @@ export function splitFrames(buffer: string): { frames: unknown[]; rest: string }
 
 /** 11.0 — a `sources` payload, validated: http(s) urls only, de-duplicated, at
  *  most 8, titles clipped; queries as strings; the snippet as a string or null.
- *  Null when nothing usable is in it. Exported for tests. */
+ *  Null when nothing usable is in it. Exported for tests (and for storage,
+ *  which re-validates a stored reply's sources the same way).
+ *  11.2 — `supports`: at most 40, text clipped to its last 300 characters,
+ *  each index remapped onto the items kept here (one dropped or repeated here
+ *  must not shift the rest) and dropped when it points at nothing. */
 export function readSources(raw: unknown): MsgSources | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const r = raw as { items?: unknown; queries?: unknown; entry?: unknown };
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const r = raw as { items?: unknown; queries?: unknown; entry?: unknown; supports?: unknown };
   const items: MsgSources['items'] = [];
-  const seen = new Set<string>();
-  for (const it of Array.isArray(r.items) ? r.items : []) {
-    const url = typeof (it as { url?: unknown })?.url === 'string' ? (it as { url: string }).url.trim() : '';
-    if (!/^https?:\/\/\S+$/i.test(url) || seen.has(url)) continue;
-    seen.add(url);
+  const seen = new Map<string, number>();
+  const kept = new Map<number, number>();
+  (Array.isArray(r.items) ? r.items : []).forEach((it, k) => {
+    const url = typeof (it as { url?: unknown } | null)?.url === 'string' ? (it as { url: string }).url.trim() : '';
+    if (!/^https?:\/\/\S+$/i.test(url)) return;
+    const known = seen.get(url);
+    if (known !== undefined) return void kept.set(k, known);
+    if (items.length >= 8) return;
+    seen.set(url, items.length);
+    kept.set(k, items.length);
     const t = (it as { title?: unknown }).title;
     items.push({ url, title: typeof t === 'string' ? t.replace(/\s+/g, ' ').trim().slice(0, 120) : '' });
-    if (items.length >= 8) break;
-  }
+  });
   const queries = (Array.isArray(r.queries) ? r.queries : []).filter((q): q is string => typeof q === 'string' && !!q.trim()).slice(0, 8);
   const entry = typeof r.entry === 'string' && r.entry.trim() ? r.entry : null;
-  return items.length || queries.length || entry ? { items, queries, entry } : null;
+  const supports: MsgSupport[] = [];
+  for (const sp of Array.isArray(r.supports) ? r.supports : []) {
+    if (supports.length >= 40) break;
+    const s = sp as { text?: unknown; sources?: unknown } | null;
+    const text = typeof s?.text === 'string' ? s.text.trim().slice(-300) : '';
+    if (!text) continue;
+    const sources: number[] = [];
+    for (const n of Array.isArray(s?.sources) ? s.sources : []) {
+      const it = typeof n === 'number' ? kept.get(n) : undefined;
+      if (it !== undefined && !sources.includes(it)) sources.push(it);
+    }
+    if (sources.length) supports.push({ text, sources: sources.slice(0, 8) });
+  }
+  if (!items.length && !queries.length && !entry) return null;
+  return { items, queries, entry, ...(supports.length ? { supports } : {}) };
 }
 
 /** Fold one frame into the state. Never throws; returns the SAME object when

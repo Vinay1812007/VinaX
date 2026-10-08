@@ -10,8 +10,14 @@
  * `sources`, `sourcePreviews` or agent `steps`. Chats saved by an older build
  * still hold them; they are dropped when the chats are read, so the next save
  * writes the device clean, and an import never revives them.
+ *
+ * 11.0 / 11.2 — `sources` is back in a new shape ({ items, queries, entry,
+ * supports }: what a web-grounded reply drew on). An object in that shape is
+ * kept (re-validated, so the inline source chips survive a reload); the old
+ * 10.x list of urls is still dropped.
  */
 import { isProviderId } from './models';
+import { readSources } from './streamReducer';
 import type { Conversation, Msg } from './types';
 
 export const STORE_KEY = 'vinax_ai_chats_v1';
@@ -32,16 +38,20 @@ export const freshChat = (): Conversation => ({
 /** Message fields earlier builds stored and 10.2 retired (see the module note). */
 const RETIRED_MSG_FIELDS = ['sources', 'sourcePreviews', 'steps'] as const;
 
-/** 10.2 — a stored chat without the retired fields (see the module note). */
+/** 10.2 — a stored chat without the retired fields (see the module note).
+ *  11.2 — `sources` in the 11.0 shape is kept, re-validated. */
 function dropRetiredFields(c: Conversation): Conversation {
   if (!c || !Array.isArray(c.messages)) return c;
-  if (!c.messages.some((m) => m && RETIRED_MSG_FIELDS.some((k) => k in m))) return c;
+  const retired = (m: Msg): boolean => RETIRED_MSG_FIELDS.some((k) => k in m);
+  if (!c.messages.some((m) => m && retired(m))) return c;
   return {
     ...c,
     messages: c.messages.map((m) => {
-      if (!m || !RETIRED_MSG_FIELDS.some((k) => k in m)) return m;
+      if (!m || !retired(m)) return m;
       const copy: Record<string, unknown> = { ...m };
+      const sources = m.role === 'assistant' ? readSources(copy.sources) : null;
       for (const k of RETIRED_MSG_FIELDS) delete copy[k];
+      if (sources) copy.sources = sources;
       return copy as unknown as Msg;
     }),
   };
@@ -253,6 +263,11 @@ function reviveMsg(raw: unknown): Msg | null {
       ...(isProviderId(media.provider) ? { provider: media.provider } : {}),
       prompt: typeof media.prompt === 'string' ? media.prompt.slice(0, 2000) : '',
     };
+  }
+  // 11.2 — what a web-grounded reply drew on (validated like a live stream's).
+  if (r.role === 'assistant' && r.sources) {
+    const sources = readSources(r.sources);
+    if (sources) m.sources = sources;
   }
   if (r.player === true) m.player = true;
   if (r.rating === 'up' || r.rating === 'down') m.rating = r.rating;

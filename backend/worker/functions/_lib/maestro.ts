@@ -155,24 +155,58 @@ interface NativeAnswer {
  * the pages (de-duplicated by url, http(s) only, at most 8, titles clipped),
  * the queries the model ran, and the provider's search-suggestion snippet
  * (`searchEntryPoint.renderedContent`, HTML the client shows in a sandbox —
- * showing it is a condition of the free grounding service). */
+ * showing it is a condition of the free grounding service).
+ * 11.2 — and which parts of the answer each page backs (`groundingSupports`):
+ * `supports[k].text` is the END of the answer's segment (its last 300
+ * characters — what the client needs to find where the sentence stops), and
+ * `supports[k].sources` are indexes into `items` (remapped: items are
+ * de-duplicated, so a chunk index is not an item index). */
+export interface GroundingSupport {
+  text: string;
+  sources: number[];
+}
 export interface GroundingSources {
   items: Array<{ url: string; title: string }>;
   queries: string[];
   entry: string | null;
+  supports: GroundingSupport[];
 }
+const MAX_SUPPORTS = 40;
+const MAX_SUPPORT_TEXT = 300;
 export function groundingSources(raw: unknown): GroundingSources | null {
   if (!raw || typeof raw !== 'object') return null;
-  const g = raw as { groundingChunks?: unknown; webSearchQueries?: unknown; searchEntryPoint?: { renderedContent?: unknown } | null };
+  const g = raw as { groundingChunks?: unknown; groundingSupports?: unknown; webSearchQueries?: unknown; searchEntryPoint?: { renderedContent?: unknown } | null };
   const items: Array<{ url: string; title: string }> = [];
-  const seen = new Set<string>();
-  for (const c of Array.isArray(g.groundingChunks) ? g.groundingChunks : []) {
+  const seen = new Map<string, number>();
+  // chunk index -> item index (a repeated page maps to its first item).
+  const itemOf = new Map<number, number>();
+  const chunks = Array.isArray(g.groundingChunks) ? g.groundingChunks : [];
+  chunks.forEach((c, ci) => {
     const web = (c as { web?: { uri?: unknown; title?: unknown } } | null)?.web;
     const url = typeof web?.uri === 'string' ? web.uri.trim() : '';
-    if (!/^https?:\/\/\S+$/i.test(url) || seen.has(url)) continue;
-    seen.add(url);
+    if (!/^https?:\/\/\S+$/i.test(url)) return;
+    const known = seen.get(url);
+    if (known !== undefined) {
+      itemOf.set(ci, known);
+      return;
+    }
+    if (items.length >= 8) return;
+    seen.set(url, items.length);
+    itemOf.set(ci, items.length);
     items.push({ url, title: (typeof web?.title === 'string' ? web.title : '').replace(/\s+/g, ' ').trim().slice(0, 120) });
-    if (items.length >= 8) break;
+  });
+  const supports: GroundingSupport[] = [];
+  for (const sp of Array.isArray(g.groundingSupports) ? g.groundingSupports : []) {
+    if (supports.length >= MAX_SUPPORTS) break;
+    const s = sp as { segment?: { text?: unknown } | null; groundingChunkIndices?: unknown } | null;
+    const text = typeof s?.segment?.text === 'string' ? s.segment.text.trim() : '';
+    if (!text) continue;
+    const sources: number[] = [];
+    for (const ci of Array.isArray(s?.groundingChunkIndices) ? s.groundingChunkIndices : []) {
+      const it = typeof ci === 'number' ? itemOf.get(ci) : undefined;
+      if (it !== undefined && !sources.includes(it)) sources.push(it);
+    }
+    if (sources.length) supports.push({ text: text.slice(-MAX_SUPPORT_TEXT).trimStart(), sources: sources.slice(0, 8) });
   }
   const queries = (Array.isArray(g.webSearchQueries) ? g.webSearchQueries : [])
     .filter((q): q is string => typeof q === 'string' && !!q.trim())
@@ -180,7 +214,7 @@ export function groundingSources(raw: unknown): GroundingSources | null {
     .slice(0, 8);
   const rendered = g.searchEntryPoint?.renderedContent;
   const entry = typeof rendered === 'string' && rendered.trim() ? rendered.slice(0, 20_000) : null;
-  return items.length || queries.length || entry ? { items, queries, entry } : null;
+  return items.length || queries.length || entry ? { items, queries, entry, supports } : null;
 }
 
 /** A native answer as a chat-completions body (thought parts dropped). */
@@ -226,7 +260,8 @@ function nativeStreamToSse(upstream: ReadableStream<Uint8Array>): ReadableStream
   const encoder = new TextEncoder();
   let buf = '';
   let usage: Record<string, unknown> | null = null;
-  // 11.0 — grounding metadata (usually on the last chunk); the fullest wins.
+  // 11.0 — grounding metadata (usually on the last chunk); the fullest wins
+  // (11.2: more pages, then more supported segments).
   let grounding: GroundingSources | null = null;
   const frame = (obj: unknown): Uint8Array => encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
   const handle = (line: string, controller: TransformStreamDefaultController<Uint8Array>): void => {
@@ -243,7 +278,7 @@ function nativeStreamToSse(upstream: ReadableStream<Uint8Array>): ReadableStream
     const text = parts.map(partText).join('');
     if (text) controller.enqueue(frame({ choices: [{ delta: { content: text } }] }));
     const g = groundingSources(j.candidates?.[0]?.groundingMetadata);
-    if (g && (!grounding || g.items.length >= grounding.items.length)) grounding = g;
+    if (g && (!grounding || g.items.length > grounding.items.length || (g.items.length === grounding.items.length && g.supports.length >= grounding.supports.length))) grounding = g;
     const u = j.usageMetadata;
     if (u && typeof u.promptTokenCount === 'number') {
       const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
