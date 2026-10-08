@@ -15,7 +15,7 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
   '11.4.0': {
     title: 'Real logos, and a mic that works',
     changes: [
-      { type: 'new', text: 'Every model in VinaX AI now shows the logo of the company that made it — Google, Meta, Mistral, DeepSeek, Qwen, Moonshot, NVIDIA and more — in the model list, on the model button, on each answer and in the greeting. Provider logos are the real ones too.' },
+      { type: 'new', text: 'Every model in VinaX AI now shows the real logo of the company that made it — in the model list, on the model button, on each answer and in the greeting — so you always know whose model is talking. The logos of the services that run the models are the real ones too.' },
       { type: 'fixed', text: 'Voice chat could sit on “Listening…” forever when the browser was using a microphone that sends no sound (such as a virtual audio cable). VinaX now notices, switches to a microphone that works and tells you which one.' },
       { type: 'new', text: 'Settings → Voice → Microphone: choose which microphone the mic button and voice chat use.' },
     ],
@@ -41,7 +41,7 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
       { type: 'fixed', text: 'Edit no longer starts a new chat. The message turns into a box right where it is; send it and the answer is redone in the same chat. Your earlier version is kept, so you can flip between them with ‹ 1 / 2 ›.' },
       { type: 'new', text: 'Voice chat speaks in the voice you choose. Pick a voice right from voice chat or Settings, grouped by provider and model, and tap the play button next to any voice to hear it first. If that voice is out of requests, your device’s voice takes over and a short note says so.' },
       { type: 'new', text: 'Web answers show where each fact came from: a small chip with the publication’s name at the end of the sentence, and a Sources button that lists every page used. While it looks things up, the reply says “Searching the web”.' },
-      { type: 'new', text: 'More free models: Cloudflare Workers AI joins NVIDIA, OpenRouter, Groq and Gemini in the model menu.' },
+      { type: 'new', text: 'More free models: a fifth provider joins the model menu, with no extra setup.' },
     ],
   },
   '11.1.1': {
