@@ -159,7 +159,16 @@ export interface LiveVoiceCallbacks {
   onFatal(reason: LiveVoiceFatal): void;
   /** Transient status line (permission prompt, model download). '' clears it. */
   onNotice?(text: string): void;
+  /** 11.2 — how the listener's CHOSEN server voice is doing: 'ok' when a
+   *  chunk played in it, 'quota' / 'unavailable' when the device voice had to
+   *  take over. Never called while the device voice is the choice. */
+  onServerVoice?(status: ServerVoiceStatus): void;
 }
+
+export type ServerVoiceStatus = 'ok' | 'quota' | 'unavailable';
+/** Why a chunk has no server audio: the device voice is the choice, or the
+ *  chosen voice is out of quota / failed. */
+type TtsMiss = 'device' | 'quota' | 'unavailable';
 
 const WAVE_BARS = 32;
 
@@ -198,7 +207,7 @@ export function splitForTts(text: string): string[] {
  *  the prefetch has started. */
 interface QueueItem {
   text: string;
-  audio?: Promise<Blob | null>;
+  audio?: Promise<Blob | TtsMiss>;
 }
 
 export class LiveVoiceEngine {
@@ -734,12 +743,14 @@ export class LiveVoiceEngine {
       if (next && !next.audio) next.audio = this.fetchServerTts(next.text);
       void fetched.then((blob) => {
         if (token !== this.turn || this.destroyed) return;
-        if (blob) {
+        if (typeof blob !== 'string') {
           this.playServerAudio(item.text, blob, token);
           return;
         }
-        // Server voice failed — the browser voice finishes this turn.
+        // Server voice failed — the browser voice finishes this turn, and the
+        // listener is told quietly why their chosen voice went away.
         this.serverTtsDown = true;
+        if (blob !== 'device') this.cbs.onServerVoice?.(blob);
         this.speakSynth(item.text, token);
       });
       return;
@@ -749,15 +760,15 @@ export class LiveVoiceEngine {
 
   // ----- server voice path -----
 
-  /** Fetch one chunk's audio from the server voice. Resolves null on ANY
+  /** Fetch one chunk's audio from the server voice. Resolves a TtsMiss on ANY
    *  failure (error, non-audio reply, empty body, leash) — never throws. */
-  private fetchServerTts(text: string): Promise<Blob | null> {
-    if (typeof fetch !== 'function') return Promise.resolve(null);
+  private fetchServerTts(text: string): Promise<Blob | TtsMiss> {
+    if (typeof fetch !== 'function') return Promise.resolve('unavailable');
     // An explicit null = the listener picked the device voice, or the key
     // serves no speech model. Skip the round-trip and let the browser speak.
     // (undefined = no chooser wired at all, which keeps the old behaviour.)
     const chosen = this.opts.getServerVoice ? this.opts.getServerVoice() : undefined;
-    if (chosen === null) return Promise.resolve(null);
+    if (chosen === null) return Promise.resolve('device');
     const picked: { provider?: string; model: string; voice: string } = chosen ?? { model: '', voice: '' };
     const ctrl = new AbortController();
     this.ttsFetches.add(ctrl);
@@ -778,14 +789,15 @@ export class LiveVoiceEngine {
     } catch {
       window.clearTimeout(timer);
       this.ttsFetches.delete(ctrl);
-      return Promise.resolve(null);
+      return Promise.resolve('unavailable');
     }
     return req
-      .then((res) => {
-        if (!res.ok || !(res.headers.get('content-type') ?? '').includes('audio/')) return null;
-        return res.blob().then((b) => (b.size > 0 ? b : null));
+      .then((res): Promise<Blob | TtsMiss> | TtsMiss => {
+        if (res.status === 429) return 'quota';
+        if (!res.ok || !(res.headers.get('content-type') ?? '').includes('audio/')) return 'unavailable';
+        return res.blob().then((b) => (b.size > 0 ? b : 'unavailable'));
       })
-      .catch(() => null)
+      .catch((): TtsMiss => 'unavailable')
       .finally(() => {
         window.clearTimeout(timer);
         this.ttsFetches.delete(ctrl);
@@ -844,6 +856,7 @@ export class LiveVoiceEngine {
     }
     if (!el || typeof URL.createObjectURL !== 'function') {
       this.serverTtsDown = true;
+      this.cbs.onServerVoice?.('unavailable');
       this.speakSynth(text, token);
       return;
     }
@@ -866,6 +879,7 @@ export class LiveVoiceEngine {
       if (fellBack || started || token !== this.turn || this.destroyed) return;
       fellBack = true;
       this.serverTtsDown = true;
+      this.cbs.onServerVoice?.('unavailable');
       this.clearSpeakTimers();
       this.stopAudioElement();
       this.speakSynth(text, token);
@@ -877,7 +891,10 @@ export class LiveVoiceEngine {
         window.clearTimeout(this.startTimer);
         this.startTimer = 0;
       }
-      if (token === this.turn && !this.destroyed) this.cbs.onAssistantCaption(text);
+      if (token === this.turn && !this.destroyed) {
+        this.cbs.onAssistantCaption(text);
+        this.cbs.onServerVoice?.('ok');
+      }
     };
     el.ontimeupdate = () => {
       this.pulse = Math.min(0.8, this.pulse + 0.3);

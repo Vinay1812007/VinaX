@@ -11,9 +11,23 @@ export interface VoiceUi {
   aiCaption: string;
   notice: string;
   error: string;
+  /** 11.2 — a quiet line when the chosen voice had to hand over to this
+   *  device's voice ('' while the chosen voice is speaking). */
+  voiceNotice: string;
+  /** 11.2 — the voice picker is open over the chat: the mic is held. */
+  held: boolean;
 }
 
-export const idleVoiceUi = (): VoiceUi => ({ state: 'idle', muted: false, userCaption: '', aiCaption: '', notice: '', error: '' });
+export const idleVoiceUi = (): VoiceUi => ({
+  state: 'idle',
+  muted: false,
+  userCaption: '',
+  aiCaption: '',
+  notice: '',
+  error: '',
+  voiceNotice: '',
+  held: false,
+});
 
 export interface VoiceUiStore {
   get: () => VoiceUi;

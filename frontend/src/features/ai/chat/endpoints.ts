@@ -8,6 +8,8 @@ export const CHAT_ENDPOINT = `${ORIGIN}/api/vinaxai`;
 export const MODELS_ENDPOINT = `${ORIGIN}/api/aimodels`;
 /** Which speech models the key serves right now. */
 export const VOICES_ENDPOINT = `${ORIGIN}/api/voices`;
+/** 11.2 — one short spoken line (voice previews). */
+export const TTS_ENDPOINT = `${ORIGIN}/api/tts`;
 export const IMAGE_ENDPOINT = `${ORIGIN}/api/image`;
 /** 10.3 — a short music clip from a prompt. */
 export const MUSIC_ENDPOINT = `${ORIGIN}/api/music`;

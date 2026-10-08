@@ -1010,6 +1010,14 @@ export default function VinaXAIPage(): ReactNode {
           onInterrupt={voice.interrupt}
           onToggleMute={voice.toggleMute}
           onEnd={voice.end}
+          voicePick={voicePick}
+          voiceCatalog={voiceCatalog}
+          onVoicePick={(v) => {
+            setVoicePick(v);
+            writePref(PREF.voice, v);
+          }}
+          onLoadVoices={loadVoices}
+          onHold={voice.hold}
         />
       )}
       {settingsOpen && (
