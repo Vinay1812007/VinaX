@@ -248,7 +248,9 @@ describe('VinaX AI — media and tools (10.3)', () => {
 
     // jsdom cannot record, so the dictation list says so and the mic stays on the device.
     const dictation = within(dialog).getByRole('radiogroup', { name: 'Dictation' });
-    expect(within(dictation).getByRole('radio', { name: /Device/ }).getAttribute('aria-checked')).toBe('true');
-    await waitFor(() => expect(dialog.textContent).toMatch(/can’t record for a dictation model/));
+    // 11.3.1 — Auto needs recording, so without it "This device" is the one in use.
+    expect(within(dictation).queryByRole('radio', { name: /Auto/ })).toBeNull();
+    expect(within(dictation).getByRole('radio', { name: /This device/ }).getAttribute('aria-checked')).toBe('true');
+    await waitFor(() => expect(dialog.textContent).toMatch(/can’t record — the mic and voice chat use this device/));
   });
 });

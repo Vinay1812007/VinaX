@@ -32,6 +32,7 @@
 import { cutSentences } from './sentences';
 import { Capacitor } from '@capacitor/core';
 import { createSttSession, recognitionCtor, sttSupported, type SttSession } from './stt';
+import { recordUtterance, utteranceSupported } from './utterance';
 
 export type LiveVoiceState = 'idle' | 'listening' | 'thinking' | 'speaking';
 /** Fatal reasons — 'no-tts' means recognition works but the browser refused to
@@ -122,6 +123,12 @@ export interface LiveVoiceOptions {
    *  server route is skipped entirely, which is also what happens when the
    *  key serves no speech model. */
   getServerVoice?: () => { provider?: string; model: string; voice: string } | null;
+  /** 11.3.1 — speech-to-text through VinaX's own server for one recorded turn
+   *  (null = it failed). When given, the web listens with the page's own
+   *  microphone and this instead of the browser's recognizer, which can take
+   *  the mic and never return a word. Two failures in a row fall back to the
+   *  browser's recognizer. Ignored in the app, whose system recognizer works. */
+  transcribe?: (clip: Blob, signal: AbortSignal) => Promise<string | null>;
 }
 
 /**
@@ -231,6 +238,12 @@ export class LiveVoiceEngine {
   // speech service can drop into this state and never recover.
   private silentStarts = 0;
   private useLocal = false;
+  /** 11.3.1 — listening through the server transcriber (see LiveVoiceOptions.transcribe). */
+  private serverStt = false;
+  /** Server transcriptions that failed in a row. */
+  private serverFails = 0;
+  /** The microphone + meter, opened once per voice chat. */
+  private meterReady: Promise<void> | null = null;
   // speaking side
   private queue: QueueItem[] = [];
   private speakingNow = false;
@@ -289,11 +302,22 @@ export class LiveVoiceEngine {
 
   start(): void {
     if (this.destroyed) return;
-    if (!sttSupported()) {
+    this.serverStt = !!this.opts.transcribe && !Capacitor.isNativePlatform() && utteranceSupported();
+    if (!this.serverStt && !sttSupported()) {
       this.cbs.onFatal('unsupported');
       return;
     }
     this.unlockSynthesis();
+    if (this.serverStt) {
+      // One microphone for the whole chat, opened inside the tap: the meter
+      // reads it, the speech detector reads the meter, the recorder records it.
+      this.micMeterAllowed = true;
+      this.setState('listening');
+      this.raf = requestAnimationFrame(this.tick);
+      this.meterReady = this.initLevelMeter();
+      this.startRecognition();
+      return;
+    }
     // Inside the tap: prepare the on-device route (model install needs the
     // gesture) — the reliable fallback when the server speech route is dead.
     prepareLocalRecognition(this.opts.lang);
@@ -450,6 +474,10 @@ export class LiveVoiceEngine {
    *  so its callbacks can never be confused with a real listening turn. */
   private armBargeIn(): void {
     if (this.destroyed || !this.opts.bargeIn || this.bargeSession) return;
+    if (this.serverStt) {
+      this.armLevelBargeIn();
+      return;
+    }
     if (typeof recognitionCtor === 'undefined' && !sttSupported()) return;
     this.speakStartedAt = Date.now();
     const seq = ++this.bargeSeq;
@@ -479,7 +507,36 @@ export class LiveVoiceEngine {
     }
   }
 
+  /** 11.3.1 — barge-in by loudness while listening through the server: the
+   *  browser's recognizer is not used at all then. The microphone runs with
+   *  echo cancellation, so our own voice is mostly removed; the bar is still
+   *  high (clearly louder than the room, held ~400 ms) and the first 700 ms of
+   *  every chunk are ignored, so the reply's opening cannot cut itself off. */
+  private bargeTimer = 0;
+  private armLevelBargeIn(): void {
+    if (this.bargeTimer || !this.analyser) return;
+    this.speakStartedAt = Date.now();
+    let loud = 0;
+    this.bargeTimer = window.setInterval(() => {
+      if (this.destroyed || this.state !== 'speaking') {
+        this.disarmLevelBargeIn();
+        return;
+      }
+      if (Date.now() - this.speakStartedAt < 700) return;
+      loud = this.micLevel() > 0.09 ? loud + 1 : 0;
+      if (loud >= 8) {
+        this.disarmLevelBargeIn();
+        this.pauseSpeaking();
+      }
+    }, 50);
+  }
+  private disarmLevelBargeIn(): void {
+    if (this.bargeTimer) window.clearInterval(this.bargeTimer);
+    this.bargeTimer = 0;
+  }
+
   private disarmBargeIn(): void {
+    this.disarmLevelBargeIn();
     this.bargeSeq += 1; // invalidate any in-flight callbacks
     const s = this.bargeSession;
     this.bargeSession = null;
@@ -534,7 +591,7 @@ export class LiveVoiceEngine {
     if (this.destroyed || this.state === s) return;
     // Package B6 — tear the barge-in ear down the instant we stop speaking, so
     // it can never leak into a listening/thinking turn.
-    if (s !== 'speaking' && this.bargeSession) this.disarmBargeIn();
+    if (s !== 'speaking' && (this.bargeSession || this.bargeTimer)) this.disarmBargeIn();
     this.state = s;
     this.cbs.onState(s);
   }
@@ -558,6 +615,10 @@ export class LiveVoiceEngine {
 
   private startRecognition(): void {
     if (this.destroyed || this.muted || this.state !== 'listening') return;
+    if (this.serverStt) {
+      this.startServerListening();
+      return;
+    }
     this.abortRec();
     // Prefer the on-device route once its model is ready — it keeps working
     // when the server speech route silently dies (and is private + offline).
@@ -658,6 +719,83 @@ export class LiveVoiceEngine {
       this.clearRestart();
       this.restartTimer = window.setTimeout(() => this.startRecognition(), 300);
     }, 8000);
+  }
+
+  /** The microphone level now, 0–1 (RMS) — what the speech detector reads. */
+  private micLevel(): number {
+    const an = this.analyser;
+    const lb = this.levelBuf;
+    if (!an || !lb) return 0;
+    an.getByteTimeDomainData(lb);
+    let sum = 0;
+    for (let i = 0; i < lb.length; i += 1) {
+      const d = (lb[i] - 128) / 128;
+      sum += d * d;
+    }
+    return Math.sqrt(sum / lb.length);
+  }
+
+  /** 11.3.1 — one listening turn through the server transcriber. */
+  private startServerListening(): void {
+    this.abortRec();
+    const seq = this.sttSeq;
+    const transcribe = this.opts.transcribe;
+    void (this.meterReady ?? Promise.resolve()).then(() => {
+      if (this.destroyed || seq !== this.sttSeq || this.muted || this.state !== 'listening' || !transcribe) return;
+      const stream = this.stream;
+      if (!stream) {
+        // No microphone of our own (denied is already reported by the meter):
+        // the browser's recognizer is the last chance.
+        this.serverStt = false;
+        if (sttSupported()) this.startRecognition();
+        return;
+      }
+      const session = recordUtterance(
+        { stream, getLevel: () => this.micLevel(), transcribe },
+        {
+          onSpeechStart: () => {
+            if (this.destroyed || seq !== this.sttSeq) return;
+            this.cbs.onNotice?.('');
+          },
+          onSpeechEnd: () => {
+            if (this.destroyed || seq !== this.sttSeq) return;
+            // Heard: show the turn as being worked on while the words come back.
+            this.setState('thinking');
+          },
+          onEnd: (text, failed) => {
+            if (this.destroyed || seq !== this.sttSeq) return;
+            this.stt = null;
+            if (text) {
+              this.serverFails = 0;
+              this.beginTurn();
+              this.cbs.onUserFinal(text);
+              return;
+            }
+            if (failed) {
+              this.serverFails += 1;
+              if (this.serverFails >= 2 && sttSupported()) {
+                this.serverFails = 0;
+                this.serverStt = false;
+                this.cbs.onNotice?.('Switched to this device’s speech recognition.');
+              } else {
+                this.cbs.onNotice?.('Didn’t catch that — say it again.');
+              }
+            }
+            // Nothing said (or a miss): listen again.
+            this.setState('listening');
+            this.clearRestart();
+            this.restartTimer = window.setTimeout(() => this.startRecognition(), 150);
+          },
+        },
+      );
+      if (!session) {
+        this.serverStt = false;
+        if (sttSupported()) this.startRecognition();
+        else this.cbs.onFatal('error');
+        return;
+      }
+      this.stt = session;
+    });
   }
 
   private clearThink(): void {

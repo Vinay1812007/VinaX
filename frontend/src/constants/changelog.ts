@@ -12,6 +12,13 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.3.1': {
+    title: 'Voice that hears you',
+    changes: [
+      { type: 'fixed', text: 'Live voice chat and the mic button could hear you but write nothing (“Voice input didn’t hear anything”). They now record you and turn your words into text on VinaX’s own speech service, so they work in any current browser. Voice chat notices when you stop talking, answers, and reads the reply aloud; talk over it to interrupt.' },
+      { type: 'improved', text: 'The mic records until you tap it again, then fills in the text. Prefer the browser’s own recognition? Choose “This device” under Settings → Voice → Dictation.' },
+    ],
+  },
   '11.3.0': {
     title: 'Ask in several chats at once',
     changes: [

@@ -204,8 +204,10 @@ for (const size of SIZES) {
     await page.setViewportSize(size);
     await seed(page, baseURL!, size.theme);
     await page.goto('/stats');
-    await expect.poll(() => bodyText(page)).toMatch(/Listened \(est\.\)/);
-    await expect.poll(() => bodyText(page)).toMatch(/≈/);
+    // Stats is its own lazy chunk too: the same 15 s leash as Settings below
+    // (the 1 s default failed on CI for 11.2.0 and 11.3.1).
+    await expect.poll(() => bodyText(page), { timeout: 15_000 }).toMatch(/Listened \(est\.\)/);
+    await expect.poll(() => bodyText(page), { timeout: 15_000 }).toMatch(/≈/);
     await page.screenshot({ path: `test-results/v61-stats-${tag}.png`, fullPage: true });
     await page.goto('/settings');
     // Settings rows arrive with the page's own chunk — about 0.6 s here, so

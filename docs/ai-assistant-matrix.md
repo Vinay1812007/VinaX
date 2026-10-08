@@ -53,8 +53,8 @@ Status words:
 | Artifact panel for documents and code in replies | done | `features/ai/artifacts/` |
 | Authoring an artifact in a canvas | out of scope | VinaX AI writes replies, not documents |
 | Read a reply aloud | provider-dependent | `features/ai/readAloud.ts`; server speech needs a provider with a free speech model, else the device voice |
-| Dictation into the composer | done | `useDictation.ts` (device), `useServerDictation.ts` (server); merges with the typed draft |
-| Live voice conversation | provider-dependent | `useLiveVoice.ts`, `LiveVoiceHost.tsx` |
+| Dictation into the composer | done | 11.3.1: **Auto by default** — `useServerDictation.ts` records until the mic is tapped again and `POST /api/transcribe` (no pick = the server's first model) writes the text; `useDictation.ts` (the browser's recognizer) when "This device" is chosen, the browser cannot record, or the server fails. Stored in `vinax.aiDictation` (unset = Auto, `device`, or a model) |
+| Live voice conversation | done | `useLiveVoice.ts`, `LiveVoiceHost.tsx`. 11.3.1: on the web it listens through the server (`features/voice/utterance.ts`): one mic stream per chat, speech found by level against a learnt room floor (capped), the turn ends after 0.9 s of quiet, the clip goes to `/api/transcribe`; two failures in a row fall back to the browser's recognizer. Barge-in by loudness (held 400 ms, 700 ms grace). The app keeps the system recognizer. The browser's recognizer took the mic on desktop Chrome and returned no words ("didn't hear anything") |
 
 ## Attachments
 
