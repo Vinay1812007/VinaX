@@ -12,6 +12,16 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.2.0': {
+    title: 'VinaX AI: your model, your voice, your sources',
+    changes: [
+      { type: 'fixed', text: 'When you pick a model, that model answers. Before, if it was busy or out of free requests, another provider’s model answered in its place without saying so. Now the reply tells you why your model couldn’t answer and offers Retry, two other models from the same provider, or Auto.' },
+      { type: 'fixed', text: 'Edit no longer starts a new chat. The message turns into a box right where it is; send it and the answer is redone in the same chat. Your earlier version is kept, so you can flip between them with ‹ 1 / 2 ›.' },
+      { type: 'new', text: 'Voice chat speaks in the voice you choose. Pick a voice right from voice chat or Settings, grouped by provider and model, and tap the play button next to any voice to hear it first. If that voice is out of requests, your device’s voice takes over and a short note says so.' },
+      { type: 'new', text: 'Web answers show where each fact came from: a small chip with the publication’s name at the end of the sentence, and a Sources button that lists every page used. While it looks things up, the reply says “Searching the web”.' },
+      { type: 'new', text: 'More free models: Cloudflare Workers AI joins NVIDIA, OpenRouter, Groq and Gemini in the model menu.' },
+    ],
+  },
   '11.1.1': {
     title: 'You can see the check now',
     changes: [
