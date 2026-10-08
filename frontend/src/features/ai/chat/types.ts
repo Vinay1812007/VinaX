@@ -108,6 +108,14 @@ export interface MsgSources {
   items: Array<{ url: string; title: string }>;
   queries: string[];
   entry: string | null;
+  /** 11.2 — which parts of the reply each page backs: `text` is the end of a
+   *  segment of the reply (its last 300 characters at most), `sources` are
+   *  indexes into `items`. Absent on replies stored by 11.0 / 11.1. */
+  supports?: MsgSupport[];
+}
+export interface MsgSupport {
+  text: string;
+  sources: number[];
 }
 
 /** 11.2 — why the listener's own model pick gave no answer (the server's

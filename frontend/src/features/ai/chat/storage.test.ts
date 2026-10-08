@@ -104,6 +104,27 @@ describe('importChats', () => {
       { role: 'assistant', content: 'a', engine: 'Balanced' },
     ]);
   });
+  it('keeps a web-grounded reply’s sources (11.0 shape, 11.2 supports) across a reload and an import, validated', () => {
+    const sources = {
+      items: [{ url: 'https://a.example/p', title: 'a.example' }, { url: 'javascript:alert(1)', title: 'bad' }, { url: 'https://b.example/q', title: 'B' }],
+      queries: ['q'],
+      entry: '<div>s</div>',
+      supports: [{ text: 'It rains.', sources: [0, 1] }, { text: 'Hot.', sources: [2] }],
+    };
+    const kept = {
+      items: [{ url: 'https://a.example/p', title: 'a.example' }, { url: 'https://b.example/q', title: 'B' }],
+      queries: ['q'],
+      entry: '<div>s</div>',
+      supports: [{ text: 'It rains.', sources: [0] }, { text: 'Hot.', sources: [1] }],
+    };
+    const saved = [{ id: 'w', title: 'W', updatedAt: 1, messages: [{ role: 'user', content: 'rain?', sources }, { role: 'assistant', content: 'It rains. Hot.', sources }] }];
+    localStorage.setItem(STORE_KEY, JSON.stringify(saved));
+    expect(loadInitialChats()[0].messages).toEqual([
+      { role: 'user', content: 'rain?' },
+      { role: 'assistant', content: 'It rains. Hot.', sources: kept },
+    ]);
+    expect(importChats(JSON.stringify(saved), [])?.chats[0].messages[1].sources).toEqual(kept);
+  });
   it('refuses a file that is not a chats export', () => {
     expect(importChats('not json', [])).toBeNull();
     expect(importChats('{"a":1}', [])).toBeNull();

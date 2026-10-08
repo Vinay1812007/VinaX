@@ -772,7 +772,9 @@ export default function VinaXAIPage(): ReactNode {
         onDelta: (delta) => {
           if (!superseded(turn)) voiceEngineRef.current?.feed(delta);
         },
-        onUpdate: (st) => patchTurn(chatId, turn, (m) => ({ ...m, content: st.text })),
+        // 11.2 — the tools ride along while it streams, so a reply that is
+        // searching the web can say so before its first word.
+        onUpdate: (st) => patchTurn(chatId, turn, (m) => ({ ...m, content: st.text, tools: st.tools.length ? st.tools : undefined })),
       });
     } catch {
       result = { state: initialStreamState(), failure: 'unavailable', aborted: controller.signal.aborted };

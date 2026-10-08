@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { CITE_MARK, CITE_OPEN, CiteContext } from './cite';
 import { cn } from '@/utils/cn';
 import { tokenize } from './tokenize';
 import { SongPickChip, SongPicksBar, extractSongPicks, parseSongLine } from './SongPick';
@@ -135,7 +136,31 @@ const INLINE_RE = new RegExp(
 );
 const LINK_RE = new RegExp(String.raw`^\[([^\]]+)\]\((${LINK_URL})\)$`);
 
+/** 11.2 — song lines are read without citation marks (a playable row has no chip). */
+const uncited = (s: string): string => (s.includes(CITE_OPEN) ? s.replace(CITE_MARK, '') : s);
+
+/** 11.2 — a citation mark (see ./cite) becomes whatever the nearest
+ *  CiteContext draws for it; the text around it renders as usual. */
+function Cite({ n }: { n: number }): ReactNode {
+  const draw = useContext(CiteContext);
+  return draw ? draw(n) : null;
+}
+
 function inline(text: string): ReactNode[] {
+  if (!text.includes(CITE_OPEN)) return inlineText(text);
+  const out: ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(CITE_MARK)) {
+    const at = m.index ?? 0;
+    if (at > last) out.push(<Fragment key={`t${at}`}>{inlineText(text.slice(last, at))}</Fragment>);
+    out.push(<Cite key={`c${at}`} n={Number(m[1])} />);
+    last = at + m[0].length;
+  }
+  if (last < text.length) out.push(<Fragment key="t-end">{inlineText(text.slice(last))}</Fragment>);
+  return out;
+}
+
+function inlineText(text: string): ReactNode[] {
   const out: ReactNode[] = [];
   const re = new RegExp(INLINE_RE.source, 'g');
   let last = 0;
@@ -368,7 +393,7 @@ function Prose({ text }: { text: string }): ReactNode {
       i += 1;
     }
     if (para.length) {
-      const picks = para.map(parseSongLine);
+      const picks = para.map((l) => parseSongLine(uncited(l)));
       if (para.length > 1 && picks.every(Boolean)) {
         blocks.push(
           <div key={blocks.length} className="ai-picks">
@@ -393,7 +418,7 @@ function Prose({ text }: { text: string }): ReactNode {
  *  rows (v5.10.0; one quiet group since 9.0), everything else stays
  *  ordinary markdown. */
 function ListBlock({ items, ordered }: { items: string[]; ordered: boolean }): ReactNode {
-  const picks = items.map(parseSongLine);
+  const picks = items.map((it) => parseSongLine(uncited(it)));
   const songy = picks.filter(Boolean).length >= Math.max(1, Math.ceil(items.length / 2));
   if (songy) {
     return (
@@ -793,7 +818,7 @@ function CodeRouter({ lang, code, closed, streaming }: { lang: string; code: str
 // ---------- tokenizer + entry ----------
 export function RichContent({ text, streaming = false }: { text: string; streaming?: boolean }): ReactNode {
   const tokens = useMemo(() => tokenize(text), [text]);
-  const picks = useMemo(() => extractSongPicks(text), [text]);
+  const picks = useMemo(() => extractSongPicks(uncited(text)), [text]);
   return (
     <div className="ai-rich space-y-1 break-words">
       {picks.length >= 2 && <SongPicksBar picks={picks} />}

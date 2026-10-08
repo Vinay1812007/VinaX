@@ -170,7 +170,7 @@ describe('maestro transport — streaming (8.1.0)', () => {
     const res = await maestroFetch('AQ.k', 'm', payload);
     const j = (await res.json()) as Record<string, unknown>;
     expect((j.choices as Array<{ message: { content: string } }>)[0].message.content).toBe('Plain');
-    expect(j.grounding).toEqual({ items: [{ url: 'https://news.example/x', title: 'X' }], queries: [], entry: null });
+    expect(j.grounding).toEqual({ items: [{ url: 'https://news.example/x', title: 'X' }], queries: [], entry: null, supports: [] });
   });
 
   it('the OpenAI-compatible endpoint streams as served', async () => {

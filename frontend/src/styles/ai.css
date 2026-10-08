@@ -2277,40 +2277,110 @@ html.light .ai-badge-web { color: rgb(var(--tide-500)); }
 .ai-web-chip { gap: 0; padding: 0 6px; color: rgb(var(--tide-400)); background: rgb(var(--tide-500) / 0.12); }
 html.light .ai-web-chip { color: rgb(var(--tide-500)); }
 
-/* 11.0 — Sources under a web-grounded reply: a caption, up to eight pills and
-   the provider's search-suggestion snippet in a sealed frame. Tokens only, so
-   every chat style keeps it readable; the row wraps inside the reply column
-   and never widens it or pushes the composer. */
-.ai-sources { display: grid; gap: 0.5rem; min-width: 0; max-width: 100%; margin-top: 0.75rem; }
-.ai-sources-cap { display: inline-flex; align-items: center; gap: 0.375rem; color: var(--ai-text-3); font-size: 11.5px; font-weight: 650; letter-spacing: 0.01em; }
-.ai-sources-list { display: flex; flex-wrap: wrap; gap: 0.375rem; margin: 0; padding: 0; list-style: none; }
-.ai-sources-list li { min-width: 0; max-width: 100%; }
-.ai-source {
-  display: inline-block;
-  max-width: min(18rem, 100%);
-  min-height: 1.75rem;
-  padding: 0.25rem 0.625rem;
+/* 11.0 / 11.2 — what a web-grounded reply drew on. Tokens only, so every
+   chat style and both themes keep it readable; nothing here can widen the
+   reply column or push the composer (phone widths included). */
+
+/* While the search runs: a globe and a shimmering "Searching the web" (the
+   shimmer stops under reduced motion, with .ai-thinking-text above). */
+.ai-searching { gap: 0.5rem; }
+.ai-searching-icon { flex: none; color: rgb(var(--tide-400)); }
+html.light .ai-searching-icon { color: rgb(var(--tide-500)); }
+
+/* The letter monogram (no favicons, no remote images). */
+.ai-cite-mono {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 9999px;
+  background: rgb(var(--tide-500) / 0.18);
+  color: rgb(var(--tide-400));
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1;
+}
+html.light .ai-cite-mono { color: rgb(var(--tide-500)); background: rgb(var(--tide-500) / 0.14); }
+
+/* An inline source chip at the end of a sentence. */
+.ai-cite {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: min(14rem, 100%);
+  margin-left: 0.3rem;
+  padding: 0.0625rem 0.5rem 0.0625rem 0.1875rem;
   border: 1px solid var(--ai-line);
   border-radius: 9999px;
-  background: rgb(var(--ink-100) / 0.05);
+  background: var(--ai-raised);
   color: var(--ai-text-2);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   line-height: 1.25rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   text-decoration: none;
+  vertical-align: 0.1em;
+  white-space: nowrap;
   transition: background-color 140ms var(--ease-calm), border-color 140ms var(--ease-calm);
 }
-.ai-source:hover { background: var(--ai-hover); border-color: var(--ai-line-strong); color: var(--ai-text); }
-.ai-source:focus-visible { outline: 2px solid rgb(var(--ember-500)); outline-offset: 2px; }
+.ai-cite:hover { background: var(--ai-raised-hover); border-color: var(--ai-line-strong); color: var(--ai-text); }
+.ai-cite:focus-visible { outline: 2px solid rgb(var(--ember-500)); outline-offset: 2px; }
+.ai-cite-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ai-cite-more { flex: none; color: var(--ai-text-3); }
+
+/* "Sources" in the reply's action row: up to three overlapping monograms. */
+.ai-sources-btn { gap: 0.375rem; }
+.ai-sources-stack { display: inline-flex; }
+.ai-sources-stack .ai-cite-mono { box-shadow: 0 0 0 1.5px var(--ai-bg); }
+.ai-sources-stack .ai-cite-mono + .ai-cite-mono { margin-left: -0.375rem; }
+
+/* The Sources panel: every page, numbered, and what the model searched for. */
+.ai-sources-panel {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  max-width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--ai-line);
+  border-radius: 16px;
+  background: var(--ai-panel);
+}
+.ai-sources-panel:focus { outline: none; }
+.ai-sources-panel:focus-visible { outline: 2px solid rgb(var(--ember-500)); outline-offset: 2px; }
+.ai-sources-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.ai-sources-title { color: var(--ai-text); font-size: 13px; font-weight: 700; }
+.ai-sources-count { margin-left: 0.25rem; color: var(--ai-text-3); font-weight: 600; }
+.ai-sources-close { flex: none; }
+.ai-sources-cap { display: flex; align-items: flex-start; gap: 0.375rem; margin: 0; color: var(--ai-text-3); font-size: 11.5px; font-weight: 600; overflow-wrap: anywhere; }
+.ai-sources-rows { display: grid; gap: 0.125rem; margin: 0; padding: 0; list-style: none; }
+.ai-sources-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.5rem;
+  border-radius: 12px;
+  color: var(--ai-text-2);
+  text-decoration: none;
+  transition: background-color 140ms var(--ease-calm);
+}
+.ai-sources-row:hover { background: var(--ai-hover); color: var(--ai-text); }
+.ai-sources-row:focus-visible { outline: 2px solid rgb(var(--ember-500)); outline-offset: 1px; }
+.ai-sources-row .ai-cite-mono { margin-top: 0.0625rem; }
+.ai-sources-num { flex: none; width: 1.125rem; color: var(--ai-text-3); font-size: 11.5px; font-weight: 650; line-height: 1.25rem; text-align: right; }
+.ai-sources-text { display: grid; min-width: 0; flex: 1; }
+.ai-sources-name { color: var(--ai-text); font-size: 13px; font-weight: 650; line-height: 1.25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-sources-page { font-size: 12.5px; line-height: 1.125rem; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.ai-sources-host { color: var(--ai-text-3); font-size: 11.5px; line-height: 1.125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* The frame's own colour scheme is left neutral so it stays transparent on a
    dark page (a mismatched scheme paints an opaque white canvas); the snippet
    brings its own light and dark styling. */
-.ai-sources-entry { display: block; width: 100%; max-width: 100%; height: 64px; max-height: 72px; border: 0; border-radius: 12px; background: transparent; color-scheme: normal; overflow: hidden; }
-html.reduce-motion .ai-source { transition: none; }
-@media (prefers-reduced-motion: reduce) { .ai-source { transition: none; } }
+.ai-sources-entry { display: block; width: 100%; max-width: 100%; height: 64px; max-height: 72px; margin-top: 0.75rem; border: 0; border-radius: 12px; background: transparent; color-scheme: normal; overflow: hidden; }
+html.reduce-motion :is(.ai-cite, .ai-sources-row) { transition: none; }
+@media (prefers-reduced-motion: reduce) { :is(.ai-cite, .ai-sources-row) { transition: none; } }
 
 /* Create image / Create music clip: what the next message makes, and by whom. */
 .ai-create-bar {
