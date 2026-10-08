@@ -14,6 +14,11 @@ vi.mock('@/features/identity/handleClaim', () => ({
 vi.mock('@/services/api', () => ({ searchSongs: vi.fn(async () => []) }));
 vi.mock('@/services/analytics/telemetry', () => ({ registerUser: vi.fn() }));
 vi.mock('@/services/analytics/sessionInsights', () => ({ initSessionInsights: vi.fn() }));
+// Finishing the welcome stamps the What's New fingerprint through a lazy
+// import of the (large) changelog. Real, it can resolve after the test's
+// environment is torn down — an unhandled EnvironmentTeardownError that turned
+// CI red with every test passing. A stub resolves at once.
+vi.mock('@/constants/changelog', () => ({ latestNotesFingerprint: () => 'test-fingerprint' }));
 
 import { OnboardingSheet } from './OnboardingSheet';
 import { claimHandle } from '@/features/identity/handleClaim';
