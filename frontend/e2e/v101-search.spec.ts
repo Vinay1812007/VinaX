@@ -174,9 +174,15 @@ test('typeahead: completions and quick hits appear as you type, and the keyboard
   // Walk down to the first song hit and press Enter: it plays.
   const songs = list.getByRole('group', { name: 'Songs' }).getByRole('option');
   await expect(songs.first()).toBeVisible();
-  const songId = await songs.first().getAttribute('id');
-  for (let i = 0; i < 12 && (await activeId(page)) !== songId; i += 1) await page.keyboard.press('ArrowDown');
-  expect(await activeId(page)).toBe(songId);
+  // The results for the new letter can land while the keys walk the list (and
+  // renumber the options), so the target is read again on every step rather
+  // than once up front — a stale id sent the walk past the songs on CI.
+  const onFirstSong = async (): Promise<boolean> => {
+    const id = await activeId(page);
+    return !!id && id === (await songs.first().getAttribute('id'));
+  };
+  for (let i = 0; i < 12 && !(await onFirstSong()); i += 1) await page.keyboard.press('ArrowDown');
+  await expect.poll(onFirstSong, { timeout: 5000 }).toBe(true);
   await page.keyboard.press('Enter');
   await expect.poll(async () => (await queueState(page)).ids.length, { timeout: 10_000 }).toBeGreaterThan(0);
   await expect(list).toBeHidden();
