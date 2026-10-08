@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { canRetry, failureFromResponse, failureMessage, needsEdit, runChatStream } from './streamClient';
+import { canRetry, failureFromResponse, failureMessage, needsEdit, pickIssueMessage, readPickIssue, runChatStream } from './streamClient';
 
 const sse = (chunks: string[], status = 200): Response => {
   const enc = new TextEncoder();
@@ -128,5 +128,48 @@ describe('needsEdit (11.0)', () => {
     expect(needsEdit('too_large')).toBe(true);
     expect(needsEdit('rejected')).toBe(true);
     for (const f of ['bad_model', 'busy', 'offline', 'unavailable', 'disabled', 'over_budget', null] as const) expect(needsEdit(f)).toBe(false);
+  });
+});
+
+describe('11.2 — model_unavailable: the pick gave no answer', () => {
+  const body = {
+    error: 'model_unavailable',
+    reason: 'quota',
+    model: { provider: 'gemini', id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
+    retryAfter: 3600,
+    alternatives: [
+      { provider: 'gemini', id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite' },
+      { provider: 'nvidia', id: 'x/y', name: 'Another provider' },
+      { provider: 'gemini', id: 'bad slug!', name: 'Bad' },
+      { provider: 'gemini', id: 'gemini-2.5-flash', name: 'Itself' },
+    ],
+  };
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('is its own failure, never re-asked automatically, and Retry stays possible', async () => {
+    expect(failureFromResponse(429, 'model_unavailable')).toBe('model_unavailable');
+    expect(failureFromResponse(503, 'model_unavailable')).toBe('model_unavailable');
+    expect(canRetry('model_unavailable')).toBe(true);
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(body), { status: 429 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const r = await runChatStream({ endpoint: '/api/vinaxai', body: {}, signal: new AbortController().signal, retryDelayMs: 0 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(r.failure).toBe('model_unavailable');
+    expect(r.pickIssue).toEqual({
+      reason: 'quota',
+      provider: 'gemini',
+      model: 'gemini-2.5-flash',
+      name: 'Gemini 2.5 Flash',
+      alternatives: [{ provider: 'gemini', model: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite' }],
+    });
+    expect(pickIssueMessage(r.pickIssue!)).toBe('Gemini 2.5 Flash has used up its free requests for today. Pick another model below, or try it again later.');
+  });
+
+  it('reads the stored (flat) copy back, and refuses junk', () => {
+    const stored = readPickIssue(body);
+    expect(readPickIssue(stored)).toEqual(stored);
+    expect(readPickIssue({ reason: 'quota', model: { provider: 'acme', id: 'x' } })).toBeNull();
+    expect(readPickIssue(null)).toBeNull();
+    expect(readPickIssue({ reason: 'weird', provider: 'groq', model: 'a/b', name: 'AB' })?.reason).toBe('down');
   });
 });

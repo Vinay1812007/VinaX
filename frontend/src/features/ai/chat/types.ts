@@ -110,6 +110,19 @@ export interface MsgSources {
   entry: string | null;
 }
 
+/** 11.2 — why the listener's own model pick gave no answer (the server's
+ *  `model_unavailable`), and the models from the same provider it offered
+ *  instead. VinaX never answers a pick with another provider's model. */
+export type PickIssueReason = 'quota' | 'not_free' | 'busy' | 'gone' | 'down' | 'refused';
+export interface PickIssue {
+  reason: PickIssueReason;
+  provider: ProviderId;
+  model: string;
+  name: string;
+  /** Up to three other models from the same provider. */
+  alternatives: Array<{ provider: ProviderId; model: string; name: string }>;
+}
+
 export interface Msg {
   role: 'user' | 'assistant';
   content: string;
@@ -147,6 +160,9 @@ export interface Msg {
   /** 11.0 — with `failed`: asking again as it is cannot work (too large, or
    *  turned away); the thread offers "Edit message" instead of Retry. */
   needsEdit?: boolean;
+  /** 11.2 — with `failed`: the picked model could not answer; the notice says
+   *  why and offers its alternatives and Auto. */
+  pickIssue?: PickIssue;
   /** 9.0 — no reply arrived and asking again cannot help right now (VinaX AI
    *  is switched off, or has reached its limit for the day). Presentation
    *  only: the thread shows a notice that points back to the music. */

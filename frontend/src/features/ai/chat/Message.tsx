@@ -29,7 +29,9 @@ import { CheckIcon, CodeIcon, GlobeIcon } from './icons';
 import { MediaCard } from './MediaCard';
 import { CODE_TOOL, isProviderId, WEB_TOOL } from './models';
 import { ProviderLogo } from './ProviderLogo';
-import type { Msg, MsgSources } from './types';
+import type { ModelChoice, Msg, MsgSources } from './types';
+import { readPickIssue } from './streamClient';
+import { AUTO } from './models';
 
 /** Everything a message can ask the page to do. The object is stable (see
  *  useStableHandlers), so memoised messages do not re-render with the page. */
@@ -39,6 +41,8 @@ export type MessageHandlers = {
   togglePin: (index: number) => void;
   branch: (index: number) => void;
   regenerate: () => void;
+  /** 11.2 — ask the last question again with another model (or Auto). */
+  askWith: (choice: ModelChoice) => void;
   /** 11.0 — put the last message back in the box (it was turned away). */
   reviseLast: () => void;
   continueReply: () => void;
@@ -259,13 +263,21 @@ function ReplyNotice({
   busy,
   onRetry,
   onEdit,
+  onAskWith,
 }: {
   m: Msg;
   last: boolean;
   busy: boolean;
   onRetry: () => void;
   onEdit: () => void;
+  onAskWith: (choice: ModelChoice) => void;
 }): ReactNode {
+  // 11.2 — the picked model gave no answer. Stored chats are read back
+  // as they were saved, so the stored copy is validated again here.
+  const issue = m.failed ? readPickIssue(m.pickIssue) : null;
+  // Asking the same model again right away cannot help when it is out for the
+  // day, not free, or gone.
+  const retryHelps = !issue || issue.reason === 'busy' || issue.reason === 'down';
   return (
     <div className="ai-notice">
       <span className="ai-notice-icon" aria-hidden>
@@ -275,7 +287,30 @@ function ReplyNotice({
         <p>{m.content}</p>
         {!busy && last && (
           <div className="ai-notice-actions" role="group" aria-label="Reply actions">
-            {m.failed && m.needsEdit ? (
+            {issue ? (
+              <>
+                {retryHelps && (
+                  <button type="button" onClick={onRetry} className="ai-btn ai-btn-accent" aria-label={`Ask ${issue.name} again`} title="Ask again">
+                    <RefreshIcon /> Retry
+                  </button>
+                )}
+                {issue.alternatives.slice(0, 2).map((alt) => (
+                  <button
+                    key={alt.model}
+                    type="button"
+                    className="ai-btn"
+                    title={`Ask this question again with ${alt.name}`}
+                    onClick={() => onAskWith({ mode: 'model', provider: alt.provider, model: alt.model, name: alt.name })}
+                  >
+                    <ProviderLogo provider={alt.provider} size={14} />
+                    Ask {alt.name}
+                  </button>
+                ))}
+                <button type="button" className="ai-btn" title="Ask this question again and let VinaX AI choose the model" onClick={() => onAskWith(AUTO)}>
+                  Use Auto
+                </button>
+              </>
+            ) : m.failed && m.needsEdit ? (
               // 11.0 — sending the same thing again would only fail again.
               <button type="button" onClick={onEdit} className="ai-btn ai-btn-accent" title="Put this message back in the box to change it">
                 <PencilIcon /> Edit message
@@ -359,6 +394,7 @@ export const AssistantMessage = memo(function AssistantMessage({
             busy={busy}
             onRetry={handlers.regenerate}
             onEdit={handlers.reviseLast}
+            onAskWith={handlers.askWith}
           />
         ) : m.content ? (
           <>

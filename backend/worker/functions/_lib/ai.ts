@@ -454,7 +454,7 @@ export function laneAttempts(env: AiEnv, lane: Lane, modelOverride?: string, lad
  * that a fresh isolate pays one failed hop before it learns.
  */
 const COOLDOWN_MS = 60_000;
-const DAILY_COOLDOWN_MS = 60 * 60_000;
+export const DAILY_COOLDOWN_MS = 60 * 60_000;
 const MAX_COOLDOWN_MS = 6 * 60 * 60_000;
 export const MODEL_GONE_COOLDOWN_MS = 60 * 60_000;
 export const KEY_REJECTED_COOLDOWN_MS = 10 * 60_000;
@@ -508,6 +508,9 @@ export function cooldownForFailure(status: number, body: string): Cooldown | nul
 }
 
 const cooldowns = new Map<string, number>();
+/** 11.2 — why each cooldown above was set (the last verdict), so a listener's
+ * own pick can be told WHY it is resting instead of being swapped. */
+const restReasons = new Map<string, CooldownReason>();
 /** 10.3 — models a key lists but may not use for free, until when. */
 const notFree = new Map<string, number>();
 const coolKey = (provider: AiProvider, model: string): string => `${provider}|${model}`;
@@ -524,6 +527,15 @@ const coolingUntil = (map: Map<string, number>, key: string, now: number): boole
 /** True while this provider+model (or the provider's whole key) is set aside. */
 export function providerCoolingDown(provider: AiProvider, model: string, now = Date.now()): boolean {
   return coolingUntil(cooldowns, keyCoolKey(provider), now) || coolingUntil(cooldowns, coolKey(provider, model), now);
+}
+/** 11.2 — while a provider+model (or the provider's whole key) is set aside:
+ * until when, and why (null when the reason was not recorded). Null when it
+ * is not resting. */
+export function providerRest(provider: AiProvider, model: string, now = Date.now()): { until: number; reason: CooldownReason | null } | null {
+  for (const key of [keyCoolKey(provider), coolKey(provider, model)]) {
+    if (coolingUntil(cooldowns, key, now)) return { until: cooldowns.get(key) as number, reason: restReasons.get(key) ?? null };
+  }
+  return null;
 }
 /** True while this lane's model (or its provider's whole key) is set aside. */
 export function laneCoolingDown(role: Lane, model: string, now = Date.now()): boolean {
@@ -559,6 +571,7 @@ function noteFailure(provider: AiProvider, model: string, status: number, body: 
   const c = cooldownForFailure(status, body);
   if (!c) return null;
   markProviderCooldown(provider, model, c.ms, c.scope);
+  restReasons.set(c.scope === 'lane' ? keyCoolKey(provider) : coolKey(provider, model), c.reason);
   if (c.reason === 'not_free') notFree.set(coolKey(provider, model), Date.now() + c.ms);
   console.log(`[ai] cooldown ${prefix}provider=${provider}${c.scope === 'model' ? ` model=${loggableModel(model)}` : ' (whole key)'} reason=${c.reason} s=${Math.round(c.ms / 1000)}`);
   return c;
@@ -566,6 +579,7 @@ function noteFailure(provider: AiProvider, model: string, status: number, body: 
 /** Test hook. */
 export function clearLaneCooldowns(): void {
   cooldowns.clear();
+  restReasons.clear();
   notFree.clear();
 }
 

@@ -12,6 +12,7 @@ const handlers = (): MessageHandlers => ({
   togglePin: vi.fn(),
   branch: vi.fn(),
   regenerate: vi.fn(),
+  askWith: vi.fn(),
   reviseLast: vi.fn(),
   continueReply: vi.fn(),
   rewrite: vi.fn(),
@@ -108,5 +109,48 @@ describe('following the newest reply (11.0)', () => {
   });
   it('is pinned again once the reader is back near the bottom', () => {
     expect(at({ top: 960, lastTop: 400, pinned: false })).toEqual({ pinned: true, rescroll: false });
+  });
+});
+
+describe('11.2 — a picked model that gave no answer', () => {
+  const issueMsg = (reason: string) => ({
+    role: 'assistant' as const,
+    content: 'Gemini 2.5 Flash has used up its free requests for today.',
+    failed: true,
+    pickIssue: {
+      reason: reason as 'quota',
+      provider: 'gemini' as const,
+      model: 'gemini-2.5-flash',
+      name: 'Gemini 2.5 Flash',
+      alternatives: [
+        { provider: 'gemini' as const, model: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite' },
+        { provider: 'gemini' as const, model: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite' },
+        { provider: 'gemini' as const, model: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
+      ],
+    },
+  });
+  const show = (reason: string, h: MessageHandlers) =>
+    render(
+      <MemoryRouter>
+        <AssistantMessage m={issueMsg(reason)} index={1} last streaming={false} busy={false} speaking={false} speakKey="k" handlers={h} />
+      </MemoryRouter>,
+    );
+
+  it('out for the day: no Retry; two same-provider models and Auto, each asks again with that choice', () => {
+    const h = handlers();
+    show('quota', h);
+    expect(screen.queryByRole('button', { name: /again/i })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Ask Gemini 2.5 Flash-Lite/ }));
+    expect(h.askWith).toHaveBeenCalledWith({ mode: 'model', provider: 'gemini', model: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite' });
+    expect(screen.queryByRole('button', { name: /Gemini 2.5 Pro/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Use Auto' }));
+    expect(h.askWith).toHaveBeenLastCalledWith({ mode: 'auto' });
+  });
+
+  it('busy or down: Retry asks the same model again', () => {
+    const h = handlers();
+    show('busy', h);
+    fireEvent.click(screen.getByRole('button', { name: 'Ask Gemini 2.5 Flash again' }));
+    expect(h.regenerate).toHaveBeenCalled();
   });
 });

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LANE_BY_MODE, NO_LIVE_WEB, attemptModel, identityLine, onRequestPost, requestMode } from './vinaxai';
+import { LANE_BY_MODE, NO_LIVE_WEB, attemptModel, identityLine, onRequestPost, pickAlternatives, pickIssue, requestMode } from './vinaxai';
 import { LANE_BASE, LANE_MODEL, clearLaneCooldowns } from '../_lib/ai';
 import { resetCatalogCache } from '../_lib/catalog';
 import { resetMaestroMode, resetMaestroModels } from '../_lib/maestro';
@@ -294,21 +294,62 @@ describe('10.3 — model picks, Auto and real model names', () => {
     expect(outbound).toHaveLength(0);
   });
 
-  it('a failed pick hands over to the default ladder inside the budget, and meta names the model that answered', async () => {
+  it('11.2 — a failed pick is never answered by another provider: 503 model_unavailable with the reason and same-provider alternatives', async () => {
+    lists['openrouter.ai/api/v1/models'] = {
+      data: [
+        { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Meta: Llama 3.3 70B Instruct (free)', pricing: { prompt: '0', completion: '0' } },
+        { id: 'meta-llama/llama-3.2-3b-instruct:free', name: 'Meta: Llama 3.2 3B Instruct (free)', pricing: { prompt: '0', completion: '0' } },
+        { id: 'qwen/qwen3-8b:free', name: 'Qwen: Qwen3 8B (free)', pricing: { prompt: '0', completion: '0' } },
+      ],
+    };
+    resetCatalogCache();
     answer = (url) => (url.includes('openrouter.ai') ? new Response('{"error":"down"}', { status: 503 }) : sse('ladder answer'));
-    const { status, frames, metas } = await run({ mode: 'model', provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct:free' });
-    expect(status).toBe(200);
-    expect(frames.map((f) => f.delta ?? '').join('')).toBe('ladder answer');
-    expect(outbound[0].url).toContain('openrouter.ai');
-    expect(outbound[1].url).toContain('integrate.api.nvidia.com');
-    expect(metas[0]).toEqual({ model: 'Nemotron 3.5 Lightning 30B A3B', modelId: 'nvidia/nemotron-3.5-lightning-30b-a3b', provider: 'nvidia', mode: 'model' });
+    const { status, frames } = await run({ mode: 'model', provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct:free' });
+    expect(status).toBe(503);
+    expect(outbound.every((o) => o.url.includes('openrouter.ai'))).toBe(true);
+    expect(frames[0]).toMatchObject({
+      error: 'model_unavailable',
+      reason: 'down',
+      model: { provider: 'openrouter', id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B Instruct' },
+    });
+    // Nearest name first, the failed (now resting) pick itself never offered.
+    expect((frames[0].alternatives as Array<{ id: string }>).map((a) => a.id)).toEqual(['meta-llama/llama-3.2-3b-instruct:free', 'qwen/qwen3-8b:free']);
   });
 
-  it('the system prompt names the model each attempt is sent to — also after a hop', async () => {
-    answer = (url) => (url.includes('openrouter.ai') ? new Response('down', { status: 500 }) : sse('ok'));
+  it('11.2 — a pick out of free requests for the day answers 429 quota with retry-after, and is not asked again while it rests', async () => {
+    answer = (url) =>
+      url.includes('api.groq.com')
+        ? new Response('{"error":{"message":"Rate limit reached for model on tokens per day (TPD)","type":"tokens","code":"rate_limit_exceeded"}}', { status: 429 })
+        : sse('x');
+    const first = await run({ mode: 'model', provider: 'groq', model: 'openai/gpt-oss-20b' });
+    expect(first.status).toBe(429);
+    expect(first.frames[0]).toMatchObject({ error: 'model_unavailable', reason: 'quota', model: { provider: 'groq', id: 'openai/gpt-oss-20b' } });
+    expect(first.frames[0].retryAfter).toBeGreaterThan(600);
+    expect((first.frames[0].alternatives as Array<{ id: string }>).map((a) => a.id)).toEqual(['llama-3.1-8b-instant']);
+    outbound.length = 0;
+    const again = await run({ mode: 'model', provider: 'groq', model: 'openai/gpt-oss-20b' });
+    expect(again.status).toBe(429);
+    expect(again.frames[0]).toMatchObject({ reason: 'quota' });
+    expect(outbound).toHaveLength(0);
+  });
+
+  it('pickIssue and pickAlternatives', () => {
+    expect(pickIssue(429, 'rate_limited', 60 * 60_000)).toBe('quota');
+    expect(pickIssue(429, 'rate_limited', 60_000)).toBe('busy');
+    expect(pickIssue(429, 'not_free')).toBe('not_free');
+    expect(pickIssue(404, 'model_gone')).toBe('gone');
+    expect(pickIssue(500, 'upstream_error')).toBe('down');
+    expect(pickIssue(0, null)).toBe('down');
+    expect(pickIssue(400, null)).toBe('refused');
+    const m = (id: string, vision = false) => ({ id, name: id, maker: null, context: null, vision });
+    const list = [m('gemini-3.5-flash-lite'), m('gemini-2.5-flash-lite', true), m('gemini-2.5-pro', true), m('gemini-2.5-flash'), m('gemma-4-31b-it')];
+    expect(pickAlternatives(list, 'gemini', 'gemini-2.5-flash', false, () => false).map((a) => a.id)).toEqual(['gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-3.5-flash-lite']);
+    expect(pickAlternatives(list, 'gemini', 'gemini-2.5-flash', true, (id) => id === 'gemini-2.5-pro').map((a) => a.id)).toEqual(['gemini-2.5-flash-lite']);
+  });
+
+  it('the system prompt names the picked model', async () => {
     await run({ mode: 'model', provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct:free' });
     expect(systemOf(outbound[0].body)).toContain('You are VinaX AI, running on Llama 3.3 70B Instruct by Meta, served through OpenRouter. If asked which model you are, say so truthfully.');
-    expect(systemOf(outbound[1].body)).toContain('running on Nemotron 3.5 Lightning 30B A3B by NVIDIA, served through NVIDIA');
     for (const o of outbound) expect(systemOf(o.body)).not.toContain('{{MODEL_IDENTITY}}');
   });
 
@@ -339,16 +380,14 @@ describe('10.3 — model picks, Auto and real model names', () => {
     expect(systemOf(outbound[0].body)).toContain('VinaX TRANSLATE');
   });
 
-  it('an image goes to a picked vision model first, with the image attached', async () => {
+  it('an image goes to a picked vision model first, with the image attached; a pick that cannot read images answers the text itself', async () => {
     const image = `data:image/png;base64,${'A'.repeat(200)}`;
     const { metas } = await run({ mode: 'model', provider: 'nvidia', model: 'moonshotai/kimi-k3', images: [image] });
-    // kimi-k3 does not read images: the vision ladder answers.
-    expect(outbound[0].body?.model).toBe('meta/llama-3.2-11b-vision-instruct');
-    expect(metas[0]).toMatchObject({ modelId: 'meta/llama-3.2-11b-vision-instruct' });
-    outbound.length = 0;
-    answer = () => sse('I see a guitar');
-    await run({ mode: 'model', provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct:free', images: [image] });
-    expect(outbound[0].body?.model).toBe('meta/llama-3.2-11b-vision-instruct');
+    // 11.2 — kimi-k3 does not read images: it answers the text, told it could not see the picture.
+    expect(outbound).toHaveLength(1);
+    expect(outbound[0].body?.model).toBe('moonshotai/kimi-k3');
+    expect(systemOf(outbound[0].body)).toContain('attached an image');
+    expect(metas[0]).toMatchObject({ modelId: 'moonshotai/kimi-k3' });
     outbound.length = 0;
     // A vision-capable pick goes first.
     lists['openrouter.ai/api/v1/models'] = { data: [{ id: 'google/gemma-4-31b-it:free', name: 'Google: Gemma 4 31B (free)', pricing: { prompt: '0', completion: '0' }, architecture: { input_modalities: ['image', 'text'], output_modalities: ['text'] } }] };
@@ -360,15 +399,19 @@ describe('10.3 — model picks, Auto and real model names', () => {
     expect(picked.metas[0]).toMatchObject({ model: 'Gemma 4 31B', provider: 'openrouter' });
   });
 
-  it('a Gemini pick is never swapped for another model when it is gone — the ladder answers instead', async () => {
+  it('a Gemini pick is never swapped for another model when it is gone — the reply says it is gone', async () => {
     answer = (url) =>
       url.includes('generativelanguage')
         ? new Response('{"error":{"code":404,"message":"models/gemini-2.5-pro is not found for API version v1beta. Please update your code to use models/gemini-3.8-flash"}}', { status: 404 })
         : sse('ladder');
-    const { metas } = await run({ mode: 'model', provider: 'gemini', model: 'gemini-2.5-pro' }, { ...ENV, VINAX_GGL_GEMINI_API_KEY: 'AIza-k' });
+    const { status, frames, metas } = await run({ mode: 'model', provider: 'gemini', model: 'gemini-2.5-pro' }, { ...ENV, VINAX_GGL_GEMINI_API_KEY: 'AIza-k' });
     const gemini = outbound.filter((o) => o.url.includes('generativelanguage'));
     expect(gemini.length).toBeGreaterThan(0);
+    expect(outbound.length).toBe(gemini.length);
     for (const o of gemini) expect(JSON.stringify(o.body)).not.toContain('gemini-3.8-flash');
-    expect(metas[0]).toMatchObject({ provider: 'nvidia' });
+    expect(status).toBe(503);
+    expect(frames[0]).toMatchObject({ error: 'model_unavailable', reason: 'gone' });
+    expect(metas).toHaveLength(0);
   });
+
 });

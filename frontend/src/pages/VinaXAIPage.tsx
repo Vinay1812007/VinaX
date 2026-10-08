@@ -63,7 +63,7 @@ import {
   writePref,
   titleFromMessage,
 } from '@/features/ai/chat/storage';
-import { canRetry, failureMessage, needsEdit, runChatStream, type ChatStreamResult } from '@/features/ai/chat/streamClient';
+import { canRetry, failureMessage, needsEdit, pickIssueMessage, runChatStream, type ChatStreamResult } from '@/features/ai/chat/streamClient';
 import { initialStreamState } from '@/features/ai/chat/streamReducer';
 import type { Conversation, MediaPick, ModelChoice, Msg } from '@/features/ai/chat/types';
 import { useModelCatalog } from '@/features/ai/chat/useModelCatalog';
@@ -652,7 +652,7 @@ export default function VinaXAIPage(): ReactNode {
   const send = async (
     raw: string,
     attachments: Attachment[] = [],
-    retry?: { history: Msg[]; previousReply: string; user: Msg; media?: 'image' | 'music' },
+    retry?: { history: Msg[]; previousReply: string; user: Msg; media?: 'image' | 'music'; choice?: ModelChoice },
   ): Promise<void> => {
     const chatId = active?.id ?? '';
     const conversation = retry?.history ?? messages;
@@ -742,7 +742,9 @@ export default function VinaXAIPage(): ReactNode {
       const body = await buildChatRequest(
         {
           voiceLive,
-          choice: now.choice,
+          // 11.2 — "Ask <another model>" on a pick that gave no answer sends
+          // with that model at once (the state update lands a render later).
+          choice: retry?.choice ?? now.choice,
           think: now.think,
           replyLang: now.replyLang,
           replyStyle: now.replyStyle,
@@ -783,7 +785,13 @@ export default function VinaXAIPage(): ReactNode {
     const split = splitFollowups(state.text.trim().replace(/\n{3,}/g, '\n\n'));
     const text =
       split.body ||
-      (result.aborted ? 'Stopped before the reply began.' : state.text ? '' : failureMessage(result.failure));
+      (result.aborted
+        ? 'Stopped before the reply began.'
+        : state.text
+          ? ''
+          : result.pickIssue
+            ? pickIssueMessage(result.pickIssue)
+            : failureMessage(result.failure));
     // The service says when a reply was cut short mid-stream.
     const finalText = state.truncated && split.body ? `${split.body}\n\n_This answer was cut short — ask me to continue._` : text;
     // The chip names the engine that actually answered — so a reply rescued
@@ -802,6 +810,7 @@ export default function VinaXAIPage(): ReactNode {
       turn: undefined,
       failed: failed || undefined,
       needsEdit: (failed && needsEdit(result.failure)) || undefined,
+      pickIssue: (failed && result.pickIssue) || undefined,
       unavailable: unavailable || undefined,
       content: finalText || '…',
       engine: engine || undefined,
@@ -835,6 +844,16 @@ export default function VinaXAIPage(): ReactNode {
     // A picture or clip (made, or failed) is asked for again from the maker.
     const media = lastReply?.media?.kind ?? lastReply?.mediaKind;
     void send(lastUser.content, [], { history: messages.slice(0, messages.lastIndexOf(lastUser)), previousReply, user: lastUser, media });
+  };
+  /** 11.2 — the picked model gave no answer: ask the same question again with
+   *  the model the listener chose from the notice (another model from the
+   *  same provider, or Auto), which also becomes the current pick. */
+  const askWith = (next: ModelChoice): void => {
+    if (busy || messages.length < 2) return;
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+    if (!lastUser) return;
+    applyChoice(next);
+    void send(lastUser.content, [], { history: messages.slice(0, messages.lastIndexOf(lastUser)), previousReply: '', user: lastUser, choice: next });
   };
   const rewriteLast = (how: 'shorter' | 'longer' | 'simpler'): void => {
     if (busy) return;
@@ -885,6 +904,7 @@ export default function VinaXAIPage(): ReactNode {
     togglePin: (idx: number) => setActiveMessages((prev) => prev.map((m, k) => (k === idx ? { ...m, pinned: !m.pinned } : m))),
     branch: branchFrom,
     regenerate,
+    askWith,
     // 11.0 — a message that was turned away (too large, refused as it is):
     // the failed turn leaves the thread and its text returns to the box.
     reviseLast: () => {
