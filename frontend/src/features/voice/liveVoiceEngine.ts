@@ -33,6 +33,7 @@ import { cutSentences } from './sentences';
 import { Capacitor } from '@capacitor/core';
 import { createSttSession, recognitionCtor, sttSupported, type SttSession } from './stt';
 import { recordUtterance, utteranceSupported } from './utterance';
+import { openMic } from './mic';
 
 export type LiveVoiceState = 'idle' | 'listening' | 'thinking' | 'speaking';
 /** Fatal reasons — 'no-tts' means recognition works but the browser refused to
@@ -1158,9 +1159,12 @@ export class LiveVoiceEngine {
       if (!navigator.mediaDevices?.getUserMedia) return;
       let stream: MediaStream;
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true },
-        });
+        // 11.3.2 — a working microphone: a silent input (a virtual audio
+        // cable chosen as the mic) is swapped for one that carries sound.
+        const mic = await openMic();
+        stream = mic.stream;
+        if (mic.replaced) this.cbs.onNotice?.(`“${mic.replaced}” sent no sound — listening on ${mic.label}.`);
+        else if (mic.allSilent) this.cbs.onNotice?.(`“${mic.label}” isn’t sending any sound. Choose another microphone in Settings → Voice.`);
       } catch (err) {
         // A hard denial must surface — recognition also runs and will emit
         // its own 'not-allowed'; whichever races through first wins.

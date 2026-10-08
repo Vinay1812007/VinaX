@@ -1,9 +1,11 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
-import { SearchIcon } from '@/components/Icons';
+import { SearchIcon, SparkleIcon } from '@/components/Icons';
 import { cn } from '@/utils/cn';
 import { CheckIcon } from './icons';
 import { buildModelMenu, choiceKey, RUNS_CODE, SEARCHES_WEB, type CatalogState, type MenuRow } from './models';
 import { ProviderLogo } from './ProviderLogo';
+import { MakerLogo } from './MakerLogo';
+import { makerFamily } from './chatStyle';
 import type { ModelChoice, Provider } from './types';
 
 export interface ModelMenuProps {
@@ -167,7 +169,12 @@ export function ModelMenu({ state, providers, current, recents, onPick, onClose,
                     if (i !== active) setActive(i);
                   }}
                 >
-                  {row.provider && <ProviderLogo provider={row.provider} size={18} />}
+                  {/* 11.3.2 — the maker's logo (Auto keeps VinaX's own mark). */}
+                  {row.choice.mode === 'model' ? (
+                    <MakerLogo family={makerFamily(row.choice.model, row.maker, row.servedBy ?? row.provider)} provider={row.servedBy ?? row.provider} size={20} />
+                  ) : (
+                    <SparkleIcon className="ai-model-auto-mark w-5 h-5" />
+                  )}
                   <span className="min-w-0 flex-1">
                     <span className="ai-model-label">{row.label}</span>
                     {row.hint && <span className="ai-model-hint">{row.hint}</span>}

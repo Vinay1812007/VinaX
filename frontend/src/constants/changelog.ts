@@ -12,6 +12,14 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.4.0': {
+    title: 'Real logos, and a mic that works',
+    changes: [
+      { type: 'new', text: 'Every model in VinaX AI now shows the logo of the company that made it — Google, Meta, Mistral, DeepSeek, Qwen, Moonshot, NVIDIA and more — in the model list, on the model button, on each answer and in the greeting. Provider logos are the real ones too.' },
+      { type: 'fixed', text: 'Voice chat could sit on “Listening…” forever when the browser was using a microphone that sends no sound (such as a virtual audio cable). VinaX now notices, switches to a microphone that works and tells you which one.' },
+      { type: 'new', text: 'Settings → Voice → Microphone: choose which microphone the mic button and voice chat use.' },
+    ],
+  },
   '11.3.1': {
     title: 'Voice that hears you',
     changes: [

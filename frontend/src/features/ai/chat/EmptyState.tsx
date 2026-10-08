@@ -3,17 +3,27 @@ import { SparkleIcon } from '@/components/Icons';
 import { ArrowUpRightIcon } from '@/components/ai/AiExtras';
 import { buildTodayBrief, type TodayBrief } from '@/features/ai/todayBrief';
 import { firstName, timeOfDay } from './storage';
+import { hasMakerLogo, MakerLogo } from './MakerLogo';
+import type { MakerFamily } from './chatStyle';
 
 /** The centred greeting on an empty chat: the VinaX sparkle, "Good evening,
  *  <first name>" and one line on what the box can do. The composer sits
  *  directly beneath it. */
-export const Greeting = memo(function Greeting({ userName }: { userName: string }): ReactNode {
+export const Greeting = memo(function Greeting({ userName, maker }: { userName: string; maker?: MakerFamily | null }): ReactNode {
   const name = firstName(userName);
+  // 11.3.2 — a picked model greets with its maker's logo; Auto with VinaX's mark.
+  const showMaker = !!maker && hasMakerLogo(maker);
   return (
     <div className="ai-column ai-greeting ai-enter">
-      <span className="ai-mark ai-hero-mark" aria-hidden>
-        <SparkleIcon filled />
-      </span>
+      {showMaker ? (
+        <span className="ai-hero-mark ai-hero-mark-maker" aria-hidden>
+          <MakerLogo family={maker} size={56} />
+        </span>
+      ) : (
+        <span className="ai-mark ai-hero-mark" aria-hidden>
+          <SparkleIcon filled />
+        </span>
+      )}
       <h2 className="ai-display text-balance">
         Good {timeOfDay()}
         {name && (

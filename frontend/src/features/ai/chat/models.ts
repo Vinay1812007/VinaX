@@ -199,6 +199,10 @@ export interface MenuRow {
   web: boolean;
   /** Logo shown on the row itself — recents only; a provider section has it in its heading. */
   provider: ProviderId | null;
+  /** 11.3.2 — who made the model (its logo leads the row); null for Auto. */
+  maker?: string | null;
+  /** 11.3.2 — the provider that serves it (the logo when the maker is unknown). */
+  servedBy?: ProviderId | null;
 }
 export interface MenuSection {
   id: string;
@@ -240,6 +244,8 @@ const modelRow = (section: string, provider: ProviderId, m: ProviderModel, recen
   code,
   web,
   provider: recent ? provider : null,
+  maker: m.maker,
+  servedBy: provider,
 });
 const section = (s: Omit<MenuSection, 'note' | 'retry' | 'provider'> & Partial<MenuSection>): MenuSection => ({
   note: null,

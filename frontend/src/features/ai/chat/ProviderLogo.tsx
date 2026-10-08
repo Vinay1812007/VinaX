@@ -1,10 +1,12 @@
 import { useId, type ReactNode } from 'react';
 import type { ProviderId } from './types';
+import { BRAND_MARKS } from './brandMarks';
 
 /**
  * 10.3 — the provider marks (11.2: five, with Cloudflare's cloud), drawn inline (no remote images: the CSP
- * allows none, and the menu must not wait on the network). Simplified,
- * single-colour-capable versions of each provider's mark.
+ * allows none, and the menu must not wait on the network). 11.3.2 — the real
+ * outlines (./brandMarks.ts) for NVIDIA, OpenRouter, Gemini and Cloudflare;
+ * Groq keeps its simple drawn q (no published outline to use).
  *
  * `tone="brand"` (default) sets the mark in white or ink on a small tile of
  * the provider's colour, so it reads the same on the light and dark themes;
@@ -26,22 +28,9 @@ const BRAND: Record<ProviderId, { tile: string; ink: string }> = {
 function Mark({ id, color }: { id: ProviderId; color: string }): ReactNode {
   switch (id) {
     case 'nvidia':
-      // The eye: an almond outline around a spiral that opens to the right.
-      return (
-        <g fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M2.5 12c2.6-4.3 6-6.5 9.5-6.5s6.9 2.2 9.5 6.5c-2.6 4.3-6 6.5-9.5 6.5S5.1 16.3 2.5 12Z" />
-          <path d="M15.2 12a3.2 3.2 0 1 1-3.2-3.2c1.2 0 2.1.5 2.7 1.3" />
-        </g>
-      );
+      return <path fill={color} d={BRAND_MARKS.nvidia.path} />;
     case 'openrouter':
-      // One line in, routed to two arrows out.
-      return (
-        <g fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 12h3.5c3.2 0 3.8-5 7-5H19" />
-          <path d="M6.5 12c3.2 0 3.8 5 7 5H19" />
-          <path d="M16.5 4.5 19 7l-2.5 2.5M16.5 14.5 19 17l-2.5 2.5" />
-        </g>
-      );
+      return <path fill={color} d={BRAND_MARKS.p_openrouter.path} />;
     case 'groq':
       // The rounded q: a ring with a hooked tail.
       return (
@@ -51,11 +40,9 @@ function Mark({ id, color }: { id: ProviderId; color: string }): ReactNode {
         </g>
       );
     case 'gemini':
-      // The four-point spark.
-      return <path fill={color} d="M12 2.5c.6 5 4.4 8.9 9.5 9.5-5.1.6-8.9 4.5-9.5 9.5-.6-5-4.4-8.9-9.5-9.5 5.1-.6 8.9-4.5 9.5-9.5Z" />;
+      return <path fill={color} d={BRAND_MARKS.p_gemini.path} />;
     case 'cloudflare':
-      // 11.2 — a plain cloud.
-      return <path fill={color} d="M7 18.5h10.6a4.2 4.2 0 0 0 .5-8.37A5.6 5.6 0 0 0 7.4 9.2 4.66 4.66 0 0 0 7 18.5Z" />;
+      return <path fill={color} d={BRAND_MARKS.p_cloudflare.path} />;
   }
 }
 

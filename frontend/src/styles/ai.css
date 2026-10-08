@@ -392,6 +392,9 @@ html.amoled .ai-main { background: #000; }
   padding-bottom: 1.75rem;
   text-align: center;
 }
+/* 11.3.2 — a picked model's maker logo in the greeting: its own tile. */
+.ai-root .ai-hero-mark.ai-hero-mark-maker { display: inline-grid; background: transparent; box-shadow: none; overflow: hidden; }
+.ai-root .ai-hero-mark.ai-hero-mark-maker svg { width: 100%; height: 100%; }
 .ai-hero-mark {
   width: 3.5rem;
   height: 3.5rem;
@@ -629,6 +632,9 @@ html.amoled .ai-main { background: #000; }
   .ai-msg-mark { width: 1.5rem; height: 1.5rem; border-radius: 8px; }
   .ai-msg-mark svg { width: 13px; height: 13px; }
 }
+/* 11.3.2 — the answering model's maker logo fills the avatar (its own tile). */
+.ai-root .ai-msg-mark.ai-msg-mark-maker { background: transparent; }
+.ai-root .ai-msg-mark.ai-msg-mark-maker svg { width: 100%; height: 100%; }
 /* A reply runs at a reading measure, not the full column. */
 .ai-reply { max-width: var(--ai-measure); }
 /* While it streams, each block fades in once as it mounts: opacity only, so

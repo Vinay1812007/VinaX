@@ -14,6 +14,7 @@ import type { ModelChoice, Provider } from './types';
 import type { DictationChoice } from './media';
 import { MemorySection } from './MemorySection';
 import { recorderSupported } from './useServerDictation';
+import { MicPicker } from './MicPicker';
 import { type VoiceCatalog } from './voices';
 import { onRadioKeys, VoicePicker } from './VoicePicker';
 import { DEVICE_VOICE, parseVoicePick } from '../voicePick';
@@ -365,6 +366,8 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
                 label="Read replies aloud automatically"
                 hint="Each finished reply is spoken in the voice above. Tap the speaker on a reply to stop."
               />
+              {/* 11.3.2 — which microphone records. */}
+              <MicPicker />
               {/* 10.3 — what the composer's mic uses. 11.3.1 — and what live
                   voice chat listens with. */}
               <div className="ai-set-block">

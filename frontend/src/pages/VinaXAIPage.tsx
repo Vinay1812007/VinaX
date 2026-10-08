@@ -15,7 +15,7 @@ import { MessageList, followAfterScroll } from '@/features/ai/chat/MessageList';
 import type { MessageHandlers } from '@/features/ai/chat/Message';
 import { editedMessage, showVersion } from '@/features/ai/chat/versions';
 import { ChatStyleContext, useChatStyle } from '@/features/ai/chat/ChatStyleScope';
-import { layoutAttrs } from '@/features/ai/chat/chatStyle';
+import { layoutAttrs, makerFamily } from '@/features/ai/chat/chatStyle';
 import { ModelMenu } from '@/features/ai/chat/ModelMenu';
 import { SettingsDialog } from '@/features/ai/chat/SettingsDialog';
 import { CreateBar } from '@/features/ai/chat/CreateBar';
@@ -34,6 +34,7 @@ import {
   canRunCode,
   choiceLabel,
   choiceProvider,
+  findModel,
   isProviderId,
   mediaGroups,
   loadDefaultChoice,
@@ -379,6 +380,8 @@ export default function VinaXAIPage(): ReactNode {
   const modelLabel = choiceLabel(choice, catalog.providers);
   const chatStyle = useChatStyle(choice, catalog.providers);
   const modelProvider = choiceProvider(choice);
+  // 11.3.2 — who made the picked model (its logo on the chip and the greeting).
+  const modelFamily = choice.mode === 'model' ? makerFamily(choice.model, findModel(catalog.providers, choice.provider, choice.model)?.maker, choice.provider) : null;
   // 10.3 — can the model in use run code? Nothing is claimed before the list is read.
   const codeSupport: CodeSupport =
     catalog.state !== 'ready'
@@ -797,7 +800,15 @@ export default function VinaXAIPage(): ReactNode {
         },
         // 11.2 — the tools ride along while it streams, so a reply that is
         // searching the web can say so before its first word.
-        onUpdate: (st) => patchTurn(chatId, turn, (m) => ({ ...m, content: st.text, tools: st.tools.length ? st.tools : undefined })),
+        // 11.3.2 — and who is answering, as soon as the stream says (the
+        // reply's avatar shows that maker's logo while the words arrive).
+        onUpdate: (st) =>
+          patchTurn(chatId, turn, (m) => ({
+            ...m,
+            content: st.text,
+            tools: st.tools.length ? st.tools : undefined,
+            ...(st.model ? { engine: st.model, engineProvider: isProviderId(st.provider) ? st.provider : undefined } : {}),
+          })),
       });
     } catch {
       result = { state: initialStreamState(), failure: 'unavailable', aborted: controller.signal.aborted };
@@ -1253,7 +1264,7 @@ export default function VinaXAIPage(): ReactNode {
               </div>
             </div>
           )}
-          {isEmpty && <Greeting userName={userName} />}
+          {isEmpty && <Greeting userName={userName} maker={modelFamily} />}
           <div ref={listRef} className="ai-scroller" hidden={isEmpty} onScroll={measureBottom}>
             {!isEmpty && (
               <MessageList
@@ -1303,6 +1314,7 @@ export default function VinaXAIPage(): ReactNode {
             docked={!isEmpty}
             modelLabel={modelLabel}
             modelProvider={modelProvider}
+            modelFamily={modelFamily}
             menuOpen={menuOpen}
             onToggleMenu={toggleMenu}
             menu={modelMenu}
