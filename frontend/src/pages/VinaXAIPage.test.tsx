@@ -484,3 +484,62 @@ describe('11.2 — Edit changes the message in place, in the same chat', () => {
     expect(document.body.textContent).not.toContain('before edit');
   });
 });
+
+describe('11.3 — several chats can write at once', () => {
+  it('a reply still writing in one chat does not block asking in another; the sidebar shows which chats are writing', async () => {
+    const base = globalThis.fetch;
+    // The FIRST chat request streams its opening words, then holds until the test lets it finish.
+    let finishFirst: (() => void) | null = null;
+    let chatCalls = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input instanceof Request ? input.url : input);
+        if (!url.endsWith('/api/vinaxai')) return base(input, init);
+        chatCalls += 1;
+        // Later requests go to the default mock, which records them itself.
+        if (chatCalls > 1) return base(input, init);
+        posted.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>);
+        const enc = new TextEncoder();
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(enc.encode('data: {"meta":{"model":"Alpha 70B","modelId":"lab/alpha-70b","provider":"nvidia","mode":"auto"}}\n\ndata: {"delta":"Slow first "}\n\n'));
+            finishFirst = () => {
+              controller.enqueue(enc.encode('data: {"delta":"reply done."}\n\ndata: {"done":true}\n\n'));
+              controller.close();
+            };
+          },
+        });
+        return Promise.resolve(new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } }));
+      }),
+    );
+    mount();
+    await sendText('First question');
+    await waitFor(() => expect(document.body.textContent).toContain('Slow first'));
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy();
+
+    // A new chat is free to ask while the first is still writing.
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: /New chat/ })[0]);
+    });
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
+    await sendText('Second question');
+    await waitFor(() => expect(document.body.textContent).toContain('Here is a short answer.'));
+    expect(posted.map((p) => { const m = p.messages as Array<{ content: string }>; return m[m.length - 1]?.content; })).toEqual(['First question', 'Second question']);
+    // Only the first chat is still writing, and the sidebar says so.
+    expect(screen.getAllByRole('status', { name: 'Writing a reply' })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
+
+    await act(async () => {
+      finishFirst?.();
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    await waitFor(() => expect(screen.queryAllByRole('status', { name: 'Writing a reply' })).toHaveLength(0));
+    // Back in the first chat, its reply arrived whole and in its own thread.
+    await act(async () => {
+      fireEvent.click(screen.getByText('First question', { selector: '.ai-side-title' }));
+    });
+    await waitFor(() => expect(document.body.textContent).toContain('Slow first reply done.'));
+    expect(document.body.textContent).not.toContain('Here is a short answer.');
+  });
+});

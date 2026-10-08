@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { STORE_KEY, exportAllChats, firstName, formatBytes, groupChats, importChats, loadInitialChats, persistChats, storageUsedBytes, timeOfDay, titleFromMessage } from './storage';
 import type { Conversation } from './types';
 
@@ -289,3 +289,36 @@ describe('11.2 — an edited message’s versions are kept with the chat', () =>
   });
 });
 
+
+describe('11.3 — no cap on how many chats are kept', () => {
+  it('keeps every chat, not just the newest 50', () => {
+    const many = Array.from({ length: 180 }, (_, i) => chat(`c${i}`, 10_000 - i));
+    persistChats(many);
+    expect((JSON.parse(localStorage.getItem(STORE_KEY) ?? '[]') as Conversation[]).map((c) => c.id)).toEqual(many.map((c) => c.id));
+  });
+
+  it('when the device is full, leaves out the least recently used unpinned chats until it fits — pinned ones always stay', () => {
+    const chats = Array.from({ length: 20 }, (_, i) => chat(`c${i}`, 1000 - i, i === 19 ? { pinned: true } : {}));
+    const real = Storage.prototype.setItem;
+    // A store that holds at most 12 chats.
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, k: string, v: string) {
+      if (k === STORE_KEY && (JSON.parse(v) as unknown[]).length > 12) throw new DOMException('full', 'QuotaExceededError');
+      real.call(this, k, v);
+    });
+    persistChats(chats);
+    spy.mockRestore();
+    const ids = (JSON.parse(localStorage.getItem(STORE_KEY) ?? '[]') as Conversation[]).map((c) => c.id);
+    expect(ids.length).toBeLessThanOrEqual(12);
+    expect(ids).toContain('c19'); // pinned, and the oldest of all
+    expect(ids.slice(0, 5)).toEqual(['c0', 'c1', 'c2', 'c3', 'c4']); // the newest stay, in order
+    expect(ids).not.toContain('c18');
+  });
+
+  it('storage that refuses every write is not an error', () => {
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('blocked', 'SecurityError');
+    });
+    expect(() => persistChats([chat('a', 1), chat('b', 2, { pinned: true })])).not.toThrow();
+    spy.mockRestore();
+  });
+});
