@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { transcribe } from './media';
+import { openMic } from '@/features/voice/mic';
 import type { MediaPick } from './types';
 
 /**
@@ -56,6 +57,8 @@ export function useServerDictation(opts: {
   /** The recognised text (to be added to the box). */
   onText: (text: string) => void;
   onFallback: (why: ServerDictationFailure) => void;
+  /** 11.3.2 — which microphone is used, when it is not the browser's own pick. */
+  onMicNote?: (note: string) => void;
 }): {
   /** 'starting' = waiting for the microphone (the permission prompt, a slow
    *  device); nothing is being recorded yet. */
@@ -126,8 +129,11 @@ export function useServerDictation(opts: {
     pendingStart.current = token;
     setElapsed(0);
     setState('starting');
-    void navigator.mediaDevices.getUserMedia({ audio: true }).then(
-      (stream) => {
+    // 11.3.2 — a working microphone (a silent virtual input is swapped out).
+    void openMic().then(
+      ({ stream, replaced, label, allSilent }) => {
+        if (replaced) optsRef.current.onMicNote?.(`“${replaced}” sent no sound — recording on ${label}.`);
+        else if (allSilent) optsRef.current.onMicNote?.(`“${label}” isn’t sending any sound. Choose another microphone in Settings → Voice.`);
         if (!alive.current || pendingStart.current !== token) {
           // Stopped, cancelled or unmounted while the mic was opening: let it
           // go. (The state already belongs to whatever happened since.)

@@ -132,7 +132,8 @@ describe('VinaX AI chat', () => {
     // 10.3 — who answered: the provider's logo and the model's original name from meta.
     const chip = document.querySelector('.ai-engine-chip');
     expect(chip?.textContent).toBe('Alpha 70B');
-    expect(chip?.querySelector('svg')?.getAttribute('data-provider')).toBe('nvidia');
+    // 11.3.2 — the maker's logo; a model with no maker in its name is filed under its provider (NVIDIA here).
+    expect(chip?.querySelector('svg')?.getAttribute('data-maker')).toBe('nvidia');
     expect(document.body.textContent).not.toContain('>>>');
     expect(screen.getByRole('button', { name: 'Show an example' })).toBeTruthy();
     const actions = screen.getByRole('group', { name: 'Reply actions' });

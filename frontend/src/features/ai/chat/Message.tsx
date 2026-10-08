@@ -31,6 +31,8 @@ import { placeCitations } from './citations';
 import { MediaCard } from './MediaCard';
 import { CODE_TOOL, isProviderId, WEB_TOOL } from './models';
 import { ProviderLogo } from './ProviderLogo';
+import { hasMakerLogo, MakerLogo } from './MakerLogo';
+import { makerFamily } from './chatStyle';
 import type { ModelChoice, Msg } from './types';
 import { readPickIssue } from './streamClient';
 import { AUTO } from './models';
@@ -489,11 +491,21 @@ export const AssistantMessage = memo(function AssistantMessage({
   // thinking mark.
   const interrupted = !streaming && !m.content && !m.media && !m.player;
   const noReply = interrupted || (!streaming && !!m.content && (m.failed || m.unavailable));
+  const family = m.engine && !waiting && !noReply ? makerFamily(m.engine, null, isProviderId(m.engineProvider) ? m.engineProvider : null) : null;
+  const maker = family && hasMakerLogo(family) ? family : null;
   return (
     <div id={`ai-msg-${index}`} className="ai-msg ai-msg-assistant ai-enter">
-      <span className={cn('ai-msg-mark', markState)} aria-hidden>
-        <SparkleIcon filled />
-      </span>
+      {/* 11.3.2 — once the model answering is known, its maker's logo; until
+          then (and for Auto's own lines) VinaX's mark with its waiting glow. */}
+      {maker ? (
+        <span className="ai-msg-mark ai-msg-mark-maker" aria-hidden>
+          <MakerLogo family={maker} size={24} />
+        </span>
+      ) : (
+        <span className={cn('ai-msg-mark', markState)} aria-hidden>
+          <SparkleIcon filled />
+        </span>
+      )}
       <div className="min-w-0 flex-1">
         <Images images={m.images} />
         {m.media ? (
@@ -622,7 +634,8 @@ export const AssistantMessage = memo(function AssistantMessage({
                 )}
                 {m.engine ? (
                   <span className="ai-engine-chip" title={`Answered by ${m.engine}`}>
-                    {isProviderId(m.engineProvider) && <ProviderLogo provider={m.engineProvider} size={14} />}
+                    {/* 11.3.2 — the maker's logo (the provider's when the maker is unknown). */}
+                    {isProviderId(m.engineProvider) && <MakerLogo family={makerFamily(m.engine, null, m.engineProvider)} provider={m.engineProvider} size={14} />}
                     <span className="truncate">{m.engine}</span>
                     <EngineContext engine={m.engine} />
                   </span>

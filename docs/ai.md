@@ -489,3 +489,16 @@ No secret is added per model. Each provider has one key (`PROVIDER_ENV` in `_lib
 `backend/worker/__tests__/laneRegistry.test.ts` fails the build if there are not exactly four AI key secrets, if a lane signs with anything else, or if a retired engine returns to the wiring.
 
 Features do not change when a model does: they name lanes. See [Lanes and failover](#lanes-and-failover).
+
+## Logos (11.4)
+
+Model makers and providers are shown with their real logos, to say which company's model answered. The outlines come from Simple Icons (simple-icons 16.34.0, CC0-1.0) and are copied into `frontend/src/features/ai/chat/brandMarks.ts`. Only the marks VinaX uses are included.
+
+- `MakerLogo.tsx` shows the logo of the company that made the model, decided by `makerFamily()` in `chatStyle.ts`. It appears on model menu rows, the composer chip, the answered-by chip, the reply's avatar once the answering model is known, and the greeting when a model is picked. Auto keeps VinaX's sparkle.
+- A maker with no published outline (OpenAI, Microsoft, xAI, Cohere) gets a plain letter tile, never a drawn imitation. A model whose maker is unknown shows its provider's logo.
+- `ProviderLogo.tsx` uses the real outlines for NVIDIA, OpenRouter, Gemini and Cloudflare. Groq keeps a simple drawn q because no outline is published.
+- VinaX's own layout, colours, typography and name stay. No other assistant's interface is copied.
+
+## Microphone (11.4)
+
+`features/voice/mic.ts` `openMic()` opens the microphone chosen in Settings → Voice → Microphone (`vinax.ai.micDevice`), or the browser's choice. It then checks for digital silence: every sample exactly 0 for 0.7 s, which a real microphone never produces. A silent input, such as a virtual audio cable like "BlackHole 2ch", is replaced by the first input that carries sound, with the system default tried first. The replacement is remembered and named in a notice. Live voice chat and the mic button use it. Chrome's built-in recognizer always uses Chrome's own microphone choice.

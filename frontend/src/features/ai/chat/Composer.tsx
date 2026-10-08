@@ -15,6 +15,8 @@ import { ConnectorChips, ConnectorList, useConnectors } from './Connectors';
 import { BookIcon, CheckIcon, ClipIcon, FolderIcon, ImageIcon, MicIcon, SendIcon, StopIcon, UploadIcon } from './icons';
 import type { CreateKind } from './media';
 import { ProviderLogo } from './ProviderLogo';
+import { MakerLogo } from './MakerLogo';
+import type { MakerFamily } from './chatStyle';
 import type { AiFeatures, ProviderId } from './types';
 import type { DictationChoice } from './media';
 import { useDictation } from './useDictation';
@@ -36,6 +38,8 @@ export interface ComposerProps {
   modelLabel: string;
   /** 10.3 — the chosen model's provider, for its logo on the chip (null = Auto). */
   modelProvider: ProviderId | null;
+  /** 11.3.2 — the picked model's maker (its logo on the chip); null on Auto. */
+  modelFamily?: MakerFamily | null;
   menuOpen: boolean;
   /** `anchor` is the chip's box, so the page can place the menu on screen. */
   onToggleMenu: (anchor: DOMRect) => void;
@@ -87,6 +91,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     docked,
     modelLabel,
     modelProvider,
+    modelFamily,
     menuOpen,
     onToggleMenu,
     menu,
@@ -174,6 +179,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       setText((prev) => (prev.trim() ? `${prev.replace(/\s+$/, '')} ${t}` : t));
       taRef.current?.focus();
     },
+    onMicNote: (note) => setServerNote(note),
     onFallback: (why: ServerDictationFailure) => {
       if (canSpeech) {
         setServerNote(
@@ -581,7 +587,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 title="Choose model"
                 className={cn('ai-chip ai-model-chip', menuOpen && 'ai-chip-on')}
               >
-                {modelProvider && <ProviderLogo provider={modelProvider} size={16} />}
+                {modelProvider && (modelFamily ? <MakerLogo family={modelFamily} provider={modelProvider} size={16} /> : <ProviderLogo provider={modelProvider} size={16} />)}
                 <span className="truncate">{modelLabel}</span>
                 <ChevronDownIcon className={cn('ai-model-chevron w-3 h-3 shrink-0', menuOpen && 'rotate-180')} />
               </button>

@@ -263,10 +263,11 @@ test('one model menu lists the live catalogue; a pick goes on the wire; connecto
   expect(posted[0].mode).toBe('model');
   expect(posted[0].provider).toBe('openrouter');
   expect(posted[0].model).toBe('maker/big:free');
-  // Who answered: the provider's logo and the model's original name, from meta.
+  // Who answered: the maker's logo (11.4 — a name with no maker in it is
+  // filed under its provider, NVIDIA here) and the model's original name.
   const answered = page.locator('.ai-engine-chip').last();
   await expect(answered).toHaveText('Alpha 70B');
-  await expect(answered.locator('svg[data-provider="nvidia"]')).toHaveCount(1);
+  await expect(answered.locator('svg[data-maker="nvidia"]')).toHaveCount(1);
   await expect(page.locator('[role="status"][aria-label="Thinking"]')).toHaveCount(0, { timeout: 10_000 });
 
   // 10.2 — no Agent mode.
