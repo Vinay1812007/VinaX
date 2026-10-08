@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.1.1': {
+    title: 'You can see the check now',
+    changes: [
+      { type: 'improved', text: 'The quick person check is now always visible under the username when you set up VinaX. It usually ticks itself; tap it if it asks.' },
+    ],
+  },
   '11.1.0': {
     title: 'A quiet check against fake accounts',
     changes: [

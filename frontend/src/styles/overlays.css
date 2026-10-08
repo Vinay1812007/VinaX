@@ -300,8 +300,11 @@ html.reduce-motion .vx-welcome-scrim, html.reduce-motion .vx-welcome-track span 
 .vx-welcome-msg { margin-top: 6px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; }
 .vx-welcome-msg.is-bad { color: var(--vx-danger); }
 .vx-welcome-msg.is-good { color: var(--vx-success); }
-/* 11.1.0 — human check (services/turnstile.ts): takes room only while it asks for a tap. */
-.vx-welcome-human[data-check="interactive"] { margin-top: 12px; }
+/* 11.1.0 — human check (services/turnstile.ts). 11.1.1: on the welcome it is always on
+   screen, with its height held so the sheet does not jump when the box draws in. */
+.vx-welcome-human[data-check="interactive"],
+.vx-welcome-human[data-visible="true"] { margin-top: 12px; }
+.vx-welcome-human[data-visible="true"] { min-height: 65px; }
 .vx-human-check-float { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 96px); z-index: 90; width: min(340px, calc(100vw - 32px)); pointer-events: none; }
 .vx-human-check-float[data-check="interactive"] { pointer-events: auto; }
 .vx-welcome-skip {

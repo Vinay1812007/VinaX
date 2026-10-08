@@ -62,8 +62,8 @@ export default function PrivacyPage() {
         <p>
           When you choose a username, a security provider checks that a person, not a script, is asking. It looks at
           technical signals from your browser and network for that one check, does not use cookies to follow you
-          across sites, and never receives your name, your username or your listening. Most people see nothing; some
-          are asked to tap a box.
+          across sites, and never receives your name, your username or your listening. A small box under the username
+          ticks itself for most people; some are asked to tap it.
         </p>
         <H>Listen Together</H>
         <p>
