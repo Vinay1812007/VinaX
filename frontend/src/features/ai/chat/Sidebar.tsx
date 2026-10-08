@@ -32,17 +32,21 @@ export interface SidebarProps {
   mobileOpen: boolean;
   onCloseMobile: () => void;
   handlers: SidebarHandlers;
+  /** 11.3 — chats writing a reply right now (several can at once). */
+  streaming?: ReadonlySet<string>;
 }
 
 const Row = memo(function Row({
   c,
   active,
+  writing = false,
   renaming,
   onRenaming,
   handlers,
 }: {
   c: Conversation;
   active: boolean;
+  writing?: boolean;
   renaming: boolean;
   onRenaming: (id: string | null) => void;
   handlers: SidebarHandlers;
@@ -80,7 +84,15 @@ const Row = memo(function Row({
           onDoubleClick={() => onRenaming(c.id)}
         >
           <span className="ai-side-title">{c.title}</span>
-          <span className="ai-side-time">{relTime(c.updatedAt)}</span>
+          {writing ? (
+            <span className="ai-side-writing" role="status" aria-label="Writing a reply" title="Writing a reply">
+              <span aria-hidden />
+              <span aria-hidden />
+              <span aria-hidden />
+            </span>
+          ) : (
+            <span className="ai-side-time">{relTime(c.updatedAt)}</span>
+          )}
         </button>
       )}
       <span className="ai-side-actions flex items-center shrink-0">
@@ -111,7 +123,7 @@ const Row = memo(function Row({
  * Escape, and hardware-back close. New chat first, then search, then threads
  * grouped by when they were last touched.
  */
-export function Sidebar({ chats, activeId, collapsed, onCollapse, mobileOpen, onCloseMobile, handlers }: SidebarProps): ReactNode {
+export function Sidebar({ chats, activeId, collapsed, onCollapse, mobileOpen, onCloseMobile, handlers, streaming }: SidebarProps): ReactNode {
   const [query, setQuery] = useState('');
   const [renaming, setRenaming] = useState<string | null>(null);
   const ref = useRef<HTMLElement>(null);
@@ -129,7 +141,7 @@ export function Sidebar({ chats, activeId, collapsed, onCollapse, mobileOpen, on
   }, [desktop, mobileOpen, onCloseMobile]);
 
   // Re-grouped whenever `chats` changes (a streaming reply does that often),
-  // which is cheap for ≤ 50 chats; the rows themselves are memoised.
+  // which stays cheap for hundreds of chats; the rows themselves are memoised.
   const groups = useMemo(() => groupChats(chats, query), [chats, query]);
 
   return (
@@ -187,7 +199,7 @@ export function Sidebar({ chats, activeId, collapsed, onCollapse, mobileOpen, on
               <h2 className="ai-side-heading">{label}</h2>
               <ul>
                 {list.map((c) => (
-                  <Row key={c.id} c={c} active={c.id === activeId} renaming={renaming === c.id} onRenaming={setRenaming} handlers={handlers} />
+                  <Row key={c.id} c={c} active={c.id === activeId} writing={!!streaming?.has(c.id)} renaming={renaming === c.id} onRenaming={setRenaming} handlers={handlers} />
                 ))}
               </ul>
             </section>

@@ -12,6 +12,13 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.3.0': {
+    title: 'Ask in several chats at once',
+    changes: [
+      { type: 'new', text: 'VinaX AI no longer makes you wait: while one chat is still writing its answer, open another chat (or start a new one) and ask there. Chats that are still writing show three moving dots in the list.' },
+      { type: 'improved', text: 'Every chat is kept. VinaX AI used to keep only your newest 50 chats on this device; now it keeps them all, and only if your device runs out of space are the oldest unpinned ones left out.' },
+    ],
+  },
   '11.2.0': {
     title: 'VinaX AI: your model, your voice, your sources',
     changes: [

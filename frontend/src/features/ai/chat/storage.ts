@@ -22,7 +22,6 @@ import type { Conversation, Msg } from './types';
 import { mapVersionTurns, reviveVersions } from './versions';
 
 export const STORE_KEY = 'vinax_ai_chats_v1';
-export const MAX_STORED_CHATS = 50;
 
 export const uid = (): string =>
   typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -170,11 +169,22 @@ export function stripImagesForPersist(chats: Conversation[]): Conversation[] {
  */
 export function persistChats(chats: Conversation[]): void {
   if (typeof localStorage === 'undefined') return;
-  try {
-    const keep = chats.filter((c) => !c.temporary);
-    localStorage.setItem(STORE_KEY, JSON.stringify(stripImagesForPersist(keep).slice(0, MAX_STORED_CHATS)));
-  } catch {
-    /* storage full or blocked — non-fatal */
+  // 11.3 — no count cap: every chat is kept (the newest 50 used to be all that
+  // survived a reload, silently). Only when the device's storage is actually
+  // full are the least recently used unpinned chats left out of what is
+  // written — a tenth at a time until it fits — and the list in memory stays
+  // whole for this visit.
+  let keep = stripImagesForPersist(chats.filter((c) => !c.temporary));
+  for (;;) {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(keep));
+      return;
+    } catch {
+      const droppable = keep.filter((c) => !c.pinned).sort((a, b) => a.updatedAt - b.updatedAt);
+      if (!droppable.length) return; // blocked storage, or pinned chats alone overflow it — non-fatal
+      const out = new Set(droppable.slice(0, Math.max(1, Math.ceil(droppable.length / 10))).map((c) => c));
+      keep = keep.filter((c) => !out.has(c));
+    }
   }
 }
 

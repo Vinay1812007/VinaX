@@ -123,8 +123,18 @@ export default function VinaXAIPage(): ReactNode {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the stamp IS the dependency
   const artifactCount = useMemo(() => collectArtifacts(messages).length, [threadStamp]);
   const isEmpty = messages.length === 0;
-  const [busy, setBusy] = useState(false);
-  const abortRef = useRef<AbortController | null>(null);
+  /* 11.3 — every chat can have its own reply in flight: start one, open
+     another chat and ask there while the first is still writing. A turn is
+     keyed by its chat; `busy` means "the chat on screen is writing". */
+  const turnsRef = useRef(new Map<string, { turn: string; controller: AbortController }>());
+  const [streamingChats, setStreamingChats] = useState<ReadonlySet<string>>(() => new Set());
+  /** The turn the live voice chat speaks from (voice follows one turn at a time). */
+  const voiceTurnRef = useRef('');
+  const busy = streamingChats.has(active?.id ?? '');
+  // The chat on screen, for callbacks that outlive a render (a reply that
+  // finishes in another chat must not read itself aloud here).
+  const activeIdRef = useRef('');
+  activeIdRef.current = active?.id ?? '';
 
   /* ---------- model ---------- */
   const [choice, setChoice] = useState<ModelChoice>(loadInitialChoice);
@@ -276,7 +286,8 @@ export default function VinaXAIPage(): ReactNode {
     stickRef.current = follow.pinned;
     setAtBottom(follow.pinned);
     if (follow.rescroll) list.scrollTo({ top: list.scrollHeight, behavior: 'auto' });
-  }, []);
+    // A state setter never changes; listed so the compiler keeps this memoised.
+  }, [setAtBottom]);
   useEffect(() => {
     const list = listRef.current;
     if (list && stickRef.current) list.scrollTo({ top: list.scrollHeight, behavior: 'auto' });
@@ -422,7 +433,7 @@ export default function VinaXAIPage(): ReactNode {
     onUserFinal: (text) => {
       // 11.0 — speaking over a reply that is still arriving ends that reply
       // first; the new utterance used to be dropped while the turn was busy.
-      if (turnRef.current) stopRef.current();
+      stopRef.current();
       void sendRef.current(text);
     },
     onStopReply: () => stopRef.current(),
@@ -443,20 +454,29 @@ export default function VinaXAIPage(): ReactNode {
     setChats((prev) => prev.map((c) => (c.id === chatId ? { ...c, messages: fn(c.messages), updatedAt: Date.now() } : c)));
   };
   const setActiveMessages = (fn: (prev: Msg[]) => Msg[]): void => updateMessages(active?.id ?? '', fn);
-  /* 11.0 — one turn at a time, and each turn owns its own reply. A turn tags
-     the placeholder it adds; only that turn may patch it, so a stopped turn
-     that finishes late can never write into the next turn's bubble, and it
-     only clears `busy` when it is still the turn in flight. */
-  const turnRef = useRef('');
-  const [turnChatId, setTurnChatId] = useState('');
-  const endTurn = (turn: string, controller: AbortController): void => {
-    if (abortRef.current === controller) abortRef.current = null;
-    if (turnRef.current !== turn) return;
-    turnRef.current = '';
-    setBusy(false);
+  /* 11.0 — each turn owns its own reply. A turn tags the placeholder it adds;
+     only that turn may patch it, so a stopped turn that finishes late can
+     never write into the next turn's bubble. 11.3 — one turn per CHAT (not
+     one for the whole page): a turn ends only its own chat's busy state. */
+  const syncStreaming = (): void => setStreamingChats(new Set(turnsRef.current.keys()));
+  const beginTurn = (chatId: string, turn: string, controller: AbortController): void => {
+    turnsRef.current.set(chatId, { turn, controller });
+    syncStreaming();
   };
-  /** A newer turn has begun since `turn` started (not merely: it was stopped). */
-  const superseded = (turn: string): boolean => turnRef.current !== '' && turnRef.current !== turn;
+  const endTurn = (chatId: string, turn: string): void => {
+    if (turnsRef.current.get(chatId)?.turn !== turn) return;
+    turnsRef.current.delete(chatId);
+    syncStreaming();
+  };
+  /** Stop the reply a chat is writing, if any. */
+  const stopChat = (chatId: string): void => {
+    const t = turnsRef.current.get(chatId);
+    if (!t) return;
+    t.controller.abort();
+    turnsRef.current.delete(chatId);
+    syncStreaming();
+  };
+
   const patchTurn = (chatId: string, turn: string, patch: (m: Msg) => Msg): void =>
     updateMessages(chatId, (prev) => {
       const next = [...prev];
@@ -497,21 +517,22 @@ export default function VinaXAIPage(): ReactNode {
     showToast('Temporary chat — nothing from it is saved on this device');
   };
 
-  const stop = (): void => {
-    abortRef.current?.abort();
-    abortRef.current = null;
-    turnRef.current = '';
-    setBusy(false);
-  };
+  /** Stop: the reply the chat on screen is writing. Other chats keep going. */
+  const stop = (): void => stopChat(activeIdRef.current);
   stopRef.current = stop;
-  // Leaving the page ends the turn in flight.
-  useEffect(() => () => abortRef.current?.abort(), []);
+  // Leaving the page ends every turn in flight.
+  useEffect(() => {
+    const turns = turnsRef.current;
+    return () => turns.forEach((t) => t.controller.abort());
+  }, []);
 
   const removeChat = (id: string): void => {
     const index = chats.findIndex((c) => c.id === id);
     const removed = chats[index];
     if (!removed) return;
     const wasActive = id === (active?.id ?? '');
+    // 11.3 — a chat deleted while it is writing stops writing.
+    stopChat(id);
     setChats((prev) => {
       const next = prev.filter((c) => c.id !== id);
       const list = next.length ? next : [freshChat()];
@@ -536,7 +557,8 @@ export default function VinaXAIPage(): ReactNode {
     const snapshot = chats;
     const snapshotActive = activeId;
     const c = freshChat();
-    stop();
+    // 11.3 — every chat that is writing stops: they are all being deleted.
+    [...turnsRef.current.keys()].forEach(stopChat);
     setChats([c]);
     setActiveId(c.id);
     setSettingsOpen(false);
@@ -622,10 +644,8 @@ export default function VinaXAIPage(): ReactNode {
         const muted = useSettingsStore.getState().mutedLanguages ?? [];
         const turn = `${Date.now().toString(36)}-${nextTurnNumber()}`;
         const controller = new AbortController();
-        turnRef.current = turn;
-        abortRef.current = controller;
-        setTurnChatId(chatId);
-        setBusy(true);
+        if (turnsRef.current.has(chatId)) return true;
+        beginTurn(chatId, turn, controller);
         updateMessages(chatId, (prev) => [...prev, { role: 'user', content: `/playlist ${arg}` }, { role: 'assistant', content: '', turn }]);
         let reply = 'The playlist engine didn’t answer — try again in a moment.';
         try {
@@ -641,7 +661,7 @@ export default function VinaXAIPage(): ReactNode {
         }
         if (controller.signal.aborted) reply = 'Stopped before the playlist was ready.';
         patchTurn(chatId, turn, () => ({ role: 'assistant', content: reply }));
-        endTurn(turn, controller);
+        endTurn(chatId, turn);
         return true;
       }
       default:
@@ -660,7 +680,8 @@ export default function VinaXAIPage(): ReactNode {
     const q = raw.trim();
     // The ref, not the `busy` state: a turn stopped a moment ago (speaking over
     // a reply) is over at once, before the next render.
-    if ((!q && attachments.length === 0) || turnRef.current) return;
+    // 11.3 — per chat: this chat is already writing a reply (other chats may be too).
+    if ((!q && attachments.length === 0) || turnsRef.current.has(chatId)) return;
 
     // 10.3 — Create image / Create music clip: one prompt → one picture or one
     // clip, made by the model in the bar and shown in the thread. Before the
@@ -681,10 +702,7 @@ export default function VinaXAIPage(): ReactNode {
       const pick = resolveMediaPick(catalog.providers, kind, createPicks[kind]);
       const turn = `${Date.now().toString(36)}-${nextTurnNumber()}`;
       const controller = new AbortController();
-      turnRef.current = turn;
-      abortRef.current = controller;
-      setTurnChatId(chatId);
-      setBusy(true);
+      beginTurn(chatId, turn, controller);
       updateMessages(chatId, (prev) => [
         ...(retry ? retry.history : prev),
         { role: 'user', content: q, ...keptVersions },
@@ -700,7 +718,7 @@ export default function VinaXAIPage(): ReactNode {
           ? { role: 'assistant', content: `${kind === 'image' ? 'Made a picture' : 'Made a music clip'} for: ${q}`, media: res.media }
           : { role: 'assistant', content: res.line, mediaKind: kind },
       );
-      endTurn(turn, controller);
+      endTurn(chatId, turn);
       return;
     }
 
@@ -717,10 +735,7 @@ export default function VinaXAIPage(): ReactNode {
     const userMsg: Msg = { role: 'user', content: content || '(image)', images: imgs.length ? imgs : undefined, ...keptVersions };
     const turn = `${Date.now().toString(36)}-${nextTurnNumber()}`;
     const controller = new AbortController();
-    turnRef.current = turn;
-    abortRef.current = controller;
-    setTurnChatId(chatId);
-    setBusy(true);
+    beginTurn(chatId, turn, controller);
     updateMessages(chatId, () => [...conversation, userMsg, { role: 'assistant', content: '', turn }]);
     setChats((prev) =>
       prev.map((c) =>
@@ -739,6 +754,8 @@ export default function VinaXAIPage(): ReactNode {
 
     const now = stateRef.current;
     const voiceLive = Boolean(voiceEngineRef.current);
+    // 11.3 — the live voice chat speaks this turn (the newest spoken one wins).
+    if (voiceLive) voiceTurnRef.current = turn;
     const player = usePlayerStore.getState();
 
     // Anything that goes wrong while the request is being put together is a
@@ -770,7 +787,7 @@ export default function VinaXAIPage(): ReactNode {
         body,
         signal: controller.signal,
         onDelta: (delta) => {
-          if (!superseded(turn)) voiceEngineRef.current?.feed(delta);
+          if (voiceTurnRef.current === turn) voiceEngineRef.current?.feed(delta);
         },
         // 11.2 — the tools ride along while it streams, so a reply that is
         // searching the web can say so before its first word.
@@ -781,8 +798,9 @@ export default function VinaXAIPage(): ReactNode {
     }
 
     // A newer turn (the listener spoke over this one) owns the voice now.
-    const voiceIsOurs = !superseded(turn);
-    endTurn(turn, controller);
+    const voiceIsOurs = voiceTurnRef.current === turn;
+    if (voiceIsOurs) voiceTurnRef.current = '';
+    endTurn(chatId, turn);
     // 11.0 — the server no longer lists the picked model: forget it everywhere
     // and fall back to Auto, so Retry (and every later message) works.
     if (result.failure === 'bad_model' && now.choice.mode === 'model') {
@@ -828,11 +846,11 @@ export default function VinaXAIPage(): ReactNode {
       sources: engine && state.sources ? state.sources : undefined,
       followups: split.followups.length ? split.followups : undefined,
     }));
-    if (!voiceIsOurs) return;
-    if (voiceEngineRef.current) {
+    if (voiceLive && !voiceIsOurs) return;
+    if (voiceLive && voiceEngineRef.current) {
       if (split.body) voiceEngineRef.current.finish(finalText);
       else voiceEngineRef.current.cancelTurn();
-    } else if (stateRef.current.autoRead && split.body && !result.aborted && readAloudSupported()) {
+    } else if (!voiceLive && chatId === activeIdRef.current && stateRef.current.autoRead && split.body && !result.aborted && readAloudSupported()) {
       // The reply is the last message: [...conversation, user, assistant].
       readAloud(`${chatId}:${conversation.length + 1}`, split.body);
     }
@@ -896,7 +914,7 @@ export default function VinaXAIPage(): ReactNode {
      * message emptied the chat back to the greeting).
      */
     edit: (idx: number, content: string) => {
-      if (busy || turnRef.current || !active) return;
+      if (busy || !active || turnsRef.current.has(active.id)) return;
       const at = active.messages[idx];
       const text = content.trim();
       if (!at || at.role !== 'user' || !text) return;
@@ -1028,6 +1046,7 @@ export default function VinaXAIPage(): ReactNode {
         mobileOpen={sidebarOpen}
         onCloseMobile={closeSidebar}
         handlers={sidebarHandlers}
+        streaming={streamingChats}
       />
 
       {promptsDraft !== null && (
@@ -1239,7 +1258,7 @@ export default function VinaXAIPage(): ReactNode {
                 chatId={active?.id ?? ''}
                 messages={messages}
                 busy={busy}
-                streamingHere={turnChatId === (active?.id ?? '')}
+                streamingHere={busy}
                 speakingId={speakingId}
                 handlers={messageHandlers}
               />

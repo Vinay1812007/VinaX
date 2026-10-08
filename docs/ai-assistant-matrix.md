@@ -18,7 +18,8 @@ Status words:
 | History grouped by recency, pinned first; search over titles and message text | done | `storage.ts` `groupChats` |
 | Rename, pin, delete a chat | done | `Sidebar.tsx` |
 | Export one chat; export every chat as JSON; import, validated field by field | done | `storage.ts` `exportChat`, `exportAllChats`, `importChats` |
-| Chats kept on the device | partial | `vinax_ai_chats_v1`, at most `MAX_STORED_CHATS`; images are stripped before saving |
+| Chats kept on the device | yes | `vinax_ai_chats_v1`, every chat (11.3: no count cap); only when the device's storage is full are the least recently used unpinned chats left out, a tenth at a time; images are stripped before saving |
+| Several chats writing at once | yes | 11.3: one turn per chat (`turnsRef` in `VinaXAIPage.tsx`); Stop stops the chat on screen; the sidebar shows three dots on every chat still writing. The server's per-person limit (burst 20, 10 a minute) still applies |
 | Temporary chat, never written to the device | done | dropped in `persistChats` |
 | Projects with instructions and reference files | partial | `features/ai/projects.ts`, `chat/ProjectSheet.tsx`; 10 files per project, 20,000 characters each |
 | **Chat styles** — the chat restyles itself to the model's maker family (11.0) | done | `chat/chatStyle.ts`, `ChatStyleScope.tsx`, `styles/ai-styles.css`; nine styles; `chatStyle.test.ts` |
