@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { LiveVoiceEngine } from '@/features/voice/liveVoiceEngine';
+import { LiveVoiceEngine, type ServerVoiceStatus } from '@/features/voice/liveVoiceEngine';
 import { pickSynthVoice } from '@/features/voice/pickSynthVoice';
 import { createVoiceUiStore, type VoiceUiStore } from './liveVoiceStore';
 
@@ -28,6 +28,18 @@ export interface LiveVoice {
   end: () => void;
   interrupt: () => void;
   toggleMute: () => void;
+  /** 11.2 — hold the chat while the voice picker is open: the mic closes (a
+   *  preview must never be heard as the listener speaking) and a reply being
+   *  spoken stops. Releasing restores the listener's own mute choice. */
+  hold: (on: boolean) => void;
+}
+
+/** The quiet line shown when the chosen voice hands over to the device. */
+export function voiceFallbackNotice(status: ServerVoiceStatus): string {
+  if (status === 'ok') return '';
+  return status === 'quota'
+    ? 'Your chosen voice is out of quota right now — this device’s voice is speaking instead.'
+    : 'Your chosen voice didn’t answer — this device’s voice is speaking instead.';
 }
 
 /**
@@ -81,6 +93,10 @@ export function useLiveVoice(opts: {
         },
         onAssistantCaption: (t) => store.set({ aiCaption: t, userCaption: '' }),
         onNotice: (t) => store.set({ notice: t }),
+        onServerVoice: (st) => {
+          const voiceNotice = voiceFallbackNotice(st);
+          if (store.get().voiceNotice !== voiceNotice) store.set({ voiceNotice });
+        },
         onFatal: (reason) => {
           store.set({
             error:
@@ -121,8 +137,29 @@ export function useLiveVoice(opts: {
   const toggleMute = useCallback((): void => {
     const muted = !store.get().muted;
     store.set({ muted });
-    engineRef.current?.setMuted(muted);
+    // While held the mic stays closed; the new choice applies on release.
+    if (!store.get().held) engineRef.current?.setMuted(muted);
   }, [store]);
+
+  const hold = useCallback(
+    (on: boolean): void => {
+      if (store.get().held === on) return;
+      store.set({ held: on });
+      const engine = engineRef.current;
+      if (!engine) return;
+      if (on) {
+        engine.setMuted(true);
+        const st = store.get().state;
+        if (st === 'speaking' || st === 'thinking') {
+          optsRef.current.onStopReply();
+          engine.interrupt();
+        }
+      } else {
+        engine.setMuted(store.get().muted);
+      }
+    },
+    [store],
+  );
 
   // Leaving the page ends a live voice chat.
   useEffect(
@@ -133,5 +170,5 @@ export function useLiveVoice(opts: {
     [],
   );
 
-  return { active, engineRef, store, levelRef, waveRef, start, end, interrupt, toggleMute };
+  return { active, engineRef, store, levelRef, waveRef, start, end, interrupt, toggleMute, hold };
 }

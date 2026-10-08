@@ -19,8 +19,9 @@
 import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { rateLimitAsync } from '../../_lib/ratelimit';
 import { dbErrorCode, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
-import { AI_PROVIDERS, LANE_MODEL, LANE_PROVIDER, PROVIDER_ENV, PROVIDER_LABEL, PROVIDER_LANE, isMaestroEndpoint, isRefusalCode, laneEndpoint, laneModel, providerKey, providerKeySource, type AiEnv, type AiProvider, type Lane } from '../../_lib/ai';
+import { AI_PROVIDERS, LANE_MODEL, LANE_PROVIDER, providerEnvName, PROVIDER_LABEL, PROVIDER_LANE, isMaestroEndpoint, isRefusalCode, laneEndpoint, laneModel, providerKey, providerKeySource, type AiEnv, type AiProvider, type Lane } from '../../_lib/ai';
 import { maestroFetch } from '../../_lib/maestro';
+import { isWorkersAiEndpoint, workersAiFetch, type WorkersAiBinding } from '../../_lib/workersai';
 import { catalogDefaultModel, fetchMedia, fetchTools, type MediaKind, type ToolEntry } from '../../_lib/catalog';
 import { aggregateLaneHealth, type AiEventRow, type LaneHealth } from '../../_lib/laneHealth';
 
@@ -44,7 +45,7 @@ interface KeyHealth {
   note: string | null;
 }
 
-async function pingKey(name: string, key: string | null, model: string, base: string): Promise<KeyHealth> {
+async function pingKey(name: string, key: string | null, model: string, base: string, ai?: WorkersAiBinding): Promise<KeyHealth> {
   if (!key) return { key: name, configured: false, ok: false, status: null, model: null, note: 'not configured' };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 9000);
@@ -52,7 +53,9 @@ async function pingKey(name: string, key: string | null, model: string, base: st
     const ping = { model, max_tokens: 4, messages: [{ role: 'user', content: 'ping' }] };
     const res = isMaestroEndpoint(base)
       ? await maestroFetch(key, model, ping, controller.signal)
-      : await fetch(base, {
+      : isWorkersAiEndpoint(base)
+        ? await workersAiFetch(ai ?? null, ping, controller.signal)
+        : await fetch(base, {
           method: 'POST',
           headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
           body: JSON.stringify(ping),
@@ -93,9 +96,9 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     Promise.all(
       AI_PROVIDERS.map(async (p): Promise<KeyHealth> => {
         const lanes = lanesOf(p);
-        const row = await pingKey(`${PROVIDER_LABEL[p]} · ${lanes.join(', ')}`, providerKey(env, p), await pingModel(p), laneEndpoint(env, PROVIDER_LANE[p]));
+        const row = await pingKey(`${PROVIDER_LABEL[p]} · ${lanes.join(', ')}`, providerKey(env, p), await pingModel(p), laneEndpoint(env, PROVIDER_LANE[p]), env.AI);
         const [media, tools] = await Promise.all([fetchMedia(env, p), fetchTools(env, p)]);
-        return { ...row, provider: p, env: PROVIDER_ENV[p], envInUse: providerKeySource(env, p)?.name ?? null, lanes, media: media.map((m) => ({ id: m.id, name: m.name, kind: m.kind })), tools };
+        return { ...row, provider: p, env: providerEnvName(p), envInUse: providerKeySource(env, p)?.name ?? null, lanes, media: media.map((m) => ({ id: m.id, name: m.name, kind: m.kind })), tools };
       }),
     ),
     sbSelectResult<{ created_at?: string }>(env, 'vinax_events', 'select=created_at&order=created_at.desc&limit=1'),

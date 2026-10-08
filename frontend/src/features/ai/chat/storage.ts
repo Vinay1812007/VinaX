@@ -10,9 +10,16 @@
  * `sources`, `sourcePreviews` or agent `steps`. Chats saved by an older build
  * still hold them; they are dropped when the chats are read, so the next save
  * writes the device clean, and an import never revives them.
+ *
+ * 11.0 / 11.2 — `sources` is back in a new shape ({ items, queries, entry,
+ * supports }: what a web-grounded reply drew on). An object in that shape is
+ * kept (re-validated, so the inline source chips survive a reload); the old
+ * 10.x list of urls is still dropped.
  */
 import { isProviderId } from './models';
+import { readSources } from './streamReducer';
 import type { Conversation, Msg } from './types';
+import { mapVersionTurns, reviveVersions } from './versions';
 
 export const STORE_KEY = 'vinax_ai_chats_v1';
 export const MAX_STORED_CHATS = 50;
@@ -32,16 +39,20 @@ export const freshChat = (): Conversation => ({
 /** Message fields earlier builds stored and 10.2 retired (see the module note). */
 const RETIRED_MSG_FIELDS = ['sources', 'sourcePreviews', 'steps'] as const;
 
-/** 10.2 — a stored chat without the retired fields (see the module note). */
+/** 10.2 — a stored chat without the retired fields (see the module note).
+ *  11.2 — `sources` in the 11.0 shape is kept, re-validated. */
 function dropRetiredFields(c: Conversation): Conversation {
   if (!c || !Array.isArray(c.messages)) return c;
-  if (!c.messages.some((m) => m && RETIRED_MSG_FIELDS.some((k) => k in m))) return c;
+  const retired = (m: Msg): boolean => RETIRED_MSG_FIELDS.some((k) => k in m);
+  if (!c.messages.some((m) => m && retired(m))) return c;
   return {
     ...c,
     messages: c.messages.map((m) => {
-      if (!m || !RETIRED_MSG_FIELDS.some((k) => k in m)) return m;
+      if (!m || !retired(m)) return m;
       const copy: Record<string, unknown> = { ...m };
+      const sources = m.role === 'assistant' ? readSources(copy.sources) : null;
       for (const k of RETIRED_MSG_FIELDS) delete copy[k];
+      if (sources) copy.sources = sources;
       return copy as unknown as Msg;
     }),
   };
@@ -70,12 +81,44 @@ function settleInterrupted(c: Conversation): Conversation {
   };
 }
 
+/**
+ * 11.2 — a stored message's earlier versions (./versions.ts) are read back
+ * checked: a malformed list is dropped, the shown index is clamped, and the
+ * turns each version keeps must be real messages (their in-flight tags never
+ * survive a reload, as for the thread itself).
+ */
+function storedTurn(raw: unknown, depth: number): Msg | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if ((r.role !== 'user' && r.role !== 'assistant') || typeof r.content !== 'string') return null;
+  const m = { ...(raw as Msg) };
+  delete m.turn;
+  delete m.creating;
+  delete m.versions;
+  delete m.version;
+  return { ...m, ...reviveVersions(r.versions, r.version, storedTurn, depth) };
+}
+function reviveStoredVersions(c: Conversation): Conversation {
+  if (!c || !Array.isArray(c.messages)) return c;
+  if (!c.messages.some((m) => m && ('versions' in m || 'version' in m))) return c;
+  return {
+    ...c,
+    messages: c.messages.map((m) => {
+      if (!m || !('versions' in m || 'version' in m)) return m;
+      const rest: Msg = { ...m };
+      delete rest.versions;
+      delete rest.version;
+      return m.role === 'user' ? { ...rest, ...reviveVersions(m.versions, m.version, storedTurn) } : rest;
+    }),
+  };
+}
+
 export function loadChats(): Conversation[] {
   if (typeof localStorage === 'undefined') return [];
   try {
     const raw = localStorage.getItem(STORE_KEY);
     const arr = raw ? (JSON.parse(raw) as Conversation[]) : [];
-    return Array.isArray(arr) ? arr.map(dropRetiredFields).map(settleInterrupted) : [];
+    return Array.isArray(arr) ? arr.map(dropRetiredFields).map(settleInterrupted).map(reviveStoredVersions) : [];
   } catch {
     return [];
   }
@@ -103,16 +146,20 @@ export function loadInitialChats(): Conversation[] {
 // 10.3 — a created picture or music clip follows the same rule: its model,
 // provider and prompt are kept, its data is not, and the thread shows a
 // placeholder line in its place after a reload.
+// 11.2 — the same holds for the earlier versions of an edited message and
+// every turn they keep.
+function stripMsg(m: Msg): Msg {
+  let out = m;
+  if (m.images && m.images.length) out = { ...out, images: m.images.map(() => '') };
+  if (m.media?.src) out = { ...out, media: { ...m.media, src: '' } };
+  if (m.versions?.length) {
+    out = mapVersionTurns(out, stripMsg);
+    out = { ...out, versions: out.versions?.map((v) => (v.images?.length ? { ...v, images: v.images.map(() => '') } : v)) };
+  }
+  return out;
+}
 export function stripImagesForPersist(chats: Conversation[]): Conversation[] {
-  return chats.map((c) => ({
-    ...c,
-    messages: c.messages.map((m) => {
-      let out = m;
-      if (m.images && m.images.length) out = { ...out, images: m.images.map(() => '') };
-      if (m.media?.src) out = { ...out, media: { ...m.media, src: '' } };
-      return out;
-    }),
-  }));
+  return chats.map((c) => ({ ...c, messages: c.messages.map(stripMsg) }));
 }
 
 /**
@@ -229,7 +276,7 @@ export const exportAllChats = (chats: Conversation[]): void =>
 const MAX_IMPORT_MESSAGES = 400;
 const MAX_IMPORT_TEXT = 60_000;
 
-function reviveMsg(raw: unknown): Msg | null {
+function reviveMsg(raw: unknown, depth = 0): Msg | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Record<string, unknown>;
   if ((r.role !== 'user' && r.role !== 'assistant') || typeof r.content !== 'string') return null;
@@ -254,6 +301,11 @@ function reviveMsg(raw: unknown): Msg | null {
       prompt: typeof media.prompt === 'string' ? media.prompt.slice(0, 2000) : '',
     };
   }
+  // 11.2 — what a web-grounded reply drew on (validated like a live stream's).
+  if (r.role === 'assistant' && r.sources) {
+    const sources = readSources(r.sources);
+    if (sources) m.sources = sources;
+  }
   if (r.player === true) m.player = true;
   if (r.rating === 'up' || r.rating === 'down') m.rating = r.rating;
   if (r.pinned === true) m.pinned = true;
@@ -264,6 +316,8 @@ function reviveMsg(raw: unknown): Msg | null {
     const f = r.followups.filter((t): t is string => typeof t === 'string').map((t) => t.slice(0, 200)).slice(0, 3);
     if (f.length) m.followups = f;
   }
+  // 11.2 — an edited message's earlier versions, each turn read the same way.
+  if (m.role === 'user') Object.assign(m, reviveVersions(r.versions, r.version, reviveMsg, depth));
   return m;
 }
 
@@ -284,7 +338,7 @@ export function importChats(text: string, existing: Conversation[]): { chats: Co
     if (!raw || typeof raw !== 'object') continue;
     const r = raw as Record<string, unknown>;
     if (!Array.isArray(r.messages)) continue;
-    const messages = r.messages.slice(0, MAX_IMPORT_MESSAGES).map(reviveMsg).filter((m): m is Msg => m !== null);
+    const messages = r.messages.slice(0, MAX_IMPORT_MESSAGES).map((x) => reviveMsg(x)).filter((m): m is Msg => m !== null);
     if (!messages.length) continue;
     const id = typeof r.id === 'string' && r.id && r.id.length <= 80 ? r.id : uid();
     if (have.has(id)) continue;

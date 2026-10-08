@@ -464,7 +464,7 @@ describe('findCatalogModel / resolveCatalogModel', () => {
 // GET /api/aimodels
 // ---------------------------------------------------------------------------
 
-async function getModels(env: Record<string, string>): Promise<{ status: number; headers: Headers; body: { fetchedAt: string; providers: Array<{ id: string; label: string; configured: boolean; models: Array<Record<string, unknown>> }> } }> {
+async function getModels(env: Record<string, unknown>): Promise<{ status: number; headers: Headers; body: { fetchedAt: string; providers: Array<{ id: string; label: string; configured: boolean; models: Array<Record<string, unknown>> }> } }> {
   const res = await aiModelsGet({ request: new Request('https://x.test/api/aimodels', { headers: { 'cf-connecting-ip': `10.9.0.${Math.floor(Math.random() * 250)}` } }), env });
   return { status: res.status, headers: res.headers, body: (await res.json()) as never };
 }
@@ -472,7 +472,8 @@ async function getModels(env: Record<string, string>): Promise<{ status: number;
 describe('GET /api/aimodels — the four-provider menu', () => {
   it('always lists the four providers, in order, with label, configured and model rows of exactly five fields', async () => {
     stubProviders();
-    const { status, headers, body } = await getModels(ALL_KEYS);
+    // 11.2 — with the AI binding present the fifth provider is configured too.
+    const { status, headers, body } = await getModels({ ...ALL_KEYS, AI: { run: async () => ({ response: '' }) } });
     expect(status).toBe(200);
     expect(headers.get('cache-control')).toBe('public, max-age=300, stale-while-revalidate=900');
     expect(headers.get('access-control-allow-origin')).toBe('*');
@@ -483,6 +484,7 @@ describe('GET /api/aimodels — the four-provider menu', () => {
       ['openrouter', 'OpenRouter', true],
       ['groq', 'Groq', true],
       ['gemini', 'Gemini', true],
+      ['cloudflare', 'Cloudflare', true],
     ]);
     for (const p of body.providers) {
       expect(p.models.length).toBeGreaterThan(0);
@@ -505,6 +507,7 @@ describe('GET /api/aimodels — the four-provider menu', () => {
       ['openrouter', false, false],
       ['groq', true, true],
       ['gemini', false, false],
+      ['cloudflare', false, false],
     ]);
   });
 

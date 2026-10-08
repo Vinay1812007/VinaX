@@ -13,6 +13,7 @@ import { Greeting, Suggestions, type QuickAction } from '@/features/ai/chat/Empt
 import { LiveVoiceHost } from '@/features/ai/chat/LiveVoiceHost';
 import { MessageList, followAfterScroll } from '@/features/ai/chat/MessageList';
 import type { MessageHandlers } from '@/features/ai/chat/Message';
+import { editedMessage, showVersion } from '@/features/ai/chat/versions';
 import { ChatStyleContext, useChatStyle } from '@/features/ai/chat/ChatStyleScope';
 import { layoutAttrs } from '@/features/ai/chat/chatStyle';
 import { ModelMenu } from '@/features/ai/chat/ModelMenu';
@@ -63,7 +64,7 @@ import {
   writePref,
   titleFromMessage,
 } from '@/features/ai/chat/storage';
-import { canRetry, failureMessage, needsEdit, runChatStream, type ChatStreamResult } from '@/features/ai/chat/streamClient';
+import { canRetry, failureMessage, needsEdit, pickIssueMessage, runChatStream, type ChatStreamResult } from '@/features/ai/chat/streamClient';
 import { initialStreamState } from '@/features/ai/chat/streamReducer';
 import type { Conversation, MediaPick, ModelChoice, Msg } from '@/features/ai/chat/types';
 import { useModelCatalog } from '@/features/ai/chat/useModelCatalog';
@@ -652,7 +653,7 @@ export default function VinaXAIPage(): ReactNode {
   const send = async (
     raw: string,
     attachments: Attachment[] = [],
-    retry?: { history: Msg[]; previousReply: string; user: Msg; media?: 'image' | 'music' },
+    retry?: { history: Msg[]; previousReply: string; user: Msg; media?: 'image' | 'music'; choice?: ModelChoice },
   ): Promise<void> => {
     const chatId = active?.id ?? '';
     const conversation = retry?.history ?? messages;
@@ -667,6 +668,11 @@ export default function VinaXAIPage(): ReactNode {
     // 11.0 — asking again for a picture or clip that failed goes back to the
     // maker (`retry.media`), not to the chat model.
     const mediaKind = retry ? retry.media : createKind;
+    // 11.2 — asking again (Retry, Regenerate, or an edit in place) keeps the
+    // message's earlier versions on it.
+    const keptVersions: Pick<Msg, 'versions' | 'version'> = retry?.user.versions?.length
+      ? { versions: retry.user.versions, version: retry.user.version }
+      : {};
     if (mediaKind) {
       if (!q) return;
       const kind = mediaKind;
@@ -681,7 +687,7 @@ export default function VinaXAIPage(): ReactNode {
       setBusy(true);
       updateMessages(chatId, (prev) => [
         ...(retry ? retry.history : prev),
-        { role: 'user', content: q },
+        { role: 'user', content: q, ...keptVersions },
         { role: 'assistant', content: '', creating: kind, turn },
       ]);
       setChats((prev) =>
@@ -708,7 +714,7 @@ export default function VinaXAIPage(): ReactNode {
     // 11.0 — text files AND the text read out of PDFs go to the model.
     const content = retry ? q : foldAttachments(q, attachments);
 
-    const userMsg: Msg = { role: 'user', content: content || '(image)', images: imgs.length ? imgs : undefined };
+    const userMsg: Msg = { role: 'user', content: content || '(image)', images: imgs.length ? imgs : undefined, ...keptVersions };
     const turn = `${Date.now().toString(36)}-${nextTurnNumber()}`;
     const controller = new AbortController();
     turnRef.current = turn;
@@ -742,7 +748,9 @@ export default function VinaXAIPage(): ReactNode {
       const body = await buildChatRequest(
         {
           voiceLive,
-          choice: now.choice,
+          // 11.2 — "Ask <another model>" on a pick that gave no answer sends
+          // with that model at once (the state update lands a render later).
+          choice: retry?.choice ?? now.choice,
           think: now.think,
           replyLang: now.replyLang,
           replyStyle: now.replyStyle,
@@ -764,7 +772,9 @@ export default function VinaXAIPage(): ReactNode {
         onDelta: (delta) => {
           if (!superseded(turn)) voiceEngineRef.current?.feed(delta);
         },
-        onUpdate: (st) => patchTurn(chatId, turn, (m) => ({ ...m, content: st.text })),
+        // 11.2 — the tools ride along while it streams, so a reply that is
+        // searching the web can say so before its first word.
+        onUpdate: (st) => patchTurn(chatId, turn, (m) => ({ ...m, content: st.text, tools: st.tools.length ? st.tools : undefined })),
       });
     } catch {
       result = { state: initialStreamState(), failure: 'unavailable', aborted: controller.signal.aborted };
@@ -783,7 +793,13 @@ export default function VinaXAIPage(): ReactNode {
     const split = splitFollowups(state.text.trim().replace(/\n{3,}/g, '\n\n'));
     const text =
       split.body ||
-      (result.aborted ? 'Stopped before the reply began.' : state.text ? '' : failureMessage(result.failure));
+      (result.aborted
+        ? 'Stopped before the reply began.'
+        : state.text
+          ? ''
+          : result.pickIssue
+            ? pickIssueMessage(result.pickIssue)
+            : failureMessage(result.failure));
     // The service says when a reply was cut short mid-stream.
     const finalText = state.truncated && split.body ? `${split.body}\n\n_This answer was cut short — ask me to continue._` : text;
     // The chip names the engine that actually answered — so a reply rescued
@@ -802,6 +818,7 @@ export default function VinaXAIPage(): ReactNode {
       turn: undefined,
       failed: failed || undefined,
       needsEdit: (failed && needsEdit(result.failure)) || undefined,
+      pickIssue: (failed && result.pickIssue) || undefined,
       unavailable: unavailable || undefined,
       content: finalText || '…',
       engine: engine || undefined,
@@ -836,6 +853,16 @@ export default function VinaXAIPage(): ReactNode {
     const media = lastReply?.media?.kind ?? lastReply?.mediaKind;
     void send(lastUser.content, [], { history: messages.slice(0, messages.lastIndexOf(lastUser)), previousReply, user: lastUser, media });
   };
+  /** 11.2 — the picked model gave no answer: ask the same question again with
+   *  the model the listener chose from the notice (another model from the
+   *  same provider, or Auto), which also becomes the current pick. */
+  const askWith = (next: ModelChoice): void => {
+    if (busy || messages.length < 2) return;
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+    if (!lastUser) return;
+    applyChoice(next);
+    void send(lastUser.content, [], { history: messages.slice(0, messages.lastIndexOf(lastUser)), previousReply: '', user: lastUser, choice: next });
+  };
   const rewriteLast = (how: 'shorter' | 'longer' | 'simpler'): void => {
     if (busy) return;
     void send(
@@ -860,31 +887,35 @@ export default function VinaXAIPage(): ReactNode {
 
   const messageHandlers = useStableHandlers<MessageHandlers>({
     /**
-     * Edit and resend. 9.1.0 — the version being replaced is PRESERVED: the
-     * conversation as it stands is kept as a branch chat before this one is
-     * truncated, so an edit can never destroy an answer the listener may want
-     * back. (9.0 called `slice(0, idx)` and the old turns were simply gone.)
-     * A temporary chat is the exception — keeping a branch of it on the device
-     * would defeat the point, so it is edited in place.
+     * 11.2 — Edit, in place. The message gets the new text, everything after
+     * it is asked again in THIS chat (the same path as Retry, so the model,
+     * the project and the tools behave the same), and the version it replaced
+     * — the old text and the turns that followed — stays on the message
+     * (./versions.ts), one ‹ › away. No chat is ever created by an edit (9.1.0
+     * kept a "· before edit" copy of the chat instead; editing the first
+     * message emptied the chat back to the greeting).
      */
     edit: (idx: number, content: string) => {
-      if (busy || !active) return;
-      if (!active.temporary && active.messages.length > idx) {
-        const kept: Conversation = {
-          ...freshChat(),
-          title: `${active.title} · before edit`,
-          messages: active.messages.map((m) => ({ ...m, pinned: undefined })),
-        };
-        setChats((prev) => [kept, ...prev]);
-      }
-      setActiveMessages((prev) => prev.slice(0, idx));
-      composerRef.current?.setText(content);
+      if (busy || turnRef.current || !active) return;
+      const at = active.messages[idx];
+      const text = content.trim();
+      if (!at || at.role !== 'user' || !text) return;
+      const user = editedMessage(active.messages, idx, text);
+      const next = active.messages[idx + 1];
+      // A picture or clip prompt that was edited goes back to the maker.
+      const media = next?.role === 'assistant' ? (next.media?.kind ?? next.mediaKind) : undefined;
+      void send(text, [], { history: active.messages.slice(0, idx), previousReply: '', user, media });
+    },
+    switchVersion: (idx: number, target: number) => {
+      if (busy) return;
+      setActiveMessages((prev) => showVersion(prev, idx, target) ?? prev);
     },
     rate: (idx: number, rating: 'up' | 'down') =>
       setActiveMessages((prev) => prev.map((m, k) => (k === idx ? { ...m, rating: m.rating === rating ? undefined : rating } : m))),
     togglePin: (idx: number) => setActiveMessages((prev) => prev.map((m, k) => (k === idx ? { ...m, pinned: !m.pinned } : m))),
     branch: branchFrom,
     regenerate,
+    askWith,
     // 11.0 — a message that was turned away (too large, refused as it is):
     // the failed turn leaves the thread and its text returns to the box.
     reviseLast: () => {
@@ -1010,6 +1041,14 @@ export default function VinaXAIPage(): ReactNode {
           onInterrupt={voice.interrupt}
           onToggleMute={voice.toggleMute}
           onEnd={voice.end}
+          voicePick={voicePick}
+          voiceCatalog={voiceCatalog}
+          onVoicePick={(v) => {
+            setVoicePick(v);
+            writePref(PREF.voice, v);
+          }}
+          onLoadVoices={loadVoices}
+          onHold={voice.hold}
         />
       )}
       {settingsOpen && (

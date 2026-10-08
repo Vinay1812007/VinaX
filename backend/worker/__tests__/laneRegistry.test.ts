@@ -17,6 +17,7 @@ import {
   AI_KEY_FALLBACKS,
   AI_KEY_SECRETS,
   AI_PROVIDERS,
+  KEY_PROVIDERS,
   PROVIDER_ENV_FALLBACK,
   providerKey,
   providerKeySource,
@@ -28,12 +29,12 @@ import {
   PROVIDER_ENV,
   PROVIDER_LANE,
   laneAttempts,
-  type Lane,
+  type KeyLane,
 } from '../functions/_lib/ai';
 import { AI_MODEL_REGISTRY, registryEnvKeys } from '../functions/_lib/models';
 import { ENV_ITEMS } from '../functions/api/admin/envcheck';
 
-const lanes = Object.keys(LANE_ENV) as Lane[];
+const lanes = Object.keys(LANE_ENV) as KeyLane[];
 const registrySlugs = new Set(Object.values(AI_MODEL_REGISTRY).map((m) => m.id));
 const registryEnv = new Set(registryEnvKeys());
 const FOUR = ['NVIDIA_API_KEY', 'OPENROUTER_API_KEY', 'GROQ_API_KEY', 'GEMINI_API_KEY'];
@@ -42,13 +43,15 @@ const PREVIOUS = ['VINAX_NVIDIA_API_KEY', 'VINAX_OPENROUTER_API_KEY', 'VINAX_GRO
 describe('10.3 — one key per provider', () => {
   it('reads exactly four AI key secrets, one per provider, in menu order', () => {
     expect([...AI_KEY_SECRETS]).toEqual(FOUR);
-    expect([...AI_PROVIDERS]).toEqual(['nvidia', 'openrouter', 'groq', 'gemini']);
+    expect([...KEY_PROVIDERS]).toEqual(['nvidia', 'openrouter', 'groq', 'gemini']);
+    // 11.2 — the fifth provider (Workers AI) has no key: it runs on the AI binding.
+    expect([...AI_PROVIDERS]).toEqual(['nvidia', 'openrouter', 'groq', 'gemini', 'cloudflare']);
     expect(new Set(Object.values(PROVIDER_ENV)).size).toBe(4);
     expect([...AI_KEY_FALLBACKS]).toEqual(PREVIOUS);
   });
 
   it('each provider reads its primary name, else its previous name — through providerKey only', () => {
-    for (const [i, p] of AI_PROVIDERS.entries()) {
+    for (const [i, p] of KEY_PROVIDERS.entries()) {
       expect(PROVIDER_ENV[p]).toBe(FOUR[i]);
       expect(PROVIDER_ENV_FALLBACK[p]).toBe(PREVIOUS[i]);
       expect(providerKey({}, p)).toBeNull();
@@ -77,12 +80,15 @@ describe('10.3 — one key per provider', () => {
   it('every lane signs with one of the four, through its provider', () => {
     for (const lane of lanes) {
       expect(FOUR, `${lane} signs with ${LANE_ENV[lane]}`).toContain(LANE_ENV[lane]);
-      expect(LANE_ENV[lane]).toBe(PROVIDER_ENV[LANE_PROVIDER[lane]]);
+      expect(LANE_ENV[lane]).toBe(PROVIDER_ENV[LANE_PROVIDER[lane] as keyof typeof PROVIDER_ENV]);
     }
   });
 
   it('keeps the feature lanes, and the agent and bench lanes are gone', () => {
     expect(lanes.sort()).toEqual(['chat', 'deep', 'dj', 'fast', 'home', 'maestro', 'mini', 'pro', 'router', 'scholar', 'search', 'vision', 'vision90']);
+    // 11.2 — the Workers AI lane signs with no key, so LANE_ENV leaves it out.
+    expect(Object.keys(LANE_PROVIDER)).toContain('workers');
+    expect(LANE_PROVIDER.workers).toBe('cloudflare');
     for (const gone of ['agent', 'dsflash', 'muse', 'rank', 'laguna', 'diffusion', 'gemma4']) expect(lanes).not.toContain(gone);
   });
 

@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  PROVIDER_IDS,
+  PROVIDER_LABEL,
   DEFAULT_MODE_KEY,
   LAST_MODEL_KEY,
   MAX_RECENTS,
@@ -41,7 +43,7 @@ const pick = (provider: Provider['id'], model: string, name?: string): ModelChoi
 beforeEach(() => localStorage.clear());
 
 describe('parseCatalogResponse', () => {
-  it('reads the four providers in menu order, keeping original names and dropping what it cannot trust', () => {
+  it('reads the five providers in menu order, keeping original names and dropping what it cannot trust', () => {
     const providers = parseCatalogResponse({
       fetchedAt: '2026-10-06T00:00:00Z',
       providers: [
@@ -61,7 +63,7 @@ describe('parseCatalogResponse', () => {
         { id: 'mystery', configured: true, models: [{ id: 'x' }] },
       ],
     });
-    expect(providers.map((p) => p.id)).toEqual(['nvidia', 'openrouter', 'groq', 'gemini']);
+    expect(providers.map((p) => p.id)).toEqual(['nvidia', 'openrouter', 'groq', 'gemini', 'cloudflare']);
     expect(providers[0].models).toEqual([
       { id: 'lab/a', name: 'Model A', maker: 'Lab', context: 1024, vision: true },
       { id: 'lab/b', name: 'b', maker: null, context: null, vision: false },
@@ -97,13 +99,14 @@ describe('buildModelMenu', () => {
 
   it('puts Auto first, then one section per provider listing EVERY model under its original name', () => {
     const menu = buildModelMenu(base);
-    expect(menu.map((s) => s.id)).toEqual(['auto', 'nvidia', 'openrouter', 'groq', 'gemini']);
+    expect(menu.map((s) => s.id)).toEqual(['auto', 'nvidia', 'openrouter', 'groq', 'gemini', 'cloudflare']);
     expect(menu[0]).toMatchObject({ title: '', label: 'Auto', rows: [{ choice: { mode: 'auto' }, label: 'Auto', hint: 'Picks the best model for each question' }] });
     expect(menu.slice(1).map((s) => [s.title, s.provider])).toEqual([
       ['NVIDIA', 'nvidia'],
       ['OpenRouter', 'openrouter'],
       ['Groq', 'groq'],
       ['Gemini', 'gemini'],
+      ['Cloudflare', 'cloudflare'],
     ]);
     expect(menu[1].rows.map((r) => [r.label, r.hint, r.vision])).toEqual([
       ['Alpha 70B Instruct', 'Lab One · 128K context', false],
@@ -138,9 +141,9 @@ describe('buildModelMenu', () => {
   });
 
   it('says so while the list loads, and offers a retry when it failed — Auto never depends on it', () => {
-    expect(buildModelMenu({ ...base, providers: [], state: 'loading' }).filter((s) => s.note === 'Loading the list…')).toHaveLength(4);
+    expect(buildModelMenu({ ...base, providers: [], state: 'loading' }).filter((s) => s.note === 'Loading the list…')).toHaveLength(5);
     const failed = buildModelMenu({ ...base, providers: [], state: 'failed' });
-    expect(failed.filter((s) => s.retry)).toHaveLength(4);
+    expect(failed.filter((s) => s.retry)).toHaveLength(5);
     expect(failed[0].rows.map((r) => r.label)).toEqual(['Auto']);
   });
 
@@ -239,5 +242,19 @@ describe('11.0 — a pick the server no longer lists', () => {
     expect(m.loadDefaultChoice()).toBeNull();
     expect(m.loadInitialChoice()).toEqual(m.AUTO);
     expect(m.loadRecents()).toEqual([alive]);
+  });
+});
+
+describe('11.2 — Workers AI (the fifth provider)', () => {
+  it('keeps its @cf/ slugs and lists it last, under its own label', () => {
+    const providers = parseCatalogResponse({
+      providers: [{ id: 'cloudflare', configured: true, models: [{ id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', name: 'Llama 3.3 70B Instruct (fp8, fast)', maker: 'Meta' }, { id: 'cf meta', name: 'bad' }] }],
+    });
+    expect(providers.map((p) => p.id)).toEqual([...PROVIDER_IDS]);
+    expect(PROVIDER_IDS[PROVIDER_IDS.length - 1]).toBe('cloudflare');
+    expect(PROVIDER_LABEL.cloudflare).toBe('Cloudflare');
+    const cf = providers.find((p) => p.id === 'cloudflare');
+    expect(cf?.configured).toBe(true);
+    expect(cf?.models.map((m) => m.id)).toEqual(['@cf/meta/llama-3.3-70b-instruct-fp8-fast']);
   });
 });

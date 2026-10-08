@@ -12,6 +12,10 @@ interface Props {
   aiCaption: string;
   error: string;
   voiceLabel: string;
+  /** 11.2 — a quiet line when the chosen voice handed over to the device's. */
+  voiceNotice?: string;
+  /** 11.2 — opens the voice picker; without it the voice is only named. */
+  onOpenVoices?(): void;
   onInterrupt(): void;
   onToggleMute(): void;
   onEnd(): void;
@@ -35,6 +39,8 @@ export function LiveVoiceOverlay({
   aiCaption,
   error,
   voiceLabel,
+  voiceNotice = '',
+  onOpenVoices,
   onInterrupt,
   onToggleMute,
   onEnd,
@@ -137,7 +143,25 @@ export function LiveVoiceOverlay({
           End voice chat
         </button>
       </div>
-      {voiceLabel !== '' && <p className="-mt-3 text-[11px] text-ink-400">Voice: {voiceLabel}</p>}
+      {onOpenVoices ? (
+        <button
+          type="button"
+          onClick={onOpenVoices}
+          aria-haspopup="dialog"
+          aria-label={`Voice: ${voiceLabel || 'Device voice'}. Change voice`}
+          className="lvo-voice -mt-2 inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-[12px] font-semibold text-ink-200 bg-ink-800/60 hover:text-ink-100 transition"
+        >
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden>
+            <path d="M2 6.5v3M5 4.5v7M8 2.5v11M11 4.5v7M14 6.5v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" fill="none" />
+          </svg>
+          <span>Voice · {voiceLabel || 'Device voice'}</span>
+        </button>
+      ) : (
+        voiceLabel !== '' && <p className="-mt-3 text-[11px] text-ink-400">Voice: {voiceLabel}</p>
+      )}
+      <p role="status" className="-mt-4 min-h-4 max-w-xs text-center text-[11px] text-ink-400">
+        {error === '' ? voiceNotice : ''}
+      </p>
     </div>
   );
 }

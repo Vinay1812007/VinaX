@@ -104,6 +104,27 @@ describe('importChats', () => {
       { role: 'assistant', content: 'a', engine: 'Balanced' },
     ]);
   });
+  it('keeps a web-grounded reply’s sources (11.0 shape, 11.2 supports) across a reload and an import, validated', () => {
+    const sources = {
+      items: [{ url: 'https://a.example/p', title: 'a.example' }, { url: 'javascript:alert(1)', title: 'bad' }, { url: 'https://b.example/q', title: 'B' }],
+      queries: ['q'],
+      entry: '<div>s</div>',
+      supports: [{ text: 'It rains.', sources: [0, 1] }, { text: 'Hot.', sources: [2] }],
+    };
+    const kept = {
+      items: [{ url: 'https://a.example/p', title: 'a.example' }, { url: 'https://b.example/q', title: 'B' }],
+      queries: ['q'],
+      entry: '<div>s</div>',
+      supports: [{ text: 'It rains.', sources: [0] }, { text: 'Hot.', sources: [1] }],
+    };
+    const saved = [{ id: 'w', title: 'W', updatedAt: 1, messages: [{ role: 'user', content: 'rain?', sources }, { role: 'assistant', content: 'It rains. Hot.', sources }] }];
+    localStorage.setItem(STORE_KEY, JSON.stringify(saved));
+    expect(loadInitialChats()[0].messages).toEqual([
+      { role: 'user', content: 'rain?' },
+      { role: 'assistant', content: 'It rains. Hot.', sources: kept },
+    ]);
+    expect(importChats(JSON.stringify(saved), [])?.chats[0].messages[1].sources).toEqual(kept);
+  });
   it('refuses a file that is not a chats export', () => {
     expect(importChats('not json', [])).toBeNull();
     expect(importChats('{"a":1}', [])).toBeNull();
@@ -212,3 +233,59 @@ describe('a chat title from its first message (11.0)', () => {
     expect(telugu).toBe(`${'క్ష'.repeat(42)}…`);
   });
 });
+
+describe('11.2 — an edited message’s versions are kept with the chat', () => {
+  const edited = (): Conversation => ({
+    id: 'e1',
+    title: 'Edited',
+    updatedAt: 1,
+    messages: [
+      {
+        role: 'user',
+        content: 'new text',
+        images: ['data:image/png;base64,AAA'],
+        version: 1,
+        versions: [
+          { content: 'old text', images: ['data:image/png;base64,AAA'], after: [{ role: 'assistant', content: 'old answer', engine: 'Alpha 70B' }] },
+          { content: 'new text', images: ['data:image/png;base64,AAA'], after: [] },
+        ],
+      },
+      { role: 'assistant', content: 'new answer' },
+    ],
+  });
+
+  it('survives a save and a reload, with picture data stripped inside versions too', () => {
+    persistChats([edited()]);
+    const raw = localStorage.getItem(STORE_KEY) ?? '';
+    expect(raw).not.toContain('base64');
+    const [c] = loadInitialChats();
+    expect(c.messages[0].version).toBe(1);
+    expect(c.messages[0].versions?.map((v) => v.content)).toEqual(['old text', 'new text']);
+    expect(c.messages[0].versions?.[0].after).toEqual([{ role: 'assistant', content: 'old answer', engine: 'Alpha 70B' }]);
+    expect(c.messages[0].versions?.[0].images).toEqual(['']);
+  });
+
+  it('a malformed stored list is dropped and a bad index is clamped on load', () => {
+    const c = edited();
+    localStorage.setItem(
+      STORE_KEY,
+      JSON.stringify([
+        { ...c, messages: [{ ...c.messages[0], version: 'x' }, c.messages[1]] },
+        { id: 'bad', title: 'Bad', updatedAt: 1, messages: [{ role: 'user', content: 'hi', versions: 'oops', version: 3 }, { role: 'assistant', content: 'yo', versions: [] }] },
+      ]),
+    );
+    const [good, bad] = loadInitialChats();
+    expect(good.messages[0].version).toBe(1);
+    expect(good.messages[0].versions).toHaveLength(2);
+    expect(bad.messages[0]).toEqual({ role: 'user', content: 'hi' });
+    expect(bad.messages[1]).toEqual({ role: 'assistant', content: 'yo' });
+  });
+
+  it('an import revives versions field by field', () => {
+    const out = importChats(JSON.stringify([edited()]), []);
+    const m = out?.chats[0].messages[0];
+    expect(m?.version).toBe(1);
+    expect(m?.versions?.[0].after).toEqual([{ role: 'assistant', content: 'old answer', engine: 'Alpha 70B' }]);
+  });
+});
+

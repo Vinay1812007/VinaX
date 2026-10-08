@@ -54,6 +54,11 @@ import {
   loggableModel,
   noteLaneFailure,
   providerAttempt,
+  providerCoolingDown,
+  providerRest,
+  DAILY_COOLDOWN_MS,
+  type Cooldown,
+  type CooldownReason,
   providerKey,
   reasoningOffParams,
   sameCall,
@@ -75,6 +80,7 @@ import { houseRules, readConfig } from '../_lib/clientConfig';
 import { placeContextLines, requestPlace } from '../_lib/place';
 import { type SupabaseEnv } from '../_lib/supabase';
 import { codeBlock, maestroFetch, maestroModelFor, outputBlock } from '../_lib/maestro';
+import { isWorkersAiEndpoint, workersAiBinding, workersAiFetch } from '../_lib/workersai';
 
 // Image understanding rides the vision lanes (the 11B default, the 90B deep
 // pair), both on the NVIDIA key since 10.3.
@@ -409,6 +415,44 @@ export function trimHistory<T extends { role: string; content: string }>(history
 /** Request-body ceiling: the 6 MB inline-image budget plus a long pasted thread. */
 const MAX_BODY_BYTES = 12_000_000;
 
+/**
+ * 11.2 — why a listener's own pick gave no answer, in the words the app shows:
+ *   quota    out of free requests for today (a daily 429)
+ *   not_free the key has no free allowance for this model at all
+ *   busy     a short rate limit — a minute or so
+ *   gone     the provider no longer serves the model
+ *   down     the provider failed (5xx), refused the key, or never answered
+ *   refused  the provider turned this request down as it is (a plain 4xx)
+ */
+export type PickIssue = 'quota' | 'not_free' | 'busy' | 'gone' | 'down' | 'refused';
+export function pickIssue(status: number, reason: CooldownReason | null, ms = 0): PickIssue {
+  if (reason === 'not_free') return 'not_free';
+  if (reason === 'rate_limited') return ms >= DAILY_COOLDOWN_MS ? 'quota' : 'busy';
+  if (reason === 'model_gone') return 'gone';
+  if (reason === 'key_rejected' || reason === 'upstream_error') return 'down';
+  if (status === 429) return 'busy';
+  if (status >= 400 && status < 500) return 'refused';
+  return 'down';
+}
+
+/** 11.2 — up to three other models from the SAME provider to offer instead of
+ * a pick that cannot answer: not resting, able to read images when the
+ * message carries one, nearest name first (the longest shared slug prefix),
+ * then the provider's own list order. Pure. */
+export function pickAlternatives(models: readonly CatalogModel[], provider: AiProvider, pickedId: string, needVision: boolean, resting: (id: string) => boolean): Array<{ provider: AiProvider; id: string; name: string }> {
+  const shared = (id: string): number => {
+    let i = 0;
+    while (i < id.length && i < pickedId.length && id[i] === pickedId[i]) i += 1;
+    return i;
+  };
+  return models
+    .map((m, i) => ({ m, i, near: shared(m.id) }))
+    .filter(({ m }) => m.id !== pickedId && (!needVision || m.vision) && !resting(m.id))
+    .sort((a, b) => b.near - a.near || a.i - b.i)
+    .slice(0, 3)
+    .map(({ m }) => ({ provider, id: m.id, name: m.name }));
+}
+
 function jsonErr(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -561,6 +605,24 @@ async function handleChat(
     if (!picked || !pickAttempt) return jsonErr({ error: 'unknown_model' }, 400);
   }
   const pick = pickAttempt;
+  // 11.2 — the answer when the listener's pick cannot reply: why, until when
+  // (when known), and up to three models from the same provider to ask
+  // instead. 429 for the rate limits (the client never re-asks a pick on its
+  // own for those), 503 otherwise — never 502 (Cloudflare swallows its body).
+  const pickUnavailable = async (issue: PickIssue, until: number | null): Promise<Response> => {
+    if (!pick || !picked) return jsonErr({ error: 'engine_unreachable' }, 503);
+    const provider = LANE_PROVIDER[pick.role];
+    const models = await fetchCatalog(env, provider).catch(() => [] as CatalogModel[]);
+    const alternatives = pickAlternatives(models, provider, picked.id, images.length > 0, (id) => providerCoolingDown(provider, id));
+    const retryAfter = until ? Math.max(1, Math.ceil((until - Date.now()) / 1000)) : null;
+    console.log(`[vinaxai] pick unavailable: ${provider}/${loggableModel(picked.id)} ${issue}${retryAfter ? ` ${retryAfter}s` : ''}`);
+    const res = jsonErr(
+      { error: 'model_unavailable', reason: issue, model: { provider, id: picked.id, name: picked.name }, ...(retryAfter ? { retryAfter } : {}), alternatives },
+      issue === 'quota' || issue === 'busy' || issue === 'not_free' ? 429 : 503,
+    );
+    if (retryAfter) res.headers.set('retry-after', String(retryAfter));
+    return res;
+  };
   // A seat on a catalogue lane (Groq for scholar and voice) must not use the
   // lane's fixed pin: a catalogue key serves a moving catalogue, and a retired
   // slug answers 404 for every caller (which is exactly how both catalogue
@@ -608,7 +670,10 @@ async function handleChat(
     webLead = best ? providerAttempt(env, 'gemini', best) : null;
   }
   const lead = pick ?? codeLead ?? webLead;
-  const allAttempts = lead ? [lead, ...ladder.filter((a) => !sameCall(a, lead))] : ladder;
+  // 11.2 — a listener's own pick is the ONLY attempt: it never fails over to
+  // another provider's model (the reply would wear a name they did not
+  // choose). When it cannot answer, the reply says why and offers others.
+  const allAttempts = pick ? [pick] : lead ? [lead, ...ladder.filter((a) => !sameCall(a, lead))] : ladder;
   // The attempts that carry the tool: every one whose model can run it. A
   // pick that cannot answers without it.
   const codeOn = new Set<LaneAttempt>(wantCode ? allAttempts.filter(attemptRunsCode) : []);
@@ -641,6 +706,16 @@ async function handleChat(
     // Logged (error ai_disabled / ai_over_budget) for the console.
     void logAiRefusal(env, 'vinaxai', blocked, isApp ? 'app' : 'web', waitUntil);
     return jsonErr({ error: aiBlockCode(blocked) }, 503);
+  }
+  // 11.2 — a pick resting for the day (out of free requests, no free
+  // allowance, retired) is not asked again: the answer would be the same.
+  // A short rest (a minute's rate limit, a 5xx) is tried anyway — the
+  // listener asked for this model by name.
+  if (pick && picked) {
+    const rest = providerRest(LANE_PROVIDER[pick.role], pick.model);
+    if (rest && (rest.reason === 'not_free' || rest.reason === 'model_gone' || (rest.reason === 'rate_limited' && rest.until - Date.now() > 10 * 60_000))) {
+      return await pickUnavailable(pickIssue(429, rest.reason, rest.reason === 'rate_limited' ? DAILY_COOLDOWN_MS : 0), rest.until);
+    }
   }
   const primary = attempts[0];
   const keyRole = primary.role;
@@ -699,7 +774,7 @@ async function handleChat(
   // 11.0 — plus Gemini and the first vision-flagged model on each catalogue
   // key, so the photo is read whichever key is configured.
   const visionExtra: LaneAttempt[] = [];
-  if (useVision) {
+  if (useVision && !pick) {
     for (const p of ['groq', 'openrouter'] as const) {
       if (!providerKey(env, p)) continue;
       const seer = (await fetchCatalog(env, p).catch(() => [])).find((m) => m.vision);
@@ -707,7 +782,9 @@ async function handleChat(
       if (attempt) visionExtra.push(attempt);
     }
   }
-  const vision = useVision ? visionLadder(env, picked?.vision ? pick : null, images.length > 1, visionExtra) : [];
+  // 11.2 — a pick reads the image itself or not at all (a pick that cannot
+  // answers the text with the "couldn't view the image" note below).
+  const vision = useVision ? (pick ? (picked?.vision ? [pick] : []) : visionLadder(env, null, images.length > 1, visionExtra)) : [];
 
   // v5.16.0 — ask the default base to append a usage chunk to the stream so
   // the AI Cost panel sees real token counts. The scholar lane's external
@@ -773,6 +850,11 @@ async function handleChat(
         delete p.stream_options;
         return await maestroFetch(a.key, a.model, p, controller.signal, !a.exact);
       }
+      if (isWorkersAiEndpoint(a.endpoint)) {
+        // 11.2 — Workers AI runs on the Worker's binding, re-framed as
+        // chat-completions SSE (_lib/workersai.ts). Never a fetch: there is no key.
+        return await workersAiFetch(workersAiBinding(env), payloadFor(a.model, a.endpoint, messages, false, false), controller.signal);
+      }
       return await fetch(a.endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${a.key}` },
@@ -796,6 +878,9 @@ async function handleChat(
   // Pairs that failed before streaming a byte in this request: the
   // empty-stream rescue below never asks them again.
   const failed = new Set<LaneAttempt>();
+  // 11.2 — the last failed attempt's status and the cooldown it earned (a
+  // pick's "why" when it gives no answer). Status 0 = no answer in time.
+  let lastVerdict: { status: number; cooldown: Cooldown | null } = { status: 0, cooldown: null };
   // Cold serverless engines can HANG without an HTTP response (observed live
   // on retired engines), and a DEGRADED engine rejects instantly with a 400
   // (observed live post-rewire). The PRIMARY gets a patient 18s leash;
@@ -826,7 +911,7 @@ async function handleChat(
       // rest of this request and re-ask the SAME pair once, so token accounting
       // can never cost a listener their answer. A degraded key 400s again and
       // the ladder walks on as before.
-      if (res?.status === 400 && !usageDropped.has(a) && !isGroqEndpoint(a.endpoint) && !isMaestroEndpoint(a.endpoint)) {
+      if (res?.status === 400 && !usageDropped.has(a) && !isGroqEndpoint(a.endpoint) && !isMaestroEndpoint(a.endpoint) && !isWorkersAiEndpoint(a.endpoint)) {
         void res.body?.cancel().catch(() => undefined);
         usageDropped.add(a);
         try {
@@ -866,8 +951,10 @@ async function handleChat(
       failed.add(a);
       if (res) {
         const errBody = await res.text().catch(() => '');
-        noteLaneFailure(a.role, a.model, res.status, errBody);
+        lastVerdict = { status: res.status, cooldown: noteLaneFailure(a.role, a.model, res.status, errBody) };
         last = res;
+      } else {
+        lastVerdict = { status: 0, cooldown: null };
       }
       // Log the real status (timeout=0, degraded/bad id=4xx, upstream 5xx) for
       // diagnosis; meta reports the engine that finally answered.
@@ -893,7 +980,9 @@ async function handleChat(
 
   // Vision unavailable on every vision pair -> a text-only answer with a note,
   // down the seat's own text ladder.
-  if (!used && useVision) {
+  // 11.2 — a pick that reads images was asked with the image and failed: the
+  // text-only retry would be the same model failing the same way.
+  if (!used && useVision && !(pick && vision.length)) {
     const noteMsgs: OutMsg[] = msgs.map((mm) => ({ ...mm }));
     const last = noteMsgs[noteMsgs.length - 1];
     last.content =
@@ -915,6 +1004,11 @@ async function handleChat(
     usedAttempt = used;
     usedModel = used.model;
     usedRole = used.role;
+  }
+  // 11.2 — the listener's pick gave no answer: say why, never substitute.
+  if (pick && (!used || !up || !up.ok || !up.body)) {
+    const c = lastVerdict.cooldown;
+    return await pickUnavailable(pickIssue(lastVerdict.status, c?.reason ?? null, c?.ms ?? 0), c && c.ms >= 60_000 ? Date.now() + c.ms : null);
   }
   if (!up) return jsonErr({ error: 'engine_unreachable' }, 503);
   if (!used || !up.ok || !up.body) {

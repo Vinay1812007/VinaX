@@ -11,6 +11,8 @@
  * retried: waiting a second changes nothing there.
  */
 import { initialStreamState, reduceFrame, splitFrames, type StreamState } from './streamReducer';
+import { isProviderId } from './models';
+import type { PickIssue, PickIssueReason } from './types';
 
 /** Why a turn produced no stream at all. `disabled` = switched off or not set
  *  up on this server; `over_budget` = today's allowance is used up.
@@ -26,7 +28,8 @@ export type StreamFailure =
   | 'over_budget'
   | 'bad_model'
   | 'too_large'
-  | 'rejected';
+  | 'rejected'
+  | 'model_unavailable';
 
 export interface ChatStreamResult {
   state: StreamState;
@@ -36,6 +39,8 @@ export interface ChatStreamResult {
   aborted: boolean;
   /** 8.2.0 — how many automatic re-asks this turn needed (0 or 1). */
   retries?: number;
+  /** 11.2 — with `model_unavailable`: why the pick gave no answer. */
+  pickIssue?: PickIssue;
 }
 
 export interface ChatStreamOptions {
@@ -63,6 +68,9 @@ export function failureFromResponse(status: number, code: unknown): StreamFailur
   if (code === 'ai_disabled' || code === 'ai_not_configured') return 'disabled';
   if (code === 'ai_over_budget') return 'over_budget';
   if (code === 'unknown_model') return 'bad_model';
+  // 11.2 — the picked model itself could not answer; the server already
+  // tried it, and never substitutes another provider's model.
+  if (code === 'model_unavailable') return 'model_unavailable';
   if (status === 413 || code === 'image_too_large' || code === 'too_large') return 'too_large';
   if (status === 400) return 'rejected';
   // 429 = every engine is rate-limited; anything else (500, 502, 503) is a
@@ -82,7 +90,9 @@ async function attempt(opts: ChatStreamOptions): Promise<ChatStreamResult> {
     });
     if (!res.ok || !res.body) {
       const err = (await res.json().catch(() => null)) as { error?: unknown } | null;
-      return { state, failure: failureFromResponse(res.status, err?.error), aborted: false };
+      const failure = failureFromResponse(res.status, err?.error);
+      const pickIssue = failure === 'model_unavailable' ? readPickIssue(err) : null;
+      return { state, failure, aborted: false, ...(pickIssue ? { pickIssue } : {}) };
     }
     const reader = res.body.getReader();
     const dec = new TextDecoder();
@@ -107,6 +117,43 @@ async function attempt(opts: ChatStreamOptions): Promise<ChatStreamResult> {
     // failure: the caller keeps what it has.
     return { state, failure: aborted || state.text ? null : isOffline() ? 'offline' : 'unavailable', aborted };
   }
+}
+
+const PICK_REASONS: readonly PickIssueReason[] = ['quota', 'not_free', 'busy', 'gone', 'down', 'refused'];
+const SLUG = /^[\w./:@+-]{1,160}$/;
+const label = (v: unknown, fallback: string): string => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 120) : fallback);
+
+/** 11.2 — a `model_unavailable` body (or a stored copy of one), validated:
+ *  a known reason, a known provider, slug-shaped ids, at most three
+ *  alternatives from the SAME provider. Null when it is not one. */
+export function readPickIssue(raw: unknown): PickIssue | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as { reason?: unknown; model?: unknown; alternatives?: unknown; provider?: unknown; name?: unknown };
+  // The wire shape nests the model; the stored shape is flat.
+  const m = (r.model && typeof r.model === 'object' ? r.model : r) as { provider?: unknown; id?: unknown; model?: unknown; name?: unknown };
+  const id = typeof m.id === 'string' ? m.id : m.model;
+  const reason = PICK_REASONS.find((x) => x === r.reason) ?? 'down';
+  if (!isProviderId(m.provider) || typeof id !== 'string' || !SLUG.test(id)) return null;
+  const provider = m.provider;
+  const alternatives: PickIssue['alternatives'] = [];
+  for (const a of Array.isArray(r.alternatives) ? r.alternatives : []) {
+    const x = (a ?? {}) as { provider?: unknown; id?: unknown; model?: unknown; name?: unknown };
+    const aid = typeof x.id === 'string' ? x.id : x.model;
+    if (x.provider !== provider || typeof aid !== 'string' || !SLUG.test(aid) || aid === id || alternatives.some((y) => y.model === aid)) continue;
+    alternatives.push({ provider, model: aid, name: label(x.name, aid) });
+    if (alternatives.length >= 3) break;
+  }
+  return { reason, provider, model: id, name: label(m.name, id), alternatives };
+}
+
+/** 11.2 — the line a pick that gave no answer leaves in the thread. */
+export function pickIssueMessage(p: PickIssue): string {
+  if (p.reason === 'quota') return `${p.name} has used up its free requests for today. Pick another model below, or try it again later.`;
+  if (p.reason === 'busy') return `${p.name} is getting too many requests right now. Try again in a minute, or pick another model.`;
+  if (p.reason === 'not_free') return `${p.name} isn’t free to use here. Pick another model.`;
+  if (p.reason === 'gone') return `${p.name} is no longer available. Pick another model.`;
+  if (p.reason === 'refused') return `${p.name} couldn’t answer this message as it is. Try another model.`;
+  return `${p.name} didn’t answer — it may be having trouble. Try again, or pick another model.`;
 }
 
 /** Resolves after `ms`, or at once when the turn is stopped. */
@@ -143,6 +190,7 @@ export function failureMessage(failure: StreamFailure | null): string {
   if (failure === 'over_budget') return 'VinaX AI has reached its limit for today — please try again later.';
   if (failure === 'bad_model') return 'That model is no longer available — switched to Auto.';
   if (failure === 'too_large') return 'That picture or file is too large to send — try a smaller one.';
+  if (failure === 'model_unavailable') return 'The model you picked couldn’t answer — try again, or pick another model.';
   if (failure === 'rejected') return 'That message couldn’t be sent as it is — try rewording it or removing an attachment.';
   return 'The assistant paused — please try again.';
 }

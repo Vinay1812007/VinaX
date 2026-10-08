@@ -11,13 +11,14 @@
  */
 import type { AiFeatures, MediaKind, MediaModel, ModelChoice, Provider, ProviderId, ProviderModel, ProviderTool } from './types';
 
-/** The four providers, in menu order. */
-export const PROVIDER_IDS: readonly ProviderId[] = ['nvidia', 'openrouter', 'groq', 'gemini'];
+/** The five providers, in menu order (11.2 — Workers AI last: explicit picks only). */
+export const PROVIDER_IDS: readonly ProviderId[] = ['nvidia', 'openrouter', 'groq', 'gemini', 'cloudflare'];
 export const PROVIDER_LABEL: Record<ProviderId, string> = {
   nvidia: 'NVIDIA',
   openrouter: 'OpenRouter',
   groq: 'Groq',
   gemini: 'Gemini',
+  cloudflare: 'Cloudflare',
 };
 
 export const isProviderId = (v: unknown): v is ProviderId => typeof v === 'string' && (PROVIDER_IDS as readonly string[]).includes(v);

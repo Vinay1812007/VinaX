@@ -330,9 +330,10 @@ describe('GET /api/aimodels — media, tools and features', () => {
   });
 
   it('reads the keys under their primary names and, during the switch, their previous names', async () => {
-    expect((await load(ALL_KEYS)).providers.map((p) => p.configured)).toEqual([true, true, true, true]);
+    // 11.2 — the fifth provider (Workers AI) needs the AI binding, not a key.
+    expect((await load(ALL_KEYS)).providers.map((p) => p.configured)).toEqual([true, true, true, true, false]);
     resetCatalogCache();
-    expect((await load(OLD_KEYS)).providers.map((p) => p.configured)).toEqual([true, true, true, true]);
+    expect((await load(OLD_KEYS)).providers.map((p) => p.configured)).toEqual([true, true, true, true, false]);
     expect(calls).toHaveLength(0);
   });
 });
@@ -421,6 +422,7 @@ describe('GET /api/voices', () => {
       ['openrouter', ['fish-audio/s2.1-pro-free:free']],
       ['groq', ['canopylabs/orpheus-arabic-saudi', 'canopylabs/orpheus-v1-english']],
       ['gemini', ['gemini-3.8-flash-tts']],
+      ['cloudflare', []],
     ]);
     expect(body.providers[3].models[0]).toMatchObject({ name: 'Gemini 3.8 Flash TTS' });
     expect(body.providers[3].models[0].voices).toHaveLength(30);

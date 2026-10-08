@@ -147,7 +147,7 @@ html.amoled .ai-scope[data-chat-style='deep'] { --ink-950: 0 0 0; --ink-900: 0 0
 .ai-root[data-chat-style]:not([data-chat-style='vinax']) .ai-suggestion { border-radius: var(--cs-r-card); }
 .ai-root[data-chat-style]:not([data-chat-style='vinax']) .ai-greeting .ai-display { font-family: var(--cs-font-display); }
 .ai-root[data-chat-style]:not([data-chat-style='vinax']) .ai-hero-mark { box-shadow: none; }
-.ai-root[data-chat-style]:not([data-chat-style='vinax']) :is(.ai-engine-chip, .ai-header-sub, .ai-side-heading, .ai-side-time, .ai-brief-label, .ai-model-heading, .ai-sources-cap, .ai-source) { font-family: var(--cs-font-label); }
+.ai-root[data-chat-style]:not([data-chat-style='vinax']) :is(.ai-engine-chip, .ai-header-sub, .ai-side-heading, .ai-side-time, .ai-brief-label, .ai-model-heading, .ai-sources-cap, .ai-cite, .ai-sources-title, .ai-sources-name) { font-family: var(--cs-font-label); }
 html.amoled .ai-root[data-chat-style] .ai-main { background: var(--ai-bg); }
 @media (max-width: 479px) {
   .ai-root:is([data-chat-style='mono'], [data-chat-style='spectrum']) .ai-composer { border-radius: 22px; }

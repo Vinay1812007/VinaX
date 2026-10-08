@@ -35,7 +35,7 @@ Status words:
 | **A withdrawn model switches the chat to Auto** (11.0) | done | `unknown_model` → `bad_model` |
 | **A reply interrupted by a reload** shows "No reply — try again" (11.0) | done | `storage.ts` |
 | Regenerate with a different approach; rewrite; continue a cut-short reply | done | `REGENERATE_RULE` in `buildChatRequest.ts`; `rewriteLast`, `continueReply` in `pages/VinaXAIPage.tsx` |
-| Edit and resend, keeping the earlier version as a `· before edit` chat | done | `pages/VinaXAIPage.tsx` |
+| Edit a message in place (same chat); earlier versions kept on the message, switch with ‹ n / m › (11.2) | done | `features/ai/chat/versions.ts`, `Message.tsx`, `pages/VinaXAIPage.tsx` |
 | Branch a conversation from a message | done | `branchFrom` |
 | Follow-up suggestions | provider-dependent | `features/ai/followups.ts`; the model is asked for them and may not supply any |
 | Long conversations | partial | client: `chat/longThread.ts` sends recent turns verbatim and lists earlier questions; server: `trimHistory` drops the oldest turns beyond 120,000 characters |

@@ -25,6 +25,9 @@ One secret per provider. `providerKey(env, provider)` reads the primary name and
 | `openrouter` | OpenRouter | `OPENROUTER_API_KEY` | `VINAX_OPENROUTER_API_KEY` | `router` |
 | `groq` | Groq | `GROQ_API_KEY` | `VINAX_GROQ_API_KEY` | `scholar` |
 | `gemini` | Gemini | `GEMINI_API_KEY` | `VINAX_GGL_GEMINI_API_KEY` | `maestro` |
+| `cloudflare` | Cloudflare | none — the Worker's AI binding (`[ai] binding = "AI"`) | — | `workers` |
+
+11.2 — `cloudflare` is Cloudflare Workers AI, reached through the Worker's own AI binding, not a key (`_lib/workersai.ts`). It counts as configured exactly when the binding exists. The allowance is one free pool for the whole account (10,000 neurons a day, reset at 00:00 UTC), so its models are offered only as explicit picks in the model menu: the `workers` lane is in no failover ladder and never Auto's choice. The models are a short curated list of text-generation models (Meta Llama 3.3 70B / 4 Scout / 3.1 8B, Mistral Small 3.1, Gemma 3 12B, QwQ 32B, Qwen2.5 Coder 32B, DeepSeek R1 Distill Qwen 32B, gpt-oss-120b / 20b); the binding's own model listing, when the runtime has one, only removes a curated model the account no longer lists. Chat only — no images, speech or media. The transport runs `AI.run(model, { messages, stream, max_tokens, temperature })` and re-frames the answer as chat-completions SSE. A spent allowance (error 4006) answers 429 and rests until 00:00 UTC (at most 6 h, the cooldown cap), and every later call in that isolate is refused at once; a model the binding does not know (5007) rests for a day and leaves the menu.
 
 Any one key is enough for the chat to work. With none, AI routes answer `503 ai_not_configured` and every surface uses its on-device path.
 
@@ -82,7 +85,7 @@ Timeouts and plain 400s earn no cooldown.
   features: { image, speech, transcription, music, code } }
 ```
 
-Always four providers, in the order `nvidia`, `openrouter`, `groq`, `gemini`. `id` is the exact slug to send back; `vision` marks a model that reads images. A missing secret or an unreachable provider gives `configured: false` or an empty list. A chat or media request that names a model is checked against the same live list and refused with `400 unknown_model` when it is not there.
+Always five providers, in the order `nvidia`, `openrouter`, `groq`, `gemini`, `cloudflare` (11.2). `id` is the exact slug to send back; `vision` marks a model that reads images. A missing secret or an unreachable provider gives `configured: false` or an empty list. A chat or media request that names a model is checked against the same live list and refused with `400 unknown_model` when it is not there.
 
 ## `POST /api/vinaxai` — the chat
 
@@ -100,14 +103,18 @@ Always four providers, in the order `nvidia`, `openrouter`, `groq`, `gemini`. `i
 1. A seat lane is chosen: the pick's provider lane for `mode: 'model'`; for Auto, `pickAutoMode()` reads the question's shape, and the flagship lane leads when `flagshipReady()`.
 2. `laneAttempts(env, seatLane, seatDefault)` builds the plan: the seat's model, its secondary, then the default ladder above. For the `scholar` and `router` seats the lead model is the live catalogue default (`catalogDefaultModel`).
 3. **The OpenRouter lane (11.0).** When `OPENROUTER_API_KEY` is set and the plan has no `router` attempt, one is inserted just ahead of the `home` attempt — a late fallback before the slow reserve. When there is no `home` attempt it goes at the end, which makes it the lead when OpenRouter is the only key. Its model is the live catalogue default, with the `router` pin as the last resort.
-4. A picked model goes first. On Auto with a time-sensitive question and a Gemini key, a search-capable Gemini 2.5 Flash model leads (see [Web search](#web-search)). On Auto with code execution requested, a code-capable model leads: the flagship if it is already first, otherwise the best `gpt-oss` model Groq lists (`codeExecutionModels`).
+4. **A picked model is the whole plan (11.2).** It is never followed by another provider's model: the reply would carry a name the listener did not choose. When the pick gives no answer, the route answers `model_unavailable` (below). On Auto with a time-sensitive question and a Gemini key, a search-capable Gemini 2.5 Flash model leads (see [Web search](#web-search)). On Auto with code execution requested, a code-capable model leads: the flagship if it is already first, otherwise the best `gpt-oss` model Groq lists (`codeExecutionModels`).
 5. Pairs that are cooling down are removed, unless that would empty the plan. An empty plan answers `503 ai_not_configured`.
+
+**When a pick gives no answer (11.2).** The route answers `{ error: 'model_unavailable', reason, model: { provider, id, name }, retryAfter?, alternatives }`, with status 429 for `quota` (a daily rate limit), `busy` (a short one) and `not_free`, and 503 for `gone`, `down` (5xx, rejected key, no answer in time) and `refused` (another 4xx). `alternatives` holds up to three other models from the same provider that are not resting, nearest name first, vision-capable only when the message carries an image (`pickAlternatives`). A pick resting for the day (`not_free`, `model_gone`, or a rate limit with more than 10 minutes left, per `providerRest()`) is not asked again; a shorter rest is tried anyway. The app shows the reason with Retry (only for `busy` and `down`), "Ask <model>" for two alternatives and "Use Auto"; the stream client never re-asks such a turn on its own.
+
+A picked model that does not read images answers the text part with the "couldn't view the image" note; a vision pick is asked once with the image.
 
 Time limits: 40 s to get response headers from some engine (22 s for `expert` and `voice`), then 90 s for the stream.
 
 ### Vision
 
-A turn with images walks `visionLadder()` instead: the `vision` seat, then `vision90`, then the Gemini flagship and any catalogue model flagged `vision`. A turn with more than one image asks Gemini and the catalogue models first. A picked model that reads images goes in front. The two NVIDIA vision seats accept one image per request, so `singleImageFor()` sends them only the newest image; every other engine gets the full set. Without the NVIDIA key a photo is still read if the Gemini key or a vision-flagged catalogue model is available.
+A turn with images walks `visionLadder()` instead: the `vision` seat, then `vision90`, then the Gemini flagship and any catalogue model flagged `vision`. A turn with more than one image asks Gemini and the catalogue models first. A picked model never walks this ladder (11.2, above). The two NVIDIA vision seats accept one image per request, so `singleImageFor()` sends them only the newest image; every other engine gets the full set. Without the NVIDIA key a photo is still read if the Gemini key or a vision-flagged catalogue model is available.
 
 ### Code execution
 

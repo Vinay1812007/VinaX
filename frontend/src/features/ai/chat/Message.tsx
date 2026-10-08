@@ -1,8 +1,9 @@
-import { memo, useEffect, useState, type ReactNode } from 'react';
+import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { EngineContext } from './ChatStyleScope';
 import { Link } from 'react-router-dom';
 import { ChatPlayerCard } from '@/components/ChatPlayerCard';
-import { SparkleIcon, WaveIcon } from '@/components/Icons';
+import { ChevronRightIcon, SparkleIcon, WaveIcon } from '@/components/Icons';
+import { CiteContext } from '@/components/ai/cite';
 import { RichContent } from '@/components/ai/RichContent';
 import {
   BranchIcon,
@@ -26,19 +27,31 @@ import { readAloud, readAloudSupported } from '@/features/ai/readAloud';
 import { cn } from '@/utils/cn';
 import { reducedMotion } from '@/utils/motion';
 import { CheckIcon, CodeIcon, GlobeIcon } from './icons';
+import { placeCitations } from './citations';
 import { MediaCard } from './MediaCard';
 import { CODE_TOOL, isProviderId, WEB_TOOL } from './models';
 import { ProviderLogo } from './ProviderLogo';
-import type { Msg, MsgSources } from './types';
+import type { ModelChoice, Msg } from './types';
+import { readPickIssue } from './streamClient';
+import { AUTO } from './models';
+import { versionOf } from './versions';
+import { SearchSuggestions, SourceChip, SourcesButton, SourcesPanel } from './Sources';
 
 /** Everything a message can ask the page to do. The object is stable (see
  *  useStableHandlers), so memoised messages do not re-render with the page. */
 export type MessageHandlers = {
+  /** 11.2 — the user message at `index` was edited to `content` (the full
+   *  text, attached-file text included): replace it and what follows, keep
+   *  the old version, and ask again. Same chat, always. */
   edit: (index: number, content: string) => void;
+  /** 11.2 — show version `target` of the edited user message at `index`. */
+  switchVersion: (index: number, target: number) => void;
   rate: (index: number, rating: 'up' | 'down') => void;
   togglePin: (index: number) => void;
   branch: (index: number) => void;
   regenerate: () => void;
+  /** 11.2 — ask the last question again with another model (or Auto). */
+  askWith: (choice: ModelChoice) => void;
   /** 11.0 — put the last message back in the box (it was turned away). */
   reviseLast: () => void;
   continueReply: () => void;
@@ -114,6 +127,72 @@ function AttachedFile({ file }: { file: AttachedText }): ReactNode {
   );
 }
 
+/** 11.2 — the listener's message edited in place: the bubble becomes a box
+ *  with the typed text (attached files and pictures stay with the message and
+ *  go out again), Cancel and Send. Enter sends, Shift+Enter is a new line,
+ *  Esc cancels. */
+function InlineEditor({
+  initial,
+  busy,
+  onCancel,
+  onSend,
+  children,
+}: {
+  initial: string;
+  busy: boolean;
+  onCancel: () => void;
+  onSend: (text: string) => void;
+  children?: ReactNode;
+}): ReactNode {
+  const [draft, setDraft] = useState(initial);
+  const box = useRef<HTMLTextAreaElement>(null);
+  // Grow with the text (up to the CSS max-height, then it scrolls).
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [draft]);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, []);
+  const canSend = !busy && draft.trim().length > 0;
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      onCancel();
+    } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      if (canSend) onSend(draft);
+    }
+  };
+  return (
+    <div className="ai-user-editor">
+      {children}
+      <textarea
+        ref={box}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={onKeyDown}
+        rows={1}
+        aria-label="Edit your message"
+        className="ai-field ai-user-editor-box"
+      />
+      <div className="ai-user-editor-actions">
+        <button type="button" onClick={onCancel} className="ai-btn" aria-label="Cancel edit">
+          Cancel
+        </button>
+        <button type="button" onClick={() => onSend(draft)} disabled={!canSend} className="ai-btn ai-btn-accent" aria-label="Send edited message">
+          Send
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export const UserMessage = memo(function UserMessage({
   m,
   index,
@@ -126,23 +205,74 @@ export const UserMessage = memo(function UserMessage({
   handlers: MessageHandlers;
 }): ReactNode {
   const { typed, files } = splitAttachedText(m.content);
+  const [editing, setEditing] = useState(false);
+  const { at, count } = versionOf(m);
+  const startEdit = (): void => {
+    if (!busy) setEditing(true);
+  };
+  // The typed part is edited; the attached-file text rides along unchanged.
+  const sendEdit = (text: string): void => {
+    if (busy || !text.trim()) return;
+    setEditing(false);
+    handlers.edit(index, text.trim() + m.content.slice(typed.length));
+  };
   return (
-    <div id={`ai-msg-${index}`} className="ai-msg ai-msg-user ai-enter">
-      <div className="ai-user-bubble" onDoubleClick={() => handlers.edit(index, m.content)} title="Double-tap to edit & resend">
-        <Images images={m.images} />
-        {typed.trim() ? <p className="whitespace-pre-wrap">{typed}</p> : null}
-        {files.map((f, k) => (
-          <AttachedFile key={k} file={f} />
-        ))}
-      </div>
+    <div id={`ai-msg-${index}`} className={cn('ai-msg ai-msg-user ai-enter', editing && 'is-editing')}>
       {/* Beside the bubble, not under it: the thread keeps one rhythm. */}
-      {!busy && (
+      {!busy && !editing && (
         <div className="ai-toolbar">
-          <button type="button" onClick={() => handlers.edit(index, m.content)} className="ai-tool" title="Edit and resend">
+          <button type="button" onClick={startEdit} className="ai-tool" title="Edit this message">
             <PencilIcon /> Edit
           </button>
         </div>
       )}
+      <div className="ai-user-stack">
+        {editing ? (
+          <InlineEditor initial={typed} busy={busy} onCancel={() => setEditing(false)} onSend={sendEdit}>
+            <Images images={m.images} />
+            {files.map((f, k) => (
+              <AttachedFile key={k} file={f} />
+            ))}
+          </InlineEditor>
+        ) : (
+          <div className="ai-user-bubble" onDoubleClick={startEdit} title="Double-tap to edit">
+            <Images images={m.images} />
+            {typed.trim() ? <p className="whitespace-pre-wrap">{typed}</p> : null}
+            {files.map((f, k) => (
+              <AttachedFile key={k} file={f} />
+            ))}
+          </div>
+        )}
+        {/* 11.2 — an edited message keeps its earlier versions: ‹ 2 / 2 ›. */}
+        {count > 1 && !editing && (
+          <div className="ai-versions" role="group" aria-label="Message versions">
+            <button
+              type="button"
+              onClick={() => handlers.switchVersion(index, at - 1)}
+              disabled={busy || at === 0}
+              aria-label="Previous version"
+              title="Previous version"
+              className="ai-tool"
+            >
+              <ChevronRightIcon className="w-3.5 h-3.5 rotate-180" />
+            </button>
+            <span className="ai-versions-count" aria-live="polite">
+              <span className="sr-only">Version </span>
+              {at + 1} / {count}
+            </span>
+            <button
+              type="button"
+              onClick={() => handlers.switchVersion(index, at + 1)}
+              disabled={busy || at === count - 1}
+              aria-label="Next version"
+              title="Next version"
+              className="ai-tool"
+            >
+              <ChevronRightIcon className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 });
@@ -160,55 +290,12 @@ export const ranCode = (m: Pick<Msg, 'tools' | 'content'>): boolean => !!m.tools
 /** 11.0 — web search was on for the model that answered (stream meta). */
 export const searchedWeb = (m: Pick<Msg, 'tools'>): boolean => !!m.tools?.includes(WEB_TOOL);
 
-const hostOf = (url: string): string => {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return url;
-  }
-};
-
-/** 11.0 — the pages a web-grounded reply drew on: up to 8 pills (the page's
- *  title, else its host; no favicons, no remote images) opening in a new tab,
- *  a "Searched the web" caption when the model ran queries, and the provider's
- *  search-suggestion snippet in a sealed frame (empty sandbox: no scripts, no
- *  same-origin, no navigation) — showing that snippet is a condition of the
- *  grounding service. Exported for tests. */
-export function Sources({ s }: { s: MsgSources }): ReactNode {
-  if (!s.items.length && !s.entry) return null;
-  return (
-    <div className="ai-sources" role="group" aria-label="Sources">
-      {s.queries.length > 0 && (
-        <span className="ai-sources-cap">
-          <GlobeIcon className="w-3.5 h-3.5" />
-          Searched the web
-        </span>
-      )}
-      {s.items.length > 0 && (
-        <ul className="ai-sources-list">
-          {s.items.slice(0, 8).map((it) => {
-            const host = hostOf(it.url);
-            return (
-              <li key={it.url}>
-                <a className="ai-source" href={it.url} target="_blank" rel="noopener noreferrer" title={it.title ? `${it.title} — ${host}` : host}>
-                  {it.title || host}
-                </a>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {s.entry && <iframe className="ai-sources-entry" sandbox="" srcDoc={s.entry} title="Search suggestions" tabIndex={-1} loading="lazy" />}
-    </div>
-  );
-}
-
 /** The pause before the first token: beside it the VinaX mark turns slowly
  *  and breathes in the Marigold → Rose glow (.ai-msg-mark.is-waiting), and this
  *  short status runs a soft shimmer, changing every couple of seconds. The
  *  accessible name stays "Thinking" — a screen reader hears it once, not every
  *  rotation. */
-function ThinkingMark({ creating }: { creating?: 'image' | 'music' }): ReactNode {
+function ThinkingMark({ creating, searching }: { creating?: 'image' | 'music'; searching?: boolean }): ReactNode {
   const lines = creating ? CREATING[creating] : WAITING;
   const [i, setI] = useState(0);
   useEffect(() => {
@@ -216,6 +303,17 @@ function ThinkingMark({ creating }: { creating?: 'image' | 'music' }): ReactNode
     const t = window.setInterval(() => setI((n) => (n + 1) % lines.length), 2400);
     return () => window.clearInterval(t);
   }, [lines.length]);
+  // 11.2 — web search is on for the model answering: say so, with a globe,
+  // until the first word arrives (the search runs before the answer).
+  if (searching && !creating)
+    return (
+      <span className="ai-thinking ai-searching" role="status" aria-label="Searching the web">
+        <GlobeIcon className="ai-searching-icon w-4 h-4" />
+        <span className="ai-thinking-text ai-shimmer" aria-hidden>
+          Searching the web
+        </span>
+      </span>
+    );
   return (
     <span className="ai-thinking" role="status" aria-label="Thinking">
       <span key={i} className="ai-thinking-text ai-shimmer" aria-hidden>
@@ -259,13 +357,21 @@ function ReplyNotice({
   busy,
   onRetry,
   onEdit,
+  onAskWith,
 }: {
   m: Msg;
   last: boolean;
   busy: boolean;
   onRetry: () => void;
   onEdit: () => void;
+  onAskWith: (choice: ModelChoice) => void;
 }): ReactNode {
+  // 11.2 — the picked model gave no answer. Stored chats are read back
+  // as they were saved, so the stored copy is validated again here.
+  const issue = m.failed ? readPickIssue(m.pickIssue) : null;
+  // Asking the same model again right away cannot help when it is out for the
+  // day, not free, or gone.
+  const retryHelps = !issue || issue.reason === 'busy' || issue.reason === 'down';
   return (
     <div className="ai-notice">
       <span className="ai-notice-icon" aria-hidden>
@@ -275,7 +381,30 @@ function ReplyNotice({
         <p>{m.content}</p>
         {!busy && last && (
           <div className="ai-notice-actions" role="group" aria-label="Reply actions">
-            {m.failed && m.needsEdit ? (
+            {issue ? (
+              <>
+                {retryHelps && (
+                  <button type="button" onClick={onRetry} className="ai-btn ai-btn-accent" aria-label={`Ask ${issue.name} again`} title="Ask again">
+                    <RefreshIcon /> Retry
+                  </button>
+                )}
+                {issue.alternatives.slice(0, 2).map((alt) => (
+                  <button
+                    key={alt.model}
+                    type="button"
+                    className="ai-btn"
+                    title={`Ask this question again with ${alt.name}`}
+                    onClick={() => onAskWith({ mode: 'model', provider: alt.provider, model: alt.model, name: alt.name })}
+                  >
+                    <ProviderLogo provider={alt.provider} size={14} />
+                    Ask {alt.name}
+                  </button>
+                ))}
+                <button type="button" className="ai-btn" title="Ask this question again and let VinaX AI choose the model" onClick={() => onAskWith(AUTO)}>
+                  Use Auto
+                </button>
+              </>
+            ) : m.failed && m.needsEdit ? (
               // 11.0 — sending the same thing again would only fail again.
               <button type="button" onClick={onEdit} className="ai-btn ai-btn-accent" title="Put this message back in the box to change it">
                 <PencilIcon /> Edit message
@@ -330,6 +459,26 @@ export const AssistantMessage = memo(function AssistantMessage({
       ]
     : [];
   const waiting = streaming && !m.content;
+  // 11.2 — a web-grounded reply: one source chip at the end of each sentence
+  // a page backs (placed in the raw text, drawn by RichContent), and a
+  // Sources button that opens the full list.
+  const sources = !streaming ? m.sources : undefined;
+  const placed = useMemo(
+    () => placeCitations(m.content, sources?.supports, sources?.items.length ?? 0),
+    [m.content, sources],
+  );
+  const drawCite = useMemo(
+    () => (sources && placed.cites.length ? (n: number) => <SourceChip items={sources.items} sources={placed.cites[n] ?? []} /> : null),
+    [sources, placed],
+  );
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const sourcesBtn = useRef<HTMLButtonElement>(null);
+  const sourcesId = useId();
+  const closeSources = (): void => {
+    setSourcesOpen(false);
+    sourcesBtn.current?.focus();
+  };
+  const hasSources = !!sources?.items.length;
   // 10.0 — the mark has three states: turning in the glow while it waits for
   // the first word, glowing while the words arrive, and settled once they stop.
   const markState = waiting ? 'is-waiting' : streaming ? 'is-streaming' : undefined;
@@ -359,6 +508,7 @@ export const AssistantMessage = memo(function AssistantMessage({
             busy={busy}
             onRetry={handlers.regenerate}
             onEdit={handlers.reviseLast}
+            onAskWith={handlers.askWith}
           />
         ) : m.content ? (
           <>
@@ -373,11 +523,14 @@ export const AssistantMessage = memo(function AssistantMessage({
                 after the last paragraph or list item by CSS, or by the span
                 below when the reply ends in a block such as code. */}
             <div className={cn('ai-reply', streaming && 'is-streaming')}>
-              <RichContent text={streaming ? hideFollowupLine(m.content) : m.content} streaming={streaming} />
+              <CiteContext.Provider value={drawCite}>
+                <RichContent text={streaming ? hideFollowupLine(m.content) : placed.text} streaming={streaming} />
+              </CiteContext.Provider>
               {streaming && <span className="ai-caret" aria-hidden />}
             </div>
-            {/* 11.0 — the pages a web-grounded reply drew on, once it has finished. */}
-            {!streaming && m.sources && <Sources s={m.sources} />}
+            {/* 11.0 — the search service's suggestions, once the reply has
+                finished (a condition of the grounding service: always shown). */}
+            {sources?.entry && <SearchSuggestions entry={sources.entry} />}
             {!busy && (
               <div className="ai-toolbar mt-2 -ml-2 flex flex-wrap items-center gap-0.5" role="group" aria-label="Reply actions">
                 <CopyButton text={m.content} />
@@ -437,6 +590,17 @@ export const AssistantMessage = memo(function AssistantMessage({
                 >
                   <PinIcon />
                 </button>
+                {/* 11.2 — every page the reply drew on. */}
+                {hasSources && sources && (
+                  <SourcesButton
+                    ref={sourcesBtn}
+                    s={sources}
+                    open={sourcesOpen}
+                    panelId={sourcesId}
+                    onToggle={() => setSourcesOpen((o) => !o)}
+                    onClose={closeSources}
+                  />
+                )}
                 <MoreMenu actions={more} />
                 {/* 10.3 — who answered: the provider's logo and the model's
                     original name, straight from the stream (a failover hop
@@ -450,7 +614,7 @@ export const AssistantMessage = memo(function AssistantMessage({
                   </span>
                 )}
                 {/* 11.0 — web search was on for this reply: a small globe. */}
-                {searchedWeb(m) && (
+                {searchedWeb(m) && !hasSources && (
                   <span className="ai-engine-chip ai-web-chip" title="Web search was on for this reply">
                     <GlobeIcon className="w-3.5 h-3.5" />
                     <span className="sr-only">Web search on</span>
@@ -465,10 +629,11 @@ export const AssistantMessage = memo(function AssistantMessage({
                 ) : null}
               </div>
             )}
+            {!busy && hasSources && sourcesOpen && sources && <SourcesPanel s={sources} id={sourcesId} onClose={closeSources} />}
             {!busy && last && m.followups?.length ? <FollowupChips items={m.followups} disabled={busy} onPick={handlers.send} /> : null}
           </>
         ) : (
-          <ThinkingMark creating={m.creating} />
+          <ThinkingMark creating={m.creating} searching={streaming && searchedWeb(m)} />
         )}
       </div>
     </div>
