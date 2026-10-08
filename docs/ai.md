@@ -25,6 +25,9 @@ One secret per provider. `providerKey(env, provider)` reads the primary name and
 | `openrouter` | OpenRouter | `OPENROUTER_API_KEY` | `VINAX_OPENROUTER_API_KEY` | `router` |
 | `groq` | Groq | `GROQ_API_KEY` | `VINAX_GROQ_API_KEY` | `scholar` |
 | `gemini` | Gemini | `GEMINI_API_KEY` | `VINAX_GGL_GEMINI_API_KEY` | `maestro` |
+| `cloudflare` | Cloudflare | none — the Worker's AI binding (`[ai] binding = "AI"`) | — | `workers` |
+
+11.2 — `cloudflare` is Cloudflare Workers AI, reached through the Worker's own AI binding, not a key (`_lib/workersai.ts`). It counts as configured exactly when the binding exists. The allowance is one free pool for the whole account (10,000 neurons a day, reset at 00:00 UTC), so its models are offered only as explicit picks in the model menu: the `workers` lane is in no failover ladder and never Auto's choice. The models are a short curated list of text-generation models (Meta Llama 3.3 70B / 4 Scout / 3.1 8B, Mistral Small 3.1, Gemma 3 12B, QwQ 32B, Qwen2.5 Coder 32B, DeepSeek R1 Distill Qwen 32B, gpt-oss-120b / 20b); the binding's own model listing, when the runtime has one, only removes a curated model the account no longer lists. Chat only — no images, speech or media. The transport runs `AI.run(model, { messages, stream, max_tokens, temperature })` and re-frames the answer as chat-completions SSE. A spent allowance (error 4006) answers 429 and rests until 00:00 UTC (at most 6 h, the cooldown cap), and every later call in that isolate is refused at once; a model the binding does not know (5007) rests for a day and leaves the menu.
 
 Any one key is enough for the chat to work. With none, AI routes answer `503 ai_not_configured` and every surface uses its on-device path.
 
@@ -82,7 +85,7 @@ Timeouts and plain 400s earn no cooldown.
   features: { image, speech, transcription, music, code } }
 ```
 
-Always four providers, in the order `nvidia`, `openrouter`, `groq`, `gemini`. `id` is the exact slug to send back; `vision` marks a model that reads images. A missing secret or an unreachable provider gives `configured: false` or an empty list. A chat or media request that names a model is checked against the same live list and refused with `400 unknown_model` when it is not there.
+Always five providers, in the order `nvidia`, `openrouter`, `groq`, `gemini`, `cloudflare` (11.2). `id` is the exact slug to send back; `vision` marks a model that reads images. A missing secret or an unreachable provider gives `configured: false` or an empty list. A chat or media request that names a model is checked against the same live list and refused with `400 unknown_model` when it is not there.
 
 ## `POST /api/vinaxai` — the chat
 

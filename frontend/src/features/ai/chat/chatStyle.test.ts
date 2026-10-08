@@ -125,3 +125,12 @@ describe('chat style layouts', () => {
     expect(seen.size).toBe(CHAT_STYLES.length);
   });
 });
+
+describe('11.2 — Workers AI slugs', () => {
+  it('reads the maker behind the @cf/ host prefix', () => {
+    expect(makerFamily('@cf/meta/llama-3.3-70b-instruct-fp8-fast', 'Meta', 'cloudflare')).toBe('meta');
+    expect(makerFamily('@cf/qwen/qwq-32b', null, 'cloudflare')).toBe('qwen');
+    expect(makerFamily('@cf/openai/gpt-oss-120b', null, 'cloudflare')).toBe('openai');
+    expect(makerFamily('@hf/acme/unknown', null, 'cloudflare')).toBe('other');
+  });
+});

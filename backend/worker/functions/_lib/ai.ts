@@ -37,6 +37,7 @@
  * lanes without their own LANE_BASE pin.
  */
 import { isModelGone, maestroFetch } from './maestro';
+import { WORKERS_AI_BASE, isWorkersAiEndpoint, workersAiBinding, workersAiFetch, type WorkersAiBinding } from './workersai';
 import { dbErrorCode, sbInsert, sbRpcResult, sbSelectResult, supabaseConfigured, type SupabaseEnv } from './supabase';
 
 export interface AiEnv {
@@ -57,33 +58,49 @@ export interface AiEnv {
    * deploy of new code when the provider publishes a newer one. */
   VINAX_MAESTRO_MODEL?: string;
   NVIDIA_BASE_URL?: string;
+  /** 11.2 — the Workers AI binding (`[ai] binding = "AI"` in wrangler.toml).
+   * No key: the fifth provider is configured exactly when this exists. */
+  AI?: WorkersAiBinding;
 }
 
-/** 10.3 — the four providers, in the order every menu and report lists them. */
-export type AiProvider = 'nvidia' | 'openrouter' | 'groq' | 'gemini';
-export const AI_PROVIDERS: readonly AiProvider[] = ['nvidia', 'openrouter', 'groq', 'gemini'];
-export const PROVIDER_LABEL: Record<AiProvider, string> = { nvidia: 'NVIDIA', openrouter: 'OpenRouter', groq: 'Groq', gemini: 'Gemini' };
+/** 10.3 — the four providers that sign with a key. */
+export type KeyProvider = 'nvidia' | 'openrouter' | 'groq' | 'gemini';
+export const KEY_PROVIDERS: readonly KeyProvider[] = ['nvidia', 'openrouter', 'groq', 'gemini'];
+/** 11.2 — plus Cloudflare Workers AI, served through the Worker's AI binding
+ * (no key; ./workersai.ts). Every menu and report lists them in this order. */
+export type AiProvider = KeyProvider | 'cloudflare';
+export const AI_PROVIDERS: readonly AiProvider[] = [...KEY_PROVIDERS, 'cloudflare'];
+export const PROVIDER_LABEL: Record<AiProvider, string> = { nvidia: 'NVIDIA', openrouter: 'OpenRouter', groq: 'Groq', gemini: 'Gemini', cloudflare: 'Cloudflare' };
+export function isKeyProvider(p: AiProvider): p is KeyProvider {
+  return p !== 'cloudflare';
+}
+/** 11.2 — the binding's name, where a report names a provider's secret. */
+export const WORKERS_AI_BINDING = 'AI';
+/** 11.2 — what providerKey() returns for Cloudflare when the binding exists: a
+ * marker, not a credential. It never leaves the Worker — a Workers AI attempt
+ * goes through the binding transport, never through fetch. */
+export const WORKERS_AI_KEY = 'binding:AI';
 
 /** The secret that holds each provider's single key (10.3 — the primary names). */
 export type AiKeySecret = 'NVIDIA_API_KEY' | 'OPENROUTER_API_KEY' | 'GROQ_API_KEY' | 'GEMINI_API_KEY';
 /** 10.3 — the name each key had before; read only while the primary is unset. */
 export type AiKeyFallback = 'VINAX_NVIDIA_API_KEY' | 'VINAX_OPENROUTER_API_KEY' | 'VINAX_GROQ_API_KEY' | 'VINAX_GGL_GEMINI_API_KEY';
-export const PROVIDER_ENV: Record<AiProvider, AiKeySecret> = {
+export const PROVIDER_ENV: Record<KeyProvider, AiKeySecret> = {
   nvidia: 'NVIDIA_API_KEY',
   openrouter: 'OPENROUTER_API_KEY',
   groq: 'GROQ_API_KEY',
   gemini: 'GEMINI_API_KEY',
 };
-export const PROVIDER_ENV_FALLBACK: Record<AiProvider, AiKeyFallback> = {
+export const PROVIDER_ENV_FALLBACK: Record<KeyProvider, AiKeyFallback> = {
   nvidia: 'VINAX_NVIDIA_API_KEY',
   openrouter: 'VINAX_OPENROUTER_API_KEY',
   groq: 'VINAX_GROQ_API_KEY',
   gemini: 'VINAX_GGL_GEMINI_API_KEY',
 };
 /** Every AI key secret VinaX reads by its primary name — exactly four (laneRegistry.test.ts locks it). */
-export const AI_KEY_SECRETS: readonly AiKeySecret[] = AI_PROVIDERS.map((p) => PROVIDER_ENV[p]);
+export const AI_KEY_SECRETS: readonly AiKeySecret[] = KEY_PROVIDERS.map((p) => PROVIDER_ENV[p]);
 /** 10.3 — the four fallback names, in the same order. */
-export const AI_KEY_FALLBACKS: readonly AiKeyFallback[] = AI_PROVIDERS.map((p) => PROVIDER_ENV_FALLBACK[p]);
+export const AI_KEY_FALLBACKS: readonly AiKeyFallback[] = KEY_PROVIDERS.map((p) => PROVIDER_ENV_FALLBACK[p]);
 
 const secretValue = (env: object, name: string): string => {
   const raw = (env as Record<string, unknown>)[name];
@@ -96,13 +113,15 @@ const secretValue = (env: object, name: string): string => {
  * speech, voices, images, transcription, music and the owner console — goes
  * through this, so the switch to the new names is one place. */
 export function providerKey(env: object, provider: AiProvider): string | null {
+  if (provider === 'cloudflare') return workersAiBinding(env) ? WORKERS_AI_KEY : null;
   return secretValue(env, PROVIDER_ENV[provider]) || secretValue(env, PROVIDER_ENV_FALLBACK[provider]) || null;
 }
 
 /** 10.3 — which secret name supplies a provider's key right now (names only,
  * never the value), for the env checklist and health: the primary, the
  * fallback, or none. */
-export function providerKeySource(env: object, provider: AiProvider): { name: AiKeySecret | AiKeyFallback; fallback: boolean } | null {
+export function providerKeySource(env: object, provider: AiProvider): { name: AiKeySecret | AiKeyFallback | typeof WORKERS_AI_BINDING; fallback: boolean } | null {
+  if (provider === 'cloudflare') return workersAiBinding(env) ? { name: WORKERS_AI_BINDING, fallback: false } : null;
   if (secretValue(env, PROVIDER_ENV[provider])) return { name: PROVIDER_ENV[provider], fallback: false };
   if (secretValue(env, PROVIDER_ENV_FALLBACK[provider])) return { name: PROVIDER_ENV_FALLBACK[provider], fallback: true };
   return null;
@@ -133,7 +152,10 @@ export type Lane =
   | 'maestro'
   // Vision lanes — image understanding.
   | 'vision'
-  | 'vision90';
+  | 'vision90'
+  // 11.2 — Cloudflare Workers AI through the binding: explicit picks only,
+  // never in the failover ladder (one small daily pool for the account).
+  | 'workers';
 
 /** 10.3 — which provider (and so which key) serves each lane. */
 export const LANE_PROVIDER: Record<Lane, AiProvider> = {
@@ -150,11 +172,17 @@ export const LANE_PROVIDER: Record<Lane, AiProvider> = {
   maestro: 'gemini',
   vision: 'nvidia',
   vision90: 'nvidia',
+  workers: 'cloudflare',
 };
 
 /** 10.3 — the lane a listener-picked catalogue model rides: its endpoint, its
  * transport and its `@lane` label in the AI event log. */
-export const PROVIDER_LANE: Record<AiProvider, Lane> = { nvidia: 'chat', openrouter: 'router', groq: 'scholar', gemini: 'maestro' };
+export const PROVIDER_LANE: Record<AiProvider, Lane> = { nvidia: 'chat', openrouter: 'router', groq: 'scholar', gemini: 'maestro', cloudflare: 'workers' };
+
+/** The secret (or, for Workers AI, the binding) a provider needs, by name. */
+export function providerEnvName(provider: AiProvider): AiKeySecret | typeof WORKERS_AI_BINDING {
+  return isKeyProvider(provider) ? PROVIDER_ENV[provider] : WORKERS_AI_BINDING;
+}
 
 /** Default (NVIDIA) chat-completions endpoint, honoring the env override. */
 export function defaultEndpoint(env: AiEnv): string {
@@ -168,6 +196,8 @@ export const LANE_BASE: Partial<Record<Lane, string>> = {
   scholar: 'https://api.groq.com/openai/v1',
   router: 'https://openrouter.ai/api/v1',
   maestro: 'https://generativelanguage.googleapis.com/v1beta/openai',
+  // 11.2 — not a URL: Workers AI attempts go through the binding transport.
+  workers: WORKERS_AI_BASE,
 };
 
 /** Full chat-completions URL for a lane — its own provider base when pinned,
@@ -203,7 +233,7 @@ export function isMaestroEndpoint(url: string): boolean {
 /** True when the endpoint is NOT the NVIDIA base — i.e. vendor-specific
  * payload knobs must be withheld. */
 export function isExternalEndpoint(url: string): boolean {
-  return isGroqEndpoint(url) || isRouterEndpoint(url) || isMaestroEndpoint(url);
+  return isGroqEndpoint(url) || isRouterEndpoint(url) || isMaestroEndpoint(url) || isWorkersAiEndpoint(url);
 }
 
 /** nemotron a3b-family models reason by DEFAULT and leak BARE chain-of-thought
@@ -270,6 +300,9 @@ export const LANE_MODEL: Record<Lane, string> = {
   maestro: 'gemini-3.8-flash',
   vision: 'meta/llama-3.2-11b-vision-instruct',
   vision90: 'meta/llama-3.2-90b-vision-instruct',
+  // 11.2 — the health ping / engine test default only (the cheapest curated
+  // model); listeners pick from the curated list in ./workersai.ts.
+  workers: '@cf/meta/llama-3.1-8b-instruct-fast',
 };
 
 /** Per-lane SECONDARY model pin — a healthy same-key variant tried on the
@@ -293,11 +326,17 @@ export const LANE_SECONDARY: Partial<Record<Lane, string>> = {
   // retired too, and _lib/maestro.ts already resolves a live replacement.
 };
 
-/** Env var that holds each lane's key — derived from LANE_PROVIDER, so a lane
- * can never point at a secret outside the four (10.3). */
-export const LANE_ENV: Record<Lane, AiKeySecret> = Object.fromEntries(
-  (Object.keys(LANE_PROVIDER) as Lane[]).map((l) => [l, PROVIDER_ENV[LANE_PROVIDER[l]]]),
-) as Record<Lane, AiKeySecret>;
+/** The lanes that sign with a key (every lane but the 11.2 binding lane). */
+export type KeyLane = Exclude<Lane, 'workers'>;
+/** Env var that holds each keyed lane's key — derived from LANE_PROVIDER, so a
+ * lane can never point at a secret outside the four (10.3). The Workers AI
+ * lane has no secret and is not listed (11.2). */
+export const LANE_ENV: Record<KeyLane, AiKeySecret> = Object.fromEntries(
+  (Object.keys(LANE_PROVIDER) as Lane[]).flatMap((l) => {
+    const p = LANE_PROVIDER[l];
+    return isKeyProvider(p) ? [[l, PROVIDER_ENV[p]]] : [];
+  }),
+) as Record<KeyLane, AiKeySecret>;
 
 /** Cross-lane failover ladder: when a lane's own model is missing or dead,
  * the next live pair takes the call — one dead model never takes a feature
@@ -560,6 +599,12 @@ function noteFailure(provider: AiProvider, model: string, status: number, body: 
   if (!c) return null;
   markProviderCooldown(provider, model, c.ms, c.scope);
   if (c.reason === 'not_free') notFree.set(coolKey(provider, model), Date.now() + c.ms);
+  // 11.2 — Workers AI models come from a curated list, not a live one: a model
+  // the binding says does not exist rests for a day and leaves the list.
+  if (c.reason === 'model_gone' && provider === 'cloudflare') {
+    markProviderCooldown(provider, model, NOT_FREE_COOLDOWN_MS);
+    notFree.set(coolKey(provider, model), Date.now() + NOT_FREE_COOLDOWN_MS);
+  }
   console.log(`[ai] cooldown ${prefix}provider=${provider}${c.scope === 'model' ? ` model=${loggableModel(model)}` : ' (whole key)'} reason=${c.reason} s=${Math.round(c.ms / 1000)}`);
   return c;
 }
@@ -732,7 +777,9 @@ export async function chat(
         // provider's key shapes need different endpoints; see _lib/maestro.ts).
         res = isMaestroEndpoint(endpoint)
           ? await maestroFetch(key, model, payload, controller.signal)
-          : await fetch(endpoint, {
+          : isWorkersAiEndpoint(endpoint)
+            ? await workersAiFetch(workersAiBinding(env), payload, controller.signal)
+            : await fetch(endpoint, {
               method: 'POST',
               headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
               body: JSON.stringify(payload),

@@ -7,7 +7,8 @@
  * 10.3 — the four providers VinaX AI reaches, one key each. The order is the
  * order the menu lists them in (and the order GET /api/aimodels sends them).
  */
-export type ProviderId = 'nvidia' | 'openrouter' | 'groq' | 'gemini';
+/** 11.2 — `cloudflare` is Workers AI through the Worker's AI binding (no key). */
+export type ProviderId = 'nvidia' | 'openrouter' | 'groq' | 'gemini' | 'cloudflare';
 
 /** One model a provider serves right now, under its own original name. */
 export interface ProviderModel {

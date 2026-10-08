@@ -31,6 +31,7 @@
  */
 import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { maestroFetch } from '../../_lib/maestro';
+import { isWorkersAiEndpoint, workersAiBinding, workersAiFetch } from '../../_lib/workersai';
 import {
   LANE_ENV,
   LANE_MODEL,
@@ -38,6 +39,7 @@ import {
   LANE_PROVIDER,
   LANE_SECONDARY,
   PROVIDER_ENV,
+  providerEnvName,
   PROVIDER_LANE,
   laneModel,
   isMaestroEndpoint,
@@ -47,6 +49,7 @@ import {
   reasoningOffParams,
   type AiEnv,
   type AiProvider,
+  type KeyLane,
   type Lane,
 } from '../../_lib/ai';
 import { MEDIA_KINDS, catalogDefaultModel, describeModel, findCatalogModel, findMediaModel, normaliseProvider, type MediaKind } from '../../_lib/catalog';
@@ -171,7 +174,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   const model =
     overrideModel ?? (catalogLane ? ((await catalogDefaultModel(env, provider)) ?? LANE_MODEL[lane]) : laneModel(env, lane));
   const key = laneKey(env, lane);
-  if (!key) return json({ error: 'not_configured', status: 0, head: `${LANE_ENV[lane]} is not set`, lane, provider, model });
+  if (!key) return json({ error: 'not_configured', status: 0, head: `${lane in LANE_ENV ? LANE_ENV[lane as KeyLane] : 'The AI binding'} is not set`, lane, provider, model });
 
 
   // The bench probes the lane's OWN endpoint — providers are mixed now.
@@ -194,7 +197,9 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   try {
     up = isMaestroEndpoint(endpoint)
       ? await maestroFetch(key, model, payload, abort.signal, !byProvider)
-      : await fetch(endpoint, {
+      : isWorkersAiEndpoint(endpoint)
+        ? await workersAiFetch(workersAiBinding(env), payload, abort.signal)
+        : await fetch(endpoint, {
           method: 'POST',
           headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
           body: JSON.stringify(payload),
@@ -283,7 +288,7 @@ async function benchMedia(
 ): Promise<Response> {
   const kind = typeof body.kind === 'string' && (MEDIA_KINDS as readonly string[]).includes(body.kind) ? (body.kind as MediaKind) : null;
   if (!kind) return json({ error: 'unknown_kind', kinds: MEDIA_KINDS }, 400);
-  if (!laneKey(env, PROVIDER_LANE[provider])) return json({ error: 'not_configured', status: 0, head: `${PROVIDER_ENV[provider]} is not set`, provider, kind });
+  if (!laneKey(env, PROVIDER_LANE[provider])) return json({ error: 'not_configured', status: 0, head: `${providerEnvName(provider)} is not set`, provider, kind });
   const m = await findMediaModel(env, provider, kind, body.model);
   if (!m) return json({ error: 'unknown_model', provider, kind }, 400);
   const base = { kind, provider, model: m.id, name: m.name };
