@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.5.1': {
+    title: 'A listener profile you can keep',
+    changes: [
+      { type: 'improved', text: 'Owner console \u2014 Profile now downloads the listener\u2019s page itself: who they are, their counts, their top songs with the play bars, their languages and their recent activity, in one file to keep, send or print. JSON and Activity (CSV) sit beside it for data work.' },
+    ],
+  },
   '11.5.0': {
     title: 'Home scrolls the way it should',
     changes: [

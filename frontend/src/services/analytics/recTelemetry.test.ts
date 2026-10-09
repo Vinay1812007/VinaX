@@ -44,6 +44,12 @@ vi.mock('@/services/recommendation/engine', () => ({
 }));
 vi.mock('@/services/api', () => ({ getSong: vi.fn() }));
 
+// Warmed on purpose, not used here: the player's own fire-and-forget
+// dynamic imports can still be loading when this file's environment is torn
+// down, which fails the whole run with an EnvironmentTeardownError while
+// every test passes (slow CI runners only). In the registry first = resolved
+// from cache. Same reason as components/FavButton.test.tsx.
+import '@/services/ai/sessionContext';
 import { COMPLETE_RATIO, SKIP_RATIO, UNKNOWN_DURATION_SEC, COUNTED_PLAY_SEC, emitPlaybackEvent, newRun, type AutoEntryMeta, type PlaybackEndReason, type PlaybackEvent } from '@/services/playback/session';
 import { KEYS } from '@/constants/storage-keys';
 import { usePlayerStore } from '@/store/playerStore';

@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { test, expect, type Page } from '@playwright/test';
 
 /**
@@ -283,12 +284,22 @@ test('User Management downloads a listener profile, their activity and the whole
   await openSection(page, 'users');
   await expect(page.locator('#view')).toContainText('Listener one');
 
-  // One listener's full server-side record, from the row.
+  // The readable profile — the drill-down as a page — straight from the row.
   const [profile] = await Promise.all([
     page.waitForEvent('download'),
     page.locator('#view button.udl').first().click(),
   ]);
-  expect(profile.suggestedFilename()).toMatch(/^vinax-listener-listener-one-\d{4}-\d{2}-\d{2}\.json$/);
+  expect(profile.suggestedFilename()).toMatch(/^vinax-profile-listener-one-\d{4}-\d{2}-\d{2}\.html$/);
+  const report = await readFile((await profile.path())!, 'utf8');
+  // It carries what the panel shows: who, where, the counts and the songs.
+  expect(report).toContain('<title>VinaX listener profile — Listener one</title>');
+  expect(report).toContain('@one_01a');
+  expect(report).toContain('Hyderabad');
+  expect(report).toContain('Kesariya');
+  expect(report).toContain('Arijit Singh');
+  expect(report).toMatch(/Top language[\s\S]*hindi|hindi[\s\S]*Top language/);
+  // Self-contained: nothing is fetched when it is opened.
+  expect(report).not.toMatch(/<script|src=["']http/i);
 
   // Every listener in the list, as a spreadsheet.
   const [all] = await Promise.all([
@@ -304,7 +315,16 @@ test('User Management downloads a listener profile, their activity and the whole
     page.waitForEvent('download'),
     page.locator('#mdl').click(),
   ]);
-  expect(fromModal.suggestedFilename()).toMatch(/\.json$/);
+  expect(fromModal.suggestedFilename()).toMatch(/^vinax-profile-.*\.html$/);
+  const [raw] = await Promise.all([
+    page.waitForEvent('download'),
+    page.locator('#mdljson').click(),
+  ]);
+  expect(raw.suggestedFilename()).toMatch(/^vinax-listener-.*\.json$/);
+  const record = JSON.parse(await readFile((await raw.path())!, 'utf8')) as { user: { username: string }; events: unknown[]; note: string };
+  expect(record.user.username).toBe('one_01a');
+  expect(record.events).toHaveLength(2);
+  expect(record.note).toMatch(/never uploaded/);
   const [activity] = await Promise.all([
     page.waitForEvent('download'),
     page.locator('#mdlcsv').click(),

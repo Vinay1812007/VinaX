@@ -7,6 +7,15 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Song } from '@/types';
+// Liking a song fires telemetry and the adaptive re-plan as fire-and-forget
+// dynamic imports (libraryStore.toggleFavorite). One started by the last
+// assertion can still be loading when this file's environment is torn down,
+// and vitest then fails the whole run with an EnvironmentTeardownError while
+// every test passes — on a slow, cold CI runner only. Importing them here
+// puts them in the module registry first, so those `import()`s resolve from
+// cache instead of starting a load.
+import '@/services/analytics/telemetry';
+import '@/services/recommendation/adaptive';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useToastStore } from '@/store/toastStore';
 import { FavButton } from './FavButton';
