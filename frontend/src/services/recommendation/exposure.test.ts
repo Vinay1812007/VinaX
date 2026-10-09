@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   EXPOSURE_CAP,
   EXPOSURE_KEY,
@@ -23,6 +23,15 @@ import { makeSong as song } from '@/__fixtures__/songs';
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
 const T0 = Date.UTC(2026, 9, 2, 12, 0, 0);
+
+// Every call here is given its own `now`, with one exception that cannot be:
+// a snooze receipt's `undo()` reads the clock itself (it runs seconds after
+// the snooze in real life). T0 is a fixed date, so from the moment the real
+// clock passed T0 + 7 days the undo test's snoozes were already expired and
+// it failed for good. Freeze Date for the file — the explicit `now`
+// arguments keep saying what each test means.
+beforeEach(() => vi.useFakeTimers({ now: T0, toFake: ['Date'] }));
+afterEach(() => vi.useRealTimers());
 
 describe('exposure ledger', () => {
   beforeEach(() => {

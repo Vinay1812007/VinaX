@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildScoringFrame, scoreCandidate, weightGain } from './scoring';
 import { rerankCandidates } from './reranking';
 import { applyWeightOverrides, DEFAULT_RECOMMENDATION_WEIGHTS, resetWeightOverrides, type RecommendationWeightKey } from './weights';
@@ -105,7 +105,18 @@ const SCORER_KEYS: Partial<Record<RecommendationWeightKey, ReasonKind[]>> = {
 /** Keys that act in the diversity re-rank rather than in the per-song score. */
 const RERANK_KEYS: RecommendationWeightKey[] = ['diversity', 'discovery'];
 
-afterEach(() => resetWeightOverrides());
+// The scorer decays affinities against the live clock (profile.ts
+// `getDecayedAffinity`, and the last-week artist lift in scoring.ts), so two
+// calls milliseconds apart differ in the twelfth decimal and the
+// "leaked into" assertions below fail at random. Worse, NOW is a fixed date:
+// once the real clock drifts a week past it the artist lift switches off and
+// the fixture stops exercising the term it is here to pin. Freeze Date (only
+// Date — nothing here waits on a timer).
+beforeEach(() => vi.useFakeTimers({ now: NOW, toFake: ['Date'] }));
+afterEach(() => {
+  vi.useRealTimers();
+  resetWeightOverrides();
+});
 
 describe('owner weight overrides reach the score they are documented to move', () => {
   it('every key of the table is covered here (a new key must say what it moves)', () => {
