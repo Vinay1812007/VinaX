@@ -295,7 +295,7 @@ Config Backup exports and restores six keys as one JSON file: `banners`, `festiv
 
 | Control | File | Contents |
 | --- | --- | --- |
-| **Profile** on a row, **Download profile** in the drill-down | `vinax-profile-<name>-<date>.html` | the drill-down as a page: the header line, the counts, top songs with their play bars, languages, and the 300 most recent events. One self-contained file — no styles, scripts or images are loaded when it is opened — so it can be kept, sent, or printed to PDF |
+| **Download** in a row's *Profile download* column, **Download profile** in the drill-down | `vinax-profile-<name>-<date>.html` | the drill-down as a page: the header line, the counts, top songs with their play bars, languages, and the 300 most recent events. One self-contained file — no styles, scripts or images are loaded when it is opened — so it can be kept, sent, or printed to PDF |
 | **JSON** in the drill-down | `vinax-listener-<name>-<date>.json` | the raw record for data work: the latest-state row and every event the endpoint returns |
 | **Activity (CSV)** in the drill-down | `vinax-activity-<name>-<date>.csv` | the same event window as a spreadsheet |
 | **Download listeners (CSV)** | `vinax-listeners[-<search>]-<date>.csv` | every row of the current list, walked 100 at a time to the end (not just the page on screen), honouring the search box; it stops after 100 pages |

@@ -283,6 +283,9 @@ test('User Management downloads a listener profile, their activity and the whole
   await openAdmin(page);
   await openSection(page, 'users');
   await expect(page.locator('#view')).toContainText('Listener one');
+  // The download has a column of its own, named, next to Delete.
+  expect(await page.locator('#view thead th').allInnerTexts())
+    .toEqual(['Listener', 'Location', 'Device', 'First seen', 'Last seen', 'Profile download', '']);
 
   // The readable profile — the drill-down as a page — straight from the row.
   const [profile] = await Promise.all([

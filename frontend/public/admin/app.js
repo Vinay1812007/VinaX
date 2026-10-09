@@ -858,7 +858,8 @@
     setExport('users', U);
     var rows = U.map(function (u) {
       var loc = [u.city, u.country].filter(Boolean).map(esc).join(', ') || '<span class="muted">—</span>';
-      return '<tr class="clickable" data-uid="' + esc(u.device_id) + '" data-uname="' + esc(u.name || 'Anonymous') + '"><td><span class="dot2 ' + (u.is_playing ? 'on' : 'off') + '"></span>' + esc(u.name || 'Anonymous') + (u.username ? ' <span class="muted">@' + esc(u.username) + '</span>' : '') + '</td><td>' + loc + '</td><td><span class="pill">' + platIcon(u.platform) + ' ' + esc(u.platform || 'web') + '</span> <span class="muted">' + esc(String(u.device_id || '').slice(0, 8)) + '</span></td><td class="muted">' + date(u.first_seen) + '</td><td class="muted">' + ago(u.last_seen) + '</td><td style="white-space:nowrap"><button class="ghost udl" data-dl="' + esc(u.device_id) + '" data-dlname="' + esc(u.name || u.username || 'listener') + '" style="padding:4px 10px;font-size:11px">Profile</button> <button class="ghost udel" data-del="' + esc(u.device_id) + '" style="padding:4px 10px;font-size:11px;color:var(--bad)">Delete</button></td></tr>';
+      return '<tr class="clickable" data-uid="' + esc(u.device_id) + '" data-uname="' + esc(u.name || 'Anonymous') + '"><td><span class="dot2 ' + (u.is_playing ? 'on' : 'off') + '"></span>' + esc(u.name || 'Anonymous') + (u.username ? ' <span class="muted">@' + esc(u.username) + '</span>' : '') + '</td><td>' + loc + '</td><td><span class="pill">' + platIcon(u.platform) + ' ' + esc(u.platform || 'web') + '</span> <span class="muted">' + esc(String(u.device_id || '').slice(0, 8)) + '</span></td><td class="muted">' + date(u.first_seen) + '</td><td class="muted">' + ago(u.last_seen) + '</td><td><button class="ghost udl" data-dl="' + esc(u.device_id) + '" data-dlname="' + esc(u.name || u.username || 'listener') + '" style="padding:4px 10px;font-size:11px;white-space:nowrap" title="Download this listener\u2019s profile page">Download</button></td>' +
+        '<td><button class="ghost udel" data-del="' + esc(u.device_id) + '" style="padding:4px 10px;font-size:11px;color:var(--bad)">Delete</button></td></tr>';
     }).join('');
     var canPrev = userOffset > 0;
     // D-22 follow-up: the server already computes hasMore (fetches limit+1);
@@ -872,9 +873,9 @@
       '<div class="card"><div class="n">' + (s.total_plays || 0) + '</div><div class="l">Total plays</div></div></div>' +
       '<div class="row" style="margin-bottom:12px"><input id="uq" type="search" placeholder="Search by name…" value="' + esc(userQ) + '" style="max-width:280px" /><button class="btn btn-primary" id="ugo">Search</button>' +
       '<button class="ghost" id="udlall" title="Every listener in this list, all pages, as a CSV file">Download listeners (CSV)</button>' +
-      '<span class="muted" style="font-size:12px">Tip: click a row for details \u00b7 Profile downloads that listener\u2019s page</span></div>' +
-      '<table><thead><tr><th>Listener</th><th>Location</th><th>Device</th><th>First seen</th><th>Last seen</th><th></th></tr></thead><tbody>' +
-      (rows || '<tr class="table-empty"><td colspan="6"><div class="state state-empty empty" role="status"><div class="state-title">No users found</div><div class="state-hint">Try a shorter name or part of an email, or clear the search.</div></div></td></tr>') + '</tbody></table>' +
+      '<span class="muted" style="font-size:12px">Tip: click a row for details</span></div>' +
+      '<table><thead><tr><th>Listener</th><th>Location</th><th>Device</th><th>First seen</th><th>Last seen</th><th>Profile download</th><th></th></tr></thead><tbody>' +
+      (rows || '<tr class="table-empty"><td colspan="7"><div class="state state-empty empty" role="status"><div class="state-title">No users found</div><div class="state-hint">Try a shorter name or part of an email, or clear the search.</div></div></td></tr>') + '</tbody></table>' +
       '<div class="row" style="margin-top:14px"><button class="ghost" id="uprev"' + (canPrev ? '' : ' disabled') + '>← Prev</button>' +
       '<span class="muted">Showing ' + (userOffset + 1) + '–' + (userOffset + U.length) + '</span>' +
       '<button class="ghost" id="unext"' + (canNext ? '' : ' disabled') + '>Next →</button></div>';
