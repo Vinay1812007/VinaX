@@ -690,6 +690,97 @@
   function loadExperiments() { apiMemo('/api/admin/experiments').then(function (d) { if (d && active === 'experiments') renderExperiments(d); }).catch(failIf('experiments', 'the experiments')); }
 
   // ---------- Users: profile downloads (11.5.0) ----------
+  /** What the drill-down shows, derived from the raw events — one place, so
+   *  the panel on screen and the downloaded profile can never disagree. */
+  function profileFacts(events) {
+    var ev = events || [];
+    var plays = ev.filter(function (e) { return e.type === 'play'; });
+    var songMap = {}, langMap = {};
+    plays.forEach(function (e) {
+      if (e.song_title) {
+        var k = e.song_title + '|' + (e.song_artist || '');
+        songMap[k] = songMap[k] || { title: e.song_title, artist: e.song_artist || '', plays: 0 };
+        songMap[k].plays++;
+      }
+      var l = e.language || 'unknown';
+      langMap[l] = (langMap[l] || 0) + 1;
+    });
+    var songs = Object.keys(songMap).map(function (k) { return songMap[k]; }).sort(function (a, b) { return b.plays - a.plays; });
+    var langs = Object.keys(langMap).map(function (l) { return { language: l, plays: langMap[l] }; }).sort(function (a, b) { return b.plays - a.plays; });
+    return { events: ev, plays: plays, songs: songs, languages: langs };
+  }
+
+  /**
+   * The listener profile as a page a person can read, keep or print to PDF —
+   * the same header, counts, top songs and activity the drill-down shows,
+   * in one self-contained HTML file (no styles, scripts or images loaded
+   * from anywhere). Raw JSON and the activity CSV stay beside it for data
+   * work; this is the one to send to someone.
+   */
+  function profileReportHtml(user, facts, name) {
+    var u = user || {};
+    var title = name || u.name || 'Anonymous';
+    var place = [u.city, u.region, u.country].filter(Boolean).join(', ') || 'Unknown';
+    var meta = [
+      place,
+      u.platform || 'web',
+      u.app_version ? 'v' + u.app_version : '',
+      'joined ' + (u.first_seen ? date(u.first_seen) : '—'),
+      'last seen ' + (u.last_seen ? date(u.last_seen) : '—'),
+    ].filter(Boolean).join(' · ');
+    var topLang = facts.languages[0] ? facts.languages[0].language : '—';
+    var max = facts.songs.length ? facts.songs[0].plays : 0;
+    var songRows = facts.songs.map(function (x) {
+      return '<tr><td>' + esc(x.title) + '</td><td class="muted">' + esc(x.artist || '—') + '</td>' +
+        '<td class="num">' + x.plays + '</td>' +
+        '<td class="barcell"><span class="bar" style="width:' + (max ? Math.round((x.plays / max) * 100) : 0) + '%"></span></td></tr>';
+    }).join('');
+    var actRows = facts.events.slice(0, 300).map(function (e) {
+      return '<tr><td><span class="tag">' + esc(e.type || '—') + '</span></td><td>' + esc(e.song_title || '—') +
+        '</td><td class="muted">' + esc(e.song_artist || '—') + '</td><td class="muted">' + esc(e.language || '—') +
+        '</td><td class="muted">' + (e.created_at ? date(e.created_at) : '—') + '</td></tr>';
+    }).join('');
+    var langRows = facts.languages.map(function (l) { return '<tr><td>' + esc(l.language) + '</td><td class="num">' + l.plays + '</td></tr>'; }).join('');
+    var empty = '<p class="muted">Nothing recorded yet.</p>';
+    return '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+      '<title>VinaX listener profile — ' + esc(title) + '</title><style>' +
+      ':root{color-scheme:light}' +
+      'body{margin:0;padding:32px;background:#faf7f2;color:#1b1a18;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}' +
+      '.wrap{max-width:900px;margin:0 auto}' +
+      'h1{margin:0 0 4px;font-size:26px;letter-spacing:-0.02em}h1 span{color:#8a8278;font-weight:500;font-size:17px}' +
+      'h2{margin:30px 0 10px;font-size:17px;letter-spacing:-0.01em}' +
+      '.meta{color:#6f6860;font-size:13px;margin:0 0 22px}' +
+      '.cards{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 6px}' +
+      '.card{flex:1 1 160px;border:1px solid #e4ded4;border-radius:12px;padding:14px 16px;background:#fff}' +
+      '.card .n{font-size:26px;font-weight:700;letter-spacing:-0.02em}' +
+      '.card .l{color:#6f6860;font-size:12px;margin-top:2px}' +
+      'table{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff;border:1px solid #e4ded4;border-radius:12px;overflow:hidden}' +
+      'th,td{text-align:left;padding:8px 12px;border-bottom:1px solid #efeae1;vertical-align:top}' +
+      'th{background:#f3eee5;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;color:#6f6860}' +
+      'tr:last-child td{border-bottom:0}.muted{color:#6f6860}.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}' +
+      '.barcell{width:34%}.bar{display:block;height:8px;border-radius:999px;background:#d97706;min-width:3px}' +
+      '.tag{display:inline-block;padding:1px 8px;border-radius:999px;background:#f0ebe1;font-size:11.5px}' +
+      'footer{margin-top:28px;color:#6f6860;font-size:12px;border-top:1px solid #e4ded4;padding-top:12px}' +
+      '@media print{body{padding:0;background:#fff}.card,table{break-inside:avoid}}' +
+      '</style></head><body><div class="wrap">' +
+      '<h1>' + esc(title) + (u.username ? ' <span>@' + esc(u.username) + '</span>' : '') + '</h1>' +
+      '<p class="meta">' + esc(meta) + '</p>' +
+      '<div class="cards">' +
+      '<div class="card"><div class="n">' + facts.plays.length + '</div><div class="l">Plays (recent)</div></div>' +
+      '<div class="card"><div class="n">' + facts.songs.length + '</div><div class="l">Distinct songs</div></div>' +
+      '<div class="card"><div class="n">' + esc(topLang) + '</div><div class="l">Top language</div></div>' +
+      '<div class="card"><div class="n">' + facts.events.length + '</div><div class="l">Events in this window</div></div>' +
+      '</div>' +
+      '<h2>Top songs</h2>' + (songRows ? '<table><thead><tr><th>Song</th><th>Artist</th><th class="num">Plays</th><th></th></tr></thead><tbody>' + songRows + '</tbody></table>' : empty) +
+      '<h2>Languages</h2>' + (langRows ? '<table><thead><tr><th>Language</th><th class="num">Plays</th></tr></thead><tbody>' + langRows + '</tbody></table>' : empty) +
+      '<h2>Activity</h2>' + (actRows ? '<table><thead><tr><th>What</th><th>Song</th><th>Artist</th><th>Language</th><th>When</th></tr></thead><tbody>' + actRows + '</tbody></table>' : empty) +
+      (facts.events.length > 300 ? '<p class="muted">Showing the 300 most recent of ' + facts.events.length + ' events. The JSON download carries them all.</p>' : '') +
+      '<footer>VinaX listener profile · device ' + esc(String(u.device_id || '').slice(0, 12)) + ' · generated ' + esc(date(new Date().toISOString())) + '<br>' +
+      'Server-side record only. The listening taste profile is built and kept on the listener\u2019s own device and is never uploaded, so it is not in this file.<br>' +
+      'Contains personal data — handle accordingly.</footer>' +
+      '</div></body></html>';
+  }
   /**
    * One listener's whole server-side record — the latest-state row plus the
    * long event window (`full=1`), as a JSON file. Honesty note, repeated in
@@ -697,7 +788,11 @@
    * is built and kept on the listener's own device and never uploaded, so it
    * is not here and cannot be.
    */
-  function downloadProfile(deviceId, name) {
+  /**
+   * `kind` is 'page' (default — the readable profile, what the drill-down
+   * shows) or 'json' (the raw server record for data work).
+   */
+  function downloadProfile(deviceId, name, kind) {
     if (!deviceId) return Promise.resolve(false);
     var release = busyButton();
     return api('/api/admin/user?full=1&deviceId=' + encodeURIComponent(deviceId)).then(function (d) {
@@ -705,16 +800,27 @@
       if (!d) return false; // 401 — the sign-in screen is already up
       if (d.configured === false) { toast('No database is configured — there is nothing to download.', 'bad'); return false; }
       if (!d.user && !(d.events || []).length) { toast('Nothing to download — this listener has no record.', 'bad'); return false; }
+      var who = slug(name || (d.user && d.user.username) || deviceId, 'profile');
+      if (kind === 'json') {
+        saveFile(
+          'vinax-listener-' + who + '-' + stampName() + '.json',
+          JSON.stringify({
+            exported_at: new Date().toISOString(),
+            note: 'Server-side record only. The listening taste profile lives on the listener\u2019s device and is never uploaded.',
+            device_id: deviceId,
+            user: d.user || null,
+            events: d.events || [],
+          }, null, 2),
+          'application/json',
+        );
+        return true;
+      }
+      var user = d.user || { device_id: deviceId, name: name };
+      if (!user.device_id) user.device_id = deviceId;
       saveFile(
-        'vinax-listener-' + slug(name || (d.user && d.user.username) || deviceId, 'profile') + '-' + stampName() + '.json',
-        JSON.stringify({
-          exported_at: new Date().toISOString(),
-          note: 'Server-side record only. The listening taste profile lives on the listener\u2019s device and is never uploaded.',
-          device_id: deviceId,
-          user: d.user || null,
-          events: d.events || [],
-        }, null, 2),
-        'application/json',
+        'vinax-profile-' + who + '-' + stampName() + '.html',
+        profileReportHtml(user, profileFacts(d.events), name),
+        'text/html',
       );
       return true;
     }).catch(function () { release(); toast('Failed — the listener record could not be read. Try again.', 'bad'); return false; });
@@ -766,7 +872,7 @@
       '<div class="card"><div class="n">' + (s.total_plays || 0) + '</div><div class="l">Total plays</div></div></div>' +
       '<div class="row" style="margin-bottom:12px"><input id="uq" type="search" placeholder="Search by name…" value="' + esc(userQ) + '" style="max-width:280px" /><button class="btn btn-primary" id="ugo">Search</button>' +
       '<button class="ghost" id="udlall" title="Every listener in this list, all pages, as a CSV file">Download listeners (CSV)</button>' +
-      '<span class="muted" style="font-size:12px">Tip: click a row for details · Profile downloads one listener\u2019s full record</span></div>' +
+      '<span class="muted" style="font-size:12px">Tip: click a row for details \u00b7 Profile downloads that listener\u2019s page</span></div>' +
       '<table><thead><tr><th>Listener</th><th>Location</th><th>Device</th><th>First seen</th><th>Last seen</th><th></th></tr></thead><tbody>' +
       (rows || '<tr class="table-empty"><td colspan="6"><div class="state state-empty empty" role="status"><div class="state-title">No users found</div><div class="state-hint">Try a shorter name or part of an email, or clear the search.</div></div></td></tr>') + '</tbody></table>' +
       '<div class="row" style="margin-top:14px"><button class="ghost" id="uprev"' + (canPrev ? '' : ' disabled') + '>← Prev</button>' +
@@ -841,13 +947,15 @@
         '<div class="cards"><div class="card"><div class="n">' + plays.length + '</div><div class="l">Plays (recent)</div></div>' +
         '<div class="card"><div class="n">' + top.length + '</div><div class="l">Distinct songs</div></div>' +
         '<div class="card"><div class="n">' + esc(langs[0] ? langs[0].language : '—') + '</div><div class="l">Top language</div></div></div>' +
-        '<div class="row" style="margin-bottom:14px"><button class="btn" id="mdl">Download profile (JSON)</button>' +
+        '<div class="row" style="margin-bottom:14px"><button class="btn" id="mdl">Download profile</button>' +
+        '<button class="ghost" id="mdljson">JSON</button>' +
         '<button class="ghost" id="mdlcsv">Activity (CSV)</button>' +
-        '<span class="muted" style="font-size:12px">Everything the server holds for this listener</span></div>' +
+        '<span class="muted" style="font-size:12px">This page as a file you can keep, print or send · JSON and CSV for data work</span></div>' +
         '<h3>Top songs</h3>' + bars(top, function (x) { return esc(x.title) + (x.artist ? ' <span class="muted">· ' + esc(x.artist) + '</span>' : ''); }, function (x) { return x.plays; }) +
         '<h3>Recent activity</h3><table><tbody>' + (recent || '<tr class="table-empty"><td><div class="state state-empty empty" role="status"><div class="state-title">No activity</div><div class="state-hint">Plays, searches and favourites by this listener show up here as they happen.</div></div></td></tr>') + '</tbody></table>';
       $('mx').addEventListener('click', closeModal);
       $('mdl').addEventListener('click', function () { downloadProfile(deviceId, name || u.name || u.username); });
+      $('mdljson').addEventListener('click', function () { downloadProfile(deviceId, name || u.name || u.username, 'json'); });
       // The activity table as a spreadsheet. The modal already holds a recent
       // window; the file carries the full one the download endpoint returns.
       $('mdlcsv').addEventListener('click', function () {
