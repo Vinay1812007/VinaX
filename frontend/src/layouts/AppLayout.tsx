@@ -25,7 +25,7 @@ import { initSessionInsights } from '@/services/analytics/sessionInsights';
 import { applyGlassLevel, applyThemeClasses, resolveTheme } from '@/utils/theme';
 import { closeTopOverlay } from '@/hooks/useDismissOnBack';
 import { recallScroll, rememberScroll, restoreWhenTall } from '@/features/nav/scrollMemory';
-import { shouldRescueWheel } from '@/features/nav/wheelRescue';
+import { shouldRescueTouch, shouldRescueWheel } from '@/features/nav/wheelRescue';
 import { loadBlocklist } from '@/services/content/blocklist';
 import { initLockScreenLyrics } from '@/services/media-session/lockscreenLyrics';
 import { initDownloads } from '@/services/downloads';
@@ -114,6 +114,7 @@ export function AppLayout() {
   useLastRoute();
 
   const mainRef = useRef<HTMLElement>(null);
+  const bottomChromeRef = useRef<HTMLDivElement>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   // ⌘/Ctrl+K opens the command palette (works while typing too, like the console).
@@ -321,10 +322,35 @@ export function AppLayout() {
       if (!m || !shouldRescueWheel(t, root, e.defaultPrevented)) return;
       m.scrollBy({ top: e.deltaY });
     };
+    // 11.5.0 — the same rescue for a finger. A wheel is a pointer device
+    // only: on a phone the identical injected blocker ate the drag and Home
+    // could not be scrolled at all. Passive — the blocker has already taken
+    // the gesture, we only forward the distance it swallowed.
+    let lastY = 0;
+    let rescuing = false;
+    const onTouchStart = (e: TouchEvent) => {
+      rescuing = shouldRescueTouch(e.target, document.getElementById('root'), e.defaultPrevented);
+      lastY = e.touches[0]?.clientY ?? 0;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      const m = mainRef.current;
+      if (!rescuing || !m) return;
+      const y = e.touches[0]?.clientY ?? lastY;
+      m.scrollBy({ top: lastY - y });
+      lastY = y;
+    };
+    // The wheel half is web-only (a WebView has no wheel); the touch half is
+    // installed everywhere — the Android app is a shell over the same live
+    // origin, so it loads the same third-party scripts and can be blocked the
+    // same way, and touch is the only way in there.
     if (!isNativePlatform()) window.addEventListener('wheel', onWheel, { passive: true });
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
     return () => {
       window.removeEventListener('vx:np', open);
       window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- navigate is stable
   }, []);
@@ -418,6 +444,32 @@ export function AppLayout() {
     robots.content = noindex ? 'noindex,follow' : 'index,follow';
   }, [pathname]);
 
+  // 11.5.0 — how much room the page must leave at the bottom is MEASURED,
+  // not guessed. The old reserve was two fixed tokens (64px dock + 64px
+  // player) which was wrong in both directions: ~100px of dead space with
+  // nothing playing, and short of the real chrome at a larger display size
+  // or with a tall gesture inset — where the last shelf sat under the dock
+  // and could not be reached. The measured value feeds every consumer of
+  // --player-safe-offset (page padding, the snackbar, the session pill).
+  useEffect(() => {
+    const el = bottomChromeRef.current;
+    const root = document.documentElement;
+    const clear = () => root.style.removeProperty('--player-safe-offset');
+    if (!el) {
+      clear();
+      return;
+    }
+    const apply = () => root.style.setProperty('--player-safe-offset', `${Math.round(el.getBoundingClientRect().height)}px`);
+    apply();
+    if (typeof ResizeObserver === 'undefined') return clear;
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      clear();
+    };
+  }, [isFullScreenPlayer]);
+
   return (
     <div className="vx-shell h-dvh flex flex-col overflow-hidden">
       <a
@@ -470,7 +522,7 @@ export function AppLayout() {
         <WhatsNewSheet />
       </Suspense>
       {!isFullScreenPlayer && (
-        <div className="fixed bottom-0 inset-x-0 z-40 pb-[var(--safe-bottom)]">
+        <div ref={bottomChromeRef} className="fixed bottom-0 inset-x-0 z-40 pb-[var(--safe-bottom)]">
           <PlayerErrorBoundary>
             <PlayerBar />
           </PlayerErrorBoundary>

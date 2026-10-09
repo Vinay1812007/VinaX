@@ -19,3 +19,13 @@ export function shouldRescueWheel(target: EventTarget | null, root: Element | nu
   while (top.parentNode && top.parentNode !== document.body) top = top.parentNode;
   return !(top instanceof Element && (top.matches(OWN_OVERLAYS) || top.querySelector(OWN_OVERLAYS) !== null));
 }
+
+/**
+ * 11.5.0 — the same judgement for a TOUCH that lands on an injected blocker.
+ * The wheel rescue only ever helped pointer devices: on a phone the identical
+ * invisible fixed element under <body> swallows the drag and Home is frozen
+ * with no way out (field reports: "the home screen does not scroll"). The
+ * predicate is unchanged — anything of ours, or an event an overlay already
+ * handled, is left alone — so only a blocker is ever rescued.
+ */
+export const shouldRescueTouch = shouldRescueWheel;

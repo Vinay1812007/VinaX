@@ -150,7 +150,7 @@ There are 72 sections in eight groups. The descriptions are the console's own (`
 | Live Listening (`live`) | Who is listening right now, what they play and where. | `/api/admin/live` |
 | Activity Feed (`activity`) | The latest plays, searches and AI calls as they arrive. | `/api/admin/activity` |
 | Engagement (`engagement`) | How often listeners come back and how long they stay. | `/api/admin/engagement`, `/api/cat` |
-| User Management (`users`) | Find a listener and see their devices and recent activity. | `/api/admin/users`, `/api/admin/maintenance`, `/api/admin/user` |
+| User Management (`users`) | Find a listener, see their devices and recent activity, and download records. | `/api/admin/users`, `/api/admin/maintenance`, `/api/admin/user` |
 | Retention Cohorts (`retention`) | Weekly cohorts and how many come back on day 1, 7 and 30. | `/api/admin/retention` |
 | Feature Usage (`usage`) | Which parts of the app listeners actually use. | `/api/admin/usage` |
 | Listening Heatmap (`heatmap`) | When listening peaks, by weekday and hour. | `/api/admin/usage` |
@@ -290,6 +290,16 @@ Read side (`api/appconfig.ts`, `_lib/clientConfig.ts`): public, no auth, and it 
 Runbook, AI house rules, AI prices, AI emergency controls, trending pins, status note and the maintenance window are not in the public bundle; the console or other Worker routes read them. The app also holds each answer for one to five minutes in its query cache, so a published change is visible within a few minutes, not instantly.
 
 Config Backup exports and restores six keys as one JSON file: `banners`, `festival`, `status-note`, `flags`, `runbook` and `trending-pins`. It does not include the Home layout or the other keys.
+
+### Listener downloads (User Management)
+
+| Control | File | Contents |
+| --- | --- | --- |
+| **Profile** on a row, **Download profile (JSON)** in the drill-down | `vinax-listener-<name>-<date>.json` | `/api/admin/user?full=1` — the listener's latest-state row and up to 2 000 events with every column the server holds |
+| **Activity (CSV)** in the drill-down | `vinax-activity-<name>-<date>.csv` | the same event window as a spreadsheet |
+| **Download listeners (CSV)** | `vinax-listeners[-<search>]-<date>.csv` | every row of the current list, walked 100 at a time to the end (not just the page on screen), honouring the search box; it stops after 100 pages |
+
+The taste profile that drives recommendations is built and kept on the listener's own device and is never uploaded, so it is not in these files — the exported JSON says so in a `note` field. Downloads carry personal data: treat them as such (see [data-and-privacy.md](data-and-privacy.md)).
 
 ### Feature flags
 
