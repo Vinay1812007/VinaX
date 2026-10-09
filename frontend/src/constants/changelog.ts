@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.5.0': {
+    title: 'Home scrolls the way it should',
+    changes: [
+      { type: 'fixed', text: 'Home could stop scrolling on a phone and sit stuck at the top. An invisible layer left behind by an outside script was swallowing the swipe; VinaX now passes the swipe through to the page, so Home always moves.' },
+      { type: 'fixed', text: 'A swipe inside a panel \u2014 notifications, the welcome, any sheet \u2014 now scrolls that panel instead of being taken as a pull-to-refresh, and a sideways swipe across a row of cards stays sideways instead of turning into a pull halfway through.' },
+      { type: 'fixed', text: 'The bottom of every page now leaves exactly as much room as the player and the tab bar really take: the last section is no longer hidden behind them, and there is no empty gap when nothing is playing.' },
+      { type: 'improved', text: 'Owner console \u2014 User Management can download a listener\u2019s full record: Profile on any row, or Download profile and Activity (CSV) inside their details. Download listeners (CSV) saves the whole list, every page, not just the one on screen. The on-device taste profile is never uploaded, so it is not in the file.' },
+    ],
+  },
   '11.4.0': {
     title: 'Real logos, and a mic that works',
     changes: [

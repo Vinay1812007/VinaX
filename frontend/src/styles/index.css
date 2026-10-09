@@ -507,8 +507,13 @@ html.light body {
 }
 
 main {
-  overscroll-behavior-y: contain;
+  overscroll-behavior: contain;
+  /* `clip`, not `hidden`: a hidden overflow still leaves a scroll box the
+     browser can pan programmatically — focusing a card inside a shelf rail
+     slid the whole page sideways with no way to slide it back (11.5.0).
+     `hidden` stays first for anything that does not know `clip`. */
   overflow-x: hidden;
+  overflow-x: clip;
 }
 
 h1, h2, h3, h4 { text-wrap: balance; }

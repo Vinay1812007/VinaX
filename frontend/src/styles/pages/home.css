@@ -281,6 +281,7 @@ html.light .vx-home .vxh-hero-kicker svg { color: rgb(var(--tide-500)); }
   margin: 0 calc(-1 * var(--vx-gutter)) var(--vxh-section);
   padding: 2px var(--vx-gutter);
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
 }
 .vx-home .vxh-shortcuts::-webkit-scrollbar { display: none; }
@@ -421,6 +422,7 @@ a.vxh-card:hover { background: var(--vxh-tile-hover); }
   margin: 0 calc(-1 * var(--vx-gutter)) 24px;
   padding: 2px var(--vx-gutter);
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
 }
 .vx-home .vxh-chips::-webkit-scrollbar { display: none; }

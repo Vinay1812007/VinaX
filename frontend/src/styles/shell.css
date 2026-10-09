@@ -560,6 +560,10 @@ html.amoled .np-mini { --mat-tint: none; }
   display: flex;
   gap: var(--vx-card-gap);
   overflow-x: auto;
+  /* A rail that runs out of track keeps the overscroll to itself: without
+     this the leftover sideways push chains to the page (and, in the app, to
+     the system back gesture) — the drift listeners felt on Home (11.5.0). */
+  overscroll-behavior-x: contain;
   margin: 0 calc(-1 * var(--vx-gutter));
   padding: 4px var(--vx-gutter) 10px;
   scroll-padding-inline: var(--vx-gutter);

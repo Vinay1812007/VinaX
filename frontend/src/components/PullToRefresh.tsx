@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/utils/cn';
 import { haptic } from '@/services/native';
+import { canStartPull, gestureAxis } from '@/features/nav/pullGuard';
 
 /**
  * Pull-to-refresh wrapper. Native Android WebView has no built-in P2R, and
@@ -10,8 +11,11 @@ import { haptic } from '@/services/native';
  * at the very top and the gesture being predominantly vertical.
  *
  * Design contract:
- *  - Only pulls when the nearest scroll container is at scrollTop === 0.
- *  - Doesn't fight a horizontal swipe (shelf scrollers, cast handoff).
+ *  - Only pulls when the page scroller is at scrollTop === 0 AND the finger
+ *    landed on the page itself — never inside a sheet, a menu or any other
+ *    inner scroller (features/nav/pullGuard.ts).
+ *  - Doesn't fight a horizontal swipe (shelf scrollers, cast handoff): the
+ *    axis is decided once per gesture and never revised.
  *  - Threshold: 72px pull before commit; rubber-bands past that (max ~120px).
  *  - Haptic on threshold-cross so users know when release triggers refresh.
  *  - Idempotent onRefresh — caller returns a promise; we hold the spinner
@@ -53,6 +57,8 @@ export function PullToRefresh({
   const startY = useRef<number | null>(null);
   const startX = useRef<number | null>(null);
   const active = useRef(false);
+  // The axis this gesture committed to, or null while it is still ambiguous.
+  const axis = useRef<'x' | 'y' | null>(null);
   const hasHapticed = useRef(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const setPullBoth = useCallback((v: number) => {
@@ -98,14 +104,20 @@ export function PullToRefresh({
     if (disabled) return;
 
     const onTouchStart = (e: TouchEvent) => {
+      active.current = false;
+      axis.current = null;
+      hasHapticed.current = false;
+      // Disarm first, ALWAYS: an early return used to leave the previous
+      // gesture's start point behind, and the next touch measured its drag
+      // from wherever the last finger went down (a phantom pull).
+      startY.current = null;
+      startX.current = null;
       if (refreshingRef.current) return;
-      // Only arm the gesture if the primary scroll container is at the top.
-      if (scrollTopEl().scrollTop > 0) return;
+      // The page owns this drag only if it began on the page, at the top.
+      if (!canStartPull(e.target, scrollTopEl())) return;
       const t = e.touches[0];
       startY.current = t.clientY;
       startX.current = t.clientX;
-      active.current = false;
-      hasHapticed.current = false;
     };
 
     const onTouchMove = (e: TouchEvent) => {
@@ -113,8 +125,11 @@ export function PullToRefresh({
       const t = e.touches[0];
       const dy = t.clientY - startY.current;
       const dx = t.clientX - startX.current;
-      // Ignore horizontal-dominant gestures (shelf scroll, swipe-next).
-      if (Math.abs(dx) > Math.abs(dy)) return;
+      // Horizontal-dominant gestures (shelf scroll, swipe-next) are not ours,
+      // and a gesture that went sideways once stays sideways: judging each
+      // move on its own let a rail swipe drift into a pull mid-flick.
+      if (axis.current === null) axis.current = gestureAxis(dx, dy);
+      if (axis.current !== 'y') return;
       // Only care about DOWNWARD pulls from the top of the page.
       if (dy <= 0) {
         active.current = false;
@@ -144,12 +159,13 @@ export function PullToRefresh({
     };
 
     const onTouchEnd = () => {
-      if (refreshingRef.current) return;
       const wasActive = active.current;
       const finalPull = pullRef.current;
       active.current = false;
+      axis.current = null;
       startY.current = null;
       startX.current = null;
+      if (refreshingRef.current) return;
       if (wasActive && finalPull >= threshold) {
         void commitRefresh();
       } else {

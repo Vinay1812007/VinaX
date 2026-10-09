@@ -53,6 +53,8 @@ const MOCK: Record<string, unknown> = {
   '/api/admin/edge': { origin: 'https://www.example.test', checkedAt: iso(0), healthy: true, problems: 0, shell: { status: 200, ms: 80, ok: true, bytes: 4000, cacheStatus: 'HIT', build: '5.13.0' }, assets: [{ path: '/assets/index-abc.js', kind: 'script', ok: true, status: 200, contentType: 'application/javascript', ms: 30 }], endpoints: [{ name: 'Version', method: 'GET', path: '/api/version', ok: true, status: 200, ms: 40 }, { name: 'Preview CORS', method: 'OPTIONS', path: '/api/preview', ok: false, status: 500, ms: 90, note: 'expected 204' }] },
   '/api/admin/releases': { configured: true, release: { tag: 'v5.12.0', name: 'v5.12.0', assets: [{ name: 'app.apk' }], notes: 'Ten new features' }, runs: [{ number: 101, name: 'Deploy', title: 'v5.12.0', conclusion: 'success', status: 'completed', branch: 'main', sha: 'abc1234', event: 'push', started: iso(3), url: 'https://example.test/run' }, { number: 100, name: 'Deploy', title: 'fix', conclusion: 'failure', status: 'completed', branch: 'main', sha: 'def5678', event: 'push', started: iso(10), url: 'https://example.test/run2' }], commits: [{ sha: 'abc1234', message: 'v5.12.0: ten new listening features', author: 'dev', at: iso(3) }], live: { version: '5.12.0' } },
   '/api/admin/tables': { configured: true, totalRows: 54321, tables: [{ name: 'vinax_events', total: 50000, last24h: 1200, newestAt: iso(0.1), ageMin: 6, note: 'Play and page events' }, { name: 'vinax_ai_events', total: 4321, last24h: 0, newestAt: iso(30), ageMin: 1800, note: 'AI calls' }] },
+  '/api/admin/users': { configured: true, limit: 50, offset: 0, hasMore: false, summary: { total_users: 2, active_24h: 1, new_24h: 1, total_plays: 90 }, users: [{ device_id: 'dev-one', name: 'Listener one', username: 'one_01a', platform: 'android', country: 'IN', city: 'Hyderabad', is_playing: true, first_seen: iso(240), last_seen: iso(1) }, { device_id: 'dev-two', name: 'Listener two', username: null, platform: 'web', country: null, city: null, is_playing: false, first_seen: iso(400), last_seen: iso(30) }] },
+  '/api/admin/user': { configured: true, user: { device_id: 'dev-one', name: 'Listener one', username: 'one_01a', platform: 'android', country: 'IN', city: 'Hyderabad', region: 'TG', app_version: '11.5.0', is_playing: true, first_seen: iso(240), last_seen: iso(1), current_song_title: 'Kesariya', current_song_artist: 'Arijit Singh' }, events: [{ type: 'play', song_id: 's1', song_title: 'Kesariya', song_artist: 'Arijit Singh', language: 'hindi', created_at: iso(2), country: 'IN', city: 'Hyderabad' }, { type: 'search', song_title: null, song_artist: null, language: null, created_at: iso(3), country: 'IN', city: 'Hyderabad' }] },
   '/api/admin/audit': { items: [{ kind: 'appconfig', text: 'Updated flags', at: iso(2) }, { kind: 'block', text: 'Blocked song x', at: iso(20) }] },
   '/api/admin/usage': { configured: true, days: 7, sampled: 4200, byType: [{ type: 'play', n: 2000, devices: 300 }, { type: 'search', n: 800, devices: 200 }, { type: 'favorite', n: 120, devices: 80 }], byPlatform: [{ platform: 'android', n: 2500 }, { platform: 'web', n: 1700 }], heatmap: heat, peak: { day: 5, hour: 21, n: 10 } },
   '/api/admin/funnel': { configured: true, days: 7, sampled: 4200, steps: [{ id: 'open', label: 'Opened the app', devices: 400, pct: 100 }, { id: 'register', label: 'Chose a name', devices: 210, pct: 52 }, { id: 'play', label: 'Played a song', devices: 300, pct: 75 }, { id: 'complete', label: 'Finished a song', devices: 220, pct: 55 }, { id: 'favorite', label: 'Liked a song', devices: 80, pct: 20 }, { id: 'search', label: 'Searched', devices: 200, pct: 50 }, { id: 'share', label: 'Shared', devices: 12, pct: 3 }] },
@@ -270,6 +272,44 @@ test('catalog search, song drilldown and query console run against the API', asy
   await page.locator('#qc-run').click();
   await expect.poll(() => viewText(page)).toMatch(/2 rows/i);
   expect(await viewText(page)).toMatch(/created_at/i);
+  expect(errors).toEqual([]);
+});
+
+test('User Management downloads a listener profile, their activity and the whole list', async ({ page }) => {
+  await login(page);
+  await mockBackend(page);
+  const errors = collectErrors(page);
+  await openAdmin(page);
+  await openSection(page, 'users');
+  await expect(page.locator('#view')).toContainText('Listener one');
+
+  // One listener's full server-side record, from the row.
+  const [profile] = await Promise.all([
+    page.waitForEvent('download'),
+    page.locator('#view button.udl').first().click(),
+  ]);
+  expect(profile.suggestedFilename()).toMatch(/^vinax-listener-listener-one-\d{4}-\d{2}-\d{2}\.json$/);
+
+  // Every listener in the list, as a spreadsheet.
+  const [all] = await Promise.all([
+    page.waitForEvent('download'),
+    page.locator('#udlall').click(),
+  ]);
+  expect(all.suggestedFilename()).toMatch(/^vinax-listeners-\d{4}-\d{2}-\d{2}\.csv$/);
+
+  // The same two downloads from the drill-down.
+  await page.locator('#view tr[data-uid]').first().click();
+  await expect(page.locator('#modalBody')).toContainText('Download profile');
+  const [fromModal] = await Promise.all([
+    page.waitForEvent('download'),
+    page.locator('#mdl').click(),
+  ]);
+  expect(fromModal.suggestedFilename()).toMatch(/\.json$/);
+  const [activity] = await Promise.all([
+    page.waitForEvent('download'),
+    page.locator('#mdlcsv').click(),
+  ]);
+  expect(activity.suggestedFilename()).toMatch(/^vinax-activity-.*\.csv$/);
   expect(errors).toEqual([]);
 });
 

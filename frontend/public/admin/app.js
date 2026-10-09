@@ -311,17 +311,40 @@
       return res.json();
     });
   }
-  function downloadCsv() {
-    if (!exportRows) return;
-    var cols = Object.keys(exportRows[0]);
-    var lines = [cols.join(',')].concat(exportRows.map(function (r) {
-      return cols.map(function (c) { var v = r[c] == null ? '' : String(r[c]); return '"' + v.replace(/"/g, '""') + '"'; }).join(',');
+  /** Rows → CSV text. Columns are the union of the keys, so a row that is
+   *  missing a field does not shift every later column by one. */
+  function csvOf(rows) {
+    var cols = [], seen = {};
+    rows.forEach(function (r) {
+      Object.keys(r || {}).forEach(function (c) { if (!seen[c]) { seen[c] = 1; cols.push(c); } });
+    });
+    var lines = [cols.join(',')].concat(rows.map(function (r) {
+      return cols.map(function (c) {
+        var v = r && r[c] != null ? r[c] : '';
+        if (typeof v === 'object') v = JSON.stringify(v);
+        return '"' + String(v).replace(/"/g, '""') + '"';
+      }).join(',');
     }));
-    var blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    return lines.join('\n');
+  }
+  /** Hand a file to the browser. One place, so every download behaves alike. */
+  function saveFile(name, text, type) {
+    var blob = new Blob([text], { type: type || 'text/plain' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
-    a.href = url; a.download = exportName + '-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click(); toast('Download started — ' + a.download, 'info');
+    a.href = url; a.download = name; a.rel = 'noopener'; a.click();
+    toast('Download started — ' + name, 'info');
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+  function stampName() { return new Date().toISOString().slice(0, 10); }
+  /** A file name a person can read, from whatever the row is called. */
+  function slug(s, fallback) {
+    var out = String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+    return out || fallback || 'export';
+  }
+  function downloadCsv() {
+    if (!exportRows) return;
+    saveFile(exportName + '-' + stampName() + '.csv', csvOf(exportRows), 'text/csv');
   }
 
   function showLogin(msg) { stopAuto(); $('app').hidden = true; $('login').hidden = false; $('loginErr').textContent = msg || ''; }
@@ -666,6 +689,62 @@
   }
   function loadExperiments() { apiMemo('/api/admin/experiments').then(function (d) { if (d && active === 'experiments') renderExperiments(d); }).catch(failIf('experiments', 'the experiments')); }
 
+  // ---------- Users: profile downloads (11.5.0) ----------
+  /**
+   * One listener's whole server-side record — the latest-state row plus the
+   * long event window (`full=1`), as a JSON file. Honesty note, repeated in
+   * the file itself: this is everything the SERVER holds. The taste profile
+   * is built and kept on the listener's own device and never uploaded, so it
+   * is not here and cannot be.
+   */
+  function downloadProfile(deviceId, name) {
+    if (!deviceId) return Promise.resolve(false);
+    var release = busyButton();
+    return api('/api/admin/user?full=1&deviceId=' + encodeURIComponent(deviceId)).then(function (d) {
+      release();
+      if (!d) return false; // 401 — the sign-in screen is already up
+      if (d.configured === false) { toast('No database is configured — there is nothing to download.', 'bad'); return false; }
+      if (!d.user && !(d.events || []).length) { toast('Nothing to download — this listener has no record.', 'bad'); return false; }
+      saveFile(
+        'vinax-listener-' + slug(name || (d.user && d.user.username) || deviceId, 'profile') + '-' + stampName() + '.json',
+        JSON.stringify({
+          exported_at: new Date().toISOString(),
+          note: 'Server-side record only. The listening taste profile lives on the listener\u2019s device and is never uploaded.',
+          device_id: deviceId,
+          user: d.user || null,
+          events: d.events || [],
+        }, null, 2),
+        'application/json',
+      );
+      return true;
+    }).catch(function () { release(); toast('Failed — the listener record could not be read. Try again.', 'bad'); return false; });
+  }
+
+  /** Every listener, not just the page on screen: walk the list to the end. */
+  function downloadAllUsers() {
+    var release = busyButton();
+    var rows = [], offset = 0, pages = 0;
+    function page() {
+      return api('/api/admin/users?limit=100&offset=' + offset + (userQ ? '&q=' + encodeURIComponent(userQ) : '')).then(function (d) {
+        if (!d) return null;
+        if (d.configured === false) return [];
+        rows = rows.concat(d.users || []);
+        offset += 100;
+        pages += 1;
+        // 100 pages = 10 000 listeners; a stop so a wrong hasMore can never loop.
+        if (d.hasMore && pages < 100) return page();
+        return rows;
+      });
+    }
+    return page().then(function (all) {
+      release();
+      if (!all) return false;
+      if (!all.length) { toast('Nothing to download — no listeners matched.', 'bad'); return false; }
+      saveFile('vinax-listeners' + (userQ ? '-' + slug(userQ, 'search') : '') + '-' + stampName() + '.csv', csvOf(all), 'text/csv');
+      return true;
+    }).catch(function () { release(); toast('Failed — the listener list could not be read in full. Try again.', 'bad'); return false; });
+  }
+
   // ---------- Users ----------
   function renderUsers(d) {
     var s = d.summary || {};
@@ -673,7 +752,7 @@
     setExport('users', U);
     var rows = U.map(function (u) {
       var loc = [u.city, u.country].filter(Boolean).map(esc).join(', ') || '<span class="muted">—</span>';
-      return '<tr class="clickable" data-uid="' + esc(u.device_id) + '" data-uname="' + esc(u.name || 'Anonymous') + '"><td><span class="dot2 ' + (u.is_playing ? 'on' : 'off') + '"></span>' + esc(u.name || 'Anonymous') + (u.username ? ' <span class="muted">@' + esc(u.username) + '</span>' : '') + '</td><td>' + loc + '</td><td><span class="pill">' + platIcon(u.platform) + ' ' + esc(u.platform || 'web') + '</span> <span class="muted">' + esc(String(u.device_id || '').slice(0, 8)) + '</span></td><td class="muted">' + date(u.first_seen) + '</td><td class="muted">' + ago(u.last_seen) + '</td><td><button class="ghost udel" data-del="' + esc(u.device_id) + '" style="padding:4px 10px;font-size:11px;color:var(--bad)">Delete</button></td></tr>';
+      return '<tr class="clickable" data-uid="' + esc(u.device_id) + '" data-uname="' + esc(u.name || 'Anonymous') + '"><td><span class="dot2 ' + (u.is_playing ? 'on' : 'off') + '"></span>' + esc(u.name || 'Anonymous') + (u.username ? ' <span class="muted">@' + esc(u.username) + '</span>' : '') + '</td><td>' + loc + '</td><td><span class="pill">' + platIcon(u.platform) + ' ' + esc(u.platform || 'web') + '</span> <span class="muted">' + esc(String(u.device_id || '').slice(0, 8)) + '</span></td><td class="muted">' + date(u.first_seen) + '</td><td class="muted">' + ago(u.last_seen) + '</td><td style="white-space:nowrap"><button class="ghost udl" data-dl="' + esc(u.device_id) + '" data-dlname="' + esc(u.name || u.username || 'listener') + '" style="padding:4px 10px;font-size:11px">Profile</button> <button class="ghost udel" data-del="' + esc(u.device_id) + '" style="padding:4px 10px;font-size:11px;color:var(--bad)">Delete</button></td></tr>';
     }).join('');
     var canPrev = userOffset > 0;
     // D-22 follow-up: the server already computes hasMore (fetches limit+1);
@@ -685,18 +764,27 @@
       '<div class="card"><div class="n">' + (s.active_24h || 0) + '</div><div class="l">Active (24h)</div></div>' +
       '<div class="card"><div class="n">' + (s.new_24h || 0) + '</div><div class="l">New (24h)</div></div>' +
       '<div class="card"><div class="n">' + (s.total_plays || 0) + '</div><div class="l">Total plays</div></div></div>' +
-      '<div class="row" style="margin-bottom:12px"><input id="uq" type="search" placeholder="Search by name…" value="' + esc(userQ) + '" style="max-width:280px" /><button class="btn btn-primary" id="ugo">Search</button><span class="muted" style="font-size:12px">Tip: click a row for details</span></div>' +
+      '<div class="row" style="margin-bottom:12px"><input id="uq" type="search" placeholder="Search by name…" value="' + esc(userQ) + '" style="max-width:280px" /><button class="btn btn-primary" id="ugo">Search</button>' +
+      '<button class="ghost" id="udlall" title="Every listener in this list, all pages, as a CSV file">Download listeners (CSV)</button>' +
+      '<span class="muted" style="font-size:12px">Tip: click a row for details · Profile downloads one listener\u2019s full record</span></div>' +
       '<table><thead><tr><th>Listener</th><th>Location</th><th>Device</th><th>First seen</th><th>Last seen</th><th></th></tr></thead><tbody>' +
       (rows || '<tr class="table-empty"><td colspan="6"><div class="state state-empty empty" role="status"><div class="state-title">No users found</div><div class="state-hint">Try a shorter name or part of an email, or clear the search.</div></div></td></tr>') + '</tbody></table>' +
       '<div class="row" style="margin-top:14px"><button class="ghost" id="uprev"' + (canPrev ? '' : ' disabled') + '>← Prev</button>' +
       '<span class="muted">Showing ' + (userOffset + 1) + '–' + (userOffset + U.length) + '</span>' +
       '<button class="ghost" id="unext"' + (canNext ? '' : ' disabled') + '>Next →</button></div>';
     $('ugo').addEventListener('click', function () { userQ = $('uq').value.trim(); userOffset = 0; loadUsers(); });
+    $('udlall').addEventListener('click', function () { downloadAllUsers(); });
     $('uq').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('ugo').click(); });
     $('uprev').addEventListener('click', function () { if (userOffset > 0) { userOffset = Math.max(0, userOffset - (d.limit || 50)); loadUsers(); } });
     $('unext').addEventListener('click', function () { userOffset += (d.limit || 50); loadUsers(); });
     Array.prototype.forEach.call(document.querySelectorAll('tr[data-uid]'), function (tr) {
       rowButton(tr, function () { openUser(tr.getAttribute('data-uid'), tr.getAttribute('data-uname')); });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('button.udl'), function (b) {
+      b.addEventListener('click', function (e) {
+        e.stopPropagation(); // the row itself opens the drill-down
+        downloadProfile(b.getAttribute('data-dl'), b.getAttribute('data-dlname'));
+      });
     });
     Array.prototype.forEach.call(document.querySelectorAll('button.udel'), function (b) {
       b.addEventListener('click', function (e) {
@@ -753,9 +841,25 @@
         '<div class="cards"><div class="card"><div class="n">' + plays.length + '</div><div class="l">Plays (recent)</div></div>' +
         '<div class="card"><div class="n">' + top.length + '</div><div class="l">Distinct songs</div></div>' +
         '<div class="card"><div class="n">' + esc(langs[0] ? langs[0].language : '—') + '</div><div class="l">Top language</div></div></div>' +
+        '<div class="row" style="margin-bottom:14px"><button class="btn" id="mdl">Download profile (JSON)</button>' +
+        '<button class="ghost" id="mdlcsv">Activity (CSV)</button>' +
+        '<span class="muted" style="font-size:12px">Everything the server holds for this listener</span></div>' +
         '<h3>Top songs</h3>' + bars(top, function (x) { return esc(x.title) + (x.artist ? ' <span class="muted">· ' + esc(x.artist) + '</span>' : ''); }, function (x) { return x.plays; }) +
         '<h3>Recent activity</h3><table><tbody>' + (recent || '<tr class="table-empty"><td><div class="state state-empty empty" role="status"><div class="state-title">No activity</div><div class="state-hint">Plays, searches and favourites by this listener show up here as they happen.</div></div></td></tr>') + '</tbody></table>';
       $('mx').addEventListener('click', closeModal);
+      $('mdl').addEventListener('click', function () { downloadProfile(deviceId, name || u.name || u.username); });
+      // The activity table as a spreadsheet. The modal already holds a recent
+      // window; the file carries the full one the download endpoint returns.
+      $('mdlcsv').addEventListener('click', function () {
+        var release = busyButton();
+        api('/api/admin/user?full=1&deviceId=' + encodeURIComponent(deviceId)).then(function (f) {
+          release();
+          if (!f) return;
+          var rows = (f.events || []);
+          if (!rows.length) { toast('Nothing to download — this listener has no activity yet.', 'bad'); return; }
+          saveFile('vinax-activity-' + slug(name || u.username || deviceId, 'listener') + '-' + stampName() + '.csv', csvOf(rows), 'text/csv');
+        }).catch(function () { release(); toast('Failed — the activity could not be read. Try again.', 'bad'); });
+      });
     }).catch(function () {
       var box = $('modalBody'); if (!box || $('modal').hidden) return;
       box.innerHTML = '<button type="button" class="x icon-btn" id="mx" aria-label="Close">✕</button>' + stateError('This listener could not be read. Check the connection, then try again.', function () { openUser(deviceId, name); });
