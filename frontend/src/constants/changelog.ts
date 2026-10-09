@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.5.2': {
+    title: 'The download has a name',
+    changes: [
+      { type: 'improved', text: 'Owner console \u2014 User Management lists a Profile download column, so the button that saves a listener\u2019s page says what it is instead of sitting unlabelled beside Delete.' },
+    ],
+  },
   '11.5.1': {
     title: 'A listener profile you can keep',
     changes: [
