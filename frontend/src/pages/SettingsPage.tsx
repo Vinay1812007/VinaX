@@ -834,8 +834,8 @@ export default function SettingsPage() {
                   setLocal(KEYS.analyticsConsent, v);
                   setUsageSharing(v);
                   if (v) {
-                    void import('@/services/analytics/telemetry').then((m) => m.registerUser());
-                    void import('@/services/analytics/sessionInsights').then((m) => m.initSessionInsights());
+                    void import('@/services/analytics/telemetry').then((m) => m.registerUser()).catch(() => undefined);
+                    void import('@/services/analytics/sessionInsights').then((m) => m.initSessionInsights()).catch(() => undefined);
                   }
                   toast(v ? 'Thank you — anonymous usage sharing is on' : 'Usage sharing is off');
                 }}

@@ -424,7 +424,7 @@ export default function SearchPage() {
     if (q.length < 2 || !all.data || allPlaceholder || lastTracked.current === q) return;
     lastTracked.current = q;
     const count = all.data.songs.length;
-    void import('@/services/analytics/telemetry').then((mm) => mm.trackSearch(q, count));
+    void import('@/services/analytics/telemetry').then((mm) => mm.trackSearch(q, count)).catch(() => undefined);
   }, [q, all.data, allPlaceholder]);
   const topResult = rankedAllSongs[0];
   // When the words are an artist's exact name, that artist is the clearest top
