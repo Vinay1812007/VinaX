@@ -70,7 +70,7 @@ export function WhatsNewSheet() {
         setNotes(m.latestNotes());
         setOpen(true);
       }
-    });
+    }).catch(() => undefined);
     return () => {
       alive = false;
     };

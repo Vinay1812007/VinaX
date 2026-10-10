@@ -326,7 +326,7 @@ export function OnboardingSheet() {
     if (firstRun) {
       void import('@/constants/changelog').then((m) => {
         setLocal(KEYS.lastSeenVersion, m.latestNotesFingerprint());
-      });
+      }).catch(() => undefined);
     }
     setLocal(KEYS.onboarded, true);
     setFirstRun(false);
@@ -425,7 +425,7 @@ export function OnboardingSheet() {
     setLocal(KEYS.analyticsConsent, consent);
     if (picked.length) useSettingsStore.getState().setPinnedLanguages(picked);
     // Register this (anonymous) device + name with the backend, if consented.
-    void import('@/services/analytics/telemetry').then((m) => m.registerUser());
+    void import('@/services/analytics/telemetry').then((m) => m.registerUser()).catch(() => undefined);
     // AppLayout's idle init ran before consent existed — start insights now so
     // a fresh opt-in is covered from this session, not the next reload.
     initSessionInsights();

@@ -176,7 +176,7 @@ export const useLibraryStore = create<LibraryState>()(
       isArtistHidden: (song) => isSongBlocked(song, get()),
       toggleFavorite: (song) => {
         if (!get().favorites.some((s) => s.id === song.id)) {
-          void import('@/services/analytics/telemetry').then((m) => m.trackFavorite(song));
+          void import('@/services/analytics/telemetry').then((m) => m.trackFavorite(song)).catch(() => undefined);
           // 8.5.0 — liking the song that is playing steers what comes next right away.
           if (nowPlayingId() === song.id) void import('@/services/recommendation/adaptive').then((m) => m.noteLikeAndMaybeReplan(song)).catch(() => undefined);
         }
@@ -222,7 +222,7 @@ export const useLibraryStore = create<LibraryState>()(
         if (song && song.id === songId) {
           recordDislike(song, hiding);
           if (hiding) {
-            void import('@/services/analytics/telemetry').then((m) => m.trackDislike(song));
+            void import('@/services/analytics/telemetry').then((m) => m.trackDislike(song)).catch(() => undefined);
             // 9.1.0 — the exposure ledger holds it down everywhere too. (Hiding
             // is already a HARD rule in every filter; this is what makes the
             // dislike outlive an un-hide.)
@@ -318,7 +318,7 @@ export const useLibraryStore = create<LibraryState>()(
         // 200-song import would swamp the profile in one tap.
         if (added) {
           recordPlaylistAdd(song);
-          void import('@/services/analytics/telemetry').then((m) => m.trackPlaylistAdd(song));
+          void import('@/services/analytics/telemetry').then((m) => m.trackPlaylistAdd(song)).catch(() => undefined);
         }
       },
       addManyToCollection: (collectionId, songs) => {

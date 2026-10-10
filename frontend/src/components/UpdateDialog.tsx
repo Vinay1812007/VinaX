@@ -52,7 +52,7 @@ export function UpdateDialog() {
     void import('@/features/settings/actions').then((m) => {
       m.downloadProfileExport();
       setExported(true);
-    });
+    }).catch(() => undefined);
   };
 
   const busy = phase === 'downloading' || phase === 'installing';

@@ -65,7 +65,7 @@ export default function HistoryPage() {
   // Whole-history clear is undoable (snapshot → clear → toast with Undo).
   // Loaded on demand, like the onboarding restore: the settings actions
   // module carries the backup code and has no place in this page's chunk.
-  const clearHistoryWithUndo = () => void import('@/features/settings/actions').then((m) => m.clearHistoryWithUndo());
+  const clearHistoryWithUndo = () => void import('@/features/settings/actions').then((m) => m.clearHistoryWithUndo()).catch(() => undefined);
   const clearSince = useHistoryStore((s) => s.clearSince);
   const playQueue = usePlayerStore((s) => s.playQueue);
   // Package D6 — language + date filters, and Play all acts on what you see.

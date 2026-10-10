@@ -41,7 +41,7 @@ export const useHistoryStore = create<HistoryState>()(
           const done = { ...entries[idx], completed: true };
           delete done.skipped; // finished after all: not a skip
           entries[idx] = done;
-          void import('@/services/analytics/telemetry').then((m) => m.trackComplete(entries[idx].song));
+          void import('@/services/analytics/telemetry').then((m) => m.trackComplete(entries[idx].song)).catch(() => undefined);
         }
         set({ entries });
       },

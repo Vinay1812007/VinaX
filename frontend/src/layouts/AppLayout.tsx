@@ -200,7 +200,7 @@ export function AppLayout() {
       }).then((handle) => {
         removeUrl = () => void handle.remove();
       });
-    });
+    }).catch(() => undefined);
     return () => {
       remove?.();
       removeUrl?.();
@@ -235,7 +235,7 @@ export function AppLayout() {
     void import('@/store/outputStore').then((o) => {
       const sid = o.useOutputStore.getState().sinkId;
       if (sid) void audioEngine.setOutputDevice(sid);
-    });
+    }).catch(() => undefined);
 
     // Everything else is non-blocking; defer to idle so first paint and
     // time-to-interactive stay fast on cold start.
@@ -245,18 +245,18 @@ export function AppLayout() {
       void import('@/services/analytics/recTelemetry').then((m) => m.initRecTelemetry()).catch(() => undefined);
       initSessionInsights();
       // Measured listening time for Stats (pauses/seeks excluded).
-      void import('@/services/analytics/listenClock').then((m) => m.initListenClock());
+      void import('@/services/analytics/listenClock').then((m) => m.initListenClock()).catch(() => undefined);
       // v6.3.0 — remember which hand-offs the listener finished or skipped.
-      void import('@/services/recommendation/transitionTracker').then((m) => m.initTransitionTracker());
+      void import('@/services/recommendation/transitionTracker').then((m) => m.initTransitionTracker()).catch(() => undefined);
       // A username chosen while offline stays "pending" until the service
       // confirms it — retry now and on every reconnect.
-      void import('@/features/identity/handleClaim').then((m) => m.installClaimRetry());
+      void import('@/features/identity/handleClaim').then((m) => m.installClaimRetry()).catch(() => undefined);
       void loadBlocklist();
       initLockScreenLyrics();
       initSpatialNav();
       initAlarm();
       initAudioOutputWatcher();
-      void import('@/features/player/djVoice').then((m) => m.initDjVoice());
+      void import('@/features/player/djVoice').then((m) => m.initDjVoice()).catch(() => undefined);
       useCastStore.getState().init();
       // Android 13+: media notification needs notification permission.
       void requestNotificationPermissionOnce();
@@ -270,7 +270,7 @@ export function AppLayout() {
             store.setInfo(mergeResumeCheck(store.info, info));
           });
         });
-      });
+      }).catch(() => undefined);
     });
 
     // 9.1.0 — carry a 9.0 device's shown-song memory into the shared exposure
@@ -386,7 +386,7 @@ export function AppLayout() {
       document.documentElement.dataset.density = density;
       // v5.17.0 — custom accent (one hex → derived ramps), display size, high contrast.
       // Custom accent math lives in a lazy chunk — only listeners who picked one pay for it.
-      if (accent === 'custom' && accentCustom) void import('@/utils/accentRamp').then((m) => m.applyCustomAccent(accentCustom, resolved === 'light'));
+      if (accent === 'custom' && accentCustom) void import('@/utils/accentRamp').then((m) => m.applyCustomAccent(accentCustom, resolved === 'light')).catch(() => undefined);
       document.documentElement.style.fontSize = uiScale === 'sm' ? '15px' : uiScale === 'lg' ? '17.5px' : '';
       document.documentElement.classList.toggle('hc', highContrast);
       applyGlassLevel(glassLevel, glassBlur);
@@ -394,13 +394,13 @@ export function AppLayout() {
       // Dynamic accent (experimental, off by default): the artwork-tint math
       // lives in a lazy chunk so first-load users never pay for it.
       if (dynamicTheme && currentAccent) {
-        void import('@/utils/dynamicAccent').then((m) => m.applyArtAccent(currentAccent));
+        void import('@/utils/dynamicAccent').then((m) => m.applyArtAccent(currentAccent)).catch(() => undefined);
       } else {
         const st = document.documentElement.style;
         st.removeProperty('--ember-500');
         st.removeProperty('--ember-400');
         st.removeProperty('--ember-600');
-        if (accent === 'custom' && accentCustom) void import('@/utils/accentRamp').then((m) => m.applyCustomAccent(accentCustom, resolved === 'light'));
+        if (accent === 'custom' && accentCustom) void import('@/utils/accentRamp').then((m) => m.applyCustomAccent(accentCustom, resolved === 'light')).catch(() => undefined);
       }
     };
     apply();

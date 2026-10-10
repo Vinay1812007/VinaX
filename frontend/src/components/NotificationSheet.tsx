@@ -70,7 +70,7 @@ export function NotificationSheet({ open, onClose }: { open: boolean; onClose: (
         .slice(0, 3)
         .map(([version, info]) => ({ version, title: (info as { title?: string }).title ?? 'Improvements' }));
       setNotes(rows);
-    });
+    }).catch(() => undefined);
   }, [open]);
   const groups = groupByDay(anns);
   return (

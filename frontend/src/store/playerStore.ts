@@ -533,7 +533,7 @@ export const usePlayerStore = create<PlayerState>()(
           // really been heard (services/playback/session.ts).
           useHistoryStore.getState().addPlay(song);
           playbackInHistory = true;
-          void import('@/utils/streak').then((m) => m.bumpStreak());
+          void import('@/utils/streak').then((m) => m.bumpStreak()).catch(() => undefined);
           // Android 13+: the playback notification needs this permission.
           void checkNotificationOnFirstPlay(toast);
           scheduleBridgeCheck();
@@ -575,9 +575,9 @@ export const usePlayerStore = create<PlayerState>()(
           inst.run.skipped = true;
           recordSkip(song, Math.round(inst.heardSec * 10) / 10);
           useHistoryStore.getState().markSkipped(song.id);
-          void import('@/services/analytics/telemetry').then((m) => m.trackSkip(song));
+          void import('@/services/analytics/telemetry').then((m) => m.trackSkip(song)).catch(() => undefined);
           // v6.3.0 — two skips inside the recommender's tail re-plan the rest of it.
-          void import('@/services/recommendation/adaptive').then((m) => m.noteSkipAndMaybeReplan(song));
+          void import('@/services/recommendation/adaptive').then((m) => m.noteSkipAndMaybeReplan(song)).catch(() => undefined);
         }
       }
 
@@ -623,7 +623,7 @@ export const usePlayerStore = create<PlayerState>()(
             inst.run.completed = true;
             recordComplete(song, Math.round(inst.heardSec * 10) / 10);
             useHistoryStore.getState().markCompleted(song.id);
-            void import('@/services/recommendation/adaptive').then((m) => m.noteCompleted());
+            void import('@/services/recommendation/adaptive').then((m) => m.noteCompleted()).catch(() => undefined);
           }
           finalizePlayback(repeat === 'one' ? 'repeat' : 'ended');
         }

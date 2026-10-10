@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.5.3': {
+    title: 'A chunk that fails to load stays quiet',
+    changes: [
+      { type: 'fixed', text: 'When a part of the app that loads in the background could not be fetched \u2014 a stale copy on the device, a dropped connection mid-download \u2014 VinaX reported its own failure as an app error. Those background loads are optional by design, so a missed one is now simply skipped instead of raising an error nobody can act on.' },
+    ],
+  },
   '11.5.2': {
     title: 'The download has a name',
     changes: [
