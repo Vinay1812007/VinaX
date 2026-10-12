@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { festivalClass, type Festival } from '@/constants/festivals';
-import { festivalVisual, particleCount } from '@/constants/festivalVisuals';
+import { ambientPlan, festivalVisual, type FestivalSignature } from '@/constants/festivalVisuals';
 import { FestivalEmblem } from '@/components/FestivalEmblem';
 import { useFestivalNow } from '@/features/festival/festivalPreview';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -12,6 +12,22 @@ const SEEN_KEY = `${STORAGE_PREFIX}.festival-splash`;
 
 /** The two national days fly the flag instead of the generic emblem watermark. */
 const FLAG_DAYS = new Set(['independence', 'republic']);
+
+/** Pieces in the one-shot burst behind the greeting card's emblem. */
+const BURST_PIECES = 14;
+
+/**
+ * True when nothing should move: either reduced-motion switch (the app's own
+ * setting or the system preference) or data saver. One rule, read in both
+ * places that draw motion, so the backdrop and the greeting card can never
+ * disagree about whether this device wants animation.
+ */
+function useStillMotion(): boolean {
+  const reduceMotion = useSettingsStore((s) => s.reduceMotion);
+  const dataSaver = useSettingsStore((s) => s.dataSaver);
+  return reduceMotion || dataSaver
+    || (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+}
 
 /** 24-spoke chakra, drawn inline; turns slowly via CSS. */
 function Chakra() {
@@ -67,14 +83,76 @@ function FlagBackdrop({ balls }: { balls: number }) {
 }
 
 /**
+ * The day's own set piece, drawn on top of the ambient layer: fireworks,
+ * lamps lit along the bottom, clouds of colour, a sky of stars, or lanterns
+ * strung from above. All of it is drawn in CSS from the skin's three colours
+ * (see the `.fest-set` block in the generator) — this only places the pieces
+ * and gives each its own phase, so none of them move together.
+ *
+ * Positions are arithmetic on the index, not random: the same festival draws
+ * the same arrangement on every open, and the tests can assert it.
+ */
+function SetPiece({ signature, count }: { signature: FestivalSignature; count: number }) {
+  if (signature === 'none' || count < 1) return null;
+  return (
+    <div className="fest-set" data-signature={signature} data-testid="fest-set">
+      {Array.from({ length: count }, (_, i) => {
+        switch (signature) {
+          case 'fireworks':
+            return <b key={i} className="fest-fw" style={{
+              left: `${12 + ((i * 29) % 76)}%`,
+              top: `${10 + ((i * 23) % 36)}%`,
+              animationDelay: `${-((i * 1.7) % 4.6)}s`,
+              animationDuration: `${4 + (i % 4) * 0.7}s`,
+            }} />;
+          case 'diyas':
+            // Evenly spaced along the bottom, each lamp in the middle of its
+            // own share of the width, so the row reads as a line of lamps.
+            return <b key={i} className="fest-diya" style={{
+              left: `${((i + 0.5) * 100) / count}%`,
+              animationDelay: `${-((i * 0.37) % 1.9)}s`,
+            }} />;
+          case 'bloom':
+            return <b key={i} className="fest-bloom" style={{
+              left: `${14 + ((i * 31) % 72)}%`,
+              top: `${16 + ((i * 41) % 60)}%`,
+              animationDelay: `${-((i * 1.9) % 7.5)}s`,
+            }} />;
+          case 'twinkle':
+            return <b key={i} className="fest-twinkle" style={{
+              left: `${4 + ((i * 37) % 92)}%`,
+              top: `${5 + ((i * 53) % 70)}%`,
+              animationDelay: `${-((i * 0.73) % 4.2)}s`,
+              animationDuration: `${3.4 + (i % 5) * 0.6}s`,
+            }} />;
+          case 'lanterns':
+            return <b key={i} className="fest-lamp" style={{
+              left: `${8 + ((i * 100) / count)}%`,
+              // The cord length is also the pivot the swing turns about.
+              // Step and modulus coprime, or 5 % 15 hands out three lengths
+              // and the lanterns hang in tiers instead of at mixed heights.
+              ['--fest-drop' as string]: `${6 + ((i * 7) % 17)}vh`,
+              animationDelay: `${-((i * 1.3) % 6)}s`,
+              animationDuration: `${5.2 + (i % 4) * 0.8}s`,
+            } as CSSProperties} />;
+          default:
+            return null;
+        }
+      })}
+    </div>
+  );
+}
+
+/**
  * The ambient layer behind the whole app while a skin is on: glow + motif
- * (CSS), one large emblem watermark and a short particle system. Particles are
- * transform/opacity only, capped (see particleCount), paused while the tab is
- * hidden, and absent under reduced motion (either switch) and data saver.
+ * (CSS), one large emblem watermark, a short particle system and the day's set
+ * piece. Everything is transform/opacity only, capped together by ambientPlan
+ * (the set piece spends part of the same budget, so the particles step back),
+ * paused while the tab is hidden, and absent under reduced motion (either
+ * switch) and data saver.
  */
 export function FestBackdrop({ festival }: { festival: Festival }) {
-  const reduceMotion = useSettingsStore((s) => s.reduceMotion);
-  const dataSaver = useSettingsStore((s) => s.dataSaver);
+  const still = useStillMotion();
   const [paused, setPaused] = useState(() => typeof document !== 'undefined' && document.hidden);
   useEffect(() => {
     const sync = () => setPaused(document.hidden);
@@ -83,14 +161,19 @@ export function FestBackdrop({ festival }: { festival: Festival }) {
   }, []);
   const visual = festivalVisual(festival.id);
   const motion = festival.backdrop?.motion ?? 'rise';
-  const still = reduceMotion || dataSaver
-    || (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
-  const count = still ? 0 : particleCount(festival.backdrop?.density, window.innerWidth);
   const flag = !still && FLAG_DAYS.has(festival.id);
+  // The two national days already fly the flag — that IS their set piece, so
+  // they do not take a second one and keep their full share of particles.
+  const signature = flag ? 'none' : visual.signature;
+  const plan = still
+    ? { particles: 0, pieces: 0 }
+    : ambientPlan(festival.backdrop?.density, signature, window.innerWidth);
+  const count = plan.particles;
   const balls = festival.id === 'independence' ? Math.min(14, Math.max(8, count)) : 0;
   return (
     <div className={`fest-sky${paused ? ' is-paused' : ''}`} data-festival={festival.id} aria-hidden>
       {flag ? <FlagBackdrop balls={balls} /> : <FestivalEmblem id={visual.emblem} className="fest-wm" />}
+      <SetPiece signature={signature} count={plan.pieces} />
       {count > 0 && !(flag && balls > 0) && (
         <div className="fest-particles">
           {Array.from({ length: count }, (_, i) => (
@@ -101,9 +184,14 @@ export function FestBackdrop({ festival }: { festival: Festival }) {
                 left: `${(i * 61 + 7) % 94}%`,
                 top: motion === 'drift' ? `${8 + ((i * 37) % 58)}%` : undefined,
                 fontSize: 9 + ((i * 7) % 9),
+                // How far this one wanders either side of its column on the
+                // way past. Varying it is what stops the fall reading as rain,
+                // so the step and the modulus are coprime — 13 % 26 would only
+                // ever have given two widths, alternating.
+                ['--fest-sway' as string]: `${9 + ((i * 7) % 23)}px`,
                 animationDelay: `${-((i * 2.3) % 12)}s`,
                 animationDuration: `${motion === 'drift' ? 6 + (i % 5) * 1.5 : 13 + (i % 6) * 2.6}s`,
-              }}
+              } as CSSProperties}
             />
           ))}
         </div>
@@ -203,6 +291,10 @@ export function FestiveSplash() {
   }, [visible, close]);
 
   const visual = useMemo(() => (festival ? festivalVisual(festival.id) : null), [festival]);
+  // The card's halo and burst are decoration on top of an entrance the card
+  // plays anyway; on a device that asked for stillness they are not drawn at
+  // all rather than drawn and then suppressed in CSS.
+  const stillCard = useStillMotion();
   const backdrop = theme ? <FestBackdrop festival={theme} /> : null;
   if (!visible || !festival || !visual) return backdrop;
   const short = festival.name.split(' · ')[0].replace(/\s*\(.*\)$/, '');
@@ -212,7 +304,24 @@ export function FestiveSplash() {
       {backdrop}
       <div className="fest-splash" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
         <div ref={cardRef} className="fest-card vx-mat-thick" role="dialog" aria-modal="true" aria-labelledby="fest-title" aria-describedby="fest-blurb" data-festival={festival.id}>
-          <FestivalEmblem id={visual.emblem} />
+          <div className="fest-crest">
+            <FestivalEmblem id={visual.emblem} />
+            {!stillCard && <span className="fest-halo" />}
+            {!stillCard && (
+              <span className="fest-burst" data-testid="fest-burst">
+                {Array.from({ length: BURST_PIECES }, (_, i) => (
+                  <i key={i} style={{
+                    // Angle round the emblem, how far it is thrown, and how
+                    // much it spins on the way — one set of values per piece.
+                    ['--fest-a' as string]: `${(i * 360) / BURST_PIECES}deg`,
+                    ['--fest-d' as string]: `${64 + ((i * 17) % 46)}px`,
+                    ['--fest-s' as string]: `${(i % 2 ? 1 : -1) * (180 + ((i * 53) % 220))}deg`,
+                    animationDelay: `${0.2 + (i % 5) * 0.035}s`,
+                  } as CSSProperties} />
+                ))}
+              </span>
+            )}
+          </div>
           <h2 id="fest-title">{festival.greeting}</h2>
           <p id="fest-blurb">{visual.blurb}</p>
           <div className="fest-actions">

@@ -12,6 +12,17 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.6.0': {
+    title: 'A festival you can feel',
+    changes: [
+      { type: 'fixed', text: 'The thin coloured line across the very top of the app during a festival is gone. It read as a stray browser line above the page rather than as part of the day \u2014 the festival now lives in the backdrop. The greeting card lost the same hard edge and opens with a wash of the day\u2019s colours instead.' },
+      { type: 'improved', text: 'The backdrop is alive rather than still: the glow breathes, the pattern behind the page drifts, the emblem floats, and petals, sparks and snow now sway and tumble on the way past instead of sliding straight down.' },
+      { type: 'improved', text: 'Each big day gets the thing it is known for. Lamps lit in a row along the bottom for Diwali, Karthika Masam and Guru Nanak Jayanti. Fireworks for New Year, Dussehra and Ganesh Chaturthi. Clouds of colour for Holi, Bathukamma and Children\u2019s Day. A sky of stars for Maha Shivaratri and Christmas. Lanterns strung overhead for Eid, Bakrid and Vaikunta Ekadasi.' },
+      { type: 'improved', text: 'The greeting card arrives with the day in its own colours \u2014 the emblem inside a ring of light, and one burst that plays and clears.' },
+      { type: 'improved', text: 'Home offers the festival that is actually on. During Diwali the shelf is Diwali songs, not a generic Festival Specials; the greeting strip says Play Diwali songs and, for a festival that runs several days, which day today is.' },
+      { type: 'improved', text: 'None of it moves if you have asked for less motion or turned on data saver, and all of it stops while the tab is in the background.' },
+    ],
+  },
   '11.5.3': {
     title: 'A chunk that fails to load stays quiet',
     changes: [
