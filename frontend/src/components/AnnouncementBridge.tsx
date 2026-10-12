@@ -9,7 +9,16 @@ import { isNativePlatform } from '@/services/native';
 export function AnnouncementBridge(): null {
   const navigate = useNavigate();
   useEffect(() => {
-    if (!isNativePlatform()) return undefined;
+    if (!isNativePlatform()) {
+      // 11.7.1 — the web half: a browser whose listener already allowed
+      // notifications re-sends its subscription (at once if the server never
+      // confirmed it, else daily), a few seconds after boot so it never
+      // competes with the first screen.
+      const timer = window.setTimeout(() => {
+        void import('@/services/push').then((m) => m.syncPush()).catch(() => undefined);
+      }, 5_000);
+      return () => window.clearTimeout(timer);
+    }
     const nav = (to: string): void => {
       navigate(to);
     };
