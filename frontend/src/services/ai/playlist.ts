@@ -10,6 +10,7 @@ import { matchesProposal } from '@/services/ai/dj';
 import { catalogQueries, intentTitle, parseMusicIntent, requestedSongCount, type MusicIntent } from '@/services/ai/musicIntent';
 import { embedQueryDetailed, embedSongs } from '@/services/ai/embeddings';
 import { semanticRank } from '@/services/ai/semantic';
+import { personalOrder, tasteLens } from '@/services/ai/personalize';
 
 // Same-origin on web; the native app calls the deployed function directly.
 const ENDPOINT = isNativePlatform()
@@ -95,7 +96,18 @@ export async function failureReason(res: Response): Promise<PlaylistFailure> {
  * pages, and the round shifts the whole window.
  */
 export const POOL_SEARCHES = 6;
-export const POOL_PAGES = 5;
+/**
+ * 11.7.0 — 5 → 7. Prime, so any number of laps below it is coprime with it and
+ * the rotation walks every page in turn instead of cycling a subset.
+ */
+export const POOL_PAGES = 7;
+/**
+ * 11.7.0 — the most pages of ONE phrasing a single round may read. Before 11.7
+ * a one-phrasing request ("telugu sad songs") read six laps over five pages —
+ * every page, every round — so each "Regenerate" drew a byte-identical pool.
+ * At most half the depth per round keeps consecutive rounds disjoint.
+ */
+const MAX_LAPS = Math.floor(POOL_PAGES / 2);
 /** Results per search. */
 const POOL_LIMIT = 25;
 
@@ -108,10 +120,11 @@ const POOL_LIMIT = 25;
  */
 export function poolPlan(queries: readonly string[], round: number): Array<{ query: string; page: number }> {
   if (!queries.length) return [];
-  const lapsPerRound = Math.max(1, Math.ceil(POOL_SEARCHES / queries.length));
+  const lapsPerRound = Math.max(1, Math.min(MAX_LAPS, Math.ceil(POOL_SEARCHES / queries.length)));
+  const searches = Math.min(POOL_SEARCHES, lapsPerRound * queries.length);
   const seen = new Set<string>();
   const out: Array<{ query: string; page: number }> = [];
-  for (let i = 0; i < POOL_SEARCHES; i += 1) {
+  for (let i = 0; i < searches; i += 1) {
     const query = queries[(round + i) % queries.length];
     const page = 1 + ((round * lapsPerRound + Math.floor(i / queries.length)) % POOL_PAGES);
     const key = `${query}#${page}`;
@@ -431,7 +444,10 @@ export async function generatePlaylist(
   };
   // How many songs this generation has to find (the locked ones are already found).
   const need = Math.max(0, target - locked.length);
-  const round = playlistRound(prompt, options.regenerate === true);
+  // 11.7.0 — EVERY generation of an idea moves its round on, not only the
+  // Regenerate button. Typing the same request again (or tapping the same
+  // suggestion chip tomorrow) used to read round 0's pages every time.
+  const round = playlistRound(prompt, true);
   const ledger = exposureLedger();
   /** Keep the locked songs in place and drop anything the caller rejected. */
   const assemble = (found: readonly Song[]): Song[] => {
@@ -456,7 +472,7 @@ export async function generatePlaylist(
     if (signal?.aborted) return { ok: false, reason: 'error' };
     const pool = await poolPromise;
     if (pool.length + locked.length < MIN_CATALOGUE) return { ok: false, reason };
-    const ranked = (await semanticRank(prompt, pool, { intent, leashMs: 2500, signal })).map((x) => x.song);
+    const ranked = await rankForListener(prompt, intent, pool, need, signal);
     const songs = assemble(ranked);
     if (signal?.aborted || songs.length < Math.min(MIN_CATALOGUE, target)) return { ok: false, reason };
     // Only the songs this generation CHOSE count as exposure; a locked song the
@@ -494,7 +510,9 @@ export async function generatePlaylist(
         // The curator is told what not to suggest: earlier generations, the
         // songs the listener locked (it must not spend picks re-proposing them)
         // and anything they rejected.
-        avoidTitles: [...new Set([...avoidTitles, ...locked.map((x) => x.title), ...(options.exclude ?? []).map((x) => x.title)])].slice(0, 140),
+        // 11.7.0 — rejected and locked titles FIRST: they matter most, and a cap
+        // anywhere downstream drops the tail.
+        avoidTitles: [...new Set([...(options.exclude ?? []).map((x) => x.title), ...locked.map((x) => x.title), ...avoidTitles])].slice(0, 140),
         round,
         // 9.1.0 — how many songs the listener asked for, when they said.
         ...(asked ? { wantSongs: target } : {}),
@@ -556,6 +574,17 @@ async function fillFromPool(prompt: string, intent: MusicIntent, have: Song[], p
   const titles = new Set(have.map((s) => titleKey(s.title)));
   const open = pool.filter((s) => !ids.has(s.id) && !titles.has(titleKey(s.title)));
   if (!open.length) return [];
-  const ranked = await semanticRank(prompt, open, { intent, leashMs: 2500, signal });
-  return ranked.slice(0, count).map((x) => x.song);
+  return (await rankForListener(prompt, intent, open, count, signal)).slice(0, count);
+}
+
+/**
+ * 11.7.0 — the pool ranked for THIS listener: relevance to the request first,
+ * then their own artist affinity, then a bounded draw among close contenders
+ * (./personalize.ts). Model-space and in-language songs still lead as before.
+ */
+async function rankForListener(prompt: string, intent: MusicIntent, songs: Song[], take: number, signal?: AbortSignal): Promise<Song[]> {
+  const ranked = await semanticRank(prompt, songs, { intent, leashMs: 2500, signal });
+  const langs = intent.languages;
+  const inLanguage = (s: Song): boolean => !langs.length || (s.language != null && langs.includes(s.language));
+  return personalOrder(ranked, { take, lens: tasteLens(), tier: (x) => `${x.space}|${inLanguage(x.song) ? 1 : 0}` }).map((x) => x.song);
 }

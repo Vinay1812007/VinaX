@@ -12,6 +12,18 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.7.0': {
+    title: 'AI that stops repeating itself',
+    changes: [
+      { type: 'fixed', text: 'Up next, Radio, the AI DJ and the AI Playlist kept bringing back the same songs. VinaX remembers what you have heard so it can move on, but that memory filled up with every song Home showed you and pushed out the ones you actually played, skipped or said no to. It now holds far more and never lets a glance at Home push out a song you played.' },
+      { type: 'fixed', text: 'Asking the AI Playlist for the same idea twice, such as "telugu sad songs", read the same catalogue pages every time. Every new request for an idea now reads further into the catalogue, not only when you tap Regenerate.' },
+      { type: 'fixed', text: 'Songs you locked or rejected in a playlist were sometimes forgotten by the curator once your playlist history grew long. They are always passed on now.' },
+      { type: 'improved', text: 'AI playlists are ranked for you, not just for the words you typed. Two people asking for the same thing now get different lists, led by the singers each of them actually listens to, and artists you keep skipping drop down.' },
+      { type: 'improved', text: 'The AI treats your favourites as a guide rather than a setlist. It looks for songs near what you love that you probably have not heard yet, and each request draws on a different slice of your favourites instead of the same eight every time.' },
+      { type: 'improved', text: 'VinaX AI remembers what it suggested in your other recent chats, so a new chat does not open with the same songs.' },
+      { type: 'improved', text: 'DJ remix, folk and devotional sets and playlists now draw from deeper in the catalogue instead of always starting with the same twenty songs.' },
+    ],
+  },
   '11.6.0': {
     title: 'A festival you can feel',
     changes: [

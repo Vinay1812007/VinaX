@@ -55,3 +55,39 @@ export function extractRecommendedFromThread(messages: ThreadMsg[], max = 12): s
   // Keep the most recent picks when the thread is long.
   return out.slice(-max);
 }
+
+interface StoredThread {
+  messages: ThreadMsg[];
+  updatedAt: number;
+}
+
+/**
+ * 11.7.0 — picks from the listener's OTHER recent chats. The in-thread memory
+ * above forgets everything the moment a new chat opens, so "suggest some sad
+ * Telugu songs" in Monday's chat and again in Tuesday's got the same answer.
+ * Newest chats first, only chats touched inside `maxAgeDays`, minus anything
+ * already in `exclude` (this thread's own list rides separately). Derived from
+ * the chats already stored on the device — no new state.
+ */
+export function recentPicksAcrossChats(
+  chats: readonly StoredThread[],
+  exclude: readonly string[] = [],
+  { max = 40, maxAgeDays = 14, now = Date.now() }: { max?: number; maxAgeDays?: number; now?: number } = {},
+): string[] {
+  const seen = new Set(exclude.map((x) => x.toLowerCase()));
+  const out: string[] = [];
+  const recent = chats
+    .filter((c) => c && Array.isArray(c.messages) && Number.isFinite(c.updatedAt) && now - c.updatedAt <= maxAgeDays * 86_400_000)
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+  for (const c of recent) {
+    // Newest picks of each chat first.
+    for (const line of extractRecommendedFromThread(c.messages, max).reverse()) {
+      const key = line.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(line);
+      if (out.length >= max) return out;
+    }
+  }
+  return out;
+}

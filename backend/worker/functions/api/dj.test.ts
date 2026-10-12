@@ -11,7 +11,7 @@ vi.mock('../_lib/ai', async (importOriginal) => {
   return { ...actual, chat: (...args: unknown[]) => chatMock(...args), gather: (...args: unknown[]) => gatherMock(...(args as [])), logAiEvent: () => Promise.resolve() };
 });
 
-import { canonKey, onRequestPost, parseCandidates, parsePicks } from './dj';
+import { canonKey, onRequestPost, parseCandidates, parsePicks, stylePage } from './dj';
 
 const pool = [
   { id: 'p1', title: 'Samajavaragamana', artist: 'Sid Sriram', language: 'telugu' },
@@ -29,6 +29,17 @@ const post = async (body: unknown, extraEnv: Record<string, string> = {}) => {
 };
 
 beforeEach(() => { chatMock.mockReset(); gatherMock.mockReset(); gatherMock.mockResolvedValue([]); });
+
+describe('11.7 — stylePage', () => {
+  it('walks pages 1→2→3 with the client round', () => {
+    expect([0, 1, 2, 3, 4].map((r) => stylePage(r))).toEqual([1, 2, 3, 1, 2]);
+  });
+  it('reaches beyond page 1 without a round', () => {
+    const seen = new Set(Array.from({ length: 60 }, () => stylePage()));
+    expect([...seen].every((p) => p >= 1 && p <= 3)).toBe(true);
+    expect(seen.size).toBeGreaterThan(1);
+  });
+});
 
 describe('parsePicks', () => {
   it('keeps only pool songs, in model order, without repeats, with clipped notes', () => {

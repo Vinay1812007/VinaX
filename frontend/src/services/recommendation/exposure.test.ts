@@ -157,6 +157,26 @@ describe('exposure ledger', () => {
     expect(l.keys.has(songKey(song(`s${lastIndex}`, { title: `Title ${lastIndex}`, artist: `Artist ${lastIndex}` })))).toBe(true);
   });
 
+  it('11.7 — a flood of on-screen rows never evicts what the listener played, skipped or disliked', () => {
+    const played = song('p1', { title: 'Played Song', artist: 'Some Artist' });
+    const skipped = song('x1', { title: 'Skipped Song', artist: 'Other Artist' });
+    const disliked = song('d1', { title: 'Disliked Song', artist: 'Third Artist' });
+    recordExposure([played], 'played', T0);
+    recordExposure([skipped], 'skipped', T0);
+    recordExposure([disliked], 'disliked', T0);
+    // Far more Home impressions than the ledger holds, all newer.
+    for (let i = 0; i < EXPOSURE_CAP + 300; i += 1) {
+      recordExposure([song(`s${i}`, { title: `Shelf ${i}`, artist: `Shelf Artist ${i}` })], 'shown', T0 + 1 + i);
+    }
+    const l = exposureLedger(T0 + HOUR);
+    expect(l.size).toBe(EXPOSURE_CAP);
+    expect(l.cooling(songKey(played))).toBe(true);
+    expect(l.cooling(songKey(skipped))).toBe(true);
+    expect(l.cooling(songKey(disliked))).toBe(true);
+    // The weakest, oldest impressions went instead.
+    expect(l.keys.has(songKey(song('s0', { title: 'Shelf 0', artist: 'Shelf Artist 0' })))).toBe(false);
+  });
+
   it('never records a song with no title or id', () => {
     recordExposure([{ ...song('a', { title: 'One', artist: 'A' }), title: '' }], 'shown', T0);
     expect(exposureLedger(T0).size).toBe(0);

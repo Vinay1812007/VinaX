@@ -3,7 +3,7 @@
  *  last two weeks outrank an older binge, so the profile every AI payload
  *  carries actually follows the listener week to week. */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildTasteSnapshot } from './taste';
+import { buildTasteSnapshot, headPlusSample } from './taste';
 import { useHistoryStore } from '@/store/historyStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import type { Song } from '@/types';
@@ -56,5 +56,29 @@ describe('buildTasteSnapshot — 14-day recency weighting', () => {
     const snap = buildTasteSnapshot(now);
     expect(snap.topSongs[0]).toBe('Evergreen — Classic Artist');
     expect(snap.topArtists).toContain('Classic Artist');
+  });
+});
+
+describe('11.7 — the snapshot rotates what it leans on', () => {
+  it('keeps the head and draws the rest from deeper in the list', () => {
+    const list = Array.from({ length: 40 }, (_, i) => i);
+    const draws = new Set<string>();
+    for (let k = 0; k < 20; k += 1) {
+      const out = headPlusSample(list, 4, 4, 30);
+      expect(out.slice(0, 4)).toEqual([0, 1, 2, 3]);
+      expect(out).toHaveLength(8);
+      expect(new Set(out).size).toBe(8);
+      expect(out.slice(4).every((x) => x >= 4 && x < 34)).toBe(true);
+      draws.add(out.join(','));
+    }
+    expect(draws.size).toBeGreaterThan(10);
+  });
+
+  it('liked songs are not the same eight every call when the library is deep', () => {
+    const favorites = Array.from({ length: 40 }, (_, i) => song(`f${i}`, `Fav ${i}`, `Artist ${i}`));
+    useLibraryStore.setState({ favorites } as unknown as Parameters<typeof useLibraryStore.setState>[0]);
+    const seen = new Set<string>();
+    for (let k = 0; k < 10; k += 1) seen.add(buildTasteSnapshot().likedSongs.join('|'));
+    expect(seen.size).toBeGreaterThan(1);
   });
 });

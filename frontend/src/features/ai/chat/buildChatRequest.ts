@@ -1,5 +1,6 @@
 import { buildTasteSnapshot } from '@/services/ai/taste';
-import { extractRecommendedFromThread } from '@/services/ai/threadMemory';
+import { extractRecommendedFromThread, recentPicksAcrossChats } from '@/services/ai/threadMemory';
+import { loadChats } from './storage';
 import { getSong } from '@/services/api';
 import { detectSongLinks, prefRuleMessage, songContextBlock } from '@/features/ai/replyPrefs';
 import type { Song } from '@/types';
@@ -103,13 +104,20 @@ export async function buildChatRequest(s: TurnSettings, t: TurnInput): Promise<R
     // The taste snapshot plus this thread's own memory: everything already
     // recommended in this conversation, so "give me more" reaches into fresh
     // territory instead of looping.
-    taste: {
-      ...buildTasteSnapshot(),
-      alreadyRecommendedThisChat: extractRecommendedFromThread(
+    taste: (() => {
+      const thisChat = extractRecommendedFromThread(
         t.previousReply ? [...t.conversation, { role: 'assistant', content: t.previousReply }] : t.conversation,
         32,
-      ),
-    },
+      );
+      // 11.7.0 — and what the assistant suggested in the listener's other
+      // recent chats, so a new chat does not open with the same songs.
+      const elsewhere = recentPicksAcrossChats(loadChats() as unknown as Parameters<typeof recentPicksAcrossChats>[0], thisChat, { max: 40 });
+      return {
+        ...buildTasteSnapshot(),
+        alreadyRecommendedThisChat: thisChat,
+        ...(elsewhere.length ? { recentlyRecommended: elsewhere } : {}),
+      };
+    })(),
     profile: s.profile || undefined,
     // 9.1.0 — coarse place, so date/time answers suit the
     // listener instead of always assuming IST. `assistantPlace()` returns

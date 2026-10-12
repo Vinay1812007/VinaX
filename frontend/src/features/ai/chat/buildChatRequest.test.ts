@@ -5,7 +5,7 @@ const PLACE = { country: 'IN', region: 'Telangana', city: 'Hyderabad', timezone:
 let placeRequest: unknown = PLACE;
 vi.mock('@/services/location/assistantPlace', () => ({ assistantPlace: () => PLACE, assistantPlaceRequest: () => placeRequest }));
 vi.mock('@/services/ai/taste', () => ({ buildTasteSnapshot: () => ({}) }));
-vi.mock('@/services/ai/threadMemory', () => ({ extractRecommendedFromThread: () => [] }));
+vi.mock('@/services/ai/threadMemory', () => ({ extractRecommendedFromThread: () => [], recentPicksAcrossChats: () => [] }));
 vi.mock('@/services/api', () => ({ getSong: () => Promise.resolve(null) }));
 
 import { buildChatRequest, type TurnSettings } from './buildChatRequest';
