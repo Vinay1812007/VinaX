@@ -1381,7 +1381,12 @@
   function loadEngagement() { apiMemo('/api/admin/engagement?days=' + rangeDays).then(function (d) { if (d && active === 'engagement') renderEngagement(d); }).catch(failIf('engagement', 'engagement')); }
 
   // ---------- Notifications (push composer) ----------
-  var PN_BASES = ['https://www.sirimillavinay.online/api/cat', 'https://saavn.sumit.co/api', 'https://nepotuneapi.vercel.app/api'];
+  // 11.7.1 — same-origin only. The console's own CSP (index.html meta tag:
+  // connect-src 'self' + the database) blocks every other host, so the old
+  // list (www…/api/cat and two public mirrors) failed in the browser before a
+  // request was even made and the picker always said "sources unavailable".
+  // admin.<domain>/api/* is routed to the same Worker, /api/cat included.
+  var PN_BASES = ['/api/cat'];
   var pnDest = '/';
   var pnKind = 'home';
   function pnPickHtml(txt) { return '<span class="pill">Opens: ' + esc(txt) + '</span>'; }

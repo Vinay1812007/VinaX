@@ -1,3 +1,4 @@
+import './apexRedirect';
 import './services/storage/earlyMigrations';
 import React from 'react';
 import ReactDOM from 'react-dom/client';

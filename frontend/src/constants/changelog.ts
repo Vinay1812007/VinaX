@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.7.1': {
+    title: 'Notifications that arrive',
+    changes: [
+      { type: 'fixed', text: 'Notifications could stop reaching you on the web even though you had turned them on. Your browser said yes, but VinaX never heard back that it was set up, and nothing tried again. If you have allowed notifications, VinaX now checks in each time you open it and sets them up again when needed.' },
+      { type: 'fixed', text: 'Settings only shows notifications as on once they really are set up, so it no longer says "on" for a device that was never connected.' },
+      { type: 'fixed', text: 'In the Android app, a failed step in setting up notifications is now retried and reported instead of failing silently.' },
+      { type: 'fixed', text: 'Opening VinaX at the address without "www" now takes you to the full site, where sign-up for notifications and everything else that talks to VinaX works.' },
+    ],
+  },
   '11.7.0': {
     title: 'AI that stops repeating itself',
     changes: [
