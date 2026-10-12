@@ -16,7 +16,7 @@ vi.mock('@/services/ai/embeddings', async (importActual) => {
   return { cosine: actual.cosine, activeEmbeddingModel: () => null, embedQueryDetailed: async () => null, embedSongs: async () => undefined, getCachedEmbedding: () => null };
 });
 
-import { failureReason, gatherCataloguePool, generatePlaylist, loadAvoidTitles, playlistErrorCopy, playlistRound, POOL_PAGES, POOL_SEARCHES, recordAvoidTitles, resetPlaylistRounds, resolveSuggestions } from './playlist';
+import { failureReason, gatherCataloguePool, generatePlaylist, loadAvoidTitles, playlistErrorCopy, playlistRound, POOL_PAGES, POOL_SEARCHES, poolPlan, recordAvoidTitles, resetPlaylistRounds, resolveSuggestions } from './playlist';
 import { exposureLedger, recordExposure, resetExposure } from '@/services/recommendation/exposure';
 import { songKey } from '@/services/recommendation/songIdentity';
 import { catalogQueries, parseMusicIntent } from './musicIntent';
@@ -287,6 +287,37 @@ describe('8.2.0 — intent-aware playlists', () => {
       expect(second).not.toEqual(first);
       const shared = second.filter((x) => first.includes(x));
       expect(shared.length).toBeLessThan(second.length);
+    });
+
+    // 11.7.0 — a one-phrasing request read every page every round (six laps
+    // over five pages), so its pool never changed. Consecutive rounds must now
+    // be disjoint for 1–3 phrasings, and the rotation must reach every page.
+    it.each([1, 2, 3, 6])('consecutive rounds read different pages with %i phrasing(s)', (n) => {
+      const queries = Array.from({ length: n }, (_, i) => `q${i}`);
+      const key = (r: number) => poolPlan(queries, r).map((p) => `${p.query}#${p.page}`);
+      for (let r = 0; r < 10; r += 1) {
+        const a = key(r);
+        const b = key(r + 1);
+        expect(a.length).toBeGreaterThan(0);
+        expect(new Set(a).size).toBe(a.length);
+        const shared = b.filter((x) => a.includes(x));
+        if (n <= 3) expect(shared).toEqual([]);
+        else expect(shared.length).toBeLessThan(b.length);
+      }
+      const visited = new Set<number>();
+      for (let r = 0; r < POOL_PAGES; r += 1) for (const p of poolPlan(queries, r)) visited.add(p.page);
+      expect(visited.size).toBe(POOL_PAGES);
+    });
+
+    it('a plain second generation of the same idea reads new pages too, not only Regenerate', async () => {
+      vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ error: 'ai_over_budget' }), { status: 503 }));
+      vi.mocked(searchSongsPage).mockResolvedValue([]);
+      await generatePlaylist('telugu sad songs', [], []);
+      const first = new Set(plan());
+      vi.mocked(searchSongsPage).mockClear();
+      await generatePlaylist('telugu sad songs', [], []);
+      vi.unstubAllGlobals();
+      expect(plan().some((x) => !first.has(x))).toBe(true);
     });
 
     it('stays inside the page budget however high the round goes', async () => {

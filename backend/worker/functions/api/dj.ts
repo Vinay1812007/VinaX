@@ -72,11 +72,21 @@ export function stylePhrase(style: MusicStyle, language: string | null): string 
 }
 
 /** Real catalogue songs for a style phrase, bounded in time; [] on any failure. */
-export async function styleCatalogCandidates(phrase: string, timeoutMs = 4_000): Promise<Candidate[]> {
+/**
+ * 11.7.0 — which catalogue page a style lookup reads. `round` (when the client
+ * sends one) walks pages 1→2→3 in turn; without it the page is random. The
+ * catalogue's first three pages of a style phrase are all in the style.
+ */
+export function stylePage(round?: number): number {
+  if (typeof round === 'number' && Number.isFinite(round) && round >= 0) return 1 + (Math.floor(round) % 3);
+  return 1 + (crypto.getRandomValues(new Uint8Array(1))[0] % 3);
+}
+
+export async function styleCatalogCandidates(phrase: string, timeoutMs = 4_000, page = 1): Promise<Candidate[]> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const found = await Promise.race([
-      searchCatalogSongs(phrase, 20),
+      searchCatalogSongs(phrase, 20, page),
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new Error('timeout')), timeoutMs);
       }),
@@ -320,7 +330,9 @@ async function handlePost(context: { request: Request; env: DjEnv; waitUntil?: (
   // 8.3.0 — real catalogue songs for a locked style. The lookup runs beside
   // the gather; once it is done (or when there is none) it gets at most
   // EXTRAS_WAIT_MS more, so it never holds the set up by its own 4 s leash.
-  const stylePromise = maxDiscover > 0 && style ? styleCatalogCandidates(stylePhrase(style, language)) : Promise.resolve([] as Candidate[]);
+  // 11.7.0 — page 1, 2 or 3 at random: page 1 alone put the same twenty
+  // catalogue songs at the front of every style-locked set.
+  const stylePromise = maxDiscover > 0 && style ? styleCatalogCandidates(stylePhrase(style, language), 4_000, stylePage()) : Promise.resolve([] as Candidate[]);
   if (discover && pool.length < 12) {
     try {
       const gathered = await gather(

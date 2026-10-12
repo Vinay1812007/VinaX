@@ -62,8 +62,10 @@ async function callCatalogue(path: string[], query: Record<string, string>): Pro
 }
 
 /** Song search. Throws CatalogUnavailable when the catalogue is down (the caller retries on a later run). */
-export async function searchCatalogSongs(query: string, limit = 10): Promise<CatalogCandidate[]> {
-  const data = await callCatalogue(['search', 'songs'], { query, limit: String(Math.min(20, Math.max(1, limit))) });
+export async function searchCatalogSongs(query: string, limit = 10, page = 1): Promise<CatalogCandidate[]> {
+  // 11.7.0 — `page`: callers that want variety read deeper than page 1.
+  const p = Math.min(10, Math.max(1, Math.floor(page) || 1));
+  const data = await callCatalogue(['search', 'songs'], { query, limit: String(Math.min(20, Math.max(1, limit))), ...(p > 1 ? { page: String(p) } : {}) });
   const results = Array.isArray(data?.results) ? data.results : [];
   return results.map(toCandidate).filter((c: CatalogCandidate | null): c is CatalogCandidate => c !== null);
 }

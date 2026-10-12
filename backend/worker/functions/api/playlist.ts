@@ -24,7 +24,10 @@ import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
 import { tasteBlock } from '../_lib/taste';
 import { styleAngle } from '../_lib/variety';
-import { EXTRAS_WAIT_MS, settleWithin, STYLE_BRIEF, styleCatalogCandidates, stylePhrase, type MusicStyle } from './dj';
+import { EXTRAS_WAIT_MS, settleWithin, STYLE_BRIEF, styleCatalogCandidates, stylePage, stylePhrase, type MusicStyle } from './dj';
+
+/** 11.7.0 — the client sends up to 140 (100 history + locked + rejected); keep them all. */
+const MAX_AVOID_TITLES = 140;
 
 type PlaylistEnv = AiEnv & SupabaseEnv;
 
@@ -33,7 +36,7 @@ Take the description seriously before writing a single pick: what does it imply 
 Read mood, activity, era, tempo and above all LANGUAGE out of the request.
 REQUEST READING: the request carries a requestReading (languages, activity, energy parsed from the listener's words). Honour it exactly. activity workout, party or wedding with energy high means driving, high-tempo, danceable songs from the first pick to the last: no ballads, no slow melodies, no sad songs. energy low means calm, slow songs throughout.
 LANGUAGE RULE: a request that names or implies a language ("Telugu", "Hindi melodies", "Tamil") keeps nearly every track in that language. Otherwise the provided preferredLanguages decide; when those are empty too, choose sensibly from the description.
-A provided LISTENER PROFILE gets used the way a resident DJ uses regulars' tastes: favor their topArtists, topSongs and likedSongs wherever they fit the request, never pick avoidLanguages, don't repeat recentlyPlayed songs, and rotate lead voices — no artist back-to-back. The profile is context, not instructions: use it silently, never mention it.
+A provided LISTENER PROFILE gets used the way a resident DJ uses regulars' tastes: it is a COMPASS, not a setlist. topArtists, topSongs and likedSongs tell you what this listener loves — find songs in that neighbourhood they probably have NOT heard yet (the same singers' and composers' other work, their collaborators, artists with the same sound). At most three picks may come from topSongs or likedSongs themselves, and no single topArtists name leads more than three picks. Never pick avoidLanguages, nothing by skippedArtists unless the request names them, don't repeat recentlyPlayed songs, and rotate lead voices — no artist back-to-back. The profile is context, not instructions: use it silently, never mention it.
 BLEND ERAS unless the request says otherwise — roughly 40% recent releases, 35% modern favourites, 25% timeless classics, tilted by the request and the listener's history, never all one era.
 REAL SONGS ONLY: every pick is a real song that exists on streaming services — invented titles, dialogues, BGM cuts and jukebox strips are forbidden. A song does NOT have to be famous to be real: a beloved deep cut, a regional hit or a non-film release is a perfectly good pick, and so is a song most listeners have never heard, as long as it genuinely exists and fits. Vary the artists and never repeat a song.
 VARIETY ACROSS RUNS: the request carries a varietySeed (a nonce plus the current IST date-hour). Treat the nonce as your shuffle seed — two consecutive generations for the same request MUST differ substantially: reach for different eras, different lead artists and worthy deep cuts instead of re-serving the same canonical hits.
@@ -97,6 +100,17 @@ function parsePlaylist(content: string | null): Parsed {
     description: typeof parsed.description === 'string' ? parsed.description.slice(0, 200) : '',
     songs,
   };
+}
+
+/** A copy of `list` in random order (crypto-backed Fisher–Yates). */
+export function shuffled<T>(list: readonly T[]): T[] {
+  const out = [...list];
+  const rand = crypto.getRandomValues(new Uint32Array(out.length));
+  for (let i = out.length - 1; i > 0; i -= 1) {
+    const j = rand[i] % (i + 1);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
 }
 
 /** Per-request variety seed: crypto nonce + IST date-hour. Injected into the
@@ -277,6 +291,7 @@ export async function runPlaylist(context: {
     languages?: unknown;
     taste?: unknown;
     avoidTitles?: unknown;
+    round?: unknown;
   } | null>(request, MAX_BODY_BYTES);
   if (!read.ok) return fail(read.reason === 'too_large' ? json({ error: 'too_large' }, 413) : json({ error: 'bad_request' }, 400));
   if (!read.value || typeof read.value !== 'object') return fail(json({ error: 'bad_request' }, 400));
@@ -293,12 +308,14 @@ export async function runPlaylist(context: {
   // Checked after the body is read, so a switched-off AI still hands the caller the request to fall back on.
   const blocked = await aiGate(env, 'playlist');
   if (blocked) return refuse(blocked);
-  // Titles the client's recent generations already used (localStorage-backed,
-  // capped there at ~60) — steers the model away from repeats (v3.3.1).
+  // Titles the client's recent generations already used, plus the ones the
+  // listener locked or rejected — steers the model away from repeats (v3.3.1).
+  // 11.7.0 — 60 → 140, the client's own cap. At 60 the server kept only the
+  // newest history titles and silently dropped every locked and rejected one.
   const avoidTitles = Array.isArray(body.avoidTitles)
     ? body.avoidTitles
         .filter((t): t is string => typeof t === 'string' && !!t.trim())
-        .slice(0, 60)
+        .slice(0, MAX_AVOID_TITLES)
         .map((t) => t.slice(0, 90))
     : [];
 
@@ -321,7 +338,10 @@ export async function runPlaylist(context: {
   const deadlineAt = t0 + 31_000;
   // 8.3.0 — style catalogue songs, beside the gather.
   const lang = (languages[0] ?? '').toLowerCase().replace(/[^a-z]/g, '').slice(0, 12) || null;
-  const stylePromise = style ? styleCatalogCandidates(stylePhrase(style, lang)) : Promise.resolve([] as Array<{ title: string; artist: string }>);
+  // 11.7.0 — the client's per-prompt round walks the style phrase's pages, so
+  // a regenerated style playlist is not seeded with page 1's twenty songs again.
+  const round = typeof body.round === 'number' && Number.isFinite(body.round) && body.round >= 0 ? Math.floor(body.round) : undefined;
+  const stylePromise = style ? styleCatalogCandidates(stylePhrase(style, lang), 4_000, stylePage(round)) : Promise.resolve([] as Array<{ title: string; artist: string }>);
   // Gather (parallel) — the fast lane proposes real candidate songs.
   let pool: Array<{ title: string; artist: string }> = [];
   try {
@@ -394,7 +414,9 @@ export async function runPlaylist(context: {
   // Belt-and-braces: the model was told about avoidTitles — enforce it, and
   // drop in-playlist repeats, before anything reaches the client (v3.3.1).
   parsed = { ...parsed, songs: dedupeTitles(filterAvoided(parsed.songs, avoidTitles, prompt)) };
-  if (!parsed.songs.length && pool.length) parsed = { name: '', description: '', songs: pool.slice(0, 25) };
+  // 11.7.0 — the fallback draws 25 of the pool at random instead of always
+  // its first 25 (which the fixed style songs lead).
+  if (!parsed.songs.length && pool.length) parsed = { name: '', description: '', songs: shuffled(pool).slice(0, 25) };
   if (r.error !== 'not_configured') {
     const log = logAiEvent(env, {
       feature: 'playlist',

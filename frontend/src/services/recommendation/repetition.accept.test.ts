@@ -151,6 +151,22 @@ describe('9.1 acceptance — a 120-track fixture (24 artists, all playable, all 
     expect(second.filter((s) => !before.has(songKey(s))).length).toBeGreaterThanOrEqual(12);
   });
 
+  // 11.7.0 — real use, not a clean fixture: between two queue runs the
+  // listener opens Home a few times, and every shelf records what it showed.
+  // Before 11.7 the ledger kept the newest 600 rows of ANY kind, so that flood
+  // evicted the queue's own rows and the second run served the first again.
+  it('still introduces new tracks after Home floods the ledger between generations', async () => {
+    const seed = makeSong('seed', { title: 'Seed', artist: 'Seed Artist', language: LANGUAGE });
+    const first = await generate(seed, 1);
+    for (let visit = 0; visit < 6; visit += 1) {
+      const shelf = Array.from({ length: 250 }, (_, i) => makeSong(`home-${visit}-${i}`, { title: `Home Pick ${visit}-${i}`, artist: `Home Artist ${i % 40}`, language: LANGUAGE }));
+      recordExposure(shelf, 'shown');
+    }
+    const second = await generate(seed, 2);
+    const before = new Set(first.map(songKey));
+    expect(second.filter((s) => !before.has(songKey(s))).length).toBeGreaterThanOrEqual(12);
+  });
+
   it('never repeats a canonical identity inside one generation', async () => {
     const seed = makeSong('seed', { title: 'Seed', artist: 'Seed Artist', language: LANGUAGE });
     for (const salt of [1, 2, 3]) {

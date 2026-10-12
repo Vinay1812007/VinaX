@@ -81,11 +81,11 @@ describe('onRequestPost — variety plumbing end to end', () => {
     return calls;
   }
 
-  const post = (body: unknown): Promise<Response> =>
+  const post = (body: unknown, ip?: string): Promise<Response> =>
     onRequestPost({
       request: new Request('http://localhost/api/playlist', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', ...(ip ? { 'cf-connecting-ip': ip } : {}) },
         body: JSON.stringify(body),
       }),
       // v5.4.0: the dj lane rides its own lightning key now.
@@ -127,6 +127,27 @@ describe('onRequestPost — variety plumbing end to end', () => {
     expect(data.songs).toHaveLength(2);
     expect(data.songs[0].title).toHaveLength(200);
     expect(data.songs[0].artist).toHaveLength(200);
+  });
+
+  // 11.7.0 — the client sends up to 140 (history, then locked and rejected
+  // titles last). The server used to keep 60, dropping the tail.
+  it('keeps the whole avoid list the client sends, including the tail', async () => {
+    const calls = stubUpstream();
+    const avoid = [...Array.from({ length: 100 }, (_, i) => `History ${i}`), 'Rejected Tail Song'];
+    await post({ prompt: 'rainy telugu melodies', avoidTitles: avoid }, '10.11.7.1');
+    const curate = calls.find((c) => c.system.startsWith('You build playlists'));
+    expect(curate!.user).toContain('Rejected Tail Song');
+  });
+
+  it('carries skipped artists and other chats’ picks in the listener profile', async () => {
+    const calls = stubUpstream();
+    await post({ prompt: 'gym set', taste: { skippedArtists: ['Never Again'], recentlyRecommended: ['Song X — Artist Y'], listenerEnergy: 'restless' } }, '10.11.7.2');
+    const curate = calls.find((c) => c.system.startsWith('You build playlists'));
+    expect(curate!.user).toContain('"skippedArtists":["Never Again"]');
+    expect(curate!.user).toContain('"recentlyRecommended":["Song X — Artist Y"]');
+    expect(curate!.user).toContain('"listenerEnergy":"restless"');
+    // The profile is a compass: the prompt caps how much of it is replayed.
+    expect(curate!.system).toContain('At most three picks may come from topSongs or likedSongs');
   });
 
   it('generates a different nonce on every request', async () => {

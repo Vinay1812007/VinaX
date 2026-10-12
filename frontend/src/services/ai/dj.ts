@@ -5,6 +5,7 @@ import { searchSongs } from '@/services/api';
 import { canonicalKey, isJunkTitle, primaryArtist } from '@/services/recommendation/songIdentity';
 import { matchTier } from '@/features/search/rerank';
 import { buildSessionContext } from '@/services/ai/sessionContext';
+import { headPlusSample } from '@/services/ai/taste';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
 import { getSliders, sliderDialLines } from '@/services/personalization/dials';
 import { getMoodPin } from '@/services/personalization/session';
@@ -143,7 +144,9 @@ export function buildDjContext(seed: Song | null, ctx: RecommendationContext): R
     if (cur) cur.n += 1;
     else playCounts.set(e.song.id, { song: e.song, n: 1 });
   }
-  const topSongs = [...playCounts.values()].sort((a, b) => b.n - a.n).slice(0, 10).map((x) => describeSong(x.song));
+  // 11.7.0 — the strongest six, then four drawn from the next thirty, so each
+  // set leans on a different part of what the listener loves (./taste.ts).
+  const topSongs = headPlusSample([...playCounts.values()].sort((a, b) => b.n - a.n), 6, 4, 30).map((x) => describeSong(x.song));
   const avoidArtists = Object.values(ctx.profile.artists)
     .filter((a) => a.skips >= 3 && a.skips > a.completes)
     .sort((a, b) => b.skips - a.skips)
@@ -165,7 +168,7 @@ export function buildDjContext(seed: Song | null, ctx: RecommendationContext): R
     recentlyCompleted: ctx.history.filter((e) => e.completed).slice(0, 10).map((e) => describeSong(e.song)),
     skippedSongs: ctx.history.filter(isSkippedPlay).slice(0, 10).map((e) => describeSong(e.song)),
     avoidSongs: loadSurfaced().slice(0, AVOID_SEND).map((x) => x.d),
-    likedSongs: ctx.favorites.slice(0, 15).map(describeSong),
+    likedSongs: headPlusSample(ctx.favorites, 8, 7, 80).map(describeSong),
     topSongs,
     avoidArtists,
     preferredArtists: [...new Set([...topArtists(ctx.profile, 10).map((a) => a.affinity.name), ...ctx.favorites.flatMap((s) => s.artists.map((a) => a.name))])].slice(0, 12),

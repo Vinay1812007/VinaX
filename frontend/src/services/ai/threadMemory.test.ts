@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractRecommendedFromThread } from './threadMemory';
+import { extractRecommendedFromThread, recentPicksAcrossChats } from './threadMemory';
 
 const asst = (content: string) => ({ role: 'assistant' as const, content });
 const user = (content: string) => ({ role: 'user' as const, content });
@@ -39,5 +39,28 @@ describe('extractRecommendedFromThread (B5)', () => {
       ]),
     ).toEqual([]);
     expect(extractRecommendedFromThread([])).toEqual([]);
+  });
+});
+
+describe('11.7 recentPicksAcrossChats', () => {
+  const NOW = Date.UTC(2026, 9, 12);
+  const DAY = 86_400_000;
+  it('remembers picks from other recent chats, newest chat first, minus this chat’s own', () => {
+    const out = recentPicksAcrossChats(
+      [
+        { updatedAt: NOW - 3 * DAY, messages: [asst('1. Old One — Singer A')] },
+        { updatedAt: NOW - DAY, messages: [asst('1. Newer — Singer B\n2. Shared — Singer C')] },
+        { updatedAt: NOW - 30 * DAY, messages: [asst('1. Ancient — Singer D')] },
+      ],
+      ['Shared — Singer C'],
+      { now: NOW },
+    );
+    expect(out).toEqual(['Newer — Singer B', 'Old One — Singer A']);
+  });
+
+  it('stops at the cap', () => {
+    const lines = Array.from({ length: 30 }, (_, i) => `${i + 1}. Song ${i} — Artist ${i}`).join('\n');
+    const out = recentPicksAcrossChats([{ updatedAt: NOW, messages: [asst(lines)] }], [], { now: NOW, max: 10 });
+    expect(out).toHaveLength(10);
   });
 });
