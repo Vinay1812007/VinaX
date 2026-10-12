@@ -112,6 +112,29 @@ export function activeFestival(date = new Date()): Festival | null {
   return null;
 }
 
+/**
+ * Where today sits inside a festival that runs for more than one day —
+ * Diwali's five, Navratri's nine, Ganesh Chaturthi's ten. Returns null for a
+ * festival that is a single day, and for a date outside every window, so the
+ * caller can simply not say anything.
+ *
+ * Counted in whole UTC days so a clock change inside the window cannot move
+ * the answer by one.
+ */
+export function festivalDay(f: Festival, date = new Date()): { day: number; days: number } | null {
+  const v = (date.getMonth() + 1) * 100 + date.getDate();
+  const year = date.getFullYear();
+  const DAY = 86_400_000;
+  for (const [mf, df, mt, dt] of f.windows) {
+    if (v < mf * 100 + df || v > mt * 100 + dt) continue;
+    const from = Date.UTC(year, mf - 1, df);
+    const days = Math.round((Date.UTC(year, mt - 1, dt) - from) / DAY) + 1;
+    if (days < 2) return null;
+    return { day: Math.round((Date.UTC(year, date.getMonth(), date.getDate()) - from) / DAY) + 1, days };
+  }
+  return null;
+}
+
 /** The next festival on the calendar after `date` (wrapping into next year), with days until it. */
 export function nextFestival(date = new Date()): { festival: Festival; inDays: number } | null {
   const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
