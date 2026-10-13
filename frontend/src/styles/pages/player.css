@@ -237,6 +237,22 @@ html.light .vx-np-art-img { box-shadow: 0 28px 60px -26px rgb(48 22 34 / 0.42), 
 .vx-np-zone.is-middle { left: 33.333%; }
 .vx-np-zone.is-right { right: 0; border-radius: 0 22px 22px 0; }
 .vx-np-zone:focus-visible { outline-offset: -3px; }
+/* 13.0.2 — the canvas media rides in a one-viewport frame at the top of the
+   backdrop. The backdrop itself is as tall as the whole scrolling page, so
+   an unframed contain-fit clip centred itself somewhere down the document
+   (visible only at the bottom of the first screen). Framed, the clip and
+   its ambient fill fill exactly the first screen — behind the title and
+   controls, Spotify-style — and scroll away naturally under the queue.
+   (Not sticky: the backdrop's overflow:hidden would defeat it; not fixed:
+   the sheet's drag transform would unmoor it.) In the fixed immersive
+   layer the frame simply equals the layer. */
+.vx-np-canvas-frame {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 100dvh;
+  pointer-events: none;
+}
+
 /* The artwork / video toggle over the art. */
 .vx-np-canvas-toggle {
   position: absolute;

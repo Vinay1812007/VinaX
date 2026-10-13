@@ -147,13 +147,16 @@ export function SongCanvasBackdrop({ canvas, isPlaying, artUrl }: { canvas: Song
     return () => window.removeEventListener('resize', compute);
   }, [canvas.src, compute]);
   if (!canvas.src) return null;
+  // The frame (player.css) sizes the media to the first viewport: the
+  // sheet's backdrop is as tall as the whole scrolling page, and without it
+  // a contained clip centred itself somewhere down the document. Framed,
+  // the canvas fills exactly the screen behind the controls.
   return (
-    <>
+    <div className="vx-np-canvas-frame" aria-hidden>
       {fit === 'ambient' && artUrl && (
         <img
           src={artUrl}
           alt=""
-          aria-hidden
           draggable={false}
           className="absolute inset-0 h-full w-full object-cover scale-110 blur-3xl brightness-[.55] saturate-125"
         />
@@ -168,7 +171,7 @@ export function SongCanvasBackdrop({ canvas, isPlaying, artUrl }: { canvas: Song
         }}
         className={cn('absolute inset-0 h-full w-full', fit === 'ambient' ? 'object-contain' : 'object-cover')}
       />
-    </>
+    </div>
   );
 }
 
