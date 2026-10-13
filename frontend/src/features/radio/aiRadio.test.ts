@@ -4,7 +4,7 @@ import { byArtist, parseRadioPrompt, pickRadioSeeds, promptQueries, RADIO_MOODS,
 
 describe('parseRadioPrompt', () => {
   it('reads language, decade and mood from a short request', () => {
-    expect(parseRadioPrompt('  Telugu 90s   melodies ')).toEqual({ text: 'Telugu 90s melodies', language: 'telugu', decade: 1990, intent: 'melody' });
+    expect(parseRadioPrompt('  Telugu 90s   melodies ')).toEqual({ text: 'Telugu 90s melodies', language: 'telugu', decade: 1990, intent: 'melody', artist: null });
     expect(parseRadioPrompt('bollywood party')).toMatchObject({ language: 'hindi', intent: 'energetic', decade: null });
     expect(parseRadioPrompt('2000s tamil love songs')).toMatchObject({ language: 'tamil', decade: 2000, intent: 'romantic' });
   });
@@ -15,11 +15,48 @@ describe('parseRadioPrompt', () => {
   });
 
   it('an artist name is just words: no language, decade or mood', () => {
-    expect(parseRadioPrompt('Sid Sriram')).toEqual({ text: 'Sid Sriram', language: null, decade: null, intent: null });
+    expect(parseRadioPrompt('Sid Sriram')).toEqual({ text: 'Sid Sriram', language: null, decade: null, intent: null, artist: null });
   });
 
   it('clips very long input', () => {
     expect(parseRadioPrompt('a'.repeat(200)).text).toHaveLength(80);
+  });
+});
+
+describe('13.1 — the radio reads requests the way search does (musicIntent)', () => {
+  it('understands activities, context and energy', () => {
+    expect(parseRadioPrompt('Play relaxing Telugu songs for late-night studying')).toMatchObject({ language: 'telugu', intent: 'chill' });
+    expect(parseRadioPrompt('Give me an energetic Hindi workout mix')).toMatchObject({ language: 'hindi', intent: 'energetic' });
+    expect(parseRadioPrompt('songs that sound like rainy evenings').intent).toBe('chill');
+    expect(parseRadioPrompt('high energy kannada beats').intent).toBe('mass');
+  });
+
+  it('reads a named artist from "like" / "similar to", keeping their mood words', () => {
+    expect(parseRadioPrompt('songs similar to Anirudh Ravichander but with more electronic elements').artist).toBe('Anirudh Ravichander');
+    expect(parseRadioPrompt('sad songs like Sid Sriram')).toMatchObject({ artist: 'Sid Sriram', intent: 'heartbreak' });
+    // Pronouns are never a seed.
+    expect(parseRadioPrompt('more like this').artist).toBeNull();
+  });
+
+  it('nostalgia asks for classics, and "surprise me" is the surprise tune', () => {
+    expect(parseRadioPrompt('nostalgic telugu songs').intent).toBe('classics');
+    expect(parseRadioPrompt('play throwback hindi hits').intent).toBe('classics');
+    expect(parseRadioPrompt('surprise me with music I am likely to enjoy').intent).toBe('surprise');
+  });
+
+  it('an artist request searches their songs first; surprise searches no tune shape', () => {
+    expect(promptQueries(parseRadioPrompt('songs like Sid Sriram'), 'telugu')[0]).toBe('sid sriram songs');
+    const surprise = promptQueries(parseRadioPrompt('surprise me'), 'telugu');
+    expect(surprise).toEqual(['surprise me']);
+  });
+
+  it('an artist request opens on that artist and rotates within their songs', () => {
+    const list = [makeSong('o1', { artist: 'Someone Else' }), makeSong('a1', { artist: 'Sid Sriram' }), makeSong('a2', { artist: 'Sid Sriram' }), makeSong('o2', { artist: 'Another' })];
+    for (let rotate = 0; rotate < 3; rotate += 1) {
+      const seeds = pickRadioSeeds([list], { artist: 'Sid Sriram', rotate });
+      expect(['a1', 'a2']).toContain(seeds[0].id);
+      expect(seeds.map((s) => s.id).slice(0, 2).sort()).toEqual(['a1', 'a2']);
+    }
   });
 });
 

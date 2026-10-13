@@ -1,7 +1,7 @@
 import type { Song } from '@/types';
-import { LANGUAGES } from '@/constants/languages';
+import { parseMusicIntent, type IntentMood } from '@/services/ai/musicIntent';
 import { tuneSearchQuery, type TuneIntent } from '@/services/recommendation/tune';
-import { matchesStyle, styleFromText, styleQueries, tuneStyle, type MusicStyle } from '@/services/recommendation/style';
+import { matchesStyle, styleQueries, tuneStyle, type MusicStyle } from '@/services/recommendation/style';
 import { songKey } from '@/services/recommendation/songIdentity';
 
 /**
@@ -45,53 +45,59 @@ export interface ParsedRadioPrompt {
   decade: number | null;
   /** The mood the words ask for, as a tune the DJ can follow. */
   intent: TuneIntent | null;
+  /** 13.1 — "songs like <name>" / "similar to <name>": the artist or song named, else null. */
+  artist: string | null;
 }
 
-const LANGUAGE_WORDS: Record<string, string> = {
-  ...Object.fromEntries(LANGUAGES.map((l) => [l.id, l.id])),
-  bollywood: 'hindi',
-  tollywood: 'telugu',
-  kollywood: 'tamil',
-  mollywood: 'malayalam',
-  sandalwood: 'kannada',
-};
+/** 13.1 — a shared mood is read by musicIntent; these are the radio's own tunes. */
+const MOOD_TUNE: Record<IntentMood, TuneIntent> = { romantic: 'romantic', energetic: 'energetic', chill: 'chill', melancholy: 'heartbreak', devotional: 'devotional' };
 
-/** Mood words → tune, checked in this order (the first family that matches wins). */
-const INTENT_WORDS: Array<[RegExp, TuneIntent]> = [
-  [/\b(devotional|bhakti|bhajans?|spiritual|god|temple)\b/, 'devotional'],
-  [/\b(sad|heartbreak|breakup|emotional|pain)\b/, 'heartbreak'],
-  [/\b(melody|melodies|melodious|soulful)\b/, 'melody'],
-  [/\b(romantic|romance|love)\b/, 'romantic'],
-  [/\b(dance|party|club|energetic|workout|gym|upbeat)\b/, 'energetic'],
-  [/\b(mass|beats|kuthu|dappu)\b/, 'mass'],
-  [/\b(chill|calm|relax|relaxing|lofi|lo-fi|sleep|soft)\b/, 'chill'],
-  [/\b(latest|new|fresh)\b/, 'fresh'],
-  [/\b(classic|classics|evergreen|old|retro|golden)\b/, 'classics'],
-];
-
-/** Read a free-text request ("Telugu 90s melodies") into language, decade and mood. */
+/**
+ * Read a free-text request into language, decade, mood and a named artist.
+ *
+ * 13.1 — the reading is parseMusicIntent (services/ai/musicIntent.ts), the
+ * same parser natural-language search and the AI playlist builder use, so
+ * "relaxing Telugu songs for late-night studying", "songs similar to
+ * <artist>", "nostalgic hindi songs" and "surprise me" all land. This file
+ * keeps only the tunes the shared parser has no word for (melody, mass,
+ * surprise) and the mapping from its moods to the DJ's tunes.
+ */
 export function parseRadioPrompt(raw: string): ParsedRadioPrompt {
   const text = raw.replace(/\s+/g, ' ').trim().slice(0, 80);
   const lower = text.toLowerCase();
-  const language = lower.split(/[^a-z]+/).map((w) => LANGUAGE_WORDS[w]).find(Boolean) ?? null;
-  let decade: number | null = null;
-  const m = lower.match(/\b(19|20)?(\d)0'?s\b/);
-  if (m) {
-    const tens = Number(m[2]);
-    const century = m[1] ? Number(m[1]) * 100 : tens >= 5 ? 1900 : 2000;
-    decade = century + tens * 10;
-  }
-  // 8.3.0 — a style named in the words ("telugu dj songs", "folk songs", "janapadalu", "bhajans") comes first.
-  const style = styleFromText(lower);
-  const intent = style ?? INTENT_WORDS.find(([re]) => re.test(lower))?.[1] ?? (decade !== null && decade < 2010 ? 'classics' : null);
-  return { text, language, decade, intent };
+  const read = parseMusicIntent(text);
+  const language = read.languages[0] ?? null;
+  const decade = read.decade;
+  const artist = read.seed?.text ?? null;
+  // The style comes first (DJ remix / folk / devotional named in the words),
+  // then the radio-only tunes the shared parser folds into broader moods,
+  // then the shared moods, the era, and an energy with no mood of its own.
+  const radioOnly: TuneIntent | null = /\b(melody|melodies|melodious|soulful)\b/.test(lower)
+    ? 'melody'
+    : /\b(mass|beats|kuthu|dappu)\b/.test(lower)
+      ? 'mass'
+      : /\bsurprise\b/.test(lower)
+        ? 'surprise'
+        : null;
+  const intent: TuneIntent | null =
+    read.style
+    ?? radioOnly
+    ?? (read.moods[0] ? MOOD_TUNE[read.moods[0]] : null)
+    ?? (read.era === 'classic' ? 'classics' : read.era === 'fresh' ? 'fresh' : null)
+    ?? (read.energy === 'high' ? 'energetic' : read.energy === 'low' ? 'chill' : null)
+    ?? (decade !== null && decade < 2010 ? 'classics' : null);
+  return { text, language, decade, intent, artist };
 }
 
 /** The catalogue queries for a request, most specific first, never repeated. */
 export function promptQueries(p: ParsedRadioPrompt, fallbackLanguage: string | null): string[] {
   const lang = p.language ?? fallbackLanguage;
   const out: string[] = [];
-  if (p.intent) {
+  // 13.1 — a named artist is the most specific ask: their songs lead.
+  if (p.artist) out.push(`${p.artist} songs`);
+  // "Surprise me" names no catalogue shape: the DJ's surprise tune takes over
+  // after seeding, so only the listener's own words (and any artist) search.
+  if (p.intent && p.intent !== 'surprise') {
     const q = tuneSearchQuery(p.intent, lang);
     if (q) out.push(q);
     // 8.3.0 — a style has a second phrasing the catalogue answers ("<language> remix songs").
@@ -120,6 +126,8 @@ export interface PickOptions {
   max?: number;
   /** 8.3.0 — songs in this style (DJ remix, folk, devotional) open the radio; the rest only fill in. */
   style?: MusicStyle | null;
+  /** 13.1 — songs credited to this artist open the radio ("songs like <artist>"); the rest only fill in. */
+  artist?: string | null;
 }
 
 /**
@@ -128,7 +136,7 @@ export interface PickOptions {
  * decade first. Pure.
  */
 export function pickRadioSeeds(lists: Song[][], opts: PickOptions = {}): Song[] {
-  const { language = null, decade = null, blocked, rotate = 0, max = 5, style = null } = opts;
+  const { language = null, decade = null, blocked, rotate = 0, max = 5, style = null, artist = null } = opts;
   const merged: Song[] = [];
   const ids = new Set<string>();
   const titles = new Set<string>();
@@ -153,13 +161,20 @@ export function pickRadioSeeds(lists: Song[][], opts: PickOptions = {}): Song[] 
     const y = yearOf(s);
     return decade !== null && y !== null && y >= decade && y < decade + 10;
   };
-  const styled = style ? [...merged.filter((s) => matchesStyle(s, style)), ...merged.filter((s) => !matchesStyle(s, style))] : merged;
+  // 13.1 — a named artist outranks everything: their songs open the radio.
+  const want = (artist ?? '').trim().toLowerCase();
+  const credited = (s: Song): boolean => !!want && (s.artists.some((a) => a.name.trim().toLowerCase() === want) || s.subtitle.toLowerCase().includes(want));
+  const byName = want ? [...merged.filter(credited), ...merged.filter((s) => !credited(s))] : merged;
+  const styled = style ? [...byName.filter((s) => matchesStyle(s, style)), ...byName.filter((s) => !matchesStyle(s, style))] : byName;
   const ordered = decade !== null ? [...styled.filter(inDecade), ...styled.filter((s) => !inDecade(s))] : styled;
   if (!ordered.length) return [];
   const shift = Math.max(0, Math.floor(rotate)) % ordered.length;
   // Rotation only within the best part of the list, so a decade request still opens in its decade.
   // 8.3.0 — a style request rotates among its style songs only, so it always opens in the style.
-  const best = decade !== null ? Math.max(1, ordered.filter(inDecade).length) : style ? Math.max(1, ordered.filter((s) => matchesStyle(s, style)).length) : ordered.length;
+  // 13.1 — an artist request rotates among that artist's songs only.
+  const best = want && byName.some(credited)
+    ? Math.max(1, ordered.filter(credited).length)
+    : decade !== null ? Math.max(1, ordered.filter(inDecade).length) : style ? Math.max(1, ordered.filter((s) => matchesStyle(s, style)).length) : ordered.length;
   const head = ordered.slice(0, best);
   const rotated = [...head.slice(shift % head.length), ...head.slice(0, shift % head.length), ...ordered.slice(best)];
   return rotated.slice(0, max);
@@ -196,7 +211,7 @@ export async function seedsForPrompt(
   const queries = promptQueries(parsed, fallbackLanguage);
   const settled = await Promise.allSettled(queries.map((q) => deps.search(q, 20, { signal: deps.signal })));
   const lists = settled.map((r) => (r.status === 'fulfilled' ? r.value : []));
-  const pick = { language: parsed.language, decade: parsed.decade, blocked: deps.blocked, rotate: deps.rotate, style: tuneStyle(parsed.intent) ?? null };
+  const pick = { language: parsed.language, decade: parsed.decade, blocked: deps.blocked, rotate: deps.rotate, style: tuneStyle(parsed.intent) ?? null, artist: parsed.artist };
   const seeds = pickRadioSeeds(lists, pick);
   if (seeds.length >= 2 || !deps.ai || deps.signal?.aborted) return { seeds, parsed, via: seeds.length ? 'catalogue' : 'none' };
   const lang = parsed.language ?? fallbackLanguage;

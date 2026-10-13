@@ -110,7 +110,7 @@ const ACTIVITY_MOOD: Partial<Record<IntentActivity, IntentMood>> = { workout: 'e
 
 const HIGH_ENERGY = /\b(high[\s-]?energy|high[\s-]?tempo|energetic|upbeat|fast|pumping|power|intense|beats?|banger|bangers|hype|loud|peppy)\b/;
 const LOW_ENERGY = /\b(low[\s-]?energy|slow|calm|soft|quiet|gentle|mellow|soothing|relaxing|chill)\b/;
-const CLASSIC = /\b(old|oldies|classic|classics|evergreen|retro|vintage|golden)\b/;
+const CLASSIC = /\b(old|oldies|classic|classics|evergreen|retro|vintage|golden|nostalgic|nostalgia|throwback|memories)\b/;
 const FRESH = /\b(new|latest|recent|fresh|trending|this year)\b/;
 
 /** Words that carry no musical meaning in a request. */
