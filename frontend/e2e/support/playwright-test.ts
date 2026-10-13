@@ -102,6 +102,18 @@ const extended = vtest.extend<Fixtures>({
           /* storage blocked: the test sees the sign-in screen */
         }
       });
+      // 13.1 — the festival greeting is a real once-a-year modal that opens
+      // ~1.2 s after boot WHENEVER the run lands on a festival day (the
+      // suite runs on the real calendar), and its scrim then swallows the
+      // spec's next click: features-v517 failed one run in three during
+      // Bathukamma. Dismiss it the moment it blocks an action, the way a
+      // listener would (Escape). Specs that test festivals assert skins,
+      // never the greeting, so nothing they check is hidden by this.
+      ctx.on('page', (p) => {
+        void p.addLocatorHandler(p.locator('.fest-splash'), async () => {
+          await p.keyboard.press('Escape');
+        }).catch(() => undefined);
+      });
       return ctx;
     };
     await use(browser);

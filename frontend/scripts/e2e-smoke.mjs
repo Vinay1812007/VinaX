@@ -133,6 +133,19 @@ const launchOpts = { args: ['--no-sandbox'] };
 if (process.env.E2E_CHROMIUM_PATH) launchOpts.executablePath = process.env.E2E_CHROMIUM_PATH;
 const browser = await chromium.launch(launchOpts);
 const context = await browser.newContext({ timezoneId: 'Asia/Kolkata', locale: 'en-IN' });
+// 13.0 made a Google account required, so a signed-out boot stops at the
+// sign-in screen and never reaches #main-content — the smoke check had been
+// failing since then. Start signed in with the same test account the spec
+// harness uses (e2e/support/playwright-test.ts); no server checks it here.
+await context.addInitScript(() => {
+  try {
+    if (!localStorage.getItem('vinax.account.v1')) {
+      localStorage.setItem('vinax.account.v1', JSON.stringify({ session: 'vx1.e2e.test', user: { name: 'Tester', email: 'tester@example.com', picture: null, username: 'tester' } }));
+    }
+  } catch {
+    /* storage blocked: the boot check reports the sign-in screen */
+  }
+});
 // Determinism: kill everything that isn't our local static server.
 await context.route('**/*', (route) => {
   const u = route.request().url();
