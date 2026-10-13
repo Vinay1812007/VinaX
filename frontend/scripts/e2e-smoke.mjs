@@ -16,8 +16,9 @@
  * `npx playwright-core install chromium`; a custom binary can be forced with
  * E2E_CHROMIUM_PATH (used by the sandboxed dev container).
  */
-/* global URL, document -- URL is a Node 18+ global; document only appears
-   inside page.evaluate callbacks, which run in the browser. */
+/* global URL, document, localStorage -- URL is a Node 18+ global; document
+   and localStorage only appear inside page.evaluate / addInitScript
+   callbacks, which run in the browser. */
 import { createServer } from 'node:http';
 import { readFile, readdir, stat, mkdir } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
