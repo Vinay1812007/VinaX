@@ -155,7 +155,7 @@ The bell in Home's top bar opens `NotificationSheet`: a `thick` glass sheet whos
 
 An app style may swap the body face through `--tpl-font-body`; what follows is the base.
 
-Two families: Manrope variable for body and interface text (self-hosted at `/fonts/manrope-var.woff2`, weights 200–800), and Bricolage Grotesque variable for display type (`--vx-font-display`, `font-display`; `/fonts/bricolage-var.woff2`, weights 200–800, SIL OFL). See 10.0 "Marigold" above for where the display face is used.
+Manrope variable for body and interface text in every style (self-hosted at `/fonts/manrope-var.woff2`, weights 200–800). The display face (`--vx-font-display`, `font-display`) is the app style's own: see the table below. The base default is Bricolage Grotesque (`/fonts/bricolage-var.woff2`, weights 200–800, SIL OFL); see 10.0 "Marigold" above for where the display face is used.
 
 | Token | Value | Tailwind class | Used for |
 | --- | --- | --- | --- |
@@ -168,6 +168,21 @@ Two families: Manrope variable for body and interface text (self-hosted at `/fon
 | `--vx-type-caption` | `.75rem` | `text-caption` | Eyebrows (`.vx-eyebrow`, uppercase spacing `.08em`), captions |
 
 Headings track tight (`-0.035em` for display and page, `-0.025em` for sections) at weight 750. Times and counts use tabular numerals.
+
+### One voice per app style (13.2)
+
+Body text is Manrope in every style; each style sets its own display face through `--vx-font-display`, with its own title weight and tracking (`--tpl-title-*`, `--tpl-section-*`), because a serif or a condensed face cannot share a grotesk's tight tracking. All are self-hosted variable woff2, latin subset, SIL OFL (licences beside the files in `/fonts`), declared in `templates/base.css`. A face is fetched only when text using it renders: when its style is active, and on the style picker, where each style's name is set in its own face. None is in the service worker's precache.
+
+| Style | Display face | File | Why |
+| --- | --- | --- | --- |
+| Aura | Manrope | `manrope-var.woff2` | The calm house face |
+| Pulse | Archivo | `archivo-var.woff2` | A compact grotesk: dense and quick to scan. Archivo runs wider than Manrope, so Pulse's page size steps down on phones |
+| Sangam | Eczar | `eczar-var.woff2` | Rosetta's display serif from Indian type design: warm and sturdy on plum and marigold. Near-natural tracking |
+| Nocturne | Bricolage Grotesque | `bricolage-var.woff2` | Set lighter (640): titles that glow rather than shout |
+| Marquee | Big Shoulders Display | `big-shoulders-var.woff2` | Condensed cinema-marquee letters, run large with neutral tracking |
+| Vibe | Baloo 2 | `baloo2-var.woff2` | Ek Type's rounded face: bubbly and bold |
+
+**Never put a font on `#root`.** The whole app mounts in `#root`, so a stack there beats the body face for every element without its own `font-family`. An earlier boot-splash rule did exactly that, and on Android phones with a theme font the app rendered in the listener's novelty font. No style may lead a stack with a system font either: on Android, `system-ui` is whatever the phone's theme says. Both are pinned by `src/constants/typography.test.ts`.
 
 ## Spacing, radii, elevation
 
@@ -278,4 +293,6 @@ import { TopBarActions } from '@/components/TopBar';
 6. Scripted scrolling uses `scrollBehavior()`.
 7. Anything sticky under the top bar reads `--vx-topbar-h`.
 8. Every animation has an answer for both reduced-motion switches: `html.reduce-motion` (the setting) and `@media (prefers-reduced-motion: reduce)`.
-9. A change that affects the look keeps `theme.test.ts`, `contrast.test.ts` and `templates.test.ts` green. See [testing.md](testing.md).
+9. A change that affects the look keeps `theme.test.ts`, `contrast.test.ts`, `templates.test.ts` and `typography.test.ts` green. See [testing.md](testing.md).
+10. A style-scoped override of a light-theme token must match the specificity of the light glass rule in `templates/base.css` (`html.light[data-template]:not([class*='fest-'])`, (0,3,1)). A plain `html.light[data-template='x']` loses to it silently; Pulse and Marquee shipped see-through bars that way until 13.2.
+11. The mini player and the phone tab bar never show page text through them: glass styles hold them to a higher floor than other chrome; flat styles are opaque.

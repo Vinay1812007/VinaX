@@ -74,11 +74,14 @@ html[data-template='vibe'] {
   --tpl-r-mini: 999px;
   --tpl-r-np-art: 36px;
   --tpl-font-body: ui-rounded, 'SF Pro Rounded', 'Manrope', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* 13.2 — Baloo 2 (Ek Type): round terminals, generous bowls, bubbly by design. */
+  --vx-font-display: 'Baloo 2', 'Manrope', system-ui, sans-serif;
   --vx-type-page: clamp(2.25rem, 4.2vw, 3.5rem);
   --vx-type-section: 1.6rem;
   --tpl-title-weight: 800;
-  --tpl-title-tracking: -0.045em;
+  --tpl-title-tracking: -0.015em;
   --tpl-section-weight: 800;
+  --tpl-section-tracking: -0.01em;
   --tpl-card-title-weight: 750;
   --tpl-enter: tplPop;
   --tpl-enter-dur: 420ms;

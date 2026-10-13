@@ -71,8 +71,11 @@ html[data-template='nocturne'] {
   --tpl-r-mini: 12px;
   --tpl-r-np-art: 12px;
   --vx-type-section: 1.3rem;
+  /* 13.2 — Bricolage Grotesque at a lighter weight: titles that glow rather than shout. */
+  --vx-font-display: 'Bricolage Grotesque', 'Manrope', system-ui, sans-serif;
+  --tpl-title-weight: 640;
   --tpl-title-tracking: -0.03em;
-  --tpl-section-weight: 700;
+  --tpl-section-weight: 640;
   --tpl-enter: tplZoom;
   --tpl-enter-dur: 380ms;
   --vx-radius-panel: 16px;

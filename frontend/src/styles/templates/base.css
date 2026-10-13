@@ -26,6 +26,50 @@
      so every rule here wins by specificity, never by order.
    ========================================================================= */
 
+/* --------------------------------------------------- 13.2 — display faces */
+/* Each style speaks in its own display face; body copy stays Manrope in
+   every style for legibility (Marquee's included — a system stack let the
+   phone's theme font in). Self-hosted, SIL OFL 1.1 (licences beside the
+   files in /fonts), latin subset, variable weight. A face is fetched only
+   when text that uses it renders — in practice when its style is active, or
+   on the style picker, where each name is set in its own face — and none is
+   in the service worker's precache.
+     Aura      Manrope (the house face, index.css)
+     Pulse     Archivo — compact grotesk: dense, fast, scoreboard-plain
+     Sangam    Eczar — Rosetta's display serif from Indian type design:
+               warm and sturdy on the plum-and-saffron canvas
+     Nocturne  Bricolage Grotesque (index.css), set lighter for the night
+     Marquee   Big Shoulders Display — condensed, cinema-marquee letters
+     Vibe      Baloo 2 — Ek Type's rounded face: bubbly and bold */
+@font-face {
+  font-family: 'Archivo';
+  src: url('/fonts/archivo-var.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Eczar';
+  src: url('/fonts/eczar-var.woff2') format('woff2-variations');
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Big Shoulders Display';
+  src: url('/fonts/big-shoulders-var.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Baloo 2';
+  src: url('/fonts/baloo2-var.woff2') format('woff2-variations');
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ------------------------------------------------------------------ dials */
 html[data-template] {
   /* Shape. */
@@ -90,6 +134,21 @@ html.light[data-template]:not([class*='fest-']) {
   --vx-deck-shadow: 0 16px 36px -18px rgb(var(--ink-100) / 0.35);
 }
 html.light[data-template]:not([class*='fest-']) body { background-color: rgb(var(--ink-900)); }
+
+/* -------------------------------------- 13.2 — the bottom chrome is readable */
+/* The mini player and the phone tab bar hold the controls a listener uses
+   most, and they sit over the densest part of the page: shelf titles scroll
+   right under them. At the chrome floor (0.8 light, 0.84 dark) song titles
+   showed through as a second line of text beneath the playing one. These
+   two get a higher floor; they keep their tint and blur, and the glass
+   setting still moves them, but they no longer show text through. Flat
+   styles (Pulse, Marquee) are already opaque. */
+html:is([data-template='aura'], [data-template='sangam'], [data-template='nocturne'], [data-template='vibe']) :is(.np-mini, .vx-dock) {
+  --vx-mat-chrome: rgb(var(--ink-950) / clamp(0.9, calc(var(--glass-alpha) + 0.1), 0.96));
+}
+html.light:is([data-template='aura'], [data-template='sangam'], [data-template='nocturne'], [data-template='vibe']) :is(.np-mini, .vx-dock) {
+  --vx-mat-chrome: rgb(var(--ink-950) / clamp(0.93, calc(var(--glass-alpha) + 0.12), 0.97));
+}
 
 /* ------------------------------------------------- 11.0 — light is glass too */
 /* The light theme used to be white panes on a near-white canvas: frost over

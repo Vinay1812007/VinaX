@@ -545,6 +545,15 @@ html.reduce-motion .vx-settings *, html.reduce-motion .vx-settings *::before, ht
 .vx-tpl-card:active { transform: scale(0.98); }
 .vx-tpl-card[aria-checked='true'] { box-shadow: inset 0 0 0 2px rgb(var(--ember-500)); background: rgb(var(--ember-500) / 0.1); }
 .vx-tpl-name { margin-top: 8px; padding: 0 4px; color: rgb(var(--ink-100)); font-size: 14.5px; font-weight: 750; }
+/* 13.2 — each style's name is set in that style's own display face, so the
+   type is part of the choice, not a surprise after it. The faces load only
+   while the picker is on screen (templates/base.css). */
+.vx-tpl-card[data-tpl='aura'] .vx-tpl-name { font-family: 'Manrope', system-ui, sans-serif; font-weight: 800; letter-spacing: -0.02em; }
+.vx-tpl-card[data-tpl='pulse'] .vx-tpl-name { font-family: 'Archivo', 'Manrope', system-ui, sans-serif; font-weight: 800; letter-spacing: -0.015em; }
+.vx-tpl-card[data-tpl='sangam'] .vx-tpl-name { font-family: 'Eczar', 'Manrope', Georgia, serif; font-size: 16px; font-weight: 700; }
+.vx-tpl-card[data-tpl='nocturne'] .vx-tpl-name { font-family: 'Bricolage Grotesque', 'Manrope', system-ui, sans-serif; font-weight: 640; }
+.vx-tpl-card[data-tpl='marquee'] .vx-tpl-name { font-family: 'Big Shoulders Display', 'Manrope', system-ui, sans-serif; font-size: 18px; font-weight: 800; letter-spacing: 0.01em; line-height: 1.1; }
+.vx-tpl-card[data-tpl='vibe'] .vx-tpl-name { font-family: 'Baloo 2', 'Manrope', system-ui, sans-serif; font-size: 16px; font-weight: 800; line-height: 1.15; }
 .vx-tpl-tag { padding: 0 4px; color: rgb(var(--ink-400)); font-size: 12px; font-weight: 550; line-height: 1.35; }
 .vx-tpl-preview {
   --r-art: 5px;

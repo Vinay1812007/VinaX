@@ -70,14 +70,17 @@ html[data-template='marquee'] {
   --tpl-r-deck: 0px;
   --tpl-r-mini: 0px;
   --tpl-r-np-art: 4px;
-  --tpl-font-body: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --vx-font-display: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --vx-type-page: clamp(1.75rem, 2.8vw, 2.5rem);
-  --vx-type-section: 1.5rem;
-  --tpl-title-weight: 700;
-  --tpl-title-tracking: -0.02em;
-  --tpl-section-weight: 700;
-  --tpl-section-tracking: -0.015em;
+  /* 13.2 — the titles are the marquee: Big Shoulders Display, tall and
+     condensed like cinema signage, so they can run large and still fit.
+     Body copy is the house face. It was a system stack, which on Android
+     means whatever theme font the phone has (often a handwritten one). */
+  --vx-font-display: 'Big Shoulders Display', 'Manrope', system-ui, sans-serif;
+  --vx-type-page: clamp(2.25rem, 4.4vw, 3.75rem);
+  --vx-type-section: 1.85rem;
+  --tpl-title-weight: 800;
+  --tpl-title-tracking: 0.005em;
+  --tpl-section-weight: 800;
+  --tpl-section-tracking: 0.01em;
   --tpl-card-title-weight: 500;
   --tpl-enter: tplFade;
   --tpl-enter-dur: 120ms;
@@ -102,8 +105,15 @@ html[data-template='marquee'] {
   --vx-mat-specular: transparent;
   --vx-mat-art: 0;
 }
-html.light[data-template='marquee'] {
+/* 13.2 — the same specificity fix as Pulse: base.css's light glass rule,
+   (0,3,1), beat the plain (0,2,1) selector, so Marquee light — which has no
+   blur by design — shipped 80 % see-through bars and the page's text ran
+   through the mini player and the tab bar. */
+html.light[data-template='marquee'],
+html.light[data-template='marquee']:not([class*='fest-']) {
+  --vx-mat-thin: rgb(var(--ink-950));
   --vx-mat-regular: rgb(var(--ink-950));
+  --vx-mat-chrome: rgb(var(--ink-950));
   --vx-mat-thick: rgb(var(--ink-950));
 }
 html[data-template='marquee'] :is(.vx-mat-thin, .vx-mat-regular, .vx-mat-chrome, .vx-mat-thick) {
@@ -125,7 +135,7 @@ html[data-template='marquee']:not([class*='fest-']) .vx-workspace {
   html[data-template='marquee'] .vx-workspace { margin: 0; }
 }
 html[data-template='marquee'] .vx-library { background: transparent; border-radius: 0; margin: 10px 0 0; box-shadow: inset 0 1px 0 var(--vx-border); }
-html[data-template='marquee'] .vx-brand { font-family: var(--vx-font-display); font-weight: 700; letter-spacing: -0.03em; }
+html[data-template='marquee'] .vx-brand { font-family: var(--vx-font-display); font-weight: 800; letter-spacing: 0.01em; }
 html[data-template='marquee'] .vx-nav-link { min-height: 44px; font-weight: 500; color: rgb(var(--ink-100)); }
 html[data-template='marquee'] .vx-nav-link:hover { background: rgb(var(--ink-100) / 0.08); }
 html[data-template='marquee'] :is(.vx-nav-active, .vx-nav-active:hover) { background: rgb(var(--ink-100) / 0.12); color: rgb(var(--ink-100)); box-shadow: none; font-weight: 700; }

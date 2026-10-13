@@ -69,13 +69,15 @@ html[data-template='pulse'] {
   --tpl-r-deck: 0px;
   --tpl-r-mini: 8px;
   --tpl-r-np-art: 8px;
-  --vx-font-display: 'Manrope', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --vx-type-page: clamp(2rem, 3.6vw, 3.25rem);
+  /* 13.2 — Archivo: a compact grotesk, plain and quick to read at a glance. */
+  --vx-font-display: 'Archivo', 'Manrope', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Dense: Archivo runs wider than Manrope, so the phone size steps down. */
+  --vx-type-page: clamp(1.75rem, 3.6vw, 3.25rem);
   --vx-type-section: 1.375rem;
   --tpl-title-weight: 800;
-  --tpl-title-tracking: -0.045em;
+  --tpl-title-tracking: -0.03em;
   --tpl-section-weight: 800;
-  --tpl-section-tracking: -0.035em;
+  --tpl-section-tracking: -0.02em;
   --tpl-card-title-weight: 700;
   --tpl-enter: tplFade;
   --tpl-enter-dur: 160ms;
@@ -102,8 +104,18 @@ html[data-template='pulse'] {
   --vx-mat-specular: transparent;
   --vx-mat-art: 0;
 }
-html.light[data-template='pulse'] {
+/* 13.2 — the light theme's glass rule in base.css is
+   `html.light[data-template]:not([class*='fest-'])`, specificity (0,3,1):
+   a plain `html.light[data-template='pulse']` (0,2,1) LOST to it, so Pulse
+   light shipped 80 % see-through bars with no blur and page text ran through
+   the tab bar — the very failure the comment above guards against. The
+   second selector matches that specificity and wins by order; the first
+   still covers a festival skin, where the glass rule stands down. */
+html.light[data-template='pulse'],
+html.light[data-template='pulse']:not([class*='fest-']) {
+  --vx-mat-thin: rgb(var(--ink-950));
   --vx-mat-regular: rgb(var(--ink-950));
+  --vx-mat-chrome: rgb(var(--ink-950));
   --vx-mat-thick: rgb(var(--ink-950));
 }
 html[data-template='pulse'] :is(.vx-mat-thin, .vx-mat-regular, .vx-mat-chrome, .vx-mat-thick) {
@@ -147,7 +159,10 @@ html[data-template='pulse'] .vx-topbar.is-scrolled { box-shadow: none; }
 /* Phone tab bar: no box — it fades up out of the page. */
 html[data-template='pulse'] .vx-dock {
   background-color: transparent;
-  background-image: linear-gradient(180deg, rgb(var(--ink-950) / 0), rgb(var(--ink-950) / 0.92) 34%, rgb(var(--ink-950)));
+  /* 13.2 — the fade starts near-solid: the mini player sits right on top of
+     the dock, and a fade from 0 let a shelf title show in the strip between
+     the playing song and the tabs. */
+  background-image: linear-gradient(180deg, rgb(var(--ink-950) / 0.88), rgb(var(--ink-950)) 30%);
   box-shadow: none;
   padding-top: 6px;
 }
