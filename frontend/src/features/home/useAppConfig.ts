@@ -20,6 +20,8 @@ export interface PromoBannerData {
 export function useBanners() {
   return useQuery({
     queryKey: ['app-banners'],
+    // 11.7.2 — re-check when the listener comes back (the app-wide default is off).
+    refetchOnWindowFocus: true,
     staleTime: 5 * 60_000,
     gcTime: 30 * 60_000,
     retry: 1,
@@ -45,6 +47,8 @@ export interface FestivalOverrideConfig {
 export function useFestivalOverride() {
   return useQuery({
     queryKey: ['festival-override'],
+    // 11.7.2 — re-check when the listener comes back (the app-wide default is off).
+    refetchOnWindowFocus: true,
     staleTime: 5 * 60_000,
     gcTime: 30 * 60_000,
     retry: 1,
@@ -147,6 +151,14 @@ export function useClientConfig(): ClientConfig | null {
     staleTime: 60_000,
     gcTime: 30 * 60_000,
     retry: 1,
+    // 11.7.2 — the app-wide default is no refetch on focus, so an app left open
+    // (or resumed on Android) never saw a new broadcast or greeting until a
+    // full reload; with a short broadcast window that meant never. This read
+    // is one small edge-cached request, so it re-checks on return and every
+    // five minutes while visible.
+    refetchOnWindowFocus: true,
+    refetchInterval: 5 * 60_000,
+    refetchIntervalInBackground: false,
     queryFn: async (): Promise<ClientConfig | null> => {
       const r = await fetch(`${BASE}/api/appconfig?key=client`);
       if (!r.ok) return null;

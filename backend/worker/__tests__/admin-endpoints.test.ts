@@ -125,6 +125,21 @@ describe('push composer', () => {
     expect(calls.some((c) => c.method === 'POST' && c.url.includes('vinax_feedback'))).toBe(false);
   });
 
+  it('11.7.2 — a real send leaves a push-receipt with what was delivered, linked to its announcement', async () => {
+    installFetch();
+    const res = await pushPost({ request: adminReq({ title: 'Hello', body: 'World', link: '/' }), env: ENV });
+    expect(res.status).toBe(200);
+    const inserts = calls.filter((c) => c.method === 'POST' && c.url.includes('vinax_events')).map((c) => JSON.parse(c.body!) as { type: string; message: string });
+    const announcement = inserts.find((r) => r.type === 'announcement');
+    const receipt = inserts.find((r) => r.type === 'push-receipt');
+    expect(announcement).toBeDefined();
+    expect(receipt).toBeDefined();
+    const a = JSON.parse(announcement!.message) as { ts: number };
+    const r = JSON.parse(receipt!.message) as { ts: number; title: string; web: { total: number; sent: number }; audience: string };
+    expect(r.ts).toBe(a.ts);
+    expect(r).toMatchObject({ title: 'Hello', web: { total: 0, sent: 0 }, audience: 'everyone' });
+  });
+
   it('refuses a blank body and an external link (D-20)', async () => {
     installFetch();
     const blank = await pushPost({ request: adminReq({ title: 'T', body: '   ', link: '/' }), env: ENV });

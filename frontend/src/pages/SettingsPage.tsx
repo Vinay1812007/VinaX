@@ -380,6 +380,22 @@ export default function SettingsPage() {
   useEffect(() => {
     if (pushSupported()) void isPushSubscribed().then(setPushOn);
   }, []);
+  // 11.7.2 — the Android app's own push permission (the WebView has no Push API).
+  const [nativePush, setNativePush] = useState<'askable' | 'on' | 'blocked' | 'unsupported' | 'unknown'>('unknown');
+  useEffect(() => {
+    if (!isNativePlatform()) return;
+    void import('@/services/push/notifyAsk').then((m) => m.notifyState()).then(setNativePush).catch(() => setNativePush('unsupported'));
+  }, []);
+  const toggleNativePush = async (v: boolean): Promise<void> => {
+    const m = await import('@/services/push/notifyAsk');
+    if (!v) {
+      toast('To turn them off, open Android Settings → Apps → VinaX → Notifications');
+      return;
+    }
+    const r = await m.turnOnNotifications();
+    toast(m.turnOnMessage(r));
+    setNativePush(await m.notifyState());
+  };
   const togglePush = async (v: boolean): Promise<void> => {
     if (v) {
       const r = await enablePush();
@@ -775,6 +791,15 @@ export default function SettingsPage() {
                   <Toggle on={pushOn} onChange={(v) => void togglePush(v)} label="Push notifications" />
                 </Row>
               ) : (
+                <>
+                {isNativePlatform() && nativePush !== 'unsupported' && nativePush !== 'unknown' && (
+                  <Row
+                    label="Push notifications"
+                    note={nativePush === 'blocked' ? 'Blocked for VinaX — turn them on in Android Settings → Apps → VinaX → Notifications.' : 'Today’s pick and new music, even when the app is closed.'}
+                  >
+                    <Toggle on={nativePush === 'on'} onChange={(v) => void toggleNativePush(v)} label="Push notifications" />
+                  </Row>
+                )}
                 <Row label="New-music alerts" note="New announcements appear as notifications when the app opens.">
                   <Toggle
                     on={appAlerts}
@@ -786,6 +811,7 @@ export default function SettingsPage() {
                     label="New-music alerts"
                   />
                 </Row>
+                </>
               )}
             </Section>
           )}

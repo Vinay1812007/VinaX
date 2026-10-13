@@ -223,6 +223,9 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
   // Android in-app pickup channel (that would show Warangal-targeted news to
   // a Delhi listener). Only unfiltered "send to everyone" pushes get the
   // vinax_events row.
+  // 11.7.2 — one timestamp ties this send's announcement row to its
+  // delivery receipt (below), so the console can say who it reached.
+  const sentAt = Date.now();
   if (!geoQuery.length) {
     await sbInsert(env, 'vinax_events', {
       device_id: 'admin',
@@ -231,7 +234,7 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
         title,
         body: text,
         link: url,
-        ts: Date.now(),
+        ts: sentAt,
         ...(dedupeKey ? { dedupe_key: dedupeKey } : {}),
       }).slice(0, 900),
     }).catch(() => false);
@@ -262,10 +265,16 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
   });
   let sent = 0;
   let gone = 0;
+  // 11.7.2 — why a browser did not take it (403 = key mismatch, 0 = timeout, …).
+  const failed: Record<string, number> = {};
   for (const r of results) {
-    if (r.status !== 'fulfilled') continue;
+    if (r.status !== 'fulfilled') {
+      failed.error = (failed.error ?? 0) + 1;
+      continue;
+    }
     if (r.value.ok) sent += 1;
-    if (r.value.gone) gone += 1;
+    else if (r.value.gone) gone += 1;
+    else failed[String(r.value.status)] = (failed[String(r.value.status)] ?? 0) + 1;
   }
   // Also fan out to native Android via FCM — background push, even when closed.
   let fcm = 0;
@@ -291,5 +300,20 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
       );
     }
   }
-  return json({ ok: true, total: subs.length, sent, gone, fcm: fcmError ? null : fcm, ...(fcmError ? { fcmError } : {}), target: geoTagForLog }, 200);
+  // 11.7.2 — the delivery receipt. Before this the sent log could only say a
+  // message was SENT, never whether anything received it, so "nobody got my
+  // test" had no answer. Read back by /api/admin/notifylog.
+  await sbInsert(env, 'vinax_events', {
+    device_id: 'admin',
+    type: 'push-receipt',
+    message: JSON.stringify({
+      ts: sentAt,
+      title: title.slice(0, 80),
+      audience: geoTagForLog,
+      web: { total: subs.length, sent, gone, failed },
+      fcm: fcmError ? null : fcm,
+      ...(fcmError ? { fcmError } : {}),
+    }).slice(0, 900),
+  }).catch(() => false);
+  return json({ ok: true, total: subs.length, sent, gone, failed, fcm: fcmError ? null : fcm, ...(fcmError ? { fcmError } : {}), target: geoTagForLog }, 200);
 };

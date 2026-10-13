@@ -12,6 +12,17 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.7.2': {
+    title: 'Notifications you can turn on',
+    changes: [
+      { type: 'new', text: 'After your second song, VinaX offers to turn on notifications — one tap, and your browser or phone asks for permission. Say not now and it waits a week.' },
+      { type: 'fixed', text: 'The Android app can now ask for notification permission from Settings → Notifications. Before, that page had no way to turn them on, and if they are blocked it tells you where to switch them back on.' },
+      { type: 'fixed', text: 'The notifications card on Home works in the Android app too, and comes back after two weeks instead of disappearing for good after "Not now".' },
+      { type: 'fixed', text: 'Messages from VinaX now reach you while the app is already open. Before, you only saw a new message after fully reopening the app.' },
+      { type: 'improved', text: 'Those messages stay on screen long enough to read and have an Open button, instead of flashing past and jumping to another page on their own.' },
+      { type: 'fixed', text: 'Two notifications in a row no longer quietly replace each other — each one now shows.' },
+    ],
+  },
   '11.7.1': {
     title: 'Notifications that arrive',
     changes: [

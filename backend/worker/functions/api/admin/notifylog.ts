@@ -19,7 +19,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const read = await sbSelectResult<{ type: string; message: string | null; created_at: string; city: string | null; region: string | null; country: string | null; song_title: string | null; language: string | null }>(
     env,
     'vinax_events',
-    'type=in.(announcement,song-push,ai-push)&select=type,message,created_at,city,region,country,song_title,language&order=created_at.desc&limit=30',
+    'type=in.(announcement,song-push,ai-push,push-receipt)&select=type,message,created_at,city,region,country,song_title,language&order=created_at.desc&limit=60',
   );
   // 7.2.0 — a failed read is not "nothing was sent".
   if (!read.ok) return dbFailure(read);
