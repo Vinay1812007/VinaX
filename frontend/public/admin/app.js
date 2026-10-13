@@ -1462,20 +1462,110 @@
       b.classList.toggle('active', b.getAttribute('data-k') === k);
     });
   }
+  // 11.7.2 — "Send a message" is the ONE messaging page. It replaced three
+  // overlapping tools (Broadcast Message, Announcement Composer and the old
+  // Notifications page); #broadcast and #announce now land here (canonicalSec).
+  // A message can go out as a push notification (POST /api/admin/push — every
+  // subscribed browser + every Android device) and/or as the in-app message
+  // (the `broadcast` config key: shown once per device on the next open, only
+  // inside its window).
+  var pnStat = null; // last GET /api/admin/push answer — feeds the confirm summary
+  var pnLive = null; // the published `broadcast` value, or null
+  var pnLiveSig = '';
+  var HOUR_MS = 3600000;
+  var MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function plural(n, one, many) { n = Number(n) || 0; return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+  /** "16 Oct 10:30" in the owner's own time zone (the year only when it isn't this year). */
+  function fmtWhen(ms) {
+    var d = new Date(ms);
+    if (isNaN(d.getTime())) return '—';
+    var p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return d.getDate() + ' ' + MONTH_SHORT[d.getMonth()] + (d.getFullYear() !== new Date().getFullYear() ? ' ' + d.getFullYear() : '') + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  /** Shared From/Until guard for anything listeners only see inside a window.
+   *  Returns '' when the window is fine, else a plain sentence for the owner.
+   *  A window under an hour is blocked: people only see these when they next
+   *  open the app, so a 3-minute window reaches almost nobody. */
+  function windowProblem(startIso, endIso) {
+    var now = Date.now();
+    var s = startIso ? Date.parse(startIso) : NaN;
+    var e = endIso ? Date.parse(endIso) : NaN;
+    if (isNaN(e)) return '';
+    if (e <= now) return 'The “Until” time has already passed — pick a later one.';
+    if (!isNaN(s) && e <= s) return '“Until” must be after “From”.';
+    var from = isNaN(s) ? now : Math.max(s, now);
+    if (e - from < HOUR_MS) return 'That only shows it for ' + Math.max(1, Math.round((e - from) / 60000)) + ' min — people only see it when they next open the app, so almost nobody would. Make the window at least an hour.';
+    return '';
+  }
+  /** Live now / Scheduled / Ended for a published From/Until window. */
+  function windowStatus(startIso, endIso, openEnded) {
+    var now = Date.now();
+    var s = startIso ? Date.parse(startIso) : NaN;
+    var e = endIso ? Date.parse(endIso) : NaN;
+    if (!isNaN(s) && now < s) return { key: 'scheduled', label: 'Scheduled', detail: 'starts ' + fmtWhen(s) + (isNaN(e) ? '' : ' · until ' + fmtWhen(e)) };
+    if (!isNaN(e) && now > e) return { key: 'ended', label: 'Ended', detail: 'ended ' + fmtWhen(e) };
+    return { key: 'live', label: 'Live now', detail: isNaN(e) ? (openEnded || 'until cleared') : 'until ' + fmtWhen(e) };
+  }
+  function statusPill(st) { return st.key === 'live' ? okPill(true, st.label) : '<span class="pill">' + esc(st.label) + '</span>'; }
   function loadNotifyStat() {
     apiMemo('/api/admin/push').then(function (d) {
       if (active !== 'notify2' || !d) return;
+      pnStat = d;
       var el = $('pn-stat');
       if (!el) return;
-      if (d.configured === false) el.innerHTML = '⚠ Push keys are missing on the server — sending is disabled.';
-      else el.innerHTML = '<b>' + (d.subscribers || 0) + '</b> device(s) subscribed' + ((d.subscribers || 0) === 0 ? ' — listeners opt in via the 🔔 card on Home or Settings → Notifications.' : '.');
+      if (d.configured === false) {
+        el.innerHTML = '⚠ Push keys are missing on the server — push notifications are off. In-app messages still work.';
+        var cb = $('pn-via-push'); if (cb) { cb.checked = false; cb.disabled = true; }
+      } else {
+        var web = d.subscribers || 0;
+        var android = d.fcm == null ? null : (Number(d.fcm) || 0);
+        el.innerHTML = 'Push reaches <b>' + esc(plural(web, 'browser')) + '</b> · <b>' + (android == null ? 'Android count unavailable' : esc(plural(android, 'Android device'))) + '</b>' +
+          (web === 0 && !android ? ' — listeners turn notifications on from the 🔔 card on Home or Settings → Notifications.' : '');
+      }
       stamp();
     }).catch(noop);
   }
   function loadNotify() {
-    if (!document.getElementById('pn-send')) { renderNotify(); loadNotifyLog(); return; }
+    if (!document.getElementById('pn-send')) { renderNotify(); loadNotifyLog(); loadLiveBroadcast(); return; }
     loadNotifyStat();
     loadNotifyLog();
+    loadLiveBroadcast();
+  }
+  // "Live in the app" — the published in-app message and its window status.
+  function loadLiveBroadcast() {
+    cfgGet('broadcast').then(function (d) {
+      if (active !== 'notify2' || !d) return;
+      var host = document.getElementById('pn-livebox');
+      if (!host) return;
+      var v = d.configured && d.value && typeof d.value === 'object' && d.value.text ? d.value : null;
+      pnLive = v;
+      var st = v ? windowStatus(v.start, v.end, 'until you stop it') : null;
+      var sig = JSON.stringify([v, st && st.key, st && st.detail, d.updated_at || '']);
+      if (sig === pnLiveSig && host.getAttribute('data-ready') === '1') return; // unchanged — don't repaint under the owner
+      pnLiveSig = sig;
+      host.setAttribute('data-ready', '1');
+      if (!v) {
+        host.innerHTML = '<h3 style="margin-top:0">Live in the app</h3><p class="muted" style="font-size:12px;margin-bottom:0">Nothing right now. An in-app message you send shows here until it ends or you stop it.</p>';
+        return;
+      }
+      host.innerHTML = '<h3 style="margin-top:0">Live in the app ' + statusPill(st) + '</h3>' +
+        '<p style="margin:6px 0">“' + esc(v.text) + '”</p>' +
+        '<p class="muted" style="font-size:12px">' + esc(st.detail.charAt(0).toUpperCase() + st.detail.slice(1)) + (v.link ? ' · opens ' + esc(v.link) : '') + (d.updated_at ? ' · sent ' + esc(ago(d.updated_at)) : '') + '</p>' +
+        (st.key === 'ended' ? '<p class="muted" style="font-size:12px">Nobody sees it any more.</p>' : (st.key === 'live' ? '<p class="muted" style="font-size:12px">Each person sees it once, the next time they open VinaX.</p>' : '')) +
+        '<div class="row" style="gap:8px;align-items:center"><button class="ghost" id="pn-stop" style="color:var(--bad)">' + (st.key === 'ended' ? 'Clear' : 'Stop showing') + '</button><span class="muted" id="pn-stop-out" style="font-size:12px"></span></div>';
+      $('pn-stop').addEventListener('click', function () {
+        vxConfirm('Stop showing this message in the app? People who already saw it are not affected.', { title: 'Live in the app', danger: true, okText: 'Stop showing' }).then(function (ok) {
+          if (!ok) return;
+          cfgSet('broadcast', null).then(function (r) {
+            if (r && r.ok) loadLiveBroadcast();
+            else stampOut('pn-stop-out', 'Could not stop it' + (r && r.error ? ' — ' + r.error : ''), true);
+          }).catch(function () { stampOut('pn-stop-out', 'Could not stop it — network', true); });
+        });
+      });
+    }).catch(function () {
+      var host = document.getElementById('pn-livebox');
+      if (host && active === 'notify2') { pnLiveSig = ''; host.removeAttribute('data-ready'); host.innerHTML = '<h3 style="margin-top:0">Live in the app</h3>' + stateError('Could not read what is live in the app.', loadLiveBroadcast); }
+    });
   }
   // ---------- Content Control (blocklist manager) ----------
   function renderContent(d) {
@@ -1583,7 +1673,7 @@
     if (!view) return;
     insertTop(view,
       '<div class="card" id="quickbox" style="margin-bottom:14px"><div class="row" style="flex-wrap:wrap;gap:8px">' +
-      '<button class="ghost qa-go" data-to="notify2">Send notification</button>' +
+      '<button class="ghost qa-go" data-to="notify2">Send a message</button>' +
       '<button class="ghost qa-go" data-to="technical">Site mode</button>' +
       '<button class="ghost qa-go" data-to="content">Content control</button>' +
       '<button class="ghost qa-go" data-to="feedback">Feedback</button>' +
@@ -1601,7 +1691,7 @@
     paletteOpen = true;
     var items = Object.keys(TITLES).map(function (k) { return { label: TITLES[k], go: function () { setSection(k); } }; });
     items.push({ label: 'Action: Re-check engine health', go: function () { setSection('technical'); window.setTimeout(function () { var b = document.getElementById('hrecheck'); if (b) b.click(); }, 600); } });
-    items.push({ label: 'Action: Send a notification', go: function () { setSection('notify2'); } });
+    items.push({ label: 'Action: Send a message (push or in-app)', go: function () { setSection('notify2'); } });
     items.push({ label: 'Action: Site mode (maintenance switch)', go: function () { setSection('technical'); } });
     var wrap = document.createElement('div');
     wrap.className = 'modal';
@@ -1647,32 +1737,82 @@
     q.focus();
   }
   // ---------- Sent-notification log ----------
+  function pnJson(s) {
+    if (s && typeof s === 'object') return s;
+    try { var j = JSON.parse(s || '{}'); return j && typeof j === 'object' ? j : null; } catch (e) { return null; }
+  }
+  /** Who a targeted send went to: a string as-is, an object as "key: value · …". */
+  function pnAudience(a) {
+    if (a == null || a === '') return '';
+    if (typeof a !== 'object') return String(a);
+    return Object.keys(a).map(function (k) { var v = a[k]; return k + ': ' + (Array.isArray(v) ? v.join(', ') : String(v)); }).join(' · ');
+  }
+  /** `failed` is a {status: count} map (or a plain number on older rows) → total. */
+  function pnFailedCount(f) {
+    if (typeof f === 'number') return f;
+    if (!f || typeof f !== 'object') return 0;
+    return Object.keys(f).reduce(function (a, k) { return a + (Number(f[k]) || 0); }, 0);
+  }
+  /** Delivery line from a push-receipt ({web:{total,sent,gone,failed}, fcm, fcmError}); "—" for none. */
+  function pnDelivery(rc) {
+    if (!rc) return '—';
+    var w = rc.web || {};
+    var s = 'Reached ' + (Number(w.sent) || 0) + ' of ' + (Number(w.total) || 0) + ' browsers · ' + (rc.fcm == null ? 'Android unknown' : (Number(rc.fcm) || 0) + ' Android');
+    if (w.gone) s += ' · ' + w.gone + ' expired removed';
+    var nf = pnFailedCount(w.failed);
+    if (nf) s += ' · ' + nf + ' refused';
+    if (rc.fcmError) s += ' · Android delivery failed';
+    return esc(s);
+  }
   function loadNotifyLog() {
     apiMemo('/api/admin/notifylog').then(function (d) {
       if (active !== 'notify2' || !d) return;
       var host = document.getElementById('pn-logbox');
       if (!host) return;
-      var rows = (d.rows || []).map(function (r) {
+      var all = d.rows || [];
+      // 11.7.2 — "push-receipt" rows carry the delivery counts of one send.
+      // Their `ts` equals the `ts` inside the announcement row they belong to,
+      // so the receipt shows on that line; a receipt with no announcement (a
+      // send filtered to an audience) gets a line of its own. Older rows have
+      // no receipt and show "—".
+      var annTs = {}, rcByTs = {};
+      all.forEach(function (r) {
+        if (r.type !== 'announcement' && r.type !== 'push-receipt') return;
+        var j = pnJson(r.message);
+        if (!j || j.ts == null) return;
+        if (r.type === 'announcement') annTs[String(j.ts)] = true;
+        else rcByTs[String(j.ts)] = j;
+      });
+      var rows = all.map(function (r) {
         var when = ist(r.created_at);
+        var j;
+        if (r.type === 'push-receipt') {
+          j = pnJson(r.message) || {};
+          if (j.ts != null && annTs[String(j.ts)]) return '';
+          var aud = pnAudience(j.audience);
+          return '<tr><td><span class="pill">push · targeted</span></td><td><b>' + esc(j.title || '') + '</b>' + (aud ? ' <span class="muted">to ' + esc(aud) + '</span>' : '') + '</td><td class="muted">' + pnDelivery(j) + '</td><td class="muted">' + when + '</td><td></td></tr>';
+        }
         if (r.type === 'announcement') {
-          var t = '', b = '', canRetract = true;
-          try { var j = JSON.parse(r.message || '{}'); t = j.title || ''; b = j.body || ''; } catch (e) { t = r.message || ''; }
-          return '<tr><td><span class="pill">announcement</span></td><td><b>' + esc(t) + '</b> <span class="muted">' + esc(b) + '</span></td><td class="muted">' + when + '</td>' +
-            '<td>' + (canRetract ? '<button class="ghost pn-retract" data-at="' + esc(r.created_at) + '" style="padding:3px 10px;font-size:11px;color:var(--bad)">Retract</button>' : '') + '</td></tr>';
+          var t = '', b = '';
+          j = pnJson(r.message);
+          if (j) { t = j.title || ''; b = j.body || ''; } else t = r.message || '';
+          var rc = j && j.ts != null ? rcByTs[String(j.ts)] : null;
+          return '<tr><td><span class="pill">push</span></td><td><b>' + esc(t) + '</b> <span class="muted">' + esc(b) + '</span></td><td class="muted">' + pnDelivery(rc) + '</td><td class="muted">' + when + '</td>' +
+            '<td><button class="ghost pn-retract" data-at="' + esc(r.created_at) + '" style="padding:3px 10px;font-size:11px;color:var(--bad)">Retract</button></td></tr>';
         }
         var parts = String(r.message || '').split('|');
-        return '<tr><td><span class="pill">daily pick</span></td><td><b>' + esc(parts[1] || '') + '</b> <span class="muted">sent to ' + esc(parts[0] || '0') + ' device(s)</span></td><td class="muted">' + when + '</td><td></td></tr>';
+        return '<tr><td><span class="pill">daily pick</span></td><td><b>' + esc(parts[1] || '') + '</b></td><td class="muted">Sent to ' + esc(parts[0] || '0') + ' device(s)</td><td class="muted">' + when + '</td><td></td></tr>';
       }).join('');
-      host.innerHTML = '<h3>Sent log <span class="muted">· retracting an announcement stops app pickups; delivered web pushes can\u2019t be recalled</span></h3>' +
-        '<table><thead><tr><th>Type</th><th>Content</th><th>When</th><th></th></tr></thead><tbody>' +
-        (rows || '<tr class="table-empty"><td colspan="4"><div class="state state-empty empty" role="status"><div class="state-title">Nothing sent yet</div><div class="state-hint">Notifications you send are logged here with their delivery counts.</div></div></td></tr>') + '</tbody></table>';
+      host.innerHTML = '<h3>Sent log <span class="muted">· Retract stops the app showing a push to people who open it later; notifications already delivered can’t be recalled</span></h3>' +
+        '<table><thead><tr><th>Type</th><th>Content</th><th>Delivery</th><th>When</th><th></th></tr></thead><tbody>' +
+        (rows || '<tr class="table-empty"><td colspan="5"><div class="state state-empty empty" role="status"><div class="state-title">Nothing sent yet</div><div class="state-hint">Push notifications you send are logged here with how many devices they reached.</div></div></td></tr>') + '</tbody></table>';
       Array.prototype.forEach.call(host.querySelectorAll('.pn-retract'), function (b) {
         b.addEventListener('click', function () {
-          vxConfirm('Retract this announcement? App users will stop receiving it on open.', { title: 'Notifications', danger: true, okText: 'Retract' }).then(function (ok) {
+          vxConfirm('Retract this push? People who open the app from now on won’t get it. Notifications already delivered stay on their devices.', { title: 'Send a message', danger: true, okText: 'Retract' }).then(function (ok) {
             if (!ok) return;
             postApi('/api/admin/notifylog', { action: 'retract', created_at: b.getAttribute('data-at') }).then(function (r) {
               if (r && r.ok) loadNotifyLog();
-              else vxAlert('Retract failed', { title: 'Notifications' });
+              else vxAlert('Retract failed', { title: 'Send a message' });
             }).catch(noop);
           });
         });
@@ -1794,15 +1934,35 @@
         '</div></div>');
     }).catch(noop);
   }
+  /** "Push to 1 browser and 0 Android devices" from the last subscriber read. */
+  function pnPushSummary() {
+    if (!pnStat || pnStat.configured === false || pnStat.subscribers == null) return 'push to every phone and browser that allowed notifications';
+    return 'push to ' + plural(pnStat.subscribers, 'browser') + ' and ' + (pnStat.fcm == null ? 'every Android device' : plural(pnStat.fcm, 'Android device'));
+  }
+  /** The plain result line for POST /api/admin/push. */
+  function pnPushResult(r) {
+    if (!r) return { err: true, text: 'Push not sent — sign in again and retry.' };
+    if (r.error) return { err: true, text: 'Push not sent — ' + r.error };
+    var total = Number(r.total) || 0, sent = Number(r.sent) || 0;
+    var s = 'Pushed to ' + sent + ' of ' + total + ' browsers · ' + (r.fcm == null ? 'Android devices couldn’t be reached' : plural(r.fcm, 'Android device'));
+    if (r.gone) s += ' · ' + r.gone + ' expired removed';
+    var nf = pnFailedCount(r.failed);
+    if (nf) s += ' · ' + nf + ' refused';
+    if (r.fcmError) s += ' · Android delivery failed';
+    if (sent === 0 && total > 0) s += '\nNone of the browsers accepted it — they may have turned notifications off.';
+    return { err: false, text: s };
+  }
   function renderNotify() {
+    var defUntil = isoLocal(new Date(Date.now() + 3 * 86400000).toISOString());
+    var tick = 'display:flex;align-items:flex-start;gap:8px;margin:6px 0;font-size:13px;cursor:pointer';
     $('view').innerHTML =
-      '<div class="card" style="max-width:640px">' +
-      '<h3 style="margin-top:0">Send a notification</h3>' +
-      '<p class="muted" style="font-size:12px">Browsers that opted in get a push instantly; the Android app shows it next time it opens. Use sparingly.</p>' +
-      '<p class="muted" id="pn-stat" style="font-size:12px">Checking subscribers…</p>' +
-      '<input id="pn-title" type="text" placeholder="Title (e.g. New Telugu hits are in!)" style="margin-bottom:8px" />' +
-      '<input id="pn-body" type="text" placeholder="Message (max 300 chars)" style="margin-bottom:10px" />' +
-      '<p class="muted" style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin:0 0 6px">Where should it open?</p>' +
+      '<div class="card" style="max-width:680px">' +
+      '<h3 style="margin-top:0">Send a message</h3>' +
+      '<p class="muted" style="font-size:12px;margin-top:-4px">Write it once, then choose how it reaches people. Every message goes to everyone, so use it sparingly.</p>' +
+      '<p class="muted" id="pn-stat" style="font-size:12px">Checking who can get push notifications…</p>' +
+      lbl('Title (optional for in-app only)', inp('pn-title', '', 'e.g. New Telugu hits are in!', 'maxlength="80" style="width:100%"')) +
+      lbl('Message', inp('pn-body', '', 'What do you want people to know?', 'maxlength="240" style="width:100%"')) +
+      '<p class="muted" style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin:14px 0 6px">Where should it open?</p>' +
       '<div class="seg" style="margin-bottom:8px">' +
       '<button class="pn-kind active" data-k="home">Home</button>' +
       '<button class="pn-kind" data-k="song">A song</button>' +
@@ -1812,11 +1972,17 @@
       '<div id="pn-searchwrap" style="display:none"><input id="pn-q" type="text" placeholder="Search the catalog…" style="margin-bottom:6px" /><div id="pn-results"></div></div>' +
       '<div id="pn-customwrap" style="display:none"><input id="pn-link" type="text" placeholder="/made-for-you, /charts, /together…" style="margin-bottom:6px" /></div>' +
       '<p id="pn-chosen" style="margin:4px 0 12px">' + pnPickHtml('Home') + '</p>' +
-      '<div class="row"><button class="btn btn-primary" id="pn-send">Send to all</button><span class="muted" id="pn-out" style="font-size:12px"></span></div>' +
+      '<p class="muted" style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin:14px 0 6px">How should it reach people?</p>' +
+      '<label style="' + tick + '"><input type="checkbox" id="pn-via-push" checked /><span><b>Push notification</b> <span class="muted">(phones and browsers that allowed notifications — arrives even when the app is closed)</span></span></label>' +
+      '<label style="' + tick + '"><input type="checkbox" id="pn-via-app" checked /><span><b>In-app message</b> <span class="muted">(everyone sees it once the next time they open VinaX)</span></span></label>' +
+      '<div id="pn-appwrap" style="margin-left:26px">' + lbl('Show until (optional — leave empty to show it until you stop it)', inp('pn-until', defUntil, '', 'type="datetime-local"')) + '</div>' +
+      '<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px"><button class="btn btn-primary" id="pn-send">Send</button><span class="muted" id="pn-out" style="font-size:12px;white-space:pre-line"></span></div>' +
       '</div>' +
+      '<div class="card" id="pn-livebox" style="max-width:680px;margin-top:14px">' + stateLoading('rows', 'Checking what is live in the app…') + '</div>' +
       '<div class="card" id="pn-logbox" style="max-width:820px;margin-top:14px">' + stateLoading('rows', 'Loading sent log…') + '</div>';
     pnKind = 'home';
     pnDest = '/';
+    pnLiveSig = '';
     Array.prototype.forEach.call(document.querySelectorAll('.pn-kind'), function (b) {
       b.addEventListener('click', function () { pnSetKind(b.getAttribute('data-k')); });
     });
@@ -1827,27 +1993,67 @@
       if (q.length < 2) { $('pn-results').innerHTML = ''; return; }
       deb = setTimeout(function () { pnSearch(q); }, 350);
     });
+    $('pn-via-app').addEventListener('change', function () { $('pn-appwrap').style.display = $('pn-via-app').checked ? '' : 'none'; });
     $('pn-send').addEventListener('click', function () {
+      var btn = $('pn-send');
+      if (btn.disabled) return;
       var t = $('pn-title').value.trim(), b = $('pn-body').value.trim();
-      if (!t || !b) { $('pn-out').textContent = 'Title and message are required.'; return; }
+      var viaPush = $('pn-via-push').checked, viaApp = $('pn-via-app').checked;
+      if (!b) { stampOut('pn-out', 'Write a message first.', true); return; }
+      if (!viaPush && !viaApp) { stampOut('pn-out', 'Pick at least one way to reach people.', true); return; }
       var link = pnKind === 'custom' ? ($('pn-link').value.trim() || '/') : pnDest;
-      if (link.charAt(0) !== '/') { $('pn-out').textContent = 'Links must be in-app paths starting with /.'; return; }
-      vxConfirm('Send this notification to ALL subscribed devices now?\n\nOpens: ' + link, { title: 'Push notification', okText: 'Send now' }).then(function (ok) {
+      if (link.charAt(0) !== '/') { stampOut('pn-out', 'Links must be in-app paths starting with /.', true); return; }
+      if (link.length > 200) { stampOut('pn-out', 'That link is too long (200 characters at most).', true); return; }
+      var appText = t ? t + ' — ' + b : b;
+      var untilIso = '';
+      if (viaApp) {
+        if (appText.length > 240) { stampOut('pn-out', 'The in-app message is ' + (appText.length - 240) + ' characters too long — title and message together can be 240 at most.', true); return; }
+        var rawUntil = $('pn-until').value;
+        untilIso = fromLocal(rawUntil);
+        if (rawUntil && !untilIso) { stampOut('pn-out', '“Show until” is not a valid date.', true); return; }
+        var prob = windowProblem('', untilIso);
+        if (prob) { stampOut('pn-out', prob, true); return; }
+      }
+      var untilText = untilIso ? 'until ' + fmtWhen(Date.parse(untilIso)) : 'until you stop it';
+      var parts = [];
+      if (viaPush) parts.push(pnPushSummary());
+      if (viaApp) parts.push('show in the app ' + untilText);
+      var summary = parts.join(', and ');
+      summary = summary.charAt(0).toUpperCase() + summary.slice(1) + '.';
+      if (viaApp && pnLive) summary += '\n\nThis replaces the message that is in the app now.';
+      summary += '\n\nOpens: ' + link;
+      vxConfirm(summary, { title: 'Send a message', okText: 'Send now' }).then(function (ok) {
         if (!ok) return;
-        $('pn-send').disabled = true;
-        $('pn-out').textContent = 'Sending…';
-        postApi('/api/admin/push', { title: t, body: b, link: link }).then(function (r) {
-          $('pn-send').disabled = false;
-          if (!r) { $('pn-out').textContent = 'Failed'; return; }
-          if (r.error) { $('pn-out').textContent = 'Not sent — ' + r.error; return; }
-          $('pn-out').textContent = 'Delivered to ' + (r.sent || 0) + ' of ' + (r.total || 0) + ' web device(s)' + (r.gone ? ' · ' + r.gone + ' expired removed' : '') + ' ✓ — the app picks it up on next open.';
+        btn.disabled = true;
+        stampOut('pn-out', 'Sending…');
+        var jobs = [];
+        if (viaPush) {
+          jobs.push(postApiRaw('/api/admin/push', { title: t || 'VinaX', body: b, link: link }).then(pnPushResult, function () { return { err: true, text: 'Push not sent — network error.' }; }));
+        }
+        if (viaApp) {
+          // Same value shape the old Broadcast tool published: a NEW id per
+          // send (each id shows once per device), optional in-app link, window.
+          var val = { id: 'b' + Date.now().toString(36), text: appText };
+          if (link !== '/') val.link = link;
+          if (untilIso) val.end = untilIso;
+          jobs.push(cfgSet('broadcast', val).then(function (r) {
+            if (r && r.ok) return { err: false, text: 'In the app ' + untilText + ' — live within about a minute.' };
+            return { err: true, text: 'In-app message not saved' + (r && r.error ? ' — ' + r.error : '') + '.' };
+          }, function () { return { err: true, text: 'In-app message not saved — network error.' }; }));
+        }
+        Promise.all(jobs).then(function (res) {
+          btn.disabled = false;
+          var anyErr = res.some(function (x) { return x.err; });
+          stampOut('pn-out', res.map(function (x) { return x.text; }).join('\n'), anyErr);
+          if (!anyErr) { $('pn-title').value = ''; $('pn-body').value = ''; }
           loadNotifyStat();
-        }).catch(function () { $('pn-send').disabled = false; $('pn-out').textContent = 'Failed'; });
+          loadLiveBroadcast();
+          loadNotifyLog();
+        });
       });
     });
     loadNotifyStat();
   }
-
   // ---------- Live Rooms ----------
   function renderRooms(d) {
     var rows = (d.rooms || []).map(function (r) {
@@ -2763,6 +2969,22 @@
   // ---------- Banner & Promotion Management (server-backed) ----------
   var bnPreview = { title: '', subtitle: '', linkType: 'song', linkId: '', start: '', end: '', img: '' };
   var bnSaved = null; // server copy; null = not loaded yet
+  // 11.7.2 — banner windows are whole days, compared with today's UTC date on
+  // the server (backend activeBanners: start <= today <= end, end inclusive),
+  // so the status and the guard use that same rule.
+  function bnToday() { return new Date().toISOString().slice(0, 10); }
+  function bannerStatus(b) {
+    var today = bnToday();
+    if (b && b.start && today < b.start) return { key: 'scheduled', label: 'Scheduled' };
+    if (b && b.end && today > b.end) return { key: 'ended', label: 'Ended' };
+    return { key: 'live', label: 'Live now' };
+  }
+  function bannerWindowProblem(start, end) {
+    if (!end) return '';
+    if (start && end < start) return 'The end date is before the start date.';
+    if (end < bnToday()) return 'That end date has already passed — nobody would see this banner.';
+    return '';
+  }
   function renderBannersSection() {
     if (bnSaved === null) {
       $('view').innerHTML = stateLoading('rows', 'Loading published banners…');
@@ -2788,6 +3010,7 @@
     }
     var savedRows = saved.map(function (b, i) {
       return html`<tr><td>${b.title}</td><td class="muted">${b.subtitle}</td><td><span class="pill">${b.linkType}</span> ${b.linkId}</td><td class="muted">${b.start || '—'} → ${b.end || '—'}</td>` +
+        '<td>' + statusPill(bannerStatus(b)) + '</td>' +
         '<td><button class="ghost bn-del" data-i="' + i + '" style="padding:3px 10px;font-size:11px;color:var(--bad)">Delete</button></td></tr>';
     }).join('');
     $('view').innerHTML =
@@ -2813,7 +3036,7 @@
         '<h4>' + esc(bnPreview.title || 'Your banner title') + '</h4><p>' + esc(bnPreview.subtitle || 'A helpful subtitle appears here') + '</p></div>' +
       '<div class="row" style="margin-top:12px"><button class="btn btn-primary" id="bn-save">Publish banner</button><span class="muted" id="bn-out" style="font-size:12px"></span></div></div>' +
       '<h3>Published banners (' + saved.length + ')</h3>' +
-      (savedRows ? '<table><thead><tr><th>Title</th><th>Subtitle</th><th>Link</th><th>Schedule</th><th></th></tr></thead><tbody>' + savedRows + '</tbody></table>'
+      (savedRows ? '<table><thead><tr><th>Title</th><th>Subtitle</th><th>Link</th><th>Schedule</th><th>Status</th><th></th></tr></thead><tbody>' + savedRows + '</tbody></table>'
         : emptyState('empty_activity','No banners yet','Compose one above and click "Publish banner" to make it live.')) +
       '<h3>Saved JSON</h3><pre class="codebox" style="max-height:220px">' + esc(JSON.stringify(saved, null, 2)) + '</pre>';
     function syncFields() {
@@ -2836,6 +3059,8 @@
       if (btn.disabled) return;
       if (!bnPreview.title.trim()) { $('bn-out').textContent = 'Title required.'; return; }
       if (bnPreview.img && bnPreview.img.length > 300000) { $('bn-out').textContent = 'Image too large — pick one under ~200 KB.'; return; }
+      var bnProb = bannerWindowProblem(bnPreview.start, bnPreview.end);
+      if (bnProb) { $('bn-out').textContent = bnProb; return; }
       btn.disabled = true;
       $('bn-out').textContent = 'Publishing…';
       var next = saved.concat([{
@@ -2990,10 +3215,10 @@
       var sw = f.colors.map(function (c) {
         return '<i style="display:inline-block;width:14px;height:14px;border-radius:4px;margin-right:3px;background:' + esc(c) + ';border:1px solid var(--border-strong)"></i>';
       }).join('');
-      // Mini preview: the festival's own photo, canvas, ribbon and accent button.
+      // Mini preview: the festival's own photo, canvas and accent button. (11.7.2 —
+      // no coloured bar along the top: the app stopped drawing one in 11.6.0.)
       var preview = '<div style="position:relative;border-radius:10px;overflow:hidden;height:64px;background:' + esc(f.canvas) + ';border:1px solid var(--border-strong);margin:8px 0 10px">' +
         '<div style="position:absolute;inset:0;background-image:linear-gradient(180deg,rgba(5,7,15,.05),rgba(5,7,15,.72)),url(' + JSON.stringify(f.image || '') + ');background-size:cover;background-position:' + esc(f.imagePosition || 'center') + ';opacity:.8"></div>' +
-        '<div style="position:absolute;top:0;left:0;right:0;height:3px;background:' + esc(f.ribbon) + '"></div>' +
         '<div style="position:absolute;left:10px;top:14px;font-weight:900;font-size:12px;color:#fff;letter-spacing:.2px">VinaX</div>' +
         '<div style="position:absolute;left:10px;bottom:10px;height:8px;width:46%;border-radius:999px;background:rgba(255,255,255,.12)"></div>' +
         '<div style="position:absolute;right:10px;bottom:8px;padding:4px 10px;border-radius:999px;background:' + esc(f.accent) + ';color:#000;font-size:10px;font-weight:800">Play</div>' +
@@ -3014,7 +3239,7 @@
     }).join('');
     $('view').innerHTML =
       '<div class="stub-banner"><h4>Festival Themes \u2014 live control</h4>' +
-      '<p>Every festival is a full theme: a real photo backdrop, greeting splash, shape based confetti, accent colors, top ribbon, ambient glow and a living motif. The app follows its built-in calendar by default. ' +
+      '<p>Every festival is a full theme: a real photo backdrop, greeting splash, shape based confetti, accent colors, ambient glow and a living motif. The app follows its built-in calendar by default. ' +
       'From here you can <b>force</b> any festival for every listener right now, switch everything <b>off</b>, or return to <b>auto</b>. ' +
       '' + FEST_LIST.length + ' festivals, each its own theme (photo, accent, canvas, glow, motif and motion). Lunar dates are 2026 \u2014 refresh them yearly in <code>src/constants/festivals.ts</code>, then run <code>npm run gen:festivals</code>.</p></div>' +
       '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">Listeners currently see</h3>' +
@@ -3725,36 +3950,25 @@
   }
 
   // ---- Promotion --------------------------------------------------------------
-  // 20. Broadcast message.
-  function renderBroadcastSection() {
-    cfgEditor({
-      sec: 'broadcast', key: 'broadcast', title: 'Broadcast message', clearable: true, empty: null, saveLabel: 'Send to everyone',
-      help: 'A one-time toast every listener sees the next time the app is open (each broadcast id shows once per device). Optional in-app link (a path like <code>/later</code>). Optional window. Tick “Also push” to reach closed apps and subscribed browsers through notifications.',
-      form: function (v) { v = v || {}; return '<div class="broadcast-composer"><div>' + lbl('Message', inp('bc-text', v.text || '', 'New: Listen Later — save songs for later from any menu', 'style="width:100%" maxlength="240"')) + lbl('Link (optional, in-app path)', inp('bc-link', v.link || '', '/later', 'style="width:280px"')) + '<label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px"><input type="checkbox" id="bc-push" /> Also push as a notification (closed apps + browsers)</label>' + '<div class="row" style="gap:12px;flex-wrap:wrap"><div>' + lbl('From (optional)', inp('bc-start', isoLocal(v.start), '', 'type="datetime-local"')) + '</div><div>' + lbl('Until (optional)', inp('bc-end', isoLocal(v.end), '', 'type="datetime-local"')) + '</div></div></div><div class="broadcast-preview" aria-label="Broadcast preview"><span class="ops-eyebrow">LISTENER PREVIEW</span><div class="broadcast-device"><div class="broadcast-device-top">VinaX <span>now</span></div><strong id="bc-preview-text">' + esc(v.text || 'Your message will appear here') + '</strong><span id="bc-preview-link" class="muted">' + esc(v.link || 'No link') + '</span></div><p class="muted" style="font-size:11px">Preview updates as you type. Publishing remains a separate action.</p></div></div>'; },
-      read: function () { var t = $('bc-text').value.trim(); if (!t) throw new Error('Message is required'); var o = { id: 'b' + Date.now().toString(36), text: t.slice(0, 240) }; var l = $('bc-link').value.trim(); if (l) { if (l.charAt(0) !== '/') throw new Error('Link must be an in-app path starting with /'); o.link = l.slice(0, 200); } var s = fromLocal($('bc-start').value), e = fromLocal($('bc-end').value); if (s) o.start = s; if (e) o.end = e; return o; },
-      after: function (v) { return v && v.text ? '<div class="card"><b>Live broadcast:</b> “' + esc(v.text) + '” <span class="muted">· id ' + esc(v.id || '') + '</span></div>' : ''; },
-      wire: function () {
-        function paint() { var t = $('bc-preview-text'), l = $('bc-preview-link'); if (t) t.textContent = $('bc-text').value.trim() || 'Your message will appear here'; if (l) l.textContent = $('bc-link').value.trim() || 'No link'; }
-        ['bc-text', 'bc-link'].forEach(function (id) { var el = $(id); if (el) el.addEventListener('input', paint); });
-        paint();
-      },
-      // v5.19.0 — optional push through the same composer path the Notifications tool uses.
-      onSaved: function (v) {
-        var cb = $('bc-push'); if (!cb || !cb.checked) return;
-        postApi('/api/admin/push', { title: 'VinaX', body: v.text, link: v.link || '/' }).then(function (r) {
-          stampOut('broadcast-out', r && (r.ok || r.sent != null) ? 'Published ✓ · pushed to ' + (r.sent != null ? r.sent + ' devices' : 'subscribers') : 'Published ✓ · push failed' + (r && r.error ? ' — ' + r.error : ''), !(r && (r.ok || r.sent != null)));
-        }).catch(function () { stampOut('broadcast-out', 'Published ✓ · push failed — network', true); });
-      },
-    });
-  }
+  // 20. (11.7.2) The Broadcast message editor was folded into "Send a message"
+  // (renderNotify), which publishes the same `broadcast` key; #broadcast
+  // lands there through canonicalSec().
   // 21. Home greeting.
   function renderGreetingSection() {
     cfgEditor({
       sec: 'greeting', key: 'greeting', title: 'Home greeting line', clearable: true, empty: null,
-      help: 'Replaces the line under the Home headline for everyone while the window is open (e.g. “Festival week — new Diwali mixes every day”). Outside the window the app’s own personal message returns.',
+      help: 'One line at the top of Home that everyone sees while its window is open (e.g. “Festival week — new Diwali mixes every day”). Leave both dates empty to show it until you clear it. Outside the window, Home shows its usual personal greeting again.',
       form: function (v) { v = v || {}; return lbl('Line', inp('gr-text', v.text || '', 'Festival week — new mixes every day', 'style="width:100%" maxlength="160"')) + '<div class="row" style="gap:12px;flex-wrap:wrap"><div>' + lbl('From (optional)', inp('gr-start', isoLocal(v.start), '', 'type="datetime-local"')) + '</div><div>' + lbl('Until (optional)', inp('gr-end', isoLocal(v.end), '', 'type="datetime-local"')) + '</div></div>'; },
-      read: function () { var t = $('gr-text').value.trim(); if (!t) throw new Error('Line is required'); var o = { text: t.slice(0, 160) }; var s = fromLocal($('gr-start').value), e = fromLocal($('gr-end').value); if (s) o.start = s; if (e) o.end = e; return o; },
+      read: function () { var t = $('gr-text').value.trim(); if (!t) throw new Error('Line is required'); var o = { text: t.slice(0, 160) }; var s = fromLocal($('gr-start').value), e = fromLocal($('gr-end').value); var prob = windowProblem(s, e); if (prob) throw new Error(prob); if (s) o.start = s; if (e) o.end = e; return o; },
+      // 11.7.2 — what is published, and whether Home shows it right now.
+      after: function (v) { return '<div class="card" id="gr-status">' + greetingStatusHtml(v) + '</div>'; },
+      onSaved: function (v) { var el = $('gr-status'); if (el) el.innerHTML = greetingStatusHtml(v); },
     });
+  }
+  function greetingStatusHtml(v) {
+    if (!v || !v.text) return '<span class="muted">Nothing published — Home shows its usual personal greeting.</span>';
+    var st = windowStatus(v.start, v.end, 'until cleared');
+    return '<b>Published line:</b> “' + esc(v.text) + '” ' + statusPill(st) + ' <span class="muted">· ' + esc(st.detail) + '</span>';
   }
   // Home Layout Studio — the admin’s safe production default. Listener-side
   // Home Studio remains private and can preview AI layouts without publishing.
@@ -3786,28 +4000,21 @@
       read: function () { return $('faq-text').value.split(/\n\s*\n/).map(function (b) { var lines = b.trim().split('\n'); var q = (lines.shift() || '').trim().slice(0, 160); var a = lines.join('\n').trim().slice(0, 1200); return q && a ? { q: q, a: a } : null; }).filter(Boolean).slice(0, 30); },
     });
   }
-  // 23. Announcement composer (in-app announcement rows, picked up on open).
-  function renderAnnounceSection() {
-    $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">Announcement composer</h3><p class="muted">An in-app announcement listeners pick up the next time they open the app (native shows it as a local notification; web shows it in the app). Retract from Notifications → Sent log.</p>' +
-      lbl('Title', inp('an-title', '', 'Big update: 43 festival themes', 'style="width:100%" maxlength="80"')) + lbl('Body', '<textarea id="an-body" class="inp" rows="4" style="width:100%" maxlength="300" placeholder="What changed and why it matters"></textarea>') + lbl('Link (optional in-app path)', inp('an-link', '', '/settings', 'style="width:280px"')) +
-      '<div class="row" style="gap:8px;align-items:center;margin-top:12px"><button class="btn btn-primary" id="an-send">Publish announcement</button><span class="muted" id="an-out" style="font-size:12px"></span></div></div>';
-    $('an-send').addEventListener('click', function () {
-      var title = $('an-title').value.trim(), body = $('an-body').value.trim(), link = $('an-link').value.trim();
-      if (!title || !body) { stampOut('an-out', 'Title and body are required', true); return; }
-      vxConfirm('Publish this announcement to every listener?', { title: 'Announcement', okText: 'Publish' }).then(function (ok) {
-        if (!ok) return;
-        postApi('/api/admin/push', { title: title, body: body, link: link || '/' }).then(function (r) {
-          if (r && (r.ok || r.sent != null)) { stampOut('an-out', 'Published ✓'); $('an-title').value = ''; $('an-body').value = ''; }
-          else stampOut('an-out', 'Failed' + (r && r.error ? ' — ' + r.error : ''), true);
-        }).catch(function () { stampOut('an-out', 'Failed — network', true); });
-      });
-    });
-  }
+  // 23. (11.7.2) The Announcement composer was folded into "Send a message"
+  // (renderNotify); #announce lands there through canonicalSec().
 
   // ---- Settings ---------------------------------------------------------------
   // 24. Pinned tools — the operator's own shortlist at the top of the nav.
   var PINS_KEY = 'vinax_admin_pins';
-  function getPins() { try { return JSON.parse(localStorage.getItem(PINS_KEY) || '[]'); } catch (e) { return []; } }
+  function getPins() {
+    var raw;
+    try { raw = JSON.parse(localStorage.getItem(PINS_KEY) || '[]'); } catch (e) { return []; }
+    if (!Array.isArray(raw)) return [];
+    // 11.7.2 — a pinned retired tool (Broadcast / Announcement) becomes "Send a message" once.
+    var out = [];
+    raw.forEach(function (p) { p = canonicalSec(p); if (out.indexOf(p) < 0) out.push(p); });
+    return out;
+  }
   function applyPins() {
     var pins = getPins();
     var host = document.getElementById('nav-pins');
@@ -3861,7 +4068,7 @@
   }
   function fmtN(n) { n = Number(n) || 0; return n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(n); }
 
-  var TITLES = { workspace: 'Operations Workspace', overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', experiments: 'A/B Experiments', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Notifications', content: 'Content Control', ailab: 'API Monitoring', songs: 'Song Management', playlists: 'Playlist Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', festivals: 'Festival Themes', config: 'App Configuration', homebuilder: 'Home Layout Studio', retention: 'Retention Cohorts', dataquality: 'Data Quality', catalog: 'Catalog Lookup', engineprobe: 'Engine Probe', seo: 'SEO Corpus', edge: 'Edge & Endpoint Health', releases: 'Releases & CI', tables: 'Database Overview', audit: 'Audit Trail', flags: 'Feature Flags', runbook: 'Runbook', backup: 'Config Backup', trendpins: 'Trending Pins', statusnote: 'Status Note', usage: 'Feature Usage', heatmap: 'Listening Heatmap', funnel: 'Onboarding Funnel', segments: 'Audience Segments', songstats: 'Song Drilldown', skips: 'Skip Report', synonyms: 'Search Synonyms', sources: 'Catalog Sources', langorder: 'Language Order', blocklistio: 'Blocklist Import/Export', aistarters: 'AI Starter Prompts', aiquick: 'AI Quick Actions', airules: 'AI House Rules', cron: 'Cron Health', opscenter: 'Operations Center', statushist: 'Status History', envcheck: 'Environment Checklist', query: 'Query Console', relnotes: 'Release Notes', maintwin: 'Maintenance Scheduler', minver: 'Minimum App Version', broadcast: 'Broadcast Message', greeting: 'Home Greeting', faq: 'Help Center FAQ', announce: 'Announcement Composer', pins: 'Pinned Tools', aicost: 'AI Tokens & Cost', recquality: 'Recommendation Quality', aiops: 'AI Operations', recconfig: 'Recommendation Tuning', trends: 'Trend Operations' };
+  var TITLES = { workspace: 'Operations Workspace', overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', experiments: 'A/B Experiments', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Send a message', content: 'Content Control', ailab: 'API Monitoring', songs: 'Song Management', playlists: 'Playlist Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', festivals: 'Festival Themes', config: 'App Configuration', homebuilder: 'Home Layout Studio', retention: 'Retention Cohorts', dataquality: 'Data Quality', catalog: 'Catalog Lookup', engineprobe: 'Engine Probe', seo: 'SEO Corpus', edge: 'Edge & Endpoint Health', releases: 'Releases & CI', tables: 'Database Overview', audit: 'Audit Trail', flags: 'Feature Flags', runbook: 'Runbook', backup: 'Config Backup', trendpins: 'Trending Pins', statusnote: 'Status Note', usage: 'Feature Usage', heatmap: 'Listening Heatmap', funnel: 'Onboarding Funnel', segments: 'Audience Segments', songstats: 'Song Drilldown', skips: 'Skip Report', synonyms: 'Search Synonyms', sources: 'Catalog Sources', langorder: 'Language Order', blocklistio: 'Blocklist Import/Export', aistarters: 'AI Starter Prompts', aiquick: 'AI Quick Actions', airules: 'AI House Rules', cron: 'Cron Health', opscenter: 'Operations Center', statushist: 'Status History', envcheck: 'Environment Checklist', query: 'Query Console', relnotes: 'Release Notes', maintwin: 'Maintenance Scheduler', minver: 'Minimum App Version', greeting: 'Home Greeting', faq: 'Help Center FAQ', pins: 'Pinned Tools', aicost: 'AI Tokens & Cost', recquality: 'Recommendation Quality', aiops: 'AI Operations', recconfig: 'Recommendation Tuning', trends: 'Trend Operations' };
   var USES_RANGE = { workspace: true, location: true, world: true, music: true, technical: true, insights: true, ai: true, search: true, engagement: true, usage: true, heatmap: true, funnel: true, songstats: true, skips: true, aicost: true, recquality: true, aiops: true };
   // v5.7.5 — formal category reorganisation: which category each tool sits
   // under (drives the breadcrumb over the tool title) + collapsible category
@@ -3895,12 +4102,10 @@
     blocklistio: 'Export the blocklist, or import one from a file.',
     banners: 'Promotional banners with schedules and links.',
     festivals: 'Seasonal themes, applied from the calendar or forced.',
-    broadcast: 'A one-line message shown to every listener.',
-    greeting: 'The greeting line at the top of Home.',
+    greeting: 'A line at the top of Home for everyone, for as long as you choose.',
     homebuilder: 'The default order and visibility of Home shelves.',
     faq: 'Questions and answers in the in-app help centre.',
-    announce: 'Compose an announcement and preview it before it goes out.',
-    notify2: 'Send push notifications and review what went out.',
+    notify2: 'Reach everyone with a push notification, an in-app message, or both — and see what went out.',
     music: 'Top songs, artists and languages over the selected range.',
     search: 'What listeners search for, and which queries find nothing.',
     location: 'Listeners and plays by country, platform and city.',
@@ -3941,7 +4146,7 @@
     backup: 'Download or restore the published settings as one file.',
     pins: 'Pin the tools you use most to the top of the sidebar.'
   };
-  var CATS = { workspace: 'Dashboards', overview: 'Dashboards', realtime: 'Dashboards', live: 'Audience', activity: 'Audience', engagement: 'Audience', users: 'Audience', segments: 'Audience', songs: 'Catalog', playlists: 'Catalog', categories: 'Catalog', content: 'Catalog', banners: 'Promotion', festivals: 'Promotion', notify2: 'Promotion', homebuilder: 'Promotion', music: 'Analytics', search: 'Analytics', location: 'Analytics', world: 'Analytics', insights: 'Analytics', experiments: 'Analytics', ai: 'AI & Engines', ailab: 'AI & Engines', technical: 'Operations', feedback: 'Operations', rooms: 'Operations', opscenter: 'Operations', config: 'Settings', retention: 'Audience', dataquality: 'Operations', catalog: 'Catalog', engineprobe: 'AI & Engines', seo: 'Analytics', edge: 'Operations', releases: 'Operations', tables: 'Operations', audit: 'Operations', flags: 'Settings', runbook: 'Settings', backup: 'Settings', trendpins: 'Catalog', statusnote: 'Operations', usage: 'Audience', heatmap: 'Audience', funnel: 'Audience', songstats: 'Catalog', skips: 'Catalog', synonyms: 'Catalog', sources: 'Catalog', langorder: 'Catalog', blocklistio: 'Catalog', aistarters: 'AI & Engines', aiquick: 'AI & Engines', airules: 'AI & Engines', cron: 'Operations', statushist: 'Operations', envcheck: 'Operations', query: 'Operations', relnotes: 'Operations', maintwin: 'Operations', minver: 'Operations', broadcast: 'Promotion', greeting: 'Promotion', faq: 'Promotion', announce: 'Promotion', pins: 'Settings', aicost: 'AI & Engines', recquality: 'Analytics', aiops: 'AI & Engines', recconfig: 'Settings', trends: 'Catalog' };
+  var CATS = { workspace: 'Dashboards', overview: 'Dashboards', realtime: 'Dashboards', live: 'Audience', activity: 'Audience', engagement: 'Audience', users: 'Audience', segments: 'Audience', songs: 'Catalog', playlists: 'Catalog', categories: 'Catalog', content: 'Catalog', banners: 'Promotion', festivals: 'Promotion', notify2: 'Promotion', homebuilder: 'Promotion', music: 'Analytics', search: 'Analytics', location: 'Analytics', world: 'Analytics', insights: 'Analytics', experiments: 'Analytics', ai: 'AI & Engines', ailab: 'AI & Engines', technical: 'Operations', feedback: 'Operations', rooms: 'Operations', opscenter: 'Operations', config: 'Settings', retention: 'Audience', dataquality: 'Operations', catalog: 'Catalog', engineprobe: 'AI & Engines', seo: 'Analytics', edge: 'Operations', releases: 'Operations', tables: 'Operations', audit: 'Operations', flags: 'Settings', runbook: 'Settings', backup: 'Settings', trendpins: 'Catalog', statusnote: 'Operations', usage: 'Audience', heatmap: 'Audience', funnel: 'Audience', songstats: 'Catalog', skips: 'Catalog', synonyms: 'Catalog', sources: 'Catalog', langorder: 'Catalog', blocklistio: 'Catalog', aistarters: 'AI & Engines', aiquick: 'AI & Engines', airules: 'AI & Engines', cron: 'Operations', statushist: 'Operations', envcheck: 'Operations', query: 'Operations', relnotes: 'Operations', maintwin: 'Operations', minver: 'Operations', greeting: 'Promotion', faq: 'Promotion', pins: 'Settings', aicost: 'AI & Engines', recquality: 'Analytics', aiops: 'AI & Engines', recconfig: 'Settings', trends: 'Catalog' };
   var densityButton = $('density');
   if (densityButton) {
     var compact = false;
@@ -4161,11 +4366,9 @@
     else if (active === 'relnotes') loadReleaseNotes();
     else if (active === 'maintwin') renderMaintWindowSection();
     else if (active === 'minver') renderMinVersionSection();
-    else if (active === 'broadcast') renderBroadcastSection();
     else if (active === 'greeting') renderGreetingSection();
     else if (active === 'homebuilder') renderHomeBuilderSection();
     else if (active === 'faq') renderFaqSection();
-    else if (active === 'announce') renderAnnounceSection();
     else if (active === 'pins') renderPinsSection();
     else if (active === 'aicost') loadAiCost();
   }
@@ -4179,7 +4382,7 @@
   // Sections whose state lives in this browser (localStorage) — an auto-tick
   // re-render adds nothing and used to wipe in-progress edits the moment
   // focus left a field, and reset scroll every 10 s.
-  var LOCAL_SECTIONS = { songs: true, playlists: true, categories: true, banners: true, festivals: true, config: true, homebuilder: true, catalog: true, engineprobe: true, edge: true, flags: true, runbook: true, backup: true, trendpins: true, statusnote: true, songstats: true, synonyms: true, sources: true, langorder: true, blocklistio: true, aistarters: true, aiquick: true, airules: true, query: true, relnotes: true, maintwin: true, minver: true, broadcast: true, greeting: true, faq: true, announce: true, pins: true, statushist: true, envcheck: true };
+  var LOCAL_SECTIONS = { songs: true, playlists: true, categories: true, banners: true, festivals: true, config: true, homebuilder: true, catalog: true, engineprobe: true, edge: true, flags: true, runbook: true, backup: true, trendpins: true, statusnote: true, songstats: true, synonyms: true, sources: true, langorder: true, blocklistio: true, aistarters: true, aiquick: true, airules: true, query: true, relnotes: true, maintwin: true, minver: true, greeting: true, faq: true, pins: true, statushist: true, envcheck: true };
   function autoTick() {
     if (formFocused()) return;
     if (LOCAL_SECTIONS[active]) return;
@@ -4205,7 +4408,11 @@
   function isIdle() { return Date.now() - lastActivity > IDLE_MS; }
   function startAuto() { stopAuto(); if (autoRefresh && !document.hidden) autoTimer = setInterval(autoTick, refreshMs); }
   function stopAuto() { if (autoTimer) { clearInterval(autoTimer); autoTimer = null; } }
+  // 11.7.2 — retired tools whose links (bookmarks, pins, saved last section)
+  // must still land somewhere: both now live on "Send a message".
+  function canonicalSec(s) { return s === 'broadcast' || s === 'announce' ? 'notify2' : s; }
   function setSection(sec) {
+    sec = canonicalSec(sec);
     memoReset();
     retryFns = {};
     active = sec;
@@ -4567,7 +4774,7 @@
       // and the sidebar search is a secondary always-visible filter.
     }
     document.addEventListener('visibilitychange', function () { if (document.hidden) stopAuto(); else { refreshActive(); startAuto(); } });
-    window.addEventListener('hashchange', function () { var s = (location.hash || '').replace('#', ''); if (TITLES[s] && s !== active) setSection(s); });
+    window.addEventListener('hashchange', function () { var s = canonicalSec((location.hash || '').replace('#', '')); if (TITLES[s] && s !== active) setSection(s); });
     document.addEventListener('keydown', function (e) {
       var tag = (e.target && e.target.tagName) || '';
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
@@ -4581,7 +4788,7 @@
   function start() {
     showApp(); buildRange(); initEnhancements();
     if (autoRefresh) document.body.classList.add('live');
-    var initial = (location.hash || '').replace('#', '');
+    var initial = canonicalSec((location.hash || '').replace('#', ''));
     setSection(TITLES[initial] ? initial : (localStorage.getItem('vinax_admin_sec') || HOME_SEC));
   }
 

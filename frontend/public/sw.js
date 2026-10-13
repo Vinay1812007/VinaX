@@ -271,7 +271,10 @@ self.addEventListener('push', (event) => {
     body: data.body || '',
     icon: data.icon || '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
-    tag: data.tag || 'vinax',
+    // 11.7.2 — a tag of its own per message. One shared 'vinax' tag made every
+    // new notification silently REPLACE the one before it (no sound, no
+    // banner), so a second send looked like it never arrived.
+    tag: data.tag || 'vinax-' + Date.now(),
     data: { url: data.url || '/' },
   };
   event.waitUntil(self.registration.showNotification(title, options));

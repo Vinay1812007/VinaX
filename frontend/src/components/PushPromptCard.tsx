@@ -1,29 +1,48 @@
 import { useEffect, useState } from 'react';
-import { enablePush, pushSupported } from '@/services/push';
 import { toast } from '@/store/toastStore';
 import { BellIcon } from './Icons';
 
-const KEY = 'vinax.push-prompt.v1';
+/**
+ * Notifications ask on Home — web push AND the Android app.
+ *
+ * 11.7.2 — it used to show once ever ("Not now" hid it for good), never on
+ * the app (the WebView has no Push API, but the app has native push), and not
+ * when a browser had granted permission without the server ever saving the
+ * device. Now it shows whenever notifications can still be turned on, and
+ * "Not now" hides it for 14 days. The shared logic is services/push/notifyAsk.
+ */
+export const CARD_KEY = 'vinax.push-prompt.v2';
+export const CARD_SNOOZE_MS = 14 * 86_400_000;
 
-/** One-time notifications ask on Home (web push). Hidden on the app — the
- *  WebView has no Push API; the app uses announcement alerts instead. */
+function cardSnoozed(now = Date.now()): boolean {
+  try {
+    const until = Number(localStorage.getItem(CARD_KEY));
+    return Number.isFinite(until) && until > now;
+  } catch {
+    return false;
+  }
+}
+
 export function PushPromptCard() {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    try {
-      if (!pushSupported()) return;
-      if (localStorage.getItem(KEY)) return;
-      if (Notification.permission !== 'default') return;
-      setShow(true);
-    } catch {
-      /* stay hidden */
-    }
+    if (cardSnoozed()) return undefined;
+    let live = true;
+    void import('@/services/push/notifyAsk')
+      .then((m) => m.notifyState())
+      .then((state) => {
+        if (live && state === 'askable') setShow(true);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
   }, []);
   if (!show) return null;
   const dismiss = (): void => {
     try {
-      localStorage.setItem(KEY, '1');
+      localStorage.setItem(CARD_KEY, String(Date.now() + CARD_SNOOZE_MS));
     } catch {
       /* ignore */
     }
@@ -31,16 +50,15 @@ export function PushPromptCard() {
   };
   const turnOn = async (): Promise<void> => {
     setBusy(true);
-    const r = await enablePush();
-    setBusy(false);
-    if (r === 'ok') {
-      toast('Notifications on — you’ll know when something new lands');
-      dismiss();
-    } else if (r === 'denied') {
-      dismiss();
-    } else {
-      toast('Could not enable notifications — try from Settings later');
-      setShow(false);
+    try {
+      const m = await import('@/services/push/notifyAsk');
+      const r = await m.turnOnNotifications();
+      toast(m.turnOnMessage(r));
+      if (r === 'ok' || r === 'denied' || r === 'unsupported') setShow(false);
+    } catch {
+      toast('Couldn’t turn on notifications — try again from Settings');
+    } finally {
+      setBusy(false);
     }
   };
   return (

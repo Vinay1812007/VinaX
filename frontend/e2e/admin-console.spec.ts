@@ -7,7 +7,7 @@ import { test, expect, type Page } from '@playwright/test';
  * `#nav button[data-sec]` is opened and must render a non-empty panel (with
  * content probes for the panels that have known fixtures), then the key
  * interactions are exercised — catalog search, song drilldown, query console,
- * synonyms publish, broadcast publish, pinning a tool. Zero page errors and
+ * synonyms publish, sending a message (push + in-app), pinning a tool. Zero page errors and
  * zero console errors tolerated. All non-localhost network is aborted.
  *
  * Shell (v11.0): `header#topbar` holds the drawer button, the section title,
@@ -45,6 +45,15 @@ function initialConfig(): Record<string, unknown> {
 }
 
 const MOCK: Record<string, unknown> = {
+  '/api/admin/push': { configured: true, subscribers: 1, fcm: 2, geo: null },
+  '/api/admin/notifylog': {
+    rows: [
+      { type: 'push-receipt', created_at: iso(1), message: JSON.stringify({ ts: 222, title: 'Hyderabad only', web: { total: 4, sent: 3, gone: 1, failed: 0 }, fcm: 5, audience: 'IN · Hyderabad' }) },
+      { type: 'push-receipt', created_at: iso(2), message: JSON.stringify({ ts: 111, title: 'Weekend mix', web: { total: 1, sent: 1, gone: 0, failed: 0 }, fcm: 0, audience: 'all' }) },
+      { type: 'announcement', created_at: iso(2), message: JSON.stringify({ ts: 111, title: 'Weekend mix', body: 'Fresh picks' }) },
+      { type: 'announcement', created_at: iso(30), message: JSON.stringify({ title: 'Old news', body: 'Before receipts' }) },
+    ],
+  },
   '/api/admin/overview': { totals: {}, today: {}, series: [] },
   '/api/admin/retention': { configured: true, cohorts: [{ cohort_week: iso(24 * 14), cohort_size: 120, d1: 42.5, d7: 21, d30: 9 }, { cohort_week: iso(24 * 7), cohort_size: 88, d1: 38, d7: 19, d30: null }] },
   '/api/admin/dataquality': { score: 87, sampled: 5000, metrics: { originVerifiedPct: 98, countryResolvedPct: 91, aiOkPct: 96, aiContentPct: 94 }, slos: [{ name: 'AI success', targetPct: 95, actualPct: 96, budgetBurnedPct: 40 }, { name: 'Play origin', targetPct: 97, actualPct: 98, budgetBurnedPct: 12 }] },
@@ -138,11 +147,10 @@ const PROBES: Record<string, RegExp> = {
   relnotes: /releases with cards[\s\S]*v?\d+\.\d+\.\d+/i,
   maintwin: /current window/i,
   minver: /5140/,
-  broadcast: /hello everyone/i,
-  greeting: /festival week/i,
+  greeting: /festival week[\s\S]*live now/i,
   faq: /how do i download\?/i,
-  announce: /announcement composer/i,
   pins: /pinned tools/i,
+  notify2: /live in the app[\s\S]*hello everyone[\s\S]*reached 1 of 1 browsers · 0 android/i,
   festivals: /festivals, each its own theme/i,
 };
 
@@ -182,6 +190,9 @@ async function mockBackend(page: Page): Promise<Backend> {
     } else if (p === '/api/appconfig') {
       const k = url.searchParams.get('key') ?? '';
       body = { [k]: backend.cfg[k] ?? null };
+    } else if (req.method() === 'POST' && p === '/api/admin/push') {
+      backend.posted.push(p);
+      body = { ok: true, total: 1, sent: 1, gone: 0, fcm: 2, target: 'all' };
     } else if (req.method() === 'POST') {
       backend.posted.push(p);
       body = { ok: true, sent: 3 };
@@ -336,7 +347,7 @@ test('User Management downloads a listener profile, their activity and the whole
   expect(errors).toEqual([]);
 });
 
-test('synonyms and broadcast publish through appconfig; pinning a tool adds it to the nav', async ({ page }) => {
+test('synonyms publish through appconfig; a message goes out as push + in-app; pinning a tool adds it to the nav', async ({ page }) => {
   await login(page);
   const backend = await mockBackend(page);
   const errors = collectErrors(page);
@@ -350,16 +361,27 @@ test('synonyms and broadcast publish through appconfig; pinning a tool adds it t
   await expect.poll(() => backend.cfg['search-synonyms']).toEqual({ arr: 'A. R. Rahman', ssmb: 'Mahesh Babu' });
   await expect(page.locator('#synonyms-out')).toContainText(/published/i);
 
-  await openSection(page, 'broadcast');
-  await expect(page.locator('#bc-text')).toBeVisible();
-  await page.locator('#bc-text').fill('New: Listen Later');
-  await page.locator('#bc-link').fill('/later');
-  await page.locator('#broadcast-save').click();
+  // 11.7.2 — the retired Broadcast / Announcement hashes land on "Send a message".
+  await page.evaluate(() => { location.hash = 'broadcast'; });
+  await expect(page.locator('#secTitle')).toHaveText('Send a message');
+  await expect(page.locator('#pn-send')).toBeVisible();
+  await expect(page.locator('#pn-stat')).toContainText(/1 browser · 2 Android devices/);
+  await page.locator('#pn-title').fill('Big news');
+  await page.locator('#pn-body').fill('New: Listen Later');
+  await page.evaluate(() => document.querySelector<HTMLButtonElement>('.pn-kind[data-k="custom"]')?.click());
+  await page.locator('#pn-link').fill('/later');
+  await page.locator('#pn-send').click();
+  await expect(page.locator('.vxd-msg')).toContainText(/Push to 1 browser and 2 Android devices, and show in the app until /);
+  await page.locator('.vxd-ok').click();
   await expect
     .poll(() => backend.cfg.broadcast as { id?: string; text?: string; link?: string } | undefined)
-    .toMatchObject({ text: 'New: Listen Later', link: '/later' });
-  expect((backend.cfg.broadcast as { id: string }).id).toMatch(/^b/);
-  expect(backend.posted).toEqual(expect.arrayContaining(['search-synonyms', 'broadcast']));
+    .toMatchObject({ text: 'Big news — New: Listen Later', link: '/later' });
+  const sentBroadcast = backend.cfg.broadcast as { id: string; end?: string };
+  expect(sentBroadcast.id).toMatch(/^b/);
+  expect(Date.parse(sentBroadcast.end ?? '') - Date.now()).toBeGreaterThan(2 * 86_400_000);
+  await expect(page.locator('#pn-out')).toContainText(/Pushed to 1 of 1 browsers · 2 Android devices/);
+  await expect(page.locator('#pn-out')).toContainText(/In the app until /);
+  expect(backend.posted).toEqual(expect.arrayContaining(['search-synonyms', 'broadcast', '/api/admin/push']));
 
   await openSection(page, 'pins');
   await expect(page.locator('[data-pintoggle="cron"]')).toBeAttached();
@@ -369,7 +391,7 @@ test('synonyms and broadcast publish through appconfig; pinning a tool adds it t
   expect(errors).toEqual([]);
 });
 
-test('operations center, audience segments and broadcast preview are actionable', async ({ page }) => {
+test('operations center, audience segments and the message window guard are actionable', async ({ page }) => {
   await login(page);
   const errors = collectErrors(page);
   await mockBackend(page);
@@ -386,11 +408,17 @@ test('operations center, audience segments and broadcast preview are actionable'
   await page.locator('[data-audseg="power"]').click();
   await expect(page.locator('#view')).toContainText(/power listeners/i);
 
-  await openSection(page, 'broadcast');
-  await page.locator('#bc-text').fill('Preview this update');
-  await page.locator('#bc-link').fill('/discover');
-  await expect(page.locator('#bc-preview-text')).toHaveText('Preview this update');
-  await expect(page.locator('#bc-preview-link')).toHaveText('/discover');
+  await openSection(page, 'notify2');
+  await expect(page.locator('#pn-send')).toBeVisible();
+  await page.locator('#pn-body').fill('Quick one');
+  await page.evaluate(() => {
+    const d = new Date(Date.now() + 10 * 60_000);
+    const p = (n: number): string => String(n).padStart(2, '0');
+    (document.getElementById('pn-until') as HTMLInputElement).value = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  });
+  await page.locator('#pn-send').click();
+  await expect(page.locator('#pn-out')).toContainText(/at least an hour/);
+  await expect(page.locator('.vxd-msg')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

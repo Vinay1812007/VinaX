@@ -88,8 +88,16 @@ function useClientConfigEffects(): void {
     const b = cfg.broadcast;
     if (b && getLocal<string>(BROADCAST_SEEN_KEY, '') !== b.id) {
       setLocal(BROADCAST_SEEN_KEY, b.id);
-      toast(b.text);
-      if (b.link) window.setTimeout(() => { if (location.pathname !== b.link) navigate(b.link as string); }, 1200);
+      // 11.7.2 — the owner's message used to flash as a 4-second toast and then
+      // yank the listener to its link a second later, which read as a glitch
+      // and was easy to miss. It now stays up for 15 s and the link is the
+      // listener's choice ("Open").
+      const link = b.link;
+      toast(b.text, {
+        key: 'broadcast',
+        duration: 15_000,
+        ...(link && link !== location.pathname ? { action: { label: 'Open', onClick: () => navigate(link) } } : {}),
+      });
     }
   }, [cfg, navigate]);
 }
@@ -248,6 +256,8 @@ export function AppLayout() {
       void import('@/services/analytics/listenClock').then((m) => m.initListenClock()).catch(() => undefined);
       // v6.3.0 — remember which hand-offs the listener finished or skipped.
       void import('@/services/recommendation/transitionTracker').then((m) => m.initTransitionTracker()).catch(() => undefined);
+      // 11.7.2 — after the second song of a session, offer to turn on notifications (web + app).
+      void import('@/services/push/notifyAsk').then((m) => m.installNotifyAsk()).catch(() => undefined);
       // A username chosen while offline stays "pending" until the service
       // confirms it — retry now and on every reconnect.
       void import('@/features/identity/handleClaim').then((m) => m.installClaimRetry()).catch(() => undefined);
