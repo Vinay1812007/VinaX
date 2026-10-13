@@ -5,7 +5,7 @@ import { buildTodayBrief, type TodayBrief } from '@/features/ai/todayBrief';
 import { firstName, timeOfDay } from './storage';
 import { siteName } from './citations';
 import { SiteMark } from './SiteMark';
-import { headlinePrompt, loadHeadlines, type Headline } from './headlines';
+import { headlinePrompt, loadHeadlines, seenAgo, type Headline } from './headlines';
 import { hasMakerLogo, MakerLogo } from './MakerLogo';
 import type { MakerFamily } from './chatStyle';
 
@@ -135,6 +135,7 @@ export function TrendingNow({ onSend }: { onSend: (text: string) => void }): Rea
               <span className="ai-trending-site">
                 <SiteMark host={h.site} letter={name.charAt(0).toUpperCase()} />
                 {name}
+                {seenAgo(h.at) && <span className="ai-trending-when"> · {seenAgo(h.at)}</span>}
               </span>
             </button>
           );

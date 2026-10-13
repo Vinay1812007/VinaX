@@ -104,7 +104,7 @@ describe('currentHeadlines and GET /api/ai/headlines', () => {
   it('reads the stored row, validated, and never searches', async () => {
     const calls = install({ stored: fresh() });
     const doc = await currentHeadlines(ENV);
-    expect(doc?.topics[0].items).toEqual([{ title: 'A <b>story</b>', url: 'https://a.example/1', site: 'a.example' }]);
+    expect(doc?.topics[0].items).toEqual([{ title: 'A <b>story</b>', url: 'https://a.example/1', site: 'a.example', at: null }]);
     expect(serperCalls(calls)).toHaveLength(0);
     const { onRequestGet } = await import('../functions/api/ai/headlines');
     resetHeadlinesCache();
@@ -124,6 +124,37 @@ describe('currentHeadlines and GET /api/ai/headlines', () => {
     expect(await currentHeadlines(ENV)).toBeNull();
     const { onRequestGet } = await import('../functions/api/ai/headlines');
     expect(await (await onRequestGet({ env: ENV })).json()).toEqual({ topics: [] });
+  });
+});
+
+describe('13.1 — one story once, each story on its own clock', () => {
+  it('drops a repeated url and a repeated title across topics (first appearance wins)', () => {
+    const doc = readHeadlinesDoc({ updatedAt: new Date().toISOString(), topics: [
+      { id: 'india', items: [{ title: 'Budget passed', url: 'https://a.example/1' }, { title: 'BUDGET passed!', url: 'https://b.example/2' }] },
+      { id: 'tech', items: [{ title: 'Something else', url: 'https://a.example/1' }, { title: 'Chip plant opens', url: 'https://c.example/3' }] },
+    ] });
+    expect(doc?.topics.find((t) => t.id === 'india')?.items.map((h) => h.url)).toEqual(['https://a.example/1']);
+    expect(doc?.topics.find((t) => t.id === 'tech')?.items.map((h) => h.title)).toEqual(['Chip plant opens']);
+  });
+
+  it('keeps a valid per-item observation time and drops an unreadable one', () => {
+    const at = '2026-10-13T00:00:00.000Z';
+    const doc = readHeadlinesDoc({ updatedAt: new Date().toISOString(), topics: [
+      { id: 'india', items: [{ title: 'Stamped', url: 'https://a.example/1', at }, { title: 'Garbled', url: 'https://a.example/2', at: 'not a time' }] },
+    ] });
+    expect(doc?.topics[0].items.map((h) => h.at)).toEqual([at, null]);
+  });
+
+  it('an item older than a day ages out on its own, inside a fresh document', async () => {
+    const now = Date.now();
+    const old = new Date(now - 26 * 3_600_000).toISOString();
+    const recent = new Date(now - 2 * 3_600_000).toISOString();
+    resetHeadlinesCache();
+    install({ stored: { updatedAt: new Date(now).toISOString(), topics: [
+      { id: 'india', items: [{ title: 'Carried for a day', url: 'https://a.example/old', at: old }, { title: 'Seen this morning', url: 'https://a.example/new', at: recent }] },
+    ] } });
+    const doc = await currentHeadlines(ENV, now);
+    expect(doc?.topics.find((t) => t.id === 'india')?.items.map((h) => h.url)).toEqual(['https://a.example/new']);
   });
 });
 

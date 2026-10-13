@@ -11,6 +11,8 @@ export interface Headline {
   title: string;
   url: string;
   site: string;
+  /** 13.1 — when the server first saw the story (ISO), or null on older documents. */
+  at: string | null;
 }
 
 const TOPICS = new Set(['india', 'tech']);
@@ -26,11 +28,12 @@ export function readHeadlines(raw: unknown): Headline[] {
     const topic = typeof o.label === 'string' && o.label.trim() ? o.label.trim().slice(0, 20) : o.id;
     const list: Headline[] = [];
     for (const it of Array.isArray(o.items) ? o.items : []) {
-      const x = (it ?? {}) as { title?: unknown; url?: unknown; site?: unknown };
+      const x = (it ?? {}) as { title?: unknown; url?: unknown; site?: unknown; at?: unknown };
       const url = typeof x.url === 'string' && /^https?:\/\/\S+$/i.test(x.url) ? x.url : '';
       const title = typeof x.title === 'string' ? x.title.replace(/\s+/g, ' ').trim().slice(0, 160) : '';
       const site = typeof x.site === 'string' && /^[a-z0-9.-]{1,100}$/i.test(x.site) ? x.site : '';
-      if (url && title && site && list.length < 4) list.push({ topic, title, url, site });
+      const at = typeof x.at === 'string' && Number.isFinite(Date.parse(x.at)) ? x.at : null;
+      if (url && title && site && list.length < 4) list.push({ topic, title, url, site, at });
     }
     lists.push(list);
   }
@@ -67,3 +70,16 @@ export function loadHeadlines(now = Date.now()): Promise<Headline[]> {
 
 /** What tapping a headline asks: about this story, now (so the chat searches for it). */
 export const headlinePrompt = (h: Pick<Headline, 'title'>): string => `What's the latest news on this: "${h.title}"?`;
+
+/** "2h ago" / "just now" for a story's observation time; '' when unknown or in the future. */
+export function seenAgo(at: string | null, now = Date.now()): string {
+  if (!at) return '';
+  const ms = now - Date.parse(at);
+  if (!Number.isFinite(ms) || ms < 0) return '';
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 5) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}

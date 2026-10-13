@@ -7,7 +7,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TrendingNow } from './EmptyState';
-import { headlinePrompt, loadHeadlines, readHeadlines, resetHeadlines } from './headlines';
+import { headlinePrompt, loadHeadlines, readHeadlines, resetHeadlines, seenAgo } from './headlines';
 
 const ANSWER = {
   updatedAt: '2026-10-13T06:23:00.000Z',
@@ -73,5 +73,25 @@ describe('TrendingNow', () => {
     await vi.waitFor(() => expect(f).toHaveBeenCalled());
     await Promise.resolve();
     expect(container.querySelector('.ai-trending')).toBeNull();
+  });
+});
+
+describe('13.1 — a story\'s observation time', () => {
+  it('keeps a valid at, nulls an unreadable one', () => {
+    const items = readHeadlines({ topics: [{ id: 'india', items: [
+      { title: 'Stamped', url: 'https://a.example/1', site: 'a.example', at: '2026-10-13T00:00:00.000Z' },
+      { title: 'Garbled', url: 'https://a.example/2', site: 'a.example', at: 'yesterday-ish' },
+    ] }] });
+    expect(items.map((h) => h.at)).toEqual(['2026-10-13T00:00:00.000Z', null]);
+  });
+
+  it('seenAgo says how long ago, and nothing for unknown or future times', () => {
+    const now = Date.parse('2026-10-14T12:00:00.000Z');
+    expect(seenAgo('2026-10-14T11:58:00.000Z', now)).toBe('just now');
+    expect(seenAgo('2026-10-14T11:20:00.000Z', now)).toBe('40m ago');
+    expect(seenAgo('2026-10-14T05:00:00.000Z', now)).toBe('7h ago');
+    expect(seenAgo('2026-10-11T05:00:00.000Z', now)).toBe('3d ago');
+    expect(seenAgo(null, now)).toBe('');
+    expect(seenAgo('2026-10-15T00:00:00.000Z', now)).toBe('');
   });
 });
