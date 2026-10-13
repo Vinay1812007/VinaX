@@ -254,11 +254,25 @@ describe('serperSearch', () => {
   });
 });
 
+describe('websites (11.8.1)', () => {
+  it('mentionsSite: a domain or a link, not code, abbreviations or an email address', async () => {
+    const { mentionsSite } = await import('../functions/_lib/serper');
+    for (const yes of ['sportsmart.com', 'what is sportsmart.com?', 'is www.example.in down', 'https://news.example.org/a/b', 'check vinax.app', '(see example.co.uk)']) expect(mentionsSite(yes)).toBe(true);
+    for (const no of ['node.js is great', 'e.g. this', 'i.e. that', 'mail me at a@b.com', 'console.log(x)', 'version 1.2.3', 'plain words']) expect(mentionsSite(no)).toBe(false);
+  });
+
+  it('a bare domain is searched as itself, never padded with the previous message', () => {
+    expect(buildSearchQuery('sportsmart.com', 'Tell me about Pushpa 3')).toBe('sportsmart.com');
+    expect(buildSearchQuery('what is https://shop.example.com/p/123?token=abc', 'earlier topic here')).toBe('what is shop.example.com');
+  });
+});
+
 describe('buildSearchQuery', () => {
   it('drops attached file text, fenced code and URLs, and collapses whitespace', () => {
     const msg = 'What is the   latest version of React?\n```js\nconsole.log(1)\n```\nsee https://example.com/x?y=1 and www.example.org\n\n--- File: notes.txt ---\nsecret notes 2026 news\n\n--- File: b.pdf (excerpt) ---\nmore';
     const q = buildSearchQuery(msg);
-    expect(q).toBe('What is the latest version of React? see and');
+    // A link keeps only its host: never a path, a query or a token.
+    expect(q).toBe('What is the latest version of React? see example.com and example.org');
     expect(cleanForQuery('--- File: a.txt ---\nonly a file')).toBe('');
     expect(buildSearchQuery('\n\n--- File: a.txt ---\nonly a file', 'previous')).toBe('');
   });
@@ -278,6 +292,6 @@ describe('buildSearchQuery', () => {
     expect(buildSearchQuery('who won the IPL final in 2026 yesterday', prev)).toBe('who won the IPL final in 2026 yesterday');
     expect(buildSearchQuery('when is it releasing?')).toBe('when is it releasing?');
     // The previous message's files, code and links never leak in.
-    expect(buildSearchQuery('price today?', 'Pixel phone https://shop.example/p\n\n--- File: x.txt ---\nprivate')).toBe('Pixel phone price today?');
+    expect(buildSearchQuery('price today?', 'Pixel phone https://shop.example/p?token=abc\n\n--- File: x.txt ---\nprivate')).toBe('Pixel phone shop.example price today?');
   });
 });

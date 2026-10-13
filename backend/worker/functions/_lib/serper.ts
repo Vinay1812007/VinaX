@@ -201,7 +201,7 @@ const STOP = new Set(
   'a an the and or but if of to in on at for from by with about as is are was were be been being do does did have has had i me my we our you your he she it they them this that these those what when where who whom which why how can could would should will shall may might must please tell show give find search look up just also any some more most very so than then there here not no yes ok okay hey hi hello vinax ai'.split(' '),
 );
 
-/** One message as plain query text: attached file text, fenced code, URLs and the chat's data fence removed. Pure. */
+/** One message as plain query text: attached file text and fenced code removed, links reduced to their host. Pure. */
 export function cleanForQuery(text: string): string {
   let s = typeof text === 'string' ? text : '';
   const file = s.indexOf(FILE_BLOCK);
@@ -209,10 +209,29 @@ export function cleanForQuery(text: string): string {
   return s
     .replace(/```[\s\S]*?(?:```|$)/g, ' ')
     .replace(/`[^`\n]*`/g, ' ')
-    .replace(/\bhttps?:\/\/\S+/gi, ' ')
-    .replace(/\bwww\.\S+/gi, ' ')
+    // 11.8.1 — a link becomes its site's name only: never a path or a query
+    // string (they can carry ids or tokens), but "what is this site?" still searches.
+    .replace(/\bhttps?:\/\/[^\s/?#]+\S*/gi, (u) => linkHost(u))
+    .replace(/\bwww\.[^\s/?#]+\S*/gi, (u) => linkHost(`https://${u}`))
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function linkHost(u: string): string {
+  try {
+    const host = new URL(u).hostname.replace(/^www\./, '');
+    return ` ${host} `;
+  } catch {
+    return ' ';
+  }
+}
+
+/** 11.8.1 — a website named in the text: a link, or a bare domain on a common
+ *  suffix ("sportsmart.com", "example.co.in"). Not an email address, not a
+ *  file name (index.js). Pure. */
+const SITE = /(?:^|[\s(<"'“‘])(?:https?:\/\/|www\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|net|org|in|io|co|ai|app|dev|me|info|online|site|store|shop|xyz|tech|edu|gov|uk|us|tv|biz|news|blog|live|today|world|page|link|so|gg|fm|ly|to)(?:\.[a-z]{2})?(?:[/?#][^\s]*)?(?=$|[\s)>"'”’,.!?:;])/i;
+export function mentionsSite(text: string): boolean {
+  return typeof text === 'string' && SITE.test(text);
 }
 
 function contentWords(text: string, max: number): string[] {
@@ -226,7 +245,7 @@ function contentWords(text: string, max: number): string[] {
 /**
  * 11.8 — the search query for one chat turn. Built from the latest user
  * message ONLY (never taste, memory, project, profile or place text): attached
- * files, fenced code and URLs stripped, whitespace collapsed, ≤ 300 chars. A
+ * files and fenced code stripped, links cut to their host, whitespace collapsed, ≤ 300 chars. A
  * short or pronoun-led follow-up ("when is it releasing?") gets up to 8
  * content words of the previous user message in front. Pure.
  */
@@ -236,7 +255,8 @@ export function buildSearchQuery(latest: string, previous?: string | null): stri
   if (!q) return '';
   const words = q.split(' ').filter(Boolean);
   // Short, pronoun-led, or a short question that leans on "it"/"they"/… ("when is it releasing?").
-  const needsContext = words.length < 4 || REFERENCE_START.test(q) || (words.length <= 8 && REFERENCE_ANYWHERE.test(q));
+  // A message that names a website is about that site: no borrowed words.
+  const needsContext = !mentionsSite(q) && (words.length < 4 || REFERENCE_START.test(q) || (words.length <= 8 && REFERENCE_ANYWHERE.test(q)));
   const extra = needsContext && previous ? contentWords(previous, 8) : [];
   const lowerQ = q.toLowerCase();
   const prefix = extra.filter((w) => !lowerQ.includes(w.toLowerCase()));

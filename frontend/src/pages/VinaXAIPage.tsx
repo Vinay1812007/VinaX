@@ -807,6 +807,8 @@ export default function VinaXAIPage(): ReactNode {
             ...m,
             content: st.text,
             tools: st.tools.length ? st.tools : undefined,
+            // 11.8.1 — the live web search status, until the first word.
+            activity: st.activity ?? undefined,
             ...(st.model ? { engine: st.model, engineProvider: isProviderId(st.provider) ? st.provider : undefined } : {}),
           })),
       });
@@ -859,6 +861,7 @@ export default function VinaXAIPage(): ReactNode {
       engine: engine || undefined,
       engineProvider: engine ? engineProvider : undefined,
       tools: engine && state.tools.length ? state.tools : undefined,
+      activity: undefined,
       // 11.0 — the pages a web-grounded reply drew on, kept with the chat.
       sources: engine && state.sources ? state.sources : undefined,
       followups: split.followups.length ? split.followups : undefined,

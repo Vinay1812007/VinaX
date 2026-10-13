@@ -13,6 +13,12 @@
  *                                  `supports` (11.2): [{ text, sources }] — the
  *                                  reply's segments each page backs
  *   { done: true, truncated? }     the end; `truncated` = cut short mid-reply
+ *   { status: { step, query,       11.8.1: a web search before the reply —
+ *               count?, sites? } }  'searching', then 'searched' (results found)
+ *   { failed: { status, body } }   11.8.1: a turn that already streamed its
+ *                                  search status and then could not answer:
+ *                                  the HTTP status and JSON body it would
+ *                                  otherwise have answered with
  *
  * Parsing used to live inline in the page's send() loop, tangled with React
  * state. Here it is two pure functions — split the byte stream into frames,
@@ -22,7 +28,7 @@
  * know (an older server's extra meta, any other frame kind) are ignored.
  */
 
-import type { MsgSources, MsgSupport } from './types';
+import type { MsgActivity, MsgSources, MsgSupport } from './types';
 
 export interface StreamState {
   /** The reply so far. */
@@ -37,6 +43,10 @@ export interface StreamState {
   tools: string[];
   /** 11.0 — the pages a grounded reply drew on (null until the event arrives). */
   sources: MsgSources | null;
+  /** 11.8.1 — the live search status (null when the turn is not searching). */
+  activity: MsgActivity | null;
+  /** 11.8.1 — the service could not answer after the stream began (its status and JSON body). */
+  failed: { status: number; body: unknown } | null;
   /** The service said the reply was cut short. */
   truncated: boolean;
   done: boolean;
@@ -51,6 +61,8 @@ export const initialStreamState = (): StreamState => ({
   provider: '',
   tools: [],
   sources: null,
+  activity: null,
+  failed: null,
   truncated: false,
   done: false,
   malformed: 0,
@@ -136,6 +148,8 @@ export function reduceFrame(state: StreamState, frame: unknown): StreamState {
     truncated?: unknown;
     meta?: { model?: unknown; modelId?: unknown; provider?: unknown; tools?: unknown } | null;
     sources?: unknown;
+    status?: unknown;
+    failed?: unknown;
   };
   let next = state;
   const set = (patch: Partial<StreamState>): void => {
@@ -160,6 +174,29 @@ export function reduceFrame(state: StreamState, frame: unknown): StreamState {
     const sources = readSources(f.sources);
     if (sources) set({ sources });
   }
+  if (f.status !== undefined) {
+    const activity = readActivity(f.status);
+    if (activity) set({ activity });
+  }
+  if (f.failed && typeof f.failed === 'object' && !Array.isArray(f.failed) && !next.failed) {
+    const st = (f.failed as { status?: unknown }).status;
+    set({ failed: { status: typeof st === 'number' && st >= 400 && st < 600 ? st : 500, body: (f.failed as { body?: unknown }).body ?? null } });
+  }
   if (f.done === true && !next.done) set({ done: true });
   return next;
+}
+
+/** 11.8.1 — a `status` payload, validated: a known step, the query (≤ 300
+ *  characters), a result count, and up to 5 host names. Null when unusable. */
+export function readActivity(raw: unknown): MsgActivity | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const r = raw as { step?: unknown; query?: unknown; count?: unknown; sites?: unknown };
+  if (r.step !== 'searching' && r.step !== 'searched') return null;
+  const query = typeof r.query === 'string' ? r.query.replace(/\s+/g, ' ').trim().slice(0, 300) : '';
+  if (r.step === 'searching') return { step: 'searching', query };
+  const count = typeof r.count === 'number' && Number.isFinite(r.count) && r.count >= 0 ? Math.floor(r.count) : 0;
+  const sites = (Array.isArray(r.sites) ? r.sites : [])
+    .filter((x): x is string => typeof x === 'string' && /^[a-z0-9.-]{1,100}$/i.test(x))
+    .slice(0, 5);
+  return { step: 'searched', query, count, sites };
 }
