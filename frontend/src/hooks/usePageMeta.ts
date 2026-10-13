@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 
 const APP_NAME = import.meta.env.VITE_APP_NAME || 'VinaX';
-const DEFAULT_DESCRIPTION = 'Music tuned to you. No login, private by design.';
+const DEFAULT_DESCRIPTION = 'Music tuned to you. Private by design.';
 
 function setMeta(attr: 'name' | 'property', key: string, content: string): void {
   let el = document.head.querySelector<HTMLMetaElement>(`meta[${attr}="${key}"]`);

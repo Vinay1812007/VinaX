@@ -170,7 +170,19 @@ On a chat turn where Gemini's free grounding does not run, the Worker may make o
 - `RESEARCH_DAILY_LIMIT` (plain var in `worker/wrangler.toml`, default 5): deep-research runs a day. Each run spends 4 searches from `SERPER_DAILY_LIMIT`, so 5 runs use at most 20. Switch it off with the `deep-research` feature in AI Operations; usage shows there as feature `deep-research`.
 - Pictures in replies and site logos load through `/api/webimg` and `/api/favicon`. Picture links are signed with `TELEMETRY_PEPPER` (else `DEVICE_ID_SECRET`); with neither set, replies carry no pictures.
 
-### Google sign-in (12.2)
+### Moving to a new database (13.0)
+
+`frontend/supabase/vinax-13.sql` is the whole schema for a **new** database project: every table, index, function and row-level-security rule the Worker uses, plus the 13.0 account tables. Steps:
+
+1. Create a new project in the database host's dashboard (free plan is fine).
+2. SQL editor → paste `frontend/supabase/vinax-13.sql` → Run. It is idempotent.
+3. Point the Worker at it — Project settings → API gives the URL and the service-role key:
+   `npx wrangler secret put SUPABASE_URL --config worker/wrangler.toml` and
+   `npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml`.
+4. Re-publish what lived in `vinax_config` from the owner console (AI controls, AI prices, house rules, site mode, client config); run the "Trending headlines" workflow once to refill Trending now.
+5. When the new project works, delete the old project in its dashboard. Nothing is copied over: old analytics, usernames, AI logs, push registrations (devices register again on their next open) and Listen Together rooms stay behind.
+
+### Google sign-in (12.2; required since 13.0)
 
 Optional sign-in runs on the push project **VinaX Music** (`vinax-music`). The Worker checks Google's ID token itself (`_lib/googleAuth.ts`) and issues its own 30-day session.
 

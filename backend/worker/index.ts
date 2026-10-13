@@ -99,6 +99,7 @@ import * as m_api_ai_playlist from './functions/api/ai/playlist';
 import * as m_api_ai_dj from './functions/api/ai/dj';
 import * as m_api_auth_google from './functions/api/auth/google';
 import * as m_api_auth_me from './functions/api/auth/me';
+import * as m_api_account_data from './functions/api/account/data';
 import * as m_api_ai_headlines from './functions/api/ai/headlines';
 import * as m_api_ai_title from './functions/api/ai/title';
 import * as m_api_favicon from './functions/api/favicon';
@@ -146,6 +147,8 @@ interface Mod {
   onRequest?: Handler;
   onRequestGet?: Handler;
   onRequestPost?: Handler;
+  /** 13.0 — /api/account/data writes the synced copy with PUT. */
+  onRequestPut?: Handler;
   onRequestOptions?: Handler;
 }
 
@@ -243,6 +246,7 @@ const EXACT: Record<string, Mod> = {
   '/api/ai/dj': m_api_ai_dj,
   '/api/auth/google': m_api_auth_google,
   '/api/auth/me': m_api_auth_me,
+  '/api/account/data': m_api_account_data,
   '/api/ai/headlines': m_api_ai_headlines,
   '/api/ai/title': m_api_ai_title,
   '/api/favicon': m_api_favicon,
@@ -316,7 +320,9 @@ const pickHandler = (mod: Mod, method: string): Handler | undefined => {
       ? mod.onRequestGet
       : m === 'POST'
         ? mod.onRequestPost
-        : m === 'OPTIONS'
+        : m === 'PUT'
+          ? mod.onRequestPut
+          : m === 'OPTIONS'
           ? mod.onRequestOptions
           : undefined;
   return specific ?? mod.onRequest;

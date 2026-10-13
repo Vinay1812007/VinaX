@@ -9,9 +9,10 @@
  * and logo — sign-in buttons must follow the provider's own branding.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { currentAccount, onAccountChange, renderGoogleButton, signInNative, signOut, type Account, type SignInResult } from '@/services/auth/google';
+import { currentAccount, renderGoogleButton, signInNative, signOut, type Account, type SignInResult } from '@/services/auth/google';
 import { isNativePlatform } from '@/services/native';
 import { toast } from '@/store/toastStore';
+import '@/styles/signin.css';
 
 /** Google's four-colour "G", from Google's sign-in branding kit (Android button only). */
 function GoogleG(): ReactNode {
@@ -33,11 +34,8 @@ export function signInMessage(r: SignInResult): string | null {
   return 'Sign-in is not available right now. You can keep listening and sign in later in Settings.';
 }
 
-export function useAccount(): Account | null {
-  const [a, setA] = useState<Account | null>(currentAccount);
-  useEffect(() => onAccountChange(setA), []);
-  return a;
-}
+export { useAccount } from './useAccount';
+import { useAccount } from './useAccount';
 
 export function GoogleSignIn({ onSignedIn, theme = 'dark' }: { onSignedIn?: (a: Account) => void; theme?: 'dark' | 'light' }): ReactNode {
   const account = useAccount();

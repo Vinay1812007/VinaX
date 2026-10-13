@@ -31,7 +31,7 @@ export default function SongPage() {
   usePageMeta({
     title: song ? `${song.title} — ${song.artists[0]?.name ?? song.subtitle}${song.album ? ` | ${song.album.name}` : ''}` : undefined,
     description: song
-      ? `Play ${song.title} by ${song.subtitle}${song.year ? ` (${song.year})` : ''} free on VinaX — synced lyrics, HD audio, no login.`
+      ? `Play ${song.title} by ${song.subtitle}${song.year ? ` (${song.year})` : ''} free on VinaX — synced lyrics, HD audio.`
       : undefined,
     image: song ? bestImage(song.images, 500) : undefined,
     type: 'music.song',

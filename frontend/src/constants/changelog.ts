@@ -12,6 +12,16 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '13.0.0': {
+    title: 'VinaX 13: your music, on every device',
+    changes: [
+      { type: 'new', text: 'Sign in with your Google account to use VinaX. It takes one tap, and your Google photo becomes your profile picture.' },
+      { type: 'new', text: 'Your library, playlists, history, taste profile and settings now follow your account: sign in on another phone or computer and they are there.' },
+      { type: 'new', text: '“Made for you” on Home builds a personal mix from your own taste in one tap. When the AI’s free daily allowance runs out, VinaX builds it on your device instead.' },
+      { type: 'fixed', text: 'Switching app styles no longer makes the page jump under your finger.' },
+      { type: 'fixed', text: 'Your daily mix now carries the name of the app style you use, instead of always saying “Aura”.' },
+    ],
+  },
   '12.2.1': {
     title: 'Your username, shown again',
     changes: [

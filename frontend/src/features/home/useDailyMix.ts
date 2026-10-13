@@ -32,7 +32,7 @@ function seededPick<T>(arr: T[], seed: string, n: number): T[] {
 /**
  * "VinaX Daily" — one personalized mix that refreshes each morning. Built
  * from your top artists and languages (local taste profile), with a daily
- * seed so it's stable through the day. No cloud, no account.
+ * seed so it's stable through the day. Built on the device.
  */
 export function useDailyMix() {
   const pinned = useSettingsStore((s) => s.pinnedLanguages);

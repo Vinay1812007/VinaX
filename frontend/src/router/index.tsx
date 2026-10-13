@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { SiteGate } from '@/components/SiteGate';
+import { AuthGate } from '@/components/AuthGate';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppLayout } from '@/layouts/AppLayout';
 import { RouteError } from '@/components/ErrorBoundary';
@@ -109,9 +110,11 @@ export const router = createBrowserRouter([
     path: '/VinaXAI',
     element: (
       <SiteGate>
+      <AuthGate>
       <Suspense fallback={<div className="h-[100dvh] grid place-items-center bg-ink-950 text-ink-300">Loading VinaX AI…</div>}>
         <VinaXAIPage />
       </Suspense>
+            </AuthGate>
       </SiteGate>
     ),
     errorElement: <RouteError />,
@@ -120,7 +123,9 @@ export const router = createBrowserRouter([
     path: '/',
     element: (
       <SiteGate>
+      <AuthGate>
         <AppLayout />
+            </AuthGate>
       </SiteGate>
     ),
     errorElement: <RouteError />,

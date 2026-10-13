@@ -86,7 +86,25 @@ const extended = vtest.extend<Fixtures>({
   },
   // eslint-disable-next-line no-empty-pattern
   browser: async ({}, use) => {
-    await use(await launchBrowser());
+    const browser = await launchBrowser();
+    // 13.0 — the app needs a Google account: every context this browser opens
+    // (the fixture's and the ones a spec makes itself) starts signed in with a
+    // test account. The session is never checked against a real server here.
+    // A page opened with ?e2e-signed-out in its address stays signed out.
+    const newContext = browser.newContext.bind(browser);
+    browser.newContext = async (...args: Parameters<typeof browser.newContext>) => {
+      const ctx = await newContext(...args);
+      await ctx.addInitScript(() => {
+        try {
+          if (location.search.includes('e2e-signed-out') || localStorage.getItem('vinax.account.v1')) return;
+          localStorage.setItem('vinax.account.v1', JSON.stringify({ session: 'vx1.e2e.test', user: { name: 'Tester', email: 'tester@example.com', picture: null, username: 'tester' } }));
+        } catch {
+          /* storage blocked: the test sees the sign-in screen */
+        }
+      });
+      return ctx;
+    };
+    await use(browser);
   },
   context: async ({ browser, baseURL }, use) => {
     const { contextOptions, ...rest } = useOptions;

@@ -28,7 +28,7 @@ export default function AlbumPage() {
   usePageMeta({
     title: album ? `${album.title}${album.year ? ` (${album.year})` : ''} — Album` : undefined,
     description: album
-      ? `Listen to ${album.title}${album.year ? ` (${album.year})` : ''} — ${album.songCount ?? album.songs.length} songs free on VinaX. No login, private by design.`
+      ? `Listen to ${album.title}${album.year ? ` (${album.year})` : ''} — ${album.songCount ?? album.songs.length} songs free on VinaX. Private by design.`
       : undefined,
     image: album ? bestImage(album.images, 500) : undefined,
     type: 'music.album',

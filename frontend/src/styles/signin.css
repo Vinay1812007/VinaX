@@ -1,0 +1,44 @@
+/* 12.2 — Google sign-in (13.0: required) on the welcome and in Settings (components/GoogleSignIn.tsx).
+   The web button is Google's own (drawn by its script); the app button follows its branding. */
+.vx-welcome-signin { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 16px; }
+.vx-welcome-or { display: flex; align-items: center; gap: 10px; width: 100%; color: rgb(var(--ink-400)); font-size: 12px; font-weight: 600; }
+.vx-welcome-or::before, .vx-welcome-or::after { content: ''; flex: 1; height: 1px; background: var(--vx-border); }
+.vx-google-slot, .vx-google-web { width: 100%; display: flex; justify-content: center; min-height: 44px; }
+.vx-google-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; max-width: 360px; height: 44px; padding: 0 16px; border-radius: 9999px; border: 1px solid #747775; background: #131314; color: #e3e3e3; font: 500 14px/1 Roboto, system-ui, sans-serif; }
+html.light .vx-google-btn { background: #fff; color: #1f1f1f; }
+.vx-google-btn:disabled { opacity: 0.7; }
+.vx-account { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 420px; padding: 8px 10px; border-radius: 14px; background: var(--vx-surface-2, rgb(var(--ink-900))); }
+.vx-account-pic { width: 32px; height: 32px; flex: none; border-radius: 9999px; object-fit: cover; }
+.vx-account-pic.is-letter { display: inline-flex; align-items: center; justify-content: center; background: rgb(var(--ink-700)); color: rgb(var(--ink-100)); font-weight: 700; }
+.vx-account-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.vx-account-name { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vx-account-email { font-size: 12px; color: rgb(var(--ink-400)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vx-account-out { flex: none; min-height: 36px; padding: 0 12px; border-radius: 9999px; font-size: 13px; font-weight: 700; color: rgb(var(--ink-200)); background: rgb(var(--ink-100) / 0.08); }
+
+/* 13.0 — the sign-in screen every route shows until a Google account is signed in. */
+.vx-signin {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  background:
+    radial-gradient(60% 50% at 20% 10%, rgb(var(--vx-accent-rgb, 236 72 153) / 0.22), transparent 70%),
+    radial-gradient(50% 45% at 85% 90%, rgb(var(--tide-500) / 0.18), transparent 70%),
+    rgb(var(--ink-950));
+}
+.vx-signin-card {
+  width: min(420px, 100%);
+  padding: 32px 24px 24px;
+  border-radius: 28px;
+  text-align: center;
+  border: 1px solid var(--vx-border);
+}
+.vx-signin-logo { margin: 0 auto 16px; border-radius: 18px; }
+.vx-signin-title { font-size: clamp(26px, 6vw, 32px); font-weight: 800; letter-spacing: -0.025em; color: rgb(var(--ink-50)); }
+.vx-signin-lede { margin-top: 8px; color: rgb(var(--ink-300)); font-size: 15px; line-height: 1.55; }
+.vx-signin-button { margin-top: 24px; display: flex; justify-content: center; min-height: 44px; }
+.vx-signin-button .vx-google-slot { width: 100%; display: flex; justify-content: center; }
+.vx-signin-fine { margin-top: 20px; color: rgb(var(--ink-400)); font-size: 12.5px; line-height: 1.5; }
+.vx-signin-fine a { color: rgb(var(--ink-200)); text-decoration: underline; text-underline-offset: 2px; }
+/* Google draws its button in a frame; without this a dark page shows a white strip around it. */
+.vx-google-web iframe { color-scheme: normal; }

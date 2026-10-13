@@ -326,7 +326,7 @@ export default function VinaXAIPage(): ReactNode {
   usePageMeta({
     title: chatTitle ?? 'VinaX AI — ask anything',
     description:
-      'Chat with VinaX AI — ask anything and get clean answers with code, tables and images. Free, private, no login.',
+      'Chat with VinaX AI — ask anything and get clean answers with code, tables and images. Free and private.',
     canonicalPath: '/VinaXAI',
   });
 

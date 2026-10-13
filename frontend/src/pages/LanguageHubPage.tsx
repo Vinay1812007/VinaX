@@ -91,7 +91,7 @@ export default function LanguageHubPage({ language }: { language: string }) {
 
   usePageMeta({
     title: `${label} Songs — Latest Hits & Trending`,
-    description: `Stream the latest ${label} songs free on VinaX — trending hits, new releases and evergreen favourites. No login, private by design.`,
+    description: `Stream the latest ${label} songs free on VinaX — trending hits, new releases and evergreen favourites. Private by design.`,
     canonicalPath: `/${language}-songs`,
   });
   useJsonLd(

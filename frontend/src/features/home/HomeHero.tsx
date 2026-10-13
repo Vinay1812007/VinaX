@@ -5,6 +5,8 @@ import { PlayIcon, SparkleIcon } from '@/components/Icons';
 import { RadioGlyph } from '@/features/radio/RadioGlyph';
 import { bestImage, artSrcSet, FALLBACK_ART } from '@/utils/images';
 import { languageLabel } from '@/constants/languages';
+import { templateOption } from '@/constants/templates';
+import { useSettingsStore } from '@/store/settingsStore';
 import type { HomeDesign } from '@/services/recommendation/homeDesign';
 
 const onArtError = (e: SyntheticEvent<HTMLImageElement>) => {
@@ -59,10 +61,13 @@ export function HomeHero({ design, songs, recent, lead, onPlay, onResume, onRadi
   const cover = songs[0] ? bestImage(songs[0].images, 350) : FALLBACK_ART;
   const collage = collageArt(songs);
   const line = mixLine(songs);
+  // 13.0 — the mix wears the active app style's name ("Vibe Mix"); "Aura Mix"
+  // under another style read like a leftover.
+  const mixName = `${templateOption(useSettingsStore((s) => s.template)).label} Mix`;
   return (
     <div className={lead ? 'vxh-opening is-welcome' : 'vxh-opening'}>
       {lead}
-      <section className="vx-hero vxh-hero" aria-label="Your Aura Mix">
+      <section className="vx-hero vxh-hero" aria-label={`Your ${mixName}`}>
         <img className="vxh-hero-wash" src={cover} alt="" aria-hidden decoding="async" onError={onArtError} />
         <div className={collage.length === 4 ? 'vxh-hero-art is-collage' : 'vxh-hero-art'} aria-hidden>
           {collage.length === 4
@@ -70,11 +75,11 @@ export function HomeHero({ design, songs, recent, lead, onPlay, onResume, onRadi
             : <img src={cover} alt="" width={240} height={240} decoding="async" onError={onArtError} />}
         </div>
         <div className="vxh-hero-copy">
-          <p className="vxh-hero-kicker"><SparkleIcon /> Aura Mix{songs.length > 0 && ` · ${songs.length} songs`}</p>
+          <p className="vxh-hero-kicker"><SparkleIcon /> {mixName}{songs.length > 0 && ` · ${songs.length} songs`}</p>
           <h2 className="vxh-hero-title">{design.title}</h2>
           <p className="vxh-hero-desc">{line ? `${line}. ` : ''}{design.description}</p>
           <div className="vxh-hero-actions">
-            <button type="button" onClick={onPlay} disabled={!songs.length} className="vx-play-fab is-lg" aria-label="Play your Aura Mix"><PlayIcon /></button>
+            <button type="button" onClick={onPlay} disabled={!songs.length} className="vx-play-fab is-lg" data-tour="hero-play" aria-label={`Play your ${mixName}`}><PlayIcon /></button>
             <button type="button" onClick={onRadio} className="vxh-pill"><RadioGlyph /> AI Radio</button>
             <button type="button" onClick={onSurprise} className="vxh-pill is-quiet"><SparkleIcon /> Surprise me</button>
             <Link to="/made-for-you" className="vx-section-link vxh-hero-more">More mixes</Link>

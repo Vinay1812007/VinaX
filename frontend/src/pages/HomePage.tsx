@@ -35,6 +35,7 @@ import { EXP_HOME_SHELF_ORDER, homeShelfOrder } from '@/features/experiments/hom
 import { useRecommendations } from '@/features/recommendations/useRecommendations';
 import { HomeHero } from '@/features/home/HomeHero';
 import { HomeFeatures, HomeWelcome } from '@/features/home/HomeWelcome';
+import { MadeForYouCard } from '@/features/home/MadeForYouCard';
 import { ListeningGuide } from '@/features/home/ListeningGuide';
 import { FlowEntryCard } from '@/features/flow/FlowEntryCard';
 import { HomeStudio } from '@/features/home/HomeStudio';
@@ -326,6 +327,7 @@ export default function HomePage() {
             onSurprise={surprise}
           />
           {firstVisit && <HomeFeatures />}
+          <MadeForYouCard />
           <ListeningGuide />
           <FlowEntryCard />
 

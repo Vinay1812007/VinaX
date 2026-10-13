@@ -37,7 +37,7 @@ export default function MoodHubPage({ language, mood }: { language: string; mood
 
   usePageMeta({
     title: `${label} ${mood.label} Songs — Stream Free`,
-    description: `The best ${label} ${mood.label.toLowerCase()} songs — ${mood.blurb}. Stream free on VinaX, no login, tuned to you.`,
+    description: `The best ${label} ${mood.label.toLowerCase()} songs — ${mood.blurb}. Stream free on VinaX, tuned to you.`,
     canonicalPath: path,
   });
   useJsonLd(

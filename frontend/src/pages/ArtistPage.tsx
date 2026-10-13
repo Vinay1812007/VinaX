@@ -35,7 +35,7 @@ export default function ArtistPage() {
   usePageMeta({
     title: artist ? `${artist.name} Songs — Hits & Latest` : undefined,
     description: artist
-      ? `Play ${artist.name} songs free on VinaX — top hits, latest releases and albums. No login, private by design.`
+      ? `Play ${artist.name} songs free on VinaX — top hits, latest releases and albums. Private by design.`
       : undefined,
     image: artist ? bestImage(artist.images, 500) : undefined,
     type: 'profile',

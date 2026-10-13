@@ -149,6 +149,27 @@ export function signOut(): void {
   setAccount(null);
 }
 
+/** 13.0 — ask the server whether the session still stands; a definite "no" (401) signs out.
+ *  Offline or a server hiccup keeps the listener signed in. */
+export async function validateSession(fetchImpl: typeof fetch = fetch): Promise<boolean> {
+  const a = currentAccount();
+  if (!a) return false;
+  try {
+    const res = await fetchImpl(`${ORIGIN}/api/auth/me`, { headers: { authorization: `Bearer ${a.session}` }, cache: 'no-store' });
+    if (res.status === 401) {
+      signOut();
+      return false;
+    }
+    if (res.ok) {
+      const j = (await res.json()) as { user?: AccountUser };
+      if (j.user) setAccount({ session: a.session, user: { ...a.user, ...j.user, picture: j.user.picture ?? a.user.picture } });
+    }
+  } catch {
+    /* offline: keep the session */
+  }
+  return true;
+}
+
 /** Delete the account on the server (Google id, email, name, picture), then sign out. */
 export async function deleteAccount(fetchImpl: typeof fetch = fetch): Promise<boolean> {
   const a = currentAccount();

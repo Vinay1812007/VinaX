@@ -196,12 +196,12 @@ describe('HomePage 10.0 — the first visit', () => {
     onTestFinished(() => usePlayerStore.setState({ playQueue: realPlayQueue }));
     renderHome();
     expect(await screen.findByRole('heading', { level: 1, name: /All the music you love\. Free\./ })).toBeTruthy();
-    expect(screen.getByText(/No sign-up needed\./)).toBeTruthy();
+    expect(screen.getByText(/Nothing to pay\./)).toBeTruthy();
     // The six feature tiles link to real destinations.
     const tiles = within(screen.getByRole('region', { name: 'Everything included, all free' })).getAllByRole('link');
     expect(tiles.map((a) => a.getAttribute('href'))).toEqual(['/VinaXAI', '/radio', '/together', '/karaoke', '/download', '/languages']);
     // The Aura Mix stays (the guided tour points at its play button).
-    const auraPlay = screen.getByRole('button', { name: 'Play your Aura Mix' }) as HTMLButtonElement;
+    const auraPlay = screen.getByRole('button', { name: /^Play your \w+ Mix$/ }) as HTMLButtonElement;
     // Wait for the opening mix, then start it from the welcome.
     await vi.waitFor(() => expect(auraPlay.disabled).toBe(false), { timeout: 5000 });
     fireEvent.click(screen.getByRole('button', { name: /Start listening/ }));

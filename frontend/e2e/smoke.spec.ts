@@ -32,7 +32,7 @@ test('first run walks the welcome: name → languages → look → slides → ap
   await page.goto('/');
 
   // Step 1 demands a name; Escape does not close a required step.
-  await expect(page.getByRole('heading', { name: 'Free. No sign-up.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toBeVisible();
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByText('Enter a name of at least two letters.')).toBeVisible();

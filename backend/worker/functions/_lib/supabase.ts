@@ -325,3 +325,24 @@ export async function sbUpdate(env: SupabaseEnv, table: string, query: string, p
     return false;
   }
 }
+
+/**
+ * 13.0 — PATCH that answers the rows it changed (`return=representation`):
+ * [] means the filter matched nothing (an optimistic-concurrency miss), null a
+ * transport or database failure.
+ */
+export async function sbUpdateReturning<T>(env: SupabaseEnv, table: string, query: string, patch: unknown, select = '*'): Promise<T[] | null> {
+  const b = base(env);
+  if (!b) return null;
+  try {
+    const res = await dbFetch(`${b.url}/rest/v1/${table}?${query}&select=${encodeURIComponent(select)}`, {
+      method: 'PATCH',
+      headers: headers(b.key, { prefer: 'return=representation' }),
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) return null;
+    return (await res.json().catch(() => null)) as T[] | null;
+  } catch {
+    return null;
+  }
+}

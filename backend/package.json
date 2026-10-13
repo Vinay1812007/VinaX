@@ -1,7 +1,7 @@
 {
   "name": "vinax-api",
   "private": true,
-  "version": "6.2.1",
+  "version": "7.0.0",
   "description": "VinaX backend — Cloudflare Worker (API, SEO pages, sitemaps, image proxy).",
   "type": "module",
   "engines": {

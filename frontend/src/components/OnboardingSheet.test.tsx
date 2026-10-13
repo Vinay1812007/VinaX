@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // 12.2 — the welcome offers Google sign-in (optional); its script is never loaded in tests.
 vi.mock('@/services/auth/google', () => ({
-  currentAccount: () => null,
+  // 13.0 — the welcome runs after sign-in.
+  currentAccount: () => ({ session: 'vx1.t.s', user: { name: 'Tester', email: 't@example.com', picture: null, username: null } }),
   onAccountChange: () => () => undefined,
   renderGoogleButton: vi.fn(async () => true),
   signInNative: vi.fn(),
@@ -21,7 +22,6 @@ vi.mock('@/services/analytics/sessionInsights', () => ({ initSessionInsights: vi
 vi.mock('@/constants/changelog', () => ({ latestNotesFingerprint: () => 'test-fingerprint' }));
 
 import { OnboardingSheet } from './OnboardingSheet';
-import { renderGoogleButton } from '@/services/auth/google';
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal } from '@/services/storage/local';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -47,19 +47,21 @@ describe('OnboardingSheet (11.0 welcome)', () => {
     mount();
     const dialog = screen.getByRole('dialog');
     expect(dialog.querySelector('.vx-mat-thick')).toBeTruthy();
-    await heading('Free. No sign-up.');
+    await heading('Welcome to VinaX');
     expect(screen.getByText('Step 1 of 8')).toBeTruthy();
 
     // Required step: Escape does not close it, and an empty name is refused.
     fireEvent.keyDown(dialog, { key: 'Escape' });
+    // 13.0 — the name starts as the Google account's; cleared, it is refused.
+    expect((screen.getByLabelText('Your name') as HTMLInputElement).value).toBe('Tester');
+    fireEvent.change(screen.getByLabelText('Your name'), { target: { value: '' } });
     press('Continue');
     expect(screen.getByText('Enter a name of at least two letters.')).toBeTruthy();
     expect(getLocal<boolean>(KEYS.onboarded, false)).toBe(false);
 
-    // 12.2 — no username field and no human check: a name, and an optional Google sign-in.
+    // 13.0 — sign-in happens before the welcome (AuthGate): the welcome asks only for a name.
     expect(screen.queryByLabelText('Username')).toBeNull();
-    expect(renderGoogleButton).toHaveBeenCalled();
-    expect(screen.getByText(/Optional\. Signing in keeps your username/)).toBeTruthy();
+    expect(screen.getByText(/You’re signed in\./)).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Your name'), { target: { value: 'Tester' } });
     press('Continue');
     await heading('Choose your languages');
@@ -67,7 +69,7 @@ describe('OnboardingSheet (11.0 welcome)', () => {
 
     // Back and forward again keeps the name.
     press('Back');
-    await heading('Free. No sign-up.');
+    await heading('Welcome to VinaX');
     press('Continue');
     await heading('Choose your languages');
 

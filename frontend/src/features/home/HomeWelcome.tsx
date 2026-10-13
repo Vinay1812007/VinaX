@@ -13,7 +13,7 @@ const LANGUAGE_COUNT = HUB_LANGUAGES.length;
 
 /**
  * 10.0.0 — the first visit: before anything has been played on this device,
- * Home opens with the promise in plain words (free, no sign-up, no account,
+ * Home opens with the promise in plain words (free, nothing to pay,
  * Indian languages) and one obvious action, Start listening, which plays the
  * opening mix the page already holds. No data of its own: nothing here asks
  * the catalogue, so the first-paint request budget is unchanged.
@@ -31,13 +31,13 @@ export function HomeWelcome({ name, onStart, ready }: { name?: string; onStart: 
           <p key={row}>{SCRIPTS.slice(row * 6, row * 6 + 6).map((w) => <span key={w}>{w}</span>)}</p>
         ))}
       </div>
-      <p className="vxh-welcome-kicker"><span className="vxh-welcome-badge">Free forever</span> No sign-up needed.</p>
+      <p className="vxh-welcome-kicker"><span className="vxh-welcome-badge">Free forever</span> Nothing to pay.</p>
       <h1 id="vxh-welcome-title" className="vxh-welcome-title">
         {first && <span className="vxh-welcome-hello">Welcome, {first}. </span>}
         All the music you love. <span className="vxh-welcome-free">Free.</span>
       </h1>
       <p className="vxh-welcome-sub">
-        Hindi, Telugu, Tamil, Punjabi and {LANGUAGE_COUNT - 4} more languages. No subscription, no email, no password: just press play.
+        Hindi, Telugu, Tamil, Punjabi and {LANGUAGE_COUNT - 4} more languages. No subscription and nothing to pay: just press play.
       </p>
       <div className="vxh-welcome-actions">
         <button type="button" className="vxh-cta" onClick={onStart} aria-busy={!ready || undefined}>
