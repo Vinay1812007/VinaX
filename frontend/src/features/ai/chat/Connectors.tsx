@@ -13,10 +13,11 @@ import {
 import { loadMemories, memoryEnabled, setMemoryEnabled } from '@/features/ai/memory';
 import { usePlayerStore } from '@/store/playerStore';
 import { cn } from '@/utils/cn';
-import { BulbIcon, CodeIcon, MemoryIcon } from './icons';
+import { BulbIcon, CodeIcon, GlobeIcon, MemoryIcon } from './icons';
 
 const ICON: Record<ConnectorId, (p: { className?: string }) => ReactNode> = {
   think: BulbIcon,
+  research: GlobeIcon,
   nowPlaying: MusicIcon,
   memory: MemoryIcon,
   code: CodeIcon,
@@ -27,6 +28,9 @@ export interface TurnConnectors {
   think: boolean;
   nowPlaying: boolean;
   onThink: (on: boolean) => void;
+  /** 12.0 — Deep research (optional so older callers compile). */
+  research?: boolean;
+  onResearch?: (on: boolean) => void;
   onNowPlaying: (on: boolean) => void;
   /** 10.3 — Run code: listed when the server can run code for some model,
    *  with whether the model in use can. */
@@ -76,6 +80,7 @@ export function useConnectors(turn: TurnConnectors): {
 
   const views = connectorViews({
     think: turn.think,
+    research: turn.research === true,
     nowPlaying: turn.nowPlaying,
     song,
     memoryOn: stored.memoryOn,
@@ -94,6 +99,9 @@ export function useConnectors(turn: TurnConnectors): {
       switch (id) {
         case 'think':
           turn.onThink(on);
+          return;
+        case 'research':
+          turn.onResearch?.(on);
           return;
         case 'nowPlaying':
           turn.onNowPlaying(on);

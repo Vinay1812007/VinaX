@@ -134,6 +134,8 @@ GITHUB_REPO = "Vinay1812007/VinaX"
 # secret SERPER_API_KEY; unset = no web search). The free allowance is a
 # one-time 2,500 queries, so 80 a day lasts about a month. 0 = none.
 SERPER_DAILY_LIMIT = "80"
+# 12.0 — deep-research runs a day (each spends 4 of the searches above). 0 = none.
+RESEARCH_DAILY_LIMIT = "10"
 
 # Secrets (set with `npx wrangler secret put <NAME> --config worker/wrangler.toml`
 # or the Workers dashboard, never in this file) — every name documented in

@@ -36,6 +36,8 @@
     // 11.8 — the chat's web search when the model's own search does not run
     // (daily cap SERPER_DAILY_LIMIT; calls show as feature web-search).
     ['web-search', 'Web search in VinaX AI (results from the search service, daily cap)'],
+    // 12.0 — deep research: 4 searches a run, RESEARCH_DAILY_LIMIT runs a day.
+    ['deep-research', 'Deep research in VinaX AI (4 web searches a run, daily cap)'],
   ];
   var days = null;
   var last = null;      // last aiops payload

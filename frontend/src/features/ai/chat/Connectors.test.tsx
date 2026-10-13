@@ -51,9 +51,9 @@ describe('Connectors', () => {
       .getAllByRole('switch')
       .map((el) => el.getAttribute('aria-labelledby') && document.getElementById(el.getAttribute('aria-labelledby')!)?.textContent);
     // 11.0 — no Place row: place follows the app-wide region setting alone.
-    expect(names).toEqual(['Think', 'Now playing', 'Memory']);
+    expect(names).toEqual(['Think', 'Deep research', 'Now playing', 'Memory']);
     // Defaults: everything off.
-    expect(within(list).getAllByRole('switch').map((el) => el.getAttribute('aria-checked'))).toEqual(['false', 'false', 'false']);
+    expect(within(list).getAllByRole('switch').map((el) => el.getAttribute('aria-checked'))).toEqual(['false', 'false', 'false', 'false']);
     expect(chips()).toEqual([]);
   });
 
@@ -77,7 +77,7 @@ describe('Connectors', () => {
     act(() => useSettingsStore.setState({ allowRegionInference: false }));
     render(<Harness />);
     expect(screen.queryByText('Place')).toBeNull();
-    expect(within(screen.getByRole('group', { name: 'Connectors' })).getAllByRole('switch')).toHaveLength(3);
+    expect(within(screen.getByRole('group', { name: 'Connectors' })).getAllByRole('switch')).toHaveLength(4);
   });
 
   it('Memory: on in one tap; off asks for a second tap before it forgets saved lines', () => {
@@ -136,7 +136,7 @@ describe('connectorViews / activeConnectors', () => {
   it('lists nothing as active when nothing is on, and never a Place row', () => {
     const views = connectorViews(base);
     expect(activeConnectors(views).map((v) => v.id)).toEqual([]);
-    expect(views.map((v) => v.id)).toEqual(['think', 'nowPlaying', 'memory']);
+    expect(views.map((v) => v.id)).toEqual(['think', 'research', 'nowPlaying', 'memory']);
   });
 });
 

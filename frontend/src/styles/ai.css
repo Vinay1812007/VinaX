@@ -2769,3 +2769,44 @@ html.reduce-motion .ai-voice-row {
 }
 html.reduce-motion .ai-search-site { animation: none; }
 @media (prefers-reduced-motion: reduce) { .ai-search-site { animation: none; } }
+
+/* 12.0 — a site's logo inside the letter disc (loaded through the Worker). A
+   light disc behind it so dark logos stay visible on the dark theme. */
+.ai-cite-mono.has-logo { background: rgb(255 255 255 / 0.92); overflow: hidden; padding: 1px; }
+.ai-cite-mono.has-logo > img { width: 100%; height: 100%; object-fit: contain; border-radius: inherit; display: block; }
+
+/* 12.0 — deep research lists every search it runs. */
+.ai-search-queries { display: flex; flex-direction: column; gap: 2px; }
+
+/* 12.0 — the model's reasoning: live while it thinks, then folded away. */
+.ai-thought { margin: 0 0 0.75rem; color: var(--ai-text-3); }
+.ai-thought-head { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85em; font-weight: 650; color: var(--ai-text-2); cursor: pointer; list-style: none; user-select: none; }
+.ai-thought-head::-webkit-details-marker { display: none; }
+details.ai-thought > summary.ai-thought-head::after { content: '›'; margin-left: 0.15rem; transition: transform 140ms var(--ease-calm); }
+details.ai-thought[open] > summary.ai-thought-head::after { transform: rotate(90deg); }
+.ai-thought-text {
+  margin: 0.4rem 0 0;
+  padding-left: 0.85rem;
+  border-left: 2px solid rgb(var(--ink-600) / 0.6);
+  font-size: 0.85em;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+.ai-thought.is-live .ai-thought-text { max-height: 9rem; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 2.5rem); mask-image: linear-gradient(to bottom, transparent, #000 2.5rem); }
+
+/* 12.0 — pictures from the web search: one large, up to two stacked beside it. */
+.ai-pictures { display: grid; gap: 6px; margin: 0.75rem 0 0.25rem; max-width: 34rem; border-radius: var(--vx-radius-card); overflow: hidden; }
+.ai-pictures.is-1 { grid-template-columns: 1fr; }
+.ai-pictures.is-2 { grid-template-columns: 1fr 1fr; }
+.ai-pictures.is-3 { grid-template-columns: 1.6fr 1fr; grid-template-rows: 1fr 1fr; }
+.ai-pictures.is-3 > .ai-picture:first-child { grid-row: span 2; }
+.ai-picture { display: block; background: var(--ai-raised); min-height: 7rem; aspect-ratio: 4 / 3; }
+.ai-pictures.is-3 > .ai-picture:not(:first-child) { aspect-ratio: auto; min-height: 5rem; }
+.ai-picture > img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@media (max-width: 479px) {
+  .ai-pictures { max-width: 100%; }
+  .ai-picture { min-height: 5.5rem; }
+}

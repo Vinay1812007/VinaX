@@ -28,7 +28,7 @@
  * know (an older server's extra meta, any other frame kind) are ignored.
  */
 
-import type { MsgActivity, MsgSources, MsgSupport } from './types';
+import type { MsgActivity, MsgImage, MsgSources, MsgSupport } from './types';
 
 export interface StreamState {
   /** The reply so far. */
@@ -45,6 +45,10 @@ export interface StreamState {
   sources: MsgSources | null;
   /** 11.8.1 — the live search status (null when the turn is not searching). */
   activity: MsgActivity | null;
+  /** 12.0 — the reasoning so far (`think` frames). */
+  thinking: string;
+  /** 12.0 — a title for a new chat (`title` frame). */
+  title: string;
   /** 11.8.1 — the service could not answer after the stream began (its status and JSON body). */
   failed: { status: number; body: unknown } | null;
   /** The service said the reply was cut short. */
@@ -62,6 +66,8 @@ export const initialStreamState = (): StreamState => ({
   tools: [],
   sources: null,
   activity: null,
+  thinking: '',
+  title: '',
   failed: null,
   truncated: false,
   done: false,
@@ -102,7 +108,7 @@ export function splitFrames(buffer: string): { frames: unknown[]; rest: string }
  *  must not shift the rest) and dropped when it points at nothing. */
 export function readSources(raw: unknown): MsgSources | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-  const r = raw as { items?: unknown; queries?: unknown; entry?: unknown; supports?: unknown };
+  const r = raw as { items?: unknown; queries?: unknown; entry?: unknown; supports?: unknown; images?: unknown };
   const items: MsgSources['items'] = [];
   const seen = new Map<string, number>();
   const kept = new Map<number, number>();
@@ -111,7 +117,7 @@ export function readSources(raw: unknown): MsgSources | null {
     if (!/^https?:\/\/\S+$/i.test(url)) return;
     const known = seen.get(url);
     if (known !== undefined) return void kept.set(k, known);
-    if (items.length >= 8) return;
+    if (items.length >= 12) return;
     seen.set(url, items.length);
     kept.set(k, items.length);
     const t = (it as { title?: unknown }).title;
@@ -132,8 +138,17 @@ export function readSources(raw: unknown): MsgSources | null {
     }
     if (sources.length) supports.push({ text, sources: sources.slice(0, 8) });
   }
+  // 12.0 — pictures: Worker links only (a signed /api/webimg path), at most 4.
+  const images: MsgImage[] = [];
+  for (const im of Array.isArray(r.images) ? r.images : []) {
+    const o = (im ?? {}) as { src?: unknown; page?: unknown; alt?: unknown };
+    const src = typeof o.src === 'string' && /^\/api\/webimg\?u=[^\s"'<>]+&s=[0-9a-f]{32}$/.test(o.src) ? o.src : '';
+    const page = typeof o.page === 'string' && /^https?:\/\/\S+$/i.test(o.page) ? o.page : '';
+    if (src && !images.some((x) => x.src === src)) images.push({ src, page, alt: typeof o.alt === 'string' ? o.alt.slice(0, 120) : '' });
+    if (images.length >= 4) break;
+  }
   if (!items.length && !queries.length && !entry) return null;
-  return { items, queries, entry, ...(supports.length ? { supports } : {}) };
+  return { items, queries, entry, ...(supports.length ? { supports } : {}), ...(images.length ? { images } : {}) };
 }
 
 /** Fold one frame into the state. Never throws; returns the SAME object when
@@ -150,6 +165,8 @@ export function reduceFrame(state: StreamState, frame: unknown): StreamState {
     sources?: unknown;
     status?: unknown;
     failed?: unknown;
+    think?: unknown;
+    title?: unknown;
   };
   let next = state;
   const set = (patch: Partial<StreamState>): void => {
@@ -174,6 +191,11 @@ export function reduceFrame(state: StreamState, frame: unknown): StreamState {
     const sources = readSources(f.sources);
     if (sources) set({ sources });
   }
+  if (typeof f.think === 'string' && f.think && next.thinking.length < THINK_MAX) set({ thinking: (next.thinking + f.think).slice(0, THINK_MAX) });
+  if (typeof f.title === 'string' && !next.title) {
+    const title = f.title.replace(/\s+/g, ' ').trim().slice(0, 60);
+    if (title) set({ title });
+  }
   if (f.status !== undefined) {
     const activity = readActivity(f.status);
     if (activity) set({ activity });
@@ -188,15 +210,21 @@ export function reduceFrame(state: StreamState, frame: unknown): StreamState {
 
 /** 11.8.1 — a `status` payload, validated: a known step, the query (≤ 300
  *  characters), a result count, and up to 5 host names. Null when unusable. */
+/** 12.0 — the most reasoning text kept per reply. */
+export const THINK_MAX = 20_000;
+
 export function readActivity(raw: unknown): MsgActivity | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-  const r = raw as { step?: unknown; query?: unknown; count?: unknown; sites?: unknown };
-  if (r.step !== 'searching' && r.step !== 'searched') return null;
+  const r = raw as { step?: unknown; query?: unknown; count?: unknown; sites?: unknown; queries?: unknown; research?: unknown };
+  if (r.step !== 'searching' && r.step !== 'searched' && r.step !== 'planning') return null;
   const query = typeof r.query === 'string' ? r.query.replace(/\s+/g, ' ').trim().slice(0, 300) : '';
-  if (r.step === 'searching') return { step: 'searching', query };
+  const queries = (Array.isArray(r.queries) ? r.queries : []).filter((q): q is string => typeof q === 'string' && !!q.trim()).map((q) => q.trim().slice(0, 200)).slice(0, 6);
+  const extra = { ...(queries.length ? { queries } : {}), ...(r.research === true ? { research: true } : {}) };
+  if (r.step === 'planning') return { step: 'planning', query, ...extra };
+  if (r.step === 'searching') return { step: 'searching', query, ...extra };
   const count = typeof r.count === 'number' && Number.isFinite(r.count) && r.count >= 0 ? Math.floor(r.count) : 0;
   const sites = (Array.isArray(r.sites) ? r.sites : [])
     .filter((x): x is string => typeof x === 'string' && /^[a-z0-9.-]{1,100}$/i.test(x))
-    .slice(0, 5);
-  return { step: 'searched', query, count, sites };
+    .slice(0, 8);
+  return { step: 'searched', query, count, sites, ...extra };
 }

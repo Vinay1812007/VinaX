@@ -97,6 +97,9 @@ import * as m_api_ai_search from './functions/api/ai/search';
 import * as m_api_ai_playlist from './functions/api/ai/playlist';
 import * as m_api_ai_dj from './functions/api/ai/dj';
 import * as m_api_ai_headlines from './functions/api/ai/headlines';
+import * as m_api_ai_title from './functions/api/ai/title';
+import * as m_api_favicon from './functions/api/favicon';
+import * as m_api_webimg from './functions/api/webimg';
 import * as m_api_preview from './functions/api/preview';
 import * as m_api_push_fcm_register from './functions/api/push/fcm-register';
 import * as m_api_push_subscribe from './functions/api/push/subscribe';
@@ -235,6 +238,9 @@ const EXACT: Record<string, Mod> = {
   '/api/ai/playlist': m_api_ai_playlist,
   '/api/ai/dj': m_api_ai_dj,
   '/api/ai/headlines': m_api_ai_headlines,
+  '/api/ai/title': m_api_ai_title,
+  '/api/favicon': m_api_favicon,
+  '/api/webimg': m_api_webimg,
   '/api/preview': m_api_preview,
   '/api/push/fcm-register': m_api_push_fcm_register,
   '/api/push/subscribe': m_api_push_subscribe,

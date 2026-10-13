@@ -165,6 +165,11 @@ On a chat turn where Gemini's free grounding does not run, the Worker may make o
 - **Switch it off:** console → AI Operations → the `web-search` switch (or the emergency stop, which stops it too), then publish. To take it out completely, run `npx wrangler secret delete SERPER_API_KEY --config worker/wrangler.toml`.
 - **When credits run out:** Serper answers 401/402/403/429 (or a 400 naming credits). Each isolate stops calling for 24 hours and logs `[serper] answered … out of credits` once, and the rows show `error: credits_exhausted`. The chat keeps answering without results.
 
+### Deep research and pictures (12.0)
+
+- `RESEARCH_DAILY_LIMIT` (plain var in `worker/wrangler.toml`, default 10): deep-research runs a day. Each run spends 4 searches from `SERPER_DAILY_LIMIT`, so 10 runs use at most 40. Switch it off with the `deep-research` feature in AI Operations; usage shows there as feature `deep-research`.
+- Pictures in replies and site logos load through `/api/webimg` and `/api/favicon`. Picture links are signed with `TELEMETRY_PEPPER` (else `DEVICE_ID_SECRET`); with neither set, replies carry no pictures.
+
 ### Human check on usernames
 
 Since 11.1.0 the onboarding username claim (`POST /api/username`) carries a Turnstile token. Since 11.1.1 the widget is always on screen under the username field (`appearance: always`): it ticks itself for most listeners and asks for a tap only when the check needs one. A parked claim retried later, with no form on screen, gets a temporary floating box that shows only if a tap is needed (`interaction-only`).

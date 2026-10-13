@@ -6,6 +6,7 @@
  * them one list and one vocabulary. Nothing here talks to the server.
  *
  *   think     — the deep engine reasons it through first     (page state)
+ *   research  — 12.0: several web searches, a long cited report (page state, one message)
  *   nowPlaying— the song playing now rides with the message (page state)
  *   memory    — the lines the listener asked it to remember  (./memory.ts)
  *   code      — 10.3: the model may run code to work things out (this module)
@@ -71,7 +72,7 @@ export function codeChipNote(support: CodeSupport): string | null {
   return support === 'unsupported' ? 'not available with this model' : null;
 }
 
-export type ConnectorId = 'think' | 'nowPlaying' | 'memory' | 'code';
+export type ConnectorId = 'think' | 'research' | 'nowPlaying' | 'memory' | 'code';
 
 /** One row of the Connectors list, as the menu and the chip row draw it. */
 export interface ConnectorView {
@@ -88,6 +89,8 @@ export interface ConnectorView {
 
 export interface ConnectorInputs {
   think: boolean;
+  /** 12.0 — Deep research for the next message. */
+  research?: boolean;
   nowPlaying: boolean;
   /** Title of the song playing now, if any. */
   song?: string | null;
@@ -105,6 +108,7 @@ export function connectorViews(s: ConnectorInputs): ConnectorView[] {
   const lines = (n: number): string => `${n} saved line${n === 1 ? '' : 's'}`;
   return [
     { id: 'think', name: 'Think', description: 'Reason it through carefully before answering', on: s.think },
+    { id: 'research', name: 'Deep research', description: 'Searches the web several times and writes a longer report with sources', on: s.research === true },
     {
       id: 'nowPlaying',
       name: 'Now playing',

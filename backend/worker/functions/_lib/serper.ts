@@ -33,11 +33,15 @@ export interface SerperResult {
   url: string;
   title: string;
   snippet: string;
+  /** 12.0 — the result's own picture, when Serper returned one (news photos). */
+  image?: string;
 }
 
 export interface SerperSearch {
   results: SerperResult[];
   quick?: string;
+  /** 12.0 — the knowledge panel's picture, when there is one. No extra credit. */
+  hero?: string;
 }
 
 export interface SerperOptions {
@@ -162,13 +166,15 @@ export function mapSerperResponse(json: unknown, news = false): SerperSearch {
       const title = plainText(item.title, TITLE_MAX);
       if (!title) continue;
       seen.add(url);
-      results.push({ url, title, snippet: plainText(item.snippet, SNIPPET_MAX) });
+      const image = httpUrl(item.imageUrl) ?? undefined;
+      results.push({ url, title, snippet: plainText(item.snippet, SNIPPET_MAX), ...(image ? { image } : {}) });
     }
   }
   const box = isObj(json.answerBox) ? json.answerBox : null;
   const graph = isObj(json.knowledgeGraph) ? json.knowledgeGraph : null;
   const quick = plainText(box?.answer, QUICK_MAX) || plainText(box?.snippet, QUICK_MAX) || plainText(graph?.description, QUICK_MAX);
-  return quick ? { results, quick } : { results };
+  const hero = httpUrl(graph?.imageUrl) ?? undefined;
+  return { results, ...(quick ? { quick } : {}), ...(hero ? { hero } : {}) };
 }
 
 /** Does this answer mean "no more credits" (or a refused key)? Pure. */
@@ -285,8 +291,15 @@ async function cacheRead(key: Request): Promise<SerperSearch | null> {
     if (!hit) return null;
     const j = (await hit.json()) as unknown;
     if (!isObj(j) || !Array.isArray(j.results)) return null;
-    const results = (j.results as unknown[]).filter(isObj).map((r) => ({ url: String(r.url ?? ''), title: String(r.title ?? ''), snippet: String(r.snippet ?? '') })).filter((r) => httpUrl(r.url) && r.title);
-    return typeof j.quick === 'string' && j.quick ? { results, quick: j.quick } : { results };
+    const results = (j.results as unknown[])
+      .filter(isObj)
+      .map((r) => {
+        const image = httpUrl(r.image) ?? undefined;
+        return { url: String(r.url ?? ''), title: String(r.title ?? ''), snippet: String(r.snippet ?? ''), ...(image ? { image } : {}) };
+      })
+      .filter((r) => httpUrl(r.url) && r.title);
+    const hero = httpUrl(j.hero) ?? undefined;
+    return { results, ...(typeof j.quick === 'string' && j.quick ? { quick: j.quick } : {}), ...(hero ? { hero } : {}) };
   } catch {
     return null;
   }

@@ -252,7 +252,7 @@ describe('10.3 — model picks, Auto and real model names', () => {
       request: new Request('https://x.test/api/vinaxai', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'cf-connecting-ip': `10.7.${Math.floor(ip / 250)}.${ip % 250}` },
-        body: JSON.stringify({ messages: [{ role: 'user', content: 'hello there' }], ...payload }),
+        body: JSON.stringify({ messages: [{ role: 'user', content: 'tell me about Carnatic ragas' }], ...payload }),
       }),
       env,
     });

@@ -4,6 +4,10 @@ import { isNativePlatform } from '@/services/native';
 const ORIGIN = isNativePlatform() ? 'https://www.sirimillavinay.online' : '';
 
 export const CHAT_ENDPOINT = `${ORIGIN}/api/vinaxai`;
+/** 12.0 — a site's logo, through the Worker (never fetched from the site by the browser). */
+export const FAVICON_ENDPOINT = `${ORIGIN}/api/favicon`;
+/** 12.0 — a Worker path (a signed picture link) as the browser should load it. */
+export const workerAsset = (path: string): string => `${ORIGIN}${path}`;
 /** The live model catalogue. Fetched only when the model menu first opens. */
 export const MODELS_ENDPOINT = `${ORIGIN}/api/aimodels`;
 /** Which speech models the key serves right now. */
