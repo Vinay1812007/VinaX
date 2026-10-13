@@ -80,7 +80,12 @@ export async function signInNative(): Promise<SignInResult> {
     const { SocialLogin } = await import('@capgo/capacitor-social-login');
     if (!nativeReady) nativeReady = SocialLogin.initialize({ google: { webClientId: GOOGLE_WEB_CLIENT_ID } });
     await nativeReady;
-    const res = await SocialLogin.login({ provider: 'google', options: { scopes: ['email', 'profile'] } });
+    // No `scopes` here, deliberately: the plugin's defaults already cover
+    // openid + email + profile, and on Android passing ANY scopes makes it
+    // reject before the Google sheet even opens ("You CANNOT use scopes
+    // without modifying the main activity") because our MainActivity is a
+    // plain BridgeActivity. That rejection was every tap's silent death.
+    const res = await SocialLogin.login({ provider: 'google', options: {} });
     const r = res.result as { idToken?: string | null };
     if (!r?.idToken) return 'cancelled';
     return await exchangeGoogleToken(r.idToken);
