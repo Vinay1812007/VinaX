@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '12.2.0': {
+    title: 'Sign in with Google (optional)',
+    changes: [
+      { type: 'new', text: 'You can now sign in with Google — on the welcome screen or in Settings → Your data. It’s optional: listening never needs an account.' },
+      { type: 'improved', text: 'Signing in keeps your username with your Google account. Sign out or delete the account any time in Settings.' },
+      { type: 'improved', text: 'The welcome is shorter: just your name, no username to pick and no “are you a person” check.' },
+      { type: 'improved', text: 'The Android app moves to a new identity, so it installs alongside the old one. Move your library with Settings → Your data → Move to a new device, then remove the old app.' },
+    ],
+  },
   '12.1.0': {
     title: 'Pictures in VinaX AI',
     changes: [

@@ -36,7 +36,7 @@ export default function ContactPage() {
           removals propagate to all clients within minutes.
         </p>
         <p className="vx-doc-end">
-          VinaX is free and login-free, so there&rsquo;s no account support — there are no accounts. Everything else,
+          VinaX is free and you never need to sign in. If you signed in with Google, you can sign out or delete the account yourself in Settings → Your data. Everything else,
           we&rsquo;re happy to help with.
         </p>
       </div>

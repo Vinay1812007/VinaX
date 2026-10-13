@@ -18,7 +18,7 @@ export default function DownloadPage() {
       <div className="flex flex-col items-center text-center pt-4 sm:pt-8">
         <img src="/icons/icon.svg" alt="" width={112} height={112} className="w-28 h-28 rounded-[var(--vx-radius-panel)] shadow-[var(--vx-art-shadow)]" />
         <h1 className="vx-page-title mt-7">VinaX for Android</h1>
-        <p className="mt-2 text-[15px] text-ink-400">Free, no account, private by design.</p>
+        <p className="mt-2 text-[15px] text-ink-400">Free, no sign-up needed, private by design.</p>
 
         {isNativePlatform() ? (
           <p className="mt-8 text-[15px] font-semibold text-ink-100">You’re already on the app.</p>

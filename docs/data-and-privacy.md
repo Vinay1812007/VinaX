@@ -10,6 +10,10 @@ This document says what VinaX keeps on a listener's device, what leaves the devi
 - **The web app shows advertising on some browsing pages.** Those pages load a third-party advertising script, and that is not controlled by the usage-sharing choice. See [Advertising](#advertising).
 - **The server keeps short technical records.** AI calls are logged as counts and timings without prompts or replies. Rate limiting keys on a hashed network address, not the address itself.
 
+## Optional Google sign-in (12.2)
+
+Listening never needs an account. A listener who taps **Sign in with Google** (welcome screen or Settings → Your data) sends Google's ID token to the Worker, which checks it with Google and stores one row in `vinax_accounts`: the Google account ID, email address (and whether Google verified it), name, profile picture address, the listener's existing VinaX username when the device proves it owns it, and the last device ID and time. Nothing else moves: library, history, taste profile and AI chats stay on the device. The session is kept on the device and sent only to `/api/auth/*`. **Sign out** forgets the session on the device; **Delete account** removes the row. On the website the sign-in button and its script load from Google; in the Android app the system's Google account sheet is used.
+
 ## What is stored on the device
 
 | Where | What | Notes |

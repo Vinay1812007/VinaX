@@ -258,9 +258,6 @@ export function AppLayout() {
       void import('@/services/recommendation/transitionTracker').then((m) => m.initTransitionTracker()).catch(() => undefined);
       // 11.7.2 — after the second song of a session, offer to turn on notifications (web + app).
       void import('@/services/push/notifyAsk').then((m) => m.installNotifyAsk()).catch(() => undefined);
-      // A username chosen while offline stays "pending" until the service
-      // confirms it — retry now and on every reconnect.
-      void import('@/features/identity/handleClaim').then((m) => m.installClaimRetry()).catch(() => undefined);
       void loadBlocklist();
       initLockScreenLyrics();
       initSpatialNav();

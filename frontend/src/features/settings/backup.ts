@@ -4,7 +4,7 @@ import { getLocal, setLocal, writeLocalBatch, type StorageFailure } from '@/serv
 import { HOME_DESIGN_KEY, validateHomeDesign } from '@/services/recommendation/homeDesign';
 import { pruneTrash, type TrashEntry } from '@/features/library/trash';
 import { normalizeTags } from '@/features/library/tags';
-import { USERNAME_RE } from '@/features/identity/handleClaim';
+import { USERNAME_RE } from '@/features/identity/username';
 import { SMART_COLLECTIONS_KEY, sanitizeSmartCollections } from '@/features/library/smartCollections';
 import { normalizeProfile } from '@/services/personalization/profile';
 import { sanitizeAlarm, sanitizeLyricOffsets } from '@/services/storage/sanitize';

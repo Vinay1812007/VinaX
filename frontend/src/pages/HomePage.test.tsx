@@ -196,7 +196,7 @@ describe('HomePage 10.0 — the first visit', () => {
     onTestFinished(() => usePlayerStore.setState({ playQueue: realPlayQueue }));
     renderHome();
     expect(await screen.findByRole('heading', { level: 1, name: /All the music you love\. Free\./ })).toBeTruthy();
-    expect(screen.getByText(/No sign-up\. No account\./)).toBeTruthy();
+    expect(screen.getByText(/No sign-up needed\./)).toBeTruthy();
     // The six feature tiles link to real destinations.
     const tiles = within(screen.getByRole('region', { name: 'Everything included, all free' })).getAllByRole('link');
     expect(tiles.map((a) => a.getAttribute('href'))).toEqual(['/VinaXAI', '/radio', '/together', '/karaoke', '/download', '/languages']);

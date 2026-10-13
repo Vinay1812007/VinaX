@@ -50,7 +50,7 @@ export default function AboutPage() {
 
       <div className="vx-sec-block vx-doc">
         <p>
-          VinaX is free music with no login and no account. It plays music in Indian languages and English, and
+          VinaX is free music with no login needed. It plays music in Indian languages and English, and
           learns what you like on your device.
         </p>
         <p>

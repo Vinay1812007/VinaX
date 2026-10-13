@@ -3,13 +3,13 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/features/identity/handleClaim', () => ({
-  USERNAME_RE: /^[a-z0-9_]{3,20}$/,
-  pendingClaim: () => null,
-  claimHandle: vi.fn(async (u: string) => {
-    localStorage.setItem('vinax.test.claimed', u);
-    return { status: 'confirmed' };
-  }),
+// 12.2 — the welcome offers Google sign-in (optional); its script is never loaded in tests.
+vi.mock('@/services/auth/google', () => ({
+  currentAccount: () => null,
+  onAccountChange: () => () => undefined,
+  renderGoogleButton: vi.fn(async () => true),
+  signInNative: vi.fn(),
+  signOut: vi.fn(),
 }));
 vi.mock('@/services/api', () => ({ searchSongs: vi.fn(async () => []) }));
 vi.mock('@/services/analytics/telemetry', () => ({ registerUser: vi.fn() }));
@@ -21,7 +21,7 @@ vi.mock('@/services/analytics/sessionInsights', () => ({ initSessionInsights: vi
 vi.mock('@/constants/changelog', () => ({ latestNotesFingerprint: () => 'test-fingerprint' }));
 
 import { OnboardingSheet } from './OnboardingSheet';
-import { claimHandle } from '@/features/identity/handleClaim';
+import { renderGoogleButton } from '@/services/auth/google';
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal } from '@/services/storage/local';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -56,21 +56,20 @@ describe('OnboardingSheet (11.0 welcome)', () => {
     expect(screen.getByText('Enter a name of at least two letters.')).toBeTruthy();
     expect(getLocal<boolean>(KEYS.onboarded, false)).toBe(false);
 
+    // 12.2 — no username field and no human check: a name, and an optional Google sign-in.
+    expect(screen.queryByLabelText('Username')).toBeNull();
+    expect(renderGoogleButton).toHaveBeenCalled();
+    expect(screen.getByText(/Optional\. Signing in keeps your username/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Your name'), { target: { value: 'Tester' } });
-    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'tester_one' } });
     press('Continue');
     await heading('Choose your languages');
-    // The third argument hands over the on-screen human check's token (11.1.0).
-    expect(claimHandle).toHaveBeenCalledWith('tester_one', 'Tester', expect.any(Function));
     expect(getLocal<string>(KEYS.userName, '')).toBe('Tester');
 
-    // Back, then Continue with the same username: it is not claimed twice.
-    localStorage.setItem(KEYS.userHandle, JSON.stringify('tester_one'));
+    // Back and forward again keeps the name.
     press('Back');
     await heading('Free. No sign-up.');
     press('Continue');
     await heading('Choose your languages');
-    expect(claimHandle).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole('checkbox'));
     press('Continue');
