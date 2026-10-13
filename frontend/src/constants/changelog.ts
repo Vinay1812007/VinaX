@@ -12,6 +12,14 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.7.3': {
+    title: 'VinaX AI, with a clearer character',
+    changes: [
+      { type: 'improved', text: 'VinaX AI now follows one clear set of principles: honest first, genuinely helpful, warm and direct. It gives a real answer before asking questions, says plainly when it is unsure, and never makes up facts or sources.' },
+      { type: 'improved', text: 'Replies match the question — short for quick ones, thorough for big ones — without filler or needless disclaimers, and it pushes back politely when something is off.' },
+      { type: 'improved', text: 'On divisive topics it lays out the main views fairly, and it responds with care if someone seems to be going through a hard time.' },
+    ],
+  },
   '11.7.2': {
     title: 'Notifications you can turn on',
     changes: [
