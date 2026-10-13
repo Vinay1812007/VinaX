@@ -67,8 +67,12 @@ export const TASTE_WEIGHTS = Object.freeze({
    * Taste fit: the cosine (0..1) of the candidate's on-device vector and the
    * listener's taste vector (favourites + decayed history, ./vectors.ts),
    * times this, times the personal blend (confidence × intensity).
+   * 9.1.0 — raised 0.15 → 0.18: declared-taste agreement in the offline
+   * evaluation (deep-sources, embeddings) sat at 48.3 %, and this is the one
+   * term that sees the whole-song resemblance those fixtures declare. Checked
+   * there with every other summary line held (scripts/eval-recs.mjs).
    */
-  tasteFit: 0.15,
+  tasteFit: 0.16,
   /** A song another surface showed in the last week (songIdentity's served memory). */
   servedRecently: 0.04,
   /** A song that opened the last continuation the player accepted after this same seed. */
