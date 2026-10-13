@@ -620,3 +620,16 @@ html.reduce-motion .vx-settings *, html.reduce-motion .vx-settings *::before, ht
 .vx-tpl-card[data-tpl='vibe'] .vx-tpl-dock { left: 14px; right: 14px; bottom: 4px; height: 18px; border-radius: 999px; background: rgb(255 255 255 / 0.1); }
 .vx-tpl-card[data-tpl='vibe'] .vx-tpl-dock i { top: 5px; border-radius: 50%; }
 .vx-tpl-card[data-tpl='vibe'] .vx-tpl-dock i:nth-child(1) { top: 3px; width: 12px; height: 12px; margin-left: -3px; background: linear-gradient(120deg, var(--tpl-a), var(--tpl-b)); }
+
+/* 13.0.2 — instant app-style switch (TemplatePicker.applyInstant): while
+   `tpl-switching` is on <html>, every transition is suspended so the whole
+   page snaps to the new style in one frame. Without this, a template swap
+   set off hundreds of simultaneous 400ms background/border tweens — the
+   main source of the switch feeling laggy on phones. Removed two frames
+   after the swap, so ordinary interactions animate as before. */
+html.tpl-switching,
+html.tpl-switching *,
+html.tpl-switching *::before,
+html.tpl-switching *::after {
+  transition: none !important;
+}

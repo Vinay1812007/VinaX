@@ -1,5 +1,6 @@
 import { useRef, type KeyboardEvent } from 'react';
 import { TEMPLATE_OPTIONS, type TemplateId } from '@/constants/templates';
+import { isNativePlatform } from '@/services/native';
 
 /**
  * 11.0 — the app style picker: six looks as one radio group (arrow keys move
@@ -11,17 +12,43 @@ import { TEMPLATE_OPTIONS, type TemplateId } from '@/constants/templates';
  */
 /**
  * Switch styles as one cross-fade of the whole page where the browser can
- * (View Transitions); elsewhere, and under either reduced-motion switch, the
- * change is immediate. The attribute is stamped inside the transition so the
- * "after" snapshot is the new style — the layout effect that normally applies
- * it runs a frame later.
+ * (View Transitions); elsewhere the change is immediate. The attribute is
+ * stamped inside the transition so the "after" snapshot is the new style —
+ * the layout effect that normally applies it runs a frame later.
+ *
+ * 13.0.2 — the cross-fade is DESKTOP-ONLY. On the Android app (and phones
+ * generally) a View Transition snapshots the whole page, and snapshots do
+ * not carry `backdrop-filter`: every glass surface captured as a see-through
+ * void, so the UI looked EMPTY for the length of the fade, and snapshotting
+ * a blur-heavy page janked hard on phone GPUs. Phones take the instant path.
  */
+function wantsCrossfade(root: HTMLElement): boolean {
+  if (isNativePlatform()) return false;
+  if (root.classList.contains('reduce-motion')) return false;
+  const mm = window.matchMedia?.bind(window);
+  if (mm?.('(prefers-reduced-motion: reduce)').matches) return false;
+  // Coarse primary pointer = phone/tablet: same snapshot artifacts as the app.
+  if (mm?.('(pointer: coarse)').matches) return false;
+  return true;
+}
+
+/** Instant switch: suspend every colour/shadow transition for the swap, so
+ *  the page snaps to the new style in one frame instead of hundreds of
+ *  elements tweening background/border for 400ms — the other half of the
+ *  "laggy" switch on low-end phones. Transitions return two frames later,
+ *  once the new style has laid out. */
+function applyInstant(id: TemplateId, apply: (id: TemplateId) => void): void {
+  const root = document.documentElement;
+  root.classList.add('tpl-switching');
+  apply(id);
+  requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('tpl-switching')));
+}
+
 function switchStyle(id: TemplateId, apply: (id: TemplateId) => void): void {
   const root = document.documentElement;
   const start = (document as Document & { startViewTransition?: (cb: () => void) => unknown }).startViewTransition;
-  const still = root.classList.contains('reduce-motion') || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  if (typeof start !== 'function' || still) {
-    apply(id);
+  if (typeof start !== 'function' || !wantsCrossfade(root)) {
+    applyInstant(id, apply);
     return;
   }
   start.call(document, () => {
