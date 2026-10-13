@@ -1686,3 +1686,27 @@ create table if not exists vinax_account_data (
 );
 
 alter table vinax_account_data enable row level security;
+
+
+-- ======================= status page (uptime) =======================
+-- Read and written by /api/status (the status page and the status-tick
+-- workflow). Kept outside the vinax_ prefix since they were first created,
+-- so a vinax_ reset leaves the uptime history alone.
+
+create table if not exists uptime_daily (
+  component  text not null,
+  day        date not null,
+  up         integer not null default 0,
+  total      integer not null default 0,
+  primary key (component, day)
+);
+
+create table if not exists uptime_last (
+  component   text primary key,
+  ok          boolean not null,
+  latency_ms  integer,
+  checked_at  timestamptz not null default now()
+);
+
+alter table uptime_daily enable row level security;
+alter table uptime_last  enable row level security;
