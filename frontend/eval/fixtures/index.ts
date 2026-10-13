@@ -15,7 +15,7 @@ import { pool, song, versionFamily, WORDS, type LangId } from './catalogue';
  * Bump EVAL_FIXTURES_VERSION whenever a fixture changes, or two reports stop
  * being comparable.
  */
-export const EVAL_FIXTURES_VERSION = '1.3.0'; // 9.0.0 — album/related-artist retrieval, cached embeddings, served songs, a memory sitting, unplayable tracks, sparse history (1.2.0: DJ-remix and folk; 1.1.0: mixed-queue)
+export const EVAL_FIXTURES_VERSION = '1.4.0'; // 9.1.0 — `served` gains fourteen alternative search results so its metric measures the exposure penalty instead of pool arithmetic (1.3.0: album/related-artist retrieval, cached embeddings, served songs, a memory sitting, unplayable tracks, sparse history; 1.2.0: DJ-remix and folk; 1.1.0: mixed-queue)
 
 /** Far enough ahead that a soft mute is active whenever the evaluation runs, without reading the clock. */
 export const FAR_FUTURE = 4_102_444_800_000;
@@ -409,7 +409,13 @@ export function buildFixtures(now: number): EvalFixture[] {
   const embeddedOff: EvalFixture = { ...embedded, id: 'embeddings-off', title: 'The same listener, no vectors on the device', notes: 'Control for `embeddings`: identical, except the device holds no learned vectors.', embeddings: {} };
 
   // 9.0.0 — Home showed eight of the seed's strongest suggestions this week.
+  // 1.4.0 — the pool holds real alternatives. With the default 26-song pool a
+  // 20-song sitting HAD to ship nearly all eight shown songs whatever the
+  // penalty, so the served metric read pool arithmetic (a saturated 37.5 %),
+  // not the engine. Fourteen more search results make avoidance possible, and
+  // the metric now measures how much the exposure penalty actually holds back.
   const served = listener(now, 'telugu', { id: 'served', title: 'Songs Home showed this week (Telugu)', notes: 'Eight of the strongest suggestions were shown on Home: the served-recently penalty holds them back a little, never as a rule.' });
+  served.search = [...served.search, ...pool('telugu', { prefix: 'served-x', count: 14, offset: 13, artistPattern: [3, 5, 7, 2, 6, 4, 3, 7, 5, 2, 4, 6, 7, 3] })];
   served.served = served.related.slice(0, 8);
 
   // 9.0.0 — a sitting with memory: every accepted continuation is committed,
