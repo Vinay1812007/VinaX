@@ -285,6 +285,8 @@ Neither event carries a song or a song id. The client rate-limits them: a bucket
 
 `features/experiments/recExperiment.ts` ties an outcome to an experiment. Assignment is the pure hash `pickVariant` (`features/experiments/useExperiment.ts`, mirrored by `backend/worker/functions/_lib/experiments.ts`). `decideRecVariant(key)` is the decision point: it returns the variant and records that the continuation being planned depends on it. `claimExposure` turns pending decisions into the `exp` map of a continuation that was actually served, and `exposureOf` returns it for that continuation's outcomes. A decision for a plan that is never served expires after `PENDING_DECISION_TTL_MS` (60 s). An owner tuning rollout rides in the same map as `rec-config`. Call `decideRecVariant` in every arm, control included, while planning: only an exposed control is a comparison group.
 
+**The live decision point (13.1).** `planNextSongs` calls `decideRecVariant('rec-next-songs')` on every plan. Named arms set the taste-fit weight for that plan (`REC_TASTE_ARMS` in `engine.ts`): `taste-0.15` (the 9.0 value, which measures 9.1's raise on real listening) and `taste-0.18`. `control`, and any name the build does not know, keep the shipped weight. To run it, create the experiment in the owner console under exactly the key `rec-next-songs` with arms named `control` and `taste-0.15` (and optionally `taste-0.18`); read it with completion rate as the primary metric, as below.
+
 ### Reading an A/B result
 
 1. Pick one primary metric before looking, for example completion rate: `complete ÷ (complete + skip + early_skip + partial)`.

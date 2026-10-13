@@ -311,6 +311,12 @@ export interface RecommendationContext {
   /** 8.2.0 — ids that opened the last accepted continuation after this same seed. Superseded by `seedRepeatKeys`. */
   seedRepeatIds?: ReadonlySet<string>;
   /**
+   * 13.1 — the taste-fit weight for this plan, when an experiment arm sets one
+   * (engine.ts, `rec-next-songs`). Absent = TASTE_WEIGHTS.tasteFit, the
+   * shipped value — every device outside the experiment scores exactly as before.
+   */
+  tasteFitWeight?: number;
+  /**
    * 8.3.0 — the style the listener is in (DJ remixes, folk songs, devotional
    * songs), set by the next-song engine from the seed, the last plays and the
    * tune (./style.ts `sessionStyle`). It adds a style candidate source and a

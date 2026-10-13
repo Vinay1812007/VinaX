@@ -28,6 +28,17 @@ import { useEvidenceStore } from '@/store/evidenceStore';
 import { useDownloadsStore } from '@/store/downloadsStore';
 import { lastSeedContinuation, rememberSeedContinuation } from './recMemory';
 import { exposureLedger, recordExposure, snoozedKeySet } from './exposure';
+import { decideRecVariant, EXP_REC_NEXT_SONGS } from '@/features/experiments/recExperiment';
+
+/**
+ * 13.1 — the arms of the next-song experiment (`rec-next-songs`, created in
+ * the owner console). Each named arm sets the taste-fit weight for the plan;
+ * 'control' and any name not listed here keep the shipped weight, so a typo
+ * in the console can only ever mean "no change". 9.1 raised the weight
+ * 0.15 → 0.16 on the offline evaluation's evidence; `taste-0.15` measures
+ * that change on real listening, `taste-0.18` probes further up.
+ */
+export const REC_TASTE_ARMS: Readonly<Record<string, number>> = Object.freeze({ 'taste-0.15': 0.15, 'taste-0.18': 0.18 });
 
 type EmbeddingsModule = typeof import('@/services/ai/embeddings');
 
@@ -354,7 +365,11 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   // 8.3.1 — under "Switch language" the style is searched in the language the queue switches TO
   // (the same pinned-first choice as the lock below); with no such language, not at all.
   const styleLanguage = tune === 'different-language' ? ctx.pinnedLanguages.find((l) => l !== seedLanguage) ?? null : undefined;
-  const nextCtx: RecommendationContext = { ...ctx, seedSong: seed, anchorSong: previous && previous.id !== seed.id ? previous : null, surface: ctx.surface ?? 'next', intentQuery, style, ...(styleLanguage !== undefined ? { styleLanguage } : {}), trendBonus: trend.bonus, trendLabel: trend.label, trendItems: trend.items, exposurePenaltyOf: (k) => planLedger.penalty(k), seedRepeatKeys: lastSeedContinuation(seed) };
+  // 13.1 — the experiment's decision point, read in EVERY arm (control
+  // included) so exposure is comparable; outside the experiment it returns
+  // 'control', records nothing, and the plan scores exactly as shipped.
+  const tasteArm = REC_TASTE_ARMS[decideRecVariant(EXP_REC_NEXT_SONGS)];
+  const nextCtx: RecommendationContext = { ...ctx, seedSong: seed, anchorSong: previous && previous.id !== seed.id ? previous : null, surface: ctx.surface ?? 'next', intentQuery, style, ...(styleLanguage !== undefined ? { styleLanguage } : {}), trendBonus: trend.bonus, trendLabel: trend.label, trendItems: trend.items, exposurePenaltyOf: (k) => planLedger.penalty(k), seedRepeatKeys: lastSeedContinuation(seed), ...(tasteArm !== undefined ? { tasteFitWeight: tasteArm } : {}) };
   const mode = effectiveDiscoveryMode(nextCtx);
   const intent = nextCtx.sessionIntent ?? null;
   const library = useLibraryStore.getState();

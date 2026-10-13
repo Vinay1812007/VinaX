@@ -333,7 +333,7 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext, frame: 
   // 8.2.0 — taste fit: the whole-song resemblance to what the listener loves
   // and plays lately (artists, album, language, genres, mood, vibes, decade
   // at once), which the per-feature terms above only see one at a time.
-  add('taste', tasteFit(song, ctx, frame, cp, c.classified) * TASTE_WEIGHTS.tasteFit * blend);
+  add('taste', tasteFit(song, ctx, frame, cp, c.classified) * (ctx.tasteFitWeight ?? TASTE_WEIGHTS.tasteFit) * blend);
 
   // 8.2.0 — no surface re-serves what another just showed, and asking again
   // from the same song does not hand back the same opening: small penalties,
