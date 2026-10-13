@@ -58,6 +58,7 @@ import * as m_api_admin_musicapi from './functions/api/admin/musicapi';
 import * as m_api_admin_notifylog from './functions/api/admin/notifylog';
 import * as m_api_admin_overview from './functions/api/admin/overview';
 import * as m_api_admin_push from './functions/api/admin/push';
+import * as m_api_admin_fcmcheck from './functions/api/admin/fcmcheck';
 import * as m_api_admin_realtime from './functions/api/admin/realtime';
 import * as m_api_admin_releases from './functions/api/admin/releases';
 import * as m_api_admin_retention from './functions/api/admin/retention';
@@ -197,6 +198,7 @@ const EXACT: Record<string, Mod> = {
   '/api/admin/notifylog': m_api_admin_notifylog,
   '/api/admin/overview': m_api_admin_overview,
   '/api/admin/push': m_api_admin_push,
+  '/api/admin/fcmcheck': m_api_admin_fcmcheck,
   '/api/admin/realtime': m_api_admin_realtime,
   '/api/admin/releases': m_api_admin_releases,
   '/api/admin/retention': m_api_admin_retention,

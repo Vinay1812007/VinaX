@@ -214,7 +214,8 @@ for (const size of SIZES) {
     // vitest's 1 s default poll was a knife edge that a few hundred bytes
     // anywhere in the graph could tip. Same explicit leash as the polls above.
     await expect.poll(() => bodyText(page), { timeout: 15_000 }).toMatch(/@tester/);
-    await expect.poll(() => bodyText(page), { timeout: 15_000 }).toMatch(/Confirmed by the service/);
+    // 12.2 — the Account row (optional Google sign-in) replaced the Username row.
+    await expect.poll(() => bodyText(page), { timeout: 15_000 }).toMatch(/Sign in with Google to keep it with your account/);
     expect(await noHorizontalScroll(page)).toBe(true);
   });
 }

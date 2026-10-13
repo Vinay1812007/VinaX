@@ -97,6 +97,41 @@ async function accessToken(sa: ServiceAccount): Promise<string | null> {
   return inflightExchange;
 }
 
+/**
+ * 12.2.1 — does FCM_SERVICE_ACCOUNT work? Names only, never the key: which
+ * project it belongs to, whether Google issues a token for it, and how FCM
+ * answers a validate-only message to a made-up device (nothing is delivered).
+ * A working setup answers `fcm: 'ok'` — FCM checked the message and refused
+ * only the fake device.
+ */
+export async function checkFcm(env: FcmEnv): Promise<{ configured: boolean; project: string | null; token: boolean; fcm: 'ok' | 'denied' | 'error' | 'skipped'; detail: string | null }> {
+  if (!env.FCM_SERVICE_ACCOUNT) return { configured: false, project: null, token: false, fcm: 'skipped', detail: null };
+  let sa: ServiceAccount;
+  try {
+    sa = JSON.parse(env.FCM_SERVICE_ACCOUNT) as ServiceAccount;
+  } catch {
+    return { configured: true, project: null, token: false, fcm: 'skipped', detail: 'not valid JSON' };
+  }
+  const project = typeof sa.project_id === 'string' ? sa.project_id : null;
+  cachedToken = null;
+  const at = await accessToken(sa);
+  if (!at || !project) return { configured: true, project, token: false, fcm: 'skipped', detail: 'Google refused the service account' };
+  try {
+    const res = await fetch(`https://fcm.googleapis.com/v1/projects/${project}/messages:send`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${at}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ validate_only: true, message: { token: 'vinax-fcm-self-test-not-a-device', notification: { title: 'test', body: 'test' } } }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const j = (await res.json().catch(() => null)) as { error?: { status?: string; message?: string; details?: Array<{ errorCode?: string }> } } | null;
+    const code = j?.error?.details?.find((d) => d.errorCode)?.errorCode ?? j?.error?.status ?? null;
+    if (res.ok || res.status === 400 || res.status === 404) return { configured: true, project, token: true, fcm: 'ok', detail: code };
+    return { configured: true, project, token: true, fcm: res.status === 401 || res.status === 403 ? 'denied' : 'error', detail: `${res.status} ${code ?? ''}`.trim() };
+  } catch {
+    return { configured: true, project, token: true, fcm: 'error', detail: 'no answer' };
+  }
+}
+
 export interface FcmMessage {
   title: string;
   body: string;
