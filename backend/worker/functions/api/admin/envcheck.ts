@@ -43,7 +43,7 @@ export const ENV_ITEMS: Array<{ name: string; group: string; required: boolean; 
   // 11.8 — web search in VinaX AI when the model's own search does not run.
   // Not an AI key (the lane registry keeps exactly four of those).
   { name: 'SERPER_API_KEY', group: 'Web search', required: false, note: 'web search in VinaX AI (off when unset; one-time free allowance)' },
-  { name: 'RESEARCH_DAILY_LIMIT', group: 'Web search', required: false, note: 'deep-research runs per UTC day (plain var, default 10; 4 searches each)' },
+  { name: 'RESEARCH_DAILY_LIMIT', group: 'Web search', required: false, note: 'deep-research runs per UTC day (plain var, default 5; 4 searches each)' },
   { name: 'SERPER_DAILY_LIMIT', group: 'Web search', required: false, note: 'web searches allowed per UTC day (plain var, default 80)' },
   { name: 'VINAX_MAESTRO_MODEL', group: 'AI', required: false, note: 'optional model name that replaces the maestro pin (never a key)' },
   { name: 'ASSETS_HOST', group: 'Edge', required: true, note: 'Pages origin the Worker proxies' },

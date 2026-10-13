@@ -82,7 +82,7 @@ import { placeContextLines, requestPlace } from '../_lib/place';
 import { type SupabaseEnv } from '../_lib/supabase';
 import { codeBlock, maestroFetch, maestroModelFor, outputBlock } from '../_lib/maestro';
 import { isWorkersAiEndpoint, workersAiBinding, workersAiFetch } from '../_lib/workersai';
-import { countToday, isSmallTalk, makeTitle, noteToday, planResearch, signedImagePath, type ImageEnv } from '../_lib/chatExtras';
+import { countToday, isBareEntity, isSmallTalk, makeTitle, wantsImages, noteToday, planResearch, signedImagePath, type ImageEnv } from '../_lib/chatExtras';
 import { buildSearchQuery, cleanForQuery, mentionsSite, serperKey, serperSearch, type SerperEnv, type SerperSearch } from '../_lib/serper';
 
 // Image understanding rides the vision lanes (the 11B default, the 90B deep
@@ -415,6 +415,17 @@ export async function pictureList(env: ImageEnv, found: SerperSearch): Promise<A
   return out;
 }
 
+/** 12.1 — an image search's pictures for the reply's gallery: signed Worker links, a caption and the site. */
+export async function galleryOf(env: ImageEnv, found: SerperSearch): Promise<Array<{ src: string; page: string; alt: string; source: string }>> {
+  const out: Array<{ src: string; page: string; alt: string; source: string }> = [];
+  for (const r of found.results) {
+    if (!r.image || out.length >= 6) continue;
+    const src = await signedImagePath(env, r.image);
+    if (src) out.push({ src, page: r.url, alt: r.title.slice(0, 120), source: r.snippet.slice(0, 60) });
+  }
+  return out;
+}
+
 /** 12.0 — the result hosts, for the "searched" status (at most 8, no repeats). */
 export function hostsOf(found: SerperSearch): string[] {
   const sites: string[] = [];
@@ -450,6 +461,12 @@ export function mergeResults(all: SerperSearch[], max: number): SerperSearch {
 /** 12.0 — how a reply is laid out (appended per request, after the owner's prompt). */
 export const FORMAT_RULE =
   'FORMAT: Start with the direct answer in one or two sentences. Put the key names and terms in **bold**. When something has parts, steps or options, use a short bullet list. Keep paragraphs to two or three sentences. Use a heading only for long answers. End with one short line offering a natural next step when it helps.';
+/** 12.1 — a bare name ("ktm"): answer like a search page — what it most likely is, then what they may want. */
+export const ENTITY_RULE =
+  'The listener sent just a name. Start with one short line saying what it most likely refers to (if it could mean several things, ask "Are you asking about …?" naming the most likely one). Then write "What would you like to know?" and a short bullet list of 4 to 6 specific things they might want (for example price, best models, history, comparison with rivals). Keep it brief.';
+/** 12.1 — pictures from an image search are on screen with the reply. */
+export const PICTURES_RULE =
+  'Pictures from an image search are shown to the listener with this reply (listed in <pictures>). Never tell them to look for images elsewhere and never say you cannot show images. Refer to what the pictures show by their titles when it helps, briefly.';
 /** 12.0 — small talk ("hi", "thanks"): instant and brief. */
 export const CHIT_RULE = 'This is small talk. Reply warmly in one or two short sentences, in the listener\'s language, and offer one thing you can help with. No lists, no headings.';
 /** 12.0 — deep research: a long, structured, cited report from the search results. */
@@ -478,7 +495,7 @@ export function searchResultsBlock(found: SerperSearch): string {
 }
 
 interface Env extends AiEnv, SupabaseEnv, SerperEnv, ImageEnv {
-  /** 12.0 — deep-research runs allowed per UTC day (plain var, default 10). */
+  /** 12.0 — deep-research runs allowed per UTC day (plain var, default 5). */
   RESEARCH_DAILY_LIMIT?: string;
 }
 
@@ -818,6 +835,10 @@ async function handleChat(
   // (the + menu switch) gets the strongest seat for its long report.
   const smallTalk = reqMode === 'auto' && !thinkOnAuto && isSmallTalk(lastUserRaw);
   const wantResearch = (reqMode === 'auto' || reqMode === 'model') && body.research === true && !smallTalk;
+  // 12.1 — pictures: asked for ("bmw car images"), or a bare name ("ktm").
+  const ownText = cleanForQuery(lastUserRaw);
+  const bareEntity = (reqMode === 'auto' || reqMode === 'model') && !smallTalk && !wantResearch && isBareEntity(ownText) && !wantsWeb(ownText);
+  const wantPictures = (reqMode === 'auto' || reqMode === 'model') && !smallTalk && !wantResearch && (bareEntity || wantsImages(ownText));
   const mode: Mode =
     reqMode === 'auto'
       ? smallTalk
@@ -1043,6 +1064,7 @@ async function handleChat(
     if (mode === 'chit') sys = `${sys}\n\n${CHIT_RULE}`;
     else if (mode !== 'voice') sys = `${sys}\n\n${FORMAT_RULE}`;
     if (wantResearch) sys = `${sys}\n\n${RESEARCH_RULE}`;
+    if (bareEntity) sys = `${sys}\n\n${ENTITY_RULE}`;
     if (mode !== 'voice' && mode !== 'chit') sys = `${sys}\n\nFOLLOW-UPS: after a substantive answer, end with ONE final line that starts with ">>> " followed by up to three short follow-up questions the user might ask next, separated by " | " (example: ">>> Show an example | Make it shorter | Why does that happen?"). Omit the line entirely for one-line replies, greetings, refusals, pure song lists and translations.`;
   }
 
@@ -1101,14 +1123,21 @@ async function handleChat(
   // 12.0 — deep research: the question plus 3 planned searches (4 credits),
   // within RESEARCH_DAILY_LIMIT runs a day and the owner's deep-research switch.
   let researching = false;
+  let picturing = false;
   const searchAllowed =
     (reqMode === 'auto' || reqMode === 'model') && !smallTalk && !wantCode && !!serperKey(env) && !looksLikeMusicCommand(lastUserRaw);
   if (searchAllowed && wantResearch) {
     const query = buildSearchQuery(lastUserRaw, userTurnsRaw.length > 1 ? userTurnsRaw[userTurnsRaw.length - 2] : null);
-    const cap = /^\d{1,4}$/.test((env.RESEARCH_DAILY_LIMIT ?? '').trim()) ? Number(env.RESEARCH_DAILY_LIMIT) : 10;
+    const cap = /^\d{1,4}$/.test((env.RESEARCH_DAILY_LIMIT ?? '').trim()) ? Number(env.RESEARCH_DAILY_LIMIT) : 5;
     if (query && !(await aiGate(env, 'web-search')) && !(await aiGate(env, 'deep-research')) && (await countToday(env, 'deep-research', 'research')) < cap) {
       searchQuery = query;
       researching = true;
+    }
+  } else if (searchAllowed && wantPictures) {
+    const query = buildSearchQuery(lastUserRaw, userTurnsRaw.length > 1 ? userTurnsRaw[userTurnsRaw.length - 2] : null);
+    if (query && !(await aiGate(env, 'web-search'))) {
+      searchQuery = query;
+      picturing = true;
     }
   } else if (
     searchAllowed &&
@@ -1134,6 +1163,19 @@ async function handleChat(
     if (head?.role === 'system' && typeof head.content === 'string') head.content = `${head.content}\n\n${searchResultsBlock(found)}`;
   };
   const runSearch = async (send: (o: unknown) => void): Promise<void> => {
+    if (picturing) {
+      send({ status: { step: 'searching', query: searchQuery, images: true } });
+      const found = await serperSearch(env, searchQuery, { ...searchOpts(false), images: true });
+      const gallery = await galleryOf(env, found);
+      if (gallery.length) {
+        send({ gallery });
+        const head = msgs[0];
+        if (head?.role === 'system' && typeof head.content === 'string')
+          head.content = `${head.content}\n\n<pictures>\n${gallery.map((g, i) => `[${i + 1}] ${g.alt}${g.source ? ` (${g.source})` : ''}`).join('\n')}\n</pictures>\n${PICTURES_RULE}`;
+      }
+      send({ status: { step: 'searched', query: searchQuery, count: gallery.length, sites: hostsOf(found), images: true } });
+      return;
+    }
     if (!researching) {
       send({ status: { step: 'searching', query: searchQuery } });
       const found = await serperSearch(env, searchQuery, searchOpts(wantsNews(lastUserRaw)));
@@ -1445,6 +1487,8 @@ async function handleChat(
         // 11.0 — reasoning a model never closed (see the end of drain).
         const thinkBox: { text: string } = { text: '' };
         const thinkBudget = { left: THINK_MAX };
+        // 12.1 — when the reasoning started, and whether its length was sent.
+        const thought = { at: 0, sent: false };
         // Drain an upstream SSE body, forward each content delta to the client
         // and return the full text so we can detect an empty answer (a 200 with
         // no content — some lanes intermittently return this) and fail over.
@@ -1479,6 +1523,7 @@ async function handleChat(
           let thinkSent = 0;
           const sendThink = (t: string): void => {
             if (!t || thinkBudget.left <= 0) return;
+            if (!thought.at) thought.at = Date.now();
             const part = t.slice(0, thinkBudget.left);
             thinkBudget.left -= part.length;
             send({ think: part });
@@ -1509,6 +1554,11 @@ async function handleChat(
             // until real content starts so answers begin cleanly.
             const t = full ? text : text.replace(/^\s+/, '');
             if (!t) return;
+            // 12.1 — the first word after reasoning: say how long it took.
+            if (thought.at && !thought.sent) {
+              thought.sent = true;
+              send({ thought: { ms: Date.now() - thought.at } });
+            }
             full += t;
             send({ delta: t });
           };

@@ -167,7 +167,7 @@ On a chat turn where Gemini's free grounding does not run, the Worker may make o
 
 ### Deep research and pictures (12.0)
 
-- `RESEARCH_DAILY_LIMIT` (plain var in `worker/wrangler.toml`, default 10): deep-research runs a day. Each run spends 4 searches from `SERPER_DAILY_LIMIT`, so 10 runs use at most 40. Switch it off with the `deep-research` feature in AI Operations; usage shows there as feature `deep-research`.
+- `RESEARCH_DAILY_LIMIT` (plain var in `worker/wrangler.toml`, default 5): deep-research runs a day. Each run spends 4 searches from `SERPER_DAILY_LIMIT`, so 5 runs use at most 20. Switch it off with the `deep-research` feature in AI Operations; usage shows there as feature `deep-research`.
 - Pictures in replies and site logos load through `/api/webimg` and `/api/favicon`. Picture links are signed with `TELEMETRY_PEPPER` (else `DEVICE_ID_SECRET`); with neither set, replies carry no pictures.
 
 ### Human check on usernames

@@ -278,8 +278,9 @@ test('one model menu lists the live catalogue; a pick goes on the wire; connecto
   // The group is named by its heading (aria-labelledby), so find it by role + name.
   const group = page.getByRole('group', { name: 'Connectors', exact: true });
   // 11.0 — no Place row: place follows the app-wide region setting.
-  await expect(group.getByRole('switch')).toHaveCount(3);
-  expect((await group.locator('.ai-conn-name').allTextContents()).map((t) => t.trim())).toEqual(['Think', 'Now playing', 'Memory']);
+  // 12.0 — Deep research joins, right after Think.
+  await expect(group.getByRole('switch')).toHaveCount(4);
+  expect((await group.locator('.ai-conn-name').allTextContents()).map((t) => t.trim())).toEqual(['Think', 'Deep research', 'Now playing', 'Memory']);
   const think = page.getByRole('switch', { name: 'Think' });
   await expect(think).toHaveAttribute('aria-checked', 'false');
   await think.click();

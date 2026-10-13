@@ -117,6 +117,8 @@ export interface MsgActivity {
   /** 12.0 — deep research: every search it runs. */
   queries?: string[];
   research?: boolean;
+  /** 12.1 — an image search. */
+  images?: boolean;
 }
 
 export interface MsgSources {
@@ -136,6 +138,8 @@ export interface MsgImage {
   /** The page it came from. */
   page: string;
   alt: string;
+  /** 12.1 — the site it came from (gallery captions). */
+  source?: string;
 }
 export interface MsgSupport {
   text: string;
@@ -181,6 +185,8 @@ export interface Msg {
   thinking?: string;
   /** 12.0 — how long it reasoned before the first word (ms). */
   thoughtMs?: number;
+  /** 12.1 — pictures from an image search, shown as captioned cards above the reply. */
+  gallery?: MsgImage[];
   /** 11.0 — the pages a web-grounded reply drew on. */
   sources?: MsgSources;
   /** 10.3 — a picture or a music clip made with Create image / Create music clip. */

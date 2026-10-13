@@ -47,6 +47,8 @@ export interface SerperSearch {
 export interface SerperOptions {
   /** Ask the news endpoint instead of web results. */
   news?: boolean;
+  /** 12.1 — ask the images endpoint (pictures with their titles and pages). */
+  images?: boolean;
   /** Two-letter country code for `gl`; anything else means "in". */
   country?: string | null;
   /** Two-letter language code for `hl`; anything else means "en". */
@@ -63,6 +65,7 @@ export interface SerperOptions {
 
 export const SERPER_SEARCH_URL = 'https://google.serper.dev/search';
 export const SERPER_NEWS_URL = 'https://google.serper.dev/news';
+export const SERPER_IMAGES_URL = 'https://google.serper.dev/images';
 /** The vinax_ai_events `model` value of a Serper call (feature `web-search`). */
 export const SERPER_LOG_MODEL = WEB_SEARCH_LOG_MODEL;
 export const SERPER_DEFAULT_DAILY_LIMIT = 80;
@@ -70,6 +73,8 @@ export const SERPER_DEFAULT_DAILY_LIMIT = 80;
 export const SERPER_NUM = 10;
 export const SERPER_TIMEOUT_MS = 5_000;
 const MAX_RESULTS = 5;
+/** 12.1 — pictures kept from an image search. */
+const MAX_IMAGES = 6;
 const TITLE_MAX = 160;
 const SNIPPET_MAX = 400;
 const QUICK_MAX = 400;
@@ -152,22 +157,25 @@ function httpUrl(v: unknown): string | null {
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
 /** Serper's JSON → at most 5 http(s) results (title ≤ 160, snippet ≤ 400) and an optional quick answer. Pure. */
-export function mapSerperResponse(json: unknown, news = false): SerperSearch {
+export function mapSerperResponse(json: unknown, news = false, images = false): SerperSearch {
   if (!isObj(json)) return { results: [] };
-  const list = json[news ? 'news' : 'organic'];
+  const list = json[images ? 'images' : news ? 'news' : 'organic'];
   const results: SerperResult[] = [];
   const seen = new Set<string>();
+  const max = images ? MAX_IMAGES : MAX_RESULTS;
   if (Array.isArray(list)) {
     for (const item of list) {
-      if (results.length >= MAX_RESULTS) break;
+      if (results.length >= max) break;
       if (!isObj(item)) continue;
       const url = httpUrl(item.link);
       if (!url || seen.has(url)) continue;
       const title = plainText(item.title, TITLE_MAX);
       if (!title) continue;
       seen.add(url);
-      const image = httpUrl(item.imageUrl) ?? undefined;
-      results.push({ url, title, snippet: plainText(item.snippet, SNIPPET_MAX), ...(image ? { image } : {}) });
+      const image = httpUrl(item.imageUrl) ?? (images ? httpUrl(item.thumbnailUrl) : null) ?? undefined;
+      // 12.1 — an image result must have its picture; its snippet is the site's name.
+      if (images && !image) continue;
+      results.push({ url, title, snippet: plainText(images ? item.source : item.snippet, SNIPPET_MAX), ...(image ? { image } : {}) });
     }
   }
   const box = isObj(json.answerBox) ? json.answerBox : null;
@@ -195,9 +203,9 @@ export function serperLang(l: unknown): string {
 }
 
 /** The synthetic GET the edge cache stores a result under: endpoint + normalised query + gl. */
-export function serperCacheKey(origin: string, news: boolean, query: string, gl: string): Request {
+export function serperCacheKey(origin: string, news: boolean, query: string, gl: string, images = false): Request {
   const base = /^https?:\/\/[^/]+$/.test(origin) ? origin : DEFAULT_ORIGIN;
-  return new Request(`${base}/__serper/${news ? 'news' : 'search'}?q=${encodeURIComponent(normaliseQuery(query))}&gl=${gl}`, { method: 'GET' });
+  return new Request(`${base}/__serper/${images ? 'images' : news ? 'news' : 'search'}?q=${encodeURIComponent(normaliseQuery(query))}&gl=${gl}`, { method: 'GET' });
 }
 
 // ---------------------------------------------------------------- query building
@@ -359,10 +367,11 @@ export async function serperSearch(env: SerperEnv, query: string, opts: SerperOp
     const key = serperKey(env);
     const q = typeof query === 'string' ? query.replace(/\s+/g, ' ').trim().slice(0, 300) : '';
     if (!key || !q) return empty;
-    const news = opts.news === true;
+    const images = opts.images === true;
+    const news = !images && opts.news === true;
     const gl = serperCountry(opts.country);
     const hl = serperLang(opts.lang);
-    const cacheKey = serperCacheKey(opts.cacheOrigin ?? DEFAULT_ORIGIN, news, q, gl);
+    const cacheKey = serperCacheKey(opts.cacheOrigin ?? DEFAULT_ORIGIN, news, q, gl, images);
 
     const cached = await cacheRead(cacheKey);
     if (cached) return cached;
@@ -379,7 +388,7 @@ export async function serperSearch(env: SerperEnv, query: string, opts: SerperOp
     let error: string | null = null;
     let out: SerperSearch = empty;
     try {
-      const res = await fetch(news ? SERPER_NEWS_URL : SERPER_SEARCH_URL, {
+      const res = await fetch(images ? SERPER_IMAGES_URL : news ? SERPER_NEWS_URL : SERPER_SEARCH_URL, {
         method: 'POST',
         headers: { 'X-API-KEY': key, 'content-type': 'application/json' },
         body: JSON.stringify({ q, gl, hl, num: SERPER_NUM }),
@@ -387,7 +396,7 @@ export async function serperSearch(env: SerperEnv, query: string, opts: SerperOp
       });
       status = res.status;
       if (res.ok) {
-        out = mapSerperResponse(await res.json(), news);
+        out = mapSerperResponse(await res.json(), news, images);
         noteCall(Date.now());
       } else {
         const body = (await res.text().catch(() => '')).slice(0, 2000);
