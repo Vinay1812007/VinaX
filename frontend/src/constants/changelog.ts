@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '12.2.1': {
+    title: 'Your username, shown again',
+    changes: [
+      { type: 'fixed', text: 'Settings → Your data shows your username again when you are not signed in, with the option to keep it with a Google account.' },
+    ],
+  },
   '12.2.0': {
     title: 'Sign in with Google (optional)',
     changes: [

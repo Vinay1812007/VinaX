@@ -281,7 +281,9 @@ function AccountRow() {
   const handle = account?.user.username ?? getLocal<string>(KEYS.userHandle, '');
   const note = account
     ? `Signed in with Google${handle ? ` · @${handle}` : ''}. Your library and history stay on this device.`
-    : 'Optional. Sign in with Google to keep your username with your account. Listening never needs it.';
+    : handle
+      ? `Your username is @${handle}, on this device. Sign in with Google to keep it with your account. Listening never needs it.`
+      : 'Optional. Sign in with Google to keep your username with your account. Listening never needs it.';
   return (
     <Row label="Account" note={note} keywords="sign in google login account username" stack>
       <GoogleSignIn />
