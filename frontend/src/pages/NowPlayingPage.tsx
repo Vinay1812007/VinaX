@@ -599,7 +599,7 @@ export default function NowPlayingPage() {
       <StageBackdrop artUrl={artUrl}>
         {/* v5.7.12 — the video canvas: the clip fills the whole player behind
             the gradients on every screen size (full-screen canvas style). */}
-        {!chromeHidden && <SongCanvasBackdrop canvas={canvas} isPlaying={isPlaying} />}
+        {!chromeHidden && <SongCanvasBackdrop canvas={canvas} isPlaying={isPlaying} artUrl={artUrl} />}
         <div className="vx-np-bg-wash" />
         {/* v5.8.2 — the scrim thins over a playing clip so the video reads
             instead of drowning, and thins again once the controls are gone.
@@ -1016,7 +1016,7 @@ export default function NowPlayingPage() {
             onTouchEnd={onArtTouchEnd}
             onTouchCancel={onArtTouchCancel}
           >
-            <SongCanvasBackdrop canvas={canvas} isPlaying={isPlaying} />
+            <SongCanvasBackdrop canvas={canvas} isPlaying={isPlaying} artUrl={artUrl} />
             <div aria-hidden className="vx-np-canvas-shade" />
             {tapZones}
             <div aria-hidden className="vx-np-canvas-caption">

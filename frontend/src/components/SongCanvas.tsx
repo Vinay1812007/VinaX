@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { Song } from '@/types';
 import { findVideoForSong, type Video } from '@/services/api/videos';
@@ -78,11 +78,14 @@ function CanvasVideo({
   isPlaying,
   className,
   onError,
+  onAspect,
 }: {
   src: string;
   isPlaying: boolean;
   className?: string;
   onError(): void;
+  /** Reports the clip's intrinsic width/height ratio once it is known. */
+  onAspect?(aspect: number): void;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
@@ -103,22 +106,69 @@ function CanvasVideo({
       disablePictureInPicture
       draggable={false}
       onError={onError}
+      onLoadedMetadata={(e) => {
+        const v = e.currentTarget;
+        if (v.videoWidth > 0 && v.videoHeight > 0) onAspect?.(v.videoWidth / v.videoHeight);
+      }}
       className={className}
     />
   );
 }
 
-/** The full-bleed canvas behind the whole player, on every viewport. Mount
- *  inside the backdrop layer, UNDER the darkening gradients. */
-export function SongCanvasBackdrop({ canvas, isPlaying }: { canvas: SongCanvasState; isPlaying: boolean }) {
+/** Cover overscans a clip by this much before the fit flips to ambient:
+ *  a 9:16 canvas still fills a phone edge-to-edge (≈1.2×), while a 16:9
+ *  clip on the same phone (≈4×) would be an unwatchable centre crop. */
+const AMBIENT_OVERSCAN = 1.45;
+
+/**
+ * 13.0.2 — the full-bleed canvas behind the whole player, on every
+ * viewport, now with Spotify-style auto fit. A clip whose shape is close
+ * to the screen's fills it (object-cover, as before). A landscape clip on
+ * a portrait phone used to be centre-cropped into a giant face; it now
+ * plays whole (object-contain) over the blurred artwork, which fills the
+ * letterbox so there are no black bands. Mount inside the backdrop layer,
+ * UNDER the darkening gradients.
+ */
+export function SongCanvasBackdrop({ canvas, isPlaying, artUrl }: { canvas: SongCanvasState; isPlaying: boolean; artUrl?: string | null }) {
+  const [fit, setFit] = useState<'cover' | 'ambient'>('cover');
+  const aspect = useRef(0);
+  const compute = useCallback(() => {
+    if (!aspect.current) return;
+    const view = window.innerWidth / Math.max(1, window.innerHeight);
+    const overscan = Math.max(aspect.current / view, view / aspect.current);
+    setFit(overscan > AMBIENT_OVERSCAN ? 'ambient' : 'cover');
+  }, []);
+  // A new clip decides afresh; the screen turning decides again.
+  useEffect(() => {
+    aspect.current = 0;
+    setFit('cover');
+    if (!canvas.src) return;
+    window.addEventListener('resize', compute);
+    return () => window.removeEventListener('resize', compute);
+  }, [canvas.src, compute]);
   if (!canvas.src) return null;
   return (
-    <CanvasVideo
-      src={canvas.src}
-      isPlaying={isPlaying}
-      onError={canvas.markFailed}
-      className="absolute inset-0 h-full w-full object-cover"
-    />
+    <>
+      {fit === 'ambient' && artUrl && (
+        <img
+          src={artUrl}
+          alt=""
+          aria-hidden
+          draggable={false}
+          className="absolute inset-0 h-full w-full object-cover scale-110 blur-3xl brightness-[.55] saturate-125"
+        />
+      )}
+      <CanvasVideo
+        src={canvas.src}
+        isPlaying={isPlaying}
+        onError={canvas.markFailed}
+        onAspect={(a) => {
+          aspect.current = a;
+          compute();
+        }}
+        className={cn('absolute inset-0 h-full w-full', fit === 'ambient' ? 'object-contain' : 'object-cover')}
+      />
+    </>
   );
 }
 
