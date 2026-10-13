@@ -12,6 +12,18 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '13.2.0': {
+    title: 'Six styles, six voices',
+    changes: [
+      { type: 'fixed', text: 'VinaX now always uses its own lettering. On phones with a custom system font, most of the app used to appear in that font instead.' },
+      { type: 'new', text: 'Each app style has its own title lettering: compact and bold in Pulse, a warm serif in Sangam, lighter in Nocturne, tall cinema-sign letters in Marquee, round and bubbly in Vibe. Aura keeps the clean house face.' },
+      { type: 'improved', text: 'The style picker shows every name in its own lettering, so you can see the difference before you choose.' },
+      { type: 'fixed', text: 'Song titles no longer show through the mini player and the tab bar, and Pulse and Marquee keep their solid bars in the light theme.' },
+      { type: 'improved', text: 'Jump back in shows song titles on two lines instead of cutting them short, and Home’s play, AI Radio and Surprise me buttons sit on one row on phones.' },
+      { type: 'improved', text: 'AI Radio understands more of how you ask: “relaxing Telugu songs for studying”, “songs like Sid Sriram”, “nostalgic Hindi hits” or “surprise me”.' },
+      { type: 'improved', text: 'Trending now in VinaX AI shows each story once, says how long ago it was seen, and drops stories older than a day.' },
+    ],
+  },
   '13.1.0': {
     title: 'VinaX 13.1 “1.3.VinaXCW”: sign-in that works, a calmer canvas, a visible sleep timer',
     changes: [
