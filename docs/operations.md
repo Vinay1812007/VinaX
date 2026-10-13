@@ -170,6 +170,10 @@ On a chat turn where Gemini's free grounding does not run, the Worker may make o
 - `RESEARCH_DAILY_LIMIT` (plain var in `worker/wrangler.toml`, default 5): deep-research runs a day. Each run spends 4 searches from `SERPER_DAILY_LIMIT`, so 5 runs use at most 20. Switch it off with the `deep-research` feature in AI Operations; usage shows there as feature `deep-research`.
 - Pictures in replies and site logos load through `/api/webimg` and `/api/favicon`. Picture links are signed with `TELEMETRY_PEPPER` (else `DEVICE_ID_SECRET`); with neither set, replies carry no pictures.
 
+### Cleaning the current database and creating every table fresh (13.0)
+
+`frontend/supabase/vinax-13-reset.sql` does it in the SAME project, so the Worker's database secrets do not change. Part 1 permanently deletes every table and function named `vinax_…` in the `public` schema (all analytics, logs, usernames, accounts and synced data, push registrations, rooms, trends, owner settings); nothing else is touched. Part 2 is the full 13.0 schema. Steps: database dashboard → SQL editor → paste the file → Run; then re-publish the owner console settings and run the "Trending headlines" workflow once. Everyone signs in with Google again.
+
 ### Moving to a new database (13.0)
 
 `frontend/supabase/vinax-13.sql` is the whole schema for a **new** database project: every table, index, function and row-level-security rule the Worker uses, plus the 13.0 account tables. Steps:
