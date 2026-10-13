@@ -12,6 +12,16 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '13.1.0': {
+    title: 'VinaX 13.1 “1.3.VinaXCW”: sign-in that works, a calmer canvas, a visible sleep timer',
+    changes: [
+      { type: 'fixed', text: 'Sign in with Google works on Android again: tapping the button opens the account sheet and completes.' },
+      { type: 'fixed', text: 'Picking an app style no longer flashes an empty screen or stutters on phones — the new look snaps into place.' },
+      { type: 'new', text: 'The sleep timer shows where you can see it: a live countdown on the player’s clock, and “Sleeps in 14 min” on the playback notification.' },
+      { type: 'improved', text: 'The video canvas fills the whole screen on every device: a clip that fits your screen plays edge to edge, and one that doesn’t plays whole over its own soft glow — no more zoomed-in crops.' },
+      { type: 'improved', text: 'Up next leans a little more into your own taste, and a song continuation on a flaky network arrives in about two seconds instead of seven.' },
+    ],
+  },
   '13.0.0': {
     title: 'VinaX 13: your music, on every device',
     changes: [
