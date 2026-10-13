@@ -25,6 +25,16 @@ export const BROAD_PAGES = 6;
 
 /** 7.2.0 — at most this many catalogue requests in flight per gather. */
 export const CANDIDATE_FETCH_CONCURRENCY = 6;
+/**
+ * 9.1.0 — a gather is STALLED when, after the soft deadline, every required
+ * source has answered and no task has settled for this long. A stalled gather
+ * finishes with what it has instead of waiting the whole hard deadline: with
+ * a small catalogue the pool can never reach `minPool`, so one source that
+ * never settles used to cost ~7.3 s of the 8 s budget (and ~2.8 s of the
+ * urgent 3.5 s) while the listener sat at the end of the queue. Everything
+ * that is still going to answer keeps the gather alive by settling.
+ */
+export const GATHER_STALL_MS = 900;
 /** 7.2.0 — a provider response is reused for 3 minutes; at most 60 are kept (oldest dropped first). */
 const CACHE_TTL_MS = 3 * 60_000;
 const CACHE_CAP = 60;
@@ -246,19 +256,36 @@ function runTasks(tasks: Task[], local: number, o: GatherOptions, now: () => num
   let running = 0;
   let soft = false;
   let done = false;
+  let lastSettleAt = started;
+  let stallTimer: ReturnType<typeof setTimeout> | undefined;
   return new Promise((resolve) => {
     const finish = (): void => {
       if (done) return;
       done = true;
       clearTimeout(softTimer);
       clearTimeout(hardTimer);
+      clearTimeout(stallTimer);
       o.signal?.removeEventListener('abort', finish);
       ctl.abort();
       o.onReport?.({ settled: tasks.filter((_, i) => out[i]).map((t) => t.label), abandoned: tasks.filter((_, i) => !out[i]).map((t) => t.label), ms: now() - started });
       resolve(out);
     };
+    const requiredOk = (): boolean => tasks.every((t, i) => !t.required || out[i]);
+    // 9.1.0 — the stall watch (GATHER_STALL_MS): armed after the soft deadline
+    // while required sources have answered, re-armed by every later settle.
+    // A fast source keeps the gather alive; one that never settles cannot
+    // hold a small pool (ids below minPool) to the hard deadline any more.
+    const armStall = (): void => {
+      if (done || !soft || settled === tasks.length || !requiredOk()) return;
+      clearTimeout(stallTimer);
+      const waitMs = Math.max(0, lastSettleAt + GATHER_STALL_MS - now());
+      stallTimer = setTimeout(() => {
+        if (!done && soft && requiredOk() && now() - lastSettleAt >= GATHER_STALL_MS) finish();
+        else armStall();
+      }, waitMs);
+    };
     const check = (): void => {
-      if (settled === tasks.length || (soft && ids.size + local >= (o.minPool ?? 60) && tasks.every((t, i) => !t.required || out[i]))) finish();
+      if (settled === tasks.length || (soft && ids.size + local >= (o.minPool ?? 60) && requiredOk())) finish();
     };
     const pump = (): void => {
       while (!done && running < CANDIDATE_FETCH_CONCURRENCY && queue.length) {
@@ -275,12 +302,14 @@ function runTasks(tasks: Task[], local: number, o: GatherOptions, now: () => num
               settled += 1;
               for (const s of out[i]!) ids.add(s.id);
             }
+            lastSettleAt = now();
             check();
+            if (!done) armStall();
             pump();
           });
       }
     };
-    const softTimer = setTimeout(() => { soft = true; check(); }, o.softDeadlineMs ?? 2_500);
+    const softTimer = setTimeout(() => { soft = true; check(); if (!done) armStall(); }, o.softDeadlineMs ?? 2_500);
     const hardTimer = setTimeout(finish, o.hardDeadlineMs ?? 8_000);
     if (o.signal?.aborted) return finish();
     o.signal?.addEventListener('abort', finish, { once: true });
