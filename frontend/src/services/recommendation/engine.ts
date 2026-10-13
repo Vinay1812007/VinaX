@@ -198,8 +198,10 @@ export interface NextRecommendationOptions {
  *  8.3.0 — the listener's style (DJ remixes, folk, devotional) is kept going: a style source, a style term and a style quota.
  *  9.0.0 — artists the sitting pushed away come last, the album and related-artist sources follow the song a stretch
  *          continues from, an unplayable mark survives a copy that says nothing, the recent share of the taste vector
- *          is capped, and the artist-affinity and session weights are read (weights 1.3.0). */
-export const PIPELINE_VERSION = '9.0.0';
+ *          is capped, and the artist-affinity and session weights are read (weights 1.3.0).
+ *  9.1.0 — a stalled gather finishes once nothing more will settle (candidates.ts GATHER_STALL_MS), and the
+ *          taste-fit term rises 0.15 → 0.16 (TASTE_WEIGHTS; the override table and weights 1.3.0 unchanged). */
+export const PIPELINE_VERSION = '9.1.0';
 export function algorithmVersion(): string {
   // The weights part names an owner override while one is applied ("1.3.0+rc7").
   return `${PIPELINE_VERSION}/${activeWeightsVersion()}`;

@@ -112,7 +112,7 @@ Passive listening teaches less as one sitting goes on (`updater.ts`). A `PLAY` a
 | `history` | Familiar mode only: favourites and finished songs in the seed's language, without a fetch |
 | `rediscovery` | Songs completed more than 14 days ago, without a fetch |
 
-- **Bounded work.** At most six catalogue requests are in flight (`CANDIDATE_FETCH_CONCURRENCY`). Identical requests share one fetch, and responses are reused for three minutes (sixty kept). After a soft deadline the gather resolves once the pool holds enough songs and the required sources (the seed's suggestions, the intent search, the style search) have answered; at the hard deadline it resolves with whatever has settled and aborts the rest.
+- **Bounded work.** At most six catalogue requests are in flight (`CANDIDATE_FETCH_CONCURRENCY`). Identical requests share one fetch, and responses are reused for three minutes (sixty kept). After a soft deadline the gather resolves once the pool holds enough songs and the required sources (the seed's suggestions, the intent search, the style search) have answered; 9.1.0 — past the soft deadline, with every required source answered, a gather whose pool cannot reach `minPool` also resolves once no source has settled for `GATHER_STALL_MS` (900 ms), so one request that never settles cannot hold a small pool to the hard deadline (it used to cost ~7.3 s of the 8 s budget); at the hard deadline it resolves with whatever has settled and aborts the rest.
 - **Provenance.** A song found by several sources arrives once, carrying every source. Its primary source is the first in `SOURCE_PRIORITY` (`types.ts`): intent, related, favorite-artist, album, favorite-album, related-artist, style, proven, verified-trend, history, rediscovery, genre, explore, trending.
 - **Playable.** A response that carried stream URLs for some songs and none for another marks that one `unplayable`; a response with no stream URL at all says nothing either way. A candidate marked `unplayable` stays so until a copy with a stream URL arrives.
 - **Cold start.** With no taste yet the languages are the pinned ones, then the languages of liked songs, then unmuted defaults; the artists of liked songs seed the artist searches.
@@ -175,7 +175,7 @@ Three further terms live in `TASTE_WEIGHTS`, outside the override table:
 
 | Key | Weight | Used for |
 | --- | ---: | --- |
-| `tasteFit` | 0.15 | × the taste fit (0–1) × the personal blend; reason `taste` |
+| `tasteFit` | 0.16 | × the taste fit (0–1) × the personal blend; reason `taste` |
 | `seedRepeat` | 0.10 | Subtracted when the song opened the last continuation accepted after this same seed; reason `served` |
 | `servedRecently` | 0.04 | A fallback only: subtracted when the caller passes `servedKeys` and no exposure penalty applies. The live plan passes `exposurePenaltyOf` instead (see [The exposure ledger](#the-exposure-ledger)). |
 
@@ -228,7 +228,7 @@ When nothing else fits, soft rules give way in the order a listener minds least:
 | `refinement` | The AI DJ's order for the same stretch, a separate promise with a 24-second budget (`AI_BUDGET_MS`). The player applies it only to automatic entries that have not started: never the current song, a committed next song, or a song the listener queued or kept. |
 | `commit(accepted)` | Publishes "why this song" lines, DJ segues, the `queued` exposure and the seed memory for the songs the player actually accepted. A rejected or cancelled proposal publishes nothing. |
 | `topUp(seedNow, n)` | The rest of the ranked pool, re-validated against the song now at the end of the queue. When the queue runs dry before a new plan is ready, the player plays from it instead of pausing. A reserve in another language is never used. |
-| `fallback`, `latencyMs`, `alg` | Why the AI did not choose the order, how long the plan took, and the pipeline version (`PIPELINE_VERSION`, `9.0.0`) with the weights version. |
+| `fallback`, `latencyMs`, `alg` | Why the AI did not choose the order, how long the plan took, and the pipeline version (`PIPELINE_VERSION`, `9.1.0`) with the weights version. |
 
 The DJ's order is accepted only if at least `min(3, limit)` of its own picks survive validation and its arc error is no worse than the local order's plus 0.08 (plus 0.2 while a tune is active). Otherwise the local order stays. The player cancels a plan and its DJ request when the queue changes.
 

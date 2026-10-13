@@ -58,7 +58,7 @@ An unknown flag exits with code 2. The runner passes these on as environment var
 
 ## Fixtures
 
-`buildFixtures(now)` returns 29 fixtures, each a pure function of the timestamp the harness passes in (`NOW = 1_800_000_000_000`). Songs, titles and artists are fictional, in Telugu, Hindi, Tamil, Punjabi, Malayalam and Latin scripts (`frontend/eval/fixtures/catalogue.ts`). `EVAL_FIXTURES_VERSION` is `1.3.0`; bump it whenever a fixture changes, because two reports with different fixture versions are not comparable.
+`buildFixtures(now)` returns 29 fixtures, each a pure function of the timestamp the harness passes in (`NOW = 1_800_000_000_000`). Songs, titles and artists are fictional, in Telugu, Hindi, Tamil, Punjabi, Malayalam and Latin scripts (`frontend/eval/fixtures/catalogue.ts`). `EVAL_FIXTURES_VERSION` is `1.4.0`; bump it whenever a fixture changes, because two reports with different fixture versions are not comparable.
 
 | Fixture | What it is for |
 | --- | --- |
@@ -85,7 +85,7 @@ An unknown flag exits with code 2. The runner passes these on as environment var
 | `dj-session`, `folk-session` | A DJ-remix sitting and a folk sitting; what follows should stay in style |
 | `deep-sources` | Thin suggestions; the album page and two similar artists' pages hold songs no search returns. Declares those as its taste |
 | `embeddings`, `embeddings-off` | The device holds learned vectors that tell the fitting half of a 60-song pool apart; `-off` is the same listener without them |
-| `served` | Eight of the strongest suggestions were shown on Home this week |
+| `served` | Eight of the strongest suggestions were shown on Home this week. 1.4.0 — the pool holds fourteen alternative search results, so the metric measures the exposure penalty instead of pool arithmetic (the 26-song pool had saturated it at 37.5 %; the same engine reads 27.5 % with room to avoid) |
 | `memory` | Every continuation is committed and its first four songs end (three finished, one skipped) |
 | `unplayable` | The suggestions response can stream only half its songs |
 | `sparse-history` | Three plays, no favourites, one pinned language |
@@ -306,6 +306,7 @@ Neither event carries a song or a song id. The client rate-limits them: a bucket
 ## History that still matters
 
 - **The default baseline is the 7.1 release (`7c4e2f5`).** The harness was built to compare 7.2 with it, which is why the runner still falls back to `recommendNextSongs` and why a baseline run does not assert the rules. That commit can no longer be loaded (see [Comparing with a baseline](#comparing-with-a-baseline)). Audit and progress records from that time are in [history/progress-7.2.md](history/progress-7.2.md), [history/audit-7.2.md](history/audit-7.2.md) and [history/audit-9.1.md](history/audit-9.1.md).
+- **`served songs queued` read 37.5 % until fixtures 1.4.0.** With the default 26-song pool a 20-song sitting had to ship nearly all eight shown songs whatever the penalty, so the number was pool arithmetic. The deepened fixture reads 27.5 %; a 1.75× queue-surface multiplier on the ledger penalty was prototyped against it and shipped an identical count (the sequencer's energy fit dominates at this pool scale), so the served question is judged by the A/B (`rec_served` / `rec_outcome`), not by a weight.
 - **Discovery share runs at about twice the allocation** (35.8 % against 17.9 %) and has since the first comparison. The sequencer's budget holds only while familiar candidates remain, and with these small artist sets late continuations exhaust them. 72 continuations were over the allocation with familiar songs still available; the engine reports `discovery-share` as a relaxation.
 - **Same lead back to back is 36, of which 24 avoidable, and same lead within three is 1 806.** Neither is gated. The fixtures have small artist sets, so late continuations have few leads to choose from; the engine reports `artist-spacing` (234 continuations) and `artist-cap` (48) as relaxations. Treat these as numbers to hold steady across a change, not as targets met.
 - **The seed-memory replay reads "3 of 3 without memory".** That is the expected value, not a defect: without a commit the engine has nothing to remember. The number to watch is the committed one.
