@@ -150,7 +150,16 @@
       /* 11.0 — the canvas is the app style's (--boot-bg, stamped by the pre-paint script above). */
       html, body { background: var(--boot-bg, #101116); margin: 0; }
       html.amoled, html.amoled body { background: #000; }
-      #root { min-height: 100dvh; color: #eff2f8; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif; }
+      /* 13.2 — the face is set on BODY, never on #root. #root used to carry a
+         system-font stack for the boot splash, and the whole app mounts inside
+         #root, so every element without its own font-family inherited the
+         DEVICE font instead of the style's: on Android phones with a theme
+         font (common on Realme, Xiaomi, Samsung) VinaX rendered in the
+         listener's novelty font. Only sheets portaled to <body> were right.
+         The app style's own body face (html[data-template] body, base.css)
+         replaces this one as soon as the stylesheet applies. */
+      body { font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; }
+      #root { min-height: 100dvh; color: #eff2f8; }
       #boot { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: var(--boot-bg, #101116); padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom); }
       html.amoled #boot { background: #000; }
       #boot svg { width: 96px; height: 96px; border-radius: 24px; box-shadow: 0 18px 48px -18px rgba(255, 164, 46, 0.5); }
