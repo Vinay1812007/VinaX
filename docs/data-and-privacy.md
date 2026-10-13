@@ -10,9 +10,13 @@ This document says what VinaX keeps on a listener's device, what leaves the devi
 - **The web app shows advertising on some browsing pages.** Those pages load a third-party advertising script, and that is not controlled by the usage-sharing choice. See [Advertising](#advertising).
 - **The server keeps short technical records.** AI calls are logged as counts and timings without prompts or replies. Rate limiting keys on a hashed network address, not the address itself.
 
-## Optional Google sign-in (12.2)
+## Your Google account (13.0)
 
-Listening never needs an account. A listener who taps **Sign in with Google** (welcome screen or Settings → Your data) sends Google's ID token to the Worker, which checks it with Google and stores one row in `vinax_accounts`: the Google account ID, email address (and whether Google verified it), name, profile picture address, the listener's existing VinaX username when the device proves it owns it, and the last device ID and time. Nothing else moves: library, history, taste profile and AI chats stay on the device. The session is kept on the device and sent only to `/api/auth/*`. **Sign out** forgets the session on the device; **Delete account** removes the row. On the website the sign-in button and its script load from Google; in the Android app the system's Google account sheet is used.
+VinaX needs a Google account: until a listener signs in, every page is the sign-in screen (the Privacy, Terms and Contact pages stay readable). Signing in sends Google's ID token to the Worker, which checks it with Google and stores one row in `vinax_accounts`: the Google account ID, email address (and whether Google verified it), name, profile picture address, the VinaX username when the device proves it owns it, and the last device ID and time.
+
+**What syncs.** The account also holds one copy of the listener's data in `vinax_account_data`, in the same format as the backup file: settings, library and playlists, smart collections, listening history, taste profile, bookmarks and the Home layout. It is merged into each device the listener signs in on and updated a few seconds after a change. **AI chats, searches and this device's identity never sync.** The copy is at most 2 MB.
+
+**Session and deletion.** The session is kept on the device and sent only to `/api/auth/*` and `/api/account/*`. **Sign out** forgets it on the device (the data stays on the device and in the account). **Delete account** (Settings → Your data) removes the account row and the synced copy from the server. On the website the sign-in button and its script load from Google; in the Android app the system's Google account sheet is used.
 
 ## What is stored on the device
 

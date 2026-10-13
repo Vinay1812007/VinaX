@@ -899,3 +899,11 @@ html.light .vx-home .vxh-free-facts li::before {
   .vx-home .vxh-cta:hover, .vx-home .vxh-feature:hover { transform: none; }
 }
 
+
+/* 13.0 — "Made for <name>": one tap builds a personal mix. */
+.vxh-madefor { display: flex; align-items: center; gap: 16px; margin: 16px 0; padding: 18px 20px; border-radius: var(--vx-radius-card, 20px); background: linear-gradient(120deg, rgb(var(--vx-accent-rgb, 236 72 153) / 0.20), rgb(var(--tide-500) / 0.12)); border: 1px solid var(--vx-border); }
+.vxh-madefor-text { flex: 1; min-width: 0; }
+.vxh-madefor h2 { font-size: 18px; font-weight: 800; color: rgb(var(--ink-50)); }
+.vxh-madefor p { margin-top: 2px; font-size: 13.5px; color: rgb(var(--ink-300)); line-height: 1.45; }
+.vxh-madefor .vxh-pill { flex: none; display: inline-flex; align-items: center; gap: 6px; }
+@media (max-width: 479px) { .vxh-madefor { flex-direction: column; align-items: stretch; } }

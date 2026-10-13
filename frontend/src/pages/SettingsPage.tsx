@@ -75,6 +75,7 @@ import {
 } from '@/components/Icons';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { GoogleSignIn, useAccount } from '@/components/GoogleSignIn';
+import { onSyncStatus, syncNow, syncStatus, type SyncStatus } from '@/services/account/sync';
 import { deleteAccount } from '@/services/auth/google';
 import '@/styles/pages/settings.css';
 
@@ -279,16 +280,28 @@ function AccountRow() {
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const handle = account?.user.username ?? getLocal<string>(KEYS.userHandle, '');
-  const note = account
-    ? `Signed in with Google${handle ? ` · @${handle}` : ''}. Your library and history stay on this device.`
-    : handle
-      ? `Your username is @${handle}, on this device. Sign in with Google to keep it with your account. Listening never needs it.`
-      : 'Optional. Sign in with Google to keep your username with your account. Listening never needs it.';
+  // 13.0 — the account's sync, said plainly.
+  const [sync, setSync] = useState<SyncStatus>(syncStatus);
+  useEffect(() => onSyncStatus(setSync), []);
+  const syncLine =
+    sync === 'syncing'
+      ? 'Syncing…'
+      : sync === 'synced'
+        ? 'Library, history, taste and settings are synced to your account.'
+        : sync === 'offline'
+          ? 'Offline — changes sync when you reconnect.'
+          : sync === 'error'
+            ? 'Could not sync just now — VinaX will try again.'
+            : 'Your library, history, taste and settings follow your account.';
+  const note = account ? `Signed in with Google${handle ? ` · @${handle}` : ''}. ${syncLine}` : 'Sign in with Google to use VinaX.';
   return (
     <Row label="Account" note={note} keywords="sign in google login account username" stack>
       <GoogleSignIn />
       {account && (
-        <div className="mt-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <RowButton onClick={() => void syncNow()} disabled={sync === 'syncing'}>
+            {sync === 'syncing' ? 'Syncing…' : 'Sync now'}
+          </RowButton>
           {confirm ? (
             <span className="inline-flex items-center gap-2">
               <span className="text-[13px] text-ink-300">Delete your account from VinaX?</span>

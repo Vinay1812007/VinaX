@@ -24,11 +24,12 @@ export default function TermsPage() {
           the Android app or Kid mode; see <Link to="/privacy">Privacy</Link>). If you ever see VinaX asking for
           money, it isn&rsquo;t VinaX.
         </p>
-        <H>No accounts</H>
+        <H>Your account</H>
         <p>
-          You don&rsquo;t create an account, so there are no credentials to protect and nothing to ban. Your name,
-          favorites, history and taste profile live only on your device — see the{' '}
-          <Link to="/privacy">Privacy page</Link> for exactly what that means.
+          You sign in with your Google account; VinaX never sees or stores a password. Your library, playlists,
+          history, taste profile and settings are kept with your account so they follow you to every device, and you
+          can delete the account at any time in Settings → Your data. Don&rsquo;t share your Google account to give
+          others access. See the <Link to="/privacy">Privacy page</Link> for exactly what is stored.
         </p>
         <H>Availability</H>
         <p>

@@ -258,6 +258,8 @@ export function AppLayout() {
       void import('@/services/recommendation/transitionTracker').then((m) => m.initTransitionTracker()).catch(() => undefined);
       // 11.7.2 — after the second song of a session, offer to turn on notifications (web + app).
       void import('@/services/push/notifyAsk').then((m) => m.installNotifyAsk()).catch(() => undefined);
+      // 13.0 — library, history, taste and settings follow the Google account.
+      void import('@/services/account/sync').then((m) => m.installAccountSync()).catch(() => undefined);
       void loadBlocklist();
       initLockScreenLyrics();
       initSpatialNav();

@@ -215,7 +215,7 @@ for (const size of SIZES) {
     // anywhere in the graph could tip. Same explicit leash as the polls above.
     await expect.poll(() => bodyText(page), { timeout: 15_000 }).toMatch(/@tester/);
     // 12.2 — the Account row (optional Google sign-in) replaced the Username row.
-    await expect.poll(() => bodyText(page), { timeout: 15_000 }).toMatch(/Sign in with Google to keep it with your account/);
+    await expect.poll(() => bodyText(page), { timeout: 15_000 }).toMatch(/Signed in with Google · @tester/);
     expect(await noHorizontalScroll(page)).toBe(true);
   });
 }

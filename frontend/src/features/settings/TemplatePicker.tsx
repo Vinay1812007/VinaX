@@ -30,9 +30,40 @@ function switchStyle(id: TemplateId, apply: (id: TemplateId) => void): void {
   });
 }
 
+/** The element that scrolls `el` (the page itself when no ancestor does). */
+function scrollerOf(el: HTMLElement): HTMLElement {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const o = getComputedStyle(p).overflowY;
+    if ((o === 'auto' || o === 'scroll') && p.scrollHeight > p.clientHeight) return p;
+  }
+  return (document.scrollingElement as HTMLElement | null) ?? document.documentElement;
+}
+
+/**
+ * 13.0 — each style has its own type scale and spacing, so the content above
+ * the picker changes height and the card that was just tapped used to jump
+ * (up to ~40 px) under the finger. Hold it where it was: measure before the
+ * switch, then scroll by the difference once the new style has laid out (and
+ * again after the cross-fade, which lays out late).
+ */
+function keepInPlace(el: HTMLElement | null | undefined): void {
+  if (!el) return;
+  const top = el.getBoundingClientRect().top;
+  const scroller = scrollerOf(el);
+  const settle = (): void => {
+    if (!el.isConnected) return;
+    const d = el.getBoundingClientRect().top - top;
+    if (Math.abs(d) >= 1) scroller.scrollBy({ top: d, behavior: 'instant' as ScrollBehavior });
+  };
+  requestAnimationFrame(() => requestAnimationFrame(settle));
+  setTimeout(settle, 350);
+}
+
 export function TemplatePicker({ value, onChange: commit }: { value: TemplateId; onChange: (id: TemplateId) => void }) {
   const onChange = (id: TemplateId): void => {
-    if (id !== value) switchStyle(id, commit);
+    if (id === value) return;
+    keepInPlace(refs.current[ids.indexOf(id)]);
+    switchStyle(id, commit);
   };
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
   const ids = TEMPLATE_OPTIONS.map((t) => t.id);

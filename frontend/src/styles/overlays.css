@@ -300,22 +300,6 @@ html.reduce-motion .vx-welcome-scrim, html.reduce-motion .vx-welcome-track span 
 .vx-welcome-msg { margin-top: 6px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; }
 .vx-welcome-msg.is-bad { color: var(--vx-danger); }
 .vx-welcome-msg.is-good { color: var(--vx-success); }
-/* 12.2 — optional Google sign-in on the welcome and in Settings (components/GoogleSignIn.tsx).
-   The web button is Google's own (drawn by its script); the app button follows its branding. */
-.vx-welcome-signin { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 16px; }
-.vx-welcome-or { display: flex; align-items: center; gap: 10px; width: 100%; color: rgb(var(--ink-400)); font-size: 12px; font-weight: 600; }
-.vx-welcome-or::before, .vx-welcome-or::after { content: ''; flex: 1; height: 1px; background: var(--vx-border); }
-.vx-google-slot, .vx-google-web { width: 100%; display: flex; justify-content: center; min-height: 44px; }
-.vx-google-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; max-width: 360px; height: 44px; padding: 0 16px; border-radius: 9999px; border: 1px solid #747775; background: #131314; color: #e3e3e3; font: 500 14px/1 Roboto, system-ui, sans-serif; }
-html.light .vx-google-btn { background: #fff; color: #1f1f1f; }
-.vx-google-btn:disabled { opacity: 0.7; }
-.vx-account { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 420px; padding: 8px 10px; border-radius: 14px; background: var(--vx-surface-2, rgb(var(--ink-900))); }
-.vx-account-pic { width: 32px; height: 32px; flex: none; border-radius: 9999px; object-fit: cover; }
-.vx-account-pic.is-letter { display: inline-flex; align-items: center; justify-content: center; background: rgb(var(--ink-700)); color: rgb(var(--ink-100)); font-weight: 700; }
-.vx-account-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-.vx-account-name { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vx-account-email { font-size: 12px; color: rgb(var(--ink-400)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vx-account-out { flex: none; min-height: 36px; padding: 0 12px; border-radius: 9999px; font-size: 13px; font-weight: 700; color: rgb(var(--ink-200)); background: rgb(var(--ink-100) / 0.08); }
 .vx-welcome-skip {
   position: relative;
   flex-shrink: 0;
@@ -504,3 +488,4 @@ html.reduce-motion .vx-inbox-row { transition: none; }
 html.reduce-motion .vx-tut-spot { transition: none; }
 html.reduce-motion .vx-tut-card { animation: none; }
 @media (prefers-reduced-motion: reduce) { .vx-tut-spot { transition: none; } .vx-tut-card { animation: none; } }
+

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { PageHeader } from '@/components/PageHeader';
 import { SongRow } from '@/components/SongRow';
@@ -66,6 +66,9 @@ export default function AIPlaylistPage() {
   const [result, setResult] = useState<GeneratedPlaylist | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // 13.0 — `?build=<request>` (the Home "Made for you" card) sends the request at once.
+  const [params, setParams] = useSearchParams();
+  const buildParam = params.get('build');
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   /**
    * 9.1.0 — tracks the listener pinned. A rebuild keeps these, in place, and
@@ -142,6 +145,19 @@ export default function AIPlaylistPage() {
   };
 
   const stop = () => abortRef.current?.abort();
+
+  useEffect(() => {
+    const q = buildParam?.trim().slice(0, 500);
+    if (!q) return;
+    setParams((p) => {
+      const next = new URLSearchParams(p);
+      next.delete('build');
+      return next;
+    }, { replace: true });
+    void run(q, 'new');
+    // Runs once per request handed over in the address.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buildParam]);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();

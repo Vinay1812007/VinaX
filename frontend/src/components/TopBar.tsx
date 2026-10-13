@@ -7,6 +7,7 @@ import { NAV_GROUPS, PRIMARY_NAV } from '@/constants/nav';
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal } from '@/services/storage/local';
 import { cn } from '@/utils/cn';
+import { useAccount } from './useAccount';
 
 const ACTIONS_SLOT = 'vx-topbar-actions';
 
@@ -35,8 +36,12 @@ export function TopBar({ onCommands }: { onCommands: () => void }) {
     io.observe(el);
     return () => io.disconnect();
   }, [pathname]);
-  const name = getLocal<string>(KEYS.userName, '').trim();
+  // 13.0 — the signed-in Google account's photo; its initial when there is none.
+  const account = useAccount();
+  const name = (account?.user.name ?? getLocal<string>(KEYS.userName, '')).trim();
   const initial = name ? name.slice(0, 1).toUpperCase() : '';
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const photo = !photoFailed && account?.user.picture ? account.user.picture : null;
   return (
     <>
     <div ref={sentinel} className="vx-topbar-sentinel" aria-hidden />
@@ -51,8 +56,8 @@ export function TopBar({ onCommands }: { onCommands: () => void }) {
         {/* Pages add their own actions here through <TopBarActions>. */}
         <div id={ACTIONS_SLOT} className="contents" />
         <button type="button" className="vx-command-key hidden lg:inline-flex" onClick={onCommands} aria-label="Open command palette"><kbd>⌘</kbd><kbd>K</kbd></button>
-        <Link to="/settings" className="vx-avatar" aria-label="Local profile and settings" title="Local profile and settings">
-          {initial || <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-5 h-5" aria-hidden><circle cx="12" cy="8.5" r="3.8" /><path d="M4.5 20c1.2-3.6 4.1-5.5 7.5-5.5s6.3 1.9 7.5 5.5" /></svg>}
+        <Link to="/settings" className={cn('vx-avatar', photo && 'has-photo')} aria-label={name ? `${name} — profile and settings` : 'Profile and settings'} title={name ? `${name} — profile and settings` : 'Profile and settings'}>
+          {photo ? <img src={photo} alt="" width={36} height={36} referrerPolicy="no-referrer" onError={() => setPhotoFailed(true)} /> : initial ||<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-5 h-5" aria-hidden><circle cx="12" cy="8.5" r="3.8" /><path d="M4.5 20c1.2-3.6 4.1-5.5 7.5-5.5s6.3 1.9 7.5 5.5" /></svg>}
         </Link>
       </div>
     </header>

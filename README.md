@@ -6,7 +6,7 @@ VinaX is a free music app with no sign-up. It plays from a public catalogue, lea
 
 ## What a listener gets
 
-- **Music without an account.** Pick a name and languages; signing in with Google is optional. There is no password or payment. Home, Discover, Search, Library and VinaX AI are the five destinations. Search suggests as you type; Discover has charts, languages, moods, regions and films.
+- **Sign in with Google.** One tap; the Google photo is the profile picture, and the library, playlists, history, taste and settings follow the account to every device. There is no password or payment. Home, Discover, Search, Library and VinaX AI are the five destinations. Search suggests as you type; Discover has charts, languages, moods, regions and films.
 - **A queue that builds itself.** Tap a song and the queue fills five songs at a time. AI Radio plays endlessly from a song, an artist, a mood or a few words. Pin a mood or Tune this queue rebuilds Up Next at once; Familiar, Balanced and Discover set how adventurous the picks are.
 - **A full player.** Reorderable queue, synced lyrics where available, sleep timer, crossfade, sound settings, lock-screen and headset controls, casting, drive mode and karaoke. Flow is a full-screen feed of song previews.
 - **A library on the device.** Favourites, playlists, Listen Later, smart collections, history and listening stats. One-file backup with preview, merge or replace, and Undo; an encrypted one-time link moves everything to another device.
@@ -237,6 +237,6 @@ Do not commit secrets, generated build folders (`dist/`, `frontend/android/`) or
 
 ## Privacy and legal
 
-No account is needed. An optional Google sign-in stores only the account's ID, email, name, picture and VinaX username ([docs/data-and-privacy.md](docs/data-and-privacy.md#optional-google-sign-in-122)). Library, history, settings, the taste profile and AI chats stay on the device, and the service keeps no copy. Searching, AI features, Listen Together, notifications and device transfer send only the fields listed in [docs/data-and-privacy.md](docs/data-and-privacy.md); AI calls are logged as counts and timings, without prompts or replies. Usage statistics are sent only when the listener opts in. The advertisement on the website's browsing pages is not covered by that choice and is described in the same document.
+Listeners sign in with a Google account. The account row holds the Google ID, email, name, picture and VinaX username, and one synced copy of the library, history, taste profile and settings; AI chats stay on the device ([docs/data-and-privacy.md](docs/data-and-privacy.md#your-google-account-130)). Searching, AI features, Listen Together, notifications and device transfer send only the fields listed in [docs/data-and-privacy.md](docs/data-and-privacy.md); AI calls are logged as counts and timings, without prompts or replies. Usage statistics are sent only when the listener opts in. The advertisement on the website's browsing pages is not covered by that choice and is described in the same document.
 
 The repository carries no licence file. The legal position on content, takedowns and listener data is in [docs/legal-copyright.md](docs/legal-copyright.md).

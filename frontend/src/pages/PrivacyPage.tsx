@@ -11,11 +11,14 @@ export default function PrivacyPage() {
     <div className="vx-sec">
       <PageHeader title="Privacy" subtitle="Last updated October 2026" />
       <div className="vx-doc">
-        <H>What stays on your device</H>
+        <H>Your account and what syncs</H>
         <p>
-          Everything personal: your name, favorites, listening history, downloads, queue, taste profile, streaks,
-          settings and every VinaX AI chat. None of it is uploaded, synced or backed up by us — which also means only
-          you can lose it, and only you can export it (Settings → Your data).
+          You sign in with Google. VinaX stores your Google account ID, email, name and profile photo, and keeps a copy
+          of your library and playlists, listening history, taste profile, smart collections, bookmarks, Home layout and
+          settings with your account, so they follow you to every device you sign in on. This copy is stored by our
+          database provider and is only readable by VinaX&rsquo;s server. <strong>VinaX AI chats, downloads, searches
+          and your queue are not synced</strong> — they stay on the device. Delete account (Settings → Your data)
+          removes the account and its synced copy.
         </p>
         <H>What we receive — only if you opt in</H>
         <p>
@@ -57,14 +60,6 @@ export default function PrivacyPage() {
           in your browser; the messages you send are processed to generate a reply and are not used to identify you.
           Voice chat and mic dictation use your device&rsquo;s speech engine — in supporting browsers and in the
           Android app, speech is recognised on your device — and VinaX never stores audio.
-        </p>
-        <H>Signing in with Google (optional)</H>
-        <p>
-          You never need an account to listen. If you choose <b>Sign in with Google</b>, Google confirms who you are
-          and VinaX stores your Google account ID, email address, name and profile picture, plus your VinaX username
-          if you had one. That is all: your library, history, taste profile and AI chats stay on your device as
-          before. On the website the sign-in button is loaded from Google. Sign out in Settings → Your data; Delete
-          account there removes everything VinaX stored about the account.
         </p>
         <H>Listen Together</H>
         <p>

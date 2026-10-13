@@ -17,9 +17,10 @@ import { trendingSeed } from '@/constants/seeds';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { useLibraryStore } from '@/store/libraryStore';
 import { toast } from '@/store/toastStore';
-import { GoogleSignIn } from './GoogleSignIn';
+import { currentAccount } from '@/services/auth/google';
 import type { Song } from '@/types';
 import { Chip } from './Chip';
+import { useAccount } from './useAccount';
 import { SparkleIcon, PlayIcon, HeartIcon, CompassIcon } from './Icons';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { cn } from '@/utils/cn';
@@ -101,6 +102,7 @@ const TOUR_STAGES: Stage[] = TOUR.map((_, i) => `t${i}` as Stage);
  * the app. Shown exactly once; skippable at any point.
  */
 export function OnboardingSheet() {
+  const account = useAccount();
   const tourOpen = useUiStore((s) => s.tourOpen);
   const closeTour = useUiStore((s) => s.closeTour);
   const location = useLocation();
@@ -110,13 +112,15 @@ export function OnboardingSheet() {
   // QR "Move to a new device" import (which reloads with the old device's
   // profile, onboarded flag included). Leaving /handoff without importing
   // brings the sheet straight back.
-  const open = (firstRun || tourOpen) && location.pathname !== '/handoff';
+  // 13.0 — the welcome comes after Google sign-in, never on the public pages a signed-out visitor can read.
+  const open = !!account && (firstRun || tourOpen) && location.pathname !== '/handoff';
   const [stage, setStage] = useState<Stage>('you');
   const template = useSettingsStore((st) => st.template);
   const setTemplate = useSettingsStore((st) => st.setTemplate);
   const detected = readBrowserSignals().languages;
   const [picked, setPicked] = useState<string[]>(detected.length ? detected : ['hindi', 'english']);
-  const [name, setName] = useState<string>(() => getLocal<string>(KEYS.userName, ''));
+  // 13.0 — signed in with Google before the welcome: the name starts as the account's.
+  const [name, setName] = useState<string>(() => getLocal<string>(KEYS.userName, '') || (currentAccount()?.user.name ?? '').slice(0, 40));
   // v7.1.0 — unticked by default: the privacy page promises usage sharing "only if you opt in",
   // and a pre-ticked box is not an opt-in. It can be changed later in Settings → Region & Privacy.
   const [consent, setConsent] = useState<boolean>(false);
@@ -392,8 +396,8 @@ export function OnboardingSheet() {
                 <img src="/icons/icon.svg" alt="" className="vx-welcome-logo" />
                 <span className="vx-welcome-badge">Free forever</span>
               </div>
-              {title('Free. No sign-up.', true)}
-              {lede('Nothing to pay and no password. Choose a name, or sign in with Google to keep your account across devices. Your listening stays on this device.')}
+              {title('Welcome to VinaX', true)}
+              {lede('You’re signed in. Pick the name VinaX greets you with — your library and taste follow your Google account.')}
               <label className="vx-welcome-label mt-5" htmlFor="vx-name">Your name</label>
               <input
                 id="vx-name"
@@ -406,18 +410,6 @@ export function OnboardingSheet() {
                 className={cn(INPUT, nameErr && INPUT_BAD)}
               />
               {nameErr && <p className="vx-welcome-msg is-bad">Enter a name of at least two letters.</p>}
-              {/* 12.2 — optional: listening never needs an account. */}
-              <div className="vx-welcome-signin">
-                <span className="vx-welcome-or" aria-hidden>
-                  or
-                </span>
-                <GoogleSignIn
-                  onSignedIn={(a) => {
-                    if (a.user.name && name.trim().length < 2) setName(a.user.name.slice(0, 40));
-                  }}
-                />
-                <p className="vx-welcome-msg">Optional. Signing in keeps your username with your Google account.</p>
-              </div>
               {(
                 <div className="mt-5 pt-4 border-t border-[color:var(--vx-border)] flex items-center justify-center gap-1 flex-wrap text-[13px] text-ink-400">
                   <span>Already use VinaX elsewhere?</span>

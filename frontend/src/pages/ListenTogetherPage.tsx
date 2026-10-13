@@ -134,7 +134,7 @@ function Idle(): ReactNode {
           <UsersIcon className="w-6 h-6" />
         </span>
         <h1 className="vx-lt-title">Listen together</h1>
-        <p className="vx-lt-lede">The same song, at the same second, on every phone in the room. Free — no sign-up, no app needed.</p>
+        <p className="vx-lt-lede">The same song, at the same second, on every phone in the room. Free — no app needed.</p>
       </header>
 
       <div className="vx-lt-cards">

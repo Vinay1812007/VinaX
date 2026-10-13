@@ -745,3 +745,7 @@ html.reduce-motion .vx-shell *, html.reduce-motion .ai-root * { animation: none 
 /* The snackbar host also mounts outside the shell (the VinaX AI route). */
 @media (prefers-reduced-motion: reduce) { .vx-snack { animation: none !important; transition: none !important; } }
 html.reduce-motion .vx-snack { animation: none !important; transition: none !important; }
+
+/* 13.0 — the Google account photo in the avatar. */
+.vx-avatar.has-photo { padding: 0; overflow: hidden; background: none; }
+.vx-avatar.has-photo > img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }

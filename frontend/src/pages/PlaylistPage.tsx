@@ -26,7 +26,7 @@ export default function PlaylistPage() {
   usePageMeta({
     title: playlist ? `${playlist.title} — Playlist` : undefined,
     description: playlist
-      ? `Listen to ${playlist.title}${playlist.songCount != null ? ` — ${playlist.songCount} songs` : ''} free on VinaX. No login, private by design.`
+      ? `Listen to ${playlist.title}${playlist.songCount != null ? ` — ${playlist.songCount} songs` : ''} free on VinaX. Private by design.`
       : undefined,
     image: playlist ? bestImage(playlist.images, 500) : undefined,
     type: 'music.playlist',

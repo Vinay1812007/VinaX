@@ -108,7 +108,7 @@ export const TUTORIALS: Tutorial[] = [
     steps: [
       { route: '/', title: 'A tour that plays', body: 'This tour runs inside the app and starts a song in your first language.', tip: 'Leave at any time with Esc or Close.' },
       { route: '/', target: '.vx-topbar', title: 'Where you are', body: 'The top bar holds this page’s actions. Home, Discover, Search, Library and VinaX AI sit in the navigation.', placement: 'bottom' },
-      { route: '/', target: '[aria-label="Play your Aura Mix"]', title: 'Your Aura Mix', body: 'This button plays a mix built from your languages and listening. Press Next and the tour starts a song.', placement: 'bottom' },
+      { route: '/', target: '[data-tour="hero-play"]', title: 'Your mix', body: 'This button plays a mix built from your languages and listening. Press Next and the tour starts a song.', placement: 'bottom' },
       { target: PLAYER, title: 'The player bar', body: 'Play, pause and skip from here. Tap the artwork or title for the full-screen player.', action: async () => { await playTutorialSong(); await wait(700); }, placement: 'top' },
       { target: `${PLAYER} [aria-label="Add to favorites"], ${PLAYER} [aria-label="Remove from favorites"]`, title: 'Like a song', body: 'The heart adds the song to Liked songs. Your likes shape Home, on this device only.', placement: 'top' },
       { route: '/queue', target: 'section[aria-label="Tune this queue"]', title: 'The next five', body: 'After any song, VinaX lines up five more, led by its language. A chip here rebuilds them.', action: () => wait(400), placement: 'bottom' },
