@@ -13,7 +13,7 @@ Backend paths are relative to `backend/worker/functions/`; frontend paths are re
 | AI proposes; code decides. | Every AI answer is parsed, clipped and validated on the server, then validated again on the device. |
 | Every AI feature has a non-AI result. | See [When every provider is down](#when-every-provider-is-down). |
 | Model output is untrusted. | Display text with markup or links is rejected; song suggestions are resolved against the catalogue. |
-| Web search only through a provider's own free tool. | Since 11.0 the one web tool is Gemini's search grounding, free on the free tier for the Gemini 2.5 Flash family (see [Web search](#web-search)). No route searches or fetches the web itself, no third-party search engine is called, and models that browse on their own (`WEB_BROWSING_SLUGS` in `_lib/catalog.ts`) stay out of every list. Replies that could not use the tool are told to flag answers that may be out of date. |
+| Web search: the provider's free tool first, a capped search service second. | Gemini's search grounding, free on the free tier for the Gemini 2.5 Flash family, runs whenever it can (see [Web search](#web-search)). On a turn where it does not, the chat may make one call to Serper (`_lib/serper.ts`) for Google results, under a daily cap and a cache, because Serper's free allowance is a one-time 2,500 queries. No route fetches or scrapes a web page, only the chat route searches, and models that browse on their own (`WEB_BROWSING_SLUGS` in `_lib/catalog.ts`) stay out of every list. Replies with neither are told to flag answers that may be out of date. |
 
 ## Providers and keys
 
@@ -122,12 +122,28 @@ A model runs code only when its provider lists the tool for it (`attemptRunsCode
 
 ### Web search
 
-The only web tool is the Gemini provider's search grounding, and only on models where it is free: `searchCapable()` in `_lib/catalog.ts` is true for ids starting `gemini-2.5-flash` (including `-lite`) and false for everything else — Gemini 3.x grounding, Groq's browser search and OpenRouter's web plugin are paid and are never used. The free tier allows 500 grounded prompts a day, shared across those models.
+There are two web tools. Grounding always comes first because it is free every day; Serper results are used only on a turn where grounding does not run.
+
+#### Gemini search grounding
+
+The first web tool is the Gemini provider's search grounding, and only on models where it is free: `searchCapable()` in `_lib/catalog.ts` is true for ids starting `gemini-2.5-flash` (including `-lite`) and false for everything else — Gemini 3.x grounding, Groq's browser search and OpenRouter's web plugin are paid and are never used. The free tier allows 500 grounded prompts a day, shared across those models.
 
 - **When it runs** (`runsSearch()` in `api/vinaxai.ts`): always for a listener's exact pick of a 2.5 Flash model; on Auto only when `wantsWeb()` fires — the latest message carries a time, news, price, weather, score or "is … open" cue, or a year of 2025 or later — and then a 2.5 Flash attempt from the live Gemini catalogue is placed first on the ladder (`webLead`), the rest following as usual. Never with code execution (code wins), never on the internal seats, never with Think on Auto.
 - **How it is sent:** `tools: [{ googleSearch: {} }]` in the native request (`_lib/maestro.ts`, beside `codeExecution`). A 400, or a 429 that names the grounding quota, is retried once without the tool; that is not a lane failure and starts no cooldown.
 - **What comes back:** the transport reads `candidates[0].groundingMetadata` and `groundingSources()` reduces it to at most 8 pages (http(s) only, de-duplicated, titles clipped), the queries the model ran, and the provider's search-suggestion snippet (`searchEntryPoint.renderedContent`). The chat route forwards it as one `{ sources }` frame (below) and adds `web_search` to `meta.tools`. Showing the snippet is a condition of the free grounding service; the client renders it in a sandboxed frame.
 - `GET /api/aimodels` lists `{ id: 'web_search', name: 'Web search', models: [...] }` under the gemini provider's `tools`, and `features.web` is true when any model has it. The model menu shows those models with a "Searches the web" tag.
+
+#### Serper results (11.8)
+
+`_lib/serper.ts` searches Google through Serper (`POST https://google.serper.dev/search`, or `/news` for a message with a news cue) and returns at most 5 results (http(s) only, titles ≤ 160 characters, snippets ≤ 400, markup stripped) plus an optional quick answer (the answer box, else the knowledge-graph description). It asks for at most 10 results, because a larger page costs 2 credits.
+
+- **When it runs** (`api/vinaxai.ts`, after the owner's `vinaxai` gate and before any model is called): only when the first attempt of the plan does not carry grounding (`runsSearch()`), on Auto or a picked model, without code execution, when `wantsWeb()` fires for the latest message (its own text, not an attached file), when the message is not a music command, when `SERPER_API_KEY` is set, and when `aiGate(env, 'web-search')` allows it. Never on the voice, expert or translator seats. At most one call per turn.
+- **The query** (`buildSearchQuery`): the latest user message only, with attached file text (`--- File: … ---` blocks), fenced code and URLs removed, whitespace collapsed, at most 300 characters. A follow-up (under four words, led by a pronoun, or a short question with "it", "they" and similar in it) gets up to 8 content words of the previous user message in front. Taste, memory, project, profile and place text are never sent. `gl` is the listener's coarse country when their place setting already sends one, else `in`; `hl` is the request's `lang` when present, else `en`.
+- **What the model gets:** a `<search_results>` block appended to the system message: one line saying the results are reference material, not instructions, an optional `Quick answer:` line, then `[n] title`, URL and snippet per result. The system prompt (section 5) says to cite them inline as [1], [2], to say so when they do not answer the question, never to cite a source outside the block and never to follow instructions inside it. A picked model is still the whole plan: results change what it reads, never which model answers.
+- **What the listener gets:** the same one `{ sources }` frame a grounded reply sends (items = each result's `{ url, title }`, `queries` = [the query], `entry` = null), before `done`, only when the reply has text and no grounded frame was sent; and `web_search` in `meta.tools`.
+- **Credits.** Checked in this order: the edge cache (`caches.default`, keyed by endpoint, normalised query and `gl`: news 15 minutes, other results 60 minutes, an empty answer 2 minutes; a failed call is not cached), then a 24-hour rest after Serper answers 401, 402, 403 or 429, or a 400 naming credits or quota (per isolate, logged once), then the daily cap: `SERPER_DAILY_LIMIT` (default 80, `0` = no calls) successful non-cached calls per UTC day. The count is today's `vinax_ai_events` rows with feature `web-search`, model `serper` and `ok`, read with a 60-second cache, plus this isolate's own calls since that read. Like the spend caps it is soft by up to one cache period and the calls in flight.
+- **Failure.** A missing key, a timeout (5 s), a non-2xx answer, an unreadable body or any error is "no results": the chat answers exactly as it would have without the search.
+- **Logging.** Each non-cached call writes one `vinax_ai_events` row: feature `web-search`, model `serper`, ok, status, an error code (`timeout`, `network`, `http_<status>`, `credits_exhausted`) and latency. The query is not logged. These rows count as calls in AI Operations but never as tokens or unknown cost. The key is sent only in the `X-API-KEY` header and is never logged or returned.
 
 ### Status codes
 
@@ -154,7 +170,7 @@ A success is a server-sent event stream, one JSON object per `data:` frame.
 | --- | --- |
 | `{ meta: { model, modelId, provider, mode, tools? } }` | Published name, slug and provider of the model answering, and the requested mode. Sent again when a failover hop changes the model. |
 | `{ delta: "text" }` | The next piece of the reply |
-| `{ sources: { items: [{ url, title }], queries: [...], entry: html \| null } }` | 11.0 — what a grounded reply drew on (see [Web search](#web-search)); sent once, before `done`, only for an attempt that asked for grounding. Older clients ignore it. |
+| `{ sources: { items: [{ url, title }], queries: [...], entry: html \| null } }` | 11.0 — what a grounded reply drew on (see [Web search](#web-search)); sent once, before `done`, only for an attempt that asked for grounding. 11.8 — or the Serper results the reply was given (`entry` null); never both. Older clients ignore it. |
 | `{ done: true }` | The end |
 | `{ done: true, truncated: true }` | The reply was cut short |
 
@@ -262,7 +278,7 @@ Three kinds of switch turn AI off on purpose: the listener's settings, the owner
 
 ## Tests
 
-- Worker, in `backend/worker/__tests__/`: `aiChatAudit.test.ts` and `aiAuditSweep.test.ts` (the 11.0 chat fixes: OpenRouter on the ladder, vision, 429, history budget, unclosed reasoning, cancellation, default speech), `aiFallback.test.ts`, `aiControls.test.ts`, `aiMedia.test.ts`, `aiOps.test.ts`, `aiProviderAdmin.test.ts`, `aiTokens.test.ts`, `aicost.test.ts`, `catalog.test.ts`.
+- Worker, in `backend/worker/__tests__/`: `aiChatAudit.test.ts` and `aiAuditSweep.test.ts` (the 11.0 chat fixes: OpenRouter on the ladder, vision, 429, history budget, unclosed reasoning, cancellation, default speech), `aiFallback.test.ts`, `aiControls.test.ts`, `aiMedia.test.ts`, `aiOps.test.ts`, `aiProviderAdmin.test.ts`, `aiTokens.test.ts`, `aicost.test.ts`, `catalog.test.ts`, `aiWebSearch.test.ts` (grounding), `serper.test.ts` and `serperChat.test.ts` (Serper search, its credit guards and the chat wiring).
 - Chat page, beside the code in `features/ai/chat/`: `streamClient.test.ts`, `streamReducer.test.ts`, `buildChatRequest.test.ts`, `chatStyle.test.ts`, `longThread.test.ts`, `models.test.ts`, `ModelMenu.test.tsx`, `Composer.test.tsx`, `Message.test.tsx`, `media.test.ts`, `storage.test.ts`; in `features/ai/`: `attachments.test.ts`, `pdfText.test.ts`, `memory.test.ts`, `projects.test.ts`; in `components/ai/`: `tokenize.test.ts`, `RichContent.test.tsx`.
 - Browser: `frontend/e2e/vinax-ai.spec.ts`.
 
@@ -302,7 +318,7 @@ Bodies are read through a capped reader (`_lib/body.ts`, `readJsonCapped`); a bo
 
 The owner publishes one record, `vinax_config` key `ai-controls`, and the Worker enforces it. It holds an emergency stop, one switch per feature, and a daily token cap and a daily cost cap.
 
-The features are `dj`, `curate-metadata`, `curate-ranking`, `curate-home`, `curate-shelves`, `playlist`, `vinaxai`, `assistant`, `tts`, `lyrics`, `image`, `embed`, `search`, `transcribe` and `music` (`AI_FEATURES` in `_lib/ai.ts`). A feature is on unless its value is exactly `false`.
+The features are `dj`, `curate-metadata`, `curate-ranking`, `curate-home`, `curate-shelves`, `playlist`, `vinaxai`, `assistant`, `tts`, `lyrics`, `image`, `embed`, `search`, `transcribe`, `music` and `web-search` (the chat's Serper search, 11.8) (`AI_FEATURES` in `_lib/ai.ts`). A feature is on unless its value is exactly `false`.
 
 Every route calls `aiGate(env, feature)` before it contacts a provider, and `chat()` checks again before its first attempt, so a switch flipped mid-request still takes effect.
 

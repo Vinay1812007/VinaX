@@ -21,6 +21,21 @@ const row = (o: Partial<AiOpsRow>): AiOpsRow => ({
   prompt_tokens: 1000, completion_tokens: 500, ...o,
 });
 
+describe('11.8 — web search rows', () => {
+  it('count as web-search calls but never as an unknown cost', () => {
+    const at = new Date().toISOString();
+    const rows = [
+      { created_at: at, feature: 'web-search', model: 'serper', ok: true, status: 200, error: null, latency_ms: 300 },
+      { created_at: at, feature: 'web-search', model: 'serper', ok: false, status: 0, error: 'timeout', latency_ms: 5000 },
+    ] as unknown as AiOpsRow[];
+    const r = aggregateAiOps(rows, {}) as unknown as { byFeature: Array<{ key?: string; feature?: string; calls: number; cost: { unpricedCalls: number; complete?: boolean } }> };
+    const row = r.byFeature.find((f) => (f.key ?? f.feature) === 'web-search');
+    expect(row?.calls).toBe(2);
+    expect(row?.cost.unpricedCalls).toBe(0);
+    expect(AI_CONTROL_FEATURES).toContain('web-search');
+  });
+});
+
 describe('aggregateAiOps', () => {
   const prices = parsePrices({ 'alpha-': { in: 1, out: 2 } });
   const rows = [

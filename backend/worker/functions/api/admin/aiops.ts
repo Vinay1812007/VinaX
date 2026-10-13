@@ -21,6 +21,7 @@
  * failed config read leaves the numbers and marks controls and prices unknown.
  */
 import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { WEB_SEARCH_LOG_MODEL } from '../../_lib/ai';
 import { percentile } from '../../_lib/laneHealth';
 import { dbErrorCode, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 import { costUsd, matchPrice, modelSlug, parsePrices, type PriceTable } from './aicost';
@@ -35,7 +36,7 @@ export const ROW_CAP = 20_000;
 
 /** The switchable AI features of the `ai-controls` contract, in display order. */
 export const AI_CONTROL_FEATURES = [
-  'dj', 'curate-metadata', 'curate-ranking', 'curate-home', 'curate-shelves', 'playlist', 'vinaxai', 'assistant', 'tts', 'lyrics', 'image', 'embed', 'search',
+  'dj', 'curate-metadata', 'curate-ranking', 'curate-home', 'curate-shelves', 'playlist', 'vinaxai', 'assistant', 'tts', 'lyrics', 'image', 'embed', 'search', 'web-search',
 ] as const;
 export type AiControlFeature = (typeof AI_CONTROL_FEATURES)[number];
 
@@ -121,6 +122,9 @@ function add(a: Acc, r: AiOpsRow, prices: PriceTable | null): void {
   if (isHop(r.error)) a.hops += 1;
   if (r.error === 'ai_disabled') a.disabled += 1;
   if (r.error === 'ai_over_budget') a.over += 1;
+  // 11.8 — a web search call (Serper) spends no model tokens: counted as a
+  // call, never as a cost the price table cannot explain.
+  if (r.model === WEB_SEARCH_LOG_MODEL) return;
   const p = tokens(r.prompt_tokens);
   const c = tokens(r.completion_tokens);
   if (p === null || c === null) {

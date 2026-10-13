@@ -990,8 +990,12 @@ export async function gatherDetailed(
 
 // 10.3 — `transcribe` (speech to text) and `music` (music generation) join
 // the list; like every switch they are on unless set to exactly false.
-export const AI_FEATURES = ['dj', 'curate-metadata', 'curate-ranking', 'curate-home', 'curate-shelves', 'playlist', 'vinaxai', 'assistant', 'tts', 'lyrics', 'image', 'embed', 'search', 'transcribe', 'music'] as const;
+// 11.8 — `web-search`: the chat's Serper web search (_lib/serper.ts). The
+// emergency stop stops it like every other feature.
+export const AI_FEATURES = ['dj', 'curate-metadata', 'curate-ranking', 'curate-home', 'curate-shelves', 'playlist', 'vinaxai', 'assistant', 'tts', 'lyrics', 'image', 'embed', 'search', 'transcribe', 'music', 'web-search'] as const;
 export type AiFeature = (typeof AI_FEATURES)[number];
+/** 11.8 — the vinax_ai_events `model` of a web search call (feature `web-search`); not an AI model. */
+export const WEB_SEARCH_LOG_MODEL = 'serper';
 
 export interface AiControls {
   /** Every AI feature off, backend-enforced. */
@@ -1315,6 +1319,9 @@ function summarise(usage: UsageState, prices: PriceTable): UsageSummary {
   let cost = 0;
   const unpriced: string[] = [];
   for (const m of usage.models) {
+    // 11.8 — a web search (Serper) is logged for the console and its daily
+    // cap, but it spends no model tokens: it never makes a cost unknown.
+    if (m.model === WEB_SEARCH_LOG_MODEL) continue;
     prompt += m.prompt;
     completion += m.completion;
     calls += m.calls;

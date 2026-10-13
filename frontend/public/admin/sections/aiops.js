@@ -33,6 +33,9 @@
     // 10.3 — speech to text for dictation, and music clips in VinaX AI.
     ['transcribe', 'Dictation by an AI model (speech to text)'],
     ['music', 'Music clip generation in VinaX AI'],
+    // 11.8 — the chat's web search when the model's own search does not run
+    // (daily cap SERPER_DAILY_LIMIT; calls show as feature web-search).
+    ['web-search', 'Web search in VinaX AI (results from the search service, daily cap)'],
   ];
   var days = null;
   var last = null;      // last aiops payload

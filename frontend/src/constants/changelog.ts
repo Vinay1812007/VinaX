@@ -12,6 +12,14 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.8.0': {
+    title: 'VinaX AI can look things up',
+    changes: [
+      { type: 'new', text: 'Ask VinaX AI about something happening now — news, scores, prices, release dates, the weather — and it can search the web before answering, whichever model is replying. The pages it used appear under the reply, and the answer points to them as [1], [2].' },
+      { type: 'improved', text: 'Follow-up questions like "when is it releasing?" search for what you were just talking about.' },
+      { type: 'improved', text: 'When a search is not available, VinaX AI still answers and says when its information about recent events may be out of date.' },
+    ],
+  },
   '11.7.4': {
     title: 'VinaX AI, written for listeners',
     changes: [
