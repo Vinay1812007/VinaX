@@ -10,6 +10,14 @@ const SLEEP_SONGS = [3, 5, 10];
 /** Whole minutes left on a clock timer (at least 1 while it runs). */
 const minutesLeft = (at: number): number => Math.max(1, Math.ceil((at - Date.now()) / 60_000));
 
+/** 13.0.2 — the badge's live countdown: "14m" far out, "9:41" inside the
+ *  last ten minutes, so the final stretch visibly ticks down. */
+const shortLeft = (at: number): string => {
+  const s = Math.max(0, Math.round((at - Date.now()) / 1000));
+  if (s >= 600) return `${Math.ceil(s / 60)}m`;
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+};
+
 interface SleepSummary {
   active: boolean;
   /** A few characters for the tool-row badge. */
@@ -28,11 +36,12 @@ function useSleepSummary(): SleepSummary {
   const sleepAt = usePlayerStore((s) => s.sleepAt);
   const afterTrack = usePlayerStore((s) => s.sleepAfterTrack);
   const songsLeft = usePlayerStore((s) => s.sleepSongsLeft);
-  // A clock timer's label counts down: re-read it every 20 s while one runs.
+  // 13.0.2 — a clock timer's badge counts down LIVE: once a second while one
+  // runs (the interval exists only while the player UI shows the badge).
   const [, tick] = useState(0);
   useEffect(() => {
     if (sleepAt == null) return;
-    const t = window.setInterval(() => tick((n) => n + 1), 20_000);
+    const t = window.setInterval(() => tick((n) => n + 1), 1000);
     return () => window.clearInterval(t);
   }, [sleepAt]);
   if (afterTrack) {
@@ -45,7 +54,7 @@ function useSleepSummary(): SleepSummary {
   if (sleepAt != null) {
     const m = minutesLeft(sleepAt);
     const mins = `${m} minute${m === 1 ? '' : 's'}`;
-    return { active: true, short: `${m}m`, spoken: `Sleep timer: ${mins} left`, sentence: `Playback stops in ${mins}.` };
+    return { active: true, short: shortLeft(sleepAt), spoken: `Sleep timer: ${mins} left`, sentence: `Playback stops in ${mins}.` };
   }
   return { active: false, short: '', spoken: 'Sleep timer', sentence: 'Playback stops by itself when the timer ends.' };
 }

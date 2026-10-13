@@ -188,6 +188,25 @@ public class VinaxMediaPlugin extends Plugin {
         finish(call, dispatch(i));
     }
 
+    /**
+     * 13.0.2 — sleep-timer line on the notification. Only annotates a LIVE
+     * session: when the service is not running there is no notification to
+     * carry the line, and starting a foreground service just for it would
+     * post an empty "VinaX" card — so the call resolves as a quiet no-op
+     * (JS re-sends the label on resync when a session appears).
+     */
+    @PluginMethod
+    public void setSleepLabel(PluginCall call) {
+        VinaxMediaService live = VinaxMediaService.instance;
+        if (live == null || !live.isStarted()) {
+            call.resolve();
+            return;
+        }
+        Intent i = new Intent(VinaxMediaService.ACTION_SLEEP);
+        i.putExtra("label", call.getString("label", ""));
+        finish(call, dispatch(i));
+    }
+
     @PluginMethod
     public void stop(PluginCall call) {
         VinaxMediaService live = VinaxMediaService.instance;

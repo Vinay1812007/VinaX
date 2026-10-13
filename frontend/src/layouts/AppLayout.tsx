@@ -262,6 +262,8 @@ export function AppLayout() {
       void import('@/services/account/sync').then((m) => m.installAccountSync()).catch(() => undefined);
       void loadBlocklist();
       initLockScreenLyrics();
+      // 13.0.2 — mirror an active sleep timer onto the playback notification.
+      if (isNativePlatform()) void import('@/services/media-session/sleepNotification').then((m) => m.initSleepNotification()).catch(() => undefined);
       initSpatialNav();
       initAlarm();
       initAudioOutputWatcher();

@@ -71,6 +71,8 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
     public static final String ACTION_METADATA  = "vinax.METADATA";
     public static final String ACTION_STATE     = "vinax.STATE";
     public static final String ACTION_POSITION  = "vinax.POSITION";
+    /** 13.0.2 — sleep-timer line for the notification's sub-text ("" = off). */
+    public static final String ACTION_SLEEP     = "vinax.SLEEP";
     public static final String ACTION_STOP_SELF = "vinax.STOP_SELF";
     /** Launch-intent extra: tapping the notification body / media session
      *  should open the app ON THE FULL-SCREEN PLAYER (4.16.1). MainActivity
@@ -97,6 +99,8 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
     private String title  = "";
     private String artist = "";
     private String album  = "VinaX";
+    /** Sleep-timer line shown as the notification's sub-text; "" when off. */
+    private String sleepLabel = "";
     private Bitmap artwork;
     private boolean playing    = false;
     private long    duration   = 0;
@@ -223,6 +227,11 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
             case ACTION_STATE:
                 playing = intent.getBooleanExtra("playing", false);
                 break;
+            case ACTION_SLEEP:
+                // 13.0.2 — only the notification changes; the fall-through to
+                // updateSession()/promote() below rebuilds it with the line.
+                sleepLabel = safe(intent.getStringExtra("label"));
+                break;
             case ACTION_POSITION:
                 long previousDuration = duration;
                 duration = Math.round(intent.getDoubleExtra("duration", 0) * 1000);
@@ -306,7 +315,9 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
         NotificationCompat.Builder b = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle(title.isEmpty() ? "VinaX" : title)
                 .setContentText(artist)
-                .setSubText(album)
+                // 13.0.2 — an active sleep timer takes the sub-text line
+                // ("Sleeps in 14 min"); otherwise the album as before.
+                .setSubText(sleepLabel.isEmpty() ? album : sleepLabel)
                 .setSmallIcon(R.drawable.vinax_ic_note)
                 .setLargeIcon(artwork)
                 .setContentIntent(content)

@@ -27,6 +27,8 @@ interface VinaxMediaPlugin {
   setMetadata(o: { title: string; artist: string; album: string; artwork: string }): Promise<void>;
   setPlaybackState(o: { playbackState: 'playing' | 'paused' | 'none' }): Promise<void>;
   setPosition(o: { duration: number; position: number; playbackRate: number }): Promise<void>;
+  /** 13.0.2 — sleep-timer line on the playback notification ('' = off). */
+  setSleepLabel(o: { label: string }): Promise<void>;
   provideChildren(o: { parentId: string; items: { id: string; title: string; subtitle: string; iconUrl?: string; playable: boolean }[] }): Promise<void>;
   stop(): Promise<void>;
   addListener(
@@ -209,6 +211,7 @@ export async function setMediaHandlers(h: MediaHandlers): Promise<void> {
 let _song: Song | null = null;
 let _artwork = '';
 let _lyricLine: string | null = null;
+let _sleepLabel = '';
 let _playing = false;
 let _position: { duration: number; position: number; rate: number } | null = null;
 // Last position handed to native; ticks closer than 1 s to it are skipped.
@@ -244,6 +247,27 @@ function pushNativePosition(): void {
   }).catch((e) => record('setPosition', false, String(e)));
 }
 
+function pushNativeSleep(): void {
+  if (!native || !VinaxMedia) return;
+  void VinaxMedia.setSleepLabel({ label: _sleepLabel })
+    .then(() => record(`setSleepLabel(${_sleepLabel || 'off'})`, true))
+    // An APK older than 13.0.2 has no such method — recorded, never surfaced.
+    .catch((e) => record('setSleepLabel', false, String(e)));
+}
+
+/**
+ * 13.0.2 — the sleep timer on the playback notification: a short line such
+ * as "Sleeps in 14 min" in the notification's sub-text, '' / null to clear.
+ * Native only (the web lock screen has no free slot); no-op off-device and
+ * when nothing changed.
+ */
+export function setSleepNotificationLabel(label: string | null): void {
+  const next = label && label.trim() ? label.trim() : '';
+  if (next === _sleepLabel) return;
+  _sleepLabel = next;
+  pushNativeSleep();
+}
+
 /** Replay metadata, state and position — the native side asked for it. */
 function resyncNative(): void {
   if (!native || !VinaxMedia || !_song) return;
@@ -251,6 +275,7 @@ function resyncNative(): void {
   pushNativeMetadata();
   pushNativeState();
   pushNativePosition();
+  if (_sleepLabel) pushNativeSleep();
 }
 
 function pushWebMetadata(): void {
@@ -286,6 +311,9 @@ export function updateMediaMetadata(song: Song | null): void {
       return;
     }
     pushNativeMetadata(); // show immediately; artwork fills in once decoded
+    // A timer armed before anything played was a quiet no-op (no session to
+    // annotate) — the session exists now, so the line goes up with it.
+    if (changed && _sleepLabel) pushNativeSleep();
     const artUrl = bestImage(song.images, 500);
     void artworkDataUrl(artUrl)
       .catch(() => null)
