@@ -309,7 +309,13 @@ function SearchSteps({ a }: { a: MsgActivity }): ReactNode {
   const line =
     a.step === 'planning'
       ? 'Planning the research'
-      : !found
+      : a.images
+        ? !found
+          ? 'Searching for pictures'
+          : n
+            ? `Found ${n} picture${n === 1 ? '' : 's'}`
+            : 'No pictures found'
+        : !found
         ? a.research
           ? `Running ${searches} web searches`
           : 'Searching the web'
@@ -383,6 +389,28 @@ function Thoughts({ text, ms, live }: { text: string; ms?: number; live: boolean
       </summary>
       <p className="ai-thought-text">{text}</p>
     </details>
+  );
+}
+
+/** 12.1 — an image search's pictures as captioned cards above the reply
+ *  (three across, two on a phone), shown as soon as the search returns. Each
+ *  opens the page it came from; one that fails to load is left out. */
+function Gallery({ images }: { images: MsgImage[] }): ReactNode {
+  const [broken, setBroken] = useState<string[]>([]);
+  const shown = images.filter((im) => !broken.includes(im.src)).slice(0, 6);
+  if (!shown.length) return null;
+  return (
+    <div className="ai-gallery" role="group" aria-label="Pictures">
+      {shown.map((im) => (
+        <a key={im.src} className="ai-gallery-card" href={im.page || undefined} target="_blank" rel="noopener noreferrer">
+          <span className="ai-gallery-img">
+            <img src={workerAsset(im.src)} alt={im.alt} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setBroken((b) => [...b, im.src])} />
+          </span>
+          {im.alt && <span className="ai-gallery-title">{im.alt}</span>}
+          {im.source && <span className="ai-gallery-source">{im.source}</span>}
+        </a>
+      ))}
+    </div>
   );
 }
 
@@ -643,6 +671,7 @@ export const AssistantMessage = memo(function AssistantMessage({
                 after the last paragraph or list item by CSS, or by the span
                 below when the reply ends in a block such as code. */}
             {m.thinking && <Thoughts text={m.thinking} ms={m.thoughtMs} live={false} />}
+            {m.gallery?.length ? <Gallery images={m.gallery} /> : null}
             <div className={cn('ai-reply', streaming && 'is-streaming')}>
               <CiteContext.Provider value={drawCite}>
                 <RichContent text={streaming ? hideFollowupLine(m.content) : placed.text} streaming={streaming} />
@@ -651,7 +680,7 @@ export const AssistantMessage = memo(function AssistantMessage({
             </div>
             {/* 11.0 — the search service's suggestions, once the reply has
                 finished (a condition of the grounding service: always shown). */}
-            {sources?.images?.length ? <Pictures images={sources.images} /> : null}
+            {!m.gallery?.length && sources?.images?.length ? <Pictures images={sources.images} /> : null}
             {sources?.entry && <SearchSuggestions entry={sources.entry} />}
             {!busy && (
               <div className="ai-toolbar mt-2 -ml-2 flex flex-wrap items-center gap-0.5" role="group" aria-label="Reply actions">
@@ -757,6 +786,8 @@ export const AssistantMessage = memo(function AssistantMessage({
           </>
         ) : (
           <>
+            {/* 12.1 — image-search pictures show as soon as they arrive. */}
+            {m.gallery?.length ? <Gallery images={m.gallery} /> : null}
             {streaming && m.thinking ? (
               <Thoughts text={m.thinking} live />
             ) : (

@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetSerperState } from '../functions/_lib/serper';
-import { resetCounts, isSmallTalk, cleanTitle, parsePlan, logoHost, signedImagePath, imageSignatureOk } from '../functions/_lib/chatExtras';
+import { resetCounts, isSmallTalk, cleanTitle, parsePlan, logoHost, signedImagePath, imageSignatureOk, wantsImages, isBareEntity } from '../functions/_lib/chatExtras';
 import { resetAiControlsCache } from '../functions/_lib/ai';
 
 type Ctx = { request: Request; env: Record<string, string>; waitUntil?: (p: Promise<unknown>) => void };
@@ -32,7 +32,7 @@ const json = (content: string): Response => new Response(JSON.stringify({ choice
 interface Opts { answer?: (c: Call) => Response; plan?: string; title?: string; researchToday?: number }
 function stub(o: Opts = {}): Call[] {
   const calls: Call[] = [];
-  vi.stubGlobal('fetch', vi.fn(async (u: unknown, init?: RequestInit) => {
+  const impl = async (u: unknown, init?: RequestInit): Promise<Response> => {
     const url = String(u);
     const method = init?.method ?? 'GET';
     let body: Record<string, unknown> = {};
@@ -51,7 +51,9 @@ function stub(o: Opts = {}): Call[] {
       return json('ok');
     }
     return o.answer ? o.answer(call) : sse({ content: 'Answer [1].' });
-  }));
+  };
+  (globalThis as { __stubFetch?: typeof impl }).__stubFetch = impl;
+  vi.stubGlobal('fetch', vi.fn(impl));
   return calls;
 }
 const events = (t: string): Array<Record<string, unknown>> => t.split('\n\n').filter((l) => l.startsWith('data:')).map((l) => JSON.parse(l.slice(5)) as Record<string, unknown>);
@@ -176,6 +178,57 @@ describe('deep research', () => {
     expect(parsePlan('```json\n["a b", "c d", "e f", "g h"]\n```')).toEqual(['a b', 'c d', 'e f']);
     expect(parsePlan('1. first query here\n2. second query here')).toEqual(['first query here', 'second query here']);
     expect(parsePlan('nonsense')).toEqual([]);
+  });
+});
+
+describe('12.1 — pictures for "X images" and bare names', () => {
+  it('wantsImages and isBareEntity', () => {
+    for (const yes of ['bmw car images', 'show me photos of the Taj Mahal', 'what does a quokka look like', 'tesla logo']) expect(wantsImages(yes)).toBe(true);
+    expect(wantsImages('explain photosynthesis')).toBe(false);
+    for (const yes of ['ktm', 'BMW', 'Taj Mahal', 'Allu Arjun', 'Royal Enfield Bullet']) expect(isBareEntity(yes)).toBe(true);
+    for (const no of ['hi', 'what is ktm', 'ktm price in india today', 'play', 'music', '1234', 'explain']) expect(isBareEntity(no)).toBe(false);
+  });
+
+  it('"ktm" runs one image search, streams a gallery before the reply, and asks what they want to know', async () => {
+    const calls = stub();
+    vi.stubGlobal('fetch', vi.fn(async (u: unknown, init?: RequestInit) => {
+      const url = String(u);
+      if (url === 'https://google.serper.dev/images') {
+        calls.push({ url, method: 'POST', json: JSON.parse(String(init?.body)) as Record<string, unknown> });
+        return new Response(JSON.stringify({ images: [
+          { title: 'KTM Duke 390', imageUrl: 'https://img.example/duke.jpg', link: 'https://ktm.example/duke', source: 'ktm.example' },
+          { title: 'KTM RC 390', imageUrl: 'https://img.example/rc.jpg', link: 'https://ktm.example/rc', source: 'ktm.example' },
+          { title: 'bad', imageUrl: 'ftp://x/y.jpg', link: 'https://x.example/' },
+        ] }), { status: 200 });
+      }
+      return (globalThis as { __stubFetch?: (u: unknown, i?: RequestInit) => Promise<Response> }).__stubFetch!(u, init);
+    }));
+    const ev = await chat({ mode: 'auto', messages: [{ role: 'user', content: 'ktm' }] });
+    expect(calls.filter((c) => c.url === 'https://google.serper.dev/images').map((c) => c.json.q)).toEqual(['ktm']);
+    expect(calls.some((c) => c.url === 'https://google.serper.dev/search')).toBe(false);
+    const g = ev.find((e) => e.gallery)?.gallery as Array<{ src: string; alt: string; source: string; page: string }>;
+    expect(g.map((x) => x.alt)).toEqual(['KTM Duke 390', 'KTM RC 390']);
+    expect(g[0]).toMatchObject({ source: 'ktm.example', page: 'https://ktm.example/duke' });
+    expect(g.every((x) => x.src.startsWith('/api/webimg?u='))).toBe(true);
+    expect(ev.findIndex((e) => e.gallery)).toBeLessThan(ev.findIndex((e) => typeof e.delta === 'string'));
+    const sys = sysOf(streamed(calls)[0]);
+    expect(sys).toContain('The listener sent just a name.');
+    expect(sys).toContain('<pictures>\n[1] KTM Duke 390 (ktm.example)');
+    expect(sys).toContain('Never tell them to look for images elsewhere');
+  });
+});
+
+describe('12.1 — reasoning time', () => {
+  it('the first word after reasoning comes with a thought frame', async () => {
+    stub({ answer: () => sse({ reasoning: 'Thinking. ' }, { content: 'Done.' }) });
+    const ev = await chat({ mode: 'auto', messages: [{ role: 'user', content: 'explain the theory of relativity' }] });
+    const t = ev.findIndex((e) => e.thought);
+    expect(t).toBeGreaterThan(-1);
+    expect(typeof (ev[t].thought as { ms: number }).ms).toBe('number');
+    expect(t).toBeLessThan(ev.findIndex((e) => typeof e.delta === 'string'));
+    stub();
+    const plain = await chat({ mode: 'auto', messages: [{ role: 'user', content: 'explain gravity simply' }] });
+    expect(plain.some((e) => e.thought)).toBe(false);
   });
 });
 

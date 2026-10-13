@@ -820,6 +820,8 @@ export default function VinaXAIPage(): ReactNode {
             ...m,
             content: st.text,
             thinking: st.thinking || undefined,
+            // 12.1 — image-search pictures show while the answer streams.
+            gallery: st.gallery.length ? st.gallery : undefined,
             tools: st.tools.length ? st.tools : undefined,
             // 11.8.1 — the live web search status, until the first word.
             activity: st.activity ?? undefined,
@@ -880,7 +882,10 @@ export default function VinaXAIPage(): ReactNode {
       tools: engine && state.tools.length ? state.tools : undefined,
       activity: undefined,
       thinking: state.thinking || undefined,
-      thoughtMs: state.thinking ? thinkingMs.get(turn) : undefined,
+      // 12.1 — the server's measure first (the client's can be 0 when the
+      // reasoning and the first words arrive in one network chunk).
+      thoughtMs: state.thinking ? state.thoughtMs || thinkingMs.get(turn) : undefined,
+      gallery: state.gallery.length ? state.gallery : undefined,
       // 11.0 — the pages a web-grounded reply drew on, kept with the chat.
       sources: engine && state.sources ? state.sources : undefined,
       followups: split.followups.length ? split.followups : undefined,

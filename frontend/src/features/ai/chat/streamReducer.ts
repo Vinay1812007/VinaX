@@ -49,6 +49,10 @@ export interface StreamState {
   thinking: string;
   /** 12.0 — a title for a new chat (`title` frame). */
   title: string;
+  /** 12.1 — how long the model reasoned, measured by the server (`thought` frame). */
+  thoughtMs: number;
+  /** 12.1 — image-search pictures (`gallery` frame). */
+  gallery: MsgImage[];
   /** 11.8.1 — the service could not answer after the stream began (its status and JSON body). */
   failed: { status: number; body: unknown } | null;
   /** The service said the reply was cut short. */
@@ -68,6 +72,8 @@ export const initialStreamState = (): StreamState => ({
   activity: null,
   thinking: '',
   title: '',
+  thoughtMs: 0,
+  gallery: [],
   failed: null,
   truncated: false,
   done: false,
@@ -139,14 +145,7 @@ export function readSources(raw: unknown): MsgSources | null {
     if (sources.length) supports.push({ text, sources: sources.slice(0, 8) });
   }
   // 12.0 — pictures: Worker links only (a signed /api/webimg path), at most 4.
-  const images: MsgImage[] = [];
-  for (const im of Array.isArray(r.images) ? r.images : []) {
-    const o = (im ?? {}) as { src?: unknown; page?: unknown; alt?: unknown };
-    const src = typeof o.src === 'string' && /^\/api\/webimg\?u=[^\s"'<>]+&s=[0-9a-f]{32}$/.test(o.src) ? o.src : '';
-    const page = typeof o.page === 'string' && /^https?:\/\/\S+$/i.test(o.page) ? o.page : '';
-    if (src && !images.some((x) => x.src === src)) images.push({ src, page, alt: typeof o.alt === 'string' ? o.alt.slice(0, 120) : '' });
-    if (images.length >= 4) break;
-  }
+  const images = readImages(r.images, 4);
   if (!items.length && !queries.length && !entry) return null;
   return { items, queries, entry, ...(supports.length ? { supports } : {}), ...(images.length ? { images } : {}) };
 }
@@ -167,6 +166,8 @@ export function reduceFrame(state: StreamState, frame: unknown): StreamState {
     failed?: unknown;
     think?: unknown;
     title?: unknown;
+    thought?: unknown;
+    gallery?: unknown;
   };
   let next = state;
   const set = (patch: Partial<StreamState>): void => {
@@ -196,6 +197,14 @@ export function reduceFrame(state: StreamState, frame: unknown): StreamState {
     const title = f.title.replace(/\s+/g, ' ').trim().slice(0, 60);
     if (title) set({ title });
   }
+  if (f.thought && typeof f.thought === 'object' && !next.thoughtMs) {
+    const ms = (f.thought as { ms?: unknown }).ms;
+    if (typeof ms === 'number' && Number.isFinite(ms) && ms >= 0) set({ thoughtMs: Math.min(Math.round(ms), 600_000) });
+  }
+  if (Array.isArray(f.gallery) && !next.gallery.length) {
+    const gallery = readImages(f.gallery, 6);
+    if (gallery.length) set({ gallery });
+  }
   if (f.status !== undefined) {
     const activity = readActivity(f.status);
     if (activity) set({ activity });
@@ -210,16 +219,30 @@ export function reduceFrame(state: StreamState, frame: unknown): StreamState {
 
 /** 11.8.1 — a `status` payload, validated: a known step, the query (≤ 300
  *  characters), a result count, and up to 5 host names. Null when unusable. */
+/** 12.0 / 12.1 — picture entries: Worker links only (a signed /api/webimg path), http(s) pages, clipped captions. Pure. */
+export function readImages(raw: unknown, max: number): MsgImage[] {
+  const images: MsgImage[] = [];
+  for (const im of Array.isArray(raw) ? raw : []) {
+    const o = (im ?? {}) as { src?: unknown; page?: unknown; alt?: unknown; source?: unknown };
+    const src = typeof o.src === 'string' && /^\/api\/webimg\?u=[^\s"'<>]+&s=[0-9a-f]{32}$/.test(o.src) ? o.src : '';
+    const page = typeof o.page === 'string' && /^https?:\/\/\S+$/i.test(o.page) ? o.page : '';
+    const source = typeof o.source === 'string' ? o.source.replace(/\s+/g, ' ').trim().slice(0, 60) : '';
+    if (src && !images.some((x) => x.src === src)) images.push({ src, page, alt: typeof o.alt === 'string' ? o.alt.slice(0, 120) : '', ...(source ? { source } : {}) });
+    if (images.length >= max) break;
+  }
+  return images;
+}
+
 /** 12.0 — the most reasoning text kept per reply. */
 export const THINK_MAX = 20_000;
 
 export function readActivity(raw: unknown): MsgActivity | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-  const r = raw as { step?: unknown; query?: unknown; count?: unknown; sites?: unknown; queries?: unknown; research?: unknown };
+  const r = raw as { step?: unknown; query?: unknown; count?: unknown; sites?: unknown; queries?: unknown; research?: unknown; images?: unknown };
   if (r.step !== 'searching' && r.step !== 'searched' && r.step !== 'planning') return null;
   const query = typeof r.query === 'string' ? r.query.replace(/\s+/g, ' ').trim().slice(0, 300) : '';
   const queries = (Array.isArray(r.queries) ? r.queries : []).filter((q): q is string => typeof q === 'string' && !!q.trim()).map((q) => q.trim().slice(0, 200)).slice(0, 6);
-  const extra = { ...(queries.length ? { queries } : {}), ...(r.research === true ? { research: true } : {}) };
+  const extra = { ...(queries.length ? { queries } : {}), ...(r.research === true ? { research: true } : {}), ...(r.images === true ? { images: true } : {}) };
   if (r.step === 'planning') return { step: 'planning', query, ...extra };
   if (r.step === 'searching') return { step: 'searching', query, ...extra };
   const count = typeof r.count === 'number' && Number.isFinite(r.count) && r.count >= 0 ? Math.floor(r.count) : 0;

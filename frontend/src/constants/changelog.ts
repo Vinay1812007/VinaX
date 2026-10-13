@@ -12,6 +12,14 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '12.1.0': {
+    title: 'Pictures in VinaX AI',
+    changes: [
+      { type: 'new', text: 'Ask for pictures — “bmw car images”, “photos of the Taj Mahal” — and VinaX AI shows them as cards with captions, right above its answer.' },
+      { type: 'new', text: 'Type just a name, like “ktm”, and VinaX AI shows pictures, says what it most likely means and offers what you might want to know next.' },
+      { type: 'fixed', text: '“Thought for 12s” now shows how long the model actually reasoned.' },
+    ],
+  },
   '12.0.0': {
     title: 'VinaX AI 12: research, reasoning and faster hellos',
     changes: [

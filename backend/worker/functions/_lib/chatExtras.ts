@@ -24,6 +24,30 @@ export function isSmallTalk(q: string): boolean {
   return !!s && s.length <= 40 && SMALL_TALK.test(s);
 }
 
+// ------------------------------------------------------------------ pictures
+
+/** 12.1 — "bmw car images", "show me photos of the Taj Mahal": an image search. Pure. */
+export function wantsImages(q: string): boolean {
+  return /\b(?:images?|photos?|pictures?|pics?|wallpapers?|logos?|looks? like)\b/i.test(q ?? '');
+}
+
+const NOT_A_NAME = new Set(
+  'help test testing music song songs playlist playlists album albums track tracks lyrics bgm remix remixes play pause stop next menu settings yes no ok okay hi hello hey thanks bye why how what who when where which explain summarise summarize translate write code chart diagram continue more again'.split(' '),
+);
+
+/** 12.1 — a bare name ("ktm", "BMW", "Taj Mahal"): one to three words, no
+ *  question or request around it. Answered like a search engine: pictures and
+ *  "are you asking about…". Pure. */
+export function isBareEntity(q: string): boolean {
+  const s = (q ?? '').trim().replace(/[?!.]+$/, '');
+  if (!s || s.length > 40 || isSmallTalk(s)) return false;
+  const words = s.split(/\s+/);
+  if (words.length > 3) return false;
+  if (!words.every((w) => /^[\p{L}\p{N}&.'-]{1,24}$/u.test(w))) return false;
+  if (!/\p{L}/u.test(s)) return false;
+  return !words.some((w) => NOT_A_NAME.has(w.toLowerCase()));
+}
+
 // ------------------------------------------------------------------ titles
 
 /** A model's title → 2–6 plain words, no quotes or trailing punctuation; '' when unusable. Pure. */

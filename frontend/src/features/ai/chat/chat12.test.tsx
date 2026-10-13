@@ -96,6 +96,38 @@ describe('the reply', () => {
   });
 });
 
+describe('12.1 — pictures and reasoning time', () => {
+  it('a gallery frame and a thought frame are read once and validated', () => {
+    const s = run([
+      { gallery: [{ src: IMG, page: 'https://ktm.example/duke', alt: 'KTM Duke', source: 'ktm.example' }, { src: 'https://evil.example/x.jpg', page: '', alt: 'x' }] },
+      { thought: { ms: 12_345 } },
+      { thought: { ms: 1 } },
+    ]);
+    expect(s.gallery).toEqual([{ src: IMG, page: 'https://ktm.example/duke', alt: 'KTM Duke', source: 'ktm.example' }]);
+    expect(s.thoughtMs).toBe(12_345);
+  });
+
+  it('the gallery shows captioned cards above the reply, while it is still being written', () => {
+    const { container } = reply({ role: 'assistant', content: 'Are you asking about KTM motorcycles?', gallery: [{ src: IMG, page: 'https://ktm.example/duke', alt: 'KTM Duke', source: 'ktm.example' }] }, true);
+    const card = container.querySelector('.ai-gallery-card') as HTMLAnchorElement;
+    expect(card.getAttribute('href')).toBe('https://ktm.example/duke');
+    expect(card.textContent).toContain('KTM Duke');
+    expect(card.textContent).toContain('ktm.example');
+    expect(card.querySelector('img')?.getAttribute('src')).toBe(IMG);
+    const gallery = container.querySelector('.ai-gallery') as HTMLElement;
+    const replyText = container.querySelector('.ai-reply') as HTMLElement;
+    expect(gallery.compareDocumentPosition(replyText) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('picture searches say so', () => {
+    reply({ role: 'assistant', content: '', activity: { step: 'searching', query: 'ktm', images: true } }, true);
+    expect(screen.getByRole('status', { name: 'Searching for pictures' })).toBeTruthy();
+    cleanup();
+    reply({ role: 'assistant', content: '', activity: { step: 'searched', query: 'ktm', count: 6, sites: [], images: true } }, true);
+    expect(screen.getByRole('status', { name: 'Found 6 pictures' })).toBeTruthy();
+  });
+});
+
 describe('site logos and the Deep research switch', () => {
   it('SiteMark loads the logo through the Worker and falls back to the letter', () => {
     const { container } = render(<SiteMark host="www.Example.com" letter="E" />);
