@@ -82,7 +82,7 @@ import { placeContextLines, requestPlace } from '../_lib/place';
 import { type SupabaseEnv } from '../_lib/supabase';
 import { codeBlock, maestroFetch, maestroModelFor, outputBlock } from '../_lib/maestro';
 import { isWorkersAiEndpoint, workersAiBinding, workersAiFetch } from '../_lib/workersai';
-import { buildSearchQuery, cleanForQuery, serperKey, serperSearch, type SerperEnv, type SerperSearch } from '../_lib/serper';
+import { buildSearchQuery, cleanForQuery, mentionsSite, serperKey, serperSearch, type SerperEnv, type SerperSearch } from '../_lib/serper';
 
 // Image understanding rides the vision lanes (the 11B default, the 90B deep
 // pair), both on the NVIDIA key since 10.3.
@@ -377,7 +377,8 @@ const WEB_CUES = [
 ];
 export function wantsWeb(q: string): boolean {
   const s = q.trim();
-  return !!s && WEB_CUES.some((re) => re.test(s));
+  // 11.8.1 — and a website: "sportsmart.com" or a link is a question about that site.
+  return !!s && (WEB_CUES.some((re) => re.test(s)) || mentionsSite(s));
 }
 
 /** 11.8 — a message that asks for news gets the news endpoint. Pure; exported for tests. */
@@ -391,6 +392,12 @@ export function looksLikeMusicCommand(q: string): boolean {
   return /^\s*(?:play|queue|shuffle|put on|pause|resume|next|previous|skip)\b/i.test(q);
 }
 
+/** 11.8.1 — the line right after the results. The prompt's section 5 says the
+ * same, but a small model follows a rule next to the results far better than
+ * one 3,000 words up (live: uncited replies with invented headlines). */
+export const SEARCH_ANSWER_RULE =
+  'Answer from these results. For anything current or specific, use only facts they contain, and put the matching number in square brackets, like [1] or [2], right after each sentence that uses a result. If they do not answer the question, say so plainly instead of guessing. Do not say you cannot browse the web: these results are your web search.';
+
 /** 11.8 — the reference block a turn's web search results ride in, appended
  * to the system message. Titles and snippets arrive as plain text without
  * angle brackets (_lib/serper.ts), so nothing inside can close the block. */
@@ -402,6 +409,7 @@ export function searchResultsBlock(found: SerperSearch): string {
     if (r.snippet) lines.push(r.snippet);
   });
   lines.push('</search_results>');
+  lines.push(SEARCH_ANSWER_RULE);
   return lines.join('\n');
 }
 
@@ -638,6 +646,82 @@ export const onRequestPost = async (context: {
     return jsonErr({ error: 'exception', message: 'internal_error' }, 500);
   }
 };
+
+/**
+ * 11.8.1 — a turn that searches the web answers at once with an event stream
+ * and says what it is doing before the model starts:
+ *   { status: { step: 'searching', query } }
+ *   { status: { step: 'searched', query, count, sites } }   sites = result hosts
+ * then the reply's own frames (`finish()`'s stream, passed through as is). A
+ * turn that then cannot answer sends `{ failed: { status, body } }` — the HTTP
+ * status and JSON body it would otherwise have answered with — and ends.
+ * Clients that do not know these frames ignore them.
+ */
+function searchFirstStream(query: string, run: () => Promise<SerperSearch>, finish: () => Promise<Response>): Response {
+  const encoder = new TextEncoder();
+  let gone = false;
+  let inner: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  const stream = new ReadableStream<Uint8Array>({
+    cancel() {
+      gone = true;
+      inner?.cancel().catch(() => undefined);
+    },
+    async start(controller) {
+      const send = (obj: unknown): void => {
+        if (gone) return;
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+        } catch {
+          /* closed */
+        }
+      };
+      try {
+        send({ status: { step: 'searching', query } });
+        const found = await run();
+        const sites: string[] = [];
+        for (const r of found.results) {
+          try {
+            const host = new URL(r.url).hostname.replace(/^www\./, '');
+            if (!sites.includes(host)) sites.push(host);
+          } catch {
+            /* mapSerperResponse keeps only valid urls */
+          }
+        }
+        send({ status: { step: 'searched', query, count: found.results.length, sites } });
+        if (gone) return;
+        const res = await finish();
+        if (res.ok && res.body && (res.headers.get('content-type') ?? '').includes('text/event-stream')) {
+          inner = res.body.getReader();
+          for (;;) {
+            const { done, value } = await inner.read();
+            if (done || gone) break;
+            controller.enqueue(value);
+          }
+        } else {
+          const body = (await res.json().catch(() => ({}))) as unknown;
+          send({ failed: { status: res.status, body } });
+        }
+      } catch (e) {
+        console.warn('[vinaxai] search turn failed:', e instanceof Error ? e.name : 'error');
+        send({ failed: { status: 500, body: { error: 'exception', message: 'internal_error' } } });
+      } finally {
+        try {
+          controller.close();
+        } catch {
+          /* already closed by a cancel */
+        }
+      }
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      'content-type': 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-store',
+      connection: 'keep-alive',
+      ...CORS,
+    },
+  });
+}
 
 async function handleChat(
   request: Request,
@@ -928,9 +1012,13 @@ async function handleChat(
   // only when the listener's place setting already sends it. Results go to
   // whichever model answers — a pick stays the whole plan — and a failed or
   // empty search changes nothing: the chat answers without it.
+  // 11.8.1 — the search itself runs inside the reply stream (see
+  // searchFirstStream), so the page can show "Searching the web" and what was
+  // found while it happens, instead of a generic wait.
   const firstUp = useVision && vision.length ? vision[0] : attempts[0];
   const groundedTurn = !!firstUp && runsSearch(firstUp);
   let webFound: (SerperSearch & { query: string }) | null = null;
+  let searchQuery = '';
   if (
     !groundedTurn &&
     (reqMode === 'auto' || reqMode === 'model') &&
@@ -941,544 +1029,550 @@ async function handleChat(
     !looksLikeMusicCommand(lastUserRaw)
   ) {
     const query = buildSearchQuery(lastUserRaw, userTurnsRaw.length > 1 ? userTurnsRaw[userTurnsRaw.length - 2] : null);
-    const searchBlocked = query ? await aiGate(env, 'web-search') : 'disabled';
-    if (!searchBlocked) {
-      const found = await serperSearch(env, query, {
-        news: wantsNews(lastUserRaw),
-        country: place?.country ?? null,
-        lang: typeof body.lang === 'string' ? body.lang : null,
-        waitUntil,
-        cacheOrigin: new URL(request.url).origin,
-        client: isApp ? 'app' : 'web',
-      });
-      if (found.results.length) {
-        webFound = { ...found, query };
-        const head = msgs[0];
-        if (head?.role === 'system' && typeof head.content === 'string') head.content = `${head.content}\n\n${searchResultsBlock(found)}`;
-      }
-    }
+    if (query && !(await aiGate(env, 'web-search'))) searchQuery = query;
   }
-
-  // v5.16.0 — ask the default base to append a usage chunk to the stream so
-  // the AI Cost panel sees real token counts. The scholar lane's external
-  // base is left EXACTLY as before (it rejects unknown knobs with a 400 —
-  // probed live for reasoning_effort — and reports usage on its final chunk
-  // unasked anyway). Should the default base ever refuse the option, the
-  // first 400 flips this off for the rest of the request and the same pair
-  // is re-asked plainly, so the stream itself never depends on it.
-  // 11.0 — the opt-out is per attempt (a later fallback keeps its usage
-  // chunk), and the Gemini transport never carries the option at all.
-  const usageDropped = new Set<LaneAttempt>();
-  const payloadFor = (m: string, endpoint: string, messages: OutMsg[], code = false, usageOptIn = true, search = false): Record<string, unknown> => {
-    const p: Record<string, unknown> = {
-      model: m,
-      messages,
-      temperature: TEMP_BY_MODE[mode],
-      max_tokens: MAXTOK_BY_MODE[mode],
-      stream: true,
-    };
-    // 10.3 — the code tool, in each provider's own shape. 11.0 — and Gemini's
-    // own search grounding (native transport). Nothing else is ever put in
-    // `tools`: no browsing, no web plugin. (11.8 — Serper results reach a
-    // model as text in the system message, never as a tool.)
-    if (code && isMaestroEndpoint(endpoint)) p.code_execution = true;
-    if (search && !code && isMaestroEndpoint(endpoint)) p.web_search = true;
-    if (code && isGroqEndpoint(endpoint)) p.tools = [{ type: 'code_interpreter' }];
-    if (usageOptIn && !isGroqEndpoint(endpoint)) p.stream_options = { include_usage: true };
-    // Default-base-only knob: the external hosts reject reasoning_effort with
-    // a 400 (probed live), so it never travels off the default base.
-    if (m.includes('gpt-oss') && !isExternalEndpoint(endpoint)) p.reasoning_effort = EFFORT_BY_MODE[mode];
-    // nemotron-3-nano (search/expert primary) leaks BARE chain-of-thought —
-    // no <think> wrapper for the SSE gate to strip — unless its reasoning is
-    // switched off at the chat-template level (probed live — see
-    // reasoningOffParams). Model-gated: a no-op for every other pin.
-    // 11.0 — chat_template_kwargs is an NVIDIA-only field: the same model name
-    // on another provider's endpoint must not carry it.
-    if (!isExternalEndpoint(endpoint)) Object.assign(p, reasoningOffParams(m));
-    return p;
-  };
-
-  // `ms` is a leash on TIME TO RESPONSE HEADERS only. Each attempt owns its
-  // controller and the timer is cleared the moment headers arrive — a shared
-  // never-cleared timeout signal used to keep ticking into the body and cut a
-  // long answer off mid-sentence at the leash. A stream that then stalls is
-  // the drain's job (STREAM_BUDGET_MS), not this timer's.
-  // 10.3 — each attempt's system prompt names the model it is sent to, so a
-  // failover hop never answers "which model are you?" with another's name.
-  // 11.7.4 — the owner's prompt no longer names the model (the reply's engine
-  // chip does), so the identity slot is only filled where a prompt still
-  // carries one. The web line is independent of it: a grounded attempt gets
-  // WEB_TOOL_LINE — swapped in for NO_LIVE_WEB where that line is present,
-  // appended otherwise (the main prompt's section 5 covers the no-web case).
-  const withIdentity = (a: LaneAttempt, messages: OutMsg[]): OutMsg[] => {
-    const head = messages[0];
-    if (head?.role !== 'system' || typeof head.content !== 'string') return messages;
-    let content = head.content.includes(IDENTITY_SLOT) ? head.content.replace(IDENTITY_SLOT, identityLine(a)) : head.content;
-    if (runsSearch(a)) content = content.includes(NO_LIVE_WEB) ? content.replace(NO_LIVE_WEB, WEB_TOOL_LINE) : `${content}\n\n${WEB_TOOL_LINE}`;
-    return content === head.content ? messages : [{ ...head, content }, ...messages.slice(1)];
-  };
-  const callStream = async (a: LaneAttempt, messagesIn: OutMsg[], ms = 30_000): Promise<Response> => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), ms);
-    const messages = withIdentity(a, singleImageFor(a, messagesIn));
-    try {
-      if (isMaestroEndpoint(a.endpoint)) {
-        // 8.1.0 — its own transport (native streaming). 10.3 — an exact
-        // catalogue pick is never swapped for another model.
-        const p = payloadFor(a.model, a.endpoint, messages, runsCode(a), false, runsSearch(a));
-        delete p.stream_options;
-        return await maestroFetch(a.key, a.model, p, controller.signal, !a.exact);
-      }
-      if (isWorkersAiEndpoint(a.endpoint)) {
-        // 11.2 — Workers AI runs on the Worker's binding, re-framed as
-        // chat-completions SSE (_lib/workersai.ts). Never a fetch: there is no key.
-        return await workersAiFetch(workersAiBinding(env), payloadFor(a.model, a.endpoint, messages, false, false), controller.signal);
-      }
-      return await fetch(a.endpoint, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${a.key}` },
-        body: JSON.stringify(payloadFor(a.model, a.endpoint, messages, runsCode(a), !usageDropped.has(a))),
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timeoutId);
+  const runSearch = async (): Promise<SerperSearch> => {
+    const found = await serperSearch(env, searchQuery, {
+      news: wantsNews(lastUserRaw),
+      country: place?.country ?? null,
+      lang: typeof body.lang === 'string' ? body.lang : null,
+      waitUntil,
+      cacheOrigin: new URL(request.url).origin,
+      client: isApp ? 'app' : 'web',
+    });
+    if (found.results.length) {
+      webFound = { ...found, query: searchQuery };
+      const head = msgs[0];
+      if (head?.role === 'system' && typeof head.content === 'string') head.content = `${head.content}\n\n${searchResultsBlock(found)}`;
     }
+    return found;
   };
 
-  const t0 = Date.now();
-  // Track the model + lane role that ACTUALLY served the request. The old
-  // code logged @${keyRole} — the primary lane's role captured once at line
-  // 504 — even after failover swapped model/key/endpoint to a sibling lane,
-  // so the admin AI-Monitoring dashboard undercounted rescues and could not
-  // detect a persistently-broken primary (audit finding H15).
-  let usedAttempt: LaneAttempt = useVision ? (vision[0] ?? primary) : primary;
-  let usedModel = usedAttempt.model;
-  let usedRole: Lane = usedAttempt.role;
-  // Pairs that failed before streaming a byte in this request: the
-  // empty-stream rescue below never asks them again.
-  const failed = new Set<LaneAttempt>();
-  // 11.2 — the last failed attempt's status and the cooldown it earned (a
-  // pick's "why" when it gives no answer). Status 0 = no answer in time.
-  let lastVerdict: { status: number; cooldown: Cooldown | null } = { status: 0, cooldown: null };
-  // Cold serverless engines can HANG without an HTTP response (observed live
-  // on retired engines), and a DEGRADED engine rejects instantly with a 400
-  // (observed live post-rewire). The PRIMARY gets a patient 18s leash;
-  // laddered hops get a tight 10s each. Each hop calls ITS OWN lane
-  // endpoint: providers are mixed now.
-  // 8.2.0 — the walk is bounded by TIME, not by a count of four: it keeps
-  // hopping down the full ladder while the header budget lasts, so Auto and
-  // every pinned seat fall through to the last healthy engine instead of
-  // erroring after the fourth. Each failure also teaches the cooldown table.
-  const headerDeadline = t0 + (mode === 'expert' || mode === 'voice' ? QUICK_HEADER_BUDGET_MS : HEADER_BUDGET_MS);
-  const walk = async (plan: LaneAttempt[], messages: OutMsg[]): Promise<{ up: Response | null; used: LaneAttempt | null }> => {
-    let last: Response | null = null;
-    let tried = 0;
-    for (const a of plan) {
-      const remaining = headerDeadline - Date.now();
-      // The first try always runs; later hops only while there is time for one.
-      if (tried > 0 && remaining < MIN_HOP_MS) break;
-      if (tried > 0 && obeyCooldown && laneCoolingDown(a.role, a.model)) continue;
-      const leash = Math.max(MIN_HOP_MS, Math.min(tried === 0 ? 18_000 : 10_000, remaining));
-      tried += 1;
-      let res: Response | null;
+  // 11.8.1 — the rest of the turn: the model ladder and the reply stream.
+  const finish = async (): Promise<Response> => {
+    // v5.16.0 — ask the default base to append a usage chunk to the stream so
+    // the AI Cost panel sees real token counts. The scholar lane's external
+    // base is left EXACTLY as before (it rejects unknown knobs with a 400 —
+    // probed live for reasoning_effort — and reports usage on its final chunk
+    // unasked anyway). Should the default base ever refuse the option, the
+    // first 400 flips this off for the rest of the request and the same pair
+    // is re-asked plainly, so the stream itself never depends on it.
+    // 11.0 — the opt-out is per attempt (a later fallback keeps its usage
+    // chunk), and the Gemini transport never carries the option at all.
+    const usageDropped = new Set<LaneAttempt>();
+    const payloadFor = (m: string, endpoint: string, messages: OutMsg[], code = false, usageOptIn = true, search = false): Record<string, unknown> => {
+      const p: Record<string, unknown> = {
+        model: m,
+        messages,
+        temperature: TEMP_BY_MODE[mode],
+        max_tokens: MAXTOK_BY_MODE[mode],
+        stream: true,
+      };
+      // 10.3 — the code tool, in each provider's own shape. 11.0 — and Gemini's
+      // own search grounding (native transport). Nothing else is ever put in
+      // `tools`: no browsing, no web plugin. (11.8 — Serper results reach a
+      // model as text in the system message, never as a tool.)
+      if (code && isMaestroEndpoint(endpoint)) p.code_execution = true;
+      if (search && !code && isMaestroEndpoint(endpoint)) p.web_search = true;
+      if (code && isGroqEndpoint(endpoint)) p.tools = [{ type: 'code_interpreter' }];
+      if (usageOptIn && !isGroqEndpoint(endpoint)) p.stream_options = { include_usage: true };
+      // Default-base-only knob: the external hosts reject reasoning_effort with
+      // a 400 (probed live), so it never travels off the default base.
+      if (m.includes('gpt-oss') && !isExternalEndpoint(endpoint)) p.reasoning_effort = EFFORT_BY_MODE[mode];
+      // nemotron-3-nano (search/expert primary) leaks BARE chain-of-thought —
+      // no <think> wrapper for the SSE gate to strip — unless its reasoning is
+      // switched off at the chat-template level (probed live — see
+      // reasoningOffParams). Model-gated: a no-op for every other pin.
+      // 11.0 — chat_template_kwargs is an NVIDIA-only field: the same model name
+      // on another provider's endpoint must not carry it.
+      if (!isExternalEndpoint(endpoint)) Object.assign(p, reasoningOffParams(m));
+      return p;
+    };
+
+    // `ms` is a leash on TIME TO RESPONSE HEADERS only. Each attempt owns its
+    // controller and the timer is cleared the moment headers arrive — a shared
+    // never-cleared timeout signal used to keep ticking into the body and cut a
+    // long answer off mid-sentence at the leash. A stream that then stalls is
+    // the drain's job (STREAM_BUDGET_MS), not this timer's.
+    // 10.3 — each attempt's system prompt names the model it is sent to, so a
+    // failover hop never answers "which model are you?" with another's name.
+    // 11.7.4 — the owner's prompt no longer names the model (the reply's engine
+    // chip does), so the identity slot is only filled where a prompt still
+    // carries one. The web line is independent of it: a grounded attempt gets
+    // WEB_TOOL_LINE — swapped in for NO_LIVE_WEB where that line is present,
+    // appended otherwise (the main prompt's section 5 covers the no-web case).
+    const withIdentity = (a: LaneAttempt, messages: OutMsg[]): OutMsg[] => {
+      const head = messages[0];
+      if (head?.role !== 'system' || typeof head.content !== 'string') return messages;
+      let content = head.content.includes(IDENTITY_SLOT) ? head.content.replace(IDENTITY_SLOT, identityLine(a)) : head.content;
+      if (runsSearch(a)) content = content.includes(NO_LIVE_WEB) ? content.replace(NO_LIVE_WEB, WEB_TOOL_LINE) : `${content}\n\n${WEB_TOOL_LINE}`;
+      return content === head.content ? messages : [{ ...head, content }, ...messages.slice(1)];
+    };
+    const callStream = async (a: LaneAttempt, messagesIn: OutMsg[], ms = 30_000): Promise<Response> => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), ms);
+      const messages = withIdentity(a, singleImageFor(a, messagesIn));
       try {
-        res = await callStream(a, messages, leash);
-      } catch {
-        res = null; // hang / network abort — the next pair takes the call
+        if (isMaestroEndpoint(a.endpoint)) {
+          // 8.1.0 — its own transport (native streaming). 10.3 — an exact
+          // catalogue pick is never swapped for another model.
+          const p = payloadFor(a.model, a.endpoint, messages, runsCode(a), false, runsSearch(a));
+          delete p.stream_options;
+          return await maestroFetch(a.key, a.model, p, controller.signal, !a.exact);
+        }
+        if (isWorkersAiEndpoint(a.endpoint)) {
+          // 11.2 — Workers AI runs on the Worker's binding, re-framed as
+          // chat-completions SSE (_lib/workersai.ts). Never a fetch: there is no key.
+          return await workersAiFetch(workersAiBinding(env), payloadFor(a.model, a.endpoint, messages, false, false), controller.signal);
+        }
+        return await fetch(a.endpoint, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${a.key}` },
+          body: JSON.stringify(payloadFor(a.model, a.endpoint, messages, runsCode(a), !usageDropped.has(a))),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
       }
-      // A 400 while the usage opt-in rode the request: drop the option for the
-      // rest of this request and re-ask the SAME pair once, so token accounting
-      // can never cost a listener their answer. A degraded key 400s again and
-      // the ladder walks on as before.
-      if (res?.status === 400 && !usageDropped.has(a) && !isGroqEndpoint(a.endpoint) && !isMaestroEndpoint(a.endpoint) && !isWorkersAiEndpoint(a.endpoint)) {
-        void res.body?.cancel().catch(() => undefined);
-        usageDropped.add(a);
+    };
+
+    const t0 = Date.now();
+    // Track the model + lane role that ACTUALLY served the request. The old
+    // code logged @${keyRole} — the primary lane's role captured once at line
+    // 504 — even after failover swapped model/key/endpoint to a sibling lane,
+    // so the admin AI-Monitoring dashboard undercounted rescues and could not
+    // detect a persistently-broken primary (audit finding H15).
+    let usedAttempt: LaneAttempt = useVision ? (vision[0] ?? primary) : primary;
+    let usedModel = usedAttempt.model;
+    let usedRole: Lane = usedAttempt.role;
+    // Pairs that failed before streaming a byte in this request: the
+    // empty-stream rescue below never asks them again.
+    const failed = new Set<LaneAttempt>();
+    // 11.2 — the last failed attempt's status and the cooldown it earned (a
+    // pick's "why" when it gives no answer). Status 0 = no answer in time.
+    let lastVerdict: { status: number; cooldown: Cooldown | null } = { status: 0, cooldown: null };
+    // Cold serverless engines can HANG without an HTTP response (observed live
+    // on retired engines), and a DEGRADED engine rejects instantly with a 400
+    // (observed live post-rewire). The PRIMARY gets a patient 18s leash;
+    // laddered hops get a tight 10s each. Each hop calls ITS OWN lane
+    // endpoint: providers are mixed now.
+    // 8.2.0 — the walk is bounded by TIME, not by a count of four: it keeps
+    // hopping down the full ladder while the header budget lasts, so Auto and
+    // every pinned seat fall through to the last healthy engine instead of
+    // erroring after the fourth. Each failure also teaches the cooldown table.
+    const headerDeadline = t0 + (mode === 'expert' || mode === 'voice' ? QUICK_HEADER_BUDGET_MS : HEADER_BUDGET_MS);
+    const walk = async (plan: LaneAttempt[], messages: OutMsg[]): Promise<{ up: Response | null; used: LaneAttempt | null }> => {
+      let last: Response | null = null;
+      let tried = 0;
+      for (const a of plan) {
+        const remaining = headerDeadline - Date.now();
+        // The first try always runs; later hops only while there is time for one.
+        if (tried > 0 && remaining < MIN_HOP_MS) break;
+        if (tried > 0 && obeyCooldown && laneCoolingDown(a.role, a.model)) continue;
+        const leash = Math.max(MIN_HOP_MS, Math.min(tried === 0 ? 18_000 : 10_000, remaining));
+        tried += 1;
+        let res: Response | null;
         try {
           res = await callStream(a, messages, leash);
         } catch {
-          res = null;
+          res = null; // hang / network abort — the next pair takes the call
         }
-      }
-      // 10.3 — a 400 while the code tool rode the request: ask the same model
-      // once more without it, so the tool can never cost the answer.
-      if (res?.status === 400 && runsCode(a)) {
-        void res.body?.cancel().catch(() => undefined);
-        codeDropped.add(a);
-        try {
-          res = await callStream(a, messages, leash);
-        } catch {
-          res = null;
-        }
-      }
-      // 11.0 — a 400 while grounding rode the request, or a 429 that names the
-      // grounding quota (the day's free grounded prompts are spent): ask the
-      // same model once more without the tool. The plain model still answers,
-      // so this is not a lane failure; any other 429 is one, as before.
-      if (res && (res.status === 400 || res.status === 429) && runsSearch(a)) {
-        const text = await res.clone().text().catch(() => '');
-        if (res.status === 400 || /ground|search/i.test(text)) {
+        // A 400 while the usage opt-in rode the request: drop the option for the
+        // rest of this request and re-ask the SAME pair once, so token accounting
+        // can never cost a listener their answer. A degraded key 400s again and
+        // the ladder walks on as before.
+        if (res?.status === 400 && !usageDropped.has(a) && !isGroqEndpoint(a.endpoint) && !isMaestroEndpoint(a.endpoint) && !isWorkersAiEndpoint(a.endpoint)) {
           void res.body?.cancel().catch(() => undefined);
-          searchDropped.add(a);
+          usageDropped.add(a);
           try {
             res = await callStream(a, messages, leash);
           } catch {
             res = null;
           }
         }
-      }
-      if (res?.ok && res.body) return { up: res, used: a };
-      failed.add(a);
-      if (res) {
-        const errBody = await res.text().catch(() => '');
-        lastVerdict = { status: res.status, cooldown: noteLaneFailure(a.role, a.model, res.status, errBody) };
-        last = res;
-      } else {
-        lastVerdict = { status: 0, cooldown: null };
-      }
-      // Log the real status (timeout=0, degraded/bad id=4xx, upstream 5xx) for
-      // diagnosis; meta reports the engine that finally answered.
-      if (waitUntil)
-        waitUntil(
-          logAiEvent(env, {
-            feature: 'assistant',
-            model: `${a.model} @${a.role}`,
-            ok: false,
-            status: res ? res.status : 0,
-            error: res ? `engine_fallback_${res.status}` : 'engine_timeout',
-            client: isApp ? 'app' : 'web',
-            latency_ms: Date.now() - t0,
-          }),
-        );
-    }
-    return { up: last, used: null };
-  };
-
-  let activePlan: LaneAttempt[] = useVision ? vision : attempts;
-  let activeMsgs: OutMsg[] = msgs;
-  let { up, used } = await walk(activePlan, msgs);
-
-  // Vision unavailable on every vision pair -> a text-only answer with a note,
-  // down the seat's own text ladder.
-  // 11.2 — a pick that reads images was asked with the image and failed: the
-  // text-only retry would be the same model failing the same way.
-  if (!used && useVision && !(pick && vision.length)) {
-    const noteMsgs: OutMsg[] = msgs.map((mm) => ({ ...mm }));
-    const last = noteMsgs[noteMsgs.length - 1];
-    last.content =
-      typeof last.content === 'string'
-        ? last.content
-        : ((last.content.find((p) => p.type === 'text') as { text: string } | undefined)?.text ?? '');
-    noteMsgs[0] = {
-      role: 'system',
-      content: `${sys}\n\n(The user attached an image, but image understanding is offline right now — answer the text part and mention that you couldn't view the image.)`,
-    };
-    activePlan = attempts;
-    activeMsgs = noteMsgs;
-    // An aborted fetch here must not escape as a raw 500 exception JSON — an
-    // honest engine_unreachable is something the client can render (DQA-02).
-    ({ up, used } = await walk(attempts, noteMsgs));
-  }
-
-  if (used) {
-    usedAttempt = used;
-    usedModel = used.model;
-    usedRole = used.role;
-  }
-  // 11.2 — the listener's pick gave no answer: say why, never substitute.
-  if (pick && (!used || !up || !up.ok || !up.body)) {
-    const c = lastVerdict.cooldown;
-    return await pickUnavailable(pickIssue(lastVerdict.status, c?.reason ?? null, c?.ms ?? 0), c && c.ms >= 60_000 ? Date.now() + c.ms : null);
-  }
-  if (!up) return jsonErr({ error: 'engine_unreachable' }, 503);
-  if (!used || !up.ok || !up.body) {
-    const status = up.status;
-    if (waitUntil)
-      waitUntil(
-        logAiEvent(env, {
-          feature: 'assistant',
-          model: `${usedModel} @${usedRole}`,
-          ok: false,
-          status,
-          error: `http_${status}`,
-          client: isApp ? 'app' : 'web',
-          latency_ms: Date.now() - t0,
-        }),
-      );
-    // 11.0 — an upstream rate limit answers 429 (the client's "busy" line and
-    // its longer pause key on that status). Anything else stays a 500, not a
-    // 502: Cloudflare swallows origin 502 bodies (DQA-02).
-    if (status === 429) {
-      const retryAfter = Number(up.headers.get('retry-after'));
-      const res = jsonErr({ error: 'upstream', status }, 429);
-      res.headers.set('retry-after', String(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(Math.ceil(retryAfter), 60) : 5));
-      return res;
-    }
-    return jsonErr({ error: 'upstream', status }, 500);
-  }
-  const served: LaneAttempt = used;
-
-  const upBody = up.body;
-  const encoder = new TextEncoder();
-  // 11.0 — the listener went away (closed the tab, pressed stop): stop reading
-  // the upstream at once instead of draining it to the stream budget.
-  let gone = false;
-  let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
-  // One `sources` frame per reply: a grounded attempt's, else the web search's.
-  let sourcesSent = false;
-  const stream = new ReadableStream<Uint8Array>({
-    cancel() {
-      gone = true;
-      activeReader?.cancel().catch(() => undefined);
-    },
-    async start(controller) {
-      const send = (obj: unknown): void => {
-        if (gone) return;
-        try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
-        } catch {
-          gone = true; // the stream was closed under us
+        // 10.3 — a 400 while the code tool rode the request: ask the same model
+        // once more without it, so the tool can never cost the answer.
+        if (res?.status === 400 && runsCode(a)) {
+          void res.body?.cancel().catch(() => undefined);
+          codeDropped.add(a);
+          try {
+            res = await callStream(a, messages, leash);
+          } catch {
+            res = null;
+          }
         }
-      };
-      // 11.0 — reasoning a model never closed (see the end of drain).
-      const thinkBox: { text: string } = { text: '' };
-      // Drain an upstream SSE body, forward each content delta to the client
-      // and return the full text so we can detect an empty answer (a 200 with
-      // no content — some lanes intermittently return this) and fail over.
-      // Token usage summed over every drain of this request (an empty-stream
-      // rescue is a second upstream call, and both bill).
-      // Null until at least one upstream reported usage.
-      const usageBox: { prompt: number; completion: number; seen: boolean } = { prompt: 0, completion: 0, seen: false };
-      // Overall stream budget: one deadline for the whole reply, so a stuck
-      // upstream is cut instead of holding the connection open forever. A
-      // failover drain that starts late still gets a usable minimum window.
-      const streamDeadline = Date.now() + STREAM_BUDGET_MS;
-      // Set when a drain was cut (budget or a mid-stream upstream error) AFTER
-      // text had already been forwarded — the final event then says so rather
-      // than presenting half an answer as complete.
-      const cutBox: { truncated: boolean } = { truncated: false };
-      const drain = async (body: ReadableStream<Uint8Array>): Promise<string> => {
-        const reader = body.getReader();
-        activeReader = reader;
-        const decoder = new TextDecoder();
-        let buf = '';
-        let full = '';
-        // Reasoning engines (deep lane) can open the content stream with a
-        // <think>…</think> chain-of-thought block. Gate the stream: buffer
-        // until we know whether it starts with <think>, and forward only what
-        // follows </think> — internal reasoning never reaches the client.
-        // We forward ONLY delta.content; reasoning_content deltas are ignored.
-        let pending = '';
-        let gate: 'probe' | 'think' | 'pass' = 'probe';
-        let cut = false;
-        // 10.3 — Groq code interpreter reports, per tool index.
-        const toolShown = new Map<number, { code: boolean; output: boolean }>();
-        const budgetId = setTimeout(
-          () => {
-            cut = true;
-            // Cancelling settles the pending read, so the loop below exits.
-            reader.cancel().catch(() => undefined);
-          },
-          Math.max(STREAM_MIN_DRAIN_MS, streamDeadline - Date.now()),
-        );
-        const forward = (text: string): void => {
-          // Models often open with stray whitespace/newlines — swallow them
-          // until real content starts so answers begin cleanly.
-          const t = full ? text : text.replace(/^\s+/, '');
-          if (!t) return;
-          full += t;
-          send({ delta: t });
-        };
-        const onDelta = (delta: string): void => {
-          if (gate === 'pass') {
-            forward(delta);
-            return;
-          }
-          pending += delta;
-          if (gate === 'probe') {
-            const lead = pending.replace(/^\s+/, '');
-            if (!lead) return;
-            // Too short to tell yet whether it's an opening <think> tag.
-            if (lead.length < 7 && '<think>'.startsWith(lead)) return;
-            if (!lead.startsWith('<think>')) {
-              gate = 'pass';
-              pending = '';
-              forward(lead);
-              return;
-            }
-            gate = 'think';
-          }
-          const end = pending.indexOf('</think>');
-          if (end >= 0) {
-            gate = 'pass';
-            const after = pending.slice(end + 8);
-            pending = '';
-            forward(after);
-          }
-        };
-        try {
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done || cut || gone) break;
-            buf += decoder.decode(value, { stream: true });
-            let nl: number;
-            while ((nl = buf.indexOf('\n')) >= 0) {
-              const line = buf.slice(0, nl).trim();
-              buf = buf.slice(nl + 1);
-              if (!line.startsWith('data:')) continue;
-              const data = line.slice(5).trim();
-              if (!data || data === '[DONE]') continue;
-              try {
-                const j = JSON.parse(data) as { choices?: Array<{ delta?: { content?: unknown; executed_tools?: unknown }; message?: { executed_tools?: unknown } }> };
-                // 10.3 — executed code and its output, before the text that follows them.
-                const ran = executedToolsText(j.choices?.[0]?.delta?.executed_tools ?? j.choices?.[0]?.message?.executed_tools, toolShown);
-                if (ran) onDelta(ran);
-                // 11.0 — the pages a grounded Gemini answer drew on (the maestro
-                // transport's extra frame): one additive `sources` event, which
-                // older clients ignore. Never produced by any other provider.
-                // Only for an attempt that asked for grounding: pages an
-                // unasked model volunteers are never passed on.
-                const g = (j as { grounding?: unknown }).grounding;
-                if (g && typeof g === 'object' && Array.isArray((g as { items?: unknown }).items) && runsSearch(usedAttempt)) {
-                  send({ sources: g });
-                  sourcesSent = true;
-                }
-                const delta = j.choices?.[0]?.delta?.content;
-                if (typeof delta === 'string' && delta) onDelta(delta);
-                // The usage chunk (opt-in on the default base, unasked on the
-                // scholar base) carries no delta — one per upstream call.
-                const usage = usageFromJson(j);
-                if (usage) {
-                  usageBox.prompt += usage.prompt_tokens;
-                  usageBox.completion += usage.completion_tokens;
-                  usageBox.seen = true;
-                }
-              } catch {
-                /* skip a malformed SSE chunk */
-              }
+        // 11.0 — a 400 while grounding rode the request, or a 429 that names the
+        // grounding quota (the day's free grounded prompts are spent): ask the
+        // same model once more without the tool. The plain model still answers,
+        // so this is not a lane failure; any other 429 is one, as before.
+        if (res && (res.status === 400 || res.status === 429) && runsSearch(a)) {
+          const text = await res.clone().text().catch(() => '');
+          if (res.status === 400 || /ground|search/i.test(text)) {
+            void res.body?.cancel().catch(() => undefined);
+            searchDropped.add(a);
+            try {
+              res = await callStream(a, messages, leash);
+            } catch {
+              res = null;
             }
           }
-        } catch {
-          /* upstream aborted mid-stream */
-          cut = true;
-        } finally {
-          clearTimeout(budgetId);
         }
-        // Stream ended while still probing (very short answers) — flush it.
-        // A stream that ended inside <think> is discarded: an unclosed
-        // chain-of-thought is not an answer; the empty-stream failover runs.
-        if (gate === 'probe' && pending) forward(pending);
-        // 11.0 — a <think> block that never closed (the model spent its whole
-        // budget reasoning): remember that it happened, so the failover is
-        // logged for what it is and the reply can be marked cut short.
-        if ((gate as string) === 'think' && !full) thinkBox.text = pending.replace(/^\s*<think>/, '').trim();
-        if (gone) reader.cancel().catch(() => undefined);
-        // Partial text + a cut stream = a truncated answer. A cut with nothing
-        // forwarded stays an empty stream, which the failover ladder handles.
-        if (cut && full) cutBox.truncated = true;
-        return full;
-      };
-
-      // 10.2 — meta names the engine and seat (and, 10.3/11.0, the tools that
-      // were on for it); a grounded answer's sources travel in their own event.
-      // 10.3 — the engine is the REAL model: its published name, its exact
-      // slug and its provider, for whichever attempt is streaming.
-      const sendMeta = (a: LaneAttempt): void => {
-        const m = attemptModel(a);
-        const tools = [...(runsCode(a) ? ['code_execution'] : []), ...(runsSearch(a) || webFound ? ['web_search'] : [])];
-        send({ meta: { model: m.name, modelId: m.id, provider: m.provider, mode: reqMode, ...(tools.length ? { tools } : {}) } });
-      };
-      sendMeta(usedAttempt);
-      let full = await drain(upBody);
-
-      // Engine streamed 200 OK but produced no content (observed live for
-      // voice/home lane — and for reasoning engines whose entire output is an
-      // unclosed chain-of-thought block, which the gate rightly discards).
-      // Fail over transparently along the SAME lane ladder instead of handing
-      // the client an empty reply — with one engine degraded upstream, a
-      // single hard-coded sibling isn't enough (observed live post-rewire).
-      if (!full) {
+        if (res?.ok && res.body) return { up: res, used: a };
+        failed.add(a);
+        if (res) {
+          const errBody = await res.text().catch(() => '');
+          lastVerdict = { status: res.status, cooldown: noteLaneFailure(a.role, a.model, res.status, errBody) };
+          last = res;
+        } else {
+          lastVerdict = { status: 0, cooldown: null };
+        }
+        // Log the real status (timeout=0, degraded/bad id=4xx, upstream 5xx) for
+        // diagnosis; meta reports the engine that finally answered.
         if (waitUntil)
           waitUntil(
             logAiEvent(env, {
               feature: 'assistant',
-              model: `${usedModel} @${keyRole}`,
+              model: `${a.model} @${a.role}`,
               ok: false,
-              status: 200,
-              error: thinkBox.text ? 'unclosed_think_fallback' : 'empty_stream_fallback',
+              status: res ? res.status : 0,
+              error: res ? `engine_fallback_${res.status}` : 'engine_timeout',
               client: isApp ? 'app' : 'web',
               latency_ms: Date.now() - t0,
             }),
           );
-        // 8.2.0 — the whole remaining ladder, not the first four: every pair
-        // that has not already failed this request and is not resting, while
-        // the reply's overall budget still has room for a hop.
-        for (const a of activePlan) {
-          if (full || gone) break;
-          if (a === served || failed.has(a)) continue;
-          if (obeyCooldown && laneCoolingDown(a.role, a.model)) continue;
-          if (streamDeadline - Date.now() < STREAM_MIN_DRAIN_MS) break;
-          try {
-            const upFb = await callStream(a, activeMsgs, 10_000);
-            if (upFb.ok && upFb.body) {
-              usedAttempt = a;
-              usedModel = a.model;
-              usedRole = a.role;
-              sendMeta(a);
-              full = await drain(upFb.body);
-            } else {
-              failed.add(a);
-              noteLaneFailure(a.role, a.model, upFb.status, await upFb.text().catch(() => ''));
-            }
-          } catch {
-            /* this pair failed too — try the next one */
-            failed.add(a);
-          }
-        }
       }
+      return { up: last, used: null };
+    };
 
-      // `truncated` is additive: clients that only read `done` are unaffected.
-      // 11.0 — nobody else answered and the only text is unclosed reasoning:
-      // a chain of thought is still not an answer, so none is sent — but the
-      // reply is marked cut short, so the app can say so instead of showing
-      // nothing at all.
-      if (!full && thinkBox.text) cutBox.truncated = true;
-      // 11.8 — the web search results this reply was given, as the same one
-      // `sources` frame a grounded reply sends (never both).
-      if (webFound && full && !sourcesSent) {
-        send({ sources: { items: webFound.results.map((r) => ({ url: r.url, title: r.title })), queries: [webFound.query], entry: null } });
-        sourcesSent = true;
-      }
-      send(cutBox.truncated ? { done: true, truncated: true } : { done: true });
-      if (!gone) {
-        try {
-          controller.close();
-        } catch {
-          /* already closed by a cancel */
-        }
-      }
-      if (waitUntil) {
+    let activePlan: LaneAttempt[] = useVision ? vision : attempts;
+    let activeMsgs: OutMsg[] = msgs;
+    let { up, used } = await walk(activePlan, msgs);
+
+    // Vision unavailable on every vision pair -> a text-only answer with a note,
+    // down the seat's own text ladder.
+    // 11.2 — a pick that reads images was asked with the image and failed: the
+    // text-only retry would be the same model failing the same way.
+    if (!used && useVision && !(pick && vision.length)) {
+      const noteMsgs: OutMsg[] = msgs.map((mm) => ({ ...mm }));
+      const last = noteMsgs[noteMsgs.length - 1];
+      last.content =
+        typeof last.content === 'string'
+          ? last.content
+          : ((last.content.find((p) => p.type === 'text') as { text: string } | undefined)?.text ?? '');
+      noteMsgs[0] = {
+        role: 'system',
+        content: `${sys}\n\n(The user attached an image, but image understanding is offline right now — answer the text part and mention that you couldn't view the image.)`,
+      };
+      activePlan = attempts;
+      activeMsgs = noteMsgs;
+      // An aborted fetch here must not escape as a raw 500 exception JSON — an
+      // honest engine_unreachable is something the client can render (DQA-02).
+      ({ up, used } = await walk(attempts, noteMsgs));
+    }
+
+    if (used) {
+      usedAttempt = used;
+      usedModel = used.model;
+      usedRole = used.role;
+    }
+    // 11.2 — the listener's pick gave no answer: say why, never substitute.
+    if (pick && (!used || !up || !up.ok || !up.body)) {
+      const c = lastVerdict.cooldown;
+      return await pickUnavailable(pickIssue(lastVerdict.status, c?.reason ?? null, c?.ms ?? 0), c && c.ms >= 60_000 ? Date.now() + c.ms : null);
+    }
+    if (!up) return jsonErr({ error: 'engine_unreachable' }, 503);
+    if (!used || !up.ok || !up.body) {
+      const status = up.status;
+      if (waitUntil)
         waitUntil(
           logAiEvent(env, {
             feature: 'assistant',
             model: `${usedModel} @${usedRole}`,
-            ok: !!full,
-            status: 200,
-            error: full ? (cutBox.truncated ? 'stream_truncated' : null) : 'empty',
+            ok: false,
+            status,
+            error: `http_${status}`,
             client: isApp ? 'app' : 'web',
             latency_ms: Date.now() - t0,
-            ...(usageBox.seen ? { prompt_tokens: usageBox.prompt, completion_tokens: usageBox.completion } : {}),
           }),
         );
+      // 11.0 — an upstream rate limit answers 429 (the client's "busy" line and
+      // its longer pause key on that status). Anything else stays a 500, not a
+      // 502: Cloudflare swallows origin 502 bodies (DQA-02).
+      if (status === 429) {
+        const retryAfter = Number(up.headers.get('retry-after'));
+        const res = jsonErr({ error: 'upstream', status }, 429);
+        res.headers.set('retry-after', String(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(Math.ceil(retryAfter), 60) : 5));
+        return res;
       }
-    },
-  });
+      return jsonErr({ error: 'upstream', status }, 500);
+    }
+    const served: LaneAttempt = used;
 
-  return new Response(stream, {
-    headers: {
-      'content-type': 'text/event-stream; charset=utf-8',
-      'cache-control': 'no-store',
-      connection: 'keep-alive',
-      ...CORS,
-    },
-  });
+    const upBody = up.body;
+    const encoder = new TextEncoder();
+    // 11.0 — the listener went away (closed the tab, pressed stop): stop reading
+    // the upstream at once instead of draining it to the stream budget.
+    let gone = false;
+    let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+    // One `sources` frame per reply: a grounded attempt's, else the web search's.
+    let sourcesSent = false;
+    const stream = new ReadableStream<Uint8Array>({
+      cancel() {
+        gone = true;
+        activeReader?.cancel().catch(() => undefined);
+      },
+      async start(controller) {
+        const send = (obj: unknown): void => {
+          if (gone) return;
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+          } catch {
+            gone = true; // the stream was closed under us
+          }
+        };
+        // 11.0 — reasoning a model never closed (see the end of drain).
+        const thinkBox: { text: string } = { text: '' };
+        // Drain an upstream SSE body, forward each content delta to the client
+        // and return the full text so we can detect an empty answer (a 200 with
+        // no content — some lanes intermittently return this) and fail over.
+        // Token usage summed over every drain of this request (an empty-stream
+        // rescue is a second upstream call, and both bill).
+        // Null until at least one upstream reported usage.
+        const usageBox: { prompt: number; completion: number; seen: boolean } = { prompt: 0, completion: 0, seen: false };
+        // Overall stream budget: one deadline for the whole reply, so a stuck
+        // upstream is cut instead of holding the connection open forever. A
+        // failover drain that starts late still gets a usable minimum window.
+        const streamDeadline = Date.now() + STREAM_BUDGET_MS;
+        // Set when a drain was cut (budget or a mid-stream upstream error) AFTER
+        // text had already been forwarded — the final event then says so rather
+        // than presenting half an answer as complete.
+        const cutBox: { truncated: boolean } = { truncated: false };
+        const drain = async (body: ReadableStream<Uint8Array>): Promise<string> => {
+          const reader = body.getReader();
+          activeReader = reader;
+          const decoder = new TextDecoder();
+          let buf = '';
+          let full = '';
+          // Reasoning engines (deep lane) can open the content stream with a
+          // <think>…</think> chain-of-thought block. Gate the stream: buffer
+          // until we know whether it starts with <think>, and forward only what
+          // follows </think> — internal reasoning never reaches the client.
+          // We forward ONLY delta.content; reasoning_content deltas are ignored.
+          let pending = '';
+          let gate: 'probe' | 'think' | 'pass' = 'probe';
+          let cut = false;
+          // 10.3 — Groq code interpreter reports, per tool index.
+          const toolShown = new Map<number, { code: boolean; output: boolean }>();
+          const budgetId = setTimeout(
+            () => {
+              cut = true;
+              // Cancelling settles the pending read, so the loop below exits.
+              reader.cancel().catch(() => undefined);
+            },
+            Math.max(STREAM_MIN_DRAIN_MS, streamDeadline - Date.now()),
+          );
+          const forward = (text: string): void => {
+            // Models often open with stray whitespace/newlines — swallow them
+            // until real content starts so answers begin cleanly.
+            const t = full ? text : text.replace(/^\s+/, '');
+            if (!t) return;
+            full += t;
+            send({ delta: t });
+          };
+          const onDelta = (delta: string): void => {
+            if (gate === 'pass') {
+              forward(delta);
+              return;
+            }
+            pending += delta;
+            if (gate === 'probe') {
+              const lead = pending.replace(/^\s+/, '');
+              if (!lead) return;
+              // Too short to tell yet whether it's an opening <think> tag.
+              if (lead.length < 7 && '<think>'.startsWith(lead)) return;
+              if (!lead.startsWith('<think>')) {
+                gate = 'pass';
+                pending = '';
+                forward(lead);
+                return;
+              }
+              gate = 'think';
+            }
+            const end = pending.indexOf('</think>');
+            if (end >= 0) {
+              gate = 'pass';
+              const after = pending.slice(end + 8);
+              pending = '';
+              forward(after);
+            }
+          };
+          try {
+            for (;;) {
+              const { done, value } = await reader.read();
+              if (done || cut || gone) break;
+              buf += decoder.decode(value, { stream: true });
+              let nl: number;
+              while ((nl = buf.indexOf('\n')) >= 0) {
+                const line = buf.slice(0, nl).trim();
+                buf = buf.slice(nl + 1);
+                if (!line.startsWith('data:')) continue;
+                const data = line.slice(5).trim();
+                if (!data || data === '[DONE]') continue;
+                try {
+                  const j = JSON.parse(data) as { choices?: Array<{ delta?: { content?: unknown; executed_tools?: unknown }; message?: { executed_tools?: unknown } }> };
+                  // 10.3 — executed code and its output, before the text that follows them.
+                  const ran = executedToolsText(j.choices?.[0]?.delta?.executed_tools ?? j.choices?.[0]?.message?.executed_tools, toolShown);
+                  if (ran) onDelta(ran);
+                  // 11.0 — the pages a grounded Gemini answer drew on (the maestro
+                  // transport's extra frame): one additive `sources` event, which
+                  // older clients ignore. Never produced by any other provider.
+                  // Only for an attempt that asked for grounding: pages an
+                  // unasked model volunteers are never passed on.
+                  const g = (j as { grounding?: unknown }).grounding;
+                  if (g && typeof g === 'object' && Array.isArray((g as { items?: unknown }).items) && runsSearch(usedAttempt)) {
+                    send({ sources: g });
+                    sourcesSent = true;
+                  }
+                  const delta = j.choices?.[0]?.delta?.content;
+                  if (typeof delta === 'string' && delta) onDelta(delta);
+                  // The usage chunk (opt-in on the default base, unasked on the
+                  // scholar base) carries no delta — one per upstream call.
+                  const usage = usageFromJson(j);
+                  if (usage) {
+                    usageBox.prompt += usage.prompt_tokens;
+                    usageBox.completion += usage.completion_tokens;
+                    usageBox.seen = true;
+                  }
+                } catch {
+                  /* skip a malformed SSE chunk */
+                }
+              }
+            }
+          } catch {
+            /* upstream aborted mid-stream */
+            cut = true;
+          } finally {
+            clearTimeout(budgetId);
+          }
+          // Stream ended while still probing (very short answers) — flush it.
+          // A stream that ended inside <think> is discarded: an unclosed
+          // chain-of-thought is not an answer; the empty-stream failover runs.
+          if (gate === 'probe' && pending) forward(pending);
+          // 11.0 — a <think> block that never closed (the model spent its whole
+          // budget reasoning): remember that it happened, so the failover is
+          // logged for what it is and the reply can be marked cut short.
+          if ((gate as string) === 'think' && !full) thinkBox.text = pending.replace(/^\s*<think>/, '').trim();
+          if (gone) reader.cancel().catch(() => undefined);
+          // Partial text + a cut stream = a truncated answer. A cut with nothing
+          // forwarded stays an empty stream, which the failover ladder handles.
+          if (cut && full) cutBox.truncated = true;
+          return full;
+        };
+
+        // 10.2 — meta names the engine and seat (and, 10.3/11.0, the tools that
+        // were on for it); a grounded answer's sources travel in their own event.
+        // 10.3 — the engine is the REAL model: its published name, its exact
+        // slug and its provider, for whichever attempt is streaming.
+        const sendMeta = (a: LaneAttempt): void => {
+          const m = attemptModel(a);
+          const tools = [...(runsCode(a) ? ['code_execution'] : []), ...(runsSearch(a) || webFound ? ['web_search'] : [])];
+          send({ meta: { model: m.name, modelId: m.id, provider: m.provider, mode: reqMode, ...(tools.length ? { tools } : {}) } });
+        };
+        sendMeta(usedAttempt);
+        let full = await drain(upBody);
+
+        // Engine streamed 200 OK but produced no content (observed live for
+        // voice/home lane — and for reasoning engines whose entire output is an
+        // unclosed chain-of-thought block, which the gate rightly discards).
+        // Fail over transparently along the SAME lane ladder instead of handing
+        // the client an empty reply — with one engine degraded upstream, a
+        // single hard-coded sibling isn't enough (observed live post-rewire).
+        if (!full) {
+          if (waitUntil)
+            waitUntil(
+              logAiEvent(env, {
+                feature: 'assistant',
+                model: `${usedModel} @${keyRole}`,
+                ok: false,
+                status: 200,
+                error: thinkBox.text ? 'unclosed_think_fallback' : 'empty_stream_fallback',
+                client: isApp ? 'app' : 'web',
+                latency_ms: Date.now() - t0,
+              }),
+            );
+          // 8.2.0 — the whole remaining ladder, not the first four: every pair
+          // that has not already failed this request and is not resting, while
+          // the reply's overall budget still has room for a hop.
+          for (const a of activePlan) {
+            if (full || gone) break;
+            if (a === served || failed.has(a)) continue;
+            if (obeyCooldown && laneCoolingDown(a.role, a.model)) continue;
+            if (streamDeadline - Date.now() < STREAM_MIN_DRAIN_MS) break;
+            try {
+              const upFb = await callStream(a, activeMsgs, 10_000);
+              if (upFb.ok && upFb.body) {
+                usedAttempt = a;
+                usedModel = a.model;
+                usedRole = a.role;
+                sendMeta(a);
+                full = await drain(upFb.body);
+              } else {
+                failed.add(a);
+                noteLaneFailure(a.role, a.model, upFb.status, await upFb.text().catch(() => ''));
+              }
+            } catch {
+              /* this pair failed too — try the next one */
+              failed.add(a);
+            }
+          }
+        }
+
+        // `truncated` is additive: clients that only read `done` are unaffected.
+        // 11.0 — nobody else answered and the only text is unclosed reasoning:
+        // a chain of thought is still not an answer, so none is sent — but the
+        // reply is marked cut short, so the app can say so instead of showing
+        // nothing at all.
+        if (!full && thinkBox.text) cutBox.truncated = true;
+        // 11.8 — the web search results this reply was given, as the same one
+        // `sources` frame a grounded reply sends (never both).
+        if (webFound && full && !sourcesSent) {
+          send({ sources: { items: webFound.results.map((r) => ({ url: r.url, title: r.title })), queries: [webFound.query], entry: null } });
+          sourcesSent = true;
+        }
+        send(cutBox.truncated ? { done: true, truncated: true } : { done: true });
+        if (!gone) {
+          try {
+            controller.close();
+          } catch {
+            /* already closed by a cancel */
+          }
+        }
+        if (waitUntil) {
+          waitUntil(
+            logAiEvent(env, {
+              feature: 'assistant',
+              model: `${usedModel} @${usedRole}`,
+              ok: !!full,
+              status: 200,
+              error: full ? (cutBox.truncated ? 'stream_truncated' : null) : 'empty',
+              client: isApp ? 'app' : 'web',
+              latency_ms: Date.now() - t0,
+              ...(usageBox.seen ? { prompt_tokens: usageBox.prompt, completion_tokens: usageBox.completion } : {}),
+            }),
+          );
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        'content-type': 'text/event-stream; charset=utf-8',
+        'cache-control': 'no-store',
+        connection: 'keep-alive',
+        ...CORS,
+      },
+    });
+
+  };
+  return searchQuery ? searchFirstStream(searchQuery, runSearch, finish) : finish();
 }

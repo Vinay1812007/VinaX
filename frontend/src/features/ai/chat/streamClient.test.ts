@@ -15,6 +15,33 @@ const sse = (chunks: string[], status = 200): Response => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('runChatStream', () => {
+  it('11.8.1 — passes the search status on, and reads a refusal sent inside the stream like an HTTP one', async () => {
+    const pickBody = { error: 'model_unavailable', reason: 'quota', model: { provider: 'groq', id: 'openai/gpt-oss-120b', name: 'GPT-OSS 120B' }, alternatives: [] };
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(sse([
+      'data: {"status":{"step":"searching","query":"q"}}\n\n',
+      'data: {"status":{"step":"searched","query":"q","count":3,"sites":["a.example"]}}\n\n',
+      `data: ${JSON.stringify({ failed: { status: 429, body: pickBody } })}\n\n`,
+    ]))));
+    const steps: string[] = [];
+    const out = await runChatStream({ endpoint: '/x', body: {}, signal: new AbortController().signal, onUpdate: (s) => steps.push(s.activity?.step ?? '') });
+    expect(steps).toEqual(['searching', 'searched', 'searched']);
+    expect(out.state.activity).toEqual({ step: 'searched', query: 'q', count: 3, sites: ['a.example'] });
+    expect(out.failure).toBe('model_unavailable');
+    expect(out.pickIssue).toMatchObject({ reason: 'quota', provider: 'groq', model: 'openai/gpt-oss-120b' });
+  });
+
+  it('11.8.1 — an in-stream "switched off" is not re-asked; a passing failure is, once', async () => {
+    const off = vi.fn(() => Promise.resolve(sse(['data: {"status":{"step":"searching","query":"q"}}\n\ndata: {"failed":{"status":503,"body":{"error":"ai_disabled"}}}\n\n'])));
+    vi.stubGlobal('fetch', off);
+    expect((await runChatStream({ endpoint: '/x', body: {}, signal: new AbortController().signal, retryDelayMs: 0 })).failure).toBe('disabled');
+    expect(off).toHaveBeenCalledTimes(1);
+    const down = vi.fn(() => Promise.resolve(sse(['data: {"failed":{"status":503,"body":{"error":"engine_unreachable"}}}\n\n'])));
+    vi.stubGlobal('fetch', down);
+    const out = await runChatStream({ endpoint: '/x', body: {}, signal: new AbortController().signal, retryDelayMs: 0 });
+    expect(out.failure).toBe('unavailable');
+    expect(down).toHaveBeenCalledTimes(2);
+  });
+
   it('folds a stream whose frames are split across network chunks', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(sse(['data: {"meta":{"model":"m"}}\n\ndata: {"del', 'ta":"Hi"}\n\n', 'data: {"delta":" there"}\n\ndata: {"done":true,"truncated":true}\n\n']))));
     const deltas: string[] = [];

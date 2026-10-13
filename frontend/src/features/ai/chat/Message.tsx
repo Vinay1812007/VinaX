@@ -27,13 +27,13 @@ import { readAloud, readAloudSupported } from '@/features/ai/readAloud';
 import { cn } from '@/utils/cn';
 import { reducedMotion } from '@/utils/motion';
 import { CheckIcon, CodeIcon, GlobeIcon } from './icons';
-import { placeCitations } from './citations';
+import { placeCitations, siteName } from './citations';
 import { MediaCard } from './MediaCard';
 import { CODE_TOOL, isProviderId, WEB_TOOL } from './models';
 import { ProviderLogo } from './ProviderLogo';
 import { hasMakerLogo, MakerLogo } from './MakerLogo';
 import { makerFamily } from './chatStyle';
-import type { ModelChoice, Msg } from './types';
+import type { ModelChoice, Msg, MsgActivity } from './types';
 import { readPickIssue } from './streamClient';
 import { AUTO } from './models';
 import { versionOf } from './versions';
@@ -297,7 +297,45 @@ export const searchedWeb = (m: Pick<Msg, 'tools'>): boolean => !!m.tools?.includ
  *  short status runs a soft shimmer, changing every couple of seconds. The
  *  accessible name stays "Thinking" — a screen reader hears it once, not every
  *  rotation. */
-function ThinkingMark({ creating, searching }: { creating?: 'image' | 'music'; searching?: boolean }): ReactNode {
+/** 11.8.1 — a web search before the reply, step by step: "Searching the web"
+ *  with what is being searched for, then how many results came back and from
+ *  which sites (letter monograms, no remote images), until the first word. */
+function SearchSteps({ a }: { a: MsgActivity }): ReactNode {
+  const found = a.step === 'searched';
+  const n = a.count ?? 0;
+  const line = !found ? 'Searching the web' : n ? `Reading ${n} web result${n === 1 ? '' : 's'}` : 'No web results — answering without them';
+  const sites = found ? (a.sites ?? []).slice(0, 4) : [];
+  return (
+    <span className="ai-thinking ai-searching ai-search-steps" role="status" aria-label={line}>
+      <GlobeIcon className="ai-searching-icon w-4 h-4" />
+      <span className="ai-search-body">
+        <span key={a.step} className="ai-thinking-text ai-shimmer" aria-hidden>
+          {line}
+        </span>
+        {a.query && (
+          <span className="ai-search-query" aria-hidden>
+            “{a.query}”
+          </span>
+        )}
+        {sites.length > 0 && (
+          <span className="ai-search-sites" aria-hidden>
+            {sites.map((host) => {
+              const name = siteName(host);
+              return (
+                <span key={host} className="ai-search-site" title={host}>
+                  <span className="ai-cite-mono">{name.charAt(0).toUpperCase()}</span>
+                  {name}
+                </span>
+              );
+            })}
+          </span>
+        )}
+      </span>
+    </span>
+  );
+}
+
+function ThinkingMark({ creating, searching, activity }: { creating?: 'image' | 'music'; searching?: boolean; activity?: MsgActivity }): ReactNode {
   const lines = creating ? CREATING[creating] : WAITING;
   const [i, setI] = useState(0);
   useEffect(() => {
@@ -305,6 +343,7 @@ function ThinkingMark({ creating, searching }: { creating?: 'image' | 'music'; s
     const t = window.setInterval(() => setI((n) => (n + 1) % lines.length), 2400);
     return () => window.clearInterval(t);
   }, [lines.length]);
+  if (activity && !creating) return <SearchSteps a={activity} />;
   // 11.2 — web search is on for the model answering: say so, with a globe,
   // until the first word arrives (the search runs before the answer).
   if (searching && !creating)
@@ -646,7 +685,7 @@ export const AssistantMessage = memo(function AssistantMessage({
             {!busy && last && m.followups?.length ? <FollowupChips items={m.followups} disabled={busy} onPick={handlers.send} /> : null}
           </>
         ) : (
-          <ThinkingMark creating={m.creating} searching={streaming && searchedWeb(m)} />
+          <ThinkingMark creating={m.creating} searching={streaming && searchedWeb(m)} activity={streaming ? m.activity : undefined} />
         )}
       </div>
     </div>

@@ -116,7 +116,9 @@ export interface PlacedCitations {
 
 /** Put one citation mark at the end of each supported sentence (see the module note). */
 export function placeCitations(content: string, supports: MsgSupport[] | undefined, itemCount: number): PlacedCitations {
-  if (!supports?.length || !itemCount || !content) return { text: content, cites: [] };
+  if (!itemCount || !content) return { text: content, cites: [] };
+  // 11.8.1 — no supports (web search results): the reply's own [n] markers.
+  if (!supports?.length) return placeNumberedCitations(content, itemCount);
   const fences = fenceRanges(content);
   const at = new Map<number, number[]>();
   let cursor = 0;
@@ -149,6 +151,55 @@ export function placeCitations(content: string, supports: MsgSupport[] | undefin
     text += content.slice(from, pos) + citeMark(cites.length);
     cites.push(at.get(pos)!);
     from = pos;
+  }
+  return { text: text + content.slice(from), cites };
+}
+
+/** "[1]", "[2, 3]" — a numbered source marker, not a link's text ("[1](…)"). */
+const NUMBERED = /\[(\d{1,2}(?:\s*,\s*\d{1,2})*)\](?!\()/g;
+
+/**
+ * 11.8.1 — a reply written from web search results cites them as [1], [2]
+ * (numbered as the Sources list is). Each marker becomes a citation mark for
+ * those sources, so it draws as the same chip a grounded reply shows; markers
+ * side by side ("[1][2]") share one chip, and the space before a marker goes
+ * with it. A number with no source, and a marker inside code, maths, a link
+ * or a table row, is left as written.
+ */
+export function placeNumberedCitations(content: string, itemCount: number): PlacedCitations {
+  if (!itemCount || !content || !content.includes('[')) return { text: content, cites: [] };
+  const fences = fenceRanges(content);
+  const groups: Array<{ start: number; end: number; sources: number[] }> = [];
+  for (const m of content.matchAll(NUMBERED)) {
+    const start = m.index ?? 0;
+    const end = start + m[0].length;
+    if (fences.some(([a, b]) => start >= a && start <= b)) continue;
+    const lineStart = content.lastIndexOf('\n', start - 1) + 1;
+    const lineEndRaw = content.indexOf('\n', start);
+    const line = content.slice(lineStart, lineEndRaw < 0 ? content.length : lineEndRaw);
+    if (line.trimStart().startsWith('|') || insideInline(line, start - lineStart)) continue;
+    const sources = m[1]
+      .split(',')
+      .map((x) => Number(x.trim()) - 1)
+      .filter((n) => Number.isInteger(n) && n >= 0 && n < itemCount);
+    if (!sources.length) continue;
+    const prev = groups[groups.length - 1];
+    if (prev && prev.end === start) {
+      prev.end = end;
+      for (const n of sources) if (!prev.sources.includes(n)) prev.sources.push(n);
+    } else {
+      groups.push({ start, end, sources: [...new Set(sources)] });
+    }
+  }
+  if (!groups.length) return { text: content, cites: [] };
+  const cites: number[][] = [];
+  let text = '';
+  let from = 0;
+  for (const g of groups) {
+    const start = content[g.start - 1] === ' ' && g.start - 1 >= from ? g.start - 1 : g.start;
+    text += content.slice(from, start) + citeMark(cites.length);
+    cites.push(g.sources);
+    from = g.end;
   }
   return { text: text + content.slice(from), cites };
 }

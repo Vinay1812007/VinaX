@@ -2318,6 +2318,40 @@ html.light .ai-web-chip { color: rgb(var(--tide-500)); }
 .ai-searching { gap: 0.5rem; }
 .ai-searching-icon { flex: none; color: rgb(var(--tide-400)); }
 html.light .ai-searching-icon { color: rgb(var(--tide-500)); }
+/* 11.8.1 — the search, step by step: the line, what is being searched for,
+   then the sites the results came from (letter monograms). Wraps inside the
+   reply column on every width; nothing here can push the composer. */
+.ai-search-steps { align-items: flex-start; max-width: 100%; }
+.ai-search-steps .ai-searching-icon { margin-top: 0.3em; }
+.ai-search-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ai-search-query {
+  max-width: min(36rem, 100%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85em;
+  font-weight: 500;
+  color: var(--ai-text-3);
+}
+.ai-search-sites { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.ai-search-site {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 12rem;
+  padding: 2px 9px 2px 3px;
+  border-radius: 9999px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.8em;
+  font-weight: 550;
+  color: var(--ai-text-2);
+  background: rgb(var(--tide-500) / 0.1);
+  animation: ai-fade 180ms var(--ease-calm) both;
+}
+html.reduce-motion .ai-search-site { animation: none; }
+@media (prefers-reduced-motion: reduce) { .ai-search-site { animation: none; } }
 
 /* The letter monogram (no favicons, no remote images). */
 .ai-cite-mono {
@@ -2640,3 +2674,35 @@ html.reduce-motion .ai-voice-row {
   animation: none !important;
   transition: none !important;
 }
+
+/* 11.8.1 — the web search, step by step, before the first word: what is being
+   searched for, then the sites the results came from (letter monograms, no
+   remote images). Tokens only; long queries are cut with an ellipsis so the
+   column never widens on a phone. */
+.ai-search-steps { align-items: flex-start; }
+.ai-search-steps .ai-searching-icon { margin-top: 0.3em; }
+.ai-search-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ai-search-query {
+  max-width: min(36rem, 70vw);
+  overflow: hidden;
+  font-size: 0.85em;
+  font-weight: 500;
+  color: var(--ai-text-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-search-sites { display: flex; flex-wrap: wrap; gap: 6px; }
+.ai-search-site {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px 2px 3px;
+  border-radius: 9999px;
+  font-size: 0.8em;
+  font-weight: 550;
+  color: var(--ai-text-2);
+  background: rgb(var(--tide-500) / 0.1);
+  animation: ai-fade 180ms var(--ease-calm) both;
+}
+html.reduce-motion .ai-search-site { animation: none; }
+@media (prefers-reduced-motion: reduce) { .ai-search-site { animation: none; } }

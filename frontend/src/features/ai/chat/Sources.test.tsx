@@ -131,6 +131,51 @@ describe('a web-grounded reply', () => {
     expect(screen.queryByText('Searching the web')).toBeNull();
   });
 
+  it('11.8.1 — shows each search step: what it searches for, then how many results and from which sites', () => {
+    reply({ role: 'assistant', content: '', activity: { step: 'searching', query: 'sportsmart.com' } }, true);
+    const searching = screen.getByRole('status', { name: 'Searching the web' });
+    expect(searching.textContent).toContain('“sportsmart.com”');
+    cleanup();
+    reply({ role: 'assistant', content: '', activity: { step: 'searched', query: 'sportsmart.com', count: 5, sites: ['sportsmart.com', 'news.example.co.in'] } }, true);
+    const found = screen.getByRole('status', { name: 'Reading 5 web results' });
+    expect(found.textContent).toContain('Sportsmart');
+    expect(found.textContent).toContain('Example');
+    expect(found.querySelector('img')).toBeNull();
+    cleanup();
+    reply({ role: 'assistant', content: '', activity: { step: 'searched', query: 'zzqx', count: 0, sites: [] } }, true);
+    expect(screen.getByRole('status', { name: 'No web results — answering without them' })).toBeTruthy();
+    cleanup();
+    // Once the reply is written, the steps are gone.
+    reply({ role: 'assistant', content: 'Done.', activity: { step: 'searched', query: 'q', count: 2, sites: [] } });
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('11.8.1 — a reply that cites [1] and [2] from its search gets the same chips', () => {
+    const numbered: Msg = {
+      role: 'assistant',
+      content: 'It is sunny [1]. Highs near 31 °C [2][3]. See `arr[1]` and [a link](https://x.example/).',
+      engine: 'Model',
+      tools: [WEB_TOOL],
+      sources: { items: sources.items, queries: ['weather today'], entry: null },
+    };
+    const { container } = reply(numbered);
+    const chips = container.querySelectorAll<HTMLAnchorElement>('a.ai-cite');
+    expect(chips).toHaveLength(2);
+    expect(chips[0].getAttribute('href')).toBe(sources.items[0].url);
+    expect(container.textContent).not.toMatch(/\[1\]\.|\[2\]\[3\]/);
+    // Inline code keeps its brackets.
+    expect(container.textContent).toContain('arr[1]');
+  });
+
+  it('11.8.1 — numbered markers: out-of-range numbers, code blocks and links are left alone', () => {
+    expect(placeCitations('See [9] and [0].', undefined, 2)).toEqual({ text: 'See [9] and [0].', cites: [] });
+    expect(placeCitations('```\nx[1]\n```', undefined, 2).cites).toEqual([]);
+    expect(placeCitations('[1](https://a.example)', undefined, 2).cites).toEqual([]);
+    const placed = placeCitations('A [1, 2]. B [2].', undefined, 2);
+    expect(placed.cites).toEqual([[0, 1], [1]]);
+    expect(placed.text).not.toContain('[');
+  });
+
   it('draws a chip at the end of each supported sentence that opens the page safely', () => {
     const { container } = reply(m);
     const chips = container.querySelectorAll<HTMLAnchorElement>('a.ai-cite');

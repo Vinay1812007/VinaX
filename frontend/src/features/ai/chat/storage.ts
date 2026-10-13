@@ -151,6 +151,12 @@ function stripMsg(m: Msg): Msg {
   let out = m;
   if (m.images && m.images.length) out = { ...out, images: m.images.map(() => '') };
   if (m.media?.src) out = { ...out, media: { ...m.media, src: '' } };
+  // 11.8.1 — the live search status belongs to the reply being written, never to the saved chat.
+  if (m.activity) {
+    const { activity: _live, ...rest } = out;
+    void _live;
+    out = rest;
+  }
   if (m.versions?.length) {
     out = mapVersionTurns(out, stripMsg);
     out = { ...out, versions: out.versions?.map((v) => (v.images?.length ? { ...v, images: v.images.map(() => '') } : v)) };

@@ -110,6 +110,14 @@ async function attempt(opts: ChatStreamOptions): Promise<ChatStreamResult> {
       }
       if (state !== before) opts.onUpdate?.(state);
     }
+    // 11.8.1 — a searching turn answers 200 at once and reports a refusal
+    // inside the stream: read it exactly as the HTTP answer would have been.
+    if (state.failed && !state.text) {
+      const err = (state.failed.body && typeof state.failed.body === 'object' ? state.failed.body : null) as { error?: unknown } | null;
+      const failure = failureFromResponse(state.failed.status, err?.error);
+      const pickIssue = failure === 'model_unavailable' ? readPickIssue(err) : null;
+      return { state, failure, aborted: false, ...(pickIssue ? { pickIssue } : {}) };
+    }
     return { state, failure: null, aborted: false };
   } catch {
     const aborted = opts.signal.aborted;

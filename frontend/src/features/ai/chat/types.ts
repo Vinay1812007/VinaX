@@ -105,6 +105,16 @@ export type ModelChoice =
 /** 11.0 — what a web-grounded reply drew on (the stream's `sources` event):
  *  the pages, the queries the model ran, and the provider's search-suggestion
  *  snippet (HTML, shown in a sealed frame). Kept with the chat. */
+/** 11.8.1 — what a reply is doing before its first word, from the stream's
+ *  `status` frames: searching the web for `query`, then found `count`
+ *  results on `sites`. Shown only while the reply is being written; never kept. */
+export interface MsgActivity {
+  step: 'searching' | 'searched';
+  query: string;
+  count?: number;
+  sites?: string[];
+}
+
 export interface MsgSources {
   items: Array<{ url: string; title: string }>;
   queries: string[];
@@ -152,6 +162,8 @@ export interface Msg {
   engineProvider?: ProviderId;
   /** 10.3 — tools that were on for the model that answered (stream meta). */
   tools?: string[];
+  /** 11.8.1 — the live search status while the reply waits for its first word (never stored). */
+  activity?: MsgActivity;
   /** 11.0 — the pages a web-grounded reply drew on. */
   sources?: MsgSources;
   /** 10.3 — a picture or a music clip made with Create image / Create music clip. */

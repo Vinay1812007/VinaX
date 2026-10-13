@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.8.1': {
+    title: 'Watch VinaX AI search',
+    changes: [
+      { type: 'new', text: 'While VinaX AI searches the web you can follow along: it shows what it is searching for, then how many results it found and from which sites, before the answer starts.' },
+      { type: 'improved', text: 'Answers built on a web search now point to their sources right in the text: tap a source chip to open the page.' },
+      { type: 'fixed', text: 'Ask about a website — just type its address — and VinaX AI looks it up instead of saying it can’t browse the web.' },
+      { type: 'improved', text: 'Answers that use a web search stick to what the results say, and say so when the results don’t cover your question.' },
+    ],
+  },
   '11.8.0': {
     title: 'VinaX AI can look things up',
     changes: [
