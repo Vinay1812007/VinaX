@@ -109,10 +109,14 @@ export type ModelChoice =
  *  `status` frames: searching the web for `query`, then found `count`
  *  results on `sites`. Shown only while the reply is being written; never kept. */
 export interface MsgActivity {
-  step: 'searching' | 'searched';
+  /** 12.0 — 'planning': deep research is choosing its searches. */
+  step: 'planning' | 'searching' | 'searched';
   query: string;
   count?: number;
   sites?: string[];
+  /** 12.0 — deep research: every search it runs. */
+  queries?: string[];
+  research?: boolean;
 }
 
 export interface MsgSources {
@@ -123,6 +127,15 @@ export interface MsgSources {
    *  segment of the reply (its last 300 characters at most), `sources` are
    *  indexes into `items`. Absent on replies stored by 11.0 / 11.1. */
   supports?: MsgSupport[];
+  /** 12.0 — pictures the search returned, as signed Worker links (`/api/webimg?…`). */
+  images?: MsgImage[];
+}
+export interface MsgImage {
+  /** A Worker path, never a third-party address. */
+  src: string;
+  /** The page it came from. */
+  page: string;
+  alt: string;
 }
 export interface MsgSupport {
   text: string;
@@ -164,6 +177,10 @@ export interface Msg {
   tools?: string[];
   /** 11.8.1 — the live search status while the reply waits for its first word (never stored). */
   activity?: MsgActivity;
+  /** 12.0 — the model's reasoning, shown folded away above the reply. */
+  thinking?: string;
+  /** 12.0 — how long it reasoned before the first word (ms). */
+  thoughtMs?: number;
   /** 11.0 — the pages a web-grounded reply drew on. */
   sources?: MsgSources;
   /** 10.3 — a picture or a music clip made with Create image / Create music clip. */

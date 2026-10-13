@@ -245,7 +245,7 @@ describe('a feature is on unless its value is exactly false', () => {
 describe('the emergency stop', () => {
   it('turns every AI route off, streaming ones included', async () => {
     install({ controls: { emergencyOff: true } });
-    const chatRes = await vinaxaiPost({ request: post('/api/vinaxai', { messages: [{ role: 'user', content: 'hi' }] }), env: ENV });
+    const chatRes = await vinaxaiPost({ request: post('/api/vinaxai', { messages: [{ role: 'user', content: 'tell me about ragas' }] }), env: ENV });
     expect(chatRes.status).toBe(503);
     expect(await errorOf(chatRes)).toBe('ai_disabled');
     const tts = await ttsPost({ request: post('/api/tts', { text: 'hello' }), env: ENV });

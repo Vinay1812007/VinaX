@@ -26,18 +26,20 @@ import { hideFollowupLine } from '@/features/ai/followups';
 import { readAloud, readAloudSupported } from '@/features/ai/readAloud';
 import { cn } from '@/utils/cn';
 import { reducedMotion } from '@/utils/motion';
-import { CheckIcon, CodeIcon, GlobeIcon } from './icons';
+import { BulbIcon, CheckIcon, CodeIcon, GlobeIcon } from './icons';
 import { placeCitations, siteName } from './citations';
 import { MediaCard } from './MediaCard';
 import { CODE_TOOL, isProviderId, WEB_TOOL } from './models';
 import { ProviderLogo } from './ProviderLogo';
 import { hasMakerLogo, MakerLogo } from './MakerLogo';
 import { makerFamily } from './chatStyle';
-import type { ModelChoice, Msg, MsgActivity } from './types';
+import type { ModelChoice, Msg, MsgActivity, MsgImage } from './types';
 import { readPickIssue } from './streamClient';
 import { AUTO } from './models';
 import { versionOf } from './versions';
 import { SearchSuggestions, SourceChip, SourcesButton, SourcesPanel } from './Sources';
+import { SiteMark } from './SiteMark';
+import { workerAsset } from './endpoints';
 
 /** Everything a message can ask the page to do. The object is stable (see
  *  useStableHandlers), so memoised messages do not re-render with the page. */
@@ -303,8 +305,20 @@ export const searchedWeb = (m: Pick<Msg, 'tools'>): boolean => !!m.tools?.includ
 function SearchSteps({ a }: { a: MsgActivity }): ReactNode {
   const found = a.step === 'searched';
   const n = a.count ?? 0;
-  const line = !found ? 'Searching the web' : n ? `Reading ${n} web result${n === 1 ? '' : 's'}` : 'No web results — answering without them';
-  const sites = found ? (a.sites ?? []).slice(0, 4) : [];
+  const searches = a.queries?.length ?? 1;
+  const line =
+    a.step === 'planning'
+      ? 'Planning the research'
+      : !found
+        ? a.research
+          ? `Running ${searches} web searches`
+          : 'Searching the web'
+        : n
+          ? a.research
+            ? `Reading ${n} sources from ${searches} searches — writing the report`
+            : `Reading ${n} web result${n === 1 ? '' : 's'}`
+          : 'No web results — answering without them';
+  const sites = found ? (a.sites ?? []).slice(0, a.research ? 6 : 4) : [];
   return (
     <span className="ai-thinking ai-searching ai-search-steps" role="status" aria-label={line}>
       <GlobeIcon className="ai-searching-icon w-4 h-4" />
@@ -312,10 +326,20 @@ function SearchSteps({ a }: { a: MsgActivity }): ReactNode {
         <span key={a.step} className="ai-thinking-text ai-shimmer" aria-hidden>
           {line}
         </span>
-        {a.query && (
-          <span className="ai-search-query" aria-hidden>
-            “{a.query}”
+        {a.research && a.queries && a.queries.length > 1 ? (
+          <span className="ai-search-queries" aria-hidden>
+            {a.queries.map((q) => (
+              <span key={q} className="ai-search-query">
+                “{q}”
+              </span>
+            ))}
           </span>
+        ) : (
+          a.query && (
+            <span className="ai-search-query" aria-hidden>
+              “{a.query}”
+            </span>
+          )
         )}
         {sites.length > 0 && (
           <span className="ai-search-sites" aria-hidden>
@@ -323,7 +347,7 @@ function SearchSteps({ a }: { a: MsgActivity }): ReactNode {
               const name = siteName(host);
               return (
                 <span key={host} className="ai-search-site" title={host}>
-                  <span className="ai-cite-mono">{name.charAt(0).toUpperCase()}</span>
+                  <SiteMark host={host} letter={name.charAt(0).toUpperCase()} />
                   {name}
                 </span>
               );
@@ -332,6 +356,51 @@ function SearchSteps({ a }: { a: MsgActivity }): ReactNode {
         )}
       </span>
     </span>
+  );
+}
+
+/** 12.0 — the model's reasoning: live and open while it thinks, then folded
+ *  away above the reply as "Thought for 12s" (tap to read it again). */
+function Thoughts({ text, ms, live }: { text: string; ms?: number; live: boolean }): ReactNode {
+  const secs = ms ? Math.max(1, Math.round(ms / 1000)) : 0;
+  if (live)
+    return (
+      <div className="ai-thought is-live" role="status" aria-label="Thinking">
+        <span className="ai-thought-head">
+          <BulbIcon className="w-4 h-4" />
+          <span className="ai-thinking-text ai-shimmer">Thinking</span>
+        </span>
+        <p className="ai-thought-text" aria-hidden>
+          {text.length > 900 ? `…${text.slice(-900)}` : text}
+        </p>
+      </div>
+    );
+  return (
+    <details className="ai-thought">
+      <summary className="ai-thought-head">
+        <BulbIcon className="w-4 h-4" />
+        <span>{secs ? `Thought for ${secs}s` : 'Thought it through'}</span>
+      </summary>
+      <p className="ai-thought-text">{text}</p>
+    </details>
+  );
+}
+
+/** 12.0 — pictures the web search returned (loaded through the Worker): one
+ *  large, up to two beside it; each opens the page it came from. A picture
+ *  that fails to load is left out. */
+function Pictures({ images }: { images: MsgImage[] }): ReactNode {
+  const [broken, setBroken] = useState<string[]>([]);
+  const shown = images.filter((im) => !broken.includes(im.src)).slice(0, 3);
+  if (!shown.length) return null;
+  return (
+    <div className={cn('ai-pictures', `is-${shown.length}`)} role="group" aria-label="Pictures from the web">
+      {shown.map((im) => (
+        <a key={im.src} className="ai-picture" href={im.page || undefined} target="_blank" rel="noopener noreferrer" title={im.alt}>
+          <img src={workerAsset(im.src)} alt={im.alt} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setBroken((b) => [...b, im.src])} />
+        </a>
+      ))}
+    </div>
   );
 }
 
@@ -573,6 +642,7 @@ export const AssistantMessage = memo(function AssistantMessage({
                 and a small Marigold mark pulses where the words end: drawn
                 after the last paragraph or list item by CSS, or by the span
                 below when the reply ends in a block such as code. */}
+            {m.thinking && <Thoughts text={m.thinking} ms={m.thoughtMs} live={false} />}
             <div className={cn('ai-reply', streaming && 'is-streaming')}>
               <CiteContext.Provider value={drawCite}>
                 <RichContent text={streaming ? hideFollowupLine(m.content) : placed.text} streaming={streaming} />
@@ -581,6 +651,7 @@ export const AssistantMessage = memo(function AssistantMessage({
             </div>
             {/* 11.0 — the search service's suggestions, once the reply has
                 finished (a condition of the grounding service: always shown). */}
+            {sources?.images?.length ? <Pictures images={sources.images} /> : null}
             {sources?.entry && <SearchSuggestions entry={sources.entry} />}
             {!busy && (
               <div className="ai-toolbar mt-2 -ml-2 flex flex-wrap items-center gap-0.5" role="group" aria-label="Reply actions">
@@ -685,7 +756,13 @@ export const AssistantMessage = memo(function AssistantMessage({
             {!busy && last && m.followups?.length ? <FollowupChips items={m.followups} disabled={busy} onPick={handlers.send} /> : null}
           </>
         ) : (
-          <ThinkingMark creating={m.creating} searching={streaming && searchedWeb(m)} activity={streaming ? m.activity : undefined} />
+          <>
+            {streaming && m.thinking ? (
+              <Thoughts text={m.thinking} live />
+            ) : (
+              <ThinkingMark creating={m.creating} searching={streaming && searchedWeb(m)} activity={streaming ? m.activity : undefined} />
+            )}
+          </>
         )}
       </div>
     </div>

@@ -11,11 +11,13 @@
  *   on show under the reply — showing it next to a grounded answer is a
  *   condition of the free grounding service.
  *
- * No favicons and no remote images: the monogram is a letter.
+ * 12.0 — each source shows its site's logo (loaded through the Worker,
+ * SiteMark), its letter when there is none; a chip names the site.
  */
 import { forwardRef, useEffect, useRef, type ReactNode } from 'react';
 import { XIcon } from '@/components/Icons';
-import { sourceLabel } from './citations';
+import { siteName, sourceLabel } from './citations';
+import { SiteMark } from './SiteMark';
 import { GlobeIcon } from './icons';
 import type { MsgSources } from './types';
 
@@ -43,11 +45,9 @@ export function SourceChip({ items, sources }: { items: Item[]; sources: number[
       title={title}
       aria-label={`Source: ${l.name}${more ? ` and ${more} more` : ''}`}
     >
-      <span className="ai-cite-mono" aria-hidden>
-        {l.letter}
-      </span>
+      <SiteMark host={l.host} letter={l.letter} />
       <span className="ai-cite-name" aria-hidden>
-        {l.name}
+        {l.host ? siteName(l.host) : l.name}
       </span>
       {more > 0 && (
         <span className="ai-cite-more" aria-hidden>
@@ -80,9 +80,7 @@ export const SourcesButton = forwardRef<HTMLButtonElement, { s: MsgSources; open
       >
         <span className="ai-sources-stack" aria-hidden>
           {s.items.slice(0, 3).map((it) => (
-            <span key={it.url} className="ai-cite-mono">
-              {sourceLabel(it).letter}
-            </span>
+            <SiteMark key={it.url} host={sourceLabel(it).host} letter={sourceLabel(it).letter} />
           ))}
         </span>
         <span className="ai-tool-label">Sources</span>
@@ -142,9 +140,7 @@ export function SourcesPanel({ s, id, onClose }: { s: MsgSources; id: string; on
                   <span className="ai-sources-num" aria-hidden>
                     {k + 1}
                   </span>
-                  <span className="ai-cite-mono" aria-hidden>
-                    {l.letter}
-                  </span>
+                  <SiteMark host={l.host} letter={l.letter} />
                   <span className="ai-sources-text">
                     <span className="ai-sources-name">{l.name}</span>
                     {l.pageTitle && l.pageTitle !== l.name && <span className="ai-sources-page">{l.pageTitle}</span>}

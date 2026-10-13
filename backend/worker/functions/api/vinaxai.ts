@@ -82,6 +82,7 @@ import { placeContextLines, requestPlace } from '../_lib/place';
 import { type SupabaseEnv } from '../_lib/supabase';
 import { codeBlock, maestroFetch, maestroModelFor, outputBlock } from '../_lib/maestro';
 import { isWorkersAiEndpoint, workersAiBinding, workersAiFetch } from '../_lib/workersai';
+import { countToday, isSmallTalk, makeTitle, noteToday, planResearch, signedImagePath, type ImageEnv } from '../_lib/chatExtras';
 import { buildSearchQuery, cleanForQuery, mentionsSite, serperKey, serperSearch, type SerperEnv, type SerperSearch } from '../_lib/serper';
 
 // Image understanding rides the vision lanes (the 11B default, the 90B deep
@@ -112,7 +113,8 @@ export function requestMode(raw: unknown): RequestMode {
 // (Groq); win — the big creative engine (dj lane); voice — live voice chat
 // (rides the sub-second scholar lane so spoken replies come straight back —
 // v3.4.1); expert — the Search-page music expert (Title — Artist contract).
-type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'maestro' | 'model' | 'voice' | 'expert' | 'translator';
+// 12.0 — chit: small talk ("hi", "thanks") on Auto, on the sub-second lane.
+type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'maestro' | 'model' | 'voice' | 'expert' | 'translator' | 'chit';
 // Live-voice replies are spoken back, so first-token latency is the whole game.
 // Re-laned home → scholar (v3.4.1): the 550B home engine measured ~6.7 s to
 // first token on live — every spoken turn opened with that long a silence, which
@@ -137,6 +139,7 @@ export const LANE_BY_MODE: Record<Mode, Lane> = {
   // so the translator rides the fast general engine with a strict
   // translation contract instead.
   translator: 'fast',
+  chit: 'scholar',
 };
 const EFFORT_BY_MODE: Record<Mode, 'low' | 'medium' | 'high'> = {
   muse: 'low',
@@ -149,6 +152,7 @@ const EFFORT_BY_MODE: Record<Mode, 'low' | 'medium' | 'high'> = {
   voice: 'low',
   expert: 'low',
   translator: 'low',
+  chit: 'low',
 };
 // Capability-tuned per-seat budgets: the balanced default (muse), the short
 // quick seat (swift), the deep seat's long structured answers (sage), music
@@ -164,6 +168,7 @@ const MAXTOK_BY_MODE: Record<Mode, number> = {
   voice: 700,
   expert: 900,
   translator: 2000,
+  chit: 400,
 };
 // Per-seat sampling temperature: cooler for the precision seats (quick facts,
 // deep reasoning), warmer for the big creative engine.
@@ -178,6 +183,7 @@ const TEMP_BY_MODE: Record<Mode, number> = {
   voice: 0.75,
   expert: 0.75,
   translator: 0.4,
+  chit: 0.8,
 };
 
 // 8.1.0 — the assistant prompt is as small as the app's mechanics allow. The
@@ -392,6 +398,64 @@ export function looksLikeMusicCommand(q: string): boolean {
   return /^\s*(?:play|queue|shuffle|put on|pause|resume|next|previous|skip)\b/i.test(q);
 }
 
+/** 12.0 — up to 4 pictures the search already returned (no extra search), each
+ * loaded through the Worker by a signed link; none without a signing secret. */
+export async function pictureList(env: ImageEnv, found: SerperSearch): Promise<Array<{ src: string; page: string; alt: string }>> {
+  const out: Array<{ src: string; page: string; alt: string }> = [];
+  const seen = new Set<string>();
+  const add = async (img: string | undefined, page: string, alt: string): Promise<void> => {
+    if (!img || seen.has(img) || out.length >= 4) return;
+    const src = await signedImagePath(env, img);
+    if (!src) return;
+    seen.add(img);
+    out.push({ src, page, alt: alt.slice(0, 120) });
+  };
+  if (found.hero) await add(found.hero, found.results[0]?.url ?? '', found.results[0]?.title ?? '');
+  for (const r of found.results) await add(r.image, r.url, r.title);
+  return out;
+}
+
+/** 12.0 — the result hosts, for the "searched" status (at most 8, no repeats). */
+export function hostsOf(found: SerperSearch): string[] {
+  const sites: string[] = [];
+  for (const r of found.results) {
+    try {
+      const host = new URL(r.url).hostname.replace(/^www\./, '');
+      if (!sites.includes(host)) sites.push(host);
+    } catch {
+      /* mapSerperResponse keeps only valid urls */
+    }
+    if (sites.length >= 8) break;
+  }
+  return sites;
+}
+
+/** 12.0 — deep research: several searches' results as one list (de-duplicated, round-robin, at most `max`). Pure. */
+export function mergeResults(all: SerperSearch[], max: number): SerperSearch {
+  const results: SerperSearch['results'] = [];
+  const seen = new Set<string>();
+  for (let i = 0; results.length < max && all.some((f) => f.results[i]); i++) {
+    for (const f of all) {
+      const r = f.results[i];
+      if (!r || seen.has(r.url) || results.length >= max) continue;
+      seen.add(r.url);
+      results.push(r);
+    }
+  }
+  const quick = all.map((f) => f.quick).find(Boolean);
+  const hero = all.map((f) => f.hero).find(Boolean);
+  return { results, ...(quick ? { quick } : {}), ...(hero ? { hero } : {}) };
+}
+
+/** 12.0 — how a reply is laid out (appended per request, after the owner's prompt). */
+export const FORMAT_RULE =
+  'FORMAT: Start with the direct answer in one or two sentences. Put the key names and terms in **bold**. When something has parts, steps or options, use a short bullet list. Keep paragraphs to two or three sentences. Use a heading only for long answers. End with one short line offering a natural next step when it helps.';
+/** 12.0 — small talk ("hi", "thanks"): instant and brief. */
+export const CHIT_RULE = 'This is small talk. Reply warmly in one or two short sentences, in the listener\'s language, and offer one thing you can help with. No lists, no headings.';
+/** 12.0 — deep research: a long, structured, cited report from the search results. */
+export const RESEARCH_RULE =
+  'DEEP RESEARCH: The listener asked for deep research and several web searches were run for it (see <search_results>). Write a thorough report: a one-paragraph summary first, then sections with ## headings covering background, the latest facts, numbers and comparisons (a table when it helps), different viewpoints, and what it means. Cite every factual sentence with its result number, like [3]. Only use facts the results contain; say clearly what they do not cover. Aim for 600 to 1,200 words.';
+
 /** 11.8.1 — the line right after the results. The prompt's section 5 says the
  * same, but a small model follows a rule next to the results far better than
  * one 3,000 words up (live: uncited replies with invented headlines). */
@@ -413,7 +477,10 @@ export function searchResultsBlock(found: SerperSearch): string {
   return lines.join('\n');
 }
 
-interface Env extends AiEnv, SupabaseEnv, SerperEnv {}
+interface Env extends AiEnv, SupabaseEnv, SerperEnv, ImageEnv {
+  /** 12.0 — deep-research runs allowed per UTC day (plain var, default 10). */
+  RESEARCH_DAILY_LIMIT?: string;
+}
 
 const CORS: Record<string, string> = {
   'access-control-allow-origin': '*',
@@ -424,6 +491,8 @@ const CORS: Record<string, string> = {
 /** Ceiling for one whole streamed reply. The per-attempt leash only covers time
  *  to response headers; this is what ends an upstream that stalls mid-body. */
 const STREAM_BUDGET_MS = 90_000;
+/** 12.0 — the most reasoning text passed on per reply. */
+const THINK_MAX = 20_000;
 /** A failover drain that starts late still gets at least this long. */
 const STREAM_MIN_DRAIN_MS = 15_000;
 
@@ -657,7 +726,7 @@ export const onRequestPost = async (context: {
  * status and JSON body it would otherwise have answered with — and ends.
  * Clients that do not know these frames ignore them.
  */
-function searchFirstStream(query: string, run: () => Promise<SerperSearch>, finish: () => Promise<Response>): Response {
+function searchFirstStream(run: (send: (o: unknown) => void) => Promise<void>, finish: () => Promise<Response>): Response {
   const encoder = new TextEncoder();
   let gone = false;
   let inner: ReadableStreamDefaultReader<Uint8Array> | null = null;
@@ -676,18 +745,7 @@ function searchFirstStream(query: string, run: () => Promise<SerperSearch>, fini
         }
       };
       try {
-        send({ status: { step: 'searching', query } });
-        const found = await run();
-        const sites: string[] = [];
-        for (const r of found.results) {
-          try {
-            const host = new URL(r.url).hostname.replace(/^www\./, '');
-            if (!sites.includes(host)) sites.push(host);
-          } catch {
-            /* mapSerperResponse keeps only valid urls */
-          }
-        }
-        send({ status: { step: 'searched', query, count: found.results.length, sites } });
+        await run(send);
         if (gone) return;
         const res = await finish();
         if (res.ok && res.body && (res.headers.get('content-type') ?? '').includes('text/event-stream')) {
@@ -734,7 +792,7 @@ async function handleChat(
   // long thread of pasted documents (the client sends the whole conversation).
   // 10.2 — older clients still send `web` (the retired Research toggle); it is
   // not read, so it changes nothing.
-  const read = await readJsonCapped<{ messages?: InMsg[]; mode?: unknown; provider?: unknown; model?: unknown; images?: unknown; taste?: unknown; profile?: unknown; place?: unknown; tools?: unknown; kidMode?: unknown; lang?: unknown } | null>(request, MAX_BODY_BYTES);
+  const read = await readJsonCapped<{ messages?: InMsg[]; mode?: unknown; provider?: unknown; model?: unknown; images?: unknown; taste?: unknown; profile?: unknown; place?: unknown; tools?: unknown; kidMode?: unknown; lang?: unknown; research?: unknown; title?: unknown } | null>(request, MAX_BODY_BYTES);
   if (!read.ok) return read.reason === 'too_large' ? jsonErr({ error: 'too_large' }, 413) : jsonErr({ error: 'bad_request' }, 400);
   if (!read.value || typeof read.value !== 'object') return jsonErr({ error: 'bad_request' }, 400);
   const body = read.value;
@@ -756,8 +814,24 @@ async function handleChat(
   // 10.3 — Think on Auto still sends `sage`: it keeps the deep-reasoning seat
   // instead of the flagship, as it has since 7.1.
   const thinkOnAuto = reqMode === 'auto' && typeof body.mode === 'string' && body.mode.trim().toLowerCase() === 'sage';
+  // 12.0 — small talk answers at once on the fastest lane; deep research
+  // (the + menu switch) gets the strongest seat for its long report.
+  const smallTalk = reqMode === 'auto' && !thinkOnAuto && isSmallTalk(lastUserRaw);
+  const wantResearch = (reqMode === 'auto' || reqMode === 'model') && body.research === true && !smallTalk;
   const mode: Mode =
-    reqMode === 'auto' ? (thinkOnAuto ? 'sage' : flagshipReady(env) ? 'maestro' : pickAutoMode(lastUserRaw.slice(0, 2000))) : reqMode;
+    reqMode === 'auto'
+      ? smallTalk
+        ? 'chit'
+        : wantResearch
+          ? flagshipReady(env)
+            ? 'maestro'
+            : 'sage'
+          : thinkOnAuto
+            ? 'sage'
+            : flagshipReady(env)
+              ? 'maestro'
+              : pickAutoMode(lastUserRaw.slice(0, 2000))
+      : reqMode;
   const profile =
     typeof body.profile === 'string'
       ? [...body.profile].filter((ch) => ch === '\n' || ch === '\t' || ch.charCodeAt(0) >= 32).join('').trim().slice(0, 1500)
@@ -876,7 +950,7 @@ async function handleChat(
   // the Gemini key exists and the live catalogue lists one. Code wins when both
   // are wanted (grounding and code execution are not combined). Think on Auto
   // keeps its deep seat. The rest of the ladder follows as fallback.
-  const webCue = reqMode === 'auto' && !thinkOnAuto && wantsWeb(lastUserRaw.slice(0, 2000));
+  const webCue = reqMode === 'auto' && !thinkOnAuto && !smallTalk && !wantResearch && wantsWeb(lastUserRaw.slice(0, 2000));
   let webLead: LaneAttempt | null = null;
   if (webCue && !wantCode && providerKey(env, 'gemini')) {
     const ids = (await fetchCatalog(env, 'gemini').catch(() => [] as CatalogModel[])).map((m) => m.id).filter(searchCapable);
@@ -902,7 +976,7 @@ async function handleChat(
   // asked again without it.
   const searchDropped = new Set<LaneAttempt>();
   const runsSearch = (a: LaneAttempt): boolean =>
-    (reqMode === 'model' || webCue) && !searchDropped.has(a) && !runsCode(a) && isMaestroEndpoint(a.endpoint) && searchCapable(attemptModel(a).id);
+    (reqMode === 'model' || webCue) && !wantResearch && !searchDropped.has(a) && !runsCode(a) && isMaestroEndpoint(a.endpoint) && searchCapable(attemptModel(a).id);
   if (!allAttempts.length) return jsonErr({ error: 'ai_not_configured' }, 503);
   // 8.2.0 — the same cooldown table chat() obeys: a lane+model that answered
   // 429 / model-gone / key-rejected / 5xx recently is not asked again until it
@@ -964,7 +1038,12 @@ async function handleChat(
     if (rules) sys = `${sys}\n\nHOUSE NOTES (from the VinaX team — follow when relevant):\n${rules}`;
     // v5.16.0 — follow-up chips: one trailing line the client lifts off the
     // reply. Skipped in voice mode (spoken replies must not carry it).
-    if (mode !== 'voice') sys = `${sys}\n\nFOLLOW-UPS: after a substantive answer, end with ONE final line that starts with ">>> " followed by up to three short follow-up questions the user might ask next, separated by " | " (example: ">>> Show an example | Make it shorter | Why does that happen?"). Omit the line entirely for one-line replies, greetings, refusals, pure song lists and translations.`;
+    // 12.0 — the answer's shape: the point first, key terms in bold, a short
+    // list when something has parts. Small talk stays one or two sentences.
+    if (mode === 'chit') sys = `${sys}\n\n${CHIT_RULE}`;
+    else if (mode !== 'voice') sys = `${sys}\n\n${FORMAT_RULE}`;
+    if (wantResearch) sys = `${sys}\n\n${RESEARCH_RULE}`;
+    if (mode !== 'voice' && mode !== 'chit') sys = `${sys}\n\nFOLLOW-UPS: after a substantive answer, end with ONE final line that starts with ">>> " followed by up to three short follow-up questions the user might ask next, separated by " | " (example: ">>> Show an example | Make it shorter | Why does that happen?"). Omit the line entirely for one-line replies, greetings, refusals, pure song lists and translations.`;
   }
 
   const msgs: OutMsg[] = [
@@ -1017,36 +1096,69 @@ async function handleChat(
   // found while it happens, instead of a generic wait.
   const firstUp = useVision && vision.length ? vision[0] : attempts[0];
   const groundedTurn = !!firstUp && runsSearch(firstUp);
-  let webFound: (SerperSearch & { query: string }) | null = null;
+  let webFound: (SerperSearch & { query: string; queries: string[] }) | null = null;
   let searchQuery = '';
-  if (
+  // 12.0 — deep research: the question plus 3 planned searches (4 credits),
+  // within RESEARCH_DAILY_LIMIT runs a day and the owner's deep-research switch.
+  let researching = false;
+  const searchAllowed =
+    (reqMode === 'auto' || reqMode === 'model') && !smallTalk && !wantCode && !!serperKey(env) && !looksLikeMusicCommand(lastUserRaw);
+  if (searchAllowed && wantResearch) {
+    const query = buildSearchQuery(lastUserRaw, userTurnsRaw.length > 1 ? userTurnsRaw[userTurnsRaw.length - 2] : null);
+    const cap = /^\d{1,4}$/.test((env.RESEARCH_DAILY_LIMIT ?? '').trim()) ? Number(env.RESEARCH_DAILY_LIMIT) : 10;
+    if (query && !(await aiGate(env, 'web-search')) && !(await aiGate(env, 'deep-research')) && (await countToday(env, 'deep-research', 'research')) < cap) {
+      searchQuery = query;
+      researching = true;
+    }
+  } else if (
+    searchAllowed &&
     !groundedTurn &&
-    (reqMode === 'auto' || reqMode === 'model') &&
-    !wantCode &&
-    serperKey(env) &&
     // The message itself, not the text of an attached file.
-    wantsWeb(cleanForQuery(lastUserRaw).slice(0, 2000)) &&
-    !looksLikeMusicCommand(lastUserRaw)
+    wantsWeb(cleanForQuery(lastUserRaw).slice(0, 2000))
   ) {
     const query = buildSearchQuery(lastUserRaw, userTurnsRaw.length > 1 ? userTurnsRaw[userTurnsRaw.length - 2] : null);
     if (query && !(await aiGate(env, 'web-search'))) searchQuery = query;
   }
-  const runSearch = async (): Promise<SerperSearch> => {
-    const found = await serperSearch(env, searchQuery, {
-      news: wantsNews(lastUserRaw),
-      country: place?.country ?? null,
-      lang: typeof body.lang === 'string' ? body.lang : null,
-      waitUntil,
-      cacheOrigin: new URL(request.url).origin,
-      client: isApp ? 'app' : 'web',
-    });
-    if (found.results.length) {
-      webFound = { ...found, query: searchQuery };
-      const head = msgs[0];
-      if (head?.role === 'system' && typeof head.content === 'string') head.content = `${head.content}\n\n${searchResultsBlock(found)}`;
-    }
-    return found;
+  const searchOpts = (news: boolean) => ({
+    news,
+    country: place?.country ?? null,
+    lang: typeof body.lang === 'string' ? body.lang : null,
+    waitUntil,
+    cacheOrigin: new URL(request.url).origin,
+    client: (isApp ? 'app' : 'web') as 'app' | 'web',
+  });
+  const useResults = (found: SerperSearch, queries: string[]): void => {
+    if (!found.results.length) return;
+    webFound = { ...found, query: searchQuery, queries };
+    const head = msgs[0];
+    if (head?.role === 'system' && typeof head.content === 'string') head.content = `${head.content}\n\n${searchResultsBlock(found)}`;
   };
+  const runSearch = async (send: (o: unknown) => void): Promise<void> => {
+    if (!researching) {
+      send({ status: { step: 'searching', query: searchQuery } });
+      const found = await serperSearch(env, searchQuery, searchOpts(wantsNews(lastUserRaw)));
+      useResults(found, [searchQuery]);
+      send({ status: { step: 'searched', query: searchQuery, count: found.results.length, sites: hostsOf(found) } });
+      return;
+    }
+    const t0 = Date.now();
+    send({ status: { step: 'planning', query: searchQuery, research: true } });
+    const plan = await planResearch(env, searchQuery);
+    const queries = [searchQuery, ...plan].slice(0, 4);
+    send({ status: { step: 'searching', query: searchQuery, queries, research: true } });
+    const all = await Promise.all(queries.map((q, i) => serperSearch(env, q, searchOpts(i === 0 ? wantsNews(lastUserRaw) : false))));
+    const merged = mergeResults(all, 12);
+    useResults(merged, queries);
+    send({ status: { step: 'searched', query: searchQuery, queries, count: merged.results.length, sites: hostsOf(merged), research: true } });
+    const ok = merged.results.length > 0;
+    if (ok) noteToday('deep-research', 'research');
+    const log = logAiEvent(env, { feature: 'deep-research', model: 'research', ok, status: ok ? 200 : 204, error: ok ? null : 'no_results', client: isApp ? 'app' : 'web', latency_ms: Date.now() - t0 });
+    if (waitUntil) waitUntil(log);
+  };
+  // 12.0 — a new chat gets a short title, written beside the answer (fast
+  // lane), when the app asks for one (`title: true` on the first message).
+  const titlePromise: Promise<string | null> | null =
+    body.title === true && userTurnsRaw.length === 1 && (reqMode === 'auto' || reqMode === 'model') && !smallTalk ? makeTitle(env, lastUserRaw).catch(() => null) : null;
 
   // 11.8.1 — the rest of the turn: the model ladder and the reply stream.
   const finish = async (): Promise<Response> => {
@@ -1332,6 +1444,7 @@ async function handleChat(
         };
         // 11.0 — reasoning a model never closed (see the end of drain).
         const thinkBox: { text: string } = { text: '' };
+        const thinkBudget = { left: THINK_MAX };
         // Drain an upstream SSE body, forward each content delta to the client
         // and return the full text so we can detect an empty answer (a 200 with
         // no content — some lanes intermittently return this) and fail over.
@@ -1360,6 +1473,26 @@ async function handleChat(
           // We forward ONLY delta.content; reasoning_content deltas are ignored.
           let pending = '';
           let gate: 'probe' | 'think' | 'pass' = 'probe';
+          // 12.0 — the reasoning itself is passed on, as `think` frames, so the
+          // page can show it folded away ("Thought for 12s"). It never enters
+          // the reply text, and at most THINK_MAX characters go per reply.
+          let thinkSent = 0;
+          const sendThink = (t: string): void => {
+            if (!t || thinkBudget.left <= 0) return;
+            const part = t.slice(0, thinkBudget.left);
+            thinkBudget.left -= part.length;
+            send({ think: part });
+          };
+          const flushThink = (): void => {
+            const body = pending.replace(/^\s*<think>/, '');
+            const end = body.indexOf('</think>');
+            // Hold back what could be the start of a closing tag.
+            const upto = end >= 0 ? end : Math.max(thinkSent, body.length - 8);
+            if (upto > thinkSent) {
+              sendThink(body.slice(thinkSent, upto));
+              thinkSent = upto;
+            }
+          };
           let cut = false;
           // 10.3 — Groq code interpreter reports, per tool index.
           const toolShown = new Map<number, { code: boolean; output: boolean }>();
@@ -1398,6 +1531,7 @@ async function handleChat(
               }
               gate = 'think';
             }
+            flushThink();
             const end = pending.indexOf('</think>');
             if (end >= 0) {
               gate = 'pass';
@@ -1433,6 +1567,10 @@ async function handleChat(
                     send({ sources: g });
                     sourcesSent = true;
                   }
+                  // 12.0 — reasoning some providers send in a field of its own.
+                  const rd = j.choices?.[0]?.delta as { reasoning?: unknown; reasoning_content?: unknown } | undefined;
+                  const reasoning = rd?.reasoning_content ?? rd?.reasoning;
+                  if (typeof reasoning === 'string' && reasoning) sendThink(reasoning);
                   const delta = j.choices?.[0]?.delta?.content;
                   if (typeof delta === 'string' && delta) onDelta(delta);
                   // The usage chunk (opt-in on the default base, unasked on the
@@ -1536,8 +1674,14 @@ async function handleChat(
         // 11.8 — the web search results this reply was given, as the same one
         // `sources` frame a grounded reply sends (never both).
         if (webFound && full && !sourcesSent) {
-          send({ sources: { items: webFound.results.map((r) => ({ url: r.url, title: r.title })), queries: [webFound.query], entry: null } });
+          const images = await pictureList(env, webFound);
+          send({ sources: { items: webFound.results.map((r) => ({ url: r.url, title: r.title })), queries: webFound.queries, entry: null, ...(images.length ? { images } : {}) } });
           sourcesSent = true;
+        }
+        // 12.0 — the new chat's title (written while the answer streamed).
+        if (titlePromise && full) {
+          const title = await Promise.race([titlePromise, new Promise<null>((r) => setTimeout(() => r(null), 1_500))]);
+          if (title) send({ title });
         }
         send(cutBox.truncated ? { done: true, truncated: true } : { done: true });
         if (!gone) {
@@ -1574,5 +1718,5 @@ async function handleChat(
     });
 
   };
-  return searchQuery ? searchFirstStream(searchQuery, runSearch, finish) : finish();
+  return searchQuery ? searchFirstStream(runSearch, finish) : finish();
 }

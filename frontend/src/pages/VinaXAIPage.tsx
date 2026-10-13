@@ -111,6 +111,9 @@ const nextTurnNumber = (): number => {
   return turnCount;
 };
 
+/** 12.0 — per turn: ms of reasoning before the first word (kept until the turn ends). */
+const thinkingMs = new Map<string, number>();
+
 export default function VinaXAIPage(): ReactNode {
   /* ---------- conversations ---------- */
   const [chats, setChats] = useState<Conversation[]>(loadInitialChats);
@@ -150,6 +153,8 @@ export default function VinaXAIPage(): ReactNode {
   /* ---------- composer toggles ---------- */
   // Think routes the next messages to the deep lane.
   const [think, setThink] = useState(false);
+  // 12.0 — Deep research: on for the next message only (the + menu switch).
+  const [research, setResearch] = useState(false);
   // 10.3 — Create image / Create music clip: the next messages describe what
   // to make, until the bar's × turns it off. The model for each kind is the
   // last one used while the server still lists it, else the first listed.
@@ -337,8 +342,8 @@ export default function VinaXAIPage(): ReactNode {
   );
 
   /* ---------- latest values for callbacks that outlive a render ---------- */
-  const stateRef = useRef({ choice, think, profile, replyLang, replyStyle, songCtx, autoRead });
-  stateRef.current = { choice, think, profile, replyLang, replyStyle, songCtx, autoRead };
+  const stateRef = useRef({ choice, think, research, profile, replyLang, replyStyle, songCtx, autoRead });
+  stateRef.current = { choice, think, research, profile, replyLang, replyStyle, songCtx, autoRead };
 
   /* ---------- model selection ---------- */
   const applyChoice = useCallback((c: ModelChoice): void => {
@@ -790,10 +795,16 @@ export default function VinaXAIPage(): ReactNode {
         },
         { conversation, userMsg, query: q, images: imgs, previousReply: retry?.previousReply },
       );
+      // 12.0 — deep research rides this message only, then switches itself off.
+      const researchOn = now.research && !voiceLive && !retry?.previousReply;
+      if (now.research) setResearch(false);
+      // 12.0 — how long the model reasoned before its first word.
+      let thinkFrom = 0;
+      let thoughtMs = 0;
       result = await runChatStream({
         endpoint: CHAT_ENDPOINT,
         headers: clientHeaders(),
-        body,
+        body: researchOn ? { ...body, research: true } : body,
         signal: controller.signal,
         onDelta: (delta) => {
           if (voiceTurnRef.current === turn) voiceEngineRef.current?.feed(delta);
@@ -802,16 +813,22 @@ export default function VinaXAIPage(): ReactNode {
         // searching the web can say so before its first word.
         // 11.3.2 — and who is answering, as soon as the stream says (the
         // reply's avatar shows that maker's logo while the words arrive).
-        onUpdate: (st) =>
+        onUpdate: (st) => {
+          if (st.thinking && !thinkFrom) thinkFrom = Date.now();
+          if (st.text && thinkFrom && !thoughtMs) thoughtMs = Date.now() - thinkFrom;
           patchTurn(chatId, turn, (m) => ({
             ...m,
             content: st.text,
+            thinking: st.thinking || undefined,
             tools: st.tools.length ? st.tools : undefined,
             // 11.8.1 — the live web search status, until the first word.
             activity: st.activity ?? undefined,
             ...(st.model ? { engine: st.model, engineProvider: isProviderId(st.provider) ? st.provider : undefined } : {}),
-          })),
+          }));
+        },
       });
+      if (result.state.thinking && thinkFrom && !thoughtMs) thoughtMs = Date.now() - thinkFrom;
+      if (thoughtMs) thinkingMs.set(turn, thoughtMs);
     } catch {
       result = { state: initialStreamState(), failure: 'unavailable', aborted: controller.signal.aborted };
     }
@@ -862,10 +879,19 @@ export default function VinaXAIPage(): ReactNode {
       engineProvider: engine ? engineProvider : undefined,
       tools: engine && state.tools.length ? state.tools : undefined,
       activity: undefined,
+      thinking: state.thinking || undefined,
+      thoughtMs: state.thinking ? thinkingMs.get(turn) : undefined,
       // 11.0 — the pages a web-grounded reply drew on, kept with the chat.
       sources: engine && state.sources ? state.sources : undefined,
       followups: split.followups.length ? split.followups : undefined,
     }));
+    thinkingMs.delete(turn);
+    // 12.0 — a new chat takes the short title the server wrote ("BMW meaning
+    // explained"), unless the listener has renamed it meanwhile.
+    if (state.title && !conversation.length) {
+      const auto = titleFromMessage(q || (imgs.length ? 'Image chat' : (attachments[0]?.name ?? 'New chat')));
+      setChats((prev) => prev.map((c) => (c.id === chatId && (c.title === auto || c.title === 'New chat') ? { ...c, title: state.title } : c)));
+    }
     if (voiceLive && !voiceIsOurs) return;
     if (voiceLive && voiceEngineRef.current) {
       if (split.body) voiceEngineRef.current.finish(finalText);
@@ -1323,6 +1349,8 @@ export default function VinaXAIPage(): ReactNode {
             menu={modelMenu}
             think={think}
             onThink={setThink}
+            research={research}
+            onResearch={setResearch}
             songCtx={songCtx}
             onSongCtx={setSongCtx}
             createKind={createKind}

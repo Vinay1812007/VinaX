@@ -4,6 +4,7 @@ import { ArrowUpRightIcon } from '@/components/ai/AiExtras';
 import { buildTodayBrief, type TodayBrief } from '@/features/ai/todayBrief';
 import { firstName, timeOfDay } from './storage';
 import { siteName } from './citations';
+import { SiteMark } from './SiteMark';
 import { headlinePrompt, loadHeadlines, type Headline } from './headlines';
 import { hasMakerLogo, MakerLogo } from './MakerLogo';
 import type { MakerFamily } from './chatStyle';
@@ -132,9 +133,7 @@ export function TrendingNow({ onSend }: { onSend: (text: string) => void }): Rea
               <span className="ai-trending-topic">{h.topic}</span>
               <span className="ai-trending-title">{h.title}</span>
               <span className="ai-trending-site">
-                <span className="ai-cite-mono" aria-hidden>
-                  {name.charAt(0).toUpperCase()}
-                </span>
+                <SiteMark host={h.site} letter={name.charAt(0).toUpperCase()} />
                 {name}
               </span>
             </button>

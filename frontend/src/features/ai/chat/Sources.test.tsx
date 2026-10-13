@@ -140,7 +140,8 @@ describe('a web-grounded reply', () => {
     const found = screen.getByRole('status', { name: 'Reading 5 web results' });
     expect(found.textContent).toContain('Sportsmart');
     expect(found.textContent).toContain('Example');
-    expect(found.querySelector('img')).toBeNull();
+    // 12.0 — site logos, loaded through the Worker only.
+    expect([...found.querySelectorAll('img')].map((i) => i.getAttribute('src'))).toEqual(['/api/favicon?host=sportsmart.com', '/api/favicon?host=news.example.co.in']);
     cleanup();
     reply({ role: 'assistant', content: '', activity: { step: 'searched', query: 'zzqx', count: 0, sites: [] } }, true);
     expect(screen.getByRole('status', { name: 'No web results — answering without them' })).toBeTruthy();
@@ -180,11 +181,12 @@ describe('a web-grounded reply', () => {
     const { container } = reply(m);
     const chips = container.querySelectorAll<HTMLAnchorElement>('a.ai-cite');
     expect(chips).toHaveLength(2);
-    expect(chips[0].textContent).toBe('CCitytoday');
+    expect(chips[0].textContent).toBe('Citytoday');
+    expect(chips[0].querySelector('img')?.getAttribute('src')).toBe('/api/favicon?host=citytoday.example');
     expect(chips[0].getAttribute('aria-label')).toBe('Source: Citytoday');
     expect(chips[0].getAttribute('href')).toBe(ITEMS[0].url);
     expect(chips[0].getAttribute('title')).toBe('citytoday.example');
-    expect(chips[1].textContent).toBe('DDailyherald+1');
+    expect(chips[1].textContent).toBe('Dailyherald+1');
     expect(chips[1].getAttribute('aria-label')).toBe('Source: Dailyherald and 1 more');
     for (const a of chips) {
       expect(a.getAttribute('target')).toBe('_blank');
@@ -193,7 +195,8 @@ describe('a web-grounded reply', () => {
     // The chip sits inside the sentence's paragraph, and no mark leaks as text.
     expect(chips[0].closest('p')?.textContent).toContain('It will rain today.');
     expect(marks(container.textContent ?? '')).toBe(0);
-    expect(document.querySelector('img')).toBeNull();
+    // 12.0 — logos load only through the Worker, never from the cited site.
+    for (const img of document.querySelectorAll('img')) expect(img.getAttribute('src')).toMatch(/^\/api\/favicon\?host=[a-z0-9.-]+$/);
     // The suggestion snippet stays on show, sealed.
     const frame = screen.getByTitle('Search suggestions') as HTMLIFrameElement;
     expect(frame.getAttribute('sandbox')).toBe('');
@@ -210,7 +213,7 @@ describe('a web-grounded reply', () => {
     expect(btn.getAttribute('aria-controls')).toBe(panel.id);
     expect(document.activeElement).toBe(panel);
     const rows = within(panel).getAllByRole('link');
-    expect(rows.map((r) => r.textContent)).toEqual(['1CCitytodaycitytoday.example', '2DDailyheralddailyherald.co.in', '3RRain expected all weeknews.example.net']);
+    expect(rows.map((r) => r.textContent)).toEqual(['1Citytodaycitytoday.example', '2Dailyheralddailyherald.co.in', '3Rain expected all weeknews.example.net']);
     expect(within(panel).getByText(/Searched for: “rain forecast this week”/)).toBeTruthy();
     fireEvent.keyDown(panel, { key: 'Escape' });
     expect(screen.queryByRole('region', { name: 'Sources' })).toBeNull();

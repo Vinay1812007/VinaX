@@ -188,7 +188,7 @@ describe('pinned seats reach the flagship lane late', () => {
 // Streaming route
 // ---------------------------------------------------------------------------
 let ip = 0;
-function chatRequest(mode: string, content = 'hello there', extra: Record<string, unknown> = {}): Request {
+function chatRequest(mode: string, content = 'tell me about Carnatic ragas', extra: Record<string, unknown> = {}): Request {
   ip += 1;
   return new Request('https://example.test/api/vinaxai', {
     method: 'POST',
@@ -246,7 +246,7 @@ describe('/api/vinaxai — Auto and the flagship', () => {
   it('Auto leads with the flagship while it is healthy', async () => {
     expect(flagshipReady(env)).toBe(true);
     install(() => sse('flagship answer'));
-    const { text, frames } = await drive(env, chatRequest('auto', 'hi'));
+    const { text, frames } = await drive(env, chatRequest('auto', 'tell me about Carnatic ragas'));
     expect(text).toBe('flagship answer');
     expect(llm()[0].url).toContain('generativelanguage');
     expect(frames.find((f) => f.meta)?.meta).toEqual({ model: 'Gemini 3.8 Flash', modelId: 'gemini-3.8-flash', provider: 'gemini', mode: 'auto' });
@@ -254,10 +254,10 @@ describe('/api/vinaxai — Auto and the flagship', () => {
 
   it('a resting flagship: Auto picks the next seat at once, no round trip to it', async () => {
     install((url) => (url.includes('generativelanguage') ? new Response('{"error":{"message":"You exceeded your current quota, please check your plan and billing details."}}', { status: 429 }) : sse('rescued')));
-    await drive(env, chatRequest('auto', 'hi'));
+    await drive(env, chatRequest('auto', 'tell me about Carnatic ragas'));
     expect(flagshipReady(env)).toBe(false);
     install((url) => (url.includes('generativelanguage') ? new Response('nope', { status: 500 }) : sse('next seat')));
-    const { text, frames } = await drive(env, chatRequest('auto', 'hi'));
+    const { text, frames } = await drive(env, chatRequest('auto', 'tell me about Carnatic ragas'));
     expect(text).toBe('next seat');
     expect(llm().some((c) => c.url.includes('generativelanguage'))).toBe(false);
     // Short question → the quick seat, named in meta by its real model.

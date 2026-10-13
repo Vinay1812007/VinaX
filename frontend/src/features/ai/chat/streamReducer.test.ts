@@ -84,7 +84,7 @@ describe('10.3 — tools in meta', () => {
 
 describe('11.0 — the sources event', () => {
   const run = (frames: unknown[]): StreamState => frames.reduce<StreamState>((s, f) => reduceFrame(s, f), initialStreamState());
-  it('keeps validated sources (http(s) only, de-duplicated, at most 8, titles clipped) and the snippet', () => {
+  it('keeps validated sources (http(s) only, de-duplicated, at most 12, titles clipped) and the snippet', () => {
     const items = [
       { url: 'https://a.example/x', title: 'A' },
       { url: 'https://a.example/x', title: 'dup' },
@@ -94,7 +94,7 @@ describe('11.0 — the sources event', () => {
     ];
     const s = run([{ meta: { model: 'Gemini 2.5 Flash', modelId: 'gemini-2.5-flash', provider: 'gemini', tools: ['web_search'] } }, { delta: 'x' }, { sources: { items, queries: ['q1'], entry: '<div>s</div>' } }, { done: true }]);
     expect(s.tools).toEqual(['web_search']);
-    expect(s.sources?.items).toHaveLength(8);
+    expect(s.sources?.items).toHaveLength(12);
     expect(s.sources?.items[0]).toEqual({ url: 'https://a.example/x', title: 'A' });
     expect(s.sources?.items[1].title).toHaveLength(120);
     expect(s.sources?.items.some((i) => i.url.startsWith('javascript:'))).toBe(false);

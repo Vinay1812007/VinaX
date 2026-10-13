@@ -12,6 +12,17 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '12.0.0': {
+    title: 'VinaX AI 12: research, reasoning and faster hellos',
+    changes: [
+      { type: 'new', text: 'Deep research: switch it on in the + menu and VinaX AI plans the research, runs several web searches and writes a longer report with every fact linked to its source.' },
+      { type: 'new', text: 'See how VinaX AI reasons: when a model thinks before answering, its reasoning shows while it works, then folds away as “Thought for 12s” — tap to read it again.' },
+      { type: 'new', text: 'Answers that use the web can show pictures from the search, and every source now shows its site’s logo.' },
+      { type: 'improved', text: 'Answers are easier to scan: the point first, key terms in bold, and short lists when something has parts.' },
+      { type: 'improved', text: 'New chats get a short, clear title, like “BMW meaning explained”.' },
+      { type: 'improved', text: 'Saying hi, thanks or bye gets a reply straight away.' },
+    ],
+  },
   '11.9.0': {
     title: 'Trending now in VinaX AI',
     changes: [

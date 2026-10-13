@@ -61,7 +61,7 @@ describe('TrendingNow', () => {
     expect(screen.getByRole('region', { name: 'Trending now' })).toBeTruthy();
     expect(container.querySelectorAll('.ai-trending-card')).toHaveLength(3);
     expect(container.textContent).toContain('Tech');
-    expect(container.querySelector('img')).toBeNull();
+    expect([...container.querySelectorAll('img')].every((i) => i.getAttribute('src')?.startsWith('/api/favicon?host='))).toBe(true);
     fireEvent.click(card);
     expect(onSend).toHaveBeenCalledWith('What\'s the latest news on this: "India story one"?');
   });

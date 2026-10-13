@@ -133,6 +133,16 @@ The first web tool is the Gemini provider's search grounding, and only on models
 - **What comes back:** the transport reads `candidates[0].groundingMetadata` and `groundingSources()` reduces it to at most 8 pages (http(s) only, de-duplicated, titles clipped), the queries the model ran, and the provider's search-suggestion snippet (`searchEntryPoint.renderedContent`). The chat route forwards it as one `{ sources }` frame (below) and adds `web_search` to `meta.tools`. Showing the snippet is a condition of the free grounding service; the client renders it in a sandboxed frame.
 - `GET /api/aimodels` lists `{ id: 'web_search', name: 'Web search', models: [...] }` under the gemini provider's `tools`, and `features.web` is true when any model has it. The model menu shows those models with a "Searches the web" tag.
 
+#### 12.0 — deep research, reasoning, pictures, titles, small talk
+
+- **Deep research** (`research: true` in the request; the + menu's **Deep research** switch, one message at a time). `planResearch` (`_lib/chatExtras.ts`) asks the fast lane for 3 more searches (a fixed fallback when it can't), the question and those 3 run in parallel (4 credits), `mergeResults` keeps 12 de-duplicated results, and `RESEARCH_RULE` asks for a structured, cited report of 600–1,200 words. Auto answers it on the flagship seat (else the deep seat); grounding is off for it. Runs are capped by `RESEARCH_DAILY_LIMIT` (plain var, default 10) counted from `vinax_ai_events` rows (feature `deep-research`, model `research`, ok), behind the owner switches `web-search` and `deep-research`. Over the cap the turn answers as a normal chat. Status frames: `planning`, `searching` (with `queries`), `searched` (with `count`, `sites`), all with `research: true`.
+- **Reasoning** is no longer thrown away: a `<think>` block and the `reasoning` / `reasoning_content` delta fields are sent as `{ think: "…" }` frames (at most 20,000 characters a reply), never as reply text. The page shows it live, then folded as "Thought for Ns" (`Thoughts` in `Message.tsx`); it is kept with the chat.
+- **Pictures**: the search's own images (a result's `imageUrl`, the knowledge panel's image) — no extra search — ride the `sources` frame as `images: [{ src, page, alt }]`, at most 4. `src` is a signed Worker path (`/api/webimg?u=…&s=…`, HMAC with `TELEMETRY_PEPPER`, else `DEVICE_ID_SECRET`), so the browser never contacts the picture's site and the route is not an open proxy; raster images only, ≤ 3 MB, cached a day.
+- **Site logos**: `GET /api/favicon?host=…` (public host names only) fetches a 64-px logo once and caches it for a week; the page falls back to the letter monogram (`SiteMark`).
+- **Titles**: on a chat's first message (Auto or a pick, not small talk) `makeTitle` asks the fast lane for a 2–5 word title beside the answer and sends `{ title }` before `done`; the page uses it unless the listener renamed the chat.
+- **Small talk** ("hi", "thanks", "bye" — `isSmallTalk`) on Auto takes the `chit` seat: the scholar lane (sub-second first token), 400 tokens, `CHIT_RULE`, no search, no title.
+- **Format**: every other reply gets `FORMAT_RULE` (answer first, key terms in bold, short lists, short paragraphs).
+
 #### Serper results (11.8)
 
 `_lib/serper.ts` searches Google through Serper (`POST https://google.serper.dev/search`, or `/news` for a message with a news cue) and returns at most 5 results (http(s) only, titles ≤ 160 characters, snippets ≤ 400, markup stripped) plus an optional quick answer (the answer box, else the knowledge-graph description). It asks for at most 10 results, because a larger page costs 2 credits.
@@ -174,6 +184,8 @@ A success is a server-sent event stream, one JSON object per `data:` frame.
 | `{ delta: "text" }` | The next piece of the reply |
 | `{ sources: { items: [{ url, title }], queries: [...], entry: html \| null } }` | 11.0 — what a grounded reply drew on (see [Web search](#web-search)); sent once, before `done`, only for an attempt that asked for grounding. 11.8 — or the Serper results the reply was given (`entry` null); never both. Older clients ignore it. |
 | `{ status: { step, query, count?, sites? } }` | 11.8.1 — a web search before the reply: `searching`, then `searched` with the result count and host names. Only on a turn that searches. |
+| `{ think: "text" }` | 12.0 — the model's reasoning, never part of the reply text. |
+| `{ title: "…" }` | 12.0 — a short title for a new chat, before `done`. |
 | `{ failed: { status, body } }` | 11.8.1 — a searching turn that could not answer after its stream began: the HTTP status and JSON error body it would otherwise have sent. |
 | `{ done: true }` | The end |
 | `{ done: true, truncated: true }` | The reply was cut short |

@@ -47,6 +47,9 @@ export interface ComposerProps {
   menu: ReactNode;
   think: boolean;
   onThink: (on: boolean) => void;
+  /** 12.0 — Deep research for the next message. */
+  research?: boolean;
+  onResearch?: (on: boolean) => void;
   /** 10.0 — the song playing now rides with the message (the Now playing connector). */
   songCtx: boolean;
   onSongCtx: (on: boolean) => void;
@@ -97,6 +100,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     menu,
     think,
     onThink,
+    research,
+    onResearch,
     songCtx,
     onSongCtx,
     createKind,
@@ -219,6 +224,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   };
   const connectors = useConnectors({
     think,
+    research,
+    onResearch,
     nowPlaying: songCtx,
     onThink,
     onNowPlaying: onSongCtx,
@@ -643,6 +650,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         <p className="ai-composer-status" role={serverNote || dictation.note ? 'status' : undefined}>
           {serverNote || dictation.note ? (
             <span className="is-note">{serverNote || dictation.note}</span>
+          ) : research ? (
+            <span className="is-on">Deep research on — 4 web searches, a longer cited report</span>
           ) : busy && think ? (
             <span className="is-thinking ai-shimmer">Thinking it through…</span>
           ) : think ? (
