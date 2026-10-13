@@ -82,6 +82,7 @@ import * as m_api_cron_ai_daily_push from './functions/api/cron/ai-daily-push';
 import * as m_api_cron_seo_crawl from './functions/api/cron/seo-crawl';
 import * as m_api_cron_song_push from './functions/api/cron/song-push';
 import * as m_api_cron_trends_ingest from './functions/api/cron/trends-ingest';
+import * as m_api_cron_headlines from './functions/api/cron/headlines';
 import * as m_api_cron_weekly_digest from './functions/api/cron/weekly-digest';
 import * as m_api_events from './functions/api/events';
 import * as m_api_experiments from './functions/api/experiments';
@@ -95,6 +96,7 @@ import * as m_api_recommendations from './functions/api/recommendations';
 import * as m_api_ai_search from './functions/api/ai/search';
 import * as m_api_ai_playlist from './functions/api/ai/playlist';
 import * as m_api_ai_dj from './functions/api/ai/dj';
+import * as m_api_ai_headlines from './functions/api/ai/headlines';
 import * as m_api_preview from './functions/api/preview';
 import * as m_api_push_fcm_register from './functions/api/push/fcm-register';
 import * as m_api_push_subscribe from './functions/api/push/subscribe';
@@ -218,6 +220,7 @@ const EXACT: Record<string, Mod> = {
   '/api/cron/seo-crawl': m_api_cron_seo_crawl,
   '/api/cron/song-push': m_api_cron_song_push,
   '/api/cron/trends-ingest': m_api_cron_trends_ingest,
+  '/api/cron/headlines': m_api_cron_headlines,
   '/api/cron/weekly-digest': m_api_cron_weekly_digest,
   '/api/events': m_api_events,
   '/api/experiments': m_api_experiments,
@@ -231,6 +234,7 @@ const EXACT: Record<string, Mod> = {
   '/api/ai/search': m_api_ai_search,
   '/api/ai/playlist': m_api_ai_playlist,
   '/api/ai/dj': m_api_ai_dj,
+  '/api/ai/headlines': m_api_ai_headlines,
   '/api/preview': m_api_preview,
   '/api/push/fcm-register': m_api_push_fcm_register,
   '/api/push/subscribe': m_api_push_subscribe,

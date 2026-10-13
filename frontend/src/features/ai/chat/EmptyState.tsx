@@ -3,6 +3,8 @@ import { SparkleIcon } from '@/components/Icons';
 import { ArrowUpRightIcon } from '@/components/ai/AiExtras';
 import { buildTodayBrief, type TodayBrief } from '@/features/ai/todayBrief';
 import { firstName, timeOfDay } from './storage';
+import { siteName } from './citations';
+import { headlinePrompt, loadHeadlines, type Headline } from './headlines';
 import { hasMakerLogo, MakerLogo } from './MakerLogo';
 import type { MakerFamily } from './chatStyle';
 
@@ -79,6 +81,7 @@ export const Suggestions = memo(function Suggestions({
           </button>
         ))}
       </div>
+      <TrendingNow onSend={onSend} />
       {brief && (
         <p className="ai-brief">
           <span className="ai-brief-label">Today for you · {brief.date}</span>
@@ -98,3 +101,46 @@ export const Suggestions = memo(function Suggestions({
     </div>
   );
 });
+
+/**
+ * 11.9 — "Trending now": a few current headlines (India news and tech), the
+ * same for everyone, refreshed by the server every few hours. Tapping one asks
+ * VinaX AI about it, which searches the web for the latest. Hidden when there
+ * are none (switched off, not set up, or the request failed). Letter
+ * monograms only — no remote images.
+ */
+export function TrendingNow({ onSend }: { onSend: (text: string) => void }): ReactNode {
+  const [items, setItems] = useState<Headline[]>([]);
+  useEffect(() => {
+    let live = true;
+    void loadHeadlines().then((h) => {
+      if (live) setItems(h);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (!items.length) return null;
+  return (
+    <section className="ai-trending" aria-label="Trending now">
+      <h2 className="ai-trending-label">Trending now</h2>
+      <div className="ai-scroll-x ai-trending-row" role="group" aria-label="Trending headlines">
+        {items.map((h) => {
+          const name = siteName(h.site);
+          return (
+            <button key={h.url} type="button" className="ai-trending-card" onClick={() => onSend(headlinePrompt(h))} title={`Ask VinaX AI about this — ${h.site}`}>
+              <span className="ai-trending-topic">{h.topic}</span>
+              <span className="ai-trending-title">{h.title}</span>
+              <span className="ai-trending-site">
+                <span className="ai-cite-mono" aria-hidden>
+                  {name.charAt(0).toUpperCase()}
+                </span>
+                {name}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}

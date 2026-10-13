@@ -487,6 +487,69 @@ html.amoled .ai-main { background: #000; }
   font-weight: 700;
   color: rgb(var(--ink-200));
 }
+/* 11.9 — "Trending now": current headlines under the suggestions, one
+   scrolling row of cards (tokens only, so every chat style and both themes
+   keep it readable; the row scrolls instead of widening the column). */
+.ai-trending { margin-top: 1.25rem; }
+.ai-trending-label {
+  margin: 0 0 0.5rem;
+  color: var(--ai-text-3);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.ai-trending-row { display: flex; gap: 0.625rem; padding-bottom: 0.25rem; scroll-snap-type: x proximity; }
+.ai-trending-card {
+  display: flex;
+  flex: 0 0 15.5rem;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-height: 7rem;
+  padding: 0.75rem 0.875rem;
+  border: 0;
+  border-radius: var(--vx-radius-card);
+  background: var(--ai-raised);
+  color: var(--ai-text);
+  text-align: left;
+  scroll-snap-align: start;
+  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+}
+.ai-trending-card:active { transform: scale(0.98); }
+@media (hover: hover) {
+  .ai-trending-card:hover { background: var(--ai-raised-hover); }
+}
+.ai-trending-topic {
+  align-self: flex-start;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  background: rgb(var(--tide-500) / 0.12);
+  color: rgb(var(--tide-400));
+  font-size: 11px;
+  font-weight: 700;
+}
+html.light .ai-trending-topic { color: rgb(var(--tide-500)); }
+.ai-trending-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.ai-trending-site {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  color: var(--ai-text-3);
+  font-size: 12px;
+  font-weight: 550;
+}
+@media (max-width: 479px) {
+  .ai-trending-card { flex-basis: 13.5rem; }
+}
 .ai-quick-row {
   display: flex;
   align-items: center;

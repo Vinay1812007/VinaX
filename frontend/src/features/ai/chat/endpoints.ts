@@ -16,6 +16,8 @@ export const MUSIC_ENDPOINT = `${ORIGIN}/api/music`;
 /** 10.3 — recorded speech to text, for the composer's mic when a server
  *  dictation model is chosen. */
 export const TRANSCRIBE_ENDPOINT = `${ORIGIN}/api/transcribe`;
+/** 11.9 — the "Trending now" headlines on the empty chat (read only; the server refreshes them). */
+export const HEADLINES_ENDPOINT = `${ORIGIN}/api/ai/headlines`;
 
 // 10.3 — `IMAGES_ENABLED` is gone: Create image (and Create music clip) show
 // when GET /api/aimodels says the feature exists (`features.image`, `.music`).
