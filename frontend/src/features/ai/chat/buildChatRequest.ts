@@ -9,6 +9,7 @@ import { assistantPlaceRequest } from '@/services/location/assistantPlace';
 import { trimThread } from './longThread';
 import { memoryBlock } from '../memory';
 import { projectBlock, projectById } from '../projects';
+import { kidModeOn } from '@/services/kidMode';
 
 const VOICE_RULE =
   'SYSTEM RULE for this voice conversation: every reply is spoken aloud — 1-3 short conversational sentences of plain text, no markdown, no lists, no emojis.';
@@ -119,6 +120,8 @@ export async function buildChatRequest(s: TurnSettings, t: TurnInput): Promise<R
       };
     })(),
     profile: s.profile || undefined,
+    // 11.7.4 — the prompt keeps replies age-appropriate when Kid mode is on.
+    ...(kidModeOn() ? { kidMode: true } : {}),
     // 9.1.0 — coarse place, so date/time answers suit the
     // listener instead of always assuming IST. `assistantPlace()` returns
     // undefined whenever "Allow region inference" is off AND no manual override

@@ -199,7 +199,9 @@ describe('Workers AI — VinaX AI chat', () => {
     expect(ai.run.mock.calls[0][0]).toBe('@cf/meta/llama-3.3-70b-instruct-fp8-fast');
     const inputs = ai.run.mock.calls[0][1] as { messages: Array<{ role: string; content: string }>; stream: boolean };
     expect(inputs.stream).toBe(true);
-    expect(inputs.messages[0].content).toContain('Llama 3.3 70B Instruct (fp8, fast) by Meta, served through Cloudflare');
+    // 11.7.4 — the owner's prompt: never claim a specific model (the app shows it on each reply).
+    expect(inputs.messages[0].content).toContain('the app shows it on each reply');
+    expect(inputs.messages[0].content).not.toContain('Llama 3.3 70B Instruct (fp8, fast) by Meta');
     expect((fetchSpy.mock.calls as unknown[][]).some((c) => String(c[0]).startsWith('workers-ai:'))).toBe(false);
   });
 
