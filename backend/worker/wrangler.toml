@@ -130,6 +130,10 @@ routes = [
 # Host of the Pages deployment serving the static frontend.
 ASSETS_HOST = "vinax.pages.dev"
 GITHUB_REPO = "Vinay1812007/VinaX"
+# 11.8 — web searches VinaX AI may make per UTC day through Serper (the
+# secret SERPER_API_KEY; unset = no web search). The free allowance is a
+# one-time 2,500 queries, so 80 a day lasts about a month. 0 = none.
+SERPER_DAILY_LIMIT = "80"
 
 # Secrets (set with `npx wrangler secret put <NAME> --config worker/wrangler.toml`
 # or the Workers dashboard, never in this file) — every name documented in

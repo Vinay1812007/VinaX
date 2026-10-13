@@ -290,7 +290,8 @@ describe('AI Operations', () => {
     expect(body.key).toBe('ai-controls');
     expect(body.value.emergencyOff).toBe(true);
     expect(body.value.features.tts).toBe(false);
-    expect(Object.keys(body.value.features)).toHaveLength(15); // 8.5.0 adds "search", 10.3 "transcribe" and "music"
+    expect(Object.keys(body.value.features)).toHaveLength(16); // 8.5.0 adds "search", 10.3 "transcribe" and "music", 11.8 "web-search"
+    expect(body.value.features['web-search']).toBe(true);
     expect(body.value.dailyTokenCap).toBe(100000);
   });
 

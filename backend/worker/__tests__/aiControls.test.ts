@@ -5,7 +5,7 @@
  * database REST surface and the model provider).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { aiControlsStatus, chat, gather, resetAiControlsCache, validateAiControls } from '../functions/_lib/ai';
+import { aiControlsStatus, aiGate, chat, gather, resetAiControlsCache, validateAiControls } from '../functions/_lib/ai';
 import { onRequestPost as djPost } from '../functions/api/dj';
 import { onRequestPost as playlistPost } from '../functions/api/playlist';
 import { onRequestPost as curatePost } from '../functions/api/curate';
@@ -299,6 +299,29 @@ describe('daily spend caps', () => {
     const status = await aiControlsStatus(ENV);
     expect(status.usage).toMatchObject({ costUsd: 0.1, costKnown: false, unpricedModels: ['mystery'], source: 'exact' });
     expect(status.caps.costUsd).toMatchObject({ cap: 0.5, used: 0.1, known: false, reached: false });
+  });
+
+  it('11.8 — web search rows (model serper) spend no tokens: they never make the cost unknown', async () => {
+    install({
+      controls: { emergencyOff: false, dailyCostCapUsd: 0.5 },
+      prices: { m1: { in: 100, out: 100 } },
+      usage: [
+        { model: 'm1 @dj', calls: 1, prompt_tokens: 1000, completion_tokens: 0, calls_without_usage: 0 },
+        { model: 'serper', calls: 40, prompt_tokens: 0, completion_tokens: 0, calls_without_usage: 40 },
+      ],
+    });
+    const status = await aiControlsStatus(ENV);
+    expect(status.usage).toMatchObject({ costUsd: 0.1, costKnown: true, tokensComplete: true, unpricedModels: [] });
+  });
+
+  it('11.8 — the web-search switch and the emergency stop both refuse web search', async () => {
+    install({ controls: { emergencyOff: false, features: { 'web-search': false } } });
+    expect(await aiGate(ENV, 'web-search')).toBe('disabled');
+    expect(await aiGate(ENV, 'vinaxai')).toBeNull();
+    expect(validateAiControls({ emergencyOff: false, features: { 'web-search': false } }).ok).toBe(true);
+    resetAiControlsCache();
+    install({ controls: { emergencyOff: true } });
+    expect(await aiGate(ENV, 'web-search')).toBe('disabled');
   });
 
   it('falls back to a bounded sample until the usage function is migrated', async () => {

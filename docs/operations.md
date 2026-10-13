@@ -149,6 +149,21 @@ Four keys, one per provider; every free model and tool that provider offers runs
 The fifth provider needs no key and no secret: it runs on the Worker's AI binding, `[ai] binding = "AI"` in `backend/worker/wrangler.toml`, and is configured whenever that binding is deployed. The free allowance is 10,000 neurons a day for the whole account, reset at 00:00 UTC; every Workers AI model draws on the same pool. Its models appear only as explicit picks in the model menu (never Auto, never a fallback). When the pool is spent the provider answers 429 until the reset and the picked model says so; nothing else is affected. To take it out of the menu, remove the `[ai]` table and deploy. Usage is visible in the Cloudflare dashboard under Workers AI. The console's env checklist shows which name each provider is using.
 - Once a provider is on its current name, its older name can be deleted with `npx wrangler secret delete <NAME> --config worker/wrangler.toml`. Nothing reads any other secret beginning `VINAX_` except `VINAX_MAESTRO_MODEL`; per-model keys left from before 10.3 can be deleted the same way.
 
+### Web search in VinaX AI (11.8)
+
+On a chat turn where Gemini's free grounding does not run, the Worker may make one call to Serper for Google results ([ai.md](ai.md#web-search)). Serper's free allowance is a one-time 2,500 queries, not a monthly one, so every call is capped and cached.
+
+| Setting | Where | Default |
+| --- | --- | --- |
+| `SERPER_API_KEY` | Worker secret (serper.dev → API key). Not an AI key: it is not in `PROVIDER_ENV` | unset = no web search through Serper |
+| `SERPER_DAILY_LIMIT` | Plain var in `backend/worker/wrangler.toml` `[vars]` | `80` successful, non-cached calls per UTC day (about a month of the free allowance); `0` = none |
+
+- **Set the key:** `cd backend && npx wrangler secret put SERPER_API_KEY --config worker/wrangler.toml`, then paste the key at the prompt. It takes effect at once, with no deploy. For `npm run dev`, put `SERPER_API_KEY=...` in `backend/worker/.dev.vars`, which is gitignored. Never put it in `wrangler.toml`, a `VITE_*` variable or a ticket.
+- **Change the cap:** edit `SERPER_DAILY_LIMIT` in `worker/wrangler.toml` and deploy (merge to `main`, or `npm run deploy`). A value set in the dashboard is overwritten by the next deploy.
+- **Read usage:** console → AI Operations, feature `web-search`. Calls today are the searches that spent a credit, because cache hits are not logged. The same rows are what the daily cap counts. Serper's own dashboard shows the credits left.
+- **Switch it off:** console → AI Operations → the `web-search` switch (or the emergency stop, which stops it too), then publish. To take it out completely, run `npx wrangler secret delete SERPER_API_KEY --config worker/wrangler.toml`.
+- **When credits run out:** Serper answers 401/402/403/429 (or a 400 naming credits). Each isolate stops calling for 24 hours and logs `[serper] answered … out of credits` once, and the rows show `error: credits_exhausted`. The chat keeps answering without results.
+
 ### Human check on usernames
 
 Since 11.1.0 the onboarding username claim (`POST /api/username`) carries a Turnstile token. Since 11.1.1 the widget is always on screen under the username field (`appearance: always`): it ticks itself for most listeners and asks for a tap only when the check needs one. A parked claim retried later, with no form on screen, gets a temporary floating box that shows only if a tap is needed (`interaction-only`).
@@ -232,7 +247,7 @@ The owner publishes one record, `vinax_config` key `ai-controls`, from the conso
 | Control | Effect |
 | --- | --- |
 | `emergencyOff: true` | Every AI route answers `503 { "error": "ai_disabled" }` before any provider call |
-| `features.<name>: false` | That feature answers `503 ai_disabled`. A feature is on unless its value is exactly `false` |
+| `features.<name>: false` | That feature answers `503 ai_disabled`. A feature is on unless its value is exactly `false`. `web-search` is the exception: switched off, the chat still answers, just without Serper results |
 | `dailyTokenCap`, `dailyCostCapUsd` | Once today's (UTC) known use reaches the cap, AI routes answer `503 { "error": "ai_over_budget" }` |
 
 - The app treats these exactly as it treats a provider outage and falls back to its on-device paths. Each refusal is logged to `vinax_ai_events` and is excluded from spend, the objectives and lane health.

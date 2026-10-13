@@ -394,6 +394,8 @@ Cost = { usd, pricedCalls, unpricedCalls, unreportedCalls, complete }
 
 The controls editor publishes the `ai-controls` key through `POST /api/admin/appconfig`: `{ emergencyOff, features, dailyTokenCap, dailyCostCapUsd, updatedAt, updatedBy? }`, where `features` holds one boolean per name in `AI_FEATURES` (`_lib/ai.ts`), which the route returns as `controlFeatures`.
 
+**Web search (11.8).** The chat's web search through the search service is the `web-search` feature. Its switch is in the controls editor, and the emergency stop stops it too. Switched off, the chat still answers, without search results. Each search that spent a credit is one `byFeature` row under `web-search` (model `serper`, which lands in `byLane` as `(none)` because it has no `@lane`). Cache hits are not logged, so today's `web-search` calls are the credits spent today, and the same rows feed the daily cap (`SERPER_DAILY_LIMIT`, default 80). Those rows add calls but never tokens or unknown cost. The Environment Checklist shows `SERPER_API_KEY` and `SERPER_DAILY_LIMIT` under **Web search**. Setting the key and the cap: [operations.md](operations.md#web-search-in-vinax-ai-118).
+
 - A feature is on unless it is exactly `false`. Empty cap fields mean no cap.
 - Switching all AI off asks for confirmation before anything is sent.
 - Before publishing, the panel re-reads the stored value. If someone published after the panel loaded (a different `updatedAt`), it refuses and asks the operator to look first.
