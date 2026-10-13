@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.7.4': {
+    title: 'VinaX AI, written for listeners',
+    changes: [
+      { type: 'improved', text: 'VinaX AI talks like a knowledgeable friend: plain, natural replies by default, lists and tables only when they really help, and code always in proper code blocks. It answers first and asks at most one question.' },
+      { type: 'improved', text: 'It is more careful with facts — it would rather say "I’m not sure" than guess a song, an artist, a lyric or a release year, and it won’t reproduce copyrighted lyrics.' },
+      { type: 'improved', text: 'With Kid mode on, VinaX AI keeps every answer friendly and age-appropriate.' },
+      { type: 'improved', text: 'The model answering each reply is shown on the reply itself; VinaX AI no longer claims to be one particular model.' },
+    ],
+  },
   '11.7.3': {
     title: 'VinaX AI, with a clearer character',
     changes: [

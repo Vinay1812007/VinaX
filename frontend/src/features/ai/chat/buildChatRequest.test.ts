@@ -9,6 +9,7 @@ vi.mock('@/services/ai/threadMemory', () => ({ extractRecommendedFromThread: () 
 vi.mock('@/services/api', () => ({ getSong: () => Promise.resolve(null) }));
 
 import { buildChatRequest, type TurnSettings } from './buildChatRequest';
+import { useSettingsStore } from '@/store/settingsStore';
 
 const SETTINGS: TurnSettings = {
   voiceLive: false,
@@ -24,6 +25,15 @@ const turn = { conversation: [], userMsg: { role: 'user' as const, content: 'wha
 beforeEach(() => {
   localStorage.clear();
   placeRequest = PLACE;
+});
+
+describe('buildChatRequest — Kid mode (11.7.4)', () => {
+  it('tells the server when Kid mode is on, and says nothing when it is off', async () => {
+    useSettingsStore.setState({ kidMode: true });
+    expect((await buildChatRequest(SETTINGS, turn)).kidMode).toBe(true);
+    useSettingsStore.setState({ kidMode: false });
+    expect((await buildChatRequest(SETTINGS, turn)).kidMode).toBeUndefined();
+  });
 });
 
 describe('buildChatRequest — place (11.0: no chat switch, the region setting alone)', () => {
