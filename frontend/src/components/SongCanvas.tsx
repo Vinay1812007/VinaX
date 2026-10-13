@@ -122,12 +122,19 @@ const AMBIENT_OVERSCAN = 1.45;
 
 /**
  * 13.0.2 — the full-bleed canvas behind the whole player, on every
- * viewport, now with Spotify-style auto fit. A clip whose shape is close
- * to the screen's fills it (object-cover, as before). A landscape clip on
- * a portrait phone used to be centre-cropped into a giant face; it now
- * plays whole (object-contain) over the blurred artwork, which fills the
- * letterbox so there are no black bands. Mount inside the backdrop layer,
- * UNDER the darkening gradients.
+ * viewport, with Spotify-style auto fit. A clip whose shape is close to
+ * the screen's fills it (object-cover, as before). A mismatched clip — a
+ * landscape one on a phone, a portrait one on a PC — used to be
+ * centre-cropped into a giant face; it now plays whole (object-contain)
+ * over a blurred, zoomed copy of ITSELF, so the WHOLE screen is still the
+ * moving video, edge to edge, with no bands and no crop. The blurred
+ * artwork sits under both as the fallback while the clip loads.
+ *
+ * The ambient copy is a second <video> on the SAME src — a deliberate,
+ * ambient-fit-only exception to the "exactly one <video> decodes" rule:
+ * one network fetch (cache-shared), one extra decode of a small preview
+ * clip, and it pauses with playback like the sharp one. Mount inside the
+ * backdrop layer, UNDER the darkening gradients.
  */
 export function SongCanvasBackdrop({ canvas, isPlaying, artUrl }: { canvas: SongCanvasState; isPlaying: boolean; artUrl?: string | null }) {
   const [fit, setFit] = useState<'cover' | 'ambient'>('cover');
@@ -159,6 +166,15 @@ export function SongCanvasBackdrop({ canvas, isPlaying, artUrl }: { canvas: Song
           alt=""
           draggable={false}
           className="absolute inset-0 h-full w-full object-cover scale-110 blur-3xl brightness-[.55] saturate-125"
+        />
+      )}
+      {fit === 'ambient' && (
+        <CanvasVideo
+          src={canvas.src}
+          isPlaying={isPlaying}
+          // The ambient copy failing is cosmetic: the artwork under it fills in.
+          onError={() => undefined}
+          className="absolute inset-0 h-full w-full object-cover scale-110 blur-2xl brightness-[.6] saturate-125"
         />
       )}
       <CanvasVideo
