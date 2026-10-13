@@ -12,6 +12,13 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.9.0': {
+    title: 'Trending now in VinaX AI',
+    changes: [
+      { type: 'new', text: 'A new chat in VinaX AI now shows what’s trending: the latest India news and tech headlines, refreshed through the day.' },
+      { type: 'new', text: 'Tap a headline and VinaX AI looks up the latest on that story for you, with its sources.' },
+    ],
+  },
   '11.8.1': {
     title: 'Watch VinaX AI search',
     changes: [

@@ -51,6 +51,9 @@ export interface SerperOptions {
   waitUntil?: (p: Promise<unknown>) => void;
   /** Origin the cache key is built on (the request's own); a fixed internal one otherwise. */
   cacheOrigin?: string;
+  /** 11.9 — run only while today's calls are under this share of the daily cap
+   *  (0–1, default 1). Background jobs pass less, so listeners' searches keep priority. */
+  capShare?: number;
   client?: 'web' | 'app';
 }
 
@@ -354,7 +357,9 @@ export async function serperSearch(env: SerperEnv, query: string, opts: SerperOp
     const now = Date.now();
     if (serperResting(now)) return empty;
     const limit = serperDailyLimit(env);
-    if (limit <= 0 || (await serperCallsToday(env, now)) >= limit) return empty;
+    const share = typeof opts.capShare === 'number' && opts.capShare >= 0 && opts.capShare <= 1 ? opts.capShare : 1;
+    const allowed = Math.floor(limit * share);
+    if (allowed <= 0 || (await serperCallsToday(env, now)) >= allowed) return empty;
 
     const t0 = Date.now();
     let status = 0;

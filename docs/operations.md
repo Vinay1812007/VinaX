@@ -160,6 +160,7 @@ On a chat turn where Gemini's free grounding does not run, the Worker may make o
 
 - **Set the key:** `cd backend && npx wrangler secret put SERPER_API_KEY --config worker/wrangler.toml`, then paste the key at the prompt. It takes effect at once, with no deploy. For `npm run dev`, put `SERPER_API_KEY=...` in `backend/worker/.dev.vars`, which is gitignored. Never put it in `wrangler.toml`, a `VITE_*` variable or a ticket.
 - **Change the cap:** edit `SERPER_DAILY_LIMIT` in `worker/wrangler.toml` and deploy (merge to `main`, or `npm run deploy`). A value set in the dashboard is overwritten by the next deploy.
+- **Trending headlines (11.9):** the `headlines.yml` job uses up to 16 of the day's searches (2 every three hours) and stops at 75 % of `SERPER_DAILY_LIMIT`, so listeners' own searches keep the last quarter. With the default 80 a day, the free allowance lasts about a month either way. To stop it, switch `web-search` off (the strip disappears too) or disable the workflow in the code host's Actions tab. To refresh by hand, run the workflow ("Run workflow").
 - **Read usage:** console → AI Operations, feature `web-search`. Calls today are the searches that spent a credit, because cache hits are not logged. The same rows are what the daily cap counts. Serper's own dashboard shows the credits left.
 - **Switch it off:** console → AI Operations → the `web-search` switch (or the emergency stop, which stops it too), then publish. To take it out completely, run `npx wrangler secret delete SERPER_API_KEY --config worker/wrangler.toml`.
 - **When credits run out:** Serper answers 401/402/403/429 (or a 400 naming credits). Each isolate stops calling for 24 hours and logs `[serper] answered … out of credits` once, and the rows show `error: credits_exhausted`. The chat keeps answering without results.
@@ -194,6 +195,7 @@ All schedules are workflows in `.github/workflows/`, plus one Cron Trigger on th
 | **AI song push** (`song-push.yml`) | Daily 13:30 | Calls `/api/cron/song-push`. |
 | **Trends ingest** (`trends-ingest.yml`) | Minute 17 of every sixth hour | Calls `/api/cron/trends-ingest`: reads the configured trend sources, stores a snapshot, matches items to catalogue songs and deletes expired data ([trends.md](trends.md)). |
 | **Weekly digest** (`weekly-digest.yml`) | Monday 03:30 | Calls `/api/cron/weekly-digest`; the result is the digest card on the console's Overview. |
+| **Trending headlines** (`headlines.yml`) | Minute 23 of every third hour | Calls `/api/cron/headlines` once (no retry: a retry could spend more searches). Two web searches (India news, tech), stored in `vinax_config` key `ai-headlines` for the "Trending now" strip on the empty VinaX AI chat. At most 16 searches a day; it skips (answers `{ ok: true, skipped }`) while `web-search` is switched off or today's searches are at 75 % of `SERPER_DAILY_LIMIT`. |
 
 Each scheduled workflow can also be run by hand. `/api/cron/seo-crawl` exists on the Worker, but no workflow calls it.
 
