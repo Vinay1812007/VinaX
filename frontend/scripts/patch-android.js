@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const PKG = 'app.tarang.music';
+const PKG = 'app.Vinax.music';
 const PKG_PATH = PKG.replace(/\./g, '/');
 
 const root = process.cwd();

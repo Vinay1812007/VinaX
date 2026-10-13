@@ -96,6 +96,8 @@ import * as m_api_recommendations from './functions/api/recommendations';
 import * as m_api_ai_search from './functions/api/ai/search';
 import * as m_api_ai_playlist from './functions/api/ai/playlist';
 import * as m_api_ai_dj from './functions/api/ai/dj';
+import * as m_api_auth_google from './functions/api/auth/google';
+import * as m_api_auth_me from './functions/api/auth/me';
 import * as m_api_ai_headlines from './functions/api/ai/headlines';
 import * as m_api_ai_title from './functions/api/ai/title';
 import * as m_api_favicon from './functions/api/favicon';
@@ -237,6 +239,8 @@ const EXACT: Record<string, Mod> = {
   '/api/ai/search': m_api_ai_search,
   '/api/ai/playlist': m_api_ai_playlist,
   '/api/ai/dj': m_api_ai_dj,
+  '/api/auth/google': m_api_auth_google,
+  '/api/auth/me': m_api_auth_me,
   '/api/ai/headlines': m_api_ai_headlines,
   '/api/ai/title': m_api_ai_title,
   '/api/favicon': m_api_favicon,

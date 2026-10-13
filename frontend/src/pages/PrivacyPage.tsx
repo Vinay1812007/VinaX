@@ -58,12 +58,13 @@ export default function PrivacyPage() {
           Voice chat and mic dictation use your device&rsquo;s speech engine — in supporting browsers and in the
           Android app, speech is recognised on your device — and VinaX never stores audio.
         </p>
-        <H>Username check</H>
+        <H>Signing in with Google (optional)</H>
         <p>
-          When you choose a username, a security provider checks that a person, not a script, is asking. It looks at
-          technical signals from your browser and network for that one check, does not use cookies to follow you
-          across sites, and never receives your name, your username or your listening. A small box under the username
-          ticks itself for most people; some are asked to tap it.
+          You never need an account to listen. If you choose <b>Sign in with Google</b>, Google confirms who you are
+          and VinaX stores your Google account ID, email address, name and profile picture, plus your VinaX username
+          if you had one. That is all: your library, history, taste profile and AI chats stay on your device as
+          before. On the website the sign-in button is loaded from Google. Sign out in Settings → Your data; Delete
+          account there removes everything VinaX stored about the account.
         </p>
         <H>Listen Together</H>
         <p>

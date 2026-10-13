@@ -42,7 +42,7 @@ export function HomeAbout() {
         <h2 id="vx-home-about">About VinaX</h2>
         <p>
           VinaX is a free music app for India. It plays Telugu, Hindi, Tamil, Punjabi, Kannada, Malayalam, Bengali,
-          Marathi, Bhojpuri, Gujarati, Urdu and English songs with no login and no account: open it and press play.
+          Marathi, Bhojpuri, Gujarati, Urdu and English songs with no login needed: open it and press play.
           It works in the browser and as an Android app with background playback and offline downloads.
         </p>
 

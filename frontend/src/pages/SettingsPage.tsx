@@ -62,7 +62,6 @@ import { IconButton } from '@/components/IconButton';
 import { cn } from '@/utils/cn';
 import {
   BellIcon,
-  CheckIcon,
   ClockIcon,
   DownloadIcon,
   HelpIcon,
@@ -75,8 +74,8 @@ import {
   XIcon,
 } from '@/components/Icons';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { handleStatus, retryPendingClaim, type HandleStatus } from '@/features/identity/handleClaim';
-import { useUiStore } from '@/store/uiStore';
+import { GoogleSignIn, useAccount } from '@/components/GoogleSignIn';
+import { deleteAccount } from '@/services/auth/google';
 import '@/styles/pages/settings.css';
 
 const BackupCenter = lazy(() => import('@/features/settings/BackupCenter').then((m) => ({ default: m.BackupCenter })));
@@ -271,54 +270,45 @@ const eraseItems = [
 ];
 
 /**
- * Username row — says exactly what the service knows. A handle chosen while
- * offline is "waiting", never shown as confirmed; a refused one asks for a
- * new choice (reopens the welcome step's handle picker).
+ * 12.2 — Account: optional Google sign-in. Signed in, the row shows who, the
+ * linked username, Sign out, and Delete account (removes the Google id, email,
+ * name and picture from the server; the library stays on this device).
  */
-function UsernameRow() {
-  const [status, setStatus] = useState<HandleStatus>(handleStatus);
+function AccountRow() {
+  const account = useAccount();
+  const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
-  const openTour = useUiStore((x) => x.openTour);
-  useEffect(() => {
-    const refresh = () => setStatus(handleStatus());
-    window.addEventListener('online', refresh);
-    window.addEventListener('storage', refresh);
-    return () => {
-      window.removeEventListener('online', refresh);
-      window.removeEventListener('storage', refresh);
-    };
-  }, []);
-  const retry = async () => {
-    setBusy(true);
-    const out = await retryPendingClaim();
-    setBusy(false);
-    setStatus(handleStatus());
-    if (out?.status === 'confirmed') toast(`@${out.username} is confirmed`);
-    else if (out?.status === 'taken') toast(`@${out.username} is taken — choose another`);
-    else if (out) toast('Still could not reach the service — will retry when you reconnect');
-  };
-  const label = status.state === 'none' ? 'No username yet' : `@${status.handle}`;
-  const note =
-    status.state === 'confirmed'
-      ? 'Confirmed by the service. Unique to you across VinaX.'
-      : status.state === 'pending'
-        ? `Chosen ${new Date(status.since).toLocaleDateString()} but not confirmed yet — VinaX retries when you are online.`
-        : status.state === 'taken'
-          ? 'That username was already taken when VinaX tried to confirm it. Pick another.'
-          : 'Usernames are claimed from the welcome step.';
+  const handle = account?.user.username ?? getLocal<string>(KEYS.userHandle, '');
+  const note = account
+    ? `Signed in with Google${handle ? ` · @${handle}` : ''}. Your library and history stay on this device.`
+    : 'Optional. Sign in with Google to keep your username with your account. Listening never needs it.';
   return (
-    <Row label={label} note={note} keywords="username handle account">
-      {status.state === 'pending' ? (
-        <RowButton onClick={() => void retry()} disabled={busy}>
-          {busy ? 'Confirming…' : 'Confirm now'}
-        </RowButton>
-      ) : status.state === 'taken' || status.state === 'none' ? (
-        <RowButton onClick={openTour}>Choose</RowButton>
-      ) : (
-        <span className="vx-set-status">
-          <CheckIcon className="w-4 h-4" />
-          Confirmed
-        </span>
+    <Row label="Account" note={note} keywords="sign in google login account username" stack>
+      <GoogleSignIn />
+      {account && (
+        <div className="mt-2">
+          {confirm ? (
+            <span className="inline-flex items-center gap-2">
+              <span className="text-[13px] text-ink-300">Delete your account from VinaX?</span>
+              <RowButton
+                disabled={busy}
+                onClick={() => {
+                  setBusy(true);
+                  void deleteAccount().then((ok) => {
+                    setBusy(false);
+                    setConfirm(false);
+                    toast(ok ? 'Your account was deleted from VinaX.' : 'Could not delete it right now — try again.');
+                  });
+                }}
+              >
+                {busy ? 'Deleting…' : 'Delete'}
+              </RowButton>
+              <RowButton onClick={() => setConfirm(false)}>Cancel</RowButton>
+            </span>
+          ) : (
+            <RowButton onClick={() => setConfirm(true)}>Delete account</RowButton>
+          )}
+        </div>
       )}
     </Row>
   );
@@ -895,12 +885,12 @@ export default function SettingsPage() {
                 ))}
               </select>
             </Row>
-            <LinkRow to="/privacy" label="How privacy works" note="No accounts. Your taste lives on this device." keywords="private by design login servers" />
+            <LinkRow to="/privacy" label="How privacy works" note="Accounts are optional. Your taste lives on this device." keywords="private by design login servers" />
             <LinkRow to="/taste-profile" label="What VinaX knows about you" note="Your taste profile, in full." keywords="see taste profile" />
           </Section>
 
           <Section title="Your data" id="your-data" lede="Your library, history and settings live on this device. Back them up, move them or clear them.">
-            <UsernameRow />
+            <AccountRow />
             <Group title="Back up and move">
               <LinkRow to="/handoff" label="Move to a new device" note="An encrypted, one-use QR. Parked for 10 minutes." keywords="handoff transfer qr" />
               <Row label="Backup Center" note="What a backup holds and leaves out; restore with a merge-or-replace preview and undo." keywords="restore merge">

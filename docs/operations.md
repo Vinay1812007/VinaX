@@ -170,9 +170,21 @@ On a chat turn where Gemini's free grounding does not run, the Worker may make o
 - `RESEARCH_DAILY_LIMIT` (plain var in `worker/wrangler.toml`, default 5): deep-research runs a day. Each run spends 4 searches from `SERPER_DAILY_LIMIT`, so 5 runs use at most 20. Switch it off with the `deep-research` feature in AI Operations; usage shows there as feature `deep-research`.
 - Pictures in replies and site logos load through `/api/webimg` and `/api/favicon`. Picture links are signed with `TELEMETRY_PEPPER` (else `DEVICE_ID_SECRET`); with neither set, replies carry no pictures.
 
+### Google sign-in (12.2)
+
+Optional sign-in runs on the push project **VinaX Music** (`vinax-music`). The Worker checks Google's ID token itself (`_lib/googleAuth.ts`) and issues its own 30-day session.
+
+| Setting | Where |
+| --- | --- |
+| `GOOGLE_CLIENT_ID` | Plain var in `backend/worker/wrangler.toml`: the project's public web OAuth client id. Sign-in answers `503 not_configured` without it. |
+| `AUTH_SECRET` | Worker secret that signs sessions: `npx wrangler secret put AUTH_SECRET --config worker/wrangler.toml` (any long random value). Falls back to `DEVICE_ID_SECRET`. Changing it signs everyone out. |
+| Accounts table | Apply `frontend/supabase/migrations/2026-10-vinax-12.2-accounts.sql` once. Until then sign-in still works but nothing is stored (`stored: false`). |
+| Allowed web origins | Cloud console → Google Auth Platform → Clients → the web client: `https://www.sirimillavinay.online`, `https://sirimillavinay.online`, `https://vinax.pages.dev`, `http://localhost:5173`. A new domain needs adding here, or the button refuses to load. |
+| Android | The app's SHA-1 must be on the Android app in the push project (see [fcm-push-setup.md](fcm-push-setup.md)); a release keystore needs its own SHA-1 added. |
+
 ### Human check on usernames
 
-Since 11.1.0 the onboarding username claim (`POST /api/username`) carries a Turnstile token. Since 11.1.1 the widget is always on screen under the username field (`appearance: always`): it ticks itself for most listeners and asks for a tap only when the check needs one. A parked claim retried later, with no form on screen, gets a temporary floating box that shows only if a tap is needed (`interaction-only`).
+Since 12.2 the app no longer claims usernames at onboarding; this check only serves app versions before 12.2. Since 11.1.0 the onboarding username claim (`POST /api/username`) carries a Turnstile token. Since 11.1.1 the widget is always on screen under the username field (`appearance: always`): it ticks itself for most listeners and asks for a tap only when the check needs one. A parked claim retried later, with no form on screen, gets a temporary floating box that shows only if a tap is needed (`interaction-only`).
 
 | Piece | Where |
 | --- | --- |

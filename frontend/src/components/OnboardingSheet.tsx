@@ -17,8 +17,7 @@ import { trendingSeed } from '@/constants/seeds';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { useLibraryStore } from '@/store/libraryStore';
 import { toast } from '@/store/toastStore';
-import { claimHandle, pendingClaim, USERNAME_RE } from '@/features/identity/handleClaim';
-import { mountHumanCheck, type HumanCheck } from '@/services/turnstile';
+import { GoogleSignIn } from './GoogleSignIn';
 import type { Song } from '@/types';
 import { Chip } from './Chip';
 import { SparkleIcon, PlayIcon, HeartIcon, CompassIcon } from './Icons';
@@ -107,22 +106,11 @@ export function OnboardingSheet() {
   const location = useLocation();
   const navigate = useNavigate();
   const [firstRun, setFirstRun] = useState(() => !getLocal<boolean>(KEYS.onboarded, false));
-  // Existing listeners from before usernames existed — and listeners whose
-  // chosen handle the service REFUSED — reopen ONLY the welcome step so they
-  // claim a handle, then close without re-running the tour. A claim that is
-  // merely waiting for the network does not reopen anything: it retries on
-  // its own (features/identity/handleClaim).
-  const [handleOnly, setHandleOnly] = useState(
-    () =>
-      getLocal<boolean>(KEYS.onboarded, false) &&
-      !getLocal<string>(KEYS.userHandle, '') &&
-      pendingClaim()?.status !== 'pending',
-  );
   // The sheet steps aside on /handoff so a first-run device can complete the
   // QR "Move to a new device" import (which reloads with the old device's
   // profile, onboarded flag included). Leaving /handoff without importing
   // brings the sheet straight back.
-  const open = (firstRun || handleOnly || tourOpen) && location.pathname !== '/handoff';
+  const open = (firstRun || tourOpen) && location.pathname !== '/handoff';
   const [stage, setStage] = useState<Stage>('you');
   const template = useSettingsStore((st) => st.template);
   const setTemplate = useSettingsStore((st) => st.setTemplate);
@@ -133,19 +121,6 @@ export function OnboardingSheet() {
   // and a pre-ticked box is not an opt-in. It can be changed later in Settings → Region & Privacy.
   const [consent, setConsent] = useState<boolean>(false);
   const [nameErr, setNameErr] = useState(false);
-  // Unique handle — mandatory, because display names collide across listeners.
-  const [handle, setHandle] = useState<string>(
-    () => getLocal<string>(KEYS.userHandle, '') || pendingClaim()?.username || '',
-  );
-  const [handleEdited, setHandleEdited] = useState(false);
-  const [handleErr, setHandleErr] = useState<string | null>(() => {
-    const p = pendingClaim();
-    return p?.status === 'taken' ? `@${p.username} is taken. Pick another username.` : null;
-  });
-  const [handleSuggestions, setHandleSuggestions] = useState<string[]>(() => pendingClaim()?.suggestions ?? []);
-  const [claiming, setClaiming] = useState(false);
-  // Live availability, checked while the listener types (debounced).
-  const [handleAvail, setHandleAvail] = useState<'checking' | 'free' | 'taken' | null>(null);
   const [importErr, setImportErr] = useState(false);
   const [moreLangs, setMoreLangs] = useState(false);
   // Package A7/D1 — the 10-song taste-seed step. Sits between the language
@@ -270,46 +245,6 @@ export function OnboardingSheet() {
   // other overlays share the reference implementation instead of having none.
   useFocusTrap(dialogRef, open, () => escapeRef.current());
 
-  // 11.1.0 — the human check for the username claim. Mounted as soon as the
-  // first step shows, so the token is normally ready before Continue.
-  // 11.1.1 — always on screen: the box ticks itself for almost everyone.
-  const humanSlotRef = useRef<HTMLDivElement>(null);
-  const humanCheckRef = useRef<HumanCheck | null>(null);
-  useEffect(() => {
-    const slot = humanSlotRef.current;
-    if (!open || stage !== 'you' || !slot) return;
-    const check = mountHumanCheck(slot, 'username', { visible: true });
-    humanCheckRef.current = check;
-    return () => {
-      check.remove();
-      if (humanCheckRef.current === check) humanCheckRef.current = null;
-    };
-  }, [open, stage]);
-
-  // Debounced live "already exists?" probe — the error shows while typing,
-  // not only after Continue. The POST claim remains the authority.
-  useEffect(() => {
-    const u = handle.trim().toLowerCase();
-    if (!open || !/^[a-z0-9_]{3,20}$/.test(u)) {
-      setHandleAvail(null);
-      return;
-    }
-    if (u === getLocal<string>(KEYS.userHandle, '')) {
-      setHandleAvail('free'); // our own saved handle is always ok
-      return;
-    }
-    setHandleAvail('checking');
-    const base = isNativePlatform() ? 'https://www.sirimillavinay.online/api/username' : '/api/username';
-    const t = window.setTimeout(() => {
-      fetch(`${base}?u=${encodeURIComponent(u)}`)
-        .then((r) => r.json())
-        .then((j: { available?: boolean }) => {
-          setHandleAvail(j?.available === false ? 'taken' : 'free');
-        })
-        .catch(() => setHandleAvail(null)); // network hiccup: stay quiet, claim decides
-    }, 450);
-    return () => window.clearTimeout(t);
-  }, [handle, open]);
 
   if (!open) return null;
 
@@ -336,88 +271,32 @@ export function OnboardingSheet() {
   };
 
   /** vinay mac → vinay_mac_k4x — editable suggestion, never empty. */
-  const genHandle = (from: string): string => {
-    const stem = from
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '')
-      .slice(0, 14);
-    const salt = Math.random().toString(36).replace(/[^a-z0-9]/g, '').slice(0, 3) || '777';
-    return `${stem || 'listener'}_${salt}`.slice(0, 20);
-  };
 
   const onNameChange = (v: string) => {
     setName(v);
-    // Keep the suggested handle tracking the name until the listener edits it.
-    if (!handleEdited) setHandle(v.trim().length >= 2 ? genHandle(v) : '');
   };
 
   // The sequence the listener walks. A returning listener who only owes a
   // username sees that one step; a replay starts at the look.
-  const seq: Stage[] = handleOnly
-    ? ['you']
-    : firstRun
+  const seq: Stage[] = firstRun
       ? ['you', 'langs', 'look', ...(seed === 'none' ? [] : (['songs'] as Stage[])), ...TOUR_STAGES]
       : ['look', ...TOUR_STAGES];
   const pos = Math.max(0, seq.indexOf(stage));
-  const required = handleOnly || (firstRun && (stage === 'you' || stage === 'langs'));
+  const required = firstRun && (stage === 'you' || stage === 'langs');
   // Escape closes the sheet only once the required steps are behind: leaving
-  // earlier would skip the username and the usage-sharing choice.
+  // earlier would skip the name and the usage-sharing choice.
   escapeRef.current = required ? () => undefined : finish;
   const goNext = () => (pos < seq.length - 1 ? setStage(seq[pos + 1]) : finish());
   const goBack = () => pos > 0 && setStage(seq[pos - 1]);
 
-  const continueFromYou = async () => {
+  const continueFromYou = () => {
     const trimmed = name.trim();
     if (trimmed.length < 2) {
       setNameErr(true);
       return;
     }
     setNameErr(false);
-    const username = handle.trim().toLowerCase();
-    if (!USERNAME_RE.test(username)) {
-      setHandleErr('Enter a username: 3 to 20 letters, numbers or underscores.');
-      return;
-    }
-    if (handleAvail === 'taken') {
-      setHandleErr(`@${username} is taken. Pick another username.`);
-      return;
-    }
-    setHandleErr(null);
-    // Coming Back to this step with the same, already-claimed username must
-    // not claim it a second time.
-    const p = pendingClaim();
-    const mine = username === getLocal<string>(KEYS.userHandle, '') || (p?.status === 'pending' && p.username === username);
-    if (!mine) {
-      setClaiming(true);
-      const outcome = await claimHandle(username, trimmed, () => humanCheckRef.current?.token() ?? Promise.resolve(null));
-      setClaiming(false);
-      if (outcome.status === 'taken') {
-        setHandleErr(`@${username} is taken. Pick another username.`);
-        setHandleSuggestions(outcome.suggestions);
-        return;
-      }
-      // 'confirmed' stored the handle; 'pending' parked it for retry. Either
-      // way the welcome continues — a flaky network must not block it, but it
-      // must not pretend the name is confirmed either.
-      if (outcome.status === 'pending') {
-        toast(
-          outcome.reason === 'offline'
-            ? `You are offline. @${username} will be confirmed when you reconnect.`
-            : outcome.reason === 'check'
-              ? `VinaX could not check that you are a person, so @${username} is not confirmed yet. It will try again.`
-              : `@${username} is not confirmed yet. VinaX will keep trying.`,
-          { duration: 5000 },
-        );
-      }
-    }
     setLocal(KEYS.userName, trimmed);
-    if (handleOnly) {
-      // Pre-username listener: handle claimed, nothing else to redo.
-      setHandleOnly(false);
-      return;
-    }
     setStage('langs');
   };
 
@@ -514,9 +393,7 @@ export function OnboardingSheet() {
                 <span className="vx-welcome-badge">Free forever</span>
               </div>
               {title('Free. No sign-up.', true)}
-              {lede(handleOnly
-                ? 'One thing is missing: a username. There is still no email, no password and nothing to pay.'
-                : 'No email, no password and nothing to pay. Choose a name and a username. Your listening stays on this device.')}
+              {lede('Nothing to pay and no password. Choose a name, or sign in with Google to keep your account across devices. Your listening stays on this device.')}
               <label className="vx-welcome-label mt-5" htmlFor="vx-name">Your name</label>
               <input
                 id="vx-name"
@@ -529,53 +406,19 @@ export function OnboardingSheet() {
                 className={cn(INPUT, nameErr && INPUT_BAD)}
               />
               {nameErr && <p className="vx-welcome-msg is-bad">Enter a name of at least two letters.</p>}
-              <label className="vx-welcome-label mt-4" htmlFor="vx-username">Username</label>
-              <div className="relative">
-                <span aria-hidden="true" className="absolute left-4 top-1/2 -translate-y-1/2 text-[15px] text-ink-400">@</span>
-                <input
-                  id="vx-username"
-                  value={handle}
-                  onChange={(e) => {
-                    setHandleEdited(true);
-                    setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20));
-                    setHandleErr(null);
-                    setHandleSuggestions([]);
+              {/* 12.2 — optional: listening never needs an account. */}
+              <div className="vx-welcome-signin">
+                <span className="vx-welcome-or" aria-hidden>
+                  or
+                </span>
+                <GoogleSignIn
+                  onSignedIn={(a) => {
+                    if (a.user.name && name.trim().length < 2) setName(a.user.name.slice(0, 40));
                   }}
-                  placeholder="username"
-                  maxLength={20}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  aria-invalid={handleErr != null}
-                  aria-describedby="vx-username-msg"
-                  className={cn(INPUT, 'pl-9', handleErr && INPUT_BAD)}
                 />
+                <p className="vx-welcome-msg">Optional. Signing in keeps your username with your Google account.</p>
               </div>
-              <div id="vx-username-msg" aria-live="polite">
-                {handleErr ? (
-                  <p className="vx-welcome-msg is-bad">{handleErr}</p>
-                ) : handleAvail === 'taken' ? (
-                  <p className="vx-welcome-msg is-bad">@{handle} is taken. Pick another username.</p>
-                ) : handleAvail === 'free' ? (
-                  <p className="vx-welcome-msg is-good">@{handle} is available.</p>
-                ) : handleAvail === 'checking' ? (
-                  <p className="vx-welcome-msg">Checking availability…</p>
-                ) : (
-                  <p className="vx-welcome-msg">Other listeners find you by this. 3 to 20 letters, numbers or underscores.</p>
-                )}
-              </div>
-              <div ref={humanSlotRef} className="vx-welcome-human" />
-              {handleSuggestions.length > 0 && (
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <span className="text-[12px] font-semibold text-ink-400">Available:</span>
-                  {handleSuggestions.map((sug) => (
-                    <Chip key={sug} onClick={() => { setHandleEdited(true); setHandle(sug); setHandleErr(null); setHandleSuggestions([]); }}>
-                      @{sug}
-                    </Chip>
-                  ))}
-                </div>
-              )}
-              {!handleOnly && (
+              {(
                 <div className="mt-5 pt-4 border-t border-[color:var(--vx-border)] flex items-center justify-center gap-1 flex-wrap text-[13px] text-ink-400">
                   <span>Already use VinaX elsewhere?</span>
                   <button type="button" onClick={() => navigate('/handoff?mode=receive')} className="vx-welcome-link">Move from old device</button>
@@ -693,17 +536,15 @@ export function OnboardingSheet() {
           <button
             type="button"
             onClick={() => {
-              if (stage === 'you') void continueFromYou();
+              if (stage === 'you') continueFromYou();
               else if (stage === 'langs') continueFromLangs();
               else if (stage === 'songs') finishSeed(true);
               else goNext();
             }}
-            disabled={claiming || (stage === 'songs' && seedSongs.length === 0)}
+            disabled={stage === 'songs' && seedSongs.length === 0}
             className="flex-1 h-12 rounded-full btn-primary text-[15px] font-bold disabled:opacity-60"
           >
-            {claiming
-              ? 'Checking username…'
-              : stage === 'songs' && seedLiked.length
+            {stage === 'songs' && seedLiked.length
                 ? `Continue with ${seedLiked.length} liked`
                 : slide
                   ? last ? 'Start listening' : 'Next'

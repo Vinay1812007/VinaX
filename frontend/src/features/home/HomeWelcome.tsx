@@ -31,7 +31,7 @@ export function HomeWelcome({ name, onStart, ready }: { name?: string; onStart: 
           <p key={row}>{SCRIPTS.slice(row * 6, row * 6 + 6).map((w) => <span key={w}>{w}</span>)}</p>
         ))}
       </div>
-      <p className="vxh-welcome-kicker"><span className="vxh-welcome-badge">Free forever</span> No sign-up. No account.</p>
+      <p className="vxh-welcome-kicker"><span className="vxh-welcome-badge">Free forever</span> No sign-up needed.</p>
       <h1 id="vxh-welcome-title" className="vxh-welcome-title">
         {first && <span className="vxh-welcome-hello">Welcome, {first}. </span>}
         All the music you love. <span className="vxh-welcome-free">Free.</span>

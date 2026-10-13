@@ -18,21 +18,13 @@ The Worker needs the push project's **service-account private key** to sign send
 
 Until the secret is set the push path does nothing: the app runs normally and tokens are stored, but no message is sent (`fcmConfigured()` in `backend/worker/functions/_lib/fcm.ts`).
 
-## If devices report `FIS_AUTH_ERROR` (no Android device gets a token)
+## The project (12.2)
 
-Seen in Technical Monitoring as `push-native` — `registration error: … java.io.IOException: FIS_AUTH_ERROR` (2026-10-12). The push provider's installation service refused the app's API key, so `register()` never yields a token and no Android device is ever saved; the server and the app code are not at fault. Every APK is signed with the stable CI debug keystore (`frontend/ci/debug-keystore.b64`), whose fingerprints are:
+Since 12.2 the app is `app.Vinax.music` in the push project **VinaX Music** (`vinax-music`, project number `152181244509`, free plan). `frontend/native-android/google-services.json` is that project's file, with the Android app registered under the CI signing key's SHA-1 `71:27:BB:E2:25:1F:9E:A4:89:61:EC:9B:76:A5:07:5F:94:DE:A2:CC`. The same project runs the optional Google sign-in.
 
-- SHA-1 `71:27:BB:E2:25:1F:9E:A4:89:61:EC:9B:76:A5:07:5F:94:DE:A2:CC`
-- SHA-256 `D3:00:8F:AC:86:2B:C0:A9:82:3C:97:27:D7:B3:E5:BA:20:C0:50:B2:05:A1:1A:41:C2:8C:41:7F:44:40:0D:33`
+The old project (`apptarangmusic`, app `app.tarang.music`) is retired: its devices reported `FIS_AUTH_ERROR` (the installation service refused the app), so no Android device ever got a token. Once `FCM_SERVICE_ACCOUNT` holds the new project's key (above), delete the old project's keys, or the whole old project, in its console.
 
-Fix, in the push provider's console for the project in `google-services.json` (project number `296694772987`):
-
-1. **Project settings → Your apps → Android app `app.tarang.music` → Add fingerprint**: add both fingerprints above.
-2. **The cloud console's APIs & Services → Library**: make sure **Firebase Installations API** and **Firebase Cloud Messaging API** are enabled.
-3. **APIs & Services → Credentials → the Android key** (the `current_key` in `google-services.json`): if it has *Application restrictions*, they must allow Android package `app.tarang.music` with the SHA-1 above; if it has *API restrictions*, they must include Firebase Installations API and Firebase Cloud Messaging API (or set "Don't restrict key").
-4. Download the refreshed `google-services.json`, replace `frontend/native-android/google-services.json`, commit, and let the APK build. Changes to key restrictions can take a few minutes to apply.
-
-Then open the new app once: Settings → Notifications → turn on. The console's "Send a message" page should count one more device, and the `push-native` rows stop.
+Because the package changed, the 12.2 APK installs beside the old app instead of replacing it. Listeners move their library with Settings → Your data → Move to a new device, then remove the old app. Push sign-ups from the old app do not carry over.
 
 ## What is wired in the repository
 

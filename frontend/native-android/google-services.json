@@ -1,26 +1,44 @@
 {
   "project_info": {
-    "project_number": "296694772987",
-    "project_id": "apptarangmusic",
-    "storage_bucket": "apptarangmusic.firebasestorage.app"
+    "project_number": "152181244509",
+    "project_id": "vinax-music",
+    "storage_bucket": "vinax-music.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:296694772987:android:f4db29b35a641c8816ec5e",
+        "mobilesdk_app_id": "1:152181244509:android:6d5dd1ba5c4a588cbec3b4",
         "android_client_info": {
-          "package_name": "app.tarang.music"
+          "package_name": "app.Vinax.music"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "152181244509-rs0mfao8aa51mj11p1a8p962aikt39b1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "app.Vinax.music",
+            "certificate_hash": "7127bbe2251f9ea48961ec9b76a5075f94dea2cc"
+          }
+        },
+        {
+          "client_id": "152181244509-biv1p3bge1endo5pd8qpc1ormhb4a75l.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyC6xqXsb-jeBX6EPIr1-JXrLEUg3CpLPJo"
+          "current_key": "AIzaSyDHYM0LxFTVxU_TU0ExroYERT2zLUe4quc"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "152181244509-biv1p3bge1endo5pd8qpc1ormhb4a75l.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

@@ -37,7 +37,7 @@ test('first run walks the welcome: name → languages → look → slides → ap
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByText('Enter a name of at least two letters.')).toBeVisible();
 
-  // The username is suggested from the name; offline, the claim is parked.
+  // 12.2 — no username step: a name, and Google sign-in is optional.
   await page.getByLabel('Your name').fill('Tester');
   await page.getByRole('button', { name: 'Continue' }).click();
 
