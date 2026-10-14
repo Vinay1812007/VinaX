@@ -29,23 +29,23 @@ const ROUTES = [
   // Home description must sit in Bing's 25–160 char window (BWT flagged the
   // old 205-char version, 2026-08-17). This one is 152. 10.0 — it leads with
   // the free promise, as the app's first-visit welcome does.
-  { p: '/', t: 'VinaX — Free Music Streaming for India', d: 'VinaX is free music streaming for India, with no sign-up and no account: Telugu, Hindi, Tamil and 9 more languages, smart mixes, live charts and lyrics.', h1: 'VinaX — Free Music Streaming for India' },
+  { p: '/', t: 'VinaX — Free Music Streaming for India', d: 'VinaX is free music streaming for India, with one Google sign-in and no subscription: Telugu, Hindi, Tamil and 9 more languages, smart mixes, live charts and lyrics.', h1: 'VinaX — Free Music Streaming for India' },
   { p: '/discover', t: 'Discover', d: 'Fresh picks, trending songs and ready-made mixes across languages and moods.', h1: 'Discover new music' },
   { p: '/charts', t: 'Top Charts', d: 'The most popular songs right now, by language — updated daily.', h1: 'Top Charts', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/charts#page', name: 'Top Charts', url: 'https://www.sirimillavinay.online/charts', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
-  { p: '/top-songs', t: 'Top Songs — Most Popular Right Now', d: 'The most popular songs on VinaX right now — Telugu, Hindi, Tamil and nine more languages. Stream the top hits free, no login, updated continuously.', h1: 'Top Songs', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/top-songs#page', name: 'Top Songs on VinaX', url: 'https://www.sirimillavinay.online/top-songs', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
-  { p: '/trending', t: 'Popular Songs', d: 'Popular Telugu, Hindi, Tamil, Punjabi and more on VinaX, from the catalogue. Free streaming, no login, refreshed continuously.', h1: 'Popular Songs', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/trending#page', name: 'Popular Songs on VinaX', url: 'https://www.sirimillavinay.online/trending', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
-  { p: '/most-searched', t: 'Most Searched Songs & Queries', d: 'The songs and searches people look for most on VinaX — across Telugu, Hindi, Tamil and more. Discover what everyone is hunting for. Free, no login.', h1: 'Most Searched Songs', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/most-searched#page', name: 'Most Searched Songs on VinaX', url: 'https://www.sirimillavinay.online/most-searched', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
+  { p: '/top-songs', t: 'Top Songs — Most Popular Right Now', d: 'The most popular songs on VinaX right now — Telugu, Hindi, Tamil and nine more languages. Stream the top hits free, updated continuously.', h1: 'Top Songs', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/top-songs#page', name: 'Top Songs on VinaX', url: 'https://www.sirimillavinay.online/top-songs', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
+  { p: '/trending', t: 'Popular Songs', d: 'Popular Telugu, Hindi, Tamil, Punjabi and more on VinaX, from the catalogue. Free streaming, refreshed continuously.', h1: 'Popular Songs', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/trending#page', name: 'Popular Songs on VinaX', url: 'https://www.sirimillavinay.online/trending', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
+  { p: '/most-searched', t: 'Most Searched Songs & Queries', d: 'The songs and searches people look for most on VinaX — across Telugu, Hindi, Tamil and more. Discover what everyone is hunting for. Free to stream.', h1: 'Most Searched Songs', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/most-searched#page', name: 'Most Searched Songs on VinaX', url: 'https://www.sirimillavinay.online/most-searched', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
   { p: '/explore', t: 'Explore', d: 'Browse by mood, genre, language, region and film soundtracks.', h1: 'Explore VinaX' },
   { p: '/moods', t: 'Moods', d: 'Music for every moment — romance, workout, chill, party, focus and more.', h1: 'Music for every mood', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/moods#page', name: 'Music by Mood', url: 'https://www.sirimillavinay.online/moods', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
   { p: '/movies', t: 'Movie Music', d: 'Film soundtracks and hit songs from the movies.', h1: 'Movie soundtracks', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/movies#page', name: 'Movie Soundtracks', url: 'https://www.sirimillavinay.online/movies', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
   { p: '/regions', t: 'Regions', d: 'Music tuned to your region and language.', h1: 'Music by region' },
   { p: '/languages', t: 'Languages', d: 'Pin the languages you listen to — Telugu, Hindi, Tamil, English and more.', h1: 'Browse by language', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/languages#page', name: 'Music by Language', url: 'https://www.sirimillavinay.online/languages', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
   { p: '/made-for-you', t: 'Made For You', d: 'Personal mixes built from your listening — private and on-device.', h1: 'Made for you' },
-  { p: '/about', t: 'About', d: 'VinaX is a free, no-login music player. Private by design, tuned to you.', h1: 'About VinaX', ld: { '@context': 'https://schema.org', '@type': 'AboutPage', '@id': 'https://www.sirimillavinay.online/about#page', name: 'About VinaX', url: 'https://www.sirimillavinay.online/about', mainEntity: { '@id': 'https://www.sirimillavinay.online/#org' } } },
+  { p: '/about', t: 'About', d: 'VinaX is a free music app for India. Private by design, tuned to you.', h1: 'About VinaX', ld: { '@context': 'https://schema.org', '@type': 'AboutPage', '@id': 'https://www.sirimillavinay.online/about#page', name: 'About VinaX', url: 'https://www.sirimillavinay.online/about', mainEntity: { '@id': 'https://www.sirimillavinay.online/#org' } } },
   { p: '/help', t: 'Help & Feedback', d: 'FAQs, how-tos, and how to report a problem.', h1: 'Help & Feedback' },
-  { p: '/VinaXAI', t: 'VinaX AI — ask anything', d: 'Chat with VinaX AI — ask anything and get clean answers with code, tables and images. Free, private, no login.', h1: 'VinaX AI' },
+  { p: '/VinaXAI', t: 'VinaX AI — ask anything', d: 'Chat with VinaX AI — ask anything and get clean answers with code, tables and images. Free and private.', h1: 'VinaX AI' },
   { p: '/download', t: 'Get the App', d: 'Install VinaX on Android for background playback and offline downloads.', h1: 'Get VinaX for Android' },
-  { p: '/privacy', t: 'Privacy', d: 'No accounts. Your data stays on your device. Private by design.', h1: 'Privacy' },
+  { p: '/privacy', t: 'Privacy', d: 'What VinaX stores with your Google account, what stays on your device, and how to export or delete it.', h1: 'Privacy' },
   { p: '/terms', t: 'Terms of Use', d: 'Content is sourced from third parties; no DRM circumvention. Plain-language terms.', h1: 'Terms of Use' },
   { p: '/contact', t: 'Contact & Takedowns', d: 'Contact VinaX for support, bug reports, or rights / takedown requests.', h1: 'Contact & Takedowns' },
   { p: '/dmca', t: 'Copyright & Takedowns', d: 'How VinaX credits artists and labels, and how rights holders can have content removed within minutes.', h1: 'Copyright and takedowns' },
@@ -66,7 +66,7 @@ for (const l of HUB_LANGS) {
   ROUTES.push({
     p: `/${l}-songs`,
     t: `${cap(l)} Songs — Latest Hits & Trending`,
-    d: `Stream the latest ${cap(l)} songs free on VinaX — trending hits, new releases and evergreen favourites. No login, private by design.`,
+    d: `Stream the latest ${cap(l)} songs free on VinaX — trending hits, new releases and evergreen favourites. Free, with no subscription.`,
     h1: `${cap(l)} Songs`,
     ld: {
       '@context': 'https://schema.org',
@@ -195,8 +195,8 @@ let bodies;
 
 /** Home's hero line: the free promise, as the first-visit welcome states it (features/home/HomeWelcome.tsx). */
 const HOME_PROMISE =
-  '<p><strong>All the music you love. Free.</strong> Free forever, with no sign-up, no account and no subscription: ' +
-  'open VinaX and press play. Hindi, Telugu, Tamil, Punjabi and 8 more languages, with synced lyrics, AI Radio, ' +
+  '<p><strong>All the music you love. Free.</strong> Free forever, with no subscription: ' +
+  'sign in with Google once and press play. Hindi, Telugu, Tamil, Punjabi and 8 more languages, with synced lyrics, AI Radio, ' +
   'Listen Together rooms, VinaX AI and offline downloads in the Android app.</p>';
 
 /** The crawlable body for one route: the real page text, then the nav. */

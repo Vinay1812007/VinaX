@@ -900,7 +900,7 @@ export default function SettingsPage() {
                 ))}
               </select>
             </Row>
-            <LinkRow to="/privacy" label="How privacy works" note="Accounts are optional. Your taste lives on this device." keywords="private by design login servers" />
+            <LinkRow to="/privacy" label="How privacy works" note="What syncs with your account and what stays on this device." keywords="private by design login servers" />
             <LinkRow to="/taste-profile" label="What VinaX knows about you" note="Your taste profile, in full." keywords="see taste profile" />
           </Section>
 

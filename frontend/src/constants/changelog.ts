@@ -12,6 +12,14 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '13.3.0': {
+    title: 'A welcome that answers your questions',
+    changes: [
+      { type: 'new', text: 'The sign-in page now explains VinaX before you sign in: what you get, how it stays free, exactly what signing in with Google shares, what stays on your device, and answers to common questions.' },
+      { type: 'improved', text: 'No ads on the sign-in page — and it says plainly where the website’s one labelled ad does and doesn’t appear.' },
+      { type: 'fixed', text: 'Search results, the loading screen and Settings no longer say VinaX needs no login. It needs one Google sign-in, and still costs nothing.' },
+    ],
+  },
   '13.2.0': {
     title: 'Six styles, six voices',
     changes: [
