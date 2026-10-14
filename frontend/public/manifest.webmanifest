@@ -1,7 +1,7 @@
 {
   "name": "VinaX",
   "short_name": "VinaX",
-  "description": "Music tuned to you. No login, private by design.",
+  "description": "Free music in 12 Indian languages. One Google sign-in, no subscription.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0d090f",

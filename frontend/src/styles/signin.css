@@ -18,14 +18,67 @@ html.light .vx-google-btn { background: #fff; color: #1f1f1f; }
 /* 13.0 — the sign-in screen every route shows until a Google account is signed in. */
 .vx-signin {
   min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  padding: 0 16px max(32px, env(safe-area-inset-bottom));
   background:
-    radial-gradient(60% 50% at 20% 10%, rgb(var(--vx-accent-rgb, 236 72 153) / 0.22), transparent 70%),
-    radial-gradient(50% 45% at 85% 90%, rgb(var(--tide-500) / 0.18), transparent 70%),
+    radial-gradient(60% 50dvh at 20% 10dvh, rgb(var(--vx-accent-rgb, 236 72 153) / 0.22), transparent 70%),
+    radial-gradient(50% 45dvh at 85% 90dvh, rgb(var(--tide-500) / 0.18), transparent 70%),
     rgb(var(--ink-950));
+  background-repeat: no-repeat;
 }
+/* 13.3.0 — the card still owns the first screen; the rest of the page sits below it. */
+.vx-signin-hero {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: max(24px, env(safe-area-inset-top)) 0 24px;
+}
+.vx-signin-peek {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 16px;
+  border-radius: 9999px; color: rgb(var(--ink-300)); font-size: 14px; font-weight: 600;
+}
+.vx-signin-peek:hover, .vx-signin-peek:focus-visible { color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.06); }
+.vx-signin-peek svg { animation: vxSigninNudge 2.4s ease-in-out infinite; }
+@keyframes vxSigninNudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
+@media (prefers-reduced-motion: reduce) { .vx-signin-peek svg { animation: none; } }
+html.reduce-motion .vx-signin-peek svg { animation: none; }
+
+.vx-signin-more { width: min(760px, 100%); margin: 0 auto; display: flex; flex-direction: column; gap: 48px; color: rgb(var(--ink-300)); }
+.vx-signin-more section { scroll-margin-top: 24px; }
+.vx-signin-h2 { font-size: clamp(22px, 4.5vw, 26px); font-weight: 800; letter-spacing: -0.02em; color: rgb(var(--ink-100)); }
+.vx-signin-intro { margin-top: 6px; font-size: 15px; line-height: 1.55; }
+.vx-signin-features { margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.vx-signin-features li,
+.vx-signin-split > div {
+  display: flex; flex-direction: column; gap: 6px; padding: 16px; border-radius: 18px;
+  background: rgb(var(--ink-100) / 0.04); border: 1px solid var(--vx-border);
+}
+.vx-signin-features strong, .vx-signin-split h3 { color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; }
+.vx-signin-features span, .vx-signin-split p { font-size: 14px; line-height: 1.55; }
+.vx-signin-facts { margin-top: 16px; display: flex; flex-direction: column; gap: 12px; font-size: 15px; line-height: 1.55; }
+.vx-signin-facts li { padding-left: 16px; border-left: 2px solid rgb(var(--vx-accent-rgb, 236 72 153) / 0.6); }
+.vx-signin-facts strong { color: rgb(var(--ink-100)); }
+.vx-signin-split { margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.vx-signin-note { margin-top: 12px; font-size: 14px; }
+.vx-signin-faq { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+.vx-signin-faq details { border-radius: 14px; background: rgb(var(--ink-100) / 0.04); border: 1px solid var(--vx-border); }
+.vx-signin-faq summary {
+  cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 48px; padding: 12px 16px; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 600;
+}
+.vx-signin-faq summary::-webkit-details-marker { display: none; }
+.vx-signin-faq summary::after { content: '+'; flex: none; font-size: 20px; font-weight: 400; color: rgb(var(--ink-400)); }
+.vx-signin-faq details[open] summary::after { content: '–'; }
+.vx-signin-faq details p { padding: 0 16px 14px; font-size: 14px; line-height: 1.6; }
+.vx-signin-note a, .vx-signin-faq a, .vx-signin-links a { color: rgb(var(--ink-200)); text-decoration: underline; text-underline-offset: 2px; }
+.vx-signin-end { display: flex; flex-direction: column; align-items: center; gap: 16px; padding-top: 8px; text-align: center; }
+.vx-signin-again {
+  min-height: 48px; padding: 0 24px; border-radius: 9999px; font-size: 15px; font-weight: 700;
+  color: rgb(var(--ink-950)); background: rgb(var(--ink-100));
+}
+.vx-signin-links { font-size: 13px; color: rgb(var(--ink-400)); }
 .vx-signin-card {
   width: min(420px, 100%);
   padding: 32px 24px 24px;
@@ -34,10 +87,15 @@ html.light .vx-google-btn { background: #fff; color: #1f1f1f; }
   border: 1px solid var(--vx-border);
 }
 .vx-signin-logo { margin: 0 auto 16px; border-radius: 18px; }
-.vx-signin-title { font-size: clamp(26px, 6vw, 32px); font-weight: 800; letter-spacing: -0.025em; color: rgb(var(--ink-50)); }
+.vx-signin-title { font-size: clamp(26px, 6vw, 32px); font-weight: 800; letter-spacing: -0.025em; color: rgb(var(--ink-100)); }
 .vx-signin-lede { margin-top: 8px; color: rgb(var(--ink-300)); font-size: 15px; line-height: 1.55; }
 .vx-signin-button { margin-top: 24px; display: flex; justify-content: center; min-height: 44px; }
-.vx-signin-button .vx-google-slot { width: 100%; display: flex; justify-content: center; }
+.vx-signin-button .vx-google-slot { width: 100%; display: flex; flex-direction: column; align-items: center; }
+/* 13.3.0 — when Google’s script can’t load: the reason and a retry, in place of the button. */
+.vx-google-slot { flex-direction: column; align-items: center; }
+.vx-google-failed { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.vx-google-failed p { color: rgb(var(--ink-300)); font-size: 13.5px; line-height: 1.5; }
+.vx-google-failed button { min-height: 44px; padding: 0 20px; border-radius: 9999px; font-size: 14px; font-weight: 700; color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.1); border: 1px solid var(--vx-border); }
 .vx-signin-fine { margin-top: 20px; color: rgb(var(--ink-400)); font-size: 12.5px; line-height: 1.5; }
 .vx-signin-fine a { color: rgb(var(--ink-200)); text-decoration: underline; text-underline-offset: 2px; }
 /* Google draws its button in a frame; without this a dark page shows a white strip around it. */

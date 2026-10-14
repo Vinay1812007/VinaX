@@ -1,9 +1,9 @@
 /**
- * 12.2 — the optional "Sign in with Google" control, used by the welcome sheet
- * and Settings. On the web it is Google's own button (rendered by Google's
+ * 12.2 — the "Sign in with Google" control (required since 13.0), used by the
+ * sign-in screen, the welcome sheet and Settings. On the web it is Google's own button (rendered by Google's
  * sign-in script, as Google's branding rules require); in the Android app it
  * opens the system's Google account sheet. Signed in, it shows who and offers
- * Sign out. Listening never needs it.
+ * Sign out.
  *
  * Brand rule: this button is the one place VinaX shows another company's name
  * and logo — sign-in buttons must follow the provider's own branding.
@@ -31,7 +31,7 @@ export function signInMessage(r: SignInResult): string | null {
   if (r === 'ok' || r === 'cancelled') return null;
   if (r === 'offline') return 'You’re offline — connect and try signing in again.';
   if (r === 'refused') return 'Google sign-in was not accepted. Try again.';
-  return 'Sign-in is not available right now. You can keep listening and sign in later in Settings.';
+  return 'Sign-in is not available right now. Try again in a moment.';
 }
 
 export { useAccount } from './useAccount';
@@ -41,6 +41,8 @@ export function GoogleSignIn({ onSignedIn, theme = 'dark' }: { onSignedIn?: (a: 
   const account = useAccount();
   const slotRef = useRef<HTMLDivElement>(null);
   const [webFailed, setWebFailed] = useState(false);
+  // Bumped by "Try again" to redraw the button after Google’s script failed to load.
+  const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const native = isNativePlatform();
   const onSignedInRef = useRef(onSignedIn);
@@ -59,6 +61,7 @@ export function GoogleSignIn({ onSignedIn, theme = 'dark' }: { onSignedIn?: (a: 
     const slot = slotRef.current;
     if (native || account || !slot) return;
     let alive = true;
+    setWebFailed(false);
     void renderGoogleButton(slot, (r) => alive && settle(r), theme).then((ok) => {
       if (alive) setWebFailed(!ok);
     });
@@ -67,7 +70,7 @@ export function GoogleSignIn({ onSignedIn, theme = 'dark' }: { onSignedIn?: (a: 
       slot.replaceChildren();
     };
     // settle reads refs and stable setters only.
-  }, [native, account, theme]);
+  }, [native, account, theme, attempt]);
 
   if (account) {
     const u = account.user;
@@ -111,7 +114,14 @@ export function GoogleSignIn({ onSignedIn, theme = 'dark' }: { onSignedIn?: (a: 
   return (
     <div className="vx-google-slot">
       <div ref={slotRef} className="vx-google-web" />
-      {webFailed && <p className="vx-welcome-msg">Sign-in could not load right now. You can sign in later in Settings.</p>}
+      {webFailed && (
+        <div className="vx-google-failed" role="alert">
+          <p>Google sign-in couldn’t load. Check your connection — or, if an ad or tracker blocker is on, allow accounts.google.com for this site.</p>
+          <button type="button" onClick={() => setAttempt((n) => n + 1)}>
+            Try again
+          </button>
+        </div>
+      )}
     </div>
   );
 }
