@@ -36,6 +36,18 @@ test('13.3.0: the sign-in screen explains VinaX, and carries no ads', async ({ p
   });
 });
 
+test('13.3.0: when Google’s script is blocked, the screen says why and Try again redraws the button', async ({ page }) => {
+  let blocked = true;
+  await page.route('**/accounts.google.com/**', (r) => (blocked ? r.abort() : r.fulfill({ contentType: 'text/javascript', body: 'window.google={accounts:{id:{initialize(){},renderButton(el){el.textContent="google-button"},disableAutoSelect(){}}}};' })));
+  await page.goto('/?e2e-signed-out');
+  await expect(page.getByRole('alert').filter({ hasText: 'Google sign-in couldn’t load' })).toBeVisible();
+  await expect(page.getByText('sign in later in Settings', { exact: false })).toHaveCount(0);
+  blocked = false;
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByText('google-button')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+});
+
 test('signed in, the app opens with the account in the top bar', async ({ page }) => {
   await page.goto('/settings');
   await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toHaveCount(0);

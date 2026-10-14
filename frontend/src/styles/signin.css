@@ -90,7 +90,12 @@ html.reduce-motion .vx-signin-peek svg { animation: none; }
 .vx-signin-title { font-size: clamp(26px, 6vw, 32px); font-weight: 800; letter-spacing: -0.025em; color: rgb(var(--ink-100)); }
 .vx-signin-lede { margin-top: 8px; color: rgb(var(--ink-300)); font-size: 15px; line-height: 1.55; }
 .vx-signin-button { margin-top: 24px; display: flex; justify-content: center; min-height: 44px; }
-.vx-signin-button .vx-google-slot { width: 100%; display: flex; justify-content: center; }
+.vx-signin-button .vx-google-slot { width: 100%; display: flex; flex-direction: column; align-items: center; }
+/* 13.3.0 — when Google’s script can’t load: the reason and a retry, in place of the button. */
+.vx-google-slot { flex-direction: column; align-items: center; }
+.vx-google-failed { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.vx-google-failed p { color: rgb(var(--ink-300)); font-size: 13.5px; line-height: 1.5; }
+.vx-google-failed button { min-height: 44px; padding: 0 20px; border-radius: 9999px; font-size: 14px; font-weight: 700; color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.1); border: 1px solid var(--vx-border); }
 .vx-signin-fine { margin-top: 20px; color: rgb(var(--ink-400)); font-size: 12.5px; line-height: 1.5; }
 .vx-signin-fine a { color: rgb(var(--ink-200)); text-decoration: underline; text-underline-offset: 2px; }
 /* Google draws its button in a frame; without this a dark page shows a white strip around it. */

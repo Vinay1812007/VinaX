@@ -33,7 +33,7 @@ export function HomeAbout() {
           </li>
           <li>
             <strong>Your taste stays yours</strong>
-            <span>Listening history, favourites and taste profile stay on your device and are never shared with advertisers.</span>
+            <span>Your history, favourites and taste profile sync only with your own account, and are never shared with advertisers.</span>
           </li>
         </ul>
       </div>
@@ -61,11 +61,11 @@ export function HomeAbout() {
           ))}
         </p>
 
-        <h2>Recommendations that stay on your device</h2>
+        <h2>Recommendations worked out on your device</h2>
         <p>
           VinaX learns what you like from the languages you pin and the songs you finish, like and skip. That taste
-          profile is worked out on your device, not on a server, and the Taste Profile page shows everything it has
-          learned. When you tap a song, the DJ builds the next five songs from it, led by that song’s language, and
+          profile is worked out on your device, not on a server; a copy syncs with your account so it follows you to
+          every device, and the Taste Profile page shows everything it has learned. When you tap a song, the DJ builds the next five songs from it, led by that song’s language, and
           keeps adding more as you listen. Choose Familiar, Balanced or Discover in Settings to decide how many new
           artists it brings in.
         </p>
