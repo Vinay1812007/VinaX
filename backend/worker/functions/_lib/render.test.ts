@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { matchHub, renderEntity, renderHub } from './render';
+import { entityPage, matchHub, MIRROR_BASES, renderEntity, renderHub, useCatalogBases } from './render';
 
 const shell = readFileSync(resolve(__dirname, '../../../index.html'), 'utf8');
 
@@ -342,5 +342,37 @@ describe('renderEntity — 8.4.0 content depth (low-value content fix)', () => {
     expect(main).toContain('href="/album/ala-vaikunthapurramuloo-al1"');
     expect(main).toContain('A playback singer from Hyderabad.');
     expect(main).toContain('href="/artist/sid-sriram-ar2"');
+  });
+});
+
+describe('13.6.0 — entityPage (shared by the edge and the build-time prerender)', () => {
+  afterEach(() => useCatalogBases([]));
+
+  it('returns the page path and HTML with one canonical — its own, no trailing slash', async () => {
+    vi.stubGlobal('fetch', (input: RequestInfo | URL) =>
+      Promise.resolve(String(input).includes('saavn.sumit.co') ? Response.json(SONG) : new Response('nope', { status: 500 })),
+    );
+    const page = await entityPage('song', 'abc123', shell);
+    expect(page?.path).toBe('/song/chukkala-chunni-abc123');
+    expect(page?.html.match(/rel="canonical"/g)).toHaveLength(1);
+    expect(page?.html).toContain('rel="canonical" href="https://www.sirimillavinay.online/song/chukkala-chunni-abc123"');
+    expect(page?.html).toContain('<h1>Chukkala Chunni</h1>');
+  });
+
+  it('is null when no mirror has the entity (the build then skips the page)', async () => {
+    vi.stubGlobal('fetch', () => Promise.resolve(new Response('nope', { status: 500 })));
+    expect(await entityPage('song', 'gone-404', shell)).toBeNull();
+  });
+
+  it('with the mirror bases, never asks the Worker’s own /api/cat', async () => {
+    const asked: string[] = [];
+    vi.stubGlobal('fetch', (input: RequestInfo | URL) => {
+      asked.push(String(input));
+      return Promise.resolve(String(input).includes('saavn.sumit.co') ? Response.json(SONG) : new Response('nope', { status: 500 }));
+    });
+    useCatalogBases(MIRROR_BASES);
+    expect(await entityPage('song', 'abc123', shell)).not.toBeNull();
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked.some((u) => u.startsWith('https://www.sirimillavinay.online/'))).toBe(false);
   });
 });

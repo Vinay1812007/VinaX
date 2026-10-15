@@ -9,9 +9,8 @@ const locsOf = (xml: string): string[] => [...xml.matchAll(/<loc>([^<]+)<\/loc>/
 afterEach(() => vi.restoreAllMocks());
 
 describe('sitemap index', () => {
-  it('is valid XML, lists every child map as a www-absolute URL, 30-min edge cache', async () => {
-    // Supabase unconfigured → the index degrades to exactly the legacy maps.
-    const res = await sitemapIndex({ env: {} });
+  it('13.6.0: lists only maps whose URLs answer with their own text; www-absolute; 30-min edge cache', async () => {
+    const res = await sitemapIndex();
     expect(res.headers.get('content-type')).toContain('application/xml');
     const cache = res.headers.get('cache-control') ?? '';
     expect(cache).toContain('max-age=1800');
@@ -19,48 +18,19 @@ describe('sitemap index', () => {
     const xml = await res.text();
     expect(xml.startsWith('<?xml')).toBe(true);
     expect(xml).toContain('<sitemapindex');
-    // v5.3.0: the legacy sitemap-songs.xml left the index — it always returned
-    // 0 URLs (songs live in the paginated /sitemaps/songs-N.xml corpus maps),
-    // and an empty child gets a sitemap index flagged in Search Console.
-    for (const child of [
-      'sitemap-static.xml',
-      'sitemap-hubs.xml',
-      'sitemap-albums.xml',
-      'sitemap-movies.xml',
-      'sitemap-artists.xml',
-    ]) {
-      expect(xml).toContain(`${ORIGIN}/${child}`);
-    }
-    expect(xml).not.toContain(`${ORIGIN}/sitemap-songs.xml`);
-    const locs = locsOf(xml);
-    expect(locs.length).toBeGreaterThanOrEqual(5);
-    for (const loc of locs) {
-      expect(loc.startsWith(`${ORIGIN}/`), loc).toBe(true);
-      expect(() => new URL(loc)).not.toThrow();
+    expect(locsOf(xml)).toEqual([`${ORIGIN}/sitemap-static.xml`, `${ORIGIN}/sitemap-hubs.xml`, `${ORIGIN}/entity-pages.xml`]);
+    // The entity routes serve the app shell (home's text + canonical) since
+    // they left the Worker: their live-search and corpus maps advertised copies of home.
+    for (const gone of ['sitemap-albums.xml', 'sitemap-movies.xml', 'sitemap-artists.xml', 'sitemap-songs.xml', 'sitemaps/']) {
+      expect(xml).not.toContain(`${ORIGIN}/${gone}`);
     }
   });
 
-  it('adds paginated corpus maps when the SEO corpus has rows (4.15.0)', async () => {
-    // sbCount does a HEAD with Prefer: count=exact and reads content-range.
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: RequestInfo | URL) => {
-        const u = String(url);
-        // 23k songs → 3 pages; everything else empty.
-        const total = u.includes('type=eq.song') ? 23000 : 0;
-        return new Response(null, { status: 200, headers: { 'content-range': `0-0/${total}` } });
-      }),
-    );
-    const res = await sitemapIndex({ env: { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'k' } });
-    const xml = await res.text();
-    // 23k songs at 1000/page (Supabase max-rows cap, 4.16.3) → 23 pages.
-    for (const n of [1, 12, 23]) expect(xml).toContain(`${ORIGIN}/sitemaps/songs-${n}.xml`);
-    expect(xml).not.toContain('/sitemaps/songs-24.xml');
-    expect(xml).not.toContain('/sitemaps/albums-1.xml');
-    // Legacy children survive alongside the corpus maps (minus the retired
-    // always-empty sitemap-songs.xml — the corpus maps ARE the song URLs).
-    expect(xml).toContain(`${ORIGIN}/sitemap-albums.xml`);
-    expect(xml).not.toContain(`${ORIGIN}/sitemap-songs.xml`);
+  it('makes no Supabase or catalog request (one Worker invocation, nothing behind it)', async () => {
+    const f = vi.fn();
+    vi.stubGlobal('fetch', f);
+    await sitemapIndex();
+    expect(f).not.toHaveBeenCalled();
   });
 });
 

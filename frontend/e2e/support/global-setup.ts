@@ -39,6 +39,9 @@ async function resolveFile(urlPath: string): Promise<string | null> {
     s = await stat(fp).catch(() => null);
   }
   if (s?.isFile()) return fp;
+  // Like the static host: /song/x is served from song/x.html (13.6.0 entity pages).
+  const html = `${normalize(join(DIST, urlPath))}.html`;
+  if (html.startsWith(DIST) && (await stat(html).catch(() => null))?.isFile()) return html;
   if (urlPath.startsWith('/assets/')) return null;
   return join(DIST, 'index.html');
 }

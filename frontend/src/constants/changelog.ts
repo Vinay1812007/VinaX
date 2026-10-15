@@ -12,6 +12,14 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '13.6.0': {
+    title: 'Songs, albums and artists you can share',
+    changes: [
+      { type: 'new', text: 'The most-played songs in every language, with their albums and artists, have their own pages you can open without an account: who sang it, who made the music, the album, the release date and the tracklist.' },
+      { type: 'improved', text: 'Links to those songs, albums and artists show the right title and cover when you share them.' },
+      { type: 'fixed', text: 'Search engines are no longer told about thousands of song links that only showed the home page.' },
+    ],
+  },
   '13.5.0': {
     title: 'Look around before you sign in',
     changes: [

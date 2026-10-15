@@ -107,6 +107,14 @@ try {
   process.exit(1);
 }
 
+// 13.6.0 — keep the plain shell (stylesheet LINKED, #seo-slot unfilled) for
+// scripts/prerender-entities.mjs. Song/album/artist pages link the shared,
+// cached stylesheet instead of inlining it: hundreds of pages at ~35 KB each,
+// not ~265 KB. Outside dist/, so it is never deployed.
+const SHELL_CACHE = 'node_modules/.cache/vinax/shell.html';
+mkdirSync(dirname(SHELL_CACHE), { recursive: true });
+writeFileSync(SHELL_CACHE, base);
+
 // Inline the built stylesheet (4.17.8): the <link rel="stylesheet"> was the
 // last render-blocking request on the critical path (~450 ms on PSI's
 // throttled mobile — Lighthouse "Render-blocking requests" named exactly this

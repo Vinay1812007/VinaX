@@ -14,6 +14,15 @@ import type { SupabaseEnv } from './supabase';
 import { artistRows, harvestSoon, seoRow, songRowsDeep, type SeoRow } from './seo';
 
 const BASES = ['https://www.sirimillavinay.online/api/cat', 'https://saavn.sumit.co/api', 'https://nepotuneapi.vercel.app/api'];
+/** 13.6.0 — the build's entity prerender (frontend/scripts/prerender-entities.mjs)
+ *  renders with the public mirrors only: going through the Worker's own
+ *  /api/cat would spend the Worker request budget once per page per deploy. */
+export const MIRROR_BASES = BASES.filter((b) => !b.startsWith('https://www.sirimillavinay.online'));
+let bases: readonly string[] = BASES;
+/** Choose the catalogue bases this module reads from (build-time use). */
+export function useCatalogBases(list: readonly string[]): void {
+  bases = list.length ? list : BASES;
+}
 const ORIGIN = 'https://www.sirimillavinay.online';
 
 interface Assets {
@@ -173,7 +182,7 @@ function within<T>(p: Promise<T>, ms: number): Promise<T | null> {
 }
 
 async function fetchJson(suffix: string): Promise<any> {
-  for (const base of BASES) {
+  for (const base of bases) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 2500);
     try {
@@ -727,6 +736,75 @@ export async function renderHub(
   }
 }
 
+/** 13.6.0 — one entity page as HTML, from a shell, or null when the catalogue
+ *  has nothing for it. Used by renderEntity (edge) and by the build's
+ *  entity prerender; `harvest` receives what the page learned. */
+export async function entityPage(
+  type: string,
+  id: string,
+  shell: string,
+  harvest?: (rows: SeoRow[]) => void,
+): Promise<{ path: string; html: string } | null> {
+  const realId = idOf(id);
+  const meta = await buildMeta(type, realId);
+  if (!meta) return null;
+  // Catalog names are unbounded — keep the description inside Bing's
+  // 25–160 char window regardless of how long a title runs.
+  meta.desc = clampDesc(meta.desc);
+  harvest?.(meta.harvestRows ?? []);
+  const path = `/${type}/${slugify(meta.h1)}-${realId}`;
+  const img = meta.image
+    ? `<meta property="og:image" content="${esc(meta.image)}"/><meta property="og:image:width" content="500"/><meta property="og:image:height" content="500"/><meta name="twitter:image" content="${esc(meta.image)}"/><meta name="twitter:card" content="summary_large_image"/>` +
+      `<meta name="twitter:title" content="${esc(meta.title)}"/><meta name="twitter:description" content="${esc(meta.desc)}"/>`
+    : '';
+  const music = (meta.music ?? [])
+    .map(([k, v]) => `<meta property="${esc(k)}" content="${esc(v)}"/>`)
+    .join('');
+  const head =
+    `<link rel="canonical" href="${ORIGIN}${path}"/>` +
+    `<meta property="og:type" content="${esc(meta.ogType)}"/>` +
+    `<meta property="og:title" content="${esc(meta.title)}"/>` +
+    `<meta property="og:description" content="${esc(meta.desc)}"/>` +
+    `<meta property="og:url" content="${ORIGIN}${path}"/>` +
+    img +
+    music +
+    `<script type="application/ld+json">${jsonForScript(meta.crumbs ? [meta.jsonld, breadcrumbLd(meta.crumbs)] : meta.jsonld)}</script>` +
+    `</head>`;
+  const list = meta.tracks.length
+    ? `<ol>${meta.tracks
+        .slice(0, 40)
+        .map((t) => `<li>${t.id ? `<a href="/song/${esc(slugify(t.title))}-${esc(t.id)}">${esc(t.title)}</a>` : esc(t.title)}${t.artist ? ` — ${esc(t.artist)}` : ''}</li>`)
+        .join('')}</ol>`
+    : '';
+  const xlinks =
+    meta.links && meta.links.length
+      ? `<p>${meta.links.map((l) => `<a href="${esc(l.href)}">${esc(l.label)}</a>`).join(' · ')}</p>`
+      : '';
+  const content =
+    `<main id="seo-content"><h1>${esc(meta.h1)}</h1><p>${esc(meta.sub)}</p>${meta.para ? `<p>${esc(meta.para)}</p>` : ''}${xlinks}` +
+    (meta.image ? `<img src="${esc(meta.image)}" alt="${esc(meta.h1)}" width="300" height="300"/>` : '') +
+    list +
+    (meta.sections ?? '') +
+    `<nav aria-label="VinaX"><a href="/">Home</a> <a href="/charts">Charts</a> <a href="/discover">Discover</a> <a href="/telugu-songs">Telugu Songs</a> <a href="/hindi-songs">Hindi Songs</a> <a href="/tamil-songs">Tamil Songs</a></nav></main>`;
+  const html = shell
+    .replace(/<title>[^<]*<\/title>/, `<title>${esc(meta.title)}</title>`)
+    .replace(/(<meta name="description" content=")[^"]*(")/, `$1${esc(meta.desc)}$2`)
+    // Strip the shell's STATIC og:/twitter: tags before injecting ours —
+    // WhatsApp/Facebook/Twitter honor the FIRST tag they meet, so leaving
+    // the generic site card in place meant every shared song link previewed
+    // as "VinaX — music tuned to you" instead of the song (share-card bug).
+    // og:site_name survives (entity cards should still carry the brand).
+    .replace(/<meta property="og:(type|title|description|image|image:width|image:height)" content="[^"]*"\s*\/?>/g, '')
+    // 13.5.0 — the shell is the prerendered HOME page, which carries its own
+    // canonical and og:url ("/"). Left in, every hub declared two canonicals
+    // with home's first, and Google could file the hub as a copy of home.
+    .replace(/<link rel="canonical" href="[^"]*"\s*\/?>/g, '')
+    .replace(/<meta property="og:url" content="[^"]*"\s*\/?>/g, '')
+    .replace(/<meta name="twitter:(card|image|title|description)" content="[^"]*"\s*\/?>/g, '')
+    .replace('</head>', head);
+  return { path, html: injectContent(html, content) };
+}
+
 export async function renderEntity(
   type: string,
   id: string,
@@ -737,68 +815,11 @@ export async function renderEntity(
   try {
     const shellRes = await env.ASSETS.fetch(new URL('/index.html', request.url).toString());
     const shell = await shellRes.text();
-    const realId = idOf(id);
-    const meta = await buildMeta(type, realId);
-    if (!meta) {
-      return new Response(shell, { headers: { 'content-type': 'text/html; charset=utf-8' } });
-    }
-    // Catalog names are unbounded — keep the description inside Bing's
-    // 25–160 char window regardless of how long a title runs.
-    meta.desc = clampDesc(meta.desc);
     // Feed the SEO corpus with everything this page knows (fire-and-forget:
     // the response never waits on Supabase, failures are invisible).
-    harvestSoon(env, meta.harvestRows ?? [], waitUntil);
-    const path = `/${type}/${slugify(meta.h1)}-${realId}`;
-    const img = meta.image
-      ? `<meta property="og:image" content="${esc(meta.image)}"/><meta property="og:image:width" content="500"/><meta property="og:image:height" content="500"/><meta name="twitter:image" content="${esc(meta.image)}"/><meta name="twitter:card" content="summary_large_image"/>` +
-        `<meta name="twitter:title" content="${esc(meta.title)}"/><meta name="twitter:description" content="${esc(meta.desc)}"/>`
-      : '';
-    const music = (meta.music ?? [])
-      .map(([k, v]) => `<meta property="${esc(k)}" content="${esc(v)}"/>`)
-      .join('');
-    const head =
-      `<link rel="canonical" href="${ORIGIN}${path}"/>` +
-      `<meta property="og:type" content="${esc(meta.ogType)}"/>` +
-      `<meta property="og:title" content="${esc(meta.title)}"/>` +
-      `<meta property="og:description" content="${esc(meta.desc)}"/>` +
-      `<meta property="og:url" content="${ORIGIN}${path}"/>` +
-      img +
-      music +
-      `<script type="application/ld+json">${jsonForScript(meta.crumbs ? [meta.jsonld, breadcrumbLd(meta.crumbs)] : meta.jsonld)}</script>` +
-      `</head>`;
-    const list = meta.tracks.length
-      ? `<ol>${meta.tracks
-          .slice(0, 40)
-          .map((t) => `<li>${t.id ? `<a href="/song/${esc(slugify(t.title))}-${esc(t.id)}">${esc(t.title)}</a>` : esc(t.title)}${t.artist ? ` — ${esc(t.artist)}` : ''}</li>`)
-          .join('')}</ol>`
-      : '';
-    const xlinks =
-      meta.links && meta.links.length
-        ? `<p>${meta.links.map((l) => `<a href="${esc(l.href)}">${esc(l.label)}</a>`).join(' · ')}</p>`
-        : '';
-    const content =
-      `<main id="seo-content"><h1>${esc(meta.h1)}</h1><p>${esc(meta.sub)}</p>${meta.para ? `<p>${esc(meta.para)}</p>` : ''}${xlinks}` +
-      (meta.image ? `<img src="${esc(meta.image)}" alt="${esc(meta.h1)}" width="300" height="300"/>` : '') +
-      list +
-      (meta.sections ?? '') +
-      `<nav aria-label="VinaX"><a href="/">Home</a> <a href="/charts">Charts</a> <a href="/discover">Discover</a> <a href="/telugu-songs">Telugu Songs</a> <a href="/hindi-songs">Hindi Songs</a> <a href="/tamil-songs">Tamil Songs</a></nav></main>`;
-    const html = shell
-      .replace(/<title>[^<]*<\/title>/, `<title>${esc(meta.title)}</title>`)
-      .replace(/(<meta name="description" content=")[^"]*(")/, `$1${esc(meta.desc)}$2`)
-      // Strip the shell's STATIC og:/twitter: tags before injecting ours —
-      // WhatsApp/Facebook/Twitter honor the FIRST tag they meet, so leaving
-      // the generic site card in place meant every shared song link previewed
-      // as "VinaX — music tuned to you" instead of the song (share-card bug).
-      // og:site_name survives (entity cards should still carry the brand).
-      .replace(/<meta property="og:(type|title|description|image|image:width|image:height)" content="[^"]*"\s*\/?>/g, '')
-      // 13.5.0 — the shell is the prerendered HOME page, which carries its own
-      // canonical and og:url ("/"). Left in, every hub declared two canonicals
-      // with home's first, and Google could file the hub as a copy of home.
-      .replace(/<link rel="canonical" href="[^"]*"\s*\/?>/g, '')
-      .replace(/<meta property="og:url" content="[^"]*"\s*\/?>/g, '')
-      .replace(/<meta name="twitter:(card|image|title|description)" content="[^"]*"\s*\/?>/g, '')
-      .replace('</head>', head);
-    return new Response(injectContent(html, content), {
+    const page = await entityPage(type, id, shell, (rows) => harvestSoon(env, rows, waitUntil));
+    if (!page) return new Response(shell, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+    return new Response(page.html, {
       headers: {
         'content-type': 'text/html; charset=utf-8',
         'cache-control': 'public, max-age=3600, s-maxage=86400',
