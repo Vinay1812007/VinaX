@@ -120,6 +120,8 @@
       (function () {
         try {
           if (location.pathname !== '/') return; // only the home route uses it
+          // 13.5.0 — signed out, home is the sign-in screen: nothing would use it.
+          try { if (!localStorage.getItem('vinax.account.v1')) return; } catch (e) { return; }
           var raw = null;
           try { raw = localStorage.getItem('vinax.settings.v1'); } catch (e) { /* private mode */ }
           var st = {};
