@@ -131,6 +131,21 @@ const FACTS: PanelItem[] = [
   { icon: 'child', title: 'Kid mode', text: 'Hides songs the catalogue marks explicit, keeps a separate taste profile and shows no ads.' },
 ];
 
+/** 13.5.0 — published pages a visitor can read without an account. */
+const BROWSE: { href: string; label: string }[] = [
+  { href: '/charts/', label: 'Top charts' },
+  { href: '/top-songs/', label: 'Top songs' },
+  { href: '/trending/', label: 'Popular now' },
+  { href: '/discover/', label: 'Discover' },
+  { href: '/telugu-songs/', label: 'Telugu songs' },
+  { href: '/hindi-songs/', label: 'Hindi songs' },
+  { href: '/tamil-songs/', label: 'Tamil songs' },
+  { href: '/punjabi-songs/', label: 'Punjabi songs' },
+  { href: '/moods/', label: 'Moods' },
+  { href: '/movies/', label: 'Movie music' },
+  { href: '/languages/', label: 'All languages' },
+];
+
 function Panel({ id, side, title, items }: { id: string; side: 'left' | 'right'; title: string; items: PanelItem[] }): ReactNode {
   return (
     <section className={`vx-signin-side is-${side}`} aria-labelledby={id}>
@@ -208,6 +223,20 @@ export default function SignInScreen(): ReactNode {
       </div>
 
       <div className="vx-signin-more">
+        {/* 13.5.0 — published pages anyone can read. Plain links: each page loads with its own text. */}
+        <section aria-labelledby="vx-signin-browse">
+          <h2 id="vx-signin-browse" className="vx-signin-h2">
+            Browse before you sign in
+          </h2>
+          <nav className="vx-signin-browse" aria-label="Browse VinaX">
+            {BROWSE.map((l) => (
+              <a key={l.href} href={l.href}>
+                {l.label}
+              </a>
+            ))}
+          </nav>
+        </section>
+
         <section aria-labelledby="vx-signin-shares">
           <h2 id="vx-signin-shares" className="vx-signin-h2">
             What signing in shares

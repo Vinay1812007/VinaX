@@ -31,17 +31,17 @@ const ROUTES = [
   // the free promise, as the app's first-visit welcome does.
   { p: '/', t: 'VinaX — Free Music Streaming for India', d: 'VinaX is free music streaming for India, with one Google sign-in and no subscription: Telugu, Hindi, Tamil and 9 more languages, smart mixes, live charts and lyrics.', h1: 'VinaX — Free Music Streaming for India' },
   { p: '/discover', t: 'Discover', d: 'Fresh picks, trending songs and ready-made mixes across languages and moods.', h1: 'Discover new music' },
-  { p: '/charts', t: 'Top Charts', d: 'The most popular songs right now, by language — updated daily.', h1: 'Top Charts', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/charts#page', name: 'Top Charts', url: 'https://www.sirimillavinay.online/charts', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
-  { p: '/top-songs', t: 'Top Songs — Most Popular Right Now', d: 'The most popular songs on VinaX right now — Telugu, Hindi, Tamil and nine more languages. Stream the top hits free, updated continuously.', h1: 'Top Songs', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/top-songs#page', name: 'Top Songs on VinaX', url: 'https://www.sirimillavinay.online/top-songs', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
-  { p: '/trending', t: 'Popular Songs', d: 'Popular Telugu, Hindi, Tamil, Punjabi and more on VinaX, from the catalogue. Free streaming, refreshed continuously.', h1: 'Popular Songs', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/trending#page', name: 'Popular Songs on VinaX', url: 'https://www.sirimillavinay.online/trending', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
-  { p: '/most-searched', t: 'Most Searched Songs & Queries', d: 'The songs and searches people look for most on VinaX — across Telugu, Hindi, Tamil and more. Discover what everyone is hunting for. Free to stream.', h1: 'Most Searched Songs', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/most-searched#page', name: 'Most Searched Songs on VinaX', url: 'https://www.sirimillavinay.online/most-searched', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
+  { p: '/charts', t: 'Top Charts', d: 'The most popular songs right now, by language — updated daily.', h1: 'Top Charts', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/charts/#page', name: 'Top Charts', url: 'https://www.sirimillavinay.online/charts/', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
+  { p: '/top-songs', t: 'Top Songs — Most Popular Right Now', d: 'The most popular songs on VinaX right now — Telugu, Hindi, Tamil and nine more languages. Stream the top hits free, updated continuously.', h1: 'Top Songs', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/top-songs/#page', name: 'Top Songs on VinaX', url: 'https://www.sirimillavinay.online/top-songs/', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
+  { p: '/trending', t: 'Popular Songs', d: 'Popular Telugu, Hindi, Tamil, Punjabi and more on VinaX, from the catalogue. Free streaming, refreshed continuously.', h1: 'Popular Songs', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/trending/#page', name: 'Popular Songs on VinaX', url: 'https://www.sirimillavinay.online/trending/', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
+  { p: '/most-searched', t: 'Most Searched Songs & Queries', d: 'The songs and searches people look for most on VinaX — across Telugu, Hindi, Tamil and more. Discover what everyone is hunting for. Free to stream.', h1: 'Most Searched Songs', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/most-searched/#page', name: 'Most Searched Songs on VinaX', url: 'https://www.sirimillavinay.online/most-searched/', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
   { p: '/explore', t: 'Explore', d: 'Browse by mood, genre, language, region and film soundtracks.', h1: 'Explore VinaX' },
-  { p: '/moods', t: 'Moods', d: 'Music for every moment — romance, workout, chill, party, focus and more.', h1: 'Music for every mood', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/moods#page', name: 'Music by Mood', url: 'https://www.sirimillavinay.online/moods', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
-  { p: '/movies', t: 'Movie Music', d: 'Film soundtracks and hit songs from the movies.', h1: 'Movie soundtracks', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/movies#page', name: 'Movie Soundtracks', url: 'https://www.sirimillavinay.online/movies', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
+  { p: '/moods', t: 'Moods', d: 'Music for every moment — romance, workout, chill, party, focus and more.', h1: 'Music for every mood', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/moods/#page', name: 'Music by Mood', url: 'https://www.sirimillavinay.online/moods/', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
+  { p: '/movies', t: 'Movie Music', d: 'Film soundtracks and hit songs from the movies.', h1: 'Movie soundtracks', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/movies/#page', name: 'Movie Soundtracks', url: 'https://www.sirimillavinay.online/movies/', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
   { p: '/regions', t: 'Regions', d: 'Music tuned to your region and language.', h1: 'Music by region' },
-  { p: '/languages', t: 'Languages', d: 'Pin the languages you listen to — Telugu, Hindi, Tamil, English and more.', h1: 'Browse by language', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/languages#page', name: 'Music by Language', url: 'https://www.sirimillavinay.online/languages', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
+  { p: '/languages', t: 'Languages', d: 'Pin the languages you listen to — Telugu, Hindi, Tamil, English and more.', h1: 'Browse by language', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/languages/#page', name: 'Music by Language', url: 'https://www.sirimillavinay.online/languages/', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
   { p: '/made-for-you', t: 'Made For You', d: 'Personal mixes built from your listening — private and on-device.', h1: 'Made for you' },
-  { p: '/about', t: 'About', d: 'VinaX is a free music app for India. Private by design, tuned to you.', h1: 'About VinaX', ld: { '@context': 'https://schema.org', '@type': 'AboutPage', '@id': 'https://www.sirimillavinay.online/about#page', name: 'About VinaX', url: 'https://www.sirimillavinay.online/about', mainEntity: { '@id': 'https://www.sirimillavinay.online/#org' } } },
+  { p: '/about', t: 'About', d: 'VinaX is a free music app for India. Private by design, tuned to you.', h1: 'About VinaX', ld: { '@context': 'https://schema.org', '@type': 'AboutPage', '@id': 'https://www.sirimillavinay.online/about/#page', name: 'About VinaX', url: 'https://www.sirimillavinay.online/about/', mainEntity: { '@id': 'https://www.sirimillavinay.online/#org' } } },
   { p: '/help', t: 'Help & Feedback', d: 'FAQs, how-tos, and how to report a problem.', h1: 'Help & Feedback' },
   { p: '/VinaXAI', t: 'VinaX AI — ask anything', d: 'Chat with VinaX AI — ask anything and get clean answers with code, tables and images. Free and private.', h1: 'VinaX AI' },
   { p: '/download', t: 'Get the App', d: 'Install VinaX on Android for background playback and offline downloads.', h1: 'Get VinaX for Android' },
@@ -86,7 +86,14 @@ const NAV_LINKS = [
   ['/made-for-you', 'Made For You'], ['/about', 'About'], ['/privacy', 'Privacy'],
   ['/terms', 'Terms'], ['/contact', 'Contact'],
 ];
-const NAV = `<nav aria-label="Browse VinaX">${NAV_LINKS.map(([h, l]) => `<a href="${h}">${esc(l)}</a>`).join(' ')}</nav>`;
+// 13.5.0 — every page's public URL is its trailing-slash form: the host
+// serves charts/index.html at /charts/ with a 200 and answers /charts with a
+// 308 to it, and the sitemap lists /charts/. Canonicals, og:url, JSON-LD and
+// these links all use that form, so nothing points at a redirect.
+const pageUrl = (p) => (p === '/' ? '/' : `${p}/`);
+/** Links to prerendered pages inside rendered bodies (About, Help, hubs) take the same form. */
+const slashLinks = (html) => html.replace(/href="(\/[A-Za-z][\w-]*)"/g, (m, p) => (ROUTES.some((r) => r.p === p) ? `href="${p}/"` : m));
+const NAV = `<nav aria-label="Browse VinaX">${NAV_LINKS.map(([h, l]) => `<a href="${pageUrl(h)}">${esc(l)}</a>`).join(' ')}</nav>`;
 
 // Per-route try/catch so a single bad route doesn't skip the other 27 — and
 // the process exits non-zero if any route failed OR if the base template
@@ -216,10 +223,10 @@ const failures = [];
 for (const r of ROUTES) {
   try {
     const head =
-      `<link rel="canonical" href="${ORIGIN}${r.p}"/>` +
+      `<link rel="canonical" href="${ORIGIN}${pageUrl(r.p)}"/>` +
       `<meta property="og:title" content="${esc(r.t)} · VinaX"/>` +
       `<meta property="og:description" content="${esc(r.d)}"/>` +
-      `<meta property="og:url" content="${ORIGIN}${r.p}"/>` +
+      `<meta property="og:url" content="${ORIGIN}${pageUrl(r.p)}"/>` +
       (r.ld ? `<script type="application/ld+json">${jsonForScript(r.ld)}</script>` : '') +
       `</head>`;
     const content =
@@ -227,7 +234,7 @@ for (const r of ROUTES) {
       // (PSI 2026-08: "Document does not have a main landmark" — the audit
       // snapshots the static shell before React mounts <main id="main-content">).
       // React wipes #root children on hydrate, so there is never a duplicate.
-      `<main id="seo-content">${bodyFor(r)}${NAV}</main>`;
+      slashLinks(`<main id="seo-content">${bodyFor(r)}${NAV}</main>`);
     const html = base
       .replace(/<title>[^<]*<\/title>/, `<title>${esc(r.t)} · VinaX</title>`)
       .replace(/(<meta name="description" content=")[^"]*(")/, `$1${esc(r.d)}$2`)

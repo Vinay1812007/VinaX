@@ -5,13 +5,15 @@
  */
 import { expect, test } from '@playwright/test';
 
-test('signed out, every page is the sign-in screen; the legal pages stay readable', async ({ page }) => {
+test('signed out, every personal page is the sign-in screen; the legal pages stay readable', async ({ page }) => {
   await page.route('**/accounts.google.com/**', (r) => r.abort());
-  for (const path of ['/', '/search', '/library', '/settings', '/VinaXAI']) {
+  // 13.5.0 — published pages (Charts, hubs, VinaX AI's page…) show their own text instead; see below.
+  for (const path of ['/', '/search', '/library', '/settings', '/song/x-123']) {
     await page.goto(`${path}?e2e-signed-out`);
     await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toBeVisible();
     await expect(page.getByText('Sign in with your Google account to start listening.', { exact: false })).toBeVisible();
-    await expect(page.locator('nav')).toHaveCount(0);
+    // No app navigation (the sign-in page's own Browse links aside, 13.5.0).
+    await expect(page.locator('nav:not(.vx-signin-browse)')).toHaveCount(0);
   }
   await page.goto('/privacy?e2e-signed-out');
   await expect(page.getByRole('heading', { name: 'Your account and what syncs' })).toBeVisible();
@@ -104,4 +106,39 @@ test('13.4.0: the avatar opens profile and app settings, and Sign out signs out'
   await page.getByRole('button', { name: /profile and settings/ }).click();
   await page.getByRole('menuitem', { name: 'Sign out' }).click();
   await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toBeVisible();
+});
+
+test('13.5.0: signed out, a published page shows its own text with a sign-in card, and calls no catalogue API', async ({ page }) => {
+  await page.route('**/accounts.google.com/**', (r) => r.abort());
+  const api: string[] = [];
+  page.on('request', (r) => {
+    const p = new URL(r.url()).pathname;
+    if (p.startsWith('/api/')) api.push(p);
+  });
+  for (const [path, h1] of [['/charts/', 'Top Charts'], ['/telugu-songs/', 'Telugu Songs'], ['/privacy/', 'Privacy']] as const) {
+    await page.goto(`${path}?e2e-signed-out`);
+    await expect(page.getByRole('heading', { name: h1, level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Listen free on VinaX' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toHaveCount(0);
+    // The page's own links stay crawlable, in the form the host answers with a 200.
+    await expect(page.locator('#vx-public-content a[href="/charts/"]').first()).toBeAttached();
+  }
+  await page.waitForTimeout(500);
+  // Only the maintenance switch is asked; no catalogue, config or account calls.
+  expect(api.filter((p) => p !== '/api/site-mode')).toEqual([]);
+});
+
+test('13.5.0: the sign-in page links to the published pages', async ({ page }) => {
+  await page.route('**/accounts.google.com/**', (r) => r.abort());
+  await page.goto('/?e2e-signed-out');
+  const browse = page.getByRole('navigation', { name: 'Browse VinaX' });
+  await expect(browse.getByRole('link', { name: 'Top charts' })).toHaveAttribute('href', '/charts/');
+  await browse.getByRole('link', { name: 'Telugu songs' }).click();
+  await expect(page.getByRole('heading', { name: 'Telugu Songs', level: 1 })).toBeVisible();
+});
+
+test('13.5.0: signed in, a published page is the full app page', async ({ page }) => {
+  await page.goto('/charts/');
+  await expect(page.getByRole('heading', { name: 'Listen free on VinaX' })).toHaveCount(0);
+  await expect(page.locator('.vx-topbar')).toBeVisible();
 });

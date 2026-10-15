@@ -712,6 +712,11 @@ export async function renderHub(
       .replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`)
       .replace(/(<meta name="description" content=")[^"]*(")/, `$1${esc(desc)}$2`)
       .replace(/<meta property="og:(type|title|description|image|image:width|image:height)" content="[^"]*"\s*\/?>/g, '')
+      // 13.5.0 — the shell is the prerendered HOME page, which carries its own
+      // canonical and og:url ("/"). Left in, every hub declared two canonicals
+      // with home's first, and Google could file the hub as a copy of home.
+      .replace(/<link rel="canonical" href="[^"]*"\s*\/?>/g, '')
+      .replace(/<meta property="og:url" content="[^"]*"\s*\/?>/g, '')
       .replace(/<meta name="twitter:(card|image|title|description)" content="[^"]*"\s*\/?>/g, '')
       .replace('</head>', head);
     return new Response(injectContent(html, content), {
@@ -786,6 +791,11 @@ export async function renderEntity(
       // as "VinaX — music tuned to you" instead of the song (share-card bug).
       // og:site_name survives (entity cards should still carry the brand).
       .replace(/<meta property="og:(type|title|description|image|image:width|image:height)" content="[^"]*"\s*\/?>/g, '')
+      // 13.5.0 — the shell is the prerendered HOME page, which carries its own
+      // canonical and og:url ("/"). Left in, every hub declared two canonicals
+      // with home's first, and Google could file the hub as a copy of home.
+      .replace(/<link rel="canonical" href="[^"]*"\s*\/?>/g, '')
+      .replace(/<meta property="og:url" content="[^"]*"\s*\/?>/g, '')
       .replace(/<meta name="twitter:(card|image|title|description)" content="[^"]*"\s*\/?>/g, '')
       .replace('</head>', head);
     return new Response(injectContent(html, content), {

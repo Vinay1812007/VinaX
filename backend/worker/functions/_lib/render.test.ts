@@ -112,6 +112,20 @@ describe('mood x language hubs', () => {
     expect(html).toContain('rel="canonical" href="https://www.sirimillavinay.online/telugu-romantic-songs"');
   });
 
+  it('13.5.0: a hub served from the prerendered home shell declares ONE canonical and og:url — its own', async () => {
+    vi.stubGlobal('fetch', () => Promise.resolve(Response.json({ data: { results: [] } })));
+    // dist/index.html is the prerendered HOME page: it carries home's canonical and og:url.
+    const homeShell = shell.replace(
+      '</head>',
+      '<link rel="canonical" href="https://www.sirimillavinay.online/"/><meta property="og:url" content="https://www.sirimillavinay.online/"/></head>',
+    );
+    const homeEnv = { ASSETS: { fetch: () => Promise.resolve(new Response(homeShell, { headers: { 'content-type': 'text/html' } })) } };
+    const html = await (await renderHub('hindi', 'sad', new Request('https://www.sirimillavinay.online/hindi-sad-songs'), homeEnv)).text();
+    expect(html.match(/rel="canonical"/g)).toHaveLength(1);
+    expect(html.match(/property="og:url"/g)).toHaveLength(1);
+    expect(html).toContain('rel="canonical" href="https://www.sirimillavinay.online/hindi-sad-songs"');
+  });
+
   it('renderHub fails soft to the plain shell when the catalog is down', async () => {
     vi.stubGlobal('fetch', () => Promise.reject(new Error('down')));
     const res = await renderHub('telugu', 'romantic', new Request('https://www.sirimillavinay.online/telugu-romantic-songs'), env());
