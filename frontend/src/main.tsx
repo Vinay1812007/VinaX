@@ -9,6 +9,11 @@ import './styles/shell.css';
 import './styles/features.css';
 import './styles/templates/index.css';
 import './styles/festivals.css';
+import { captureServerPage } from './services/seo/serverPage';
+
+// 13.5.0 — keep this URL's server-rendered text before React replaces #root
+// (signed-out visitors read it on PublicPage; see services/seo/serverPage.ts).
+captureServerPage();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

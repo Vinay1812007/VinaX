@@ -27,7 +27,10 @@ export const SYNC_ENDPOINT = `${ORIGIN}/api/account/data`;
 export const SYNC_CATEGORIES: readonly BackupCategoryId[] = ['settings', 'library', 'smartCollections', 'history', 'taste', 'bookmarks', 'homeLayout'];
 const STATE_KEY = 'vinax.account.sync.v1';
 const PUSH_DELAY_MS = 4_000;
-const PUSH_EVERY_MS = 3 * 60_000;
+// 13.5.0 — 10 minutes, was 3. Each tick is a pull (a Worker request) even
+// when nothing changed; local changes still push 4 s after they happen, and
+// a round also runs when the tab is hidden and when it comes back online.
+const PUSH_EVERY_MS = 10 * 60_000;
 /** The server's cap is 2 MB; stay under it. */
 const MAX_BYTES = 1_900_000;
 

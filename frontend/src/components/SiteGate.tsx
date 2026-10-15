@@ -13,8 +13,13 @@ export function SiteGate({ children }: { children: ReactNode }) {
   const q = useQuery<SiteMode>({
     queryKey: ['site-mode'],
     enabled: typeof window !== 'undefined',
-    staleTime: 55_000,
-    refetchInterval: 60_000,
+    // 13.5.0 — every open tab asked once a minute (60 Worker requests an
+    // hour each, ~1,440 a day) to catch a switch that is almost never on.
+    // Now: once on load, then every 30 minutes; while the site IS in
+    // maintenance it still re-checks every minute, so listeners come back
+    // as soon as the owner turns it off.
+    staleTime: 25 * 60_000,
+    refetchInterval: (query) => (query.state.data?.mode === 'maintenance' ? 60_000 : 30 * 60_000),
     refetchIntervalInBackground: false,
     queryFn: async () => {
       const base = isNativePlatform() ? 'https://www.sirimillavinay.online' : '';

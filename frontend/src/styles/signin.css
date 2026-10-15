@@ -98,6 +98,14 @@ html.light .vx-google-btn { background: #fff; color: #1f1f1f; }
 .vx-signin-facts strong { color: rgb(var(--ink-100)); }
 .vx-signin-split { margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 .vx-signin-note { margin-top: 12px; font-size: 14px; }
+/* 13.5.0 — published pages to browse before signing in. */
+.vx-signin-browse { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
+.vx-signin-browse a {
+  display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 9999px;
+  font-size: 14px; font-weight: 600; color: rgb(var(--ink-100));
+  background: rgb(var(--ink-100) / 0.05); border: 1px solid var(--vx-border);
+}
+.vx-signin-browse a:hover, .vx-signin-browse a:focus-visible { background: rgb(var(--ink-100) / 0.1); }
 .vx-signin-faq { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
 .vx-signin-faq details { border-radius: 14px; background: rgb(var(--ink-100) / 0.04); border: 1px solid var(--vx-border); }
 .vx-signin-faq summary {

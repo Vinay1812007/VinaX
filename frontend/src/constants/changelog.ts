@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '13.5.0': {
+    title: 'Look around before you sign in',
+    changes: [
+      { type: 'new', text: 'Charts, Top songs, Discover, Moods, Movie music and every language page can be read without an account, with a Sign in card for when you want to listen.' },
+      { type: 'new', text: 'The sign-in page has a Browse section that opens those pages.' },
+      { type: 'improved', text: 'VinaX checks in with the server less often while it sits open, so it uses less data in the background.' },
+      { type: 'fixed', text: 'Search engines now see each page’s own address and text, so VinaX pages can show up properly in search results.' },
+    ],
+  },
   '13.4.0': {
     title: 'Your profile, one tap away',
     changes: [
