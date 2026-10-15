@@ -36,7 +36,7 @@ export default function ContactPage() {
           removals propagate to all clients within minutes.
         </p>
         <p className="vx-doc-end">
-          You sign in to VinaX with Google. You can sign out or delete your account yourself in Settings → Your data. Everything else,
+          You sign in to VinaX with Google. You can sign out or delete your account yourself in Settings → Profile. Everything else,
           we&rsquo;re happy to help with.
         </p>
       </div>

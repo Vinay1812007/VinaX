@@ -25,25 +25,61 @@ html.light .vx-google-btn { background: #fff; color: #1f1f1f; }
     rgb(var(--ink-950));
   background-repeat: no-repeat;
 }
-/* 13.3.0 — the card still owns the first screen; the rest of the page sits below it. */
+/* 13.4.0 — the first screen: the card in the middle, "What you get" on its
+   left and "Free, and how it stays free" on its right (desktop). Narrower,
+   the two panels sit side by side under the card; on a phone they stack. */
 .vx-signin-hero {
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
   gap: 20px;
-  padding: max(24px, env(safe-area-inset-top)) 0 24px;
+  padding: max(10dvh, 24px, env(safe-area-inset-top)) 0 48px;
 }
-.vx-signin-peek {
-  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 16px;
-  border-radius: 9999px; color: rgb(var(--ink-300)); font-size: 14px; font-weight: 600;
+.vx-signin-side {
+  width: min(560px, 100%);
+  padding: 20px 20px 8px;
+  border-radius: 24px;
+  background: rgb(var(--ink-100) / 0.035);
+  border: 1px solid var(--vx-border);
 }
-.vx-signin-peek:hover, .vx-signin-peek:focus-visible { color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.06); }
-.vx-signin-peek svg { animation: vxSigninNudge 2.4s ease-in-out infinite; }
-@keyframes vxSigninNudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
-@media (prefers-reduced-motion: reduce) { .vx-signin-peek svg { animation: none; } }
-html.reduce-motion .vx-signin-peek svg { animation: none; }
+.vx-signin-side-title { font-size: 19px; font-weight: 800; letter-spacing: -0.015em; color: rgb(var(--ink-100)); }
+.vx-signin-side-list { margin-top: 12px; display: flex; flex-direction: column; }
+.vx-signin-side-list li { display: flex; align-items: flex-start; gap: 14px; padding: 12px 0; border-top: 1px solid var(--vx-border); }
+.vx-signin-side-list li:first-child { border-top: 0; padding-top: 4px; }
+.vx-signin-side-list li > span:last-child { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.vx-signin-side-list strong { color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; }
+.vx-signin-side-list li > span:last-child > span { color: rgb(var(--ink-300)); font-size: 13.5px; line-height: 1.5; }
+.vx-signin-icon {
+  display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 12px;
+  color: rgb(var(--vx-accent-rgb, 236 72 153));
+  background: rgb(var(--vx-accent-rgb, 236 72 153) / 0.12);
+  box-shadow: inset 0 0 0 1px rgb(var(--vx-accent-rgb, 236 72 153) / 0.22);
+}
+.vx-signin-side.is-right .vx-signin-icon {
+  color: rgb(var(--tide-400, 45 212 191));
+  background: rgb(var(--tide-500, 20 184 166) / 0.12);
+  box-shadow: inset 0 0 0 1px rgb(var(--tide-500, 20 184 166) / 0.24);
+}
+@media (min-width: 900px) {
+  .vx-signin-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); width: min(1100px, 100%); margin: 0 auto; align-items: start; }
+  .vx-signin-card { grid-column: 1 / -1; }
+  .vx-signin-side { width: 100%; height: 100%; }
+}
+@media (min-width: 1240px) {
+  .vx-signin-hero {
+    grid-template-columns: minmax(0, 1fr) minmax(380px, 420px) minmax(0, 1fr);
+    grid-template-areas: 'left card right';
+    align-items: center;
+    width: min(1400px, 100%);
+    min-height: 100dvh;
+    gap: 28px;
+    padding-top: max(24px, env(safe-area-inset-top));
+  }
+  .vx-signin-card { grid-area: card; grid-column: auto; }
+  .vx-signin-side { height: auto; }
+  .vx-signin-side.is-left { grid-area: left; }
+  .vx-signin-side.is-right { grid-area: right; }
+}
 
 .vx-signin-more { width: min(760px, 100%); margin: 0 auto; display: flex; flex-direction: column; gap: 48px; color: rgb(var(--ink-300)); }
 .vx-signin-more section { scroll-margin-top: 24px; }

@@ -70,6 +70,7 @@ import {
   ShieldIcon,
   SparkleIcon,
   SunIcon,
+  UsersIcon,
   WaveIcon,
   XIcon,
 } from '@/components/Icons';
@@ -91,6 +92,8 @@ const ResetTasteSheet = lazy(() => import('@/features/personalization/ResetTaste
  */
 
 const SECTIONS: SectionDef[] = [
+  // 13.4.0 — the account has its own section, first (the top-bar avatar's menu links here).
+  { id: 'profile', title: 'Profile', icon: UsersIcon },
   { id: 'appearance', title: 'Appearance', icon: SunIcon },
   { id: 'playback', title: 'Playback', icon: PlayIcon },
   { id: 'sound', title: 'Sound', icon: WaveIcon },
@@ -459,6 +462,12 @@ export default function SettingsPage() {
           </div>
           {!wide && !q && <SectionJump sections={sections} />}
           {q && <SearchStatus q={q} />}
+
+          <Section title="Profile" id="profile" lede="Your Google account, what syncs with it, and what VinaX has learned about you.">
+            <AccountRow />
+            <LinkRow to="/taste-profile" label="Taste profile" note="The languages, artists and moods VinaX has learned you like." keywords="taste profile likes profile settings" />
+            <LinkRow to="/stats" label="Listening stats" note="Your minutes, top songs and streaks." keywords="stats minutes streak profile" />
+          </Section>
 
           <Section title="Appearance" id="appearance" lede="App style, language, theme, colour and size.">
             <Block label="App style" note="Six complete looks: colours, type, shapes, the navigation and the player all change. Your music, library and settings stay as they are." keywords="template look design layout skin ui ux aura pulse sangam nocturne marquee vibe redesign appearance">
@@ -904,8 +913,7 @@ export default function SettingsPage() {
             <LinkRow to="/taste-profile" label="What VinaX knows about you" note="Your taste profile, in full." keywords="see taste profile" />
           </Section>
 
-          <Section title="Your data" id="your-data" lede="Your library, history and settings live on this device. Back them up, move them or clear them.">
-            <AccountRow />
+          <Section title="Your data" id="your-data" lede="Your library, history and settings sync with your account. Back them up, move them or clear them.">
             <Group title="Back up and move">
               <LinkRow to="/handoff" label="Move to a new device" note="An encrypted, one-use QR. Parked for 10 minutes." keywords="handoff transfer qr" />
               <Row label="Backup Center" note="What a backup holds and leaves out; restore with a merge-or-replace preview and undo." keywords="restore merge">

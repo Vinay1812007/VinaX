@@ -12,6 +12,17 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '13.4.0': {
+    title: 'Your profile, one tap away',
+    changes: [
+      { type: 'new', text: 'Tap your profile picture for a menu with your account, taste profile, listening stats and data, the app settings you change most, and Sign out.' },
+      { type: 'new', text: 'Settings has a Profile section at the top: your Google account, what syncs, Sign out and Delete account.' },
+      { type: 'improved', text: 'The sign-in page shows what you get on one side and how VinaX stays free on the other, so you see it all without scrolling.' },
+      { type: 'improved', text: 'About, Help, Get the app and Copyright open without signing in, like Privacy and Terms.' },
+      { type: 'fixed', text: 'Sign out works. A background account check could sign you straight back in a moment later.' },
+      { type: 'fixed', text: 'VinaX no longer checks your account over and over while it is open. It checks once per visit, so pages load faster and use less data.' },
+    ],
+  },
   '13.3.0': {
     title: 'A welcome that answers your questions',
     changes: [

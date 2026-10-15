@@ -80,7 +80,8 @@ test('top bar: no search box, Home actions live in it; Discover has no Ads tile 
   const bar = page.locator('.vx-topbar');
   await expect(bar.getByRole('button', { name: 'Notifications' })).toBeVisible();
   await expect(bar.getByRole('button', { name: 'Toggle theme' })).toBeVisible();
-  await expect(bar.getByRole('link', { name: /settings/i })).toBeVisible();
+  // 13.4.0 — the avatar is a menu button (profile + app settings), not a link.
+  await expect(bar.getByRole('button', { name: /profile and settings/i })).toBeVisible();
   expect(await bar.getByRole('link', { name: /search/i }).count()).toBe(0);
   await page.screenshot({ path: 'test-results/v701-home-412.png' });
   await page.goto('/search');

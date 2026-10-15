@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDownIcon } from './Icons';
@@ -10,6 +10,8 @@ import { cn } from '@/utils/cn';
 import { useAccount } from './useAccount';
 
 const ACTIONS_SLOT = 'vx-topbar-actions';
+// 13.4.0 — the avatar's menu loads the first time it opens.
+const ProfileMenu = lazy(() => import('./ProfileMenu'));
 
 /**
  * v7.0.1 — the bar carries no search box: Search is a primary destination and
@@ -18,6 +20,8 @@ const ACTIONS_SLOT = 'vx-topbar-actions';
  * Left: back / forward (desktop) or the mark (phone) and the page name.
  * Right: the page's own actions (portalled in through <TopBarActions>), the
  * command palette key and the listener's avatar, which opens Settings.
+ * 13.4.0 — the avatar opens a menu instead: profile settings, app settings
+ * and Sign out (ProfileMenu).
  */
 export function TopBar({ onCommands }: { onCommands: () => void }) {
   const navigate = useNavigate();
@@ -42,6 +46,15 @@ export function TopBar({ onCommands }: { onCommands: () => void }) {
   const initial = name ? name.slice(0, 1).toUpperCase() : '';
   const [photoFailed, setPhotoFailed] = useState(false);
   const photo = !photoFailed && account?.user.picture ? account.user.picture : null;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const avatarRef = useRef<HTMLButtonElement>(null);
+  const closeMenu = useCallback((refocus: boolean) => {
+    setMenuOpen(false);
+    if (refocus) avatarRef.current?.focus();
+  }, []);
+  // A new page closes the menu.
+  useEffect(() => setMenuOpen(false), [pathname]);
+  const face = photo ? <img src={photo} alt="" width={36} height={36} referrerPolicy="no-referrer" onError={() => setPhotoFailed(true)} /> : initial || <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-5 h-5" aria-hidden><circle cx="12" cy="8.5" r="3.8" /><path d="M4.5 20c1.2-3.6 4.1-5.5 7.5-5.5s6.3 1.9 7.5 5.5" /></svg>;
   return (
     <>
     <div ref={sentinel} className="vx-topbar-sentinel" aria-hidden />
@@ -56,9 +69,26 @@ export function TopBar({ onCommands }: { onCommands: () => void }) {
         {/* Pages add their own actions here through <TopBarActions>. */}
         <div id={ACTIONS_SLOT} className="contents" />
         <button type="button" className="vx-command-key hidden lg:inline-flex" onClick={onCommands} aria-label="Open command palette"><kbd>⌘</kbd><kbd>K</kbd></button>
-        <Link to="/settings" className={cn('vx-avatar', photo && 'has-photo')} aria-label={name ? `${name} — profile and settings` : 'Profile and settings'} title={name ? `${name} — profile and settings` : 'Profile and settings'}>
-          {photo ? <img src={photo} alt="" width={36} height={36} referrerPolicy="no-referrer" onError={() => setPhotoFailed(true)} /> : initial ||<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-5 h-5" aria-hidden><circle cx="12" cy="8.5" r="3.8" /><path d="M4.5 20c1.2-3.6 4.1-5.5 7.5-5.5s6.3 1.9 7.5 5.5" /></svg>}
-        </Link>
+        <span className="vx-avatar-wrap">
+          {/* No title tooltip: it sat over the Now playing panel. The label carries the name. */}
+          <button
+            ref={avatarRef}
+            type="button"
+            className={cn('vx-avatar', photo && 'has-photo', menuOpen && 'is-open')}
+            aria-label={name ? `${name} — profile and settings` : 'Profile and settings'}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-controls={menuOpen ? 'vx-profile-menu' : undefined}
+            onClick={() => setMenuOpen((o) => !o)}
+          >
+            {face}
+          </button>
+          {menuOpen && (
+            <Suspense fallback={null}>
+              <ProfileMenu account={account} name={name} avatar={face} onClose={closeMenu} />
+            </Suspense>
+          )}
+        </span>
       </div>
     </header>
     </>

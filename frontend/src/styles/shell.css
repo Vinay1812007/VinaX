@@ -362,6 +362,50 @@ html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)
 }
 .vx-avatar::after { content: ''; position: absolute; inset: -4px; }
 .vx-avatar:hover { transform: scale(1.05); }
+.vx-avatar.is-open { box-shadow: 0 0 0 2px rgb(var(--ink-950)), 0 0 0 4px rgb(var(--vx-accent-rgb, 236 72 153) / 0.9); }
+.vx-avatar:focus-visible { outline: 2px solid rgb(var(--vx-accent-rgb, 236 72 153)); outline-offset: 3px; }
+
+/* 13.4.0 — the avatar's menu (components/ProfileMenu.tsx): who, profile
+   settings, app settings, Sign out. Anchored under the avatar's right edge. */
+.vx-avatar-wrap { position: relative; display: inline-flex; }
+.vx-pmenu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 80;
+  width: min(300px, calc(100vw - 24px));
+  max-height: calc(100dvh - 96px);
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 18px;
+  border: 1px solid var(--vx-border);
+  background-color: rgb(var(--ink-900) / 0.96);
+  animation: vx-pmenu-in 160ms var(--ease-calm, ease-out);
+  transform-origin: top right;
+}
+html.light .vx-pmenu { background-color: rgb(255 255 255 / 0.97); }
+@keyframes vx-pmenu-in { from { opacity: 0; transform: translateY(-4px) scale(0.97); } }
+.vx-pmenu-who { display: flex; align-items: center; gap: 12px; padding: 10px 10px 12px; margin-bottom: 4px; border-bottom: 1px solid var(--vx-border); }
+.vx-pmenu-avatar {
+  display: grid; place-items: center; flex: none; width: 44px; height: 44px; overflow: hidden;
+  border-radius: 50%; background: var(--vx-glow); color: var(--vx-on-accent); font-size: 17px; font-weight: 800;
+}
+.vx-pmenu-avatar > img { width: 100%; height: 100%; object-fit: cover; }
+.vx-pmenu-id { display: flex; flex-direction: column; min-width: 0; }
+.vx-pmenu-name { font-size: 15px; font-weight: 800; color: rgb(var(--ink-100)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vx-pmenu-sub { font-size: 12.5px; color: rgb(var(--ink-400)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vx-pmenu-label { padding: 10px 10px 4px; font-size: 11.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: rgb(var(--ink-400)); }
+.vx-pmenu-item {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 42px; padding: 0 10px;
+  border-radius: 10px; text-align: left; font-size: 14px; font-weight: 600; color: rgb(var(--ink-100)); outline: none;
+}
+.vx-pmenu-item > svg { flex: none; color: rgb(var(--ink-300)); }
+.vx-pmenu-item:hover, .vx-pmenu-item:focus-visible { background: rgb(var(--ink-100) / 0.08); }
+.vx-pmenu-item:focus-visible { box-shadow: inset 0 0 0 2px rgb(var(--vx-accent-rgb, 236 72 153) / 0.8); }
+.vx-pmenu-item.is-out { margin-top: 4px; border-top: 1px solid var(--vx-border); border-radius: 0 0 10px 10px; color: rgb(var(--ember-400, 251 113 133)); }
+.vx-pmenu-item.is-out > svg { color: inherit; }
+@media (prefers-reduced-motion: reduce) { .vx-pmenu { animation: none; } }
+html.reduce-motion .vx-pmenu { animation: none; }
 @media (max-width: 767px) {
   .vx-topbar { gap: 10px; margin-bottom: 2px; padding: max(8px, var(--safe-top)) var(--vx-gutter) 8px; }
   .vx-topbar-context { font-size: 17px; }
