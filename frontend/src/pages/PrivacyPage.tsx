@@ -17,7 +17,7 @@ export default function PrivacyPage() {
           of your library and playlists, listening history, taste profile, smart collections, bookmarks, Home layout and
           settings with your account, so they follow you to every device you sign in on. This copy is stored by our
           database provider and is only readable by VinaX&rsquo;s server. <strong>VinaX AI chats, downloads, searches
-          and your queue are not synced</strong> — they stay on the device. Delete account (Settings → Your data)
+          and your queue are not synced</strong> — they stay on the device. Delete account (Settings → Profile)
           removes the account and its synced copy.
         </p>
         <H>What we receive — only if you opt in</H>

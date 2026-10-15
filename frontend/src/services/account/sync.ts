@@ -205,7 +205,13 @@ export function installAccountSync(): void {
   if (installed || typeof window === 'undefined') return;
   installed = true;
   void syncNow();
+  // 13.4.0 — a new SESSION syncs; a refreshed name or photo on the same
+  // session does not (that rewrite used to start a sync round every time).
+  let lastSession = currentAccount()?.session ?? null;
   onAccountChange((a) => {
+    const session = a?.session ?? null;
+    if (session === lastSession) return;
+    lastSession = session;
     if (a) void syncNow();
     else setStatus('signed_out');
   });

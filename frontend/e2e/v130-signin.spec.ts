@@ -53,3 +53,55 @@ test('signed in, the app opens with the account in the top bar', async ({ page }
   await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toHaveCount(0);
   await expect(page.locator('.vx-avatar')).toHaveAttribute('aria-label', /Tester/);
 });
+
+test('13.4.0: the sign-in card has What you get on its left and Free on its right; no "What you get with VinaX" link', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.route('**/accounts.google.com/**', (r) => r.abort());
+  await page.goto('/?e2e-signed-out');
+  await expect(page.getByText('What you get with VinaX')).toHaveCount(0);
+  const box = async (sel: string) => (await page.locator(sel).boundingBox())!;
+  const card = await box('.vx-signin-card');
+  const left = await box('.vx-signin-side.is-left');
+  const right = await box('.vx-signin-side.is-right');
+  expect(left.x + left.width).toBeLessThanOrEqual(card.x);
+  expect(right.x).toBeGreaterThanOrEqual(card.x + card.width);
+  // All three sit on the first screen.
+  for (const b of [card, left, right]) expect(b.y + b.height).toBeLessThanOrEqual(900);
+});
+
+test('13.4.0: About, Help and Get the app open signed out', async ({ page }) => {
+  for (const path of ['/about', '/help', '/download']) {
+    await page.goto(`${path}?e2e-signed-out`);
+    await expect(page.locator('main').first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toHaveCount(0);
+  }
+});
+
+test('13.4.0: the avatar opens profile and app settings, and Sign out signs out', async ({ page }) => {
+  // A returning listener: no first-run sheet over the top bar.
+  await page.addInitScript(() => {
+    if (!localStorage.getItem('vinax.onboarded.v1')) localStorage.setItem('vinax.onboarded.v1', 'true');
+  });
+  await page.goto('/library');
+  // What's new opens once for a version this browser hasn't seen; close it.
+  const whatsNew = page.getByRole('button', { name: 'Let’s go' });
+  await page.waitForTimeout(1500);
+  if (await whatsNew.isVisible()) await whatsNew.click();
+  // A festival-day greeting opens ~1.2 s after boot; the harness closes it
+  // with Escape, which would also close this menu — let it come and go first.
+  await page.waitForTimeout(1800);
+  if (await page.locator('.fest-splash').count()) {
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.fest-splash')).toHaveCount(0);
+  }
+  await page.getByRole('button', { name: /profile and settings/ }).click();
+  const menu = page.getByRole('menu', { name: 'Profile and settings' });
+  await expect(menu).toBeVisible();
+  await expect(menu.getByText('Profile settings')).toBeVisible();
+  await expect(menu.getByText('App settings')).toBeVisible();
+  await menu.getByRole('menuitem', { name: 'Account & sign-in' }).click();
+  await expect(page.getByRole('heading', { name: 'Profile', level: 2 })).toBeVisible();
+  await page.getByRole('button', { name: /profile and settings/ }).click();
+  await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toBeVisible();
+});

@@ -16,7 +16,7 @@ VinaX needs a Google account: until a listener signs in, every page is the sign-
 
 **What syncs.** The account also holds one copy of the listener's data in `vinax_account_data`, in the same format as the backup file: settings, library and playlists, smart collections, listening history, taste profile, bookmarks and the Home layout. It is merged into each device the listener signs in on and updated a few seconds after a change. **AI chats, searches and this device's identity never sync.** The copy is at most 2 MB.
 
-**Session and deletion.** The session is kept on the device and sent only to `/api/auth/*` and `/api/account/*`. **Sign out** forgets it on the device (the data stays on the device and in the account). **Delete account** (Settings → Your data) removes the account row and the synced copy from the server. On the website the sign-in button and its script load from Google; in the Android app the system's Google account sheet is used.
+**Session and deletion.** The session is kept on the device and sent only to `/api/auth/*` and `/api/account/*`. **Sign out** forgets it on the device (the data stays on the device and in the account). **Delete account** (Settings → Profile, also reached from the top-bar avatar menu) removes the account row and the synced copy from the server. On the website the sign-in button and its script load from Google; in the Android app the system's Google account sheet is used.
 
 ## What is stored on the device
 

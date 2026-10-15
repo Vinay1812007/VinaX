@@ -28,7 +28,7 @@ export default function TermsPage() {
         <p>
           You sign in with your Google account; VinaX never sees or stores a password. Your library, playlists,
           history, taste profile and settings are kept with your account so they follow you to every device, and you
-          can delete the account at any time in Settings → Your data. Don&rsquo;t share your Google account to give
+          can delete the account at any time in Settings → Profile. Don&rsquo;t share your Google account to give
           others access. See the <Link to="/privacy">Privacy page</Link> for exactly what is stored.
         </p>
         <H>Availability</H>

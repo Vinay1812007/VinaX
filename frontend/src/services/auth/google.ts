@@ -142,6 +142,10 @@ export async function renderGoogleButton(el: HTMLElement, done: (r: SignInResult
 
 // ------------------------------------------------------------------ account
 
+/** The session the server confirmed during this page's life, and the check in flight. */
+let confirmedSession: string | null = null;
+let checking: Promise<boolean> | null = null;
+
 /** Sign out on this device (the session simply stops being sent). */
 export function signOut(): void {
   const g = (window as unknown as { google?: Gis }).google;
@@ -151,28 +155,60 @@ export function signOut(): void {
     /* not loaded */
   }
   if (isNativePlatform()) void import('@capgo/capacitor-social-login').then(({ SocialLogin }) => SocialLogin.logout({ provider: 'google' })).catch(() => undefined);
+  confirmedSession = null;
   setAccount(null);
 }
 
+/** Tests only: forget the confirmed session. */
+export function resetSessionCheckForTests(): void {
+  confirmedSession = null;
+  checking = null;
+}
+
 /** 13.0 — ask the server whether the session still stands; a definite "no" (401) signs out.
- *  Offline or a server hiccup keeps the listener signed in. */
-export async function validateSession(fetchImpl: typeof fetch = fetch): Promise<boolean> {
+ *  Offline or a server hiccup keeps the listener signed in.
+ *
+ *  13.4.0 — once per session per page load, never more. It used to write a
+ *  fresh account object on every answer; AuthGate re-ran it for every new
+ *  object, so a signed-in tab called /api/auth/me (and the account sync)
+ *  hundreds of times a second, and an answer landing after Sign out signed
+ *  the listener straight back in. Now a confirmed session is not asked
+ *  about again, the account is rewritten only when a field actually
+ *  changed, and an answer for a session that is no longer the current one
+ *  (signed out, or another account) is dropped. */
+export function validateSession(fetchImpl: typeof fetch = fetch): Promise<boolean> {
   const a = currentAccount();
-  if (!a) return false;
-  try {
-    const res = await fetchImpl(`${ORIGIN}/api/auth/me`, { headers: { authorization: `Bearer ${a.session}` }, cache: 'no-store' });
-    if (res.status === 401) {
-      signOut();
-      return false;
+  if (!a) return Promise.resolve(false);
+  if (confirmedSession === a.session) return Promise.resolve(true);
+  if (checking) return checking;
+  const run = async (): Promise<boolean> => {
+    try {
+      const res = await fetchImpl(`${ORIGIN}/api/auth/me`, { headers: { authorization: `Bearer ${a.session}` }, cache: 'no-store' });
+      const now = currentAccount();
+      // Signed out (or into another account) while the answer was on its way.
+      if (!now || now.session !== a.session) return false;
+      if (res.status === 401) {
+        signOut();
+        return false;
+      }
+      if (res.ok) {
+        confirmedSession = a.session;
+        const j = (await res.json()) as { user?: AccountUser };
+        const latest = currentAccount();
+        if (j.user && latest && latest.session === a.session) {
+          const user: AccountUser = { ...latest.user, ...j.user, picture: j.user.picture ?? latest.user.picture };
+          if (JSON.stringify(user) !== JSON.stringify(latest.user)) setAccount({ session: a.session, user });
+        }
+      }
+    } catch {
+      /* offline: keep the session */
     }
-    if (res.ok) {
-      const j = (await res.json()) as { user?: AccountUser };
-      if (j.user) setAccount({ session: a.session, user: { ...a.user, ...j.user, picture: j.user.picture ?? a.user.picture } });
-    }
-  } catch {
-    /* offline: keep the session */
-  }
-  return true;
+    return true;
+  };
+  checking = run().finally(() => {
+    checking = null;
+  });
+  return checking;
 }
 
 /** Delete the account on the server (Google id, email, name, picture), then sign out. */
