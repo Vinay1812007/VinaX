@@ -45,7 +45,7 @@ const DEVICES = [
   { device_id: 'c_bbb', name: null, username: null, platform: 'android', country: 'IN', city: 'Hyderabad', is_playing: false, first_seen: H(100), last_seen: H(48) },
 ];
 const ACCOUNTS = [
-  { google_sub: '1001', name: 'New Listener', username: null, device_id: null, created_at: H(2), last_seen: H(1) },
+  { google_sub: '1001', name: 'New Listener', username: null, email: 'new@example.com', picture: 'https://lh3.example/a.jpg', country: 'IN', region: 'TG', city: 'Hyderabad', platform: 'android', app_version: '13.7.0', device_id: null, created_at: H(2), last_seen: H(1) },
   { google_sub: '1002', name: 'Older Account', username: 'old', device_id: null, created_at: H(90), last_seen: H(30) },
 ];
 const SUMMARY = { total_users: 2, active_24h: 1, new_24h: 0, total_plays: 13 };
@@ -58,7 +58,7 @@ function countOf(url: string): number {
 }
 const happy: Route[] = [
   [(u) => u.includes('/rpc/vinax_user_summary'), () => json(SUMMARY)],
-  [(u) => u.includes('/vinax_accounts') && u.includes('device_id=in.'), () => json([{ device_id: 'c_bbb', name: 'Bhagya', username: 'bhagya' }])],
+  [(u) => u.includes('/vinax_accounts') && u.includes('device_id=in.'), () => json([{ device_id: 'c_bbb', name: 'Bhagya', username: 'bhagya', email: 'bhagya@example.com', picture: 'https://lh3.example/b.jpg' }])],
   [(u) => u.includes('/vinax_accounts') && u.includes('select=*&limit=1'), (u) => json([], { 'content-range': `0-0/${countOf(u)}` })],
   [(u) => u.includes('/vinax_accounts') && u.includes('select=google_sub'), () => json(ACCOUNTS)],
   [(u) => u.includes('/vinax_users'), () => json(DEVICES.map((d) => ({ ...d })))],
@@ -74,16 +74,16 @@ describe('GET /api/admin/users — accounts and usage rows together', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { users: Array<Record<string, unknown>>; summary: Record<string, number>; hasMore: boolean; unavailable?: string[] };
     expect(body.users.map((u) => u.device_id)).toEqual(['account:1001', 'c_aaa', 'account:1002', 'c_bbb']);
-    expect(body.users[0]).toMatchObject({ kind: 'account', name: 'New Listener', platform: null, first_seen: ACCOUNTS[0].created_at });
-    // A linked device carries the account's name and username.
-    expect(body.users[3]).toMatchObject({ signed_in: true, name: 'Bhagya', username: 'bhagya' });
+    // 13.7 — an account row carries its Gmail, photo and coarse sign-in facts.
+    expect(body.users[0]).toMatchObject({ kind: 'account', name: 'New Listener', email: 'new@example.com', picture: 'https://lh3.example/a.jpg', city: 'Hyderabad', country: 'IN', platform: 'android', app_version: '13.7.0', first_seen: ACCOUNTS[0].created_at });
+    // A linked device carries the account's name, username, Gmail and photo.
+    expect(body.users[3]).toMatchObject({ signed_in: true, name: 'Bhagya', username: 'bhagya', email: 'bhagya@example.com', picture: 'https://lh3.example/b.jpg' });
     expect(body.summary).toEqual({ total_users: 4, active_24h: 2, new_24h: 1, total_plays: 13, accounts_total: 3 });
     expect(body.hasMore).toBe(false);
     expect(body.unavailable).toBeUndefined();
-    // Only unlinked accounts become their own rows; the email is never read.
+    // Only unlinked accounts become their own rows.
     const accRead = calls.find((c) => c.url.includes('/vinax_accounts') && c.url.includes('select=google_sub'))!;
     expect(accRead.url).toContain('device_id=is.null');
-    expect(calls.some((c) => c.url.includes('/vinax_accounts') && c.url.includes('email'))).toBe(false);
   });
 
   it('pages over the merged list exactly', async () => {
@@ -100,7 +100,27 @@ describe('GET /api/admin/users — accounts and usage rows together', () => {
     db(happy);
     await users({ request: req('/api/admin/users?q=New'), env: ENV });
     const accRead = calls.find((c) => c.url.includes('/vinax_accounts') && c.url.includes('select=google_sub'))!;
-    expect(accRead.url).toContain('or=(name.ilike.*New*,username.ilike.*New*)');
+    expect(accRead.url).toContain('or=(name.ilike.*New*,username.ilike.*New*,email.ilike.*New*)');
+  });
+
+  it('a Gmail search finds a linked device too', async () => {
+    db([
+      [(u) => u.includes('/vinax_accounts') && u.includes('device_id=not.is.null'), () => json([{ device_id: 'c_bbb' }])],
+      ...happy,
+    ]);
+    await users({ request: req('/api/admin/users?q=bhagya@example'), env: ENV });
+    const devRead = calls.find((c) => c.url.includes('/vinax_users'))!;
+    expect(devRead.url).toContain('device_id.in.("c_bbb")');
+  });
+
+  it('before the 13.7 columns exist the account list still loads, without them', async () => {
+    db([
+      [(u) => u.includes('/vinax_accounts') && u.includes('select=google_sub') && u.includes('country'), () => new Response('{"code":"42703"}', { status: 400 })],
+      ...happy,
+    ]);
+    const body = (await (await users({ request: req('/api/admin/users'), env: ENV })).json()) as { users: Array<{ device_id: string }>; unavailable?: string[] };
+    expect(body.unavailable).toBeUndefined();
+    expect(body.users.map((u) => u.device_id)).toContain('account:1001');
   });
 
   it('a failed account read keeps the usage list and names what is missing', async () => {
@@ -181,7 +201,7 @@ describe('GET /api/auth/me links the device and keeps last_seen current', () => 
     expect(calls).toHaveLength(0);
     expect(await touchAccount(meReq(), ENV, row({ last_seen: new Date(Date.now() - TOUCH_MS - 1000).toISOString() }))).toBe(true);
     const patch = JSON.parse(calls[0].body!) as Record<string, unknown>;
-    expect(Object.keys(patch)).toEqual(['last_seen']);
+    expect(Object.keys(patch)).toEqual(['last_seen', 'country', 'region', 'city']);
   });
 
   it('the same device already linked is not rewritten', async () => {

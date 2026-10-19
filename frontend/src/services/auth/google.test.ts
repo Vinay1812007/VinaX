@@ -26,7 +26,7 @@ describe('Google sign-in', () => {
     expect(await exchangeGoogleToken('google.id.token', f)).toBe('ok');
     const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('/api/auth/google');
-    expect(JSON.parse(String(init.body))).toEqual({ credential: 'google.id.token', signed_device_id: 'signed.device' });
+    expect(JSON.parse(String(init.body))).toEqual({ credential: 'google.id.token', signed_device_id: 'signed.device', platform: 'web', appVersion: expect.any(String) });
     expect(currentAccount()).toEqual({ session: 'vx1.payload.sig', user: USER });
     expect(getLocal(KEYS.userHandle, '')).toBe('vinay');
     expect(getLocal(KEYS.userName, '')).toBe('A Listener');
@@ -98,13 +98,15 @@ describe('Google sign-in', () => {
     let f = ok({ user: USER });
     await validateSession(f);
     let headers = (f.mock.calls[0] as unknown as [string, RequestInit])[1].headers as Record<string, string>;
-    expect(headers).toEqual({ authorization: 'Bearer vx1.p.s' });
+    expect(headers).toMatchObject({ authorization: 'Bearer vx1.p.s', 'x-vinax-platform': 'web' });
+    expect(headers['x-vinax-device']).toBeUndefined();
+    expect(headers['x-vinax-version']).toMatch(/^\d+\.\d+\.\d+/);
     resetSessionCheckForTests();
     setLocal(KEYS.signedDeviceId, 'c_abc.sig');
     f = ok({ user: USER });
     await validateSession(f);
     headers = (f.mock.calls[0] as unknown as [string, RequestInit])[1].headers as Record<string, string>;
-    expect(headers).toEqual({ authorization: 'Bearer vx1.p.s', 'x-vinax-device': 'c_abc.sig' });
+    expect(headers).toMatchObject({ authorization: 'Bearer vx1.p.s', 'x-vinax-device': 'c_abc.sig' });
   });
 
   it('a 401 signs out; checks running at once share one request', async () => {

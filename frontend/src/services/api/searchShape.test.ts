@@ -58,3 +58,44 @@ it('runs the admin synonym rewrite on every search endpoint', async () => {
     }
   }
 });
+
+// 13.7 — the catalogue's best match comes only in topQuery: "arijit" names the
+// artist Arijit Singh there, while the artist rows are duets and a namesake.
+it('leads each group with its topQuery item and remembers the top artist', async () => {
+  request.mockImplementation(({ validate }) =>
+    Promise.resolve(
+      validate({
+        data: {
+          topQuery: { results: [{ id: '459320', title: 'Arijit Singh', type: 'artist', image: [] }] },
+          songs: { results: [] },
+          albums: { results: [] },
+          artists: {
+            results: [
+              { id: '702776', title: 'Pritam & Arijit Singh', type: 'artist', image: [] },
+              { id: '1742694', title: 'Arijit', type: 'artist', image: [] },
+            ],
+          },
+          playlists: { results: [] },
+        },
+      }),
+    ),
+  );
+  const out = await searchAll('arijit');
+  expect(out.artists.map((a) => a.id)).toEqual(['459320', '702776', '1742694']);
+  expect(out.topArtistId).toBe('459320');
+});
+
+it('a topQuery item already in its group moves to the front, once', async () => {
+  request.mockImplementation(({ validate }) =>
+    Promise.resolve(
+      validate({
+        data: {
+          topquery: { data: [{ id: '2', title: 'B', type: 'artist', image: [] }] },
+          songs: { results: [] },
+          artists: { results: [{ id: '1', title: 'A', type: 'artist', image: [] }, { id: '2', title: 'B', type: 'artist', image: [] }] },
+        },
+      }),
+    ),
+  );
+  expect((await searchAll('b')).artists.map((a) => a.id)).toEqual(['2', '1']);
+});

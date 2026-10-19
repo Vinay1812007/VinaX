@@ -94,6 +94,8 @@ export interface SearchResults {
   albums: Album[];
   artists: Artist[];
   playlists: Playlist[];
+  /** 13.7 — the catalogue's own best-match artist for the query, when it named one. */
+  topArtistId?: string;
 }
 
 export type MediaEntity = Song | Album | Playlist | Artist;

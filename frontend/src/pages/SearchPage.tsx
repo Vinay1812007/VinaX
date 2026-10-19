@@ -385,7 +385,9 @@ export default function SearchPage() {
   }, [routeQuery]);
 
   const all = useSearchAll(q, !lyricsMode);
-  const infiniteSongs = useInfiniteSongs(q, tab === 'Songs' && !lyricsMode, { search: true });
+  // 13.7 — also on the All tab: the grouped search answers only three songs,
+  // so its song list borrows the Songs list's first page (one parallel call).
+  const infiniteSongs = useInfiniteSongs(q, (tab === 'Songs' || tab === 'All') && !lyricsMode, { search: true });
   const albums = useInfiniteAlbums(q, tab === 'Albums' && !lyricsMode); // paged — was capped at 20 (P2-29)
   const artists = useInfiniteArtists(q, tab === 'Artists' && !lyricsMode); // paged — was capped at 20 (P2-30)
   const playlists = useInfinitePlaylists(q, tab === 'Playlists' && !lyricsMode);
@@ -400,8 +402,13 @@ export default function SearchPage() {
   const suggestLyrics = active && !lyricsMode && looksLikeLyric(q) && lyricHintDismissed !== q;
   // One memoized ranking pass per settled result set (was recomputed twice
   // per render — P2-19), in search mode: junk filter off, relevance on.
-  const allSongs = all.data?.songs;
+  const groupedSongs = all.data?.songs;
   const allPlaceholder = all.isPlaceholderData;
+  const firstSongPage = infiniteSongs.data?.pages[0];
+  const allSongs = useMemo(
+    () => (groupedSongs ? flattenSongPages([groupedSongs, firstSongPage ?? []], { sameRecording: true }) : undefined),
+    [groupedSongs, firstSongPage],
+  );
   // v5.19.0 — then the literal-match tiers (exact title → starts-with → all
   // words) with a nudge for pinned languages, on top of the taste pass.
   const rankedAllSongs = useMemo(
@@ -430,7 +437,13 @@ export default function SearchPage() {
   // When the words are an artist's exact name, that artist is the clearest top
   // result; the songs list then starts from the first song instead of the second.
   const topArtist = useMemo(
-    () => (allPlaceholder ? undefined : all.data?.artists.find((a) => normalizeQuery(a.name) === q)),
+    () => {
+      if (allPlaceholder || !all.data) return undefined;
+      // 13.7 — the catalogue's own best match wins over a namesake whose name
+      // happens to equal the words ("arijit" → Arijit Singh, not "Arijit").
+      const best = all.data.topArtistId ? all.data.artists.find((a) => a.id === all.data!.topArtistId) : undefined;
+      return best ?? all.data.artists.find((a) => normalizeQuery(a.name) === q);
+    },
     [all.data, allPlaceholder, q],
   );
   const leadFrom = topArtist ? 0 : 1;
@@ -442,13 +455,17 @@ export default function SearchPage() {
     [all.data?.playlists, pinnedLangs],
   );
   const songPages = infiniteSongs.data?.pages;
-  const allSongList = useMemo(() => flattenSongPages(songPages), [songPages]);
-  const availableLangs = [
-    ...new Set(
-      allSongList.map((s) => s.language).filter((l): l is string => !!l && l !== 'unknown'),
-    ),
-  ];
-  const songList = langFilter ? allSongList.filter((s) => s.language === langFilter) : allSongList;
+  const allSongList = useMemo(() => flattenSongPages(songPages, { sameRecording: true }), [songPages]);
+  const availableLangs = useMemo(
+    () => [...new Set(allSongList.map((s) => s.language).filter((l): l is string => !!l && l !== 'unknown'))],
+    [allSongList],
+  );
+  // 13.7 — memoised: a fresh filtered array every render re-ran the sort and
+  // refinements below and re-rendered every row.
+  const songList = useMemo(
+    () => (langFilter ? allSongList.filter((s) => s.language === langFilter) : allSongList),
+    [allSongList, langFilter],
+  );
   // v5.17.0 — the Songs tab shows the language-filtered list, in the chosen
   // sort order, narrowed by the local "filter these results" text.
   const displaySongs = useMemo(

@@ -18,6 +18,7 @@ import {
   fetchCatalog,
   fetchVoiceCatalog,
   findCatalogModel,
+  lookupCatalogModel,
   humaniseSlug,
   isFreePricing,
   isServedVoiceModel,
@@ -449,6 +450,30 @@ describe('findCatalogModel / resolveCatalogModel', () => {
     expect(await resolveCatalogModel(ALL_KEYS, 'openrouter', '')).toBeNull();
     expect(await resolveCatalogModel(ALL_KEYS, 'openrouter', null)).toBeNull();
     expect(await findCatalogModel(ALL_KEYS, 'nowhere', 'openai/gpt-oss-20b')).toBeNull();
+  });
+
+  // 13.7 — a valid pick was refused as unknown_model (and the app switched
+  // the listener to Auto) whenever the isolate's list was stale or failed.
+  it('a miss re-reads the live list once; an unreadable list is "not listed", not "unknown"', async () => {
+    let groq = ['openai/gpt-oss-20b'];
+    let up = true;
+    const f = vi.fn((u: unknown) => {
+      if (!up) return Promise.reject(new Error('offline'));
+      return Promise.resolve(new Response(JSON.stringify({ data: (String(u).includes('groq') ? groq : []).map((id) => ({ id })) }), { status: 200 }));
+    });
+    vi.stubGlobal('fetch', f);
+    expect((await lookupCatalogModel(ALL_KEYS, 'groq', 'openai/gpt-oss-20b')).model?.id).toBe('openai/gpt-oss-20b');
+    // Added upstream after the list was cached: found on the re-read.
+    groq = ['openai/gpt-oss-20b', 'openai/gpt-oss-120b'];
+    expect(await lookupCatalogModel(ALL_KEYS, 'groq', 'openai/gpt-oss-120b')).toMatchObject({ model: { id: 'openai/gpt-oss-120b' }, listed: true });
+    // A real miss right after: no second re-read inside the window.
+    const calls = f.mock.calls.length;
+    expect(await lookupCatalogModel(ALL_KEYS, 'groq', 'vendor/made-up')).toEqual({ model: null, listed: true });
+    expect(f.mock.calls.length).toBe(calls);
+    // Cold isolate with the provider unreachable: not listed.
+    resetCatalogCache();
+    up = false;
+    expect(await lookupCatalogModel(ALL_KEYS, 'groq', 'openai/gpt-oss-20b')).toEqual({ model: null, listed: false });
   });
 
   it('describeModel uses the cached entry, else the slug read back faithfully', async () => {

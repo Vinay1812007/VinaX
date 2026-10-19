@@ -7,6 +7,9 @@
   var autoTimer = null;
   var exportRows = null, exportName = 'vinax';
   var userOffset = 0, userQ = '';
+  // 13.7 — search as you type: the newest request wins, and the box keeps
+  // focus and caret across the re-render.
+  var userSeq = 0, userTypeTimer = 0, userCaret = null;
   var lastJson = null, lastStampAt = Date.now();
   // Request-budget fix: default auto-refresh 10s -> 30s. An always-open
   // admin tab at 10s burned ~8-9k Worker requests/day by itself; 30s keeps
@@ -722,6 +725,7 @@
     var title = name || u.name || 'Anonymous';
     var place = [u.city, u.region, u.country].filter(Boolean).join(', ') || 'Unknown';
     var meta = [
+      u.email || '',
       place,
       u.kind === 'account' ? 'account · not sharing usage' : (u.platform || 'web'),
       u.app_version ? 'v' + u.app_version : '',
@@ -858,9 +862,21 @@
     setExport('users', U);
     var rows = U.map(function (u) {
       var loc = [u.city, u.country].filter(Boolean).map(esc).join(', ') || '<span class="muted">—</span>';
-      return '<tr class="clickable" data-uid="' + esc(u.device_id) + '" data-uname="' + esc(u.name || 'Anonymous') + '"><td><span class="dot2 ' + (u.is_playing ? 'on' : 'off') + '"></span>' + esc(u.name || 'Anonymous') + (u.username ? ' <span class="muted">@' + esc(u.username) + '</span>' : '') + (u.signed_in ? ' <span class="muted" title="Signed in with an account">· signed in</span>' : '') + '</td><td>' + loc + '</td><td>' + (u.kind === 'account'
-        ? '<span class="pill" title="Signed in; usage sharing is off, so there is no device, location or play data">👤 account</span> <span class="muted">not sharing usage</span>'
-        : '<span class="pill">' + platIcon(u.platform) + ' ' + esc(u.platform || 'web') + '</span> <span class="muted">' + esc(String(u.device_id || '').slice(0, 8)) + '</span>') + '</td><td class="muted">' + date(u.first_seen) + '</td><td class="muted">' + ago(u.last_seen) + '</td><td><button class="ghost udl" data-dl="' + esc(u.device_id) + '" data-dlname="' + esc(u.name || u.username || 'listener') + '" style="padding:4px 10px;font-size:11px;white-space:nowrap" title="Download this listener\u2019s profile page">Download</button></td>' +
+      var who = u.name || u.email || 'Anonymous';
+      // 13.7 — the account's photo (Google serves it; no referrer is sent) and Gmail.
+      var avatar = u.picture
+        ? '<img class="uavatar" src="' + esc(u.picture) + '" alt="" width="28" height="28" loading="lazy" referrerpolicy="no-referrer" />'
+        : '<span class="uavatar uavatar-none" aria-hidden="true">' + esc(String(who).charAt(0).toUpperCase()) + '</span>';
+      var device = u.kind === 'account'
+        ? '<span class="pill" title="Signed in; usage sharing is off, so there are no plays or searches">👤 ' + esc(u.platform || 'account') + '</span> <span class="muted">not sharing usage</span>'
+        : '<span class="pill">' + platIcon(u.platform) + ' ' + esc(u.platform || 'web') + '</span> <span class="muted">' + esc(String(u.device_id || '').slice(0, 8)) + '</span>';
+      return '<tr class="clickable" data-uid="' + esc(u.device_id) + '" data-uname="' + esc(who) + '">' +
+        '<td><div class="ucell">' + avatar + '<div><div><span class="dot2 ' + (u.is_playing ? 'on' : 'off') + '"></span>' + esc(who) +
+        (u.username ? ' <span class="muted">@' + esc(u.username) + '</span>' : '') +
+        (u.signed_in ? ' <span class="muted" title="Signed in with an account">· signed in</span>' : '') + '</div>' +
+        (u.email ? '<div class="muted uemail">' + esc(u.email) + '</div>' : '') + '</div></div></td>' +
+        '<td>' + loc + '</td><td>' + device + '</td><td class="muted">' + date(u.first_seen) + '</td><td class="muted">' + ago(u.last_seen) + '</td>' +
+        '<td><button class="ghost udl" data-dl="' + esc(u.device_id) + '" data-dlname="' + esc(u.name || u.username || 'listener') + '" style="padding:4px 10px;font-size:11px;white-space:nowrap" title="Download this listener’s profile page">Download</button></td>' +
         '<td><button class="ghost udel" data-del="' + esc(u.device_id) + '" style="padding:4px 10px;font-size:11px;color:var(--bad)">Delete</button></td></tr>';
     }).join('');
     var canPrev = userOffset > 0;
@@ -875,15 +891,33 @@
       '<div class="card"><div class="n">' + (s.total_plays || 0) + '</div><div class="l">Total plays</div></div>' +
       (s.accounts_total != null ? '<div class="card"><div class="n">' + s.accounts_total + '</div><div class="l">Signed-in accounts</div></div>' : '') + '</div>' +
       ((d.unavailable || []).indexOf('accounts') >= 0 ? '<div class="muted" role="status" style="margin-bottom:12px">Signed-in accounts could not be read — only listeners who share usage are listed and counted.</div>' : '') +
-      '<div class="row" style="margin-bottom:12px"><input id="uq" type="search" placeholder="Search by name…" value="' + esc(userQ) + '" style="max-width:280px" /><button class="btn btn-primary" id="ugo">Search</button>' +
+      '<div class="row" style="margin-bottom:12px"><input id="uq" type="search" placeholder="Search name, @username or Gmail…" aria-label="Search listeners by name, username or Gmail" autocomplete="off" value="' + esc(userQ) + '" style="max-width:280px" /><button class="btn btn-primary" id="ugo">Search</button>' +
       '<button class="ghost" id="udlall" title="Every listener in this list, all pages, as a CSV file">Download listeners (CSV)</button>' +
       '<span class="muted" style="font-size:12px">Tip: click a row for details</span></div>' +
       '<table><thead><tr><th>Listener</th><th>Location</th><th>Device</th><th>First seen</th><th>Last seen</th><th>Profile download</th><th></th></tr></thead><tbody>' +
-      (rows || '<tr class="table-empty"><td colspan="7"><div class="state state-empty empty" role="status"><div class="state-title">No users found</div><div class="state-hint">Try a shorter name or part of a username, or clear the search.</div></div></td></tr>') + '</tbody></table>' +
+      (rows || '<tr class="table-empty"><td colspan="7"><div class="state state-empty empty" role="status"><div class="state-title">No users found</div><div class="state-hint">Try a shorter name, part of a username or Gmail, or clear the search.</div></div></td></tr>') + '</tbody></table>' +
       '<div class="row" style="margin-top:14px"><button class="ghost" id="uprev"' + (canPrev ? '' : ' disabled') + '>← Prev</button>' +
       '<span class="muted">Showing ' + (userOffset + 1) + '–' + (userOffset + U.length) + '</span>' +
       '<button class="ghost" id="unext"' + (canNext ? '' : ' disabled') + '>Next →</button></div>';
-    $('ugo').addEventListener('click', function () { userQ = $('uq').value.trim(); userOffset = 0; loadUsers(); });
+    $('ugo').addEventListener('click', function () { clearTimeout(userTypeTimer); userQ = $('uq').value.trim(); userOffset = 0; loadUsers(); });
+    $('uq').addEventListener('input', function () {
+      var box = this;
+      clearTimeout(userTypeTimer);
+      userTypeTimer = setTimeout(function () {
+        var next = box.value.trim();
+        if (next === userQ) return;
+        userQ = next;
+        userOffset = 0;
+        userCaret = box.selectionStart;
+        loadUsers();
+      }, 250);
+    });
+    if (userCaret != null) {
+      var ub = $('uq');
+      ub.focus();
+      try { ub.setSelectionRange(userCaret, userCaret); } catch (e) { /* not a text input */ }
+      userCaret = null;
+    }
     $('udlall').addEventListener('click', function () { downloadAllUsers(); });
     $('uq').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('ugo').click(); });
     $('uprev').addEventListener('click', function () { if (userOffset > 0) { userOffset = Math.max(0, userOffset - (d.limit || 50)); loadUsers(); } });
@@ -915,8 +949,10 @@
     stamp();
   }
   function loadUsers() {
+    var seq = ++userSeq;
     apiMemo('/api/admin/users?limit=50&offset=' + userOffset + (userQ ? '&q=' + encodeURIComponent(userQ) : ''))
-      .then(function (d) { if (d && active === 'users') renderUsers(d); }).catch(failIf('users', 'the listener list'));
+      // A slower answer for an older search never paints over a newer one.
+      .then(function (d) { if (d && active === 'users' && seq === userSeq) renderUsers(d); }).catch(failIf('users', 'the listener list'));
   }
 
   // ---------- User drill-down ----------
@@ -947,7 +983,9 @@
       var recent = ev.slice(0, 18).map(function (e) { return '<tr><td><span class="pill">' + esc(e.type) + '</span></td><td>' + (e.song_title ? esc(e.song_title) : '<span class="muted">—</span>') + '</td><td class="muted">' + ago(e.created_at) + '</td></tr>'; }).join('');
       $('modalBody').innerHTML =
         '<button class="x" id="mx">✕</button>' +
-        '<h2 style="margin:2px 0 2px">' + esc(name || u.name || 'Anonymous') + (u.username ? ' <span class="muted" style="font-size:14px">@' + esc(u.username) + '</span>' : '') + '</h2>' +
+        '<div class="ucell" style="margin:2px 0 2px">' + (u.picture ? '<img class="uavatar uavatar-lg" src="' + esc(u.picture) + '" alt="" width="44" height="44" referrerpolicy="no-referrer" />' : '') +
+        '<div><h2 style="margin:0">' + esc(name || u.name || 'Anonymous') + (u.username ? ' <span class="muted" style="font-size:14px">@' + esc(u.username) + '</span>' : '') + '</h2>' +
+        (u.email ? '<div class="muted uemail">' + esc(u.email) + '</div>' : '') + '</div></div>' +
         '<div class="muted" style="font-size:12.5px;margin-bottom:14px">' + esc([u.city, u.country].filter(Boolean).join(', ') || 'Unknown') + ' · ' + esc(u.kind === 'account' ? 'account · not sharing usage' : (u.platform || 'web')) + (u.app_version ? ' · v' + esc(u.app_version) : '') + ' · joined ' + date(u.first_seen) + ' · last seen ' + ago(u.last_seen) + '</div>' +
         '<div class="cards"><div class="card"><div class="n">' + plays.length + '</div><div class="l">Plays (recent)</div></div>' +
         '<div class="card"><div class="n">' + top.length + '</div><div class="l">Distinct songs</div></div>' +

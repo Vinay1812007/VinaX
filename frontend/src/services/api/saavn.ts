@@ -164,6 +164,30 @@ export function searchPlaylistsPage(rawQuery: string, page: number, limit = 20, 
   });
 }
 
+/** 13.7 — put topQuery's items first in their own groups (by type), once each. */
+export function mergeTopQuery(raw: unknown, into: SearchResults): void {
+  const group = raw as { results?: unknown; data?: unknown } | null | undefined;
+  const items = Array.isArray(group?.results) ? group.results : Array.isArray(group?.data) ? group.data : [];
+  const lead = <T extends { id: string }>(list: T[], item: T | null): void => {
+    if (!item) return;
+    const at = list.findIndex((x) => x.id === item.id);
+    if (at >= 0) list.splice(at, 1);
+    list.unshift(item);
+  };
+  // Reverse so the first topQuery item ends up first.
+  for (const it of [...items].reverse()) {
+    const type = (it as { type?: unknown })?.type;
+    if (type === 'artist') {
+      const a = normalizeArtist(it);
+      lead(into.artists, a);
+      if (a) into.topArtistId = a.id;
+    }
+    else if (type === 'album') lead(into.albums, normalizeAlbum(it));
+    else if (type === 'playlist') lead(into.playlists, normalizePlaylist(it));
+    else if (type === 'song') lead(into.songs, normalizeSongList([it])[0] ?? null);
+  }
+}
+
 export function searchAll(rawQuery: string, opts?: CatalogOpts): Promise<SearchResults> {
   const query = rewriteQuery(rawQuery);
   return orchestratedRequest({
@@ -182,6 +206,9 @@ export function searchAll(rawQuery: string, opts?: CatalogOpts): Promise<SearchR
       const playlists = ((d.playlists?.results ?? d.playlists?.data ?? []) as unknown[])
         .map(normalizePlaylist)
         .filter((p): p is Playlist => p !== null);
+      // 13.7 — the catalogue's best match arrives only in topQuery (both
+      // servers send it): "arijit" names the artist Arijit Singh there while
+      // the three artist rows are duets and a namesake. Lead its group with it.
       if (!songs.length && !albums.length && !artists.length && !playlists.length) {
         // A supported, explicitly empty list is a valid zero-result search.
         // Unsupported shapes still try the next provider.
@@ -190,7 +217,9 @@ export function searchAll(rawQuery: string, opts?: CatalogOpts): Promise<SearchR
         );
         if (!hasResultList) return null;
       }
-      return { songs, albums, artists, playlists };
+      const out: SearchResults = { songs, albums, artists, playlists };
+      mergeTopQuery(d.topQuery ?? d.topquery, out);
+      return out;
     },
   });
 }

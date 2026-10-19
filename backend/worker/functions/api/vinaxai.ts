@@ -72,7 +72,7 @@ import {
   aiGate,
   logAiRefusal,
 } from '../_lib/ai';
-import { catalogDefaultModel, codeExecutionModels, describeModel, fetchCatalog, findCatalogModel, normaliseProvider, searchCapable, type CatalogModel } from '../_lib/catalog';
+import { catalogDefaultModel, codeExecutionModels, describeModel, fetchCatalog, lookupCatalogModel, normaliseProvider, searchCapable, type CatalogModel } from '../_lib/catalog';
 import { APP_KNOWLEDGE } from '../_lib/appknowledge';
 import { readJsonCapped } from '../_lib/body';
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
@@ -909,8 +909,19 @@ async function handleChat(
   let pickAttempt: LaneAttempt | null = null;
   if (reqMode === 'model') {
     const provider = normaliseProvider(body.provider);
-    picked = provider ? await findCatalogModel(env, provider, body.model) : null;
+    const found = provider ? await lookupCatalogModel(env, provider, body.model) : { model: null, listed: true };
+    picked = found.model;
     pickAttempt = provider && picked ? providerAttempt(env, provider, picked.id) : null;
+    // 13.7 — the provider's list could not be read (cold isolate, provider
+    // blip): that is "busy, ask again", not "no such model". The app answers
+    // unknown_model by switching the listener to Auto, so a false one used
+    // to throw away a perfectly good pick.
+    if (!picked && provider && !found.listed && typeof body.model === 'string' && body.model.trim()) {
+      const id = body.model.trim().slice(0, 128);
+      const res = jsonErr({ error: 'model_unavailable', reason: 'busy', model: { provider, id, name: describeModel(provider, id).name }, retryAfter: 30, alternatives: [] }, 429);
+      res.headers.set('retry-after', '30');
+      return res;
+    }
     if (!picked || !pickAttempt) return jsonErr({ error: 'unknown_model' }, 400);
   }
   const pick = pickAttempt;

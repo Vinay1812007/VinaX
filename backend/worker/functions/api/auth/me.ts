@@ -10,7 +10,7 @@ import { readJsonCapped } from '../../_lib/body';
 import { rateLimitAsync } from '../../_lib/ratelimit';
 import { sbDelete, sbUpdate, type SupabaseEnv } from '../../_lib/supabase';
 import { resolveIdentity, type IdentityEnv } from '../../_lib/identity';
-import { accountOf, CORS, DEVICE_HEADER, json, publicUser, type AccountRow } from '../../_lib/authShared';
+import { accountFacts, accountOf, CORS, DEVICE_HEADER, json, publicUser, type AccountRow } from '../../_lib/authShared';
 
 type Env = AuthEnv & SupabaseEnv & IdentityEnv;
 
@@ -36,7 +36,11 @@ export async function touchAccount(request: Request, env: Env, row: Pick<Account
   const last = Date.parse(row.last_seen ?? '');
   if (patch.device_id || !Number.isFinite(last) || Date.now() - last > TOUCH_MS) patch.last_seen = new Date().toISOString();
   if (!Object.keys(patch).length) return false;
-  return sbUpdate(env, 'vinax_accounts', `google_sub=eq.${encodeURIComponent(row.google_sub)}`, patch).catch(() => false);
+  const where = `google_sub=eq.${encodeURIComponent(row.google_sub)}`;
+  // 13.7 — the coarse facts ride along with the last_seen refresh; before the
+  // 13.7 columns exist that write is refused and the bare patch is stored.
+  const full = await sbUpdate(env, 'vinax_accounts', where, { ...patch, ...accountFacts(request) }).catch(() => false);
+  return full || sbUpdate(env, 'vinax_accounts', where, patch).catch(() => false);
 }
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: CORS });

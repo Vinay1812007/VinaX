@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '13.7.0': {
+    title: 'Better search, steadier AI picks',
+    changes: [
+      { type: 'improved', text: 'Search puts the best match first — "arijit" now leads with Arijit Singh — and the All tab shows more songs.' },
+      { type: 'fixed', text: 'The Songs list no longer repeats the same song several times, and scrolling long results is smoother.' },
+      { type: 'fixed', text: 'A VinaX AI model you picked is no longer switched back to Auto when the model list is slow to load; you are asked to try again instead.' },
+      { type: 'improved', text: 'The Privacy page now explains the sign-in details your account keeps (city, device and app version) and who can see them.' },
+    ],
+  },
   '13.6.4': {
     title: 'Every new listener shows in the console',
     changes: [
