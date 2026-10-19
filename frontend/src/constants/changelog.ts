@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '13.6.3': {
+    title: 'Steadier release checks',
+    changes: [
+      { type: 'fixed', text: 'The search-as-you-type check that runs before every release no longer fails at random, so fixes are not held up by false alarms.' },
+    ],
+  },
   '13.6.2': {
     title: 'Easier with a screen reader and voice control',
     changes: [
