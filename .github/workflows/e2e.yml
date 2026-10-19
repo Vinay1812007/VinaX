@@ -1,11 +1,10 @@
 # Actions pinned by SHA — rotate via Dependabot (github-actions ecosystem).
 name: E2E
 
-# Playwright smoke suite (audit §6): boots the BUILT bundle under vite preview
-# with all external network aborted, and walks the app's spine — onboarding,
-# navigation, settings, handoff fail-soft, taste profile. Deterministic by
-# construction (no live catalog, no AI backend), so a red run means the app
-# broke, not the internet.
+# Playwright suite (audit §6): the smoke script, then `playwright test` over
+# frontend/e2e/ against the BUILT bundle (served by e2e/support/serve-dist.mjs)
+# with all external network aborted. Deterministic by construction (no live
+# catalog, no AI backend), so a red run means the app broke, not the internet.
 on:
   push:
     branches: [main]
@@ -30,17 +29,19 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
-      # playwright-core (the installed dependency) must install its OWN
-      # pinned Chromium build — `npx playwright install` pulls the latest
-      # `playwright` package instead, whose browser revision can drift from
-      # what playwright-core's launcher expects.
-      - run: npx playwright-core install --with-deps chromium
+      # @playwright/test and playwright-core are pinned to the same exact
+      # version, so the locally installed CLI fetches the Chromium both expect.
+      - run: npx playwright install --with-deps chromium
       - run: npm run build
       - run: npm run e2e
-      - name: Upload traces on failure
+      # HTML report with traces, screenshots and error context for each
+      # failure: download it and run `npx playwright show-report <dir>`.
+      - name: Upload report on failure
         if: failure()
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
-          name: playwright-traces
-          path: frontend/test-results/
+          name: playwright-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
           retention-days: 7

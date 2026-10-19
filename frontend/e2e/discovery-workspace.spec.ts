@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './support/test';
 import { latestNotesFingerprint } from '../src/constants/changelog';
 const songs = Array.from({ length: 12 }, (_, i) => ({
   id: `discovery-${i}`,

@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './support/test';
 
 /**
  * Admin console (/admin/ — a static page, not the React app) with every

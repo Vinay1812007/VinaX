@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '13.6.1': {
+    title: 'Tested in a real browser',
+    changes: [
+      { type: 'improved', text: 'Every VinaX update now goes through more than a hundred checks in a real browser before it reaches you: Home, search, the queue, Listen Together, VinaX AI, your library, festivals and sign-in.' },
+    ],
+  },
   '13.6.0': {
     title: 'Songs, albums and artists you can share',
     changes: [

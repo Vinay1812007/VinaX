@@ -62,14 +62,15 @@ Run one file with `npx vitest run <path>` from the package folder.
 `npm run e2e` does two things:
 
 1. `node scripts/e2e-smoke.mjs` checks that no built `/assets/*.js` file is secretly HTML, then boots the built app in a real browser with every external request aborted and confirms the app mounts and client-side navigation works.
-2. `vitest run --config e2e/vitest.config.ts` runs the specs in `frontend/e2e/`.
+2. `playwright test` runs the specs in `frontend/e2e/` with Playwright's own runner (`@playwright/test`, config in `frontend/playwright.config.ts`).
 
 ### How the harness works
 
-- The specs are written against the usual browser-test API, but that runner is not a dependency. `e2e/vitest.config.ts` aliases its module name to `e2e/support/playwright-test.ts`, a small shim over `vitest` and `playwright-core`. It provides `test`, `test.describe`, `beforeEach`/`afterEach`, `test.use`, the `page`, `context`, `browser` and `baseURL` fixtures, and retrying locator matchers such as `toBeVisible`, `toHaveText` and `toHaveCount` (5-second default). Only that subset exists.
-- `e2e/support/global-setup.ts` serves **`frontend/dist/`** on a random localhost port: static files, directory indexes (so `/admin/` works), a fallback to `index.html` for unknown routes, and a plain 404 for a missing `/assets/` file. It throws if `dist/index.html` is missing, so **build first**.
-- One browser instance per spec file, a fresh context per test. Specs abort every request that is not to localhost and answer `/api/**` themselves with `page.route`. A red run means the app broke, not the network.
-- Three files are excluded from the run: `smoke.spec.ts` (replaced by the smoke script), `a11y.spec.ts` (needs a package that is not installed) and `qa-sweep.spec.ts` (an on-demand harness).
+- Specs import `test` and `expect` from `e2e/support/test.ts`: the stock Playwright `test` plus two suite-wide fixtures. Every browser context starts signed in with a test account (open a page with `?e2e-signed-out` to stay signed out), and the festival greeting is dismissed with Escape whenever it blocks an action or assertion. A spec that checks the greeting itself sets `test.use({ dismissFestivalGreeting: false })`.
+- Playwright's `webServer` starts `e2e/support/serve-dist.mjs`, which serves **`frontend/dist/`** on port 4173 (`E2E_PORT` to change it): static files, directory indexes (so `/admin/` works), `/song/x` from `song/x.html`, a fallback to `index.html` for unknown routes, and a plain 404 for a missing `/assets/` file. It exits if `dist/index.html` is missing, so **build first**. Locally an already running server on that port is reused.
+- Spec files run in parallel (half the CPU cores locally, two workers on CI), the tests inside a file in order, a fresh context per test, 1280×900 viewport, `en-IN` locale, `Asia/Kolkata` time zone, 120-second test budget. Specs abort every request that is not to localhost and answer `/api/**` themselves with `page.route`. A red run means the app broke, not the network.
+- Three files are excluded from the run: `smoke.spec.ts` (replaced by the smoke script), `a11y.spec.ts` (needs a package that is not installed) and `qa-sweep.spec.ts` (an on-demand harness: `QA_SWEEP=1 npx playwright test e2e/qa-sweep.spec.ts`).
+- Every failure keeps a trace, a screenshot and an `error-context.md` under `test-results/`, and the run writes an HTML report to `playwright-report/`. CI uploads both as the `playwright-report` artifact.
 
 ### Feature specs
 
@@ -84,11 +85,22 @@ Unit tests that pin the same features: `services/api/allotment.test.ts` (ranking
 
 The guided tours (`features/tutorials/tutorials.ts`) have unit tests but no browser spec. After changing a tour, build, serve `dist/` (`npx vite preview`) and walk each tour in a real browser at a phone and a desktop size: every step with a `target` must spotlight a visible element, and its card must sit fully on screen. A target near the top of the screen needs `placement: 'bottom'`; a target further down a long page needs the step's `reveal` action, because the runner only accepts a match that is already in view.
 
-The test browser comes from `npx playwright-core install chromium`. To use an installed binary, set `E2E_CHROMIUM_PATH`. `E2E_PRINT_REQUESTS=1` makes `e2e/home-requests.spec.ts` print how many requests each endpoint received while Home loads:
+The test browser comes from `npx playwright install chromium`. To use an installed binary, set `E2E_CHROMIUM_PATH`. `E2E_PRINT_REQUESTS=1` makes `e2e/home-requests.spec.ts` print how many requests each endpoint received while Home loads:
 
 ```sh
 cd frontend
-npx vitest run --config e2e/vitest.config.ts e2e/home-requests.spec.ts
+npx playwright test e2e/home-requests.spec.ts
+```
+
+Useful runner commands, from `frontend/`:
+
+```sh
+npm run e2e:ui                                   # UI mode: pick tests, watch, step through each action
+npx playwright test e2e/v70.spec.ts --headed     # watch one file run in a visible browser
+npx playwright test -g "Queue Builder" --debug   # step through with the inspector
+npm run e2e:report                               # open the last HTML report
+npx playwright show-trace test-results/<test>/trace.zip
+npx playwright codegen http://localhost:4173     # record clicks into spec code (serve dist/ first)
 ```
 
 ### Fixture shapes
