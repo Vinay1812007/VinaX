@@ -411,11 +411,11 @@ const stillFree = <T extends { id: string }>(provider: CatalogProvider, models: 
 
 /** One provider's chat and media lists, from one cached list read (10.3).
  *  Never replaces a good list with an empty answer. */
-async function providerLists(env: AiEnv, provider: CatalogProvider): Promise<{ models: CatalogModel[]; media: MediaModel[] } | null> {
+async function providerLists(env: AiEnv, provider: CatalogProvider, force = false): Promise<{ models: CatalogModel[]; media: MediaModel[] } | null> {
   const key = keyOf(env, provider);
   if (!key) return null;
   const hit = cache.get(provider);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit;
+  if (hit && !force && Date.now() - hit.at < TTL_MS) return hit;
   if (provider === 'cloudflare') {
     // 11.2 — the curated Workers AI list (./workersai.ts), checked against the
     // binding's own listing when it has one. Chat only: no media.
@@ -476,11 +476,48 @@ const SLUG = /^@?[\w./:-]{1,128}$/;
  *  live free catalogue is refused rather than forwarded, so no request can
  *  route a paid or unknown model onto the key. */
 export async function findCatalogModel(env: AiEnv, providerRaw: CatalogProvider | string, wanted: unknown): Promise<CatalogModel | null> {
-  if (typeof wanted !== 'string') return null;
+  return (await lookupCatalogModel(env, providerRaw, wanted)).model;
+}
+
+/** How soon one isolate may re-read a provider's list because a pick missed. */
+export const MISS_REFRESH_MS = 60_000;
+const lastMissRefresh = new Map<CatalogProvider, number>();
+
+/**
+ * 13.7 — findCatalogModel, with the reason a pick was not found.
+ *   { model }                  listed: use it
+ *   { model: null, listed }    the provider's list was read and lacks it
+ *   { model: null, !listed }   the list could not be read right now
+ * A miss on a cached list re-reads the live list once (at most every
+ * MISS_REFRESH_MS per provider): a model the provider added after this
+ * isolate cached its list, or a list that failed to load on a cold isolate,
+ * used to refuse a valid pick as `unknown_model` — and the app answers that
+ * by switching the listener back to Auto.
+ */
+export async function lookupCatalogModel(
+  env: AiEnv,
+  providerRaw: CatalogProvider | string,
+  wanted: unknown,
+): Promise<{ model: CatalogModel | null; listed: boolean }> {
+  const provider = normaliseProvider(providerRaw);
+  if (!provider || typeof wanted !== 'string') return { model: null, listed: true };
   const slug = wanted.trim();
-  if (!slug || !SLUG.test(slug)) return null;
-  const models = await fetchCatalog(env, providerRaw);
-  return models.find((m) => m.id === slug) ?? null;
+  if (!slug || !SLUG.test(slug)) return { model: null, listed: true };
+  // No key: the provider lists nothing here, ever — a plain "unknown".
+  if (!keyOf(env, provider)) return { model: null, listed: true };
+  const find =(lists: { models: CatalogModel[] } | null): CatalogModel | null =>
+    lists ? (stillFree(provider, lists.models).find((m) => m.id === slug) ?? null) : null;
+  let lists = await providerLists(env, provider);
+  let model = find(lists);
+  if (!model) {
+    const last = lastMissRefresh.get(provider) ?? 0;
+    if (!lists || Date.now() - last > MISS_REFRESH_MS) {
+      lastMissRefresh.set(provider, Date.now());
+      lists = await providerLists(env, provider, true);
+      model = find(lists);
+    }
+  }
+  return { model, listed: !!lists };
 }
 
 /** The slug form of findCatalogModel. */
@@ -903,4 +940,5 @@ export async function isServedVoiceModel(env: AiEnv, provider: CatalogProvider |
 export function resetCatalogCache(): void {
   cache.clear();
   voiceCache.clear();
+  lastMissRefresh.clear();
 }

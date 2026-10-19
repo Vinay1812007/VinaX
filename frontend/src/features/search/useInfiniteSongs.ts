@@ -1,4 +1,5 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useCallback } from 'react';
+import { useInfiniteQuery, type InfiniteData } from '@tanstack/react-query';
 import type { Album, Artist, Playlist, Song } from '@/types';
 import {
   searchAlbumsPage,
@@ -10,6 +11,8 @@ import type { RequestPriority } from '@/services/api/client';
 import { useSettingsStore } from '@/store/settingsStore';
 import { normalizeQuery, rankSongs, relaxedQuery, SEARCH_GC_MS, SEARCH_STALE_MS } from './useSearch';
 import { rerankSongs } from './rerank';
+import { recordingKey } from '@/services/recommendation/identityCore';
+import { primaryArtist } from '@/services/recommendation/songKey';
 
 type SongPageFetch = (
   q: string,
@@ -81,19 +84,27 @@ export async function fetchSongsPage(
 export function useInfiniteSongs(query: string, enabled = true, opts?: { search?: boolean }) {
   const q = normalizeQuery(query);
   const search = opts?.search === true;
+  const pinned = useSettingsStore((st) => st.pinnedLanguages);
+  // 13.7 — a stable select: an inline one is a new function every render, so
+  // TanStack re-ranked every loaded page (up to 1,000 songs) on each render
+  // and handed back new arrays, which re-rendered every row below.
+  const select = useCallback(
+    (data: InfiniteData<Song[], number>) => ({
+      ...data,
+      pages: data.pages.map((raw) => {
+        const page = rankSongs(raw, search ? { query: q, searchMode: true } : {});
+        return search ? rerankSongs(page, q, pinned) : page;
+      }),
+    }),
+    [q, search, pinned],
+  );
   return useInfiniteQuery({
     queryKey: ['inf-songs', q, search ? 's' : 'x'],
     enabled: enabled && q.length > 1,
     initialPageParam: 1,
     // Keep provider pages raw in the cache so filters cannot terminate pagination.
     queryFn: ({ pageParam, signal }) => fetchSongsPage(q, pageParam, search, signal),
-    select: (data) => ({
-      ...data,
-      pages: data.pages.map((raw) => {
-        const page = rankSongs(raw, search ? { query: q, searchMode: true } : {});
-        return search ? rerankSongs(page, q, useSettingsStore.getState().pinnedLanguages) : page;
-      }),
-    }),
+    select,
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length >= (search ? 5 : 15) &&
       allPages.length < 40 &&
@@ -214,16 +225,24 @@ export function flattenAlbumPages(pages: Album[][] | undefined): Album[] {
   return out;
 }
 
-export function flattenSongPages(pages: Song[][] | undefined): Song[] {
+export function flattenSongPages(pages: Song[][] | undefined, opts?: { sameRecording?: boolean }): Song[] {
   if (!pages) return [];
   const seen = new Set<string>();
   const out: Song[] = [];
   for (const page of pages) {
     for (const song of page) {
-      if (!seen.has(song.id)) {
-        seen.add(song.id);
-        out.push(song);
+      if (seen.has(song.id)) continue;
+      seen.add(song.id);
+      // 13.7 — search lists also drop re-uploads of the same recording (the
+      // catalogue lists one song under many ids: "Apna Bana Le" ×7). Same
+      // title, primary artist and version tag; remixes, live and lofi cuts
+      // stay. The first copy keeps its place, so rows never jump.
+      if (opts?.sameRecording) {
+        const key = `rec:${recordingKey(song.title, primaryArtist(song))}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
       }
+      out.push(song);
     }
   }
   return out;

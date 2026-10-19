@@ -152,7 +152,12 @@ export const onRequestGet = async (context: { request: Request; params: { path?:
     // /search?query= → grouped autocomplete (client reads d.<kind>.data).
     if (seg[0] === 'search') {
       const j = await upstream(`__call=autocomplete.get&query=${encodeURIComponent(q('query'))}&cc=in&includeMetaTags=1`);
+      // 13.7 — the best match ("arijit" → the artist Arijit Singh) comes only
+      // in topquery; the three artist rows often miss it. Songs in it are
+      // mapped like every other song row; artists/albums pass as they are.
+      const top: unknown[] = Array.isArray(j?.topquery?.data) ? j.topquery.data : [];
       return json({
+        topQuery: { data: top.map((t) => ((t as { type?: unknown })?.type === 'song' ? (mapList([t], origin)[0] ?? t) : t)) },
         songs: { data: mapList(j?.songs?.data, origin) },
         albums: { data: j?.albums?.data ?? [] },
         artists: { data: j?.artists?.data ?? [] },

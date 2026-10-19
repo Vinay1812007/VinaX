@@ -15,7 +15,7 @@ import { resolveIdentity, type IdentityEnv } from '../../_lib/identity';
 import { readJsonCapped } from '../../_lib/body';
 import { rateLimitAsync } from '../../_lib/ratelimit';
 import { sbSelectRes, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
-import { accountOf, CORS, json, publicUser } from '../../_lib/authShared';
+import { accountFacts, accountOf, CORS, json, publicUser } from '../../_lib/authShared';
 
 type Env = AuthEnv & IdentityEnv & SupabaseEnv;
 
@@ -51,21 +51,22 @@ export const onRequestPost = async (ctx: { request: Request; env: Env }): Promis
       }
     }
     const now = new Date().toISOString();
-    stored = await sbUpsert(
-      env,
-      'vinax_accounts',
-      {
-        google_sub: profile.sub,
-        email: profile.email,
-        email_verified: profile.emailVerified,
-        name: profile.name,
-        picture: profile.picture,
-        username,
-        ...(deviceId ? { device_id: deviceId } : {}),
-        last_seen: now,
-      },
-      'google_sub',
-    );
+    const row = {
+      google_sub: profile.sub,
+      email: profile.email,
+      email_verified: profile.emailVerified,
+      name: profile.name,
+      picture: profile.picture,
+      username,
+      ...(deviceId ? { device_id: deviceId } : {}),
+      last_seen: now,
+    };
+    // 13.7 — plus the coarse sign-in facts (accountFacts). Before the 13.7
+    // columns exist the write is refused; the row is then stored without
+    // them, because /api/auth/me signs out a session that has no row.
+    stored =
+      (await sbUpsert(env, 'vinax_accounts', { ...row, ...accountFacts(request, body) }, 'google_sub')) ||
+      (await sbUpsert(env, 'vinax_accounts', row, 'google_sub'));
   }
   return json({ session, stored, user: publicUser({ ...profile, username }) });
 };

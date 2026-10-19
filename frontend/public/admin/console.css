@@ -274,6 +274,12 @@ tr.table-empty > td, tr.table-empty:hover > td { padding: var(--s-5); background
 /* Status is never colour alone: each status pill carries a glyph as well as its text. */
 .pill:is(.ok, .st-ok)::before { content: '✓'; } .pill.warn::before { content: '!'; } .pill:is(.bad, .st-fail)::before { content: '✕'; } .pill.info::before { content: 'i'; }
 .dot2 { display: inline-block; width: 8px; height: 8px; margin-right: var(--s-2); border-radius: 50%; background: var(--text-3); }
+/* 13.7 — User Management: the account photo (or initial) beside the name, Gmail under it. */
+.ucell { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.uavatar { flex: none; width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: var(--surface-2, rgba(127,127,127,.15)); }
+.uavatar-lg { width: 44px; height: 44px; }
+.uavatar-none { display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--text-2); }
+.uemail { font-size: 12px; overflow-wrap: anywhere; }
 .banner, .stub-banner { display: flex; align-items: flex-start; gap: var(--s-2); padding: var(--s-3) var(--s-4); margin-bottom: var(--s-4); background: var(--info-soft); color: var(--text); border: 1px solid var(--border); border-left: 3px solid var(--info); border-radius: var(--r-sm); }
 .banner-warn, .stub-banner { background: var(--warn-soft); border-left-color: var(--warn); }
 .banner-error { background: var(--bad-soft); border-left-color: var(--bad); }

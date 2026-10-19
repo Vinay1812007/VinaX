@@ -38,14 +38,37 @@ interface UserRow {
   kind?: 'account';
   /** 13.6.4 — the usage row belongs to a signed-in account. */
   signed_in?: boolean;
+  /** 13.7 — the signed-in account's Gmail and profile photo. */
+  email?: string | null;
+  picture?: string | null;
+  region?: string | null;
+  app_version?: string | null;
 }
-interface AccountRow {
+export interface AccountRow {
   google_sub: string;
   name: string | null;
   username: string | null;
   device_id: string | null;
   created_at: string;
   last_seen: string;
+  email?: string | null;
+  picture?: string | null;
+  country?: string | null;
+  region?: string | null;
+  city?: string | null;
+  platform?: string | null;
+  app_version?: string | null;
+}
+
+/** 13.7 — the account columns the console reads; the second set is the
+ *  pre-13.7 table (before the migration adds the sign-in facts). */
+export const ACCOUNT_COLUMNS = 'google_sub,name,username,device_id,created_at,last_seen,email,picture,country,region,city,platform,app_version';
+export const ACCOUNT_COLUMNS_BASE = 'google_sub,name,username,device_id,created_at,last_seen,email,picture';
+
+/** Reads accounts with the 13.7 columns, falling back to the older table shape. */
+export async function readAccounts<T>(read: (cols: string) => Promise<DbResult<T>>): Promise<DbResult<T>> {
+  const r = await read(ACCOUNT_COLUMNS);
+  return !r.ok && r.error === 'bad_request' ? read(ACCOUNT_COLUMNS_BASE) : r;
 }
 interface Summary {
   total_users: number;
@@ -85,9 +108,13 @@ export function accountToRow(a: AccountRow): UserRow {
     kind: 'account',
     name: a.name,
     username: a.username,
-    platform: null,
-    country: null,
-    city: null,
+    email: a.email ?? null,
+    picture: a.picture ?? null,
+    platform: a.platform ?? null,
+    country: a.country ?? null,
+    region: a.region ?? null,
+    city: a.city ?? null,
+    app_version: a.app_version ?? null,
     is_playing: false,
     first_seen: a.created_at,
     last_seen: a.last_seen,
@@ -116,16 +143,31 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   // last_seen and sliced, so the page is exact whichever source fills it.
   const window = offset + limit + 1;
   let deviceQuery = 'select=device_id,name,username,platform,country,city,is_playing,first_seen,last_seen&order=last_seen.desc,device_id.asc';
-  if (q) deviceQuery += `&or=(name.ilike.*${like}*,username.ilike.*${like}*,device_id.ilike.*${like}*)`;
+  // 13.7 — a search also matches the Gmail, name or username of a linked
+  // account, so typing someone's Gmail finds their usage row too.
+  let linkedHits: string[] = [];
+  if (q) {
+    const hits = await sbSelectResult<{ device_id: string }>(
+      env,
+      'vinax_accounts',
+      `select=device_id&device_id=not.is.null&or=(name.ilike.*${like}*,username.ilike.*${like}*,email.ilike.*${like}*)&limit=200`,
+    );
+    if (hits.ok) linkedHits = hits.rows.map((r) => r.device_id).filter(Boolean);
+  }
+  const inList = (ids: string[]): string => encodeURIComponent(ids.map((id) => `"${String(id).replace(/["\\]/g, '')}"`).join(','));
+  if (q) {
+    deviceQuery += `&or=(name.ilike.*${like}*,username.ilike.*${like}*,device_id.ilike.*${like}*${linkedHits.length ? `,device_id.in.(${inList(linkedHits)})` : ''})`;
+  }
   // Accounts already linked to a device show as that device's usage row.
-  let accountQuery = 'select=google_sub,name,username,device_id,created_at,last_seen&device_id=is.null&order=last_seen.desc,google_sub.asc';
-  if (q) accountQuery += `&or=(name.ilike.*${like}*,username.ilike.*${like}*)`;
+  const accountQuery = (cols: string): string =>
+    `select=${cols}&device_id=is.null&order=last_seen.desc,google_sub.asc` +
+    (q ? `&or=(name.ilike.*${like}*,username.ilike.*${like}*,email.ilike.*${like}*)` : '');
 
   const since = encodeURIComponent(new Date(Date.now() - 86_400_000).toISOString());
   const [read, summary, accounts, accTotal, accNew, accActive, accAll] = await Promise.all([
     readWindow<UserRow>(env, 'vinax_users', deviceQuery, window),
     sbRpcResult<Summary>(env, 'vinax_user_summary', {}),
-    readWindow<AccountRow>(env, 'vinax_accounts', accountQuery, window),
+    readAccounts((cols) => readWindow<AccountRow>(env, 'vinax_accounts', accountQuery(cols), window)),
     sbCountResult(env, 'vinax_accounts', 'device_id=is.null'),
     sbCountResult(env, 'vinax_accounts', `device_id=is.null&created_at=gte.${since}`),
     sbCountResult(env, 'vinax_accounts', `device_id=is.null&last_seen=gte.${since}`),
@@ -142,29 +184,32 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const accountsOk = accounts.ok && accTotal.ok && accNew.ok && accActive.ok && accAll.ok;
   const devices = read.rows;
 
-  // Name and username of the accounts linked to the devices on screen.
-  const linked = new Map<string, { name: string | null; username: string | null }>();
-  if (accountsOk && devices.length) {
-    const ids = devices.map((d) => `"${String(d.device_id).replace(/"/g, '')}"`).join(',');
-    const l = await sbSelectResult<{ device_id: string; name: string | null; username: string | null }>(
-      env,
-      'vinax_accounts',
-      `select=device_id,name,username&device_id=in.(${encodeURIComponent(ids)})&limit=${devices.length}`,
-    );
-    if (l.ok) for (const r of l.rows) linked.set(r.device_id, { name: r.name, username: r.username });
-  }
-  for (const d of devices) {
-    const a = linked.get(d.device_id);
-    if (!a) continue;
-    d.signed_in = true;
-    if (!d.name) d.name = a.name;
-    if (!d.username) d.username = a.username;
-  }
-
   const merged = accountsOk ? [...devices, ...accounts.rows.map(accountToRow)].sort(newerFirst) : devices;
   const users = merged.slice(offset, offset + limit + 1);
   const hasMore = users.length > limit;
   if (hasMore) users.length = limit;
+
+  // Name, username, Gmail and photo of the accounts linked to the usage rows
+  // on this page (read for the page only, not the whole window).
+  const onPage = users.filter((u) => u.kind !== 'account');
+  const linked = new Map<string, { name: string | null; username: string | null; email: string | null; picture: string | null }>();
+  if (accountsOk && onPage.length) {
+    const l = await sbSelectResult<{ device_id: string; name: string | null; username: string | null; email: string | null; picture: string | null }>(
+      env,
+      'vinax_accounts',
+      `select=device_id,name,username,email,picture&device_id=in.(${inList(onPage.map((d) => d.device_id))})&limit=${onPage.length}`,
+    );
+    if (l.ok) for (const r of l.rows) linked.set(r.device_id, r);
+  }
+  for (const d of onPage) {
+    const a = linked.get(d.device_id);
+    if (!a) continue;
+    d.signed_in = true;
+    d.email = a.email;
+    d.picture = a.picture;
+    if (!d.name) d.name = a.name;
+    if (!d.username) d.username = a.username;
+  }
 
   const s = summary.value ?? null;
   const total = s && accountsOk

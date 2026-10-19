@@ -10,7 +10,10 @@
  */
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal, removeLocal, setLocal } from '@/services/storage/local';
-import { isNativePlatform } from '@/services/native';
+import { isNativePlatform, platformName } from '@/services/native';
+
+/** 13.7 — the platform and build the account is used on, for the owner console. */
+const clientFacts = (): { platform: string; appVersion: string } => ({ platform: platformName(), appVersion: __APP_VERSION__ });
 
 /** The project's public web OAuth client id (not a secret). */
 export const GOOGLE_WEB_CLIENT_ID = '152181244509-biv1p3bge1endo5pd8qpc1ormhb4a75l.apps.googleusercontent.com';
@@ -55,7 +58,7 @@ export async function exchangeGoogleToken(credential: string, fetchImpl: typeof 
     const res = await fetchImpl(`${ORIGIN}/api/auth/google`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ credential, signed_device_id: getLocal<string>(KEYS.signedDeviceId, '') || undefined }),
+      body: JSON.stringify({ credential, signed_device_id: getLocal<string>(KEYS.signedDeviceId, '') || undefined, ...clientFacts() }),
     });
     if (res.status === 401) return 'refused';
     if (!res.ok) return 'unavailable';
@@ -186,7 +189,8 @@ export function validateSession(fetchImpl: typeof fetch = fetch): Promise<boolea
       // 13.6.4 — the device's signed id (issued once usage sharing is on)
       // links this device to the account, so the console counts one listener.
       const signed = getLocal<string>(KEYS.signedDeviceId, '');
-      const headers: Record<string, string> = { authorization: `Bearer ${a.session}` };
+      const facts = clientFacts();
+      const headers: Record<string, string> = { authorization: `Bearer ${a.session}`, 'x-vinax-platform': facts.platform, 'x-vinax-version': facts.appVersion };
       if (signed) headers['x-vinax-device'] = signed;
       const res = await fetchImpl(`${ORIGIN}/api/auth/me`, { headers, cache: 'no-store' });
       const now = currentAccount();

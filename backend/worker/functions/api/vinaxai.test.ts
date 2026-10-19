@@ -304,6 +304,19 @@ describe('10.3 — model picks, Auto and real model names', () => {
     expect(outbound).toHaveLength(0);
   });
 
+  it('13.7 — a provider list that cannot be read is "busy, ask again" (429), never unknown_model, and no engine is called', async () => {
+    const saved = lists['api.groq.com/openai/v1/models'];
+    lists['api.groq.com/openai/v1/models'] = { data: [] };
+    try {
+      const { status, frames } = await run({ mode: 'model', provider: 'groq', model: 'openai/gpt-oss-20b' });
+      expect(status).toBe(429);
+      expect(frames[0]).toMatchObject({ error: 'model_unavailable', reason: 'busy', model: { provider: 'groq', id: 'openai/gpt-oss-20b' }, retryAfter: 30 });
+      expect(outbound).toHaveLength(0);
+    } finally {
+      lists['api.groq.com/openai/v1/models'] = saved;
+    }
+  });
+
   it('11.2 — a failed pick is never answered by another provider: 503 model_unavailable with the reason and same-provider alternatives', async () => {
     lists['openrouter.ai/api/v1/models'] = {
       data: [

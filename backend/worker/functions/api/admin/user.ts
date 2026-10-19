@@ -2,7 +2,7 @@
  *  Top songs / languages / recents are derived client-side from the events. */
 import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
-import { ACCOUNT_ROW_PREFIX, accountToRow } from './users';
+import { ACCOUNT_ROW_PREFIX, accountToRow, readAccounts, type AccountRow } from './users';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -53,10 +53,8 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   let lookupId = deviceId;
   if (deviceId.startsWith(ACCOUNT_ROW_PREFIX)) {
     const sub = deviceId.slice(ACCOUNT_ROW_PREFIX.length);
-    const acc = await sbSelectResult<{ google_sub: string; name: string | null; username: string | null; device_id: string | null; created_at: string; last_seen: string }>(
-      env,
-      'vinax_accounts',
-      `google_sub=eq.${encodeURIComponent(sub)}&select=google_sub,name,username,device_id,created_at,last_seen&limit=1`,
+    const acc = await readAccounts((cols) =>
+      sbSelectResult<AccountRow>(env, 'vinax_accounts', `google_sub=eq.${encodeURIComponent(sub)}&select=${cols}&limit=1`),
     );
     if (!acc.ok) return dbFailure(acc);
     const row = acc.rows[0];
@@ -77,7 +75,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     : 'type,song_title,song_artist,language,created_at,country,city';
   const eventLimit = full ? 2000 : 150;
 
-  const [users, events] = await Promise.all([
+  const [users, events, account] = await Promise.all([
     sbSelectResult<UserRow>(
       env,
       'vinax_users',
@@ -88,11 +86,16 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
       'vinax_events',
       `device_id=eq.${enc}&order=created_at.desc&limit=${eventLimit}&select=${eventCols}`,
     ),
+    // 13.7 — the account linked to this device: Gmail, photo, sign-in facts.
+    readAccounts((cols) => sbSelectResult<AccountRow>(env, 'vinax_accounts', `device_id=eq.${enc}&select=${cols}&order=last_seen.desc&limit=1`)),
   ]);
 
   // 7.2.0 — a failed read is not "no such user"; a profile export built on
   // one would silently ship an empty history.
   if (!users.ok) return dbFailure(users);
   if (!events.ok) return dbFailure(events);
-  return adminJson({ configured: true, user: users.rows[0] ?? null, events: events.rows });
+  const u = users.rows[0] ?? null;
+  const a = account.ok ? account.rows[0] : undefined;
+  const user = u && a ? { ...u, signed_in: true, email: a.email ?? null, picture: a.picture ?? null, name: u.name ?? a.name, username: u.username ?? a.username, account_created: a.created_at } : u;
+  return adminJson({ configured: true, user, events: events.rows });
 };

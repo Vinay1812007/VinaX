@@ -20,6 +20,14 @@ export default function PrivacyPage() {
           and your queue are not synced</strong> — they stay on the device. Delete account (Settings → Profile)
           removes the account and its synced copy.
         </p>
+        <p>
+          To run the service, your account also records where and on what you last signed in: the city, region and
+          country our network sees for the connection (worked out by our hosting provider; the IP address itself is never
+          stored), whether you use the web app or the Android app, the app version, and when you were last active.
+          VinaX&rsquo;s owner can see your account details — name, email, profile photo and these sign-in facts — in the
+          admin console, to support listeners and keep the service safe. What you play and search is not part of this:
+          that is only shared if you opt in below.
+        </p>
         <H>What we receive — only if you opt in</H>
         <p>
           During onboarding you choose whether to share anonymous usage statistics. If you opt in, the app sends
