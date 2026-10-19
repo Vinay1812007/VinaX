@@ -174,15 +174,29 @@ test('typeahead: completions and quick hits appear as you type, and the keyboard
   // Walk down to the first song hit and press Enter: it plays.
   const songs = list.getByRole('group', { name: 'Songs' }).getByRole('option');
   await expect(songs.first()).toBeVisible();
-  // The results for the new letter can land while the keys walk the list (and
-  // renumber the options), so the target is read again on every step rather
-  // than once up front — a stale id sent the walk past the songs on CI.
-  const onFirstSong = async (): Promise<boolean> => {
-    const id = await activeId(page);
-    return !!id && id === (await songs.first().getAttribute('id'));
-  };
-  for (let i = 0; i < 12 && !(await onFirstSong()); i += 1) await page.keyboard.press('ArrowDown');
-  await expect.poll(onFirstSong, { timeout: 5000 }).toBe(true);
+  // The results for the new letter can land while the keys walk the list and
+  // add suggestions above the songs (renumbering every option), so a fixed
+  // number of ArrowDowns can stop short or overshoot (13.6.2 CI: it stopped on
+  // a suggestion). Each step re-reads the list and moves toward the first song,
+  // and the walk only ends once the cursor has stayed there through a pause.
+  const options = list.getByRole('option');
+  await expect
+    .poll(
+      async () => {
+        const ids = await options.evaluateAll((els) => els.map((e) => e.id));
+        const target = await songs.first().getAttribute('id');
+        const active = await activeId(page);
+        if (target && active === target) {
+          await page.waitForTimeout(300);
+          return (await activeId(page)) === (await songs.first().getAttribute('id'));
+        }
+        const at = active ? ids.indexOf(active) : -1;
+        await page.keyboard.press(at < ids.indexOf(target ?? '') ? 'ArrowDown' : 'ArrowUp');
+        return false;
+      },
+      { timeout: 20_000, intervals: [50] },
+    )
+    .toBe(true);
   await page.keyboard.press('Enter');
   await expect.poll(async () => (await queueState(page)).ids.length, { timeout: 10_000 }).toBeGreaterThan(0);
   await expect(list).toBeHidden();
