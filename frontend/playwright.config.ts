@@ -21,11 +21,9 @@ const executablePath = process.env.E2E_CHROMIUM_PATH || process.env.PLAYWRIGHT_E
 
 export default defineConfig({
   testDir: './e2e',
-  // smoke is superseded by scripts/e2e-smoke.mjs; a11y needs @axe-core/playwright
-  // (not installed); qa-sweep is an on-demand harness (QA_SWEEP=1, run by path).
-  testIgnore: process.env.QA_SWEEP
-    ? ['**/smoke.spec.ts', '**/a11y.spec.ts']
-    : ['**/smoke.spec.ts', '**/a11y.spec.ts', '**/qa-sweep.spec.ts'],
+  // smoke is superseded by scripts/e2e-smoke.mjs; qa-sweep is an on-demand
+  // harness (QA_SWEEP=1, run by path).
+  testIgnore: process.env.QA_SWEEP ? ['**/smoke.spec.ts'] : ['**/smoke.spec.ts', '**/qa-sweep.spec.ts'],
   // The specs were tuned under a 120 s budget (lazy chunks on a cold CI box).
   timeout: 120_000,
   expect: { timeout: 5_000 },
