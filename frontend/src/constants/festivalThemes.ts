@@ -34,13 +34,6 @@ export interface FestivalTheme {
   motif: FestivalMotif;
   /** Emoji beside the brand; omit to keep the logo clean. */
   badge?: string;
-  /**
-   * Festive app logo for the skin's days (a same-origin image under
-   * /icons/fest/). The generator swaps every `/icons/icon.svg` image for it
-   * with CSS `content`, so it costs no JS and shows from first paint. Browsers
-   * that cannot replace an image's content simply keep the regular logo.
-   */
-  logo?: string;
 }
 
 export const FESTIVAL_THEMES: Record<string, FestivalTheme> = {
@@ -75,7 +68,7 @@ export const FESTIVAL_THEMES: Record<string, FestivalTheme> = {
   gandhi: { accent: '#a3a3a3', canvasHue: 0, canvasSat: 0, glow: ['#f97316', '#22c55e'], glowShape: 'sides', ribbon: ['#f97316', '#ffffff', '#22c55e'], motif: 'rings', badge: '🕊️' },
   bathukamma: { accent: '#e879f9', canvasHue: 296, glow: ['#e879f9', '#f59e0b', '#22c55e'], glowShape: 'corners', ribbon: ['#e879f9', '#f59e0b', '#facc15', '#22c55e'], motif: 'rangoli', badge: '🌸' },
   navratri: { accent: '#dc2626', canvasHue: 355, glow: ['#dc2626', '#facc15', '#a855f7'], glowShape: 'corners', ribbon: ['#dc2626', '#facc15', '#22c55e', '#a855f7'], motif: 'diamonds', badge: '💃' },
-  dussehra: { accent: '#f5b301', canvasHue: 356, glow: ['#f5b301', '#dc2626'], glowShape: 'sky', ribbon: ['#f5b301', '#ef4444', '#fb923c'], motif: 'diamonds', badge: '🏹', logo: '/icons/fest/dussehra.webp' },
+  dussehra: { accent: '#f5b301', canvasHue: 356, glow: ['#f5b301', '#dc2626'], glowShape: 'sky', ribbon: ['#f5b301', '#ef4444', '#fb923c'], motif: 'diamonds', badge: '🏹' },
   halloween: { accent: '#ff7a1a', canvasHue: 262, canvasSat: 0.9, glow: ['#ff7a1a', '#a855f7'], glowShape: 'sunrise', ribbon: ['#ff7a1a', '#a855f7', '#22c55e'], motif: 'waves', badge: '🎃' },
   apformation: { accent: '#16a34a', canvasHue: 134, glow: ['#16a34a', '#facc15'], glowShape: 'sides', ribbon: ['#16a34a', '#facc15', '#ffffff'], motif: 'stripes', badge: '🌾' },
   diwali: { accent: '#facc15', canvasHue: 272, canvasSat: 1, glow: ['#f59e0b', '#a855f7', '#ef4444'], glowShape: 'sunrise', ribbon: ['#facc15', '#fb923c', '#ef4444', '#a855f7'], motif: 'lamps', badge: '🪔' },

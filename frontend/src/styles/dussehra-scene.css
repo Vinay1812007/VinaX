@@ -1,0 +1,163 @@
+/* Dussehra living backdrop (13.7.1) — see components/DussehraScene.tsx.
+   Lives inside .fest-sky (fixed, behind content, pointer-events none), so the
+   tab-hidden pause rule there pauses everything here too. Every animation is
+   transform/opacity on a whole element; nothing repaints the art. Loaded with
+   the festival backdrop's lazy chunk, never at first load.
+
+   One 9s story, shared by the layers below:
+     0–13%   arrow nocked, string drawn to the cheek
+     14–30%  release; the arrow arcs across and strikes Ravanasura's chest
+     30–42%  a flash at the chest, the effigy staggers
+     31–55%  crackers burst over the heads, the fire at his feet flares
+     88–100% the next arrow is nocked */
+
+.ds-scene,
+.ds-leaves {
+  --ds-hero-a: #ffd27a; --ds-hero-b: #f59e0b;
+  --ds-foe-a: #ea580c; --ds-foe-b: #9a1b1b; --ds-foe-c: #4a0a0a;
+  --ds-sky: #3a1414; --ds-eye: #ff5a2e; --ds-gold: #fbbf24; --ds-string: #ffe7a8;
+  --ds-leaf: #6cbf45; --ds-stem: #3f7d2a; --ds-leaf-o: 0.75;
+  --ds-o: 0.62;
+}
+html.light .ds-scene,
+html.light .ds-leaves {
+  --ds-hero-a: #d97706; --ds-hero-b: #92400e;
+  --ds-foe-a: #c2410c; --ds-foe-b: #991b1b; --ds-foe-c: #7f1d1d;
+  --ds-sky: #7f1d1d; --ds-eye: #dc2626; --ds-gold: #b45309; --ds-string: #92400e;
+  --ds-leaf: #4d9a2e; --ds-stem: #2f6b1f; --ds-leaf-o: 0.6;
+  --ds-o: 0.38;
+}
+
+/* The stage: always 12:5 so a percentage on a layer is a fixed point of the
+   art. It sits on the player's top edge (the shell's own measurement of it),
+   centred, and never wider than the screen. */
+.ds-scene {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--vx-player-h, 76px) + var(--vx-deck-gap, 10px) * 2);
+  width: min(100vw, calc(clamp(140px, 40vh, 380px) * 2.4));
+  aspect-ratio: 12 / 5;
+  transform: translateX(-50%);
+  opacity: var(--ds-o);
+}
+.ds-layer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+
+.ds-hero-a { stop-color: var(--ds-hero-a); }
+.ds-hero-b { stop-color: var(--ds-hero-b); }
+.ds-foe-a { stop-color: var(--ds-foe-a); }
+.ds-foe-b { stop-color: var(--ds-foe-b); }
+.ds-foe-c { stop-color: var(--ds-foe-c); }
+.ds-skyline { fill: var(--ds-sky); opacity: 0.55; }
+.ds-eyes { fill: var(--ds-eye); }
+.ds-gold { stroke: var(--ds-gold); }
+.ds-string { fill: none; stroke: var(--ds-string); stroke-width: 1.6; }
+.ds-shaft { stroke: var(--ds-string); stroke-width: 3; stroke-linecap: round; }
+.ds-head { fill: var(--ds-string); }
+.ds-fletch { stroke: #fb923c; stroke-width: 2.4; stroke-linecap: round; }
+
+/* Rama's scarf lifts in the wind, pivoting at his shoulder. */
+.ds-scarf { transform-origin: 19.7% 47.6%; animation: dsSway 3.2s ease-in-out infinite alternate; }
+@keyframes dsSway { from { transform: rotate(-3deg); } to { transform: rotate(4deg); } }
+
+/* The bowstring: drawn while an arrow is nocked, straight once it is loosed. */
+.ds-string-drawn { animation: dsDrawn 9s linear infinite; }
+.ds-string-rest { animation: dsRest 9s linear infinite; }
+@keyframes dsDrawn { 0%, 13% { opacity: 1; } 14%, 91% { opacity: 0; } 93%, 100% { opacity: 1; } }
+@keyframes dsRest { 0%, 13% { opacity: 0; } 14%, 91% { opacity: 1; } 93%, 100% { opacity: 0; } }
+
+/* The arrow: a small pull back, then an arc from the bow to the chest
+   (523 × 22 units of the 1200 × 500 stage). */
+.ds-arrow { will-change: transform, opacity; animation: dsArrow 9s linear infinite; }
+@keyframes dsArrow {
+  0%, 12% { transform: translate(-0.8%, 0); opacity: 1; animation-timing-function: ease-in; }
+  14% { transform: translate(0, 0); opacity: 1; }
+  22% { transform: translate(21.8%, -5.2%); }
+  30% { transform: translate(43.6%, 4.4%); opacity: 1; }
+  33% { transform: translate(43.6%, 4.4%); opacity: 0; }
+  34%, 90% { transform: translate(-0.8%, 0); opacity: 0; }
+  96%, 100% { transform: translate(-0.8%, 0); opacity: 1; }
+}
+
+/* The strike: a flash at the chest and a stagger about the effigy's feet. */
+.ds-hit {
+  position: absolute; left: 79.6%; top: 51%; width: 11%; aspect-ratio: 1;
+  border-radius: 50%; opacity: 0;
+  background: radial-gradient(circle, #fff6cc 0%, #fbbf24 30%, rgb(249 115 22 / 0.5) 55%, transparent 70%);
+  will-change: transform, opacity; animation: dsHit 9s ease-out infinite;
+}
+@keyframes dsHit {
+  0%, 29% { opacity: 0; transform: translate(-50%, -50%) scale(0.2); }
+  31% { opacity: 1; transform: translate(-50%, -50%) scale(0.6); }
+  42%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.8); }
+}
+.ds-ravana { transform-origin: 81.7% 94%; animation: dsStagger 9s ease-in-out infinite; }
+@keyframes dsStagger {
+  0%, 30% { transform: rotate(0deg); }
+  32% { transform: rotate(-2.2deg); }
+  35% { transform: rotate(1.6deg); }
+  38% { transform: rotate(-1deg); }
+  42%, 100% { transform: rotate(0deg); }
+}
+
+/* Ravana dahan: the fire at his feet always flickers and flares after the hit. */
+.ds-fire { position: absolute; left: 0; right: 0; bottom: 6%; height: 17%; transform-origin: 81% 100%; animation: dsBlaze 9s ease-in-out infinite; }
+.ds-fire i {
+  position: absolute; bottom: 0; width: 3.6%; height: 100%; margin-left: -1.8%;
+  border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%;
+  background: radial-gradient(ellipse at 50% 85%, #fff6cc, #fbbf24 30%, #f97316 55%, rgb(220 38 38 / 0.7) 72%, transparent 80%);
+  scale: var(--ds-s, 1); transform-origin: 50% 100%;
+  will-change: transform, opacity; animation: dsFlicker 1.5s ease-in-out infinite;
+}
+@keyframes dsFlicker {
+  0%, 100% { transform: scaleY(1) skewX(0deg); opacity: 0.9; }
+  30% { transform: scaleY(1.2) skewX(-6deg); opacity: 1; }
+  64% { transform: scaleY(0.86) skewX(5deg); opacity: 0.75; }
+}
+@keyframes dsBlaze {
+  0%, 30% { transform: scale(1, 1); }
+  36% { transform: scale(1.25, 1.7); }
+  70% { transform: scale(1.15, 1.45); }
+  86%, 100% { transform: scale(1, 1); }
+}
+
+/* Crackers over the heads once the arrow lands. */
+.ds-burst {
+  position: absolute; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; border-radius: 50%; opacity: 0;
+  --b1: #fde68a; --b2: #fb7185; --b3: #2dd4bf;
+  box-shadow: 0 -30px 0 0 var(--b1), 21px -21px 0 0 var(--b2), 30px 0 0 0 var(--b3), 21px 21px 0 0 var(--b1), 0 30px 0 0 var(--b2), -21px 21px 0 0 var(--b3), -30px 0 0 0 var(--b1), -21px -21px 0 0 var(--b2), 0 -50px 0 -1px var(--b3), 35px -35px 0 -1px var(--b1), 50px 0 0 -1px var(--b2), 35px 35px 0 -1px var(--b3), 0 50px 0 -1px var(--b1), -35px 35px 0 -1px var(--b2), -50px 0 0 -1px var(--b3), -35px -35px 0 -1px var(--b1);
+  will-change: transform, opacity; animation: dsBurst 9s ease-out infinite;
+}
+.ds-burst-1 { --b1: #fb923c; --b2: #fde68a; --b3: #f43f5e; }
+.ds-burst-2 { --b1: #2dd4bf; --b2: #fbbf24; --b3: #fde68a; }
+@keyframes dsBurst {
+  0%, 31% { opacity: 0; transform: scale(0.1); }
+  33% { opacity: 1; }
+  44% { opacity: 0.7; }
+  53%, 100% { opacity: 0; transform: scale(1.6); }
+}
+
+/* Jammi leaves, the leaf exchanged on Vijayadashami, drifting down the whole
+   sky: a slow fall with a sway either side and a turn, and a flutter. */
+.ds-leaves { position: absolute; inset: 0; overflow: hidden; }
+.ds-leaf {
+  position: absolute; top: -40px; width: var(--ds-size, 22px); height: calc(var(--ds-size, 22px) * 1.33);
+  opacity: 0; will-change: transform, opacity; animation: dsLeafFall 14s linear infinite;
+}
+.ds-leaf svg { display: block; width: 100%; height: 100%; animation: dsFlutter 2.2s ease-in-out infinite alternate; }
+.ds-leaf .ds-leaflet { fill: var(--ds-leaf); }
+.ds-leaf .ds-stem { fill: none; stroke: var(--ds-stem); stroke-width: 1.4; stroke-linecap: round; }
+@keyframes dsLeafFall {
+  0% { opacity: 0; transform: translate3d(0, 0, 0) rotate(0deg); }
+  6% { opacity: var(--ds-leaf-o); }
+  25% { transform: translate3d(var(--ds-sway), 27vh, 0) rotate(70deg); }
+  50% { transform: translate3d(calc(var(--ds-sway) * -1), 54vh, 0) rotate(160deg); }
+  75% { transform: translate3d(var(--ds-sway), 81vh, 0) rotate(250deg); }
+  94% { opacity: var(--ds-leaf-o); }
+  100% { opacity: 0; transform: translate3d(0, 110vh, 0) rotate(330deg); }
+}
+@keyframes dsFlutter { from { transform: scaleX(1); } to { transform: scaleX(0.45); } }
+
+/* Belt and braces: the component is not mounted under either still switch,
+   but if the system preference flips while it is on screen, stop at once. */
+html.reduce-motion .ds-scene, html.reduce-motion .ds-leaves { display: none; }
+@media (prefers-reduced-motion: reduce) { .ds-scene, .ds-leaves { display: none; } }

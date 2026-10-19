@@ -350,8 +350,6 @@ html.amoled[class*='fest-'] .fest-sky::before, html.amoled[class*='fest-'] .fest
     ];
     out.push(`/* ${f.name} — ${f.when} */`);
     out.push(`html.${cls} {\n  ${vars.join('\n  ')}\n}`);
-    // A festive logo replaces the app mark wherever it is drawn as an <img>.
-    if (t.logo) out.push(`html.${cls} img[src="/icons/icon.svg"] { content: url('${t.logo}'); }`);
     out.push(`html.${cls}.light {\n  --ember-300: ${r.light[300]}; --ember-400: ${r.light[400]}; --ember-500: ${r.light[500]}; --ember-600: ${r.light[600]};\n  --ink-950: ${cv.light[950]}; --ink-900: ${cv.light[900]}; --ink-850: ${cv.light[850]}; --ink-800: ${cv.light[800]};\n  --fest-c2: rgb(${ec.light[0]}); --fest-c3: rgb(${ec.light[1]});\n}`);
     out.push('');
   }
