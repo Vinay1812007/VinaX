@@ -12,6 +12,13 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '13.6.4': {
+    title: 'Every new listener shows in the console',
+    changes: [
+      { type: 'fixed', text: 'User Management now lists everyone who signs in, not only listeners who chose to share usage, so new sign-ups and their counts show up straight away.' },
+      { type: 'improved', text: 'A listener who shares usage after signing in is counted once, and the console shows when each account was last active.' },
+    ],
+  },
   '13.6.3': {
     title: 'Steadier release checks',
     changes: [

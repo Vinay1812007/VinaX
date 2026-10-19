@@ -4,6 +4,7 @@ import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { auditPrior, logAdminAudit } from '../../_lib/adminAudit';
 import { methodNotAllowed } from '../../_lib/ratelimit';
 import { sbDelete, sbDeleteReturning, sbInsert, sbSelectResult, sbUpdate, type SupabaseEnv } from '../../_lib/supabase';
+import { ACCOUNT_ROW_PREFIX } from './users';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -34,6 +35,21 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
       typeof body?.reason === 'string' ? body.reason.replace(/\|/g, '/').trim().slice(0, 300) : '';
     if (!id || id.length > 128) return json({ error: 'bad_request' }, 400);
     if (reason.length < 3) return json({ error: 'reason_required' }, 400);
+    // 13.6.4 — an account row (signed in, no usage row): delete the account;
+    // its synced library goes with it (vinax_account_data cascades). The
+    // listener is signed out and can sign in again as a new account.
+    if (id.startsWith(ACCOUNT_ROW_PREFIX)) {
+      const sub = id.slice(ACCOUNT_ROW_PREFIX.length);
+      const gone = await sbDeleteReturning<{ google_sub: string }>(
+        env,
+        'vinax_accounts',
+        `google_sub=eq.${encodeURIComponent(sub)}&select=google_sub`,
+      );
+      if (gone === null) return json({ ok: false, error: 'delete_failed' }, 500);
+      if (gone.length === 0) return json({ ok: false, error: 'not_found' }, 404);
+      await logAdminAudit(context, { action: 'user-delete', summary: `Deleted account ${sub.slice(0, 6)}…: ${reason}`, target: `account ${sub.slice(0, 6)}…` });
+      return json({ ok: true });
+    }
     const okEvents = await sbDelete(env, 'vinax_events', `device_id=eq.${encodeURIComponent(id)}`);
     // Returning delete so a typo'd / already-deleted device_id is an honest
     // not_found instead of a silent `{ok:true}` no-op (D-18).
@@ -50,6 +66,9 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
     // Scrub the identifier from any feedback the device filed — deleting a
     // user must not keep their device_id alive in another table (D-4).
     await sbUpdate(env, 'vinax_feedback', `device_id=eq.${encodeURIComponent(id)}`, { device_id: 'deleted' });
+    // 13.6.4 — an account linked to this device goes back to an account row
+    // in User Management instead of vanishing with the device.
+    await sbUpdate(env, 'vinax_accounts', `device_id=eq.${encodeURIComponent(id)}`, { device_id: null });
     // Permanent audit note — written via the audit channel (status never
     // 'new', never 'resolved': it must not inflate the feedback KPI and must
     // survive clear_feedback). Only the truncated id is recorded.

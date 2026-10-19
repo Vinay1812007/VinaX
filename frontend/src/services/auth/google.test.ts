@@ -4,7 +4,7 @@
  *  and account deletion clear it; failures are named. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { KEYS } from '@/constants/storage-keys';
-import { getLocal } from '@/services/storage/local';
+import { getLocal, setLocal } from '@/services/storage/local';
 import { currentAccount, deleteAccount, exchangeGoogleToken, onAccountChange, resetSessionCheckForTests, signOut, validateSession } from './google';
 import { signInMessage } from '@/components/GoogleSignIn';
 
@@ -89,6 +89,22 @@ describe('Google sign-in', () => {
     answer(new Response(JSON.stringify({ user: USER }), { status: 200 }));
     expect(await pending).toBe(false);
     expect(currentAccount()).toBeNull();
+  });
+
+  // 13.6.4 — the device's signed id rides along so the server can link the
+  // device to the account (one listener in the console, not two rows).
+  it('sends the signed device id when there is one, and nothing when there is not', async () => {
+    await exchangeGoogleToken('t', ok({ session: 'vx1.p.s', user: USER }));
+    let f = ok({ user: USER });
+    await validateSession(f);
+    let headers = (f.mock.calls[0] as unknown as [string, RequestInit])[1].headers as Record<string, string>;
+    expect(headers).toEqual({ authorization: 'Bearer vx1.p.s' });
+    resetSessionCheckForTests();
+    setLocal(KEYS.signedDeviceId, 'c_abc.sig');
+    f = ok({ user: USER });
+    await validateSession(f);
+    headers = (f.mock.calls[0] as unknown as [string, RequestInit])[1].headers as Record<string, string>;
+    expect(headers).toEqual({ authorization: 'Bearer vx1.p.s', 'x-vinax-device': 'c_abc.sig' });
   });
 
   it('a 401 signs out; checks running at once share one request', async () => {

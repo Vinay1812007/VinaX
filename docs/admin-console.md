@@ -291,6 +291,17 @@ Runbook, AI house rules, AI prices, AI emergency controls, trending pins, status
 
 Config Backup exports and restores six keys as one JSON file: `banners`, `festival`, `status-note`, `flags`, `runbook` and `trending-pins`. It does not include the Home layout or the other keys.
 
+### Who User Management lists
+
+Two sources, merged by last seen, newest first:
+
+- **Usage rows** (`vinax_users`): written by `/api/events`, so a listener appears only after ticking "share usage" (unticked by default) and playing. These carry the location, the platform and the plays. A row whose device is linked to a signed-in account shows the account's name and username when the device has none, and an "account" mark.
+- **Account rows** (`vinax_accounts` with no linked device): everyone who signed in with Google and has no usage row yet. The *Device* column says "account · not sharing usage"; there is no location, no plays, and the email is never sent to the console. The row's id is `account:<Google account id>`. The drill-down shows the name and dates; **Delete** removes the account (its synced library goes with it) and signs the listener out.
+
+A device is linked to an account when it proves its signed id: at sign-in, or on the app's once-per-load session check (`GET /api/auth/me` with the `x-vinax-device` header), which also refreshes the account's last seen at most every 10 minutes. The welcome and its usage tick come after sign-in, so a new listener is linked on their next app load; until then they can show as both an account row and a usage row. Deleting a usage row unlinks its account, which then shows as an account row again.
+
+The cards add the two together: *Total users*, *Active (24h)* and *New (24h)* count usage rows plus unlinked accounts; *Signed in* counts every account. If the account read fails the usage list still shows, the answer names `unavailable: ["accounts"]`, and *Signed in* shows a dash. The list is merged up to 10,100 rows deep (the CSV export's 100 pages of 100).
+
 ### Listener downloads (User Management)
 
 | Control | File | Contents |
