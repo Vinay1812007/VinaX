@@ -14,11 +14,11 @@ export function LanguageGrid({ heading = true }: { heading?: boolean }) {
         {HUB_LANGUAGES.map((id) => {
           const native = NATIVE_NAMES[id];
           return (
-            <Link key={id} to={`/${id}-songs`} aria-label={`Explore ${languageLabel(id)} music`} className={`bx-lang ${languageTone(id)}`}>
+            <Link key={id} to={`/${id}-songs`} className={`bx-lang ${languageTone(id)}`}>
               <strong className="bx-lang-script" aria-hidden lang={native?.lang} dir={native?.dir}>
                 {native?.text ?? languageLabel(id)}
               </strong>
-              <span className="bx-lang-name" aria-hidden>
+              <span className="bx-lang-name">
                 {languageLabel(id)}
               </span>
             </Link>

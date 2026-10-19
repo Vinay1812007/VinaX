@@ -492,6 +492,8 @@ export default function QueuePage() {
   if (!queue.length) {
     return (
       <>
+        {/* The page keeps its title when empty, for screen-reader heading navigation. */}
+        <h1 className="sr-only">Queue</h1>
         {building && <Suspense fallback={null}><QueueBuilderSheet onClose={() => setBuilding(false)} /></Suspense>}
         <EmptyState
           icon={<QueueIcon className="w-8 h-8" />}

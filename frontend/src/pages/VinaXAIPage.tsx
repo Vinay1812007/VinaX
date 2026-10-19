@@ -1185,11 +1185,12 @@ export default function VinaXAIPage(): ReactNode {
         />
       )}
 
-      {/* Main */}
-      <div className="ai-main">
+      {/* Main — a role, not a <main>: the global `main` rule (index.css)
+          clips horizontal overflow, which would cut off the composer menus. */}
+      <div className="ai-main" role="main">
         {/* Header: the chat's name and nothing that competes with it. The
             model lives beside the composer, where it is chosen. */}
-        <header className="ai-header">
+        <div className="ai-header">
           <button type="button" className="ai-icon-btn ai-below-md" aria-label="Menu" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(true)}>
             <MenuIcon className="w-5 h-5" />
           </button>
@@ -1272,7 +1273,7 @@ export default function VinaXAIPage(): ReactNode {
           <button type="button" onClick={openSettings} aria-label="Chat settings" title="Chat settings" aria-haspopup="dialog" className="ai-icon-btn">
             <SettingsIcon className="w-5 h-5" />
           </button>
-        </header>
+        </div>
 
         {/* Stage: ONE composer instance in one tree position. On an empty chat
             the stage centres greeting → composer → suggestions; once there

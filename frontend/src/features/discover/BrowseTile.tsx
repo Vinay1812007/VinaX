@@ -40,7 +40,8 @@ export function BrowseTile(props: LinkTile | ButtonTile) {
     <>
       <span className="bx-tile-text">
         <span className="bx-tile-title">{title}</span>
-        {meta && <span className="bx-tile-meta">{meta}</span>}
+        {/* The space keeps title and meta two words in the accessible name. */}
+        {meta && <> <span className="bx-tile-meta">{meta}</span></>}
       </span>
       {visual && (
         <span className="bx-tile-vis" aria-hidden>

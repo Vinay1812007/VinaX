@@ -54,9 +54,9 @@ describe('BrowseTile', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
-  it('as a link, keeps its accessible name when one is given', () => {
-    inRouter(<BrowseTile to="/telugu-sad-songs" label="Telugu sad songs" title="Sad" meta="Telugu songs" />);
-    const link = screen.getByRole('link', { name: 'Telugu sad songs' });
+  it('as a link, is named by its title then its meta, as two words (WCAG 2.5.3 label in name)', () => {
+    inRouter(<BrowseTile to="/telugu-sad-songs" title="Sad" meta="Telugu songs" />);
+    const link = screen.getByRole('link', { name: 'Sad Telugu songs' });
     expect(link.getAttribute('href')).toBe('/telugu-sad-songs');
   });
 });
@@ -64,10 +64,10 @@ describe('BrowseTile', () => {
 describe('LanguageGrid', () => {
   it('labels each hub and marks its script with the right language', () => {
     inRouter(<LanguageGrid />);
-    const telugu = screen.getByRole('link', { name: 'Explore Telugu music' });
+    const telugu = screen.getByRole('link', { name: 'Telugu' });
     expect(telugu.getAttribute('href')).toBe('/telugu-songs');
     expect(telugu.querySelector('[lang="te"]')?.textContent).toBe('తెలుగు');
-    const urdu = screen.getByRole('link', { name: 'Explore Urdu music' });
+    const urdu = screen.getByRole('link', { name: 'Urdu' });
     expect(urdu.querySelector('[lang="ur"]')?.getAttribute('dir')).toBe('rtl');
   });
 });
@@ -75,8 +75,8 @@ describe('LanguageGrid', () => {
 describe('HubMoodTiles', () => {
   it('links every mood hub for the language, minus the one being shown', () => {
     inRouter(<HubMoodTiles language="telugu" exclude="romantic" />);
-    expect(screen.getByRole('link', { name: 'Telugu sad songs' }).getAttribute('href')).toBe('/telugu-sad-songs');
-    expect(screen.queryByRole('link', { name: 'Telugu romantic songs' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Sad Telugu songs' }).getAttribute('href')).toBe('/telugu-sad-songs');
+    expect(screen.queryByRole('link', { name: 'Romantic Telugu songs' })).toBeNull();
     expect(screen.getAllByRole('link')).toHaveLength(5);
   });
 });

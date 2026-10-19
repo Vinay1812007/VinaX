@@ -182,8 +182,8 @@ test('mood x language hub route renders (SEO category layer)', async ({ page }) 
   await page.goto('/telugu-romantic-songs');
   await expect(page.getByRole('heading', { name: 'Telugu Romantic Songs' })).toBeVisible();
   // Internal-link mesh: sibling moods + other languages + parent hub.
-  await expect(page.getByRole('link', { name: 'Telugu sad songs' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Hindi romantic songs' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Sad Telugu songs' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Romantic Hindi songs' })).toBeVisible();
 });
 
 test('queue rows drag-reorder with the grip handle', async ({ page }) => {

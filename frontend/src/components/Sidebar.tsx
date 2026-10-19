@@ -63,7 +63,7 @@ export function Sidebar() {
   return (
     <aside className={cn('vx-sidebar vx-mat-thin hidden md:flex', collapsed && 'is-collapsed')} aria-label="Sidebar">
       <div className="vx-sidebar-head">
-        <Link to="/" className="vx-brand" aria-label="VinaX home">
+        <Link to="/" className="vx-brand" aria-label={collapsed ? 'VinaX home' : undefined}>
           <img src="/icons/icon.svg" alt="" width={30} height={30} />
           {!collapsed && <span>VinaX</span>}
           {/* 10.0 — the promise, always in view: VinaX is free. */}

@@ -12,6 +12,14 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '13.6.2': {
+    title: 'Easier with a screen reader and voice control',
+    changes: [
+      { type: 'fixed', text: 'Language and mood tiles, the VinaX logo, the Listen Together link and the ⌘K button are now named by the words you see on them, so voice control finds them when you say what is on screen.' },
+      { type: 'fixed', text: 'VinaX AI marks its chat as the main part of the page, and an empty Queue still has a title, so screen readers can jump straight to them.' },
+      { type: 'improved', text: 'Every update is now checked for accessibility problems on 15 pages in both themes and on a phone before it reaches you.' },
+    ],
+  },
   '13.6.1': {
     title: 'Tested in a real browser',
     changes: [

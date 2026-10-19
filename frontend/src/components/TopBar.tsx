@@ -68,7 +68,7 @@ export function TopBar({ onCommands }: { onCommands: () => void }) {
       <div className="vx-topbar-actions">
         {/* Pages add their own actions here through <TopBarActions>. */}
         <div id={ACTIONS_SLOT} className="contents" />
-        <button type="button" className="vx-command-key hidden lg:inline-flex" onClick={onCommands} aria-label="Open command palette"><kbd>⌘</kbd><kbd>K</kbd></button>
+        <button type="button" className="vx-command-key hidden lg:inline-flex" onClick={onCommands} aria-label="Open command palette, ⌘K" aria-keyshortcuts="Meta+K Control+K"><kbd>⌘</kbd><kbd>K</kbd></button>
         <span className="vx-avatar-wrap">
           {/* No title tooltip: it sat over the Now playing panel. The label carries the name. */}
           <button

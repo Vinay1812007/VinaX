@@ -427,11 +427,11 @@ export default function LibraryPage() {
 
       {showAll && !searching && flagOn(flags, 'listenTogether') && (
         <div className="vx-lp-links vx-lp-section">
-          <Link to="/together" aria-label="Listen Together" aria-describedby="lp-together-note" className="vx-lp-link">
+          <Link to="/together" className="vx-lp-link">
             <span className="vx-lp-link-glyph" aria-hidden><UsersIcon className="w-5 h-5" /></span>
             <span className="vx-lp-link-text">
-              <span className="t">Listen Together</span>
-              <span className="m" id="lp-together-note">Play in sync with friends</span>
+              <span className="t">Listen Together</span>{' '}
+              <span className="m">Play in sync with friends</span>
             </span>
             <ChevronRightIcon className="vx-lp-link-go" />
           </Link>

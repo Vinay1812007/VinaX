@@ -69,8 +69,16 @@ Run one file with `npx vitest run <path>` from the package folder.
 - Specs import `test` and `expect` from `e2e/support/test.ts`: the stock Playwright `test` plus two suite-wide fixtures. Every browser context starts signed in with a test account (open a page with `?e2e-signed-out` to stay signed out), and the festival greeting is dismissed with Escape whenever it blocks an action or assertion. A spec that checks the greeting itself sets `test.use({ dismissFestivalGreeting: false })`.
 - Playwright's `webServer` starts `e2e/support/serve-dist.mjs`, which serves **`frontend/dist/`** on port 4173 (`E2E_PORT` to change it): static files, directory indexes (so `/admin/` works), `/song/x` from `song/x.html`, a fallback to `index.html` for unknown routes, and a plain 404 for a missing `/assets/` file. It exits if `dist/index.html` is missing, so **build first**. Locally an already running server on that port is reused.
 - Spec files run in parallel (half the CPU cores locally, two workers on CI), the tests inside a file in order, a fresh context per test, 1280×900 viewport, `en-IN` locale, `Asia/Kolkata` time zone, 120-second test budget. Specs abort every request that is not to localhost and answer `/api/**` themselves with `page.route`. A red run means the app broke, not the network.
-- Three files are excluded from the run: `smoke.spec.ts` (replaced by the smoke script), `a11y.spec.ts` (needs a package that is not installed) and `qa-sweep.spec.ts` (an on-demand harness: `QA_SWEEP=1 npx playwright test e2e/qa-sweep.spec.ts`).
+- Two files are excluded from the run: `smoke.spec.ts` (replaced by the smoke script) and `qa-sweep.spec.ts` (an on-demand harness: `QA_SWEEP=1 npx playwright test e2e/qa-sweep.spec.ts`).
 - Every failure keeps a trace, a screenshot and an `error-context.md` under `test-results/`, and the run writes an HTML report to `playwright-report/`. CI uploads both as the `playwright-report` artifact.
+
+### Accessibility gate
+
+`e2e/a11y.spec.ts` runs axe-core (`@axe-core/playwright`) on 15 pages in the dark and the light theme, five of them again at phone size, plus the sign-in screen, a forced festival greeting and the erase-everything dialog (38 scans). Any WCAG 2.0, 2.1 or 2.2 level A or AA violation fails the test, whatever axe rates its impact. Each test waits for the page's own heading before scanning, so it never scans a loading shell. The full axe result for every scan is attached to the HTML report.
+
+Limits: axe marks colour contrast "incomplete" on text over glass, gradients and images (10 to 40 elements a page), so contrast there is not proven. It also cannot judge focus order or what a screen reader says. Those still need a manual pass.
+
+The rule that caught real problems in 13.6.2 is `label-content-name-mismatch` (WCAG 2.5.3, Label in Name): an `aria-label` must contain the text on screen, because voice-control users say what they see. Prefer no `aria-label` and let the visible text be the name. axe counts `aria-hidden` text as visible, and two spans with no whitespace between them read as one word.
 
 ### Feature specs
 

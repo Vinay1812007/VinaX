@@ -25,7 +25,6 @@ export function HubMoodTiles({ language, exclude }: { language: string; exclude?
           <BrowseTile
             key={m.slug}
             to={`/${language}-${m.slug}-songs`}
-            label={`${label} ${m.label.toLowerCase()} songs`}
             tone={`vx-tone-${tone}`}
             title={m.label}
             meta={`${label} songs`}
