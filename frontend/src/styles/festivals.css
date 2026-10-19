@@ -638,7 +638,6 @@ html.fest-dussehra {
   --fest-c1: rgb(var(--ember-400)); --fest-c2: rgb(239 68 68); --fest-c3: rgb(251 146 60);
   --fest-motif: repeating-linear-gradient(45deg, rgb(var(--ember-500) / 0.09) 0 1px, transparent 1px 24px), repeating-linear-gradient(-45deg, rgb(var(--ember-500) / 0.09) 0 1px, transparent 1px 24px); --fest-motif-size: auto;
 }
-html.fest-dussehra img[src="/icons/icon.svg"] { content: url('/icons/fest/dussehra.webp'); }
 html.fest-dussehra.light {
   --ember-300: 143 104 0; --ember-400: 117 86 0; --ember-500: 92 67 0; --ember-600: 61 45 0;
   --ink-950: 254 251 251; --ink-900: 252 243 244; --ink-850: 248 237 237; --ink-800: 240 224 225;
