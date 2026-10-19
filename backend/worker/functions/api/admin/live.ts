@@ -18,12 +18,18 @@ interface UserRow {
   last_seen: string;
 }
 
+/** How recently a device must have checked in to count as listening now. */
+export const LIVE_WINDOW_MS = 120_000;
+
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
   if (!(await isAdminAsync(request, env))) return unauthorized();
 
   if (!supabaseConfigured(env)) return adminJson({ configured: false, count: 0, playing: 0, byCountry: {}, listeners: [] });
-  const since = new Date(Date.now() - 60_000).toISOString();
+  // 13.7.3 — two minutes, not one. Android throttles a backgrounded app's
+  // timers, so a phone playing with the screen off can miss a 25 s heartbeat
+  // or two and used to blink out of Live while it was still playing.
+  const since = new Date(Date.now() - LIVE_WINDOW_MS).toISOString();
   const query =
     `last_seen=gte.${encodeURIComponent(since)}` +
     `&order=last_seen.desc&limit=500` +

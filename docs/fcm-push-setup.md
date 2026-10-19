@@ -22,6 +22,15 @@ Until the secret is set the push path does nothing: the app runs normally and to
 
 Since 12.2 the app is `app.Vinax.music` in the push project **VinaX Music** (`vinax-music`, project number `152181244509`, free plan). `frontend/native-android/google-services.json` is that project's file, with the Android app registered under the CI signing key's SHA-1 `71:27:BB:E2:25:1F:9E:A4:89:61:EC:9B:76:A5:07:5F:94:DE:A2:CC`. The same project runs the optional Google sign-in.
 
+**The published APKs are signed with the release key, not the CI key.** Its fingerprints (read from release v13.7.2, build 1427) are:
+
+- SHA-1 `D9:55:85:C3:D4:4F:52:92:47:39:7C:95:A0:E5:F9:D1:11:BA:62:BE`
+- SHA-256 `8C:AF:24:E7:AA:83:B7:EA:12:E1:2C:E3:FF:C1:14:DD:8C:EB:57:38:25:AB:EB:82:3E:FE:AE:E4:F2:6B:7C:CE`
+
+Both must be added to the Android app in Firebase (Project settings → Your apps → `app.Vinax.music` → Add fingerprint), and the SHA-1 to an Android OAuth client for `app.Vinax.music` in Google Cloud (APIs & Services → Credentials). If the Firebase API key is restricted to Android apps, the release SHA-1 must be on that restriction too. Without them, installed apps cannot get a push token or sign in with Google. Afterwards download the new `google-services.json` and replace `frontend/native-android/google-services.json`. To read the fingerprint of any APK: `apksigner verify --print-certs vinax.apk`.
+
+**How a push looks (13.7.3).** Every message goes to the `vinax_picks` channel ("Song picks & news", high importance), created by the app at start-up, with the white V small icon `vinax_ic_notify` and the accent `#FFA42E`. The manifest names the same three as FCM's defaults, so a push the system draws while the app is closed looks the same. A push that arrives while the app is open is shown too (`presentationOptions` in `capacitor.config.ts`). These are compiled into the APK: they apply from the first APK built after 13.7.3.
+
 The old project (`apptarangmusic`, app `app.tarang.music`) is retired: its devices reported `FIS_AUTH_ERROR` (the installation service refused the app), so no Android device ever got a token. Once `FCM_SERVICE_ACCOUNT` holds the new project's key (above), delete the old project's keys, or the whole old project, in its console.
 
 Because the package changed, the 12.2 APK installs beside the old app instead of replacing it. Listeners move their library with Settings → Your data → Move to a new device, then remove the old app. Push sign-ups from the old app do not carry over.

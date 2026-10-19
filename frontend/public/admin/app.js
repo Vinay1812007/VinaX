@@ -411,12 +411,12 @@
       return '<tr><td><span class="dot2 ' + (r.playing ? 'on' : 'off') + '"></span>' + esc(r.name) + '</td><td>' + song + '</td><td>' + loc + '</td><td><span class="pill">' + esc(r.platform) + '</span>' + (r.deviceId ? ' <span class="muted">' + esc(String(r.deviceId).slice(0, 8)) + '</span>' : '') + '</td><td class="muted">' + ago(r.lastSeen) + '</td></tr>';
     }).join('');
     $('view').innerHTML =
-      '<div class="cards"><div class="card"><div class="n">' + (d.count || 0) + '</div><div class="l">Active now (60s)</div></div>' +
+      '<div class="cards"><div class="card"><div class="n">' + (d.count || 0) + '</div><div class="l">Active now (2 min)</div></div>' +
       '<div class="card"><div class="n">' + (d.playing || 0) + '</div><div class="l">Currently playing</div></div>' +
       '<div class="card"><div class="n">' + ck.length + '</div><div class="l">Countries</div></div></div>' +
       '<div class="chips">' + ck.map(function (k) { return '<span class="pill">' + esc(k) + ' · ' + esc(countries[k]) + '</span>'; }).join('') + '</div>' +
       '<table><thead><tr><th>Listener</th><th>Now playing</th><th>Location</th><th>Device</th><th>Seen</th></tr></thead><tbody>' +
-      (rows || '<tr class="table-empty"><td colspan="5"><div class="state state-empty empty" role="status"><div class="state-title">No one is listening right now</div><div class="state-hint">This list refreshes on its own and fills within a minute of someone pressing play.</div></div></td></tr>') + '</tbody></table>';
+      (rows || '<tr class="table-empty"><td colspan="5"><div class="state state-empty empty" role="status"><div class="state-title">No one is listening right now</div><div class="state-hint">This list refreshes on its own and fills within a minute or two of someone pressing play.</div></div></td></tr>') + '</tbody></table>';
     stamp();
   }
   function loadLive() { apiMemo('/api/admin/live').then(function (d) { if (d && active === 'live') renderLive(d); }).catch(failIf('live', 'live listening')); }
@@ -593,7 +593,7 @@
         '<div style="flex:1;min-width:240px">' +
           '<h3>Listening now</h3>' +
           '<table><thead><tr><th>Listener</th><th>Track</th><th>Where</th></tr></thead><tbody>' +
-          (nowRows || '<tr class="table-empty"><td colspan="3"><div class="state state-empty empty" role="status"><div class="state-title">No one is listening right now</div><div class="state-hint">This list refreshes on its own and fills within a minute of someone pressing play.</div></div></td></tr>') + '</tbody></table>' +
+          (nowRows || '<tr class="table-empty"><td colspan="3"><div class="state state-empty empty" role="status"><div class="state-title">No one is listening right now</div><div class="state-hint">This list refreshes on its own and fills within a minute or two of someone pressing play.</div></div></td></tr>') + '</tbody></table>' +
           '<h3>By country (range)</h3>' +
           '<table><thead><tr><th>Country</th><th>Listeners</th></tr></thead><tbody>' + list + '</tbody></table>' +
         '</div>' +
@@ -1795,6 +1795,25 @@
     if (!f || typeof f !== 'object') return 0;
     return Object.keys(f).reduce(function (a, k) { return a + (Number(f[k]) || 0); }, 0);
   }
+  /** 13.7.3 — why Android was not reached, in words (codes from _lib/fcm.ts and FCM itself). */
+  var PN_FCM_REASONS = {
+    not_configured: 'Android push is not set up: FCM_SERVICE_ACCOUNT is missing on the Worker',
+    bad_service_account_json: 'FCM_SERVICE_ACCOUNT on the Worker is not valid JSON',
+    google_refused_service_account: 'Google refused the Firebase service account (key revoked or wrong project)',
+    SENDER_ID_MISMATCH: 'devices registered with a different Firebase project',
+    THIRD_PARTY_AUTH_ERROR: 'Firebase credentials rejected',
+    QUOTA_EXCEEDED: 'Firebase sending quota reached',
+    UNAVAILABLE: 'Firebase was briefly unavailable',
+    INTERNAL: 'Firebase error',
+    timeout: 'no answer from Firebase',
+  };
+  function pnFcmWhy(r) {
+    var parts = [];
+    if (r.fcmError) parts.push(PN_FCM_REASONS[r.fcmError] || ('Android delivery failed (' + r.fcmError + ')'));
+    var f = r.fcmFailed || {};
+    Object.keys(f).forEach(function (k) { parts.push((Number(f[k]) || 0) + ' Android ' + (PN_FCM_REASONS[k] ? '— ' + PN_FCM_REASONS[k] : 'refused (' + k + ')')); });
+    return parts.length ? ' · ' + parts.join(' · ') : '';
+  }
   /** Delivery line from a push-receipt ({web:{total,sent,gone,failed}, fcm, fcmError}); "—" for none. */
   function pnDelivery(rc) {
     if (!rc) return '—';
@@ -1803,7 +1822,7 @@
     if (w.gone) s += ' · ' + w.gone + ' expired removed';
     var nf = pnFailedCount(w.failed);
     if (nf) s += ' · ' + nf + ' refused';
-    if (rc.fcmError) s += ' · Android delivery failed';
+    s += pnFcmWhy(rc);
     return esc(s);
   }
   function loadNotifyLog() {
@@ -1990,7 +2009,7 @@
     if (r.gone) s += ' · ' + r.gone + ' expired removed';
     var nf = pnFailedCount(r.failed);
     if (nf) s += ' · ' + nf + ' refused';
-    if (r.fcmError) s += ' · Android delivery failed';
+    s += pnFcmWhy(r);
     if (sent === 0 && total > 0) s += '\nNone of the browsers accepted it — they may have turned notifications off.';
     return { err: false, text: s };
   }

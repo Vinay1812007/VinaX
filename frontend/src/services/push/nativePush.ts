@@ -14,12 +14,32 @@
  * that never arrives is reported too — so the next failure has a name.
  */
 import { isNativePlatform } from '@/services/native';
+import { withNotificationPermission } from '@/services/native/permissions';
 
 const BASE = 'https://www.sirimillavinay.online';
 /** How long `register()` may take to produce a token before that is reported. */
 const TOKEN_WAIT_MS = 20_000;
 let wired = false;
 let tokenSeen = false;
+/** True once this launch's token reached the server; resume re-registers until it does. */
+let uploaded = false;
+
+/**
+ * 13.7.3 — the Android channel every VinaX push uses. The server names it in
+ * each message and the manifest names it as FCM's default
+ * (backend _lib/fcm.ts FCM_CHANNEL_ID, scripts/patch-android.js). Created on
+ * every start (Android keeps the first settings, so this is idempotent);
+ * importance 4 = high, so a pick pops up instead of sitting silently in the tray.
+ */
+export const PUSH_CHANNEL = {
+  id: 'vinax_picks',
+  name: 'Song picks & news',
+  description: 'Your daily song picks and messages from VinaX',
+  importance: 4,
+  visibility: 1,
+  vibration: true,
+  lights: true,
+} as const;
 
 function report(message: string): void {
   void import('@/services/analytics/telemetry').then((m) => m.reportError('push-native', message)).catch(() => undefined);
@@ -37,7 +57,9 @@ export async function uploadFcmToken(
       const res = await fetchImpl(`${BASE}/api/push/fcm-register`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ token, platform: 'android', tzOffset: -new Date().getTimezoneOffset() }),
+        // 13.7.3 — lang too: without it every Android device fell outside the
+        // console's language filter and the language-grouped song pick.
+        body: JSON.stringify({ token, platform: 'android', lang: navigator.language || undefined, tzOffset: -new Date().getTimezoneOffset() }),
       });
       const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
       if (res.ok && body?.ok) return true;
@@ -69,19 +91,27 @@ async function loadPlugin(): Promise<PushPlugin | null> {
 async function wire(PushNotifications: PushPlugin): Promise<void> {
   if (wired) return;
   wired = true;
+  try {
+    await PushNotifications.createChannel({ ...PUSH_CHANNEL });
+  } catch (e) {
+    report(`channel: ${String(e).slice(0, 120)}`);
+  }
   // Device registered with FCM -> persist the token so the server can push.
   await PushNotifications.addListener('registration', (t) => {
     tokenSeen = true;
-    void uploadFcmToken(t.value);
+    void uploadFcmToken(t.value).then((ok) => {
+      if (ok) uploaded = true;
+    });
   });
   await PushNotifications.addListener('registrationError', (err) => {
     tokenSeen = true;
     report(`registration error: ${String((err as { error?: unknown })?.error ?? err).slice(0, 160)}`);
   });
   // Tap on a delivered notification -> deep-link into the app.
+  // Protocol-relative "//host/x" is refused: it would leave the app's origin.
   await PushNotifications.addListener('pushNotificationActionPerformed', (e) => {
     const link = (e.notification.data as { link?: string } | undefined)?.link;
-    if (typeof link === 'string' && link.startsWith('/')) navigateTo(link);
+    if (typeof link === 'string' && /^\/(?!\/)/.test(link)) navigateTo(link);
   });
 }
 
@@ -119,9 +149,12 @@ export async function enableNativePush(): Promise<'ok' | 'denied' | 'unsupported
   if (!PushNotifications) return 'unsupported';
   try {
     await wire(PushNotifications);
-    let perm = await PushNotifications.checkPermissions();
-    if (perm.receive !== 'granted') perm = await PushNotifications.requestPermissions();
-    if (perm.receive !== 'granted') return 'denied';
+    const granted = await withNotificationPermission(async (ask) => {
+      let perm = await PushNotifications.checkPermissions();
+      if (perm.receive !== 'granted') perm = (await ask(() => PushNotifications.requestPermissions())) ?? perm;
+      return perm.receive === 'granted';
+    }, true);
+    if (!granted) return 'denied';
     await registerToken(PushNotifications);
     return 'ok';
   } catch (e) {
@@ -138,13 +171,36 @@ export async function registerNativePush(navigate: (to: string) => void): Promis
   if (!PushNotifications) return;
   try {
     await wire(PushNotifications);
-    let perm = await PushNotifications.checkPermissions();
-    if (perm.receive === 'prompt' || perm.receive === 'prompt-with-rationale') {
-      perm = await PushNotifications.requestPermissions();
-    }
-    if (perm.receive !== 'granted') return; // the listener said no; Settings → Notifications can ask again
+    // Queued with the other start-up asks, so only one dialog shows and this
+    // reads its answer instead of being refused for asking at the same time.
+    const granted = await withNotificationPermission(async (ask) => {
+      let perm = await PushNotifications.checkPermissions();
+      if (perm.receive === 'prompt' || perm.receive === 'prompt-with-rationale') {
+        perm = (await ask(() => PushNotifications.requestPermissions())) ?? (await PushNotifications.checkPermissions());
+      }
+      return perm.receive === 'granted';
+    });
+    if (!granted) return; // the listener said no; Settings → Notifications can ask again
     await registerToken(PushNotifications);
   } catch (e) {
     report(`register failed: ${String(e).slice(0, 160)}`);
+  }
+}
+
+/**
+ * 13.7.3 — back in the foreground: if this launch has no token on the server
+ * yet (the permission was granted later in Android Settings, the upload failed
+ * offline, or the first ask lost a race), register again. Never asks.
+ */
+export async function refreshNativePush(): Promise<void> {
+  if (!isNativePlatform() || uploaded) return;
+  const PushNotifications = await loadPlugin();
+  if (!PushNotifications) return;
+  try {
+    await wire(PushNotifications);
+    if ((await PushNotifications.checkPermissions()).receive !== 'granted') return;
+    await registerToken(PushNotifications);
+  } catch (e) {
+    report(`refresh failed: ${String(e).slice(0, 160)}`);
   }
 }

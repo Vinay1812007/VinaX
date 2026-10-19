@@ -13,12 +13,13 @@
  */
 import { sbInsert, sbSelect, sbUpdate, type SupabaseEnv } from '../../_lib/supabase';
 import { pushConfigured, sendPush, type PushSubscriptionRecord, type VapidEnv } from '../../_lib/webpush';
+import { fcmConfigured, sendFcm, type FcmEnv } from '../../_lib/fcm';
 import { gateRecipients, stampPushed, type GateEnv } from '../../_lib/notifyGate';
 import { chat, type AiEnv } from '../../_lib/ai';
 import { safeEqual } from '../../_lib/safe-compare';
 import { catalogLang, groupByLang, langName } from '../../_lib/pushlang';
 
-type Env = SupabaseEnv & VapidEnv & AiEnv & GateEnv & { CRON_SECRET?: string };
+type Env = SupabaseEnv & VapidEnv & FcmEnv & AiEnv & GateEnv & { CRON_SECRET?: string };
 
 /** Concurrency-bounded parallel map (up to `limit` in flight). */
 async function mapWithConcurrency<T, R>(
@@ -43,7 +44,25 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
+/**
+ * 13.7.3 — the song pick also goes to the Android app. It used to read only
+ * browser subscriptions, so Android devices (vinax_fcm_tokens) never got the
+ * daily pick at all. Both kinds share the gate and the language grouping.
+ */
+interface TokRow {
+  kind: 'fcm';
+  token: string;
+  country: string | null;
+  region: string | null;
+  city: string | null;
+  lang: string | null;
+  tz_offset: number | null;
+  last_pushed_at: string | null;
+}
+type Recipient = SubRow | TokRow;
+
 interface SubRow {
+  kind?: 'web';
   endpoint: string;
   p256dh: string;
   auth: string;
@@ -165,7 +184,7 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
   const key = request.headers.get('x-cron-secret') ?? '';
   // Constant-time compare so response timing can't leak the cron secret (M11).
   if (!env.CRON_SECRET || !safeEqual(key, env.CRON_SECRET)) return json({ error: 'unauthorized' }, 401);
-  if (!pushConfigured(env)) return json({ error: 'push_not_configured' }, 400);
+  if (!pushConfigured(env) && !fcmConfigured(env)) return json({ error: 'push_not_configured' }, 400);
   // Hard cap: one song push per day, no matter how often the cron fires.
   const lastPush = await sbSelect<{ created_at: string }>(
     env,
@@ -176,11 +195,21 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
     return json({ ok: false, reason: 'throttled_daily' }, 200);
   }
 
-  const allSubs = await sbSelect<SubRow>(
-    env,
-    'vinax_push_subscriptions',
-    'select=endpoint,p256dh,auth,country,region,city,lang,tz_offset,last_pushed_at&active=eq.true&limit=5000',
-  );
+  const webSubs = pushConfigured(env)
+    ? await sbSelect<SubRow>(
+      env,
+      'vinax_push_subscriptions',
+      'select=endpoint,p256dh,auth,country,region,city,lang,tz_offset,last_pushed_at&active=eq.true&limit=5000',
+    )
+    : [];
+  const fcmToks = fcmConfigured(env)
+    ? (await sbSelect<Omit<TokRow, 'kind'>>(
+      env,
+      'vinax_fcm_tokens',
+      'select=token,country,region,city,lang,tz_offset,last_pushed_at&active=eq.true&limit=5000',
+    ).catch(() => [])).map((t): TokRow => ({ ...t, kind: 'fcm' }))
+    : [];
+  const allSubs: Recipient[] = [...webSubs, ...fcmToks];
   if (!allSubs.length) return json({ ok: false, reason: 'no_subscribers' }, 200);
 
   // Eligibility gate (engine step 5 + 7): drop devices in their local quiet
@@ -195,7 +224,7 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
   // gets its own song; the AI-written line is capped at MAX_AI_GROUPS (the
   // long tail keeps the honest "song · artist" template).
   const groups = groupByLang(subs);
-  const prepared: Array<{ lang: string; rows: SubRow[]; song: Pick; blurb: string; link: string }> = [];
+  const prepared: Array<{ lang: string; rows: Recipient[]; song: Pick; blurb: string; link: string }> = [];
   for (let i = 0; i < groups.length; i++) {
     const g = groups[i];
     const song = await pickSongForLang(g.lang);
@@ -223,8 +252,25 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
 
   // Fan out per group in parallel with bounded concurrency (audit L4/H13
   // lineage: the sequential loop could not finish inside the wall clock).
-  const fanOut = async (): Promise<number> => {
-    const jobs = prepared.flatMap((p) => p.rows.map((row) => ({ row, p })));
+  const fanOut = async (): Promise<{ web: number; fcm: number }> => {
+    const nowIso = new Date(now).toISOString();
+    // Android first, one FCM batch per language group: every browser push is
+    // its own outgoing request, and a large web audience could otherwise use
+    // up the Worker's request budget before the Android sends started.
+    let fcm = 0;
+    for (const p of prepared) {
+      const toks = p.rows.filter((r): r is TokRow => r.kind === 'fcm').map((r) => r.token);
+      if (!toks.length) continue;
+      const r = await sendFcm(env, toks, { title: '🎵 Your song pick', body: p.blurb, link: p.link });
+      fcm += r.sent;
+      const dead = new Set(r.dead);
+      const delivered = r.sent ? toks.filter((t) => !dead.has(t)) : [];
+      if (delivered.length) await stampPushed(env, 'vinax_fcm_tokens', 'token', delivered, nowIso);
+      await mapWithConcurrency(r.dead, 16, (d) =>
+        sbUpdate(env, 'vinax_fcm_tokens', `token=eq.${encodeURIComponent(d)}`, { active: false }).catch(() => false),
+      );
+    }
+    const jobs = prepared.flatMap((p) => p.rows.filter((r): r is SubRow => r.kind !== 'fcm').map((row) => ({ row, p })));
     const pushed: string[] = [];
     const results = await mapWithConcurrency(jobs, 32, async ({ row, p }) => {
       const res = await sendPush(env, row as PushSubscriptionRecord, {
@@ -243,16 +289,22 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
       return res.ok;
     });
     // Stamp the frequency-cap clock for everyone actually delivered.
-    if (pushed.length) await stampPushed(env, 'vinax_push_subscriptions', 'endpoint', pushed, new Date(now).toISOString());
-    return results.reduce((n, r) => n + (r.status === 'fulfilled' && r.value ? 1 : 0), 0);
+    if (pushed.length) await stampPushed(env, 'vinax_push_subscriptions', 'endpoint', pushed, nowIso);
+    const web = results.reduce((n, r) => n + (r.status === 'fulfilled' && r.value ? 1 : 0), 0);
+    return { web, fcm };
   };
 
-  const summary = prepared.map((p) => ({ lang: p.lang, subscribers: p.rows.length, song: p.song.name }));
+  const summary = prepared.map((p) => ({
+    lang: p.lang,
+    subscribers: p.rows.length,
+    android: p.rows.filter((r) => r.kind === 'fcm').length,
+    song: p.song.name,
+  }));
   const skipped = { quiet: gate.skippedQuiet, fatigue: gate.skippedFatigue };
   if (typeof waitUntil === 'function') {
     waitUntil(fanOut());
     return json({ ok: true, groups: summary, total: subs.length, candidates: allSubs.length, skipped, sent: 'dispatched' }, 200);
   }
-  const sent = await fanOut();
-  return json({ ok: true, groups: summary, total: subs.length, candidates: allSubs.length, skipped, sent }, 200);
+  const counts = await fanOut();
+  return json({ ok: true, groups: summary, total: subs.length, candidates: allSubs.length, skipped, sent: counts.web + counts.fcm, web: counts.web, fcm: counts.fcm }, 200);
 };

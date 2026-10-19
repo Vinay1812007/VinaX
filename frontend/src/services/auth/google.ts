@@ -13,7 +13,16 @@ import { getLocal, removeLocal, setLocal } from '@/services/storage/local';
 import { isNativePlatform, platformName } from '@/services/native';
 
 /** 13.7 — the platform and build the account is used on, for the owner console. */
-const clientFacts = (): { platform: string; appVersion: string } => ({ platform: platformName(), appVersion: __APP_VERSION__ });
+let reportedVersion: string = __APP_VERSION__;
+const clientFacts = (): { platform: string; appVersion: string } => ({ platform: platformName(), appVersion: reportedVersion });
+/** 13.7.3 — Android: report the installed APK's version, not the website's build. */
+async function readInstalledVersion(): Promise<void> {
+  try {
+    reportedVersion = await (await import('@/services/native/version')).resolveAppVersion();
+  } catch {
+    /* keep the web build's version */
+  }
+}
 
 /** The project's public web OAuth client id (not a secret). */
 export const GOOGLE_WEB_CLIENT_ID = '152181244509-biv1p3bge1endo5pd8qpc1ormhb4a75l.apps.googleusercontent.com';
@@ -58,7 +67,7 @@ export async function exchangeGoogleToken(credential: string, fetchImpl: typeof 
     const res = await fetchImpl(`${ORIGIN}/api/auth/google`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ credential, signed_device_id: getLocal<string>(KEYS.signedDeviceId, '') || undefined, ...clientFacts() }),
+      body: JSON.stringify({ credential, signed_device_id: getLocal<string>(KEYS.signedDeviceId, '') || undefined, ...(isNativePlatform() ? (await readInstalledVersion(), clientFacts()) : clientFacts()) }),
     });
     if (res.status === 401) return 'refused';
     if (!res.ok) return 'unavailable';
@@ -189,6 +198,7 @@ export function validateSession(fetchImpl: typeof fetch = fetch): Promise<boolea
       // 13.6.4 — the device's signed id (issued once usage sharing is on)
       // links this device to the account, so the console counts one listener.
       const signed = getLocal<string>(KEYS.signedDeviceId, '');
+      if (isNativePlatform()) await readInstalledVersion();
       const facts = clientFacts();
       const headers: Record<string, string> = { authorization: `Bearer ${a.session}`, 'x-vinax-platform': facts.platform, 'x-vinax-version': facts.appVersion };
       if (signed) headers['x-vinax-device'] = signed;

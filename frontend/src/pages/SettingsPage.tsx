@@ -595,7 +595,7 @@ export default function SettingsPage() {
             <Group title="Lyrics and the DJ voice">
               {isNativePlatform() && (
                 <Row label="Lock screen lyrics" note="The current synced line on your lock screen and media controls.">
-                  <Toggle on={s.lockScreenLyrics} onChange={(v) => { s.setLockScreenLyrics(v); if (v) void ensureNotificationPermission().then(() => getNotificationPermission().then(setNotifPerm)); }} label="Lock screen lyrics" />
+                  <Toggle on={s.lockScreenLyrics} onChange={(v) => { s.setLockScreenLyrics(v); if (v) void ensureNotificationPermission(true).then(() => getNotificationPermission().then(setNotifPerm)); }} label="Lock screen lyrics" />
                 </Row>
               )}
               {notifPerm === 'denied' && (
@@ -603,7 +603,7 @@ export default function SettingsPage() {
                   <span>Notifications are off — lock-screen lyrics and playback controls need them to appear.</span>
                   <button
                     type="button"
-                    onClick={() => void ensureNotificationPermission().then(() => getNotificationPermission().then(setNotifPerm))}
+                    onClick={() => void ensureNotificationPermission(true).then(() => getNotificationPermission().then(setNotifPerm))}
                     className="vx-tap vx-set-btn is-accent"
                   >
                     Enable

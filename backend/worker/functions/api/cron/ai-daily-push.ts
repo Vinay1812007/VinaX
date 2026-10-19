@@ -624,6 +624,26 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
       let web = 0; let gone = 0; let fcm = 0; let quiet = 0; let fatigue = 0;
       const nowMs = Date.now();
       const nowIso = new Date(nowMs).toISOString();
+      // 13.7.3 — Android (FCM) first: each browser push is its own outgoing
+      // request, and a large web audience could use up the Worker's request
+      // budget before the FCM sends started, so Android silently got nothing.
+      if (fcmConfigured(env)) {
+        const allToks = await sbSelect<{ token: string; country: string | null; tz_offset: number | null; last_pushed_at: string | null }>(
+          env, 'vinax_fcm_tokens', `select=token,country,tz_offset,last_pushed_at&active=eq.true&limit=5000${cohortFullSuffix}`,
+        ).catch(() => []);
+        const g = gateRecipients(allToks, env, nowMs);
+        quiet += g.skippedQuiet; fatigue += g.skippedFatigue;
+        if (g.eligible.length) {
+          const r = await sendFcm(env, g.eligible.map((t) => t.token), { title: pick.title, body: pick.body, link });
+          fcm = r.sent;
+          const dead = new Set(r.dead);
+          const delivered = g.eligible.map((t) => t.token).filter((t) => !dead.has(t));
+          if (delivered.length) await stampPushed(env, 'vinax_fcm_tokens', 'token', delivered, nowIso);
+          await mapWithConcurrency(r.dead, 16, (d) =>
+            sbUpdate(env, 'vinax_fcm_tokens', `token=eq.${encodeURIComponent(d)}`, { active: false }).catch(() => false),
+          );
+        }
+      }
       if (pushConfigured(env)) {
         const allSubs = await sbSelect<{ endpoint: string; p256dh: string; auth: string; country: string | null; tz_offset: number | null; last_pushed_at: string | null }>(
           env, 'vinax_push_subscriptions',
@@ -641,23 +661,6 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
         });
         for (const r of results) { if (r.status === 'fulfilled') { if (r.value.ok) web += 1; if (r.value.gone) gone += 1; } }
         if (pushed.length) await stampPushed(env, 'vinax_push_subscriptions', 'endpoint', pushed, nowIso);
-      }
-      if (fcmConfigured(env)) {
-        const allToks = await sbSelect<{ token: string; country: string | null; tz_offset: number | null; last_pushed_at: string | null }>(
-          env, 'vinax_fcm_tokens', `select=token,country,tz_offset,last_pushed_at&active=eq.true&limit=5000${cohortFullSuffix}`,
-        ).catch(() => []);
-        const g = gateRecipients(allToks, env, nowMs);
-        quiet += g.skippedQuiet; fatigue += g.skippedFatigue;
-        if (g.eligible.length) {
-          const r = await sendFcm(env, g.eligible.map((t) => t.token), { title: pick.title, body: pick.body, link });
-          fcm = r.sent;
-          const dead = new Set(r.dead);
-          const delivered = g.eligible.map((t) => t.token).filter((t) => !dead.has(t));
-          if (delivered.length) await stampPushed(env, 'vinax_fcm_tokens', 'token', delivered, nowIso);
-          await mapWithConcurrency(r.dead, 16, (d) =>
-            sbUpdate(env, 'vinax_fcm_tokens', `token=eq.${encodeURIComponent(d)}`, { active: false }).catch(() => false),
-          );
-        }
       }
       return { web, gone, fcm, quiet, fatigue };
     };

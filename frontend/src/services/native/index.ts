@@ -15,20 +15,16 @@ function devLog(...args: unknown[]): void {
 
 /**
  * Android 13+ requires POST_NOTIFICATIONS for the media playback notification
- * to be visible. We check + request via the LocalNotifications plugin (its
- * permission maps to the system notification permission).
+ * to be visible. 13.7.3: requests are queued so only one dialog shows per
+ * launch (see ./permissions, loaded on demand to keep it out of first load).
+ * `force` is for a tap the listener made (Settings, a toggle).
  *
  * Returns 'granted' | 'denied' | 'unsupported'.
  */
-export async function ensureNotificationPermission(): Promise<'granted' | 'denied' | 'unsupported'> {
+export async function ensureNotificationPermission(force = false): Promise<'granted' | 'denied' | 'unsupported'> {
   if (!isNativePlatform()) return 'unsupported';
   try {
-    const { LocalNotifications } = await import('@capacitor/local-notifications');
-    let status = await LocalNotifications.checkPermissions();
-    if (status.display !== 'granted') {
-      status = await LocalNotifications.requestPermissions();
-    }
-    return status.display === 'granted' ? 'granted' : 'denied';
+    return await (await import('./permissions')).ensureNotificationPermission(force);
   } catch (err) {
     devLog('notification permission check failed', err);
     return 'unsupported';

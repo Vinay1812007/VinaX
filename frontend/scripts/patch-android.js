@@ -171,7 +171,21 @@ if (fs.existsSync(manifestPath)) {
     }
   }
 
+  // 13.7.3 — FCM's defaults for a push the system draws while the app is in
+  // the background or closed: the white V (a full-colour launcher icon draws
+  // as a blob), the VinaX accent, and the app's own high-importance channel
+  // (created by services/push/nativePush.ts) instead of "Miscellaneous".
   const service = `
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/vinax_ic_notify" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/vinax_notify" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="vinax_picks" />
+
         <meta-data
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
@@ -232,6 +246,8 @@ if (fs.existsSync(manifestPath)) {
   // Remove old meta-data if it exists
   const oldMetaRegex = /<meta-data[^>]*android:name="com\.google\.android\.gms\.car\.application"[^>]*\/>/gs;
   manifest = manifest.replace(oldMetaRegex, '');
+  const oldFcmMetaRegex = /<meta-data[^>]*android:name="com\.google\.firebase\.messaging\.default_notification_(?:icon|color|channel_id)"[^>]*\/>/gs;
+  manifest = manifest.replace(oldFcmMetaRegex, '');
 
   const oldReceiverRegex = /<receiver[^>]*android:name="androidx\.media\.session\.MediaButtonReceiver"[^>]*>.*?<\/receiver>/gs;
   manifest = manifest.replace(oldReceiverRegex, '');

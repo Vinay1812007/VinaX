@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { checkAnnouncements } from '@/services/announcements';
-import { registerNativePush } from '@/services/push/nativePush';
 import { isNativePlatform } from '@/services/native';
 
 /** App-only: checks admin announcements on open/resume, shows them as
@@ -23,13 +22,17 @@ export function AnnouncementBridge(): null {
       navigate(to);
     };
     void checkAnnouncements(nav);
-    void registerNativePush(nav);
+    // Android-only, so loaded on demand: it stays out of every browser's first load.
+    const push = import('@/services/push/nativePush');
+    void push.then((m) => m.registerNativePush(nav)).catch(() => undefined);
     let unmounted = false;
     let remove: (() => void) | null = null;
     void import('@capacitor/app')
       .then(({ App }) =>
         App.addListener('appStateChange', (s) => {
-          if (s.isActive) void checkAnnouncements(nav);
+          if (!s.isActive) return;
+          void checkAnnouncements(nav);
+          void push.then((m) => m.refreshNativePush()).catch(() => undefined);
         }),
       )
       .then((handle) => {
