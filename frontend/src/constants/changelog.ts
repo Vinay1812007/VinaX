@@ -12,11 +12,17 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
-  '13.7.1': {
-    title: 'Happy Dussehra & Ayudha Pooja',
+  '13.7.2': {
+    title: 'A Dussehra logo and a living backdrop',
     changes: [
       { type: 'new', text: 'A Dussehra VinaX logo — Rama’s bow and arrow, a wreath of Jammi leaves and a marigold toran — on the app, the website and the Android home screen.' },
       { type: 'new', text: 'A living Dussehra backdrop: Rama draws his bow, the arrow strikes Ravanasura, the fire flares and crackers burst while Jammi leaves drift down. It stays still when reduced motion or data saver is on.' },
+    ],
+  },
+  '13.7.1': {
+    title: 'Happy Dussehra & Ayudha Pooja',
+    changes: [
+      { type: 'new', text: 'A festive VinaX logo for Dussehra and Ayudha Pooja, from today until 21 October.' },
       { type: 'improved', text: 'The Dussehra theme and greeting now run through Ayudha Pooja on 21 October.' },
     ],
   },
