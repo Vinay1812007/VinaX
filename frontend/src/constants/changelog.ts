@@ -12,6 +12,13 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '13.7.1': {
+    title: 'Happy Dussehra & Ayudha Pooja',
+    changes: [
+      { type: 'new', text: 'A festive VinaX logo for Dussehra and Ayudha Pooja, from today until 21 October.' },
+      { type: 'improved', text: 'The Dussehra theme and greeting now run through Ayudha Pooja on 21 October.' },
+    ],
+  },
   '13.7.0': {
     title: 'Better search, steadier AI picks',
     changes: [
