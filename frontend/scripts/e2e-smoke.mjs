@@ -12,8 +12,9 @@
  *      even with all external APIs dead (offline-resilient home).
  *   3. SPA navigation — client-side route changes keep the app mounted.
  *
- * Browser resolution: CI installs the playwright-core-matched Chromium via
- * `npx playwright-core install chromium`; a custom binary can be forced with
+ * Browser resolution: CI installs Chromium via `npx playwright install
+ * chromium` (@playwright/test and playwright-core are pinned to the same
+ * version, so it is the build this launcher expects); a custom binary can be forced with
  * E2E_CHROMIUM_PATH (used by the sandboxed dev container).
  */
 /* global URL, document, localStorage -- URL is a Node 18+ global; document
@@ -137,7 +138,7 @@ const context = await browser.newContext({ timezoneId: 'Asia/Kolkata', locale: '
 // 13.0 made a Google account required, so a signed-out boot stops at the
 // sign-in screen and never reaches #main-content — the smoke check had been
 // failing since then. Start signed in with the same test account the spec
-// harness uses (e2e/support/playwright-test.ts); no server checks it here.
+// harness uses (e2e/support/test.ts); no server checks it here.
 await context.addInitScript(() => {
   try {
     if (!localStorage.getItem('vinax.account.v1')) {

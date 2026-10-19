@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './support/test';
 import { latestNotesFingerprint } from '../src/constants/changelog';
 
 /**
@@ -71,7 +71,7 @@ for (const size of [{ width: 390, height: 844 }, { width: 1280, height: 900 }]) 
     expect(await dialog.locator('ol li').first().innerText()).toMatch(/energy|mood|favourite|discovery|hand-off/);
     await page.screenshot({ path: `test-results/v63-queue-builder-${size.width}.png` });
     await dialog.getByRole('button', { name: 'Play this plan' }).click();
-    await expect.poll(() => queueIds(page), { timeout: 10_000 }).toSatisfy((ids: string[]) => ids.length >= 3);
+    await expect.poll(async () => (await queueIds(page)).length, { timeout: 10_000 }).toBeGreaterThanOrEqual(3);
     const ids = await queueIds(page);
     expect(new Set(ids).size).toBe(ids.length);
     await expect.poll(() => bodyText(page)).toMatch(/Queue/);

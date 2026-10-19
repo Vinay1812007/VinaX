@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './support/test';
 import { latestNotesFingerprint } from '../src/constants/changelog';
 
 /**
@@ -13,8 +13,8 @@ import { latestNotesFingerprint } from '../src/constants/changelog';
  * What it checks, for each: an accessible name, a touch target that meets the
  * repo's 44px rule, keyboard reachability, and no horizontal page overflow at
  * 360px. It is NOT a full axe audit — `e2e/a11y.spec.ts` is that, and it stays
- * excluded from this runner because `@axe-core/playwright` is not installed
- * (see e2e/vitest.config.ts). These are the properties that can be verified
+ * excluded from the suite because `@axe-core/playwright` is not installed
+ * (see playwright.config.ts). These are the properties that can be verified
  * without it, on exactly the surfaces that changed.
  */
 interface Song {

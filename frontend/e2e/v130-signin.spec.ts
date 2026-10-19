@@ -1,9 +1,9 @@
 /**
  * 13.0 — VinaX needs a Google account. Signed out (?e2e-signed-out keeps the
- * test account away, see support/playwright-test.ts), every app page is the
+ * test account away, see support/test.ts), every app page is the
  * sign-in screen; the legal pages stay readable. Signed in, the app opens.
  */
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/test';
 
 test('signed out, every personal page is the sign-in screen; the legal pages stay readable', async ({ page }) => {
   await page.route('**/accounts.google.com/**', (r) => r.abort());
@@ -52,8 +52,10 @@ test('13.3.0: when Google’s script is blocked, the screen says why and Try aga
 
 test('signed in, the app opens with the account in the top bar', async ({ page }) => {
   await page.goto('/settings');
-  await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toHaveCount(0);
+  // The avatar first, so the app has rendered before the absence check. First-run
+  // onboarding also says "Welcome to VinaX", so look for the sign-in screen itself.
   await expect(page.locator('.vx-avatar')).toHaveAttribute('aria-label', /Tester/);
+  await expect(page.locator('main.vx-signin')).toHaveCount(0);
 });
 
 test('13.4.0: the sign-in card has What you get on its left and Free on its right; no "What you get with VinaX" link', async ({ page }) => {

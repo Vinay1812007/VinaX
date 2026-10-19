@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './support/test';
 import { latestNotesFingerprint } from '../src/constants/changelog';
 
 /**
@@ -50,6 +50,10 @@ async function dismissDialogs(page: Page): Promise<void> {
     b?.click();
   });
 }
+
+// The suite dismisses the festival greeting whenever it blocks an action or
+// an assertion (e2e/support/test.ts); this spec asserts the greeting itself.
+test.use({ dismissFestivalGreeting: false });
 
 for (const theme of ['dark', 'light'] as const) {
   test(`forced festivals skin the ${theme} theme (class, accent, sky)`, async ({ page }) => {

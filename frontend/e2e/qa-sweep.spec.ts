@@ -7,7 +7,7 @@
  *   stubbed  — catalog answers with plausible data: pages must render content.
  * Not part of CI (this is a QA harness, slow by design) — run explicitly.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './support/test';
 import { latestNotesFingerprint } from '../src/constants/changelog';
 
 const ROUTES = [

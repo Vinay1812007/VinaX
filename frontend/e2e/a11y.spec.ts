@@ -5,7 +5,7 @@
  * tokens — all shipped separately); this keeps regressions out.
  */
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './support/test';
 import { latestNotesFingerprint } from '../src/constants/changelog';
 
 // Scan with animations settled: the page-enter fade (vx-stagger/fade-up)
