@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { festivalClass, type Festival } from '@/constants/festivals';
 import { ambientPlan, festivalVisual, type FestivalSignature } from '@/constants/festivalVisuals';
@@ -12,6 +12,10 @@ const SEEN_KEY = `${STORAGE_PREFIX}.festival-splash`;
 
 /** The two national days fly the flag instead of the generic emblem watermark. */
 const FLAG_DAYS = new Set(['independence', 'republic']);
+
+/** Festivals with a drawn scene of their own (art fetched only on those days). */
+const DussehraScene = lazy(() => import('@/components/DussehraScene').then((m) => ({ default: m.DussehraScene })));
+const SCENE_DAYS = new Set(['dussehra']);
 
 /** Pieces in the one-shot burst behind the greeting card's emblem. */
 const BURST_PIECES = 14;
@@ -162,6 +166,9 @@ export function FestBackdrop({ festival }: { festival: Festival }) {
   const visual = festivalVisual(festival.id);
   const motion = festival.backdrop?.motion ?? 'rise';
   const flag = !still && FLAG_DAYS.has(festival.id);
+  // Dussehra's scene (Rama, the arrow, Ravanasura) replaces the watermark,
+  // and its falling Jammi leaves replace the generic particles.
+  const scene = !still && SCENE_DAYS.has(festival.id);
   // The two national days already fly the flag — that IS their set piece, so
   // they do not take a second one and keep their full share of particles.
   const signature = flag ? 'none' : visual.signature;
@@ -172,9 +179,14 @@ export function FestBackdrop({ festival }: { festival: Festival }) {
   const balls = festival.id === 'independence' ? Math.min(14, Math.max(8, count)) : 0;
   return (
     <div className={`fest-sky${paused ? ' is-paused' : ''}`} data-festival={festival.id} aria-hidden>
-      {flag ? <FlagBackdrop balls={balls} /> : <FestivalEmblem id={visual.emblem} className="fest-wm" />}
+      {flag ? <FlagBackdrop balls={balls} /> : scene ? null : <FestivalEmblem id={visual.emblem} className="fest-wm" />}
       <SetPiece signature={signature} count={plan.pieces} />
-      {count > 0 && !(flag && balls > 0) && (
+      {scene && (
+        <Suspense fallback={null}>
+          <DussehraScene leaves={count} />
+        </Suspense>
+      )}
+      {count > 0 && !(flag && balls > 0) && !scene && (
         <div className="fest-particles">
           {Array.from({ length: count }, (_, i) => (
             <span

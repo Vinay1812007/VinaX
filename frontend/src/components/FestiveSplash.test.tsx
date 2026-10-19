@@ -65,6 +65,50 @@ describe('<FestBackdrop /> on the national days', () => {
   });
 });
 
+describe('<FestBackdrop /> Dussehra scene (13.7.1)', () => {
+  it('draws Rama, the arrow, Ravanasura, fire and crackers, with Jammi leaves for particles', async () => {
+    const { container, findByTestId } = render(<FestBackdrop festival={fest('dussehra')} />);
+    const scene = await findByTestId('ds-scene');
+    for (const sel of ['.ds-art', '.ds-scarf', '.ds-string-drawn', '.ds-string-rest', '.ds-ravana', '.ds-arrow', '.ds-hit']) {
+      expect(scene.querySelector(sel), sel).not.toBeNull();
+    }
+    expect(scene.querySelectorAll('.ds-fire i').length).toBeGreaterThan(0);
+    expect(scene.querySelectorAll('.ds-burst').length).toBeGreaterThan(0);
+    // The scene replaces the bow watermark and the generic particles…
+    expect(container.querySelector('.fest-wm')).toBeNull();
+    expect(container.querySelector('.fest-p')).toBeNull();
+    const leaves = container.querySelectorAll('.ds-leaf');
+    expect(leaves.length).toBeGreaterThan(0);
+    expect(leaves.length).toBeLessThanOrEqual(PARTICLE_CAP.desktop);
+    // …and keeps the day's fireworks.
+    expect(container.querySelector('.fest-set .fest-fw')).not.toBeNull();
+  });
+
+  it('lays the leaves out the same way on every open', async () => {
+    const first = render(<FestBackdrop festival={fest('dussehra')} />);
+    await first.findByTestId('ds-scene');
+    const a = Array.from(first.container.querySelectorAll<HTMLElement>('.ds-leaf'), (el) => el.getAttribute('style'));
+    first.unmount();
+    const second = render(<FestBackdrop festival={fest('dussehra')} />);
+    await second.findByTestId('ds-scene');
+    const b = Array.from(second.container.querySelectorAll<HTMLElement>('.ds-leaf'), (el) => el.getAttribute('style'));
+    expect(b).toEqual(a);
+  });
+
+  it.each([['reduceMotion'], ['dataSaver']] as const)('nothing moves under %s: no scene, the watermark instead', (key) => {
+    useSettingsStore.setState({ [key]: true });
+    const { container } = render(<FestBackdrop festival={fest('dussehra')} />);
+    expect(container.querySelector('.ds-scene')).toBeNull();
+    expect(container.querySelector('.ds-leaf')).toBeNull();
+    expect(container.querySelector('.fest-wm')).not.toBeNull();
+  });
+
+  it('other festivals never get the scene', () => {
+    const { container } = render(<FestBackdrop festival={fest('diwali')} />);
+    expect(container.querySelector('.ds-scene')).toBeNull();
+  });
+});
+
 describe('<FestBackdrop /> set pieces (11.6)', () => {
   it('gives each festival the set piece its day is known for', () => {
     const cases: Array<[string, string, number]> = [
