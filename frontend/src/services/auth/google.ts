@@ -183,7 +183,12 @@ export function validateSession(fetchImpl: typeof fetch = fetch): Promise<boolea
   if (checking) return checking;
   const run = async (): Promise<boolean> => {
     try {
-      const res = await fetchImpl(`${ORIGIN}/api/auth/me`, { headers: { authorization: `Bearer ${a.session}` }, cache: 'no-store' });
+      // 13.6.4 — the device's signed id (issued once usage sharing is on)
+      // links this device to the account, so the console counts one listener.
+      const signed = getLocal<string>(KEYS.signedDeviceId, '');
+      const headers: Record<string, string> = { authorization: `Bearer ${a.session}` };
+      if (signed) headers['x-vinax-device'] = signed;
+      const res = await fetchImpl(`${ORIGIN}/api/auth/me`, { headers, cache: 'no-store' });
       const now = currentAccount();
       // Signed out (or into another account) while the answer was on its way.
       if (!now || now.session !== a.session) return false;

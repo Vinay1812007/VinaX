@@ -2,6 +2,7 @@
  *  Top songs / languages / recents are derived client-side from the events. */
 import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+import { ACCOUNT_ROW_PREFIX, accountToRow } from './users';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -45,7 +46,25 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     });
   }
   if (!supabaseConfigured(env)) return adminJson({ configured: false, user: null, events: [] });
-  const enc = encodeURIComponent(deviceId);
+
+  // 13.6.4 — an account row (signed in, no usage row): the account's name and
+  // dates, no plays. If the account has since been linked to a device, the
+  // device's record answers instead.
+  let lookupId = deviceId;
+  if (deviceId.startsWith(ACCOUNT_ROW_PREFIX)) {
+    const sub = deviceId.slice(ACCOUNT_ROW_PREFIX.length);
+    const acc = await sbSelectResult<{ google_sub: string; name: string | null; username: string | null; device_id: string | null; created_at: string; last_seen: string }>(
+      env,
+      'vinax_accounts',
+      `google_sub=eq.${encodeURIComponent(sub)}&select=google_sub,name,username,device_id,created_at,last_seen&limit=1`,
+    );
+    if (!acc.ok) return dbFailure(acc);
+    const row = acc.rows[0];
+    if (!row) return adminJson({ configured: true, user: null, events: [] });
+    if (!row.device_id) return adminJson({ configured: true, user: accountToRow(row), events: [] });
+    lookupId = row.device_id;
+  }
+  const enc = encodeURIComponent(lookupId);
 
   // full=1 → the profile-download export: a much larger event window with
   // every column the server holds, so User Management's "Download profile"

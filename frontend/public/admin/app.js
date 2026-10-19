@@ -723,7 +723,7 @@
     var place = [u.city, u.region, u.country].filter(Boolean).join(', ') || 'Unknown';
     var meta = [
       place,
-      u.platform || 'web',
+      u.kind === 'account' ? 'account · not sharing usage' : (u.platform || 'web'),
       u.app_version ? 'v' + u.app_version : '',
       'joined ' + (u.first_seen ? date(u.first_seen) : '—'),
       'last seen ' + (u.last_seen ? date(u.last_seen) : '—'),
@@ -858,7 +858,9 @@
     setExport('users', U);
     var rows = U.map(function (u) {
       var loc = [u.city, u.country].filter(Boolean).map(esc).join(', ') || '<span class="muted">—</span>';
-      return '<tr class="clickable" data-uid="' + esc(u.device_id) + '" data-uname="' + esc(u.name || 'Anonymous') + '"><td><span class="dot2 ' + (u.is_playing ? 'on' : 'off') + '"></span>' + esc(u.name || 'Anonymous') + (u.username ? ' <span class="muted">@' + esc(u.username) + '</span>' : '') + '</td><td>' + loc + '</td><td><span class="pill">' + platIcon(u.platform) + ' ' + esc(u.platform || 'web') + '</span> <span class="muted">' + esc(String(u.device_id || '').slice(0, 8)) + '</span></td><td class="muted">' + date(u.first_seen) + '</td><td class="muted">' + ago(u.last_seen) + '</td><td><button class="ghost udl" data-dl="' + esc(u.device_id) + '" data-dlname="' + esc(u.name || u.username || 'listener') + '" style="padding:4px 10px;font-size:11px;white-space:nowrap" title="Download this listener\u2019s profile page">Download</button></td>' +
+      return '<tr class="clickable" data-uid="' + esc(u.device_id) + '" data-uname="' + esc(u.name || 'Anonymous') + '"><td><span class="dot2 ' + (u.is_playing ? 'on' : 'off') + '"></span>' + esc(u.name || 'Anonymous') + (u.username ? ' <span class="muted">@' + esc(u.username) + '</span>' : '') + (u.signed_in ? ' <span class="muted" title="Signed in with an account">· signed in</span>' : '') + '</td><td>' + loc + '</td><td>' + (u.kind === 'account'
+        ? '<span class="pill" title="Signed in; usage sharing is off, so there is no device, location or play data">👤 account</span> <span class="muted">not sharing usage</span>'
+        : '<span class="pill">' + platIcon(u.platform) + ' ' + esc(u.platform || 'web') + '</span> <span class="muted">' + esc(String(u.device_id || '').slice(0, 8)) + '</span>') + '</td><td class="muted">' + date(u.first_seen) + '</td><td class="muted">' + ago(u.last_seen) + '</td><td><button class="ghost udl" data-dl="' + esc(u.device_id) + '" data-dlname="' + esc(u.name || u.username || 'listener') + '" style="padding:4px 10px;font-size:11px;white-space:nowrap" title="Download this listener\u2019s profile page">Download</button></td>' +
         '<td><button class="ghost udel" data-del="' + esc(u.device_id) + '" style="padding:4px 10px;font-size:11px;color:var(--bad)">Delete</button></td></tr>';
     }).join('');
     var canPrev = userOffset > 0;
@@ -870,12 +872,14 @@
       '<div class="cards"><div class="card"><div class="n">' + (s.total_users || 0) + '</div><div class="l">Total users</div></div>' +
       '<div class="card"><div class="n">' + (s.active_24h || 0) + '</div><div class="l">Active (24h)</div></div>' +
       '<div class="card"><div class="n">' + (s.new_24h || 0) + '</div><div class="l">New (24h)</div></div>' +
-      '<div class="card"><div class="n">' + (s.total_plays || 0) + '</div><div class="l">Total plays</div></div></div>' +
+      '<div class="card"><div class="n">' + (s.total_plays || 0) + '</div><div class="l">Total plays</div></div>' +
+      (s.accounts_total != null ? '<div class="card"><div class="n">' + s.accounts_total + '</div><div class="l">Signed-in accounts</div></div>' : '') + '</div>' +
+      ((d.unavailable || []).indexOf('accounts') >= 0 ? '<div class="muted" role="status" style="margin-bottom:12px">Signed-in accounts could not be read — only listeners who share usage are listed and counted.</div>' : '') +
       '<div class="row" style="margin-bottom:12px"><input id="uq" type="search" placeholder="Search by name…" value="' + esc(userQ) + '" style="max-width:280px" /><button class="btn btn-primary" id="ugo">Search</button>' +
       '<button class="ghost" id="udlall" title="Every listener in this list, all pages, as a CSV file">Download listeners (CSV)</button>' +
       '<span class="muted" style="font-size:12px">Tip: click a row for details</span></div>' +
       '<table><thead><tr><th>Listener</th><th>Location</th><th>Device</th><th>First seen</th><th>Last seen</th><th>Profile download</th><th></th></tr></thead><tbody>' +
-      (rows || '<tr class="table-empty"><td colspan="7"><div class="state state-empty empty" role="status"><div class="state-title">No users found</div><div class="state-hint">Try a shorter name or part of an email, or clear the search.</div></div></td></tr>') + '</tbody></table>' +
+      (rows || '<tr class="table-empty"><td colspan="7"><div class="state state-empty empty" role="status"><div class="state-title">No users found</div><div class="state-hint">Try a shorter name or part of a username, or clear the search.</div></div></td></tr>') + '</tbody></table>' +
       '<div class="row" style="margin-top:14px"><button class="ghost" id="uprev"' + (canPrev ? '' : ' disabled') + '>← Prev</button>' +
       '<span class="muted">Showing ' + (userOffset + 1) + '–' + (userOffset + U.length) + '</span>' +
       '<button class="ghost" id="unext"' + (canNext ? '' : ' disabled') + '>Next →</button></div>';
@@ -944,7 +948,7 @@
       $('modalBody').innerHTML =
         '<button class="x" id="mx">✕</button>' +
         '<h2 style="margin:2px 0 2px">' + esc(name || u.name || 'Anonymous') + (u.username ? ' <span class="muted" style="font-size:14px">@' + esc(u.username) + '</span>' : '') + '</h2>' +
-        '<div class="muted" style="font-size:12.5px;margin-bottom:14px">' + esc([u.city, u.country].filter(Boolean).join(', ') || 'Unknown') + ' · ' + esc(u.platform || 'web') + (u.app_version ? ' · v' + esc(u.app_version) : '') + ' · joined ' + date(u.first_seen) + ' · last seen ' + ago(u.last_seen) + '</div>' +
+        '<div class="muted" style="font-size:12.5px;margin-bottom:14px">' + esc([u.city, u.country].filter(Boolean).join(', ') || 'Unknown') + ' · ' + esc(u.kind === 'account' ? 'account · not sharing usage' : (u.platform || 'web')) + (u.app_version ? ' · v' + esc(u.app_version) : '') + ' · joined ' + date(u.first_seen) + ' · last seen ' + ago(u.last_seen) + '</div>' +
         '<div class="cards"><div class="card"><div class="n">' + plays.length + '</div><div class="l">Plays (recent)</div></div>' +
         '<div class="card"><div class="n">' + top.length + '</div><div class="l">Distinct songs</div></div>' +
         '<div class="card"><div class="n">' + esc(langs[0] ? langs[0].language : '—') + '</div><div class="l">Top language</div></div></div>' +
