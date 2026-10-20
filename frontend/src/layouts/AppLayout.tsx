@@ -16,6 +16,7 @@ const NextUpCard = lazy(() => import('@/components/NextUpCard').then(m => ({ def
 const NowPlayingRail = lazy(() => import('@/components/NowPlayingRail').then(m => ({ default: m.NowPlayingRail })));
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { TopBar } from '@/components/TopBar';
+import { GetAppSlot } from '@/components/GetAppSlot';
 import { DiagBanner } from '@/components/DiagBanner';
 import { OfflineBanner } from '@/components/OfflineBanner';
 const OnboardingSheet = lazy(() => import('@/components/OnboardingSheet').then(m => ({ default: m.OnboardingSheet })));
@@ -32,7 +33,8 @@ import { initDownloads } from '@/services/downloads';
 import { initSpatialNav } from '@/services/tv/spatialNav';
 import { initAlarm } from '@/services/alarm';
 import { ShortcutsModal } from '@/components/ShortcutsModal';
-import { UpdateDialog } from '@/components/UpdateDialog';
+// Android-app only, so loaded on demand: never part of a browser's first load.
+const UpdateDialog = lazy(() => import('@/components/UpdateDialog').then((m) => ({ default: m.UpdateDialog })));
 // Boot overlays (festival splash, What's-New sheet) render at most once per
 // day/release — lazy chunks, not first-load bytes (161KB budget, zero slack).
 const FestiveSplash = lazy(() => import('@/components/FestiveSplash').then((m) => ({ default: m.FestiveSplash })));
@@ -489,6 +491,7 @@ export function AppLayout() {
       >
         Skip to content
       </a>
+      <GetAppSlot />
       <div className="flex flex-1 min-h-0">
         <Sidebar />
         <main ref={mainRef} id="main-content" tabIndex={-1} className="vx-workspace flex-1 min-w-0 overflow-y-auto px-4 md:px-8 pb-[calc(var(--player-safe-offset)+2rem)] md:pb-28">
@@ -527,7 +530,11 @@ export function AppLayout() {
         </Suspense>
       )}
       {!isNativePlatform() && <ShortcutsModal />}
-      {isNativePlatform() && <UpdateDialog />}
+      {isNativePlatform() && (
+        <Suspense fallback={null}>
+          <UpdateDialog />
+        </Suspense>
+      )}
       <Suspense fallback={null}>
         <FestiveSplash />
         <WhatsNewSheet />

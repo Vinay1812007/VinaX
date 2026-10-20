@@ -14,6 +14,7 @@ import { useLocation } from 'react-router-dom';
 import { validateSession } from '@/services/auth/google';
 import { serverPageFor } from '@/services/seo/serverPage';
 import { useAccount } from './useAccount';
+import { GetAppSlot } from './GetAppSlot';
 
 // The sign-in screen (and Google's button) loads only when it is needed.
 const SignInScreen = lazy(() => import('./SignInScreen'));
@@ -54,6 +55,7 @@ export function AuthGate({ children }: { children: ReactNode }): ReactNode {
   if (!published && PUBLIC_PATHS.has(path)) return <>{children}</>;
   return (
     <Suspense fallback={<main className="min-h-dvh bg-ink-950" aria-busy="true" />}>
+      <GetAppSlot />
       {published ? <PublicPage page={published} /> : <SignInScreen />}
     </Suspense>
   );
