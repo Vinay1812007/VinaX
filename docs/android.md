@@ -65,7 +65,7 @@ A local build keeps the generated project's `versionCode` of 1, because only CI 
 
 The script is idempotent and runs after every sync.
 
-1. Copies every `.java` file from `frontend/native-android/` into the app's package folder, replacing the `__PKG__` placeholder with `app.tarang.music`.
+1. Copies every `.java` file from `frontend/native-android/` into the app's package folder, replacing the `__PKG__` placeholder with `app.Vinax.music`.
 2. Copies `native-android/res/**` (widget layouts, vector icons, shape drawables, provider info, and `values/vinax_widgets.xml` with the widget and notification strings and colours) into the app's resources. Every file is prefixed `vinax_`, so nothing collides with the generated project's own resources.
 3. Copies `native-android/google-services.json` into `android/app/` when the file exists. The wrapper library applies the push build plugin by itself when it finds the file.
 4. Writes `MainActivity.java`. It registers `VinaxMediaPlugin` (app-local plugins are not discovered automatically), relays a notification tap that asks for the full-screen player, and calls the web view's `onResume()` and `resumeTimers()` in both `onPause` and `onStop`, so the notification, lock-screen and widget controls act while the app is in the background.
@@ -81,7 +81,7 @@ The app is a thin native shell around the web app. `frontend/capacitor.config.ts
 
 | Setting | Value | Consequence |
 | --- | --- | --- |
-| `appId` | `app.tarang.music` | The package name. The patch script uses the same value |
+| `appId` | `app.Vinax.music` | The package name. The patch script uses the same value |
 | `webDir` | `dist` | The build output the sync step copies in |
 | `server.url` | The production site | The shell loads the live web app, so web changes reach installed apps without a reinstall |
 | `server.androidScheme` | `https` | Required; do not relax |

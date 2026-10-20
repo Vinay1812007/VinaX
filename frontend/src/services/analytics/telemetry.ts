@@ -26,6 +26,12 @@ const ENDPOINT = isNativePlatform()
   : '/api/events';
 const PLATFORM = platformName();
 const HEARTBEAT_MS = 25_000;
+/**
+ * 13.7.3 — the version a row reports: on Android the installed APK's version
+ * and build (the app loads the live website, so __APP_VERSION__ is the
+ * website's build there). Read once at start-up from services/native/version.
+ */
+let appVersion: string = __APP_VERSION__;
 
 
 /** The onboarding analytics opt-in — also gates session insights (sessionInsights.ts). */
@@ -82,7 +88,7 @@ async function send(type: string, song?: Song | null, extra?: Record<string, unk
         name: getLocal<string>(KEYS.userName, '') || undefined,
         type,
         platform: PLATFORM,
-        appVersion: __APP_VERSION__,
+        appVersion,
         song: toEventSong(song),
         ...(extra ?? {}),
         ...(meta ? { meta } : {}),
@@ -165,8 +171,37 @@ export function initTelemetry(): void {
 
   let lastPlaying = false;
 
-  // Presence ping so a brand-new listener appears in Live immediately.
-  void send('open');
+  // Presence ping so a brand-new listener appears in Live immediately. On
+  // Android it waits for the installed version (a few ms) so the row is right.
+  if (isNativePlatform()) {
+    void import('@/services/native/version')
+      .then((m) => m.resolveAppVersion())
+      .then((v) => {
+        appVersion = v;
+      })
+      .catch(() => undefined)
+      .then(() => send('open'));
+  }
+  else void send('open');
+
+  // 13.7.3 — back in the foreground: check in at once. A backgrounded Android
+  // WebView throttles timers, so the 25 s heartbeat can lapse while the phone
+  // is locked; without this the listener stayed missing from Live (and their
+  // session from the console) until the next play.
+  let lastPresence = 0;
+  const presence = (): void => {
+    if (document.visibilityState !== 'visible' || Date.now() - lastPresence < 15_000) return;
+    lastPresence = Date.now();
+    const s = usePlayerStore.getState();
+    const song = s.queue[s.index] ?? null;
+    void send(s.isPlaying && song ? 'heartbeat' : 'open', s.isPlaying ? song : null);
+  };
+  document.addEventListener('visibilitychange', presence);
+  if (isNativePlatform()) {
+    void import('@capacitor/app')
+      .then(({ App }) => App.addListener('resume', presence))
+      .catch(() => undefined);
+  }
 
   // Field Web Vitals (LCP / INP / CLS) → Technical Monitoring. Loaded post-idle
   // as its own chunk so measuring never affects the metric being measured, and

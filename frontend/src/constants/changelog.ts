@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '13.7.3': {
+    title: 'Notifications on Android, fixed',
+    changes: [
+      { type: 'fixed', text: 'The daily song pick now reaches the Android app — before, it only went to browsers.' },
+      { type: 'fixed', text: 'A notification that arrives while VinaX is open now shows, and Android asks for notification permission once instead of several times at start-up, so the app no longer misses its chance to sign up for notifications.' },
+      { type: 'improved', text: 'Android notifications have their own “Song picks & news” channel, the VinaX V in the status bar and the VinaX colour.' },
+      { type: 'fixed', text: 'Opening VinaX on Android again picks up notifications you turned on in Android Settings, without a restart.' },
+    ],
+  },
   '13.7.2': {
     title: 'A Dussehra logo and a living backdrop',
     changes: [

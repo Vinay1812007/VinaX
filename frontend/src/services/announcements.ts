@@ -23,7 +23,7 @@ export function setAppAlertsEnabled(on: boolean): void {
   } catch {
     /* ignore */
   }
-  if (on) void ensureNotificationPermission();
+  if (on) void ensureNotificationPermission(true);
 }
 
 // Package D7 — temporary quiet: mute announcement alerts for N days without

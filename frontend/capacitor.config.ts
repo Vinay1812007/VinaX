@@ -37,6 +37,14 @@ const config: CapacitorConfig = {
     // See top-of-file WARNING before changing.
     url: 'https://www.sirimillavinay.online',
   },
+  plugins: {
+    // 13.7.3 — show a push that arrives while the app is open. Without this
+    // the plugin swallowed it (FCM hands foreground messages to the app, and
+    // the app drew nothing), so a test sent with the app open never appeared.
+    PushNotifications: {
+      presentationOptions: ['badge', 'sound', 'alert'],
+    },
+  },
 };
 
 export default config;

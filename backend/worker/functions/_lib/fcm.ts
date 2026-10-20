@@ -4,9 +4,21 @@
  * local-notification path, which only fires while the app is open).
  *
  * Requires FCM_SERVICE_ACCOUNT: the Firebase service-account JSON (the whole
- * file, as a string) set as a Cloudflare Pages secret. No-op when unset, so the
- * rest of the app is unaffected until you configure it.
+ * file, as a string) set as a secret on the Worker (`vinax-api`; a Pages
+ * secret is not seen by the Worker). No-op when unset, so the rest of the app
+ * is unaffected until you configure it.
  */
+
+/**
+ * 13.7.3 — the Android channel, small icon and accent every push uses. The
+ * app creates the channel at start-up (services/push/nativePush.ts) and the
+ * manifest names the same three as FCM's defaults (scripts/patch-android.js),
+ * so a push looks the same whether the app or FCM draws it. The icon must be a
+ * white-on-transparent drawable: a full-colour launcher icon draws as a blob.
+ */
+export const FCM_CHANNEL_ID = 'vinax_picks';
+export const FCM_SMALL_ICON = 'vinax_ic_notify';
+export const FCM_ACCENT = '#FFA42E';
 export interface FcmEnv {
   FCM_SERVICE_ACCOUNT?: string;
 }
@@ -148,20 +160,43 @@ export interface FcmMessage {
  * scale) and every per-token fetch carries a 10 s abort so one slow upstream
  * can't stall the pool.
  */
-export async function sendFcm(env: FcmEnv, tokens: string[], msg: FcmMessage): Promise<{ sent: number; dead: string[] }> {
+export interface FcmResult {
+  sent: number;
+  /** Tokens FCM says no longer exist — safe to deactivate. */
+  dead: string[];
+  /** Why the rest did not go, by FCM error code (or HTTP status / 'timeout'). */
+  failed: Record<string, number>;
+  /** Set when nothing could be sent at all: the secret or Google refused it. */
+  error: string | null;
+}
+
+/**
+ * Is this FCM refusal about the token itself (the app was uninstalled, the
+ * token rotated or was never valid)? Only then is the device pruned. A plain
+ * 400 is NOT enough: a malformed message answers 400 for every device, and
+ * treating that as "dead" once deactivated every Android device at once.
+ */
+function tokenIsDead(status: number, code: string | null, message: string): boolean {
+  if (status === 404 || code === 'UNREGISTERED') return true;
+  return status === 400 && code === 'INVALID_ARGUMENT' && /registration token/i.test(message);
+}
+
+export async function sendFcm(env: FcmEnv, tokens: string[], msg: FcmMessage): Promise<FcmResult> {
   const dead: string[] = [];
-  if (!env.FCM_SERVICE_ACCOUNT || !tokens.length) return { sent: 0, dead };
+  const failed: Record<string, number> = {};
+  if (!env.FCM_SERVICE_ACCOUNT) return { sent: 0, dead, failed, error: 'not_configured' };
+  if (!tokens.length) return { sent: 0, dead, failed, error: null };
   let sa: ServiceAccount;
   try {
     sa = JSON.parse(env.FCM_SERVICE_ACCOUNT) as ServiceAccount;
   } catch {
-    return { sent: 0, dead };
+    return { sent: 0, dead, failed, error: 'bad_service_account_json' };
   }
   const at = await accessToken(sa);
-  if (!at) return { sent: 0, dead };
+  if (!at) return { sent: 0, dead, failed, error: 'google_refused_service_account' };
   const url = `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`;
 
-  const sendOne = async (token: string): Promise<'ok' | 'dead' | 'skip'> => {
+  const sendOne = async (token: string): Promise<'ok' | 'dead' | string> => {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 10_000);
     try {
@@ -173,16 +208,21 @@ export async function sendFcm(env: FcmEnv, tokens: string[], msg: FcmMessage): P
             token,
             notification: { title: msg.title.slice(0, 120), body: (msg.body || '').slice(0, 240) },
             data: { link: msg.link || '/' },
-            android: { priority: 'high', notification: { default_sound: true } },
+            android: {
+              priority: 'high',
+              notification: { channel_id: FCM_CHANNEL_ID, icon: FCM_SMALL_ICON, color: FCM_ACCENT, default_sound: true },
+            },
           },
         }),
         signal: ctrl.signal,
       });
       if (res.ok) return 'ok';
-      if (res.status === 404 || res.status === 400) return 'dead';
-      return 'skip';
+      const j = (await res.json().catch(() => null)) as { error?: { status?: string; message?: string; details?: Array<{ errorCode?: string }> } } | null;
+      const code = j?.error?.details?.find((d) => d.errorCode)?.errorCode ?? j?.error?.status ?? null;
+      if (tokenIsDead(res.status, code, j?.error?.message ?? '')) return 'dead';
+      return code ?? String(res.status);
     } catch {
-      return 'skip';
+      return 'timeout';
     } finally {
       clearTimeout(timer);
     }
@@ -200,8 +240,9 @@ export async function sendFcm(env: FcmEnv, tokens: string[], msg: FcmMessage): P
       const outcome = await sendOne(tokens[i]);
       if (outcome === 'ok') sent += 1;
       else if (outcome === 'dead') dead.push(tokens[i]);
+      else failed[outcome] = (failed[outcome] ?? 0) + 1;
     }
   });
   await Promise.all(workers);
-  return { sent, dead };
+  return { sent, dead, failed, error: null };
 }

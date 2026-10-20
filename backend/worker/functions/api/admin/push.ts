@@ -247,6 +247,35 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
     target: geoTagForLog,
     after: { title, body: text, link: url, audience: geoTagForLog },
   });
+  // Native Android via FCM — background push, even when closed. 13.7.3: sent
+  // BEFORE the web fan-out. Every browser push is its own outgoing request, and
+  // once a large web audience had used up the Worker's per-request budget the
+  // FCM token exchange and sends failed silently, so Android got nothing.
+  let fcm = 0;
+  let fcmError: string | null = fcmConfigured(env) ? null : 'not_configured';
+  let fcmFailed: Record<string, number> = {};
+  if (fcmConfigured(env)) {
+    const toksRead = await sbSelectResult<{ token: string }>(
+      env,
+      'vinax_fcm_tokens',
+      `select=token&active=eq.true&limit=5000${geoSuffix}`,
+    );
+    // The send is not refused here — the response names the failed Android
+    // read instead of reporting fcm: 0 as if nobody was subscribed.
+    if (!toksRead.ok) fcmError = dbErrorCode(toksRead.error);
+    const toks = toksRead.rows;
+    if (toks.length) {
+      const r = await sendFcm(env, toks.map((t) => t.token), { title, body: text, link: url });
+      fcm = r.sent;
+      fcmFailed = r.failed;
+      if (r.error) fcmError = r.error;
+      // Parallel dead-token cleanup — the old sequential loop compounded the
+      // same wall-clock problem the web-push loop had (audit finding H14).
+      await mapWithConcurrency(r.dead, 16, (dead) =>
+        sbUpdate(env, 'vinax_fcm_tokens', `token=eq.${encodeURIComponent(dead)}`, { active: false }).catch(() => false),
+      );
+    }
+  }
   // Fan out in parallel with a bounded concurrency. The previous sequential
   // await-loop over 5000 subscribers (~150 ms each) blew past the Pages
   // Functions 30 s wall clock and returned a partial count with no retry
@@ -276,30 +305,6 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
     else if (r.value.gone) gone += 1;
     else failed[String(r.value.status)] = (failed[String(r.value.status)] ?? 0) + 1;
   }
-  // Also fan out to native Android via FCM — background push, even when closed.
-  let fcm = 0;
-  let fcmError: string | null = null;
-  if (fcmConfigured(env)) {
-    const toksRead = await sbSelectResult<{ token: string }>(
-      env,
-      'vinax_fcm_tokens',
-      `select=token&active=eq.true&limit=5000${geoSuffix}`,
-    );
-    // Web push already went out, so the send is not refused here — the
-    // response names the failed Android read instead of reporting fcm: 0 as
-    // if nobody was subscribed.
-    if (!toksRead.ok) fcmError = dbErrorCode(toksRead.error);
-    const toks = toksRead.rows;
-    if (toks.length) {
-      const r = await sendFcm(env, toks.map((t) => t.token), { title, body: text, link: url });
-      fcm = r.sent;
-      // Parallel dead-token cleanup — the old sequential loop compounded the
-      // same wall-clock problem the web-push loop had (audit finding H14).
-      await mapWithConcurrency(r.dead, 16, (dead) =>
-        sbUpdate(env, 'vinax_fcm_tokens', `token=eq.${encodeURIComponent(dead)}`, { active: false }).catch(() => false),
-      );
-    }
-  }
   // 11.7.2 — the delivery receipt. Before this the sent log could only say a
   // message was SENT, never whether anything received it, so "nobody got my
   // test" had no answer. Read back by /api/admin/notifylog.
@@ -313,7 +318,8 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
       web: { total: subs.length, sent, gone, failed },
       fcm: fcmError ? null : fcm,
       ...(fcmError ? { fcmError } : {}),
+      ...(Object.keys(fcmFailed).length ? { fcmFailed } : {}),
     }).slice(0, 900),
   }).catch(() => false);
-  return json({ ok: true, total: subs.length, sent, gone, failed, fcm: fcmError ? null : fcm, ...(fcmError ? { fcmError } : {}), target: geoTagForLog }, 200);
+  return json({ ok: true, total: subs.length, sent, gone, failed, fcm: fcmError ? null : fcm, fcmFailed, ...(fcmError ? { fcmError } : {}), target: geoTagForLog }, 200);
 };
