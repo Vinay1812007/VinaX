@@ -7,7 +7,6 @@ import { TopBarActions } from '@/components/TopBar';
 import { IconButton } from '@/components/IconButton';
 import { PullToRefresh } from '@/components/PullToRefresh';
 import { PromoBanner } from '@/components/PromoBanner';
-import { GetAppBanner } from '@/components/GetAppBanner';
 import { PushPromptCard } from '@/components/PushPromptCard';
 import { NotificationSheet } from '@/components/NotificationSheet';
 import { DownloadCta } from '@/components/DownloadCta';
@@ -382,7 +381,6 @@ export default function HomePage() {
           </section>
 
           <div className="vxh-asks">
-            <GetAppBanner />
             <DownloadCta />
             <PushPromptCard />
             {/* Owner-published promo banner (admin → Banner & Promotion). */}

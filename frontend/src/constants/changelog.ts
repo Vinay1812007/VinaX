@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '13.7.4': {
+    title: 'Get the app, from your phone’s browser',
+    changes: [
+      { type: 'new', text: 'Listening on your phone’s browser? A bar at the top now offers the VinaX Android app, or on an iPhone shows how to add VinaX to your Home Screen. Tap × to hide it for a week.' },
+    ],
+  },
   '13.7.3': {
     title: 'Notifications on Android, fixed',
     changes: [

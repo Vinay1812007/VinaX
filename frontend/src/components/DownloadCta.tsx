@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { isNativePlatform } from '@/services/native';
 
-/** Desktop/web nudge to install the Android app (mobile Android-web uses GetAppBanner). */
+/** Desktop/web nudge to install the Android app (phone browsers get the GetAppSlot bar at the top). */
 export function DownloadCta() {
   if (isNativePlatform()) return null;
   return (
