@@ -160,6 +160,24 @@ test.describe('owner console shell', () => {
     expect(errors).toEqual([]);
   });
 
+  test('a slow tab the owner already left never draws over the tab that is showing', async ({ page }) => {
+    const errors = watchErrors(page);
+    await mockApi(page, 'empty');
+    // Settings → Feature switches answers slowly; the owner switches tabs first.
+    await page.route('**/api/admin/appconfig**', async (route) => {
+      await new Promise((r) => setTimeout(r, 1500));
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ configured: true, value: null, updated_at: null }) });
+    });
+    await page.addInitScript(() => sessionStorage.setItem('vinax_admin_token', 'owner-pass'));
+    await page.goto('/admin/#/settings/flags');
+    await page.getByRole('tab', { name: 'Runbook' }).click();
+    await expect(page.getByRole('tab', { name: 'Runbook' })).toHaveAttribute('aria-selected', 'true');
+    await page.waitForTimeout(2500); // past the slow Feature switches answer
+    // Before 13.8.1 the late answer replaced the Runbook with the switches.
+    await expect(page.locator('#pageBody')).not.toContainText('Listen Together');
+    expect(errors).toEqual([]);
+  });
+
   test('on a phone the sidebar is a menu', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await mockApi(page, 'empty');

@@ -48,7 +48,7 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
   // with the same `ts`) goes with it; before, the orphan kept showing in the
   // console's history after the announcement was removed. Best effort.
   for (const r of rows) {
-    let ts: unknown = null;
+    let ts: unknown;
     try { ts = r.message ? (JSON.parse(r.message) as { ts?: unknown }).ts : null; } catch { ts = null; }
     if (typeof ts === 'number' && Number.isFinite(ts)) {
       await sbDelete(env, 'vinax_events', `device_id=eq.admin&type=eq.push-receipt&message=like.${encodeURIComponent(`{"ts":${ts},*`)}`);

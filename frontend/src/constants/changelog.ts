@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '13.8.1': {
+    title: 'Behind-the-scenes fixes',
+    changes: [
+      { type: 'fixed', text: 'Server updates from 13.8 now reach the app: a check that stopped them going out has been fixed.' },
+    ],
+  },
   '13.8.0': {
     title: 'A rebuilt control room behind VinaX',
     changes: [

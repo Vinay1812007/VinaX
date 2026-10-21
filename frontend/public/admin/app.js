@@ -117,13 +117,14 @@
       tab: cur.tab ? cur.tab.id : null,
       params: cur.params,
       setParam: function (k, v) {
+        if (cur !== current) return;
         cur.params[k] = v;
         setHash(cur.page.id, cur.tab ? cur.tab.id : null, cur.params, true);
       },
-      refresh: function () { renderBody(); },
+      refresh: function () { if (cur === current) renderBody(); },
       every: function (ms, fn) { if (cur !== current) return; cur.timers.push(setInterval(function () { if (!document.hidden) fn(); }, ms)); },
       onDispose: function (fn) { cur.disposers.push(fn); },
-      go: function (page, tab, params) { setHash(page, tab, params || {}); route(); }
+      go: function (page, tab, params) { if (cur !== current) return; setHash(page, tab, params || {}); route(); }
     };
   }
 
@@ -131,7 +132,11 @@
     if (!current) return;
     dispose();
     VX.api.clearMemo();
-    var body = VX.clear($('pageBody'));
+    // 13.8.1 — every render gets its own container. A slow request from a
+    // page or tab the owner already left now lands in a detached element
+    // instead of drawing over the page that is showing.
+    var body = h('div.page-body');
+    VX.mount($('pageBody'), body);
     var fn = current.tab ? current.tab.render : current.page.render;
     try {
       var out = fn(body, makeCtx());
