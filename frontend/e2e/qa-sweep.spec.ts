@@ -194,7 +194,7 @@ test('QA PASS 4 — admin console shell', async ({ page }) => {
   // show its own failure handling, never a crash.
   await page.route('**/api/**', (r) => r.abort());
   await page.goto('/admin/');
-  await expect(page.getByText(/VinaX Admin|admin/i).first()).toBeVisible({ timeout: 8000 });
+  await expect(page.getByRole('heading', { name: 'VinaX Console' })).toBeVisible({ timeout: 8000 });
   // Login gate present; a token attempt with no backend fails HONESTLY.
   const tokenBox = page.locator('#token');
   await expect(tokenBox).toBeVisible();
@@ -203,6 +203,6 @@ test('QA PASS 4 — admin console shell', async ({ page }) => {
   await page.waitForTimeout(1200);
   const txt = ((await page.textContent('body')) ?? '').replace(/\s+/g, ' ');
   console.log('ADMIN LOGIN RESPONSE:', txt.slice(0, 200));
-  expect(txt).toMatch(/Network error|Server unreachable|Invalid token|Checking/);
+  expect(txt).toMatch(/Could not reach the server/); // 13.8 console sign-in
   expect(errors).toEqual([]);
 });
