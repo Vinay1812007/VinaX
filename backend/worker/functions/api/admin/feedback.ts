@@ -36,6 +36,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
   if (!(await isAdminAsync(request, env))) return unauthorized();
+  if (!supabaseConfigured(env)) return adminJson({ ok: false, error: 'not_configured' }, 503);
 
   const body = (await request.json().catch(() => null)) as { id?: number; status?: string } | null;
   const id = body && typeof body.id === 'number' ? body.id : null;

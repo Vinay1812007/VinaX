@@ -8,19 +8,26 @@ import { sbCountResult, sbSelectResult, supabaseConfigured, type SupabaseEnv } f
 
 type Env = AdminEnv & SupabaseEnv;
 
+// `ts` is the column that says when a row last changed. 13.8 — it must be a
+// column the table really has: four tables have no created_at, so they used
+// to read as "unreadable" and the grand total was always null.
 const TABLES: Array<{ name: string; ts: string; note: string }> = [
   { name: 'vinax_events', ts: 'created_at', note: 'plays, searches, errors, vitals — the analytics firehose' },
   { name: 'vinax_ai_events', ts: 'created_at', note: 'every AI lane call with ok/latency' },
+  { name: 'vinax_accounts', ts: 'last_seen', note: 'signed-in accounts (Google sign-in)' },
+  { name: 'vinax_account_data', ts: 'updated_at', note: 'synced library, settings and history per account' },
+  { name: 'vinax_users', ts: 'last_seen', note: 'listener devices that share usage (opt-in)' },
   { name: 'vinax_feedback', ts: 'created_at', note: 'bug reports, feedback, admin audit rows' },
-  { name: 'vinax_users', ts: 'created_at', note: 'anonymous device profiles' },
-  { name: 'vinax_rooms', ts: 'created_at', note: 'Listen Together rooms' },
-  { name: 'vinax_room_members', ts: 'created_at', note: 'room membership' },
-  { name: 'vinax_push_subscriptions', ts: 'created_at', note: 'web push endpoints' },
-  { name: 'vinax_fcm_tokens', ts: 'created_at', note: 'Android push tokens' },
+  { name: 'vinax_rooms', ts: 'updated_at', note: 'Listen Together rooms' },
+  { name: 'vinax_room_members', ts: 'last_seen', note: 'room membership' },
+  { name: 'vinax_push_subscriptions', ts: 'updated_at', note: 'web push endpoints' },
+  { name: 'vinax_fcm_tokens', ts: 'updated_at', note: 'Android push tokens' },
   { name: 'vinax_seo_urls', ts: 'added_at', note: 'sitemap corpus' },
-  { name: 'vinax_experiments', ts: 'created_at', note: 'A/B assignments' },
+  { name: 'vinax_experiments', ts: 'created_at', note: 'A/B experiments' },
   { name: 'vinax_blocklist', ts: 'created_at', note: 'blocked songs / artists / keywords' },
   { name: 'vinax_config', ts: 'updated_at', note: 'admin-published app config' },
+  { name: 'vinax_trend_runs', ts: 'started_at', note: 'trend refresh runs' },
+  { name: 'vinax_trend_snapshots', ts: 'fetched_at', note: 'trend source snapshots' },
 ];
 
 const json = (o: unknown, status = 200): Response =>

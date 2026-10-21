@@ -1,7 +1,7 @@
 /** Sent-notification log: announcements + daily song pushes, with retract. */
 import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { logAdminAudit } from '../../_lib/adminAudit';
-import { sbDeleteReturning, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+import { sbDelete, sbDeleteReturning, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -29,6 +29,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
 export const onRequestPost = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = context;
   if (!(await isAdminAsync(request, env))) return unauthorized();
+  if (!supabaseConfigured(env)) return json({ ok: false, error: 'not_configured' }, 503);
   const body = (await request.json().catch(() => null)) as { action?: string; created_at?: string } | null;
   if (body?.action !== 'retract' || typeof body.created_at !== 'string') return json({ error: 'bad_request' }, 400);
   // Audit finding M-SRV-9: sbDelete returned true even when zero rows were
@@ -43,6 +44,16 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
   );
   if (rows === null) return json({ ok: false, error: 'delete_failed' }, 500);
   if (rows.length === 0) return json({ ok: false, error: 'not_found' }, 404);
+  // 13.8 — an announcement's delivery receipt (written by /api/admin/push
+  // with the same `ts`) goes with it; before, the orphan kept showing in the
+  // console's history after the announcement was removed. Best effort.
+  for (const r of rows) {
+    let ts: unknown = null;
+    try { ts = r.message ? (JSON.parse(r.message) as { ts?: unknown }).ts : null; } catch { ts = null; }
+    if (typeof ts === 'number' && Number.isFinite(ts)) {
+      await sbDelete(env, 'vinax_events', `device_id=eq.admin&type=eq.push-receipt&message=like.${encodeURIComponent(`{"ts":${ts},*`)}`);
+    }
+  }
   // E12 — retractions are mutations too; leave a row (best-effort).
   await logAdminAudit(context, {
     action: 'notify-retract',

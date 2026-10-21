@@ -84,7 +84,7 @@ describe('usage panel', () => {
     expect(body.source).toBe('sampled');
     expect(body.sampled).toBe(EVENTS.length);
     expect(calls[0]).toContain('vinax_events?created_at=gte.');
-    expect(calls[0]).toContain('limit=10000');
+    expect(calls[0]).toContain('limit=1000&offset=0'); // 13.8: paged
     expect(body.byType).toEqual(usageFromRows(EVENTS).byType);
   });
 });

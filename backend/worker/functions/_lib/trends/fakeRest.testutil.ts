@@ -83,6 +83,7 @@ interface Query {
   filters: Array<[string, string]>;
   order: Array<{ col: string; desc: boolean; nullsLast: boolean }>;
   limit: number | null;
+  offset?: number;
   onConflict: string[] | null;
 }
 
@@ -94,6 +95,7 @@ function parseQuery(qs: string): Query {
     const value = decodeURIComponent(part.slice(i + 1));
     if (key === 'select') continue;
     if (key === 'limit') q.limit = Number(value);
+    else if (key === 'offset') q.offset = Number(value);
     else if (key === 'order')
       q.order = value.split(',').map((o) => {
         const bits = o.split('.');
@@ -124,7 +126,8 @@ function select(rows: Row[], q: Query): Row[] {
       return 0;
     });
   }
-  return q.limit !== null ? out.slice(0, q.limit) : out;
+  const from = q.offset ?? 0;
+  return q.limit !== null ? out.slice(from, from + q.limit) : out.slice(from);
 }
 
 const reply = (body: unknown, status = 200): Response => new Response(body === null ? null : JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });

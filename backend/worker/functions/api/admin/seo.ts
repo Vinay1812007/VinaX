@@ -11,7 +11,7 @@ import { SEO_PAGE_SIZE, SEO_TYPES } from '../../_lib/seo';
 
 type Env = AdminEnv & SupabaseEnv;
 
-interface Row { key: string; type: string; name?: string | null; lang?: string | null; added_at?: string | null; }
+interface Row { key: string; type: string; title?: string | null; slug?: string | null; lang?: string | null; added_at?: string | null; }
 
 const json = (o: unknown, status = 200): Response =>
   new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -26,7 +26,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     Promise.all(
       Object.entries(SEO_TYPES).map(async ([plural, type]) => ({ plural, type, read: await sbCountResult(env, 'vinax_seo_urls', `type=eq.${type}`) })),
     ),
-    sbSelectResult<Row>(env, 'vinax_seo_urls', 'select=key,type,name,lang,added_at&order=added_at.desc&limit=2000'),
+    sbSelectResult<Row>(env, 'vinax_seo_urls', 'select=key,type,title,slug,lang,added_at&order=added_at.desc&limit=2000'),
     (async () => {
       const t0 = Date.now();
       try {
@@ -62,7 +62,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     counts,
     languages: [...langs.entries()].map(([lang, n]) => ({ lang, n })).sort((a, b) => b.n - a.n).slice(0, 12),
     addedByDay: [...byDay.entries()].map(([day, n]) => ({ day, n })).sort((a, b) => (a.day < b.day ? -1 : 1)).slice(-14),
-    newest: sample.slice(0, 25).map((r) => ({ key: r.key, type: r.type, name: r.name ?? '', lang: r.lang ?? '', added_at: r.added_at ?? '' })),
+    newest: sample.slice(0, 25).map((r) => ({ key: r.key, type: r.type, name: r.title ?? '', slug: r.slug ?? '', lang: r.lang ?? '', added_at: r.added_at ?? '' })),
     sampled: sample.length,
     sitemap,
   });

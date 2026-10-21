@@ -4,234 +4,135 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
-    <!-- Audit finding H-SRV-10: strict CSP for the admin console. Blocks
-         inline scripts and any script host except our own, so a stray
-         unescaped-innerHTML slip can't execute injected <script>. All CSS
-         now lives in /admin/console.css; style-src keeps 'unsafe-inline'
-         only because the console scripts still write style="" attributes
-         into the markup they build (bar widths, chart heights, swatches).
-         connect-src is 'self' plus the hosted database and the geocoder
-         used by the World map. -->
+    <!-- Strict CSP for the owner console: no inline scripts, no third-party
+         script hosts, so an injection slip cannot execute. Every console
+         script builds DOM through VX.h (text nodes), never innerHTML.
+         style-src keeps 'unsafe-inline' for style="" attributes on chart
+         bars and swatches. connect-src adds the geocoder used by the map. -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' blob:; connect-src 'self' https://*.supabase.co https://nominatim.openstreetmap.org" />
-    <title>VinaX · Control Room</title>
-
-    <!-- Pre-paint: resolves the theme (stored choice, else the system
-         preference) and the sidebar rail state before first paint, so there
-         is no theme flash and no layout shift. External file because the CSP
-         above forbids inline scripts. -->
+    <meta name="theme-color" content="#0e0f13" />
+    <title>VinaX · Console</title>
+    <link rel="icon" href="/favicon.ico" />
     <script src="/admin/theme-boot.js"></script>
-
-    <!-- Leaflet (vendored — CSP script-src is 'self') for the World map. -->
     <link rel="stylesheet" href="/admin/leaflet/leaflet.css" />
     <link rel="stylesheet" href="/admin/console.css" />
   </head>
   <body>
-    <!-- Icon sprite (same-document <use>, so the strict CSP is untouched). -->
     <svg class="sprite" width="0" height="0" aria-hidden="true" focusable="false">
       <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
-      <symbol id="i-rail" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M16 10l-2 2 2 2"/></symbol>
       <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
       <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></symbol>
-      <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 10a6 6 0 0 1 12 0c0 5 2 6.5 2 6.5H4S6 15 6 10z"/><path d="M10 20a2 2 0 0 0 4 0"/></symbol>
-      <symbol id="i-report" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 3h6v4H9zM9 12h6M9 16h4"/></symbol>
-      <symbol id="i-json" viewBox="0 0 24 24"><path d="M9 4c-2 0-3 1-3 3v2c0 1.6-1 3-2.5 3C5 12 6 13.4 6 15v2c0 2 1 3 3 3"/><path d="M15 4c2 0 3 1 3 3v2c0 1.6 1 3 2.5 3-1.5 0-2.5 1.4-2.5 3v2c0 2-1 3-3 3"/></symbol>
-      <symbol id="i-csv" viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></symbol>
+      <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 20V9M7 13l5-5 5 5M5 4h14"/></symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3.5 2.8 19.5h18.4z"/><path d="M12 10v4M12 17v.01"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8v.01"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+      <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M4 13l2.5-7h11L20 13v6H4z"/><path d="M4 13h4.5l1 2h5l1-2H20"/></symbol>
       <symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 0 0 17z" fill="currentColor" stroke="none"/></symbol>
-      <symbol id="i-rows" viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></symbol>
-      <symbol id="i-compact" viewBox="0 0 24 24"><path d="M4 10h16M4 14h16M12 3v4M10 5l2 2 2-2M12 21v-4M10 19l2-2 2 2"/></symbol>
-      <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M9 16l-4-4 4-4M5 12h10"/></symbol>
-      <symbol id="i-dash" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></symbol>
-      <symbol id="i-aud" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5"/><circle cx="17.5" cy="8.5" r="2.5"/><path d="M18 14c2.3.5 3.5 2.6 3.5 5"/></symbol>
-      <symbol id="i-cat" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></symbol>
-      <symbol id="i-promo" viewBox="0 0 24 24"><path d="M4 10v4h3l9 4V6l-9 4z"/><path d="M8 14.5l1 4.5h2.5l-1-4M19 9.5a3.5 3.5 0 0 1 0 5"/></symbol>
-      <symbol id="i-ana" viewBox="0 0 24 24"><path d="M5 20V11M12 20V4M19 20v-6"/></symbol>
-      <symbol id="i-ai" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4"/></symbol>
-      <symbol id="i-ops" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
-      <symbol id="i-set" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+      <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M10 16l-4-4 4-4M6 12h10"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"/></symbol>
+      <symbol id="i-edit" viewBox="0 0 24 24"><path d="M5 19l1-4L16 5l3 3L9 18z"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M5 15V6a1 1 0 0 1 1-1h9"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></symbol>
+      <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5H5V6h5"/></symbol>
+      <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12l16-7-6 16-3-6.5z"/><path d="M11 14.5 20 5"/></symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+      <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="4" rx="1.5"/><rect x="13" y="10" width="7" height="10" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/></symbol>
+      <symbol id="i-live" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14"/></symbol>
+      <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.5"/><path d="M3 19.5c.6-3.3 3-5 6-5s5.4 1.7 6 5"/><path d="M15.5 5.2a3.5 3.5 0 0 1 0 6.6M18 14.6c1.6.7 2.6 2.4 3 4.9"/></symbol>
+      <symbol id="i-growth" viewBox="0 0 24 24"><path d="M4 19h16"/><path d="M5 15l4.5-4.5 3.5 3 6-6.5"/><path d="M15 7h4v4"/></symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.5 5.2 3.5 8.5S14.4 18.1 12 20.5C9.6 18.1 8.5 15.3 8.5 12S9.6 5.9 12 3.5z"/></symbol>
+      <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
+      <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 21c-3.9 0-6.5-2.6-6.5-6.2 0-3.9 3.3-6 4.3-10.3 2.6 1.8 3.4 4.3 3.2 6.3 1-.6 1.7-1.8 1.9-3 1.8 1.6 3.6 4.1 3.6 7 0 3.6-2.6 6.2-6.5 6.2z"/></symbol>
+      <symbol id="i-library" viewBox="0 0 24 24"><rect x="4" y="4" width="4" height="16" rx="1"/><rect x="10" y="4" width="4" height="16" rx="1"/><path d="M16.5 4.8l3.7 1 -3.7 14.4"/></symbol>
+      <symbol id="i-layout" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M3.5 9h17M10 9v11"/></symbol>
+      <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 10a6 6 0 0 1 12 0c0 5 2 6.5 2 6.5H4S6 15 6 10z"/><path d="M10 20a2 2 0 0 0 4 0"/></symbol>
+      <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></symbol>
+      <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></symbol>
+      <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></symbol>
+      <symbol id="i-message" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></symbol>
+      <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7.5" ry="2.8"/><path d="M4.5 6v12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8V6M4.5 12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8"/></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></symbol>
+      <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="14" r="4"/><path d="M11 11l8.5-8.5M16 6l2.5 2.5M14 8l2 2"/></symbol>
+      <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></symbol>
+      <symbol id="i-command" viewBox="0 0 24 24"><path d="M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3z"/></symbol>
     </svg>
 
-    <div id="login" class="login">
-      <div class="panel">
-        <div class="lg-brand"><a class="brand" id="loginBrand" href="/admin/" aria-label="VinaX admin home"><img class="mark" src="/icons/icon.svg" alt="" width="40" height="40" /><span class="bname">VinaX</span><small>Console</small></a></div>
-        <h1>Sign in</h1>
-        <p class="lead">Enter the admin token to open the owner console.</p>
-        <div class="field">
-          <label for="token">Admin token</label>
-          <input id="token" type="password" autocomplete="off" spellcheck="false" aria-describedby="tokenHelp loginErr" />
-          <span class="hint" id="tokenHelp">Kept for this tab only and cleared when you close it.</span>
-          <div id="loginErr" class="err" role="alert"></div>
+    <!-- Sign-in -->
+    <main id="login" class="login" hidden>
+      <form id="loginForm" class="login-card" autocomplete="off">
+        <div class="brand-mark" aria-hidden="true">V</div>
+        <h1>VinaX Console</h1>
+        <p class="muted">Owner sign-in. The password is checked by the server on every request and is kept only in this tab.</p>
+        <label class="field-label" for="token">Owner password</label>
+        <input id="token" class="input" type="password" autocomplete="current-password" required />
+        <p id="loginErr" class="login-err" role="alert"></p>
+        <button id="enter" class="btn primary block" type="submit"><span>Sign in</span></button>
+      </form>
+    </main>
+
+    <!-- Console -->
+    <div id="app" class="app" hidden>
+      <a class="skip" href="#main">Skip to content</a>
+      <aside id="sidebar" class="sidebar" aria-label="Console navigation">
+        <div class="sb-brand">
+          <div class="brand-mark sm" aria-hidden="true">V</div>
+          <div class="sb-brand-text"><strong>VinaX</strong><span>Console</span></div>
+          <button id="sbClose" class="icon-btn sb-close" type="button" aria-label="Close menu"><svg class="ic" aria-hidden="true"><use href="#i-close"/></svg></button>
         </div>
-        <button type="button" id="enter" class="btn btn-primary">Open console</button>
-      </div>
-      <p class="lg-foot">Token-gated · contains listeners&rsquo; personal data</p>
-    </div>
-
-    <div id="app" hidden>
-      <!-- Shell is a single CSS grid: the sidebar spans every row on the
-           left; top bar / stale banner / main / footer stack on the right.
-           The top bar holds the drawer button, the section title, the
-           environment chip, the refresh action, the theme toggle and
-           sign-out; brand, live counters, section nav, view controls and
-           actions live in the sidebar. On desktop the sidebar collapses to an icon rail
-           (state kept per browser); under 900px it is an off-canvas drawer
-           opened by the top bar's menu button. -->
-      <div class="sb-scrim" id="sbScrim"></div>
-      <aside id="sidebar" class="sidebar" aria-label="Console sidebar">
-        <div class="sb-head">
-          <a class="brand" id="brandHome" href="#overview" aria-label="VinaX admin home" title="Console home"><img class="mark" src="/icons/icon.svg" alt="" width="28" height="28" /><span class="bname">VinaX</span><small>Console</small></a>
-          <button type="button" class="sb-icon" id="sbCollapse" aria-pressed="false" aria-label="Collapse sidebar" title="Collapse sidebar"><svg class="ic ic-rail" aria-hidden="true"><use href="#i-rail"></use></svg><svg class="ic ic-close" aria-hidden="true"><use href="#i-close"></use></svg></button>
-        </div>
-
-        <div class="sb-group sb-live" role="group" aria-label="Live">
-          <div class="sb-title" aria-hidden="true">Live <span class="dot" title="Auto-refresh status"></span></div>
-          <div id="kpis" class="kpis" title="Live pulse — refreshes every minute">
-            <span class="k"><span class="kg" aria-hidden="true">●</span><b>–</b><span class="kl">now</span></span>
-            <span class="k"><span class="kg" aria-hidden="true">▶</span><b>–</b><span class="kl">today</span></span>
-            <span class="k"><span class="kg" aria-hidden="true">⚠</span><b>–</b><span class="kl">errors</span></span>
-          </div>
-        </div>
-
-        <nav id="nav" aria-label="Console sections">
-          <input id="navSearch" class="nav-search" type="search" placeholder="Search tools… (⌘K)" aria-label="Filter tools" />
-          <!-- v5.7.5 — formal category reorganisation: every tool sits under
-               exactly one category; category headers collapse (state kept per
-               browser) and show their tool count. Categories are ordered by
-               daily workflow: watch → audience → catalog → promotion →
-               reports → AI → operations → settings. -->
-          <button type="button" class="nav-group-label" data-group="Dashboards" aria-expanded="true" title="Dashboards"><svg class="ic" aria-hidden="true"><use href="#i-dash"></use></svg><span class="ng-t">Dashboards</span> <span class="ng-n">3</span><span class="ng-chev" aria-hidden="true">▾</span></button>
-          <button type="button" data-sec="workspace" data-cat="Dashboards" data-local="prefs" title="Layout and preferences are kept in this browser only">Operations Workspace</button>
-          <button type="button" data-sec="overview" data-cat="Dashboards" class="active" aria-current="page">Overview</button>
-          <button type="button" data-sec="realtime" data-cat="Dashboards">Real-Time</button>
-          <button type="button" class="nav-group-label" data-group="Audience" aria-expanded="true" title="Audience"><svg class="ic" aria-hidden="true"><use href="#i-aud"></use></svg><span class="ng-t">Audience</span> <span class="ng-n">9</span><span class="ng-chev" aria-hidden="true">▾</span></button>
-          <button type="button" data-sec="live" data-cat="Audience">Live Listening</button>
-          <button type="button" data-sec="activity" data-cat="Audience">Activity Feed</button>
-          <button type="button" data-sec="engagement" data-cat="Audience">Engagement</button>
-          <button type="button" data-sec="users" data-cat="Audience">User Management</button>
-          <button type="button" data-sec="retention" data-cat="Audience">Retention Cohorts</button>
-          <button type="button" data-sec="usage" data-cat="Audience">Feature Usage</button>
-          <button type="button" data-sec="heatmap" data-cat="Audience">Listening Heatmap</button>
-          <button type="button" data-sec="funnel" data-cat="Audience">Onboarding Funnel</button>
-          <button type="button" data-sec="segments" data-cat="Audience">Audience Segments</button>
-          <button type="button" class="nav-group-label" data-group="Catalog" aria-expanded="true" title="Catalog"><svg class="ic" aria-hidden="true"><use href="#i-cat"></use></svg><span class="ng-t">Catalog</span> <span class="ng-n">13</span><span class="ng-chev" aria-hidden="true">▾</span></button>
-          <button type="button" data-sec="songs" data-cat="Catalog">Song Management</button>
-          <button type="button" data-sec="playlists" data-cat="Catalog">Playlist Management</button>
-          <button type="button" data-sec="categories" data-cat="Catalog">Categories &amp; Genres</button>
-          <button type="button" data-sec="content" data-cat="Catalog">Content Control</button>
-          <button type="button" data-sec="catalog" data-cat="Catalog">Catalog Lookup</button>
-          <button type="button" data-sec="trendpins" data-cat="Catalog">Trending Pins</button>
-          <button type="button" data-sec="trends" data-cat="Catalog">Trend Operations</button>
-          <button type="button" data-sec="songstats" data-cat="Catalog">Song Drilldown</button>
-          <button type="button" data-sec="skips" data-cat="Catalog">Skip Report</button>
-          <button type="button" data-sec="synonyms" data-cat="Catalog">Search Synonyms</button>
-          <button type="button" data-sec="sources" data-cat="Catalog">Catalog Sources</button>
-          <button type="button" data-sec="langorder" data-cat="Catalog">Language Order</button>
-          <button type="button" data-sec="blocklistio" data-cat="Catalog">Blocklist Import/Export</button>
-          <button type="button" class="nav-group-label" data-group="Promotion" aria-expanded="true" title="Promotion"><svg class="ic" aria-hidden="true"><use href="#i-promo"></use></svg><span class="ng-t">Promotion</span> <span class="ng-n">6</span><span class="ng-chev" aria-hidden="true">▾</span></button>
-          <button type="button" data-sec="banners" data-cat="Promotion">Banners &amp; Offers</button>
-          <button type="button" data-sec="festivals" data-cat="Promotion">Festival Themes</button>
-          <button type="button" data-sec="greeting" data-cat="Promotion">Home Greeting</button>
-          <button type="button" data-sec="homebuilder" data-cat="Promotion">Home Layout Studio</button>
-          <button type="button" data-sec="faq" data-cat="Promotion">Help Center FAQ</button>
-          <button type="button" data-sec="notify2" data-cat="Promotion">Send a message</button>
-          <button type="button" class="nav-group-label" data-group="Analytics" aria-expanded="true" title="Analytics"><svg class="ic" aria-hidden="true"><use href="#i-ana"></use></svg><span class="ng-t">Analytics</span> <span class="ng-n">9</span><span class="ng-chev" aria-hidden="true">▾</span></button>
-          <button type="button" data-sec="music" data-cat="Analytics">Music Analytics</button>
-          <button type="button" data-sec="search" data-cat="Analytics">Search Analytics</button>
-          <button type="button" data-sec="location" data-cat="Analytics">Location Analytics</button>
-          <button type="button" data-sec="world" data-cat="Analytics">World Map</button>
-          <button type="button" data-sec="insights" data-cat="Analytics">Insights</button>
-          <button type="button" data-sec="experiments" data-cat="Analytics">A/B Experiments</button>
-          <button type="button" data-sec="recquality" data-cat="Analytics">Recommendation Quality</button>
-          <button type="button" data-sec="recconfig" data-cat="Analytics">Recommendation Tuning</button>
-          <button type="button" data-sec="seo" data-cat="Analytics">SEO Corpus</button>
-          <button type="button" class="nav-group-label" data-group="AI &amp; Engines" aria-expanded="true" title="AI &amp; Engines"><svg class="ic" aria-hidden="true"><use href="#i-ai"></use></svg><span class="ng-t">AI &amp; Engines</span> <span class="ng-n">8</span><span class="ng-chev" aria-hidden="true">▾</span></button>
-          <button type="button" data-sec="ai" data-cat="AI &amp; Engines">AI Monitoring</button>
-          <button type="button" data-sec="aiops" data-cat="AI &amp; Engines">AI Operations</button>
-          <button type="button" data-sec="ailab" data-cat="AI &amp; Engines">API Monitoring</button>
-          <button type="button" data-sec="engineprobe" data-cat="AI &amp; Engines">Engine Probe</button>
-          <button type="button" data-sec="aistarters" data-cat="AI &amp; Engines">AI Starter Prompts</button>
-          <button type="button" data-sec="aiquick" data-cat="AI &amp; Engines">AI Quick Actions</button>
-          <button type="button" data-sec="airules" data-cat="AI &amp; Engines">AI House Rules</button>
-          <button type="button" data-sec="aicost" data-cat="AI &amp; Engines">AI Tokens &amp; Cost</button>
-          <button type="button" class="nav-group-label" data-group="Operations" aria-expanded="true" title="Operations"><svg class="ic" aria-hidden="true"><use href="#i-ops"></use></svg><span class="ng-t">Operations</span> <span class="ng-n">17</span><span class="ng-chev" aria-hidden="true">▾</span></button>
-          <button type="button" data-sec="opscenter" data-cat="Operations">Operations Center</button>
-          <button type="button" data-sec="technical" data-cat="Operations">Technical Monitoring</button>
-          <button type="button" data-sec="feedback" data-cat="Operations">Feedback &amp; Bugs</button>
-          <button type="button" data-sec="rooms" data-cat="Operations">Live Rooms</button>
-          <button type="button" data-sec="edge" data-cat="Operations">Edge &amp; Endpoint Health</button>
-          <button type="button" data-sec="dataquality" data-cat="Operations">Data Quality</button>
-          <button type="button" data-sec="releases" data-cat="Operations">Releases &amp; CI</button>
-          <button type="button" data-sec="tables" data-cat="Operations">Database Overview</button>
-          <button type="button" data-sec="audit" data-cat="Operations">Audit Trail</button>
-          <button type="button" data-sec="statusnote" data-cat="Operations">Status Note</button>
-          <button type="button" data-sec="cron" data-cat="Operations">Cron Health</button>
-          <button type="button" data-sec="statushist" data-cat="Operations">Status History</button>
-          <button type="button" data-sec="envcheck" data-cat="Operations">Environment Checklist</button>
-          <button type="button" data-sec="query" data-cat="Operations">Query Console</button>
-          <button type="button" data-sec="relnotes" data-cat="Operations">Release Notes</button>
-          <button type="button" data-sec="maintwin" data-cat="Operations">Maintenance Scheduler</button>
-          <button type="button" data-sec="minver" data-cat="Operations">Minimum App Version</button>
-          <button type="button" class="nav-group-label" data-group="Settings" aria-expanded="true" title="Settings"><svg class="ic" aria-hidden="true"><use href="#i-set"></use></svg><span class="ng-t">Settings</span> <span class="ng-n">5</span><span class="ng-chev" aria-hidden="true">▾</span></button>
-          <button type="button" data-sec="config" data-cat="Settings" data-local="all" title="Kept in this browser only">App Configuration</button>
-          <button type="button" data-sec="flags" data-cat="Settings">Feature Flags</button>
-          <button type="button" data-sec="runbook" data-cat="Settings">Runbook</button>
-          <button type="button" data-sec="backup" data-cat="Settings">Config Backup</button>
-          <button type="button" data-sec="pins" data-cat="Settings" data-local="all" title="Kept in this browser only">Pinned Tools</button>
-        </nav>
-
-        <div class="sb-group" id="sbView" role="group" aria-label="View">
-          <div class="sb-title" aria-hidden="true">View</div>
-          <div class="seg" id="range" role="group" aria-label="Date range" hidden></div>
-          <!-- app.js adds the refresh-interval select (#hdr-interval) to this row. -->
-          <div class="sb-row" id="intervalHost">
-            <button type="button" class="switch" id="autoWrap" aria-pressed="true" title="Auto-refresh"><span class="track on" id="autoTrack"><span class="knob"></span></span><span class="bl">Auto-refresh</span></button>
-          </div>
-          <!-- app.js adds the row-density toggle (#rowDensity) before #density. -->
-          <div class="sb-grid" id="viewToggles">
-            <button type="button" class="ghost sb-btn" id="density" aria-pressed="false" title="Toggle compact layout"><svg class="ic" aria-hidden="true"><use href="#i-compact"></use></svg><span class="bl">Compact</span></button>
-          </div>
-        </div>
-
-        <div class="sb-group" id="sbActions" role="group" aria-label="Actions">
-          <div class="sb-title" aria-hidden="true">Actions</div>
-          <div class="sb-grid">
-            <button type="button" class="ghost sb-btn" id="refresh" title="Refresh now (R)"><svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg><span class="bl">Refresh</span></button>
-            <button type="button" class="ghost sb-btn" id="notify" aria-pressed="false" title="Browser alert when new errors appear"><svg class="ic" aria-hidden="true"><use href="#i-bell"></use></svg><span class="bl">Alerts</span></button>
-            <button type="button" class="ghost sb-btn" id="report" title="Copy a day report to the clipboard"><svg class="ic" aria-hidden="true"><use href="#i-report"></use></svg><span class="bl">Report</span></button>
-            <button type="button" class="ghost sb-btn" id="json" title="Download this panel as JSON"><svg class="ic" aria-hidden="true"><use href="#i-json"></use></svg><span class="bl">JSON</span></button>
-            <button type="button" class="ghost sb-btn wide" id="csv" hidden title="Download this table as CSV"><svg class="ic" aria-hidden="true"><use href="#i-csv"></use></svg><span class="bl">CSV</span></button>
-          </div>
+        <button id="paletteBtn" class="sb-search" type="button"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg><span>Jump to…</span><kbd>Ctrl K</kbd></button>
+        <nav id="nav" class="nav"></nav>
+        <div class="sb-foot">
+          <span id="envChip" class="env-chip">Production</span>
+          <span id="buildChip" class="muted small"></span>
         </div>
       </aside>
-      <header id="topbar">
-        <button type="button" class="icon-btn" id="menuBtn" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false" title="Menu"><svg class="ic" aria-hidden="true"><use href="#i-menu"></use></svg></button>
-        <div class="tb-title"><span id="secCrumb" class="crumb"></span><h1 id="secTitle">Overview</h1></div>
-        <div class="spacer"></div>
-        <span class="updated" id="updated">—</span>
-        <span id="envChip" class="pill">Local</span>
-        <button type="button" class="btn" id="hdrRefresh" title="Refresh this panel (R)"><svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg><span class="bl">Refresh</span></button>
-        <!-- app.js keeps #themeVal ("Dark" / "Light") and the button's aria-label in step with the theme. -->
-        <button type="button" class="icon-btn" id="theme" aria-label="Switch theme" title="Switch light / dark theme"><svg class="ic" aria-hidden="true"><use href="#i-theme"></use></svg><span class="sr-only" id="themeVal">Dark</span></button>
-        <button type="button" class="icon-btn" id="logout" aria-label="Sign out" title="Sign out"><svg class="ic" aria-hidden="true"><use href="#i-logout"></use></svg></button>
-      </header>
-      <div id="stale" class="stale" role="status" hidden>Data looks stale — refresh may be failing.</div>
-      <main id="main">
-        <p id="secDesc" class="desc"></p>
-        <div id="view"><div class="state state-loading" role="status"><span class="sr-only">Loading…</span><span class="skeleton sk-kpi"></span><span class="skeleton sk-row"></span><span class="skeleton sk-row"></span></div></div>
-      </main>
-      <footer>VinaX Admin Console · token-gated · account details (name, Gmail, sign-in city) are personal data — handle with care</footer>
+      <div id="scrimNav" class="scrim-nav" hidden></div>
+
+      <div class="main-col">
+        <header class="topbar">
+          <button id="menuBtn" class="icon-btn menu-btn" type="button" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></button>
+          <div class="crumbs"><span id="crumbGroup" class="muted"></span><span class="muted sep" aria-hidden="true">/</span><h1 id="pageTitle">Overview</h1></div>
+          <span class="grow"></span>
+          <span id="updated" class="muted small" aria-live="polite"></span>
+          <label class="switch compact" title="Refresh this page every 30 seconds">
+            <input id="autoRefresh" type="checkbox" role="switch" /><span class="track" aria-hidden="true"></span><span class="switch-label">Auto</span>
+          </label>
+          <button id="refreshBtn" class="icon-btn" type="button" aria-label="Refresh" title="Refresh (R)"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+          <button id="themeBtn" class="icon-btn" type="button" aria-label="Switch theme" title="Switch theme"><svg class="ic" aria-hidden="true"><use href="#i-theme"/></svg></button>
+          <button id="logoutBtn" class="icon-btn" type="button" aria-label="Sign out" title="Sign out"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg></button>
+        </header>
+        <main id="main" class="page" tabindex="-1">
+          <p id="pageDesc" class="page-desc muted"></p>
+          <div id="pageTabs"></div>
+          <div id="pageBody" class="page-body"></div>
+        </main>
+      </div>
     </div>
 
-    <div id="modal" class="modal" hidden><div class="box" id="modalBody"></div></div>
+    <div id="toasts" class="toasts" aria-live="polite"></div>
 
     <script src="/admin/leaflet/leaflet.js"></script>
     <script src="/admin/festivals.js"></script>
-    <script src="/admin/workspace.js"></script>
-    <script src="/admin/sections/registry.js"></script>
+    <script src="/admin/core.js"></script>
+    <script src="/admin/pages/overview.js"></script>
+    <script src="/admin/pages/live.js"></script>
+    <script src="/admin/pages/listeners.js"></script>
+    <script src="/admin/pages/audience.js"></script>
+    <script src="/admin/pages/places.js"></script>
+    <script src="/admin/pages/music.js"></script>
+    <script src="/admin/pages/trends.js"></script>
+    <script src="/admin/pages/catalog.js"></script>
+    <script src="/admin/pages/home.js"></script>
+    <script src="/admin/pages/notify.js"></script>
+    <script src="/admin/pages/ai.js"></script>
+    <script src="/admin/pages/recs.js"></script>
+    <script src="/admin/pages/health.js"></script>
+    <script src="/admin/pages/feedback.js"></script>
+    <script src="/admin/pages/data.js"></script>
+    <script src="/admin/pages/settings.js"></script>
     <script src="/admin/app.js"></script>
-    <!-- 7.2.0 — section modules (each registers with sections/registry.js). -->
-    <script src="/admin/sections/recquality.js"></script>
-    <script src="/admin/sections/aiops.js"></script>
-    <script src="/admin/sections/recconfig.js"></script>
-    <script src="/admin/sections/trends.js"></script>
   </body>
 </html>

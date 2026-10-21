@@ -3,7 +3,7 @@
 import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { auditPrior, logAdminAudit } from '../../_lib/adminAudit';
 import { methodNotAllowed } from '../../_lib/ratelimit';
-import { sbDelete, sbDeleteReturning, sbInsert, sbSelectResult, sbUpdate, type SupabaseEnv } from '../../_lib/supabase';
+import { sbDelete, sbDeleteReturning, sbInsert, sbSelectResult, sbUpdate, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 import { ACCOUNT_ROW_PREFIX } from './users';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -21,6 +21,7 @@ export const onRequestGet = async (): Promise<Response> => methodNotAllowed('POS
 export const onRequestPost = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = context;
   if (!(await isAdminAsync(request, env))) return unauthorized();
+  if (!supabaseConfigured(env)) return json({ ok: false, error: 'not_configured' }, 503);
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   const action = typeof body?.action === 'string' ? body.action : '';
   const days = typeof body?.days === 'number' && body.days > 0 ? Math.floor(body.days) : 0;
@@ -50,9 +51,10 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
       await logAdminAudit(context, { action: 'user-delete', summary: `Deleted account ${sub.slice(0, 6)}…: ${reason}`, target: `account ${sub.slice(0, 6)}…` });
       return json({ ok: true });
     }
-    const okEvents = await sbDelete(env, 'vinax_events', `device_id=eq.${encodeURIComponent(id)}`);
     // Returning delete so a typo'd / already-deleted device_id is an honest
-    // not_found instead of a silent `{ok:true}` no-op (D-18).
+    // not_found instead of a silent `{ok:true}` no-op (D-18). 13.8 — the user
+    // row goes FIRST: deleting events first wiped a real device's history and
+    // then could still answer "failed" (or not_found for a typo).
     const removed = await sbDeleteReturning<{ device_id: string }>(
       env,
       'vinax_users',
@@ -60,6 +62,7 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
     );
     if (removed === null) return json({ ok: false, error: 'delete_failed' }, 500);
     if (removed.length === 0) return json({ ok: false, error: 'not_found' }, 404);
+    const okEvents = await sbDelete(env, 'vinax_events', `device_id=eq.${encodeURIComponent(id)}`);
     // Best-effort cleanup of remaining references so the deletion doesn't
     // leave the device lingering in rooms it once joined (orphan audit).
     await sbDelete(env, 'vinax_room_members', `device_id=eq.${encodeURIComponent(id)}`);
@@ -73,7 +76,9 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
     // 'new', never 'resolved': it must not inflate the feedback KPI and must
     // survive clear_feedback). Only the truncated id is recorded.
     await logAdminAudit(context, { action: 'user-delete', summary: `Deleted user ${id.slice(0, 12)}…: ${reason}`, target: `${id.slice(0, 12)}…` });
-    return json({ ok: okEvents });
+    // The device is gone either way; `eventsDeleted: false` says its play
+    // history could not be removed and needs a retry via purge.
+    return json({ ok: true, eventsDeleted: okEvents });
   }
   if (action === 'purge_events') {
     if (!days) return json({ error: 'bad_request' }, 400);
@@ -116,7 +121,9 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
     return json({ ok: a && b });
   }
   if (action === 'site_mode') {
-    const mode = body?.mode === 'maintenance' ? 'maintenance' : 'live';
+    // 13.8 — only the two real modes; anything else used to mean "go live".
+    if (body?.mode !== 'maintenance' && body?.mode !== 'live') return json({ error: 'bad_mode' }, 400);
+    const mode = body.mode;
     const note = typeof body?.note === 'string' ? body.note.trim().slice(0, 200) : '';
     // 7.2.0 — the mode in force just before the switch, for the audit row
     // (the public reader honours the newest admin-written row).

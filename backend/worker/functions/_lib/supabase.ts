@@ -76,8 +76,41 @@ export function dbErrorCode(error: DbFailure): string {
   return error === 'not_configured' ? 'db_not_configured' : error === 'unauthorized' ? 'db_unauthorized' : error === 'not_found' ? 'db_schema_missing' : error === 'bad_request' ? 'db_bad_request' : 'db_unavailable';
 }
 
-/** SELECT that says exactly why it failed. `rows` is always an array (empty on failure). */
+/**
+ * The database answers at most this many rows per request (the hosted
+ * PostgREST `max-rows` default) — a bigger `limit` is silently cut to it.
+ */
+export const DB_PAGE_ROWS = 1000;
+/** Upper bound on pages one paged read may take (subrequest budget). */
+const MAX_PAGES = 20;
+
+/**
+ * SELECT that says exactly why it failed. `rows` is always an array (empty on failure).
+ *
+ * 13.8 — a `limit` above DB_PAGE_ROWS (and no explicit `offset`) is read in
+ * pages of DB_PAGE_ROWS, so `limit=10000` really returns up to 10,000 rows.
+ * Before, ~25 admin reads and the push sender asked for 2,000–20,000 rows,
+ * silently got 1,000, and undercounted (or stopped sending) past that.
+ */
 export async function sbSelectResult<T>(env: SupabaseEnv, table: string, query: string, opts: { timeoutMs?: number; headers?: Record<string, string> } = {}): Promise<DbResult<T>> {
+  const m = /(^|&)limit=(\d+)(?=&|$)/.exec(query);
+  const wanted = m ? Number(m[2]) : 0;
+  if (wanted > DB_PAGE_ROWS && !/(^|&)offset=/.test(query) && !(opts.headers && Object.keys(opts.headers).some((k) => k.toLowerCase() === 'range'))) {
+    const rows: T[] = [];
+    const total = Math.min(wanted, DB_PAGE_ROWS * MAX_PAGES);
+    for (let from = 0; from < total; from += DB_PAGE_ROWS) {
+      const take = Math.min(DB_PAGE_ROWS, total - from);
+      const page = await sbSelectOnce<T>(env, table, query.replace(/(^|&)limit=\d+(?=&|$)/, `$1limit=${take}&offset=${from}`), opts);
+      if (!page.ok) return page;
+      rows.push(...page.rows);
+      if (page.rows.length < take) break;
+    }
+    return { ok: true, rows };
+  }
+  return sbSelectOnce<T>(env, table, query, opts);
+}
+
+async function sbSelectOnce<T>(env: SupabaseEnv, table: string, query: string, opts: { timeoutMs?: number; headers?: Record<string, string> }): Promise<DbResult<T>> {
   const b = base(env);
   if (!b) return { ok: false, error: 'not_configured', httpStatus: null, rows: [] };
   try {
@@ -196,6 +229,9 @@ export async function sbSelectRes<T>(
  * Dashboards and anything that reports numbers use `sbSelectResult`.
  */
 export async function sbSelect<T>(env: SupabaseEnv, table: string, query: string): Promise<T[]> {
+  // 13.8 — big reads (the push senders ask for 5,000) are paged like sbSelectResult.
+  const m = /(^|&)limit=(\d+)(?=&|$)/.exec(query);
+  if (m && Number(m[2]) > DB_PAGE_ROWS) return (await sbSelectResult<T>(env, table, query)).rows;
   const b = base(env);
   if (!b) return [];
   try {

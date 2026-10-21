@@ -37,7 +37,10 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     const rows = read.ok ? read.rows : null;
     const lastAt = rows && rows[0] ? rows[0][j.ts] ?? null : null;
     const ageMin = lastAt ? Math.round((Date.now() - Date.parse(lastAt)) / 60_000) : null;
-    return { id: j.id, label: j.label, schedule: j.schedule, note: j.note, lastAt, ageMin, ok: rows === null ? null : ageMin !== null && ageMin <= j.maxAgeMin, maxAgeMin: j.maxAgeMin, readable: rows !== null };
+    // 13.8 — no footprint at all (a fresh database) is "not run yet":
+    // `ok: null, neverRan: true`, not overdue. Overdue needs a stale footprint.
+    const neverRan = rows !== null && lastAt === null;
+    return { id: j.id, label: j.label, schedule: j.schedule, note: j.note, lastAt, ageMin, ok: rows === null || neverRan ? null : ageMin !== null && ageMin <= j.maxAgeMin, neverRan, maxAgeMin: j.maxAgeMin, readable: rows !== null };
   });
   const unavailable = jobs.filter((j) => !j.readable).map((j) => j.id);
   return json({ configured: true, checkedAt: new Date().toISOString(), jobs, unavailable });

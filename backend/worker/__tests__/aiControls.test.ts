@@ -328,7 +328,7 @@ describe('daily spend caps', () => {
     install({ controls: { emergencyOff: false, dailyTokenCap: 100 }, usage: null, sample: [{ model: 'm1 @dj', prompt_tokens: 90, completion_tokens: 20 }], answer: djAnswer });
     expect(await errorOf(await dj())).toBe('ai_over_budget');
     const sampleRead = calls.find((c) => c.method === 'GET' && c.url.includes('/rest/v1/vinax_ai_events'));
-    expect(sampleRead?.url).toContain('limit=10000');
+    expect(sampleRead?.url).toContain('limit=1000&offset=0'); // 13.8: paged
     expect((await aiControlsStatus(ENV)).usage?.source).toBe('sampled');
   });
 

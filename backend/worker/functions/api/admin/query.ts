@@ -23,7 +23,7 @@ export const QUERYABLE: Record<string, { ts: string; columns: string[] }> = {
   vinax_experiments: { ts: 'created_at', columns: ['created_at', 'key', 'name', 'active', 'variants'] },
   vinax_blocklist: { ts: 'created_at', columns: ['created_at', 'song_id', 'song_title', 'reason'] },
   vinax_config: { ts: 'updated_at', columns: ['updated_at', 'key', 'value'] },
-  vinax_seo_urls: { ts: 'added_at', columns: ['added_at', 'type', 'key', 'name', 'lang'] },
+  vinax_seo_urls: { ts: 'added_at', columns: ['added_at', 'type', 'key', 'title', 'slug', 'lang'] },
 };
 
 const SAFE_VAL = /^[\w .:@/#+-]{1,120}$/;
@@ -48,7 +48,7 @@ export function buildQuery(params: URLSearchParams): { table: string; query: str
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
   if (!(await isAdminAsync(request, env))) return unauthorized();
-  if (!supabaseConfigured(env)) return json({ configured: false, rows: [] });
+  if (!supabaseConfigured(env)) return json({ configured: false, columns: [], rows: [] });
   const built = buildQuery(new URL(request.url).searchParams);
   if ('error' in built) return json({ error: built.error, tables: Object.keys(QUERYABLE) }, 400);
   // 7.2.0 — a failed read is reported as a failure (with its kind), never as

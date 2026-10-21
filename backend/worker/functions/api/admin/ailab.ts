@@ -68,6 +68,9 @@ const LANES: readonly Lane[] = [
   'chat', 'fast', 'deep', 'scholar', 'home', 'dj', 'search',
   'pro', 'mini', 'router', 'maestro',
   'vision', 'vision90',
+  // 13.8 — Workers AI (provider 'cloudflare' benches on this lane); it was
+  // missing, so every Workers AI bench answered unknown_lane.
+  'workers',
 ];
 
 /** 10.3 — a model the bench may send on a provider's key: one the provider
