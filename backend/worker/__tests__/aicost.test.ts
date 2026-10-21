@@ -110,7 +110,7 @@ describe('GET /api/admin/aicost', () => {
     expect((body.byModel as Array<{ cost: number }>)[0].cost).toBe(1);
     const ev = calls.find((u) => u.includes('vinax_ai_events')) ?? '';
     expect(ev).toContain('select=created_at,feature,model,prompt_tokens,completion_tokens');
-    expect(ev).toContain('order=created_at.desc&limit=20000');
+    expect(ev).toContain('order=created_at.desc&limit=1000&offset=0'); // 13.8: 20k read in 1,000-row pages
   });
 
   it('the price key is publishable from the console', () => {

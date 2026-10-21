@@ -51,6 +51,9 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   // dates, no plays. If the account has since been linked to a device, the
   // device's record answers instead.
   let lookupId = deviceId;
+  // The account an `account:<sub>` id named, kept so a linked device with no
+  // usage row still opens as the account (13.8) instead of "not found".
+  let accountRow: AccountRow | null = null;
   if (deviceId.startsWith(ACCOUNT_ROW_PREFIX)) {
     const sub = deviceId.slice(ACCOUNT_ROW_PREFIX.length);
     const acc = await readAccounts((cols) =>
@@ -61,6 +64,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     if (!row) return adminJson({ configured: true, user: null, events: [] });
     if (!row.device_id) return adminJson({ configured: true, user: accountToRow(row), events: [] });
     lookupId = row.device_id;
+    accountRow = row;
   }
   const enc = encodeURIComponent(lookupId);
 
@@ -96,6 +100,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   if (!events.ok) return dbFailure(events);
   const u = users.rows[0] ?? null;
   const a = account.ok ? account.rows[0] : undefined;
-  const user = u && a ? { ...u, signed_in: true, email: a.email ?? null, picture: a.picture ?? null, name: u.name ?? a.name, username: u.username ?? a.username, account_created: a.created_at } : u;
+  const merged = u && a ? { ...u, signed_in: true, email: a.email ?? null, picture: a.picture ?? null, name: u.name ?? a.name, username: u.username ?? a.username, account_created: a.created_at } : u;
+  const user = merged ?? (accountRow ? accountToRow(accountRow) : null);
   return adminJson({ configured: true, user, events: events.rows });
 };

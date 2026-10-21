@@ -53,7 +53,7 @@ Each provider's `id` string is the `id` field of its export. The two platform ad
 | `backend/worker/functions/api/admin/trends.ts` | `GET/POST /api/admin/trends` |
 | `frontend/supabase/migrations/2026-09-vinax-7.2-trends.sql` | The five tables (also in `frontend/supabase/schema.sql`) |
 | `.github/workflows/trends-ingest.yml` | The schedule |
-| `frontend/public/admin/sections/trends.js` | Owner console panel "Trend Operations" |
+| `frontend/public/admin/pages/trends.js` | Owner console page "Trends" |
 | `frontend/src/services/trends/client.ts` | `fetchVerifiedTrends` |
 | `frontend/src/services/trends/present.ts` | Labels and view states for the Charts page |
 | `frontend/src/services/trends/signal.ts` | `trendSignalNow`, the recommender's trend signal |
@@ -214,7 +214,7 @@ Momentum is computed only for a provider whose `derivedMetricsAllowed(env)` is t
 
 ## Owner console: `/api/admin/trends`
 
-Every handler checks `isAdminAsync` first. The panel is "Trend Operations" in `frontend/public/admin/sections/trends.js`; see [admin-console.md](admin-console.md).
+Every handler checks `isAdminAsync` first. The console page is "Trends" in `frontend/public/admin/pages/trends.js`; see [admin-console.md](admin-console.md).
 
 `GET` returns `providers`, `policy`, `freshness` (per source and region), `quota` (used today, daily budget, units per run), `retention` (age of the oldest stored snapshot), `matches`, `reviewQueue`, `recentDecisions`, `editorial` and `runs`. When a database read fails it answers `503` with an error code, never zeros.
 

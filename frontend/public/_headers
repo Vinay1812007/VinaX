@@ -68,7 +68,9 @@
   Cache-Control: no-cache
 /admin/console.css
   Cache-Control: no-cache
-/admin/workspace.js
+/admin/core.js
   Cache-Control: no-cache
-/admin/sections/*
+/admin/pages/*
+  Cache-Control: no-cache
+/admin/festivals.js
   Cache-Control: no-cache

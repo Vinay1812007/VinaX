@@ -15,11 +15,13 @@ interface CommitRow { sha: string; commit: { message: string; author: { name: st
 const json = (o: unknown, status = 200): Response =>
   new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
-async function gh<T>(env: GithubEnv, path: string): Promise<T | null> {
+async function gh<T>(env: GithubEnv, path: string, statuses?: number[]): Promise<T | null> {
   try {
     const r = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO || 'Vinay1812007/VinaX'}${path}`, {
       headers: { authorization: `Bearer ${env.GITHUB_TOKEN}`, accept: 'application/vnd.github+json', 'user-agent': 'VinaX-Admin', 'x-github-api-version': '2022-11-28' },
+      signal: AbortSignal.timeout(10_000), // 13.8 — a hung upstream must not hang the console
     });
+    statuses?.push(r.status);
     if (!r.ok) return null;
     return (await r.json()) as T;
   } catch {
@@ -33,15 +35,19 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   if (!githubConfigured(env)) return json({ configured: false });
   const origin = new URL(request.url).origin.replace('admin.', 'www.');
 
+  // 13.8 — an expired or revoked token used to look exactly like an empty
+  // repository; `tokenRejected` names it.
+  const statuses: number[] = [];
   const [release, runs, commits, live] = await Promise.all([
     latestRelease(env),
-    gh<{ workflow_runs: RunRow[] }>(env, '/actions/runs?per_page=20'),
-    gh<CommitRow[]>(env, '/commits?per_page=10&sha=main'),
-    fetch(`${origin}/api/version`, { headers: { 'cache-control': 'no-cache' } }).then((r) => r.json()).catch(() => null) as Promise<Record<string, unknown> | null>,
+    gh<{ workflow_runs: RunRow[] }>(env, '/actions/runs?per_page=20', statuses),
+    gh<CommitRow[]>(env, '/commits?per_page=10&sha=main', statuses),
+    fetch(`${origin}/api/version`, { headers: { 'cache-control': 'no-cache' }, signal: AbortSignal.timeout(8_000) }).then((r) => r.json()).catch(() => null) as Promise<Record<string, unknown> | null>,
   ]);
 
   return json({
     configured: true,
+    tokenRejected: statuses.length > 0 && statuses.every((st) => st === 401 || st === 403),
     release: release
       ? { tag: release.tag_name, name: release.name, notes: (release.body ?? '').slice(0, 1200), assets: release.assets.map((a) => ({ name: a.name, url: a.browser_download_url })) }
       : null,

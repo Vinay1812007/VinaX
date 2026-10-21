@@ -13,12 +13,12 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     sbSelectResult<{ type: string; message: string | null; created_at: string }>(
       env,
       'vinax_events',
-      'type=in.(site-mode,announcement,song-push)&select=type,message,created_at&order=created_at.desc&limit=25',
+      'type=in.(site-mode,announcement,song-push)&select=type,message,created_at&order=created_at.desc&limit=100',
     ),
     sbSelectResult<{ message: string | null; created_at: string }>(
       env,
       'vinax_feedback',
-      'type=eq.admin-audit&select=message,created_at&order=created_at.desc&limit=15',
+      'type=eq.admin-audit&select=message,created_at&order=created_at.desc&limit=150',
     ),
   ]);
   // 7.2.0 — a trail with a failed half would silently omit actions.
@@ -47,6 +47,6 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
           }
         : { kind: action, text, at: a.created_at };
     }),
-  ].sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 30);
+  ].sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 200); // 13.8 — was 30: too short to be a trail
   return adminJson({ configured: true, items });
 };

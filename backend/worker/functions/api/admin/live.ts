@@ -46,7 +46,9 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   }
 
   const listeners = rows.map((r) => ({
-    name: r.name ?? 'Anonymous',
+    // 13.8 — a listener with only a handle showed as "Anonymous".
+    name: r.name ?? (r.username ? `@${r.username}` : 'Anonymous'),
+    username: r.username ?? null,
     deviceId: r.device_id,
     city: r.city,
     country: r.country,

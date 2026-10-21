@@ -36,8 +36,10 @@ export const ROW_CAP = 20_000;
 
 /** The switchable AI features of the `ai-controls` contract, in display order. */
 export const AI_CONTROL_FEATURES = [
-  'dj', 'curate-metadata', 'curate-ranking', 'curate-home', 'curate-shelves', 'playlist', 'vinaxai', 'assistant', 'tts', 'lyrics', 'image', 'embed', 'search', 'web-search', 'deep-research',
+  'dj', 'curate-metadata', 'curate-ranking', 'curate-home', 'curate-shelves', 'playlist', 'vinaxai', 'assistant', 'tts', 'lyrics', 'image', 'embed', 'search', 'transcribe', 'music', 'web-search', 'deep-research',
 ] as const;
+// 13.8 — 'transcribe' and 'music' were missing, so every publish from the
+// console (which sends one switch per listed feature) turned them back on.
 export type AiControlFeature = (typeof AI_CONTROL_FEATURES)[number];
 
 export interface AiOpsRow {

@@ -1,6 +1,6 @@
 /** Overview: headline KPIs, engagement (DAU/WAU/MAU), and growth charts. */
 import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbRpcResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+import { sbCountResult, sbRpcResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -16,14 +16,21 @@ interface GeoRow { country: string; city: string; listeners: number; plays: numb
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
   if (!(await isAdminAsync(request, env))) return unauthorized();
-  if (!supabaseConfigured(env)) return adminJson({ configured: false, summary: null, newUsersByDay: [], playsByDay: [], topSongs: [], topCountries: [] });
+  if (!supabaseConfigured(env)) return adminJson({ configured: false, summary: null, newUsersByDay: [], playsByDay: [], topSongs: [], topCountries: [], accounts: null });
 
-  const [summary, newUsersByDay, playsByDay, topSongs, geo] = await Promise.all([
+  // 13.8 — signed-in accounts live in vinax_accounts (Google sign-in), not
+  // in vinax_users (opt-in listening telemetry), so count them separately.
+  const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
+  const since7 = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const [summary, newUsersByDay, playsByDay, topSongs, geo, accounts, accountsToday, accounts7d] = await Promise.all([
     sbRpcResult<Summary>(env, 'vinax_overview', {}),
     sbRpcResult<DayUsers[]>(env, 'vinax_new_users_by_day', { days: 14 }),
     sbRpcResult<DayPlays[]>(env, 'vinax_plays_by_day', { days: 14 }),
     sbRpcResult<SongRow[]>(env, 'vinax_top_songs', { days: 7, lim: 5 }),
     sbRpcResult<GeoRow[]>(env, 'vinax_geo', { days: 7 }),
+    sbCountResult(env, 'vinax_accounts'),
+    sbCountResult(env, 'vinax_accounts', `created_at=gte.${encodeURIComponent(dayStart.toISOString())}`),
+    sbCountResult(env, 'vinax_accounts', `last_seen=gte.${encodeURIComponent(since7)}`),
   ]);
   // 7.2.0 — every part is a headline number or chart: one failed read makes
   // the whole panel unavailable rather than a mix of real data and zeros.
@@ -47,5 +54,11 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     playsByDay: playsByDay.value ?? [],
     topSongs: topSongs.value ?? [],
     topCountries,
+    // null when the accounts table is unreachable — the KPI shows "—".
+    accounts: {
+      total: accounts.ok ? accounts.value : null,
+      newToday: accountsToday.ok ? accountsToday.value : null,
+      active7d: accounts7d.ok ? accounts7d.value : null,
+    },
   });
 };

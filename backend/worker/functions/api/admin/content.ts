@@ -26,13 +26,15 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   // 7.2.0 — an empty blocklist from a failed read would suggest nothing is
   // blocked (and the importer would re-block everything).
   if (!blocked.ok) return dbFailure(blocked);
-  if (!topSongs.ok) return dbFailure(topSongs);
-  return adminJson({ configured: true, blocked: blocked.rows, topSongs: topSongs.value ?? [] });
+  // 13.8 — the block suggestions are optional: a missing or failing RPC must
+  // not hide the blocklist itself (the owner could no longer unblock).
+  return adminJson({ configured: true, blocked: blocked.rows, topSongs: topSongs.ok ? topSongs.value ?? [] : [], ...(topSongs.ok ? {} : { topSongsError: 'unavailable' }) });
 };
 
 export const onRequestPost = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = context;
   if (!(await isAdminAsync(request, env))) return unauthorized();
+  if (!supabaseConfigured(env)) return adminJson({ ok: false, error: 'not_configured' }, 503);
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   const action = body ? clip(body.action, 12) : null;

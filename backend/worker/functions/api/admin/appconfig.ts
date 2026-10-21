@@ -9,7 +9,7 @@
 import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { auditPrior, logAdminAudit } from '../../_lib/adminAudit';
 import { validateAiControls } from '../../_lib/ai';
-import { sbSelectResult, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+import { sbDelete, sbSelectResult, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -79,6 +79,16 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
   const key = typeof body.key === 'string' ? body.key : '';
   if (!ALLOWED_KEYS.has(key)) return json({ error: 'unknown_key' }, 400);
   if (body.value === undefined) return json({ error: 'bad_request' }, 400);
+  // 13.8 — `value: null` clears the key: the row is deleted so readers fall
+  // back to their defaults. (Upserting null failed: value is jsonb NOT NULL,
+  // so every "Clear" button in the console answered store_failed.)
+  if (body.value === null) {
+    const prior = await sbSelectResult<{ value: unknown }>(env, 'vinax_config', `key=eq.${encodeURIComponent(key)}&select=value&limit=1`);
+    const cleared = await sbDelete(env, 'vinax_config', `key=eq.${encodeURIComponent(key)}`);
+    if (!cleared) return json({ error: 'store_failed' }, 502);
+    await logAdminAudit(context, { action: 'config', summary: `cleared ${key}`, target: key, before: auditPrior(prior, (row) => row.value), after: null });
+    return json({ ok: true, cleared: true });
+  }
   const validate = VALIDATORS[key];
   let value: unknown = body.value;
   if (validate) {

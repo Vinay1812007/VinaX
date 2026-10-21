@@ -12,6 +12,13 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '13.8.0': {
+    title: 'A rebuilt control room behind VinaX',
+    changes: [
+      { type: 'improved', text: 'The owner console behind VinaX was rebuilt from scratch: sixteen clear pages instead of seventy, every one working against the new database, so problems you report get spotted and fixed faster.' },
+      { type: 'fixed', text: 'Behind the scenes: switching an announcement or banner off now really turns it off, and a few health checks that always showed an error now report correctly.' },
+    ],
+  },
   '13.7.4': {
     title: 'Get the app, from your phone’s browser',
     changes: [
