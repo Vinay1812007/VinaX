@@ -99,6 +99,19 @@ A pin lasts 45 minutes. Tap the same chip again to unpin.
 | **Queue** button | Opens the Queue page |
 | **Player tools** button | Volume, Speed, Loop a passage, Marks, Tune this queue, and More |
 | ⋯ menu | **Drive mode**, **Karaoke** (when the song has synced lyrics), **Listen together**, **Share now-playing card**, then the usual song actions |
+| **Artwork / Video** chip | When the song has a music video, the clip plays behind the whole player; the chip brings the still artwork back and remembers your choice on this device |
+| ⤢ button (while a clip plays) | Full-screen video canvas: the controls step away and the clip takes the whole screen |
+
+In the full-screen canvas:
+
+| Gesture or control | What it does |
+|---|---|
+| Tap once | Brings the controls back |
+| Double-tap anywhere | Likes the song, with a heart where you tapped (it never unlikes by accident) |
+| ♥ beside the title | Like or unlike |
+| Quality chip (for example **540p · Auto**) | Shows what is playing; opens a menu to pin a quality or go back to **Auto**, which picks the best the clip has for your screen. The menu says the highest quality this clip is published in — higher ones switch on by themselves when the source adds them |
+| ⤢ | Browser full screen on or off |
+| ⌄, Escape or Android back | Back to the player |
 
 Inside **Player tools**:
 

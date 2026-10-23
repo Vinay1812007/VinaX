@@ -18,7 +18,7 @@
     desc: 'Every listener device and signed-in account: search, open a profile, download or delete.',
     noAuto: true, // a long list the owner scrolls and filters; refresh on demand
     tabs: [
-      { id: 'all', label: 'All listeners', desc: 'Listener devices that share usage, plus signed-in accounts without a device. Most recently seen first.', render: renderAll },
+      { id: 'all', label: 'All listeners', desc: 'Listener devices that share usage, plus signed-in accounts without a device. Most recently seen first. Filter by Android, web or iOS.', render: renderAll },
       { id: 'top', label: 'Top listeners', desc: 'Devices with the most plays in the chosen window.', render: renderTop }
     ]
   });
@@ -91,10 +91,45 @@
     { value: 'all', label: 'All' }, { value: 'signed', label: 'Signed in' }, { value: 'device', label: 'Devices only' },
     { value: 'account', label: 'Accounts only' }, { value: 'active', label: 'Active · 24h' }
   ];
+  /* 13.9 — the platform filter is applied by the server on both sources. */
+  var PLATFORM_FILTERS = [
+    { value: '', label: 'Any platform' }, { value: 'android', label: 'Android' }, { value: 'web', label: 'Web' }, { value: 'ios', label: 'iOS' }
+  ];
+  var PLATFORM_KEYS = ['android', 'web', 'ios'];
+
+  /** Listeners on one platform: usage devices plus signed-in accounts that have no device. */
+  function platformTotal(p, key) {
+    var devices = 0;
+    (p.devices || []).forEach(function (d) { if (String(d.platform || 'web').toLowerCase() === key) devices += Number(d.listeners) || 0; });
+    var only = p.accountsOnly ? Number(p.accountsOnly[key]) || 0 : 0;
+    return devices + only;
+  }
+
+  /** 13.9 — one tile per platform: how many listeners, and how many of them signed in. */
+  function platformKpis(p) {
+    if (!p || (!p.accounts && !p.devices)) return [];
+    var tiles = PLATFORM_KEYS.map(function (key) {
+      var total = platformTotal(p, key);
+      var signed = p.accounts ? Number(p.accounts[key]) || 0 : null;
+      if (!total && !signed && key === 'ios') return null;
+      return {
+        label: platformLabel(key),
+        value: fmt.num(total),
+        sub: signed == null ? 'accounts unavailable' : fmt.plural(signed, 'signed-in account'),
+        hint: 'Devices sharing usage on ' + platformLabel(key) + ' plus signed-in accounts without a device'
+      };
+    });
+    if (p.accounts && Number(p.accounts.other) > 0) {
+      tiles.push({ label: 'Platform not reported', value: fmt.num(p.accounts.other), sub: 'accounts from before 13.7', hint: 'Signed in before the app reported its platform; fills in on their next visit' });
+    }
+    return tiles;
+  }
 
   function renderAll(host, ctx) {
     var q = ctx.params.q || '';
     var kind = ctx.params.kind || 'all';
+    var platform = PLATFORM_KEYS.indexOf(ctx.params.platform) >= 0 ? ctx.params.platform : '';
+    var platforms = null;
     var rows = [], next = 0, hasMore = false;
     var head = h('div');
     var listHost = h('div');
@@ -115,6 +150,8 @@
 
     function drawKpis(d) {
       var s = d.summary || {};
+      if (d.platforms) platforms = d.platforms;
+      var split = platformKpis(platforms);
       VX.mount(head,
         d.unavailable && d.unavailable.indexOf('accounts') >= 0 ? ui.notice('Signed-in accounts could not be read just now, so this list shows listener devices only.', 'warn') : null,
         ui.kpis([
@@ -123,14 +160,16 @@
           { label: 'Active · 24h', value: fmt.num(s.active_24h) },
           { label: 'New · 24h', value: fmt.num(s.new_24h) },
           { label: 'Plays · all time', value: fmt.num(s.total_plays) }
-        ]));
+        ]),
+        split.length ? ui.kpis(split) : null,
+        split.length ? h('p.muted.small', 'Platform tiles count every signed-in account (Android app, web or iOS) plus usage devices, whether or not usage sharing is on. Live and Places only see devices that share usage.') : null);
     }
 
     function drawTable(rebuild) {
       var list = filtered();
       info.textContent = hasMore
-        ? 'Showing the ' + fmt.num(rows.length) + ' most recently seen' + (kind !== 'all' ? ' · filters apply to these' : '')
-        : fmt.plural(rows.length, 'listener') + (q ? ' match “' + q + '”' : '');
+        ? 'Showing the ' + fmt.num(rows.length) + ' most recently seen' + (platform ? ' on ' + platformLabel(platform) : '') + (kind !== 'all' ? ' · filters apply to these' : '')
+        : fmt.plural(rows.length, 'listener') + (platform ? ' on ' + platformLabel(platform) : '') + (q ? ' match “' + q + '”' : '');
       VX.mount(more, hasMore ? ui.button('Load 50 more', { kind: 'ghost', small: true, icon: 'chevron', onClick: function () { return fetchPage(false); } }) : null);
       if (table && !rebuild) { table.update(list); return; }
       table = ui.table({
@@ -146,9 +185,10 @@
           { key: 'last_seen', label: 'Last seen', align: 'right', nowrap: true, render: function (u) { return h('span', { title: fmt.dateTime(u.last_seen) }, fmt.ago(u.last_seen)); } }
         ],
         rows: list, search: false, pageSize: 50, sortKey: 'last_seen', sortDir: 'desc', exportName: 'vinax-listeners',
-        empty: q ? 'No listener matches “' + q + '”' : rows.length ? 'No listener of this type is loaded' : 'No listeners yet',
+        empty: q ? 'No listener matches “' + q + '”' : rows.length ? 'No listener of this type is loaded' : platform ? 'No listeners on ' + platformLabel(platform) + ' yet' : 'No listeners yet',
         emptyHint: q ? 'Search looks at names, @usernames, Gmail addresses and device ids.'
           : rows.length ? 'Pick “All”, or load more listeners.'
+          : platform ? 'Signed-in accounts and usage devices on ' + platformLabel(platform) + ' appear here. Pick “Any platform” to see everyone.'
           : 'Listeners appear here once someone opens the app with usage sharing on, or signs in with Google.',
         onRow: function (u) { openListener(u.device_id, displayName(u), { onChanged: function () { fetchPage(true); } }); }
       });
@@ -160,10 +200,11 @@
         q = v; ctx.setParam('q', v); fetchPage(true);
       }, q);
       var seg = ui.segmented(KIND_FILTERS, kind, function (v) { kind = v; ctx.setParam('kind', v === 'all' ? '' : v); drawTable(true); }, 'Listener type');
+      var plat = ui.segmented(PLATFORM_FILTERS, platform, function (v) { platform = v; ctx.setParam('platform', v); fetchPage(true); }, 'Platform');
       VX.mount(listHost, ui.card({
         title: 'Listeners', sub: 'Click a listener for their profile', pad: false,
-        actions: [info, ui.button('Download everyone', { kind: 'ghost', small: true, icon: 'download', title: 'CSV of every listener matching the search', onClick: function () { return downloadAll(q); } })],
-        body: [h('div.card-body', h('div.toolbar', search, seg)), tableHost, h('div.card-body', more)]
+        actions: [info, ui.button('Download everyone', { kind: 'ghost', small: true, icon: 'download', title: 'CSV of every listener matching the search and platform', onClick: function () { return downloadAll(q, platform); } })],
+        body: [h('div.card-body', h('div.toolbar', search, plat, seg)), tableHost, h('div.card-body', more)]
       }));
       shell = true;
     }
@@ -171,7 +212,7 @@
     function fetchPage(reset) {
       var my = ++reqId;
       if (reset) { next = 0; }
-      return VX.api.get('/api/admin/users', { limit: 50, offset: next, q: q }, { fresh: true }).then(function (res) {
+      return VX.api.get('/api/admin/users', { limit: 50, offset: next, q: q, platform: platform }, { fresh: true }).then(function (res) {
         if (my !== reqId) return res; // a newer search won
         if (!res.ok) {
           if (!shell) { VX.clear(head); VX.mount(listHost, ui.error(res.message, function () { return fetchPage(true); }, res.status ? 'HTTP ' + res.status + ' · ' + res.error : null)); }
@@ -201,18 +242,18 @@
   }
 
   /** Walk every page (100 at a time) and save one CSV. */
-  function downloadAll(q) {
+  function downloadAll(q, platform) {
     var all = [];
     var pages = 0;
     function step(offset) {
-      return VX.api.get('/api/admin/users', { limit: 100, offset: offset, q: q }, { fresh: true }).then(function (res) {
+      return VX.api.get('/api/admin/users', { limit: 100, offset: offset, q: q, platform: platform || '' }, { fresh: true }).then(function (res) {
         if (!res.ok) { VX.toast('Download stopped: ' + res.message, 'bad'); return null; }
         var d = res.data || {};
         all = all.concat(d.users || []);
         pages += 1;
         if (d.hasMore && pages < 100) return step((Number(d.offset) || 0) + (Number(d.limit) || 100));
         if (!all.length) { VX.toast(q ? 'No listener matches that search.' : 'There are no listeners to download yet.', 'bad'); return null; }
-        VX.download.csv('vinax-listeners' + (q ? '-' + safeName(q) : '') + '-' + VX.stamp(), all, CSV_COLUMNS);
+        VX.download.csv('vinax-listeners' + (platform ? '-' + platform : '') + (q ? '-' + safeName(q) : '') + '-' + VX.stamp(), all, CSV_COLUMNS);
         VX.toast('Downloaded ' + fmt.plural(all.length, 'listener'), 'ok');
         return null;
       });

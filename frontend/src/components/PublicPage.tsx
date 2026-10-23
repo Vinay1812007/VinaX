@@ -11,6 +11,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { GoogleSignIn } from './GoogleSignIn';
+import { rememberGuestBrowse } from '@/services/auth/gate';
 import type { ServerPage } from '@/services/seo/serverPage';
 import '@/styles/public.css';
 
@@ -51,6 +52,10 @@ export default function PublicPage({ page }: { page: ServerPage }): ReactNode {
             </a>
           ))}
         </nav>
+        {/* 13.9 — into the live app signed out: browse and search; play asks to sign in. */}
+        <a href="/explore" className="vx-public-explore" onClick={rememberGuestBrowse}>
+          Explore
+        </a>
         <a href="#vx-public-signin" className="vx-public-cta">
           Sign in
         </a>
@@ -74,6 +79,13 @@ export default function PublicPage({ page }: { page: ServerPage }): ReactNode {
           </ul>
           <p className="vx-public-fine">
             By signing in you agree to the <a href="/terms/">Terms</a> and the <a href="/privacy/">Privacy policy</a>.
+          </p>
+          <p className="vx-public-fine">
+            Not yet?{' '}
+            <a href="/explore" onClick={rememberGuestBrowse}>
+              Explore VinaX first
+            </a>{' '}
+            — songs play once you sign in.
           </p>
         </aside>
       </div>

@@ -4,6 +4,7 @@ import { toast, toastNavigate } from '@/store/toastStore';
 import { cn } from '@/utils/cn';
 import { isFavoriteIn } from '@/utils/favIndex';
 import { bestImage } from '@/utils/images';
+import { requireAccount } from '@/services/auth/gate';
 import { HeartIcon } from './Icons';
 
 /**
@@ -12,6 +13,8 @@ import { HeartIcon } from './Icons';
  * (the toggle is its own undo).
  */
 export function toggleLike(song: Song): void {
+  // 13.9 — signed out: the sign-in sheet, and the like lands once they have.
+  if (!requireAccount('save', () => toggleLike(song))) return;
   const lib = useLibraryStore.getState();
   const wasLiked = lib.isFavorite(song.id);
   lib.toggleFavorite(song);

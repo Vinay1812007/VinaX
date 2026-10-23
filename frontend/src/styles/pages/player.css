@@ -145,6 +145,8 @@ html.light .vx-np-top .vx-np-menu button[aria-haspopup='menu']:hover { backgroun
 }
 .vx-np-top > :first-child { justify-self: start; margin-left: -4px; }
 .vx-np-top > :last-child { justify-self: end; margin-right: -4px; }
+/* 13.9 — the full-screen video button sits beside the song menu while a clip plays. */
+.vx-np-menu { display: inline-flex; align-items: center; gap: 2px; }
 .vx-np .vx-np-icon { color: rgb(var(--ink-100)); }
 .vx-np .vx-np-icon:hover { background: var(--vx-hover); }
 .vx-np-context {
@@ -698,6 +700,115 @@ html.light .vx-queue-origin[data-origin='manual'] { background: rgb(var(--ember-
 .vx-np-canvas-artist { margin-top: 2px; font-size: 14px; opacity: 0.74; }
 .vx-np-canvas-progress { height: 3px; margin-top: 12px; overflow: hidden; border-radius: 999px; background: rgb(255 255 255 / 0.25); }
 .vx-np-canvas-progress > i { display: block; width: 100%; height: 100%; background: rgb(var(--ember-400)); transform-origin: left; transition: transform 300ms linear; }
+
+/* 13.9 — the full-screen canvas: one gesture surface, a top row (back ·
+   quality · full screen), a heart beside the caption, and the double-tap
+   burst. Everything sits over video, so it is fixed light in every theme. */
+.vx-np-canvas-layer .vx-np-zone.is-full { left: 0; right: 0; width: 100%; }
+.vx-np-canvas-top {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: max(10px, var(--safe-top)) max(12px, var(--safe-right)) 28px max(12px, var(--safe-left));
+  color: #fff;
+  background: linear-gradient(180deg, rgb(0 0 0 / 0.55), transparent);
+  pointer-events: none;
+  animation: vx-np-fade 220ms var(--ease-calm) backwards;
+}
+.vx-np-canvas-top > * { pointer-events: auto; }
+.vx-np-canvas-layer .vx-np-canvas-btn { color: #fff; }
+.vx-np-canvas-layer .vx-np-canvas-btn:hover { background: rgb(255 255 255 / 0.14); }
+.vx-np-canvas-top-right { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+.vx-np-canvas-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.55);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.vx-np-canvas-chip small { font-size: 11px; font-weight: 600; opacity: 0.7; }
+.vx-np-canvas-chip[aria-expanded='true'] { background: rgb(255 255 255 / 0.2); }
+.vx-np-canvas-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 3;
+  min-width: 240px;
+  padding: 6px;
+  border-radius: 14px;
+  background: rgb(18 18 22 / 0.94);
+  color: #fff;
+  box-shadow: 0 20px 50px rgb(0 0 0 / 0.5);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+.vx-np-canvas-menu button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+}
+.vx-np-canvas-menu button:hover { background: rgb(255 255 255 / 0.08); }
+.vx-np-canvas-menu button[aria-checked='true'] { color: rgb(var(--ember-400)); }
+.vx-np-canvas-menu button small { font-size: 12px; font-weight: 500; opacity: 0.7; }
+.vx-np-canvas-menu-note { padding: 8px 12px 6px; font-size: 12px; line-height: 1.45; opacity: 0.65; }
+.vx-np-canvas-caption-row { display: flex; align-items: flex-end; gap: 12px; }
+.vx-np-canvas-like {
+  pointer-events: auto;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  color: #fff;
+  background: rgb(255 255 255 / 0.12);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition: transform 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
+}
+.vx-np-canvas-like:hover { background: rgb(255 255 255 / 0.2); }
+.vx-np-canvas-like:active { transform: scale(0.92); }
+.vx-np-canvas-like svg { width: 26px; height: 26px; }
+.vx-np-canvas-like[aria-pressed='true'] { color: rgb(var(--ember-400)); }
+.vx-np-heart-burst {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  color: #fff;
+  filter: drop-shadow(0 10px 28px rgb(0 0 0 / 0.55));
+  transform: translate(-50%, -50%) scale(0.4);
+  opacity: 0;
+  animation: vx-np-heart-burst 820ms var(--ease-calm) forwards;
+}
+.vx-np-heart-burst svg { width: 96px; height: 96px; }
+@keyframes vx-np-heart-burst {
+  0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+  25% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
+  60% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -58%) scale(1.08); opacity: 0; }
+}
+html.reduce-motion .vx-np-heart-burst { animation: none; opacity: 1; transform: translate(-50%, -50%); }
+@media (prefers-reduced-motion: reduce) { .vx-np-heart-burst { animation: none !important; opacity: 1; transform: translate(-50%, -50%); } }
 
 /* ------------------------------------------- playback and sleep sheets */
 .vx-np-opts .vx-sheet-head + .vx-np-opt { margin-top: 8px; }

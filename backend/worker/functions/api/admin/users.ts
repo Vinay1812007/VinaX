@@ -10,6 +10,7 @@
  *  device yet (`device_id` = `account:<google id>`, no location or plays).
  *  The email is never sent to the console. */
 import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { platformParam, readPlatforms } from '../../_lib/platforms';
 import {
   sbCountResult,
   sbRpcResult,
@@ -133,6 +134,10 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   // DQA-17; the route is already admin-only).
   const q = (url.searchParams.get('q') ?? '').replace(/[,()*%"\\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
   const like = encodeURIComponent(q);
+  // 13.9 — ?platform=web|android|ios narrows BOTH sources, so "who is on
+  // Android" is one click, not a scroll through every row.
+  const platform = platformParam(url.searchParams.get('platform'));
+  const platformWhere = platform ? `&platform=eq.${platform}` : '';
 
   if (!supabaseConfigured(env)) return adminJson({ configured: false, users: [], summary: null, limit, offset, hasMore: false });
 
@@ -142,7 +147,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   // full (D-22). Both sources are read up to the same depth, merged by
   // last_seen and sliced, so the page is exact whichever source fills it.
   const window = offset + limit + 1;
-  let deviceQuery = 'select=device_id,name,username,platform,country,city,is_playing,first_seen,last_seen&order=last_seen.desc,device_id.asc';
+  let deviceQuery = `select=device_id,name,username,platform,app_version,country,region,city,is_playing,first_seen,last_seen${platformWhere}&order=last_seen.desc,device_id.asc`;
   // 13.7 — a search also matches the Gmail, name or username of a linked
   // account, so typing someone's Gmail finds their usage row too.
   let linkedHits: string[] = [];
@@ -160,11 +165,14 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   }
   // Accounts already linked to a device show as that device's usage row.
   const accountQuery = (cols: string): string =>
-    `select=${cols}&device_id=is.null&order=last_seen.desc,google_sub.asc` +
+    `select=${cols}&device_id=is.null${platformWhere}&order=last_seen.desc,google_sub.asc` +
     (q ? `&or=(name.ilike.*${like}*,username.ilike.*${like}*,email.ilike.*${like}*)` : '');
 
   const since = encodeURIComponent(new Date(Date.now() - 86_400_000).toISOString());
-  const [read, summary, accounts, accTotal, accNew, accActive, accAll] = await Promise.all([
+  // The platform split rides with the first page only: the console draws
+  // its KPI tiles on a fresh load, and the CSV walk (offset > 0) does not
+  // need eleven extra counts per page.
+  const [read, summary, accounts, accTotal, accNew, accActive, accAll, platforms] = await Promise.all([
     readWindow<UserRow>(env, 'vinax_users', deviceQuery, window),
     sbRpcResult<Summary>(env, 'vinax_user_summary', {}),
     readAccounts((cols) => readWindow<AccountRow>(env, 'vinax_accounts', accountQuery(cols), window)),
@@ -172,6 +180,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     sbCountResult(env, 'vinax_accounts', `device_id=is.null&created_at=gte.${since}`),
     sbCountResult(env, 'vinax_accounts', `device_id=is.null&last_seen=gte.${since}`),
     sbCountResult(env, 'vinax_accounts'),
+    offset === 0 ? readPlatforms(env) : Promise.resolve(null),
   ]);
   // 7.2.0 — a failed read is not "no users": the list and its counts are
   // unavailable together.
@@ -229,6 +238,8 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     limit,
     offset,
     hasMore,
+    platform,
+    ...(platforms ? { platforms } : {}),
     ...(accountsOk ? {} : { unavailable: ['accounts'] }),
   });
 };

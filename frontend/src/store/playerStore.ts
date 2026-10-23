@@ -12,6 +12,7 @@ import {
 } from '@/services/media-session';
 import { recordComplete, recordPlay, recordQueueAdd, recordSkip } from '@/services/personalization/updater';
 import { checkNotificationOnFirstPlay, haptic, isNativePlatform } from '@/services/native';
+import { requireAccount } from '@/services/auth/gate';
 import { toast, toastNavigate } from './toastStore';
 import { useHistoryStore } from './historyStore';
 import { useSettingsStore } from './settingsStore';
@@ -915,6 +916,8 @@ export const usePlayerStore = create<PlayerState>()(
 
         playQueue: (songs, startIndex = 0, opts = {}) => {
           if (!songs.length) return;
+          // 13.9 — a visitor browsing signed out is asked to sign in; the tap plays after.
+          if (!requireAccount('listen', () => get().playQueue(songs, startIndex, opts))) return;
           const selectedIndex = Number.isFinite(startIndex) ? Math.min(Math.max(0, Math.floor(startIndex)), songs.length - 1) : 0;
           const seed = songs[selectedIndex];
           // C2 — kid mode: an explicit-flagged song never starts playback.
@@ -990,6 +993,7 @@ export const usePlayerStore = create<PlayerState>()(
         playAt: (index) => {
           const { queue } = get();
           if (index < 0 || index >= queue.length) return;
+          if (!requireAccount('listen', () => get().playAt(index))) return;
           resetSkipGuard(); // manual play
           maybeRecordSkip(true);
           const from = index === get().index + 1 ? queue[get().index] : null;
@@ -1162,6 +1166,7 @@ export const usePlayerStore = create<PlayerState>()(
           const { isPlaying, queue, index } = get();
           const song = queue[index];
           if (!song) return;
+          if (!isPlaying && !requireAccount('listen', () => get().togglePlay())) return;
           haptic('light');
           if (audioEngine.currentSongId !== song.id) {
             startTrack(song, true);
@@ -1306,6 +1311,7 @@ export const usePlayerStore = create<PlayerState>()(
         startRadio: (song, opts = {}) => {
           const seed = song ?? get().queue[get().index];
           if (!seed) return;
+          if (!requireAccount('listen', () => get().startRadio(song, opts))) return;
           // 8.2.0 — AI Radio seeds: distinct, valid, Kid-mode safe, at most RADIO_SEED_MAX.
           const seen = new Set<string>();
           const queue = stripExplicit([seed, ...(opts.seeds ?? []).filter(isValidSong)])
@@ -1444,6 +1450,7 @@ export const usePlayerStore = create<PlayerState>()(
 
         previewSong: (song, startAt = 0) => {
           if (!preview || !isValidSong(song)) return;
+          if (!requireAccount('listen')) return;
           if (song.explicit && kidModeOn()) {
             set({ previewError: song.id });
             return;

@@ -20,6 +20,10 @@ If you already use VinaX on another device, the first step has two links: **Move
 
 You can change every answer later in Settings. To see the look step and the slides again, open Help and press **Replay the welcome tour**.
 
+## Browse before you sign in
+
+On the website you can look around without an account: **Explore VinaX first** on the sign-in page (and **Explore** on any published page) opens Explore, Discover, Charts, Search and every song, album and artist page. A **Sign in** button sits where your photo would be. The first time you tap play, like or save, VinaX asks you to sign in right there and then carries on with what you tapped. Home, Library, Settings and the other personal pages need the account.
+
 ## Where things are
 
 There are five destinations: **Home**, **Discover**, **Search**, **Library** and **VinaX AI**. They are always one tap away: a tab bar at the bottom of a phone, a sidebar on a wider screen. Their shape depends on your app style, and the Vibe style shows icons without names on a phone; the five destinations and their order are the same in every style.

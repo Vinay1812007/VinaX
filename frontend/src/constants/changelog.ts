@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '13.9.0': {
+    title: 'Browse first, a full-screen video canvas, and every listener in the console',
+    changes: [
+      { type: 'new', text: 'On the website you can now explore before signing in: Explore, Discover, Charts, Search and every song, album and artist page open without an account. Tap play, like or save and VinaX asks you to sign in right there, then carries on with what you tapped.' },
+      { type: 'new', text: 'A full-screen video canvas: the ⤢ button on Now Playing takes the clip to the whole screen, like a music video. Tap once for the controls, double-tap anywhere to like the song with a heart where you tapped, and a heart button sits beside the title.' },
+      { type: 'new', text: 'Video quality: the canvas plays the best rendition the source has for your screen, with a quality chip (540p today) and a menu to pin one. Full HD 1080p and 4K switch on by themselves the day the source publishes them.' },
+      { type: 'fixed', text: 'The owner console now shows Android and web listeners: Overview and Listeners split every signed-in account and usage device by platform, and the Listeners list can be filtered to Android, web or iOS.' },
+    ],
+  },
   '13.8.1': {
     title: 'Behind-the-scenes fixes',
     changes: [

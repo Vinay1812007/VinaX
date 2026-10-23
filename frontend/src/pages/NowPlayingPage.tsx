@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { albumPath, artistPath, songPath } from '@/utils/slug';
 import { filmTitleFromAlbumName } from '@/services/api/movies';
@@ -16,13 +16,17 @@ import type { Mood } from '@/services/recommendation/mood';
 import type { ArtistRef, Song } from '@/types';
 import { useSyncedLyrics } from '@/features/lyrics/useSyncedLyrics';
 import { Seekbar } from '@/components/Seekbar';
-import { FavButton } from '@/components/FavButton';
+import { FavButton, toggleLike } from '@/components/FavButton';
+import { isFavoriteIn } from '@/utils/favIndex';
+import { qualityBadge, qualityLabel } from '@/services/api/videos';
 import { IconButton } from '@/components/IconButton';
 import { TrackMenu, type TrackMenuItem } from '@/components/TrackMenu';
 import { Marquee } from '@/components/Marquee';
 import { EmptyState } from '@/components/States';
 import {
   ChevronDownIcon,
+  ExpandIcon,
+  HeartIcon,
   MicIcon,
   NextIcon,
   PauseIcon,
@@ -195,6 +199,8 @@ const TABS: Array<[PanelTab, string]> = [
 export default function NowPlayingPage() {
   const song = useCurrentSong();
   usePageTitle(song ? song.title : 'Now Playing');
+  // 13.9 — the full-screen canvas's own heart (and the double-tap burst) read this.
+  const isFav = useLibraryStore((s) => (song ? isFavoriteIn(s.favorites, song.id) : false));
   const navigate = useNavigate();
   const sheetRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ y: number; dy: number } | null>(null);
@@ -263,6 +269,41 @@ export default function NowPlayingPage() {
   const [chromeHidden, setChromeHidden] = useState(false);
   // Android back gives the controls back before it leaves the player (P0-2).
   useDismissOnBack(chromeHidden, () => setChromeHidden(false));
+  // 13.9 — the full-screen canvas: the browser's real full screen when the
+  // listener asks for it (the ⤢ button), a quality menu, and double tap to
+  // like with a heart where the finger landed.
+  const [fullscreen, setFullscreen] = useState(false);
+  const fsRequested = useRef(false);
+  const [qualityOpen, setQualityOpen] = useState(false);
+  const [burst, setBurst] = useState<{ x: number; y: number; id: number } | null>(null);
+  useEffect(() => {
+    const onChange = () => setFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  useEffect(() => {
+    if (!burst) return;
+    const t = window.setTimeout(() => setBurst(null), 900);
+    return () => window.clearTimeout(t);
+  }, [burst]);
+  const enterFullscreen = () => {
+    const el = document.documentElement;
+    if (document.fullscreenElement || typeof el.requestFullscreen !== 'function') return;
+    fsRequested.current = true;
+    el.requestFullscreen().catch(() => {
+      fsRequested.current = false;
+    });
+  };
+  const leaveFullscreen = useCallback(() => {
+    if (fsRequested.current && document.fullscreenElement && typeof document.exitFullscreen === 'function') void document.exitFullscreen().catch(() => undefined);
+    fsRequested.current = false;
+  }, []);
+  // Leaving the immersive view gives the browser chrome back too.
+  useEffect(() => {
+    if (chromeHidden) return;
+    leaveFullscreen();
+    setQualityOpen(false);
+  }, [chromeHidden, leaveFullscreen]);
   const hintShown = useRef(false);
   // A single tap toggles the chrome, but the double-tap seek/favourite zones
   // live in the same layer — so the toggle waits out the double-tap window
@@ -505,6 +546,26 @@ export default function NowPlayingPage() {
     toast(dir > 0 ? '+10s' : '−10s');
   };
 
+  // 13.9 — the full-screen canvas, from the ⤢ button: controls away AND the
+  // browser's own full screen (a tap on the clip still hides the controls alone).
+  const openImmersive = () => {
+    setChromeHidden(true);
+    enterFullscreen();
+    haptic('light');
+  };
+  const closeImmersive = () => setChromeHidden(false);
+  const toggleLayerFullscreen = () => {
+    if (document.fullscreenElement) leaveFullscreen();
+    else enterFullscreen();
+  };
+  /** Double tap anywhere on the full-screen canvas likes the song (never unlikes by accident), with a heart where the finger was. */
+  const likeAt = (x: number, y: number) => {
+    cancelTap();
+    if (!useLibraryStore.getState().isFavorite(song.id)) toggleLike(song);
+    setBurst({ x, y, id: Date.now() });
+    haptic('medium');
+  };
+
   // The ⋯ menu carries the player's secondary destinations above the song actions.
   const menuItems: TrackMenuItem[] = [
     { label: 'Drive mode', action: () => navigate('/drive') },
@@ -619,6 +680,11 @@ export default function NowPlayingPage() {
             <span className="vx-np-context-name">{playingFrom}</span>
           </button>
           <span className="vx-np-menu">
+            {canvasOn && (
+              <IconButton label="Full-screen video" onClick={openImmersive} className="vx-np-icon">
+                <ExpandIcon className="w-5 h-5" />
+              </IconButton>
+            )}
             <TrackMenu song={song} leadItems={menuItems} />
           </span>
         </header>
@@ -1018,12 +1084,97 @@ export default function NowPlayingPage() {
           >
             <SongCanvasBackdrop canvas={canvas} isPlaying={isPlaying} artUrl={artUrl} />
             <div aria-hidden className="vx-np-canvas-shade" />
-            {tapZones}
-            <div aria-hidden className="vx-np-canvas-caption">
-              <p className="vx-np-canvas-title">{song.title}</p>
-              <p className="vx-np-canvas-artist">{song.subtitle}</p>
+            {/* 13.9 — one gesture surface: a tap brings the controls back, a double tap likes. */}
+            <button
+              type="button"
+              aria-label="Show the controls (tap), or like this song (double tap)"
+              onClick={onCanvasTap}
+              onDoubleClick={(e) => likeAt(e.clientX, e.clientY)}
+              className="vx-np-zone is-full"
+            />
+            <div className="vx-np-canvas-top">
+              <IconButton label="Back to the player" onClick={closeImmersive} className="vx-np-icon vx-np-canvas-btn">
+                <ChevronDownIcon className="w-6 h-6" />
+              </IconButton>
+              <span className="vx-np-canvas-top-right">
+                {canvas.quality.height != null && canvas.quality.height > 0 && (
+                  <span className="vx-np-canvas-quality">
+                    <button
+                      type="button"
+                      className="vx-np-canvas-chip"
+                      aria-haspopup="menu"
+                      aria-expanded={qualityOpen}
+                      aria-label={`Video quality: ${qualityLabel(canvas.quality.height)}`}
+                      onClick={() => setQualityOpen((v) => !v)}
+                    >
+                      {qualityBadge(canvas.quality.height)}
+                      {canvas.quality.preference === 'auto' && <small>Auto</small>}
+                    </button>
+                    {qualityOpen && (
+                      <div role="menu" aria-label="Video quality" className="vx-np-canvas-menu">
+                        <button
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={canvas.quality.preference === 'auto'}
+                          onClick={() => {
+                            canvas.quality.setPreference('auto');
+                            setQualityOpen(false);
+                          }}
+                        >
+                          Auto <small>best for this screen</small>
+                        </button>
+                        {canvas.quality.options.map((o) => (
+                          <button
+                            key={o.height}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={canvas.quality.preference === o.height}
+                            onClick={() => {
+                              canvas.quality.setPreference(o.height);
+                              setQualityOpen(false);
+                            }}
+                          >
+                            {o.label}
+                            {o.height === canvas.quality.height && <small>playing</small>}
+                          </button>
+                        ))}
+                        <p className="vx-np-canvas-menu-note">
+                          {canvas.quality.best != null
+                            ? `This clip is published up to ${qualityLabel(canvas.quality.best)}. Higher renditions switch on by themselves the day the source adds them.`
+                            : 'Quality follows what the source publishes.'}
+                        </p>
+                      </div>
+                    )}
+                  </span>
+                )}
+                <IconButton label={fullscreen ? 'Exit full screen' : 'Full screen'} onClick={toggleLayerFullscreen} className="vx-np-icon vx-np-canvas-btn">
+                  <ExpandIcon className="w-5 h-5" />
+                </IconButton>
+              </span>
+            </div>
+            <div className="vx-np-canvas-caption">
+              <div className="vx-np-canvas-caption-row">
+                <div className="min-w-0 flex-1">
+                  <p className="vx-np-canvas-title">{song.title}</p>
+                  <p className="vx-np-canvas-artist">{song.subtitle}</p>
+                </div>
+                <button
+                  type="button"
+                  aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                  aria-pressed={isFav}
+                  onClick={() => toggleLike(song)}
+                  className="vx-np-canvas-like"
+                >
+                  <HeartIcon key={String(isFav)} className={cn(isFav && 'heart-pop')} filled={isFav} />
+                </button>
+              </div>
               <CanvasProgress />
             </div>
+            {burst && (
+              <span key={burst.id} aria-hidden className="vx-np-heart-burst" style={{ left: burst.x, top: burst.y }}>
+                <HeartIcon filled />
+              </span>
+            )}
           </div>,
           document.body,
         )}

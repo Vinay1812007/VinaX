@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { Song } from '@/types';
-import { findVideoForSong, type Video } from '@/services/api/videos';
+import { findVideoForSong, qualityLabel, renditionHeight, type Video } from '@/services/api/videos';
+import { autoTarget, availableRenditions, pickRendition, readPreference, writePreference, type QualityPreference, type Rendition } from '@/services/canvas/quality';
 import { FALLBACK_ART } from '@/utils/images';
 import { cn } from '@/utils/cn';
 
@@ -14,6 +15,13 @@ import { cn } from '@/utils/cn';
  * Exactly one <video> ever decodes: the backdrop. The ART/▶VIDEO toggle
  * brings the still artwork back any time and remembers the choice per
  * device.
+ *
+ * 13.9 — quality. The clip is played at the best rendition the CDN has for
+ * this screen (services/canvas/quality): Auto picks for the display, or the
+ * listener pins a height from the full-screen view's quality menu. The
+ * decoded size is reported back so the badge says what is really playing,
+ * and a rendition that fails steps down to the next instead of killing the
+ * canvas.
  */
 const CANVAS_OFF_KEY = 'vinax_canvas_off';
 
@@ -25,6 +33,22 @@ function canvasDisabled(): boolean {
   }
 }
 
+export interface CanvasQuality {
+  /** The rendition playing now (null while off or without a clip). */
+  height: number | null;
+  /** "Full HD 1080p", "540p"… for the rendition playing now. */
+  label: string | null;
+  /** Every rendition the clip can be played at, highest first. */
+  options: Array<{ height: number; label: string }>;
+  /** The highest the clip is published in — what "4K" can honestly mean here. */
+  best: number | null;
+  preference: QualityPreference;
+  setPreference(p: QualityPreference): void;
+  /** What the decoder actually produced, once known. */
+  decoded: { width: number; height: number } | null;
+  noteDecoded(width: number, height: number): void;
+}
+
 export interface SongCanvasState {
   video: Video | null;
   /** The playable clip when the canvas should be showing; null when off/failed/none. */
@@ -32,14 +56,22 @@ export interface SongCanvasState {
   /** A usable clip exists for this song (drives the toggle's visibility). */
   hasVideo: boolean;
   off: boolean;
+  quality: CanvasQuality;
   toggle(): void;
   markFailed(): void;
 }
+
+const NO_OPTIONS: CanvasQuality['options'] = [];
 
 /** One canvas state for the whole Now Playing screen — call once, share. */
 export function useSongCanvas(song: Song | null | undefined): SongCanvasState {
   const [off, setOff] = useState(canvasDisabled);
   const [failedId, setFailedId] = useState<string | null>(null);
+  // Renditions that would not play for the current clip (by URL), so a failed
+  // 1080p steps down to 540p rather than switching the canvas off.
+  const [failedHeights, setFailedHeights] = useState<{ url: string; heights: number[] }>({ url: '', heights: [] });
+  const [preference, setPref] = useState<QualityPreference>(readPreference);
+  const [decoded, setDecoded] = useState<{ width: number; height: number } | null>(null);
   const { data } = useQuery({
     queryKey: ['song-canvas', song?.id],
     queryFn: () => findVideoForSong(song as Song),
@@ -48,14 +80,46 @@ export function useSongCanvas(song: Song | null | undefined): SongCanvasState {
     retry: false,
   });
   const video = data ?? null;
+  const previewUrl = video?.previewUrl ?? null;
+  const { data: probed } = useQuery({
+    queryKey: ['song-canvas-renditions', previewUrl],
+    queryFn: () => availableRenditions(previewUrl as string),
+    enabled: !!previewUrl,
+    staleTime: 6 * 60 * 60_000,
+    retry: false,
+  });
+  // Until the probe answers, the named rendition alone — playback never waits for it.
+  const renditions = useMemo<Rendition[]>(() => {
+    if (!previewUrl) return [];
+    return probed ?? [{ height: renditionHeight(previewUrl) ?? 0, url: previewUrl }];
+  }, [probed, previewUrl]);
   const failed = !!song && failedId === song.id;
-  const hasVideo = !!video?.previewUrl && !failed;
-  const src = hasVideo && !off ? video?.previewUrl ?? null : null;
+  const hasVideo = !!previewUrl && !failed;
+  const failedSet = useMemo(() => new Set(failedHeights.url === previewUrl ? failedHeights.heights : []), [failedHeights, previewUrl]);
+  const chosen = hasVideo && !off ? pickRendition(renditions, preference, autoTarget(), failedSet) : null;
+  const src = chosen?.url ?? null;
+  // A new clip (or a new rendition of it) decodes afresh.
+  useEffect(() => setDecoded(null), [src]);
+  const best = renditions.length ? renditions[0].height : null;
+  const quality: CanvasQuality = {
+    height: chosen ? chosen.height : null,
+    label: chosen && chosen.height > 0 ? qualityLabel(chosen.height) : null,
+    options: renditions.length ? renditions.filter((r) => r.height > 0).map((r) => ({ height: r.height, label: qualityLabel(r.height) })) : NO_OPTIONS,
+    best: best && best > 0 ? best : null,
+    preference,
+    setPreference: (p) => {
+      setPref(p);
+      writePreference(p);
+    },
+    decoded,
+    noteDecoded: (width, height) => setDecoded((d) => (d && d.width === width && d.height === height ? d : { width, height })),
+  };
   return {
     video,
     src,
     hasVideo,
     off,
+    quality,
     toggle: () => {
       const next = !off;
       setOff(next);
@@ -67,7 +131,13 @@ export function useSongCanvas(song: Song | null | undefined): SongCanvasState {
       }
     },
     markFailed: () => {
-      if (song) setFailedId(song.id);
+      if (!song) return;
+      // Another rendition is left to try: step down. Otherwise the clip is gone for this song.
+      if (chosen && previewUrl && renditions.some((r) => r.height !== chosen.height && !failedSet.has(r.height))) {
+        setFailedHeights((f) => ({ url: previewUrl, heights: [...(f.url === previewUrl ? f.heights : []), chosen.height] }));
+        return;
+      }
+      setFailedId(song.id);
     },
   };
 }
@@ -84,8 +154,8 @@ function CanvasVideo({
   isPlaying: boolean;
   className?: string;
   onError(): void;
-  /** Reports the clip's intrinsic width/height ratio once it is known. */
-  onAspect?(aspect: number): void;
+  /** Reports the clip's intrinsic ratio and size once they are known. */
+  onAspect?(aspect: number, width: number, height: number): void;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
@@ -108,7 +178,7 @@ function CanvasVideo({
       onError={onError}
       onLoadedMetadata={(e) => {
         const v = e.currentTarget;
-        if (v.videoWidth > 0 && v.videoHeight > 0) onAspect?.(v.videoWidth / v.videoHeight);
+        if (v.videoWidth > 0 && v.videoHeight > 0) onAspect?.(v.videoWidth / v.videoHeight, v.videoWidth, v.videoHeight);
       }}
       className={className}
     />
@@ -181,9 +251,10 @@ export function SongCanvasBackdrop({ canvas, isPlaying, artUrl }: { canvas: Song
         src={canvas.src}
         isPlaying={isPlaying}
         onError={canvas.markFailed}
-        onAspect={(a) => {
+        onAspect={(a, w, hgt) => {
           aspect.current = a;
           compute();
+          canvas.quality.noteDecoded(w, hgt);
         }}
         className={cn('absolute inset-0 h-full w-full', fit === 'ambient' ? 'object-contain' : 'object-cover')}
       />

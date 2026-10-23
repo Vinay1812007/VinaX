@@ -17,6 +17,7 @@ const NowPlayingRail = lazy(() => import('@/components/NowPlayingRail').then(m =
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { TopBar } from '@/components/TopBar';
 import { GetAppSlot } from '@/components/GetAppSlot';
+import { useUiStore } from '@/store/uiStore';
 import { DiagBanner } from '@/components/DiagBanner';
 import { OfflineBanner } from '@/components/OfflineBanner';
 const OnboardingSheet = lazy(() => import('@/components/OnboardingSheet').then(m => ({ default: m.OnboardingSheet })));
@@ -39,6 +40,8 @@ const UpdateDialog = lazy(() => import('@/components/UpdateDialog').then((m) => 
 // day/release — lazy chunks, not first-load bytes (161KB budget, zero slack).
 const FestiveSplash = lazy(() => import('@/components/FestiveSplash').then((m) => ({ default: m.FestiveSplash })));
 const WhatsNewSheet = lazy(() => import('@/components/WhatsNewSheet').then((m) => ({ default: m.WhatsNewSheet })));
+// 13.9 — the sign-in sheet for a visitor browsing signed out; fetched the first time it opens.
+const SignInPrompt = lazy(() => import('@/components/SignInPrompt'));
 import { initAudioOutputWatcher } from '@/services/audio/outputWatcher';
 import { audioEngine } from '@/services/audio/engine';
 import { useCastStore } from '@/services/cast';
@@ -126,6 +129,8 @@ export function AppLayout() {
   const mainRef = useRef<HTMLElement>(null);
   const bottomChromeRef = useRef<HTMLDivElement>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // 13.9 — the sign-in sheet for a visitor browsing signed out (services/auth/gate).
+  const signInOpen = useUiStore((s) => !!s.signIn);
 
   // ⌘/Ctrl+K opens the command palette (works while typing too, like the console).
   useEffect(() => {
@@ -539,6 +544,11 @@ export function AppLayout() {
         <FestiveSplash />
         <WhatsNewSheet />
       </Suspense>
+      {signInOpen && (
+        <Suspense fallback={null}>
+          <SignInPrompt />
+        </Suspense>
+      )}
       {!isFullScreenPlayer && (
         <div ref={bottomChromeRef} className="fixed bottom-0 inset-x-0 z-40 pb-[var(--safe-bottom)]">
           <PlayerErrorBoundary>

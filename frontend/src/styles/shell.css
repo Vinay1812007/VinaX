@@ -365,6 +365,25 @@ html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)
 .vx-avatar.is-open { box-shadow: 0 0 0 2px rgb(var(--ink-950)), 0 0 0 4px rgb(var(--vx-accent-rgb, 236 72 153) / 0.9); }
 .vx-avatar:focus-visible { outline: 2px solid rgb(var(--vx-accent-rgb, 236 72 153)); outline-offset: 3px; }
 
+/* 13.9 — a visitor browsing signed out: Sign in where the avatar goes. */
+.vx-topbar-signin {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  margin-left: 4px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  background: var(--vx-glow);
+  color: var(--vx-on-accent);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  box-shadow: 0 0 0 3px rgb(var(--ink-950) / 0.55);
+  transition: transform 140ms var(--ease-calm);
+}
+.vx-topbar-signin:hover { transform: scale(1.04); }
+.vx-topbar-signin:focus-visible { outline: 2px solid rgb(var(--vx-accent-rgb, 236 72 153)); outline-offset: 3px; }
+
 /* 13.4.0 — the avatar's menu (components/ProfileMenu.tsx): who, profile
    settings, app settings, Sign out. Anchored under the avatar's right edge. */
 .vx-avatar-wrap { position: relative; display: inline-flex; }
