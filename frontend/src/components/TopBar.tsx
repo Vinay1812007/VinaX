@@ -8,6 +8,7 @@ import { KEYS } from '@/constants/storage-keys';
 import { getLocal } from '@/services/storage/local';
 import { cn } from '@/utils/cn';
 import { useAccount } from './useAccount';
+import { useUiStore } from '@/store/uiStore';
 
 const ACTIONS_SLOT = 'vx-topbar-actions';
 // 13.4.0 — the avatar's menu loads the first time it opens.
@@ -55,6 +56,8 @@ export function TopBar({ onCommands }: { onCommands: () => void }) {
   // A new page closes the menu.
   useEffect(() => setMenuOpen(false), [pathname]);
   const face = photo ? <img src={photo} alt="" width={36} height={36} referrerPolicy="no-referrer" onError={() => setPhotoFailed(true)} /> : initial || <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-5 h-5" aria-hidden><circle cx="12" cy="8.5" r="3.8" /><path d="M4.5 20c1.2-3.6 4.1-5.5 7.5-5.5s6.3 1.9 7.5 5.5" /></svg>;
+  // 13.9 — a visitor browsing signed out gets a Sign in button where the avatar goes.
+  const openSignIn = useUiStore((s) => s.openSignIn);
   return (
     <>
     <div ref={sentinel} className="vx-topbar-sentinel" aria-hidden />
@@ -69,6 +72,11 @@ export function TopBar({ onCommands }: { onCommands: () => void }) {
         {/* Pages add their own actions here through <TopBarActions>. */}
         <div id={ACTIONS_SLOT} className="contents" />
         <button type="button" className="vx-command-key hidden lg:inline-flex" onClick={onCommands} aria-label="Open command palette, ⌘K" aria-keyshortcuts="Meta+K Control+K"><kbd>⌘</kbd><kbd>K</kbd></button>
+        {!account ? (
+          <button type="button" className="vx-topbar-signin" onClick={() => openSignIn('account')}>
+            Sign in
+          </button>
+        ) : (
         <span className="vx-avatar-wrap">
           {/* No title tooltip: it sat over the Now playing panel. The label carries the name. */}
           <button
@@ -89,6 +97,7 @@ export function TopBar({ onCommands }: { onCommands: () => void }) {
             </Suspense>
           )}
         </span>
+        )}
       </div>
     </header>
     </>

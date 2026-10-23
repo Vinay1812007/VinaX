@@ -108,9 +108,9 @@ Every page must handle three states: data, an **empty database** (explain what w
 
 | Page | Tabs | Routes |
 | --- | --- | --- |
-| **Overview** | — | `realtime` (polled every 15 s), `overview` (now includes signed-in `accounts`), `envcheck` (Needs attention) |
+| **Overview** | — | `realtime` (polled every 15 s), `overview` (signed-in `accounts`, and since 13.9 `platforms`: accounts and usage devices by platform), `envcheck` (Needs attention) |
 | **Live** | Now listening · Activity feed · Listen Together · Pulse | `live`, `activity`, `rooms` (end one room / close all), `realtime` |
-| **Listeners** | All listeners · Top listeners | `users` (accounts and devices merged, search, filters, CSV of everyone), `user` (profile drawer: report, JSON and activity downloads), `maintenance` `delete_user` (reason + typed DELETE), `insights` |
+| **Listeners** | All listeners · Top listeners | `users` (accounts and devices merged, search, filters, `?platform=` filter, platform tiles, CSV of everyone), `user` (profile drawer: report, JSON and activity downloads), `maintenance` `delete_user` (reason + typed DELETE), `insights` |
 | **Growth & engagement** | Growth · Engagement · Retention · Funnel · Segments · Feature usage · Heatmap · Insights | `growth`, `engagement`, `retention` (percentages computed from cohort counts), `funnel`, `insights`, `usage`, `digest` |
 | **Places** | Countries & cities · World map | `location`, `live`; city geocoding cached in this browser |
 | **Music** | Top charts · Search · Skips · Song drilldown | `music`, `insights`, `search-analytics`, `skips` (rate = skips ÷ plays), `songstats`, `content` (block) |
@@ -175,6 +175,15 @@ Two sources, merged by last seen, newest first:
 A device is linked to an account when it proves its signed id: at sign-in, or on the app's once-per-load session check (`GET /api/auth/me` with the `x-vinax-device` header), which also refreshes the account's last seen at most every 10 minutes. The welcome and its usage tick come after sign-in, so a new listener is linked on their next app load; until then they can show as both an account row and a usage row. Deleting a usage row unlinks its account, which then shows as an account row again.
 
 The cards add the two together: *Total users*, *Active (24h)* and *New (24h)* count usage rows plus unlinked accounts; *Signed in* counts every account. If the account read fails the usage list still shows, the answer names `unavailable: ["accounts"]`, and *Signed in* shows a dash. The list is merged up to 10,100 rows deep (the CSV export's 100 pages of 100).
+
+### Android, web and iOS (13.9)
+
+Until 13.9 every platform chart in the console (Live, Places, Feature usage) read `vinax_users`, so a listener who signed in on Android or the web but never ticked "share usage" appeared in no platform number at all — the owner saw "no Android users" while the Listeners list was full of them. The platform half of the console now reads the accounts too.
+
+- `_lib/platforms.ts` → `readPlatforms()` answers `{ accounts, accountsOnly, devices }`: every signed-in account split into `web`, `android`, `ios` and `other` (empty platform: signed in before 13.7 and not seen since), the same split for accounts with no linked usage row, and `vinax_platforms()` for usage devices. Exact counts; a half that cannot be read is `null`, never zero.
+- `GET /api/admin/overview` carries it as `platforms`. The Overview's *Signed-in accounts* tile reads "N Android · M web" and a **Platforms** card shows the two shares.
+- `GET /api/admin/users` carries it on the first page (`offset=0`) and accepts `?platform=web|android|ios`, which narrows **both** sources (`platform=eq.` on `vinax_users` and on the unlinked accounts). The Listeners page has an **Any platform / Android / Web / iOS** control, one tile per platform (usage devices plus account-only rows, with the signed-in count underneath) and the CSV honours the filter. Device rows now also carry `app_version` and `region`.
+- Live's "Now listening" still shows usage devices only (presence needs the heartbeat); its empty state says so and points at the Listeners page.
 
 ### Listener downloads (Listeners page)
 

@@ -11,6 +11,7 @@ import { useHistoryStore } from '@/store/historyStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { searchSongs } from '@/services/api';
 import { toast } from '@/store/toastStore';
+import { requireAccount } from '@/services/auth/gate';
 import { loadProfile } from '@/services/personalization/storage';
 import { topLanguages } from '@/services/personalization/profile';
 import {
@@ -104,6 +105,8 @@ function DecadeRadio() {
   const [busy, setBusy] = useState<string | null>(null);
   const start = async (decade: string): Promise<void> => {
     if (busy) return;
+    // 13.9 — signed out: ask first, before a search is spent; the tap replays after sign-in.
+    if (!requireAccount('listen', () => void start(decade))) return;
     setBusy(decade);
     try {
       const songs = await searchSongs(`${decade} ${lang} hits`, 30);
@@ -156,6 +159,7 @@ function YearPicker() {
   const [busy, setBusy] = useState(false);
   const play = async (): Promise<void> => {
     if (busy) return;
+    if (!requireAccount('listen', () => void play())) return;
     setBusy(true);
     try {
       const songs = await searchSongs(`${year} ${lang} songs`, 30);

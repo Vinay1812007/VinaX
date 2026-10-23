@@ -124,7 +124,7 @@
         ],
         rows: rows, sortKey: 'lastSeen', sortDir: 'desc', exportName: 'vinax-live-listeners', pageSize: 25,
         empty: 'Nobody is listening right now',
-        emptyHint: 'Listeners appear here within seconds of opening the app; they drop off 2 minutes after their last check-in.',
+        emptyHint: 'Listeners who share usage appear here within seconds of opening the app and drop off 2 minutes after their last check-in. Signed-in listeners who have not turned on usage sharing are not shown here — the Listeners page lists every account, Android and web alike.',
         onRow: function (r) { openListener(ctx, r.deviceId, r.name); }
       });
       VX.mount(listHost, ui.card({ title: 'Active listeners', sub: 'Click a listener for their profile', actions: [stamp], body: table, pad: false }));

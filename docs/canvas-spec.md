@@ -9,6 +9,34 @@ re-decided per clip and on rotation (`frontend/src/components/SongCanvas.tsx`).
 
 Clips made to this spec look best — full-bleed on the device they target.
 
+## What the catalogue serves today (13.9)
+
+The music-video source publishes each preview clip in named renditions,
+`…_v_<height>p_p.mp4`. Probed in October 2026, every clip has a **540p** file
+(the one the catalogue names as `previewUrl`) and a **360p** file beside it;
+`_v_720p_p`, `_v_1080p_p`, `_v_1440p_p` and `_v_2160p_p` answer 404, and the
+full-length `streamUrl` master is not served. So the canvas is 540p at best
+today, and the player says so rather than printing "HD".
+
+The ladder is wired for more (`frontend/src/services/canvas/quality.ts`): the
+CDN answers HEAD with CORS, so the heights above 540p are probed — once a day
+across all clips while none exists, then per clip once one has been seen — and
+Full HD 1080p or 4K switch on by themselves the day the source adds them.
+**Auto** plays the highest rendition that does not exceed the screen's longer
+side in device pixels; the full-screen view's quality chip shows what is
+playing and lets the listener pin a height. A rendition that fails steps down
+to the next instead of switching the canvas off.
+
+## Full-screen canvas (13.9)
+
+The ⤢ button on Now Playing (shown while a clip plays) hides the controls and
+asks the browser for real full screen; a tap on the clip alone hides the
+controls without it. In the full-screen view: tap once for the controls,
+double-tap anywhere to like the song (never unlike by accident) with a heart
+where the finger landed, a heart button beside the caption, the quality chip
+and a full-screen toggle at the top. Escape, Android back or the ⌄ button
+return to the player and leave full screen.
+
 ## Mobile (phones, portrait)
 
 - **Aspect ratio:** 9:16 portrait

@@ -26,7 +26,10 @@ vi.mock('@/services/personalization/updater', () => ({
 vi.mock('@/utils/color', () => ({ extractAverageColor: vi.fn(async () => null), extractVibrantColor: vi.fn(async () => null), applyArtColor: vi.fn() }));
 vi.mock('@/utils/wakeLock', () => ({ acquireWakeLock: vi.fn(async () => undefined), releaseWakeLock: vi.fn() }));
 vi.mock('@/components/SongCanvas', () => ({
-  useSongCanvas: () => ({ video: null, src: null, hasVideo: false, off: false, toggle: vi.fn(), markFailed: vi.fn() }),
+  useSongCanvas: () => ({
+    video: null, src: null, hasVideo: false, off: false, toggle: vi.fn(), markFailed: vi.fn(),
+    quality: { height: null, label: null, options: [], best: null, preference: 'auto', setPreference: vi.fn(), decoded: null, noteDecoded: vi.fn() },
+  }),
   SongCanvas: () => <img alt="" className="vx-np-art-img" />,
   SongCanvasBackdrop: () => null,
 }));

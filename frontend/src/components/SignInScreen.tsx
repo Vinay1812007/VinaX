@@ -16,6 +16,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { GoogleSignIn } from './GoogleSignIn';
+import { rememberGuestBrowse } from '@/services/auth/gate';
 import '@/styles/signin.css';
 
 /** Line icons for the side panels: 24-unit grid, drawn in the current colour. */
@@ -217,6 +218,11 @@ export default function SignInScreen(): ReactNode {
           <p className="vx-signin-fine">
             Free, with nothing to pay. By signing in you agree to the <Link to="/terms">Terms</Link> and the <Link to="/privacy">Privacy policy</Link>.
           </p>
+          {/* 13.9 — browse first: Explore, Search and every song page open signed out; play asks to sign in. */}
+          <Link to="/explore" className="vx-signin-explore" onClick={rememberGuestBrowse}>
+            Explore VinaX first
+            <span aria-hidden>→</span>
+          </Link>
         </div>
         <Panel id="vx-signin-what" side="left" title="What you get" items={FEATURES} />
         <Panel id="vx-signin-free" side="right" title="Free, and how it stays free" items={FACTS} />

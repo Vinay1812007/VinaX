@@ -144,3 +144,14 @@ html.light .vx-google-btn { background: #fff; color: #1f1f1f; }
 .vx-signin-fine a { color: rgb(var(--ink-200)); text-decoration: underline; text-underline-offset: 2px; }
 /* Google draws its button in a frame; without this a dark page shows a white strip around it. */
 .vx-google-web iframe { color-scheme: normal; }
+
+/* 13.9 — the sign-in sheet a browsing visitor meets on play, like or save (components/SignInPrompt). */
+.vx-signin-prompt .vx-sheet-sub { margin-top: 6px; line-height: 1.5; }
+.vx-signin-prompt-button { display: flex; justify-content: center; margin-top: 18px; }
+.vx-signin-prompt-perks { display: grid; gap: 6px; margin-top: 18px; padding: 0; list-style: none; font-size: 13px; color: rgb(var(--ink-300)); }
+.vx-signin-prompt-perks li { position: relative; padding-left: 18px; }
+.vx-signin-prompt-perks li::before { content: ''; position: absolute; left: 2px; top: 7px; width: 6px; height: 6px; border-radius: 9999px; background: rgb(var(--ember-500)); }
+.vx-signin-prompt-fine { margin-top: 16px; font-size: 12px; line-height: 1.5; color: rgb(var(--ink-400)); }
+.vx-signin-prompt-fine a { color: rgb(var(--ink-200)); text-decoration: underline; text-underline-offset: 2px; }
+.vx-signin-explore { display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; min-height: 40px; padding: 0 14px; border-radius: 9999px; font-size: 14px; font-weight: 700; color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.08); }
+.vx-signin-explore:hover { background: rgb(var(--ink-100) / 0.14); }

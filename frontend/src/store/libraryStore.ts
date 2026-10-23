@@ -7,6 +7,7 @@ import { findDuplicates } from '@/features/library/duplicates';
 import { pruneTrash, type TrashEntry } from '@/features/library/trash';
 import { normalizeTags } from '@/features/library/tags';
 import { guardedLocalStorage } from '@/services/storage/local';
+import { requireAccount } from '@/services/auth/gate';
 import { normalizeIdentityText } from '@/services/recommendation/identityCore';
 
 /** Derived indexes for O(1) membership checks. */
@@ -163,6 +164,7 @@ export const useLibraryStore = create<LibraryState>()(
       hiddenArtists: [],
       trash: [],
       toggleLater: (song) => {
+        if (!requireAccount('save', () => get().toggleLater(song))) return;
         const has = get().later.some((s) => s.id === song.id);
         set({ later: has ? get().later.filter((s) => s.id !== song.id) : [song, ...get().later].slice(0, 500) });
       },
@@ -175,6 +177,8 @@ export const useLibraryStore = create<LibraryState>()(
       },
       isArtistHidden: (song) => isSongBlocked(song, get()),
       toggleFavorite: (song) => {
+        // 13.9 — likes live in the account: a visitor browsing signed out is asked to sign in first.
+        if (!requireAccount('save', () => get().toggleFavorite(song))) return;
         if (!get().favorites.some((s) => s.id === song.id)) {
           void import('@/services/analytics/telemetry').then((m) => m.trackFavorite(song)).catch(() => undefined);
           // 8.5.0 — liking the song that is playing steers what comes next right away.
@@ -207,6 +211,7 @@ export const useLibraryStore = create<LibraryState>()(
         set({ favorites: merged });
       },
       toggleSaved: (entity) => {
+        if (!requireAccount('save', () => get().toggleSaved(entity))) return;
         const { saved, favorites, hiddenSongIds } = get();
         const exists = saved.some((e) => e.id === entity.id && e.kind === entity.kind);
         const newSaved = exists
@@ -237,6 +242,8 @@ export const useLibraryStore = create<LibraryState>()(
       },
       isHidden: (id) => _hiddenIds.has(id),
       createCollection: (name) => {
+        // 13.9 — playlists live in the account; a visitor gets the sign-in sheet and no playlist.
+        if (!requireAccount('save')) return '';
         const id = `col-${Date.now().toString(36)}`;
         set({
           collections: [...get().collections, { id, name, createdAt: Date.now(), songs: [] }],
@@ -305,6 +312,7 @@ export const useLibraryStore = create<LibraryState>()(
           }),
         }),
       addToCollection: (collectionId, song) => {
+        if (!requireAccount('save', () => get().addToCollection(collectionId, song))) return;
         let added = false;
         set({
           collections: get().collections.map((c) => {
@@ -322,6 +330,7 @@ export const useLibraryStore = create<LibraryState>()(
         }
       },
       addManyToCollection: (collectionId, songs) => {
+        if (!requireAccount('save', () => void get().addManyToCollection(collectionId, songs))) return 0;
         let added = 0;
         set({
           collections: get().collections.map((c) => {
