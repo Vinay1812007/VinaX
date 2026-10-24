@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '14.0.5': {
+    title: 'Diagnose: prove the catalogue secret is in use and no provider is named in the bundle',
+    changes: [
+      { type: 'improved', text: 'diagnose: prove the catalogue secret is in use and no provider is named in the bundle.' },
+    ],
+  },
   '14.0.4': {
     title: 'Catalogue providers live in a Worker secret; the app knows only /api/cat',
     changes: [
