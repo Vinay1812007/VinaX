@@ -585,6 +585,11 @@ export default function SettingsPage() {
             <Row label="Data saver" note="Lightest audio, no video canvas, lighter artwork." keywords="mobile data">
               <Toggle on={s.dataSaver} onChange={s.setDataSaver} label="Data saver" />
             </Row>
+            {isNativePlatform() && (
+              <Row label="Smart downloads" note="Keep this week's Weekly Mix downloaded. Fetched on Wi-Fi only; last week's copies are removed on their own." keywords="offline auto download weekly mix wifi">
+                <Toggle on={s.smartDownloads} onChange={s.setSmartDownloads} label="Smart downloads" />
+              </Row>
+            )}
             <Row label="Keep screen on in player" note="While the full-screen player is open and playing." keywords="wake lock">
               <Toggle on={s.keepScreenOn} onChange={s.setKeepScreenOn} label="Keep screen on in player" />
             </Row>

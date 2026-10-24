@@ -256,4 +256,4 @@ After a Worker deploy, request `GET /api/recommendations/similar/<a real song id
 
 - The busy `429` from `/api/dj`, `/api/ai/dj` and `/api/playlist` has no `retry-after` header, so a client has to choose its own wait.
 - The app can send up to 140 `avoidTitles` to `/api/playlist`, but the server keeps the first 60. Titles the app adds at the end of the list (locked and excluded songs) can be cut off when the remembered list is long.
-- No app code calls `/api/recommendations`, `/api/recommendations/similar/:songId`, `/api/ai/playlist` or `/api/ai/dj`. They are covered by backend tests only.
+- No app code calls `/api/ai/playlist` or `/api/ai/dj` (the app uses `/api/playlist` and `/api/dj`). They are covered by backend tests only. Since 15.0 `frontend/src/services/recs/similar.ts` calls `/api/recommendations/similar/:songId` ("Songs like this" in the ⋮ menu and in Now Playing → Player tools) and `/api/recommendations` (the Discover 5 card on Home), resolving each `RecTrack` to a catalogue `Song` through `getSong` and keeping `reasonText` in the reason store, with the catalogue's own suggestions as the fallback.

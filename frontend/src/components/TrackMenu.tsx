@@ -8,6 +8,7 @@ import { useLibraryStore } from '@/store/libraryStore';
 import { shareLink } from '@/utils/share';
 import { shareSongCard, shareSongStoryCard } from '@/utils/songCard';
 import { toast } from '@/store/toastStore';
+import { songsLikeThis } from '@/services/recs/similar';
 import { isNativePlatform } from '@/services/native';
 import { sendFeedback } from '@/services/feedback';
 import { useReasonStore } from '@/store/reasonStore';
@@ -344,6 +345,20 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     // retunes the DJ picks now; "Less like this" plays the artist less for a
     // while (a soft mute that ends on its own).
     { label: 'More like this', icon: 'moreLike', action: moreLike },
+    // 15.0 — songs like this one, from the catalogue-ranked route, straight
+    // into the queue after what is playing (the reason travels with each).
+    {
+      label: 'Songs like this',
+      icon: 'radio',
+      action: () => {
+        toast(`Finding songs like ${song.title}…`);
+        void songsLikeThis(song, { limit: 10 }).then((songs) => {
+          if (!songs.length) { toast('Nothing similar found right now'); return; }
+          usePlayerStore.getState().enqueueAll(songs);
+          toast(`Added ${songs.length} songs like ${song.title}`);
+        });
+      },
+    },
     artist ? { id: 'less', label: 'Less like this…', icon: 'lessLike', action: openLess, submenu: true } : null,
     // 9.1.0 — this song, not the artist: quiet for a while, then back on its own.
     { id: 'snooze', label: 'Snooze this song…', icon: 'clock', action: openSnooze, submenu: true },

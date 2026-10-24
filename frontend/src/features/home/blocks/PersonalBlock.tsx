@@ -16,6 +16,7 @@ import type { Song } from '@/types';
 import { onThisDay } from '../onThisDay';
 import { localDateKey, pickDailyFavorite, useBecauseYouLiked } from '../useBecauseYouLiked';
 import { SongOfTheDayCard, StreakCard } from '../DailyCards';
+import { DiscoverFiveCard } from '../DiscoverFive';
 import { FestivalLookaheadCard } from '../FestivalLookaheadCard';
 import { YourPlaylistsShelf } from '../YourPlaylists';
 import { useContinueListening } from '../useHomeShelves';
@@ -145,6 +146,7 @@ function MorePersonal({ mixes }: { mixes: Mix[] }) {
       <div className="vxh-daily">
         <StreakCard entries={historyEntries} />
         <SongOfTheDayCard favorites={favorites} entries={historyEntries} />
+        <DiscoverFiveCard entries={historyEntries} favorites={favorites} />
         <FestivalLookaheadCard />
       </div>
       {memories && <SongShelf title="On this day" explanation={`You were playing these ${memories.label.toLowerCase()}`} songs={lens(memories.songs, 'resume')} seeAllTo="/history" />}

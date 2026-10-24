@@ -20,6 +20,7 @@ import { GetAppSlot } from '@/components/GetAppSlot';
 import { useUiStore } from '@/store/uiStore';
 import { DiagBanner } from '@/components/DiagBanner';
 import { OfflineBanner } from '@/components/OfflineBanner';
+import { SmartDownloads } from '@/services/downloads/smart';
 const OnboardingSheet = lazy(() => import('@/components/OnboardingSheet').then(m => ({ default: m.OnboardingSheet })));
 import { AnnouncementBridge } from '@/components/AnnouncementBridge';
 import { applyUsageSharingDefault, initTelemetry } from '@/services/analytics/telemetry';
@@ -536,6 +537,8 @@ export function AppLayout() {
       </PlayerErrorBoundary>
       <Suspense fallback={null}><OnboardingSheet /></Suspense>
       <AnnouncementBridge />
+      {/* 15.0 — Android: keeps this week's Weekly Mix downloaded on Wi-Fi when the setting is on. */}
+      {isNativePlatform() && <SmartDownloads />}
       <ContextMenu />
       {paletteOpen && (
         <Suspense fallback={null}>

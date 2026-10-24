@@ -54,6 +54,7 @@ import { shareLink } from '@/utils/share';
 import { useBookmarkStore } from '@/store/bookmarkStore';
 import { AmbientOverlay, useIdle } from '@/components/AmbientOverlay';
 import { shareNowPlayingCard } from '@/utils/shareCard';
+import { songsLikeThis } from '@/services/recs/similar';
 import { toast } from '@/store/toastStore';
 import { TuneChips } from '@/features/queue/TuneChips';
 import { Chip } from '@/components/Chip';
@@ -1050,6 +1051,21 @@ export default function NowPlayingPage() {
               className="vx-np-pill"
             >
               Share this moment
+            </button>
+            {/* 15.0 — songs like this one, queued after it, each with its reason. */}
+            <button
+              type="button"
+              className="vx-np-pill"
+              onClick={() => {
+                toast(`Finding songs like ${song.title}…`);
+                void songsLikeThis(song, { limit: 10 }).then((songs) => {
+                  if (!songs.length) { toast('Nothing similar found right now'); return; }
+                  usePlayerStore.getState().enqueueAll(songs);
+                  toast(`Added ${songs.length} songs like ${song.title}`);
+                });
+              }}
+            >
+              Songs like this
             </button>
             <button
               type="button"

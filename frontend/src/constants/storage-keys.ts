@@ -41,6 +41,8 @@ export const KEYS = {
   /** Package D10 — recent karaoke sessions ("Sing again" on the Karaoke page). */
   karaoke: `${STORAGE_PREFIX}.karaoke.v1`,
   weekly: `${STORAGE_PREFIX}.weekly.v1`,
+  /** 15.0 — which week's Weekly Mix the smart downloads hold, and its ids. */
+  smartDownloads: `${STORAGE_PREFIX}.smart-downloads.v1`,
   output: `${STORAGE_PREFIX}.output.v1`,
   roomHostTokens: `${STORAGE_PREFIX}.room-host-tokens.v1`,
   /** Last in-app-update install attempt {build, ts} — the dialog reappearing

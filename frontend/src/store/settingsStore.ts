@@ -55,6 +55,8 @@ export interface SettingsState {
   crossfade: boolean;
   crossfadeSeconds: number;
   haptics: boolean;
+  /** 15.0 — Android: keep this week's Weekly Mix downloaded, fetched on Wi-Fi. */
+  smartDownloads: boolean;
   density: 'comfortable' | 'compact';
   resumePlayback: boolean;
   audioQuality: AudioQualityPref;
@@ -141,6 +143,7 @@ export interface SettingsState {
   setCrossfade(v: boolean): void;
   setCrossfadeSeconds(v: number): void;
   setHaptics(v: boolean): void;
+  setSmartDownloads(v: boolean): void;
   setDensity(v: 'comfortable' | 'compact'): void;
   setResumePlayback(v: boolean): void;
   setAudioQuality(q: AudioQualityPref): void;
@@ -206,6 +209,7 @@ const defaults = {
   crossfade: true,
   crossfadeSeconds: 5,
   haptics: true,
+  smartDownloads: false,
   density: 'comfortable' as const,
   resumePlayback: true,
   audioQuality: 'high' as AudioQualityPref,
@@ -337,6 +341,7 @@ export const useSettingsStore = create<SettingsState>()(
       setCrossfade: (crossfade) => set({ crossfade }),
       setCrossfadeSeconds: (crossfadeSeconds) => set({ crossfadeSeconds }),
       setHaptics: (haptics) => set({ haptics }),
+      setSmartDownloads: (smartDownloads) => set({ smartDownloads }),
       setDensity: (density) => set({ density }),
       setResumePlayback: (resumePlayback) => set({ resumePlayback }),
       setAudioQuality: (audioQuality) => set({ audioQuality }),
