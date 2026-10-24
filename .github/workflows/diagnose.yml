@@ -48,6 +48,22 @@ jobs:
           echo "::notice title=version::$OUT $(head -c 300 /tmp/v.json)"
           [ "$OUT" = "200" ] || echo "::error title=version::the Android update manifest did not answer 200 - installed apps cannot see new releases (GITHUB_TOKEN / GITHUB_REPO on the Worker)"
 
+      # 14.0.4 — are the providers out of the app and behind the secret?
+      - name: catalogue secret and bundle hygiene (14.0.4)
+        run: |
+          H=$(curl -s -D - -o /tmp/cat.json -m 20 'https://www.vinaxmusic.online/api/cat/search/songs?query=telugu&limit=1')
+          SRC=$(printf '%s' "$H" | tr -d '\r' | grep -i '^x-vinax-source:' | awk '{print $2}')
+          if [ "$SRC" = "upstream" ]; then echo "::notice title=catalogue-secret::OK - CATALOG_UPSTREAMS is set; a configured wrapper answered"; else echo "::warning title=catalogue-secret::CATALOG_UPSTREAMS is not set (or every wrapper failed): the built-in JioSaavn translation answered. Set it: npx wrangler secret put CATALOG_UPSTREAMS --config worker/wrangler.toml"; fi
+          curl -s -m 20 https://www.vinaxmusic.online/ -o /tmp/home.html
+          LEAK=0
+          for u in $(grep -o 'src="/assets/[^"]*\.js"' /tmp/home.html | sed 's/src="//;s/"//'); do
+            curl -s -m 30 "https://www.vinaxmusic.online$u" -o /tmp/chunk.js
+            if grep -qE 'musicapi\.vinaxmusic|saavn\.sumit|nepotune|saavn\.dev|b4a\.run|jiosaavn\.com/api' /tmp/chunk.js; then echo "::error title=provider-in-bundle::$u names a music provider"; LEAK=1; fi
+          done
+          grep -qE 'musicapi\.vinaxmusic|saavn\.sumit|nepotune|jiosaavn\.com/api' /tmp/home.html && { echo "::error title=provider-in-html::index.html names a music provider"; LEAK=1; }
+          [ "$LEAK" = 0 ] && echo "::notice title=provider-in-bundle::OK - no music provider named in index.html or its entry scripts"
+          echo "::notice title=json-hosts::$(grep -oE 'https?://[a-z0-9.-]+' /tmp/cat.json | sort -u | tr '\n' ' ')"
+
       - name: self-hosted catalog /api/cat (4.20.0)
         run: |
           OUT=$(curl -s -m 15 -o /tmp/c.json -w '%{http_code} %{time_total}s' 'https://www.vinaxmusic.online/api/cat/search/songs?query=top%20hindi%20songs&limit=3' || echo ERR)
