@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '14.0.2': {
+    title: 'Auto release: markers count only in the subject, never in the description',
+    changes: [
+      { type: 'improved', text: 'The first automatic release (merge of #151) was skipped: the squash.' },
+    ],
+  },
   '14.0.1': {
     title: 'The VinaX logo is back',
     changes: [
