@@ -13,10 +13,13 @@
  *   node scripts/auto-release.mjs            bump from HEAD's commit message
  *   node scripts/auto-release.mjs --dry-run  print what would change
  *
- * Bump level: patch, unless the commit subject or body says `#minor` or
- * `#major` (or "release: minor" / "release: major" on a line of its own).
- * The merge is left alone when it already changed the version (a manual
- * release) or its message contains `[skip release]`.
+ * Bump level: patch, unless the SUBJECT line says `#minor` or `#major`, or
+ * a line of the body is exactly "release: minor" / "release: major". The
+ * merge is left alone when it already changed the version (a manual
+ * release), or when the subject says `[skip release]` or a body line is
+ * exactly "release: skip". A squash merge's body is the pull request's
+ * description, which may *talk about* these markers (the first automatic
+ * release was skipped by its own documentation), so prose never counts.
  *
  * Exports are pure so they can be unit-tested (src/__tests__/autoRelease.test.ts).
  */
@@ -37,12 +40,26 @@ export function bumpVersion(version, level = 'patch') {
   return `${major}.${minor}.${patch + 1}`;
 }
 
-/** The bump level a commit message asks for. */
-export function levelOf(message) {
-  const m = message.toLowerCase();
-  if (/(^|\s)#major\b/.test(m) || /^\s*release:\s*major\s*$/m.test(m)) return 'major';
-  if (/(^|\s)#minor\b/.test(m) || /^\s*release:\s*minor\s*$/m.test(m)) return 'minor';
+/**
+ * What a commit message asks of the release: the subject's `#major`,
+ * `#minor` or `[skip release]`, or a body line that is exactly
+ * "release: major|minor|skip". Markers inside backticks and anywhere else in
+ * the body are prose and are ignored.
+ */
+export function directiveOf(message) {
+  const lines = message.replace(/\r/g, '').split('\n');
+  const subject = (lines[0] ?? '').replace(/`[^`]*`/g, '').toLowerCase();
+  const own = (word) => lines.slice(1).some((l) => new RegExp(`^\\s*release:\\s*${word}\\s*$`, 'i').test(l));
+  if (/\[skip release\]/.test(subject) || own('skip')) return 'skip';
+  if (/(^|\s)#major\b/.test(subject) || own('major')) return 'major';
+  if (/(^|\s)#minor\b/.test(subject) || own('minor')) return 'minor';
   return 'patch';
+}
+
+/** The bump level a commit message asks for (never 'skip'). */
+export function levelOf(message) {
+  const d = directiveOf(message);
+  return d === 'skip' ? 'patch' : d;
 }
 
 /** Strip markdown and merge noise from one line of a commit message. */
@@ -145,7 +162,7 @@ export function main(argv = process.argv.slice(2)) {
   const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
   const current = pkg.version;
 
-  if (/\[skip release\]/i.test(message)) return done('skipped', `[skip release] in the commit message; staying at ${current}`);
+  if (directiveOf(message) === 'skip') return done('skipped', `the merge asked to skip the release; staying at ${current}`);
   // A merge that already bumped the version is a manual release: leave it.
   let before = null;
   try { before = JSON.parse(git('show', 'HEAD~1:frontend/package.json')).version; } catch { /* first commit or shallow */ }
@@ -171,6 +188,8 @@ export function main(argv = process.argv.slice(2)) {
 function done(status, text, extra = {}) {
   const result = { status, text, ...extra };
   console.log(`auto-release: ${status} — ${text}`);
+  // Visible in the run's annotations, where the log itself may not be.
+  if (process.env.GITHUB_ACTIONS) console.log(`::notice title=auto-release ${status}::${text}`);
   if (process.env.GITHUB_OUTPUT) {
     writeFileSync(process.env.GITHUB_OUTPUT, `status=${status}\nversion=${extra.version ?? ''}\ntitle=${(extra.entry?.title ?? '').replace(/\n/g, ' ')}\n`, { flag: 'a' });
   }

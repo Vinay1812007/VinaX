@@ -9,9 +9,12 @@
 #
 # This workflow runs on every push to main:
 #   1. frontend/scripts/auto-release.mjs bumps the patch version (#minor /
-#      #major in the merge message bump more) and writes the What's New card
+#      #major in the merge SUBJECT bump more) and writes the What's New card
 #      from the merge's title and body. A merge that already moved the
-#      version (a manual release) or says [skip release] is left alone.
+#      version (a manual release), or whose subject says [skip release], is
+#      left alone. Only the subject or a bare "release: …" body line counts:
+#      a squash merge's body is the pull request description, and the first
+#      automatic release was skipped by the prose that documented the marker.
 #   2. The release commit ("release: 14.0.2 — <title>") is pushed to main.
 #      The static host builds the web app from it as it does for any push.
 #   3. Build Android APK is dispatched on that commit, so one signed APK and
