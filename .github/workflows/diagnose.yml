@@ -22,7 +22,7 @@ jobs:
       # yet). /api/version is the Android update manifest (GITHUB_TOKEN).
       - name: database and update manifest (14.0)
         run: |
-          OUT=$(curl -s -m 15 -o /tmp/u.json -w '%{http_code}' 'https://www.vinaxmusic.online/api/username?u=zz_probe_never_claimed' || echo ERR)
+          OUT=$(curl -s -m 15 -o /tmp/u.json -w '%{http_code}' 'https://www.vinaxmusic.online/api/username?u=zz_probe_unclaimed' || echo ERR)
           BODY=$(head -c 200 /tmp/u.json)
           case "$OUT $BODY" in
             200*unchecked*) echo "::error title=database::NOT CONFIGURED - the Worker has no SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (docs/database.md#setting-it-up). $BODY";;
