@@ -1,10 +1,17 @@
 # Actions pinned by SHA — rotate via Dependabot (github-actions ecosystem).
 name: Build Android APK
 
+# Runs by dispatch only: the Auto release workflow dispatches it on every
+# merge to main once the release commit (the version bump) has landed, so a
+# merge produces ONE signed APK and ONE GitHub Release that carry the new
+# version. A push trigger here would build the old version first.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      strict:
+        description: 'Fail when the signing keystore is missing (a hand-run release)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -104,23 +111,23 @@ jobs:
 
       - name: Decide whether this run publishes a release
         id: rel
-        # Publish a fresh signed APK on EVERY push to main (owner request:
-        # "release the app every time the code updates") — not just on
-        # [release] commits. workflow_dispatch and [release] are EXPLICIT
-        # release intent: those still FAIL loudly when the signing keystore
-        # is missing, whereas an ordinary auto-push just SKIPS the release so
-        # a normal code push can never go red over an unconfigured keystore.
+        # Publish a fresh signed APK on EVERY run (owner request: "release
+        # the app every time the code updates"); Auto release dispatches one
+        # per merge. A hand run with `strict`, or a [release] commit, is
+        # EXPLICIT release intent: those FAIL loudly when the signing keystore
+        # is missing, whereas the automatic run just SKIPS the publish so a
+        # merge can never go red over an unconfigured keystore.
         # The commit message is passed through an env var, never pasted into
         # the script: a message with quotes or backticks (the #65 squash)
         # broke the shell ("syntax error near unexpected token `newline'") and
         # skipped the release, and a crafted one could run commands in a job
         # that holds the signing secrets.
         env:
-          EVENT_NAME: ${{ github.event_name }}
+          STRICT: ${{ inputs.strict }}
           COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           echo "IS_RELEASE=true" >> "$GITHUB_ENV"
-          if [ "$EVENT_NAME" = "workflow_dispatch" ] || printf '%s' "$COMMIT_MESSAGE" | grep -qF '[release]'; then
+          if [ "$STRICT" = "true" ] || printf '%s' "$COMMIT_MESSAGE" | grep -qF '[release]'; then
             echo "RELEASE_EXPLICIT=true" >> "$GITHUB_ENV"
           else
             echo "RELEASE_EXPLICIT=false" >> "$GITHUB_ENV"

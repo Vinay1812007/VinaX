@@ -13,6 +13,41 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
+      # 14.0: is the Worker talking to its database? Three public routes say
+      # so without a token. /api/username answers `unchecked` when the two
+      # database secrets are missing on the Worker, 503 when they are set
+      # but the database refuses, and a plain answer when a read worked.
+      # /api/status carries each component's recorded history, written by
+      # the Worker's 30-minute Cron Trigger (empty = no database or no tick
+      # yet). /api/version is the Android update manifest (GITHUB_TOKEN).
+      - name: database and update manifest (14.0)
+        run: |
+          OUT=$(curl -s -m 15 -o /tmp/u.json -w '%{http_code}' 'https://www.vinaxmusic.online/api/username?u=zz_probe_unclaimed' || echo ERR)
+          BODY=$(head -c 200 /tmp/u.json)
+          case "$OUT $BODY" in
+            200*unchecked*) echo "::error title=database::NOT CONFIGURED - the Worker has no SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (docs/database.md#setting-it-up). $BODY";;
+            200*)           echo "::notice title=database::OK - a read answered ($BODY)";;
+            503*)           echo "::error title=database::UNREACHABLE - secrets are set but the database refused or timed out ($OUT $BODY)";;
+            *)              echo "::error title=database::unexpected answer $OUT $BODY";;
+          esac
+          curl -s -m 15 -o /tmp/s.json 'https://www.vinaxmusic.online/api/status' || true
+          python3 - <<'PY'
+          import json
+          try:
+              d = json.load(open('/tmp/s.json'))
+              comps = d.get('components') or []
+              hist = [c for c in comps if c.get('days')]
+              down = [c['id'] for c in comps if c.get('status') != 'up']
+              print(f"::notice title=status::overall={d.get('overall')} components={len(comps)} with-history={len(hist)} down={down}")
+              if comps and not hist:
+                  print("::warning title=status-history::no component has recorded history: the Cron Trigger has not written an uptime tick to the database yet (or cannot)")
+          except Exception as e:
+              print(f"::error title=status::could not parse /api/status: {e}")
+          PY
+          OUT=$(curl -s -m 15 -o /tmp/v.json -w '%{http_code}' 'https://www.vinaxmusic.online/api/version' || echo ERR)
+          echo "::notice title=version::$OUT $(head -c 300 /tmp/v.json)"
+          [ "$OUT" = "200" ] || echo "::error title=version::the Android update manifest did not answer 200 - installed apps cannot see new releases (GITHUB_TOKEN / GITHUB_REPO on the Worker)"
+
       - name: self-hosted catalog /api/cat (4.20.0)
         run: |
           OUT=$(curl -s -m 15 -o /tmp/c.json -w '%{http_code} %{time_total}s' 'https://www.vinaxmusic.online/api/cat/search/songs?query=top%20hindi%20songs&limit=3' || echo ERR)

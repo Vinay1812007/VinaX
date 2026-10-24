@@ -1,6 +1,6 @@
 # VinaX
 
-VinaX is a free music app with no sign-up. It plays from a public catalogue, learns a listener's taste on their own device, and builds what plays next from that. It ships as a web app and an Android app from one codebase, backed by one edge Worker, and includes VinaX AI, a chat assistant that can play music, search the web and cite its sources. The current release is 12.0.0, shown to listeners as "VinaX 12". This README covers what a listener gets, how the code is put together, how to run and check it, how a release is made, and where the rest of the documentation is.
+VinaX is a free music app with no sign-up. It plays from a public catalogue, learns a listener's taste on their own device, and builds what plays next from that. It ships as a web app and an Android app from one codebase, backed by one edge Worker, and includes VinaX AI, a chat assistant that can play music, search the web and cite its sources. The version number moves with every merge to `main` (`frontend/src/constants/version.ts` is the source of truth; listeners see the major, "VinaX 14"). This README covers what a listener gets, how the code is put together, how to run and check it, how a release is made, and where the rest of the documentation is.
 
 [Documentation index](docs/README.md) · [User guide](docs/user-guide/README.md) · [Deployment](DEPLOYMENT.md) · [Operations](docs/operations.md) · [Database](docs/database.md)
 
@@ -61,7 +61,7 @@ Since 14.0 the Worker has one hosted database, designed from a clean sheet: the 
 | Static frontend | `frontend/` built to `dist/`: a single-page app in which every page is a lazy chunk, plus the prerendered static routes, the owner console (`/admin/`) and the status page (`/status/`) | The static host's Git integration builds `frontend/` on every push to `main`. No workflow in this repository deploys it. |
 | Worker `vinax-api` | `backend/worker/`: one Worker, no framework. It answers only the routes listed in `backend/worker/wrangler.toml`; everything else falls through to the static site. It also has a key-value store for device-transfer links, rate-limit bindings, a built-in AI binding and a Cron Trigger. | The **Deploy Worker** workflow on a push to `main` that touches `backend/**`. |
 | Database | One hosted project; the schema is `backend/supabase/schema.sql` (tables, the `directory` view, the `stats_*` functions, deny-all row-level security). The Worker is its only client. | Paste `schema.sql` into the project's SQL editor once (it is idempotent); set the two Worker secrets ([docs/database.md](docs/database.md#setting-it-up)). |
-| Android package | The same bundle in a generated wrapper project with a native media service | **Build Android APK** on every push to `main`; **Release APK** on a `v*` tag. |
+| Android package | The same bundle in a generated wrapper project with a native media service | **Build Android APK**, dispatched by **Auto release** on every merge to `main`; **Release APK** on a `v*` tag. |
 
 The two halves deploy separately and either can fail alone. The frontend holds no secrets: `VITE_*` variables are visible to every visitor. Main packages, for orientation: `react`, `react-router-dom`, `zustand`, `@tanstack/react-query` and `tailwindcss`, built with `vite`; `@capacitor/*` for Android; `wrangler` for the Worker; `vitest` and `playwright-core` for tests. The full map is in [docs/architecture.md](docs/architecture.md).
 
@@ -166,15 +166,17 @@ npx wrangler deploy --config worker/wrangler.toml --dry-run --outdir /tmp/wrangl
 
 ## How releases work
 
-1. **Work on a branch.** A release changes these together:
+Every merge to `main` is a release. The **Auto release** workflow bumps the version, writes the What's New card from the merge's title and body, pushes a `release: <version> — <title>` commit, and dispatches the Android build on it; the static host and Deploy Worker publish from the same code. Nothing has to be done by hand: a pull request's title becomes the card's title and its bullet points become the changes, so write them for listeners. `#minor` or `#major` in the merge message bumps more than the patch number; `[skip release]` leaves the version alone. A pull request that bumps the version itself (the manual route below) is released as is.
+
+1. **Work on a branch.** A manual release (the automatic one does the same) changes these together:
    - `version` in `frontend/package.json` and the root entry of `frontend/package-lock.json`;
-   - `LATEST_VERSION` (semver) and `DISPLAY_VERSION` (what listeners see, e.g. "VinaX 12") in `frontend/src/constants/version.ts`;
+   - `LATEST_VERSION` (semver) and `DISPLAY_VERSION` (what listeners see, e.g. "VinaX 14") in `frontend/src/constants/version.ts`;
    - a new What's New card at the top of `CHANGELOG_V2` in `frontend/src/constants/changelog.ts`, with a title and at least one change;
    - `version` in `backend/package.json` when the Worker changed. The Worker has its own numbering (6.0.0 at frontend 12.0.0).
 
    `frontend/src/constants/release.test.ts` fails when `LATEST_VERSION`, `package.json` and the top changelog entry disagree. If you changed an inline script in `index.html`, build and run `node scripts/csp-hashes.mjs`.
 2. **Open a pull request.** CI runs lint, typecheck, unit tests, the build and the bundle budget for the frontend, and lint, typecheck, tests and a Worker dry-run for the backend. E2E builds the app and runs the browser suite.
-3. **Merge to `main`.** The static host builds and publishes the frontend. When `backend/**` changed, **Deploy Worker** runs the backend gates again, verifies its deploy token, deploys and polls `/api/status` until it answers `200`. **Build Android APK** builds the Android package and publishes a release when the signing secrets are set.
+3. **Merge to `main`.** **Auto release** pushes the version bump (unless the merge made one). The static host builds and publishes the frontend from it. When `backend/**` changed, **Deploy Worker** runs the backend gates again, verifies its deploy token, deploys and polls `/api/status` until it answers `200`. **Build Android APK**, dispatched by Auto release, builds the Android package and publishes a release when the signing secrets are set.
 4. **Verify production.** A merged commit, green checks and a verified production are three separate milestones. Confirm the static host's build succeeded and read the Deploy Worker log: it succeeds without deploying when its token is not configured. Check that the app shows the new version (Settings, About or `/changelog.json`) and that any route the change added answers. `/api/version` reports the Android release, not the Worker build. The hosting provider's own Git build check for the Worker fails on every commit because of an expired dashboard token, never because of the code; it is harmless while Deploy Worker is green ([docs/operations.md](docs/operations.md#the-known-red-check)).
 
 Full steps, release checks and what to do when a deploy does not land: [DEPLOYMENT.md](DEPLOYMENT.md). Rollback: [docs/operations.md](docs/operations.md#rollback).
@@ -190,7 +192,8 @@ All in `.github/workflows/`. Times are UTC; scheduled workflows often start late
 | `lighthouse.yml` | Push to `main`, by hand | Audits the prerendered routes: accessibility and search checks fail the run, performance is advisory |
 | `worker-deploy.yml` | Push to `main` touching `backend/**` or the workflow file; by hand, with an optional `dry_run` | Gates, then deploys the Worker and polls `/api/status` |
 | `schema.yml` | Pull requests and pushes touching `backend/supabase/**`; by hand, with an optional `apply` | Proves `schema.sql` on a fresh Postgres (apply twice, `check.sql`, reset, apply, check); on `main`, applies it to the production database when `SUPABASE_DB_URL` is set ([docs/database.md](docs/database.md#from-ci-instead-of-the-sql-editor)) |
-| `buildapk.yml` | Push to `main`, by hand | Builds the Android package; publishes a release when signing secrets are set |
+| `auto-release.yml` | Push to `main`; by hand, with an optional `dry_run` | Bumps the version, writes the What's New card from the merge, pushes the release commit and dispatches the Android build |
+| `buildapk.yml` | Dispatched by Auto release on every merge; by hand, with an optional `strict` | Builds the Android package; publishes a release when signing secrets are set (`strict` fails without them) |
 | `release.yml` | Push of a `v*` tag | Builds and publishes a signed Android release; refuses without the release keystore |
 | `diagnose.yml` | By hand, and when its own file changes | Checks that the live page's assets load and the app mounts in a headless browser; probes the catalogue route |
 | `synthetic-uptime.yml` | Every 30 minutes | Probes the live app shell and two Worker routes, runs `frontend/scripts/edge-integrity.mjs`, and opens one de-duplicated issue on failure. It is an outside check; the status page's own history comes from the Worker's Cron Trigger |

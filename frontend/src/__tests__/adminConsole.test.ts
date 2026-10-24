@@ -198,3 +198,29 @@ describe('empty and failing answers', () => {
     expect(failures).toEqual([]);
   });
 });
+
+describe('charts', () => {
+  const axis = (values: number[]): string[] => {
+    const ui = (VX as unknown as { ui: { chart: (o: unknown) => HTMLElement } }).ui;
+    const el = ui.chart({ labels: values.map((_, i) => `d${i}`), series: [{ name: 'n', values }], type: 'bar' });
+    return [...el.querySelectorAll('.chart-y span')].map((s) => s.textContent ?? '');
+  };
+
+  it('a count axis is whole numbers with no repeated labels', () => {
+    // 14.0.1: a top of 1 over four divisions printed "1 1 1 0 0" on a young
+    // database's Overview charts.
+    expect(axis([0, 0, 1])).toEqual(['0', '1']);
+    expect(axis([2, 1, 0])).toEqual(['0', '1', '2']);
+    expect(axis([5, 2])).toEqual(['0', '1', '2', '3', '4', '5']);
+    expect(axis([7, 1])).toEqual(['0', '2', '4', '6', '8', '10']);
+    expect(axis([20, 1])).toEqual(['0', '5', '10', '15', '20']);
+    for (const v of [[1], [2], [3], [4], [6], [9], [13], [48], [250], [999]]) {
+      const labels = axis(v);
+      expect(new Set(labels).size, `distinct labels for ${v}`).toBe(labels.length);
+    }
+  });
+
+  it('a fractional axis keeps four divisions', () => {
+    expect(axis([0.5, 0.25]).length).toBe(5);
+  });
+});

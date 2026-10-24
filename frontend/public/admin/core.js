@@ -703,15 +703,25 @@
     if (type === 'bar' && o.stacked) labels.forEach(function (_, i) { var t = 0; series.forEach(function (sr) { t += Number(sr.values[i]) || 0; }); maxV = Math.max(maxV, t); });
     else series.forEach(function (sr) { sr.values.forEach(function (v) { maxV = Math.max(maxV, Number(v) || 0); }); });
     var top = niceMax(maxV);
+    // Counts (listeners, plays, errors) get an axis of whole numbers: four
+    // divisions of a top of 1 printed "1 1 1 0 0" on the Overview charts of
+    // a young database. Pick the division count that keeps every step an
+    // integer; a top of 2.5 becomes 3.
+    var divs = 4;
+    var allInts = series.every(function (sr) { return sr.values.every(function (v) { return Number.isInteger(Number(v) || 0); }); });
+    if (allInts) {
+      if (top === 2.5) top = 3;
+      divs = [4, 5, 3, 2, 1].filter(function (d) { return top % d === 0; })[0] || 4;
+    }
     var f = o.format || fmt.compact;
     var lf = o.labelFormat || function (l) { return /^\d{4}-\d{2}-\d{2}/.test(String(l)) ? fmt.day(l) : String(l); };
     var svg = s('svg', { viewBox: '0 0 ' + W + ' ' + H, preserveAspectRatio: 'none', class: 'chart-svg', role: 'img', 'aria-label': o.title || 'Chart' });
     var yAxis = h('div.chart-y', { 'aria-hidden': 'true' });
     var xAxis = h('div.chart-x', { 'aria-hidden': 'true' });
-    for (var g = 0; g <= 4; g++) {
-      var y = padT + ih - (g / 4) * ih;
+    for (var g = 0; g <= divs; g++) {
+      var y = padT + ih - (g / divs) * ih;
       svg.appendChild(s('line', { x1: 0, x2: W, y1: y, y2: y, class: 'grid-line' }));
-      yAxis.appendChild(h('span', { style: { top: (y / H * 100).toFixed(2) + '%' } }, f(top * g / 4)));
+      yAxis.appendChild(h('span', { style: { top: (y / H * 100).toFixed(2) + '%' } }, f(top * g / divs)));
     }
     var n = labels.length;
     var step = Math.max(1, Math.ceil(n / 7));
