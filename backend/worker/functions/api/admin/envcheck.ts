@@ -24,6 +24,8 @@ export const ENV_ITEMS: Array<{ name: string; group: string; required: boolean; 
   { name: 'GOOGLE_CLIENT_ID', group: 'Data', required: false, note: 'optional Google sign-in (plain var; sign-in is off without it)' },
   { name: 'AUTH_SECRET', group: 'Data', required: false, note: 'signs sign-in sessions (falls back to DEVICE_ID_SECRET)' },
   { name: 'TURNSTILE_SECRET_KEY', group: 'Data', required: false, note: 'human check on username claims from app versions before 12.2 (off when unset)' },
+  { name: 'CATALOG_UPSTREAMS', group: 'Catalogue', required: false, note: 'comma-separated wrapper base URLs the catalogue tries first, in order (the app only ever sees /api/cat)' },
+  { name: 'CATALOG_DIRECT_URL', group: 'Catalogue', required: false, note: 'overrides the direct JioSaavn web API the catalogue falls back to' },
   { name: 'SUPABASE_URL', group: 'Database', required: true, note: 'database project URL' },
   { name: 'SUPABASE_SERVICE_ROLE_KEY', group: 'Database', required: true, note: 'database service-role key (server only)' },
   { name: 'CRON_SECRET', group: 'Cron', required: false, note: 'runs a job by hand through POST /api/cron/run; the Cron Trigger needs no secret' },

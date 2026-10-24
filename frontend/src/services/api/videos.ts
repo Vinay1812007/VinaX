@@ -1,3 +1,4 @@
+import { isNativePlatform } from '@/services/native';
 import type { Song } from '@/types';
 
 /**
@@ -33,7 +34,9 @@ export interface Video {
   artists: VideoArtistRef[];
 }
 
-const BASE = 'https://musicapi.vinaxmusic.online/api';
+// 14.0.4 — through the Worker's catalogue route, which forwards video routes
+// to the configured wrapper (CATALOG_UPSTREAMS); no provider URL in the app.
+const BASE = isNativePlatform() ? 'https://www.vinaxmusic.online/api/cat' : '/api/cat';
 
 /** The upstream titles arrive HTML-encoded ("Tested, Approved &amp; Trusted"). */
 function decodeEntities(s: string): string {

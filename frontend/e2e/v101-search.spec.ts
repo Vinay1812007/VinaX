@@ -11,8 +11,11 @@ import { latestNotesFingerprint } from '../src/constants/changelog';
  *  - allotment: when the first catalogue endpoint stalls, an interactive
  *    search is hedged to the next one and answers long before the stall ends.
  *
- * Two catalogue hosts are mocked with route handlers: the primary remote
- * catalogue and the same-origin one. Everything else off localhost is aborted.
+ * The app's two catalogue bases are mocked with route handlers: the
+ * same-origin /api/cat (ranked first) and the absolute
+ * www.vinaxmusic.online/api/cat (its fallback). 14.0.4: the providers
+ * themselves live in a Worker secret and never appear in the app. Everything
+ * else off localhost is aborted.
  */
 interface ApiSong {
   kind: 'song'; id: string; title: string; subtitle: string;
@@ -62,9 +65,10 @@ const WAV = silentWav(30);
 interface Hit { host: 'primary' | 'local'; path: string; query: string; at: number }
 
 /**
- * `primaryDelayMs`: how long the primary remote catalogue takes to answer
- * (it is ranked first on a fresh session). The same-origin catalogue always
- * answers at once; the third (remote mirror) is unreachable.
+ * `primaryDelayMs`: how long the first-ranked base (the same-origin
+ * /api/cat, labelled 'primary' here) takes to answer. The absolute
+ * www.vinaxmusic.online/api/cat base ('local' in these hits, the second in
+ * the ladder) always answers at once.
  */
 async function seed(page: Page, baseURL: string, primaryDelayMs = 0): Promise<Hit[]> {
   const pool = TITLES.map((_, i) => song(baseURL, i));
@@ -104,10 +108,11 @@ async function seed(page: Page, baseURL: string, primaryDelayMs = 0): Promise<Hi
     const url = new URL(route.request().url());
     const local = url.origin.startsWith('http://localhost');
     if (local && url.pathname === '/e2e-silence.wav') return route.fulfill({ body: WAV, contentType: 'audio/wav' });
-    // The primary remote catalogue speaks /api/search…; the remote mirror
-    // speaks /api/cat/… and is left unreachable.
-    const primary = !local && url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/cat/');
-    if (primary || (local && url.pathname.startsWith('/api/cat/'))) {
+    // Same-origin /api/cat is ranked first ('primary'); the absolute
+    // www.vinaxmusic.online/api/cat base is the fallback ('local').
+    const primary = local && url.pathname.startsWith('/api/cat/');
+    const fallback = !local && url.hostname === 'www.vinaxmusic.online' && url.pathname.startsWith('/api/cat/');
+    if (primary || fallback) {
       const path = url.pathname.replace(/^\/api(\/cat)?/, '');
       const query = url.searchParams.get('query') ?? '';
       hits.push({ host: primary ? 'primary' : 'local', path, query, at: Date.now() });

@@ -6,6 +6,20 @@
  * concurrency cap, and in-flight de-duplication with a short memo.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// The rules are about ranking ACROSS endpoints, so the test brings three of
+// its own. 14.0.4 — the production list is the app's own origin alone (the
+// providers live in the Worker's secret), which is one base too few here.
+vi.mock('@/constants/endpoints', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/constants/endpoints')>();
+  const bases = [
+    { id: 'alpha', url: 'https://alpha.test/api', label: 'Alpha' },
+    { id: 'beta', url: 'https://beta.test/api', label: 'Beta' },
+    { id: 'gamma', url: 'https://gamma.test/api', label: 'Gamma' },
+  ];
+  return { ...real, API_BASES: bases, DEFAULT_API_BASES: bases, activeBases: () => bases };
+});
+
 import { activeBases } from '@/constants/endpoints';
 import { clearRequestMemo, orchestratedRequest, type OrchestratedRequest } from './client';
 import { HEDGE_MAX_MS, HEDGE_MIN_MS, healthRegistry, MAX_IN_FLIGHT, parseRetryAfter } from './health';

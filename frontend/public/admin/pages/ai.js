@@ -303,13 +303,11 @@
 
   /* ------------------------------------------------------ Engine probe */
 
+  // 14.0.4 — the upstream list lives in the Worker secret CATALOG_UPSTREAMS;
+  // the server labels each by its host, so only the two fixed rows are named here.
   var SOURCE_LABEL = {
     'vinax-cat': 'VinaX catalogue (this Worker)',
-    'vinax-render': 'VinaX music API',
-    'saavn-sumit': 'Community mirror A',
-    'saavn-dev': 'Community mirror B',
-    'nepotune': 'Community mirror C',
-    'b4a': 'Community mirror D'
+    'direct': 'Direct (JioSaavn web API)'
   };
 
   function renderProbe(host) {
@@ -358,7 +356,7 @@
       return ui.load(sources, function () { return VX.api.get('/api/admin/musicapi', null, { fresh: true, timeout: 30000 }); }, function (d) {
         var rows = (d.mirrors || []).map(function (m, i) {
           var state = !m.ok ? 'down' : Number(m.songs) > 0 ? 'ok' : 'empty';
-          return { label: SOURCE_LABEL[m.id] || 'Source ' + (i + 1), state: state, songs: m.songs, ms: m.ms, status: m.status, note: m.note };
+          return { label: SOURCE_LABEL[m.id] || m.label || 'Source ' + (i + 1), state: state, songs: m.songs, ms: m.ms, status: m.status, note: m.note };
         });
         var up = rows.filter(function (r) { return r.state === 'ok'; }).length;
         return [

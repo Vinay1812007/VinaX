@@ -29,16 +29,78 @@
 
 import { decryptMediaUrl } from '../../_lib/des';
 
-const UPSTREAM = 'https://www.jiosaavn.com/api.php';
+/**
+ * 14.0.4 — every provider lives on the Worker, in secrets, and the app only
+ * ever talks to this route. CATALOG_UPSTREAMS is an ordered, comma-separated
+ * list of wrapper base URLs that speak this same dialect (the owner's own
+ * wrapper leads it); each request tries them in order, with a 6 s deadline
+ * and a one-minute bench after a failure, and falls back to the built-in
+ * translation against JioSaavn's web API (CATALOG_DIRECT_URL overrides that
+ * one). Nothing here is visible to the browser: the bundle holds /api/cat.
+ */
+export interface CatalogEnv {
+  CATALOG_UPSTREAMS?: string;
+  CATALOG_DIRECT_URL?: string;
+}
+
+const DEFAULT_DIRECT = 'https://www.jiosaavn.com/api.php';
 const COMMON = '_format=json&_marker=0&api_version=4&ctx=web6dot0';
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
+const WRAPPER_TIMEOUT_MS = 6000;
+const BENCH_MS = 60_000;
+
+/** The configured wrapper bases, in order; empty when the secret is unset. */
+export function upstreamBases(env: CatalogEnv | undefined): string[] {
+  return (env?.CATALOG_UPSTREAMS ?? '')
+    .split(',')
+    .map((u) => u.trim().replace(/\/+$/, ''))
+    .filter((u) => /^https:\/\/[^\s/]+/.test(u));
+}
+
+/** Wrappers that failed recently sit out for a minute (per isolate). */
+const benched = new Map<string, number>();
+
+/**
+ * Forward one catalogue request to a wrapper. Answers the wrapper's JSON as
+ * it is (it speaks the dialect the app reads), or null when it is benched,
+ * slow, errors, or answers something that is not JSON.
+ */
+async function viaWrapper(base: string, seg: string[], search: string): Promise<Response | null> {
+  if ((benched.get(base) ?? 0) > Date.now()) return null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), WRAPPER_TIMEOUT_MS);
+  try {
+    const r = await fetch(`${base}/${seg.map(encodeURIComponent).join('/')}${search}`, {
+      headers: { accept: 'application/json', 'user-agent': UA },
+      signal: ctrl.signal,
+    });
+    if (!r.ok || !(r.headers.get('content-type') ?? '').includes('json')) throw new Error(`wrapper ${r.status}`);
+    const text = await r.text();
+    if (!text.trim().startsWith('{') && !text.trim().startsWith('[')) throw new Error('wrapper body');
+    return new Response(text, {
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': 'public, max-age=60, s-maxage=600',
+        'access-control-allow-origin': '*',
+        'x-vinax-source': 'upstream',
+      },
+    });
+  } catch {
+    benched.set(base, Date.now() + BENCH_MS);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+let directUrl = DEFAULT_DIRECT;
 
 async function upstream(params: string): Promise<any> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 7000);
   try {
-    const r = await fetch(`${UPSTREAM}?${params}&${COMMON}`, {
+    const r = await fetch(`${directUrl}?${params}&${COMMON}`, {
       headers: { accept: 'application/json', 'user-agent': UA },
       signal: ctrl.signal,
     });
@@ -93,13 +155,23 @@ function json(data: unknown, sMaxAge = 600): Response {
 
 const nf = () => new Response(JSON.stringify({ success: false, data: null }), { status: 404, headers: { 'content-type': 'application/json' } });
 
-export const onRequestGet = async (context: { request: Request; params: { path?: string[] } }): Promise<Response> => {
+export const onRequestGet = async (context: { request: Request; params: { path?: string[] }; env?: CatalogEnv }): Promise<Response> => {
   const url = new URL(context.request.url);
   const origin = url.origin;
   const seg = (context.params.path ?? []).map((s) => decodeURIComponent(String(s)));
   const q = (k: string) => url.searchParams.get(k) ?? '';
   const limit = Math.min(Number(q('limit') || q('n') || 20) || 20, 50);
   const page = Math.max(Number(q('page') || q('p') || 1) || 1, 1);
+  directUrl = context.env?.CATALOG_DIRECT_URL?.trim() || DEFAULT_DIRECT;
+
+  // The configured wrappers first, in order; /stream stays local (its DES
+  // step needs no upstream and must stay deterministic for the edge cache).
+  if (seg[0] !== 'stream') {
+    for (const base of upstreamBases(context.env)) {
+      const res = await viaWrapper(base, seg, url.search);
+      if (res) return res;
+    }
+  }
 
   try {
     // /stream?e=<encrypted>&q=<bitrate> → 302 to the real CDN URL.
