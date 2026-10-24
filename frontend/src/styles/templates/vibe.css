@@ -188,3 +188,60 @@ html[data-template='vibe'] .vxh-hero { border-radius: 34px; }
 html[data-template='vibe'] .vx-track-row { min-height: 66px; padding-inline: 10px; }
 html[data-template='vibe'] .vx-track-art { width: 48px; height: 48px; }
 html[data-template='vibe'] .vx-np-title { letter-spacing: -0.04em; }
+
+/* ------------------------------------------------- 14.0.3 — layout identity */
+/* Vibe is BUBBLY: everything is a circle or a capsule.
+   - Hero: a blob of coral and yellow light with the artwork a 96px circle.
+   - Jump back in: three across, each a circle of artwork with the title
+     under it — bubbles, not rows.
+   - Section heads: the rounded face, bold, no tracking.
+   - Tab bar and mini player: the capsules it already had, the mini player
+     now a pill with a round thumbnail and a ringed play button.
+   - Now Playing: the artwork is a CIRCLE. */
+@media (max-width: 767px) {
+  html[data-template='vibe'] .vx-home .vx-hero.vxh-hero {
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 6px 14px;
+    padding: 20px 18px 18px;
+    border-radius: 34px;
+  }
+  html[data-template='vibe'] .vx-home .vxh-hero-art { width: 96px; height: 96px; border-radius: 50%; overflow: hidden; }
+  html[data-template='vibe'] .vx-home .vxh-hero-art.is-collage { border-radius: 50%; }
+  html[data-template='vibe'] .vx-home .vxh-hero-title { font-size: 26px; line-height: 1.1; }
+}
+html[data-template='vibe']:not([class*='fest-']) .vx-home .vxh-hero {
+  background:
+    radial-gradient(60% 70% at 90% 20%, rgb(var(--ember-500) / 0.4), transparent 70%),
+    radial-gradient(50% 60% at 10% 100%, rgb(var(--tide-500) / 0.32), transparent 70%),
+    rgb(var(--ink-850));
+}
+html[data-template='vibe'] .vx-home .vxh-tiles,
+html[data-template='vibe'] .vx-home .vxh-jump .vxh-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 8px; }
+@container jump (min-width: 520px) { html[data-template='vibe'] .vx-home .vxh-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container jump (min-width: 760px) { html[data-template='vibe'] .vx-home .vxh-tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); } html[data-template='vibe'] .vx-home .vxh-tile.is-wide-only { display: flex; } }
+html[data-template='vibe'] .vx-home .vxh-tile {
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 0;
+  padding: 8px 4px 10px;
+  border-radius: 24px;
+  background: transparent;
+  text-align: center;
+}
+html[data-template='vibe'] .vx-home .vxh-tile:hover { background: rgb(var(--ink-100) / 0.06); }
+html[data-template='vibe'] .vx-home .vxh-tile img { width: 76px; height: 76px; border-radius: 50%; box-shadow: 0 10px 24px -12px rgb(0 0 0 / 0.7), 0 0 0 3px rgb(var(--ember-500) / 0.35); }
+html[data-template='vibe'] .vx-home .vxh-tile-text { width: 100%; }
+html[data-template='vibe'] .vx-home .vxh-tile-title { font-size: 13px; }
+html[data-template='vibe'] .vx-home .vxh-tile-sub { display: none; }
+html[data-template='vibe'] .vx-home .vxh-tile .vxh-disc { position: absolute; top: 60px; right: calc(50% - 40px); }
+html[data-template='vibe'] :is(.vx-section-header h2, .vxh-head h2, .vxh-explore-head h2) { font-weight: 800; letter-spacing: -0.01em; }
+@media (max-width: 767px) {
+  html[data-template='vibe'] .np-mini { margin: 0 14px 8px; border-radius: 999px; }
+}
+html[data-template='vibe'] .np-mini .np-mini-play { box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.3); }
+/* Now Playing: the artwork is a circle. */
+html[data-template='vibe'] .vx-np-art-img { border-radius: 50%; }
+html[data-template='vibe']:not([class*='fest-']) .vx-np-art-img { box-shadow: 0 0 0 8px rgb(var(--ember-500) / 0.18), 0 30px 60px -30px rgb(0 0 0 / 0.8); }
+html[data-template='vibe'] .vx-np-title { font-weight: 800; }

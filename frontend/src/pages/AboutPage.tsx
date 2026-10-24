@@ -10,7 +10,7 @@ import '@/styles/pages/secondary.css';
 
 const LINKS: Array<{ to: string; label: string; hint: string }> = [
   { to: '/help', label: 'Help and feedback', hint: 'Guides, answers and a way to reach the team' },
-  { to: '/privacy', label: 'Privacy', hint: 'What stays on your device, and what you can opt in to' },
+  { to: '/privacy', label: 'Privacy', hint: 'What stays on your device, what is shared, and the switches' },
   { to: '/terms', label: 'Terms of use', hint: 'Plain-language terms' },
   { to: '/dmca', label: 'Copyright and takedowns', hint: 'For artists, labels and rights holders' },
   { to: '/contact', label: 'Contact', hint: 'One email address for everything' },
@@ -56,7 +56,8 @@ export default function AboutPage() {
         <p>
           There are no paywalls and no premium tiers. Your favourites, playlists, history and taste profile live on
           your device. Searches and song requests go to the catalogue so music can play, and VinaX AI receives what
-          you ask it. Anonymous usage statistics are sent only if you opt in. See what VinaX has learned on
+          you ask it. Anonymous usage statistics (which song is playing, city-level location, no account) are shared
+          unless you switch that off in Settings. See what VinaX has learned on
           your <Link to="/taste-profile">taste profile</Link>; the Privacy page below lists what leaves your device.
         </p>
         <p>

@@ -204,3 +204,78 @@ html[data-template='marquee']:not([class*='fest-']) .vx-np-bg-art { display: non
 html[data-template='marquee']:not([class*='fest-']) .vx-np-bg-wash { background: linear-gradient(180deg, color-mix(in srgb, var(--np-warm, rgb(var(--art))) 38%, rgb(var(--ink-950))), rgb(var(--ink-950)) 46%); }
 html[data-template='marquee']:not([class*='fest-']) .vx-np-bg-scrim:not(.is-canvas) { background: none; }
 html[data-template='marquee'] .vx-np-art-img { box-shadow: none; }
+
+/* ------------------------------------------------- 14.0.3 — layout identity */
+/* Marquee is PICTURE FIRST: the artwork leads every surface.
+   - Hero: on phones the artwork runs the full width above the words, a wide
+     16:9 picture with the title set in tall marquee capitals over a hairline.
+   - Jump back in: one column of wide rows, 72px pictures flush left, square,
+     hairlines between them, no fills — a film strip.
+   - Section heads: tall capitals with an em-rule beside them.
+   - Tab bar: icons only, the active one marked by a white rule underneath.
+   - Now Playing: the artwork bleeds to the edges, the title in capitals. */
+@media (max-width: 767px) {
+  html[data-template='marquee'] .vx-home .vx-hero.vxh-hero {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'art' 'kicker' 'title' 'desc' 'actions';
+    gap: 4px;
+    padding: 0 0 14px;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  html[data-template='marquee'] .vx-home .vxh-hero-art { width: 100%; aspect-ratio: 16 / 9; border-radius: 0; margin-bottom: 10px; }
+  html[data-template='marquee'] .vx-home .vxh-hero-art.is-collage { aspect-ratio: 16 / 9; grid-template-columns: repeat(4, 1fr); }
+  html[data-template='marquee'] .vx-home .vxh-hero-art img { width: 100%; height: 100%; object-fit: cover; }
+  html[data-template='marquee'] .vx-home :is(.vxh-hero-kicker, .vxh-hero-title, .vxh-hero-desc, .vxh-hero-actions) { margin-inline: 14px; }
+  html[data-template='marquee'] .vx-home .vxh-hero-title { font-size: 34px; line-height: 0.95; text-transform: uppercase; letter-spacing: 0.02em; }
+  html[data-template='marquee'] .vx-home .vxh-hero-wash { display: none; }
+}
+html[data-template='marquee'] .vx-home .vxh-hero-kicker { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; }
+html[data-template='marquee'] .vx-home .vxh-tiles { grid-template-columns: minmax(0, 1fr); gap: 0; }
+@container jump (min-width: 760px) {
+  html[data-template='marquee'] .vx-home .vxh-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; }
+}
+html[data-template='marquee'] .vx-home .vxh-tile {
+  min-height: 72px;
+  gap: 14px;
+  padding: 0 8px 0 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: inset 0 -1px 0 var(--vx-border);
+}
+html[data-template='marquee'] .vx-home .vxh-tile:hover { background: rgb(var(--ink-100) / 0.06); }
+html[data-template='marquee'] .vx-home .vxh-tile img { width: 72px; height: 72px; border-radius: 0; }
+html[data-template='marquee'] .vx-home .vxh-tile-title { font-size: 15px; font-weight: 600; }
+html[data-template='marquee'] :is(.vx-section-header h2, .vxh-head h2, .vxh-explore-head h2) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+html[data-template='marquee'] :is(.vx-section-header h2, .vxh-head h2, .vxh-explore-head h2)::before {
+  content: '';
+  width: 18px;
+  height: 2px;
+  background: rgb(var(--ember-500));
+}
+/* Tab bar: icons only; a white rule marks the active one. */
+html[data-template='marquee'] .vx-dock-item > span:last-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+html[data-template='marquee'] .vx-dock-item { position: relative; min-height: 50px; gap: 0; }
+html[data-template='marquee'] .vx-dock-pill { position: relative; width: 44px; height: 36px; border-radius: 0; }
+html[data-template='marquee'] .vx-dock-active .vx-dock-pill::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -4px;
+  height: 2px;
+  background: rgb(var(--ink-100));
+}
+/* Now Playing: the picture bleeds to the edges, the title in capitals. */
+@media (max-width: 767px) {
+  html[data-template='marquee'] .vx-np-art { width: 100%; padding-top: 0; }
+  html[data-template='marquee'] .vx-np-art-img { border-radius: 0; }
+}
+html[data-template='marquee'] .vx-np-title { text-transform: uppercase; letter-spacing: 0.02em; line-height: 1; font-size: 1.55em; }
+html[data-template='marquee'] .vx-np-artist { letter-spacing: 0.08em; text-transform: uppercase; font-size: 13px; }

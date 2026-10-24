@@ -43,7 +43,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useHistoryStore } from '@/store/historyStore';
 import { resetSessionIntent } from '@/services/personalization/sessionIntent';
 import { KEYS } from '@/constants/storage-keys';
-import { disposeTelemetry, initTelemetry, META_MAX_BYTES, trackStructured } from './telemetry';
+import { applyUsageSharingDefault, consented, disposeTelemetry, initTelemetry, META_MAX_BYTES, trackStructured } from './telemetry';
 
 const song = (id: string): Song => ({ kind: 'song', id, title: id, subtitle: 'Artist', artists: [{ id: `a-${id}`, name: `Artist ${id}` }], album: null, images: [], audio: [], duration: 200, language: 'telugu', year: '2024', explicit: false, hasLyrics: false, playCount: null });
 const tick = (t: number, d = 200) => engine.handlers?.onTime(t, d);
@@ -132,5 +132,37 @@ describe('structured events', () => {
     consent(false);
     await trackStructured('rec_served', { n: 1 });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('14.0.3 — usage sharing is on by default', () => {
+  it('sends with no stored choice, and not after the listener switched it off', async () => {
+    localStorage.removeItem(KEYS.analyticsConsent);
+    expect(consented()).toBe(true);
+    initTelemetry();
+    await vi.runOnlyPendingTimersAsync();
+    expect(posted().some((b) => b.type === 'open')).toBe(true);
+    disposeTelemetry();
+    fetchMock.mockClear();
+    consent(false);
+    expect(consented()).toBe(false);
+    initTelemetry();
+    await vi.runOnlyPendingTimersAsync();
+    expect(posted()).toEqual([]);
+  });
+
+  it('switches a device that onboarded with the old unticked box to the default once', () => {
+    localStorage.removeItem(KEYS.usageSharingDefaultOn);
+    consent(false); // the old default, written by a box nobody ticked
+    expect(applyUsageSharingDefault()).toBe(true);
+    expect(consented()).toBe(true);
+    // Later choices stand: the switch is applied once per device.
+    consent(false);
+    expect(applyUsageSharingDefault()).toBe(false);
+    expect(consented()).toBe(false);
+    // A device that never stored a choice needs no switch and no notice.
+    localStorage.removeItem(KEYS.usageSharingDefaultOn);
+    localStorage.removeItem(KEYS.analyticsConsent);
+    expect(applyUsageSharingDefault()).toBe(false);
   });
 });

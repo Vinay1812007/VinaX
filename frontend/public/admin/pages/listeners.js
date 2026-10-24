@@ -9,7 +9,7 @@
 
   VX.page({
     id: 'listeners', title: 'Listeners', group: 'Audience', icon: 'users',
-    desc: 'Everyone who opted in to usage sharing or signed in: search, filter, open a profile, delete a person’s data.',
+    desc: 'Everyone with usage sharing on (the default) or signed in: search, filter, open a profile, delete a person’s data.',
     render: render
   });
 
@@ -42,7 +42,7 @@
         var total = num(d.total);
         return [
           ui.kpis([
-            { label: 'Listeners', value: fmt.compact(counts.listeners), sub: 'devices that opted in' },
+            { label: 'Listeners', value: fmt.compact(counts.listeners), sub: 'devices sharing usage' },
             { label: 'Signed in', value: fmt.compact(counts.accounts), sub: 'Google accounts' },
             { label: 'Android', value: fmt.compact(byP.android) },
             { label: 'Web', value: fmt.compact(byP.web) },
@@ -61,7 +61,7 @@
               ],
               rows: rows, exportName: 'vinax-listeners', search: false, pageSize: LIMIT, sortKey: 'lastSeen', sortDir: 'desc',
               empty: state.q || state.platform || state.days ? 'Nobody matches these filters' : 'No listeners yet',
-              emptyHint: 'People appear here after they opt in to usage sharing or sign in.',
+              emptyHint: 'People appear here once they use the app with usage sharing on (the default) or sign in.',
               onRow: function (r) { openProfile(r, ctx, load); }
             }),
             total > LIMIT ? ui.pager(state.offset, LIMIT, total, function (o) { state.offset = o; sync(); load(); }) : null

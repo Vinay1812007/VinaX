@@ -31,6 +31,10 @@ export const KEYS = {
   /** 12.2 — the optional Google sign-in: VinaX's own session and the profile it returned. */
   account: `${STORAGE_PREFIX}.account.v1`,
   analyticsConsent: `${STORAGE_PREFIX}.analytics-consent`,
+  /** 14.0.3 — usage sharing is on by default; this marks the one-time switch of devices that never chose. */
+  usageSharingDefaultOn: `${STORAGE_PREFIX}.usage-sharing-default-on.v1`,
+  /** 14.0.3 — third-party session insights (heatmaps, masked replays): its own opt-in, off by default. */
+  sessionInsightsConsent: `${STORAGE_PREFIX}.session-insights-consent.v1`,
   downloads: `${STORAGE_PREFIX}.downloads.v1`,
   alarm: `${STORAGE_PREFIX}.alarm.v1`,
   lyricsOffset: `${STORAGE_PREFIX}.lyrics-offset.v1`,

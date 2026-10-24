@@ -373,7 +373,8 @@ export default function SettingsPage() {
   const s = useSettingsStore();
   const wide = useMediaQuery('(min-width: 1024px)');
   // Usage-sharing consent lives outside the settings store (it is never part of a backup).
-  const [usageSharing, setUsageSharing] = useState<boolean>(() => getLocal<boolean>(KEYS.analyticsConsent, false) === true);
+  const [usageSharing, setUsageSharing] = useState<boolean>(() => getLocal<boolean>(KEYS.analyticsConsent, true) !== false);
+  const [sessionInsights, setSessionInsights] = useState<boolean>(() => getLocal<boolean>(KEYS.sessionInsightsConsent, false) === true);
   const fileRef = useRef<HTMLInputElement>(null);
   const [notifPerm, setNotifPerm] = useState<'granted' | 'denied' | 'unsupported' | 'unknown'>('unknown');
   const [eraseOpen, setEraseOpen] = useState(false);
@@ -861,10 +862,10 @@ export default function SettingsPage() {
             )}
           </Section>
 
-          <Section title="Region & privacy" id="privacy" lede="Usage sharing stays off unless you turn it on.">
+          <Section title="Region & privacy" id="privacy" lede="Anonymous usage sharing is on by default; switch it off here. Session insights stay off unless you turn them on.">
             <Row
               label="Share anonymous usage"
-              note="City-level location, no account, and session insights with all on-screen text masked, to help improve VinaX. Off by default. Turning it off stops usage events at once and session insights after the next reload."
+              note="Which song is playing, city-level location and the app version, with no account attached, so VinaX can be improved. On by default; switching it off stops it at once."
               keywords="analytics telemetry consent"
             >
               <Toggle
@@ -873,11 +874,24 @@ export default function SettingsPage() {
                 onChange={(v) => {
                   setLocal(KEYS.analyticsConsent, v);
                   setUsageSharing(v);
-                  if (v) {
-                    void import('@/services/analytics/telemetry').then((m) => m.registerUser()).catch(() => undefined);
-                    void import('@/services/analytics/sessionInsights').then((m) => m.initSessionInsights()).catch(() => undefined);
-                  }
+                  if (v) void import('@/services/analytics/telemetry').then((m) => m.registerUser()).catch(() => undefined);
                   toast(v ? 'Thank you — anonymous usage sharing is on' : 'Usage sharing is off');
+                }}
+              />
+            </Row>
+            <Row
+              label="Session insights"
+              note="Heatmaps and anonymous replays of how the app is used, by a third party, with every piece of on-screen text masked on your device first. Off by default; switching it off takes effect after the next reload."
+              keywords="analytics replay heatmap clarity consent"
+            >
+              <Toggle
+                on={sessionInsights}
+                label="Session insights"
+                onChange={(v) => {
+                  setLocal(KEYS.sessionInsightsConsent, v);
+                  setSessionInsights(v);
+                  if (v) void import('@/services/analytics/sessionInsights').then((m) => m.initSessionInsights()).catch(() => undefined);
+                  toast(v ? 'Session insights are on' : 'Session insights are off');
                 }}
               />
             </Row>

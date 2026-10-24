@@ -73,10 +73,14 @@ describe('OnboardingSheet (11.0 welcome)', () => {
     press('Continue');
     await heading('Choose your languages');
 
-    fireEvent.click(screen.getByRole('checkbox'));
+    // 14.0.3 — usage sharing starts ticked; unticking it is the choice that is stored.
+    const box = screen.getByRole('checkbox') as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    fireEvent.click(box);
+    expect(box.checked).toBe(false);
     press('Continue');
     await heading('Pick your look');
-    expect(getLocal<boolean>(KEYS.analyticsConsent, false)).toBe(true);
+    expect(getLocal<boolean>(KEYS.analyticsConsent, true)).toBe(false);
     expect(useSettingsStore.getState().pinnedLanguages.length).toBeGreaterThan(0);
 
     const styles = screen.getAllByRole('radio');

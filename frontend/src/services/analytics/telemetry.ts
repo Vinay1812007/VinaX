@@ -8,11 +8,15 @@ import { bestImage } from '@/utils/images';
 import type { Song } from '@/types';
 
 /**
- * Privacy-bounded, consent-gated usage telemetry. Nothing is sent unless the
- * listener opted in during onboarding. We send only an anonymous device id, an
- * optional display name, and the current song; coarse geo is added at the edge
- * (never the raw IP). On web the endpoint is same-origin; the native app posts
- * to the deployed function.
+ * Privacy-bounded usage telemetry. 14.0.3 — on by default, off with one
+ * switch (the welcome's pre-ticked box, or Settings → Region & privacy): the
+ * owner console's Live, Listeners and Analytics pages read only these events,
+ * and with an unticked box almost nobody appeared in them. We send only an
+ * anonymous device id, an optional display name, and the current song; coarse
+ * geo is added at the edge (never the raw IP). Third-party session insights
+ * (sessionInsights.ts) are NOT covered by this: they keep their own opt-in.
+ * On web the endpoint is same-origin; the native app posts to the deployed
+ * function.
  *
  * 7.2.0 — a `play` is sent when the playback session COUNTS the play (enough
  * of it heard, once per run: services/playback/session.ts), not when a new
@@ -34,9 +38,23 @@ const HEARTBEAT_MS = 25_000;
 let appVersion: string = __APP_VERSION__;
 
 
-/** The onboarding analytics opt-in — also gates session insights (sessionInsights.ts). */
+/** Usage sharing: on unless the listener switched it off. */
 export function consented(): boolean {
-  return getLocal<boolean>(KEYS.analyticsConsent, false) === true;
+  return getLocal<boolean>(KEYS.analyticsConsent, true) !== false;
+}
+
+/**
+ * 14.0.3 — the one-time move to on-by-default. Devices that onboarded before
+ * this hold `false` from a box they never ticked (unticked by default until
+ * now), so that value cannot mean a choice; it is cleared once, and the
+ * listener is told, with the switch one tap away. Returns true when it did.
+ */
+export function applyUsageSharingDefault(): boolean {
+  if (getLocal<boolean>(KEYS.usageSharingDefaultOn, false) === true) return false;
+  setLocal(KEYS.usageSharingDefaultOn, true);
+  if (getLocal<boolean>(KEYS.analyticsConsent, true) !== false) return false;
+  setLocal(KEYS.analyticsConsent, true);
+  return true;
 }
 
 interface EventSong {

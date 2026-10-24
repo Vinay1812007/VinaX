@@ -179,3 +179,55 @@ html[data-template='nocturne'] .vx-track-row.is-current { box-shadow: inset 3px 
 /* Tabs underline instead of filling. */
 html[data-template='nocturne'] .vx-np-tabs [role='tab'] { border-radius: 0; }
 html[data-template='nocturne'] .vx-np-tabs [role='tab'][aria-selected='true'] { background: transparent; color: rgb(var(--ink-100)); box-shadow: inset 0 -2px 0 rgb(var(--ember-400)); }
+
+/* ------------------------------------------------- 14.0.3 — layout identity */
+/* Nocturne is the NIGHT SKY: gradients that run off the top, glow where the
+   music is.
+   - Hero: a gradient banner that bleeds to the top edge of the page with no
+     artwork tile; the words sit in the gradient, the play button glows.
+   - Jump back in: 2 columns of translucent cards with a gradient hairline
+     (orchid to cyan) and round artwork.
+   - Section heads: light weight, letterspaced, with a dim glow.
+   - Tab bar: the lit-from-underneath active tab it already had.
+   - Mini player: gradient progress, glowing play.
+   - Now Playing: the artwork glows in the accent. */
+@media (max-width: 767px) {
+  html[data-template='nocturne'] .vx-home .vx-hero.vxh-hero {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'kicker' 'title' 'desc' 'actions';
+    gap: 6px;
+    margin: -8px -16px 0;
+    padding: 28px 20px 22px;
+    border-radius: 0 0 28px 28px;
+  }
+  html[data-template='nocturne'] .vx-home .vxh-hero-art { display: none; }
+  html[data-template='nocturne'] .vx-home .vxh-hero-title { font-size: 30px; font-weight: 500; line-height: 1.08; letter-spacing: -0.02em; }
+  html[data-template='nocturne'] .vx-home .vxh-hero-actions { margin-top: 18px; }
+}
+html[data-template='nocturne']:not([class*='fest-']) .vx-home .vxh-hero {
+  background:
+    radial-gradient(80% 90% at 10% 0%, rgb(var(--ember-500) / 0.45), transparent 60%),
+    radial-gradient(70% 80% at 100% 10%, rgb(var(--tide-500) / 0.3), transparent 60%),
+    linear-gradient(180deg, rgb(var(--ink-800)), rgb(var(--ink-900)));
+}
+html[data-template='nocturne'] .vx-home .vxh-hero-wash { opacity: 0.35; }
+html[data-template='nocturne'] .vx-home .vxh-tiles { gap: 10px; }
+html[data-template='nocturne']:not([class*='fest-']) .vx-home .vxh-tile {
+  min-height: 66px;
+  padding: 6px 12px 6px 6px;
+  border-radius: 18px;
+  background: linear-gradient(rgb(var(--ink-850) / 0.85), rgb(var(--ink-850) / 0.85)) padding-box,
+    linear-gradient(120deg, rgb(var(--ember-500) / 0.7), rgb(var(--tide-500) / 0.5)) border-box;
+  border: 1px solid transparent;
+  box-shadow: none;
+}
+html[data-template='nocturne'] .vx-home .vxh-tile img { width: 54px; height: 54px; border-radius: 50%; }
+html[data-template='nocturne'] :is(.vx-section-header h2, .vxh-head h2, .vxh-explore-head h2) {
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-shadow: 0 0 18px rgb(var(--ember-500) / 0.45);
+}
+html[data-template='nocturne'] .np-mini-progress > i { background: linear-gradient(90deg, rgb(var(--ember-400)), rgb(var(--tide-400))); }
+html[data-template='nocturne'] .vx-np-art-img { border-radius: 24px; }
+html[data-template='nocturne']:not([class*='fest-']) .vx-np-art-img { box-shadow: 0 0 80px -10px rgb(var(--ember-500) / 0.55), 0 30px 60px -30px rgb(0 0 0 / 0.8); }
+html[data-template='nocturne'] .vx-np-title { font-weight: 500; letter-spacing: -0.01em; }

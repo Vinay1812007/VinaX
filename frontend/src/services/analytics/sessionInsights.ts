@@ -1,11 +1,13 @@
-import { consented } from '@/services/analytics/telemetry';
+import { KEYS } from '@/constants/storage-keys';
+import { getLocal } from '@/services/storage/local';
 
 /**
  * Session insights (heatmaps + anonymous session replays) — OPT-IN ONLY.
  *
- * The session-analytics tag loads only for listeners who ticked the analytics
- * opt-in at onboarding (the same consent that gates telemetry.ts), and only in
- * production builds. Privacy promises this module enforces in code, not just
+ * The session-analytics tag loads only for listeners who switched session
+ * insights on in Settings → Region & privacy (14.0.3: its own switch, off by
+ * default — usage sharing to VinaX's own database is on by default, but a
+ * third party's replays are not), and only in production builds. Privacy promises this module enforces in code, not just
  * in the provider dashboard:
  *   - every piece of on-screen text is masked on the device before upload
  *     (`data-clarity-mask` on <body>), so song titles, names, history and
@@ -32,9 +34,14 @@ declare global {
 
 let loaded = false;
 
+/** The listener's own switch for third-party session insights: off unless turned on. */
+export function sessionInsightsConsented(): boolean {
+  return getLocal<boolean>(KEYS.sessionInsightsConsent, false) === true;
+}
+
 /** Start session insights if the listener opted in. Idempotent. */
 export function initSessionInsights(isProd: boolean = import.meta.env.PROD): void {
-  if (loaded || !isProd || !consented()) return;
+  if (loaded || !isProd || !sessionInsightsConsented()) return;
   loaded = true;
   try {
     document.body.setAttribute('data-clarity-mask', 'True');

@@ -9,8 +9,13 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// 14.0.3 — session insights have their own switch (vinax.session-insights-consent.v1),
+// separate from usage sharing, which is on by default and must never load this.
 const consent = vi.hoisted(() => ({ optedIn: false }));
-vi.mock('../services/analytics/telemetry', () => ({ consented: () => consent.optedIn }));
+vi.mock('../services/storage/local', () => ({
+  getLocal: (key: string, fallback: unknown) => (key.endsWith('session-insights-consent.v1') ? consent.optedIn : fallback),
+  setLocal: () => undefined,
+}));
 
 import { initSessionInsights, resetSessionInsightsForTest } from '../services/analytics/sessionInsights';
 
