@@ -103,8 +103,19 @@ export class Query {
     this.parts.push(`${col}=in.(${values.map((v) => encodeURIComponent(`"${String(v).replace(/"/g, '\\"')}"`)).join(',')})`);
     return this;
   }
-  /** Disjunction of raw PostgREST conditions (each `col.op.value`, already escaped with `like()`). */
-  or(...conds: string[]): this { this.parts.push(`or=(${conds.map((c) => encodeURIComponent(c)).join(',')})`); return this; }
+  /**
+   * Disjunction of conditions, each `col.op.value`. The value part is sent as
+   * a PostgREST quoted string, so commas, parentheses and quotes in a
+   * listener's search text can never break out of the list.
+   */
+  or(...conds: string[]): this {
+    const quoted = conds.map((c) => {
+      const m = /^([^.]+)\.([^.]+)\.([\s\S]*)$/.exec(c);
+      return m ? `${m[1]}.${m[2]}.${quoteValue(m[3])}` : c;
+    });
+    this.parts.push(`or=(${quoted.map((c) => encodeURIComponent(c)).join(',')})`);
+    return this;
+  }
   select(cols: string): this { this.parts.push(`select=${encodeURIComponent(cols)}`); return this; }
   order(col: string, dir: 'asc' | 'desc' = 'asc', nulls?: 'first' | 'last'): this {
     this.parts.push(`order=${col}.${dir}${nulls ? `.nulls${nulls}` : ''}`);
@@ -119,9 +130,14 @@ export class Query {
 
 export const q = (): Query => new Query();
 
-/** Escape text for an `ilike` pattern inside `or()`: PostgREST reserved characters and the SQL wildcards. */
+/** Text made safe for an `ilike` pattern: the SQL wildcards are escaped, so `*` is the only wildcard left (PostgREST turns it into `%`). */
 export function like(text: string): string {
-  return text.replace(/[%_\\,.()"*]/g, (c) => `\\${c}`).replace(/\s+/g, ' ').trim();
+  return text.replace(/[\\%_]/g, (c) => `\\${c}`).replace(/\s+/g, ' ').trim();
+}
+
+/** A PostgREST quoted value: double quotes, with backslashes and quotes escaped. */
+export function quoteValue(v: string): string {
+  return `"${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
 // ------------------------------------------------------------------ fetch
@@ -260,8 +276,10 @@ export const db = {
 
   /** Exact row count (no rows move). */
   async count(env: DbEnv, table: string, query?: Query | string, opts: CallOpts = {}): Promise<Value<number>> {
+    // `select=*` unless the caller chose columns: a view or a keyed table may
+    // have no `id`, and PostgREST refuses an unknown column with a 400.
     const qs = queryString(query);
-    const r = await call(env, 'GET', `${table}?select=id&limit=1${qs ? `&${qs}` : ''}`, undefined, { ...opts, prefer: ['count=exact'] });
+    const r = await call(env, 'GET', `${table}?limit=1${/(^|&)select=/.test(qs) ? '' : '&select=*'}${qs ? `&${qs}` : ''}`, undefined, { ...opts, prefer: ['count=exact'] });
     if (!r.ok) return r;
     const total = Number((r.res.headers.get('content-range') ?? '').split('/')[1]);
     return Number.isFinite(total) ? { ok: true, value: total } : fail('unavailable', r.res.status, null, 'no content-range');
