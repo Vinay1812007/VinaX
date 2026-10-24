@@ -13,7 +13,7 @@ import { PlayIcon } from '@/components/Icons';
  */
 export function FriendsListening() {
   const following = useSocialStore((s) => s.following);
-  const live = following.filter((p) => p.nowPlaying?.id);
+  const live = (Array.isArray(following) ? following : []).filter((p) => p?.nowPlaying?.id);
   const key = live.map((p) => `${p.handle}:${p.nowPlaying?.id}`).join(',');
   const songs = useQuery({ queryKey: ['friends-now', key], queryFn: () => resolveSongs(live.map((p) => p.nowPlaying!), 12), enabled: live.length > 0, staleTime: 5 * 60_000 });
   if (!live.length) return null;
