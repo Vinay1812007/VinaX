@@ -71,11 +71,23 @@ export async function exchangeGoogleToken(credential: string, fetchImpl: typeof 
     });
     if (res.status === 401) return 'refused';
     if (!res.ok) return 'unavailable';
-    const j = (await res.json()) as { session?: unknown; user?: AccountUser };
+    const j = (await res.json()) as { session?: unknown; user?: AccountUser; returning?: unknown; hasData?: unknown };
     if (typeof j.session !== 'string' || !j.user) return 'unavailable';
-    setAccount({ session: j.session, user: j.user });
+    // V2 — a Google account that signed in before is not a new listener: no
+    // welcome, and its synced library and settings come back first. Marked
+    // BEFORE the account is set, so the welcome never opens for it and its
+    // answers can never overwrite the account's real settings.
+    const returning = j.returning === true || j.hasData === true;
+    if (returning) setLocal(KEYS.onboarded, true);
     if (j.user.username) setLocal(KEYS.userHandle, j.user.username);
     if (j.user.name && !getLocal<string>(KEYS.userName, '')) setLocal(KEYS.userName, j.user.name);
+    setAccount({ session: j.session, user: j.user });
+    if (returning) {
+      const first = (j.user.name ?? '').split(' ')[0];
+      void import('@/store/toastStore')
+        .then((m) => m.toast(j.hasData === true ? `Welcome back${first ? `, ${first}` : ''} — bringing back your library…` : `Welcome back${first ? `, ${first}` : ''}`))
+        .catch(() => undefined);
+    }
     return 'ok';
   } catch {
     return typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'unavailable';
