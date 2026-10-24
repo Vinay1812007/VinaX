@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '15.0.0': {
+    title: 'VinaX 15: six new app styles and 24 listener features #major',
+    changes: [
+      { type: 'new', text: 'Six new app styles, each in the design language of a music app listeners know (#major).' },
+      { type: 'improved', text: 'docs/app-styles.md is the design contract per style.' },
+      { type: 'new', text: 'Fonts: Inter, Figtree and Roboto added (SIL OFL); Eczar and Big Shoulders.' },
+      { type: 'improved', text: 'Legacy ids map to their replacements (LEGACY_TEMPLATES in utils/theme.ts,.' },
+    ],
+  },
   '14.0.6': {
     title: 'Vinax 15',
     changes: [
