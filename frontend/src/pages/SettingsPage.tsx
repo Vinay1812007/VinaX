@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
+import { ProfileSettings } from '@/features/social/ProfileSettings';
 import { useLocation } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { scrollBehavior } from '@/utils/motion';
@@ -466,6 +467,7 @@ export default function SettingsPage() {
 
           <Section title="Profile" id="profile" lede="Your Google account, what syncs with it, and what VinaX has learned about you.">
             <AccountRow />
+            <ProfileSettings />
             <LinkRow to="/taste-profile" label="Taste profile" note="The languages, artists and moods VinaX has learned you like." keywords="taste profile likes profile settings" />
             <LinkRow to="/stats" label="Listening stats" note="Your minutes, top songs and streaks." keywords="stats minutes streak profile" />
           </Section>

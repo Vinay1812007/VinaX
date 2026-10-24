@@ -110,7 +110,7 @@ export interface ProfileRow {
 }
 
 /** What anyone may see of a profile (the account id never leaves). */
-export function publicProfile(p: ProfileRow, extra: { following?: boolean; followers?: number; name?: string | null; picture?: string | null } = {}) {
+export function publicProfile(p: ProfileRow, extra: { following?: boolean; followers?: number; name?: string | null; picture?: string | null; own?: boolean } = {}) {
   // Now playing is shared only while fresh (the device writes it with sync).
   const fresh = p.share_now && p.now_playing && Date.now() - Date.parse(p.updated_at) < 20 * 60_000;
   return {
@@ -126,6 +126,8 @@ export function publicProfile(p: ProfileRow, extra: { following?: boolean; follo
     updatedAt: p.updated_at,
     ...(extra.following !== undefined ? { following: extra.following } : {}),
     ...(extra.followers !== undefined ? { followers: extra.followers } : {}),
+    // The owner also sees their own sharing switch; nobody else does.
+    ...(extra.own ? { shareNow: p.share_now } : {}),
   };
 }
 

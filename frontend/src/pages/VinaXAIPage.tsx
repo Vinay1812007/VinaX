@@ -1266,6 +1266,30 @@ export default function VinaXAIPage(): ReactNode {
                       {k === 'txt' ? 'Plain text (.txt)' : k === 'md' ? 'Markdown (.md)' : 'PDF (print)'}
                     </button>
                   ))}
+                  {/* 15.0 — a read-only copy of the text at a link, kept 90 days. */}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={!active || !active.messages.length || active.temporary}
+                    onClick={() => {
+                      setExportOpen(false);
+                      if (!active) return;
+                      void (async () => {
+                        try {
+                          const { shareChat } = await import('@/services/social/api');
+                          const r = await shareChat({ title: active.title, model: active.messages.find((m) => m.engine)?.engine ?? null, messages: active.messages.filter((m) => m.content.trim()).map((m) => ({ role: m.role, content: m.content })) });
+                          const { shareLink } = await import('@/utils/share');
+                          const done = await shareLink(`/ai/shared/${r.id}`, active.title || 'A VinaX AI chat');
+                          showToast(done === 'copied' ? 'Link copied — the chat is readable by anyone with it, for 90 days' : done === 'shared' ? 'Chat shared' : 'Could not share the link');
+                        } catch (e) {
+                          showToast((e as { code?: string }).code === 'signed_out' ? 'Sign in to share a chat' : 'Could not share the chat right now');
+                        }
+                      })();
+                    }}
+                    className="ai-menu-item"
+                  >
+                    Share as a link…
+                  </button>
                 </div>
               </>
             )}

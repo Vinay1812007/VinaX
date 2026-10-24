@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { useFocusStore } from '@/features/focus/focusSounds';
 import { persist } from 'zustand/middleware';
 import type { Song } from '@/types';
 import { KEYS } from '@/constants/storage-keys';
@@ -636,7 +635,7 @@ export const usePlayerStore = create<PlayerState>()(
           clearSleepTimeout();
           set({ sleepAt: null, sleepAfterTrack: false, sleepSongsLeft: 0, isPlaying: false });
           audioEngine.pause();
-          useFocusStore.getState().stop(); // 15.0 — the focus sound sleeps too
+          void import('@/features/focus/focusSounds').then((m) => m.useFocusStore.getState().stop()).catch(() => undefined); // 15.0 — the focus sound sleeps too
           toast('Sleep timer: playback stopped');
           return;
         }
@@ -810,7 +809,7 @@ export const usePlayerStore = create<PlayerState>()(
                   // Mute rides on the element's own flag; writing 0 here would
                   // leave the engine silent after an un-mute.
                   restoreVolume();
-                  useFocusStore.getState().stop(); // 15.0 — the focus sound sleeps too
+                  void import('@/features/focus/focusSounds').then((m) => m.useFocusStore.getState().stop()).catch(() => undefined); // 15.0 — the focus sound sleeps too
                   toast('Sleep timer: playback stopped');
                   return;
                 }

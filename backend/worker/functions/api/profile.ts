@@ -29,7 +29,7 @@ export const onRequestGet = async (ctx: { request: Request; env: SocialEnv }): P
   if (!r.ok) return json({ error: 'unavailable' }, 503);
   if (!r.value) return new Response(null, { status: 204, headers: CORS });
   const followers = await db.count(ctx.env, 'follows', q().eq('followee_id', who.sub));
-  return json({ profile: publicProfile(r.value, { followers: followers.ok ? followers.value : 0 }) });
+  return json({ profile: publicProfile(r.value, { followers: followers.ok ? followers.value : 0, own: true }) });
 };
 
 export const onRequestPut = async (ctx: { request: Request; env: SocialEnv }): Promise<Response> => {
@@ -74,7 +74,7 @@ export const onRequestPut = async (ctx: { request: Request; env: SocialEnv }): P
   }
   const acc = await accountOf(env, who.sub);
   const row = wrote.rows[0] ?? ({ ...patch } as ProfileRow);
-  return json({ profile: publicProfile(row, { name: acc.ok ? acc.value?.name ?? null : null, picture: acc.ok ? acc.value?.picture ?? null : null }) });
+  return json({ profile: publicProfile(row, { name: acc.ok ? acc.value?.name ?? null : null, picture: acc.ok ? acc.value?.picture ?? null : null, own: true }) });
 };
 
 export const onRequestDelete = async (ctx: { request: Request; env: SocialEnv }): Promise<Response> => {

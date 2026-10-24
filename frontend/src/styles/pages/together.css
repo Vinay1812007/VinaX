@@ -289,3 +289,12 @@ html.reduce-motion .vx-lt-pill { animation: none; }
 .vx-lt-pill-link > .truncate-1 { flex-shrink: 1; }
 .vx-lt-reacts .vx-react-btn { width: 44px; height: 44px; font-size: 19px; }
 @media (min-width: 420px) { .vx-lt-reacts .vx-react-btn { width: 48px; height: 48px; font-size: 20px; } }
+
+/* 15.0 — chat, vote-to-skip and the session's songs. */
+.vx-lt-chat { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; padding: 4px 0; }
+.vx-lt-line { font-size: 14px; line-height: 1.4; color: rgb(var(--ink-200)); overflow-wrap: anywhere; }
+.vx-lt-line b { color: rgb(var(--ember-400)); font-weight: 700; margin-right: 4px; }
+.vx-lt-chat-form { display: flex; gap: 8px; margin-top: 10px; }
+.vx-lt-code-input.is-chat { flex: 1; letter-spacing: 0; text-transform: none; font-family: inherit; font-size: 15px; text-align: left; }
+.vx-react-btn.is-skip { position: relative; font-size: 18px; }
+.vx-react-count { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: rgb(var(--ember-500)); color: var(--vx-on-accent); font-size: 11px; font-weight: 800; line-height: 18px; }

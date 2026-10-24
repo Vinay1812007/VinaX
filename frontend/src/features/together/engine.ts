@@ -25,8 +25,10 @@ import {
   leaveRoom,
   leaveRoomBeacon,
   requestSong,
+  sayInRoom,
   sendReaction,
   updateRoom,
+  voteSkip,
   type RoomTrack,
 } from '@/services/together';
 import { useTogether } from '@/services/together/session';
@@ -43,6 +45,32 @@ const GUEST_POLL_MS = 2000;
 const GUEST_HEARTBEAT_EVERY = 3;
 
 let feed = new ReactionFeed();
+
+/** 15.0 — the songs this session has played (for "save as a playlist"), in order, no repeats. */
+function rememberPlayed(song: Song | null | undefined): void {
+  if (!song) return;
+  const st = useTogether.getState();
+  if (st.played.some((s) => s.id === song.id)) return;
+  st.patch({ played: [...st.played, song].slice(-200) });
+}
+
+/** 15.0 — say something to the room. */
+export async function say(text: string): Promise<boolean> {
+  const { code } = useTogether.getState();
+  return code ? sayInRoom(code, text.trim().slice(0, 200)) : false;
+}
+
+/** 15.0 — vote to skip what is playing. The host simply skips. */
+export async function voteToSkip(): Promise<void> {
+  const st = useTogether.getState();
+  if (!st.code) return;
+  if (st.mode === 'host') { usePlayerStore.getState().next(true); return; }
+  const song = st.hostSong;
+  if (!song) return;
+  const n = await voteSkip(st.code, song.id);
+  if (n === null) toast('Could not send your vote');
+  else { st.patch({ skipVotes: n }); toast(`Vote to skip: ${n}`); }
+}
 
 function floatReactions(list: Array<{ e: string; at: string }> | undefined): void {
   const fresh = feed.ingest(list);
@@ -169,9 +197,21 @@ function runHost(code: string): () => void {
     }
     useTogether.getState().patch({
       members: d.members ?? [],
+      names: d.names ?? d.members ?? [],
       listenerCount: d.memberCount ?? d.members?.length ?? 1,
+      messages: d.room.messages ?? [],
+      skipVotes: d.room.skipVotes ?? 0,
     });
     floatReactions(d.reactions);
+    rememberPlayed(d.room.song);
+    // 15.0 — vote-to-skip: when more than half the room (host included) has
+    // voted, the host's player moves on; the server clears the votes with
+    // the new song.
+    const headcount = Math.max(1, d.memberCount ?? 1) + 1;
+    if ((d.room.skipVotes ?? 0) > headcount / 2 && d.room.song) {
+      toast('The room voted to skip');
+      usePlayerStore.getState().next(true);
+    }
     const requests = d.room.requests ?? [];
     await Promise.all(requests.map(adopt));
     if (alive) void push();
@@ -221,13 +261,17 @@ function runGuest(code: string): () => void {
     }
     store.patch({
       members: d.members ?? [],
+      names: d.names ?? d.members ?? [],
       listenerCount: d.memberCount ?? d.members?.length ?? 1,
       hostName: r.host_name ?? null,
       queue: r.queue ?? [],
       hostSong: r.song ?? null,
+      messages: r.messages ?? [],
+      skipVotes: r.skipVotes ?? 0,
       status: hostIsAway({ updated_at: r.updated_at, now: d.now }) ? 'host-away' : 'live',
     });
     floatReactions(d.reactions);
+    rememberPlayed(r.song);
     if (!r.song) return;
     clock.ingest({ position: r.position, playing: r.playing, updated_at: r.updated_at, now: d.now, rttMs: d.rttMs, receivedAt: d.receivedAt });
 

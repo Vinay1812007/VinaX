@@ -78,6 +78,8 @@ export interface RoomTrack {
   by: string | null;
 }
 
+export interface RoomMessage { by: string; text: string; at: string }
+
 export interface RoomState {
   host_name: string | null;
   song: Song | null;
@@ -86,6 +88,9 @@ export interface RoomState {
   updated_at: string;
   queue: RoomTrack[];
   requests: RoomTrack[];
+  /** 15.0 — the room's short chat and how many voted to skip the current song. */
+  messages?: RoomMessage[];
+  skipVotes?: number;
 }
 
 export type CreateRoomResult =
@@ -176,6 +181,19 @@ export async function sendReaction(code: string, emoji: string): Promise<boolean
   return r?.ok === true;
 }
 
+/** 15.0 — a chat line; everyone in the room sees it on their next poll. */
+export async function sayInRoom(code: string, text: string): Promise<boolean> {
+  const m = me();
+  const r = await post({ action: 'say', code, deviceId: m.deviceId, name: m.name, text });
+  return r?.ok === true;
+}
+
+/** 15.0 — vote to skip the song playing now; resolves the vote count. */
+export async function voteSkip(code: string, songId: string): Promise<number | null> {
+  const r = (await post({ action: 'skip', code, deviceId: me().deviceId, songId })) as { ok?: boolean; skipVotes?: number } | null;
+  return r?.ok ? r.skipVotes ?? null : null;
+}
+
 export async function heartbeat(code: string): Promise<void> {
   const m = me();
   await post({ action: 'heartbeat', code, deviceId: m.deviceId, name: m.name });
@@ -209,6 +227,8 @@ export interface RoomPoll {
   members?: string[];
   /** Always present: how many devices are in the room. */
   memberCount?: number;
+  /** 15.0 — the names members gave, for everyone in the room. */
+  names?: string[];
   reactions?: RoomReaction[];
   /** 10.0 — the server's clock (ms) when it answered; absent on older Workers. */
   now?: number;
