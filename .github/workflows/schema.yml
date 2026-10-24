@@ -64,7 +64,7 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     services:
       postgres:
@@ -80,7 +80,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Prove schema.sql on a fresh Postgres 16
         run: backend/supabase/ci.sh check "postgresql://postgres:postgres@localhost:5432/vinax"
@@ -89,11 +89,11 @@ jobs:
     needs: check
     # A push to main, or a manual run that asked for it. Pull requests never apply.
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.apply == true)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: production
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Check whether the database is configured
         id: config

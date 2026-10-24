@@ -10,7 +10,7 @@ on:
     paths: ['.github/workflows/diagnose.yml']
 jobs:
   probe:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
       - name: self-hosted catalog /api/cat (4.20.0)
