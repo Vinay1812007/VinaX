@@ -181,7 +181,7 @@
                 { key: 'lastSeen', label: 'Last seen', render: function (r) { return agoCell(r.lastSeen); } }
               ],
               rows: top, exportName: 'vinax-errors', search: top.length > 8, sortKey: 'hits', sortDir: 'desc',
-              empty: 'No errors reported', emptyHint: 'The app reports errors from listeners who opted in to usage sharing.'
+              empty: 'No errors reported', emptyHint: 'The app reports errors from listeners with usage sharing on (the default).'
             }) })
         ];
       }, { skeleton: 5 });

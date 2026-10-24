@@ -121,9 +121,11 @@ export function OnboardingSheet() {
   const [picked, setPicked] = useState<string[]>(detected.length ? detected : ['hindi', 'english']);
   // 13.0 — signed in with Google before the welcome: the name starts as the account's.
   const [name, setName] = useState<string>(() => getLocal<string>(KEYS.userName, '') || (currentAccount()?.user.name ?? '').slice(0, 40));
-  // v7.1.0 — unticked by default: the privacy page promises usage sharing "only if you opt in",
-  // and a pre-ticked box is not an opt-in. It can be changed later in Settings → Region & Privacy.
-  const [consent, setConsent] = useState<boolean>(false);
+  // 14.0.3 — ticked by default and said so: usage sharing is on unless the
+  // listener unticks it here or in Settings → Region & privacy. The privacy
+  // page describes it as on by default. Third-party session insights are a
+  // separate switch in Settings, off by default.
+  const [consent, setConsent] = useState<boolean>(true);
   const [nameErr, setNameErr] = useState(false);
   const [importErr, setImportErr] = useState(false);
   const [moreLangs, setMoreLangs] = useState(false);
@@ -449,7 +451,7 @@ export function OnboardingSheet() {
               </div>
               <label className="vx-welcome-consent">
                 <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-                <span>Share anonymous usage (city-level location, no account) and session insights with on-screen text masked, to help improve VinaX. Change it anytime in Settings.</span>
+                <span>Share anonymous usage with VinaX (which song is playing, city-level location, no account) so the app can be improved. On by default — untick to keep it off, or change it anytime in Settings → Region &amp; privacy.</span>
               </label>
             </>
           ) : stage === 'look' ? (

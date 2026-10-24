@@ -130,3 +130,22 @@ html[data-template='aura'] .vx-chip-idle { background: rgb(var(--ink-100) / 0.06
 /* The living glow under the big play button, toned down to a soft lift. */
 html[data-template='aura'] .vx-np-play { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25), 0 14px 30px -14px rgb(var(--ember-600) / 0.8); }
 html[data-template='aura'] .vx-play-fab { box-shadow: 0 10px 24px -12px rgb(var(--ember-600) / 0.8); }
+
+/* ------------------------------------------------- 14.0.3 — layout identity */
+/* Aura is GLASS AND AIR: the default, kept calm, but with its own structure.
+   - Hero: a frosted pane with the artwork as a soft rounded square and the
+     title large and left-aligned.
+   - Jump back in: two columns of frosted tiles with a hairline edge.
+   - Section heads: big and tight, a soft link pill at the right.
+   - Tab bar: iris icon, no pill fill (as before).
+   - Mini player: a frosted capsule with a 16px radius (as before). */
+html[data-template='aura']:not([class*='fest-']) .vx-home .vxh-tile {
+  background: rgb(var(--ink-100) / 0.055);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), inset 0 0 0 1px rgb(var(--ink-100) / 0.05);
+}
+html[data-template='aura'] .vx-home .vxh-tile { border-radius: 16px; min-height: 64px; }
+html[data-template='aura'] .vx-home .vxh-tile img { width: 64px; height: 64px; }
+@media (max-width: 767px) {
+  html[data-template='aura'] .vx-home .vxh-hero-title { font-size: 28px; letter-spacing: -0.04em; }
+  html[data-template='aura'] .vx-home .vxh-hero-art { border-radius: 20px; }
+}

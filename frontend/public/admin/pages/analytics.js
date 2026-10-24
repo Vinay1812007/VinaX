@@ -162,7 +162,7 @@
   function renderFunnel(data) {
     var steps = arr(data);
     var first = steps.length ? num(steps[0].listeners) : 0;
-    if (!steps.length) return ui.empty('No funnel data', 'Steps appear once listeners who opted in use the app.');
+    if (!steps.length) return ui.empty('No funnel data', 'Steps appear once listeners with usage sharing on use the app.');
     return ui.card({ title: 'Steps', sub: 'Distinct listeners who reached each step, as a share of those who opened the app', body: h('div.stack', steps.map(function (s) {
       var ratio = first ? num(s.listeners) / first : 0;
       return h('div', h('div.hb-top', h('span.hb-label', s.label || s.id || 'Step'), h('span.hb-val', fmt.num(s.listeners) + ' · ' + fmt.ratio(ratio))), ui.meter(ratio, null, s.label));

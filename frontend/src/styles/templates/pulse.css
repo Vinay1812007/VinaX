@@ -215,3 +215,81 @@ html[data-template='pulse']:not([class*='fest-']) .vx-np-bg-art { display: none;
 html[data-template='pulse']:not([class*='fest-']) .vx-np-bg-wash { background: linear-gradient(180deg, color-mix(in srgb, var(--np-warm, rgb(var(--art))) 62%, rgb(var(--ink-950))), rgb(var(--ink-950)) 78%); }
 html[data-template='pulse']:not([class*='fest-']) .vx-np-bg-scrim:not(.is-canvas) { background: none; }
 html[data-template='pulse'] .vx-np-art-img { box-shadow: 0 18px 44px -18px rgb(0 0 0 / 0.7); }
+
+/* ------------------------------------------------- 14.0.3 — layout identity */
+/* The six styles differed in colour, type and corners but shared one page
+   structure, so they read as palette swaps. Pulse is the DENSE one: Home is a
+   flat strip and a list, not a hero and a grid.
+   - Hero: a compact band with no artwork on phones, square corners, the
+     kicker as a tiny overline and the title in one line.
+   - Jump back in: ONE column of 48px rows with hairlines, no card fills —
+     a track list, the way a scoreboard lists things.
+   - Section heads: small uppercase overlines, not big titles.
+   - Tab bar: a 2px accent bar above the active icon, uppercase labels.
+   - Mini player: edge to edge, square, progress drawn across its top.
+   - Now Playing: the artwork is a square photograph (4px), controls tight. */
+@media (max-width: 767px) {
+  html[data-template='pulse'] .vx-home .vx-hero.vxh-hero {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'kicker' 'title' 'desc' 'actions';
+    gap: 4px;
+    padding: 14px 14px 12px;
+    border-radius: 4px;
+  }
+  html[data-template='pulse'] .vx-home .vxh-hero-art { display: none; }
+  html[data-template='pulse'] .vx-home .vxh-hero-title { font-size: 22px; line-height: 1.1; letter-spacing: -0.02em; }
+  html[data-template='pulse'] .vx-home .vxh-hero-desc { margin-top: 4px; font-size: 13px; }
+  html[data-template='pulse'] .vx-home .vxh-hero-actions { margin-top: 10px; gap: 8px; }
+  html[data-template='pulse'] .vx-home .vxh-hero .vx-play-fab.is-lg { width: 44px; height: 44px; }
+}
+html[data-template='pulse'] .vx-home .vxh-hero-kicker { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+html[data-template='pulse'] .vx-home .vxh-tiles,
+html[data-template='pulse'] .vx-home .vxh-jump .vxh-tiles { grid-template-columns: minmax(0, 1fr); gap: 0; }
+@container jump (min-width: 760px) {
+  html[data-template='pulse'] .vx-home .vxh-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; }
+}
+html[data-template='pulse'] .vx-home .vxh-tile {
+  min-height: 48px;
+  gap: 12px;
+  padding: 0 4px 0 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: inset 0 -1px 0 var(--vx-border);
+}
+html[data-template='pulse'] .vx-home .vxh-tile:hover { background: rgb(var(--ink-100) / 0.06); }
+html[data-template='pulse'] .vx-home .vxh-tile img { width: 44px; height: 44px; border-radius: 2px; }
+html[data-template='pulse'] .vx-home .vxh-tile-title { font-size: 14px; font-weight: 600; }
+html[data-template='pulse'] .vx-home .vxh-tile .vxh-disc { opacity: 0; }
+html[data-template='pulse'] .vx-home .vxh-tile:hover .vxh-disc { opacity: 1; }
+html[data-template='pulse'] :is(.vx-section-header h2, .vxh-head h2, .vxh-explore-head h2) {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgb(var(--ink-300));
+}
+html[data-template='pulse'] .vx-section-link { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+/* Tab bar: an accent bar above the active icon. */
+html[data-template='pulse'] .vx-dock-pill { position: relative; width: 56px; height: 26px; border-radius: 0; }
+html[data-template='pulse'] .vx-dock-active .vx-dock-pill::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: rgb(var(--ember-500));
+}
+html[data-template='pulse'] .vx-dock-item > span:last-child { font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+/* Mini player: edge to edge, square. */
+@media (max-width: 1023px) {
+  html[data-template='pulse'] [data-tour='player'] { padding: 0; }
+}
+html[data-template='pulse'] .np-mini { border-radius: 0; }
+html[data-template='pulse'] .np-mini-progress { top: 0; bottom: auto; left: 0; right: 0; border-radius: 0; }
+html[data-template='pulse'] .np-mini-progress > i { border-radius: 0; background: rgb(var(--ember-500)); }
+html[data-template='pulse'] .np-mini-thumb, html[data-template='pulse'] .np-mini-thumb img { border-radius: 2px; }
+/* Now Playing: a square photograph; the title in one weight. */
+html[data-template='pulse'] .vx-np-art-img { border-radius: 4px; }
+html[data-template='pulse'] .vx-np-title { font-weight: 700; letter-spacing: -0.01em; }
+html[data-template='pulse'] .vx-np-artist { font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; }

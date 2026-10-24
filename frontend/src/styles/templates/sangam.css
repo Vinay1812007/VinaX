@@ -106,3 +106,52 @@ html[data-template='sangam'] .vxh-chip:nth-child(even) { box-shadow: inset 0 0 0
 html[data-template='sangam'] .vxh-hero { border-radius: 28px; }
 html[data-template='sangam'] .vx-track-row { min-height: 64px; }
 html[data-template='sangam'] .vx-track-art { width: 46px; height: 46px; }
+
+/* ------------------------------------------------- 14.0.3 — layout identity */
+/* Sangam is WARM AND ROOMY: more air, bigger pictures, colour on everything.
+   - Hero: taller, the artwork large and round-cornered at the left, a faint
+     rangoli of dots behind the words, a 32px corner.
+   - Jump back in: two tall colourful tiles with the artwork as a rounded
+     square inset in the card and the title in the serif.
+   - Section heads: the serif at full size with the marigold rule beside it
+     (the rule already existed); roomier gaps.
+   - Tab bar: the floating island it already had.
+   - Mini player: a 24px capsule above it.
+   - Now Playing: the artwork on a warm raised plinth. */
+@media (max-width: 767px) {
+  html[data-template='sangam'] .vx-home .vx-hero.vxh-hero {
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 8px 16px;
+    padding: 20px 20px 18px;
+    border-radius: 32px;
+  }
+  html[data-template='sangam'] .vx-home .vxh-hero-art { width: 112px; border-radius: 22px; }
+  html[data-template='sangam'] .vx-home .vxh-hero-title { font-size: 27px; line-height: 1.08; }
+  html[data-template='sangam'] .vx-home .vxh-hero-actions { margin-top: 16px; }
+}
+html[data-template='sangam']:not([class*='fest-']) .vx-home .vxh-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 1px 1px, rgb(var(--ember-500) / 0.22) 1px, transparent 1.5px) 0 0 / 14px 14px,
+    radial-gradient(circle at 8px 8px, rgb(var(--tide-500) / 0.16) 1px, transparent 1.5px) 0 0 / 14px 14px;
+  -webkit-mask-image: radial-gradient(70% 90% at 100% 0%, #000, transparent 70%);
+  mask-image: radial-gradient(70% 90% at 100% 0%, #000, transparent 70%);
+}
+html[data-template='sangam'] .vx-home .vxh-tiles { gap: 12px; }
+html[data-template='sangam'] .vx-home .vxh-tile { min-height: 84px; padding: 10px 14px 10px 10px; border-radius: 22px; gap: 12px; }
+html[data-template='sangam'] .vx-home .vxh-tile img { width: 64px; height: 64px; border-radius: 16px; }
+html[data-template='sangam'] .vx-home .vxh-tile-title { font-family: var(--vx-font-display); font-size: 16px; font-weight: 600; letter-spacing: 0; }
+html[data-template='sangam'] .vx-home .vxh-head { margin-bottom: 16px; }
+html[data-template='sangam'] .vx-home .vxh-jump { margin-top: 28px; }
+/* Mini player: a capsule that matches the floating tab bar above it. */
+@media (max-width: 767px) {
+  html[data-template='sangam'] .np-mini { margin: 0 10px 8px; border-radius: 24px; }
+}
+/* Now Playing: a warm plinth under the artwork. */
+html[data-template='sangam']:not([class*='fest-']) .vx-np-art-img { box-shadow: 0 30px 60px -30px rgb(var(--ember-600) / 0.7), 0 0 0 10px rgb(var(--ink-100) / 0.05); }
+html[data-template='sangam'] .vx-np-art-img { border-radius: 28px; }
+html[data-template='sangam'] .vx-np-title { font-family: var(--vx-font-display); font-weight: 600; letter-spacing: 0; font-size: 1.5em; }

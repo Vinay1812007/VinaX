@@ -47,7 +47,7 @@
               { key: 'lastSeen', label: 'Seen', render: function (r) { return ui.ago(r.lastSeen); } }
             ],
             rows: rows, exportName: 'vinax-live', search: rows.length > 8, pageSize: 50,
-            empty: 'Nobody is listening right now', emptyHint: 'Listeners who opted in to usage sharing appear here within a minute of pressing play.',
+            empty: 'Nobody is listening right now', emptyHint: 'Listeners with usage sharing on (the default since 14.0.3) appear here within a minute of pressing play; the ones who switched it off never do.',
             onRow: function (r) { if (r.id) ctx.go('listeners', null, { id: r.id }); }
           }) })
         ];
@@ -62,7 +62,7 @@
       var gate = ui.gate(d, ctx);
       if (gate) return gate;
       var feed = arr(d.feed);
-      if (!feed.length) return ui.empty('No activity yet', 'Events arrive once listeners who opted in start using the app.');
+      if (!feed.length) return ui.empty('No activity yet', 'Events arrive once listeners with usage sharing on start using the app.');
       return ui.card({ title: 'Latest events', sub: fmt.plural(feed.length, 'event'), body: h('ul.list.feed', feed.map(function (e) {
         var l = obj(e.listener), s = obj(e.song);
         return h('li',

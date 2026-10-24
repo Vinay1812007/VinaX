@@ -22,7 +22,7 @@ import { DiagBanner } from '@/components/DiagBanner';
 import { OfflineBanner } from '@/components/OfflineBanner';
 const OnboardingSheet = lazy(() => import('@/components/OnboardingSheet').then(m => ({ default: m.OnboardingSheet })));
 import { AnnouncementBridge } from '@/components/AnnouncementBridge';
-import { initTelemetry } from '@/services/analytics/telemetry';
+import { applyUsageSharingDefault, initTelemetry } from '@/services/analytics/telemetry';
 import { initSessionInsights } from '@/services/analytics/sessionInsights';
 import { applyGlassLevel, applyThemeClasses, resolveTheme } from '@/utils/theme';
 import { closeTopOverlay } from '@/hooks/useDismissOnBack';
@@ -256,6 +256,14 @@ export function AppLayout() {
     // time-to-interactive stay fast on cold start.
     onIdle(() => {
       installDeterrence();
+      // 14.0.3 — a device that onboarded with the old unticked box is switched
+      // to the new default once, and told, with the switch one tap away.
+      if (applyUsageSharingDefault()) {
+        toast('Anonymous usage sharing is on by default now (city-level, no account). Switch it off in Settings → Region & privacy if you prefer.', {
+          // A plain location change: this effect runs once at boot and must not depend on the router.
+          action: { label: 'Settings', onClick: () => window.location.assign('/settings#privacy') },
+        });
+      }
       initTelemetry();
       void import('@/services/analytics/recTelemetry').then((m) => m.initRecTelemetry()).catch(() => undefined);
       initSessionInsights();

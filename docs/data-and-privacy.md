@@ -6,13 +6,13 @@ This document says what VinaX keeps on a listener's device, what leaves the devi
 
 - **Device first, account second.** Library, history, settings, the taste profile and AI chats live on the device. A signed-in listener's library, history, taste and settings also sync to their account as one copy; AI chats never do. Clearing site or app data removes the device copy; the app offers an export.
 - **Features that need the network send what they need.** Browsing sends search words and ids to the catalogue source. AI features send a bounded summary of taste and recent listening (song titles and artist names) with no install id and no name attached. Listen Together, usernames, feedback, notifications and device transfer each send the fields listed below.
-- **Usage statistics are opt-in.** The checkbox on the welcome sheet is unticked by default. While it is off, no usage events and no session insights are sent.
+- **Usage statistics are on by default, off with one switch.** Since 14.0.3 the box on the welcome sheet is ticked and says so; Settings → Region & privacy has the switch. While it is off, no usage events are sent. Devices that onboarded earlier, with the old unticked box, were switched to the default once and told, with the switch one tap away. **Session insights (third-party, masked replays) are opt-in**, their own switch in Settings, off by default.
 - **The web app shows advertising on some browsing pages.** Those pages load a third-party advertising script, and that is not controlled by the usage-sharing choice. See [Advertising](#advertising).
 - **The server keeps what its features need, in one database, and nothing more.** The tables are listed under [Server-side records](#server-side-records): no IP addresses, no precise location, no prompts or replies, no AI chats. Usage events are kept for a bounded time and then purged. Rate limiting keys on a hashed network address, not the address itself.
 
 ## Your Google account
 
-VinaX needs a Google account: until a listener signs in, every page is the sign-in screen (the Privacy, Terms and Contact pages stay readable). Signing in sends Google's ID token to the Worker, which checks it with Google and stores one row in `accounts`: the Google account ID, email address (and whether Google verified it), name, profile picture address, the linked device (`listener_id`) when the device proves its signed ID, and the time. The device is linked at sign-in or on the app's session check once per load; that check also refreshes the time at most every 10 minutes. The row also holds coarse sign-in facts, written at sign-in and on that same refresh: the edge's geo for the request (`country`, `region`, `city`; the IP address is never stored), `platform` (web, android, ios) and `app_version`. The owner console's Listeners page shows every account with its name, email, profile photo and these facts, whether or not the listener shares usage; plays, searches and favourites still reach the server only with the usage opt-in. The Privacy page says so.
+VinaX needs a Google account: until a listener signs in, every page is the sign-in screen (the Privacy, Terms and Contact pages stay readable). Signing in sends Google's ID token to the Worker, which checks it with Google and stores one row in `accounts`: the Google account ID, email address (and whether Google verified it), name, profile picture address, the linked device (`listener_id`) when the device proves its signed ID, and the time. The device is linked at sign-in or on the app's session check once per load; that check also refreshes the time at most every 10 minutes. The row also holds coarse sign-in facts, written at sign-in and on that same refresh: the edge's geo for the request (`country`, `region`, `city`; the IP address is never stored), `platform` (web, android, ios) and `app_version`. The owner console's Listeners page shows every account with its name, email, profile photo and these facts, whether or not the listener shares usage; plays, searches and favourites reach the server only while usage sharing is on (the default). The Privacy page says so.
 
 **What syncs.** The account also holds one copy of the listener's data in `account_backups`, in the same format as the backup file: settings, library and playlists, smart collections, listening history, taste profile, bookmarks and the Home layout. It is merged into each device the listener signs in on and updated a few seconds after a change; a version number makes two devices merge instead of overwrite each other. **AI chats, searches and this device's identity never sync.** The copy is at most 2 MB.
 
@@ -113,12 +113,12 @@ A `play` is sent only when the play counts: at least 5 seconds heard, or 70 % of
 
 | Question | Answer |
 | --- | --- |
-| Where is it asked? | On the welcome sheet's languages step. The checkbox starts unticked (`useState(false)` in `OnboardingSheet.tsx`). |
-| Where is it stored? | `vinax.analytics-consent` on the device. |
-| What does it turn on? | The two rows above: usage events and session insights. Nothing else. |
-| How is it enforced? | `consented()` is read on every send. Each event carries an `x-vinax-consent` header and the Worker ignores events without it. |
+| Where is it asked? | On the welcome sheet's languages step. The checkbox starts ticked and says it is on by default (`useState(true)` in `OnboardingSheet.tsx`). |
+| Where is it stored? | `vinax.analytics-consent` on the device; absent means on. `vinax.usage-sharing-default-on.v1` marks the one-time switch of pre-14.0.3 devices. Session insights: `vinax.session-insights-consent.v1`, absent means off. |
+| What does it turn on? | Usage events only. Session insights have their own switch. Nothing else. |
+| How is it enforced? | `consented()` is read on every send. Each event carries an `x-vinax-consent` header and the Worker ignores events without it. `sessionInsightsConsented()` gates the third-party tag. |
 | What still happens when it is off? | Every functional and AI request in the tables above, and advertising on the web. |
-| Where can it be changed? | **Settings → Region & Privacy → Share anonymous usage**. Turning it off stops new events at once; session insights stop after the next reload. |
+| Where can it be changed? | **Settings → Region & Privacy → Share anonymous usage** (off at once) and **→ Session insights** (off after the next reload). |
 | Do backups carry it? | No. A restore never writes it. |
 | Does device transfer carry it? | Yes. |
 
