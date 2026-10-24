@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '14.0.4': {
+    title: 'Catalogue providers live in a Worker secret; the app knows only /api/cat',
+    changes: [
+      { type: 'improved', text: 'Six looks that really differ, and live listening that really works.' },
+      { type: 'improved', text: 'Each of the six app styles now has its own page structure, not just its colours: Pulse lists, Marquee leads with the picture, Sangam spreads out, Nocturne glows from the top, Vibe turns everything into bubbles, Aura stays calm glass.' },
+      { type: 'improved', text: 'Now Playing wears the style too: a square photograph in Pulse, a glowing frame in Nocturne, a warm plinth in Sangam, a circle in Vibe.' },
+      { type: 'improved', text: 'Anonymous usage sharing is now on by default (which song is playing, city-level location, no account), so the owner can see who is listening; untick it at the welcome or switch it off in Settings → Region & privacy.' },
+    ],
+  },
   '14.0.3': {
     title: 'Six looks that really differ, and live listening that really works',
     changes: [
