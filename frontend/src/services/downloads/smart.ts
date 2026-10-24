@@ -86,7 +86,12 @@ export function SmartDownloads(): null {
         const songs = wantIds.map((id) => byId.get(id)).filter((s): s is NonNullable<typeof s> => !!s);
         const r = songs.length ? await downloadMany(songs) : { saved: 0, failed: 0 };
         for (const id of removals) await removeDownload(id).catch(() => undefined);
-        const ids = mixIds.filter((id) => have.has(id) || wantIds.includes(id));
+        // Only what smart downloads itself put on the device is ever removed
+        // later: this week's new downloads that landed, plus last week's
+        // automatic copies still in the mix. A song downloaded by hand is never listed.
+        const now = useDownloadsStore.getState().items;
+        const carried = (previous?.ids ?? []).filter((id) => mixIds.includes(id) && now[id]);
+        const ids = [...new Set([...wantIds.filter((id) => now[id]), ...carried])];
         setLocal(KEYS.smartDownloads, { week, ids, done: r.failed === 0 || r.reason !== 'offline' } satisfies SmartState);
         if (r.saved) toast(`Weekly Mix ready offline: ${r.saved} song${r.saved === 1 ? '' : 's'} downloaded`);
       } finally {

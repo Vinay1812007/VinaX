@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { SharePlaylistSheet } from '@/features/social/SharePlaylistSheet';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useLibraryStore } from '@/store/libraryStore';
@@ -60,6 +61,7 @@ export default function CollectionPage() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [targetId, setTargetId] = useState('');
   const [editing, setEditing] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [name, setName] = useState(collection?.name ?? '');
   const [emoji, setEmoji] = useState(collection?.emoji ?? '');
   const [description, setDescription] = useState(collection?.description ?? '');
@@ -257,6 +259,7 @@ export default function CollectionPage() {
             <EntityMenu
               items={[
                 { label: 'Edit details', onSelect: startEdit },
+                { label: 'Share…', onSelect: () => setShareOpen(true) },
                 { label: pinLabel, onSelect: togglePin },
                 { label: 'Copy as text', onSelect: () => void copyAsText(), disabled: !songs.length },
                 duplicates > 0 && { label: 'Remove duplicates', onSelect: dedupe },
@@ -464,6 +467,7 @@ export default function CollectionPage() {
           />
         </div>
       )}
+      <SharePlaylistSheet collection={collection} open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   );
 }

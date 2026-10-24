@@ -45,6 +45,12 @@ export const KEYS = {
   smartDownloads: `${STORAGE_PREFIX}.smart-downloads.v1`,
   /** 15.0 — the weeks each weekly goal was met (features/stats/goals.ts). */
   goalLedger: `${STORAGE_PREFIX}.goal-ledger.v1`,
+  /** 15.0 — the own public profile and following list (features/social/store.ts). */
+  social: `${STORAGE_PREFIX}.social.v1`,
+  /** 15.0 — local playlist id → its shared copy (id, invite token, version). */
+  sharedPlaylists: `${STORAGE_PREFIX}.shared-playlists.v1`,
+  /** 15.0 — release alerts: seen top-song ids per saved artist, the new ones (features/releases). */
+  releases: `${STORAGE_PREFIX}.releases.v1`,
   output: `${STORAGE_PREFIX}.output.v1`,
   roomHostTokens: `${STORAGE_PREFIX}.room-host-tokens.v1`,
   /** Last in-app-update install attempt {build, ts} — the dialog reappearing

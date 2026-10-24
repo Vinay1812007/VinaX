@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { FriendsListening } from '@/features/social/FriendsListening';
 import { FestivalBannerSlot } from '@/features/home/FestivalBannerSlot';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -351,6 +352,7 @@ export default function HomePage() {
             onSurprise={surprise}
           />
           {firstVisit && <HomeFeatures />}
+          <FriendsListening />
           <MadeForYouCard />
           <ListeningGuide />
           <FlowEntryCard />

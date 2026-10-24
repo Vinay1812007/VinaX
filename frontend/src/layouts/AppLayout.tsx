@@ -20,8 +20,6 @@ import { GetAppSlot } from '@/components/GetAppSlot';
 import { useUiStore } from '@/store/uiStore';
 import { DiagBanner } from '@/components/DiagBanner';
 import { OfflineBanner } from '@/components/OfflineBanner';
-import { SmartDownloads } from '@/services/downloads/smart';
-import { AutoEq } from '@/services/audio/autoEq';
 const OnboardingSheet = lazy(() => import('@/components/OnboardingSheet').then(m => ({ default: m.OnboardingSheet })));
 import { AnnouncementBridge } from '@/components/AnnouncementBridge';
 import { applyUsageSharingDefault, initTelemetry } from '@/services/analytics/telemetry';
@@ -112,6 +110,7 @@ const BROADCAST_SEEN_KEY = `${STORAGE_PREFIX}.broadcast-seen`;
 
 import { recsDebugEnabled } from '@/store/recsDebugStore';
 import { useTogether } from '@/services/together/session';
+const Bridges15 = lazy(() => import('./Bridges15'));
 
 const RecsDebugPanel = lazy(() => import('@/features/recommendation/RecsDebugPanel').then((m) => ({ default: m.RecsDebugPanel })));
 // 10.0 — Listen Together runs app-wide while a session is live (see
@@ -539,8 +538,8 @@ export function AppLayout() {
       <Suspense fallback={null}><OnboardingSheet /></Suspense>
       <AnnouncementBridge />
       {/* 15.0 — Android: keeps this week's Weekly Mix downloaded on Wi-Fi when the setting is on. */}
-      {isNativePlatform() && <SmartDownloads />}
-      <AutoEq />
+      {/* 15.0 — background bridges, lazy so they stay out of the first-load bundle. */}
+      <Suspense fallback={null}><Bridges15 /></Suspense>
       <ContextMenu />
       {paletteOpen && (
         <Suspense fallback={null}>

@@ -14,7 +14,7 @@
  */
 import { create } from 'zustand';
 import type { Song } from '@/types';
-import type { RoomTrack } from './index';
+import type { RoomMessage, RoomTrack } from './index';
 
 export type TogetherMode = 'idle' | 'host' | 'guest';
 export type TogetherStatus = 'connecting' | 'live' | 'reconnecting' | 'host-away';
@@ -41,6 +41,11 @@ interface TogetherState {
   /** Guest: the browser blocked audio until the listener taps once. */
   needsTap: boolean;
   floats: ReactionFloat[];
+  /** 15.0 — who is here (names members chose), the chat, skip votes, and the songs this session has played. */
+  names: string[];
+  messages: RoomMessage[];
+  skipVotes: number;
+  played: Song[];
   begin(mode: Exclude<TogetherMode, 'idle'>, code: string): void;
   patch(p: Partial<Omit<TogetherState, 'begin' | 'patch' | 'reset' | 'float'>>): void;
   float(emojis: string[]): void;
@@ -82,6 +87,10 @@ const EMPTY = {
   drift: null,
   needsTap: false,
   floats: [] as ReactionFloat[],
+  names: [] as string[],
+  messages: [] as RoomMessage[],
+  skipVotes: 0,
+  played: [] as Song[],
 };
 
 let floatSeq = 0;

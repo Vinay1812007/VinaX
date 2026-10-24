@@ -5,7 +5,8 @@ import { ArtistAvatar } from '@/features/stats/artwork';
 import { useCurrentSong } from '@/store/playerStore';
 import { REACTION_EMOJI } from '@/services/together';
 import { useTogether } from '@/services/together/session';
-import { addSong, joinSession, leaveSession, react, startHosting, tapToListen } from '@/features/together/engine';
+import { addSong, joinSession, leaveSession, react, say, startHosting, tapToListen, voteToSkip } from '@/features/together/engine';
+import { useLibraryStore } from '@/store/libraryStore';
 import { searchSongs } from '@/services/api';
 import { bestImage } from '@/utils/images';
 import type { Song } from '@/types';
@@ -197,8 +198,23 @@ function Live(): ReactNode {
   const mode = useTogether((s) => s.mode);
   const code = useTogether((s) => s.code);
   const members = useTogether((s) => s.members);
+  const names = useTogether((s) => s.names);
+  const messages = useTogether((s) => s.messages);
+  const skipVotes = useTogether((s) => s.skipVotes);
+  const played = useTogether((s) => s.played);
   const listenerCount = useTogether((s) => s.listenerCount);
   const hostName = useTogether((s) => s.hostName);
+  const [chat, setChat] = useState('');
+  const chatEnd = useRef<HTMLLIElement>(null);
+  useEffect(() => { chatEnd.current?.scrollIntoView({ block: 'nearest' }); }, [messages.length]);
+  const saveSession = () => {
+    if (!played.length) { toast('Nothing has played yet'); return; }
+    const lib = useLibraryStore.getState();
+    const cid = lib.createCollection(`Listen together · ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`);
+    if (!cid) return;
+    lib.addManyToCollection(cid, played);
+    toast(`Saved ${played.length} song${played.length === 1 ? '' : 's'} as a playlist`);
+  };
   const queue = useTogether((s) => s.queue);
   const floats = useTogether((s) => s.floats);
   const needsTap = useTogether((s) => s.needsTap);
@@ -281,7 +297,27 @@ function Live(): ReactNode {
               {e}
             </button>
           ))}
+          {/* 15.0 — vote to skip: the host skips outright; guests vote, and the song moves on past half the room. */}
+          <button type="button" onClick={() => void voteToSkip()} className="vx-react-btn is-skip" aria-label={mode === 'host' ? 'Skip this song' : 'Vote to skip this song'} title={mode === 'host' ? 'Skip' : 'Vote to skip'}>
+            ⏭{skipVotes > 0 && <span className="vx-react-count">{skipVotes}</span>}
+          </button>
         </div>
+      </section>
+
+      {/* 15.0 — the room's chat: forty lines, everyone sees them on their next poll. */}
+      <section className="vx-lt-block" aria-labelledby="vx-lt-chat">
+        <h2 id="vx-lt-chat" className="vx-lt-h2">Chat</h2>
+        <ul className="vx-lt-chat" aria-live="polite">
+          {messages.length === 0 && <li className="vx-lt-foot">Say hello — everyone in the room sees it.</li>}
+          {messages.map((m, i) => (
+            <li key={`${m.at}-${i}`} className="vx-lt-line"><b>{m.by}</b> {m.text}</li>
+          ))}
+          <li ref={chatEnd} aria-hidden />
+        </ul>
+        <form className="vx-lt-chat-form" onSubmit={(e) => { e.preventDefault(); const t = chat.trim(); if (!t) return; setChat(''); void say(t).then((ok) => { if (!ok) toast('Could not send that'); }); }}>
+          <input value={chat} onChange={(e) => setChat(e.target.value)} maxLength={200} placeholder="Say something" aria-label="Chat message" className="vx-lt-code-input is-chat" />
+          <button type="submit" className="vx-sec-pill" disabled={!chat.trim()}>Send</button>
+        </form>
       </section>
 
       <AddSong label={mode === 'host' ? 'Add to the queue' : 'Add a song for everyone'} />
@@ -304,12 +340,11 @@ function Live(): ReactNode {
       )}
 
       <section className="vx-lt-block" aria-labelledby="vx-lt-people">
-        <h2 id="vx-lt-people" className="vx-lt-h2 tabular-nums">{Math.max(listenerCount, members.length, 1)} listening</h2>
-        {/* Names render only when the server shared them (the host's view);
-            guests see the honest count above — never each other's names. */}
-        {mode === 'host' && (
+        <h2 id="vx-lt-people" className="vx-lt-h2 tabular-nums">{Math.max(listenerCount, members.length, names.length, 1)} listening</h2>
+        {/* 15.0 — everyone sees the names members chose to give the room. */}
+        {(names.length > 0 || mode === 'host') && (
           <ul className="vx-people">
-            {people.map((m, i) => (
+            {(names.length ? names : people).map((m, i) => (
               <li key={`${m}-${i}`} className="vx-person">
                 <ArtistAvatar name={m} size={36} />
                 {m}
@@ -323,6 +358,13 @@ function Live(): ReactNode {
             : 'The host controls playback; your player follows by itself, even while you browse other pages.'}
         </p>
       </section>
+
+      {played.length > 0 && (
+        <section className="vx-lt-block" aria-labelledby="vx-lt-history">
+          <h2 id="vx-lt-history" className="vx-lt-h2 tabular-nums">{played.length} played this session</h2>
+          <button type="button" onClick={saveSession} className="vx-sec-pill">Save this session as a playlist</button>
+        </section>
+      )}
 
       <button type="button" onClick={leaveSession} className="vx-sec-pill is-danger">
         {mode === 'host' ? 'End for everyone' : 'Leave session'}

@@ -27,7 +27,7 @@ import { getLocal, setLocal } from '@/services/storage/local';
 const KEY = 'vinax.discover5.v1';
 const SWIPE_PX = 56;
 
-interface DayState { day: string; ids: string[]; decided: Record<string, 'keep' | 'skip'> }
+interface DayState { day: string; ids: string[]; songs?: Song[]; decided: Record<string, 'keep' | 'skip'> }
 
 function loadDay(day: string): DayState {
   const st = getLocal<DayState | null>(KEY, null);
@@ -64,14 +64,15 @@ export function useDiscoverFive(entries: HistoryEntry[], favorites: Song[]) {
     gcTime: 86_400_000,
     queryFn: async () => {
       const stored = loadDay(day);
+      // The day's five are fixed on first fetch and kept whole, so a reload
+      // (or seeds that moved during the day) shows the same five.
+      if (stored.songs?.length) return stored.songs;
       const songs = await recommendFromSeeds(seeds, { limit: 12, exclude: [...known].slice(0, 90) });
       const lib = useLibraryStore.getState();
       const fresh = songs.filter((s) => !known.has(s.id) && !isSongBlocked(s, lib)).slice(0, 5);
-      // A day's five are fixed on first fetch; a later fetch (another tab, a
-      // reload) keeps the same order so the progress still lines up.
-      const ids = stored.ids.length ? stored.ids : fresh.map((s) => s.id);
-      if (!stored.ids.length) setLocal(KEY, { ...stored, ids });
+      setLocal(KEY, { ...stored, ids: fresh.map((s) => s.id), songs: fresh });
       const byId = new Map(fresh.map((s) => [s.id, s]));
+      const ids = fresh.map((s) => s.id);
       return ids.map((id) => byId.get(id)).filter((s): s is Song => !!s);
     },
   });

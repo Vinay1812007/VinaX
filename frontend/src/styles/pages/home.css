@@ -948,3 +948,18 @@ html.light .vx-home .vxh-free-facts li::before {
 .vxh-madefor p { margin-top: 2px; font-size: 13.5px; color: rgb(var(--ink-300)); line-height: 1.45; }
 .vxh-madefor .vxh-pill { flex: none; display: inline-flex; align-items: center; gap: 6px; }
 @media (max-width: 479px) { .vxh-madefor { flex-direction: column; align-items: stretch; } }
+
+/* ---------------------------------------- 15.0 — friends are listening */
+.vx-home .vxh-friends { margin-bottom: var(--vxh-section); }
+.vx-home .vxh-friends-row { display: flex; gap: 10px; margin: 0 calc(-1 * var(--vx-gutter)); padding: 2px var(--vx-gutter); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+.vx-home .vxh-friends-row::-webkit-scrollbar { display: none; }
+.vx-home .vxh-friend { flex: 0 0 auto; width: min(260px, 78vw); padding: 10px; border-radius: var(--tpl-r-tile, 14px); background: var(--vxh-tile-bg); }
+.vx-home .vxh-friend-who { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 8px; color: rgb(var(--ink-300)); font-size: 12.5px; font-weight: 700; }
+.vx-home .vxh-friend-avatar { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
+.vx-home .vxh-friend-song { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; }
+.vx-home .vxh-friend-art { width: 48px; height: 48px; border-radius: var(--tpl-r-art-sm, 10px); object-fit: cover; flex-shrink: 0; }
+.vx-home .vxh-friend-text { flex: 1; min-width: 0; }
+.vx-home .vxh-friend-title { display: block; overflow: hidden; color: rgb(var(--ink-100)); font-size: 14px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+.vx-home .vxh-friend-sub { display: block; overflow: hidden; color: rgb(var(--ink-400)); font-size: 12.5px; white-space: nowrap; text-overflow: ellipsis; }
+.vx-home .vxh-friend-play { display: grid; place-items: center; width: 34px; height: 34px; border-radius: var(--tpl-r-play-sm, 12px); background: rgb(var(--ember-500)); color: var(--vx-on-accent); flex-shrink: 0; }
+.vx-home .vxh-friend-play svg { width: 16px; height: 16px; margin-left: 2px; }

@@ -13,6 +13,7 @@ This folder is the guide for people who listen with VinaX. It covers setting up,
 | [Library and backup](library-and-backup.md) | Favourites, playlists, backups, restoring and moving to another device |
 | [Flow](flow.md) | The swipeable song feed |
 | [Listen Together](listen-together.md) | Hosting and joining a shared session |
+| [Friends and sharing](friends-and-sharing.md) | 15.0: public profile, following, Blend, shared playlists, room chat, shared chats, Discover 5, release alerts, weekly goals, your year as a story |
 | [VinaX AI](vinax-ai.md) | The chat: models, chat styles, what it can do and what it sends |
 | [Keyboard shortcuts](keyboard-shortcuts.md) | Every key the web app listens for, and the touch gestures |
 | [Android](android.md) | What the Android app adds |

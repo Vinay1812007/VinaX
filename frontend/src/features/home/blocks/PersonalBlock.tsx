@@ -17,6 +17,7 @@ import { onThisDay } from '../onThisDay';
 import { localDateKey, pickDailyFavorite, useBecauseYouLiked } from '../useBecauseYouLiked';
 import { SongOfTheDayCard, StreakCard } from '../DailyCards';
 import { DiscoverFiveCard } from '../DiscoverFive';
+import { useReleaseStore } from '@/features/releases/releaseWatch';
 import { FestivalLookaheadCard } from '../FestivalLookaheadCard';
 import { YourPlaylistsShelf } from '../YourPlaylists';
 import { useContinueListening } from '../useHomeShelves';
@@ -134,6 +135,8 @@ function MorePersonal({ mixes }: { mixes: Mix[] }) {
   const historyEntries = useHistoryStore((s) => s.entries);
   const favorites = useLibraryStore((s) => s.favorites);
   const memories = useMemo(() => onThisDay(historyEntries), [historyEntries]);
+  const fresh = useReleaseStore((s) => s.fresh);
+  const freshReleases = useMemo(() => fresh.map((f) => f.song), [fresh]);
   const recentAlbums = useRecentlyPlayedAlbums();
   const mostListened = useMostListened();
   const onRepeat = useOnRepeat();
@@ -149,6 +152,7 @@ function MorePersonal({ mixes }: { mixes: Mix[] }) {
         <DiscoverFiveCard entries={historyEntries} favorites={favorites} />
         <FestivalLookaheadCard />
       </div>
+      {freshReleases.length > 0 && <SongShelf title="New from your artists" explanation="Fresh songs from artists you saved" songs={dedupe(lens(freshReleases, 'personal'))} />}
       {memories && <SongShelf title="On this day" explanation={`You were playing these ${memories.label.toLowerCase()}`} songs={lens(memories.songs, 'resume')} seeAllTo="/history" />}
       {recentAlbums.isLoading ? <ShelfSkeleton /> : <SongShelf title="Recently played" songs={dedupe(lens(recentAlbums.data, 'resume'))} seeAllTo="/history" />}
       <SongShelf title="Most listened" songs={dedupe(lens(mostListened, 'resume'))} seeAllTo="/history" />

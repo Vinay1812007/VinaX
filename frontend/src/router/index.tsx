@@ -86,6 +86,9 @@ const HelpPage = lazy(() => import('@/pages/HelpPage'));
 const StatsPage = lazy(() => import('@/pages/StatsPage'));
 const RecapPage = lazy(() => import('@/pages/RecapPage'));
 const RecapStoryPage = lazy(() => import('@/pages/RecapStoryPage'));
+const ProfilePage = lazy(() => import('@/pages/ProfilePage'));
+const SharedPlaylistPage = lazy(() => import('@/pages/SharedPlaylistPage'));
+const SharedChatPage = lazy(() => import('@/pages/SharedChatPage'));
 const OfflinePage = lazy(() => import('@/pages/OfflinePage'));
 const ListenTogetherPage = lazy(() => import('@/pages/ListenTogetherPage'));
 const CollectionPage = lazy(() => import('@/pages/CollectionPage'));
@@ -182,6 +185,9 @@ export const router = createBrowserRouter([
       { path: 'stats', element: <StatsPage /> },
       { path: 'recap', element: <RecapPage /> },
       { path: 'recap/story', element: <RecapStoryPage /> },
+      { path: 'u/:handle', element: <ProfilePage /> },
+      { path: 'p/:id', element: <SharedPlaylistPage /> },
+      { path: 'ai/shared/:id', element: <SharedChatPage /> },
       { path: 'offline', element: <OfflinePage /> },
       { path: 'together', element: <ListenTogetherPage /> },
       { path: 'collection/:id', element: <CollectionPage /> },

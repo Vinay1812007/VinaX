@@ -541,3 +541,10 @@ html.reduce-motion .vx-sec *, html.reduce-motion .vx-sec *::before, html.reduce-
 .vx-story-actions .vx-story-pill { margin-top: 0; }
 .vx-story-pill.is-primary { background: #fff; color: #111; }
 @media (prefers-reduced-motion: reduce) { .vx-story-bars i.is-live::after { animation: none; width: 100%; } .vx-story-body { animation: none; } }
+
+/* ------------------------------------------- 15.0 — a shared VinaX AI chat */
+.vx-shared-chat { display: flex; flex-direction: column; gap: 18px; max-width: 760px; }
+.vx-shared-msg { padding: 14px 16px; border-radius: 16px; background: rgb(var(--ink-100) / 0.05); }
+.vx-shared-msg.is-user { align-self: flex-end; max-width: 85%; background: rgb(var(--ember-500) / 0.14); }
+.vx-shared-who { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: rgb(var(--ink-400)); }
+.vx-shared-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.5; color: rgb(var(--ink-100)); }
