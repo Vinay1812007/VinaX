@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { bumpVersion, entryFromMessage, insertChangelogEntry, levelOf, updatePackageJson, updateVersionTs } from '../../scripts/auto-release.mjs';
+import { bumpVersion, directiveOf, entryFromMessage, insertChangelogEntry, levelOf, updatePackageJson, updateVersionTs } from '../../scripts/auto-release.mjs';
 import { CHANGELOG_V2 } from '../constants/changelog';
 import { LATEST_VERSION } from '../constants/version';
 
@@ -19,11 +19,25 @@ describe('bumpVersion / levelOf', () => {
     expect(() => bumpVersion('v14')).toThrow();
   });
 
-  it('reads the level from the commit message', () => {
+  it('reads the level from the subject or a line of its own, never from prose', () => {
     expect(levelOf('Fix the queue (#160)')).toBe('patch');
     expect(levelOf('New Discover page #minor')).toBe('minor');
     expect(levelOf('Rework everything\n\nrelease: major\n')).toBe('major');
     expect(levelOf('A song called #minority report')).toBe('patch');
+    expect(directiveOf('[skip release] fix a typo in the README')).toBe('skip');
+    expect(directiveOf('Docs\n\nrelease: skip')).toBe('skip');
+    // The first automatic release was skipped by its own pull request
+    // description, which documented the markers in prose: a squash merge
+    // carries that body, so only the subject and a bare "release: …" line count.
+    const squash = [
+      'Every merge is a release (#151)',
+      '',
+      '- `#minor` or `#major` in the merge message bumps more; `[skip release]` leaves the version alone.',
+      '- A merge that says [skip release] is released as is.',
+      'Mentioning release: major in a sentence is not a request either.',
+    ].join('\n');
+    expect(directiveOf(squash)).toBe('patch');
+    expect(directiveOf('Add docs for `#major` releases')).toBe('patch');
   });
 });
 

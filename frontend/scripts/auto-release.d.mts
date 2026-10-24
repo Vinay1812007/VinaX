@@ -3,6 +3,7 @@ export type BumpLevel = 'patch' | 'minor' | 'major';
 export interface ChangeEntry { type: 'new' | 'improved' | 'fixed'; text: string }
 export interface VersionInfo { title: string; changes: ChangeEntry[] }
 export function bumpVersion(version: string, level?: BumpLevel): string;
+export function directiveOf(message: string): BumpLevel | 'skip';
 export function levelOf(message: string): BumpLevel;
 export function entryFromMessage(message: string): VersionInfo;
 export function insertChangelogEntry(source: string, version: string, entry: VersionInfo): string;
