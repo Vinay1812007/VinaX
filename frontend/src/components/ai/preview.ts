@@ -15,7 +15,7 @@ import { isNativePlatform } from '@/services/native';
  * frame-ancestors. A DEV-only srcdoc fallback would be an uninstrumented
  * preview that behaves nothing like production — exactly where bugs hide.
  */
-export const PREVIEW_ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/preview' : '/api/preview';
+export const PREVIEW_ENDPOINT = isNativePlatform() ? 'https://www.vinaxmusic.online/api/preview' : '/api/preview';
 
 export const newToken = (): string => Math.random().toString(36).slice(2, 12);
 

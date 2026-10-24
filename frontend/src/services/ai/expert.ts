@@ -12,7 +12,7 @@ import { resolveSuggestions, type Suggestion } from '@/services/ai/playlist';
  */
 
 // Same-origin on web; the native app calls the deployed function directly.
-const ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/vinaxai' : '/api/vinaxai';
+const ENDPOINT = isNativePlatform() ? 'https://www.vinaxmusic.online/api/vinaxai' : '/api/vinaxai';
 
 export type ExpertSearchResult =
   | { ok: true; songs: Song[] }

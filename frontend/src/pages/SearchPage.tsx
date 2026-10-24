@@ -319,7 +319,7 @@ export default function SearchPage() {
     queryKey: ['trending-searches'],
     staleTime: 10 * 60_000,
     queryFn: async ({ signal }) => {
-      const base = isNativePlatform() ? 'https://www.sirimillavinay.online' : '';
+      const base = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
       // Decorative chips: never worth a hung request — 6 s, and gone on unmount.
       const r = await fetchWithTimeout(`${base}/api/trending-searches`, 6000, signal);
       const j = r.ok ? ((await r.json()) as { queries?: string[] }) : null;

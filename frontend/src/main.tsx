@@ -91,7 +91,7 @@ try {
 // Progressive enhancement: register the app-shell service worker on the web
 // (production only). Skipped inside the native shell. Failures are non-fatal.
 const remoteOrigin =
-  typeof location !== 'undefined' && /(^|\.)sirimillavinay\.online$/.test(location.hostname);
+  typeof location !== 'undefined' && /(^|\.)vinaxmusic\.online$/.test(location.hostname);
 if (
   'serviceWorker' in navigator &&
   import.meta.env.PROD &&

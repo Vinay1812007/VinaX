@@ -1,5 +1,5 @@
 /**
- * Public status API + self-probing tick — powers status.sirimillavinay.online.
+ * Public status API + self-probing tick — powers status.vinaxmusic.online.
  *
  * GET  /api/status → current state of every monitored component plus 90 days
  *   of daily uptime bars (from Supabase uptime_daily / uptime_last).
@@ -27,13 +27,13 @@
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
 import { sbCount, sbSelect, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
 
-const SITE = 'https://www.sirimillavinay.online';
+const SITE = 'https://www.vinaxmusic.online';
 /** A tick is expected every 30 min; past this gap a component reads unknown/down. */
 const STALE_MS = 95 * 60_000;
 const WINDOW_DAYS = 90;
 
 const COMPONENTS: Array<{ id: string; name: string }> = [
-  { id: 'website', name: 'Website (www.sirimillavinay.online)' },
+  { id: 'website', name: 'Website (www.vinaxmusic.online)' },
   { id: 'api', name: 'API & app services' },
   { id: 'catalog', name: 'Music catalog & search' },
   { id: 'database', name: 'Database (config & profiles)' },

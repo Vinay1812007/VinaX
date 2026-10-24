@@ -59,7 +59,7 @@ describe('geoEndpoint', () => {
 
   it('is absolute on Android, so the app actually reaches the edge (9.0 skipped it entirely)', () => {
     nativeFlag.value = true;
-    expect(geoEndpoint()).toBe('https://www.sirimillavinay.online/api/geo');
+    expect(geoEndpoint()).toBe('https://www.vinaxmusic.online/api/geo');
   });
 });
 

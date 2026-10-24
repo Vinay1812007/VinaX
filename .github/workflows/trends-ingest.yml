@@ -76,7 +76,7 @@ jobs:
             # Never read a previous attempt's answer as this one's.
             rm -f body.json
             code=$(curl -sS -o body.json -w '%{http_code}' --max-time 120 -X POST \
-              "https://www.sirimillavinay.online/api/cron/trends-ingest" \
+              "https://www.vinaxmusic.online/api/cron/trends-ingest" \
               -H "x-cron-secret: ${CRON_SECRET}") || code=000
             echo "attempt $attempt: HTTP $code"
             if jq -e 'type == "object"' body.json >/dev/null 2>&1; then

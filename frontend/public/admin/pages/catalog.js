@@ -28,7 +28,7 @@
   });
 
   var CONTENT = '/api/admin/content';
-  var SITE = 'https://www.sirimillavinay.online';
+  var SITE = 'https://www.vinaxmusic.online';
   var NOT_CONNECTED = 'The database is not connected. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on the Worker.';
   var CONTENT_ERRORS = {
     keyword_too_short: 'A blocked word must be at least 3 characters — shorter words would hide most of the catalogue.',

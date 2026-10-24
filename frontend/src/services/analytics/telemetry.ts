@@ -22,7 +22,7 @@ import type { Song } from '@/types';
  * record; the Worker whitelists and clips it.
  */
 const ENDPOINT = isNativePlatform()
-  ? 'https://www.sirimillavinay.online/api/events'
+  ? 'https://www.vinaxmusic.online/api/events'
   : '/api/events';
 const PLATFORM = platformName();
 const HEARTBEAT_MS = 25_000;

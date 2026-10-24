@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 
 const DIST = process.env.PRERENDER_DIST || 'dist';
-const ORIGIN = 'https://www.sirimillavinay.online';
+const ORIGIN = 'https://www.vinaxmusic.online';
 const SHELL_CACHE = 'node_modules/.cache/vinax/shell.html';
 const RENDER_TS = resolve(dirname(fileURLToPath(import.meta.url)), '../../backend/worker/functions/_lib/render.ts');
 /** Public catalogue mirrors, in order. Never this site's own /api. */

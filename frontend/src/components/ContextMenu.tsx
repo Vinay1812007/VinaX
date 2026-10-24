@@ -45,7 +45,7 @@ const Back = ({ className }: { className?: string }) => <ChevronRightIcon classN
 /** Same canonical-origin rule the share sheet uses. */
 function absoluteUrl(path: string): string {
   const local = /^https?:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(window.location.origin);
-  const base = local ? 'https://www.sirimillavinay.online' : window.location.origin;
+  const base = local ? 'https://www.vinaxmusic.online' : window.location.origin;
   return `${base}${path}`;
 }
 

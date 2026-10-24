@@ -1,7 +1,7 @@
 import { isNativePlatform } from '@/services/native';
 
 const ENDPOINT = isNativePlatform()
-  ? 'https://www.sirimillavinay.online/api/lyrics-tools'
+  ? 'https://www.vinaxmusic.online/api/lyrics-tools'
   : '/api/lyrics-tools';
 
 const cache = new Map<string, string[]>();

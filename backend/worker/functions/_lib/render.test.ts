@@ -23,7 +23,7 @@ const SONG = {
 function env() {
   return { ASSETS: { fetch: () => Promise.resolve(new Response(shell, { headers: { 'content-type': 'text/html' } })) } };
 }
-const req = () => new Request('https://www.sirimillavinay.online/song/chukkala-chunni-abc123');
+const req = () => new Request('https://www.vinaxmusic.online/song/chukkala-chunni-abc123');
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -50,7 +50,7 @@ describe('renderEntity — song', () => {
     expect(html).toContain('"@type":"ListenAction"');
     expect(html).toContain('"@type":"MusicRecording"');
     expect(html).toContain('"@type":"BreadcrumbList"');
-    expect(html).toContain('rel="canonical" href="https://www.sirimillavinay.online/song/chukkala-chunni-abc123"');
+    expect(html).toContain('rel="canonical" href="https://www.vinaxmusic.online/song/chukkala-chunni-abc123"');
     // og:site_name (brand) deliberately survives.
     expect(html).toContain('property="og:site_name"');
   });
@@ -101,7 +101,7 @@ describe('mood x language hubs', () => {
         Response.json({ data: { results: [{ id: 's1', name: 'Nee Kannu Neeli', artists: { primary: [{ name: 'Artist A' }] } }] } }),
       ),
     );
-    const res = await renderHub('telugu', 'romantic', new Request('https://www.sirimillavinay.online/telugu-romantic-songs'), env());
+    const res = await renderHub('telugu', 'romantic', new Request('https://www.vinaxmusic.online/telugu-romantic-songs'), env());
     const html = await res.text();
     expect(html).toContain('<title>Telugu Romantic Songs — Stream Free | VinaX</title>');
     expect(html.match(/property="og:title"/g)).toHaveLength(1); // generic tags stripped here too
@@ -109,7 +109,7 @@ describe('mood x language hubs', () => {
     expect(html).toContain('"@type":"ItemList"');
     expect(html).toContain('Nee Kannu Neeli');
     expect(html).toContain('href="/telugu-sad-songs"'); // sibling links for crawl discovery
-    expect(html).toContain('rel="canonical" href="https://www.sirimillavinay.online/telugu-romantic-songs"');
+    expect(html).toContain('rel="canonical" href="https://www.vinaxmusic.online/telugu-romantic-songs"');
   });
 
   it('13.5.0: a hub served from the prerendered home shell declares ONE canonical and og:url — its own', async () => {
@@ -117,18 +117,18 @@ describe('mood x language hubs', () => {
     // dist/index.html is the prerendered HOME page: it carries home's canonical and og:url.
     const homeShell = shell.replace(
       '</head>',
-      '<link rel="canonical" href="https://www.sirimillavinay.online/"/><meta property="og:url" content="https://www.sirimillavinay.online/"/></head>',
+      '<link rel="canonical" href="https://www.vinaxmusic.online/"/><meta property="og:url" content="https://www.vinaxmusic.online/"/></head>',
     );
     const homeEnv = { ASSETS: { fetch: () => Promise.resolve(new Response(homeShell, { headers: { 'content-type': 'text/html' } })) } };
-    const html = await (await renderHub('hindi', 'sad', new Request('https://www.sirimillavinay.online/hindi-sad-songs'), homeEnv)).text();
+    const html = await (await renderHub('hindi', 'sad', new Request('https://www.vinaxmusic.online/hindi-sad-songs'), homeEnv)).text();
     expect(html.match(/rel="canonical"/g)).toHaveLength(1);
     expect(html.match(/property="og:url"/g)).toHaveLength(1);
-    expect(html).toContain('rel="canonical" href="https://www.sirimillavinay.online/hindi-sad-songs"');
+    expect(html).toContain('rel="canonical" href="https://www.vinaxmusic.online/hindi-sad-songs"');
   });
 
   it('renderHub fails soft to the plain shell when the catalog is down', async () => {
     vi.stubGlobal('fetch', () => Promise.reject(new Error('down')));
-    const res = await renderHub('telugu', 'romantic', new Request('https://www.sirimillavinay.online/telugu-romantic-songs'), env());
+    const res = await renderHub('telugu', 'romantic', new Request('https://www.vinaxmusic.online/telugu-romantic-songs'), env());
     expect(res.status).toBe(200);
     const html = await res.text();
     // Meta still unique (no catalog needed for the head), list simply absent.
@@ -202,7 +202,7 @@ describe('renderEntity — prerendered shell (4.17.6 regression)', () => {
     // Before 4.17.6 this canonical read ".../song/sorry-sorry-quot-bhojpuriya-raja-quot-2x_4tjb7"
     // — a URL nothing else linked to, so Google filed every crawled page as
     // "Alternative page with proper canonical tag" and indexed almost nothing.
-    expect(html).toContain('rel="canonical" href="https://www.sirimillavinay.online/song/sorry-sorry-bhojpuriya-raja-2x_4tjb7"');
+    expect(html).toContain('rel="canonical" href="https://www.vinaxmusic.online/song/sorry-sorry-bhojpuriya-raja-2x_4tjb7"');
     expect(html).not.toContain('-quot-');
   });
 
@@ -326,7 +326,7 @@ describe('renderEntity — 8.4.0 content depth (low-value content fix)', () => {
 
   it('an album page lists tracks with singers and lengths, plus credits', async () => {
     vi.stubGlobal('fetch', catalog);
-    const html = await (await renderEntity('album', 'sr-kalyanamandapam-al9', new Request('https://www.sirimillavinay.online/album/x-al9'), env())).text();
+    const html = await (await renderEntity('album', 'sr-kalyanamandapam-al9', new Request('https://www.vinaxmusic.online/album/x-al9'), env())).text();
     const main = mainOf(html);
     expect(main).toContain('Sr Kalyanamandapam is a 2021 Telugu album');
     expect(main).toContain('Its 2 songs run about 8 minutes in all');
@@ -336,7 +336,7 @@ describe('renderEntity — 8.4.0 content depth (low-value content fix)', () => {
 
   it('an artist page has a written intro, albums, biography and similar artists', async () => {
     vi.stubGlobal('fetch', catalog);
-    const html = await (await renderEntity('artist', 'anurag-kulkarni-ar7', new Request('https://www.sirimillavinay.online/artist/x-ar7'), env())).text();
+    const html = await (await renderEntity('artist', 'anurag-kulkarni-ar7', new Request('https://www.vinaxmusic.online/artist/x-ar7'), env())).text();
     const main = mainOf(html);
     expect(main).toContain('Anurag Kulkarni is a singer whose songs on VinaX are mostly in Telugu, with others in Kannada.');
     expect(main).toContain('href="/album/ala-vaikunthapurramuloo-al1"');
@@ -355,7 +355,7 @@ describe('13.6.0 — entityPage (shared by the edge and the build-time prerender
     const page = await entityPage('song', 'abc123', shell);
     expect(page?.path).toBe('/song/chukkala-chunni-abc123');
     expect(page?.html.match(/rel="canonical"/g)).toHaveLength(1);
-    expect(page?.html).toContain('rel="canonical" href="https://www.sirimillavinay.online/song/chukkala-chunni-abc123"');
+    expect(page?.html).toContain('rel="canonical" href="https://www.vinaxmusic.online/song/chukkala-chunni-abc123"');
     expect(page?.html).toContain('<h1>Chukkala Chunni</h1>');
   });
 
@@ -373,6 +373,6 @@ describe('13.6.0 — entityPage (shared by the edge and the build-time prerender
     useCatalogBases(MIRROR_BASES);
     expect(await entityPage('song', 'abc123', shell)).not.toBeNull();
     expect(asked.length).toBeGreaterThan(0);
-    expect(asked.some((u) => u.startsWith('https://www.sirimillavinay.online/'))).toBe(false);
+    expect(asked.some((u) => u.startsWith('https://www.vinaxmusic.online/'))).toBe(false);
   });
 });

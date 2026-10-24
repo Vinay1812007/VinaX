@@ -14,7 +14,7 @@ import { isNativePlatform } from '@/services/native';
  * timeout and the "null means unknown" contract are unchanged, so every caller
  * still falls back to browser signals when the edge says nothing.
  */
-export const GEO_ORIGIN = 'https://www.sirimillavinay.online';
+export const GEO_ORIGIN = 'https://www.vinaxmusic.online';
 export const geoEndpoint = (): string => (isNativePlatform() ? `${GEO_ORIGIN}/api/geo` : '/api/geo');
 
 interface GeoBody {

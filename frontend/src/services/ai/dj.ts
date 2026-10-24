@@ -31,7 +31,7 @@ import { isSkippedPlay } from '@/utils/plays';
  * service is slow, down or unconfigured, the caller's deterministic order
  * ships — playback never waits on the model.
  */
-const ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/dj' : '/api/dj';
+const ENDPOINT = isNativePlatform() ? 'https://www.vinaxmusic.online/api/dj' : '/api/dj';
 const SURFACED_KEY = 'vinax.dj.surfaced.v1';
 const SURFACED_CAP = 300;
 const AVOID_SEND = 120;

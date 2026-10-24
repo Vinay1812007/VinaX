@@ -18,7 +18,7 @@
  *   exit 1 = at least one is poisoned or missing (message names it)
  */
 /* global fetch, setTimeout */
-const ORIGIN = (process.argv[2] || process.env.VINAX_ORIGIN || 'https://www.sirimillavinay.online').replace(/\/$/, '');
+const ORIGIN = (process.argv[2] || process.env.VINAX_ORIGIN || 'https://www.vinaxmusic.online').replace(/\/$/, '');
 const UA = 'VinaX-edge-canary/1.0';
 
 const get = async (url, tries = 3) => {

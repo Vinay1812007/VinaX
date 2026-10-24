@@ -37,7 +37,7 @@ Project `vinax`, connected to this repository:
 
 The song, album and artist step runs only on the static host's own build, which sets `CF_PAGES=1`; elsewhere it writes an empty `dist/entity-pages.xml` and stops (set `PRERENDER_ENTITIES=1` to run it locally). It picks the most-played songs of each hub language from the public catalogue mirrors, never from this site's `/api`, plus their albums and lead artists (about 750 pages, about a minute), and renders them with the Worker's own `entityPage()` as flat files such as `dist/song/<slug>-<id>.html`, served at `/song/<slug>-<id>`. A dead mirror or the six-minute budget means fewer pages, never a failed build. `dist/entity-pages.xml` lists what was built, and the sitemap index points to it. Limits: `ENTITY_SONGS_PER_LANG`, `ENTITY_MAX_ALBUMS`, `ENTITY_MAX_ARTISTS`, `ENTITY_CONCURRENCY`, `ENTITY_BUDGET_MS`.
 
-Keep the custom domains (`www.sirimillavinay.online`, the apex, `admin.`, `update.`, `status.`) attached to the static project. It is the origin the Worker passes every unmatched URL to. The static project needs no environment variables and no secrets.
+Keep the custom domains (`www.vinaxmusic.online`, the apex, `admin.`, `update.`, `status.`) attached to the static project. It is the origin the Worker passes every unmatched URL to. The static project needs no environment variables and no secrets.
 
 Manual deploy, from `frontend/`:
 

@@ -210,7 +210,7 @@ export default function StatsPage() {
   const best = getBestStreak();
 
   const share = (): void => {
-    const text = `My VinaX: ${stats.plays} plays · ${stats.hours} listened · ${streak}-day streak 🎵 sirimillavinay.online`;
+    const text = `My VinaX: ${stats.plays} plays · ${stats.hours} listened · ${streak}-day streak 🎵 vinaxmusic.online`;
     if (navigator.share) {
       void navigator.share({ text }).catch(() => undefined);
     } else {

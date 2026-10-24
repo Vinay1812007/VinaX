@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { onRequestGet as sitemapIndex } from '../functions/sitemap.xml';
 import { onRequestGet as staticSitemap } from '../functions/sitemap-static.xml';
 
-const ORIGIN = 'https://www.sirimillavinay.online';
+const ORIGIN = 'https://www.vinaxmusic.online';
 const locsOf = (xml: string): string[] => [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
 
 afterEach(() => vi.restoreAllMocks());
@@ -61,7 +61,7 @@ describe('dynamic child sitemaps (source contract)', () => {
   for (const f of ['sitemap-songs', 'sitemap-albums', 'sitemap-artists', 'sitemap-movies']) {
     it(`${f}: www origin, trailing-slash <loc> template, 30-min edge cache`, () => {
       const src = readFileSync(`worker/functions/${f}.xml.ts`, 'utf8');
-      expect(src).toContain("const ORIGIN = 'https://www.sirimillavinay.online'");
+      expect(src).toContain("const ORIGIN = 'https://www.vinaxmusic.online'");
       expect(src).toContain('max-age=1800, s-maxage=1800');
       // Detail URLs are built as `${ORIGIN}/<type>/<slug>-<safeId>` — NO trailing
       // slash since 4.16.3: sitemap URLs must byte-match the entity canonicals,

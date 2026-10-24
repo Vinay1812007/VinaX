@@ -7,7 +7,7 @@ import type { SupabaseEnv } from './_lib/supabase';
 import { artistRows, harvestSoon, seoRow } from './_lib/seo';
 
 const BASES = [
-  'https://www.sirimillavinay.online/api/cat',
+  'https://www.vinaxmusic.online/api/cat',
   'https://saavn.sumit.co/api',
   'https://nepotuneapi.vercel.app/api',
 ];
@@ -31,7 +31,7 @@ async function fetchFirst(suffix: string): Promise<any[]> {
   }
   return [];
 }
-const ORIGIN = 'https://www.sirimillavinay.online';
+const ORIGIN = 'https://www.vinaxmusic.online';
 const YEAR = new Date().getFullYear();
 const slugify = (t: unknown): string =>
   String(t ?? '')

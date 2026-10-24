@@ -12,7 +12,7 @@ const SAFARI = 'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebK
 const FIREFOX = 'Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0';
 
 const page = (ip: string, headers: Record<string, string> = {}, path = '/song/little-flower-hkUmgmaL'): Request =>
-  new Request(`https://www.sirimillavinay.online${path}`, { headers: { 'cf-connecting-ip': ip, 'user-agent': CHROME, ...headers } });
+  new Request(`https://www.vinaxmusic.online${path}`, { headers: { 'cf-connecting-ip': ip, 'user-agent': CHROME, ...headers } });
 
 /** A real Chromium navigation carries client hints and fetch metadata. */
 const REAL = { 'sec-ch-ua': '"Chromium";v="144", "Google Chrome";v="144"', 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document', 'accept-language': 'te-IN,te;q=0.9' };
@@ -39,7 +39,7 @@ describe('browser impostors', () => {
   it('browsers that never send client hints are not judged by them', () => {
     expect(isBrowserImpostor(page('1.2.3.4', { 'user-agent': SAFARI }))).toBe(false);
     expect(isBrowserImpostor(page('1.2.3.4', { 'user-agent': FIREFOX }))).toBe(false);
-    expect(isBrowserImpostor(new Request('https://www.sirimillavinay.online/song/x-1'))).toBe(false);
+    expect(isBrowserImpostor(new Request('https://www.vinaxmusic.online/song/x-1'))).toBe(false);
   });
 });
 
@@ -68,7 +68,7 @@ describe('the verdict', () => {
   it('renders for a person, a crawler and a non-GET; serves the shell to an impostor at once', async () => {
     expect(await guardVerdict(page('1.2.3.4', REAL), {})).toBe('render');
     expect(await guardVerdict(page('1.2.3.4', { 'user-agent': 'Googlebot/2.1' }), {})).toBe('render');
-    expect(await guardVerdict(new Request('https://www.sirimillavinay.online/song/x-1', { method: 'POST', headers: { 'user-agent': CHROME } }), {})).toBe('render');
+    expect(await guardVerdict(new Request('https://www.vinaxmusic.online/song/x-1', { method: 'POST', headers: { 'user-agent': CHROME } }), {})).toBe('render');
     expect(await guardVerdict(page('1.2.3.4'), {})).toBe('impostor');
   });
 

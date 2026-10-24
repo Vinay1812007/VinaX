@@ -31,7 +31,7 @@ import { useSettingsStore } from '@/store/settingsStore';
  * turns the network side off; cached vectors stay readable.
  */
 
-const ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/embed' : '/api/embed';
+const ENDPOINT = isNativePlatform() ? 'https://www.vinaxmusic.online/api/embed' : '/api/embed';
 const MODEL_KEY = 'vinax.embed.model.v1';
 const BATCH = 64;
 /** Songs one embedSongs() call will send at most (the rest wait for a later call). */

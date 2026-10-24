@@ -10,7 +10,7 @@
   'use strict';
   var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt;
 
-  var SITE = 'https://www.sirimillavinay.online';
+  var SITE = 'https://www.vinaxmusic.online';
   var WEB_SECRETS = ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT'];
   var ANDROID_SECRET = 'FCM_SERVICE_ACCOUNT';
   var ACTIVITY = [

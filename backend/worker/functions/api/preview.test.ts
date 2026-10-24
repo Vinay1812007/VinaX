@@ -15,7 +15,7 @@ const HEADERS = {
 
 const post = (body: string, extra: Record<string, string> = {}) =>
   onRequestPost({
-    request: new Request('https://www.sirimillavinay.online/api/preview', {
+    request: new Request('https://www.vinaxmusic.online/api/preview', {
       method: 'POST',
       headers: { ...HEADERS, ...extra },
       body,
@@ -31,7 +31,7 @@ describe('/api/preview', () => {
     expect(res.headers.get('content-type')).toContain('text/html');
     const csp = res.headers.get('content-security-policy') ?? '';
     expect(csp).toContain("'unsafe-inline'");
-    expect(csp).toContain('frame-ancestors https://www.sirimillavinay.online');
+    expect(csp).toContain('frame-ancestors https://www.vinaxmusic.online');
     expect(res.headers.get('cache-control')).toBe('no-store');
     expect(res.headers.get('x-robots-tag')).toContain('noindex');
     const text = await res.text();
@@ -57,11 +57,11 @@ describe('/api/preview', () => {
 
   it('falls back to Origin when Sec-Fetch-Site is absent (older browsers)', () => {
     const mk = (h: Record<string, string>) => new Request('https://x/api/preview', { method: 'POST', headers: h });
-    expect(isSameOriginRequest(mk({ origin: 'https://www.sirimillavinay.online' }))).toBe(true);
+    expect(isSameOriginRequest(mk({ origin: 'https://www.vinaxmusic.online' }))).toBe(true);
     expect(isSameOriginRequest(mk({ origin: 'https://evil.example' }))).toBe(false);
     expect(isSameOriginRequest(mk({}))).toBe(false);
     // Sec-Fetch-Site wins when present, whatever Origin claims.
-    expect(isSameOriginRequest(mk({ 'sec-fetch-site': 'cross-site', origin: 'https://www.sirimillavinay.online' }))).toBe(false);
+    expect(isSameOriginRequest(mk({ 'sec-fetch-site': 'cross-site', origin: 'https://www.vinaxmusic.online' }))).toBe(false);
   });
 
   it('ships the opaque-origin survival kit: storage shims and failure reporting', async () => {
@@ -114,7 +114,7 @@ describe('/api/preview', () => {
       },
     });
     const res = await onRequestPost({
-      request: new Request('https://www.sirimillavinay.online/api/preview', {
+      request: new Request('https://www.vinaxmusic.online/api/preview', {
         method: 'POST',
         headers: HEADERS,
         body: big,

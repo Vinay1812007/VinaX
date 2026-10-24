@@ -13,17 +13,17 @@
 import type { SupabaseEnv } from './supabase';
 import { artistRows, harvestSoon, seoRow, songRowsDeep, type SeoRow } from './seo';
 
-const BASES = ['https://www.sirimillavinay.online/api/cat', 'https://saavn.sumit.co/api', 'https://nepotuneapi.vercel.app/api'];
+const BASES = ['https://www.vinaxmusic.online/api/cat', 'https://saavn.sumit.co/api', 'https://nepotuneapi.vercel.app/api'];
 /** 13.6.0 — the build's entity prerender (frontend/scripts/prerender-entities.mjs)
  *  renders with the public mirrors only: going through the Worker's own
  *  /api/cat would spend the Worker request budget once per page per deploy. */
-export const MIRROR_BASES = BASES.filter((b) => !b.startsWith('https://www.sirimillavinay.online'));
+export const MIRROR_BASES = BASES.filter((b) => !b.startsWith('https://www.vinaxmusic.online'));
 let bases: readonly string[] = BASES;
 /** Choose the catalogue bases this module reads from (build-time use). */
 export function useCatalogBases(list: readonly string[]): void {
   bases = list.length ? list : BASES;
 }
-const ORIGIN = 'https://www.sirimillavinay.online';
+const ORIGIN = 'https://www.vinaxmusic.online';
 
 interface Assets {
   ASSETS: { fetch: (req: Request | string | URL) => Promise<Response> };

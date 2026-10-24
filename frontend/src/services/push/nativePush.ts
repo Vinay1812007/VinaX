@@ -16,7 +16,7 @@
 import { isNativePlatform } from '@/services/native';
 import { withNotificationPermission } from '@/services/native/permissions';
 
-const BASE = 'https://www.sirimillavinay.online';
+const BASE = 'https://www.vinaxmusic.online';
 /** How long `register()` may take to produce a token before that is reported. */
 const TOKEN_WAIT_MS = 20_000;
 let wired = false;

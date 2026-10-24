@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { isApkDownloadPath, onRequest as hostMiddleware } from '../functions/_middleware';
 import worker from '../index';
 
-const UPDATE = 'https://update.sirimillavinay.online';
+const UPDATE = 'https://update.vinaxmusic.online';
 
 const run = (url: string, next = async () => new Response('handler', { status: 200 })) =>
   hostMiddleware({ request: new Request(url), next });
@@ -61,13 +61,13 @@ describe('update host middleware', () => {
   });
 
   it('keeps the apex canonicalisation and admin root redirect intact', async () => {
-    const apex = await run('https://sirimillavinay.online/song/abc?x=1');
+    const apex = await run('https://vinaxmusic.online/song/abc?x=1');
     expect(apex.status).toBe(301);
-    expect(apex.headers.get('location')).toBe('https://www.sirimillavinay.online/song/abc?x=1');
-    const admin = await run('https://admin.sirimillavinay.online/');
+    expect(apex.headers.get('location')).toBe('https://www.vinaxmusic.online/song/abc?x=1');
+    const admin = await run('https://admin.vinaxmusic.online/');
     expect(admin.status).toBe(302);
-    expect(admin.headers.get('location')).toBe('https://admin.sirimillavinay.online/admin/');
-    const plain = await run('https://www.sirimillavinay.online/api/apk');
+    expect(admin.headers.get('location')).toBe('https://admin.vinaxmusic.online/admin/');
+    const plain = await run('https://www.vinaxmusic.online/api/apk');
     expect(plain.status).toBe(200);
   });
 });

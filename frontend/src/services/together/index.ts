@@ -3,7 +3,7 @@ import { getLocal, setLocal } from '@/services/storage/local';
 import { isNativePlatform } from '@/services/native';
 import type { Song } from '@/types';
 
-const BASE = isNativePlatform() ? 'https://www.sirimillavinay.online/api/room' : '/api/room';
+const BASE = isNativePlatform() ? 'https://www.vinaxmusic.online/api/room' : '/api/room';
 
 /**
  * Host tokens are the secret authorizing host-only actions (update, end). The

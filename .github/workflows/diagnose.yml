@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: self-hosted catalog /api/cat (4.20.0)
         run: |
-          OUT=$(curl -s -m 15 -o /tmp/c.json -w '%{http_code} %{time_total}s' 'https://www.sirimillavinay.online/api/cat/search/songs?query=top%20hindi%20songs&limit=3' || echo ERR)
+          OUT=$(curl -s -m 15 -o /tmp/c.json -w '%{http_code} %{time_total}s' 'https://www.vinaxmusic.online/api/cat/search/songs?query=top%20hindi%20songs&limit=3' || echo ERR)
           SUMMARY=$(python3 -c "
           import json
           try:
@@ -42,7 +42,7 @@ jobs:
           fi
       - name: same-IP auth token test (is the signature IP-bound?)
         run: |
-          ENC=$(curl -s 'https://www.sirimillavinay.online/api/cat/search/songs?query=top%20hindi%20songs&limit=1' | python3 -c "
+          ENC=$(curl -s 'https://www.vinaxmusic.online/api/cat/search/songs?query=top%20hindi%20songs&limit=1' | python3 -c "
           import json,sys,urllib.parse
           d=json.load(sys.stdin)
           r=(d.get('data') or {}).get('results') or []
@@ -97,22 +97,22 @@ jobs:
       - name: apex host canonicalization (4.19.2)
         run: |
           for p in / /charts /moods /song/x-y; do
-            out=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "https://sirimillavinay.online$p")
+            out=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "https://vinaxmusic.online$p")
             echo "::notice title=apex$p::$out"
           done
       - name: fetch shell + verify assets
         run: |
           set -e
-          curl -sS -D headers.txt https://www.sirimillavinay.online/ -o home.html
+          curl -sS -D headers.txt https://www.vinaxmusic.online/ -o home.html
           echo "::notice title=html-bytes::$(wc -c < home.html)"
           echo "::notice title=cache-headers::$(grep -i -E 'cf-cache-status|age:|cache-control' headers.txt | tr '\n' ' | ')"
           for u in $(grep -o 'src="/assets/[^"]*"' home.html | sed 's/src="//;s/"//' | head -12); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' "https://www.sirimillavinay.online$u")
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://www.vinaxmusic.online$u")
             echo "::notice title=asset::$u -> $code"
             [ "$code" = "200" ] || echo "::error title=asset-broken::$u returned $code"
           done
           for u in $(grep -o 'href="/assets/[^"]*"' home.html | sed 's/href="//;s/"//' | head -6); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' "https://www.sirimillavinay.online$u")
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://www.vinaxmusic.online$u")
             echo "::notice title=preload::$u -> $code"
             [ "$code" = "200" ] || echo "::error title=preload-broken::$u returned $code"
           done
@@ -120,7 +120,7 @@ jobs:
           grep -q '__vxBoot' home.html && echo "::notice title=prefetch::4.18.2 prefetch script present" || echo "::warning title=prefetch::prefetch script ABSENT (older deploy live?)"
       - name: rendered DOM after JS execution
         run: |
-          google-chrome --headless=new --disable-gpu --no-sandbox --virtual-time-budget=25000 --dump-dom "https://www.sirimillavinay.online/" > dom.html 2> chrome.log || true
+          google-chrome --headless=new --disable-gpu --no-sandbox --virtual-time-budget=25000 --dump-dom "https://www.vinaxmusic.online/" > dom.html 2> chrome.log || true
           echo "::notice title=dom-bytes::$(wc -c < dom.html)"
           if grep -q 'id="main-content"' dom.html; then
             echo "::notice title=hydration::OK - React mounted (#main-content present)"

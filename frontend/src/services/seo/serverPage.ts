@@ -33,7 +33,7 @@ export function captureServerPage(doc: Document = document, loc: Pick<Location, 
     const links = doc.querySelectorAll<HTMLLinkElement>('link[rel="canonical"]');
     const href = links.length ? links[links.length - 1].getAttribute('href') : null;
     if (!block || !href) return null;
-    const path = normPath(new URL(href, 'https://www.sirimillavinay.online').pathname);
+    const path = normPath(new URL(href, 'https://www.vinaxmusic.online').pathname);
     if (path !== normPath(loc.pathname)) return null;
     const html = block.innerHTML.trim();
     if (!html) return null;

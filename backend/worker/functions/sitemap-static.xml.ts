@@ -1,5 +1,5 @@
 /** Static + hub routes. Mirrors the prerendered route set. */
-const ORIGIN = 'https://www.sirimillavinay.online';
+const ORIGIN = 'https://www.vinaxmusic.online';
 
 const HUB_LANGUAGES = ['hindi', 'telugu', 'tamil', 'english', 'punjabi', 'kannada', 'malayalam', 'bengali', 'marathi', 'bhojpuri', 'gujarati', 'urdu'];
 

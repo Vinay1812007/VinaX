@@ -23,7 +23,7 @@ import android.widget.RemoteViews;
  */
 public class VinaxQuickPlayWidget extends AppWidgetProvider {
     /** The app's own origin (capacitor.config.ts server.url) + the widget flag. */
-    static final String PLAY_URL = "https://www.sirimillavinay.online/?widget=play";
+    static final String PLAY_URL = "https://www.vinaxmusic.online/?widget=play";
 
     /** Opens the app and starts the listener's mix. Shared with VinaxPlayerWidget. */
     public static PendingIntent playIntent(Context context) {

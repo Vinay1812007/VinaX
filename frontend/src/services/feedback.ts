@@ -5,7 +5,7 @@ import { isNativePlatform, platformName } from '@/services/native';
 /** Submit user feedback / a bug report. NOT consent-gated — the user is
  *  explicitly sending this. Coarse geo is added server-side; no raw IP. */
 const ENDPOINT = isNativePlatform()
-  ? 'https://www.sirimillavinay.online/api/feedback'
+  ? 'https://www.vinaxmusic.online/api/feedback'
   : '/api/feedback';
 
 export async function sendFeedback(type: string, message: string): Promise<boolean> {

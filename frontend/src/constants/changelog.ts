@@ -362,13 +362,13 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
   '11.0.4': {
     title: 'Music now comes from our own address',
     changes: [
-      { type: 'improved', text: 'Songs, search and videos now load from VinaX’s own music server address, vinaxmusicapi.sirimillavinay.online, instead of a borrowed one. Nothing changes in how you use the app.' },
+      { type: 'improved', text: 'Songs, search and videos now load from VinaX’s own music server address instead of a borrowed one. Nothing changes in how you use the app.' },
     ],
   },
   '11.0.3': {
     title: 'Easier to find',
     changes: [
-      { type: 'fixed', text: 'On days the server was busy, search engines could not read VinaX’s crawl rules at sirimillavinay.online and stopped visiting the site altogether, so new songs and pages were not picked up. That address now always forwards to www.sirimillavinay.online straight away, whatever the server is doing.' },
+      { type: 'fixed', text: 'On days the server was busy, search engines could not read VinaX’s crawl rules at the site’s bare address and stopped visiting the site altogether, so new songs and pages were not picked up. That address now always forwards to the www address straight away, whatever the server is doing.' },
     ],
   },
   '11.0.2': {
@@ -1656,7 +1656,7 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
     changes: [
       {
         type: 'new',
-        text: 'VinaX now serves songs from its own first-party catalog API (sirimillavinay.online) as the primary source. Search, playback, and the daily song push no longer depend on community-run wrappers being up.',
+        text: 'VinaX now serves songs from its own first-party catalog API as the primary source. Search, playback, and the daily song push no longer depend on community-run wrappers being up.',
       },
       {
         type: 'improved',
@@ -2846,7 +2846,7 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
   '16.52': {
     title: 'Seven wishes',
     changes: [
-      { type: 'fixed', text: 'Android downloads now stream straight to disk (big files no longer fail), and shared links always use sirimillavinay.online — never localhost.' },
+      { type: 'fixed', text: 'Android downloads now stream straight to disk (big files no longer fail), and shared links always use the VinaX website address — never localhost.' },
       { type: 'new', text: 'Chat with AI from Search — find songs and talk music in a conversation. AI Playlist now thinks much deeper before answering.' },
       { type: 'improved', text: 'The song menu opens over a blurred, dimmed backdrop with a properly readable panel.' },
     ],

@@ -17,7 +17,7 @@
  * of a child map was a Worker request. The routes still answer for anyone
  * who has them; they are just no longer advertised.
  */
-const ORIGIN = 'https://www.sirimillavinay.online';
+const ORIGIN = 'https://www.vinaxmusic.online';
 export const INDEX_MAPS = ['sitemap-static.xml', 'sitemap-hubs.xml', 'entity-pages.xml'];
 
 export const onRequestGet = async (): Promise<Response> => {

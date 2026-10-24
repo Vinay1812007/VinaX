@@ -35,7 +35,7 @@ const config: CapacitorConfig = {
     // Load the live web app so feature updates arrive over-the-air — no
     // reinstall. The service worker caches the shell for offline launches.
     // See top-of-file WARNING before changing.
-    url: 'https://www.sirimillavinay.online',
+    url: 'https://www.vinaxmusic.online',
   },
   plugins: {
     // 13.7.3 — show a push that arrives while the app is open. Without this

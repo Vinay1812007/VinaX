@@ -11,8 +11,8 @@
  * before anything else boots. The edge redirect still has to be repaired in
  * the Cloudflare dashboard; this keeps listeners safe until then.
  */
-export const APEX_HOST = 'sirimillavinay.online';
-export const CANONICAL_ORIGIN = 'https://www.sirimillavinay.online';
+export const APEX_HOST = 'vinaxmusic.online';
+export const CANONICAL_ORIGIN = 'https://www.vinaxmusic.online';
 
 /** The www URL for an apex location, or null when no redirect is needed. */
 export function apexTarget(loc: Pick<Location, 'hostname' | 'pathname' | 'search' | 'hash'>): string | null {

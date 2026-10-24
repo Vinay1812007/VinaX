@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { mapSong, streamUrls } from './[[path]]';
 
-const ORIGIN = 'https://www.sirimillavinay.online';
+const ORIGIN = 'https://www.vinaxmusic.online';
 const RAW = {
   id: 'abc123',
   title: 'Naatu Naatu',

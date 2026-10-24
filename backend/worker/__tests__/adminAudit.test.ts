@@ -86,11 +86,11 @@ describe('redactSecrets', () => {
 
   it('strips secrets out of URLs and shrinks data URLs', () => {
     const out = redactSecrets({
-      link: 'https://www.sirimillavinay.online/song/x?token=abc123&utm=home',
+      link: 'https://www.vinaxmusic.online/song/x?token=abc123&utm=home',
       creds: 'https://user:pw@example.test/path',
       image: `data:image/png;base64,${'A'.repeat(500)}`,
     }) as Record<string, string>;
-    expect(out.link).toBe(`https://www.sirimillavinay.online/song/x?token=${encodeURIComponent(REDACTED)}&utm=home`);
+    expect(out.link).toBe(`https://www.vinaxmusic.online/song/x?token=${encodeURIComponent(REDACTED)}&utm=home`);
     expect(out.creds).not.toContain('pw');
     expect(out.image).toBe(`[data url, ${'data:image/png;base64,'.length + 500} chars]`);
   });

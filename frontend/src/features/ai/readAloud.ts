@@ -58,7 +58,7 @@ export function speakableText(md: string): string {
 
 /* ---------------------------------------------------------------- server voice */
 
-const TTS_PATH = isNativePlatform() ? 'https://www.sirimillavinay.online/api/tts' : '/api/tts';
+const TTS_PATH = isNativePlatform() ? 'https://www.vinaxmusic.online/api/tts' : '/api/tts';
 /** Per-chunk leash. 11.0 — the Worker gives a speech model up to 25s (6s on
  *  its fast route) and answers with an error when that runs out, so this
  *  sits just past it: the server's verdict arrives first, and the leash only

@@ -54,7 +54,7 @@ jobs:
           fi
           attempt=1
           until curl --fail-with-body -sS -X POST \
-              "https://www.sirimillavinay.online/api/cron/ai-daily-push${qs}" \
+              "https://www.vinaxmusic.online/api/cron/ai-daily-push${qs}" \
               -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" -w '\nHTTP %{http_code}\n'; do
             if [ "$attempt" -ge 3 ]; then
               echo "::error::ai-daily-push endpoint failed after $attempt attempts"

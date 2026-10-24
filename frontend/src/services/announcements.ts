@@ -7,7 +7,7 @@ import { ensureNotificationPermission, isNativePlatform } from '@/services/nativ
 const SEEN_KEY = 'vinax.announce-seen.v1';
 const OPT_KEY = 'vinax.app-alerts.v1';
 const ASKED_KEY = 'vinax.notif-asked.v1';
-const BASE = 'https://www.sirimillavinay.online';
+const BASE = 'https://www.vinaxmusic.online';
 
 export function appAlertsEnabled(): boolean {
   try {

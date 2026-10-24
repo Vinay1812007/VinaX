@@ -2,7 +2,7 @@
    /api/status feed and paints per-component 90-day uptime bars. */
 (function () {
   'use strict';
-  var API = 'https://www.sirimillavinay.online/api/status';
+  var API = 'https://www.vinaxmusic.online/api/status';
   var banner = document.getElementById('banner');
   var board = document.getElementById('board');
   var err = document.getElementById('err');

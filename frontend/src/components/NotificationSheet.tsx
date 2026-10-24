@@ -60,7 +60,7 @@ export function NotificationSheet({ open, onClose }: { open: boolean; onClose: (
   const [snoozed, setSnoozed] = useState(() => alertsSnoozedUntil() != null);
   useEffect(() => {
     if (!open) return;
-    const base = isNativePlatform() ? 'https://www.sirimillavinay.online' : '';
+    const base = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
     void fetch(`${base}/api/announcements?t=${Date.now()}`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { announcements?: Announcement[] } | null) => setAnns(d?.announcements ?? []))

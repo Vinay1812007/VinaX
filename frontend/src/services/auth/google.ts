@@ -26,7 +26,7 @@ async function readInstalledVersion(): Promise<void> {
 
 /** The project's public web OAuth client id (not a secret). */
 export const GOOGLE_WEB_CLIENT_ID = '152181244509-biv1p3bge1endo5pd8qpc1ormhb4a75l.apps.googleusercontent.com';
-const ORIGIN = isNativePlatform() ? 'https://www.sirimillavinay.online' : '';
+const ORIGIN = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
 const GIS_SRC = 'https://accounts.google.com/gsi/client';
 
 export interface AccountUser {

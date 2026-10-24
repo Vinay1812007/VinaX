@@ -13,7 +13,7 @@ import type { IntentMood, MusicIntent } from './musicIntent';
  * hour when the deployed backend does not have the route yet).
  */
 
-const ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/ai/search' : '/api/ai/search';
+const ENDPOINT = isNativePlatform() ? 'https://www.vinaxmusic.online/api/ai/search' : '/api/ai/search';
 const LEASH_MS = 2_500;
 const MOODS: readonly IntentMood[] = ['romantic', 'energetic', 'chill', 'melancholy', 'devotional'];
 

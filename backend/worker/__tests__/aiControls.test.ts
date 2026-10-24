@@ -71,7 +71,7 @@ const configReads = () => calls.filter((c) => c.method === 'GET' && c.url.starts
 let ipSeq = 0;
 function post(path: string, body: unknown, headers: Record<string, string> = {}): Request {
   ipSeq += 1;
-  return new Request(`https://www.sirimillavinay.online${path}`, {
+  return new Request(`https://www.vinaxmusic.online${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'cf-connecting-ip': `10.40.${Math.floor(ipSeq / 250)}.${ipSeq % 250}`, ...headers },
     body: JSON.stringify(body),

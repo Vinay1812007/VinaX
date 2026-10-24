@@ -153,12 +153,12 @@ describe('push composer', () => {
   it('link check compares the parsed origin — look-alike hosts and protocol-relative paths are refused', async () => {
     installFetch();
     const bad = [
-      'https://www.sirimillavinay.online.evil.example/x',
-      'https://www.sirimillavinay.online@evil.example/x',
-      'https://www.sirimillavinay.onlineevil.example',
+      'https://www.vinaxmusic.online.evil.example/x',
+      'https://www.vinaxmusic.online@evil.example/x',
+      'https://www.vinaxmusic.onlineevil.example',
       '//evil.example/x',
       '/\\evil.example/x',
-      'http://www.sirimillavinay.online/x',
+      'http://www.vinaxmusic.online/x',
       'javascript:alert(1)',
     ];
     for (const link of bad) {
@@ -167,7 +167,7 @@ describe('push composer', () => {
       expect(((await res.json()) as { error: string }).error).toBe('bad_link');
     }
     expect(calls).toHaveLength(0); // refused before anything was read or sent
-    for (const link of ['/', '/song/some-song-abc123', 'https://www.sirimillavinay.online/album/x?y=1']) {
+    for (const link of ['/', '/song/some-song-abc123', 'https://www.vinaxmusic.online/album/x?y=1']) {
       const res = await pushPost({ request: adminReq({ title: 'T', body: 'B', link, dryRun: true }), env: ENV });
       expect(res.status, link).toBe(200);
     }
