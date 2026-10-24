@@ -27,6 +27,8 @@ npx wrangler deploy --config worker/wrangler.toml --dry-run --outdir /tmp/wrangl
 
 `npm run build` starts by deleting `dist/` and the build caches of the folder it runs in; do not run it in a checkout whose dev server someone else is using — use the worktree recipe below.
 
+The database schema has its own workflow too (`.github/workflows/schema.yml`): on any change to `backend/supabase/**`, a fresh Postgres 16 gets `schema.sql` applied twice, then `backend/supabase/check.sql` (seed rows, every function called with assertions, constraints and row-level security proved, rolled back), then `reset.sql`, `schema.sql` and `check.sql` again. The same cycle runs locally against any throwaway database with `backend/supabase/ci.sh check <url>`.
+
 The browser suite has its own workflow (`.github/workflows/e2e.yml`): install the test browser, `npm run build`, `npm run e2e`. A separate workflow runs accessibility and search-engine checks against the prerendered routes on pushes to `main` (`lighthouse.yml`); its performance scores are advisory.
 
 ## Unit tests
