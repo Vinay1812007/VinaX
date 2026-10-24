@@ -46,6 +46,9 @@ const GUEST_HEARTBEAT_EVERY = 3;
 
 let feed = new ReactionFeed();
 
+/** 15.0 — the song the room last voted past (host side): never skipped twice. */
+let lastVotedSkip: string | null = null;
+
 /** 15.0 — the songs this session has played (for "save as a playlist"), in order, no repeats. */
 function rememberPlayed(song: Song | null | undefined): void {
   if (!song) return;
@@ -207,10 +210,17 @@ function runHost(code: string): () => void {
     // 15.0 — vote-to-skip: when more than half the room (host included) has
     // voted, the host's player moves on; the server clears the votes with
     // the new song.
-    const headcount = Math.max(1, d.memberCount ?? 1) + 1;
-    if ((d.room.skipVotes ?? 0) > headcount / 2 && d.room.song) {
+    // memberCount already includes the host (it heartbeats too). Skip once
+    // per song, and only the song this device is actually playing, so a
+    // stale poll or a slow queue extension can never skip twice.
+    const headcount = Math.max(1, d.memberCount ?? 1);
+    const roomSong = d.room.song?.id ?? null;
+    const st = usePlayerStore.getState();
+    const playing = st.queue[st.index]?.id ?? null;
+    if (roomSong && roomSong === playing && roomSong !== lastVotedSkip && (d.room.skipVotes ?? 0) > headcount / 2) {
+      lastVotedSkip = roomSong;
       toast('The room voted to skip');
-      usePlayerStore.getState().next(true);
+      st.next(true);
     }
     const requests = d.room.requests ?? [];
     await Promise.all(requests.map(adopt));

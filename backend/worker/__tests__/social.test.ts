@@ -74,6 +74,20 @@ describe('/api/profile', () => {
   });
 });
 
+describe('/api/follow — private profiles', () => {
+  it('a private handle answers like a missing one to a stranger, and stays out of their list', async () => {
+    const now = new Date().toISOString();
+    fakeDb({
+      accounts: ACCOUNTS,
+      profiles: [{ account_id: 'a2', handle: 'bobo', public: false, bio: 'secret', summary: {}, now_playing: { id: 'x' }, share_now: true, updated_at: now }],
+      follows: [{ follower_id: 'a1', followee_id: 'a2' }],
+    });
+    expect((await follow.onRequestPost({ request: await req('/api/follow', 'POST', { handle: 'bobo', on: true }), env: ENV })).status).toBe(404);
+    const list = (await (await follow.onRequestGet({ request: await req('/api/follow', 'GET'), env: ENV })).json()) as { following: unknown[] };
+    expect(list.following).toEqual([]);
+  });
+});
+
 describe('/api/follow', () => {
   it('follows and unfollows by handle, never self, and lists who is listening first', async () => {
     const now = new Date().toISOString();
@@ -179,7 +193,9 @@ describe('/api/room — 15.0 chat, names and vote-to-skip', () => {
   });
 
   it('counts one skip vote per member for the current song, ignores a stale vote, and a new song clears them', async () => {
-    const fake = fakeDb({ rooms: [room()] });
+    const seen = new Date().toISOString();
+    const fake = fakeDb({ rooms: [room()], room_members: ['m1', 'm2', 'm3'].map((m) => ({ room_code: 'ROOM01', member_id: m, name: m, last_seen: seen })) });
+    expect((await post({ action: 'skip', code: 'ROOM01', deviceId: 'stranger', songId: 's1' })).status).toBe(403);
     expect(await (await post({ action: 'skip', code: 'ROOM01', deviceId: 'm1', songId: 's1' })).json()).toEqual({ ok: true, skipVotes: 1 });
     expect(await (await post({ action: 'skip', code: 'ROOM01', deviceId: 'm1', songId: 's1' })).json()).toEqual({ ok: true, skipVotes: 1 });
     expect(await (await post({ action: 'skip', code: 'ROOM01', deviceId: 'm2', songId: 's1' })).json()).toEqual({ ok: true, skipVotes: 2 });

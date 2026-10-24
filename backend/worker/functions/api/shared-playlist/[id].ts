@@ -19,7 +19,7 @@ import { rateLimit, rateLimitAsync } from '../../_lib/ratelimit';
 import { db, dbConfigured, q } from '../../_lib/db';
 import { asObject, clip } from '../../_lib/edge';
 import { safeEqual } from '../../_lib/safe-compare';
-import { MAX_PLAYLIST_SONGS, cleanSong, type SocialEnv } from '../../_lib/social';
+import { MAX_PLAYLIST_BYTES, MAX_PLAYLIST_SONGS, cleanSong, type SocialEnv } from '../../_lib/social';
 import { publicPlaylist, type PlaylistRow } from '../shared-playlist';
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: { ...CORS, 'access-control-allow-methods': 'GET, POST, OPTIONS' } });
@@ -76,6 +76,8 @@ export const onRequestPost = async (ctx: { request: Request; env: SocialEnv; par
     songs.push({ ...add, by: clip(body.by, 40) ?? undefined });
   }
   const next = remove ? songs.filter((s) => s.id !== remove) : songs;
+  // The same byte ceiling the owner's writes meet, so a collaborator can never lock the owner out.
+  if (JSON.stringify(next).length > MAX_PLAYLIST_BYTES) return json({ error: 'too_large' }, 413);
   const done = await db.update<PlaylistRow>(ctx.env, 'shared_playlists', q().eq('id', id).eq('version', r.row.version), { songs: next, version: r.row.version + 1, updated_at: new Date().toISOString() }, { returning: true });
   if (!done.ok) return json({ error: 'unavailable' }, 503);
   if (!done.rows.length) return json({ error: 'conflict' }, 409);

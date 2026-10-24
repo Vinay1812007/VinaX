@@ -176,8 +176,8 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const now = Date.now();
   const [room, members] = await Promise.all([
     readRoom(env, code),
-    db.select<{ name: string | null; last_seen: string; reaction: string | null; reacted_at: string | null }>(
-      env, 'room_members', q().eq('room_code', code).gte('last_seen', new Date(now - 86_400_000).toISOString()).select('name,last_seen,reaction,reacted_at').limit(200),
+    db.select<{ member_id: string; name: string | null; last_seen: string; reaction: string | null; reacted_at: string | null }>(
+      env, 'room_members', q().eq('room_code', code).gte('last_seen', new Date(now - 86_400_000).toISOString()).select('member_id,name,last_seen,reaction,reacted_at').limit(200),
     ),
   ]);
   if (!room.ok) return json({ error: 'unavailable' }, 503);
@@ -187,6 +187,11 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     .filter((m) => m.reaction && m.reacted_at && REACTION_EMOJI.includes(m.reaction) && Date.parse(m.reacted_at) >= reactSince)
     .map((m) => ({ e: m.reaction as string, at: m.reacted_at as string }));
   const hostAuthorized = !!(room.room && hostToken && safeEqual(hostToken, room.room.host_token));
+  // 15.0 — a skip vote counts only while its member is here.
+  if (room.room && Array.isArray(room.room.skip_votes)) {
+    const here = new Set((members.ok ? members.rows : []).filter((m) => Date.parse(m.last_seen) >= now - PRESENCE_MS).map((m) => m.member_id));
+    room.room.skip_votes = room.room.skip_votes.filter((id) => here.has(id));
+  }
   // A mistyped code and an ended room both read `room: null` — the app shows "session ended".
   const body: Record<string, unknown> = {
     room: room.room ? publicRoom(room.room) : null,
@@ -314,6 +319,10 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     const forSong = clip(body.songId, 64);
     const current = String(asObject(r.room.current)?.id ?? '');
     if (!forSong || forSong !== current) return json({ ok: true, skipVotes: Array.isArray(r.room.skip_votes) ? r.room.skip_votes.length : 0, stale: true });
+    // Only a member who is here may vote: the voter's own row must be fresh.
+    const member = await db.one<{ last_seen: string }>(env, 'room_members', q().eq('room_code', code).eq('member_id', memberId).select('last_seen'));
+    if (!member.ok) return json({ error: 'unavailable' }, 503);
+    if (!member.value || Date.parse(member.value.last_seen) < Date.now() - PRESENCE_MS) return json({ error: 'not_member' }, 403);
     const votes = new Set(Array.isArray(r.room.skip_votes) ? r.room.skip_votes : []);
     votes.add(memberId);
     const w = await db.update(env, 'rooms', q().eq('code', code), { skip_votes: [...votes].slice(0, 200) });

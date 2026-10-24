@@ -19,6 +19,8 @@ import { db, q } from '../_lib/db';
 import { asObject, clip } from '../_lib/edge';
 import { MAX_CHAT_BYTES, newId, requireAccount, type SocialEnv } from '../_lib/social';
 
+export const MAX_SHARED_CHATS = 100;
+
 export interface SharedChatRow { id: string; owner_id: string; title: string | null; payload: { messages: Array<{ role: string; content: string }>; model?: string | null }; bytes: number; created_at: string; expires_at: string }
 
 export function cleanMessages(raw: unknown): Array<{ role: 'user' | 'assistant'; content: string }> | null {
@@ -53,6 +55,10 @@ export const onRequestPost = async (ctx: { request: Request; env: SocialEnv }): 
   const body = asObject(read.value);
   const messages = cleanMessages(body?.messages);
   if (!messages) return json({ error: 'bad_request' }, 400);
+  // At most MAX_SHARED_CHATS live shares per account; the oldest must go first.
+  const live = await db.count(ctx.env, 'shared_chats', q().eq('owner_id', who.sub));
+  if (!live.ok) return json({ error: 'unavailable' }, 503);
+  if (live.value >= MAX_SHARED_CHATS) return json({ error: 'too_many' }, 409);
   const payload = { messages, model: clip(body?.model, 80) };
   const bytes = JSON.stringify(payload).length;
   if (bytes > MAX_CHAT_BYTES) return json({ error: 'too_large' }, 413);

@@ -65,9 +65,11 @@ export async function checkReleases(force = false): Promise<number> {
     const seen = { ...useReleaseStore.getState().seen };
     const fresh = [...useReleaseStore.getState().fresh];
     const have = new Set(fresh.map((f) => f.song.id));
+    let reached = 0;
     for (const a of artists) {
       let songs: Song[];
       try { songs = await getArtistTopSongs(a.id, 0); } catch { continue; }
+      reached += 1;
       if (!songs.length) continue;
       const added = findNew(songs, seen[a.id]).filter((s) => !have.has(s.id));
       for (const s of added) { fresh.unshift({ song: s, artist: a.title, at: Date.now() }); have.add(s.id); }
@@ -75,7 +77,8 @@ export async function checkReleases(force = false): Promise<number> {
       seen[a.id] = [...new Set([...(seen[a.id] ?? []), ...songs.map((s) => s.id)])].slice(-200);
       if (added.length && isNativePlatform()) void notifyLocally(a.title, added);
     }
-    useReleaseStore.setState({ seen, fresh: fresh.slice(0, MAX_FRESH), checkedAt: Date.now() });
+    // Offline (nothing reached): try again on the next open, not in 12 hours.
+    useReleaseStore.setState({ seen, fresh: fresh.slice(0, MAX_FRESH), checkedAt: reached ? Date.now() : st.checkedAt });
   } finally {
     running = false;
   }

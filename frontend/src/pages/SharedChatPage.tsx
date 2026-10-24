@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/States';
-import { RichContent } from '@/components/ai/RichContent';
 import { getSharedChat, SocialError } from '@/services/social/api';
 import { SparkleIcon } from '@/components/Icons';
 import '@/styles/pages/secondary.css';
@@ -11,7 +10,9 @@ import '@/styles/pages/secondary.css';
 /**
  * 15.0 — /ai/shared/<id>: a VinaX AI conversation someone chose to share.
  * Read-only, text only, open to anyone with the link for 90 days. The
- * replies render with the same rich text the chat uses (song picks play).
+ * sharer writes the whole copy, so it renders as PLAIN TEXT — never the
+ * chat's rich renderer (HTML previews, Run, diagrams) — and the replies are
+ * labelled as shared, not as VinaX AI speaking on this page.
  */
 export default function SharedChatPage() {
   const { id = '' } = useParams();
@@ -26,12 +27,12 @@ export default function SharedChatPage() {
   const when = new Date(chat.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
   return (
     <div className="vx-sec">
-      <PageHeader title={chat.title ?? 'A VinaX AI chat'} subtitle={`Shared ${when}${chat.model ? ` · answered by ${chat.model}` : ''} · read-only`} />
+      <PageHeader title={chat.title ?? 'A VinaX AI chat'} subtitle={`Shared by a listener ${when}${chat.model ? ` · model: ${chat.model}` : ''} · read-only`} />
       <ol className="vx-shared-chat" aria-label="Conversation">
         {chat.messages.map((m, i) => (
           <li key={i} className={m.role === 'user' ? 'vx-shared-msg is-user' : 'vx-shared-msg is-assistant'}>
-            <span className="vx-shared-who">{m.role === 'user' ? 'Asked' : <><SparkleIcon className="w-3.5 h-3.5" /> VinaX AI</>}</span>
-            {m.role === 'user' ? <p className="vx-shared-text">{m.content}</p> : <RichContent text={m.content} />}
+            <span className="vx-shared-who">{m.role === 'user' ? 'Asked' : <><SparkleIcon className="w-3.5 h-3.5" /> Reply, as shared</>}</span>
+            <p className="vx-shared-text">{m.content}</p>
           </li>
         ))}
       </ol>

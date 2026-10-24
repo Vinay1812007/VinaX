@@ -68,6 +68,8 @@ export function SoundSettings() {
   const setGain = (i: number, v: number) => {
     const next = s.eqGains.slice();
     next[i] = v;
+    // 15.0 — dragging a band is a choice of your own: Auto EQ stands down.
+    if (s.eqAuto) useSettingsStore.setState({ eqAuto: false, eqOwnPreset: null, eqOwnGains: null });
     s.setEqGains(next);
   };
 
@@ -93,7 +95,7 @@ export function SoundSettings() {
           <div className={cn('flex flex-col gap-3', !on && 'opacity-40')}>
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Equalizer presets">
               {PRESET_IDS.map((id) => (
-                <Chip key={id} active={s.eqPreset === id} onClick={on ? () => s.setEqPreset(id, EQ_PRESETS[id]) : undefined}>
+                <Chip key={id} active={s.eqPreset === id} onClick={on ? () => { if (s.eqAuto) useSettingsStore.setState({ eqAuto: false, eqOwnPreset: null, eqOwnGains: null }); s.setEqPreset(id, EQ_PRESETS[id]); } : undefined}>
                   {EQ_PRESET_LABELS[id]}
                 </Chip>
               ))}

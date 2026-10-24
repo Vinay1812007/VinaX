@@ -67,6 +67,18 @@ describe('15.0 — Office attachments read on the device', () => {
     expect((r as { text: string }).text).toBe('## Slide 1\nOne\nMore\n\n## Slide 2\nTwo\n\nNotes 1: Say hi');
   });
 
+  it('keeps an empty styled cell as a blank, survives a bad entity, and refuses a bomb', async () => {
+    const sheet = zip({
+      'xl/sharedStrings.xml': '<sst><si><t>Hello</t></si></sst>',
+      'xl/worksheets/sheet1.xml': '<worksheet><sheetData><row r="1"><c r="A1" s="1"/><c r="B1" t="s"><v>0</v></c><c r="C1"><v>42</v></c></row></sheetData></worksheet>',
+    });
+    expect(await officeToText(fileOf('x.xlsx', sheet))).toEqual({ outcome: 'ok', text: '## sheet1\n\tHello\t42' });
+    const doc = zip({ 'word/document.xml': '<w:p><w:t>Fine &#99999999; still</w:t></w:p>' });
+    expect(await officeToText(fileOf('x.docx', doc))).toEqual({ outcome: 'ok', text: 'Fine  still' });
+    const bomb = zip({ 'word/document.xml': '<w:p><w:t>' + 'a'.repeat(9_000_000) + '</w:t></w:p>' });
+    expect(await officeToText(fileOf('x.docx', bomb))).toMatchObject({ outcome: 'unreadable' });
+  });
+
   it('says why when there is nothing to read', async () => {
     expect(await officeToText(fileOf('x.docx', zip({ 'word/document.xml': '<w:document/>' })))).toMatchObject({ outcome: 'empty' });
     expect(await officeToText(fileOf('x.docx', new TextEncoder().encode('not a zip').buffer as ArrayBuffer))).toMatchObject({ outcome: 'unreadable' });

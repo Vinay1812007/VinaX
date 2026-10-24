@@ -20,7 +20,7 @@ import { cn } from '@/utils/cn';
  * before pushing again.
  */
 
-interface ShareLink { id: string; token?: string | null; version: number }
+interface ShareLink { id: string; token?: string | null; version: number; public?: boolean }
 type ShareMap = Record<string, ShareLink>;
 
 export const loadShareMap = (): ShareMap => getLocal<ShareMap>(KEYS.sharedPlaylists, {});
@@ -45,7 +45,7 @@ export function SharePlaylistSheet({ collection, open, onClose }: { collection: 
     if (!currentAccount()) { toast('Sign in to share a playlist'); return; }
     setBusy(true);
     try {
-      const body = { id: link?.id, name: collection.name, description: collection.description ?? null, songs: collection.songs.map(liteSong), version: link?.version, public: opts.public ?? remote?.public ?? true, collab: opts.collab ?? remote?.collab };
+      const body = { id: link?.id, name: collection.name, description: collection.description ?? null, songs: collection.songs.map(liteSong), version: link?.version, public: opts.public ?? remote?.public ?? link?.public ?? (link ? undefined : false), collab: opts.collab ?? remote?.collab };
       let r = await writeSharedPlaylist(body).catch(async (e: unknown) => {
         if (e instanceof SocialError && e.status === 409) return null;
         throw e;
@@ -67,7 +67,7 @@ export function SharePlaylistSheet({ collection, open, onClose }: { collection: 
         }
       }
       if (!r) throw new Error('conflict');
-      const next: ShareLink = { id: r.playlist.id, token: r.collabToken ?? (opts.collab === false ? null : link?.token ?? null), version: r.playlist.version };
+      const next: ShareLink = { id: r.playlist.id, token: r.collabToken ?? (opts.collab === false ? null : link?.token ?? null), version: r.playlist.version, public: r.playlist.public };
       setLink(next);
       saveShareLink(collection.id, next);
       setRemote(r.playlist);

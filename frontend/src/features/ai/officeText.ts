@@ -53,10 +53,28 @@ export function listZip(buf: ArrayBuffer): ZipEntry[] {
   return out;
 }
 
+/** The most one part may expand to: a text layer is never this big; a zip bomb always is. */
+export const MAX_PART_BYTES = 8_000_000;
+
 async function inflate(data: Uint8Array): Promise<Uint8Array> {
   const ds = new DecompressionStream('deflate-raw');
-  const stream = new Blob([data as unknown as BlobPart]).stream().pipeThrough(ds);
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+  const reader = new Blob([data as unknown as BlobPart]).stream().pipeThrough(ds).getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > MAX_PART_BYTES) {
+      await reader.cancel();
+      throw new Error('part too large');
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let p = 0;
+  for (const c of chunks) { out.set(c, p); p += c.length; }
+  return out;
 }
 
 /** One entry's bytes (stored or deflated). */
@@ -68,7 +86,10 @@ export async function readZipEntry(buf: ArrayBuffer, e: ZipEntry): Promise<Uint8
   const extraLen = u16(v, p + 28);
   const start = p + 30 + nameLen + extraLen;
   const raw = new Uint8Array(buf, start, e.compressed);
-  if (e.method === 0) return raw;
+  if (e.method === 0) {
+    if (raw.length > MAX_PART_BYTES) throw new Error('part too large');
+    return raw;
+  }
   if (e.method === 8) return inflate(raw);
   throw new Error(`unsupported zip method ${e.method}`);
 }
@@ -80,7 +101,7 @@ export function xmlToText(xml: string, breakTags: RegExp): string {
   return xml
     .replace(breakTags, '\n')
     .replace(/<[^>]+>/g, '')
-    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n))).replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n) => { const c = Number(n); return c > 0 && c <= 0x10ffff ? String.fromCodePoint(c) : ''; }).replace(/&amp;/g, '&')
     .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n')
     .trim();
 }
@@ -109,9 +130,12 @@ async function xlsx(buf: ArrayBuffer, entries: ZipEntry[]): Promise<string> {
     out += `## ${e.name.replace(/^xl\/worksheets\//, '').replace(/\.xml$/, '')}\n`;
     for (const row of xml.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)) {
       const cells: string[] = [];
-      for (const c of row[1].matchAll(/<c([^>]*)>([\s\S]*?)<\/c>/g)) {
-        const attrs = c[1];
-        const inner = c[2];
+      // A cell is either self-closing (empty, styled) or open/close; matched
+      // as one alternation so an empty cell never swallows its neighbour.
+      for (const c of row[1].matchAll(/<c((?:[^>/]|\/(?!>))*)\/>|<c([^>]*)>([\s\S]*?)<\/c>/g)) {
+        if (c[1] !== undefined) { cells.push(''); continue; }
+        const attrs = c[2];
+        const inner = c[3];
         const t = /t="([^"]+)"/.exec(attrs)?.[1];
         const v = /<v>([\s\S]*?)<\/v>/.exec(inner)?.[1] ?? '';
         if (t === 's') cells.push(strings[Number(v)] ?? '');

@@ -10,7 +10,7 @@
  * like any other preset change). Switching Auto off puts the listener's own
  * preset back.
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { Song } from '@/types';
 import { EQ_PRESETS } from '@/services/audio/effects';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -58,13 +58,17 @@ export function AutoEq(): null {
     if (st.eqPreset === pick) return;
     st.setEqPreset(pick, EQ_PRESETS[pick]);
   }, [song, auto, on]);
-  // Auto off: the preset the listener had chosen comes back.
+  // Auto off: the preset the listener had chosen comes back — once, on the
+  // switch itself (never on a launch), and the remembered preset is cleared.
+  const wasAuto = useRef(auto);
   useEffect(() => {
-    if (auto) return;
+    const was = wasAuto.current;
+    wasAuto.current = auto;
+    if (auto || !was) return;
     const st = useSettingsStore.getState();
     const own = st.eqOwnPreset;
-    if (!own || own === st.eqPreset) return;
-    st.setEqPreset(own, own === 'custom' ? st.eqOwnGains ?? undefined : EQ_PRESETS[own]);
+    if (own && own !== st.eqPreset) st.setEqPreset(own, own === 'custom' ? st.eqOwnGains ?? undefined : EQ_PRESETS[own]);
+    useSettingsStore.setState({ eqOwnPreset: null, eqOwnGains: null });
   }, [auto]);
   return null;
 }

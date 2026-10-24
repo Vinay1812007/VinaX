@@ -14,7 +14,7 @@ import { readJsonCapped } from '../_lib/body';
 import { rateLimitAsync } from '../_lib/ratelimit';
 import { db, q } from '../_lib/db';
 import { asObject } from '../_lib/edge';
-import { normalizeHandle, profileByHandle, publicProfile, requireAccount, type ProfileRow, type SocialEnv } from '../_lib/social';
+import { isFollowing, normalizeHandle, profileByHandle, publicProfile, requireAccount, type ProfileRow, type SocialEnv } from '../_lib/social';
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: { ...CORS, 'access-control-allow-methods': 'GET, POST, OPTIONS' } });
 
@@ -32,7 +32,12 @@ export const onRequestGet = async (ctx: { request: Request; env: SocialEnv }): P
   const names = await db.select<{ id: string; name: string | null; picture: string | null }>(ctx.env, 'accounts', q().in('id', ids).select('id,name,picture').limit(MAX_FOLLOWING));
   const byId = new Map((names.ok ? names.rows : []).map((a) => [a.id, a]));
   const wanted = new Set(ids);
-  const following = p.rows.filter((row) => wanted.has(row.account_id)).map((row) => publicProfile(row, { following: true, name: byId.get(row.account_id)?.name ?? null, picture: byId.get(row.account_id)?.picture ?? null }));
+  // A private profile shows only to people it follows back (the rule
+  // profile/[handle].ts applies); the rest stay out of the list entirely.
+  const back = await db.select<{ follower_id: string }>(ctx.env, 'follows', q().eq('followee_id', who.sub).in('follower_id', ids).select('follower_id').limit(MAX_FOLLOWING));
+  if (!back.ok) return json({ error: 'unavailable' }, 503);
+  const followsMe = new Set(back.rows.map((r) => r.follower_id));
+  const following = p.rows.filter((row) => wanted.has(row.account_id) && (row.public || followsMe.has(row.account_id))).map((row) => publicProfile(row, { following: true, name: byId.get(row.account_id)?.name ?? null, picture: byId.get(row.account_id)?.picture ?? null }));
   following.sort((a, b) => (b.nowPlaying ? 1 : 0) - (a.nowPlaying ? 1 : 0) || Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   return json({ following });
 };
@@ -52,6 +57,13 @@ export const onRequestPost = async (ctx: { request: Request; env: SocialEnv }): 
   if (!target.ok) return json({ error: 'unavailable' }, 503);
   if (!target.value) return json({ error: 'not_found' }, 404);
   if (target.value.account_id === who.sub) return json({ error: 'self' }, 409);
+  // A private profile answers like a missing one unless it already follows
+  // the caller — no probing for private handles, and no following a stranger's private page.
+  if (on && !target.value.public) {
+    const back = await isFollowing(ctx.env, target.value.account_id, who.sub);
+    if (back === null) return json({ error: 'unavailable' }, 503);
+    if (!back) return json({ error: 'not_found' }, 404);
+  }
   if (on) {
     const n = await db.count(ctx.env, 'follows', q().eq('follower_id', who.sub));
     if (n.ok && n.value >= MAX_FOLLOWING) return json({ error: 'too_many' }, 409);
