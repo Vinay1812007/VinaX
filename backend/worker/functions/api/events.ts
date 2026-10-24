@@ -97,7 +97,10 @@ export function sanitizeMeta(kind: string, raw: unknown): Record<string, unknown
     if (Object.keys(out).length >= 40) break;
   }
   if (!Object.keys(out).length) return null;
-  return JSON.stringify(out).length <= META_MAX_BYTES ? out : null;
+  // Measured in bytes, as the database does (events_meta_shape checks
+  // octet_length): a meta full of multi-byte text must not pass here and then
+  // be refused by the insert.
+  return new TextEncoder().encode(JSON.stringify(out)).length <= META_MAX_BYTES ? out : null;
 }
 
 export const onRequestOptions = async (context: { request: Request }): Promise<Response> =>
