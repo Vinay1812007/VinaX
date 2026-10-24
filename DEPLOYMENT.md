@@ -74,7 +74,7 @@ Deploying the Worker also registers its **Cron Trigger** (`[triggers]` in `wrang
 The Worker keeps its data in one hosted database. Setting it up is a one-time step; redeploying the Worker never touches it.
 
 1. Create the hosted project.
-2. In its SQL editor, paste `backend/supabase/schema.sql` and run it. It creates every table, the `directory` view, the `stats_*` functions and the deny-all row-level security, and writes schema version 1 into `meta`. It is idempotent: re-running it is safe and deletes nothing. To start over, run `backend/supabase/reset.sql` first (it deletes all data), then `schema.sql` again.
+2. In its SQL editor, paste `backend/supabase/schema.sql` and run it. It creates every table, the `directory` view, the `stats_*` functions and the deny-all row-level security, and writes schema version 1 into `meta`. It is idempotent: re-running it is safe and deletes nothing. To start over, run `backend/supabase/reset.sql` first (it deletes all data), then `schema.sql` again. The **Schema** workflow can do the apply from CI once a `SUPABASE_DB_URL` secret is set ([docs/database.md](docs/database.md#from-ci-instead-of-the-sql-editor)); it also proves every change to `backend/supabase/**` on a scratch Postgres in pull requests.
 3. Set the two Worker secrets from `backend/`:
 
 ```sh

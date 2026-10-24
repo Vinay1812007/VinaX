@@ -602,7 +602,9 @@ language sql stable set search_path = public, pg_temp as $$
   )
   select coalesce(jsonb_agg(jsonb_build_object(
       'id', song_id, 'title', title, 'artist', artist, 'image', image,
-      'plays', plays, 'skips', skips, 'rate', round(skips::numeric * 100 / plays)::int
+      -- A skip whose play fell just before the window can push skips above
+      -- plays; a rate is a percentage, so it is capped at 100.
+      'plays', plays, 'skips', skips, 'rate', least(100, round(skips::numeric * 100 / plays))::int
     ) order by (skips::numeric / plays) desc, skips desc), '[]'::jsonb)
   from (select * from agg where plays >= greatest(coalesce(p_min, 1), 1) and skips > 0 order by (skips::numeric / plays) desc, skips desc limit 50) r;
 $$;

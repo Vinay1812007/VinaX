@@ -9,6 +9,7 @@
  */
 import { test, expect, type Page } from './support/test';
 import { latestNotesFingerprint } from '../src/constants/changelog';
+import { greetingName } from '../src/utils/greetingName';
 
 const ROUTES = [
   '/', '/discover', '/charts', '/top-songs', '/trending', '/most-searched',
@@ -60,21 +61,36 @@ function song(id: string, title: string) {
   };
 }
 
+/**
+ * A plausible catalogue. The app reaches it two ways (see v101-search.spec):
+ * the primary remote host speaks `/api/<path>` and the same-origin proxy
+ * speaks `/api/cat/<path>`; both get the same answers here. Everything else
+ * off localhost (lyrics, telemetry, the Worker's own routes) is aborted, so
+ * pages must fail soft around it.
+ */
 async function stubCatalog(page: Page): Promise<void> {
   const songs = [1, 2, 3, 4, 5, 6].map((n) => song(`qa${n}`, `QA Song ${n}`));
+  const answer = (path: string, search: string): unknown => {
+    const url = path + search;
+    if (/\/songs\/qa1|\/songs?\?id=/.test(url)) return { data: [song('qa1', 'QA Song 1')] };
+    if (/\/albums?([/?]|$)/.test(url)) return { data: { id: 'qa1', name: 'QA Album', year: '2024', songCount: 6, image: [], songs, artists: { primary: [] } } };
+    if (/\/artists?([/?]|$)/.test(url)) return { data: { id: 'qa1', name: 'QA Artist', image: [], topSongs: songs, followerCount: 10 } };
+    if (/\/playlists?([/?]|$)/.test(url)) return { data: { id: 'qa1', name: 'QA Playlist', songCount: 6, image: [], songs } };
+    if (/\/search($|\?)/.test(url)) return { data: { songs: { results: songs }, albums: { results: [] }, artists: { results: [] }, playlists: { results: [] } } };
+    return { data: { results: songs } };
+  };
   await page.route('**/*', (route) => {
-    const url = route.request().url();
-    if (url.startsWith('http://localhost') || url.startsWith('data:')) return route.continue();
-    if (/saavn|jiosaavn/.test(url)) {
-      let body: unknown = { data: { results: songs } };
-      if (/\/songs\/qa1|\/song\?id=/.test(url)) body = { data: [song('qa1', 'QA Song 1')] };
-      if (/\/albums?[/?]/.test(url)) body = { data: { id: 'qa1', name: 'QA Album', year: '2024', songCount: 6, image: [], songs, artists: { primary: [] } } };
-      if (/\/artists?[/?]/.test(url)) body = { data: { id: 'qa1', name: 'QA Artist', image: [], topSongs: songs, followerCount: 10 } };
-      if (/\/playlists?[/?]/.test(url)) body = { data: { id: 'qa1', name: 'QA Playlist', songCount: 6, image: [], songs } };
-      if (/\/search\?/.test(url)) body = { data: { songs: { results: songs }, albums: { results: [] }, artists: { results: [] }, playlists: { results: [] } } };
-      return route.fulfill({ json: body });
+    const raw = route.request().url();
+    if (raw.startsWith('data:')) return route.continue();
+    const url = new URL(raw);
+    const local = url.origin.startsWith('http://localhost');
+    const remoteCatalogue = !local && url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/cat/');
+    const localCatalogue = local && url.pathname.startsWith('/api/cat/');
+    if (remoteCatalogue || localCatalogue) {
+      return route.fulfill({ json: answer(url.pathname.replace(/^\/api(\/cat)?/, ''), url.search) }).catch(() => undefined);
     }
-    return route.abort(); // lrclib, telemetry, api/* — pages must fail soft
+    if (local && url.pathname.startsWith('/api/')) return route.abort(); // the Worker is not here: fail soft
+    return local ? route.continue() : route.abort(); // lrclib, telemetry — pages must fail soft
   });
 }
 
@@ -137,9 +153,10 @@ test('QA PASS 3 — interaction flows as "QA TEST USER"', async ({ page }) => {
   const { errors } = await prep(page);
   await stubCatalog(page);
 
-  // Home greets the QA profile personally.
+  // Home greets the QA profile personally — by first name, re-cased the way
+  // the app does it (utils/greetingName: "QA TEST USER" → "Qa").
   await page.goto('/');
-  await expect(page.getByText(new RegExp(QA_NAME.replace(/ /g, '\\s'))).first()).toBeVisible({ timeout: 8000 });
+  await expect(page.getByText(`Welcome, ${greetingName(QA_NAME)}`).first()).toBeVisible({ timeout: 8000 });
 
   // Search: type, results, tabs, keyboard autocomplete, commit.
   await page.goto('/search');
@@ -205,4 +222,31 @@ test('QA PASS 4 — admin console shell', async ({ page }) => {
   console.log('ADMIN LOGIN RESPONSE:', txt.slice(0, 200));
   expect(txt).toMatch(/Could not reach the server/); // 13.8 console sign-in
   expect(errors).toEqual([]);
+});
+
+test('QA PASS 5 — every route on a phone (390 px): no crash, no sideways scroll', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const { errors, consoleErrs } = await prep(page);
+  await stubCatalog(page);
+  const reports: Array<PageReport & { overflow: number }> = [];
+  for (const route of ROUTES) {
+    errors.length = 0;
+    consoleErrs.length = 0;
+    const r = await visit(page, route, errors, consoleErrs);
+    // Content wider than the viewport makes the whole page scroll sideways —
+    // the commonest phone-layout regression, invisible on a desktop run.
+    const overflow = await page.evaluate(() => {
+      const root = document.scrollingElement ?? document.documentElement;
+      return Math.max(0, root.scrollWidth - window.innerWidth);
+    }).catch(() => 0);
+    reports.push({ ...r, overflow });
+  }
+  console.log('=== PHONE PASS ===');
+  for (const r of reports) {
+    const bad = r.crashed || r.pageErrors.length || r.overflow > 0;
+    console.log(`${bad ? 'FAIL' : 'ok  '} ${r.route}${r.crashed ? ' [BOUNDARY]' : ''}${r.overflow ? ` overflow: ${r.overflow}px` : ''}${r.pageErrors.length ? ' pageErrors: ' + r.pageErrors.join(' | ') : ''}`);
+  }
+  expect(reports.filter((r) => r.crashed).map((r) => r.route)).toEqual([]);
+  expect(reports.filter((r) => r.pageErrors.length).map((r) => r.route)).toEqual([]);
+  expect(reports.filter((r) => r.overflow > 0).map((r) => `${r.route} (+${r.overflow}px)`)).toEqual([]);
 });

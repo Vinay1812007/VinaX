@@ -1,0 +1,129 @@
+# The database schema in CI: prove it, then (when configured) apply it.
+#
+# check — every pull request and push that touches backend/supabase/**:
+#   a fresh Postgres 16 service container gets schema.sql applied twice (it
+#   must be idempotent), check.sql (seed rows, every function called and
+#   asserted on, rolled back), reset.sql, schema.sql again and check.sql
+#   again. A function that stops answering, a constraint that stops holding
+#   or a statement that is no longer re-runnable turns this red before anyone
+#   pastes the file into a real project. No secrets, no network.
+#
+# apply — a push to main that touches backend/supabase/**, or this workflow
+#   run by hand: applies schema.sql to the production project with psql, so
+#   the SQL editor paste in docs/database.md is no longer the only path. It
+#   runs only after `check` is green and only ever runs schema.sql, which
+#   adds what is missing and deletes nothing. reset.sql and check.sql are
+#   never run against production from here.
+#
+# IT IS INERT UNTIL CONFIGURED. With no SUPABASE_DB_URL secret the apply job
+# reports that it is not set up and succeeds, so it can never turn CI red for
+# a repository that is happy applying the schema by hand.
+#
+# To enable:
+#   1. Supabase dashboard → Project Settings → Database → Connection string.
+#      Pick the SESSION POOLER URI (host aws-0-<region>.pooler.supabase.com,
+#      port 5432, user postgres.<project ref>). GitHub's runners have no IPv6,
+#      and the direct host db.<ref>.supabase.co is IPv6-only; the pooler is
+#      reachable over IPv4 and session mode supports every statement in
+#      schema.sql.
+#   2. GitHub → Settings → Secrets and variables → Actions:
+#        secret  SUPABASE_DB_URL = postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
+#      Use the database password (Project Settings → Database → Reset
+#      database password if you never kept it), URL-encoding any special
+#      characters in it.
+#   3. Push to main touching backend/supabase/**, or run this workflow by
+#      hand with "apply" ticked.
+#
+# Actions pinned by SHA — rotate via Dependabot (github-actions ecosystem).
+name: Schema
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/supabase/**'
+      - '.github/workflows/schema.yml'
+  pull_request:
+    paths:
+      - 'backend/supabase/**'
+      - '.github/workflows/schema.yml'
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Apply schema.sql to the production database (needs the SUPABASE_DB_URL secret)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # Two applies must never race each other; checks on different refs may.
+  group: schema-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vinax
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Prove schema.sql on a fresh Postgres 16
+        run: backend/supabase/ci.sh check "postgresql://postgres:postgres@localhost:5432/vinax"
+
+  apply:
+    needs: check
+    # A push to main, or a manual run that asked for it. Pull requests never apply.
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.apply == true)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Check whether the database is configured
+        id: config
+        env:
+          URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -n "$URL" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SUPABASE_DB_URL is not set, so this workflow will not apply the schema. Paste backend/supabase/schema.sql into the project's SQL editor instead, or see the header of this file to enable the apply."
+          fi
+
+      # A wrong password or an unreachable host fails inside psql with a bare
+      # "connection failed". Name the secret to rotate, and say why the direct
+      # host cannot work from here.
+      - name: Verify the connection
+        if: steps.config.outputs.configured == 'true'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if ! PGCONNECT_TIMEOUT=20 psql "$SUPABASE_DB_URL" -X -w -At -c "select current_user" > /tmp/who.txt 2>&1; then
+            sed -e 's/:[^:@/]*@/:***@/' /tmp/who.txt
+            echo "::error title=Database connection refused::psql could not connect with the SUPABASE_DB_URL secret. Check the password, and that the URL is the SESSION POOLER one (aws-0-<region>.pooler.supabase.com:5432, user postgres.<ref>): the direct host db.<ref>.supabase.co is IPv6-only and GitHub's runners cannot reach it. Update the secret under Settings → Secrets and variables → Actions and re-run."
+            exit 1
+          fi
+          echo "connected as $(cat /tmp/who.txt)"
+
+      - name: Apply schema.sql
+        if: steps.config.outputs.configured == 'true'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: backend/supabase/ci.sh apply "$SUPABASE_DB_URL"

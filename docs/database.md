@@ -15,6 +15,23 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml
 
 4. Open the console's **Database** page: it shows the schema version the paste wrote and every table.
 
+### From CI instead of the SQL editor
+
+The **Schema** workflow (`.github/workflows/schema.yml`) can apply `schema.sql` for you. It is inert until a `SUPABASE_DB_URL` secret exists:
+
+1. Supabase dashboard → Project Settings → Database → Connection string. Take the **session pooler** URI (`aws-0-<region>.pooler.supabase.com`, port 5432, user `postgres.<project ref>`), not the direct host: GitHub's runners have no IPv6 and `db.<ref>.supabase.co` is IPv6-only.
+2. GitHub → Settings → Secrets and variables → Actions → new secret `SUPABASE_DB_URL` with that URI and the database password (URL-encode special characters). The job runs in the `production` environment, so required reviewers can be set on it.
+3. Every push to `main` that touches `backend/supabase/**` then applies the schema, after the check below is green. **Actions → Schema → Run workflow** with *apply* ticked does the same by hand.
+
+The same workflow runs a **check** on every pull request that touches the schema, with no secrets: a fresh Postgres 16 gets `schema.sql` twice (it must stay idempotent), then `check.sql`, then `reset.sql` and `schema.sql` and `check.sql` again. `backend/supabase/check.sql` seeds a few rows, calls every function with assertions on the answers, proves the constraints and the row-level security, and rolls back. Locally:
+
+```sh
+backend/supabase/ci.sh check postgresql://postgres:postgres@localhost:5432/scratch   # a throwaway database
+backend/supabase/ci.sh apply "$SUPABASE_DB_URL"                                       # the real one (schema.sql only)
+```
+
+`apply` only ever runs `schema.sql`; `reset.sql` and `check.sql` are never run against the production database by the workflow.
+
 Only the Worker holds the service-role key. Row-level security is enabled and forced on every table with no policy, so the project's public anon key can read and write nothing. The app and the console never talk to the database directly.
 
 ## Tables

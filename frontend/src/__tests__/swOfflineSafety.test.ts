@@ -16,6 +16,10 @@ const AUDIO = 'vinax-audio-v1';
 describe('sw.js activate', () => {
   it('prunes old shell caches but never the downloaded-songs bucket', async () => {
     const source = readFileSync(resolve(__dirname, '../../public/sw.js'), 'utf8');
+    // The current shell bucket is whatever sw.js declares; the test must not
+    // drift every time the version is bumped.
+    const current = /const CACHE = '([^']+)'/.exec(source)?.[1];
+    if (!current) throw new Error('CACHE constant not found in sw.js');
     const listeners = new Map<string, (e: { waitUntil(p: Promise<unknown>): void }) => void>();
     const deleted: string[] = [];
     const fakeSelf = {
@@ -24,7 +28,7 @@ describe('sw.js activate', () => {
       clients: { claim: () => Promise.resolve() },
     };
     const fakeCaches = {
-      keys: () => Promise.resolve(['vinax-shell-v12', AUDIO, 'vinax-shell-v15', 'something-else']),
+      keys: () => Promise.resolve(['vinax-shell-v12', AUDIO, current, 'something-else']),
       delete: (k: string) => {
         deleted.push(k);
         return Promise.resolve(true);

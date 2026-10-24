@@ -189,6 +189,7 @@ All in `.github/workflows/`. Times are UTC; scheduled workflows often start late
 | `e2e.yml` | Push to `main`, pull requests, by hand | Builds the app and runs the browser suite |
 | `lighthouse.yml` | Push to `main`, by hand | Audits the prerendered routes: accessibility and search checks fail the run, performance is advisory |
 | `worker-deploy.yml` | Push to `main` touching `backend/**` or the workflow file; by hand, with an optional `dry_run` | Gates, then deploys the Worker and polls `/api/status` |
+| `schema.yml` | Pull requests and pushes touching `backend/supabase/**`; by hand, with an optional `apply` | Proves `schema.sql` on a fresh Postgres (apply twice, `check.sql`, reset, apply, check); on `main`, applies it to the production database when `SUPABASE_DB_URL` is set ([docs/database.md](docs/database.md#from-ci-instead-of-the-sql-editor)) |
 | `buildapk.yml` | Push to `main`, by hand | Builds the Android package; publishes a release when signing secrets are set |
 | `release.yml` | Push of a `v*` tag | Builds and publishes a signed Android release; refuses without the release keystore |
 | `diagnose.yml` | By hand, and when its own file changes | Checks that the live page's assets load and the app mounts in a headless browser; probes the catalogue route |
