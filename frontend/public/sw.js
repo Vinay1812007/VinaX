@@ -18,8 +18,8 @@
  * and downloaded songs could not even reach the player. Now the whole app
  * works offline once it has been online for a few seconds after a deploy.
  */
-const CACHE = 'vinax-shell-v15';
-const SHELL = ['/', '/manifest.webmanifest', '/icons/icon.svg', '/fonts/manrope-var.woff2', '/fonts/bricolage-var.woff2'];
+const CACHE = 'vinax-shell-v16';
+const SHELL = ['/', '/manifest.webmanifest', '/icons/icon.svg?v=14', '/fonts/manrope-var.woff2', '/fonts/bricolage-var.woff2'];
 // Downloaded songs (written by services/downloads at download time). NEVER
 // cleared on activate — losing it silently un-downloads every saved song.
 const AUDIO_CACHE = 'vinax-audio-v1';
@@ -269,8 +269,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'VinaX';
   const options = {
     body: data.body || '',
-    icon: data.icon || '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
+    icon: data.icon || '/icons/icon-192.png?v=14',
+    badge: '/icons/icon-192.png?v=14',
     // 11.7.2 — a tag of its own per message. One shared 'vinax' tag made every
     // new notification silently REPLACE the one before it (no sound, no
     // banner), so a second send looked like it never arrived.

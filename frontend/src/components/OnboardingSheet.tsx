@@ -393,7 +393,7 @@ export function OnboardingSheet() {
                     </p>
                   ))}
                 </div>
-                <img src="/icons/icon.svg" alt="" className="vx-welcome-logo" />
+                <img src="/icons/icon.svg?v=14" alt="" className="vx-welcome-logo" />
                 <span className="vx-welcome-badge">Free forever</span>
               </div>
               {title('Welcome to VinaX', true)}
