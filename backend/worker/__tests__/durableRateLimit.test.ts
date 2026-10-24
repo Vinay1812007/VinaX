@@ -118,18 +118,20 @@ describe('rateLimitAsync', () => {
     warn.mockRestore();
   });
 
-  it('a route answers the binding refusal before doing any work (events: nothing is written)', async () => {
+  it('a route answers the binding refusal before doing any work (music: no engine is asked)', async () => {
     vi.resetModules();
-    const { onRequestPost } = await import('../functions/api/events');
-    const fetchSpy = vi.fn(async () => new Response('[]', { status: 201 }));
+    const rlm = await import('../functions/_lib/ratelimit');
+    const binding = rlm.tierFor({ capacity: 3, refillPerMinute: 3 })?.binding as string;
+    const { onRequestPost } = await import('../functions/api/music');
+    const fetchSpy = vi.fn(async () => new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', fetchSpy);
     const res = await onRequestPost({
-      request: new Request('https://www.vinaxmusic.online/api/events', {
+      request: new Request('https://www.vinaxmusic.online/api/music', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-vinax-consent': 'analytics', 'cf-connecting-ip': '203.0.113.5' },
-        body: JSON.stringify({ deviceId: 'install-uuid-0001', type: 'play' }),
+        headers: { 'content-type': 'application/json', 'cf-connecting-ip': '203.0.113.5' },
+        body: JSON.stringify({ prompt: 'a calm sitar loop' }),
       }),
-      env: { SUPABASE_URL: 'https://sb.test', SUPABASE_SERVICE_ROLE_KEY: 'srk', RATE_LIMIT_300: fakeBinding(0) } as never,
+      env: { [binding]: fakeBinding(0) } as never,
     });
     expect(res.status).toBe(429);
     expect(fetchSpy).not.toHaveBeenCalled();

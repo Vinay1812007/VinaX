@@ -1,60 +1,58 @@
 /**
- * 12.2 — GET /api/auth/me (Authorization: Bearer <session>)
- *   → 200 { user } | 401 { error: 'signed_out' }
- * POST /api/auth/me { delete: true } removes the account row: the listener's
- * Google id, email, name and picture leave the server. Listening history and
- * the library were never on it.
+ * GET /api/auth/me   (Authorization: Bearer <session>, x-vinax-device?)
+ *   → 200 { user }               the account as the database has it
+ *   → 200 { ok: true }           no database on this Worker: the session alone stands
+ *   → 401 { error: 'signed_out' } bad session, or the account row is gone (deleted)
+ *   → 503 { error: 'unavailable' } the database did not answer
+ * POST /api/auth/me { delete: true } → 200 { ok: true } — removes the account
+ *   row and, with it, the synced backup. Usage events are anonymous and stay.
+ *
+ * The session check keeps the account current: last_seen is refreshed at
+ * most every TOUCH_MS, and a proved device id (the header) links the device,
+ * so a listener who ticked "share usage" after signing in is still one row
+ * in the console. Best effort, after the answer.
  */
 import { bearer, readSession, type AuthEnv } from '../../_lib/googleAuth';
 import { readJsonCapped } from '../../_lib/body';
 import { rateLimitAsync } from '../../_lib/ratelimit';
-import { sbDelete, sbUpdate, type SupabaseEnv } from '../../_lib/supabase';
-import { resolveIdentity, type IdentityEnv } from '../../_lib/identity';
-import { accountFacts, accountOf, CORS, DEVICE_HEADER, json, publicUser, type AccountRow } from '../../_lib/authShared';
+import { db, dbConfigured, q, type DbEnv } from '../../_lib/db';
+import { DEVICE_HEADER, verifiedIdentity, type IdentityEnv } from '../../_lib/identity';
+import { accountFacts, accountOf, CORS, handleOf, json, publicUser, type AccountRow } from '../../_lib/authShared';
 
-type Env = AuthEnv & SupabaseEnv & IdentityEnv;
+type Env = AuthEnv & DbEnv & IdentityEnv;
 
-/** How stale the account's last_seen may get before a session check refreshes it. */
+/** How stale last_seen may get before a session check refreshes it. */
 export const TOUCH_MS = 10 * 60_000;
 
-/**
- * 13.6.4 — keep the account row current for User Management. The welcome
- * (and its "share usage" tick) comes AFTER sign-in, so a new listener's
- * device has no signed id yet when the account is written and the account
- * stays unlinked. The app sends the device's signed id on this check; a
- * valid one links the device, so the console shows one listener, not an
- * account row plus a usage row. last_seen is refreshed at most every
- * TOUCH_MS. Best effort: a failed write never affects the answer.
- */
-export async function touchAccount(request: Request, env: Env, row: Pick<AccountRow, 'google_sub' | 'device_id' | 'last_seen'>): Promise<boolean> {
+export async function touchAccount(request: Request, env: Env, row: AccountRow): Promise<boolean> {
   const patch: Record<string, unknown> = {};
-  const signed = request.headers.get(DEVICE_HEADER);
-  if (signed) {
-    const id = await resolveIdentity(request, env, { signed_device_id: signed });
-    if (id.verified && id.deviceId !== row.device_id) patch.device_id = id.deviceId;
-  }
+  const proved = await verifiedIdentity(env, request.headers.get(DEVICE_HEADER));
+  if (proved && proved !== row.listener_id) patch.listener_id = proved;
   const last = Date.parse(row.last_seen ?? '');
-  if (patch.device_id || !Number.isFinite(last) || Date.now() - last > TOUCH_MS) patch.last_seen = new Date().toISOString();
+  if (patch.listener_id || !Number.isFinite(last) || Date.now() - last > TOUCH_MS) {
+    patch.last_seen = new Date().toISOString();
+    Object.assign(patch, accountFacts(request));
+  }
   if (!Object.keys(patch).length) return false;
-  const where = `google_sub=eq.${encodeURIComponent(row.google_sub)}`;
-  // 13.7 — the coarse facts ride along with the last_seen refresh; before the
-  // 13.7 columns exist that write is refused and the bare patch is stored.
-  const full = await sbUpdate(env, 'vinax_accounts', where, { ...patch, ...accountFacts(request) }).catch(() => false);
-  return full || sbUpdate(env, 'vinax_accounts', where, patch).catch(() => false);
+  const r = await db.update(env, 'accounts', q().eq('id', row.id), patch);
+  return r.ok;
 }
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: CORS });
 
 export const onRequestGet = async (ctx: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
-  const sub = await readSession(ctx.env, bearer(ctx.request));
+  const { request, env } = ctx;
+  const sub = await readSession(env, bearer(request));
   if (!sub) return json({ error: 'signed_out' }, 401);
-  const row = await accountOf(ctx.env, sub);
-  if (row === undefined) return json({ error: 'unavailable' }, 503);
-  if (!row) return json({ error: 'signed_out' }, 401);
-  const touch = touchAccount(ctx.request, ctx.env, row);
+  if (!dbConfigured(env)) return json({ ok: true });
+  const r = await accountOf(env, sub);
+  if (!r.ok) return json({ error: 'unavailable' }, 503);
+  if (!r.value) return json({ error: 'signed_out' }, 401);
+  const row = r.value;
+  const touch = touchAccount(request, env, row).catch(() => false);
   if (ctx.waitUntil) ctx.waitUntil(touch);
   else await touch;
-  return json({ user: publicUser(row) });
+  return json({ user: publicUser(row, await handleOf(env, row.listener_id)) });
 };
 
 export const onRequestPost = async (ctx: { request: Request; env: Env }): Promise<Response> => {
@@ -65,6 +63,7 @@ export const onRequestPost = async (ctx: { request: Request; env: Env }): Promis
   if (!sub) return json({ error: 'signed_out' }, 401);
   const read = await readJsonCapped<{ delete?: unknown } | null>(request, 1_000);
   if (!read.ok || read.value?.delete !== true) return json({ error: 'bad_request' }, 400);
-  const ok = await sbDelete(env, 'vinax_accounts', `google_sub=eq.${encodeURIComponent(sub)}`);
-  return ok ? json({ ok: true }) : json({ error: 'unavailable' }, 503);
+  if (!dbConfigured(env)) return json({ ok: true });
+  const r = await db.remove(env, 'accounts', q().eq('id', sub)); // the backup cascades
+  return r.ok ? json({ ok: true }) : json({ error: 'unavailable' }, 503);
 };

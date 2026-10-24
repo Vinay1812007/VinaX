@@ -1,15 +1,12 @@
 /**
  * System health: live-checks the AI keys (tiny 4-token ping, each against its
- * OWN provider endpoint) and Supabase write freshness, so an outage shows its
- * exact cause instead of guesswork. Admin-gated because each check spends a
- * few model tokens.
+ * OWN provider endpoint), so an outage shows its exact cause instead of
+ * guesswork. Admin-gated because each check spends a few model tokens.
  *
  * 10.3 — one key per provider, so `ai` is four rows (NVIDIA, OpenRouter,
  * Groq, Gemini), each pinging the model its lane would use right now and
- * naming the lanes that sign with it. `lanes` adds per-lane success over the
- * trailing 24 h of vinax_ai_events (calls, ok %, latency, failover hops), with
- * each lane's provider and whether its key is set — so a lane that degrades
- * while its key still pings fine is visible too.
+ * naming the lanes that sign with it. `lanes` lists every lane with its
+ * provider and whether that provider's key is set.
  *
  * 10.3 — each key row also names the secret that supplies the key right now
  * (`envInUse`: the primary name, the previous name during the switch, or
@@ -18,14 +15,12 @@
  */
 import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { rateLimitAsync } from '../../_lib/ratelimit';
-import { dbErrorCode, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
-import { AI_PROVIDERS, LANE_MODEL, LANE_PROVIDER, providerEnvName, PROVIDER_LABEL, PROVIDER_LANE, isMaestroEndpoint, isRefusalCode, laneEndpoint, laneModel, providerKey, providerKeySource, type AiEnv, type AiProvider, type Lane } from '../../_lib/ai';
+import { AI_PROVIDERS, LANE_MODEL, LANE_PROVIDER, providerEnvName, PROVIDER_LABEL, PROVIDER_LANE, isMaestroEndpoint, laneEndpoint, laneModel, providerKey, providerKeySource, type AiEnv, type AiProvider, type Lane } from '../../_lib/ai';
 import { maestroFetch } from '../../_lib/maestro';
 import { isWorkersAiEndpoint, workersAiFetch, type WorkersAiBinding } from '../../_lib/workersai';
 import { catalogDefaultModel, fetchMedia, fetchTools, type MediaKind, type ToolEntry } from '../../_lib/catalog';
-import { aggregateLaneHealth, type AiEventRow, type LaneHealth } from '../../_lib/laneHealth';
 
-type Env = AdminEnv & SupabaseEnv & AiEnv;
+type Env = AdminEnv & AiEnv;
 
 interface KeyHealth {
   key: string;
@@ -91,57 +86,22 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     if (lane === 'scholar' || lane === 'router') return (await catalogDefaultModel(env, p)) ?? LANE_MODEL[lane];
     return laneModel(env, lane);
   };
-  const since = new Date(Date.now() - 24 * 3600_000).toISOString();
-  const [keyRows, lastEvents, aiEvents] = await Promise.all([
-    Promise.all(
-      AI_PROVIDERS.map(async (p): Promise<KeyHealth> => {
-        const lanes = lanesOf(p);
-        const row = await pingKey(`${PROVIDER_LABEL[p]} · ${lanes.join(', ')}`, providerKey(env, p), await pingModel(p), laneEndpoint(env, PROVIDER_LANE[p]), env.AI);
-        const [media, tools] = await Promise.all([fetchMedia(env, p), fetchTools(env, p)]);
-        return { ...row, provider: p, env: providerEnvName(p), envInUse: providerKeySource(env, p)?.name ?? null, lanes, media: media.map((m) => ({ id: m.id, name: m.name, kind: m.kind })), tools };
-      }),
-    ),
-    sbSelectResult<{ created_at?: string }>(env, 'vinax_events', 'select=created_at&order=created_at.desc&limit=1'),
-    supabaseConfigured(env)
-      ? sbSelectResult<AiEventRow>(env, 'vinax_ai_events', `created_at=gte.${encodeURIComponent(since)}&select=model,ok,status,error,latency_ms&order=created_at.desc&limit=10000`)
-      : Promise.resolve(null),
-  ]);
-  // 10.3 — per-lane success over 24 h. Refused calls (owner AI controls)
-  // reached no lane and are left out; an idle lane shows zero calls.
-  const measured = aiEvents && aiEvents.ok ? aggregateLaneHealth(aiEvents.rows.filter((r) => !isRefusalCode(r.error))) : [];
-  const idle = (lane: string): LaneHealth => ({ lane, calls: 0, okPct: 0, p50: null, p95: null, p99: null, hops: 0, emptyStreams: 0, authErrors: 0 });
+  const keyRows = await Promise.all(
+    AI_PROVIDERS.map(async (p): Promise<KeyHealth> => {
+      const lanes = lanesOf(p);
+      const row = await pingKey(`${PROVIDER_LABEL[p]} · ${lanes.join(', ')}`, providerKey(env, p), await pingModel(p), laneEndpoint(env, PROVIDER_LANE[p]), env.AI);
+      const [media, tools] = await Promise.all([fetchMedia(env, p), fetchTools(env, p)]);
+      return { ...row, provider: p, env: providerEnvName(p), envInUse: providerKeySource(env, p)?.name ?? null, lanes, media: media.map((m) => ({ id: m.id, name: m.name, kind: m.kind })), tools };
+    }),
+  );
+  // Every lane with its provider and whether that provider's key is set.
   const lanes = (Object.keys(LANE_PROVIDER) as Lane[]).map((lane) => ({
-    ...(measured.find((m) => m.lane === lane) ?? idle(lane)),
+    lane,
     provider: LANE_PROVIDER[lane],
     keySet: providerKey(env, LANE_PROVIDER[lane]) !== null,
   }));
-  // 7.2.0 — the database half of this panel names its failure instead of
-  // guessing between "paused, empty or failing"; the AI pings stay useful.
-  const lastEventAt = lastEvents.ok && lastEvents.rows.length ? (lastEvents.rows[0].created_at ?? null) : null;
-  const dbReadable = lastEvents.ok;
-  const dbError = lastEvents.ok ? null : dbErrorCode(lastEvents.error);
   return new Response(
-    JSON.stringify({
-      time: new Date().toISOString(),
-      ai: keyRows,
-      lanes,
-      lanesReadable: aiEvents ? aiEvents.ok : false,
-      supabase: {
-        configured: supabaseConfigured(env),
-        readable: dbReadable,
-        error: dbError,
-        upstreamStatus: lastEvents.ok ? null : lastEvents.httpStatus,
-        lastEventAt,
-        note: lastEventAt
-          ? null
-          : !supabaseConfigured(env)
-            ? 'Database not configured.'
-            : !lastEvents.ok
-              ? `Unavailable — the events read failed (${dbError}${lastEvents.httpStatus ? `, HTTP ${lastEvents.httpStatus}` : ''}).`
-              : 'The events table is readable but empty — no event has been written yet.',
-      },
-      unavailable: supabaseConfigured(env) && !dbReadable ? ['supabase'] : [],
-    }),
+    JSON.stringify({ time: new Date().toISOString(), ai: keyRows, lanes }),
     { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } },
   );
 };

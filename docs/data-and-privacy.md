@@ -4,19 +4,19 @@ This document says what VinaX keeps on a listener's device, what leaves the devi
 
 ## The short version
 
-- **No accounts.** Library, history, settings, the taste profile and AI chats live on the device. The service keeps no copy, so clearing site or app data removes them; the app offers an export.
+- **Device first, account second.** Library, history, settings, the taste profile and AI chats live on the device. A signed-in listener's library, history, taste and settings also sync to their account as one copy; AI chats never do. Clearing site or app data removes the device copy; the app offers an export.
 - **Features that need the network send what they need.** Browsing sends search words and ids to the catalogue source. AI features send a bounded summary of taste and recent listening (song titles and artist names) with no install id and no name attached. Listen Together, usernames, feedback, notifications and device transfer each send the fields listed below.
 - **Usage statistics are opt-in.** The checkbox on the welcome sheet is unticked by default. While it is off, no usage events and no session insights are sent.
 - **The web app shows advertising on some browsing pages.** Those pages load a third-party advertising script, and that is not controlled by the usage-sharing choice. See [Advertising](#advertising).
-- **The server keeps short technical records.** AI calls are logged as counts and timings without prompts or replies. Rate limiting keys on a hashed network address, not the address itself.
+- **The server keeps what its features need, in one database, and nothing more.** The tables are listed under [Server-side records](#server-side-records): no IP addresses, no precise location, no prompts or replies, no AI chats. Usage events are kept for a bounded time and then purged. Rate limiting keys on a hashed network address, not the address itself.
 
-## Your Google account (13.0)
+## Your Google account
 
-VinaX needs a Google account: until a listener signs in, every page is the sign-in screen (the Privacy, Terms and Contact pages stay readable). Signing in sends Google's ID token to the Worker, which checks it with Google and stores one row in `vinax_accounts`: the Google account ID, email address (and whether Google verified it), name, profile picture address, the VinaX username when the device proves it owns it, and the last device ID and time. The device ID is linked when the device proves its signed ID, at sign-in or on the app's session check once per load; that check also refreshes the time at most every 10 minutes. Since 13.7 the row also holds coarse sign-in facts, written at sign-in and on that same refresh: Cloudflare's edge geo for the request (`country`, `region`, `city`; the IP address is never stored), `platform` (web, android, ios) and `app_version`. The admin console's User Management shows every account with its name, email, profile photo and these facts, whether or not the listener shares usage; plays, searches and favourites still reach the server only with the usage opt-in. The Privacy page says so.
+VinaX needs a Google account: until a listener signs in, every page is the sign-in screen (the Privacy, Terms and Contact pages stay readable). Signing in sends Google's ID token to the Worker, which checks it with Google and stores one row in `accounts`: the Google account ID, email address (and whether Google verified it), name, profile picture address, the linked device (`listener_id`) when the device proves its signed ID, and the time. The device is linked at sign-in or on the app's session check once per load; that check also refreshes the time at most every 10 minutes. The row also holds coarse sign-in facts, written at sign-in and on that same refresh: the edge's geo for the request (`country`, `region`, `city`; the IP address is never stored), `platform` (web, android, ios) and `app_version`. The owner console's Listeners page shows every account with its name, email, profile photo and these facts, whether or not the listener shares usage; plays, searches and favourites still reach the server only with the usage opt-in. The Privacy page says so.
 
-**What syncs.** The account also holds one copy of the listener's data in `vinax_account_data`, in the same format as the backup file: settings, library and playlists, smart collections, listening history, taste profile, bookmarks and the Home layout. It is merged into each device the listener signs in on and updated a few seconds after a change. **AI chats, searches and this device's identity never sync.** The copy is at most 2 MB.
+**What syncs.** The account also holds one copy of the listener's data in `account_backups`, in the same format as the backup file: settings, library and playlists, smart collections, listening history, taste profile, bookmarks and the Home layout. It is merged into each device the listener signs in on and updated a few seconds after a change; a version number makes two devices merge instead of overwrite each other. **AI chats, searches and this device's identity never sync.** The copy is at most 2 MB.
 
-**Session and deletion.** The session is kept on the device and sent only to `/api/auth/*` and `/api/account/*`. **Sign out** forgets it on the device (the data stays on the device and in the account). **Delete account** (Settings → Profile, also reached from the top-bar avatar menu) removes the account row and the synced copy from the server. On the website the sign-in button and its script load from Google; in the Android app the system's Google account sheet is used.
+**Session and deletion.** The session is kept on the device and sent only to `/api/auth/*` and `/api/account/*`. **Sign out** forgets it on the device (the data stays on the device and in the account). **Delete account** (Settings → Profile, also reached from the top-bar avatar menu) removes the account row and, with it, the synced copy from the server. On the website the sign-in button and its script load from Google; in the Android app the system's Google account sheet is used.
 
 ## What is stored on the device
 
@@ -53,10 +53,10 @@ The app style and the chat style are display preferences only. No request builde
 | App config, flags, festival window, announcements, blocklist, site mode, version and update check, experiment list, model and voice lists, trending searches | The Worker | Nothing personal |
 | Trends shelves (`/api/trends`) | The Worker | A two-letter region code, a language and a limit, when set |
 | Region guess (`/api/geo`) | The Worker | Nothing beyond the request itself. The answer is a country code, a region name, the edge's approximate city and a time zone. Asked only while region inference is allowed (`allowRegionInference` in settings) and no manual override is set, and at most once every 12 hours unless the listener refreshes it. The answer is cached on the device under the region key. |
-| Choosing a username (`/api/username`) | The Worker | The username, display name, install id, the signed id when one exists, and the current username when changing it. Checking availability sends only the candidate username. |
-| Sending feedback (`/api/feedback`) | The Worker, which stores it | Message and its type, platform, app version, the display name when one is set, and the install id when one exists. The Worker adds country and city from the edge. |
-| Turning notifications on (`/api/push/*`) | The Worker, which stores it | Web: the browser's push endpoint and keys, the app language and the time-zone offset. Android: the push token, the platform, the app language and the time-zone offset, plus the country, region and approximate city the edge reports for the request (`backend/worker/functions/api/push/fcm-register.ts`). Turning them off sends the endpoint, and the Worker marks that registration inactive. |
-| Listen Together (`/api/room`) | The Worker, which stores the room | Room code, display name, the playing song, upcoming songs and the playback position. Hosts push on every change and as a keep-alive; guests poll, send a heartbeat with the install id, and send a leave beacon when the tab closes. A song request carries the song's id, title, artwork and the guest's name; a reaction carries one emoji from a fixed list. Only the host's key unlocks member names; guests see a count. Ending the room deletes the room and its member rows; leaving deletes that member's row. |
+| Choosing a username (`/api/username`) | The Worker, which keeps the handle on the device's `listeners` row | The username, display name, install id, the signed id when one exists, and the current username when changing it. Checking availability sends only the candidate username. |
+| Sending feedback (`/api/feedback`) | The Worker, which stores it in `feedback` | Message and its type, platform, app version, the display name when one is set, and the install id when one exists. The Worker adds country and city from the edge. |
+| Turning notifications on (`/api/push/*`) | The Worker, which stores it in `push_devices` | Web: the browser's push endpoint and keys, the app language and the time-zone offset. Android: the push token, the platform, the app language and the time-zone offset. For both, the Worker adds the country, region and approximate city the edge reports for the request. Turning them off sends the endpoint, and the Worker marks that device inactive. |
+| Listen Together (`/api/room`) | The Worker, which stores the room in `rooms` and `room_members` | Room code, display name, the playing song, upcoming songs and the playback position. Hosts push on every change and as a keep-alive; guests poll, send a heartbeat with the install id, and send a leave beacon when the tab closes. A song request carries the song's id, title, artwork and the guest's name; a reaction carries one emoji from a fixed list. Only the host's key unlocks member names; guests see a count. Ending the room deletes the room and its member rows; leaving deletes that member's row; a room idle for six hours is deleted by the hourly housekeeping job. |
 | Move to a new device (`/api/handoff`) | The Worker's short-lived relay | Ciphertext only. Kept at most ten minutes and deleted on first read. |
 | Casting to another device | A cast framework script, loaded from its vendor only when the device picker is opened (web only) | A normal script request |
 
@@ -97,13 +97,13 @@ Since 11.8, when that search is not used for a message about current events, the
 
 **Trending now (11.9).** A new chat shows a few current headlines. The app reads them from the Worker (`/api/ai/headlines`) and sends nothing with the request. The Worker fetches them on a schedule with fixed searches (India news, tech), the same for everyone. Tapping one sends its title to VinaX AI as a question, like any other message.
 
-**What the server records about AI calls.** One row per call in `vinax_ai_events`: feature name, model name, success flag, status, error code, client kind (web or app), latency, and token counts when the model endpoint reports them. Prompts, replies, attachments and taste summaries are not written to it. What the third-party model endpoints retain is governed by their own terms and cannot be checked from this repository.
+**What the server records about AI calls.** One row per call in `ai_calls`: feature name, lane, provider, model name, success flag, status, error code, client kind (web, android, ios), latency, and token counts when the model endpoint reports them. Prompts, replies, attachments and taste summaries are not written to it. What the third-party model endpoints retain is governed by their own terms and cannot be checked from this repository.
 
 ### Only with usage sharing on
 
 | What | Goes to | What is sent |
 | --- | --- | --- |
-| Usage events (`/api/events`) | The Worker, which stores them | Install id, signed id, the display name when one is set, event type, platform, app version, and for song events the song's id, title, first artist, language and artwork URL. Types: register, open, play, pause, heartbeat, skip, complete, favourite, dislike, playlist add, share, download, lyric miss, error (with a short message), web vitals, and search — which carries the search words (up to 80 characters) and the result count. The Worker adds country, region and city from the edge; the network address itself is not stored. |
+| Usage events (`/api/events`) | The Worker, which stores them in `events` and keeps the device's latest state in `listeners` | Install id, signed id, the display name when one is set, event type, platform, app version, and for song events the song's id, title, first artist, language and artwork URL. Types: register, open, play, pause, heartbeat, skip, complete, favourite, dislike, playlist add, share, download, lyric miss, error (with a short message), web vitals, and search — which carries the search words (up to 80 characters) and the result count. The Worker never stores the install id: the row is keyed by a server-derived device id (`_lib/identity.ts`), and the Worker adds country, region and city from the edge; the network address itself is not stored. Events without the `x-vinax-consent` header are dropped. |
 | `rec_served` and `rec_outcome` (`/api/events`) | The Worker | The common fields above, no song, and a small `meta` record: who picked an automatic continuation, how long it took, how many songs, and whether each added song was finished or skipped (`services/analytics/recTelemetry.ts`). |
 | Session insights | A third-party session-analytics provider | Layout, taps and scrolls. All on-screen text is masked on the device before upload. Production builds only; advertising storage is signalled as denied. |
 
@@ -122,7 +122,7 @@ A `play` is sent only when the play counts: at least 5 seconds heard, or 70 % of
 | Do backups carry it? | No. A restore never writes it. |
 | Does device transfer carry it? | Yes. |
 
-Rows already sent while sharing was on stay on the server after it is turned off.
+Rows already sent while sharing was on stay on the server after it is turned off, until the retention purge (below) or a deletion removes them.
 
 ## Advertising
 
@@ -132,16 +132,24 @@ Advertising is not gated on the usage-sharing choice. VinaX passes the advertisi
 
 ## Server-side records
 
-| Record | Contents | Removed when |
+Everything the server keeps about listeners is in one database ([database.md](database.md)). Table by table:
+
+| Table | Contents | Removed when |
 | --- | --- | --- |
-| Usage events | As listed above; written only with usage sharing on | No removal path in the app |
-| Feedback | Message, type, name, install id, platform, version, country, city | No removal path in the app |
-| Usernames | Username, display name, a device id derived or signed by the server | No removal path in the app |
-| Push registrations | Endpoint and keys or token, language, time-zone offset; for Android tokens also the country, region and approximate city the edge reports | Marked inactive on unsubscribe, not deleted by that route |
-| Listen Together rooms | Room state and member rows (install id, name, last seen) | The room and its members when the host ends it; a member row on leave. No timed purge was found in the Worker routes. |
-| Device-transfer relay | Ciphertext | After ten minutes, or on first read |
-| AI call log | Counts and timings, no content | No removal path in the app |
-| Rate limiting | Counters keyed by route and a hash of the network address, hashed with a server-side pepper (`_lib/ratelimit.ts`) | Short-lived counters; the raw address is not part of the key |
+| `listeners` | One row per device that shared usage or claimed a handle: a server-derived device id (never the install id), display name, handle, platform, app version, edge country/region/city, what is playing now, first and last seen | The owner deletes the person from the console |
+| `accounts` | Signed-in listeners: Google id, email, name, picture, the linked device, coarse sign-in facts, times | **Delete account** in the app, or the owner's delete |
+| `account_backups` | The synced copy (the backup-file JSON), its version and size | With the account |
+| `events` | Usage events as listed above; written only with usage sharing on | Purged after `retention.eventsDays` (default 180) by the hourly housekeeping job, on the owner's purge, or with the person |
+| `feedback` | Message, type, name, device id, platform, version, country, city, status, the owner's note | The owner resolves and deletes it; a deleted person's feedback stays but is detached from them |
+| `push_devices` | Endpoint and keys or token, platform, language, time-zone offset, edge country/region/city, active flag, last pushed | Marked inactive on unsubscribe or after 180 days without a check-in; not deleted by those paths |
+| `rooms`, `room_members` | Room state; member rows (device id, name, last seen, reaction) | The room and its members when the host ends it; a member row on leave; rooms idle 6 hours and members unseen 1 day by housekeeping |
+| `notifications` | What the owner sent (title, body, link, audience filter, delivery counts); nothing about who received it | The owner retracts it (kept, marked) |
+| `ai_calls` | Counts and timings, no content, no listener | No removal path in the app |
+| `settings`, `experiments`, `audit_log`, `uptime_*`, `job_runs`, `blocked_content`, `meta` | The owner's published settings and their history, experiments, the owner's own actions, the status history, job runs, blocked content, the schema version | Nothing about listeners |
+| Device-transfer relay (`HANDOFF`, outside the database) | Ciphertext | After ten minutes, or on first read |
+| Rate limiting (isolate memory and bindings) | Counters keyed by route and a hash of the network address, hashed with a server-side pepper (`_lib/ratelimit.ts`) | Short-lived counters; the raw address is not part of the key |
+
+Two deletion paths exist. **The listener** deletes their account from Settings → Profile, which removes `accounts` and `account_backups` for them. **The owner** deletes a person from the console's Listeners page, which removes their device row, every usage event, room memberships, the account and its backup, and detaches their feedback; the reason is kept in the audit trail. The owner's **Database → Maintenance** tab can also purge usage events older than a chosen number of days for everyone.
 
 ## The backup file
 
@@ -209,11 +217,11 @@ This is the only path that carries identity. The payload is a backup plus the in
 | The personalization reset (`clearPersonalization`) | Resets the taste profile, the recommendation memories and the Home signals; favourites stay |
 | Reset app state → Erase everything | Clears the listen-event log, deletes the `vinax-embeddings` database and removes every `localStorage` key that starts with `vinax` (AI chats included), then reloads (`resetAppState`) |
 
-`resetAppState` does not itself clear the downloaded-audio cache or `sessionStorage`. Nothing on the server is removed by a local erase: usage rows sent while sharing was on, feedback, a claimed username and push registrations remain.
+`resetAppState` does not itself clear the downloaded-audio cache or `sessionStorage`. Nothing on the server is removed by a local erase: usage rows sent while sharing was on, feedback, a claimed username and push registrations remain until the retention purge or a deletion ([Server-side records](#server-side-records)). **Delete account** is the listener's path to removing the server copy of their account and synced data.
 
 ## Secrets
 
-The frontend holds no secrets. `VITE_*` variables are visible to every visitor and must never carry keys. Model-endpoint keys, the database service key, the admin password, push keys and the cron secret are Worker secrets, handled in [operations.md](operations.md).
+The frontend holds no secrets. `VITE_*` variables are visible to every visitor and must never carry keys. Model-endpoint keys, the database URL and service-role key, the admin password, the device-id signing secret, push keys and the optional cron secret are Worker secrets, handled in [operations.md](operations.md). The database's public anon key is never used: every table has row-level security forced with no policy, so it can read nothing.
 
 ## Changing what is collected
 

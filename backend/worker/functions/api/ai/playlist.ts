@@ -25,12 +25,11 @@ import { type AiEnv } from '../../_lib/ai';
 import { resolveSuggestions } from '../../_lib/playlistResolve';
 import { methodNotAllowed } from '../../_lib/ratelimit';
 import { describeFilters, rulesFilters, type SearchFilters } from '../../_lib/searchFilters';
-import { type SupabaseEnv } from '../../_lib/supabase';
 import { CatalogUnavailable } from '../../_lib/trends/catalog';
 import { runPlaylist } from '../playlist';
 import { retrieve } from './search';
 
-type Env = AiEnv & SupabaseEnv;
+type Env = AiEnv;
 
 const CORS: Record<string, string> = {
   'access-control-allow-origin': '*',

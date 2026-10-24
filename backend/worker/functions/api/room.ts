@@ -1,42 +1,39 @@
-/** Listen Together rooms.
- *  - The 6-char code is the JOIN credential (guests can view + request songs).
- *  - A separate host_token is required for HOST actions (update, end): it is
- *    returned once from `create`, stored client-side, and never transmitted to
- *    guests. This prevents a code-holder from hijacking playback or destroying
- *    the room for everyone. See audit finding H8.
- *  No personal data; both secrets are generated with crypto.getRandomValues. */
-import { sbDelete, sbInsertIgnore, sbRpc, sbSelect, sbSelectRes, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
+/**
+ * Listen Together rooms — shared playback state every member polls.
+ *
+ *   POST { action: 'create', hostName?, song? }           → { code, hostToken }
+ *   GET  ?code=…&hostToken=…                               → { room, now, memberCount, reactions, members? }
+ *   POST { action: 'update', code, hostToken, song, queue, position, playing, consumedIds }   host only
+ *   POST { action: 'request', code, song, by }             a guest asks for a song
+ *   POST { action: 'react', code, deviceId, emoji, name }  one live reaction per member
+ *   POST { action: 'heartbeat', code, deviceId, name }     presence
+ *   POST { action: 'leave', code, deviceId }
+ *   POST { action: 'end', code, hostToken }                host only
+ *
+ * The 6-character code is the JOIN credential (anyone with it may watch and
+ * request). The host token, returned exactly once at create, authorises
+ * `update` and `end`; it is never sent back to anyone. Guests polling with
+ * the code alone get a member COUNT, never names. Rooms live in `rooms` and
+ * `room_members`; idle rooms are swept by housekeeping.
+ */
+import { db, dbConfigured, q, type DbEnv } from '../_lib/db';
+import { asObject, clip, jsonResponse } from '../_lib/edge';
 import { rateLimit } from '../_lib/ratelimit';
 import { safeEqual } from '../_lib/safe-compare';
 
-interface RoomEnv extends SupabaseEnv {
-  TELEMETRY_PEPPER?: string;
-}
-
-type Env = RoomEnv;
+type Env = DbEnv;
 
 const CORS: Record<string, string> = {
   'access-control-allow-origin': '*',
   'access-control-allow-methods': 'GET, POST, OPTIONS',
   'access-control-allow-headers': 'content-type',
 };
+const json = (body: unknown, status = 200): Response => jsonResponse(body, status, CORS);
 
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...CORS },
-  });
-}
-
-/** Rate-limit bucket lookup for each room action. Different verbs get very
- *  different budgets (heartbeats fire every ~5s, creates should not).
- *
- *  10.0 — sized for a ROOM, not a device. Buckets are keyed by client IP, and
- *  Listen Together is mostly used by people in the same place: the host and
- *  three guests on one home Wi-Fi share one address. The old 60/min GET budget
- *  was spent by one guest polling every 2 s plus the host, so the next guest
- *  on that network got 429s and silently stopped following. Budgets now cover
- *  about six devices behind one address. */
+/**
+ * Budgets are per client address and sized for a ROOM: a host and a few
+ * guests on one home network share one address.
+ */
 const ROOM_RL: Record<string, { capacity: number; refillPerMinute: number }> = {
   create: { capacity: 3, refillPerMinute: 3 },
   heartbeat: { capacity: 90, refillPerMinute: 90 },
@@ -48,378 +45,241 @@ const ROOM_RL: Record<string, { capacity: number; refillPerMinute: number }> = {
   GET: { capacity: 200, refillPerMinute: 200 },
 };
 
-/** Package D11 — the only emojis a reaction may carry (server-enforced). */
-const REACTION_EMOJI = ['❤️', '🔥', '😂', '👏', '🎉', '😍'];
-/** How long a reaction stays visible in polls. */
+/** The only emojis a reaction may carry. */
+export const REACTION_EMOJI: readonly string[] = ['❤️', '🔥', '😂', '👏', '🎉', '😍'];
+/** How long a reaction stays in polls. */
 const REACTION_WINDOW_MS = 8_000;
+/** A member counts as present for this long after their last heartbeat. */
+const PRESENCE_MS = 12_000;
+const QUEUE_MAX = 12;
+const MEMBER_ID_MAX = 64;
 
-export const onRequestOptions = async (): Promise<Response> =>
-  new Response(null, { status: 204, headers: CORS });
-
-function clip(v: unknown, n: number): string | null {
-  if (typeof v !== 'string') return null;
-  const t = v.trim();
-  return t ? t.slice(0, n) : null;
+interface RoomRow {
+  code: string;
+  host_token: string;
+  host_name: string | null;
+  current: unknown;
+  queue: unknown;
+  requests: unknown;
+  position: number;
+  playing: boolean;
+  updated_at: string;
 }
+interface Track { song: unknown; by: string | null }
 
-type RoomTrack = { song: unknown; by: string | null };
+export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: CORS });
 
-/** The song column carries { v:2, current, queue, requests } — richer group
- *  state with zero schema migration. v1 rows (a bare song object) still parse. */
-function unpackSong(v: unknown): { song: unknown; queue: RoomTrack[]; requests: RoomTrack[] } {
-  if (v && typeof v === 'object' && (v as { v?: unknown }).v === 2) {
-    const o = v as { current?: unknown; queue?: unknown; requests?: unknown };
-    return {
-      song: o.current ?? null,
-      queue: Array.isArray(o.queue) ? (o.queue as RoomTrack[]).slice(0, 12) : [],
-      requests: Array.isArray(o.requests) ? (o.requests as RoomTrack[]).slice(0, 20) : [],
-    };
-  }
-  return { song: v ?? null, queue: [], requests: [] };
-}
-
-function trackArr(v: unknown, cap: number): RoomTrack[] {
-  if (!Array.isArray(v)) return [];
-  return v
-    .slice(0, cap)
-    .map((t) => ({ song: (t as RoomTrack)?.song ?? null, by: clip((t as RoomTrack)?.by, 40) }))
-    .filter((t) => !!t.song);
-}
-
-function songIdOf(t: RoomTrack): string {
-  return String((t.song as { id?: unknown })?.id ?? '');
-}
-
-/** Room code — 6 chars from a confusables-free alphabet. Cryptographic RNG so
- *  the sequence can't be predicted from observed codes (audit finding H9). */
-function newCode(): string {
+/** Room code: 6 chars from a confusables-free alphabet, from the platform CSPRNG. */
+export function newCode(): string {
   const a = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const buf = new Uint8Array(6);
   crypto.getRandomValues(buf);
   let c = '';
-  for (let i = 0; i < 6; i++) c += a[buf[i] % a.length];
+  for (let i = 0; i < 6; i += 1) c += a[buf[i] % a.length];
   return c;
 }
 
-/** Host secret — 32 bytes of urandom, base64url encoded. */
-function newHostToken(): string {
+/** Host secret: 32 random bytes, base64url. */
+export function newHostToken(): string {
   const buf = new Uint8Array(32);
   crypto.getRandomValues(buf);
   let s = '';
-  for (let i = 0; i < buf.length; i++) s += String.fromCharCode(buf[i]);
+  for (const b of buf) s += String.fromCharCode(b);
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-/** Read the stored host_token for a room; returns null if the row lacks one
- *  (legacy rooms created before this deploy). */
-async function readHostToken(env: Env, code: string): Promise<string | null | 'missing_row'> {
-  const rows = await sbSelect<{ host_token: string | null }>(
-    env, 'vinax_rooms', `code=eq.${encodeURIComponent(code)}&limit=1&select=host_token`,
-  );
-  if (!rows.length) return 'missing_row';
-  return rows[0].host_token ?? null;
+const codeOf = (v: unknown): string | null => {
+  const c = clip(v, 8)?.toUpperCase() ?? null;
+  return c && /^[A-Z0-9]{4,8}$/.test(c) ? c : null;
+};
+const memberOf = (v: unknown): string | null => clip(v, MEMBER_ID_MAX);
+
+/** A song as the room keeps it: id, title, subtitle, image and a few display fields, ≤ 2 KB. */
+function cleanSong(raw: unknown): Record<string, unknown> | null {
+  const s = asObject(raw);
+  if (!s) return null;
+  const out: Record<string, unknown> = {};
+  for (const k of ['id', 'title', 'subtitle', 'image', 'url', 'duration', 'language', 'year']) {
+    const v = s[k];
+    if (typeof v === 'string') out[k] = v.slice(0, k === 'url' || k === 'image' ? 512 : 200);
+    else if (typeof v === 'number' && Number.isFinite(v)) out[k] = v;
+  }
+  for (const k of ['artists', 'images', 'downloadUrls']) if (Array.isArray(s[k])) out[k] = (s[k] as unknown[]).slice(0, 8);
+  if (!out.id || typeof out.id !== 'string') return null;
+  return JSON.stringify(out).length <= 4096 ? out : { id: out.id, title: out.title ?? null, subtitle: out.subtitle ?? null, image: out.image ?? null };
 }
 
-/** Enforce host-token check for state-mutating host actions. Returns null if
- *  authorized, or a Response to return on failure.
- *
- *  Audit finding H-SRV-5: the previous grandfather branch silently authorized
- *  ANY caller on legacy rows (host_token IS NULL). It's been removed — those
- *  rows now return 403 legacy_room instead.
- *
- *  TODO(security H-SRV-5): backfill host_token for existing rows via a
- *  Supabase migration OR run a purge cron that deletes rows older than a few
- *  hours (rooms are short-lived; the legacy fleet drains naturally). Until
- *  then, host actions on pre-fix rooms fail fast — guests can still read the
- *  room, and the host recreates cleanly. */
-async function requireHost(env: Env, code: string, provided: string | null): Promise<Response | null> {
-  const stored = await readHostToken(env, code);
-  if (stored === 'missing_row') return json({ error: 'not_found' }, 404);
-  if (stored === null) {
-    return json(
-      { error: 'legacy_room', message: 'This room predates host tokens and cannot be modified.' },
-      403,
-    );
+function trackList(raw: unknown, cap: number): Track[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Track[] = [];
+  for (const t of raw.slice(0, cap)) {
+    const o = asObject(t);
+    const song = cleanSong(o?.song);
+    if (song) out.push({ song, by: clip(o?.by, 40) });
   }
-  if (!provided || !safeEqual(provided, stored)) {
-    return json({ error: 'forbidden' }, 403);
-  }
-  return null;
+  return out;
+}
+const tracks = (raw: unknown): Track[] => (Array.isArray(raw) ? (raw as Track[]) : []);
+const songId = (t: Track): string => String((asObject(t.song)?.id as unknown) ?? '');
+
+/** The room as the app sees it (host_token never leaves). */
+function publicRoom(r: RoomRow) {
+  return {
+    host_name: r.host_name,
+    song: r.current ?? null,
+    queue: tracks(r.queue),
+    requests: tracks(r.requests),
+    position: typeof r.position === 'number' ? r.position : 0,
+    playing: r.playing === true,
+    updated_at: r.updated_at,
+  };
+}
+
+async function readRoom(env: Env, code: string): Promise<{ ok: true; room: RoomRow | null } | { ok: false }> {
+  const r = await db.one<RoomRow>(env, 'rooms', q().eq('code', code));
+  return r.ok ? { ok: true, room: r.value } : { ok: false };
+}
+
+/** Host authorisation: the stored token must match in constant time. */
+async function requireHost(env: Env, code: string, provided: string | null): Promise<{ room: RoomRow } | { fail: Response }> {
+  const r = await readRoom(env, code);
+  if (!r.ok) return { fail: json({ error: 'unavailable' }, 503) };
+  if (!r.room) return { fail: json({ error: 'not_found' }, 404) };
+  if (!provided || !safeEqual(provided, r.room.host_token)) return { fail: json({ error: 'forbidden' }, 403) };
+  return { room: r.room };
 }
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
   const limited = rateLimit(request, 'room-get', ROOM_RL.GET, env);
   if (limited) return limited;
-  if (!supabaseConfigured(env)) return json({ error: 'not_configured' }, 503);
+  if (!dbConfigured(env)) return json({ error: 'not_configured' }, 503);
   const url = new URL(request.url);
-  const code = clip(url.searchParams.get('code'), 8);
+  const code = codeOf(url.searchParams.get('code'));
   if (!code) return json({ error: 'bad_request' }, 400);
-  const providedHostToken = clip(url.searchParams.get('hostToken'), 64);
+  const hostToken = clip(url.searchParams.get('hostToken'), 64);
 
-  const since = new Date(Date.now() - 12_000).toISOString();
-  const reactSince = new Date(Date.now() - REACTION_WINDOW_MS).toISOString();
-  const [rooms, members, reactionRows] = await Promise.all([
-    sbSelect<{ host_name: string | null; song: unknown; position: number; playing: boolean; updated_at: string; host_token: string | null }>(
-      env, 'vinax_rooms', `code=eq.${encodeURIComponent(code)}&limit=1&select=host_name,song,position,playing,updated_at,host_token`,
-    ),
-    sbSelect<{ name: string | null }>(
-      env, 'vinax_room_members', `code=eq.${encodeURIComponent(code)}&last_seen=gte.${encodeURIComponent(since)}&select=name`,
-    ),
-    // D11 — recent reactions, DELIBERATELY a separate query: if the reaction
-    // columns haven't been migrated yet this select 400s alone and reactions
-    // are simply absent, while memberCount keeps working untouched. No names
-    // attached — reactions are anonymous to guests by design (M-SRV-2 spirit).
-    sbSelect<{ reaction: string | null; reacted_at: string | null }>(
-      env,
-      'vinax_room_members',
-      `code=eq.${encodeURIComponent(code)}&reacted_at=gte.${encodeURIComponent(reactSince)}&reaction=not.is.null&select=reaction,reacted_at`,
+  const now = Date.now();
+  const [room, members] = await Promise.all([
+    readRoom(env, code),
+    db.select<{ name: string | null; last_seen: string; reaction: string | null; reacted_at: string | null }>(
+      env, 'room_members', q().eq('room_code', code).gte('last_seen', new Date(now - 86_400_000).toISOString()).select('name,last_seen,reaction,reacted_at').limit(200),
     ),
   ]);
-
-  const raw = rooms[0] ?? null;
-  // NB (audit finding M16): a mistyped code and an ended session both currently
-  // return `{ room: null }` with HTTP 200. The guest UI treats that shape as
-  // 'session ended' which is the right UX (the room genuinely isn't available),
-  // and switching to HTTP 404 for the never-existed case would need a
-  // coordinated client change to preserve that path — deferred.
-  //
-  // Audit finding M-SRV-2: an anonymous GET (guest polling with just the room
-  // code) no longer receives the raw member NAMES — those can be personal.
-  // Only a memberCount is returned. If the caller proves it's the host by
-  // presenting the stored host_token, the full member list comes back.
-  let hostAuthorized = false;
-  if (raw && providedHostToken && raw.host_token && safeEqual(providedHostToken, raw.host_token)) {
-    hostAuthorized = true;
-  }
-  // Never leak the host_token itself back to any caller.
-  const roomOut = raw
-    ? (() => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { host_token: _ht, ...rest } = raw;
-        return { ...rest, ...unpackSong(raw.song) };
-      })()
-    : null;
-  const responseBody: Record<string, unknown> = {
-    room: roomOut,
-    // 10.0 — the server's clock at answer time. `updated_at` is stamped by
-    // this same clock, so a follower computes how far the host has played
-    // since the last push as (now − updated_at) without ever comparing two
-    // devices' clocks. Before this, guests anchored on when THEY first saw a
-    // new updated_at — up to a poll interval late — and kept seeking.
-    now: Date.now(),
-    memberCount: members.length,
-    // D11 — everyone sees the room's recent reactions (emoji + stamp only).
-    reactions: reactionRows
-      .filter((r) => r.reaction && r.reacted_at && REACTION_EMOJI.includes(r.reaction))
-      .map((r) => ({ e: r.reaction, at: r.reacted_at })),
+  if (!room.ok) return json({ error: 'unavailable' }, 503);
+  const present = members.ok ? members.rows.filter((m) => Date.parse(m.last_seen) >= now - PRESENCE_MS) : [];
+  const reactSince = now - REACTION_WINDOW_MS;
+  const reactions = (members.ok ? members.rows : [])
+    .filter((m) => m.reaction && m.reacted_at && REACTION_EMOJI.includes(m.reaction) && Date.parse(m.reacted_at) >= reactSince)
+    .map((m) => ({ e: m.reaction as string, at: m.reacted_at as string }));
+  const hostAuthorized = !!(room.room && hostToken && safeEqual(hostToken, room.room.host_token));
+  // A mistyped code and an ended room both read `room: null` — the app shows "session ended".
+  const body: Record<string, unknown> = {
+    room: room.room ? publicRoom(room.room) : null,
+    // The server's clock when it answered: followers project the host's position from it.
+    now,
+    memberCount: present.length,
+    reactions,
   };
-  if (hostAuthorized) {
-    responseBody.members = members.map((m) => m.name).filter(Boolean);
-  }
-  return json(responseBody);
+  if (hostAuthorized) body.members = present.map((m) => m.name).filter((n): n is string => !!n);
+  return json(body);
 };
 
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!supabaseConfigured(env)) return json({ error: 'not_configured' }, 503);
-
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
-  const action = body ? clip(body.action, 12) : null;
+  if (!dbConfigured(env)) return json({ error: 'not_configured' }, 503);
+  const body = asObject(await request.json().catch(() => null)) ?? {};
+  const action = clip(body.action, 12) ?? '';
+  const budget = ROOM_RL[action];
+  if (!budget) return json({ error: 'unknown_action' }, 400);
+  const limited = rateLimit(request, `room-${action}`, budget, env);
+  if (limited) return limited;
   const now = new Date().toISOString();
 
   if (action === 'create') {
-    const rl = rateLimit(request, 'room-create', ROOM_RL.create, env);
-    if (rl) return rl;
-    // sbUpsert with merge-duplicates would silently overwrite an existing
-    // row's host_token if two concurrent creates picked the same random code
-    // — the second caller would receive a hostToken the first caller can't
-    // recognize, and the first host's control of the room silently evaporates
-    // (audit finding H-SRV-4). Use sbInsertIgnore instead: on collision the
-    // response comes back empty, and we regenerate + retry.
-    let created: { code: string; hostToken: string } | null = null;
-    for (let attempt = 0; attempt < 5 && !created; attempt += 1) {
+    // The random code can collide: insert with ignore-duplicates and retry
+    // with fresh keys when the answer comes back empty (nothing written).
+    for (let attempt = 0; attempt < 5; attempt += 1) {
       const code = newCode();
       const hostToken = newHostToken();
-      const rows = await sbInsertIgnore<{ code: string }>(env, 'vinax_rooms', {
+      const r = await db.insert<{ code: string }>(env, 'rooms', {
         code,
-        host_name: body ? clip(body.hostName, 60) : null,
         host_token: hostToken,
-        song: body?.song ?? null,
+        host_name: clip(body.hostName, 60),
+        current: cleanSong(body.song),
+        queue: [],
+        requests: [],
         position: 0,
         playing: false,
+        created_at: now,
         updated_at: now,
-      }, 'code');
-      if (rows === null) {
-        // The insert was REJECTED (not a collision). The dominant real-world
-        // cause: the live table predates the H8 host_token column, so
-        // PostgREST refuses the whole row and every "Start session" fails.
-        // Probe the schema so the client (and the admin) get an honest,
-        // actionable error instead of a generic 500.
-        const probe = await sbSelectRes(env, 'vinax_rooms', 'select=host_token&limit=1');
-        if (!probe.ok) {
-          const tableProbe = await sbSelectRes(env, 'vinax_rooms', 'select=code&limit=1');
-          return json(
-            {
-              error: 'needs_migration',
-              message: tableProbe.ok
-                ? 'vinax_rooms is missing the host_token column — run supabase/migrations/2026-08-vinax-rooms-hosttoken.sql'
-                : 'vinax_rooms table is missing — run supabase/schema.sql',
-            },
-            503,
-          );
-        }
-        return json({ error: 'create_failed' }, 500);
-      }
-      if (rows.length > 0) created = { code, hostToken };
-      // rows.length === 0 -> the random code collided; loop with fresh keys.
+      }, { returning: true, onConflict: 'code', ignoreDuplicates: true });
+      if (!r.ok) return json({ error: r.error === 'not_found' ? 'needs_migration' : 'create_failed', message: r.error === 'not_found' ? 'The rooms table is missing — run backend/supabase/schema.sql' : undefined }, r.error === 'not_found' ? 503 : 500);
+      if (r.rows.length) return json({ code, hostToken });
     }
-    if (!created) return json({ error: 'code_space_exhausted' }, 503);
-    // The host token is returned exactly once. The client must persist it —
-    // there is no recovery path if lost (the room is effectively closed to
-    // further host actions and the guest UI will keep polling stale state).
-    return json(created);
+    return json({ error: 'code_space_exhausted' }, 503);
   }
 
+  const code = codeOf(body.code);
+  if (!code) return json({ error: 'bad_request' }, 400);
+
   if (action === 'update') {
-    const rl = rateLimit(request, 'room-update', ROOM_RL.update, env);
-    if (rl) return rl;
-    const code = body ? clip(body.code, 8) : null;
-    if (!code) return json({ error: 'bad_request' }, 400);
-    const hostToken = body ? clip(body.hostToken, 64) : null;
-    const authErr = await requireHost(env, code, hostToken);
-    if (authErr) return authErr;
-    // Preserve requests the host hasn't consumed yet — a state push must
-    // never clobber a guest request that raced it.
-    const existing = await sbSelect<{ song: unknown }>(
-      env, 'vinax_rooms', `code=eq.${encodeURIComponent(code)}&limit=1&select=song`,
-    );
-    const prev = unpackSong(existing[0]?.song);
-    const consumedIds = Array.isArray(body?.consumedIds)
-      ? (body?.consumedIds as unknown[]).filter((x): x is string => typeof x === 'string')
-      : [];
-    const requests = prev.requests.filter((t) => !consumedIds.includes(songIdOf(t)));
-    const ok = await sbUpsert(env, 'vinax_rooms', {
-      code,
-      song: { v: 2, current: body?.song ?? null, queue: trackArr(body?.queue, 12), requests },
-      position: typeof body?.position === 'number' ? body.position : 0,
-      playing: body?.playing === true,
+    const host = await requireHost(env, code, clip(body.hostToken, 64));
+    if ('fail' in host) return host.fail;
+    // A state push must never clobber a guest request that raced it: only the
+    // requests the host says it consumed leave the list.
+    const consumed = new Set(Array.isArray(body.consumedIds) ? (body.consumedIds as unknown[]).filter((x): x is string => typeof x === 'string') : []);
+    const requests = tracks(host.room.requests).filter((t) => !consumed.has(songId(t)));
+    const r = await db.update(env, 'rooms', q().eq('code', code), {
+      current: cleanSong(body.song),
+      queue: trackList(body.queue, QUEUE_MAX),
+      requests,
+      position: typeof body.position === 'number' && Number.isFinite(body.position) ? body.position : 0,
+      playing: body.playing === true,
       updated_at: now,
-    }, 'code');
-    return json({ ok });
+    });
+    return json({ ok: r.ok });
   }
 
   if (action === 'request') {
-    const rl = rateLimit(request, 'room-request', ROOM_RL.request, env);
-    if (rl) return rl;
-    const code = body ? clip(body.code, 8) : null;
-    if (!code) return json({ error: 'bad_request' }, 400);
-    // Sanitize the incoming song shape before it enters the jsonb column —
-    // the RPC otherwise happily persists any nested structure a guest sends,
-    // which the audit flagged as an unbounded jsonb write path (H-SRV-2).
-    const song = body?.song;
-    if (!song || typeof song !== 'object') return json({ error: 'bad_song' }, 400);
-    const rawSong = song as Record<string, unknown>;
-    const cleanSong = {
-      id: String((rawSong.id as unknown) ?? '').slice(0, 128),
-      title: String((rawSong.title as unknown) ?? '').slice(0, 200),
-      subtitle: String((rawSong.subtitle as unknown) ?? '').slice(0, 200),
-      image: String((rawSong.image as unknown) ?? '').slice(0, 512),
-    };
-    if (!cleanSong.id) return json({ error: 'bad_song' }, 400);
-    if (JSON.stringify(cleanSong).length > 2048) return json({ error: 'song_too_large' }, 400);
-    // Atomic append inside the DB so two concurrent guest requests don't
-    // clobber each other via read-modify-write (audit finding M12). The RPC
-    // also de-dupes and caps to the last 20 entries.
-    const ok = await sbRpc<void>(env, 'vinax_room_append_request', {
-      p_code: code,
-      p_song: cleanSong,
-      p_by: (body ? clip(body.by, 40) : null) ?? '',
-    });
-    // sbRpc returns null on any HTTP failure — including our own
-    // `room_not_found` raise, so translate that to a 404 client-side by
-    // probing existence when the RPC signals a failure.
-    if (ok === null) {
-      const existing = await sbSelect<{ song: unknown }>(
-        env, 'vinax_rooms', `code=eq.${encodeURIComponent(code)}&limit=1&select=song`,
-      );
-      if (!existing.length) return json({ error: 'not_found' }, 404);
-      // 10.0 — a database that never got the vinax_room_append_request
-      // function failed EVERY guest request while the guest was told "Sent".
-      // Fall back to a read-modify-write: it can lose a request that races
-      // another within the same few milliseconds, which beats losing them all.
-      const prev = unpackSong(existing[0].song);
-      const by = (body ? clip(body.by, 40) : null) ?? '';
-      const dupe = [...prev.queue, ...prev.requests].some((t) => songIdOf(t) === cleanSong.id);
-      if (dupe) return json({ ok: true });
-      const written = await sbUpsert(env, 'vinax_rooms', {
-        code,
-        song: { v: 2, current: prev.song, queue: prev.queue, requests: [...prev.requests, { song: cleanSong, by }].slice(-20) },
-      }, 'code');
-      return written ? json({ ok: true, fallback: true }) : json({ error: 'append_failed' }, 500);
-    }
+    const song = cleanSong(body.song);
+    if (!song) return json({ error: 'bad_song' }, 400);
+    const r = await db.rpc<boolean>(env, 'room_request', { p_code: code, p_song: { id: song.id, title: song.title ?? '', subtitle: song.subtitle ?? '', image: song.image ?? '' }, p_by: clip(body.by, 40) ?? '' });
+    if (!r.ok) return json({ error: 'unavailable' }, 503);
+    if (r.value !== true) return json({ error: 'not_found' }, 404);
     return json({ ok: true });
   }
 
+  const memberId = memberOf(body.deviceId);
+
   if (action === 'react') {
-    const rl = rateLimit(request, 'room-react', ROOM_RL.react, env);
-    if (rl) return rl;
-    const code = body ? clip(body.code, 8) : null;
-    const deviceId = body ? clip(body.deviceId, 64) : null;
-    const emoji = body ? clip(body.emoji, 8) : null;
-    if (!code || !deviceId || !emoji || !REACTION_EMOJI.includes(emoji)) {
-      return json({ error: 'bad_request' }, 400);
-    }
-    // Race-free by construction: each member only ever writes their OWN row
-    // (keyed code+device_id), so no RPC is needed — unlike the shared request
-    // array. One live reaction per member also self-limits spam. Doubles as a
-    // heartbeat. Fails soft (ok:false) until the reaction columns exist.
-    const ok = await sbUpsert(env, 'vinax_room_members', {
-      code,
-      device_id: deviceId,
-      name: body ? clip(body.name, 60) : null,
-      last_seen: now,
-      reaction: emoji,
-      reacted_at: now,
-    }, 'code,device_id');
-    return json({ ok });
+    const emoji = clip(body.emoji, 8);
+    if (!memberId || !emoji || !REACTION_EMOJI.includes(emoji)) return json({ error: 'bad_request' }, 400);
+    // Each member writes only their OWN row, so reactions never race each
+    // other and one live reaction per member limits spam. Doubles as a heartbeat.
+    const r = await db.upsert(env, 'room_members', { room_code: code, member_id: memberId, name: clip(body.name, 60), last_seen: now, reaction: emoji, reacted_at: now }, 'room_code,member_id');
+    return json({ ok: r.ok });
   }
 
   if (action === 'heartbeat') {
-    const rl = rateLimit(request, 'room-heartbeat', ROOM_RL.heartbeat, env);
-    if (rl) return rl;
-    const code = body ? clip(body.code, 8) : null;
-    const deviceId = body ? clip(body.deviceId, 64) : null;
-    if (!code || !deviceId) return json({ error: 'bad_request' }, 400);
-    const ok = await sbUpsert(env, 'vinax_room_members', {
-      code, device_id: deviceId, name: body ? clip(body.name, 60) : null, last_seen: now,
-    }, 'code,device_id');
-    return json({ ok });
-  }
-
-  if (action === 'end') {
-    const rl = rateLimit(request, 'room-end', ROOM_RL.end, env);
-    if (rl) return rl;
-    const code = body ? clip(body.code, 8) : null;
-    if (!code) return json({ error: 'bad_request' }, 400);
-    const hostToken = body ? clip(body.hostToken, 64) : null;
-    const authErr = await requireHost(env, code, hostToken);
-    if (authErr) return authErr;
-    const ok = await Promise.all([
-      sbDelete(env, 'vinax_rooms', `code=eq.${encodeURIComponent(code)}`),
-      sbDelete(env, 'vinax_room_members', `code=eq.${encodeURIComponent(code)}`),
-    ]).then((r) => r.every(Boolean));
-    return json({ ok });
+    if (!memberId) return json({ error: 'bad_request' }, 400);
+    const r = await db.upsert(env, 'room_members', { room_code: code, member_id: memberId, name: clip(body.name, 60), last_seen: now }, 'room_code,member_id');
+    // A heartbeat for a room that no longer exists is refused by the foreign key: tell the guest.
+    if (!r.ok && (r.error === 'bad_request' || r.error === 'conflict')) return json({ error: 'not_found' }, 404);
+    return json({ ok: r.ok });
   }
 
   if (action === 'leave') {
-    const rl = rateLimit(request, 'room-leave', ROOM_RL.leave, env);
-    if (rl) return rl;
-    const code = body ? clip(body.code, 8) : null;
-    const deviceId = body ? clip(body.deviceId, 64) : null;
-    if (!code || !deviceId) return json({ error: 'bad_request' }, 400);
-    const ok = await sbDelete(env, 'vinax_room_members', `code=eq.${encodeURIComponent(code)}&device_id=eq.${encodeURIComponent(deviceId)}`);
-    return json({ ok });
+    if (!memberId) return json({ error: 'bad_request' }, 400);
+    const r = await db.remove(env, 'room_members', q().eq('room_code', code).eq('member_id', memberId));
+    return json({ ok: r.ok });
+  }
+
+  if (action === 'end') {
+    const host = await requireHost(env, code, clip(body.hostToken, 64));
+    if ('fail' in host) return host.fail;
+    const r = await db.remove(env, 'rooms', q().eq('code', code)); // members cascade
+    return json({ ok: r.ok });
   }
 
   return json({ error: 'unknown_action' }, 400);

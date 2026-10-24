@@ -6,13 +6,11 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetSerperState } from '../functions/_lib/serper';
-import { resetCounts, isSmallTalk, cleanTitle, parsePlan, logoHost, signedImagePath, imageSignatureOk, wantsImages, isBareEntity } from '../functions/_lib/chatExtras';
-import { resetAiControlsCache } from '../functions/_lib/ai';
+import { countToday, noteToday, resetCounts, isSmallTalk, cleanTitle, parsePlan, logoHost, signedImagePath, imageSignatureOk, wantsImages, isBareEntity } from '../functions/_lib/chatExtras';
 
 type Ctx = { request: Request; env: Record<string, string>; waitUntil?: (p: Promise<unknown>) => void };
 interface Call { url: string; method: string; json: Record<string, unknown> }
 
-const DB = { SUPABASE_URL: 'https://db.example.test', SUPABASE_SERVICE_ROLE_KEY: 'svc' };
 const KEYS = { NVIDIA_API_KEY: 'k-n', GROQ_API_KEY: 'k-g', SERPER_API_KEY: 'serper-k', TELEMETRY_PEPPER: 'pepper-for-tests' };
 const ORGANIC = (q: string) => ({
   knowledgeGraph: { description: 'A carmaker.', imageUrl: 'https://img.example/logo.png' },
@@ -29,7 +27,7 @@ const sse = (...chunks: Array<Record<string, unknown>>): Response =>
   new Response(chunks.map((c) => `data: ${JSON.stringify({ choices: [{ delta: c }] })}\n\n`).join('') + 'data: [DONE]\n\n', { status: 200, headers: { 'content-type': 'text/event-stream' } });
 const json = (content: string): Response => new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status: 200, headers: { 'content-type': 'application/json' } });
 
-interface Opts { answer?: (c: Call) => Response; plan?: string; title?: string; researchToday?: number }
+interface Opts { answer?: (c: Call) => Response; plan?: string; title?: string }
 function stub(o: Opts = {}): Call[] {
   const calls: Call[] = [];
   const impl = async (u: unknown, init?: RequestInit): Promise<Response> => {
@@ -40,8 +38,6 @@ function stub(o: Opts = {}): Call[] {
     const call = { url, method, json: body };
     calls.push(call);
     if (url.startsWith('https://google.serper.dev/')) return new Response(JSON.stringify(ORGANIC(String(body.q))), { status: 200 });
-    if (url.includes('/rest/v1/vinax_ai_events') && method === 'GET') return new Response('[]', { status: 200, headers: { 'content-range': `0-0/${url.includes('deep-research') ? (o.researchToday ?? 0) : 0}` } });
-    if (url.includes('/rest/v1/')) return new Response(method === 'GET' ? '[]' : null, { status: method === 'GET' ? 200 : 201 });
     if (method === 'GET') return new Response(JSON.stringify({ data: [], models: [] }), { status: 200 });
     // Non-streamed side calls: the title and the research plan.
     if (body.stream !== true) {
@@ -74,7 +70,6 @@ const sysOf = (c: Call): string => String((c.json.messages as Array<{ content: s
 beforeEach(() => {
   resetSerperState();
   resetCounts();
-  resetAiControlsCache();
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -141,9 +136,9 @@ describe('reasoning', () => {
 });
 
 describe('deep research', () => {
-  it('plans, runs 4 searches, writes a cited report, and logs one research run', async () => {
+  it('plans, runs 4 searches and writes a cited report', async () => {
     const calls = stub();
-    const ev = await chat({ mode: 'auto', research: true, messages: [{ role: 'user', content: 'BMW' }] }, { ...KEYS, ...DB });
+    const ev = await chat({ mode: 'auto', research: true, messages: [{ role: 'user', content: 'BMW' }] }, KEYS);
     const steps = ev.filter((e) => e.status).map((e) => (e.status as { step: string }).step);
     expect(steps).toEqual(['planning', 'searching', 'searched']);
     const s = serperCalls(calls);
@@ -156,22 +151,19 @@ describe('deep research', () => {
     expect(src.queries).toHaveLength(4);
     expect(src.images?.length).toBeGreaterThan(0);
     expect(src.images?.every((i) => i.src.startsWith('/api/webimg?u=') && /&s=[0-9a-f]{32}$/.test(i.src))).toBe(true);
-    const logged = calls.filter((c) => c.url.includes('/rest/v1/vinax_ai_events') && c.method === 'POST').map((c) => c.json);
-    expect(logged.some((r) => r.feature === 'deep-research' && r.model === 'research' && r.ok === true)).toBe(true);
   });
 
-  it('stops at RESEARCH_DAILY_LIMIT, and the owner can switch it off; the chat still answers', async () => {
-    let calls = stub({ researchToday: 1 });
-    await chat({ mode: 'auto', research: true, messages: [{ role: 'user', content: 'BMW' }] }, { ...KEYS, ...DB, RESEARCH_DAILY_LIMIT: '2' });
-    expect(serperCalls(calls)).toHaveLength(4);
-    calls = stub({ researchToday: 2 });
-    const ev = await chat({ mode: 'auto', research: true, messages: [{ role: 'user', content: 'Audi' }] }, { ...KEYS, ...DB, RESEARCH_DAILY_LIMIT: '2' });
+  it('stops at RESEARCH_DAILY_LIMIT (counted per isolate); the chat still answers', async () => {
+    const calls = stub();
+    const ev = await chat({ mode: 'auto', research: true, messages: [{ role: 'user', content: 'Audi' }] }, { ...KEYS, RESEARCH_DAILY_LIMIT: '0' });
     expect(serperCalls(calls)).toHaveLength(0);
     expect(ev.some((e) => typeof e.delta === 'string')).toBe(true);
-    calls = stub({ researchToday: 0 });
-    vi.stubGlobal('fetch', ((f) => async (u: unknown, init?: RequestInit) => (String(u).includes('/rest/v1/vinax_config') && (init?.method ?? 'GET') === 'GET' ? new Response(JSON.stringify([{ key: 'ai-controls', value: { features: { 'deep-research': false } } }]), { status: 200 }) : f(u, init)))(globalThis.fetch as (u: unknown, init?: RequestInit) => Promise<Response>));
-    await chat({ mode: 'auto', research: true, messages: [{ role: 'user', content: 'Mercedes' }] }, { ...KEYS, ...DB });
-    expect(serperCalls(calls)).toHaveLength(0);
+    // The counter itself: one noted run is one counted run, today only.
+    const now = Date.parse('2026-10-24T10:00:00Z');
+    expect(countToday('deep-research', 'research', now)).toBe(0);
+    noteToday('deep-research', 'research', now);
+    expect(countToday('deep-research', 'research', now)).toBe(1);
+    expect(countToday('deep-research', 'research', now + 86_400_000)).toBe(0);
   });
 
   it('parsePlan reads a JSON array or lines', () => {

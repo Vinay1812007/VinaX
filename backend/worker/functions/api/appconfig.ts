@@ -1,31 +1,19 @@
 /**
- * Public, cached read side of the admin config store (vinax_config).
+ * Public, cached app config — what the owner published, sanitised.
  *
- *   GET /api/appconfig?key=banners      → { banners: [...active only] }
- *   GET /api/appconfig?key=festival     → { festival: {mode,id} | null }
+ *   GET /api/appconfig?key=client    → the boot bundle (greeting, FAQ, layout, …)
+ *   GET /api/appconfig?key=banners   → { banners: [...] }   inside their dates, at most 10
+ *   GET /api/appconfig?key=festival  → { festival: { mode, id } | null }
+ *   GET /api/appconfig?key=flags     → { flags: { name: boolean } }
  *
- * Served with s-maxage=300 so every client hit lands on the edge cache;
- * publishing from the admin becomes visible within five minutes. Banners are
- * filtered to their schedule window HERE so clients never see (or ship logic
- * for) expired/unstarted campaigns.
+ * Values come from the `settings` table (memoised a minute in the Worker) and
+ * pass through the sanitisers in _lib/clientConfig.ts, so a bad value can
+ * never break a listener's app. Without a database every key answers the
+ * app's built-in defaults.
  */
-import { sbSelect, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
-import { CLIENT_READ_KEYS, publicClientConfig, readConfig, withRolloutSplit } from '../_lib/clientConfig';
-
-interface ConfigRow {
-  value: unknown;
-}
-
-export interface Banner {
-  id?: string;
-  title?: string;
-  subtitle?: string;
-  linkType?: string;
-  linkId?: string;
-  start?: string;
-  end?: string;
-  img?: string;
-}
+import type { DbEnv } from '../_lib/db';
+import { activeBanners, publicClientConfig, publicFestival, publicFlags } from '../_lib/clientConfig';
+import { settingsMap } from '../_lib/settings';
 
 const json = (o: unknown, sMaxAge = 300): Response =>
   new Response(JSON.stringify(o), {
@@ -36,66 +24,17 @@ const json = (o: unknown, sMaxAge = 300): Response =>
     },
   });
 
-/** A banner is live when today is inside its (optional) start/end window. */
-export function activeBanners(value: unknown, now = new Date()): Banner[] {
-  if (!Array.isArray(value)) return [];
-  const today = now.toISOString().slice(0, 10);
-  return (value as Banner[])
-    .filter((b) => b && typeof b === 'object' && typeof b.title === 'string' && b.title.trim())
-    .filter((b) => {
-      const start = typeof b.start === 'string' && b.start ? b.start : null;
-      const end = typeof b.end === 'string' && b.end ? b.end : null;
-      if (start && today < start) return false;
-      if (end && today > end) return false;
-      return true;
-    })
-    .slice(0, 10);
-}
-
-/** Only boolean flags with sane names leave the server — anything else an
- *  admin typo'd into the row is dropped rather than shipped to every client. */
-export function publicFlags(value: unknown): Record<string, boolean> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-  const out: Record<string, boolean> = {};
-  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-    if (/^[a-zA-Z][a-zA-Z0-9_-]{0,39}$/.test(k) && typeof v === 'boolean') out[k] = v;
-    if (Object.keys(out).length >= 50) break;
-  }
-  return out;
-}
-
-export const onRequestGet = async (context: { request: Request; env: SupabaseEnv }): Promise<Response> => {
-  const { request, env } = context;
-  const key = new URL(request.url).searchParams.get('key') ?? '';
-  // v5.15.0 — one bundle for everything the app reads at boot (greeting,
-  // broadcast, search synonyms, source switches, AI starters, FAQ, min build).
-  if (key === 'client') {
-    const cfg = publicClientConfig(await readConfig(env, CLIENT_READ_KEYS));
-    // 7.2.0 — a weight override staged to one experiment variant ships with
-    // that experiment's live split (withheld while the experiment is paused).
-    const { recConfig: staged, ...rest } = cfg;
-    const recConfig = staged ? await withRolloutSplit(env, staged) : null;
-    return json({ ...rest, ...(recConfig ? { recConfig } : {}) }, 60);
-  }
-  if (key !== 'banners' && key !== 'festival' && key !== 'flags') {
+export const onRequestGet = async (context: { request: Request; env?: DbEnv }): Promise<Response> => {
+  const key = new URL(context.request.url).searchParams.get('key') ?? '';
+  if (!['client', 'banners', 'festival', 'flags'].includes(key)) {
     return new Response(JSON.stringify({ error: 'unknown_key' }), { status: 400, headers: { 'content-type': 'application/json' } });
   }
-  if (!supabaseConfigured(env)) {
-    if (key === 'banners') return json({ banners: [] });
-    if (key === 'festival') return json({ festival: null }, 60);
-    if (key === 'flags') return json({ flags: {} }, 60);
-    return json({ config: null });
-  }
-  const rows = await sbSelect<ConfigRow>(env, 'vinax_config', `key=eq.${encodeURIComponent(key)}&select=value&limit=1`).catch(
-    () => [] as ConfigRow[],
-  );
-  const value = rows[0]?.value ?? null;
-  if (key === 'banners') return json({ banners: activeBanners(value) });
-  // Festival theme override — cached only briefly so an admin force/off
-  // switch reaches listeners within about a minute, not five.
-  if (key === 'festival') return json({ festival: value }, 60);
-  // v5.13.0 — feature flags are kill-switches; a minute of cache is the most
-  // an admin should have to wait for one to bite.
-  if (key === 'flags') return json({ flags: publicFlags(value) }, 60);
-  return json({ config: value });
+  const { values } = await settingsMap(context.env ?? {});
+  if (key === 'client') return json(publicClientConfig(values), 60);
+  if (key === 'banners') return json({ banners: activeBanners(values.banners) });
+  if (key === 'festival') return json({ festival: publicFestival(values.festival) }, 60);
+  return json({ flags: publicFlags(values.flags) }, 60);
 };
+
+/** The sanitisers, re-exported for callers that reach them through this route. */
+export { activeBanners, publicFlags, type Banner } from '../_lib/clientConfig';

@@ -37,16 +37,15 @@
  *   → 200 { intro, songs: [{ songId, title, artist, reason, segue, confidence, fromPool }], model }
  *   → 400 bad_request | 503 ai_not_configured | 429 engines rate limited | 500 { error }
  */
-import { aiBlockCode, aiGate, chat, extractJson, gather, isAiBlocked, logAiEvent, logAiRefusal, providerKey, type AiBlock, type AiEnv } from '../_lib/ai';
+import { chat, extractJson, gather, providerKey, type AiEnv } from '../_lib/ai';
 import { readJsonCapped } from '../_lib/body';
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
-import { type SupabaseEnv } from '../_lib/supabase';
 import { pickBySeed, styleAngle } from '../_lib/variety';
 import { canonicalKey } from '../_lib/identityCore';
 import { searchCatalogSongs } from '../_lib/trends/catalog';
 import { buildFacts, groundedLine } from '../_lib/grounding';
 
-type DjEnv = AiEnv & SupabaseEnv;
+type DjEnv = AiEnv;
 
 /** 8.3.0 — the three listening styles a DJ set (or an AI playlist) can be locked to. */
 export type MusicStyle = 'dj' | 'folk' | 'devotional';
@@ -271,18 +270,8 @@ export const onRequestPost = async (context: { request: Request; env: DjEnv; wai
 
 async function handlePost(context: { request: Request; env: DjEnv; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> {
   const { request, env } = context;
-  const isApp = request.headers.get('x-vinax-client') === 'app';
   const limited = await rateLimitAsync(request, 'dj', { capacity: 15, refillPerMinute: 8 }, env);
   if (limited) return limited;
-  // 7.2.0 — the owner's AI switches and spend caps: 503 so the client keeps
-  // its on-device order (it already treats a 503 as "DJ unavailable").
-  // Refusals are logged (error ai_disabled / ai_over_budget) for the console.
-  const refuse = (b: AiBlock): Response => {
-    void logAiRefusal(env, 'dj', b, isApp ? 'app' : 'web', context.waitUntil);
-    return json({ error: aiBlockCode(b) }, 503);
-  };
-  const blocked = await aiGate(env, 'dj');
-  if (blocked) return refuse(blocked);
   // Capped while reading — a chunked body carries no content-length.
   const read = await readJsonCapped<{ context?: unknown; pool?: unknown; count?: unknown; discover?: unknown; maxDiscover?: unknown; wantSegues?: unknown } | null>(request, 48_000);
   if (!read.ok) return read.reason === 'too_large' ? json({ error: 'too_large' }, 413) : json({ error: 'bad_request' }, 400);
@@ -343,7 +332,7 @@ async function handlePost(context: { request: Request; env: DjEnv; waitUntil?: (
         ],
         // 8.0.0 — the maestro lane knows far more real songs; both lanes pitch in parallel on their own keys.
         ['maestro', 'scholar'],
-        { temperature: 0.7, maxTokens: 900, timeoutMs: 4_500, deadlineAt: Math.min(deadlineAt, Date.now() + 4_500), soloLadder: true, feature: 'dj' },
+        { temperature: 0.7, maxTokens: 900, timeoutMs: 4_500, deadlineAt: Math.min(deadlineAt, Date.now() + 4_500), soloLadder: true },
       );
       const seen = new Set(pool.map((p) => canonKey(p.title, p.artist)));
       for (const g of gathered) {
@@ -398,28 +387,13 @@ async function handlePost(context: { request: Request; env: DjEnv; waitUntil?: (
     // 8.0.0 — the maestro lane leads when its key is set (a stronger musical
     // ear for transitions, eras and composers); scholar is its first failover.
     // Its same-key lighter sibling is skipped: scholar is faster than a retry.
-    { temperature: 0.75, lane: hasFlagship ? 'maestro' : 'scholar', json: true, maxTokens: wantSegues ? 2200 : 1800, reasoningEffort: 'low', timeoutMs: 10_000, firstTimeoutMs: hasFlagship ? 12_000 : 9_000, skipSecondary: true, ladder: hasFlagship ? ['scholar', 'dj', 'fast', 'chat', 'home'] : ['dj', 'fast', 'chat', 'home'], deadlineAt, feature: 'dj',
+    { temperature: 0.75, lane: hasFlagship ? 'maestro' : 'scholar', json: true, maxTokens: wantSegues ? 2200 : 1800, reasoningEffort: 'low', timeoutMs: 10_000, firstTimeoutMs: hasFlagship ? 12_000 : 9_000, skipSecondary: true, ladder: hasFlagship ? ['scholar', 'dj', 'fast', 'chat', 'home'] : ['dj', 'fast', 'chat', 'home'], deadlineAt,
       // 8.2.0 — a 200 with no usable pick (unparseable JSON, ids outside the
       // pool) asks the next engine instead of failing the set.
       accept: (content) => parsePicks(content, pool, count, maxDiscover, avoidBlob).songs.length > 0 },
   );
   // The controls changed while this request ran: same honest 503, nothing logged as a failed call.
-  if (isAiBlocked(r.error)) return refuse(r.error);
   const { intro, songs } = r.error ? { intro: '', songs: [] as DjPick[] } : parsePicks(r.content, pool, count, maxDiscover, avoidBlob);
-  if (r.error !== 'not_configured') {
-    const log = logAiEvent(env, {
-      feature: 'dj',
-      model: r.model ? `${r.model} @${r.keyRole ?? '?'}` : null,
-      ok: songs.length > 0,
-      status: r.status ?? null,
-      error: r.error ?? (songs.length ? null : 'empty'),
-      client: isApp ? 'app' : 'web',
-      latency_ms: Date.now() - t0,
-      prompt_tokens: r.usage?.prompt_tokens,
-      completion_tokens: r.usage?.completion_tokens,
-    });
-    if (typeof context.waitUntil === 'function') context.waitUntil(log);
-  }
   if (r.error === 'not_configured') return json({ error: 'ai_not_configured' }, 503);
   // An upstream rate limit (or every lane cooling down) is "busy", not a crash.
   if (!songs.length) return json({ error: r.error ?? 'empty', status: r.status ?? null }, r.error && r.status === 429 ? 429 : 500);

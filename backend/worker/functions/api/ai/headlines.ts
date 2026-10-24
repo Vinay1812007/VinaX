@@ -1,18 +1,15 @@
 /**
- * 11.9 — GET /api/ai/headlines → { updatedAt, topics: [{ id, label, items: [{ title, url, site }] }] }
- * or { topics: [] } when there is nothing to show (switched off, not set up,
- * or older than a day). Reads the row the scheduled job stores
- * (_lib/headlines.ts); never searches. The same for every listener.
+ * 11.9 — GET /api/ai/headlines → { topics: [] }
+ *
+ * The "Trending now" strip once read headlines a scheduled job stored. No job
+ * writes headlines in 14.0, so the answer is the "nothing to show" shape the
+ * app already handles (it hides the strip).
  */
-import { currentHeadlines } from '../../_lib/headlines';
 import { methodNotAllowed } from '../../_lib/ratelimit';
-import type { SerperEnv } from '../../_lib/serper';
 
-export const onRequestGet = async (context: { env: SerperEnv }): Promise<Response> => {
-  const doc = await currentHeadlines(context.env).catch(() => null);
-  return new Response(JSON.stringify(doc ?? { topics: [] }), {
+export const onRequestGet = async (): Promise<Response> =>
+  new Response(JSON.stringify({ topics: [] }), {
     headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=600' },
   });
-};
 
 export const onRequestPost = async (): Promise<Response> => methodNotAllowed();

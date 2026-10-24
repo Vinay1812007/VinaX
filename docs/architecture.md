@@ -1,6 +1,6 @@
 # Architecture
 
-This document is a map of VinaX: the two deployed services, the app shell and its routes, how the look is applied (app style, theme, accent, festival skin, and the chat styles of VinaX AI), the stores and how they persist, the catalogue client, the audio engine with its media session and native bridge, Listen Together, the service worker, the Worker's routes and the owner console. Each section names the files to open.
+This document is a map of VinaX: the two deployed services and the database behind the Worker, the app shell and its routes, how the look is applied (app style, theme, accent, festival skin, and the chat styles of VinaX AI), the stores and how they persist, the catalogue client, the audio engine with its media session and native bridge, Listen Together, the service worker, the Worker's routes, its data layer and scheduled jobs, and the owner console. Each section names the files to open.
 
 ## The pieces
 
@@ -28,13 +28,25 @@ This document is a map of VinaX: the two deployed services, the app shell and it
 │ backend/worker  (edge Worker "vinax-api")                            │
 │  host middleware ─ exact routes ─ dynamic routes ─ /api/cat/* ─ hubs │
 │  anything unmatched ─► the static site                               │
-│  /api/*  AI lanes, catalogue proxy, events, push, rooms, admin       │
+│  /api/*  AI lanes, catalogue proxy, sign-in + sync, events, rooms,   │
+│          push, status, the owner console's API                       │
 │  hub pages (/<lang>-<mood>-songs)  edge-rendered for crawlers        │
 │  /sitemap*  /img  /apk                                               │
+│  scheduled handler (Cron Trigger, every 30 min)                      │
+└──────────────────────────────┬───────────────────────────────────────┘
+                               │ _lib/db.ts (service-role key, 8 s deadline)
+                               ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│ one hosted database  (backend/supabase/schema.sql)                   │
+│  listeners · accounts · account_backups · events · ai_calls          │
+│  feedback · blocked_content · rooms · room_members · push_devices    │
+│  notifications · settings (+history) · experiments · audit_log       │
+│  uptime_days · uptime_latest · job_runs · meta                       │
+│  view directory · functions stats_* · RLS forced, no policies        │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-VinaX deploys as two services: the static site and the Worker. The frontend is a static build. The Worker owns every dynamic URL on the same domain, so the app calls same-origin paths and needs no cross-origin setup on the web. The Android app runs the same bundle from a local origin, so its clients call the production origin by absolute URL (see `isNativePlatform()` checks in `src/services/ai/*.ts` and `src/services/analytics/telemetry.ts`).
+VinaX deploys as two services plus one database: the static site, the Worker, and the hosted database only the Worker talks to ([database.md](database.md)). The frontend is a static build. The Worker owns every dynamic URL on the same domain, so the app calls same-origin paths and needs no cross-origin setup on the web. The Android app runs the same bundle from a local origin, so its clients call the production origin by absolute URL (see `isNativePlatform()` checks in `src/services/ai/*.ts` and `src/services/analytics/telemetry.ts`).
 
 | Layer | Packages (from `frontend/package.json` and `backend/package.json`) |
 | --- | --- |
@@ -42,7 +54,7 @@ VinaX deploys as two services: the static site and the Worker. The frontend is a
 | State | `zustand` 4 with its `persist` middleware; `@tanstack/react-query` 5 for catalogue reads |
 | Build | `vite` 8, `typescript` 5; `vitest` 4 for unit tests; `playwright-core` for browser tests |
 | Android | `@capacitor/*` 8 plus four Java files in `frontend/native-android/` |
-| Backend | One Worker deployed with `wrangler` 4; no framework |
+| Backend | One Worker deployed with `wrangler` 4; no framework. The database is reached over its REST interface with `fetch` (`_lib/db.ts`); no client library |
 
 ## App shell
 
@@ -178,7 +190,7 @@ Before 10.0 a session lived in the Listen Together page's component state: a hos
 
 **Reactions.** Each poll returns the last few seconds of reactions; `ReactionFeed` identifies them by stamp and emoji instead of comparing server time with the device clock, primes on the first poll so nothing from before you arrived floats, and skips the echo of your own tap.
 
-**Server.** `functions/api/room.ts` keeps rooms and members in the database. It sizes its per-address rate limits for a room on one Wi-Fi (about six devices behind one address: 200 GETs, 90 heartbeats, 60 updates, 30 requests and 30 reactions a minute), and when the database lacks the atomic request-append function it falls back to a read-modify-write instead of failing every guest request.
+**Server.** `functions/api/room.ts` keeps a room in the `rooms` table (code, host token, the current song, the host's queue, guests' requests, position, play state) and its members in `room_members`. The six-character code is the join credential; the host token, returned once on `create`, authorises `update` and `end`. A guest's `request` is appended by the database function `room_request`, so two guests asking at once never lose an entry; `react` and `heartbeat` write the member's own row. Rooms idle for six hours are swept by the housekeeping job. Without the database secrets every verb answers `503 not_configured`, which the engine treats as the room being unavailable.
 
 ## Service worker
 
@@ -210,14 +222,25 @@ A matched module with no handler for the request method answers `405`.
 | --- | --- |
 | `/api/dj`, `/api/curate`, `/api/playlist`, `/api/vinaxai`, `/api/aimodels`, `/api/assistant`, `/api/tts`, `/api/voices`, `/api/lyrics-tools`, `/api/image`, `/api/embed` (8.2) | AI features — see [ai.md](ai.md) |
 | `/api/cat/*`, `/api/preview`, `/api/trending-searches`, `/api/blocklist` | Catalogue and content |
-| `/api/events`, `/api/feedback`, `/api/geo`, `/api/username`, `/api/handoff`, `/api/room` | Consent-gated telemetry, feedback, coarse region, username claims, device transfer relay, Listen Together rooms |
-| `/api/appconfig`, `/api/experiments`, `/api/announcements`, `/api/site-mode`, `/api/version`, `/api/status`, `/api/apk` | Published client configuration, flags, announcements, maintenance mode, version, status probes, Android update source |
-| `/api/push/*`, `/api/cron/*` | Push subscription and the scheduled jobs the workflows call with `x-cron-secret` |
-| `/api/admin/*` | Owner console data and actions, all behind server-side admin auth — see [admin-console.md](admin-console.md). A failed database read answers `502` with its kind (unavailable, unauthorized, schema missing, bad request), never an empty `200`; every database request has a deadline (`_lib/supabase.ts`). |
+| `/api/events`, `/api/feedback`, `/api/geo`, `/api/username`, `/api/handoff`, `/api/room` | Consented usage events (an `events` row and the device's `listeners` row; the device is resolved by `_lib/identity.ts`), feedback (a `feedback` row), coarse region, the handle on the device's `listeners` row (`409 taken` with suggestions), device transfer relay (the `HANDOFF` key-value binding), Listen Together rooms (`rooms`, `room_members`) |
+| `/api/appconfig`, `/api/experiments`, `/api/announcements`, `/api/site-mode`, `/api/version`, `/api/status`, `/api/apk` | Client configuration from the `settings` table, sanitised by `_lib/clientConfig.ts` and cached at the edge; active `experiments`; the `announcement` setting; site mode and the maintenance window; live status probes plus the 90-day history from `uptime_report`; Android update source |
+| `/api/push/*` | The public VAPID key; subscribe and register write `push_devices` rows (channel `web` or `fcm`); unsubscribe switches one off |
+| `/api/auth/*`, `/api/account/data` | Google sign-in with a signed 30-day session and an `accounts` row (refreshed on the session check); the synced copy in `account_backups` with optimistic versions (`200`, `204`, `409`) |
+| `/api/cron/run` | Runs one scheduled job now, with `x-cron-secret` or the owner token |
+| `/api/trends`, `/api/ai/headlines` | Always empty (`sources: []`, `topics: []`): the trend pipeline and the headlines job have no store in the 14.0 schema |
+| `/api/admin/*` | The owner console's API, all behind server-side admin auth — see [admin-console.md](admin-console.md) and the contract in [database.md](database.md#admin-api) |
+
+### The data layer
+
+`backend/worker/functions/_lib/db.ts` is the only code that talks to the database: a small client over the database's REST interface with the service-role key, a query builder that encodes every value, an 8-second deadline on every request, transparent paging for reads above 1,000 rows, and result objects that never throw (`{ ok, rows }` or `{ ok: false, error }` where `error` is `not_configured`, `unauthorized`, `not_found`, `conflict`, `bad_request` or `unavailable`). Beside it: `edge.ts` (edge geo, platform and version headers, clipping helpers), `identity.ts` (signed device ids), `settings.ts` (the published-settings vocabulary and a one-minute memo), `audit.ts` (the audit trail with redaction) and `aiLog.ts` (one `ai_calls` row per model call). Every route follows the same rules: a public route without the database answers the shape the app already handles; an admin GET answers `{ configured: false }`, and a failed call answers `502` with the reason, never a zero.
+
+### Scheduled jobs
+
+`index.ts` exports a `scheduled` handler next to `fetch`. The Cron Trigger in `wrangler.toml` fires it every 30 minutes; `_lib/jobs.ts` runs the status tick every time and housekeeping once an hour, and records each run in `job_runs`. [operations.md](operations.md#scheduled-jobs) covers running a job by hand and reading the Jobs tab.
 
 ## Owner console
 
-`frontend/public/admin/` is a separate static page (plain scripts, no build step) that ships inside the frontend build and is served at `/admin/`. It holds no secrets. `index.html` carries the frame (a `<header id="topbar">` and the section workspace), `console.css` the styling, and `app.js` publishes shared helpers on `window.VXA` (`stateLoading`, `stateEmpty`, `stateError`, `toast`, `esc`, `html`) that the section scripts in `sections/` use for their loading, empty and error states and their notices. Every read and write goes to `/api/admin/*`, where the Worker checks the admin session on each request. What the owner publishes there — feature flags, the Home layout, banners, search synonyms, disabled catalogue bases, announcements — reaches the app through `/api/appconfig` and related public routes, which the app reads with a 5-minute stale time (`features/home/useAppConfig.ts`). [admin-console.md](admin-console.md) has the details.
+`frontend/public/admin/` is a separate static page (plain scripts, no build step) that ships inside the frontend build and is served at `/admin/`. It holds no secrets and never talks to the database. `index.html` carries the frame, `console.css` the styling, `core.js` the framework (`window.VX`: DOM builder, API client, components, charts, page registry), one file per page under `pages/`, and `app.js` the shell. Every read and write goes to `/api/admin/*`, where the Worker checks the owner token on each request and writes an audit row for every change. What the owner publishes lands in the `settings` table; `/api/appconfig` and the related public routes read it (memoised a minute, cached at the edge), and the app reads those with a 5-minute stale time (`features/home/useAppConfig.ts`). [admin-console.md](admin-console.md) has the details.
 
 ## How a play flows
 
@@ -250,4 +273,13 @@ seed song ─► candidates (inside the plan's deadline) ─► hard filter ─�
                  └─ plan.refinement (AI DJ, bounded) ─► validation ─► gate ─► automatic entries not yet started
 ```
 
-**Owner settings reach clients.** The console writes one row per key through `/api/admin/*` (server-side auth on every request, an audit row per change); the app reads them through `/api/appconfig` and related public routes, sanitised again on the way out and cached for up to a few minutes. [admin-console.md](admin-console.md) has the table of keys.
+**Owner settings reach clients.** The console writes one `settings` row per key through `POST /api/admin/settings` (server-side auth on every request, the change appended to `settings_history`, an audit row); the app reads them through `/api/appconfig` and related public routes, sanitised on the way out by `_lib/clientConfig.ts` and cached for up to a few minutes. [admin-console.md](admin-console.md#published-settings) has the table of keys.
+
+**Consented usage becomes the console's numbers.**
+
+```text
+app (usage sharing on) ─POST /api/events + x-vinax-consent─► Worker
+   identity.ts resolves the device (signed id ▸ install id ▸ fresh) ─► events row + listeners row (latest state)
+   ─► stats_* functions in the database ─► /api/admin/overview · live · listeners · analytics ─► console
+   housekeeping purges events older than settings.retention.eventsDays
+```

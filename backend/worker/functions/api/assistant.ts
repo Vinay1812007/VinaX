@@ -3,13 +3,12 @@
  * client sends a short message history and gets one reply. Conversation is
  * never stored: no user id, no persistence, consistent with no-login privacy.
  */
-import { aiBlockCode, aiGate, chat, isAiBlocked, logAiEvent, logAiRefusal, type AiBlock, type AiEnv } from '../_lib/ai';
+import { chat, type AiEnv } from '../_lib/ai';
 import { APP_KNOWLEDGE } from '../_lib/appknowledge';
 import { readJsonCapped } from '../_lib/body';
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { MUSIC_CONDUCT, tasteBlock } from '../_lib/taste';
 import { istNowLine } from '../_lib/time';
-import { type SupabaseEnv } from '../_lib/supabase';
 
 const SYSTEM_PROMPT = `You are VinaX Assistant — the friendly helper built into VinaX (vinaxmusic.online), a free, private, no-login music app with its heart in Indian music (Telugu, Hindi, Tamil and nine more languages). Listeners bring you anything: everyday questions, writing, translations, quick math, advice — help the way a great general assistant would, warm and concise, a few short sentences unless the question truly needs more. If anyone asks who made or built you: "VinaX built me" — no AI vendor or model is ever named.
 
@@ -63,7 +62,7 @@ export const onRequestGet = async (): Promise<Response> => methodNotAllowed();
 
 export const onRequestPost = async (context: {
   request: Request;
-  env: AiEnv & SupabaseEnv;
+  env: AiEnv;
   waitUntil?: (p: Promise<unknown>) => void;
 }): Promise<Response> => {
   try {
@@ -78,21 +77,12 @@ export const onRequestPost = async (context: {
 
 async function handlePost(context: {
   request: Request;
-  env: AiEnv & SupabaseEnv;
+  env: AiEnv;
   waitUntil?: (p: Promise<unknown>) => void;
 }): Promise<Response> {
   const { request, env } = context;
-  const isApp = request.headers.get('x-vinax-client') === 'app';
   const limited = await rateLimitAsync(request, 'assistant', { capacity: 20, refillPerMinute: 10 }, env);
   if (limited) return limited;
-  // 7.2.0 — the owner's AI switches and spend caps.
-  // Refusals are logged (error ai_disabled / ai_over_budget) for the console.
-  const refuse = (b: AiBlock): Response => {
-    void logAiRefusal(env, 'assistant', b, isApp ? 'app' : 'web', context.waitUntil);
-    return json({ error: aiBlockCode(b) }, 503);
-  };
-  const blocked = await aiGate(env, 'assistant');
-  if (blocked) return refuse(blocked);
   // Capped read — content-length is absent on a chunked body, so the read caps too.
   const read = await readJsonCapped<{ messages?: InMsg[]; taste?: unknown } | null>(request, MAX_BODY_BYTES);
   if (!read.ok) return read.reason === 'too_large' ? json({ error: 'too_large' }, 413) : json({ error: 'bad_request' }, 400);
@@ -116,24 +106,9 @@ async function handlePost(context: {
     [{ role: 'system', content: sysPrompt }, ...history],
     // 8.2.0 — the default ladder now ends with the flagship lane (when its key
     // is set), and a blank or prompt-echo reply asks the next engine.
-    { temperature: 0.65, lane: 'chat', maxTokens: 950, timeoutMs: 15_000, deadlineAt: t0 + 28_000, feature: 'assistant', accept: usableReply },
+    { temperature: 0.65, lane: 'chat', maxTokens: 950, timeoutMs: 15_000, deadlineAt: t0 + 28_000, accept: usableReply },
   );
-  if (isAiBlocked(r.error)) return refuse(r.error);
   const reply = r.error ? null : (r.content ?? '').trim();
-  if (r.error !== 'not_configured') {
-    const log = logAiEvent(env, {
-      feature: 'assistant',
-      model: r.model ? `${r.model} @${r.keyRole ?? '?'}` : null,
-      ok: !!reply,
-      status: r.status ?? null,
-      error: r.error ?? (reply ? null : 'empty'),
-      client: isApp ? 'app' : 'web',
-      latency_ms: Date.now() - t0,
-      prompt_tokens: r.usage?.prompt_tokens,
-      completion_tokens: r.usage?.completion_tokens,
-    });
-    if (typeof context.waitUntil === 'function') context.waitUntil(log);
-  }
   if (r.error === 'not_configured') return json({ error: 'ai_not_configured' }, 503);
   // An upstream rate limit (or every lane cooling down) is "busy", not a crash.
   if (!reply) return json({ error: r.error ?? 'empty', status: r.status }, r.status === 429 ? 429 : 500);

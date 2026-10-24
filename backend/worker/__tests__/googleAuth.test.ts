@@ -1,15 +1,18 @@
 /**
  * 12.2 — Google sign-in: ID tokens are checked against Google's keys (here a
  * key pair made in the test, served by a mocked key endpoint), sessions are
- * signed and expire, and the routes link a username only for a device that
- * proves it owns it. No network.
+ * signed and expire. Without a database the routes answer from the session
+ * alone; with one (14.0) the `accounts` row is written at sign-in and read on
+ * the session check. No network beyond the mocked key endpoint and the fake
+ * database.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { issueSession, readSession, resetGoogleKeys, verifyGoogleIdToken } from '../functions/_lib/googleAuth';
+import { signId } from '../functions/_lib/identity';
+import { DB_ENV, fakeDb } from './helpers/fakeDb';
 
 const CLIENT = '152181244509-test.apps.googleusercontent.com';
 const ENV = { GOOGLE_CLIENT_ID: CLIENT, AUTH_SECRET: 'auth-secret-for-tests', DEVICE_ID_SECRET: 'device-secret-for-tests' };
-const DB = { SUPABASE_URL: 'https://db.example.test', SUPABASE_SERVICE_ROLE_KEY: 'svc' };
 
 const b64url = (b: Uint8Array): string => btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const enc = (o: unknown): string => b64url(new TextEncoder().encode(JSON.stringify(o)));
@@ -26,7 +29,7 @@ const now = Math.floor(Date.now() / 1000);
 const good = (over: Record<string, unknown> = {}) => ({ iss: 'https://accounts.google.com', aud: CLIENT, sub: '110000000000000000001', email: 'listener@example.com', email_verified: true, name: 'A Listener', picture: 'https://lh3.example/p.jpg', iat: now, exp: now + 3600, ...over });
 
 interface Call { url: string; method: string; body: Record<string, unknown> | null }
-function stub(db: { username?: string | null } = {}): Call[] {
+function stub(): Call[] {
   const calls: Call[] = [];
   vi.stubGlobal('fetch', vi.fn(async (u: unknown, init?: RequestInit) => {
     const url = String(u);
@@ -35,8 +38,6 @@ function stub(db: { username?: string | null } = {}): Call[] {
     try { body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null; } catch { /* not JSON */ }
     calls.push({ url, method, body });
     if (url.startsWith('https://www.googleapis.com/oauth2/v3/certs')) return new Response(JSON.stringify({ keys: [{ ...publicJwk, kid: 'k1', alg: 'RS256', use: 'sig' }] }), { status: 200, headers: { 'cache-control': 'public, max-age=3600' } });
-    if (url.includes('/rest/v1/vinax_accounts') && method === 'GET') return new Response('[]', { status: 200 });
-    if (url.includes('/rest/v1/vinax_users') && method === 'GET') return new Response(JSON.stringify(db.username !== undefined ? [{ username: db.username }] : []), { status: 200 });
     return new Response(null, { status: 201 });
   }));
   return calls;
@@ -83,50 +84,89 @@ describe('sessions', () => {
 describe('POST /api/auth/google and /api/auth/me', () => {
   const post = (body: unknown): Request => new Request('https://example.test/api/auth/google', { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': '10.99.0.1' }, body: JSON.stringify(body) });
 
-  it('signs in, stores the account, and links the username only for a device that proves it owns it', async () => {
+  it('without a database: signs in from the Google token alone, stores nothing, and the session opens /api/auth/me', async () => {
     const { onRequestPost } = await import('../functions/api/auth/google');
-    let calls = stub({ username: 'vinay' });
-    let res = await onRequestPost({ request: post({ credential: await token(good()), signed_device_id: 'forged.value' }), env: { ...ENV, ...DB } });
+    const calls = stub();
+    const res = await onRequestPost({ request: post({ credential: await token(good()), signed_device_id: 'forged.value' }), env: ENV });
     expect(res.status).toBe(200);
-    let out = (await res.json()) as { session: string; stored: boolean; user: { username: string | null; email: string } };
-    expect(out.user).toMatchObject({ email: 'listener@example.com', username: null });
-    expect(out.stored).toBe(true);
-    expect(calls.some((c) => c.url.includes('vinax_users'))).toBe(false);
-    const row = calls.find((c) => c.url.includes('/rest/v1/vinax_accounts') && c.method === 'POST')?.body;
-    expect(row).toMatchObject({ google_sub: '110000000000000000001', email: 'listener@example.com', email_verified: true, username: null });
-    // A real signed device id links the device's username.
-    const { resolveIdentity } = await import('../functions/_lib/identity');
-    const minted = await resolveIdentity(new Request('https://x.test'), ENV, { deviceId: 'install-abcdef123456' });
-    calls = stub({ username: 'vinay' });
-    res = await onRequestPost({ request: post({ credential: await token(good()), signed_device_id: minted.issued }), env: { ...ENV, ...DB } });
-    out = (await res.json()) as typeof out;
-    expect(out.user.username).toBe('vinay');
-    expect(calls.some((c) => c.url.includes('vinax_users'))).toBe(true);
-    // The session opens /api/auth/me.
+    const out = (await res.json()) as { session: string; stored: boolean; user: Record<string, unknown> };
+    expect(out.user).toEqual({ name: 'A Listener', email: 'listener@example.com', picture: 'https://lh3.example/p.jpg', username: null });
+    expect(out.stored).toBe(false);
+    // Only Google's key endpoint is ever called.
+    expect(calls.every((c) => c.url.startsWith('https://www.googleapis.com/'))).toBe(true);
     const me = await import('../functions/api/auth/me');
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify([{ google_sub: '110000000000000000001', email: 'listener@example.com', name: 'A Listener', picture: null, username: 'vinay' }]), { status: 200 })));
-    const r = await me.onRequestGet({ request: new Request('https://example.test/api/auth/me', { headers: { authorization: `Bearer ${out.session}` } }), env: { ...ENV, ...DB } });
-    expect(await r.json()).toEqual({ user: { name: 'A Listener', email: 'listener@example.com', picture: null, username: 'vinay' } });
-    const no = await me.onRequestGet({ request: new Request('https://example.test/api/auth/me', { headers: { authorization: 'Bearer vx1.bad.sig' } }), env: { ...ENV, ...DB } });
+    const r = await me.onRequestGet({ request: new Request('https://example.test/api/auth/me', { headers: { authorization: `Bearer ${out.session}` } }), env: ENV });
+    expect(r.status).toBe(200);
+    // No `user`: the app keeps the profile it got at sign-in.
+    expect(await r.json()).toEqual({ ok: true });
+    const no = await me.onRequestGet({ request: new Request('https://example.test/api/auth/me', { headers: { authorization: 'Bearer vx1.bad.sig' } }), env: ENV });
     expect(no.status).toBe(401);
   });
 
   it('a bad token is 401; no client id is 503; the key never reaches the reply', async () => {
     const { onRequestPost } = await import('../functions/api/auth/google');
     stub();
-    expect((await onRequestPost({ request: post({ credential: 'nope' }), env: { ...ENV, ...DB } })).status).toBe(401);
-    expect((await onRequestPost({ request: post({ credential: await token(good()) }), env: { ...DB, AUTH_SECRET: 'x' } })).status).toBe(503);
-    const ok = await onRequestPost({ request: post({ credential: await token(good()) }), env: { ...ENV, ...DB } });
+    expect((await onRequestPost({ request: post({ credential: 'nope' }), env: ENV })).status).toBe(401);
+    expect((await onRequestPost({ request: post({ credential: await token(good()) }), env: { AUTH_SECRET: 'x' } })).status).toBe(503);
+    const ok = await onRequestPost({ request: post({ credential: await token(good()) }), env: ENV });
     expect(await ok.text()).not.toContain('auth-secret-for-tests');
   });
 
-  it('deleting the account removes the row', async () => {
+  it('deleting the account needs a session and touches nothing remote', async () => {
     const { issueSession: issue } = await import('../functions/_lib/googleAuth');
     const me = await import('../functions/api/auth/me');
     const calls = stub();
-    const s = await issue(ENV, '110000000000000000001');
-    const res = await me.onRequestPost({ request: new Request('https://example.test/api/auth/me', { method: 'POST', headers: { authorization: `Bearer ${s}`, 'content-type': 'application/json', 'cf-connecting-ip': '10.99.0.2' }, body: JSON.stringify({ delete: true }) }), env: { ...ENV, ...DB } });
+    const s = (await issue(ENV, '110000000000000000001')) as string;
+    const del = (session: string) => new Request('https://example.test/api/auth/me', { method: 'POST', headers: { authorization: `Bearer ${session}`, 'content-type': 'application/json', 'cf-connecting-ip': '10.99.0.2' }, body: JSON.stringify({ delete: true }) });
+    const res = await me.onRequestPost({ request: del(s), env: ENV });
     expect(res.status).toBe(200);
-    expect(calls.some((c) => c.method === 'DELETE' && c.url.includes('vinax_accounts?google_sub=eq.110000000000000000001'))).toBe(true);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(calls).toHaveLength(0);
+    expect((await me.onRequestPost({ request: del('vx1.bad.sig'), env: ENV })).status).toBe(401);
+  });
+});
+
+describe('14.0 — sign-in with the database', () => {
+  const DB = { ...ENV, ...DB_ENV };
+  const googleKeys = (url: string) => (url.startsWith('https://www.googleapis.com/oauth2/v3/certs')
+    ? new Response(JSON.stringify({ keys: [{ ...publicJwk, kid: 'k1', alg: 'RS256', use: 'sig' }] }), { status: 200, headers: { 'cache-control': 'public, max-age=3600' } })
+    : new Response('{}', { status: 404 }));
+  const post = (body: unknown, headers: Record<string, string> = {}): Request => new Request('https://example.test/api/auth/google', { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': '10.99.1.1', 'cf-ipcountry': 'IN', ...headers }, body: JSON.stringify(body) });
+  const LISTENER = 'd_' + 'ef'.repeat(16);
+
+  it('writes the account row, links only a PROVED device, and answers the linked handle', async () => {
+    const fake = fakeDb({ listeners: [{ id: LISTENER, handle: 'vinay' }] }, googleKeys);
+    const { onRequestPost } = await import('../functions/api/auth/google');
+    // A forged device claim links nothing.
+    const first = await onRequestPost({ request: post({ credential: await token(good()), signed_device_id: `${LISTENER}.forged`, platform: 'android', appVersion: '14.0.0' }), env: DB });
+    expect(first.status).toBe(200);
+    const out1 = (await first.json()) as { stored: boolean; user: { username: string | null } };
+    expect(out1.stored).toBe(true);
+    expect(out1.user.username).toBeNull();
+    expect(fake.rows('accounts')[0]).toMatchObject({ id: '110000000000000000001', email: 'listener@example.com', email_verified: true, name: 'A Listener', listener_id: null, platform: 'android', app_version: '14.0.0', country: 'IN' });
+    // The real signed id links the device and the handle comes back.
+    const signed = await signId(ENV.DEVICE_ID_SECRET, LISTENER);
+    const second = await onRequestPost({ request: post({ credential: await token(good()), signed_device_id: signed }), env: DB });
+    const out2 = (await second.json()) as { user: { username: string | null } };
+    expect(out2.user.username).toBe('vinay');
+    expect(fake.rows('accounts')).toHaveLength(1);
+    expect(fake.rows('accounts')[0].listener_id).toBe(LISTENER);
+  });
+
+  it('the session check answers the account, refreshes it, signs out when the row is gone, and delete removes the row', async () => {
+    const fake = fakeDb({ accounts: [{ id: '42', email: 'e@x', email_verified: true, name: 'N', picture: null, listener_id: null, last_seen: '2026-01-01T00:00:00Z' }] });
+    const me = await import('../functions/api/auth/me');
+    const s = (await issueSession(DB, '42'))!;
+    const r = await me.onRequestGet({ request: new Request('https://example.test/api/auth/me', { headers: { authorization: `Bearer ${s}`, 'cf-ipcountry': 'IN' } }), env: DB });
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ user: { name: 'N', email: 'e@x', picture: null, username: null } });
+    // The stale last_seen was refreshed (awaited: no waitUntil in the test).
+    expect(fake.rows('accounts')[0].last_seen).not.toBe('2026-01-01T00:00:00Z');
+    expect(fake.rows('accounts')[0].country).toBe('IN');
+    const other = (await issueSession(DB, '43'))!;
+    expect((await me.onRequestGet({ request: new Request('https://example.test/api/auth/me', { headers: { authorization: `Bearer ${other}` } }), env: DB })).status).toBe(401);
+    const del = await me.onRequestPost({ request: new Request('https://example.test/api/auth/me', { method: 'POST', headers: { authorization: `Bearer ${s}`, 'content-type': 'application/json', 'cf-connecting-ip': '10.99.1.9' }, body: JSON.stringify({ delete: true }) }), env: DB });
+    expect(await del.json()).toEqual({ ok: true });
+    expect(fake.rows('accounts')).toHaveLength(0);
   });
 });

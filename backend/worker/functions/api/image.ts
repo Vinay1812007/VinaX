@@ -7,19 +7,18 @@
  *    200  { image: <data URL>, model: <published name>, modelId, provider }
  *    400  { error: 'bad_request' | 'unknown_model' }   (a pick that is not on
  *         the live free list is refused, never forwarded)
- *    503  { error: 'not_configured', reason } | { error: 'ai_disabled' | 'ai_over_budget' }
+ *    503  { error: 'not_configured', reason }
  *    502  { error: <upstream reason>, status }
  *  No pick → the first free image model available (NVIDIA's hosted models,
  *  then OpenRouter's free ones), and on failure the next one. An exact pick
  *  runs alone. The model list lives in _lib/catalog.ts, the provider calls in
  *  _lib/media.ts. */
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
-import { aiBlockCode, aiGate, logAiEvent, logAiRefusal, noteProviderFailure, type AiEnv } from '../_lib/ai';
+import { noteProviderFailure, type AiEnv } from '../_lib/ai';
 import { readJsonCapped } from '../_lib/body';
 import { generateImage, pickMedia } from '../_lib/media';
-import { type SupabaseEnv } from '../_lib/supabase';
 
-type Env = AiEnv & SupabaseEnv;
+type Env = AiEnv;
 
 /** A prompt plus the two ids — nothing large belongs in this body. */
 const MAX_BODY_BYTES = 8_000;
@@ -61,19 +60,11 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
 
 const handleImage = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = context;
-  const client = request.headers.get('x-vinax-client') === 'app' ? 'app' : 'web';
   const read = await readJsonCapped<{ prompt?: unknown; provider?: unknown; model?: unknown } | null>(request, MAX_BODY_BYTES);
   if (!read.ok) return read.reason === 'too_large' ? json({ error: 'too_large' }, 413) : json({ error: 'bad_request' }, 400);
   const body = read.value && typeof read.value === 'object' ? read.value : null;
   const prompt = (typeof body?.prompt === 'string' ? body.prompt : '').trim().slice(0, 600);
   if (prompt.length < 3) return json({ error: 'bad_request' }, 400);
-  // 7.2.0 — the owner's AI switches and spend caps.
-  const blocked = await aiGate(env, 'image');
-  if (blocked) {
-    // Logged (error ai_disabled / ai_over_budget) for the console.
-    void logAiRefusal(env, 'image', blocked, client, context.waitUntil);
-    return json({ error: aiBlockCode(blocked) }, 503);
-  }
   // 10.3 — validated against the live free image list before any key is used.
   // No image model at all means the feature is unavailable, not that the
   // client sent a bad request — surface as 503 (audit finding M13).
@@ -84,16 +75,6 @@ const handleImage = async (context: { request: Request; env: Env; waitUntil?: (p
   for (const { provider, model } of pick.choices) {
     if (Date.now() - t0 > AUTO_BUDGET_MS) break;
     const r = await generateImage(env, provider, model.id, prompt);
-    const log = logAiEvent(env, {
-      feature: 'image',
-      model: `${model.id} @${provider}`,
-      ok: r.ok,
-      status: r.ok ? 200 : r.status,
-      error: r.ok ? null : r.reason,
-      client,
-      latency_ms: Date.now() - t0,
-    });
-    if (context.waitUntil) context.waitUntil(log);
     if (r.ok) {
       // Built by concatenation: the data URL is megabytes of base64.
       return new Response(

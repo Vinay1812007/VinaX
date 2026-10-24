@@ -296,7 +296,7 @@ export async function designShelves(env: AiEnv, data: Record<string, unknown>, b
       // 8.0.4 — the pitch round stays off the maestro lane (one call per Home
       // open is enough of its allowance: the curate below leads with it).
       ['scholar', 'fast'],
-      { temperature: 0.95, maxTokens: 900, timeoutMs: 4_500, deadlineAt: Math.min(deadlineAt, Date.now() + 4_500), soloLadder: true, feature: 'curate-shelves' },
+      { temperature: 0.95, maxTokens: 900, timeoutMs: 4_500, deadlineAt: Math.min(deadlineAt, Date.now() + 4_500), soloLadder: true },
     );
     const seen = new Set<string>();
     for (const g of gathered) for (const s of parseShelves(g, taste)) if (!seen.has(key(s.title))) { seen.add(key(s.title)); ideas.push(s); }
@@ -312,7 +312,7 @@ export async function designShelves(env: AiEnv, data: Record<string, unknown>, b
     ],
     // The flagship lane leads when its key is set; scholar answered the old
     // curate in 1.3 s live, so it is the first failover.
-    { temperature: 0.85, lane: 'maestro', ladder: ['scholar', 'dj', 'fast', 'chat'], json: true, maxTokens: 900, reasoningEffort: 'low', firstTimeoutMs: 6_000, timeoutMs: 5_000, skipSecondary: true, deadlineAt, feature: 'curate-shelves' },
+    { temperature: 0.85, lane: 'maestro', ladder: ['scholar', 'dj', 'fast', 'chat'], json: true, maxTokens: 900, reasoningEffort: 'low', firstTimeoutMs: 6_000, timeoutMs: 5_000, skipSecondary: true, deadlineAt },
   );
   let sections = r.error ? [] : filterAvoided(parseShelves(r.content, taste), data.avoidShelves);
   let usedAi = sections.length >= 2;

@@ -2,7 +2,7 @@
 
 VinaX is a free music app with no sign-up. It plays from a public catalogue, learns a listener's taste on their own device, and builds what plays next from that. It ships as a web app and an Android app from one codebase, backed by one edge Worker, and includes VinaX AI, a chat assistant that can play music, search the web and cite its sources. The current release is 12.0.0, shown to listeners as "VinaX 12". This README covers what a listener gets, how the code is put together, how to run and check it, how a release is made, and where the rest of the documentation is.
 
-[Documentation index](docs/README.md) · [User guide](docs/user-guide/README.md) · [Deployment](DEPLOYMENT.md) · [Operations](docs/operations.md)
+[Documentation index](docs/README.md) · [User guide](docs/user-guide/README.md) · [Deployment](DEPLOYMENT.md) · [Operations](docs/operations.md) · [Database](docs/database.md)
 
 ## What a listener gets
 
@@ -10,15 +10,12 @@ VinaX is a free music app with no sign-up. It plays from a public catalogue, lea
 - **A queue that builds itself.** Tap a song and the queue fills five songs at a time. AI Radio plays endlessly from a song, an artist, a mood or a few words. Pin a mood or Tune this queue rebuilds Up Next at once; Familiar, Balanced and Discover set how adventurous the picks are.
 - **A full player.** Reorderable queue, synced lyrics where available, sleep timer, crossfade, sound settings, lock-screen and headset controls, casting, drive mode and karaoke. A video canvas plays the song's clip behind the player, with a full-screen view (double-tap to like, a quality chip that plays the best rendition the source has). Flow is a full-screen feed of song previews.
 - **A library on the device.** Favourites, playlists, Listen Later, smart collections, history and listening stats. One-file backup with preview, merge or replace, and Undo; an encrypted one-time link moves everything to another device.
-- **Listen Together.** A room with a code, a QR and an invite link. The session follows the listener across the app and guests stay in time with the host.
 - **VinaX AI.** A chat that knows a summary of the listener's taste and can play or queue the songs it mentions.
   - **Models.** Auto picks a model for each question and moves on by itself when one is busy, or the listener picks any free model from the providers configured for the deployment, listed under its real name. The chat restyles itself to match the selected model's family, or stays on one of its own styles.
   - **Web search with sources.** When a question needs current information, it searches the web, shows what it is searching for, and links each fact to a source chip that shows the site's logo. Answers that use the web can show pictures from the search.
   - **Deep research.** A switch in the + menu: it plans several searches, runs them together and writes a longer report with every fact linked to its source.
   - **Visible reasoning.** When a model thinks before answering, its reasoning shows while it works, then folds away as "Thought for Ns".
-  - **Trending now.** An empty chat shows current news and tech headlines; tapping one asks VinaX AI for the latest on that story.
   - Also: attachments (pictures, text and code files, PDF), dictation, live voice and read-aloud, image creation, running code, projects, an opt-in memory, temporary chats, short automatic chat titles and instant replies to small talk.
-- **Notifications.** Opt-in push notifications on the web and in the Android app: song picks sent on a schedule, and messages from the owner.
 - **Looks.** Six app styles (Aura is the default), each with dark, light and true-black themes and every accent. On a festival's days the app takes that festival's colours and backdrop and offers a greeting card once; any of the 43 festival skins can be previewed in Settings → Appearance.
 - **Comfort.** Keyboard shortcuts, reduced motion, high contrast, display size, Kid mode, app language and guided tours.
 - **Android app.** The same app with background playback, notification and lock-screen controls, home-screen widgets, offline downloads, push notifications and in-app updates.
@@ -39,21 +36,31 @@ The website shows one labelled advertisement at the end of song, artist, album, 
                          │ same origin (/api, /img, /apk)
  ┌───────────────────────▼───────────────────────┐
  │ backend/worker  edge Worker "vinax-api"       │
- │  /api/*: catalogue proxy, AI, push, rooms,    │
- │          events, cron jobs, owner console     │
+ │  /api/*: catalogue proxy, AI, sign-in and     │
+ │          sync, usage events, rooms, push,     │
+ │          status, the owner console's API      │
  │  language-and-mood pages, /sitemap*, /img,    │
  │  /apk; anything unmatched → the static site   │
+ │  Cron Trigger every 30 min: status tick,      │
+ │  housekeeping                                 │
  └───────────────────────┬───────────────────────┘
-                         │ service key (Worker only)
-                  hosted database: configuration, events,
-                  rooms, push registrations, AI call log
+                         │ service-role key (Worker secret)
+ ┌───────────────────────▼───────────────────────┐
+ │ one hosted database  (backend/supabase/)      │
+ │  listeners, accounts + backups, events,       │
+ │  ai_calls, feedback, blocked content, rooms,  │
+ │  push devices, notifications, settings,       │
+ │  experiments, audit log, uptime, job runs     │
+ └───────────────────────────────────────────────┘
 ```
+
+Since 14.0 the Worker has one hosted database, designed from a clean sheet: the whole schema is one file, `backend/supabase/schema.sql`, and the Worker reaches it with two secrets (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`). Row-level security is forced on every table with no policy, so only the Worker's key can read or write; the app and the owner console never hold a database key. A listener's library, history and settings still live on the device; a signed-in listener's copy syncs to the account. [docs/database.md](docs/database.md) is the reference.
 
 | Piece | What it is | How it deploys |
 | --- | --- | --- |
 | Static frontend | `frontend/` built to `dist/`: a single-page app in which every page is a lazy chunk, plus the prerendered static routes, the owner console (`/admin/`) and the status page (`/status/`) | The static host's Git integration builds `frontend/` on every push to `main`. No workflow in this repository deploys it. |
-| Worker `vinax-api` | `backend/worker/`: one Worker, no framework. It answers only the routes listed in `backend/worker/wrangler.toml`; everything else falls through to the static site. It also has a key-value store for device-transfer links, rate-limit bindings and a built-in AI binding. | The **Deploy Worker** workflow on a push to `main` that touches `backend/**`. |
-| Database | Configuration, usage events (only with usage sharing on), feedback, usernames, Listen Together rooms, push registrations and the AI call log. Reached only by the Worker, with a service key. SQL lives in `frontend/supabase/`. | Migrations are applied by the owner by hand ([docs/operations.md](docs/operations.md)). |
+| Worker `vinax-api` | `backend/worker/`: one Worker, no framework. It answers only the routes listed in `backend/worker/wrangler.toml`; everything else falls through to the static site. It also has a key-value store for device-transfer links, rate-limit bindings, a built-in AI binding and a Cron Trigger. | The **Deploy Worker** workflow on a push to `main` that touches `backend/**`. |
+| Database | One hosted project; the schema is `backend/supabase/schema.sql` (tables, the `directory` view, the `stats_*` functions, deny-all row-level security). The Worker is its only client. | Paste `schema.sql` into the project's SQL editor once (it is idempotent); set the two Worker secrets ([docs/database.md](docs/database.md#setting-it-up)). |
 | Android package | The same bundle in a generated wrapper project with a native media service | **Build Android APK** on every push to `main`; **Release APK** on a `v*` tag. |
 
 The two halves deploy separately and either can fail alone. The frontend holds no secrets: `VITE_*` variables are visible to every visitor. Main packages, for orientation: `react`, `react-router-dom`, `zustand`, `@tanstack/react-query` and `tailwindcss`, built with `vite`; `@capacitor/*` for Android; `wrangler` for the Worker; `vitest` and `playwright-core` for tests. The full map is in [docs/architecture.md](docs/architecture.md).
@@ -78,17 +85,18 @@ frontend/
   e2e/                        browser test specs and their harness
   eval/                       offline evaluation of next-song selection
   native-android/, android-res/   native code and resources copied into the generated Android project
-  supabase/                   database schema and migrations
 backend/
-  worker/index.ts             the router
-  worker/functions/api/       public, AI (ai/), cron (cron/), push and admin (admin/) endpoints
-  worker/functions/_lib/      shared code: AI lanes, catalogue, admin auth, rate limits, push, web search, headlines
+  worker/index.ts             the router and the scheduled handler
+  worker/functions/api/       public, AI (ai/), auth (auth/), account, push, cron and admin (admin/) endpoints
+  worker/functions/_lib/      shared code: the database client (db.ts) and its companions, AI lanes, catalogue, admin auth, rate limits, web search
   worker/__tests__/           Worker tests
-  worker/wrangler.toml        Worker name, routes, vars, bindings, cron trigger
+  worker/wrangler.toml        Worker name, routes, vars, bindings, the Cron Trigger
+  supabase/schema.sql         the whole database: tables, view, functions, security (idempotent)
+  supabase/reset.sql          drops everything so schema.sql can start over
   scripts/                    an operator script for the zone's edge rules (see docs/operations.md)
 shared/identity-vectors.json  song-identity test vectors run by both packages
 docs/                         current documentation; docs/history/ holds dated records
-.github/workflows/            checks, deploys, Android builds and scheduled jobs
+.github/workflows/            checks, deploys, Android builds and the uptime probe
 ```
 
 [frontend/README.md](frontend/README.md) has a "where to change things" table; [backend/README.md](backend/README.md) describes the Worker's layout.
@@ -113,7 +121,7 @@ npm run dev
 
 Open `http://localhost:5173`. The dev server proxies `/api`, `/img` and `/apk` to the Worker on `127.0.0.1:8787` (`frontend/vite.config.ts`).
 
-Secrets are optional for a first run. Without them the catalogue works, AI routes answer "not configured" and the app uses its on-device paths, and the owner console cannot sign in. Local secrets go in `backend/worker/.dev.vars`, one `NAME=value` per line; the file is git-ignored. The names are documented in `backend/.env.example`. Never put a secret in a `VITE_*` variable.
+Secrets are optional for a first run. Without them the catalogue works, AI routes answer "not configured" and the app uses its on-device paths, and the owner console cannot sign in. Without the two database secrets the data features answer their "not configured" shapes (no sync, no rooms, no feedback, no push registration) and every console page that reads data shows its setup card. Local secrets go in `backend/worker/.dev.vars`, one `NAME=value` per line; the file is git-ignored. The names are documented in `backend/.env.example`. Never put a secret in a `VITE_*` variable.
 
 Other scripts:
 
@@ -171,7 +179,7 @@ npx wrangler deploy --config worker/wrangler.toml --dry-run --outdir /tmp/wrangl
 
 Full steps, release checks and what to do when a deploy does not land: [DEPLOYMENT.md](DEPLOYMENT.md). Rollback: [docs/operations.md](docs/operations.md#rollback).
 
-## Workflows and scheduled jobs
+## Workflows
 
 All in `.github/workflows/`. Times are UTC; scheduled workflows often start late. Every workflow with a schedule can also be run by hand.
 
@@ -184,23 +192,18 @@ All in `.github/workflows/`. Times are UTC; scheduled workflows often start late
 | `buildapk.yml` | Push to `main`, by hand | Builds the Android package; publishes a release when signing secrets are set |
 | `release.yml` | Push of a `v*` tag | Builds and publishes a signed Android release; refuses without the release keystore |
 | `diagnose.yml` | By hand, and when its own file changes | Checks that the live page's assets load and the app mounts in a headless browser; probes the catalogue route |
-| `synthetic-uptime.yml` | Every 30 minutes | Probes the live app shell and two Worker routes, runs `frontend/scripts/edge-integrity.mjs`, and opens one de-duplicated issue on failure |
-| `status-tick.yml` | Minutes 7 and 37 of every hour | `POST /api/status`: one round of status probes for the status page |
-| `ai-daily-push.yml` | 02:30, 07:30, 10:30, 15:30, 18:30 daily | Calls `/api/cron/ai-daily-push`, which composes and sends a song notification; the endpoint refuses to send again within 150 minutes |
-| `song-push.yml` | 13:30 daily | Calls `/api/cron/song-push`, which picks a song and notifies subscribed devices |
-| `trends-ingest.yml` | Minute 17 of every sixth hour | Calls `/api/cron/trends-ingest`: reads trend sources, matches them to catalogue songs, deletes expired data ([docs/trends.md](docs/trends.md)) |
-| `headlines.yml` | Minute 23 of every third hour | Calls `/api/cron/headlines` once to refresh the "Trending now" headlines; skips when web search is off or near its daily cap |
-| `weekly-digest.yml` | Monday 03:30 | Calls `/api/cron/weekly-digest` for the owner console's digest card |
+| `synthetic-uptime.yml` | Every 30 minutes | Probes the live app shell and two Worker routes, runs `frontend/scripts/edge-integrity.mjs`, and opens one de-duplicated issue on failure. It is an outside check; the status page's own history comes from the Worker's Cron Trigger |
 
-The Worker also has its own Cron Trigger (`[triggers]` in `wrangler.toml`, `7,37 * * * *`) that records the same status round, so the status page does not read "down" when the workflow runs late. The cron endpoints require a shared secret. Details: [docs/operations.md](docs/operations.md#scheduled-jobs).
+The data jobs do not run on the code host. The Worker's own Cron Trigger (`[triggers]` in `backend/worker/wrangler.toml`) fires every 30 minutes: the **status tick** probes the website, the catalogue and the console and records the result for the status page, and once an hour **housekeeping** sweeps idle rooms, purges usage events past the retention setting and retires push devices that stopped checking in. Every run is recorded in `job_runs` and shown on the console's Database page. Details: [docs/operations.md](docs/operations.md#scheduled-jobs).
 
 ## Configuration
 
-- **Worker secrets** are set on the Worker, never in `wrangler.toml` or in the frontend. `backend/.env.example` lists every name with what it does. [docs/operations.md](docs/operations.md#secrets) has the table of what each secret turns on and what happens without it, and covers the AI keys, web search and its daily caps, and the username human check.
+- **Worker secrets** are set on the Worker, never in `wrangler.toml` or in the frontend. `backend/.env.example` lists every name with what it does. [docs/operations.md](docs/operations.md#secrets) has the table of what each secret turns on and what happens without it, and covers the AI keys and web search with its daily caps.
+- **The database** is set up once with `backend/supabase/schema.sql` and the two secrets `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`: [docs/database.md](docs/database.md). Everything the owner publishes (banners, flags, Home layout, site mode, the announcement) is a row in its `settings` table, written from the console.
 - **Non-secret Worker settings** are the `[vars]` in `backend/worker/wrangler.toml`.
-- **Repository secrets** for deploying, signing the Android package and calling the cron endpoints are listed in [DEPLOYMENT.md](DEPLOYMENT.md) and [docs/operations.md](docs/operations.md#secrets).
+- **Repository secrets** for deploying and signing the Android package are listed in [DEPLOYMENT.md](DEPLOYMENT.md) and [docs/operations.md](docs/operations.md#secrets).
 - **Android background notifications** need extra setup: [docs/fcm-push-setup.md](docs/fcm-push-setup.md).
-- **AI behaviour** (providers, Auto, failover, web search, deep research, owner switches and spend caps): [docs/ai.md](docs/ai.md).
+- **AI behaviour** (providers, Auto, failover, web search, deep research): [docs/ai.md](docs/ai.md).
 
 ## Contributing rules that are enforced
 
@@ -224,6 +227,7 @@ Do not commit secrets, generated build folders (`dist/`, `frontend/android/`) or
 | --- | --- |
 | [docs/README.md](docs/README.md) | The full index and the documentation conventions |
 | [docs/architecture.md](docs/architecture.md) | The pieces and how data flows |
+| [docs/database.md](docs/database.md) | The database: setup, every table and function, the Worker's data layer, the admin API contract, scheduled jobs |
 | [docs/design-system.md](docs/design-system.md) | Tokens, app styles, themes, accents, festival skins, chat styles |
 | [docs/recommendations.md](docs/recommendations.md) | How the next song is chosen |
 | [docs/ai.md](docs/ai.md), [docs/ai-music.md](docs/ai-music.md), [docs/ai-assistant-matrix.md](docs/ai-assistant-matrix.md) | AI lanes and route contracts, the AI music experience, VinaX AI feature by feature |
@@ -237,6 +241,6 @@ Do not commit secrets, generated build folders (`dist/`, `frontend/android/`) or
 
 ## Privacy and legal
 
-Listeners sign in with a Google account. The account row holds the Google ID, email, name, picture and VinaX username, and one synced copy of the library, history, taste profile and settings; AI chats stay on the device ([docs/data-and-privacy.md](docs/data-and-privacy.md#your-google-account-130)). Searching, AI features, Listen Together, notifications and device transfer send only the fields listed in [docs/data-and-privacy.md](docs/data-and-privacy.md); AI calls are logged as counts and timings, without prompts or replies. Usage statistics are sent only when the listener opts in. The advertisement on the website's browsing pages is not covered by that choice and is described in the same document.
+Listeners sign in with a Google account. The account row holds the Google ID, email, name and picture, the linked device and coarse sign-in facts, and one synced copy of the library, history, taste profile and settings; AI chats stay on the device ([docs/data-and-privacy.md](docs/data-and-privacy.md#your-google-account)). Searching, AI features, Listen Together, notifications and device transfer send only the fields listed in [docs/data-and-privacy.md](docs/data-and-privacy.md); AI calls are logged as counts and timings, without prompts or replies. Usage statistics are sent only when the listener opts in and are purged after the retention period (180 days by default). A listener can delete their account and data from Settings; the owner can delete one person from the console. The advertisement on the website's browsing pages is not covered by the usage choice and is described in the same document.
 
 The repository carries no licence file. The legal position on content, takedowns and listener data is in [docs/legal-copyright.md](docs/legal-copyright.md).

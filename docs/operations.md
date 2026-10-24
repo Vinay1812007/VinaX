@@ -1,6 +1,6 @@
 # Operations
 
-This is the runbook for keeping VinaX running: how each piece deploys and how to tell when the Worker is behind the app, the one check that is always red, rollback, the request quota, secrets, scheduled jobs, monitoring, and the server-side controls an operator can reach (rate limits, AI switches and caps, the audit trail, maintenance mode). It ends with the short checklist for the 11.0 release. First-time setup is in [../DEPLOYMENT.md](../DEPLOYMENT.md). This is one of the documents where host names and secret names appear, because a maintainer has to type them.
+This is the runbook for keeping VinaX running: how each piece deploys and how to tell when the Worker is behind the app, the one check that is always red, rollback, the request quota, secrets, the database (moving to a new one, retention, deleting a listener), scheduled jobs, monitoring, and the server-side controls an operator can reach (rate limits). It ends with the short checklist for the 11.0 release. First-time setup is in [../DEPLOYMENT.md](../DEPLOYMENT.md); the schema and the admin API are in [database.md](database.md). This is one of the documents where host names and secret names appear, because a maintainer has to type them.
 
 ## Production at a glance
 
@@ -9,7 +9,9 @@ This is the runbook for keeping VinaX running: how each piece deploys and how to
 | Static frontend (`frontend/dist`) | The static-hosting project `vinax` (`vinax.pages.dev`, the `ASSETS_HOST` in `wrangler.toml`) | The host's Git integration builds `frontend/` on every push to `main` |
 | Worker `vinax-api` (`backend/worker`) | The edge, on the routes in `backend/worker/wrangler.toml`: `/api/*`, the language-and-mood landing pages, `/sitemap*`, `/img`, `/apk`, and the `update.` and `admin.` hosts | The **Deploy Worker** workflow (the path that works), and the host's own Git build (currently broken, see below) |
 | Android package | Built by workflow, published as a repository release | **Build Android APK** on every push to `main`; **Release APK** on a pushed tag ([android.md](android.md)) |
-| Database | A hosted Postgres service reached with the service key | SQL files in `frontend/supabase/migrations/`, pasted into the database's SQL editor by the owner |
+| Database | One hosted project; the Worker is its only client, with the service-role key | `backend/supabase/schema.sql` pasted into the SQL editor once; never redeployed with the code ([database.md](database.md#setting-it-up)) |
+
+The database holds what the Worker needs between requests: listeners and accounts (with the synced copy), consented usage events, AI call counts, feedback, blocked content, Listen Together rooms, push devices and sent notifications, the owner's published settings, experiments, the audit trail, the status history and the job runs. A listener's library, history and settings still live on the device; the account's synced copy is a mirror of them. The Worker also keeps per-isolate memory (rate-limit buckets, one-minute caches of settings) and the `HANDOFF` key-value binding for device transfer.
 
 Production host: `www.vinaxmusic.online`. The Worker owns `admin.` (to `/admin/`) and `update.` (to the package download). The apex is redirected to `www` by the static site (`frontend/public/_redirects`), not the Worker: when the apex was a Worker route, a Worker over its daily quota answered 429 for `https://vinaxmusic.online/robots.txt`, and Search Console reported "Robots.txt unreachable" and stopped crawling the whole domain (fixed in 11.0.3). Keep anything a crawler needs before it can crawl — robots.txt on every host — off Worker routes. `status.` is redirected to `/status/` by `frontend/public/_redirects`.
 
@@ -56,7 +58,8 @@ The app notices a `404`/`405` from the DJ route and stays quiet for ten minutes 
 | --- | --- |
 | Frontend | In the static-hosting project's deployment history, promote the previous successful deployment |
 | Worker | Roll back in the Worker's version history, separately |
-| Published configuration (flags, Home layout, banners) | Restore the previous value in the console, or publish the built-in defaults. Export a config backup from the console before large edits. |
+| Published configuration (flags, Home layout, banners, site mode) | Every change is kept in `settings_history`: on the console's **Publish** page open the key and restore an earlier value, or clear the key so the app uses its built-in default. |
+| Database | There is no code to roll back; the schema is versioned in `meta.schema`. A table or function missing after a partial paste is fixed by running `schema.sql` again (idempotent). |
 | Android | A published package cannot be recalled. Publish a fixed build; `min-version` in the published config can force the update dialog. |
 
 Keep the two deployed halves compatible. A frontend that calls a route the rolled-back Worker does not have falls back to its on-device paths; check that this is acceptable before rolling back only one half.
@@ -117,19 +120,42 @@ The value is typed at the prompt, never pasted into a file or a chat. `npx wrang
 | Group | Names | If missing |
 | --- | --- | --- |
 | AI providers | `NVIDIA_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY` | That provider's models are skipped and its section of the model menu is empty. With none set, AI routes answer `503 ai_not_configured` and the app uses its on-device paths ([ai.md](ai.md)) |
-| Database | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Events, config, rooms, push and the console have no storage |
 | Owner console | `ADMIN_LOGIN_PASSWORD` | Nobody can sign in to `/admin/` |
-| Web push | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Browser notifications cannot be sent |
-| Android background push | `FCM_SERVICE_ACCOUNT` | Tokens are stored, nothing is sent ([fcm-push-setup.md](fcm-push-setup.md)) |
-| Identity signing | `TELEMETRY_PEPPER`, `DEVICE_ID_SECRET` | Fallbacks are described in `backend/.env.example` |
-| Username human check | `TURNSTILE_SECRET_KEY` | Claims are not checked; see "Human check on usernames" below |
-| Scheduled jobs | `CRON_SECRET` (also a repository Actions secret with the same value) | `/api/cron/*` rejects every call |
-| Trends | `YOUTUBE_API_KEY` and the optional `TRENDS_*` settings | See [trends.md](trends.md) |
-| Optional | `GITHUB_TOKEN` (Android update source), `NVIDIA_BASE_URL`, `VINAX_MAESTRO_MODEL`, `NOTIFY_MIN_GAP_HOURS` | Defaults apply; the update lookup is rate-limited without the token |
+| Database | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Every data feature answers its "not configured" shape: `/api/room`, `/api/feedback`, `/api/push/subscribe` and `/api/push/fcm-register` answer `503 not_configured`; `/api/account/data` answers `503 unavailable`; `/api/events` accepts and drops; the blocklist, experiments and announcement answer empty; `/api/appconfig` answers the built-in defaults; `/api/status` has no history. Every console page that reads data shows its setup card (`configured: false`) |
+| Scheduled jobs by hand | `CRON_SECRET` (optional) | `POST /api/cron/run` accepts only the owner token. The Cron Trigger itself needs no secret |
+| Device identity | `DEVICE_ID_SECRET` (`TELEMETRY_PEPPER` is the fallback name) | Signed device ids cannot be issued, so `/api/events` and `/api/username` cannot tell devices apart; set it |
+| Web push | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | `/api/push/vapid` answers `key: null`; browser registrations are still stored but nothing can be sent to them |
+| Android background push | `FCM_SERVICE_ACCOUNT` | The console's push self-test has nothing to test; Android registrations are stored but nothing is sent to them ([fcm-push-setup.md](fcm-push-setup.md)) |
+| Request hashing | `TELEMETRY_PEPPER` | Rate-limit keys fall back to a built-in pepper |
+| Optional | `GITHUB_TOKEN` (Android update source), `NVIDIA_BASE_URL`, `VINAX_MAESTRO_MODEL` | Defaults apply; the update lookup is rate-limited without the token |
 
 Non-secret settings are in `[vars]` in `wrangler.toml`: `ASSETS_HOST` (the static site's host, used for fall-through and for the shell of edge-rendered pages) and `GITHUB_REPO`. The `HANDOFF` key-value binding holds device-transfer ciphertext.
 
-Repository Actions secrets: `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (Deploy Worker), `CRON_SECRET`, `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` (package signing), and `LHCI_GITHUB_APP_TOKEN` (the Lighthouse workflow).
+`TURNSTILE_SECRET_KEY` is read by nothing and can be deleted. The `CRON_SECRET` Actions secret is read by no workflow and can be deleted too.
+
+## The database
+
+The schema, the Worker's data layer and the admin API are in [database.md](database.md). This section is what an operator does with it.
+
+### Moving to a new database
+
+1. Create the new hosted project.
+2. If the project is not empty, run `backend/supabase/reset.sql` in its SQL editor (it deletes every VinaX table).
+3. Run `backend/supabase/schema.sql`. The last line of its output names the schema version and the table count.
+4. Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on the Worker with `npx wrangler secret put`. The change applies on the next request; no deploy.
+5. Open the console's **Database** page: schema version 1, every table present, `reachable: true`. Then **Overview**: the tiles read zero, not an error.
+6. Old data does not move. Signed-in listeners keep their session (it is a signed token), their first sync after the move writes a fresh copy from the device, and their device row is created again on the next consented event.
+
+### Retention and purges
+
+Usage events are the only table that grows without bound. **Housekeeping** (below) purges events older than the `retention` setting's `eventsDays` (default 180) once an hour, sweeps idle rooms and switches off push devices that have not checked in for 180 days. The Database page's **Maintenance** tab runs the same actions now (`purge_events` with a chosen number of days, `sweep_rooms`, `retire_push`), each behind a confirmation and each written to the audit trail. `ai_calls`, `feedback`, `notifications`, `audit_log` and `job_runs` are kept until the owner deletes them.
+
+### Deleting one listener's data
+
+- **The listener:** Settings → Profile → **Delete account** calls `POST /api/auth/me { delete: true }`, which removes the `accounts` row and, with it, the synced copy in `account_backups`.
+- **The owner:** on the **Listeners** page, open the person and choose **Delete**; the console asks for a reason and a typed confirmation, then calls `delete_listener`, which removes the device row, every usage event, room memberships, the account and its backup, and detaches their feedback. The audit trail keeps the reason.
+
+Repository Actions secrets: `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (Deploy Worker), `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` (package signing), and `LHCI_GITHUB_APP_TOKEN` (the Lighthouse workflow).
 
 ### AI keys: one per provider
 
@@ -156,35 +182,18 @@ On a chat turn where Gemini's free grounding does not run, the Worker may make o
 | Setting | Where | Default |
 | --- | --- | --- |
 | `SERPER_API_KEY` | Worker secret (serper.dev → API key). Not an AI key: it is not in `PROVIDER_ENV` | unset = no web search through Serper |
-| `SERPER_DAILY_LIMIT` | Plain var in `backend/worker/wrangler.toml` `[vars]` | `80` successful, non-cached calls per UTC day (about a month of the free allowance); `0` = none |
+| `SERPER_DAILY_LIMIT` | Plain var in `backend/worker/wrangler.toml` `[vars]` | `80` successful, non-cached calls per UTC day (about a month of the free allowance); `0` = none. The count is kept per isolate, so the real total across edge locations can be higher |
 
 - **Set the key:** `cd backend && npx wrangler secret put SERPER_API_KEY --config worker/wrangler.toml`, then paste the key at the prompt. It takes effect at once, with no deploy. For `npm run dev`, put `SERPER_API_KEY=...` in `backend/worker/.dev.vars`, which is gitignored. Never put it in `wrangler.toml`, a `VITE_*` variable or a ticket.
 - **Change the cap:** edit `SERPER_DAILY_LIMIT` in `worker/wrangler.toml` and deploy (merge to `main`, or `npm run deploy`). A value set in the dashboard is overwritten by the next deploy.
-- **Trending headlines (11.9):** the `headlines.yml` job uses up to 16 of the day's searches (2 every three hours) and stops at 75 % of `SERPER_DAILY_LIMIT`, so listeners' own searches keep the last quarter. With the default 80 a day, the free allowance lasts about a month either way. To stop it, switch `web-search` off (the strip disappears too) or disable the workflow in the code host's Actions tab. To refresh by hand, run the workflow ("Run workflow").
-- **Read usage:** console → AI Operations, feature `web-search`. Calls today are the searches that spent a credit, because cache hits are not logged. The same rows are what the daily cap counts. Serper's own dashboard shows the credits left.
-- **Switch it off:** console → AI Operations → the `web-search` switch (or the emergency stop, which stops it too), then publish. To take it out completely, run `npx wrangler secret delete SERPER_API_KEY --config worker/wrangler.toml`.
-- **When credits run out:** Serper answers 401/402/403/429 (or a 400 naming credits). Each isolate stops calling for 24 hours and logs `[serper] answered … out of credits` once, and the rows show `error: credits_exhausted`. The chat keeps answering without results.
+- **Read usage:** Serper's own dashboard shows the credits left; the Worker keeps no log of its calls.
+- **Switch it off:** `npx wrangler secret delete SERPER_API_KEY --config worker/wrangler.toml`, or set `SERPER_DAILY_LIMIT = 0` and deploy.
+- **When credits run out:** Serper answers 401/402/403/429 (or a 400 naming credits). Each isolate stops calling for 24 hours and logs `[serper] answered … out of credits` once. The chat keeps answering without results.
 
 ### Deep research and pictures (12.0)
 
-- `RESEARCH_DAILY_LIMIT` (plain var in `worker/wrangler.toml`, default 5): deep-research runs a day. Each run spends 4 searches from `SERPER_DAILY_LIMIT`, so 5 runs use at most 20. Switch it off with the `deep-research` feature in AI Operations; usage shows there as feature `deep-research`.
+- `RESEARCH_DAILY_LIMIT` (plain var in `worker/wrangler.toml`, default 5): deep-research runs a day. Each run spends 4 searches from `SERPER_DAILY_LIMIT`, so 5 runs use at most 20; set it to `0` to switch deep research off. The count is per isolate.
 - Pictures in replies and site logos load through `/api/webimg` and `/api/favicon`. Picture links are signed with `TELEMETRY_PEPPER` (else `DEVICE_ID_SECRET`); with neither set, replies carry no pictures.
-
-### Cleaning the current database and creating every table fresh (13.0)
-
-`frontend/supabase/vinax-13-reset.sql` does it in the SAME project, so the Worker's database secrets do not change. Part 1 permanently deletes every table and function named `vinax_…` in the `public` schema (all analytics, logs, usernames, accounts and synced data, push registrations, rooms, trends, owner settings); nothing else is touched. Part 2 is the full 13.0 schema. Steps: database dashboard → SQL editor → paste the file → Run; then re-publish the owner console settings and run the "Trending headlines" workflow once. Everyone signs in with Google again.
-
-### Moving to a new database (13.0)
-
-`frontend/supabase/vinax-13.sql` is the whole schema for a **new** database project: every table, index, function and row-level-security rule the Worker uses, plus the 13.0 account tables. Steps:
-
-1. Create a new project in the database host's dashboard (free plan is fine).
-2. SQL editor → paste `frontend/supabase/vinax-13.sql` → Run. It is idempotent.
-3. Point the Worker at it — Project settings → API gives the URL and the service-role key:
-   `npx wrangler secret put SUPABASE_URL --config worker/wrangler.toml` and
-   `npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml`.
-4. Re-publish what lived in `vinax_config` from the owner console (AI controls, AI prices, house rules, site mode, client config); run the "Trending headlines" workflow once to refill Trending now.
-5. When the new project works, delete the old project in its dashboard. Nothing is copied over: old analytics, usernames, AI logs, push registrations (devices register again on their next open) and Listen Together rooms stay behind.
 
 ### Google sign-in (12.2; required since 13.0)
 
@@ -194,43 +203,30 @@ Optional sign-in runs on the push project **VinaX Music** (`vinax-music`). The W
 | --- | --- |
 | `GOOGLE_CLIENT_ID` | Plain var in `backend/worker/wrangler.toml`: the project's public web OAuth client id. Sign-in answers `503 not_configured` without it. |
 | `AUTH_SECRET` | Worker secret that signs sessions: `npx wrangler secret put AUTH_SECRET --config worker/wrangler.toml` (any long random value). Falls back to `DEVICE_ID_SECRET`. Changing it signs everyone out. |
-| Accounts table | Apply `frontend/supabase/migrations/2026-10-vinax-12.2-accounts.sql` once. Until then sign-in still works but nothing is stored (`stored: false`). |
+| Storage | The `accounts` row (Google id, email, name, picture, linked device, coarse sign-in facts) is written at sign-in and refreshed on the session check at most every 10 minutes; `/api/account/data` keeps the synced copy in `account_backups` with optimistic versions ([database.md](database.md#public-routes-that-read-or-write-it)). Without the database secrets sign-in still works (`stored: false`) and sync answers `503 unavailable`. |
 | Allowed web origins | Cloud console → Google Auth Platform → Clients → the web client: `https://www.vinaxmusic.online`, `https://vinaxmusic.online`, `https://vinax.pages.dev`, `http://localhost:5173`. A new domain needs adding here, or the button refuses to load. |
 | Android | The app's SHA-1 must be on the Android app in the push project (see [fcm-push-setup.md](fcm-push-setup.md)); a release keystore needs its own SHA-1 added. |
 
-### Human check on usernames
-
-Since 12.2 the app no longer claims usernames at onboarding; this check only serves app versions before 12.2. Since 11.1.0 the onboarding username claim (`POST /api/username`) carries a Turnstile token. Since 11.1.1 the widget is always on screen under the username field (`appearance: always`): it ticks itself for most listeners and asks for a tap only when the check needs one. A parked claim retried later, with no form on screen, gets a temporary floating box that shows only if a tap is needed (`interaction-only`).
-
-| Piece | Where |
-| --- | --- |
-| Site key (public) | `TURNSTILE_SITE_KEY` in `frontend/src/services/turnstile.ts` (or `VITE_TURNSTILE_SITE_KEY` at build time) |
-| Secret key | Worker secret `TURNSTILE_SECRET_KEY` |
-| Server check | `backend/worker/functions/_lib/turnstile.ts`, action `username` |
-| CSP | `https://challenges.cloudflare.com` in `script-src` and `frame-src` (`frontend/public/_headers`) |
-
-Widget settings (Cloudflare dashboard → Turnstile → Add widget): hostname `vinaxmusic.online` (subdomains are included), mode **Managed**, pre-clearance **off**.
-
-Turn it on in this order: ship the app with the site key first, then set the secret. With the secret set and an app that sends no token, every claim is refused (`403 challenge`) and parks as pending until the listener updates. Turn it off by deleting the secret (`npx wrangler secret delete TURNSTILE_SECRET_KEY --config worker/wrangler.toml`).
-
-It fails open where the listener is not at fault: siteverify unreachable, a 5xx, or a wrong secret (`invalid-input-secret`) lets the claim through and logs `[turnstile]` in the Worker log. A missing, forged, reused or expired token, or one minted for another action, is refused. On the app side, a refused check never stops the welcome: the claim parks and is retried with a fresh token at the next start or reconnect.
-
 ## Scheduled jobs
 
-All schedules are workflows in `.github/workflows/`, plus one Cron Trigger on the Worker. They call the Worker; none of them carries listener data. Scheduled workflows on the code host often start late.
+The data jobs run inside the Worker. `[triggers] crons` in `backend/worker/wrangler.toml` fires the scheduled handler every 30 minutes (deploying the Worker registers it; there is nothing to schedule on the code host), `_lib/jobs.ts` decides what runs, and every run is written to `job_runs` with its outcome and a summary.
+
+| Job | When | What it does |
+| --- | --- | --- |
+| `status-tick` | Every run (30 min) | Probes the website, the catalogue and the console from the Worker and records one `uptime_tick` per component. This is the status page's history (`uptime_report`) |
+| `housekeeping` | Once an hour | `room_sweep` (rooms idle 6 h, members unseen 1 day), `purge_events` (older than `retention.eventsDays`, default 180), `retire_push_devices` (no check-in for 180 days) |
+
+- The console's **Database → Jobs** tab lists each job with its last run, outcome and summary, and flags a job as overdue when its last run is older than twice its interval. "Not run yet" on a fresh database is not a failure.
+- **Run a job now:** the same tab has a button per job, or `POST /api/cron/run` with the body `{ "job": "status-tick" }` and either the header `x-cron-secret: $CRON_SECRET` or the owner token.
+- A job that fails leaves `ok: false` and the error in its summary; the next tick runs it again. Nothing retries inside a run.
+
+The one scheduled workflow left on the code host is an outside check, not a data job:
 
 | Workflow (file) | When (UTC) | What it does |
 | --- | --- | --- |
-| **Synthetic uptime** (`synthetic-uptime.yml`) | Every 30 minutes | Probes the app shell, `/api/geo` and `/api/handoff`, then runs `frontend/scripts/edge-integrity.mjs`, which checks that every asset the live shell references answers with JavaScript. A failure opens one issue titled "Synthetic uptime probe failed" (de-duplicated by title). |
-| **Status tick** (`status-tick.yml`) | Minutes 7 and 37 of every hour | `POST /api/status`: the Worker runs its component probes and records one tick per component for the status page. This is the outside check. |
-| Worker Cron Trigger (`[triggers]` in `wrangler.toml`) | `7,37 * * * *` | The Worker's `scheduled` handler records the same status round itself, so the page does not read "API down" when the workflow runs late. Applied by `wrangler deploy`; visible under the Worker's Settings → Triggers. |
-| **AI daily push** (`ai-daily-push.yml`) | 02:30, 07:30, 10:30, 15:30, 18:30 | Calls `/api/cron/ai-daily-push` with the `x-cron-secret` header. The endpoint refuses to send again within 150 minutes. |
-| **AI song push** (`song-push.yml`) | Daily 13:30 | Calls `/api/cron/song-push`. |
-| **Trends ingest** (`trends-ingest.yml`) | Minute 17 of every sixth hour | Calls `/api/cron/trends-ingest`: reads the configured trend sources, stores a snapshot, matches items to catalogue songs and deletes expired data ([trends.md](trends.md)). |
-| **Weekly digest** (`weekly-digest.yml`) | Monday 03:30 | Calls `/api/cron/weekly-digest`; the result is the digest card on the console's Overview. |
-| **Trending headlines** (`headlines.yml`) | Minute 23 of every third hour | Calls `/api/cron/headlines` once (no retry: a retry could spend more searches). Two web searches (India news, tech), stored in `vinax_config` key `ai-headlines` for the "Trending now" strip on the empty VinaX AI chat. At most 16 searches a day; it skips (answers `{ ok: true, skipped }`) while `web-search` is switched off or today's searches are at 75 % of `SERPER_DAILY_LIMIT`. |
+| **Synthetic uptime** (`synthetic-uptime.yml`) | Every 30 minutes | Probes the app shell, `/api/geo` and `/api/handoff`, then runs `frontend/scripts/edge-integrity.mjs`, which checks that every asset the live shell references answers with JavaScript. A failure opens one issue titled "Synthetic uptime probe failed" (de-duplicated by title). Scheduled workflows on the code host often start late. |
 
-Each scheduled workflow can also be run by hand. `/api/cron/seo-crawl` exists on the Worker, but no workflow calls it.
+It can also be run by hand.
 
 Workflows that are checks rather than jobs:
 
@@ -243,20 +239,9 @@ Workflows that are checks rather than jobs:
 
 ## Monitoring
 
-- **Status page.** `frontend/public/status/` reads the ticks recorded by `/api/status`.
-- **Owner console.** Technical Monitoring, AI Lab and Data quality panels ([admin-console.md](admin-console.md)). A panel with no data means "unknown", not "healthy".
-- **Uptime issue.** The "Synthetic uptime probe failed" issue is the alert.
-
-### Service-level objectives
-
-`/api/admin/dataquality` computes two objectives over the newest AI events it samples; the console shows them on the Data quality panel.
-
-| Objective | Target | Counts as good |
-| --- | --- | --- |
-| AI success | 98 % | The call completed (`ok = true`) |
-| AI content delivery | 99 % | The call completed and carries no error marker |
-
-Error budget burned = observed failure ÷ allowed failure, capped at 999 %. Over 100 % means the objective is breached for the window. When it burns, open the AI Lab lane-health table to find the lane that is failing.
+- **Status page.** `frontend/public/status/` reads `/api/status`, which probes the website, the catalogue and the console live (memoised 60 s per isolate) and adds the 90-day history the `status-tick` job recorded (`uptime_report`) and the owner's note (the `status-note` setting, edited on the console's Publish page). Without the database `days` is empty and `uptime90` is `null`.
+- **Owner console.** **Overview** is the first look (tiles, the 14-day timeline, an "attention" list naming anything that needs the owner), **Health** the live checks, **Database → Jobs** whether the scheduled jobs are running ([admin-console.md](admin-console.md)). A panel with no data means "unknown", not "healthy".
+- **Uptime issue.** The "Synthetic uptime probe failed" issue is the alert from outside.
 
 ### Failover tests
 
@@ -275,37 +260,13 @@ What this does not guarantee: counters are shared within one edge location, not 
 
 The admin login throttle (`_lib/admin.ts`) locks a source out for 10 minutes after 15 wrong tokens, and also counts each wrong token in `ADMIN_AUTH_FAILS` so the lock holds across isolates. Correct tokens never spend the budget.
 
-## AI controls: emergency stop, feature switches and spend caps
-
-The owner publishes one record, `vinax_config` key `ai-controls`, from the console. The Worker enforces it on every AI call (`_lib/ai.ts`), including the scheduled jobs, so it does not depend on any client.
-
-| Control | Effect |
-| --- | --- |
-| `emergencyOff: true` | Every AI route answers `503 { "error": "ai_disabled" }` before any provider call |
-| `features.<name>: false` | That feature answers `503 ai_disabled`. A feature is on unless its value is exactly `false`. `web-search` is the exception: switched off, the chat still answers, just without Serper results |
-| `dailyTokenCap`, `dailyCostCapUsd` | Once today's (UTC) known use reaches the cap, AI routes answer `503 { "error": "ai_over_budget" }` |
-
-- The app treats these exactly as it treats a provider outage and falls back to its on-device paths. Each refusal is logged to `vinax_ai_events` and is excluded from spend, the objectives and lane health.
-- Each isolate refreshes the record every 30 s. A failed read fails open, except that an `emergencyOff: true` read in the last 60 s keeps applying, so a flaky database cannot lift a stop early.
-- Observed use comes from `vinax_ai_events` (cached 60 s per isolate) and is priced with the operator's `ai-prices` table. Unpriced models and calls with no reported usage make the figure a lower bound, shown as `costKnown: false` / `tokensComplete: false`, never as zero. Caps are therefore soft by about one cache period plus in-flight calls.
-
-## Audit trail
-
-Every mutating admin action writes one row through `logAdminAudit()` (`_lib/adminAudit.ts`): actor, action, time, the edge request id, the target and, for configuration changes, the value before and after with secrets redacted and large values reduced to a size and digest. Rows are stored as `vinax_feedback` rows of `type=admin-audit`, so they stay out of the feedback inbox and survive "clear resolved feedback". The write is best effort and never fails the action it describes.
-
-There is one shared console password, so every row records the actor as the owner. Rotating `ADMIN_LOGIN_PASSWORD` is the only way to revoke access, and the trail cannot say which person acted.
-
-## Maintenance mode
-
-The console's Site mode switch writes a `site-mode` record; `/api/site-mode` serves it and also honours a scheduled `maintenance-window`. The app shows the maintenance screen within about a minute and returns on its own when the mode goes live again. The console keeps working during maintenance.
-
 ## Images
 
 Artwork is served straight from the catalogue's CDN in pre-sized variants. `/img` exists only so share cards can draw artwork on a canvas from the same origin; it is not a transform layer, and every proxied image costs a Worker request and edge egress.
 
 ## After deploying 11.0
 
-Nothing new to configure: 11.0 adds no secret, no binding, no schedule and no database migration.
+Nothing new to configure: 11.0 adds no secret, no binding and no schedule.
 
 1. Confirm **Deploy Worker** is green for the release commit and that its log shows a deploy, then run the probe in "The app is newer than the API".
 2. `GET /api/aimodels` lists the five providers (four since 10.3, Cloudflare since 11.2); each one whose key is set shows `configured: true`.
@@ -323,4 +284,4 @@ Owner actions that code cannot do. The site serves prerendered routes, edge-rend
 
 - [ ] Verify the domain in each search engine's webmaster console and submit `https://www.vinaxmusic.online/sitemap.xml`. After a few days, review which URLs are not indexed and why.
 - [ ] Paste a song link and the Home link into the messaging apps your listeners use. Each should show a title and artwork card.
-- [ ] Weekly: read the digest on the console's Overview; review zero-result searches in Search Analytics; watch skip rate per language in Engagement.
+- [ ] Weekly: read the console's Overview; review the Analytics page (music, places, engagement, retention, funnel, skips, errors) and the Feedback inbox.

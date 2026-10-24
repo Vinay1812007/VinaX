@@ -5,13 +5,12 @@
  *  - makeTitle: a 2–5 word title for a new chat ("BMW meaning explained"),
  *    written by a fast model beside the answer, never in its way.
  *  - planResearch: the 3 extra searches a deep-research question runs.
- *  - countToday: how many logged rows of one kind today (the research cap).
+ *  - countToday: how many runs of one kind this isolate made today (the research cap).
  *  - signed image links: pictures and site logos load through the Worker
  *    (/api/webimg, /api/favicon), never straight from other sites, and only
  *    pictures the chat itself returned can be loaded (an HMAC on the address).
  */
 import { chat, type AiEnv } from './ai';
-import { sbCountResult, supabaseConfigured, type SupabaseEnv } from './supabase';
 
 // ------------------------------------------------------------------ small talk
 
@@ -77,7 +76,7 @@ export async function makeTitle(env: AiEnv, firstMessage: string): Promise<strin
         { role: 'system', content: 'You name chats. Reply with ONLY a 2 to 5 word title in the language of the message: no quotes, no full stop. Examples: "BMW meaning explained", "Telugu party playlist", "Fix React build error".' },
         { role: 'user', content: `Name this chat. The listener wrote:\n${text}` },
       ],
-      { lane: 'scholar', maxTokens: 24, temperature: 0.3, timeoutMs: 4_000, deadlineAt: Date.now() + 4_500, feature: 'vinaxai', accept: (c) => !!cleanTitle(c) },
+      { lane: 'scholar', maxTokens: 24, temperature: 0.3, timeoutMs: 4_000, deadlineAt: Date.now() + 4_500, accept: (c) => !!cleanTitle(c) },
     );
     return cleanTitle(r.content) || null;
   } catch {
@@ -120,7 +119,7 @@ export async function planResearch(env: AiEnv, query: string): Promise<string[]>
         { role: 'system', content: 'You plan web research. Given a question, reply with ONLY a JSON array of 3 different, specific web search queries (each under 12 words) that together cover it: background, the latest facts, and data or expert analysis. No commentary.' },
         { role: 'user', content: query },
       ],
-      { lane: 'scholar', maxTokens: 160, temperature: 0.4, timeoutMs: 5_000, deadlineAt: Date.now() + 6_000, feature: 'vinaxai', accept: (c) => parsePlan(c).length >= 2 },
+      { lane: 'scholar', maxTokens: 160, temperature: 0.4, timeoutMs: 5_000, deadlineAt: Date.now() + 6_000, accept: (c) => parsePlan(c).length >= 2 },
     );
     const plan = parsePlan(r.content).filter((q) => q.toLowerCase() !== query.toLowerCase());
     return plan.length >= 2 ? plan.slice(0, 3) : fallback;
@@ -131,34 +130,28 @@ export async function planResearch(env: AiEnv, query: string): Promise<string[]>
 
 // ------------------------------------------------------------------ daily counts
 
-const counts = new Map<string, { day: string; db: number; local: number; refreshAt: number }>();
+const counts = new Map<string, { day: string; n: number }>();
 /** Tests only. */
 export function resetCounts(): void {
   counts.clear();
 }
 
-/** Successful rows of one feature/model today (UTC): the database's count, read at most once a minute, plus this isolate's since. */
-export async function countToday(env: SupabaseEnv, feature: string, model: string, now = Date.now()): Promise<number> {
-  const day = new Date(now).toISOString().slice(0, 10);
-  const key = `${feature}|${model}`;
-  let st = counts.get(key);
-  if (st && st.day !== day) st = undefined;
-  if (!supabaseConfigured(env)) return st?.local ?? 0;
-  if (st && now < st.refreshAt) return st.db + st.local;
-  const r = await sbCountResult(env, 'vinax_ai_events', `feature=eq.${encodeURIComponent(feature)}&model=eq.${encodeURIComponent(model)}&ok=eq.true&created_at=gte.${encodeURIComponent(`${day}T00:00:00.000Z`)}`, { timeoutMs: 2_000 }).catch(() => ({ ok: false as const }));
-  const known = st ? st.db + st.local : 0;
-  st = r.ok ? { day, db: Math.max(r.value, known), local: 0, refreshAt: now + 60_000 } : { day, db: st?.db ?? 0, local: st?.local ?? 0, refreshAt: now + 15_000 };
-  counts.set(key, st);
-  return st.db + st.local;
+/**
+ * Successful runs of one kind today (UTC) in this isolate. These runs are
+ * not written to the database, so the daily cap applies per isolate.
+ */
+export function countToday(feature: string, model: string, now = Date.now()): number {
+  const st = counts.get(`${feature}|${model}`);
+  return st && st.day === new Date(now).toISOString().slice(0, 10) ? st.n : 0;
 }
 
-/** Note one more successful row of this kind in this isolate. */
+/** Note one more successful run of this kind in this isolate. */
 export function noteToday(feature: string, model: string, now = Date.now()): void {
   const day = new Date(now).toISOString().slice(0, 10);
   const key = `${feature}|${model}`;
   const st = counts.get(key);
-  if (!st || st.day !== day) counts.set(key, { day, db: 0, local: 1, refreshAt: 0 });
-  else st.local += 1;
+  if (!st || st.day !== day) counts.set(key, { day, n: 1 });
+  else st.n += 1;
 }
 
 // ------------------------------------------------------------------ images through the Worker

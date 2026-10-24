@@ -18,10 +18,9 @@
  * "<language> devotional songs"). Every pick is still resolved against the
  * catalogue by the client.
  */
-import { aiBlockCode, aiGate, chat, gather, extractJson, isAiBlocked, logAiEvent, logAiRefusal, providerKey, type AiBlock, type AiEnv } from '../_lib/ai';
+import { chat, gather, extractJson, providerKey, type AiEnv } from '../_lib/ai';
 import { readJsonCapped } from '../_lib/body';
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
-import { type SupabaseEnv } from '../_lib/supabase';
 import { tasteBlock } from '../_lib/taste';
 import { styleAngle } from '../_lib/variety';
 import { EXTRAS_WAIT_MS, settleWithin, STYLE_BRIEF, styleCatalogCandidates, stylePage, stylePhrase, type MusicStyle } from './dj';
@@ -29,7 +28,7 @@ import { EXTRAS_WAIT_MS, settleWithin, STYLE_BRIEF, styleCatalogCandidates, styl
 /** 11.7.0 — the client sends up to 140 (100 history + locked + rejected); keep them all. */
 const MAX_AVOID_TITLES = 140;
 
-type PlaylistEnv = AiEnv & SupabaseEnv;
+type PlaylistEnv = AiEnv;
 
 const SYSTEM_PROMPT = `You build playlists for VinaX, a free music app for Indian music (Telugu, Hindi, Tamil and nine more languages). You work like a professional musician turned curator — tempo, mood arc, vocal texture and era are the units you think in — and from one typed description you deliver ONE cohesive playlist that plays like a live set. If anyone asks, VinaX built you; no AI vendor or model is ever named.
 Take the description seriously before writing a single pick: what does it imply about tempo range, energy arc, era, instrumentation, singer voices? Shortlist more candidates than you need, cut the weak fits, then sequence with intention — an opener that sets the mood, a gradual build, one peak, a cool-down close. Neighboring songs should sound produced for the same moment; tonal whiplash is a failure.
@@ -261,7 +260,7 @@ async function handlePost(context: {
 /** 8.5.0 — one generation, shared by /api/playlist (titles) and /api/ai/playlist (catalogue ids). */
 export type PlaylistRun =
   | { ok: true; parsed: Parsed; reading: RequestReading; model: string | null; prompt: string; languages: string[] }
-  /** `aiUnavailable` (not configured, switched off, over budget, or no usable answer) lets a caller fall back; `prompt` is set once the body was read. */
+  /** `aiUnavailable` (not configured, or no usable answer) lets a caller fall back; `prompt` is set once the body was read. */
   | { ok: false; response: Response; aiUnavailable: boolean; prompt?: string; languages?: string[] };
 
 export async function runPlaylist(context: {
@@ -270,18 +269,9 @@ export async function runPlaylist(context: {
   waitUntil?: (p: Promise<unknown>) => void;
 }): Promise<PlaylistRun> {
   const { request, env } = context;
-  const isApp = request.headers.get('x-vinax-client') === 'app';
   // One bucket for both playlist routes: alternating them never doubles the budget.
   const limited = await rateLimitAsync(request, 'playlist', { capacity: 6, refillPerMinute: 3 }, env);
   if (limited) return { ok: false, response: limited, aiUnavailable: false };
-  // 7.2.0 — the owner's AI switches and spend caps.
-  // Refusals are logged (error ai_disabled / ai_over_budget) for the console.
-  let prompt = '';
-  let languages: string[] = [];
-  const refuse = (b: AiBlock): PlaylistRun => {
-    void logAiRefusal(env, 'playlist', b, isApp ? 'app' : 'web', context.waitUntil);
-    return { ok: false, response: json({ error: aiBlockCode(b) }, 503), aiUnavailable: true, prompt, languages };
-  };
   const fail = (response: Response): PlaylistRun => ({ ok: false, response, aiUnavailable: false });
 
   // Capped read: a 500-char prompt, 60 avoid-titles and a taste snapshot fit
@@ -296,18 +286,15 @@ export async function runPlaylist(context: {
   if (!read.ok) return fail(read.reason === 'too_large' ? json({ error: 'too_large' }, 413) : json({ error: 'bad_request' }, 400));
   if (!read.value || typeof read.value !== 'object') return fail(json({ error: 'bad_request' }, 400));
   const body = read.value;
-  prompt = typeof body.prompt === 'string' ? body.prompt.trim().slice(0, 500) : '';
+  const prompt = typeof body.prompt === 'string' ? body.prompt.trim().slice(0, 500) : '';
   if (!prompt) return fail(json({ error: 'bad_request' }, 400));
   const reading = readRequest(prompt);
   // A language the request names outranks the listener's saved preferences.
-  languages = reading.languages.length
+  const languages = reading.languages.length
     ? reading.languages
     : Array.isArray(body.languages)
       ? body.languages.filter((l): l is string => typeof l === 'string').slice(0, 5)
       : [];
-  // Checked after the body is read, so a switched-off AI still hands the caller the request to fall back on.
-  const blocked = await aiGate(env, 'playlist');
-  if (blocked) return refuse(blocked);
   // Titles the client's recent generations already used, plus the ones the
   // listener locked or rejected — steers the model away from repeats (v3.3.1).
   // 11.7.0 — 60 → 140, the client's own cap. At 60 the server kept only the
@@ -352,7 +339,7 @@ export async function runPlaylist(context: {
         { role: 'user', content: userBase + '\n\nList about 25 candidate songs as JSON.' },
       ],
       ['fast'],
-      { temperature: 0.9, maxTokens: 1500, timeoutMs: 6_000, deadlineAt: Math.min(deadlineAt, Date.now() + 6_000), feature: 'playlist' },
+      { temperature: 0.9, maxTokens: 1500, timeoutMs: 6_000, deadlineAt: Math.min(deadlineAt, Date.now() + 6_000) },
     );
     const seen = new Set<string>();
     for (const g of gathered) {
@@ -407,9 +394,8 @@ export async function runPlaylist(context: {
     // deep reasoning lane. 14s pinned shot, then fast JSON generators with the
     // remaining budget — a full playlist always fits inside client patience.
     // 8.0.0 — the maestro lane leads: every suggestion must match a real catalogue song, and it knows the most real songs.
-    { temperature: 0.9, lane: hasFlagship ? 'maestro' : 'dj', maxTokens: 2000, json: true, reasoningEffort: 'low', timeoutMs: 14_000, firstTimeoutMs: 14_000, skipSecondary: !!hasFlagship, ladder: ['dj', 'scholar', 'fast', 'home'], deadlineAt, feature: 'playlist' },
+    { temperature: 0.9, lane: hasFlagship ? 'maestro' : 'dj', maxTokens: 2000, json: true, reasoningEffort: 'low', timeoutMs: 14_000, firstTimeoutMs: 14_000, skipSecondary: !!hasFlagship, ladder: ['dj', 'scholar', 'fast', 'home'], deadlineAt },
   );
-  if (isAiBlocked(r.error)) return refuse(r.error);
   let parsed = parsePlaylist(r.error ? null : r.content);
   // Belt-and-braces: the model was told about avoidTitles — enforce it, and
   // drop in-playlist repeats, before anything reaches the client (v3.3.1).
@@ -417,20 +403,6 @@ export async function runPlaylist(context: {
   // 11.7.0 — the fallback draws 25 of the pool at random instead of always
   // its first 25 (which the fixed style songs lead).
   if (!parsed.songs.length && pool.length) parsed = { name: '', description: '', songs: shuffled(pool).slice(0, 25) };
-  if (r.error !== 'not_configured') {
-    const log = logAiEvent(env, {
-      feature: 'playlist',
-      model: r.model ? `${r.model} @${r.keyRole ?? '?'}` : null,
-      ok: parsed.songs.length > 0,
-      status: r.status ?? null,
-      error: r.error ?? (parsed.songs.length ? null : 'empty'),
-      client: isApp ? 'app' : 'web',
-      latency_ms: Date.now() - t0,
-      prompt_tokens: r.usage?.prompt_tokens,
-      completion_tokens: r.usage?.completion_tokens,
-    });
-    if (typeof context.waitUntil === 'function') context.waitUntil(log);
-  }
   if (r.error === 'not_configured') return { ok: false, response: json({ error: 'ai_not_configured' }, 503), aiUnavailable: true, prompt, languages };
   // 500, not 502: Cloudflare swallows origin 502 bodies (serves its own error
   // page) — 500 keeps the honest JSON envelope visible to clients (DQA-02).

@@ -1,23 +1,25 @@
 /**
- * 12.2 — POST /api/auth/google { credential, signed_device_id? }
- *   → 200 { session, user: { name, email, picture, username } }
+ * POST /api/auth/google { credential, signed_device_id?, platform?, appVersion? }
+ *   → 200 { session, stored, user: { name, email, picture, username } }
  *   → 401 { error: 'invalid_token' }      the Google token did not verify
  *   → 503 { error: 'not_configured' }     no GOOGLE_CLIENT_ID or no signing secret
  *
- * Signing in is optional; listening never needs it. The first sign-in links
- * the listener's existing VinaX username when the device proves it owns it (a
- * valid signed device id, the same proof /api/username uses). The account row
- * is best effort: when the table is missing the session still works and the
- * answer says `stored: false`.
+ * Signing in is optional; listening never needs it. The Google ID token is
+ * checked here (signature, issuer, audience, expiry), then VinaX issues its
+ * own signed session. The `accounts` row is written best effort: when the
+ * database is missing the session still works and the answer says
+ * `stored: false`. The device is linked to the account only when it PROVES
+ * its signed id (body or the x-vinax-device header), which is how the console
+ * shows one listener rather than an account plus a usage row.
  */
 import { clientIds, issueSession, verifyGoogleIdToken, type AuthEnv } from '../../_lib/googleAuth';
-import { resolveIdentity, type IdentityEnv } from '../../_lib/identity';
 import { readJsonCapped } from '../../_lib/body';
 import { rateLimitAsync } from '../../_lib/ratelimit';
-import { sbSelectRes, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
-import { accountFacts, accountOf, CORS, json, publicUser } from '../../_lib/authShared';
+import { db, dbConfigured, type DbEnv } from '../../_lib/db';
+import { DEVICE_HEADER, verifiedIdentity, type IdentityEnv } from '../../_lib/identity';
+import { accountFacts, accountOf, CORS, handleOf, json, publicUser } from '../../_lib/authShared';
 
-type Env = AuthEnv & IdentityEnv & SupabaseEnv;
+type Env = AuthEnv & DbEnv & IdentityEnv;
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: CORS });
 export const onRequestGet = async (): Promise<Response> => json({ error: 'method_not_allowed' }, 405);
@@ -35,38 +37,29 @@ export const onRequestPost = async (ctx: { request: Request; env: Env }): Promis
   const session = await issueSession(env, profile.sub);
   if (!session) return json({ error: 'not_configured' }, 503);
 
-  let username: string | null = null;
-  let deviceId: string | null = null;
   let stored = false;
-  if (supabaseConfigured(env)) {
+  let username: string | null = null;
+  if (dbConfigured(env)) {
     const existing = await accountOf(env, profile.sub);
-    username = existing?.username ?? null;
-    // Link the device's username only when the device PROVES it owns it.
-    const id = typeof body.signed_device_id === 'string' ? await resolveIdentity(request, env, { signed_device_id: body.signed_device_id }) : null;
-    if (id?.verified) {
-      deviceId = id.deviceId;
-      if (!username) {
-        const r = await sbSelectRes<{ username: string | null }>(env, 'vinax_users', `device_id=eq.${encodeURIComponent(id.deviceId)}&select=username&limit=1`);
-        if (r.ok) username = r.rows[0]?.username ?? null;
-      }
-    }
+    const prior = existing.ok ? existing.value : null;
+    // Only a PROVED device id links; a forged or stale claim links nothing.
+    const proved = await verifiedIdentity(env, typeof body.signed_device_id === 'string' ? body.signed_device_id : request.headers.get(DEVICE_HEADER));
+    const listenerId = proved ?? prior?.listener_id ?? null;
     const now = new Date().toISOString();
     const row = {
-      google_sub: profile.sub,
+      id: profile.sub,
       email: profile.email,
       email_verified: profile.emailVerified,
       name: profile.name,
       picture: profile.picture,
-      username,
-      ...(deviceId ? { device_id: deviceId } : {}),
+      listener_id: listenerId,
       last_seen: now,
+      ...accountFacts(request, body),
     };
-    // 13.7 — plus the coarse sign-in facts (accountFacts). Before the 13.7
-    // columns exist the write is refused; the row is then stored without
-    // them, because /api/auth/me signs out a session that has no row.
-    stored =
-      (await sbUpsert(env, 'vinax_accounts', { ...row, ...accountFacts(request, body) }, 'google_sub')) ||
-      (await sbUpsert(env, 'vinax_accounts', row, 'google_sub'));
+    const written = await db.upsert(env, 'accounts', row, 'id');
+    stored = written.ok;
+    if (!written.ok) console.warn(`[auth] account not stored (${written.error}${written.status ? ` ${written.status}` : ''}${written.code ? ` ${written.code}` : ''})`);
+    username = await handleOf(env, listenerId);
   }
-  return json({ session, stored, user: publicUser({ ...profile, username }) });
+  return json({ session, stored, user: publicUser(profile, username) });
 };

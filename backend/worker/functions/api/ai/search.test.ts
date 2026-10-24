@@ -198,8 +198,7 @@ describe('POST /api/ai/search', () => {
 
   it('asks the model with an accept check so unusable JSON moves to the next engine', async () => {
     await post({ query: 'upbeat telugu songs', withTracks: false });
-    const opts = chatMock.mock.calls[0][2] as { accept: (c: string) => boolean; feature: string; json: boolean };
-    expect(opts.feature).toBe('search');
+    const opts = chatMock.mock.calls[0][2] as { accept: (c: string) => boolean; json: boolean };
     expect(opts.json).toBe(true);
     expect(opts.accept('not json')).toBe(false);
     expect(opts.accept('{"moods":["chill"]}')).toBe(true);

@@ -19,14 +19,14 @@ const json = (o: unknown, status = 200): Response =>
 
 export const ENV_ITEMS: Array<{ name: string; group: string; required: boolean; note: string; fallback?: string }> = [
   { name: 'ADMIN_LOGIN_PASSWORD', group: 'Admin', required: true, note: 'console login' },
-  { name: 'SUPABASE_URL', group: 'Data', required: true, note: 'analytics + config store' },
-  { name: 'SUPABASE_SERVICE_ROLE_KEY', group: 'Data', required: true, note: 'server-side Supabase writes' },
   { name: 'DEVICE_ID_SECRET', group: 'Data', required: true, note: 'signed device ids for telemetry' },
   { name: 'TELEMETRY_PEPPER', group: 'Data', required: false, note: 'device id hashing (falls back to DEVICE_ID_SECRET)' },
   { name: 'GOOGLE_CLIENT_ID', group: 'Data', required: false, note: 'optional Google sign-in (plain var; sign-in is off without it)' },
   { name: 'AUTH_SECRET', group: 'Data', required: false, note: 'signs sign-in sessions (falls back to DEVICE_ID_SECRET)' },
   { name: 'TURNSTILE_SECRET_KEY', group: 'Data', required: false, note: 'human check on username claims from app versions before 12.2 (off when unset)' },
-  { name: 'CRON_SECRET', group: 'Cron', required: true, note: 'GitHub Actions → cron endpoints' },
+  { name: 'SUPABASE_URL', group: 'Database', required: true, note: 'database project URL' },
+  { name: 'SUPABASE_SERVICE_ROLE_KEY', group: 'Database', required: true, note: 'database service-role key (server only)' },
+  { name: 'CRON_SECRET', group: 'Cron', required: false, note: 'runs a job by hand through POST /api/cron/run; the Cron Trigger needs no secret' },
   { name: 'VAPID_PUBLIC_KEY', group: 'Push', required: false, note: 'web push' },
   { name: 'VAPID_PRIVATE_KEY', group: 'Push', required: false, note: 'web push' },
   { name: 'VAPID_SUBJECT', group: 'Push', required: false, note: 'web push contact' },

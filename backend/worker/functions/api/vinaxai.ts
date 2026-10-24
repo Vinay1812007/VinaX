@@ -51,7 +51,6 @@ import {
   laneKey,
   laneCoolingDown,
   laneModel,
-  logAiEvent,
   loggableModel,
   noteLaneFailure,
   providerAttempt,
@@ -63,25 +62,22 @@ import {
   providerKey,
   reasoningOffParams,
   sameCall,
-  usageFromJson,
   type AiEnv,
   type AiProvider,
   type Lane,
   type LaneAttempt,
-  aiBlockCode,
-  aiGate,
-  logAiRefusal,
 } from '../_lib/ai';
 import { catalogDefaultModel, codeExecutionModels, describeModel, fetchCatalog, lookupCatalogModel, normaliseProvider, searchCapable, type CatalogModel } from '../_lib/catalog';
 import { APP_KNOWLEDGE } from '../_lib/appknowledge';
 import { readJsonCapped } from '../_lib/body';
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { MUSIC_CONDUCT, tasteBlock } from '../_lib/taste';
-import { houseRules, readConfig } from '../_lib/clientConfig';
 import { placeContextLines, requestPlace } from '../_lib/place';
-import { type SupabaseEnv } from '../_lib/supabase';
 import { codeBlock, maestroFetch, maestroModelFor, outputBlock } from '../_lib/maestro';
 import { isWorkersAiEndpoint, workersAiBinding, workersAiFetch } from '../_lib/workersai';
+import { logAiCall } from '../_lib/aiLog';
+import { aiRefusal, refusalResponse } from '../_lib/aiControls';
+import type { DbEnv } from '../_lib/db';
 import { countToday, isBareEntity, isSmallTalk, makeTitle, wantsImages, noteToday, planResearch, signedImagePath, type ImageEnv } from '../_lib/chatExtras';
 import { buildSearchQuery, cleanForQuery, mentionsSite, serperKey, serperSearch, type SerperEnv, type SerperSearch } from '../_lib/serper';
 
@@ -494,7 +490,7 @@ export function searchResultsBlock(found: SerperSearch): string {
   return lines.join('\n');
 }
 
-interface Env extends AiEnv, SupabaseEnv, SerperEnv, ImageEnv {
+interface Env extends AiEnv, SerperEnv, ImageEnv, DbEnv {
   /** 12.0 — deep-research runs allowed per UTC day (plain var, default 5). */
   RESEARCH_DAILY_LIMIT?: string;
 }
@@ -717,18 +713,6 @@ export const onRequestPost = async (context: {
     // client. Keep the diagnostic in the server log; return a scrubbed body.
     const message = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
     console.warn('[vinaxai] unhandled exception:', message);
-    if (waitUntil)
-      waitUntil(
-        logAiEvent(env, {
-          feature: 'assistant',
-          model: 'exception',
-          ok: false,
-          status: 500,
-          error: message.slice(0, 180),
-          client: isApp ? 'app' : 'web',
-          latency_ms: 0,
-        }),
-      );
     return jsonErr({ error: 'exception', message: 'internal_error' }, 500);
   }
 };
@@ -813,6 +797,10 @@ async function handleChat(
   if (!read.ok) return read.reason === 'too_large' ? jsonErr({ error: 'too_large' }, 413) : jsonErr({ error: 'bad_request' }, 400);
   if (!read.value || typeof read.value !== 'object') return jsonErr({ error: 'bad_request' }, 400);
   const body = read.value;
+  // 14.0 — the owner's AI controls: an emergency stop, the chat switch or the
+  // daily token cap answer 503 before any model is asked.
+  const refusal = await aiRefusal(env, 'chat');
+  if (refusal) return refusalResponse(refusal, CORS);
 
   // 10.3 — auto, model, or one of the three internal seats; every retired
   // engine id is Auto (see requestMode).
@@ -1019,14 +1007,6 @@ async function handleChat(
   const attempts = obeyCooldown ? liveAttempts : allAttempts;
   if (liveAttempts.length < allAttempts.length)
     console.log(`[vinaxai] resting: ${allAttempts.filter((a) => !liveAttempts.includes(a)).map((a) => `${a.role}/${loggableModel(a.model)}`).join(', ')}`);
-  // 7.2.0 — the owner's AI switches and spend caps, before any engine is
-  // called; the chat page shows its "paused" line on a 503.
-  const blocked = await aiGate(env, 'vinaxai');
-  if (blocked) {
-    // Logged (error ai_disabled / ai_over_budget) for the console.
-    void logAiRefusal(env, 'vinaxai', blocked, isApp ? 'app' : 'web', waitUntil);
-    return jsonErr({ error: aiBlockCode(blocked) }, 503);
-  }
   // 11.2 — a pick resting for the day (out of free requests, no free
   // allowance, retired) is not asked again: the answer would be the same.
   // A short rest (a minute's rate limit, a 5xx) is tried anyway — the
@@ -1038,7 +1018,6 @@ async function handleChat(
     }
   }
   const primary = attempts[0];
-  const keyRole = primary.role;
 
   const taste = tasteBlock(body.taste);
   const flavor = MODE_FLAVOR[mode];
@@ -1063,11 +1042,7 @@ async function handleChat(
   // 11.7.4 — Kid mode (section 13 of the prompt): the device says it is on.
   if (body.kidMode === true && mode !== 'expert' && mode !== 'translator') sys = `${sys}\n\nKID MODE is ON on this device: the listener may be a child. Keep everything friendly and age-appropriate.`;
   if (profile) sys = `${sys}\n\nUSER PROFILE (written by the listener in Settings — how they want you to work; follow it unless it conflicts with your rules):\n${profile}`;
-  // v5.15.0 — house notes from the admin console (Admin → AI House Rules):
-  // a promo line, a correction, a tone note. Data from the team, clipped.
   if (mode !== 'expert' && mode !== 'translator') {
-    const rules = houseRules((await readConfig(env, ['ai-rules']))['ai-rules']);
-    if (rules) sys = `${sys}\n\nHOUSE NOTES (from the VinaX team — follow when relevant):\n${rules}`;
     // v5.16.0 — follow-up chips: one trailing line the client lifts off the
     // reply. Skipped in voice mode (spoken replies must not carry it).
     // 12.0 — the answer's shape: the point first, key terms in bold, a short
@@ -1132,7 +1107,7 @@ async function handleChat(
   let webFound: (SerperSearch & { query: string; queries: string[] }) | null = null;
   let searchQuery = '';
   // 12.0 — deep research: the question plus 3 planned searches (4 credits),
-  // within RESEARCH_DAILY_LIMIT runs a day and the owner's deep-research switch.
+  // within RESEARCH_DAILY_LIMIT runs a day (per isolate: nothing is stored).
   let researching = false;
   let picturing = false;
   const searchAllowed =
@@ -1140,13 +1115,13 @@ async function handleChat(
   if (searchAllowed && wantResearch) {
     const query = buildSearchQuery(lastUserRaw, userTurnsRaw.length > 1 ? userTurnsRaw[userTurnsRaw.length - 2] : null);
     const cap = /^\d{1,4}$/.test((env.RESEARCH_DAILY_LIMIT ?? '').trim()) ? Number(env.RESEARCH_DAILY_LIMIT) : 5;
-    if (query && !(await aiGate(env, 'web-search')) && !(await aiGate(env, 'deep-research')) && (await countToday(env, 'deep-research', 'research')) < cap) {
+    if (query && countToday('deep-research', 'research') < cap) {
       searchQuery = query;
       researching = true;
     }
   } else if (searchAllowed && wantPictures) {
     const query = buildSearchQuery(lastUserRaw, userTurnsRaw.length > 1 ? userTurnsRaw[userTurnsRaw.length - 2] : null);
-    if (query && !(await aiGate(env, 'web-search'))) {
+    if (query) {
       searchQuery = query;
       picturing = true;
     }
@@ -1157,7 +1132,7 @@ async function handleChat(
     wantsWeb(cleanForQuery(lastUserRaw).slice(0, 2000))
   ) {
     const query = buildSearchQuery(lastUserRaw, userTurnsRaw.length > 1 ? userTurnsRaw[userTurnsRaw.length - 2] : null);
-    if (query && !(await aiGate(env, 'web-search'))) searchQuery = query;
+    if (query) searchQuery = query;
   }
   const searchOpts = (news: boolean) => ({
     news,
@@ -1194,7 +1169,6 @@ async function handleChat(
       send({ status: { step: 'searched', query: searchQuery, count: found.results.length, sites: hostsOf(found) } });
       return;
     }
-    const t0 = Date.now();
     send({ status: { step: 'planning', query: searchQuery, research: true } });
     const plan = await planResearch(env, searchQuery);
     const queries = [searchQuery, ...plan].slice(0, 4);
@@ -1203,10 +1177,7 @@ async function handleChat(
     const merged = mergeResults(all, 12);
     useResults(merged, queries);
     send({ status: { step: 'searched', query: searchQuery, queries, count: merged.results.length, sites: hostsOf(merged), research: true } });
-    const ok = merged.results.length > 0;
-    if (ok) noteToday('deep-research', 'research');
-    const log = logAiEvent(env, { feature: 'deep-research', model: 'research', ok, status: ok ? 200 : 204, error: ok ? null : 'no_results', client: isApp ? 'app' : 'web', latency_ms: Date.now() - t0 });
-    if (waitUntil) waitUntil(log);
+    if (merged.results.length > 0) noteToday('deep-research', 'research');
   };
   // 12.0 — a new chat gets a short title, written beside the answer (fast
   // lane), when the app asks for one (`title: true` on the first message).
@@ -1215,17 +1186,7 @@ async function handleChat(
 
   // 11.8.1 — the rest of the turn: the model ladder and the reply stream.
   const finish = async (): Promise<Response> => {
-    // v5.16.0 — ask the default base to append a usage chunk to the stream so
-    // the AI Cost panel sees real token counts. The scholar lane's external
-    // base is left EXACTLY as before (it rejects unknown knobs with a 400 —
-    // probed live for reasoning_effort — and reports usage on its final chunk
-    // unasked anyway). Should the default base ever refuse the option, the
-    // first 400 flips this off for the rest of the request and the same pair
-    // is re-asked plainly, so the stream itself never depends on it.
-    // 11.0 — the opt-out is per attempt (a later fallback keeps its usage
-    // chunk), and the Gemini transport never carries the option at all.
-    const usageDropped = new Set<LaneAttempt>();
-    const payloadFor = (m: string, endpoint: string, messages: OutMsg[], code = false, usageOptIn = true, search = false): Record<string, unknown> => {
+    const payloadFor = (m: string, endpoint: string, messages: OutMsg[], code = false, search = false): Record<string, unknown> => {
       const p: Record<string, unknown> = {
         model: m,
         messages,
@@ -1240,7 +1201,6 @@ async function handleChat(
       if (code && isMaestroEndpoint(endpoint)) p.code_execution = true;
       if (search && !code && isMaestroEndpoint(endpoint)) p.web_search = true;
       if (code && isGroqEndpoint(endpoint)) p.tools = [{ type: 'code_interpreter' }];
-      if (usageOptIn && !isGroqEndpoint(endpoint)) p.stream_options = { include_usage: true };
       // Default-base-only knob: the external hosts reject reasoning_effort with
       // a 400 (probed live), so it never travels off the default base.
       if (m.includes('gpt-oss') && !isExternalEndpoint(endpoint)) p.reasoning_effort = EFFORT_BY_MODE[mode];
@@ -1273,7 +1233,34 @@ async function handleChat(
       if (runsSearch(a)) content = content.includes(NO_LIVE_WEB) ? content.replace(NO_LIVE_WEB, WEB_TOOL_LINE) : `${content}\n\n${WEB_TOOL_LINE}`;
       return content === head.content ? messages : [{ ...head, content }, ...messages.slice(1)];
     };
+    // 14.0 — every attempt that reaches a provider leaves an `ai_calls` row
+    // (lane, provider, model, status, latency; never the prompt). Streaming
+    // answers carry no token counts, so those stay null here.
+    const recordAttempt = (a: LaneAttempt, t0: number, res: Response | null, error: string | null): void => {
+      void logAiCall(env, {
+        feature: `chat:${mode}`,
+        lane: a.role,
+        provider: attemptModel(a).provider,
+        model: a.model,
+        ok: !!res?.ok,
+        status: res?.status ?? null,
+        error: res ? (res.ok ? null : `http_${res.status}`) : error,
+        client: isApp ? 'app' : 'web',
+        latencyMs: Date.now() - t0,
+      }, waitUntil);
+    };
     const callStream = async (a: LaneAttempt, messagesIn: OutMsg[], ms = 30_000): Promise<Response> => {
+      const started = Date.now();
+      try {
+        const res = await callStreamRaw(a, messagesIn, ms);
+        recordAttempt(a, started, res, null);
+        return res;
+      } catch (e) {
+        recordAttempt(a, started, null, e instanceof Error && e.name === 'AbortError' ? 'timeout' : 'network');
+        throw e;
+      }
+    };
+    const callStreamRaw = async (a: LaneAttempt, messagesIn: OutMsg[], ms = 30_000): Promise<Response> => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), ms);
       const messages = withIdentity(a, singleImageFor(a, messagesIn));
@@ -1281,19 +1268,17 @@ async function handleChat(
         if (isMaestroEndpoint(a.endpoint)) {
           // 8.1.0 — its own transport (native streaming). 10.3 — an exact
           // catalogue pick is never swapped for another model.
-          const p = payloadFor(a.model, a.endpoint, messages, runsCode(a), false, runsSearch(a));
-          delete p.stream_options;
-          return await maestroFetch(a.key, a.model, p, controller.signal, !a.exact);
+          return await maestroFetch(a.key, a.model, payloadFor(a.model, a.endpoint, messages, runsCode(a), runsSearch(a)), controller.signal, !a.exact);
         }
         if (isWorkersAiEndpoint(a.endpoint)) {
           // 11.2 — Workers AI runs on the Worker's binding, re-framed as
           // chat-completions SSE (_lib/workersai.ts). Never a fetch: there is no key.
-          return await workersAiFetch(workersAiBinding(env), payloadFor(a.model, a.endpoint, messages, false, false), controller.signal);
+          return await workersAiFetch(workersAiBinding(env), payloadFor(a.model, a.endpoint, messages), controller.signal);
         }
         return await fetch(a.endpoint, {
           method: 'POST',
           headers: { 'content-type': 'application/json', authorization: `Bearer ${a.key}` },
-          body: JSON.stringify(payloadFor(a.model, a.endpoint, messages, runsCode(a), !usageDropped.has(a))),
+          body: JSON.stringify(payloadFor(a.model, a.endpoint, messages, runsCode(a))),
           signal: controller.signal,
         });
       } finally {
@@ -1302,14 +1287,9 @@ async function handleChat(
     };
 
     const t0 = Date.now();
-    // Track the model + lane role that ACTUALLY served the request. The old
-    // code logged @${keyRole} — the primary lane's role captured once at line
-    // 504 — even after failover swapped model/key/endpoint to a sibling lane,
-    // so the admin AI-Monitoring dashboard undercounted rescues and could not
-    // detect a persistently-broken primary (audit finding H15).
+    // The model + lane role that ACTUALLY served the request (failover may
+    // swap model/key/endpoint to a sibling lane).
     let usedAttempt: LaneAttempt = useVision ? (vision[0] ?? primary) : primary;
-    let usedModel = usedAttempt.model;
-    let usedRole: Lane = usedAttempt.role;
     // Pairs that failed before streaming a byte in this request: the
     // empty-stream rescue below never asks them again.
     const failed = new Set<LaneAttempt>();
@@ -1341,19 +1321,6 @@ async function handleChat(
           res = await callStream(a, messages, leash);
         } catch {
           res = null; // hang / network abort — the next pair takes the call
-        }
-        // A 400 while the usage opt-in rode the request: drop the option for the
-        // rest of this request and re-ask the SAME pair once, so token accounting
-        // can never cost a listener their answer. A degraded key 400s again and
-        // the ladder walks on as before.
-        if (res?.status === 400 && !usageDropped.has(a) && !isGroqEndpoint(a.endpoint) && !isMaestroEndpoint(a.endpoint) && !isWorkersAiEndpoint(a.endpoint)) {
-          void res.body?.cancel().catch(() => undefined);
-          usageDropped.add(a);
-          try {
-            res = await callStream(a, messages, leash);
-          } catch {
-            res = null;
-          }
         }
         // 10.3 — a 400 while the code tool rode the request: ask the same model
         // once more without it, so the tool can never cost the answer.
@@ -1391,20 +1358,6 @@ async function handleChat(
         } else {
           lastVerdict = { status: 0, cooldown: null };
         }
-        // Log the real status (timeout=0, degraded/bad id=4xx, upstream 5xx) for
-        // diagnosis; meta reports the engine that finally answered.
-        if (waitUntil)
-          waitUntil(
-            logAiEvent(env, {
-              feature: 'assistant',
-              model: `${a.model} @${a.role}`,
-              ok: false,
-              status: res ? res.status : 0,
-              error: res ? `engine_fallback_${res.status}` : 'engine_timeout',
-              client: isApp ? 'app' : 'web',
-              latency_ms: Date.now() - t0,
-            }),
-          );
       }
       return { up: last, used: null };
     };
@@ -1437,8 +1390,6 @@ async function handleChat(
 
     if (used) {
       usedAttempt = used;
-      usedModel = used.model;
-      usedRole = used.role;
     }
     // 11.2 — the listener's pick gave no answer: say why, never substitute.
     if (pick && (!used || !up || !up.ok || !up.body)) {
@@ -1448,18 +1399,6 @@ async function handleChat(
     if (!up) return jsonErr({ error: 'engine_unreachable' }, 503);
     if (!used || !up.ok || !up.body) {
       const status = up.status;
-      if (waitUntil)
-        waitUntil(
-          logAiEvent(env, {
-            feature: 'assistant',
-            model: `${usedModel} @${usedRole}`,
-            ok: false,
-            status,
-            error: `http_${status}`,
-            client: isApp ? 'app' : 'web',
-            latency_ms: Date.now() - t0,
-          }),
-        );
       // 11.0 — an upstream rate limit answers 429 (the client's "busy" line and
       // its longer pause key on that status). Anything else stays a 500, not a
       // 502: Cloudflare swallows origin 502 bodies (DQA-02).
@@ -1503,10 +1442,6 @@ async function handleChat(
         // Drain an upstream SSE body, forward each content delta to the client
         // and return the full text so we can detect an empty answer (a 200 with
         // no content — some lanes intermittently return this) and fail over.
-        // Token usage summed over every drain of this request (an empty-stream
-        // rescue is a second upstream call, and both bill).
-        // Null until at least one upstream reported usage.
-        const usageBox: { prompt: number; completion: number; seen: boolean } = { prompt: 0, completion: 0, seen: false };
         // Overall stream budget: one deadline for the whole reply, so a stuck
         // upstream is cut instead of holding the connection open forever. A
         // failover drain that starts late still gets a usable minimum window.
@@ -1634,14 +1569,6 @@ async function handleChat(
                   if (typeof reasoning === 'string' && reasoning) sendThink(reasoning);
                   const delta = j.choices?.[0]?.delta?.content;
                   if (typeof delta === 'string' && delta) onDelta(delta);
-                  // The usage chunk (opt-in on the default base, unasked on the
-                  // scholar base) carries no delta — one per upstream call.
-                  const usage = usageFromJson(j);
-                  if (usage) {
-                    usageBox.prompt += usage.prompt_tokens;
-                    usageBox.completion += usage.completion_tokens;
-                    usageBox.seen = true;
-                  }
                 } catch {
                   /* skip a malformed SSE chunk */
                 }
@@ -1687,18 +1614,6 @@ async function handleChat(
         // the client an empty reply — with one engine degraded upstream, a
         // single hard-coded sibling isn't enough (observed live post-rewire).
         if (!full) {
-          if (waitUntil)
-            waitUntil(
-              logAiEvent(env, {
-                feature: 'assistant',
-                model: `${usedModel} @${keyRole}`,
-                ok: false,
-                status: 200,
-                error: thinkBox.text ? 'unclosed_think_fallback' : 'empty_stream_fallback',
-                client: isApp ? 'app' : 'web',
-                latency_ms: Date.now() - t0,
-              }),
-            );
           // 8.2.0 — the whole remaining ladder, not the first four: every pair
           // that has not already failed this request and is not resting, while
           // the reply's overall budget still has room for a hop.
@@ -1711,8 +1626,6 @@ async function handleChat(
               const upFb = await callStream(a, activeMsgs, 10_000);
               if (upFb.ok && upFb.body) {
                 usedAttempt = a;
-                usedModel = a.model;
-                usedRole = a.role;
                 sendMeta(a);
                 full = await drain(upFb.body);
               } else {
@@ -1751,20 +1664,6 @@ async function handleChat(
           } catch {
             /* already closed by a cancel */
           }
-        }
-        if (waitUntil) {
-          waitUntil(
-            logAiEvent(env, {
-              feature: 'assistant',
-              model: `${usedModel} @${usedRole}`,
-              ok: !!full,
-              status: 200,
-              error: full ? (cutBox.truncated ? 'stream_truncated' : null) : 'empty',
-              client: isApp ? 'app' : 'web',
-              latency_ms: Date.now() - t0,
-              ...(usageBox.seen ? { prompt_tokens: usageBox.prompt, completion_tokens: usageBox.completion } : {}),
-            }),
-          );
         }
       },
     });

@@ -1,69 +1,49 @@
-/** Overview: headline KPIs, engagement (DAU/WAU/MAU), and growth charts. */
-import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbCountResult, sbRpcResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
-import { readPlatforms } from '../../_lib/platforms';
+/**
+ * GET /api/admin/overview → { configured, schema, kpis, timeline, platforms, attention }
+ * The console's landing page: the tiles, two weeks of daily activity, the
+ * platform split, and what needs the owner's attention.
+ */
+import { adminJson, dbFailure } from '../../_lib/admin';
+import { adminGet } from '../../_lib/adminRoute';
+import { db, q, firstFailure } from '../../_lib/db';
 
-type Env = AdminEnv & SupabaseEnv;
-
-interface Summary {
-  active_now: number; total_users: number; new_today: number; plays_today: number;
-  plays_7d: number; errors_24h: number; dau: number; wau: number; mau: number; feedback_new: number;
+interface Kpis {
+  activeNow: number; listeners: number; newListeners24h: number; accounts: number; newAccounts7d: number;
+  plays24h: number; plays7d: number; errors24h: number; dau: number; wau: number; mau: number;
+  feedbackNew: number; pushDevices: number; roomsActive: number; aiCalls24h: number;
 }
-interface DayUsers { day: string; users: number; }
-interface DayPlays { day: string; plays: number; }
-interface SongRow { song_title: string; song_artist: string | null; song_image: string | null; plays: number; }
-interface GeoRow { country: string; city: string; listeners: number; plays: number; }
+interface Attention { level: 'bad' | 'warn' | 'info'; text: string; page?: string; tab?: string }
+interface MetaRow { key: string; value: { version?: number; appliedAt?: string } }
 
-export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
-  const { request, env } = context;
-  if (!(await isAdminAsync(request, env))) return unauthorized();
-  if (!supabaseConfigured(env)) return adminJson({ configured: false, summary: null, newUsersByDay: [], playsByDay: [], topSongs: [], topCountries: [], accounts: null, platforms: null });
-
-  // 13.8 — signed-in accounts live in vinax_accounts (Google sign-in), not
-  // in vinax_users (opt-in listening telemetry), so count them separately.
-  const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
-  const since7 = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  // 13.9 — plus the platform split (accounts AND devices), so Android and
-  // web listeners show on the first screen even when nobody shares usage.
-  const [summary, newUsersByDay, playsByDay, topSongs, geo, accounts, accountsToday, accounts7d, platforms] = await Promise.all([
-    sbRpcResult<Summary>(env, 'vinax_overview', {}),
-    sbRpcResult<DayUsers[]>(env, 'vinax_new_users_by_day', { days: 14 }),
-    sbRpcResult<DayPlays[]>(env, 'vinax_plays_by_day', { days: 14 }),
-    sbRpcResult<SongRow[]>(env, 'vinax_top_songs', { days: 7, lim: 5 }),
-    sbRpcResult<GeoRow[]>(env, 'vinax_geo', { days: 7 }),
-    sbCountResult(env, 'vinax_accounts'),
-    sbCountResult(env, 'vinax_accounts', `created_at=gte.${encodeURIComponent(dayStart.toISOString())}`),
-    sbCountResult(env, 'vinax_accounts', `last_seen=gte.${encodeURIComponent(since7)}`),
-    readPlatforms(env),
+export const onRequestGet = adminGet(async ({ env }) => {
+  const [kpis, timeline, platforms, meta] = await Promise.all([
+    db.rpc<Kpis>(env, 'stats_overview'),
+    db.rpc<unknown[]>(env, 'stats_timeline', { p_days: 14 }),
+    db.rpc<{ platforms: unknown[]; versions: unknown[] }>(env, 'stats_platforms'),
+    db.select<MetaRow>(env, 'meta', q().eq('key', 'schema').select('key,value').limit(1)),
   ]);
-  // 7.2.0 — every part is a headline number or chart: one failed read makes
-  // the whole panel unavailable rather than a mix of real data and zeros.
-  if (!summary.ok) return dbFailure(summary);
-  if (!newUsersByDay.ok) return dbFailure(newUsersByDay);
-  if (!playsByDay.ok) return dbFailure(playsByDay);
-  if (!topSongs.ok) return dbFailure(topSongs);
-  if (!geo.ok) return dbFailure(geo);
+  const failed = firstFailure(kpis, timeline, platforms, meta);
+  if (failed) return dbFailure(failed);
+  if (!kpis.ok || !timeline.ok || !platforms.ok || !meta.ok) return adminJson({ configured: true, error: 'db_unavailable' }, 502);
 
-  const byCountry: Record<string, number> = {};
-  for (const r of geo.value ?? []) byCountry[r.country] = (byCountry[r.country] ?? 0) + r.listeners;
-  const topCountries = Object.entries(byCountry)
-    .map(([country, listeners]) => ({ country, listeners }))
-    .sort((a, b) => b.listeners - a.listeners)
-    .slice(0, 8);
+  const schema = meta.rows[0]?.value ? { version: meta.rows[0].value.version ?? null, appliedAt: meta.rows[0].value.appliedAt ?? null } : null;
+  const k = kpis.value ?? ({} as Kpis);
+  const attention: Attention[] = [];
+  if (!schema) attention.push({ level: 'bad', text: 'The database has no schema version row — run backend/supabase/schema.sql.', page: 'database' });
+  if ((k.errors24h ?? 0) > 20) attention.push({ level: 'bad', text: `${k.errors24h} app errors in the last 24 hours.`, page: 'health', tab: 'errors' });
+  else if ((k.errors24h ?? 0) > 0) attention.push({ level: 'info', text: `${k.errors24h} app error${k.errors24h === 1 ? '' : 's'} in the last 24 hours.`, page: 'health', tab: 'errors' });
+  if ((k.feedbackNew ?? 0) > 0) attention.push({ level: 'warn', text: `${k.feedbackNew} new feedback message${k.feedbackNew === 1 ? '' : 's'} waiting.`, page: 'feedback' });
+  if ((k.pushDevices ?? 0) === 0) attention.push({ level: 'warn', text: 'No device is registered for push notifications yet.', page: 'notify', tab: 'audience' });
+  if ((k.roomsActive ?? 0) > 0) attention.push({ level: 'info', text: `${k.roomsActive} Listen Together room${k.roomsActive === 1 ? '' : 's'} active right now.`, page: 'live', tab: 'rooms' });
 
   return adminJson({
     configured: true,
-    summary: summary.value ?? null,
-    newUsersByDay: newUsersByDay.value ?? [],
-    playsByDay: playsByDay.value ?? [],
-    topSongs: topSongs.value ?? [],
-    topCountries,
-    // null when the accounts table is unreachable — the KPI shows "—".
-    accounts: {
-      total: accounts.ok ? accounts.value : null,
-      newToday: accountsToday.ok ? accountsToday.value : null,
-      active7d: accounts7d.ok ? accounts7d.value : null,
-    },
-    platforms,
+    schema,
+    kpis: k,
+    timeline: Array.isArray(timeline.value) ? timeline.value : [],
+    platforms: Array.isArray(platforms.value?.platforms) ? platforms.value.platforms : [],
+    versions: Array.isArray(platforms.value?.versions) ? platforms.value.versions : [],
+    attention,
+    checkedAt: new Date().toISOString(),
   });
-};
+});

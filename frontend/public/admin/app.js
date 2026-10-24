@@ -9,7 +9,7 @@
   'use strict';
   var VX = window.VX, h = VX.h, $ = function (id) { return document.getElementById(id); };
 
-  var GROUPS = ['Dashboards', 'Audience', 'Music', 'Content', 'Intelligence', 'System'];
+  var GROUPS = ['System', 'Audience', 'Intelligence', 'Content'];
   var THEME_KEY = 'vinax_admin_theme';
   var AUTO_KEY = 'vinax_admin_auto';
   var AUTO_MS = 30000;

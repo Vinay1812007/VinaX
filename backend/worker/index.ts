@@ -24,67 +24,38 @@ import * as m_api_dj from './functions/api/dj';
 import * as m_api_embed from './functions/api/embed';
 import * as m_api_voices from './functions/api/voices';
 import * as m_album_id from './functions/album/[id]';
-import * as m_api_admin_activity from './functions/api/admin/activity';
-import * as m_api_admin_ai from './functions/api/admin/ai';
-import * as m_api_admin_aicost from './functions/api/admin/aicost';
 import * as m_api_admin_ailab from './functions/api/admin/ailab';
-import * as m_api_admin_appconfig from './functions/api/admin/appconfig';
-import * as m_api_admin_audit from './functions/api/admin/audit';
 import * as m_api_admin_catalog_search from './functions/api/admin/catalog-search';
-import * as m_api_admin_content from './functions/api/admin/content';
-import * as m_api_admin_dataquality from './functions/api/admin/dataquality';
-import * as m_api_admin_digest from './functions/api/admin/digest';
 import * as m_api_admin_edge from './functions/api/admin/edge';
 import { guardVerdict, isEntityPage, isHubPage, plainShell } from './functions/_lib/pageGuard';
-import * as m_api_admin_cron from './functions/api/admin/cron';
 import * as m_api_admin_envcheck from './functions/api/admin/envcheck';
-import * as m_api_admin_funnel from './functions/api/admin/funnel';
-import * as m_api_admin_query from './functions/api/admin/query';
-import * as m_api_admin_skips from './functions/api/admin/skips';
-import * as m_api_admin_songstats from './functions/api/admin/songstats';
-import * as m_api_admin_usage from './functions/api/admin/usage';
-import * as m_api_admin_engagement from './functions/api/admin/engagement';
 import * as m_api_admin_enginetest from './functions/api/admin/enginetest';
-import * as m_api_admin_experiments from './functions/api/admin/experiments';
-import * as m_api_admin_feedback from './functions/api/admin/feedback';
-import * as m_api_admin_growth from './functions/api/admin/growth';
 import * as m_api_admin_health from './functions/api/admin/health';
-import * as m_api_admin_insights from './functions/api/admin/insights';
-import * as m_api_admin_live from './functions/api/admin/live';
-import * as m_api_admin_location from './functions/api/admin/location';
-import * as m_api_admin_maintenance from './functions/api/admin/maintenance';
-import * as m_api_admin_music from './functions/api/admin/music';
 import * as m_api_admin_musicapi from './functions/api/admin/musicapi';
-import * as m_api_admin_notifylog from './functions/api/admin/notifylog';
-import * as m_api_admin_overview from './functions/api/admin/overview';
-import * as m_api_admin_push from './functions/api/admin/push';
 import * as m_api_admin_fcmcheck from './functions/api/admin/fcmcheck';
-import * as m_api_admin_realtime from './functions/api/admin/realtime';
 import * as m_api_admin_releases from './functions/api/admin/releases';
-import * as m_api_admin_retention from './functions/api/admin/retention';
-import * as m_api_admin_rooms from './functions/api/admin/rooms';
-import * as m_api_admin_search_analytics from './functions/api/admin/search-analytics';
-import * as m_api_admin_seo from './functions/api/admin/seo';
-import * as m_api_admin_tables from './functions/api/admin/tables';
-import * as m_api_admin_technical from './functions/api/admin/technical';
-import * as m_api_admin_trends from './functions/api/admin/trends';
-import * as m_api_admin_user from './functions/api/admin/user';
-import * as m_api_admin_users from './functions/api/admin/users';
+// 14.0 — the database-backed console routes and the scheduled jobs.
+import * as m_api_admin_overview from './functions/api/admin/overview';
+import * as m_api_admin_live from './functions/api/admin/live';
+import * as m_api_admin_listeners from './functions/api/admin/listeners';
+import * as m_api_admin_analytics from './functions/api/admin/analytics';
+import * as m_api_admin_ai from './functions/api/admin/ai';
+import * as m_api_admin_feedback from './functions/api/admin/feedback';
+import * as m_api_admin_content from './functions/api/admin/content';
+import * as m_api_admin_settings from './functions/api/admin/settings';
+import * as m_api_admin_experiments from './functions/api/admin/experiments';
+import * as m_api_admin_push from './functions/api/admin/push';
+import * as m_api_admin_notifications from './functions/api/admin/notifications';
+import * as m_api_admin_audit from './functions/api/admin/audit';
+import * as m_api_admin_database from './functions/api/admin/database';
+import * as m_api_cron_run from './functions/api/cron/run';
+import { runScheduled } from './functions/_lib/jobs';
 // 7.2.0 — recommendation quality, AI operations, recommendation tuning.
-import * as m_api_admin_recquality from './functions/api/admin/recquality';
-import * as m_api_admin_aiops from './functions/api/admin/aiops';
-import * as m_api_admin_recconfig from './functions/api/admin/recconfig';
 import * as m_api_announcements from './functions/api/announcements';
 import * as m_api_apk from './functions/api/apk';
 import * as m_api_appconfig from './functions/api/appconfig';
 import * as m_api_assistant from './functions/api/assistant';
 import * as m_api_blocklist from './functions/api/blocklist';
-import * as m_api_cron_ai_daily_push from './functions/api/cron/ai-daily-push';
-import * as m_api_cron_seo_crawl from './functions/api/cron/seo-crawl';
-import * as m_api_cron_song_push from './functions/api/cron/song-push';
-import * as m_api_cron_trends_ingest from './functions/api/cron/trends-ingest';
-import * as m_api_cron_headlines from './functions/api/cron/headlines';
-import * as m_api_cron_weekly_digest from './functions/api/cron/weekly-digest';
 import * as m_api_events from './functions/api/events';
 import * as m_api_experiments from './functions/api/experiments';
 import * as m_api_feedback from './functions/api/feedback';
@@ -168,54 +139,29 @@ interface Env {
 }
 
 const EXACT: Record<string, Mod> = {
-  '/api/admin/activity': m_api_admin_activity,
-  '/api/admin/ai': m_api_admin_ai,
-  '/api/admin/aicost': m_api_admin_aicost,
   '/api/admin/ailab': m_api_admin_ailab,
-  '/api/admin/appconfig': m_api_admin_appconfig,
-  '/api/admin/audit': m_api_admin_audit,
   '/api/admin/catalog-search': m_api_admin_catalog_search,
-  '/api/admin/content': m_api_admin_content,
-  '/api/admin/dataquality': m_api_admin_dataquality,
-  '/api/admin/digest': m_api_admin_digest,
   '/api/admin/edge': m_api_admin_edge,
-  '/api/admin/cron': m_api_admin_cron,
   '/api/admin/envcheck': m_api_admin_envcheck,
-  '/api/admin/funnel': m_api_admin_funnel,
-  '/api/admin/query': m_api_admin_query,
-  '/api/admin/skips': m_api_admin_skips,
-  '/api/admin/songstats': m_api_admin_songstats,
-  '/api/admin/usage': m_api_admin_usage,
-  '/api/admin/engagement': m_api_admin_engagement,
   '/api/admin/enginetest': m_api_admin_enginetest,
-  '/api/admin/experiments': m_api_admin_experiments,
-  '/api/admin/feedback': m_api_admin_feedback,
-  '/api/admin/growth': m_api_admin_growth,
   '/api/admin/health': m_api_admin_health,
-  '/api/admin/insights': m_api_admin_insights,
-  '/api/admin/live': m_api_admin_live,
-  '/api/admin/location': m_api_admin_location,
-  '/api/admin/maintenance': m_api_admin_maintenance,
-  '/api/admin/music': m_api_admin_music,
   '/api/admin/musicapi': m_api_admin_musicapi,
-  '/api/admin/notifylog': m_api_admin_notifylog,
-  '/api/admin/overview': m_api_admin_overview,
-  '/api/admin/push': m_api_admin_push,
   '/api/admin/fcmcheck': m_api_admin_fcmcheck,
-  '/api/admin/realtime': m_api_admin_realtime,
   '/api/admin/releases': m_api_admin_releases,
-  '/api/admin/retention': m_api_admin_retention,
-  '/api/admin/rooms': m_api_admin_rooms,
-  '/api/admin/search-analytics': m_api_admin_search_analytics,
-  '/api/admin/seo': m_api_admin_seo,
-  '/api/admin/tables': m_api_admin_tables,
-  '/api/admin/technical': m_api_admin_technical,
-  '/api/admin/trends': m_api_admin_trends,
-  '/api/admin/user': m_api_admin_user,
-  '/api/admin/users': m_api_admin_users,
-  '/api/admin/recquality': m_api_admin_recquality,
-  '/api/admin/aiops': m_api_admin_aiops,
-  '/api/admin/recconfig': m_api_admin_recconfig,
+  '/api/admin/overview': m_api_admin_overview,
+  '/api/admin/live': m_api_admin_live,
+  '/api/admin/listeners': m_api_admin_listeners,
+  '/api/admin/analytics': m_api_admin_analytics,
+  '/api/admin/ai': m_api_admin_ai,
+  '/api/admin/feedback': m_api_admin_feedback,
+  '/api/admin/content': m_api_admin_content,
+  '/api/admin/settings': m_api_admin_settings,
+  '/api/admin/experiments': m_api_admin_experiments,
+  '/api/admin/push': m_api_admin_push,
+  '/api/admin/notifications': m_api_admin_notifications,
+  '/api/admin/audit': m_api_admin_audit,
+  '/api/admin/database': m_api_admin_database,
+  '/api/cron/run': m_api_cron_run,
   '/api/aimodels': m_api_aimodels,
   '/api/curate': m_api_curate,
   '/api/dj': m_api_dj,
@@ -226,12 +172,6 @@ const EXACT: Record<string, Mod> = {
   '/api/appconfig': m_api_appconfig,
   '/api/assistant': m_api_assistant,
   '/api/blocklist': m_api_blocklist,
-  '/api/cron/ai-daily-push': m_api_cron_ai_daily_push,
-  '/api/cron/seo-crawl': m_api_cron_seo_crawl,
-  '/api/cron/song-push': m_api_cron_song_push,
-  '/api/cron/trends-ingest': m_api_cron_trends_ingest,
-  '/api/cron/headlines': m_api_cron_headlines,
-  '/api/cron/weekly-digest': m_api_cron_weekly_digest,
   '/api/events': m_api_events,
   '/api/experiments': m_api_experiments,
   '/api/feedback': m_api_feedback,
@@ -385,17 +325,9 @@ export default {
     // Host-level middleware (apex 301, update.* / admin.* redirects), then the router.
     return hostMiddleware({ request, next: () => route(request, env, ctx) });
   },
-  /**
-   * 8.5.0 — Cron Trigger (wrangler.toml `[triggers]`): the status probe round
-   * every 30 minutes, so the public status page no longer depends on GitHub's
-   * scheduler (which fired the 30-minute tick only every 4–6 hours).
-   */
-  async scheduled(_event: unknown, env: Env, ctx: ExecCtx): Promise<void> {
-    ctx.waitUntil(
-      m_api_status.recordProbeRound(env as unknown as Parameters<typeof m_api_status.recordProbeRound>[0]).then(
-        (r) => console.log(`[status] scheduled tick recorded ${r.recorded} components`),
-        (e: unknown) => console.warn('[status] scheduled tick failed:', e instanceof Error ? e.message : String(e)),
-      ),
-    );
+  // 14.0 — the Cron Trigger (wrangler.toml [triggers]): the status tick every
+  // run, housekeeping once an hour. Nothing runs without the database.
+  async scheduled(event: { scheduledTime: number }, env: Env, ctx: ExecCtx): Promise<void> {
+    ctx.waitUntil(runScheduled(env as Record<string, unknown>, event.scheduledTime));
   },
 };

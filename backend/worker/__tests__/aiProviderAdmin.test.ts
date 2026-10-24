@@ -144,7 +144,7 @@ describe('health — the four keys and every lane', () => {
     ]);
     expect(body.ai[0].lanes).toEqual(['dj', 'chat', 'deep', 'fast', 'home', 'search', 'pro', 'mini', 'vision', 'vision90']);
     expect(body.lanes.map((l) => l.lane)).toEqual(['dj', 'chat', 'deep', 'fast', 'scholar', 'home', 'search', 'pro', 'mini', 'router', 'maestro', 'vision', 'vision90', 'workers']);
-    expect(body.lanes.find((l) => l.lane === 'router')).toMatchObject({ provider: 'openrouter', keySet: false, calls: 0 });
+    expect(body.lanes.find((l) => l.lane === 'router')).toEqual({ lane: 'router', provider: 'openrouter', keySet: false });
     expect(body.lanes.find((l) => l.lane === 'scholar')).toMatchObject({ provider: 'groq', keySet: true });
     // Four keys → at most two live pings here (two are unset).
     expect(calls.filter((c) => c.url.includes('chat/completions'))).toHaveLength(2);

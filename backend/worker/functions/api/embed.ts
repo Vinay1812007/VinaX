@@ -8,13 +8,12 @@
  *   400      { error: 'bad_request' }   413 { error: 'too_large' }
  *   429      rate limited
  *   503      { error: 'no_engine' } — no engine answered (the client keeps
- *            its on-device vectors); { error: 'ai_disabled' | 'ai_over_budget' }
- *            when the owner's AI switch or spend cap refuses.
+ *            its on-device vectors).
  *
  * Vectors from different models are not comparable: clients key their cache
  * by `model`. The engine ladder lives in _lib/embed.ts.
  */
-import { aiBlockCode, aiGate, type AiEnv } from '../_lib/ai';
+import { type AiEnv } from '../_lib/ai';
 import { readJsonCapped } from '../_lib/body';
 import { EMBED_DIM, MAX_TEXTS, MAX_TEXT_CHARS, embedTexts, type EmbedKind } from '../_lib/embed';
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
@@ -81,8 +80,6 @@ async function handlePost(context: { request: Request; env: AiEnv }): Promise<Re
   // search adds one query call per settled natural-language search.
   const limited = await rateLimitAsync(request, 'embed', { capacity: 30, refillPerMinute: 30 }, env);
   if (limited) return limited;
-  const blocked = await aiGate(env, 'embed');
-  if (blocked) return json({ error: aiBlockCode(blocked) }, 503);
 
   const read = await readJsonCapped<unknown>(request, MAX_BODY_BYTES);
   if (!read.ok) return read.reason === 'too_large' ? json({ error: 'too_large' }, 413) : json({ error: 'bad_request' }, 400);

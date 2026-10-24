@@ -11,7 +11,6 @@
  *   VX.fmt          number / time / percent formatting
  *   VX.ui           cards, KPI tiles, tables, charts, tabs, forms, toasts,
  *                   confirm dialogs, drawers, state panels, downloads
- *   VX.config       read + publish keys through /api/admin/appconfig
  *   VX.page(def)    page registry consumed by app.js
  */
 (function () {
@@ -180,11 +179,6 @@
   }
 
   var ERROR_TEXT = {
-    db_unavailable: 'The database is not reachable right now.',
-    db_unconfigured: 'The database is not connected (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing).',
-    db_not_configured: 'The database is not connected (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing).',
-    db_schema_missing: 'A database table or function is missing — run frontend/supabase/vinax-13.sql in the SQL editor.',
-    db_bad_request: 'The database rejected the query.',
     not_configured: 'This feature needs a server secret that is not set.',
     unauthorized: 'Signed out — enter the owner password again.',
     rate_limited: 'Too many requests — wait a moment and retry.',
@@ -248,8 +242,7 @@
       return p;
     },
     post: function (path, body, opts) { memo.clear(); return request('POST', path, Object.assign({}, opts, { body: body == null ? {} : body })); },
-    // No admin route accepts DELETE/PUT (the Worker answers 405): deletes are
-    // POST actions, e.g. VX.api.post('/api/admin/users', { action: 'delete_user', … }).
+    // No admin route accepts DELETE/PUT (the Worker answers 405).
     /** Raw fetch with the owner token, for file downloads. */
     blob: function (path, params) {
       return fetch(path + qs(params), { headers: { 'x-admin-token': VX.auth.token() }, cache: 'no-store' })
@@ -814,48 +807,6 @@
   /** Status dot + label from a tone string */
   ui.status = function (tone, label) { return h('span.status.' + (tone || 'muted'), ui.dot(tone), label); };
 
-  /* ------------------------------------------------------------- config */
-
-  /**
-   * Remote config (vinax_config via /api/admin/appconfig). The server reads
-   * ONE key per GET (?key=…) and only accepts keys in its ALLOWED_KEYS list.
-   *   VX.config.get(key)        → Promise<{ ok, value, updatedAt, res }>  (value null = not set)
-   *   VX.config.all()           → Promise<{ ok, values: {key: value}, updatedAt: {key: iso}, failed: [keys] }>
-   *   VX.config.set(key, value) → Promise<res>  (value null clears the key — readers fall back to defaults)
-   */
-  var CONFIG_KEYS = ['home-layout', 'banners', 'festival', 'status-note', 'flags', 'runbook', 'trending-pins', 'greeting', 'broadcast',
-    'search-synonyms', 'catalog-sources', 'language-order', 'ai-starters', 'ai-quick', 'support-faq', 'min-version',
-    'maintenance-window', 'ai-rules', 'ai-prices', 'ai-controls'];
-  VX.config = {
-    keys: CONFIG_KEYS.slice(),
-    get: function (key) {
-      return VX.api.get('/api/admin/appconfig', { key: key }, { fresh: true }).then(function (res) {
-        var d = res.data || {};
-        return { ok: res.ok && d.configured !== false, value: res.ok ? (d.value === undefined ? null : d.value) : null, updatedAt: d.updated_at || null, res: res, message: d.configured === false ? VX.errorText('db_unconfigured') : res.message };
-      });
-    },
-    all: function () {
-      return Promise.all(CONFIG_KEYS.map(function (k) { return VX.config.get(k); })).then(function (list) {
-        var values = {}, updatedAt = {}, failed = [];
-        list.forEach(function (r, i) {
-          var k = CONFIG_KEYS[i];
-          if (!r.ok) { failed.push(k); return; }
-          values[k] = r.value; updatedAt[k] = r.updatedAt;
-        });
-        return { ok: failed.length < CONFIG_KEYS.length, values: values, updatedAt: updatedAt, failed: failed, message: failed.length ? (list[CONFIG_KEYS.indexOf(failed[0])].message || 'Could not read config') : '' };
-      });
-    },
-    set: function (key, value, o) {
-      return VX.api.post('/api/admin/appconfig', { key: key, value: value === undefined ? null : value }).then(function (res) {
-        if (!(o && o.silent)) {
-          if (res.ok) VX.toast(value == null ? 'Cleared — the app uses its default again' : 'Published', 'ok');
-          else VX.toast('Could not save: ' + (res.data && res.data.reason ? res.data.reason : res.message), 'bad');
-        }
-        return res;
-      });
-    }
-  };
-
   /* -------------------------------------------------------------- pages */
 
   var pages = [];
@@ -869,27 +820,6 @@
    */
   VX.page = function (def) { pages.push(def); };
   VX.pages = function () { return pages.slice(); };
-
-  /**
-   * Fill a daily series so a sparse week still draws as a week.
-   *   VX.fillDays(rows, 14, 'day', ['plays']) → { labels:['2026-10-08',…], values:{ plays:[…] } }
-   * Days are UTC calendar dates (the database groups by UTC day).
-   */
-  VX.fillDays = function (rows, days, dayKey, valueKeys) {
-    var map = {};
-    (rows || []).forEach(function (r) { var k = String(r[dayKey || 'day'] || '').slice(0, 10); if (k) map[k] = r; });
-    var labels = [], values = {};
-    valueKeys.forEach(function (k) { values[k] = []; });
-    var keys = Object.keys(map).sort();
-    var end = new Date();
-    if (keys.length && keys[keys.length - 1] > end.toISOString().slice(0, 10)) end = new Date(keys[keys.length - 1] + 'T00:00:00Z');
-    for (var i = days - 1; i >= 0; i--) {
-      var d = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate() - i)).toISOString().slice(0, 10);
-      labels.push(d);
-      valueKeys.forEach(function (k) { values[k].push(map[d] ? Number(map[d][k]) || 0 : 0); });
-    }
-    return { labels: labels, values: values };
-  };
 
   /** Song/listener cell: thumbnail + title + subtitle */
   ui.media = function (img, title, sub, round) {
@@ -906,4 +836,75 @@
   VX.ui.daysPicker = function (value, onChange) {
     return ui.segmented([{ value: 1, label: '24h' }, { value: 7, label: '7d' }, { value: 30, label: '30d' }, { value: 90, label: '90d' }], value, onChange, 'Time range');
   };
+})();
+
+/* 14.0 — shared helpers for the database-backed pages. */
+(function () {
+  'use strict';
+  var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt;
+
+  /** The card every data page shows while the database is not set up. */
+  ui.setupCard = function (ctx) {
+    return ui.card({
+      title: 'Database not set up', tone: 'warn',
+      body: [
+        h('p', 'This page reads the VinaX database, and the Worker has no database configured yet. Three steps:'),
+        h('ol.steps', { style: { 'margin-top': '10px' } },
+          h('li', 'Create a Supabase project and paste ', h('code.mono', 'backend/supabase/schema.sql'), ' into its SQL editor, then Run.'),
+          h('li', 'Set the Worker secrets ', h('code.mono', 'SUPABASE_URL'), ' and ', h('code.mono', 'SUPABASE_SERVICE_ROLE_KEY'), '.'),
+          h('li', 'Open the Database page — it shows the schema version the paste wrote.')),
+        h('pre.json', { style: { 'margin-top': '10px' } }, 'cd backend\nnpx wrangler secret put SUPABASE_URL --config worker/wrangler.toml\nnpx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml'),
+        ctx && ctx.go ? h('div.toolbar', { style: { 'margin-top': '12px' } }, ui.button('Open Database page', { kind: 'ghost', small: true, icon: 'database', onClick: function () { ctx.go('database', 'tables'); } })) : null
+      ]
+    });
+  };
+
+  /** `d.configured === false` → the setup card, else null. */
+  ui.gate = function (d, ctx) { return d && d.configured === false ? ui.setupCard(ctx) : null; };
+
+  /** Arrays and objects from an answer that may be empty. */
+  VX.arr = function (v) { return Array.isArray(v) ? v : []; };
+  VX.obj = function (v) { return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; };
+  VX.num = function (v) { var n = Number(v); return isFinite(n) ? n : 0; };
+
+  /** Hour-of-week heat map: cells[7][24] (Sunday first), values scaled by opacity. */
+  var DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  ui.heatmap = function (cells, o) {
+    o = o || {};
+    cells = VX.arr(cells);
+    if (!cells.length || !cells.some(function (r) { return VX.arr(r).some(function (v) { return VX.num(v) > 0; }); })) return ui.empty(o.empty || 'No activity in this period');
+    var max = 1;
+    cells.forEach(function (r) { VX.arr(r).forEach(function (v) { max = Math.max(max, VX.num(v)); }); });
+    var grid = h('div.heat', { style: { 'grid-template-columns': '36px repeat(24, minmax(8px, 1fr))' }, role: 'img', 'aria-label': o.label || 'Activity by hour and weekday' });
+    grid.appendChild(h('span'));
+    for (var hh = 0; hh < 24; hh++) grid.appendChild(h('span.heat-lbl', hh % 3 === 0 ? String(hh) : ''));
+    cells.slice(0, 7).forEach(function (row, d) {
+      grid.appendChild(h('span.heat-lbl', DAYS[d] || String(d)));
+      for (var x = 0; x < 24; x++) {
+        var v = VX.num(VX.arr(row)[x]);
+        grid.appendChild(h('div.heat-cell', { title: DAYS[d] + ' ' + x + ':00 · ' + fmt.num(v), style: { opacity: v ? (0.15 + 0.85 * v / max).toFixed(2) : '0.06' } }));
+      }
+    });
+    return grid;
+  };
+
+  /** Previous / Next controls for server-side paging. */
+  ui.pager = function (offset, limit, total, onPage) {
+    var pages = Math.max(1, Math.ceil(VX.num(total) / limit));
+    var page = Math.floor(offset / limit);
+    return h('div.tbl-pager',
+      ui.button('Previous', { kind: 'ghost', small: true, disabled: page <= 0, onClick: function () { onPage(Math.max(0, offset - limit)); } }),
+      h('span.muted', 'Page ' + fmt.num(page + 1) + ' of ' + fmt.num(pages) + ' · ' + fmt.plural(total, 'row')),
+      ui.button('Next', { kind: 'ghost', small: true, disabled: page >= pages - 1, onClick: function () { onPage(offset + limit); } }));
+  };
+
+  /** A short random id for dedupe keys. */
+  VX.rid = function () {
+    var b = new Uint8Array(8);
+    (window.crypto || {}).getRandomValues ? window.crypto.getRandomValues(b) : b.forEach(function (_, i) { b[i] = Math.floor(Math.random() * 256); });
+    return Array.prototype.map.call(b, function (x) { return x.toString(16).padStart(2, '0'); }).join('');
+  };
+
+  /** Time cell: relative text with the full stamp as a tooltip. */
+  ui.ago = function (iso) { return iso ? h('span', { title: fmt.dateTime(iso) }, fmt.ago(iso)) : h('span.muted', '—'); };
 })();

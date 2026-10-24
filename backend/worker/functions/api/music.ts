@@ -7,7 +7,6 @@
  *   400      { error: 'bad_request' | 'unknown_model' }   413 { error: 'too_large' }
  *   429      rate limited (3 a minute: one track is a long, heavy call)
  *   503      { error: 'not_configured', reason: 'no_key' | 'no_free_model' }
- *            | { error: 'ai_disabled' | 'ai_over_budget' }
  *   502      { error: <upstream reason>, status }
  *
  * The models come from the live free lists (_lib/catalog.ts). On 2026-10-06
@@ -15,13 +14,12 @@
  * bill per clip in a field the list leaves out, so they are not offered, and
  * this route answers not_configured / no_free_model until one is free.
  */
-import { aiBlockCode, aiGate, logAiEvent, logAiRefusal, noteProviderFailure, type AiEnv } from '../_lib/ai';
+import { noteProviderFailure, type AiEnv } from '../_lib/ai';
 import { readJsonCapped } from '../_lib/body';
 import { generateMusic, pickMedia, toBase64 } from '../_lib/media';
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
-import { type SupabaseEnv } from '../_lib/supabase';
 
-type Env = AiEnv & SupabaseEnv;
+type Env = AiEnv;
 
 /** A prompt and two ids. */
 const MAX_BODY_BYTES = 4_000;
@@ -53,28 +51,19 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
 
 async function handle(context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> {
   const { request, env } = context;
-  const client = request.headers.get('x-vinax-client') === 'app' ? 'app' : 'web';
   const read = await readJsonCapped<Record<string, unknown> | null>(request, MAX_BODY_BYTES);
   if (!read.ok) return read.reason === 'too_large' ? json({ error: 'too_large' }, 413) : json({ error: 'bad_request' }, 400);
   const body = read.value && typeof read.value === 'object' && !Array.isArray(read.value) ? read.value : null;
   const prompt = typeof body?.prompt === 'string' ? body.prompt.replace(/\s+/g, ' ').trim().slice(0, 1000) : '';
   if (!body || prompt.length < 3) return json({ error: 'bad_request' }, 400);
 
-  const blocked = await aiGate(env, 'music');
-  if (blocked) {
-    void logAiRefusal(env, 'music', blocked, client, context.waitUntil);
-    return json({ error: aiBlockCode(blocked) }, 503);
-  }
   const pick = await pickMedia(env, 'music', body.provider, body.model);
   if (!pick.ok) return json({ error: pick.error, ...(pick.reason ? { reason: pick.reason } : {}) }, pick.status);
 
   // One model per request: a track is a long call, and a second one would
   // double the wait for an answer the listener did not pick.
   const { provider, model } = pick.choices[0];
-  const t0 = Date.now();
   const r = await generateMusic(env, provider, model.id, prompt);
-  const log = logAiEvent(env, { feature: 'music', model: `${model.id} @${provider}`, ok: r.ok, status: r.ok ? 200 : r.status, error: r.ok ? null : r.reason, client, latency_ms: Date.now() - t0 });
-  if (context.waitUntil) context.waitUntil(log);
   if (!r.ok) {
     noteProviderFailure(provider, model.id, r.status, r.body);
     if (r.reason === 'too_large') return json({ error: 'too_large' }, 502);

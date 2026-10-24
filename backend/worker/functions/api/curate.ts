@@ -1,8 +1,7 @@
 /** Structured music tasks on the existing key/model lane router. */
-import { aiBlockCode, aiGate, chat, extractJson, isAiBlocked, logAiEvent, logAiRefusal, type AiBlock, type AiEnv, type AiFeature, type Lane } from '../_lib/ai';
+import { chat, extractJson, type AiEnv, type Lane } from '../_lib/ai';
 import { readJsonCapped } from '../_lib/body';
 import { rateLimitAsync, methodNotAllowed } from '../_lib/ratelimit';
-import { type SupabaseEnv } from '../_lib/supabase';
 import { designShelves } from '../_lib/homeShelves';
 
 export const TASK_ROUTES = {
@@ -122,7 +121,7 @@ export function sanitizeCurated(task: 'metadata' | 'ranking' | 'home', raw: unkn
   return songs.length ? { songs } : null;
 }
 
-export async function onRequestPost({ request, env, waitUntil }: { request: Request; env: AiEnv & SupabaseEnv; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> {
+export async function onRequestPost({ request, env }: { request: Request; env: AiEnv; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> {
   const limited = await rateLimitAsync(request, 'curate', { capacity: 12, refillPerMinute: 6 }, env);
   if (limited) return limited;
   try {
@@ -133,28 +132,12 @@ export async function onRequestPost({ request, env, waitUntil }: { request: Requ
     if (!body || !Object.prototype.hasOwnProperty.call(TASK_ROUTES, body.task ?? '') || !body.data || typeof body.data !== 'object') return json({ error: 'bad_request' }, 400);
     const task = body.task as keyof typeof TASK_ROUTES;
     const route = TASK_ROUTES[task];
-    // 7.2.0 — each curate task has its own owner switch (curate-metadata,
-    // curate-ranking, curate-home, curate-shelves) plus the global stop and
-    // caps; the client already falls back on any non-2xx.
-    const feature = `curate-${task}` as AiFeature;
-    // Refusals are logged (error ai_disabled / ai_over_budget) for the console.
-    const refuse = (b: AiBlock): Response => {
-      void logAiRefusal(env, feature, b, request.headers.get('x-vinax-client') === 'app' ? 'app' : 'web', waitUntil);
-      return json({ error: aiBlockCode(b) }, 503);
-    };
-    const blocked = await aiGate(env, feature);
-    if (blocked) return refuse(blocked);
     const now = Date.now();
     if (task === 'shelves') {
       // v6.5.0 — the Home Builder: idea pitches in parallel, one curate, and
       // an on-taste fallback so Home always gets shelves while any engine is
       // configured. Only a totally unconfigured AI still answers 503.
-      const isApp = request.headers.get('x-vinax-client') === 'app';
       const r = await designShelves(env, body.data as Record<string, unknown>, route.budget);
-      if (r.error !== 'not_configured') {
-        const log = logAiEvent(env, { feature: 'home', model: r.model ? `${r.model}${r.keyRole ? ` @${r.keyRole}` : ''}` : null, ok: r.sections.length > 0, status: r.status ?? null, error: r.error ?? (r.usedAi ? null : 'fallback'), client: isApp ? 'app' : 'web', latency_ms: Date.now() - now, prompt_tokens: r.usage?.prompt_tokens, completion_tokens: r.usage?.completion_tokens });
-        if (typeof waitUntil === 'function') waitUntil(log);
-      }
       if (r.error === 'not_configured') return json({ error: 'ai_not_configured' }, 503);
       return r.sections.length ? json({ data: { sections: r.sections, model: r.model } }) : json({ error: r.error ?? 'invalid_output' }, 502);
     }
@@ -172,10 +155,9 @@ export async function onRequestPost({ request, env, waitUntil }: { request: Requ
       { role: 'user', content: JSON.stringify(body.data) },
     // v6.5.2 — leashes sized to the engines measured live (a warm metadata
     // call lands in ~4 s; 2.5 s aborted it before it could answer).
-    ], { lane: lanes[0], ladder: lanes.slice(1), json: true, temperature: 0.25, maxTokens: route.tokens, firstTimeoutMs: task === 'metadata' ? 3500 : 5000, timeoutMs: 4000, deadlineAt: now + route.budget, reasoningEffort: 'low', feature,
+    ], { lane: lanes[0], ladder: lanes.slice(1), json: true, temperature: 0.25, maxTokens: route.tokens, firstTimeoutMs: task === 'metadata' ? 3500 : 5000, timeoutMs: 4000, deadlineAt: now + route.budget, reasoningEffort: 'low',
       // 8.2.0 — an answer with nothing valid left after sanitising asks the next lane (same deadline).
       accept: (content) => sanitizeCurated(task, extractJson(content), body.data) !== null });
-    if (isAiBlocked(result.error)) return refuse(result.error);
     // Never hand the engine's JSON through as-is — validate and clip it first.
     const data = sanitizeCurated(task, extractJson(result.content), body.data);
     const servedLane = lanes.includes(result.keyRole as Lane) ? result.keyRole as Lane : lanes[0];

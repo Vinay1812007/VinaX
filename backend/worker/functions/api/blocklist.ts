@@ -1,8 +1,11 @@
-/** Public, cacheable list of blocked song ids. The app fetches this and hides
- *  the matching songs from results + playback. Coarse, no auth needed. */
-import { sbSelect, type SupabaseEnv } from '../_lib/supabase';
-
-type Env = SupabaseEnv;
+/**
+ * GET /api/blocklist → { ids: [...], artists: [...], keywords: [...] }
+ *
+ * Content the owner blocked (`blocked_content`): song ids, artist names and
+ * keywords. The app fetches this once at start-up and hides the matches from
+ * results and playback. Public, cached a minute; empty without a database.
+ */
+import { db, dbConfigured, q, type DbEnv } from '../_lib/db';
 
 const CORS: Record<string, string> = {
   'access-control-allow-origin': '*',
@@ -10,30 +13,24 @@ const CORS: Record<string, string> = {
   'access-control-allow-headers': 'content-type',
 };
 
-export const onRequestOptions = async (): Promise<Response> =>
-  new Response(null, { status: 204, headers: CORS });
+const answer = (body: { ids: string[]; artists: string[]; keywords: string[] }): Response =>
+  new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=60', ...CORS } });
 
-interface IdRow { song_id: string; }
+export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: CORS });
 
-// Package E4 — the blocklist now carries three kinds in one table, namespaced
-// in the song_id column (which is plain text): bare ids block one song,
-// `artist:<name>` blocks everything by that artist, `kw:<term>` blocks any
-// song whose title/subtitle contains the term. Old clients that only read
-// `ids` keep working — prefixed entries can never collide with real ids and
-// are also filtered out of the ids array below.
-export const onRequestGet = async (context: { env: Env }): Promise<Response> => {
-  const rows = await sbSelect<IdRow>(context.env, 'vinax_blocklist', 'select=song_id&limit=5000');
-  const ids: string[] = [];
-  const artists: string[] = [];
-  const keywords: string[] = [];
-  for (const r of rows) {
-    const v = r.song_id;
+export const onRequestGet = async (ctx?: { env?: DbEnv }): Promise<Response> => {
+  const env = ctx?.env ?? {};
+  const empty = { ids: [], artists: [], keywords: [] };
+  if (!dbConfigured(env)) return answer(empty);
+  const r = await db.select<{ kind: string; value: string }>(env, 'blocked_content', q().select('kind,value').order('id').limit(2000));
+  if (!r.ok) return answer(empty);
+  const out: { ids: string[]; artists: string[]; keywords: string[] } = { ids: [], artists: [], keywords: [] };
+  for (const row of r.rows) {
+    const v = String(row.value ?? '').trim();
     if (!v) continue;
-    if (v.startsWith('artist:')) artists.push(v.slice(7));
-    else if (v.startsWith('kw:')) keywords.push(v.slice(3));
-    else ids.push(v);
+    if (row.kind === 'song') out.ids.push(v);
+    else if (row.kind === 'artist') out.artists.push(v);
+    else if (row.kind === 'keyword') out.keywords.push(v);
   }
-  return new Response(JSON.stringify({ ids, artists, keywords }), {
-    headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=60', ...CORS },
-  });
+  return answer(out);
 };

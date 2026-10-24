@@ -1,27 +1,23 @@
-/** Store a browser push subscription (upsert by endpoint). */
-import { sbUpsert, type SupabaseEnv } from '../../_lib/supabase';
+/**
+ * POST /api/push/subscribe { endpoint, keys: { p256dh, auth }, lang?, tzOffset? }
+ *   → 200 { ok: true }
+ *   → 400 bad_request | endpoint_rejected
+ *   → 503 not_configured          no database on this Worker
+ *
+ * Keeps a browser push subscription as a `push_devices` row (channel `web`),
+ * with the language, the device's UTC offset (quiet hours) and the edge's
+ * coarse geo so the owner can send to a city. Re-subscribing refreshes the
+ * row and switches it back on.
+ */
+import { db, dbConfigured, type DbEnv } from '../../_lib/db';
+import { asObject, clip, edgeGeo, intIn, jsonResponse } from '../../_lib/edge';
 import { rateLimit } from '../../_lib/ratelimit';
-import { cleanTzOffset } from '../../_lib/notifyGate';
-
-interface SubscribeEnv extends SupabaseEnv {
-  TELEMETRY_PEPPER?: string;
-}
-
-function json(o: unknown, status = 200): Response {
-  return new Response(JSON.stringify(o), {
-    status,
-    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
-  });
-}
 
 /**
  * Known Web Push service hosts. Anything else would let an attacker register
- * an arbitrary URL as their "endpoint" and turn later admin/cron fan-outs
- * into an authenticated SSRF beacon originating from Cloudflare's edge (audit
- * finding H10). Wildcards are matched by suffix so per-region hosts (Mozilla
- * update-*.push.services.mozilla.com, Apple api.push-*.push.apple.com,
- * Microsoft wns2-*.notify.windows.com) still work without letting an attacker
- * append a matching-suffix subdomain of their own.
+ * an arbitrary URL as their "endpoint" and turn later fan-outs into an
+ * authenticated beacon from Cloudflare's edge. Per-region hosts are matched
+ * by pattern, never by suffix alone.
  */
 const ALLOWED_PUSH_HOSTS: Array<string | RegExp> = [
   'fcm.googleapis.com',
@@ -31,7 +27,7 @@ const ALLOWED_PUSH_HOSTS: Array<string | RegExp> = [
   /^api\.push\.apple\.com$/,
 ];
 
-function isAllowedPushEndpoint(raw: string): boolean {
+export function isAllowedPushEndpoint(raw: string): boolean {
   let url: URL;
   try {
     url = new URL(raw);
@@ -40,51 +36,38 @@ function isAllowedPushEndpoint(raw: string): boolean {
   }
   if (url.protocol !== 'https:') return false;
   const host = url.host.toLowerCase();
-  for (const rule of ALLOWED_PUSH_HOSTS) {
-    if (typeof rule === 'string' ? host === rule : rule.test(host)) return true;
-  }
-  return false;
+  return ALLOWED_PUSH_HOSTS.some((rule) => (typeof rule === 'string' ? host === rule : rule.test(host)));
 }
 
-interface CfExtras { cf?: { country?: string; region?: string; city?: string } }
+/** Device UTC offset in minutes east, inside the real range, else null. */
+export const cleanTzOffset = (v: unknown): number | null => intIn(v, -840, 840);
 
-export const onRequestPost = async (context: { request: Request; env: SubscribeEnv }): Promise<Response> => {
+export const onRequestPost = async (context: { request: Request; env: DbEnv }): Promise<Response> => {
   const { request, env } = context;
-  // Audit finding H-SRV-3: this endpoint was previously unrated and would
-  // happily accept an arbitrary loop of endpoint registrations from one IP.
   const limited = rateLimit(request, 'push-subscribe', { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
-  const body = (await request.json().catch(() => null)) as
-    | { endpoint?: string; keys?: { p256dh?: string; auth?: string }; lang?: string; tzOffset?: number }
-    | null;
-  const endpoint = body?.endpoint;
-  const p256dh = body?.keys?.p256dh;
-  const auth = body?.keys?.auth;
-  if (!endpoint || !p256dh || !auth) return json({ error: 'bad_request' }, 400);
-  if (!isAllowedPushEndpoint(endpoint)) return json({ error: 'endpoint_rejected' }, 400);
-  // Coarse geo — read from Cloudflare edge, stored at subscribe time so
-  // location-targeted admin pushes ("Hyderabad trending") have a subscriber
-  // filter to hit. IP itself never enters the DB (privacy promise intact).
-  const cf = (request as Request & CfExtras).cf ?? {};
-  const country = request.headers.get('CF-IPCountry') ?? cf.country ?? null;
-  const ok = await sbUpsert(
-    env,
-    'vinax_push_subscriptions',
-    {
-      endpoint,
-      p256dh,
-      auth,
-      lang: typeof body?.lang === 'string' ? body.lang.slice(0, 8) : null,
-      country: country && country !== 'XX' && country !== 'T1' ? country : null,
-      region: cf.region ?? null,
-      city: cf.city ?? null,
-      // Device UTC offset (minutes east) for the quiet-hours gate — coarse and
-      // non-identifying (not the IP, not a precise location).
-      tz_offset: cleanTzOffset(body?.tzOffset),
-      active: true,
-      updated_at: new Date().toISOString(),
-    },
-    'endpoint',
-  );
-  return json({ ok }, ok ? 200 : 500);
+  const body = asObject(await request.json().catch(() => null));
+  const keys = asObject(body?.keys);
+  const endpoint = clip(body?.endpoint, 2048);
+  const p256dh = clip(keys?.p256dh, 200);
+  const auth = clip(keys?.auth, 100);
+  if (!endpoint || !p256dh || !auth) return jsonResponse({ error: 'bad_request' }, 400);
+  if (!isAllowedPushEndpoint(endpoint)) return jsonResponse({ error: 'endpoint_rejected' }, 400);
+  if (!dbConfigured(env)) return jsonResponse({ error: 'not_configured' }, 503);
+  const geo = edgeGeo(request);
+  const r = await db.upsert(env, 'push_devices', {
+    channel: 'web',
+    target: endpoint,
+    p256dh,
+    auth,
+    platform: 'web',
+    lang: clip(body?.lang, 8)?.toLowerCase() ?? null,
+    country: geo.country,
+    region: geo.region,
+    city: geo.city,
+    tz_offset: cleanTzOffset(body?.tzOffset),
+    active: true,
+    updated_at: new Date().toISOString(),
+  }, 'target');
+  return r.ok ? jsonResponse({ ok: true }) : jsonResponse({ error: 'unavailable' }, 503);
 };

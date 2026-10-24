@@ -2,12 +2,15 @@
  * v5.15.0 — the admin-published config keys that the app itself reads, and
  * the ONE public bundle that ships them (GET /api/appconfig?key=client).
  *
- * Every value here is written by the admin console into `vinax_config` and
- * sanitised again on the way out, so a bad row can never break listeners:
- * unknown fields are dropped, strings are clipped, lists are capped.
+ * Every value is sanitised on the way out, so a bad value can never break
+ * listeners: unknown fields are dropped, strings are clipped, lists are capped.
+ *
+ * 14.0 — values come from the `settings` table (one key, one JSON value,
+ * written from the owner console); the vocabulary is SETTING_KEYS in
+ * _lib/settings.ts. Besides the client bundle this file sanitises the other
+ * public config answers: banners, the festival override, flags and site mode.
  */
-import { sbSelect, supabaseConfigured, type SupabaseEnv } from './supabase';
-import { sanitizeVariants, type ExperimentVariant } from './experiments';
+import type { ExperimentVariant } from './experiments';
 
 export const CLIENT_KEYS = [
   'home-layout',
@@ -103,50 +106,6 @@ export function publicRecConfig(raw: unknown): PublicRecConfig | null {
   }
   return null;
 }
-
-const splitMemo = new Map<string, { at: number; variants: ExperimentVariant[] }>();
-
-/**
- * An experiment-targeted config ships with that experiment's live split, so
- * a device decides membership with the same pure hash as useExperiment()
- * and needs no second request. A paused or missing experiment targets
- * nobody: the config is withheld. Memoised per isolate like readConfig.
- */
-export async function withRolloutSplit(env: SupabaseEnv, cfg: PublicRecConfig | null): Promise<PublicRecConfig | null> {
-  if (!cfg || cfg.rollout.mode !== 'experiment') return cfg;
-  const key = cfg.rollout.experimentKey;
-  let hit = splitMemo.get(key);
-  if (!hit || Date.now() - hit.at >= TTL) {
-    const rows = await sbSelect<{ variants: unknown }>(env, 'vinax_experiments', `key=eq.${encodeURIComponent(key)}&active=eq.true&select=variants&limit=1`).catch(() => [] as Array<{ variants: unknown }>);
-    hit = { at: Date.now(), variants: sanitizeVariants(rows[0]?.variants) };
-    splitMemo.set(key, hit);
-  }
-  const variant = cfg.rollout.variant;
-  if (!hit.variants.some((v) => v.name === variant)) return null;
-  return { ...cfg, rollout: { ...cfg.rollout, variants: hit.variants } };
-}
-
-interface ConfigRow { key: string; value: unknown }
-
-const memo = new Map<string, { at: number; value: Record<string, unknown> }>();
-const TTL = 60_000;
-
-/** Read several config keys in one query, memoised per isolate for a minute. */
-export async function readConfig(env: SupabaseEnv, keys: readonly string[]): Promise<Record<string, unknown>> {
-  if (!supabaseConfigured(env)) return {};
-  const id = keys.join(',');
-  const hit = memo.get(id);
-  if (hit && Date.now() - hit.at < TTL) return hit.value;
-  const list = keys.map((k) => `"${k}"`).join(',');
-  const rows = await sbSelect<ConfigRow>(env, 'vinax_config', `key=in.(${encodeURIComponent(list)})&select=key,value`).catch(() => [] as ConfigRow[]);
-  const value: Record<string, unknown> = {};
-  for (const r of rows) value[r.key] = r.value;
-  memo.set(id, { at: Date.now(), value });
-  return value;
-}
-
-/** Test hook. */
-export function resetConfigMemo(): void { memo.clear(); splitMemo.clear(); }
 
 const str = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 // Quick-action prompts keep their trailing space on purpose ("Write a ").
@@ -251,4 +210,96 @@ export function houseRules(raw: unknown): string {
     if (c >= 32 || ch === '\n' || ch === '\t') out += ch;
   }
   return out;
+}
+
+// --------------------------------------------------------------- 14.0 — the other public keys
+
+export interface Banner {
+  id?: string;
+  title?: string;
+  subtitle?: string;
+  linkType?: string;
+  linkId?: string;
+  start?: string;
+  end?: string;
+  img?: string;
+}
+
+/** Banners live today (inside their optional start/end dates), at most 10, fields clipped. */
+export function activeBanners(value: unknown, now = new Date()): Banner[] {
+  if (!Array.isArray(value)) return [];
+  const today = now.toISOString().slice(0, 10);
+  const out: Banner[] = [];
+  for (const raw of value as unknown[]) {
+    const b = obj(raw);
+    const title = b ? str(b.title, 80) : '';
+    if (!b || !title) continue;
+    const start = typeof b.start === 'string' && b.start ? b.start.slice(0, 10) : null;
+    const end = typeof b.end === 'string' && b.end ? b.end.slice(0, 10) : null;
+    if ((start && today < start) || (end && today > end)) continue;
+    const banner: Banner = { title };
+    const id = str(b.id, 40); if (id) banner.id = id;
+    const subtitle = str(b.subtitle, 160); if (subtitle) banner.subtitle = subtitle;
+    const linkType = str(b.linkType, 16); if (['song', 'album', 'playlist', 'artist'].includes(linkType)) banner.linkType = linkType;
+    const linkId = str(b.linkId, 80); if (linkId && banner.linkType) banner.linkId = linkId;
+    const img = str(b.img, 500); if (/^https:\/\//.test(img)) banner.img = img;
+    if (start) banner.start = start;
+    if (end) banner.end = end;
+    out.push(banner);
+    if (out.length >= 10) break;
+  }
+  return out;
+}
+
+/** Only boolean flags with sane names leave the server — anything else is dropped rather than shipped to every client. */
+export function publicFlags(value: unknown): Record<string, boolean> {
+  const o = obj(value);
+  if (!o) return {};
+  const out: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(o)) {
+    if (/^[a-zA-Z][a-zA-Z0-9_-]{0,39}$/.test(k) && typeof v === 'boolean') out[k] = v;
+    if (Object.keys(out).length >= 50) break;
+  }
+  return out;
+}
+
+export interface FestivalOverride {
+  mode: 'auto' | 'off' | 'force';
+  id?: string;
+}
+
+/**
+ * The festival skin override the app reads: `force` skins the app with the
+ * named festival now, `off` suppresses skins, `auto` (or null) keeps the
+ * calendar. An optional start/end window bounds a `force`.
+ */
+export function publicFestival(value: unknown, now = new Date()): FestivalOverride | null {
+  const f = obj(value);
+  if (!f) return null;
+  const mode = str(f.mode, 8);
+  if (mode !== 'auto' && mode !== 'off' && mode !== 'force') return null;
+  if (!inWindow(f.start, f.end, now)) return null;
+  const id = str(f.id, 40).toLowerCase();
+  if (mode === 'force' && !SLUG.test(id)) return null;
+  return SLUG.test(id) ? { mode, id } : { mode };
+}
+
+export interface SiteMode {
+  mode: 'live' | 'maintenance';
+  note?: string;
+}
+
+/**
+ * Live unless the owner switched `site-mode` to maintenance or a
+ * `maintenance-window` is active right now. The note is what the gate shows.
+ */
+export function publicSiteMode(values: Record<string, unknown>, now = new Date()): SiteMode {
+  const sm = obj(values['site-mode']);
+  if (sm && str(sm.mode, 16) === 'maintenance') {
+    const note = str(sm.note, 200);
+    return note ? { mode: 'maintenance', note } : { mode: 'maintenance' };
+  }
+  const window = maintenanceActive(values['maintenance-window'], now);
+  if (window) return window.note ? { mode: 'maintenance', note: window.note } : { mode: 'maintenance' };
+  return { mode: 'live' };
 }

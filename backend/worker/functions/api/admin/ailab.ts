@@ -1,6 +1,7 @@
 /**
  * AI Lab — admin-only streaming test bench for every AI lane and every
- * catalogue model.
+ * catalogue model. POST only: the per-lane health report that read the
+ * stored AI call log went away with the database (13.9.1).
  *
  * POST { lane, messages: [{ role, content }...], maxTokens?, model? } benches
  * a lane (its pinned model, or `model` on the lane's key), and
@@ -29,7 +30,7 @@
  *                  track is too heavy for a bench, and /api/embed exercises
  *                  the embedding models.
  */
-import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { maestroFetch } from '../../_lib/maestro';
 import { isWorkersAiEndpoint, workersAiBinding, workersAiFetch } from '../../_lib/workersai';
 import {
@@ -44,7 +45,6 @@ import {
   laneModel,
   isMaestroEndpoint,
   isExternalEndpoint,
-  isRefusalCode,
   laneEndpoint,
   reasoningOffParams,
   type AiEnv,
@@ -55,10 +55,8 @@ import {
 import { MEDIA_KINDS, catalogDefaultModel, describeModel, findCatalogModel, findMediaModel, normaliseProvider, type MediaKind } from '../../_lib/catalog';
 import { generateImage, speak, transcribe } from '../../_lib/media';
 import { readAudio } from '../transcribe';
-import { aggregateLaneHealth, type AiEventRow } from '../../_lib/laneHealth';
-import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
-type Env = AdminEnv & AiEnv & SupabaseEnv;
+type Env = AdminEnv & AiEnv;
 
 // The bench covers EVERY lane — the feature lanes, the two vision lanes, the
 // free-model marketplace and the flagship. 10.3 — the bench-only inventory
@@ -99,28 +97,6 @@ function json(body: unknown, status = 200): Response {
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
   });
 }
-
-/** Package B11 — GET: the lane-health report. Per-lane p50/p95/p99 latency,
- *  success rate, failover-hop / empty-stream / self-search counters over the
- *  trailing 24h of vinax_ai_events, aggregated in-function (no RPC needed;
- *  row cap keeps the read bounded). */
-export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
-  const { request, env } = context;
-  if (!(await isAdminAsync(request, env))) return unauthorized();
-  if (!supabaseConfigured(env)) return json({ configured: false, hours: 24, sampled: 0, capped: false, lanes: aggregateLaneHealth([]) });
-  const since = new Date(Date.now() - 24 * 3600_000).toISOString();
-  const read = await sbSelectResult<AiEventRow>(
-    env,
-    'vinax_ai_events',
-    `created_at=gte.${encodeURIComponent(since)}&select=model,ok,status,error,latency_ms&order=created_at.desc&limit=10000`,
-  );
-  // 7.2.0 — lane health built from a failed read shows every lane idle.
-  if (!read.ok) return dbFailure(read);
-  // Refused calls (owner AI controls) reached no lane; they would read as an
-  // "unknown" lane full of failures.
-  const rows = read.rows.filter((r) => !isRefusalCode(r.error));
-  return json({ configured: true, hours: 24, sampled: rows.length, capped: read.rows.length >= 10000, lanes: aggregateLaneHealth(rows) });
-};
 
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;

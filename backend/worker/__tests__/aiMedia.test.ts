@@ -24,7 +24,7 @@ import {
   parseOpenRouterMedia,
   resetCatalogCache,
 } from '../functions/_lib/catalog';
-import { clearLaneCooldowns, noteProviderFailure, resetAiControlsCache } from '../functions/_lib/ai';
+import { clearLaneCooldowns, noteProviderFailure } from '../functions/_lib/ai';
 import { pcmToWav } from '../functions/_lib/media';
 import { embedTexts, resetEmbedCooldowns } from '../functions/_lib/embed';
 import { resetMaestroMode, resetMaestroModels } from '../functions/_lib/maestro';
@@ -118,7 +118,6 @@ const GEMINI_LIST = {
 
 const ALL_KEYS = { NVIDIA_API_KEY: 'nv', OPENROUTER_API_KEY: 'or', GROQ_API_KEY: 'gq', GEMINI_API_KEY: 'AIza-gm' };
 const OLD_KEYS = { VINAX_NVIDIA_API_KEY: 'nv', VINAX_OPENROUTER_API_KEY: 'or', VINAX_GROQ_API_KEY: 'gq', VINAX_GGL_GEMINI_API_KEY: 'AIza-gm' };
-const DB = { SUPABASE_URL: 'https://sb.test', SUPABASE_SERVICE_ROLE_KEY: 'srk' };
 
 // ---------------------------------------------------------------------------
 // One stub for every test: lists, the config store, and provider calls
@@ -134,28 +133,23 @@ interface Call {
 }
 const calls: Call[] = [];
 let lists: Record<'nvidia' | 'openrouter' | 'groq' | 'gemini', unknown>;
-let controls: unknown;
 let provider: (c: Call) => Response | Promise<Response>;
 const json = (b: unknown, status = 200): Response => new Response(JSON.stringify(b), { status, headers: { 'content-type': 'application/json' } });
 
 beforeEach(() => {
   resetCatalogCache();
   clearLaneCooldowns();
-  resetAiControlsCache();
   resetEmbedCooldowns();
   resetMaestroMode();
   resetMaestroModels();
   calls.length = 0;
   lists = { nvidia: NVIDIA_LIST, openrouter: OPENROUTER_LIST, groq: GROQ_LIST, gemini: GEMINI_LIST };
-  controls = undefined;
   provider = () => json({ error: 'unexpected' }, 500);
   vi.spyOn(console, 'log').mockImplementation(() => undefined);
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   vi.stubGlobal('fetch', async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     const method = init?.method ?? 'GET';
-    if (url.startsWith('https://sb.test/rest/v1/vinax_config')) return json(controls === undefined ? [] : [{ key: 'ai-controls', value: controls }]);
-    if (url.startsWith('https://sb.test/')) return json([], 201);
     if (method === 'GET') {
       if (url.startsWith('https://integrate.api.nvidia.com/v1/models')) return json(lists.nvidia);
       if (url.startsWith('https://openrouter.ai/api/v1/models')) return json(lists.openrouter);
@@ -398,12 +392,6 @@ describe('POST /api/image', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('the owner\'s image switch refuses it before any provider is asked', async () => {
-    controls = { emergencyOff: false, features: { image: false } };
-    const { status, body } = await run({ prompt: 'a cat' }, { ...ALL_KEYS, ...DB });
-    expect([status, body.error]).toEqual([503, 'ai_disabled']);
-    expect(calls).toHaveLength(0);
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -468,16 +456,13 @@ describe('POST /api/tts', () => {
     expect(calls[1].json).toEqual({ model: 'fish-audio/s2.1-pro-free:free', input: 'Hello there.', response_format: 'mp3' });
   });
 
-  it('refuses a model or voice that is not on the list; not configured without the key; off with the switch', async () => {
+  it('refuses a model or voice that is not on the list; not configured without the key', async () => {
     expect((await run({ text: 'hi', provider: 'groq', model: 'playai-tts' })).status).toBe(400);
     expect((await run({ text: 'hi', provider: 'gemini', model: 'gemini-2.5-pro-preview-tts' })).status).toBe(400);
     const badVoice = await run({ text: 'hi', provider: 'gemini', model: 'gemini-3.8-flash-tts', voice: 'autumn' });
     expect([badVoice.status, ((await badVoice.json()) as { error: string }).error]).toEqual([400, 'unknown_voice']);
     const unset = await run({ text: 'hi', provider: 'gemini', model: 'gemini-3.8-flash-tts' }, { GROQ_API_KEY: 'gq' });
     expect([unset.status, ((await unset.json()) as { error: string }).error]).toEqual([503, 'not_configured']);
-    controls = { emergencyOff: false, features: { tts: false } };
-    const off = await run({ text: 'hi', provider: 'gemini', model: 'gemini-3.8-flash-tts' }, { ...ALL_KEYS, ...DB });
-    expect([off.status, ((await off.json()) as { error: string }).error]).toEqual([503, 'ai_disabled']);
     expect(calls).toHaveLength(0);
   });
 });
@@ -519,7 +504,7 @@ describe('POST /api/transcribe', () => {
     expect(parts[1]).toEqual({ inlineData: { mimeType: 'audio/wav', data: btoa('RIFF....WAVEfmt-bytes') } });
   });
 
-  it('unknown model, bad audio, too large, not configured, switched off', async () => {
+  it('unknown model, bad audio, too large, not configured', async () => {
     expect(await run({ audio, provider: 'openrouter', model: 'openai/whisper-large-v3' })).toEqual({ status: 400, body: { error: 'unknown_model' } });
     expect((await run({ audio: 'not audio at all!!', mime: 'audio/wav' })).status).toBe(400);
     expect((await run({ audio: btoa('x'.repeat(40)), mime: 'text/plain' })).status).toBe(400);
@@ -527,8 +512,6 @@ describe('POST /api/transcribe', () => {
     expect(huge.status).toBe(413);
     expect(await run({ audio }, {})).toEqual({ status: 503, body: { error: 'not_configured', reason: 'no_key' } });
     expect(await run({ audio }, { NVIDIA_API_KEY: 'nv' })).toEqual({ status: 503, body: { error: 'not_configured', reason: 'no_free_model' } });
-    controls = { emergencyOff: false, features: { transcribe: false } };
-    expect(await run({ audio }, { ...ALL_KEYS, ...DB })).toEqual({ status: 503, body: { error: 'ai_disabled' } });
     expect(calls).toHaveLength(0);
   });
 });
@@ -565,14 +548,12 @@ describe('POST /api/music', () => {
     expect(calls[0].json).toMatchObject({ model: 'google/lyria-3-clip-preview:free', modalities: ['text', 'audio'], audio: { format: 'mp3' }, stream: true });
   });
 
-  it('the per-clip-billed model is unknown; no free music model is not_configured; switched off is ai_disabled', async () => {
+  it('the per-clip-billed model is unknown; no free music model is not_configured', async () => {
     expect(await run({ prompt: 'a song', provider: 'openrouter', model: 'google/lyria-3-clip-preview' })).toEqual({ status: 400, body: { error: 'unknown_model' } });
     lists.openrouter = OPENROUTER_NO_FREE_MUSIC;
     resetCatalogCache();
     expect(await run({ prompt: 'a song' })).toEqual({ status: 503, body: { error: 'not_configured', reason: 'no_free_model' } });
     expect(await run({ prompt: 'a song' }, {})).toEqual({ status: 503, body: { error: 'not_configured', reason: 'no_key' } });
-    controls = { emergencyOff: false, features: { music: false } };
-    expect(await run({ prompt: 'a song' }, { ...ALL_KEYS, ...DB })).toEqual({ status: 503, body: { error: 'ai_disabled' } });
     expect((await run({ prompt: 'x' })).status).toBe(400);
     expect(calls).toHaveLength(0);
   });

@@ -1,10 +1,18 @@
-/** Public feedback / bug-report ingest. Users explicitly submit this, so it is
- *  not consent-gated. Coarse geo is added at the edge; no raw IP is stored. */
+/**
+ * POST /api/feedback { type, message, name?, deviceId?, appVersion?, platform? }
+ *   → 200 { ok: true }          stored
+ *   → 400 message_required      empty message
+ *   → 503 not_configured        no database on this Worker
+ *
+ * Listeners send this on purpose, so it is not consent-gated. Coarse edge geo
+ * is added; no IP is kept. The owner reads it on the console's Feedback page.
+ */
+import { db, dbConfigured, type DbEnv } from '../_lib/db';
+import { appVersionOf, asObject, clip, edgeGeo, jsonResponse, platformOf } from '../_lib/edge';
+import { resolveIdentity, type IdentityEnv } from '../_lib/identity';
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
-import { sbInsert, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
 
-type Env = SupabaseEnv;
-interface CfExtras { cf?: { country?: string; city?: string } }
+type Env = DbEnv & IdentityEnv;
 
 const CORS: Record<string, string> = {
   'access-control-allow-origin': '*',
@@ -12,45 +20,39 @@ const CORS: Record<string, string> = {
   'access-control-allow-headers': 'content-type',
 };
 
-export const onRequestOptions = async (): Promise<Response> =>
-  new Response(null, { status: 204, headers: CORS });
+const KINDS: ReadonlySet<string> = new Set(['bug', 'idea', 'content', 'other']);
 
-function clip(v: unknown, n: number): string | null {
-  if (typeof v !== 'string') return null;
-  const t = v.trim();
-  return t ? t.slice(0, n) : null;
-}
+export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: CORS });
 
-/** POST-only: answer GET with an honest 405 instead of the SPA shell (DQA-07). */
+/** POST-only: GET is an honest 405, not the app shell. */
 export const onRequestGet = async (): Promise<Response> => methodNotAllowed();
 
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
   const limited = await rateLimitAsync(request, 'feedback', { capacity: 5, refillPerMinute: 2 }, env);
   if (limited) return limited;
-  const json = (b: unknown, status = 200): Response =>
-    new Response(JSON.stringify(b), { status, headers: { 'content-type': 'application/json', ...CORS } });
+  if (!dbConfigured(env)) return jsonResponse({ error: 'not_configured' }, 503, CORS);
 
-  if (!supabaseConfigured(env)) return json({ error: 'not_configured' }, 503);
+  const body = asObject(await request.json().catch(() => null)) ?? {};
+  const message = clip(body.message, 2000);
+  if (!message) return jsonResponse({ error: 'message_required' }, 400, CORS);
+  const kindRaw = clip(body.type, 16)?.toLowerCase() ?? 'other';
+  const geo = edgeGeo(request);
+  // The device behind the message, when the app named itself (so the owner can
+  // open the listener from the inbox). An unsigned claim still yields the same
+  // derived id the events route uses, never the raw install id.
+  const identity = typeof body.deviceId === 'string' || typeof body.signed_device_id === 'string' ? await resolveIdentity(env, body) : null;
 
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
-  const message = body ? clip(body.message, 2000) : null;
-  if (!message) return json({ error: 'message_required' }, 400);
-
-  const cf = (request as Request & CfExtras).cf ?? {};
-  const ipCountry = request.headers.get('CF-IPCountry');
-  const country = (ipCountry && ipCountry !== 'XX' && ipCountry !== 'T1' ? ipCountry : cf.country) ?? null;
-
-  const ok = await sbInsert(env, 'vinax_feedback', {
-    device_id: body ? clip(body.deviceId, 64) : null,
-    name: body ? clip(body.name, 80) : null,
-    type: (body ? clip(body.type, 16) : null) ?? 'other',
+  const r = await db.insert(env, 'feedback', {
+    listener_id: identity?.id ?? null,
+    name: clip(body.name, 80),
+    kind: KINDS.has(kindRaw) ? kindRaw : 'other',
     message,
-    app_version: body ? clip(body.appVersion, 24) : null,
-    platform: (body ? clip(body.platform, 12) : null) ?? 'web',
-    country,
-    city: cf.city ?? null,
+    platform: platformOf(body.platform, request),
+    app_version: appVersionOf(body.appVersion, request),
+    country: geo.country,
+    city: geo.city,
   });
-
-  return json({ ok });
+  if (!r.ok) return jsonResponse({ error: 'unavailable' }, 503, CORS);
+  return jsonResponse({ ok: true }, 200, CORS);
 };

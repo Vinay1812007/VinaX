@@ -26,7 +26,7 @@
  * catalogue's own fields; mood, energy and tempo pick the catalogue
  * phrasings but cannot be verified (the catalogue has no audio features).
  */
-import { chat, extractJson, isAiBlocked, logAiEvent, type AiEnv } from '../../_lib/ai';
+import { chat, extractJson, type AiEnv } from '../../_lib/ai';
 import { readJsonCapped } from '../../_lib/body';
 import { canonicalKey } from '../../_lib/identityCore';
 import { methodNotAllowed, rateLimitAsync } from '../../_lib/ratelimit';
@@ -34,11 +34,10 @@ import { creditedTo, DEFAULT_LIMIT, MAX_LIMIT, SONG_ID } from '../../_lib/recs';
 import {
   catalogueQueries, describeFilters, FILTER_ACTIVITIES, FILTER_LANGUAGES, FILTER_MOODS, mergeFilters, rulesFilters, sanitizeFilters, type SearchFilters,
 } from '../../_lib/searchFilters';
-import { type SupabaseEnv } from '../../_lib/supabase';
 import { CatalogUnavailable, catalogSongSuggestions, searchCatalogSongs } from '../../_lib/trends/catalog';
 import type { CatalogCandidate } from '../../_lib/trends/matcher';
 
-type Env = AiEnv & SupabaseEnv;
+type Env = AiEnv;
 
 const CORS: Record<string, string> = {
   'access-control-allow-origin': '*',
@@ -171,27 +170,14 @@ export function selectSearchTracks(
 }
 
 /** Ask the model for filters; null when it is off, slow or unusable (the rules answer instead). */
-async function aiFilters(env: Env, query: string, isApp: boolean, waitUntil?: (p: Promise<unknown>) => void): Promise<SearchFilters | null> {
-  const t0 = Date.now();
+async function aiFilters(env: Env, query: string): Promise<SearchFilters | null> {
   const r = await chat(
     env,
     [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: JSON.stringify({ search: query }) }],
-    { lane: 'fast', ladder: ['fast', 'mini', 'chat'], json: true, temperature: 0, maxTokens: 300, firstTimeoutMs: 2_500, timeoutMs: 2_500, deadlineAt: Date.now() + 4_500, feature: 'search', accept: (c) => sanitizeFilters(extractJson(c)) !== null },
+    { lane: 'fast', ladder: ['fast', 'mini', 'chat'], json: true, temperature: 0, maxTokens: 300, firstTimeoutMs: 2_500, timeoutMs: 2_500, deadlineAt: Date.now() + 4_500, accept: (c) => sanitizeFilters(extractJson(c)) !== null },
   );
-  if (isAiBlocked(r.error) || r.error === 'not_configured') return null;
+  if (r.error === 'not_configured') return null;
   const filters = r.error ? null : sanitizeFilters(extractJson(r.content));
-  const log = logAiEvent(env, {
-    feature: 'search',
-    model: r.model ? `${r.model} @${r.keyRole ?? '?'}` : null,
-    ok: !!filters,
-    status: r.status ?? null,
-    error: r.error ?? (filters ? null : 'invalid_output'),
-    client: isApp ? 'app' : 'web',
-    latency_ms: Date.now() - t0,
-    prompt_tokens: r.usage?.prompt_tokens,
-    completion_tokens: r.usage?.completion_tokens,
-  });
-  if (typeof waitUntil === 'function') waitUntil(log);
   return filters;
 }
 
@@ -238,10 +224,9 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
   if (!read.ok) return read.reason === 'too_large' ? json({ error: 'too_large' }, 413) : json({ error: 'bad_request' }, 400);
   const req = parseSearchRequest(read.value);
   if (!req) return json({ error: 'bad_request' }, 400);
-  const isApp = request.headers.get('x-vinax-client') === 'app';
   try {
     const rules = rulesFilters(req.query);
-    const ai = await aiFilters(env, req.query, isApp, context.waitUntil).catch(() => null);
+    const ai = await aiFilters(env, req.query).catch(() => null);
     const filters = mergeFilters(rules, ai);
     const base = { filters, summary: describeFilters(filters), source: ai ? 'ai' : 'rules' };
     if (!req.withTracks) return json({ ...base, checked: [], seed: null });
