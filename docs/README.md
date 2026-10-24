@@ -38,6 +38,7 @@ This is the index of the current documentation. Everything listed here describes
 | [user-guide/README.md](user-guide/README.md) | The guide's index |
 | [user-guide/getting-started.md](user-guide/getting-started.md) | First run and the welcome, the five destinations, playing a first song |
 | [user-guide/app-styles.md](user-guide/app-styles.md) | The six app styles, themes and accents, and how to switch |
+| [user-guide/friends-and-sharing.md](user-guide/friends-and-sharing.md) | Everything 15.0 added for listening with others and daily discovery |
 | [user-guide/festival-themes.md](user-guide/festival-themes.md) | What happens on a festival, the greeting card, previewing a skin |
 | [user-guide/player-and-queue.md](user-guide/player-and-queue.md) | The player, Up Next, AI Radio, Smart Queue, Pin a mood, Tune this queue, queueing by hand |
 | [user-guide/flow.md](user-guide/flow.md) | Flow, the full-screen feed of song previews |

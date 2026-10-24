@@ -42,6 +42,10 @@ Only the Worker holds the service-role key. Row-level security is enabled and fo
 | `listeners` | device that opted in | display name, handle (unique, lower-case), platform, app version, edge country/region/city, what is playing now, first/last seen |
 | `accounts` | Google sign-in | Google subject id, email, name, picture, the linked `listener_id`, sign-in platform/version/geo, created/last seen |
 | `account_backups` | signed-in account | the app's backup JSON (`payload`), `version`, `bytes`; deleted with the account |
+| `profiles` | signed-in account (15.0) | opt-in public profile: `handle` (unique, case-insensitive), `public`, `bio`, `summary` (the device's digest), `now_playing`, `share_now`; deleted with the account |
+| `follows` | account → account (15.0) | `follower_id`, `followee_id`; no self-follow; both sides cascade |
+| `shared_playlists` | signed-in account (15.0) | `name`, `songs` (display fields, ≤ 500), `public`, `collab_token` (invite secret), `version` for merges; deleted with the account |
+| `shared_chats` | signed-in account (15.0) | a VinaX AI conversation the listener shared: text only, `expires_at` 90 days; swept by `room_sweep()` |
 | `events` | consented usage event | `kind` (play, pause, heartbeat, open, error, search, skip, favorite, share, rec_served…), song facts, language, platform, geo, error kind/message, `meta` (≤ 2 KB), `verified` |
 | `ai_calls` | model call | feature, lane, provider, model, ok, status, error, client, latency, prompt/completion tokens |
 | `feedback` | message from a listener | kind (bug/idea/content/other), message, platform, geo, `status` (new/read/resolved), owner `note` |
@@ -155,6 +159,10 @@ All under `/api/admin/`, gated by `isAdminAsync`. `?days=` is 1..90 (default 7).
 | `POST /api/push/subscribe`, `fcm-register`, `unsubscribe` | `push_devices` rows (channel web / fcm) |
 | `POST /api/auth/google`, `GET/POST /api/auth/me` | `accounts` row written at sign-in and refreshed on the session check (10 min); `delete: true` removes the account and its backup |
 | `GET/PUT /api/account/data` | `account_backups` with optimistic versions: `200`, `204`, `409 { version, updatedAt, backup }` |
+| `GET/PUT/DELETE /api/profile`, `GET /api/profile/<handle>` | `profiles` (+ `follows` for counts and private visibility) |
+| `GET/POST /api/follow` | `follows`, `profiles`, `accounts` (name, picture) |
+| `GET/POST/DELETE /api/shared-playlist`, `GET/POST /api/shared-playlist/<id>` | `shared_playlists`; collaborator writes need the invite token; owner writes `409 { playlist }` on a stale version |
+| `GET/POST/DELETE /api/share-chat`, `GET /api/share-chat/<id>` | `shared_chats` |
 | `GET/POST /api/username` | the handle on `listeners`; `409 taken` with suggestions |
 | `GET /api/experiments` | active experiments |
 | `GET /api/announcements` | the `announcement` setting (ignored when retracted) |
