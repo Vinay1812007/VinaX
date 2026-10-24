@@ -66,7 +66,7 @@ export function TopBar({ onCommands }: { onCommands: () => void }) {
         <IconButton size="sm" label="Go back" onClick={() => navigate(-1)} className="vx-topbar-nav"><ChevronDownIcon className="w-5 h-5 rotate-90" /></IconButton>
         <IconButton size="sm" label="Go forward" onClick={() => navigate(1)} className="vx-topbar-nav"><ChevronDownIcon className="w-5 h-5 -rotate-90" /></IconButton>
       </div>
-      <Link to="/" aria-label="VinaX home" className="md:hidden shrink-0"><img src="/icons/icon.svg" alt="" width={28} height={28} /></Link>
+      <Link to="/" aria-label="VinaX home" className="md:hidden shrink-0"><img src="/icons/icon.svg?v=14" alt="" width={28} height={28} /></Link>
       <span className="vx-topbar-context">{title}</span>
       <div className="vx-topbar-actions">
         {/* Pages add their own actions here through <TopBarActions>. */}

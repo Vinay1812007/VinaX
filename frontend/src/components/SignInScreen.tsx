@@ -207,7 +207,7 @@ export default function SignInScreen(): ReactNode {
     <main className="vx-signin" aria-labelledby="vx-signin-title">
       <div className="vx-signin-hero">
         <div className="vx-signin-card vx-mat-thick">
-          <img src="/icons/icon.svg" alt="" width={64} height={64} className="vx-signin-logo" />
+          <img src="/icons/icon.svg?v=14" alt="" width={64} height={64} className="vx-signin-logo" />
           <h1 id="vx-signin-title" className="vx-signin-title">
             Welcome to VinaX
           </h1>
