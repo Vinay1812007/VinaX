@@ -12,6 +12,22 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '14.0.1': {
+    title: 'The VinaX logo is back',
+    changes: [
+      { type: 'fixed', text: 'The festival logo has gone: the VinaX mark is back on the website, in browser tabs, on the installed web app and as the Android app icon.' },
+      { type: 'fixed', text: 'Behind the scenes: the owner console’s Listeners page could not load its list; it does now.' },
+    ],
+  },
+  '14.0.0': {
+    title: 'VinaX remembers again',
+    changes: [
+      { type: 'new', text: 'Sign-in sync is back: your library, playlists, history and settings follow your Google account to every device, and two devices merge instead of overwriting each other.' },
+      { type: 'new', text: 'Listen Together rooms, feedback, the handle you chose and notifications all work again, on a database built fresh for this release.' },
+      { type: 'improved', text: 'The owner console behind VinaX was rebuilt around the new database: live listening, analytics, feedback, a settings editor, notifications and the database itself, in one place.' },
+      { type: 'improved', text: 'Privacy, in one line: coarse country and city, never your address; usage events are kept for 180 days; delete your data from Settings and everything about you leaves the server.' },
+    ],
+  },
   '13.9.0': {
     title: 'Browse first, a full-screen video canvas, and every listener in the console',
     changes: [

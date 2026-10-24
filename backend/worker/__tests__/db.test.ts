@@ -27,14 +27,15 @@ afterEach(() => vi.unstubAllGlobals());
 describe('query builder', () => {
   it('encodes every value and joins filters', () => {
     const s = q().eq('kind', 'play').gte('at', '2026-10-24T00:00:00Z').ilike('name', `*${like('a,b')}*`).select('id,at').order('at', 'desc').limit(50).offset(100).toString();
-    expect(s).toBe('kind=eq.play&at=gte.2026-10-24T00%3A00%3A00Z&name=ilike.*a%5C%2Cb*&select=id%2Cat&order=at.desc&limit=50&offset=100');
+    expect(s).toBe('kind=eq.play&at=gte.2026-10-24T00%3A00%3A00Z&name=ilike.*a%2Cb*&select=id%2Cat&order=at.desc&limit=50&offset=100');
   });
   it('builds in() and or() with quoting', () => {
     expect(q().in('id', ['a', 'b"c']).toString()).toBe('id=in.(%22a%22,%22b%5C%22c%22)');
-    expect(q().or('name.ilike.*x*', 'handle.ilike.*x*').toString()).toBe('or=(name.ilike.*x*,handle.ilike.*x*)');
+    expect(q().or('name.ilike.*x*', 'handle.ilike.*x*').toString()).toBe('or=(name.ilike.%22*x*%22,handle.ilike.%22*x*%22)');
+    expect(decodeURIComponent(q().or(`name.ilike.*${like('a, (b) "c" 50%')}*`).toString())).toBe('or=(name.ilike."*a, (b) \\"c\\" 50\\\\%*")');
   });
-  it('like() neutralises reserved characters', () => {
-    expect(like('50% off (really), "quoted".*')).toBe('50\\% off \\(really\\)\\, \\"quoted\\"\\.\\*');
+  it('like() escapes the SQL wildcards and nothing else', () => {
+    expect(like('50% off_now (really), "q".*')).toBe('50\\% off\\_now (really), "q".*');
   });
 });
 
