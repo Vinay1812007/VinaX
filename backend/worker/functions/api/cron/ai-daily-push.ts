@@ -418,7 +418,7 @@ Reply with JSON only. The song_query must resolve to a ${langLabel} song.`;
 // b4a.run 404s these routes) dropped so resolution stops burning a timeout
 // per dead base before reaching the one that answers.
 const CATALOG_MIRRORS = [
-  'https://www.sirimillavinay.online/api/cat',
+  'https://www.vinaxmusic.online/api/cat',
   'https://saavn.sumit.co/api',
   'https://nepotuneapi.vercel.app/api',
 ];

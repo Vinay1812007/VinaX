@@ -6,7 +6,7 @@ import { applyWeightOverrides, resetWeightOverrides } from '@/services/recommend
  * Client read side of the admin-published app config (/api/appconfig).
  * Banners control the promo slot on Home.
  */
-const BASE = isNativePlatform() ? 'https://www.sirimillavinay.online' : '';
+const BASE = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
 
 export interface PromoBannerData {
   id?: string;

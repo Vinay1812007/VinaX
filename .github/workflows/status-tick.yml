@@ -1,4 +1,4 @@
-# Status probe tick — status.sirimillavinay.online's heartbeat.
+# Status probe tick — status.vinaxmusic.online's heartbeat.
 # Every 30 minutes this POSTs /api/status, which runs all component probes
 # SERVER-SIDE and records one tick per component into Supabase
 # (uptime_daily / uptime_last). The request carries no data and needs no
@@ -16,5 +16,5 @@ jobs:
     steps:
       - name: Trigger status probe round
         run: |
-          curl -fsS -X POST -m 60 https://www.sirimillavinay.online/api/status \
+          curl -fsS -X POST -m 60 https://www.vinaxmusic.online/api/status \
             -H 'user-agent: vinax-status-tick' || echo "tick failed (recorded as a gap)"

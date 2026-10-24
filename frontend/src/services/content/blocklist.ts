@@ -6,7 +6,7 @@ import { isNativePlatform } from '@/services/native';
  * lists (search, shelves, charts, AI/local queue resolution).
  */
 const ENDPOINT = isNativePlatform()
-  ? 'https://www.sirimillavinay.online/api/blocklist'
+  ? 'https://www.vinaxmusic.online/api/blocklist'
   : '/api/blocklist';
 
 let blocked = new Set<string>();

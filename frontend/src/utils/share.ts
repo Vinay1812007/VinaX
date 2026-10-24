@@ -1,6 +1,6 @@
 import { isNativePlatform } from '@/services/native';
 
-const CANONICAL_ORIGIN = 'https://www.sirimillavinay.online';
+const CANONICAL_ORIGIN = 'https://www.vinaxmusic.online';
 
 /** Share an in-app route via Web Share API with clipboard fallback.
  *  Native WebViews report a localhost/capacitor origin — always share the real site. */

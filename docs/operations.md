@@ -11,7 +11,7 @@ This is the runbook for keeping VinaX running: how each piece deploys and how to
 | Android package | Built by workflow, published as a repository release | **Build Android APK** on every push to `main`; **Release APK** on a pushed tag ([android.md](android.md)) |
 | Database | A hosted Postgres service reached with the service key | SQL files in `frontend/supabase/migrations/`, pasted into the database's SQL editor by the owner |
 
-Production host: `www.sirimillavinay.online`. The Worker owns `admin.` (to `/admin/`) and `update.` (to the package download). The apex is redirected to `www` by the static site (`frontend/public/_redirects`), not the Worker: when the apex was a Worker route, a Worker over its daily quota answered 429 for `https://sirimillavinay.online/robots.txt`, and Search Console reported "Robots.txt unreachable" and stopped crawling the whole domain (fixed in 11.0.3). Keep anything a crawler needs before it can crawl — robots.txt on every host — off Worker routes. `status.` is redirected to `/status/` by `frontend/public/_redirects`.
+Production host: `www.vinaxmusic.online`. The Worker owns `admin.` (to `/admin/`) and `update.` (to the package download). The apex is redirected to `www` by the static site (`frontend/public/_redirects`), not the Worker: when the apex was a Worker route, a Worker over its daily quota answered 429 for `https://vinaxmusic.online/robots.txt`, and Search Console reported "Robots.txt unreachable" and stopped crawling the whole domain (fixed in 11.0.3). Keep anything a crawler needs before it can crawl — robots.txt on every host — off Worker routes. `status.` is redirected to `/status/` by `frontend/public/_redirects`.
 
 ## Deploying, and telling whether the Worker is current
 
@@ -37,7 +37,7 @@ Every commit shows a check named "Workers Builds: vinax-api". It comes from the 
 
 **Probe.**
 
-1. `POST https://www.sirimillavinay.online/api/curate` and `POST …/api/dj` with an empty JSON body. A `404`, a `405` or the app's HTML shell means the deployed Worker does not have the route: it is stale. Any JSON answer, including an error, means the route exists.
+1. `POST https://www.vinaxmusic.online/api/curate` and `POST …/api/dj` with an empty JSON body. A `404`, a `405` or the app's HTML shell means the deployed Worker does not have the route: it is stale. Any JSON answer, including an error, means the route exists.
 2. `GET …/api/aimodels`. It always lists the five providers with `configured: true|false`; an HTML answer means the same thing as step 1.
 3. Do **not** use `GET /api/version` for this. It reports the newest published Android release (`build`, `version`, `apkUrl`, `sha256`, `minBuild`), not the Worker build.
 4. Compare the Worker's version history in the hosting dashboard with the last backend commit on `main`.
@@ -195,7 +195,7 @@ Optional sign-in runs on the push project **VinaX Music** (`vinax-music`). The W
 | `GOOGLE_CLIENT_ID` | Plain var in `backend/worker/wrangler.toml`: the project's public web OAuth client id. Sign-in answers `503 not_configured` without it. |
 | `AUTH_SECRET` | Worker secret that signs sessions: `npx wrangler secret put AUTH_SECRET --config worker/wrangler.toml` (any long random value). Falls back to `DEVICE_ID_SECRET`. Changing it signs everyone out. |
 | Accounts table | Apply `frontend/supabase/migrations/2026-10-vinax-12.2-accounts.sql` once. Until then sign-in still works but nothing is stored (`stored: false`). |
-| Allowed web origins | Cloud console → Google Auth Platform → Clients → the web client: `https://www.sirimillavinay.online`, `https://sirimillavinay.online`, `https://vinax.pages.dev`, `http://localhost:5173`. A new domain needs adding here, or the button refuses to load. |
+| Allowed web origins | Cloud console → Google Auth Platform → Clients → the web client: `https://www.vinaxmusic.online`, `https://vinaxmusic.online`, `https://vinax.pages.dev`, `http://localhost:5173`. A new domain needs adding here, or the button refuses to load. |
 | Android | The app's SHA-1 must be on the Android app in the push project (see [fcm-push-setup.md](fcm-push-setup.md)); a release keystore needs its own SHA-1 added. |
 
 ### Human check on usernames
@@ -209,7 +209,7 @@ Since 12.2 the app no longer claims usernames at onboarding; this check only ser
 | Server check | `backend/worker/functions/_lib/turnstile.ts`, action `username` |
 | CSP | `https://challenges.cloudflare.com` in `script-src` and `frame-src` (`frontend/public/_headers`) |
 
-Widget settings (Cloudflare dashboard → Turnstile → Add widget): hostname `sirimillavinay.online` (subdomains are included), mode **Managed**, pre-clearance **off**.
+Widget settings (Cloudflare dashboard → Turnstile → Add widget): hostname `vinaxmusic.online` (subdomains are included), mode **Managed**, pre-clearance **off**.
 
 Turn it on in this order: ship the app with the site key first, then set the secret. With the secret set and an app that sends no token, every claim is refused (`403 challenge`) and parks as pending until the listener updates. Turn it off by deleting the secret (`npx wrangler secret delete TURNSTILE_SECRET_KEY --config worker/wrangler.toml`).
 
@@ -313,7 +313,7 @@ Nothing new to configure: 11.0 adds no secret, no binding, no schedule and no da
 4. Expect different numbers on dashboards: when every engine is rate-limited, `/api/vinaxai` now answers `429` with a `retry-after` of 5 to 60 seconds, where it used to answer `500`. `/api/assistant`, `/api/dj`, `/api/playlist` and `/api/lyrics-tools` also answer `429` for an upstream rate limit. Other upstream failures are still `500`. An alert keyed on `500`s will fire less; add `429` to anything that tracks AI availability.
 5. Open the status page and the console's Overview once.
 6. **Run the edge rules once** — this is what stops the daily quota drain from the entity-page scraper: create a token with Zone → Firewall Services → Edit for the production zone, run `CLOUDFLARE_ZONE_TOKEN=… node backend/scripts/cf-edge-rules.mjs`, then revoke the token. See [Scraper traffic on entity pages](#scraper-traffic-on-entity-pages). Over the next day the Worker request graph should lose its spike at the 00:00 UTC reset.
-7. Check the page guard: `curl -sI -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" https://www.sirimillavinay.online/song/x-1 | grep -i x-vinax-page` should print `x-vinax-page: impostor` (with the block rule from step 6 live, the edge blocks it before that). A real browser, or Googlebot's user agent, gets the rendered page and no such header.
+7. Check the page guard: `curl -sI -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" https://www.vinaxmusic.online/song/x-1 | grep -i x-vinax-page` should print `x-vinax-page: impostor` (with the block rule from step 6 live, the edge blocks it before that). A real browser, or Googlebot's user agent, gets the rendered page and no such header.
 8. Web search: `GET /api/aimodels` shows a `web_search` tool under the gemini provider when that key's catalogue lists a 2.5 Flash model, and `features.web` is true. Pick Gemini 2.5 Flash and ask about today's weather: the reply should carry a Sources row. A key with no 2.5 Flash model shows no tag and no web search; nothing breaks.
 9. Ask VinaX AI "what time is it?" with region inference on: the answer should use your local time zone.
 
@@ -321,6 +321,6 @@ Nothing new to configure: 11.0 adds no secret, no binding, no schedule and no da
 
 Owner actions that code cannot do. The site serves prerendered routes, edge-rendered song, album, artist and playlist pages with titles, share tags and structured data, and a sitemap index at `/sitemap.xml`.
 
-- [ ] Verify the domain in each search engine's webmaster console and submit `https://www.sirimillavinay.online/sitemap.xml`. After a few days, review which URLs are not indexed and why.
+- [ ] Verify the domain in each search engine's webmaster console and submit `https://www.vinaxmusic.online/sitemap.xml`. After a few days, review which URLs are not indexed and why.
 - [ ] Paste a song link and the Home link into the messaging apps your listeners use. Each should show a title and artwork card.
 - [ ] Weekly: read the digest on the console's Overview; review zero-result searches in Search Analytics; watch skip rate per language in Engagement.

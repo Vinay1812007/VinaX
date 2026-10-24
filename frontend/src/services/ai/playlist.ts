@@ -14,7 +14,7 @@ import { personalOrder, tasteLens } from '@/services/ai/personalize';
 
 // Same-origin on web; the native app calls the deployed function directly.
 const ENDPOINT = isNativePlatform()
-  ? 'https://www.sirimillavinay.online/api/playlist'
+  ? 'https://www.vinaxmusic.online/api/playlist'
   : '/api/playlist';
 
 export interface GeneratedPlaylist {

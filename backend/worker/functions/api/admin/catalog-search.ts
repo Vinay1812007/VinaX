@@ -22,7 +22,7 @@ import { rateLimitAsync } from '../../_lib/ratelimit';
 // (DNS dead) and the b4a.run mirror (404s these routes) are dropped — they
 // only burned a timeout apiece before the working base was ever tried.
 const MIRRORS = [
-  'https://www.sirimillavinay.online/api/cat',
+  'https://www.vinaxmusic.online/api/cat',
   'https://saavn.sumit.co/api',
   'https://nepotuneapi.vercel.app/api',
 ];

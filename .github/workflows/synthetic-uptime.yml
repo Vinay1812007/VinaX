@@ -42,14 +42,14 @@ jobs:
           }
           fail=0
           # The app shell — must serve HTML that names the product.
-          probe "app shell" "https://www.sirimillavinay.online/" "^200$" || fail=1
+          probe "app shell" "https://www.vinaxmusic.online/" "^200$" || fail=1
           grep -qi "vinax" /tmp/body || { echo "::error::app shell body does not mention VinaX"; fail=1; }
           # Edge functions — alive means a deliberate JSON answer, not the SPA shell.
-          probe "geo function" "https://www.sirimillavinay.online/api/geo" "^200$" || fail=1
+          probe "geo function" "https://www.vinaxmusic.online/api/geo" "^200$" || fail=1
           # handoff GET with a malformed code must answer 400 (function alive,
           # validating) or 503 (alive, KV unbound) — 200 would mean the SPA
           # shell swallowed the route, i.e. functions are DOWN.
-          probe "handoff function" "https://www.sirimillavinay.online/api/handoff?c=bad" "^(400|503)$" || fail=1
+          probe "handoff function" "https://www.vinaxmusic.online/api/handoff?c=bad" "^(400|503)$" || fail=1
           exit $fail
 
       # Edge module-graph integrity (2026-09-07 outage). The probes above only

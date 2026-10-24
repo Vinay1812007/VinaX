@@ -15,7 +15,7 @@
 import { sbSelect, type SupabaseEnv } from '../_lib/supabase';
 import { SEO_PAGE_SIZE, SEO_TYPES, slugify } from '../_lib/seo';
 
-const ORIGIN = 'https://www.sirimillavinay.online';
+const ORIGIN = 'https://www.vinaxmusic.online';
 
 interface UrlRow {
   entity_id: string;

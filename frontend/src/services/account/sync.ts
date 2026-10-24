@@ -21,7 +21,7 @@ import { applyBackup, createBackup, parseBackup, type BackupCategoryId } from '@
 import { currentAccount, onAccountChange } from '@/services/auth/google';
 import { isNativePlatform } from '@/services/native';
 
-const ORIGIN = isNativePlatform() ? 'https://www.sirimillavinay.online' : '';
+const ORIGIN = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
 export const SYNC_ENDPOINT = `${ORIGIN}/api/account/data`;
 /** The categories that follow the account. */
 export const SYNC_CATEGORIES: readonly BackupCategoryId[] = ['settings', 'library', 'smartCollections', 'history', 'taste', 'bookmarks', 'homeLayout'];

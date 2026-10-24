@@ -40,7 +40,7 @@ export function usePageMeta(opts: {
   useEffect(() => {
     const fullTitle = title ? `${title} · ${APP_NAME}` : APP_NAME;
     const desc = description || DEFAULT_DESCRIPTION;
-    const url = canonicalPath ? `https://www.sirimillavinay.online${canonicalPath}` : window.location.href.split('?')[0];
+    const url = canonicalPath ? `https://www.vinaxmusic.online${canonicalPath}` : window.location.href.split('?')[0];
     document.title = fullTitle;
     setMeta('name', 'description', desc);
     setMeta('property', 'og:title', fullTitle);

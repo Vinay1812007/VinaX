@@ -23,7 +23,7 @@ import { safeEqual } from '../../_lib/safe-compare';
 type Env = SupabaseEnv & { CRON_SECRET?: string };
 
 // Same mirror ladder as _lib/render.ts and the live-search sitemaps.
-const BASES = ['https://www.sirimillavinay.online/api/cat', 'https://saavn.sumit.co/api', 'https://nepotuneapi.vercel.app/api'];
+const BASES = ['https://www.vinaxmusic.online/api/cat', 'https://saavn.sumit.co/api', 'https://nepotuneapi.vercel.app/api'];
 const LANGS = ['hindi', 'telugu', 'tamil', 'english', 'punjabi', 'kannada', 'malayalam', 'bengali', 'marathi', 'bhojpuri', 'gujarati', 'urdu'];
 const ARTISTS_PER_RUN = 6;
 const ALBUMS_PER_RUN = 4;

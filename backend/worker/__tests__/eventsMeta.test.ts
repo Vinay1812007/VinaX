@@ -90,7 +90,7 @@ let ipSeq = 0;
 const post = (body: Record<string, unknown>, consent = true) => {
   ipSeq += 1;
   return onRequestPost({
-    request: new Request('https://www.sirimillavinay.online/api/events', {
+    request: new Request('https://www.vinaxmusic.online/api/events', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'cf-connecting-ip': `10.31.0.${ipSeq % 250}`, ...(consent ? { 'x-vinax-consent': 'analytics' } : {}) },
       body: JSON.stringify({ deviceId: 'install-uuid-0001', ...body }),

@@ -30,7 +30,7 @@ interface Experiment {
   variants: Variant[];
 }
 
-const ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/experiments' : '/api/experiments';
+const ENDPOINT = isNativePlatform() ? 'https://www.vinaxmusic.online/api/experiments' : '/api/experiments';
 
 // --- deterministic assignment (mirror of functions/_lib/experiments.ts) ----
 function fnv1a(s: string): number {

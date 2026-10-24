@@ -208,7 +208,7 @@ export function OnboardingSheet() {
   useEffect(() => {
     if (!open || picked.length) return;
     let aliveG = true;
-    const base = isNativePlatform() ? 'https://www.sirimillavinay.online' : '';
+    const base = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
     fetch(`${base}/api/geo`)
       .then((r) => (r.ok ? (r.json() as Promise<{ country?: string | null; region?: string | null }>) : null))
       .then((g) => {

@@ -7,7 +7,7 @@ const trunc = (s: string, n: number): string => (s.length > n ? s.slice(0, n - 1
 
 /** Same-origin CORS image proxy so the cover can be drawn on a canvas. */
 function proxied(url: string): string {
-  const base = isNativePlatform() ? 'https://www.sirimillavinay.online' : '';
+  const base = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
   return `${base}/img?url=${encodeURIComponent(url)}`;
 }
 
@@ -183,7 +183,7 @@ export async function shareSongStoryCard(song: Song): Promise<boolean> {
   x.fillText('♫  Playing free on VinaX', W / 2, 1700);
   x.fillStyle = 'rgba(255,255,255,0.45)';
   x.font = '500 30px -apple-system, BlinkMacSystemFont, sans-serif';
-  x.fillText('sirimillavinay.online', W / 2, 1756);
+  x.fillText('vinaxmusic.online', W / 2, 1756);
 
   const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/png'));
   if (!blob) return false;

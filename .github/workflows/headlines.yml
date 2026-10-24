@@ -34,7 +34,7 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -u
-          code=$(curl -sS -o body.json -w '%{http_code}' -X POST "https://www.sirimillavinay.online/api/cron/headlines" \
+          code=$(curl -sS -o body.json -w '%{http_code}' -X POST "https://www.vinaxmusic.online/api/cron/headlines" \
             -H "x-cron-secret: ${CRON_SECRET}" --max-time 60 || echo 000)
           # The answer is untrusted text in this log: one line, no "::" commands.
           tr -d '\r\n' < body.json 2>/dev/null | sed 's/::/: :/g' | cut -c1-300; echo

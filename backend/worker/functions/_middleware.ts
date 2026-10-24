@@ -1,6 +1,6 @@
 /**
  * Host-level routing:
- *   sirimillavinay.online/*  → 301 to www.sirimillavinay.online (host
+ *   vinaxmusic.online/*  → 301 to www.vinaxmusic.online (host
  *   canonicalization, 4.19.1). The apex was serving the FULL SITE as a
  *   second origin: Google filed every apex copy under duplicate/canonical
  *   reasons in Search Console, and apex visitors accumulated a separate
@@ -16,7 +16,7 @@
  * All other hosts fall through to the app / other functions.
  */
 
-const CANONICAL_HOST = 'www.sirimillavinay.online';
+const CANONICAL_HOST = 'www.vinaxmusic.online';
 
 /** Paths that stream (or self-redirect to) the APK — never bounced again. */
 export const isApkDownloadPath = (pathname: string): boolean =>
@@ -28,7 +28,7 @@ export const onRequest = async (context: {
 }): Promise<Response> => {
   const url = new URL(context.request.url);
   const host = url.hostname.toLowerCase();
-  if (host === 'sirimillavinay.online') {
+  if (host === 'vinaxmusic.online') {
     url.hostname = CANONICAL_HOST;
     return Response.redirect(url.toString(), 301);
   }

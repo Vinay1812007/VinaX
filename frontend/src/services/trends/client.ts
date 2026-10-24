@@ -61,7 +61,7 @@ export interface TrendsSnapshot {
   items: VerifiedTrend[];
 }
 
-const ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/trends' : '/api/trends';
+const ENDPOINT = isNativePlatform() ? 'https://www.vinaxmusic.online/api/trends' : '/api/trends';
 const TIMEOUT_MS = 8_000;
 const KINDS = new Set<string>(['public-chart', 'editorial'] satisfies TrendKind[]);
 const STATUSES = new Set(['ok', 'stale', 'unavailable', 'disabled', 'not_configured']);

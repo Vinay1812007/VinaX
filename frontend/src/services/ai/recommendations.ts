@@ -7,7 +7,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 // ranking 9 s, home 9 s, shelves 14 s) so an answer that is on its way is
 // never aborted a second before it lands.
 export const RECOMMENDATION_AI_ROUTING = { metadataTimeoutMs: 6500, rankingTimeoutMs: 10_500, homeTimeoutMs: 10_500, shelvesTimeoutMs: 16_000 };
-const ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/curate' : '/api/curate';
+const ENDPOINT = isNativePlatform() ? 'https://www.vinaxmusic.online/api/curate' : '/api/curate';
 // v3 (7.2.0): v2 entries could hold energy/tempo a model invented for songs
 // that never carried a measurement; bumping the key discards all of them.
 const CACHE_KEY = 'vinax.recommendation.ai-metadata.v3';

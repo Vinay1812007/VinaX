@@ -95,7 +95,7 @@ export function renderRecapCard(r: RecapData, name: string): Promise<Blob> {
   // Footer
   x.fillStyle = ink(0.45);
   x.font = F(700, 32);
-  x.fillText('sirimillavinay.online — free forever · private by design', 84, H - 56);
+  x.fillText('vinaxmusic.online — free forever · private by design', 84, H - 56);
 
   return new Promise((resolve, reject) => {
     c.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/png');

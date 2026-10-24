@@ -6,7 +6,7 @@
 # apex redirect: the apex is no longer a Worker route, because a Worker over
 # its daily quota answered 429 for the apex robots.txt and Google stopped
 # crawling the whole domain. Must stay FIRST: rules match top-down.
-https://sirimillavinay.online/* https://www.sirimillavinay.online/:splat 301
+https://vinaxmusic.online/* https://www.vinaxmusic.online/:splat 301
 
 # Hashed build assets must NEVER fall back to the SPA shell: an HTML body
 # cached under the /assets/* one-year header bricks that chunk URL. That is
@@ -25,11 +25,11 @@ https://sirimillavinay.online/* https://www.sirimillavinay.online/:splat 301
 # song, artist, album and hub pages); old links land on Discover.
 /ads  /discover  301
 
-# Status page — status.sirimillavinay.online lands on the standalone status
+# Status page — status.vinaxmusic.online lands on the standalone status
 # app (public/status/, plain static files — fully independent of the SPA
 # shell, so listeners can check on VinaX even when the app misbehaves).
 # Pages only honors host-based sources for REDIRECTS, not 200 rewrites, so
 # the subdomain 301s onto the real /status/ path, which static files serve.
-https://status.sirimillavinay.online/ https://status.sirimillavinay.online/status/ 301
+https://status.vinaxmusic.online/ https://status.vinaxmusic.online/status/ 301
 
 /*    /index.html   200

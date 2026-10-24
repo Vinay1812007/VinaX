@@ -44,12 +44,12 @@ function json(o: unknown, status = 200): Response {
   });
 }
 
-const SITE_ORIGIN = 'https://www.sirimillavinay.online';
+const SITE_ORIGIN = 'https://www.vinaxmusic.online';
 
 /**
  * True only for a link that stays on the product's own origin: a site path
  * ("/song/…") or an absolute URL whose PARSED origin is ours. A string-prefix
- * test is not enough — "https://www.sirimillavinay.online.evil.example" and
+ * test is not enough — "https://www.vinaxmusic.online.evil.example" and
  * "…online@evil.example" both pass one — and "//host" or "/\host" are
  * protocol-relative, so the path form is resolved against the origin too.
  */

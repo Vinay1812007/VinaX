@@ -25,7 +25,7 @@ jobs:
         run: |
           set -eu
           attempt=1
-          until curl -fsS -X POST "https://www.sirimillavinay.online/api/cron/song-push" \
+          until curl -fsS -X POST "https://www.vinaxmusic.online/api/cron/song-push" \
               -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"; do
             if [ "$attempt" -ge 3 ]; then
               echo "::error::song-push endpoint failed after $attempt attempts"

@@ -15,7 +15,7 @@
  * the load-bearing work:
  *  1. `sandbox` in the response CSP. Without it the reflection would be a
  *     same-origin XSS sink: "Open in a new tab" is a TOP-LEVEL document at
- *     www.sirimillavinay.online, where an iframe's sandbox attribute does not
+ *     www.vinaxmusic.online, where an iframe's sandbox attribute does not
  *     apply and frame-ancestors is irrelevant. The CSP sandbox directive
  *     applies to the document itself, top-level included, so the page always
  *     runs in an opaque origin — no cookies, no app localStorage, no service
@@ -42,8 +42,8 @@ const MAX_BODY = MAX_BYTES * 2;
  *  Worker only routes /api/* on www, so a pages.dev embedder could never
  *  reach this endpoint anyway, and listing it would widen framing for free. */
 const APP_ORIGINS = [
-  'https://www.sirimillavinay.online',
-  'https://sirimillavinay.online',
+  'https://www.vinaxmusic.online',
+  'https://vinaxmusic.online',
   'http://localhost:5173',
   'http://localhost:4173',
   'http://127.0.0.1:5173',

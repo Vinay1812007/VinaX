@@ -13,8 +13,8 @@ export default function ContactPage() {
       <div className="vx-doc">
         <H>Email</H>
         <p>
-          <a href="mailto:hello@sirimillavinay.online">
-            hello@sirimillavinay.online
+          <a href="mailto:hello@vinaxmusic.online">
+            hello@vinaxmusic.online
           </a>{' '}
           — for anything: questions, ideas, problems, rights requests.
         </p>

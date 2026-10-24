@@ -56,4 +56,4 @@ Disallow: /cache-info
 # Politeness hint (Bing/Yandex honor it; Google uses Search Console settings)
 Crawl-delay: 5
 
-Sitemap: https://www.sirimillavinay.online/sitemap.xml
+Sitemap: https://www.vinaxmusic.online/sitemap.xml

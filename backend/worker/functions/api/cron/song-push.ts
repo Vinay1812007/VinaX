@@ -85,7 +85,7 @@ const SEEDS = ['romantic', 'party', 'workout', 'chill', 'melody', 'dance', 'retr
 // AI-blurb groups per run — every group still gets its own SONG; groups past
 // the cap fall back to the "song · artist" template instead of an AI line.
 const MAX_AI_GROUPS = 8;
-const MIRRORS = ['https://www.sirimillavinay.online/api/cat', 'https://saavn.sumit.co/api', 'https://nepotuneapi.vercel.app/api'];
+const MIRRORS = ['https://www.vinaxmusic.online/api/cat', 'https://saavn.sumit.co/api', 'https://nepotuneapi.vercel.app/api'];
 
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];

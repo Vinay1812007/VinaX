@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { StepList, type Step } from '@/features/settings/StepList';
 import '@/styles/pages/secondary.css';
 
-const API_BASE = isNativePlatform() ? 'https://www.sirimillavinay.online' : '';
+const API_BASE = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
 
 type SendState =
   | { step: 'idle' }

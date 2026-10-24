@@ -26,8 +26,8 @@ export default function DmcaPage() {
         <H>What to include</H>
         <p>
           Email{' '}
-          <a href="mailto:hello@sirimillavinay.online">
-            hello@sirimillavinay.online
+          <a href="mailto:hello@vinaxmusic.online">
+            hello@vinaxmusic.online
           </a>{' '}
           with: (1) the exact track, album or artist and, if possible, its link in VinaX; (2) the work it infringes
           and your relationship to it; (3) your contact details; (4) a good-faith statement that the use is not

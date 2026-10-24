@@ -54,7 +54,7 @@ export interface RecExperimentConfig {
   variants: Variant[];
 }
 
-const ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/experiments' : '/api/experiments';
+const ENDPOINT = isNativePlatform() ? 'https://www.vinaxmusic.online/api/experiments' : '/api/experiments';
 /** A decision the planner made for a continuation that was never served expires after this long. */
 export const PENDING_DECISION_TTL_MS = 60_000;
 /** Exposure maps kept per served continuation (for the outcome events of its songs). */

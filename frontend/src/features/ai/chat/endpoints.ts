@@ -1,7 +1,7 @@
 import { isNativePlatform } from '@/services/native';
 
 /** The app build talks to the production origin; the web build is same-origin. */
-const ORIGIN = isNativePlatform() ? 'https://www.sirimillavinay.online' : '';
+const ORIGIN = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
 
 export const CHAT_ENDPOINT = `${ORIGIN}/api/vinaxai`;
 /** 12.0 — a site's logo, through the Worker (never fetched from the site by the browser). */

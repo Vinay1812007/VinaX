@@ -443,7 +443,7 @@ export function AppLayout() {
     if (!/^\/(song|album|artist|playlist)\//.test(pathname)) {
       // Canonical is pathname-only (never .search or .hash) — otherwise every
       // ?utm_source= visitor gets a separate canonical and search dilutes.
-      const url = 'https://www.sirimillavinay.online' + pathname;
+      const url = 'https://www.vinaxmusic.online' + pathname;
       let canon = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
       if (!canon) {
         canon = document.createElement('link');

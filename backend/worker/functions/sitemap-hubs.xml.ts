@@ -4,7 +4,7 @@
  * deploy), same 30-min edge cache as the other maps for a consistent
  * crawler contract. KEEP IN SYNC with src/constants/hubs.ts + languages.
  */
-const ORIGIN = 'https://www.sirimillavinay.online';
+const ORIGIN = 'https://www.vinaxmusic.online';
 const LANGS = ['hindi', 'telugu', 'tamil', 'english', 'punjabi', 'kannada', 'malayalam', 'bengali', 'marathi', 'bhojpuri', 'gujarati', 'urdu'];
 const MOODS = ['romantic', 'sad', 'party', 'devotional', 'melody', 'workout'];
 

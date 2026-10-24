@@ -22,7 +22,7 @@ export function SiteGate({ children }: { children: ReactNode }) {
     refetchInterval: (query) => (query.state.data?.mode === 'maintenance' ? 60_000 : 30 * 60_000),
     refetchIntervalInBackground: false,
     queryFn: async () => {
-      const base = isNativePlatform() ? 'https://www.sirimillavinay.online' : '';
+      const base = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
       const r = await fetch(`${base}/api/site-mode`);
       return r.ok ? ((await r.json()) as SiteMode) : { mode: 'live' };
     },

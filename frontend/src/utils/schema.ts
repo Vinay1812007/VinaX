@@ -3,7 +3,7 @@ import { bestImage } from '@/utils/images';
 import { albumPath, artistPath, songPath } from '@/utils/slug';
 import type { Album, Artist, Song } from '@/types/music';
 
-export const SITE_ORIGIN = 'https://www.sirimillavinay.online';
+export const SITE_ORIGIN = 'https://www.vinaxmusic.online';
 
 /** Map a catalog language id ("telugu") to a BCP-47 tag ("te") for schema.org. */
 export function bcp47(languageId: string | null | undefined): string | undefined {

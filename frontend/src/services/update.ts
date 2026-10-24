@@ -13,8 +13,8 @@ export interface UpdateInfo {
 
 /** Public update manifest + APK proxy (served by Cloudflare; works for the
  *  private repo without exposing it). The app never talks to GitHub directly. */
-const VERSION_ENDPOINT = 'https://www.sirimillavinay.online/api/version';
-export const APK_URLS = ['https://www.sirimillavinay.online/api/apk'];
+const VERSION_ENDPOINT = 'https://www.vinaxmusic.online/api/version';
+export const APK_URLS = ['https://www.vinaxmusic.online/api/apk'];
 
 /**
  * Fold a foreground re-check into what the gate already shows. checkForUpdate

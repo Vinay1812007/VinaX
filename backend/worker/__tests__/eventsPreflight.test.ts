@@ -36,7 +36,7 @@ afterEach(() => vi.unstubAllGlobals());
 let ipSeq = 0;
 const preflight = (origin: string, requestHeaders: string[]) =>
   onRequestOptions({
-    request: new Request('https://www.sirimillavinay.online/api/events', {
+    request: new Request('https://www.vinaxmusic.online/api/events', {
       method: 'OPTIONS',
       headers: { origin, 'access-control-request-method': 'POST', 'access-control-request-headers': requestHeaders.join(',') },
     }),
@@ -44,7 +44,7 @@ const preflight = (origin: string, requestHeaders: string[]) =>
 const post = (headers: Record<string, string>) => {
   ipSeq += 1;
   return onRequestPost({
-    request: new Request('https://www.sirimillavinay.online/api/events', {
+    request: new Request('https://www.vinaxmusic.online/api/events', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'cf-connecting-ip': `10.30.0.${ipSeq % 250}`, ...headers },
       body: JSON.stringify({ deviceId: 'install-uuid-0001', type: 'play', song: { id: 's1', title: 'Orbit' } }),
@@ -59,7 +59,7 @@ describe('/api/events preflight', () => {
     expect(clientHeaders()).toEqual(expect.arrayContaining(['content-type', 'x-vinax-consent']));
   });
 
-  it.each(['https://localhost', 'capacitor://localhost', 'https://www.sirimillavinay.online', 'http://localhost:5173'])(
+  it.each(['https://localhost', 'capacitor://localhost', 'https://www.vinaxmusic.online', 'http://localhost:5173'])(
     'allows every header the client sends, for the app origin %s',
     async (origin) => {
       const res = await preflight(origin, clientHeaders());

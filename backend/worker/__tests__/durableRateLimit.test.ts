@@ -47,7 +47,7 @@ function fakeBinding(limit: number) {
 }
 
 const req = (ip: string, extra: Record<string, string> = {}) =>
-  new Request('https://www.sirimillavinay.online/api/x', { method: 'POST', headers: { 'cf-connecting-ip': ip, ...extra } });
+  new Request('https://www.vinaxmusic.online/api/x', { method: 'POST', headers: { 'cf-connecting-ip': ip, ...extra } });
 
 beforeEach(() => { compare.calls = 0; });
 afterEach(() => vi.unstubAllGlobals());
@@ -124,7 +124,7 @@ describe('rateLimitAsync', () => {
     const fetchSpy = vi.fn(async () => new Response('[]', { status: 201 }));
     vi.stubGlobal('fetch', fetchSpy);
     const res = await onRequestPost({
-      request: new Request('https://www.sirimillavinay.online/api/events', {
+      request: new Request('https://www.vinaxmusic.online/api/events', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-vinax-consent': 'analytics', 'cf-connecting-ip': '203.0.113.5' },
         body: JSON.stringify({ deviceId: 'install-uuid-0001', type: 'play' }),

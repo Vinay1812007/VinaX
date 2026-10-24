@@ -13,7 +13,7 @@ export interface ApiBase {
  * Pruned 2026-07 (DQA-10): saavn.dev (DNS no longer resolves) and the b4a.run
  * mirror (no CORS headers, so browsers can never read it) only produced
  * console errors and wasted requests. Re-add via VITE_API_BASES if revived.
- * V5.0 (2026-08): first-party catalog API (sirimillavinay.online) leads the
+ * V5.0 (2026-08): first-party catalog API (vinaxmusic.online) leads the
  * list for the web app — song delivery no longer depends on community wrappers.
  */
 export const DEFAULT_API_BASES: ApiBase[] = isNativePlatform()
@@ -25,20 +25,20 @@ export const DEFAULT_API_BASES: ApiBase[] = isNativePlatform()
       // registry benches the base for a minute — and its /suggestions
       // endpoint is buggy, which the same fallback absorbs per call.
       // 11.0.4 — reached through the owner's own domain
-      // (vinaxmusicapi.sirimillavinay.online) instead of the onrender.com URL.
-      { id: 'vinax-render', url: 'https://vinaxmusicapi.sirimillavinay.online/api', label: 'VinaX Music API' },
-      { id: 'sirimilla', url: 'https://www.sirimillavinay.online/api/cat', label: 'sirimillavinay.online' },
+      // (musicapi.vinaxmusic.online) instead of the onrender.com URL.
+      { id: 'vinax-render', url: 'https://musicapi.vinaxmusic.online/api', label: 'VinaX Music API' },
+      { id: 'sirimilla', url: 'https://www.vinaxmusic.online/api/cat', label: 'vinaxmusic.online' },
     ]
   : [
       // v5.6.7 — the owner's Render wrapper leads on web too (owner decision).
-      { id: 'vinax-render', url: 'https://vinaxmusicapi.sirimillavinay.online/api', label: 'VinaX Music API' },
+      { id: 'vinax-render', url: 'https://musicapi.vinaxmusic.online/api', label: 'VinaX Music API' },
       // Same-origin first-party catalog: the fast, free fallback. In local
       // Vite development, vite.config.ts mounts /api/cat with the exact same
       // Cloudflare catalog handler; in production Cloudflare Pages serves
       // functions/api/cat/[[path]].ts at this path.
       { id: 'local-catalog', url: '/api/cat', label: 'VinaX Catalog' },
       // Remote first-party fallback when the same-origin function is down.
-      { id: 'sirimilla', url: 'https://www.sirimillavinay.online/api/cat', label: 'sirimillavinay.online' },
+      { id: 'sirimilla', url: 'https://www.vinaxmusic.online/api/cat', label: 'vinaxmusic.online' },
     ];
 
 function basesFromEnv(): ApiBase[] | null {
