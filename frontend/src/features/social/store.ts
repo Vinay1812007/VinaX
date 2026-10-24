@@ -68,7 +68,7 @@ export const useSocialStore = create<SocialState>()(
         if (!force && Date.now() - get().loadedAt < REFRESH_EVERY_MS) return;
         set({ busy: true, error: null });
         try {
-          const [profile, following] = await Promise.all([getMyProfile(), getFollowing().catch(() => get().following)]);
+          const [profile, following] = await Promise.all([getMyProfile(), getFollowing().catch(() => get().following ?? [])]);
           set({ profile, following, loadedAt: Date.now(), followingAt: Date.now(), busy: false });
         } catch (e) {
           set({ busy: false, error: e instanceof Error ? e.message : 'error' });
@@ -128,6 +128,14 @@ export const useSocialStore = create<SocialState>()(
         }
       },
     }),
-    { name: KEYS.social, partialize: (s) => ({ profile: s.profile, following: s.following, digestAt: s.digestAt }) },
+    {
+      name: KEYS.social,
+      partialize: (s) => ({ profile: s.profile, following: s.following, digestAt: s.digestAt }),
+      // A stored copy from storage is untrusted too: the list is always an array.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<SocialState>;
+        return { ...current, ...p, following: Array.isArray(p.following) ? p.following : [], profile: p.profile && typeof p.profile === 'object' && typeof p.profile.handle === 'string' ? p.profile : null };
+      },
+    },
   ),
 );
