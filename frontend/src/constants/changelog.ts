@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '15.0.1': {
+    title: 'Home crashed when /api/follow answered without a list',
+    changes: [
+      { type: 'fixed', text: 'The e2e harness answers every /api/* call with {}: getFollowing returned.' },
+    ],
+  },
   '15.0.0': {
     title: 'VinaX 15: six new app styles and 24 listener features #major',
     changes: [
