@@ -5,6 +5,7 @@ import { useHistoryStore } from '@/store/historyStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { getStreak, getBestStreak } from '@/utils/streak';
 import { GoalRing } from '@/components/GoalRing';
+import { WeekGoals } from '@/components/WeekGoals';
 import { toast } from '@/store/toastStore';
 import { weeklyReport } from '@/features/stats/weeklyReport';
 import { calendarCells } from '@/features/stats/calendar';
@@ -291,7 +292,7 @@ export default function StatsPage() {
           <Link to="/recap" className="vx-row is-link">
             <span className="vx-row-main">
               <span className="vx-row-label">Your year in music</span>
-              <span className="vx-row-hint">Your persona, top artists and a share card</span>
+              <span className="vx-row-hint">Your persona, top artists and a share card — or play it as a story</span>
             </span>
             <ChevronRightIcon className="vx-row-chev" />
           </Link>
@@ -299,6 +300,7 @@ export default function StatsPage() {
         <div className="vx-stats-goal mt-2">
           <GoalRing />
         </div>
+        <WeekGoals />
       </section>
 
       {/* v5.17.0 — 12-week listening calendar */}

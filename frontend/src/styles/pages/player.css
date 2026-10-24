@@ -856,6 +856,8 @@ html.reduce-motion .vx-np-heart-burst { animation: none; opacity: 1; transform: 
 .vx-np-pill[aria-pressed='true'], .vx-np-pill.is-on { background: rgb(var(--ember-500)); color: var(--vx-on-accent); }
 .vx-np-pill[aria-pressed='true']:hover, .vx-np-pill.is-on:hover { background: rgb(var(--ember-400)); }
 .vx-np-pill.is-quiet { background: transparent; color: rgb(var(--ink-300)); }
+/* 15.0 — a plain range in the options sheets (focus sound volume). */
+.vx-np-range { width: min(100%, 260px); accent-color: rgb(var(--ember-500)); }
 .vx-np-pill.is-quiet:hover { color: rgb(var(--ink-100)); background: var(--vx-hover); }
 .vx-np-mark { display: inline-flex; align-items: center; border-radius: 999px; background: rgb(var(--ink-100) / 0.08); }
 .vx-np-mark-time, .vx-np-mark-remove { position: relative; min-height: 36px; font-size: 13px; }
@@ -1290,6 +1292,13 @@ html.light .vx-drive-art { box-shadow: 0 24px 50px -26px rgb(48 22 34 / 0.4); }
 .vx-drive-title { max-width: 100%; font-family: var(--vx-font-display); font-size: var(--vx-type-page); font-weight: 800; line-height: 1.25; letter-spacing: -0.03em; }
 .vx-drive-artist { max-width: 100%; overflow: hidden; margin-top: 8px; color: rgb(var(--ink-300)); font-size: 18px; font-weight: 550; white-space: nowrap; text-overflow: ellipsis; }
 .vx-drive-transport { display: flex; align-items: center; justify-content: center; gap: 24px; width: 100%; margin-top: 48px; }
+/* 15.0 — the voice button and its one-line status. */
+.vx-drive-voice { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; margin-top: 40px; }
+.vx-drive-mic { display: grid; place-items: center; width: 84px; height: 84px; border-radius: 50%; background: rgb(var(--ink-800)); color: rgb(var(--ink-100)); transition: background-color 160ms var(--ease-calm), transform 120ms var(--ease-calm), box-shadow 160ms var(--ease-calm); }
+.vx-drive-mic svg { width: 36px; height: 36px; }
+.vx-drive-mic:active { transform: scale(0.96); }
+.vx-drive-mic.is-live { background: rgb(var(--ember-500)); color: var(--vx-on-accent); box-shadow: 0 0 0 10px rgb(var(--ember-500) / 0.18); }
+.vx-drive-voice-line { max-width: 34ch; min-height: 1.5em; color: rgb(var(--ink-300)); font-size: 17px; font-weight: 550; line-height: 1.4; }
 .vx-drive-skip {
   display: grid;
   place-items: center;

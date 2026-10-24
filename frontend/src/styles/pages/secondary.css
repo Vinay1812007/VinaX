@@ -468,6 +468,14 @@ html.light .vx-help-tile:hover { background: rgb(var(--ink-950)); box-shadow: in
 
 /* Stats: the daily-goal ring sits flat, like everything else here. */
 .vx-stats-goal > div { padding: 16px 0 0 !important; border: 0; border-top: 1px solid var(--sec-line); border-radius: 0 !important; background: none !important; }
+/* 15.0 — weekly goals under the daily ring. */
+.vx-weekgoals { display: grid; gap: 14px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--sec-line); }
+.vx-weekgoal-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.vx-weekgoal-label { font-size: 14px; font-weight: 700; color: rgb(var(--ink-100)); }
+.vx-weekgoal-value { font-size: 13px; font-weight: 600; color: rgb(var(--ink-300)); }
+.vx-weekgoal-meter { height: 6px; margin-top: 8px; overflow: hidden; border-radius: 999px; background: rgb(var(--ink-100) / 0.1); }
+.vx-weekgoal-meter > span { display: block; height: 100%; border-radius: inherit; background: rgb(var(--ember-500)); transition: width 400ms var(--ease-calm); }
+.vx-weekgoal-sub { margin-top: 6px; font-size: 12.5px; font-weight: 500; color: rgb(var(--ink-400)); }
 
 /* Quiz answer options. Right / wrong also carries an outline and a hidden word, not colour alone. */
 .vx-quiz-option {
@@ -503,3 +511,33 @@ html.light .vx-help-tile:hover { background: rgb(var(--ink-950)); box-shadow: in
   .vx-sec *, .vx-sec *::before, .vx-sec *::after, .vx-empty-page * { transition: none !important; animation: none !important; }
 }
 html.reduce-motion .vx-sec *, html.reduce-motion .vx-sec *::before, html.reduce-motion .vx-sec *::after, html.reduce-motion .vx-empty-page * { transition: none !important; animation: none !important; }
+
+/* ------------------------------------------------ 15.0 — Wrapped: the story */
+.vx-story { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; justify-content: flex-end; padding: max(20px, var(--safe-top)) max(20px, var(--safe-right)) max(28px, var(--safe-bottom)) max(20px, var(--safe-left)); color: #fff; background: rgb(var(--ink-950)); overflow: hidden; user-select: none; }
+.vx-story.is-ember { background: radial-gradient(120% 80% at 20% 0%, rgb(var(--ember-500) / 0.9), rgb(var(--ember-600) / 0.6) 40%, #120308 100%); }
+.vx-story.is-tide { background: radial-gradient(120% 80% at 80% 0%, rgb(var(--tide-500) / 0.9), rgb(var(--tide-500) / 0.4) 45%, #04101a 100%); }
+.vx-story.is-ink { background: radial-gradient(100% 70% at 50% 100%, rgb(var(--ember-500) / 0.35), transparent 60%), #0b0b0f; }
+.vx-story.is-art { background: #0b0b0f; }
+.vx-story-art { position: absolute; inset: -12%; width: 124%; height: 124%; object-fit: cover; filter: blur(36px) saturate(1.4) brightness(0.55); z-index: 0; }
+.vx-story-bars { position: absolute; top: max(14px, var(--safe-top)); left: 16px; right: 16px; z-index: 3; display: flex; gap: 4px; }
+.vx-story-bars i { position: relative; flex: 1; height: 3px; overflow: hidden; border-radius: 3px; background: rgb(255 255 255 / 0.3); }
+.vx-story-bars i::after { content: ''; position: absolute; inset: 0; width: 0; background: #fff; }
+.vx-story-bars i.is-done::after { width: 100%; }
+.vx-story-bars i.is-live::after { animation: vxStoryBar linear forwards; }
+@keyframes vxStoryBar { from { width: 0; } to { width: 100%; } }
+.vx-story-close { position: absolute; top: max(26px, calc(var(--safe-top) + 12px)); right: 12px; z-index: 4; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; color: #fff; background: rgb(0 0 0 / 0.25); }
+.vx-story-close svg { width: 22px; height: 22px; }
+.vx-story-tap { position: absolute; top: 0; bottom: 0; width: 50%; z-index: 2; background: transparent; }
+.vx-story-tap.is-prev { left: 0; } .vx-story-tap.is-next { right: 0; }
+.vx-story-body { position: relative; z-index: 3; max-width: 640px; pointer-events: none; animation: vxStoryIn 420ms var(--ease-calm) both; }
+.vx-story-body > .vx-story-pill, .vx-story-body > .vx-story-actions { pointer-events: auto; }
+@keyframes vxStoryIn { from { opacity: 0; transform: translateY(18px); } }
+.vx-story-kicker { font-size: 15px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: rgb(255 255 255 / 0.8); }
+.vx-story-big { margin-top: 8px; font-family: var(--vx-font-display); font-size: clamp(64px, 18vw, 140px); font-weight: 800; line-height: 0.95; letter-spacing: -0.04em; }
+.vx-story-title { margin-top: 10px; font-family: var(--vx-font-display); font-size: clamp(30px, 8vw, 56px); font-weight: 800; line-height: 1.05; letter-spacing: -0.03em; text-wrap: balance; }
+.vx-story-text { margin-top: 14px; font-size: 17px; font-weight: 550; line-height: 1.45; color: rgb(255 255 255 / 0.85); max-width: 46ch; }
+.vx-story-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.vx-story-pill { display: inline-flex; align-items: center; gap: 8px; min-height: 46px; margin-top: 18px; padding: 0 18px; border-radius: 999px; background: rgb(255 255 255 / 0.16); color: #fff; font-size: 15px; font-weight: 700; backdrop-filter: blur(12px); }
+.vx-story-actions .vx-story-pill { margin-top: 0; }
+.vx-story-pill.is-primary { background: #fff; color: #111; }
+@media (prefers-reduced-motion: reduce) { .vx-story-bars i.is-live::after { animation: none; width: 100%; } .vx-story-body { animation: none; } }

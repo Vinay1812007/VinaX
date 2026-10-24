@@ -55,6 +55,8 @@ import { useBookmarkStore } from '@/store/bookmarkStore';
 import { AmbientOverlay, useIdle } from '@/components/AmbientOverlay';
 import { shareNowPlayingCard } from '@/utils/shareCard';
 import { songsLikeThis } from '@/services/recs/similar';
+import { FocusSheet } from '@/features/focus/FocusSheet';
+import { useFocusStore } from '@/features/focus/focusSounds';
 import { toast } from '@/store/toastStore';
 import { TuneChips } from '@/features/queue/TuneChips';
 import { Chip } from '@/components/Chip';
@@ -226,6 +228,8 @@ export default function NowPlayingPage() {
   const [showMore, setShowMore] = useState(false);
   const [showDevices, setShowDevices] = useState(false);
   const [showSleep, setShowSleep] = useState(false);
+  const [showFocus, setShowFocus] = useState(false);
+  const focusOn = useFocusStore((s) => !!s.sound);
   // v5.17.0 — song bookmarks, ambient mode, data saver.
   const seek = usePlayerStore((s) => s.seek);
   const marks = useBookmarkStore((b) => (song ? b.marks[song.id] : undefined)) ?? [];
@@ -1067,6 +1071,10 @@ export default function NowPlayingPage() {
             >
               Songs like this
             </button>
+            {/* 15.0 — rain, wind and noise beside the music, with a timer. */}
+            <button type="button" onClick={() => { setShowMore(false); setShowFocus(true); }} aria-pressed={focusOn} className="vx-np-pill">
+              Focus sounds{focusOn ? ' on' : ''}
+            </button>
             <button
               type="button"
               onClick={() => setAmbientArmed((v) => !v)}
@@ -1081,6 +1089,7 @@ export default function NowPlayingPage() {
       </Sheet>
 
       <SleepTimerSheet open={showSleep} onClose={() => setShowSleep(false)} />
+      <FocusSheet open={showFocus} onClose={() => setShowFocus(false)} />
 
       {/* v5.9.1 — immersive mode is its own layer on <body>, pinned to the
           viewport. Inside the sheet the clip scrolled and dragged with the

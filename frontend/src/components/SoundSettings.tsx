@@ -84,6 +84,11 @@ export function SoundSettings() {
           <Toggle on={on} onChange={s.setSoundEffects} label="Sound effects" />
         </Row>
 
+        {/* 15.0 — the preset follows the song's genre, mood and energy (on the device). */}
+        <Row label="Match the song" note={on ? 'The equalizer preset follows what is playing: bass for dance and hip-hop, vocal for melodies, loud for mass numbers. Your own preset comes back when this is off.' : 'Turn on sound effects to use Auto EQ.'}>
+          <Toggle on={s.eqAuto} onChange={s.setEqAuto} label="Match the song" disabled={!on} />
+        </Row>
+
         <Row stack label="Equalizer" note={on ? 'Pick a preset or drag the bands. ±12 dB.' : 'Turn on sound effects to use the equalizer.'}>
           <div className={cn('flex flex-col gap-3', !on && 'opacity-40')}>
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Equalizer presets">

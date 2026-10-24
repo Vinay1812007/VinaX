@@ -43,6 +43,8 @@ export const KEYS = {
   weekly: `${STORAGE_PREFIX}.weekly.v1`,
   /** 15.0 — which week's Weekly Mix the smart downloads hold, and its ids. */
   smartDownloads: `${STORAGE_PREFIX}.smart-downloads.v1`,
+  /** 15.0 — the weeks each weekly goal was met (features/stats/goals.ts). */
+  goalLedger: `${STORAGE_PREFIX}.goal-ledger.v1`,
   output: `${STORAGE_PREFIX}.output.v1`,
   roomHostTokens: `${STORAGE_PREFIX}.room-host-tokens.v1`,
   /** Last in-app-update install attempt {build, ts} — the dialog reappearing
