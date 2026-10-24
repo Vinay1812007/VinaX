@@ -548,12 +548,12 @@ html.reduce-motion .vx-settings *, html.reduce-motion .vx-settings *::before, ht
 /* 13.2 — each style's name is set in that style's own display face, so the
    type is part of the choice, not a surprise after it. The faces load only
    while the picker is on screen (templates/base.css). */
-.vx-tpl-card[data-tpl='aura'] .vx-tpl-name { font-family: 'Manrope', system-ui, sans-serif; font-weight: 800; letter-spacing: -0.02em; }
-.vx-tpl-card[data-tpl='pulse'] .vx-tpl-name { font-family: 'Archivo', 'Manrope', system-ui, sans-serif; font-weight: 800; letter-spacing: -0.015em; }
-.vx-tpl-card[data-tpl='sangam'] .vx-tpl-name { font-family: 'Eczar', 'Manrope', Georgia, serif; font-size: 16px; font-weight: 700; }
-.vx-tpl-card[data-tpl='nocturne'] .vx-tpl-name { font-family: 'Bricolage Grotesque', 'Manrope', system-ui, sans-serif; font-weight: 640; }
-.vx-tpl-card[data-tpl='marquee'] .vx-tpl-name { font-family: 'Big Shoulders Display', 'Manrope', system-ui, sans-serif; font-size: 18px; font-weight: 800; letter-spacing: 0.01em; line-height: 1.1; }
-.vx-tpl-card[data-tpl='vibe'] .vx-tpl-name { font-family: 'Baloo 2', 'Manrope', system-ui, sans-serif; font-size: 16px; font-weight: 800; line-height: 1.15; }
+.vx-tpl-card[data-tpl='lumen'] .vx-tpl-name { font-family: 'Inter', 'Manrope', system-ui, sans-serif; font-weight: 800; letter-spacing: -0.03em; }
+.vx-tpl-card[data-tpl='verdant'] .vx-tpl-name { font-family: 'Figtree', 'Manrope', system-ui, sans-serif; font-weight: 800; letter-spacing: -0.02em; }
+.vx-tpl-card[data-tpl='monsoon'] .vx-tpl-name { font-family: 'Manrope', system-ui, sans-serif; font-weight: 700; letter-spacing: -0.02em; }
+.vx-tpl-card[data-tpl='harbour'] .vx-tpl-name { font-family: 'Archivo', 'Manrope', system-ui, sans-serif; font-weight: 800; letter-spacing: -0.015em; }
+.vx-tpl-card[data-tpl='verse'] .vx-tpl-name { font-family: 'Baloo 2', 'Manrope', system-ui, sans-serif; font-size: 16px; font-weight: 800; line-height: 1.15; }
+.vx-tpl-card[data-tpl='onyx'] .vx-tpl-name { font-family: 'Roboto', 'Manrope', system-ui, sans-serif; font-weight: 700; letter-spacing: 0; }
 .vx-tpl-tag { padding: 0 4px; color: rgb(var(--ink-400)); font-size: 12px; font-weight: 550; line-height: 1.35; }
 .vx-tpl-preview {
   --r-art: 5px;
@@ -585,50 +585,63 @@ html.reduce-motion .vx-settings *, html.reduce-motion .vx-settings *::before, ht
 .vx-tpl-dock i:nth-child(2) { left: 37%; }
 .vx-tpl-dock i:nth-child(3) { left: 60%; }
 .vx-tpl-dock i:nth-child(4) { left: 83%; }
-/* What makes each style itself, in miniature. */
-.vx-tpl-card[data-tpl='aura'] .vx-tpl-preview { --r-art: 6px; background: radial-gradient(90% 70% at 0% 0%, color-mix(in srgb, var(--tpl-a) 30%, transparent), transparent 70%), var(--tpl-c); }
-.vx-tpl-card[data-tpl='aura'] .vx-tpl-title { width: 56%; height: 11px; }
-.vx-tpl-card[data-tpl='aura'] .vx-tpl-mini { border-radius: 7px; background: rgb(255 255 255 / 0.14); }
-.vx-tpl-card[data-tpl='pulse'] .vx-tpl-preview { --r-art: 2px; background: linear-gradient(180deg, #3a3a3a, var(--tpl-c) 46%); }
-.vx-tpl-card[data-tpl='pulse'] .vx-tpl-arts i { width: 52px; height: 15px; }
-.vx-tpl-card[data-tpl='pulse'] .vx-tpl-arts i:nth-child(2) { left: 58px; }
-.vx-tpl-card[data-tpl='pulse'] .vx-tpl-arts i:nth-child(3) { left: 0; top: 19px; }
-.vx-tpl-card[data-tpl='pulse'] .vx-tpl-mini { border-radius: 3px; }
-.vx-tpl-card[data-tpl='pulse'] .vx-tpl-mini b { background: #fff; }
-.vx-tpl-card[data-tpl='pulse'] .vx-tpl-dock { background: linear-gradient(180deg, transparent, #000); }
-.vx-tpl-card[data-tpl='pulse'] .vx-tpl-dock i:nth-child(1) { background: #fff; }
-.vx-tpl-card[data-tpl='sangam'] .vx-tpl-preview { --r-art: 10px; --r-play: 3px; background: radial-gradient(80% 60% at 0% 0%, color-mix(in srgb, var(--tpl-a) 34%, transparent), transparent 70%), radial-gradient(80% 60% at 100% 0%, color-mix(in srgb, var(--tpl-b) 22%, transparent), transparent 70%), var(--tpl-c); }
-.vx-tpl-card[data-tpl='sangam'] .vx-tpl-arts i:nth-child(2) { background: color-mix(in srgb, var(--tpl-b) 55%, var(--tpl-s)); }
-.vx-tpl-card[data-tpl='sangam'] .vx-tpl-mini { border-radius: 7px; }
-.vx-tpl-card[data-tpl='sangam'] .vx-tpl-dock { left: 6px; right: 6px; bottom: 4px; height: 19px; border-radius: 9px; background: rgb(255 255 255 / 0.1); }
-.vx-tpl-card[data-tpl='sangam'] .vx-tpl-dock i { top: 6px; }
-.vx-tpl-card[data-tpl='sangam'] .vx-tpl-dock i:nth-child(1) { width: 16px; border-radius: 4px; margin-left: -4px; }
-.vx-tpl-card[data-tpl='nocturne'] .vx-tpl-preview { --r-art: 4px; background: linear-gradient(180deg, color-mix(in srgb, var(--tpl-a) 46%, var(--tpl-c)), var(--tpl-c) 52%); }
-.vx-tpl-card[data-tpl='nocturne'] .vx-tpl-title { background: linear-gradient(90deg, #fff, var(--tpl-a), var(--tpl-b)); }
-.vx-tpl-card[data-tpl='nocturne'] .vx-tpl-mini b { box-shadow: 0 0 0 2px color-mix(in srgb, var(--tpl-a) 40%, transparent), 0 0 8px var(--tpl-a); }
-.vx-tpl-card[data-tpl='nocturne'] .vx-tpl-dock { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--tpl-a) 50%, transparent); }
-.vx-tpl-card[data-tpl='nocturne'] .vx-tpl-dock i:nth-child(1) { box-shadow: 0 0 8px var(--tpl-a), 0 9px 0 -2px var(--tpl-a); }
-.vx-tpl-card[data-tpl='marquee'] .vx-tpl-preview { --r-art: 1px; }
-.vx-tpl-card[data-tpl='marquee'] .vx-tpl-title { height: 8px; border-radius: 1px; }
-.vx-tpl-card[data-tpl='marquee'] .vx-tpl-arts { height: 40px; }
-.vx-tpl-card[data-tpl='marquee'] .vx-tpl-arts i { width: 44px; height: 40px; }
-.vx-tpl-card[data-tpl='marquee'] .vx-tpl-arts i:nth-child(2) { left: 50px; }
-.vx-tpl-card[data-tpl='marquee'] .vx-tpl-arts i:nth-child(3) { left: 100px; }
-.vx-tpl-card[data-tpl='marquee'] .vx-tpl-lines { top: 76px; }
-.vx-tpl-card[data-tpl='marquee'] .vx-tpl-lines i:nth-child(2) { left: 50px; }
-.vx-tpl-card[data-tpl='marquee'] .vx-tpl-mini { left: 0; right: 0; bottom: 21px; height: 13px; border-radius: 0; background: #000; box-shadow: inset 0 2px 0 #333, inset 40px 2px 0 -0px var(--tpl-a); }
-.vx-tpl-card[data-tpl='marquee'] .vx-tpl-mini b { background: #fff; top: 4px; }
-.vx-tpl-card[data-tpl='marquee'] .vx-tpl-mini i { top: 4px; }
-.vx-tpl-card[data-tpl='marquee'] .vx-tpl-dock { background: #000; box-shadow: inset 0 1px 0 #2a2a2a; }
-.vx-tpl-card[data-tpl='marquee'] .vx-tpl-dock i:nth-child(1) { background: #fff; }
-.vx-tpl-card[data-tpl='vibe'] .vx-tpl-preview { --r-art: 12px; background: radial-gradient(80% 60% at 0% 100%, color-mix(in srgb, var(--tpl-a) 36%, transparent), transparent 70%), radial-gradient(70% 55% at 100% 0%, color-mix(in srgb, var(--tpl-b) 26%, transparent), transparent 70%), var(--tpl-c); }
-.vx-tpl-card[data-tpl='vibe'] .vx-tpl-title { width: 60%; height: 12px; border-radius: 6px; }
-.vx-tpl-card[data-tpl='vibe'] .vx-tpl-mini { left: 12px; right: 12px; border-radius: 999px; }
-.vx-tpl-card[data-tpl='vibe'] .vx-tpl-mini i { border-radius: 50%; }
-.vx-tpl-card[data-tpl='vibe'] .vx-tpl-mini b { background: linear-gradient(120deg, var(--tpl-a), var(--tpl-b)); }
-.vx-tpl-card[data-tpl='vibe'] .vx-tpl-dock { left: 14px; right: 14px; bottom: 4px; height: 18px; border-radius: 999px; background: rgb(255 255 255 / 0.1); }
-.vx-tpl-card[data-tpl='vibe'] .vx-tpl-dock i { top: 5px; border-radius: 50%; }
-.vx-tpl-card[data-tpl='vibe'] .vx-tpl-dock i:nth-child(1) { top: 3px; width: 12px; height: 12px; margin-left: -3px; background: linear-gradient(120deg, var(--tpl-a), var(--tpl-b)); }
+/* What makes each style itself, in miniature (15.0). */
+/* Lumen: plain canvas, big title, 8px art, a floating frosted mini player, accent tab. */
+.vx-tpl-card[data-tpl='lumen'] .vx-tpl-preview { --r-art: 4px; }
+.vx-tpl-card[data-tpl='lumen'] .vx-tpl-title { width: 60%; height: 11px; }
+.vx-tpl-card[data-tpl='lumen'] .vx-tpl-mini { left: 7px; right: 7px; bottom: 25px; border-radius: 6px; background: rgb(255 255 255 / 0.14); }
+.vx-tpl-card[data-tpl='lumen'] .vx-tpl-mini b { background: #fff; }
+.vx-tpl-card[data-tpl='lumen'] .vx-tpl-dock { background: rgb(255 255 255 / 0.07); }
+/* Verdant: an artwork wash at the top, a grey tile grid, a tinted mini player, a fading tab bar. */
+.vx-tpl-card[data-tpl='verdant'] .vx-tpl-preview { --r-art: 2px; background: linear-gradient(180deg, #3b3b3b, var(--tpl-c) 48%); }
+.vx-tpl-card[data-tpl='verdant'] .vx-tpl-arts i { width: 52px; height: 15px; background: rgb(255 255 255 / 0.12); }
+.vx-tpl-card[data-tpl='verdant'] .vx-tpl-arts i:nth-child(1) { background: linear-gradient(90deg, var(--tpl-a) 0 15px, rgb(255 255 255 / 0.12) 15px); }
+.vx-tpl-card[data-tpl='verdant'] .vx-tpl-arts i:nth-child(2) { left: 58px; }
+.vx-tpl-card[data-tpl='verdant'] .vx-tpl-arts i:nth-child(3) { left: 0; top: 19px; }
+.vx-tpl-card[data-tpl='verdant'] .vx-tpl-mini { border-radius: 3px; background: #3a3a3a; }
+.vx-tpl-card[data-tpl='verdant'] .vx-tpl-mini b { background: #fff; }
+.vx-tpl-card[data-tpl='verdant'] .vx-tpl-dock { background: linear-gradient(180deg, transparent, #000); }
+.vx-tpl-card[data-tpl='verdant'] .vx-tpl-dock i:nth-child(1) { background: #fff; }
+/* Monsoon: a teal band, a banner, rounded tiles, a solid tab bar, an edge-to-edge mini player with a saffron line. */
+.vx-tpl-card[data-tpl='monsoon'] .vx-tpl-preview { --r-art: 3px; background: linear-gradient(180deg, color-mix(in srgb, var(--tpl-a) 34%, var(--tpl-c)), var(--tpl-c) 46%); }
+.vx-tpl-card[data-tpl='monsoon'] .vx-tpl-arts i { width: 112px; height: 30px; border-radius: 4px; }
+.vx-tpl-card[data-tpl='monsoon'] .vx-tpl-arts i:nth-child(2), .vx-tpl-card[data-tpl='monsoon'] .vx-tpl-arts i:nth-child(3) { display: none; }
+.vx-tpl-card[data-tpl='monsoon'] .vx-tpl-mini { left: 0; right: 0; bottom: 21px; height: 14px; border-radius: 0; background: var(--tpl-s); box-shadow: inset 0 -2px 0 var(--tpl-b); }
+.vx-tpl-card[data-tpl='monsoon'] .vx-tpl-mini b { background: #fff; }
+.vx-tpl-card[data-tpl='monsoon'] .vx-tpl-dock { background: #000; }
+/* Harbour: a tall banner with a scrim, hairline rows, a solid bar player with a cyan edge. */
+.vx-tpl-card[data-tpl='harbour'] .vx-tpl-preview { --r-art: 1px; }
+.vx-tpl-card[data-tpl='harbour'] .vx-tpl-title { top: 50px; width: 52%; height: 10px; z-index: 1; }
+.vx-tpl-card[data-tpl='harbour'] .vx-tpl-arts { top: 0; left: 0; right: 0; height: 66px; }
+.vx-tpl-card[data-tpl='harbour'] .vx-tpl-arts i { width: 100%; height: 66px; border-radius: 0; }
+.vx-tpl-card[data-tpl='harbour'] .vx-tpl-arts i:nth-child(1) { background: linear-gradient(180deg, var(--tpl-b), var(--tpl-c)); }
+.vx-tpl-card[data-tpl='harbour'] .vx-tpl-arts i:nth-child(2), .vx-tpl-card[data-tpl='harbour'] .vx-tpl-arts i:nth-child(3) { display: none; }
+.vx-tpl-card[data-tpl='harbour'] .vx-tpl-lines { top: 74px; }
+.vx-tpl-card[data-tpl='harbour'] .vx-tpl-mini { left: 0; right: 0; bottom: 21px; height: 13px; border-radius: 0; background: var(--tpl-s); box-shadow: inset 0 2px 0 var(--tpl-a); }
+.vx-tpl-card[data-tpl='harbour'] .vx-tpl-mini b { background: #fff; top: 4px; }
+.vx-tpl-card[data-tpl='harbour'] .vx-tpl-mini i { top: 4px; }
+.vx-tpl-card[data-tpl='harbour'] .vx-tpl-dock { background: var(--tpl-c); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1); }
+.vx-tpl-card[data-tpl='harbour'] .vx-tpl-dock i:nth-child(1) { box-shadow: 0 9px 0 -2px var(--tpl-a); }
+/* Verse: artwork bleeding over the top, round art, a capsule mini player, a coral bubble tab. */
+.vx-tpl-card[data-tpl='verse'] .vx-tpl-preview { --r-art: 50%; background: radial-gradient(90% 60% at 50% 0%, color-mix(in srgb, var(--tpl-a) 40%, transparent), transparent 70%), var(--tpl-c); }
+.vx-tpl-card[data-tpl='verse'] .vx-tpl-title { width: 60%; height: 12px; border-radius: 6px; }
+.vx-tpl-card[data-tpl='verse'] .vx-tpl-mini { left: 12px; right: 12px; border-radius: 999px; }
+.vx-tpl-card[data-tpl='verse'] .vx-tpl-mini i { border-radius: 50%; }
+.vx-tpl-card[data-tpl='verse'] .vx-tpl-mini b { background: var(--tpl-a); }
+.vx-tpl-card[data-tpl='verse'] .vx-tpl-dock { background: linear-gradient(180deg, transparent, var(--tpl-c)); }
+.vx-tpl-card[data-tpl='verse'] .vx-tpl-dock i { top: 5px; border-radius: 50%; }
+.vx-tpl-card[data-tpl='verse'] .vx-tpl-dock i:nth-child(1) { top: 3px; width: 12px; height: 12px; margin-left: -3px; background: linear-gradient(120deg, var(--tpl-a), var(--tpl-b)); }
+/* Onyx: a chip row, square art, a full-width mini player with a red edge, a black tab bar. */
+.vx-tpl-card[data-tpl='onyx'] .vx-tpl-preview { --r-art: 1px; }
+.vx-tpl-card[data-tpl='onyx'] .vx-tpl-title { width: 26px; height: 9px; border-radius: 999px; box-shadow: 32px 0 0 rgb(255 255 255 / 0.18), 64px 0 0 rgb(255 255 255 / 0.18), 96px 0 0 rgb(255 255 255 / 0.18); }
+.vx-tpl-card[data-tpl='onyx'] .vx-tpl-arts { top: 32px; height: 34px; }
+.vx-tpl-card[data-tpl='onyx'] .vx-tpl-arts i { width: 34px; height: 34px; }
+.vx-tpl-card[data-tpl='onyx'] .vx-tpl-lines { top: 72px; }
+.vx-tpl-card[data-tpl='onyx'] .vx-tpl-mini { left: 0; right: 0; bottom: 21px; height: 13px; border-radius: 0; background: #000; box-shadow: inset 0 2px 0 #2a2a2a, inset 48px 2px 0 var(--tpl-b); }
+.vx-tpl-card[data-tpl='onyx'] .vx-tpl-mini b { background: #fff; top: 4px; }
+.vx-tpl-card[data-tpl='onyx'] .vx-tpl-mini i { top: 4px; }
+.vx-tpl-card[data-tpl='onyx'] .vx-tpl-dock { background: #000; box-shadow: inset 0 1px 0 #2a2a2a; }
+.vx-tpl-card[data-tpl='onyx'] .vx-tpl-dock i:nth-child(1) { background: #fff; }
 
 /* 13.0.2 — instant app-style switch (TemplatePicker.applyInstant): while
    `tpl-switching` is on <html>, every transition is suspended so the whole

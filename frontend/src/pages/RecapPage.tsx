@@ -85,10 +85,13 @@ export default function RecapPage() {
         title={`Your ${recap.year} in music`}
         subtitle="Computed on this device · never uploaded"
         actions={
+          <>
+          <Link to="/recap/story" className="px-5 rounded-full btn-secondary text-sm inline-flex items-center gap-2"><SparkleIcon className="w-4 h-4" /> Play as a story</Link>
           <button type="button" onClick={() => void shareCard()} disabled={sharing} className="px-5 rounded-full btn-primary text-sm inline-flex items-center gap-2 disabled:opacity-60">
             <ShareIcon className="w-4 h-4" />
             {sharing ? 'Painting…' : 'Share card'}
           </button>
+          </>
         }
       />
 

@@ -1,0 +1,218 @@
+/* ============================================================================
+   Lumen — the 15.0 default. Clean editorial: white and black, big titles.
+
+   Black (dark) or white (light) with a crimson-pink accent and a tangerine
+   second colour. Chrome is frosted; the page itself is plain. Section titles
+   are large and tight and end in a chevron; artwork is an 8px square with a
+   soft shadow; lists are hairlines; the play button is a round pink. The
+   mini player floats as a frosted pane above a frosted tab bar whose active
+   tab is simply the accent. Motion is a short rise.
+   Design contract: docs/app-styles.md § Lumen.
+   ========================================================================= */
+
+/* ----------------------------------------------------------------- colour */
+html[data-template='lumen']:not([class*='fest-']) {
+  --ink-950: 0 0 0;
+  --ink-900: 15 15 17;
+  --ink-850: 24 24 27;
+  --ink-800: 34 34 38;
+  --ink-700: 54 54 60;
+  --ink-600: 98 98 108;
+  --ink-500: 152 152 162;
+  --ink-400: 178 178 188;
+  --ink-300: 204 204 212;
+  --ink-200: 230 230 236;
+  --ink-100: 250 250 252;
+  --vx-mesh-ember: 0.06;
+  --vx-mesh-tide: 0.03;
+}
+html.light[data-template='lumen']:not([class*='fest-']) {
+  --ink-950: 255 255 255;
+  --ink-900: 245 245 247;
+  --ink-850: 238 238 241;
+  --ink-800: 228 228 232;
+  --ink-700: 208 208 214;
+  --ink-600: 140 140 148;
+  --ink-500: 100 100 108;
+  --ink-400: 82 82 90;
+  --ink-300: 60 60 68;
+  --ink-200: 32 32 38;
+  --ink-100: 12 12 16;
+  --art: 150 150 158;
+}
+html[data-template='lumen']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+  --ember-600: 190 20 48;
+  --ember-500: 224 36 63;
+  --ember-400: 255 106 128;
+  --ember-300: 255 160 176;
+  --tide-500: 255 122 61;
+  --tide-400: 255 158 112;
+  --vx-on-accent: #fff;
+  --art: 224 36 63;
+}
+html.light[data-template='lumen']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+  --ember-600: 160 16 40;
+  --ember-500: 209 32 58;
+  --ember-400: 180 22 48;
+  --ember-300: 170 20 44;
+  --tide-500: 190 70 10;
+  --tide-400: 168 60 6;
+  --vx-on-accent: #fff;
+  --art: 150 150 158;
+}
+
+/* ------------------------------------------------------------------ dials */
+html[data-template='lumen'] {
+  --tpl-r-art: 8px;
+  --tpl-r-art-sm: 6px;
+  --tpl-r-control: 999px;
+  --tpl-r-play: 50%;
+  --tpl-r-play-sm: 50%;
+  --tpl-r-row: 6px;
+  --tpl-r-tile: 12px;
+  --tpl-r-input: 10px;
+  --tpl-r-deck: 16px;
+  --tpl-r-mini: 14px;
+  --tpl-r-np-art: 10px;
+  --vx-font-display: 'Inter', 'Manrope', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  --vx-type-page: clamp(2rem, 3.6vw, 2.75rem);
+  --vx-type-section: 1.375rem;
+  --tpl-title-weight: 800;
+  --tpl-title-tracking: -0.03em;
+  --tpl-section-weight: 700;
+  --tpl-section-tracking: -0.02em;
+  --tpl-card-title-weight: 500;
+  --tpl-enter: tplRise;
+  --tpl-enter-dur: 240ms;
+  --tpl-press: 0.97;
+  --vx-radius-panel: 14px;
+  --vx-radius-card: 10px;
+  --vx-shelf-gap: 36px;
+  --vx-card-gap: 16px;
+  --vx-art-shadow: 0 6px 18px -10px rgb(0 0 0 / 0.55);
+}
+
+/* ------------------------------------------------------------------ shell */
+html[data-template='lumen']:not([class*='fest-']) .vx-shell { background: rgb(var(--ink-950)); }
+html[data-template='lumen']:not([class*='fest-']) .vx-workspace { background: rgb(var(--ink-900)); }
+html.light[data-template='lumen']:not([class*='fest-']) .vx-shell { background: rgb(var(--ink-950)); }
+html.light[data-template='lumen']:not([class*='fest-']) .vx-workspace { background: rgb(var(--ink-950)); }
+html.light[data-template='lumen']:not([class*='fest-']) .vx-shell::before { opacity: 0.35; }
+html[data-template='lumen'] .vx-sidebar { box-shadow: inset -1px 0 0 var(--vx-border); }
+@media (min-width: 768px) {
+  html[data-template='lumen'] .vx-sidebar { margin: 0; border-radius: 0; max-height: 100dvh; }
+  html[data-template='lumen'] .vx-workspace { margin: 0; }
+}
+html[data-template='lumen'] .vx-brand { font-family: var(--vx-font-display); font-weight: 800; letter-spacing: -0.04em; }
+/* The active destination: a tinted wash in the accent, the label in the accent. */
+html[data-template='lumen'] .vx-nav-link { min-height: 42px; border-radius: 8px; font-weight: 600; }
+html[data-template='lumen'] .vx-nav-link:hover,
+html[data-template='lumen'] .vx-lib-row:hover { background: rgb(var(--ink-100) / 0.06); }
+html[data-template='lumen'] :is(.vx-nav-active, .vx-nav-active:hover) { background: rgb(var(--ember-500) / 0.12); color: rgb(var(--ember-400)); box-shadow: none; font-weight: 700; }
+html[data-template='lumen'] .vx-library { background: transparent; border-radius: 0; margin-top: 8px; box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='lumen'] .vx-lib-row + .vx-lib-row { box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='lumen'] .vx-topbar.is-scrolled { box-shadow: inset 0 -1px 0 var(--vx-border); }
+
+/* Phone tab bar: frosted, no pill; the active tab is the accent. */
+html[data-template='lumen'] .vx-dock { box-shadow: 0 -1px 0 var(--vx-mat-hairline); }
+html[data-template='lumen'] .vx-dock-pill { height: 28px; }
+html[data-template='lumen'] .vx-dock-active .vx-dock-pill { background: transparent; color: rgb(var(--ember-400)); }
+html[data-template='lumen'] :is(.vx-dock-active, .vx-dock-active:hover) { color: rgb(var(--ember-400)); font-weight: 600; }
+html[data-template='lumen'] .vx-dock-item { gap: 3px; min-height: 56px; font-size: 10.5px; font-weight: 500; }
+
+/* Mini player: a frosted pane floating above the tab bar, no progress line. */
+html[data-template='lumen'] .np-mini { --mat-tint: none; box-shadow: 0 8px 24px -12px rgb(0 0 0 / 0.6), inset 0 0 0 1px var(--vx-mat-hairline); }
+html[data-template='lumen'] .np-mini-progress { display: none; }
+html[data-template='lumen'] .np-mini .np-mini-play { background: transparent; color: rgb(var(--ink-100)); }
+html[data-template='lumen'] .np-mini-thumb { box-shadow: 0 2px 8px -2px rgb(0 0 0 / 0.5); }
+
+/* Player deck: frosted, a hairline, a round pink play. */
+html[data-template='lumen'] .vx-deck::after { background: var(--vx-mat-hairline); }
+html[data-template='lumen'] .np-play-desktop { width: 40px; height: 40px; box-shadow: none; }
+
+/* ------------------------------------------------------- pages and cards */
+html[data-template='lumen'] .vx-page-header { margin-bottom: 26px; }
+/* Section heads end in a chevron; the link is the whole head. */
+html[data-template='lumen'] :is(.vx-section-header h2, .vxh-head h2, .vxh-explore-head h2) { display: inline-flex; align-items: center; gap: 2px; }
+html[data-template='lumen'] :is(.vx-section-header h2, .vxh-head h2)::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  margin-left: 6px;
+  border-right: 2.5px solid rgb(var(--ink-500));
+  border-top: 2.5px solid rgb(var(--ink-500));
+  transform: rotate(45deg) translateY(1px);
+  opacity: 0.9;
+}
+html[data-template='lumen'] .vx-section-link { color: rgb(var(--ember-400)); font-weight: 600; padding-inline: 8px; }
+html[data-template='lumen'] .vx-section-link:hover { background: rgb(var(--ember-500) / 0.1); color: rgb(var(--ember-400)); }
+html[data-template='lumen'] .vx-media-art { box-shadow: var(--vx-art-shadow); }
+html.light[data-template='lumen'] .vx-media-art { box-shadow: 0 6px 16px -10px rgb(var(--ink-100) / 0.3); }
+html[data-template='lumen'] .vx-media-title { font-size: 14px; }
+@media (hover: hover) {
+  html[data-template='lumen'] .vx-media-card:hover .vx-media-art { transform: none; }
+  html[data-template='lumen'] .vx-media-card:hover .vx-media-art img { filter: brightness(0.82); }
+}
+html[data-template='lumen'] .card-play { width: 40px; height: 40px; box-shadow: 0 6px 16px -6px rgb(0 0 0 / 0.6); }
+/* Chips: light grey capsules; the chosen one is the accent. */
+html[data-template='lumen'] :is(.vx-chip-idle, .vxh-chip) { background: rgb(var(--ink-100) / 0.07); font-weight: 600; }
+html[data-template='lumen'] .vx-chip-on { background: rgb(var(--ember-500)); border-color: rgb(var(--ember-500)); color: var(--vx-on-accent); }
+/* Lists: hairlines. */
+html[data-template='lumen'] .vx-track-row { min-height: 54px; }
+html[data-template='lumen'] .vx-track-row + .vx-track-row { box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='lumen'] .vx-track-row.is-current { background: rgb(var(--ember-500) / 0.08); }
+html[data-template='lumen'] :is(.vxh-tile, .vxh-card) { box-shadow: none; }
+html[data-template='lumen'] .vxh-hero { border-radius: 14px; box-shadow: none; }
+html[data-template='lumen'] :is(.btn-primary, .btn-premium) { font-weight: 600; }
+html[data-template='lumen'] :is(.vx-play-fab, .vx-np-play) { box-shadow: 0 10px 24px -12px rgb(var(--ember-600) / 0.7); }
+
+/* Now Playing: the artwork large on a blurred copy of itself, a white play. */
+html[data-template='lumen'] .vx-np-art-img { box-shadow: 0 24px 56px -22px rgb(0 0 0 / 0.75); }
+html[data-template='lumen'] .vx-np-play { background: rgb(var(--ink-100)); color: rgb(var(--ink-950)); box-shadow: none; width: 68px; height: 68px; }
+html[data-template='lumen'] .vx-np-title { font-weight: 700; letter-spacing: -0.02em; }
+html[data-template='lumen'] .vx-np-artist { color: rgb(var(--ink-300)); font-weight: 500; }
+html[data-template='lumen'] .vx-np-tabs [role='tab'] { border-radius: 999px; font-weight: 600; }
+
+/* ---------------------------------------------------------- layout identity */
+/* Lumen is EDITORIAL: a plain page with big titles and pictures that speak
+   for themselves.
+   - Hero: no pane. The title block sits on the canvas; on phones the artwork
+     is an 8px square at the right of the kicker and title.
+   - Jump back in: hairline rows with 56px artwork, no fills — a list.
+   - Section heads: title + chevron (above).
+   - Tab bar and mini player: frosted, accent tab, floating pane (above). */
+html[data-template='lumen'] .vx-home .vx-hero.vxh-hero { background: transparent; box-shadow: none; padding: 0; }
+html[data-template='lumen'] .vx-home .vxh-hero::before { display: none; }
+html[data-template='lumen'] .vx-home .vxh-hero-wash { display: none; }
+html[data-template='lumen'] .vx-home .vxh-hero-art { border-radius: 8px; box-shadow: var(--vx-art-shadow); }
+html[data-template='lumen'] .vx-home .vxh-hero-kicker { color: rgb(var(--ember-400)); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+@media (max-width: 767px) {
+  html[data-template='lumen'] .vx-home .vx-hero.vxh-hero {
+    grid-template-columns: minmax(0, 1fr) 88px;
+    grid-template-areas: 'kicker art' 'title art' 'desc desc' 'actions actions';
+    align-items: start;
+    gap: 4px 14px;
+    padding: 8px 0 4px;
+    border-radius: 0;
+  }
+  html[data-template='lumen'] .vx-home .vxh-hero-art { width: 88px; border-radius: 8px; }
+  html[data-template='lumen'] .vx-home .vxh-hero-title { font-size: 26px; letter-spacing: -0.03em; line-height: 1.08; }
+  html[data-template='lumen'] .vx-home .vxh-hero-desc { margin-top: 6px; }
+}
+html[data-template='lumen'] .vx-home .vxh-tiles,
+html[data-template='lumen'] .vx-home .vxh-jump .vxh-tiles { grid-template-columns: minmax(0, 1fr); gap: 0; }
+@container jump (min-width: 760px) {
+  html[data-template='lumen'] .vx-home .vxh-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; }
+}
+html[data-template='lumen'] .vx-home .vxh-tile {
+  min-height: 56px;
+  gap: 12px;
+  padding: 0 6px 0 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: inset 0 -1px 0 var(--vx-border);
+}
+html[data-template='lumen'] .vx-home .vxh-tile:hover { background: rgb(var(--ink-100) / 0.05); }
+html[data-template='lumen'] .vx-home .vxh-tile img { width: 48px; height: 48px; margin: 4px 0; border-radius: 6px; }
+html[data-template='lumen'] .vx-home .vxh-tile-title { font-size: 14.5px; font-weight: 500; }
+html[data-template='lumen'] .vx-home .vxh-disc { border-radius: 50%; left: 14px; }

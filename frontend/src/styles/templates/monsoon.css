@@ -1,0 +1,228 @@
+/* ============================================================================
+   Monsoon — charcoal and teal with a saffron second colour.
+
+   A cool charcoal canvas, a teal accent and saffron for the second colour.
+   Home opens on a teal band and a row of language chips under the greeting;
+   the hero is a wide banner with its title bottom-left over a scrim; tiles
+   are 8px with a faint teal wash; section titles are plain and medium
+   sized. The tab bar is solid with filled teal icons; the mini player runs
+   edge to edge above it with a heart and a saffron progress line. The
+   full-screen player is washed in the artwork's colour with a teal play.
+   Motion is a gentle rise.
+   Design contract: docs/app-styles.md § Monsoon.
+   ========================================================================= */
+
+/* ----------------------------------------------------------------- colour */
+html[data-template='monsoon']:not([class*='fest-']) {
+  --ink-950: 17 19 21;
+  --ink-900: 27 30 33;
+  --ink-850: 33 37 41;
+  --ink-800: 38 42 46;
+  --ink-700: 58 64 70;
+  --ink-600: 100 108 116;
+  --ink-500: 150 160 168;
+  --ink-400: 176 186 194;
+  --ink-300: 200 208 214;
+  --ink-200: 226 232 236;
+  --ink-100: 246 250 250;
+  --vx-mesh-ember: 0.14;
+  --vx-mesh-tide: 0.06;
+}
+html.light[data-template='monsoon']:not([class*='fest-']) {
+  --ink-950: 255 255 255;
+  --ink-900: 244 246 246;
+  --ink-850: 236 240 240;
+  --ink-800: 226 232 232;
+  --ink-700: 204 212 212;
+  --ink-600: 128 140 140;
+  --ink-500: 92 104 104;
+  --ink-400: 70 82 82;
+  --ink-300: 58 70 70;
+  --ink-200: 28 38 38;
+  --ink-100: 8 16 16;
+  --art: 140 156 156;
+}
+html[data-template='monsoon']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+  --ember-600: 30 160 136;
+  --ember-500: 44 198 168;
+  --ember-400: 110 220 196;
+  --ember-300: 160 236 220;
+  --tide-500: 255 159 28;
+  --tide-400: 255 184 90;
+  --vx-on-accent: #06211b;
+  --art: 44 198 168;
+}
+html.light[data-template='monsoon']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+  --ember-600: 10 100 84;
+  --ember-500: 15 125 104;
+  --ember-400: 8 100 84;
+  --ember-300: 8 96 80;
+  --tide-500: 184 92 0;
+  --tide-400: 150 72 0;
+  --vx-on-accent: #fff;
+  --art: 140 156 156;
+}
+
+/* ------------------------------------------------------------------ dials */
+html[data-template='monsoon'] {
+  --tpl-r-art: 6px;
+  --tpl-r-art-sm: 6px;
+  --tpl-r-control: 999px;
+  --tpl-r-play: 50%;
+  --tpl-r-play-sm: 50%;
+  --tpl-r-row: 8px;
+  --tpl-r-tile: 8px;
+  --tpl-r-input: 999px;
+  --tpl-r-deck: 12px;
+  --tpl-r-mini: 0px;
+  --tpl-r-np-art: 12px;
+  --vx-font-display: 'Manrope', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  --vx-type-page: clamp(1.75rem, 3.2vw, 2.5rem);
+  --vx-type-section: 1.125rem;
+  --tpl-title-weight: 700;
+  --tpl-title-tracking: -0.02em;
+  --tpl-section-weight: 700;
+  --tpl-section-tracking: -0.015em;
+  --tpl-card-title-weight: 600;
+  --tpl-enter: tplRise;
+  --tpl-enter-dur: 220ms;
+  --tpl-press: 0.96;
+  --vx-radius-panel: 12px;
+  --vx-radius-card: 8px;
+  --vx-shelf-gap: 30px;
+  --vx-card-gap: 14px;
+  --vx-deck-gap: 10px;
+  --vx-art-shadow: 0 4px 12px -6px rgb(0 0 0 / 0.5);
+}
+/* Mostly solid: bars are opaque, the top bar keeps a thin blur. */
+html[data-template='monsoon'] {
+  --vx-mat-chrome: rgb(var(--ink-950));
+  --vx-mat-thick: rgb(var(--ink-850));
+  --vx-mat-specular: transparent;
+  --vx-mat-art: 0;
+}
+html.light[data-template='monsoon'],
+html.light[data-template='monsoon']:not([class*='fest-']) {
+  --vx-mat-chrome: rgb(var(--ink-950));
+  --vx-mat-thick: rgb(var(--ink-950));
+}
+html[data-template='monsoon'] :is(.vx-mat-chrome, .vx-mat-thick) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* ------------------------------------------------------------------ shell */
+html[data-template='monsoon']:not([class*='fest-']) .vx-shell { background: rgb(var(--ink-950)); }
+/* The page opens on a teal band that falls into the canvas. */
+html[data-template='monsoon']:not([class*='fest-']) .vx-workspace {
+  background:
+    linear-gradient(180deg, rgb(var(--ember-500) / 0.28), rgb(var(--ember-500) / 0.08) 180px, transparent 300px) local,
+    rgb(var(--ink-900));
+}
+html.light[data-template='monsoon']:not([class*='fest-']) .vx-workspace {
+  background:
+    linear-gradient(180deg, rgb(var(--ember-500) / 0.18), rgb(var(--ember-500) / 0.05) 180px, transparent 300px) local,
+    rgb(var(--ink-900));
+}
+html[data-template='monsoon'] .vx-sidebar { box-shadow: inset -1px 0 0 var(--vx-border); }
+@media (min-width: 768px) {
+  html[data-template='monsoon'] .vx-sidebar { margin: 0; border-radius: 0; max-height: 100dvh; }
+  html[data-template='monsoon'] .vx-workspace { margin: 0; }
+}
+html[data-template='monsoon'] .vx-brand { font-weight: 800; letter-spacing: -0.03em; color: rgb(var(--ember-400)); }
+html[data-template='monsoon'] .vx-nav-link { min-height: 44px; border-radius: 8px; font-weight: 600; }
+html[data-template='monsoon'] .vx-nav-link:hover,
+html[data-template='monsoon'] .vx-lib-row:hover { background: rgb(var(--ink-100) / 0.06); }
+html[data-template='monsoon'] :is(.vx-nav-active, .vx-nav-active:hover) { background: rgb(var(--ember-500) / 0.16); color: rgb(var(--ember-400)); box-shadow: inset 3px 0 0 rgb(var(--ember-500)); border-radius: 0 8px 8px 0; font-weight: 700; }
+html[data-template='monsoon'] .vx-library { background: transparent; border-radius: 0; margin-top: 8px; box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='monsoon'] .vx-topbar.is-scrolled { box-shadow: inset 0 -1px 0 var(--vx-border); }
+
+/* Phone tab bar: solid, filled teal icon, a small label. */
+html[data-template='monsoon'] .vx-dock { box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='monsoon'] .vx-dock-pill { height: 28px; border-radius: 0; }
+html[data-template='monsoon'] .vx-dock-active .vx-dock-pill { background: transparent; color: rgb(var(--ember-400)); }
+html[data-template='monsoon'] :is(.vx-dock-active, .vx-dock-active:hover) { color: rgb(var(--ember-400)); font-weight: 700; }
+html[data-template='monsoon'] .vx-dock-item { gap: 3px; min-height: 58px; font-size: 11px; font-weight: 600; }
+
+/* Mini player: edge to edge, 64px tall, a saffron progress at the bottom. */
+@media (max-width: 1023px) {
+  html[data-template='monsoon'] [data-tour='player'] { padding: 0; }
+}
+html[data-template='monsoon'] .np-mini { --mat-tint: none; border-radius: 0; box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='monsoon'] .np-mini > div { padding-top: 10px; padding-bottom: 10px; padding-left: 12px; }
+html[data-template='monsoon'] .np-mini-thumb, html[data-template='monsoon'] .np-mini-thumb img { width: 48px; height: 48px; border-radius: 6px; }
+html[data-template='monsoon'] .np-mini .np-mini-play { background: transparent; color: rgb(var(--ink-100)); }
+html[data-template='monsoon'] .np-mini-progress { left: 0; right: 0; border-radius: 0; background: rgb(var(--ink-100) / 0.14); }
+html[data-template='monsoon'] .np-mini-progress > i { border-radius: 0; background: rgb(var(--tide-500)); }
+
+/* Player deck: a solid rounded panel, a teal play. */
+html[data-template='monsoon'] .vx-deck::before,
+html[data-template='monsoon'] .vx-deck::after { display: none; }
+html[data-template='monsoon'] .vx-deck { box-shadow: inset 0 0 0 1px var(--vx-border); }
+html[data-template='monsoon'] .np-play-desktop { width: 40px; height: 40px; box-shadow: none; }
+
+/* ------------------------------------------------------- pages and cards */
+html[data-template='monsoon'] .vx-page-header { margin-bottom: 22px; }
+html[data-template='monsoon'] .vx-section-header { margin-bottom: 10px; }
+html[data-template='monsoon'] .vx-section-link { color: rgb(var(--ember-400)); font-size: 13px; font-weight: 700; padding-inline: 6px; }
+html[data-template='monsoon'] .vx-section-link:hover { background: rgb(var(--ember-500) / 0.12); color: rgb(var(--ember-400)); }
+html[data-template='monsoon'] .vx-media-art { box-shadow: var(--vx-art-shadow); }
+html[data-template='monsoon'] .vx-media-title { margin-top: 8px; font-size: 13.5px; }
+html[data-template='monsoon'] .card-play { width: 40px; height: 40px; }
+/* Chips: outlined; the chosen one is filled teal. */
+html[data-template='monsoon'] :is(.vx-chip-idle, .vxh-chip) { background: transparent; box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.22); font-weight: 600; }
+html[data-template='monsoon'] :is(.vx-chip-idle, .vxh-chip):hover { background: rgb(var(--ember-500) / 0.14); box-shadow: inset 0 0 0 1px rgb(var(--ember-500) / 0.6); }
+html[data-template='monsoon'] .vx-chip-on { background: rgb(var(--ember-500)); border-color: rgb(var(--ember-500)); color: var(--vx-on-accent); }
+html[data-template='monsoon'] .vx-track-row { min-height: 56px; }
+html[data-template='monsoon'] .vx-track-row.is-current { background: rgb(var(--ember-500) / 0.1); }
+html[data-template='monsoon'] .vxh-tile { background: rgb(var(--ember-500) / 0.08); box-shadow: inset 0 0 0 1px rgb(var(--ember-500) / 0.12); }
+html[data-template='monsoon'] .vxh-tile:hover { background: rgb(var(--ember-500) / 0.16); }
+html[data-template='monsoon'] .vxh-hero { border-radius: 10px; }
+html[data-template='monsoon'] :is(.vx-play-fab, .vx-np-play) { box-shadow: 0 10px 24px -12px rgb(var(--ember-600) / 0.8); }
+
+/* Now Playing: the artwork's colour as a wash, a 12px picture, a teal play. */
+html[data-template='monsoon']:not([class*='fest-']) .vx-np-bg-art { opacity: 0.5; }
+html[data-template='monsoon'] .vx-np-art-img { box-shadow: 0 20px 48px -20px rgb(0 0 0 / 0.7); }
+html[data-template='monsoon'] .vx-np-play { width: 64px; height: 64px; }
+html[data-template='monsoon'] .vx-np-title { font-weight: 700; }
+html[data-template='monsoon'] .vx-np-tabs [role='tab'] { border-radius: 999px; box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.18); }
+html[data-template='monsoon'] .vx-np-tabs [role='tab'][aria-selected='true'] { background: rgb(var(--ember-500)); color: var(--vx-on-accent); box-shadow: none; }
+
+/* ---------------------------------------------------------- layout identity */
+/* Monsoon is the BANNER: Home opens on a language row and a wide picture.
+   - Top chips: the language row under the greeting, outlined, the first one
+     filled teal.
+   - Hero: a wide banner on phones (16:9), the artwork as the whole picture,
+     the title bottom-left over a scrim.
+   - Jump back in: two columns of 8px tiles with a teal wash.
+   - Tab bar: solid, filled teal icon.
+   - Mini player: edge to edge with a heart and a saffron progress. */
+html[data-template='monsoon'] .vx-home .vxh-topchips { display: flex; margin-top: -8px; }
+html[data-template='monsoon'] .vx-home .vxh-explore .vxh-chips { display: none; }
+html[data-template='monsoon'] .vx-home .vxh-topchips .vxh-chip:first-child { background: rgb(var(--ember-500)); box-shadow: none; color: var(--vx-on-accent); }
+@media (max-width: 767px) {
+  html[data-template='monsoon'] .vx-home .vx-hero.vxh-hero {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'art' 'kicker' 'title' 'desc' 'actions';
+    gap: 2px;
+    padding: 0 0 12px;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  html[data-template='monsoon'] .vx-home .vxh-hero-art { width: 100%; aspect-ratio: 16 / 9; border-radius: 0; margin-bottom: -56px; }
+  html[data-template='monsoon'] .vx-home .vxh-hero-art.is-collage { aspect-ratio: 16 / 9; grid-template-columns: repeat(4, 1fr); }
+  html[data-template='monsoon'] .vx-home .vxh-hero-art img { width: 100%; height: 100%; object-fit: cover; }
+  html[data-template='monsoon'] .vx-home .vxh-hero-art::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 40%, rgb(var(--ink-950) / 0.9)); }
+  html[data-template='monsoon'] .vx-home .vxh-hero-art { position: relative; }
+  html[data-template='monsoon'] .vx-home :is(.vxh-hero-kicker, .vxh-hero-title, .vxh-hero-desc, .vxh-hero-actions) { position: relative; z-index: 1; margin-inline: 14px; }
+  html[data-template='monsoon'] .vx-home .vxh-hero-title { font-size: 26px; line-height: 1.1; }
+  html[data-template='monsoon'] .vx-home .vxh-hero-desc { margin-top: 4px; font-size: 13px; }
+  html[data-template='monsoon'] .vx-home .vxh-hero-actions { margin-top: 10px; }
+  html[data-template='monsoon'] .vx-home .vxh-hero-wash { display: none; }
+}
+html[data-template='monsoon'] .vx-home .vxh-hero-kicker { color: rgb(var(--tide-400)); font-size: 12px; font-weight: 700; }
+html[data-template='monsoon'] .vx-home .vxh-tiles,
+html[data-template='monsoon'] .vx-home .vxh-jump .vxh-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+html[data-template='monsoon'] .vx-home .vxh-tile { min-height: 56px; border-radius: 8px; }
+html[data-template='monsoon'] .vx-home .vxh-tile img { width: 56px; height: 56px; border-radius: 6px; margin: 0; }
+html[data-template='monsoon'] .vx-home .vxh-tile-title { font-size: 13.5px; font-weight: 600; }

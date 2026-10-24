@@ -471,7 +471,7 @@ export default function SettingsPage() {
           </Section>
 
           <Section title="Appearance" id="appearance" lede="App style, language, theme, colour and size.">
-            <Block label="App style" note="Six complete looks: colours, type, shapes, the navigation and the player all change. Your music, library and settings stay as they are." keywords="template look design layout skin ui ux aura pulse sangam nocturne marquee vibe redesign appearance">
+            <Block label="App style" note="Six complete looks: colours, type, shapes, the navigation and the player all change. Your music, library and settings stay as they are." keywords="template look design layout skin ui ux lumen verdant monsoon harbour verse onyx aura pulse sangam nocturne marquee vibe redesign appearance">
               <TemplatePicker value={s.template} onChange={s.setTemplate} />
             </Block>
             <Row stack label="App language" keywords="display language interface">
@@ -585,6 +585,11 @@ export default function SettingsPage() {
             <Row label="Data saver" note="Lightest audio, no video canvas, lighter artwork." keywords="mobile data">
               <Toggle on={s.dataSaver} onChange={s.setDataSaver} label="Data saver" />
             </Row>
+            {isNativePlatform() && (
+              <Row label="Smart downloads" note="Keep this week's Weekly Mix downloaded. Fetched on Wi-Fi only; last week's copies are removed on their own." keywords="offline auto download weekly mix wifi">
+                <Toggle on={s.smartDownloads} onChange={s.setSmartDownloads} label="Smart downloads" />
+              </Row>
+            )}
             <Row label="Keep screen on in player" note="While the full-screen player is open and playing." keywords="wake lock">
               <Toggle on={s.keepScreenOn} onChange={s.setKeepScreenOn} label="Keep screen on in player" />
             </Row>
@@ -629,6 +634,23 @@ export default function SettingsPage() {
                   value={s.dailyGoalMinutes}
                   onChange={s.setDailyGoalMinutes}
                   options={[0, 15, 30, 60, 120].map((n) => ({ value: n, label: n === 0 ? 'Off' : n >= 60 ? `${n / 60}h` : `${n} min` }))}
+                />
+              </Row>
+              {/* 15.0 — weekly goals with streaks, on the Stats page. */}
+              <Row stack label="Minutes a week" note="A weekly target with a streak of weeks met, on Your VinaX." keywords="weekly goal streak">
+                <Segmented
+                  label="Minutes a week"
+                  value={s.weeklyGoalMinutes}
+                  onChange={s.setWeeklyGoalMinutes}
+                  options={[0, 60, 120, 300, 600].map((n) => ({ value: n, label: n === 0 ? 'Off' : n >= 60 ? `${n / 60}h` : `${n} min` }))}
+                />
+              </Row>
+              <Row stack label="New artists a week" note="Artists you had never played before. A small nudge to roam." keywords="weekly goal discover streak">
+                <Segmented
+                  label="New artists a week"
+                  value={s.weeklyGoalArtists}
+                  onChange={s.setWeeklyGoalArtists}
+                  options={[0, 3, 5, 10].map((n) => ({ value: n, label: n === 0 ? 'Off' : String(n) }))}
                 />
               </Row>
             </Group>

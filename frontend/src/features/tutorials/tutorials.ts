@@ -179,7 +179,7 @@ export const TUTORIALS: Tutorial[] = [
     emoji: '🎨',
     steps: [
       { route: '/settings', target: '[aria-label="App style"] [aria-checked="true"]', title: 'App style', body: 'This is the style in use. Each of the six changes colours, type, shapes, the navigation and the player.', action: reveal('[aria-label="App style"]'), placement: 'bottom' },
-      { route: '/settings', title: 'Try another one', body: 'Tap any style and the app changes at once. Your music, library and settings stay as they are.', tip: 'Aura, Pulse, Sangam, Nocturne, Marquee and Vibe.' },
+      { route: '/settings', title: 'Try another one', body: 'Tap any style and the app changes at once. Your music, library and settings stay as they are.', tip: 'Lumen, Verdant, Monsoon, Harbour, Verse and Onyx.' },
       { route: '/settings', target: '[aria-label="Custom accent colour"]', title: 'Accent colour', body: 'Choose one of the preset accents, or pick any colour here and VinaX builds the palette from it.', action: reveal('[aria-label="Custom accent colour"]'), placement: 'bottom' },
       { route: '/settings', target: '[aria-label="Glass effect intensity"]', title: 'Frosted glass', body: 'This slider sets how see-through the bars, menus and sheets are. Slide toward Solid for plain panels.', action: reveal('[aria-label="Glass effect intensity"]'), placement: 'bottom' },
     ],

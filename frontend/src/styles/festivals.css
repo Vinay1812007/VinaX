@@ -28,7 +28,7 @@ html[class*='fest-'] .vx-workspace { background: radial-gradient(760px 300px at 
 }
 /* Two app styles draw the phone tab bar as a see-through fade; over a festival
    backdrop the page text shows through the icons, so the bar firms up. */
-html[class*='fest-']:is([data-template='pulse'], [data-template='marquee']) .vx-dock { background-color: rgb(var(--ink-950) / 0.96); }
+html[class*='fest-']:is([data-template='verdant'], [data-template='verse']) .vx-dock { background-color: rgb(var(--ink-950) / 0.96); }
 html[class*='fest-'] .fest-sky { position: fixed; inset: 0; z-index: -5; overflow: hidden; pointer-events: none; animation: festSkyIn 0.9s ease-out both; }
 /* The glow breathes: a slow opacity swell, nothing else, so the backdrop is
    alive without anything moving across the reading area. */

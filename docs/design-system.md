@@ -36,7 +36,7 @@ The tokens are declared in `index.css` (`--vx-ease-out` in `shell.css`). The ink
 
 ## App styles
 
-An app style ("template" in the code) is a complete look chosen in Settings → Appearance → App style. Six ship, listed in `frontend/src/constants/templates.ts`: `aura` (the default), `pulse`, `sangam`, `nocturne`, `marquee` and `vibe`. The setting is `template` in `frontend/src/store/settingsStore.ts`; the picker is `frontend/src/features/settings/TemplatePicker.tsx`.
+An app style ("template" in the code) is a complete look chosen in Settings → Appearance → App style. Six ship (15.0), listed in `frontend/src/constants/templates.ts`: `lumen` (the default), `verdant`, `monsoon`, `harbour`, `verse` and `onyx`; [app-styles.md](app-styles.md) is their design contract. The ids of the 11.0–14.x styles (`aura`, `pulse`, `sangam`, `nocturne`, `vibe`, `marquee`) map to their replacements in `LEGACY_TEMPLATES` (`frontend/src/utils/theme.ts`), the pre-paint script and the settings sanitiser, so a stored or backed-up choice survives the change. The setting is `template` in `frontend/src/store/settingsStore.ts`; the picker is `frontend/src/features/settings/TemplatePicker.tsx`.
 
 **A style may change** the ink, ember and tide values for dark and light, the body typeface, radii, title weight and tracking, press and entrance motion, how the navigation, mini player, cards and Now Playing backdrop are shaped, and whether the chrome is glass or solid. **A style may not change** what a control does, which settings exist, hit areas, focus visibility, or anything while the listener has asked for true black or high contrast.
 
@@ -70,7 +70,7 @@ An app style ("template" in the code) is a complete look chosen in Settings → 
 
 ### From setting to paint
 
-1. The inline script in `frontend/index.html` reads `vinax.settings.v1` before first paint, sets `data-template` (falling back to `aura`), and stamps the canvas colour from its own copy of the canvas table, so there is no flash of another style.
+1. The inline script in `frontend/index.html` reads `vinax.settings.v1` before first paint, sets `data-template` (mapping a legacy id and falling back to `lumen`), and stamps the canvas colour from its own copy of the canvas table, so there is no flash of another style.
 2. `AppLayout.tsx` calls `applyThemeClasses(resolved, root, template)` (`frontend/src/utils/theme.ts`) whenever theme or style changes. It toggles `.light`, `.dark`, `.amoled`, normalises the id with `normalizeTemplate` (unknown ids become `DEFAULT_TEMPLATE`), sets `data-template`, and writes the canvas to `<html>`'s background and the `theme-color` meta from `TEMPLATE_CANVAS` — `#000000` for the Black theme.
 3. CSS does the rest. The picker cross-fades with a view transition where the browser supports one and switches at once under reduced motion.
 
@@ -78,7 +78,7 @@ An app style ("template" in the code) is a complete look chosen in Settings → 
 
 The `theme` setting is one of `dark`, `light`, `amoled` (shown as Black), `system` or `auto`. `resolveTheme` turns the last two into a concrete theme: `system` follows the device, `auto` is light from 07:00 to 18:59 and dark otherwise. Black also carries `.dark`, so dark rules apply and only the surfaces change. High contrast is a separate setting that adds `.hc`.
 
-Since 11.0 the light theme is glass as well. `styles/templates/base.css` gives every style's light look three soft lights behind the panes (the accent low on the left, the second colour top right, the playing artwork top left, painted once on `.vx-shell::before`), a frosted workspace sheet, translucent white cards and tiles, and bluer, more saturated frost on the bars. The fills where text sits keep the 10.1 floors — chrome at 80% white, thick at 86% — because 80% is the thinnest white on which muted text still clears 4.5:1 over a black cover; `constants/templates.test.ts` asserts that per style. The flat styles (Pulse, Marquee) keep their opaque bars in light as in dark; their cards and canvas take the lights.
+Since 11.0 the light theme is glass as well. `styles/templates/base.css` gives every style's light look three soft lights behind the panes (the accent low on the left, the second colour top right, the playing artwork top left, painted once on `.vx-shell::before`), a frosted workspace sheet, translucent white cards and tiles, and bluer, more saturated frost on the bars. The fills where text sits keep the 10.1 floors — chrome at 80% white, thick at 86% — because 80% is the thinnest white on which muted text still clears 4.5:1 over a black cover; `constants/templates.test.ts` asserts that per style. The flat styles (Verdant, Harbour, Onyx) keep their opaque bars in light as in dark; their cards and canvas take the lights.
 
 ## Accents
 
@@ -116,7 +116,7 @@ The chat has its own, scoped styling layer; the app shell around it keeps the li
 
 ## Materials
 
-Translucent chrome and overlays use a fixed scale of four frosted materials, so a translucent surface always means the same thing and stays readable. A style may replace them with solid fills (Pulse and Marquee do); Settings → Glass effect scales them through `--glass-alpha` and `--glass-blur-boost` (`applyGlassLevel` in `utils/theme.ts`).
+Translucent chrome and overlays use a fixed scale of four frosted materials, so a translucent surface always means the same thing and stays readable. A style may replace them with solid fills (Verdant, Harbour and Onyx do; Monsoon keeps its bars solid); Settings → Glass effect scales them through `--glass-alpha` and `--glass-blur-boost` (`applyGlassLevel` in `utils/theme.ts`).
 
 ### The material scale
 
@@ -175,12 +175,14 @@ Body text is Manrope in every style; each style sets its own display face throug
 
 | Style | Display face | File | Why |
 | --- | --- | --- | --- |
-| Aura | Manrope | `manrope-var.woff2` | The calm house face |
-| Pulse | Archivo | `archivo-var.woff2` | A compact grotesk: dense and quick to scan. Archivo runs wider than Manrope, so Pulse's page size steps down on phones |
-| Sangam | Eczar | `eczar-var.woff2` | Rosetta's display serif from Indian type design: warm and sturdy on plum and marigold. Near-natural tracking |
-| Nocturne | Bricolage Grotesque | `bricolage-var.woff2` | Set lighter (640): titles that glow rather than shout |
-| Marquee | Big Shoulders Display | `big-shoulders-var.woff2` | Condensed cinema-marquee letters, run large with neutral tracking |
-| Vibe | Baloo 2 | `baloo2-var.woff2` | Ek Type's rounded face: bubbly and bold |
+| Lumen | Inter | `inter-var.woff2` | The neutral, tightly-tracked editorial grotesk |
+| Verdant | Figtree | `figtree-var.woff2` | A geometric sans with round bowls: bold titles that read at a glance |
+| Monsoon | Manrope | `manrope-var.woff2` | The house face, plain and friendly, at 700 |
+| Harbour | Archivo | `archivo-var.woff2` | A compact grotesk for a bold, slightly condensed title. Archivo runs wider than Manrope, so the page size is set for it |
+| Verse | Baloo 2 | `baloo2-var.woff2` | Ek Type's rounded face: heavy, for lyric lines and oversized titles |
+| Onyx | Roboto | `roboto-var.woff2` | The plain Android face at natural tracking |
+
+15.0 added Inter, Figtree and Roboto (all SIL OFL) and retired Eczar and Big Shoulders Display with the styles that used them. Bricolage Grotesque stays as the base display face in `index.css`.
 
 **Never put a font on `#root`.** The whole app mounts in `#root`, so a stack there beats the body face for every element without its own `font-family`. An earlier boot-splash rule did exactly that, and on Android phones with a theme font the app rendered in the listener's novelty font. No style may lead a stack with a system font either: on Android, `system-ui` is whatever the phone's theme says. Both are pinned by `src/constants/typography.test.ts`.
 

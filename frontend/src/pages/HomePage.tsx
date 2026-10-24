@@ -110,6 +110,29 @@ function LyricsChip() {
   return <Link className="vxh-chip" to={`/lyrics/${song.id}`}>Lyrics</Link>;
 }
 
+/**
+ * The browse chips: languages, charts, moods, regions. Rendered twice — in
+ * the Explore band at the foot of Home (every style) and, 15.0, as a row
+ * under the greeting (`.vxh-topchips`, hidden by default) that the styles
+ * built around a filter row (Verdant, Monsoon, Onyx) show in place of the
+ * bottom one. Both are plain links, so nothing is duplicated for a screen
+ * reader while one of them is display:none.
+ */
+function BrowseChips({ className, railLangs }: { className: string; railLangs: string[] }) {
+  return (
+    <nav className={className} aria-label="Browse">
+      <Link className="vxh-chip" to="/languages">All languages</Link>
+      {railLangs.map((l) => <Link key={l} className="vxh-chip" to={`/${l}-songs`}>{languageLabel(l)}</Link>)}
+      <Link className="vxh-chip" to="/charts">Charts</Link>
+      <Link className="vxh-chip" to="/trending">Trending</Link>
+      <Link className="vxh-chip" to="/moods">Moods</Link>
+      <Link className="vxh-chip" to="/regions">Regions</Link>
+      <Link className="vxh-chip" to="/made-for-you">Made for you</Link>
+      <LyricsChip />
+    </nav>
+  );
+}
+
 export default function HomePage() {
   // 9.0.0 — one Home generation per visit window (features/home/homeRefresh.ts).
   const generation = useHomeVisit();
@@ -315,6 +338,8 @@ export default function HomePage() {
             </header>
           )}
 
+          <BrowseChips className="vxh-chips vxh-topchips" railLangs={railLangs} />
+
           <HomeHero
             design={design}
             songs={heroSongs}
@@ -344,16 +369,7 @@ export default function HomePage() {
                 )}
               </div>
             </div>
-            <nav className="vxh-chips" aria-label="Browse">
-              <Link className="vxh-chip" to="/languages">All languages</Link>
-              {railLangs.map((l) => <Link key={l} className="vxh-chip" to={`/${l}-songs`}>{languageLabel(l)}</Link>)}
-              <Link className="vxh-chip" to="/charts">Charts</Link>
-              <Link className="vxh-chip" to="/trending">Trending</Link>
-              <Link className="vxh-chip" to="/moods">Moods</Link>
-              <Link className="vxh-chip" to="/regions">Regions</Link>
-              <Link className="vxh-chip" to="/made-for-you">Made for you</Link>
-              <LyricsChip />
-            </nav>
+            <BrowseChips className="vxh-chips" railLangs={railLangs} />
             <p className="sr-only" role="status">{refreshing ? 'Refreshing Home…' : ''}</p>
             {explore.length > 0 && (
               <>

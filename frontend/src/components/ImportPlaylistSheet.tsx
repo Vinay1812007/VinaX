@@ -1,3 +1,4 @@
+import { IMPORT_ACCEPT, fileToLines } from '@/features/library/importFile';
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLibraryStore } from '@/store/libraryStore';
@@ -207,7 +208,29 @@ export function ImportPlaylistSheet({ onClose }: { onClose(): void }) {
               className="w-full px-4 bg-ink-100/[0.06] border border-[color:var(--vx-border)] text-[15px] text-ink-100 outline-none placeholder:text-ink-400 focus:border-ember-500/70 focus:ring-2 focus:ring-ember-500/20 disabled:opacity-60 py-3 rounded-xl resize-none leading-relaxed"
             />
             <div className="mt-2 flex items-center justify-between gap-3 text-[13px] text-ink-400">
-              <span>{lines.length ? `${lines.length} song${lines.length === 1 ? '' : 's'} to look up` : 'Paste a list to begin'}</span>
+              <span>{lines.length ? `${lines.length} song${lines.length === 1 ? '' : 's'} to look up` : 'Paste a list, or open a file, to begin'}</span>
+              {/* 15.0 — a playlist export from another app (CSV, M3U or plain text) fills the box. Read on the device. */}
+              <label className="shrink-0 cursor-pointer font-semibold text-ember-400 hover:underline underline-offset-2">
+                Open a file
+                <input
+                  type="file"
+                  accept={IMPORT_ACCEPT}
+                  disabled={busy}
+                  className="sr-only"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = '';
+                    if (!f) return;
+                    void f.text().then((t) => {
+                      const got = fileToLines(f.name, t).filter(Boolean);
+                      if (!got.length) { toast('No songs found in that file'); return; }
+                      setText(got.join('\n'));
+                      if (!name.trim()) setName(f.name.replace(/\.(csv|m3u8?|txt)$/i, ''));
+                      toast(`${got.length} line${got.length === 1 ? '' : 's'} from ${f.name}`);
+                    });
+                  }}
+                />
+              </label>
               {/* Announced politely so screen-reader users hear the count move. */}
               <span role="status" aria-live="polite" aria-atomic="true">
                 {busy ? `Finding ${progress.done} of ${progress.total}…` : ''}

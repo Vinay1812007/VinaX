@@ -23,8 +23,11 @@ export function UpNextRows({ songs, start, variant }: { songs: Song[]; start: nu
       {songs.map((s, i) => {
         const line = songLine(s);
         const origin = originOf(s.id);
-        // The DJ's own one-line reason, only on what it picked.
-        const why = origin === 'auto' ? reasons[s.id] : undefined;
+        // 15.0 — every pick explains itself: the DJ's reason on its own
+        // picks, and the catalogue's reason ("Because you played …", "Same
+        // artist as …") on songs the listener queued through "Songs like
+        // this". A song with no reason recorded shows none.
+        const why = reasons[s.id];
         return (
           <li key={`${s.id}-${start + i}`}>
             <button type="button" onClick={() => usePlayerStore.getState().playAt(start + i)} className="vx-upnext-row">

@@ -2,9 +2,10 @@
    VinaX 11 — app styles ("templates"): the shared layer.
 
    A template is `html[data-template='<id>']` (set before first paint by the
-   script in index.html, kept live by utils/theme.ts). Six ship: aura (the
-   default), pulse, sangam, nocturne, marquee, vibe — one file each beside
-   this one. This file is what they have in common:
+   script in index.html, kept live by utils/theme.ts). Six ship (15.0): lumen
+   (the default), verdant, monsoon, harbour, verse, onyx — one file each
+   beside this one; docs/app-styles.md is their design contract. This file is
+   what they have in common:
 
    1. the shape, type and motion DIALS (--tpl-*) and the rules that make the
       shell and the shared primitives read them, so a template is mostly a
@@ -28,19 +29,34 @@
 
 /* --------------------------------------------------- 13.2 — display faces */
 /* Each style speaks in its own display face; body copy stays Manrope in
-   every style for legibility (Marquee's included — a system stack let the
-   phone's theme font in). Self-hosted, SIL OFL 1.1 (licences beside the
-   files in /fonts), latin subset, variable weight. A face is fetched only
-   when text that uses it renders — in practice when its style is active, or
-   on the style picker, where each name is set in its own face — and none is
-   in the service worker's precache.
-     Aura      Manrope (the house face, index.css)
-     Pulse     Archivo — compact grotesk: dense, fast, scoreboard-plain
-     Sangam    Eczar — Rosetta's display serif from Indian type design:
-               warm and sturdy on the plum-and-saffron canvas
-     Nocturne  Bricolage Grotesque (index.css), set lighter for the night
-     Marquee   Big Shoulders Display — condensed, cinema-marquee letters
-     Vibe      Baloo 2 — Ek Type's rounded face: bubbly and bold */
+   every style for legibility (a system stack let the phone's theme font
+   in). Self-hosted, SIL OFL 1.1 (licences beside the files in /fonts),
+   latin subset, variable weight. A face is fetched only when text that uses
+   it renders — in practice when its style is active, or on the style
+   picker, where each name is set in its own face — and none is in the
+   service worker's precache.
+     Lumen     Inter — the neutral, tightly-tracked editorial grotesk
+     Verdant   Figtree — a geometric sans with round bowls; bold at a glance
+     Monsoon   Manrope (the house face, index.css), plain and friendly
+     Harbour   Archivo — compact grotesk: a bold, slightly condensed title
+     Verse     Baloo 2 — Ek Type's rounded face: heavy, for lyric lines
+     Onyx      Roboto — the plain Android face at natural tracking
+   15.0 retired Eczar and Big Shoulders Display with the styles that used
+   them. */
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-var.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Figtree';
+  src: url('/fonts/figtree-var.woff2') format('woff2-variations');
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: swap;
+}
 @font-face {
   font-family: 'Archivo';
   src: url('/fonts/archivo-var.woff2') format('woff2-variations');
@@ -49,23 +65,16 @@
   font-display: swap;
 }
 @font-face {
-  font-family: 'Eczar';
-  src: url('/fonts/eczar-var.woff2') format('woff2-variations');
-  font-weight: 400 800;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Big Shoulders Display';
-  src: url('/fonts/big-shoulders-var.woff2') format('woff2-variations');
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
   font-family: 'Baloo 2';
   src: url('/fonts/baloo2-var.woff2') format('woff2-variations');
   font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Roboto';
+  src: url('/fonts/roboto-var.woff2') format('woff2-variations');
+  font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
@@ -142,11 +151,11 @@ html.light[data-template]:not([class*='fest-']) body { background-color: rgb(var
    showed through as a second line of text beneath the playing one. These
    two get a higher floor; they keep their tint and blur, and the glass
    setting still moves them, but they no longer show text through. Flat
-   styles (Pulse, Marquee) are already opaque. */
-html:is([data-template='aura'], [data-template='sangam'], [data-template='nocturne'], [data-template='vibe']) :is(.np-mini, .vx-dock) {
+   styles (Verdant, Harbour, Onyx) are already opaque. */
+html:is([data-template='lumen'], [data-template='monsoon'], [data-template='verse']) :is(.np-mini, .vx-dock) {
   --vx-mat-chrome: rgb(var(--ink-950) / clamp(0.9, calc(var(--glass-alpha) + 0.1), 0.96));
 }
-html.light:is([data-template='aura'], [data-template='sangam'], [data-template='nocturne'], [data-template='vibe']) :is(.np-mini, .vx-dock) {
+html.light:is([data-template='lumen'], [data-template='monsoon'], [data-template='verse']) :is(.np-mini, .vx-dock) {
   --vx-mat-chrome: rgb(var(--ink-950) / clamp(0.93, calc(var(--glass-alpha) + 0.12), 0.97));
 }
 

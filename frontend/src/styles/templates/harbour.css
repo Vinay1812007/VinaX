@@ -1,0 +1,267 @@
+/* ============================================================================
+   Harbour — deep navy, a cyan accent, tall banners and square corners.
+
+   A navy-black canvas with a cyan accent and a sea-blue second colour.
+   Nothing is glass and nothing floats: the sidebar and the workspace touch
+   the edges, the player is a solid bar across the bottom with its progress
+   on the top edge, the tab bar is solid with a cyan bar under the active
+   icon. Artwork is a 4px square; the hero is a tall banner with its title
+   in large capitals; section heads carry a cyan bar on the left; rows are
+   hairlines. Titles are a bold compact grotesk. Motion is a quick fade.
+   Design contract: docs/app-styles.md § Harbour.
+   ========================================================================= */
+
+/* ----------------------------------------------------------------- colour */
+html[data-template='harbour']:not([class*='fest-']) {
+  --ink-950: 6 11 16;
+  --ink-900: 14 23 32;
+  --ink-850: 18 29 40;
+  --ink-800: 23 34 45;
+  --ink-700: 40 54 68;
+  --ink-600: 86 102 118;
+  --ink-500: 146 162 178;
+  --ink-400: 170 186 200;
+  --ink-300: 196 208 220;
+  --ink-200: 224 232 240;
+  --ink-100: 246 250 255;
+  --vx-mesh-ember: 0.1;
+  --vx-mesh-tide: 0.06;
+}
+html.light[data-template='harbour']:not([class*='fest-']) {
+  --ink-950: 255 255 255;
+  --ink-900: 242 245 248;
+  --ink-850: 234 238 243;
+  --ink-800: 222 228 235;
+  --ink-700: 200 208 218;
+  --ink-600: 124 136 150;
+  --ink-500: 90 102 116;
+  --ink-400: 68 80 94;
+  --ink-300: 56 68 82;
+  --ink-200: 28 38 50;
+  --ink-100: 8 16 26;
+  --art: 130 150 170;
+}
+html[data-template='harbour']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+  --ember-600: 24 160 172;
+  --ember-500: 37 199 213;
+  --ember-400: 110 220 230;
+  --ember-300: 160 236 242;
+  --tide-500: 79 141 245;
+  --tide-400: 130 175 255;
+  --vx-on-accent: #021418;
+  --art: 37 199 213;
+}
+html.light[data-template='harbour']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+  --ember-600: 4 92 100;
+  --ember-500: 7 112 122;
+  --ember-400: 6 98 108;
+  --ember-300: 8 88 96;
+  --tide-500: 28 86 200;
+  --tide-400: 24 72 176;
+  --vx-on-accent: #fff;
+  --art: 130 150 170;
+}
+
+/* ------------------------------------------------------------------ dials */
+html[data-template='harbour'] {
+  --tpl-r-art: 4px;
+  --tpl-r-art-sm: 4px;
+  --tpl-r-control: 4px;
+  --tpl-r-play: 50%;
+  --tpl-r-play-sm: 50%;
+  --tpl-r-row: 4px;
+  --tpl-r-tile: 4px;
+  --tpl-r-input: 6px;
+  --tpl-r-deck: 0px;
+  --tpl-r-mini: 0px;
+  --tpl-r-np-art: 4px;
+  --vx-font-display: 'Archivo', 'Manrope', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --vx-type-page: clamp(2rem, 4vw, 3.5rem);
+  --vx-type-section: 1.25rem;
+  --tpl-title-weight: 800;
+  --tpl-title-tracking: -0.02em;
+  --tpl-section-weight: 800;
+  --tpl-section-tracking: -0.01em;
+  --tpl-card-title-weight: 600;
+  --tpl-enter: tplFade;
+  --tpl-enter-dur: 140ms;
+  --tpl-press: 0.97;
+  --vx-radius-panel: 4px;
+  --vx-radius-card: 4px;
+  --vx-shelf-gap: 36px;
+  --vx-card-gap: 18px;
+  --vx-deck-gap: 0px;
+  --vx-player-h: 76px;
+  --vx-art-shadow: none;
+  --vx-deck-shadow: none;
+  --transition-fast: 100ms linear;
+  --transition-normal: 140ms linear;
+}
+/* Flat: opaque materials whatever colours are on. */
+html[data-template='harbour'] {
+  --vx-mat-thin: rgb(var(--ink-950));
+  --vx-mat-regular: rgb(var(--ink-850));
+  --vx-mat-chrome: rgb(var(--ink-950));
+  --vx-mat-thick: rgb(var(--ink-850));
+  --vx-mat-specular: transparent;
+  --vx-mat-art: 0;
+}
+/* 13.2 — the light glass rule in base.css is (0,3,1); match it and win by order. */
+html.light[data-template='harbour'],
+html.light[data-template='harbour']:not([class*='fest-']) {
+  --vx-mat-thin: rgb(var(--ink-950));
+  --vx-mat-regular: rgb(var(--ink-950));
+  --vx-mat-chrome: rgb(var(--ink-950));
+  --vx-mat-thick: rgb(var(--ink-950));
+}
+html[data-template='harbour'] :is(.vx-mat-thin, .vx-mat-regular, .vx-mat-chrome, .vx-mat-thick) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* ------------------------------------------------------------------ shell */
+html[data-template='harbour']:not([class*='fest-']) .vx-shell { background: rgb(var(--ink-950)); }
+/* A faint light from the playing artwork at the top; navy below. */
+html[data-template='harbour']:not([class*='fest-']) .vx-workspace {
+  background:
+    radial-gradient(1200px 300px at 50% -140px, rgb(var(--art) / 0.28), transparent 70%) local,
+    rgb(var(--ink-900));
+}
+@media (min-width: 768px) {
+  html[data-template='harbour'] .vx-sidebar { margin: 0; max-height: 100dvh; border-radius: 0; box-shadow: inset -1px 0 0 var(--vx-border); }
+  html[data-template='harbour'] .vx-workspace { margin: 0; }
+}
+html[data-template='harbour'] .vx-library { background: transparent; border-radius: 0; margin: 10px 0 0; box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='harbour'] .vx-brand { font-family: var(--vx-font-display); font-weight: 800; letter-spacing: -0.03em; }
+html[data-template='harbour'] .vx-nav-link { min-height: 44px; border-radius: 4px; font-weight: 600; color: rgb(var(--ink-300)); }
+html[data-template='harbour'] .vx-nav-link:hover { background: rgb(var(--ink-100) / 0.07); color: rgb(var(--ink-100)); }
+html[data-template='harbour'] :is(.vx-nav-active, .vx-nav-active:hover) { background: rgb(var(--ink-100) / 0.08); color: rgb(var(--ember-400)); box-shadow: inset 3px 0 0 rgb(var(--ember-500)); font-weight: 700; }
+html[data-template='harbour'] :is(.vx-lib-row:hover, .vx-track-row:hover) { background: rgb(var(--ink-100) / 0.07); }
+html[data-template='harbour'] .vx-topbar.is-scrolled { box-shadow: inset 0 -1px 0 var(--vx-border); }
+
+/* Phone tab bar: solid, a hairline on top, a cyan bar under the active icon. */
+html[data-template='harbour'] .vx-dock { box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='harbour'] .vx-dock-pill { position: relative; width: 52px; height: 28px; border-radius: 0; }
+html[data-template='harbour'] .vx-dock-active .vx-dock-pill { background: transparent; color: rgb(var(--ember-400)); }
+html[data-template='harbour'] .vx-dock-active .vx-dock-pill::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -4px;
+  height: 2px;
+  background: rgb(var(--ember-500));
+}
+html[data-template='harbour'] :is(.vx-dock-active, .vx-dock-active:hover) { color: rgb(var(--ember-400)); font-weight: 700; }
+html[data-template='harbour'] .vx-dock-item { gap: 4px; min-height: 56px; font-size: 10.5px; font-weight: 600; }
+
+/* Mini player: a solid bar across the bottom, progress along its top edge. */
+@media (max-width: 1023px) {
+  html[data-template='harbour'] [data-tour='player'] { padding: 0; }
+}
+html[data-template='harbour'] .np-mini { --mat-tint: none; border-radius: 0; box-shadow: inset 0 -1px 0 var(--vx-border); }
+html[data-template='harbour'] .np-mini-progress { top: 0; bottom: auto; left: 0; right: 0; border-radius: 0; background: rgb(var(--ink-100) / 0.16); }
+html[data-template='harbour'] .np-mini-progress > i { border-radius: 0; background: rgb(var(--ember-500)); }
+html[data-template='harbour'] .np-mini .np-mini-play { background: transparent; color: rgb(var(--ink-100)); }
+html[data-template='harbour'] .np-mini-thumb, html[data-template='harbour'] .np-mini-thumb img { border-radius: 2px; }
+
+/* Player deck: a solid bar edge to edge. */
+html[data-template='harbour'] .vx-deck { box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='harbour'] .vx-deck::before,
+html[data-template='harbour'] .vx-deck::after { display: none; }
+html[data-template='harbour'] .np-play-desktop { background: rgb(var(--ink-100)); color: rgb(var(--ink-950)); box-shadow: none; width: 40px; height: 40px; }
+html[data-template='harbour'] .np-play-desktop:hover { background: rgb(var(--ink-100)); transform: scale(1.05); }
+
+/* ------------------------------------------------------- pages and cards */
+html[data-template='harbour'] .vx-section-link { color: rgb(var(--ink-300)); font-size: 13px; font-weight: 700; border-radius: 4px; padding-inline: 6px; }
+html[data-template='harbour'] .vx-section-link:hover { background: rgb(var(--ink-100) / 0.08); color: rgb(var(--ink-100)); }
+html[data-template='harbour'] :is(.vx-section-header h2, .vxh-head h2, .vxh-explore-head h2) { display: flex; align-items: center; gap: 10px; }
+html[data-template='harbour'] :is(.vx-section-header h2, .vxh-head h2, .vxh-explore-head h2)::before { content: ''; width: 3px; height: 1em; background: rgb(var(--ember-500)); }
+/* Bigger pictures in every shelf. */
+html[data-template='harbour'] .vx-media-rail > .vx-media-card { width: 11rem; }
+@media (min-width: 640px) {
+  html[data-template='harbour'] .vx-media-rail > .vx-media-card { width: 12.5rem; }
+}
+html[data-template='harbour'] .vx-media-title { margin-top: 10px; font-size: 14.5px; }
+@media (hover: hover) {
+  html[data-template='harbour'] .vx-media-card:hover .vx-media-art { transform: none; }
+  html[data-template='harbour'] .vx-media-card:hover .vx-media-art img { filter: brightness(0.75); }
+}
+html[data-template='harbour'] :is(.vx-play-fab, .vx-np-play, .card-play) { background: rgb(var(--ink-100)); color: rgb(var(--ink-950)); box-shadow: none; }
+html[data-template='harbour'] :is(.vx-play-fab, .vx-np-play, .card-play):hover { background: rgb(var(--ink-200)); }
+/* Chips: square-cornered, outlined; the chosen one is cyan. */
+html[data-template='harbour'] :is(.vx-chip-idle, .vxh-chip) { border-radius: 4px; background: rgb(var(--ink-100) / 0.07); box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.14); font-weight: 600; }
+html[data-template='harbour'] .vx-chip-on { border-radius: 4px; background: rgb(var(--ember-500)); border-color: rgb(var(--ember-500)); color: var(--vx-on-accent); }
+html[data-template='harbour'] .vx-track-row + .vx-track-row { box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='harbour'] .vx-track-row.is-current { background: rgb(var(--ember-500) / 0.1); }
+html[data-template='harbour'] .vxh-tile { background: rgb(var(--ink-100) / 0.07); }
+html[data-template='harbour'] .vxh-tile img { border-radius: 0; }
+html[data-template='harbour'] .vxh-hero { border-radius: 4px; box-shadow: none; }
+html[data-template='harbour'] :is(.btn-primary, .btn-secondary, .btn-premium) { border-radius: 4px; font-weight: 700; }
+html[data-template='harbour'] .vx-np-tabs [role='tab'] { border-radius: 0; }
+html[data-template='harbour'] .vx-np-tabs [role='tab'][aria-selected='true'] { background: transparent; color: rgb(var(--ember-400)); box-shadow: inset 0 -2px 0 rgb(var(--ember-500)); }
+
+/* Now Playing: the artwork blurred behind a navy scrim; square picture. */
+html[data-template='harbour']:not([class*='fest-']) .vx-np-bg-wash { background: linear-gradient(180deg, rgb(var(--ink-950) / 0.35), rgb(var(--ink-950) / 0.92) 70%); }
+html[data-template='harbour'] .vx-np-art-img { box-shadow: 0 16px 40px -18px rgb(0 0 0 / 0.8); }
+html[data-template='harbour'] .vx-np-play { width: 64px; height: 64px; }
+html[data-template='harbour'] .vx-np-title { font-weight: 800; letter-spacing: -0.01em; }
+html[data-template='harbour'] .vx-np-artist { color: rgb(var(--ember-400)); font-weight: 600; }
+
+/* ---------------------------------------------------------- layout identity */
+/* Harbour is the BANNER: a tall picture leads the page.
+   - Hero: on phones the artwork runs full width as a 16:9 banner with the
+     title in large capitals bottom-left over a scrim.
+   - Jump back in: one column of 72px rows, 4px art, hairlines, a chevron
+     at the right.
+   - Section heads: a cyan bar on the left (above).
+   - Tab bar: a cyan bar under the active icon (above).
+   - Mini player: a solid bar with progress on its top edge (above). */
+@media (max-width: 767px) {
+  html[data-template='harbour'] .vx-home .vx-hero.vxh-hero {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'art' 'kicker' 'title' 'desc' 'actions';
+    gap: 2px;
+    padding: 0 0 14px;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  html[data-template='harbour'] .vx-home .vxh-hero-art { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 0; margin-bottom: -64px; box-shadow: none; }
+  html[data-template='harbour'] .vx-home .vxh-hero-art.is-collage { aspect-ratio: 16 / 9; grid-template-columns: repeat(4, 1fr); }
+  html[data-template='harbour'] .vx-home .vxh-hero-art img { width: 100%; height: 100%; object-fit: cover; }
+  html[data-template='harbour'] .vx-home .vxh-hero-art::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 35%, rgb(var(--ink-950) / 0.94)); }
+  html[data-template='harbour'] .vx-home :is(.vxh-hero-kicker, .vxh-hero-title, .vxh-hero-desc, .vxh-hero-actions) { position: relative; z-index: 1; margin-inline: 14px; }
+  html[data-template='harbour'] .vx-home .vxh-hero-title { font-size: 30px; line-height: 1; text-transform: uppercase; letter-spacing: -0.01em; }
+  html[data-template='harbour'] .vx-home .vxh-hero-desc { margin-top: 6px; font-size: 13px; }
+  html[data-template='harbour'] .vx-home .vxh-hero-wash { display: none; }
+}
+html[data-template='harbour'] .vx-home .vxh-hero-kicker { color: rgb(var(--ember-400)); font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+html[data-template='harbour'] .vx-home .vxh-tiles,
+html[data-template='harbour'] .vx-home .vxh-jump .vxh-tiles { grid-template-columns: minmax(0, 1fr); gap: 0; }
+@container jump (min-width: 760px) {
+  html[data-template='harbour'] .vx-home .vxh-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; }
+}
+html[data-template='harbour'] .vx-home .vxh-tile {
+  min-height: 72px;
+  gap: 14px;
+  padding: 0 32px 0 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: inset 0 -1px 0 var(--vx-border);
+}
+html[data-template='harbour'] .vx-home .vxh-tile::after {
+  content: '';
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin-top: -5px;
+  border-right: 2px solid rgb(var(--ink-500));
+  border-top: 2px solid rgb(var(--ink-500));
+  transform: rotate(45deg);
+}
+html[data-template='harbour'] .vx-home .vxh-tile:hover { background: rgb(var(--ink-100) / 0.06); }
+html[data-template='harbour'] .vx-home .vxh-tile img { width: 64px; height: 64px; margin: 4px 0; border-radius: 4px; }
+html[data-template='harbour'] .vx-home .vxh-tile-title { font-size: 15px; font-weight: 600; }
+html[data-template='harbour'] .vx-home .vxh-tile .vxh-disc { border-radius: 50%; }

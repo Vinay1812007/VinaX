@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { applyThemeClasses, resolveTheme } from './theme';
+import { applyThemeClasses, normalizeTemplate, resolveTheme } from './theme';
 
 // Festival skins (html.fest-*) are deliberate, CLASS-SCOPED accent overrides
 // active only inside their calendar windows — strip those blocks so this test
@@ -105,19 +105,32 @@ describe('theme resolution + application', () => {
 
   it('11.0 — stamps the app style and its canvas, and keeps the style a caller did not name', () => {
     const root = document.createElement('html');
-    applyThemeClasses('dark', root, 'pulse');
-    expect(root.dataset.template).toBe('pulse');
+    applyThemeClasses('dark', root, 'verdant');
+    expect(root.dataset.template).toBe('verdant');
     expect(root.style.background).toBe('rgb(18, 18, 18)');
     // No style passed (an older call site): whatever is on <html> stays.
     applyThemeClasses('light', root);
-    expect(root.dataset.template).toBe('pulse');
-    expect(root.style.background).toBe('rgb(247, 247, 245)');
+    expect(root.dataset.template).toBe('verdant');
+    expect(root.style.background).toBe('rgb(246, 246, 246)');
     // AMOLED is black in every style; nonsense falls back to the default.
-    applyThemeClasses('amoled', root, 'vibe');
+    applyThemeClasses('amoled', root, 'verse');
     expect(root.style.background).toBe('rgb(0, 0, 0)');
     applyThemeClasses('dark', root, 'nonsense');
-    expect(root.dataset.template).toBe('aura');
-    expect(root.style.background).toBe('rgb(16, 17, 22)');
+    expect(root.dataset.template).toBe('lumen');
+    expect(root.style.background).toBe('rgb(15, 15, 17)');
+  });
+
+  it('15.0 — a style id from 11.0–14.x lands on the style that replaced it', () => {
+    expect(normalizeTemplate('aura')).toBe('lumen');
+    expect(normalizeTemplate('pulse')).toBe('verdant');
+    expect(normalizeTemplate('sangam')).toBe('monsoon');
+    expect(normalizeTemplate('nocturne')).toBe('harbour');
+    expect(normalizeTemplate('vibe')).toBe('verse');
+    expect(normalizeTemplate('marquee')).toBe('onyx');
+    const root = document.createElement('html');
+    applyThemeClasses('dark', root, 'marquee');
+    expect(root.dataset.template).toBe('onyx');
+    expect(root.style.background).toBe('rgb(3, 3, 3)');
   });
 
   it('applies the right classes to the root element', () => {

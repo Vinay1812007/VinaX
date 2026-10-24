@@ -16,24 +16,40 @@ export function resolveTheme(pref: ThemePref, systemPrefersDark: boolean, hour =
 // descriptions are in constants/templates.ts, loaded with Settings.
 // ---------------------------------------------------------------------------
 
-export type TemplateId = 'aura' | 'pulse' | 'sangam' | 'nocturne' | 'marquee' | 'vibe';
-export const DEFAULT_TEMPLATE: TemplateId = 'aura';
+export type TemplateId = 'lumen' | 'verdant' | 'monsoon' | 'harbour' | 'verse' | 'onyx';
+export const DEFAULT_TEMPLATE: TemplateId = 'lumen';
 
 /** The page canvas (= the style's --ink-900) per theme: [dark, light]. The
  *  pre-paint script in index.html carries the same table — keep in sync
  *  (asserted in templates.test.ts). AMOLED is black in every style. */
 export const TEMPLATE_CANVAS: Record<TemplateId, readonly [string, string]> = {
-  aura: ['#101116', '#f6f7fa'],
-  pulse: ['#121212', '#f7f7f5'],
-  sangam: ['#130e16', '#faf5ed'],
-  nocturne: ['#0e0d22', '#f7f6fd'],
-  marquee: ['#0c0c0d', '#f9f9f9'],
-  vibe: ['#0a1619', '#f4fafa'],
+  lumen: ['#0f0f11', '#f5f5f7'],
+  verdant: ['#121212', '#f6f6f6'],
+  monsoon: ['#1b1e21', '#f4f6f6'],
+  harbour: ['#0e1720', '#f2f5f8'],
+  verse: ['#141418', '#f7f6f9'],
+  onyx: ['#030303', '#f9f9f9'],
+};
+
+/** 15.0 — the 11.0–14.x styles, each mapped to the 15.0 style that took its
+ *  place (docs/app-styles.md), so a listener who chose Pulse opens 15.0 in
+ *  Verdant rather than in the default. The pre-paint script in index.html
+ *  carries the same map. */
+export const LEGACY_TEMPLATES: Readonly<Record<string, TemplateId>> = {
+  aura: 'lumen',
+  pulse: 'verdant',
+  sangam: 'monsoon',
+  nocturne: 'harbour',
+  vibe: 'verse',
+  marquee: 'onyx',
 };
 
 /** Anything not in the table (an older build's id, damaged storage) → default. */
 export function normalizeTemplate(id: unknown): TemplateId {
-  return typeof id === 'string' && Object.prototype.hasOwnProperty.call(TEMPLATE_CANVAS, id) ? (id as TemplateId) : DEFAULT_TEMPLATE;
+  if (typeof id !== 'string') return DEFAULT_TEMPLATE;
+  if (Object.prototype.hasOwnProperty.call(TEMPLATE_CANVAS, id)) return id as TemplateId;
+  if (Object.prototype.hasOwnProperty.call(LEGACY_TEMPLATES, id)) return LEGACY_TEMPLATES[id];
+  return DEFAULT_TEMPLATE;
 }
 
 /** Apply theme classes, the app style and the browser chrome colour. Idempotent.

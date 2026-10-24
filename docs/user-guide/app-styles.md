@@ -10,26 +10,28 @@ A style does not change your music. Your library, queue, history, recommendation
 
 ## The six styles
 
+Each style is modelled on the design language of a kind of music app you may already know — how its screens are laid out, its type, its shapes, where the tab bar and the player sit — in VinaX's own names and colours.
+
 | Style | In one line |
 |---|---|
-| **Aura** | Clean glass and large titles |
-| **Pulse** | Dense, flat and fast |
-| **Sangam** | Warm, roomy and colourful |
-| **Nocturne** | Midnight gradients and glow |
-| **Marquee** | Black canvas, picture first |
-| **Vibe** | Immersive, bubbly and bold |
+| **Lumen** | Clean, editorial, big titles |
+| **Verdant** | Black panels and a green accent |
+| **Monsoon** | Charcoal, teal and saffron |
+| **Harbour** | Deep navy, tall banners |
+| **Verse** | Lyrics first, coral and capsules |
+| **Onyx** | True black, white play, red marks |
 
-**Aura** is the style VinaX starts with. It is cool graphite with an iris-blue accent. The bars are frosted glass, pages open with a large left-aligned title, artwork has soft rounded corners and the play button is a circle. Choose it if you want a calm, uncluttered screen.
+**Lumen** is the style VinaX starts with. It is black (or white, in the Light theme) with a crimson-pink accent. The bars are frosted glass, section titles are large and end in a chevron, artwork has small rounded corners with a soft shadow, lists are separated by thin lines, and the mini player floats as a frosted pane above the tab bar. Choose it if you want a calm, uncluttered screen with the pictures doing the talking.
 
-**Pulse** is neutral black with a bright yellow-green accent. Nothing is glass: every bar is a solid panel, corners are tight, and rows and tiles are compact, so more fits on a screen. The top of a page takes a wash of the playing song's artwork colour, and the player is a solid bar across the bottom. Motion is short. Choose it if you want density and speed.
+**Verdant** is neutral black with a bright green accent. Nothing is glass: panels are flat grey, artwork is square, and Home opens on a row of filter chips and a two-column grid of tiles. The top of a page takes a wash of the playing song's artwork colour; the mini player is a small bar tinted with the same colour, floating over a tab bar that fades out of the page. Motion is a quick fade. Choose it if you like dense panels and a grid.
 
-**Sangam** is plum and marigold with a teal second colour. Artwork and cards are big and rounded, tiles are washed in colour, and the sidebar and the phone tab bar float as rounded panels. Motion is gentle. Choose it if you like a warm, generous layout. It is also the look VinaX had before app styles existed.
+**Monsoon** is charcoal and teal with a saffron second colour. Home opens on a teal band and a row of language chips, the hero is a wide banner with its title bottom-left, tiles are rounded with a faint teal wash, and the tab bar is solid with filled teal icons. The mini player runs edge to edge above it with a heart and a saffron progress line. Choose it if you want languages and charts one tap away.
 
-**Nocturne** is deep indigo with an orchid accent. The page sits on a slow gradient, titles carry an orchid-to-aqua gradient, play buttons glow and tabs are marked with an underline. Motion is slow. Choose it for late-night listening or if you like a little glow.
+**Harbour** is deep navy with a cyan accent. Corners are square, the hero is a tall banner with its title in capitals, rows are separated by thin lines with a chevron at the right, section titles carry a cyan bar, and the player is a solid bar across the bottom with its progress drawn along the top edge. There is no glass and little motion. Choose it if you like big banners and a clear structure.
 
-**Marquee** is true black with an ice-blue accent. Artwork is large and square-cornered, type is plain, thin lines replace panels, the play button is white, and the player bar spans the screen with its progress drawn along the top edge. There is no glass and almost no motion. Choose it if you want the pictures to lead and the app to stay out of the way.
+**Verse** puts lyrics first. The playing artwork bleeds over a charcoal canvas, the accent is coral, and everything you touch is a capsule: chips, the floating mini player, the tab you are on. On Home the hero is the artwork itself with a lyric line; in the full-screen player the lyrics come first over the artwork blurred to the edges. Things pop in and spring a little when pressed. Choose it if you sing along.
 
-**Vibe** is deep teal with a coral accent. Shapes are as round as they go: bubble artwork, a capsule player and a floating capsule tab bar. On a phone the tab bar shows icons without their names, and the tab you are on is a coloured bubble. Type is oversized and things spring a little when pressed. Choose it if you want the app to feel playful.
+**Onyx** is true black with a white play button and red for progress and live marks. Home opens on a row of mood and language chips; every section has a small overline, a big title and a **More** pill; "Jump back in" is a column of quick picks with square artwork. The tab bar is solid black with filled white icons, and the mini player is a full-width bar with a thin red progress line on its top edge. The full-screen player keeps its tabs in capitals. Choose it if you want the app to stay out of the way.
 
 ## Switch style
 
@@ -71,7 +73,7 @@ Your style is saved on this device with your other settings, and it is included 
 | What you see | Why, and what to do |
 |---|---|
 | The colours look different today | A festival theme is on. It ends with the festival. To switch it off, see [Festival themes](festival-themes.md#switch-festival-themes-off). |
-| I want the look VinaX used to have | Choose **Sangam**. If you also want its marigold accent in another style, choose the **Marigold** swatch. |
+| I want the look VinaX used to have | VinaX 15 replaced the six styles; the one you had opens as its replacement (Aura → Lumen, Pulse → Verdant, Sangam → Monsoon, Nocturne → Harbour, Vibe → Verse, Marquee → Onyx). For the marigold accent of the earliest look, choose the **Marigold** swatch. |
 | The accent did not change when I changed style | You have chosen an accent of your own. Choose **Style colour**, the first swatch. If a custom colour is set, press **Use a preset** first. |
-| The bars are not see-through | Pulse and Marquee have no glass. In the other styles, check **Glass effect** and **Background blur** in Settings → Appearance; the Black theme keeps bars solid. |
+| The bars are not see-through | Verdant, Harbour and Onyx have no glass, and Monsoon keeps its bars solid. In Lumen and Verse, check **Glass effect** and **Background blur** in Settings → Appearance; the Black theme keeps bars solid. |
 | The accent keeps changing with each song | **Dynamic theme** is on. Turn it off in Settings → Appearance. |

@@ -33,7 +33,7 @@ const heading = (name: string) => screen.findByRole('heading', { name });
 
 beforeEach(() => {
   localStorage.clear();
-  useSettingsStore.getState().setTemplate('aura');
+  useSettingsStore.getState().setTemplate('lumen');
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ available: true }) })));
 });
 afterEach(() => {
@@ -85,9 +85,9 @@ describe('OnboardingSheet (11.0 welcome)', () => {
 
     const styles = screen.getAllByRole('radio');
     expect(styles).toHaveLength(6);
-    fireEvent.click(screen.getByRole('radio', { name: /Sangam/ }));
-    expect(useSettingsStore.getState().template).toBe('sangam');
-    expect(localStorage.getItem('vinax.settings.v1')).toContain('"template":"sangam"');
+    fireEvent.click(screen.getByRole('radio', { name: /Monsoon/ }));
+    expect(useSettingsStore.getState().template).toBe('monsoon');
+    expect(localStorage.getItem('vinax.settings.v1')).toContain('"template":"monsoon"');
     expect(screen.getByRole('button', { name: 'Skip' })).toBeTruthy();
     press('Use this look');
 
