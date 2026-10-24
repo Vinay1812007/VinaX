@@ -135,11 +135,15 @@ jobs:
           fi
           grep -q 'id="boot"' dom.html && echo "::warning title=boot::boot brand row still in DOM" || echo "::notice title=boot::boot row cleared"
           echo "::notice title=chrome-log::$(head -c 700 chrome.log | tr '\n' ' ')"
-          # 13.9: Charts can be browsed before signing in, so a visitor with no
-          # account must reach the real page there.
+          # A published URL for a visitor with no account: 13.5 shows the
+          # published page (PublicPage, "Listen free on VinaX") on a direct
+          # load, and the live app once the visitor chooses to browse (13.9).
+          # Either is React, mounted; only the static shell is a failure.
           google-chrome --headless=new --disable-gpu --no-sandbox --virtual-time-budget=25000 --dump-dom "https://www.vinaxmusic.online/charts" > charts.html 2>> chrome.log || true
-          if grep -q 'id="main-content"' charts.html; then
-            echo "::notice title=guest-browse::OK - /charts mounted for a visitor with no account"
+          if grep -q 'id="vx-public-signin-title"' charts.html; then
+            echo "::notice title=published-page::OK - /charts shows the published page to a visitor with no account"
+          elif grep -q 'id="main-content"' charts.html; then
+            echo "::notice title=published-page::OK - /charts mounted the live app"
           else
-            echo "::error title=guest-browse::FAILED - /charts did not reach #main-content after 25s virtual time"
+            echo "::error title=published-page::FAILED - /charts is the static shell after 25s virtual time"
           fi
