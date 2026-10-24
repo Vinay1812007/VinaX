@@ -122,10 +122,24 @@ jobs:
         run: |
           google-chrome --headless=new --disable-gpu --no-sandbox --virtual-time-budget=25000 --dump-dom "https://www.vinaxmusic.online/" > dom.html 2> chrome.log || true
           echo "::notice title=dom-bytes::$(wc -c < dom.html)"
+          # 13.0: a visitor with no account is shown the sign-in screen at /,
+          # which has no #main-content. Both are React, mounted; only the
+          # static shell (neither) means the app did not boot. This probe had
+          # reported FAILED on every run since 13.0 for a healthy site.
           if grep -q 'id="main-content"' dom.html; then
             echo "::notice title=hydration::OK - React mounted (#main-content present)"
+          elif grep -q 'id="vx-signin-title"' dom.html; then
+            echo "::notice title=hydration::OK - React mounted (sign-in screen for a visitor with no account)"
           else
             echo "::error title=hydration::FAILED - static shell only after 25s virtual time"
           fi
           grep -q 'id="boot"' dom.html && echo "::warning title=boot::boot brand row still in DOM" || echo "::notice title=boot::boot row cleared"
           echo "::notice title=chrome-log::$(head -c 700 chrome.log | tr '\n' ' ')"
+          # 13.9: Charts can be browsed before signing in, so a visitor with no
+          # account must reach the real page there.
+          google-chrome --headless=new --disable-gpu --no-sandbox --virtual-time-budget=25000 --dump-dom "https://www.vinaxmusic.online/charts" > charts.html 2>> chrome.log || true
+          if grep -q 'id="main-content"' charts.html; then
+            echo "::notice title=guest-browse::OK - /charts mounted for a visitor with no account"
+          else
+            echo "::error title=guest-browse::FAILED - /charts did not reach #main-content after 25s virtual time"
+          fi
