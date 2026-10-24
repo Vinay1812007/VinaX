@@ -1,0 +1,112 @@
+# Every merge to main becomes a numbered release.
+#
+# The release contract (README "How releases work") moves four files in
+# lock-step: package.json + package-lock.json, src/constants/version.ts
+# (LATEST_VERSION, DISPLAY_VERSION) and the What's New card on top of
+# src/constants/changelog.ts. Doing that by hand on every merge meant it
+# rarely happened: on 2026-10-24 five builds of "14.0.1" shipped and no
+# listener saw an update, a What's New card, or a new version anywhere.
+#
+# This workflow runs on every push to main:
+#   1. frontend/scripts/auto-release.mjs bumps the patch version (#minor /
+#      #major in the merge message bump more) and writes the What's New card
+#      from the merge's title and body. A merge that already moved the
+#      version (a manual release) or says [skip release] is left alone.
+#   2. The release commit ("release: 14.0.2 — <title>") is pushed to main.
+#      The static host builds the web app from it as it does for any push.
+#   3. Build Android APK is dispatched on that commit, so one signed APK and
+#      one GitHub Release carry the new version. Its own push trigger is
+#      gone: a merge would otherwise also build the OLD version first.
+#      Deploy Worker keeps its push trigger (backend/** on the merge itself).
+#
+# A push made with the workflow's own token starts no other workflow, which
+# is why step 3 dispatches explicitly and why this workflow cannot loop on
+# its own commit. If main is protected against the token's push, set a
+# RELEASE_TOKEN secret (a fine-grained PAT with contents: write on this
+# repository): it is used for the push when present.
+#
+# Actions pinned by SHA — rotate via Dependabot (github-actions ecosystem).
+name: Auto release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Show the bump without committing'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  # Releases are sequential: a second merge waits for the first bump to land.
+  group: auto-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # The release commit itself never bumps again.
+    if: ${{ !startsWith(github.event.head_commit.message, 'release:') }}
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - name: Bump the version and write the What's New card
+        id: bump
+        env:
+          RELEASE_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then node scripts/auto-release.mjs --dry-run; else node scripts/auto-release.mjs; fi
+
+      # The same gate CI applies: version, package.json and the changelog agree.
+      - name: Check the release contract
+        if: steps.bump.outputs.status == 'bumped' && inputs.dry_run != true
+        run: npx vitest run src/constants/release.test.ts src/__tests__/autoRelease.test.ts
+
+      - name: Commit and push the release
+        if: steps.bump.outputs.status == 'bumped' && inputs.dry_run != true
+        env:
+          VERSION: ${{ steps.bump.outputs.version }}
+          TITLE: ${{ steps.bump.outputs.title }}
+        run: |
+          git config user.name "vinax-release[bot]"
+          git config user.email "release@vinaxmusic.online"
+          git add package.json package-lock.json src/constants/version.ts src/constants/changelog.ts
+          git commit -m "release: $VERSION — $TITLE" -m "Automatic release from the merge of ${{ github.sha }} (.github/workflows/auto-release.yml)."
+          if ! git push origin HEAD:main; then
+            echo "::error title=Release not pushed::main refused the release commit. Either allow this workflow to push (Settings → Rules / Branch protection: let GitHub Actions bypass, or allow the token) or set a RELEASE_TOKEN secret with contents: write. Until then, bump the version by hand as README → How releases work describes."
+            exit 1
+          fi
+          echo "released=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Released::$VERSION — $TITLE ($(git rev-parse --short HEAD))"
+
+      # One signed APK and one GitHub Release per merge, built from the
+      # commit that carries the version (the release commit, or the merge
+      # itself when it bumped the version by hand or asked to skip).
+      - name: Build and publish the Android release
+        if: inputs.dry_run != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          REF=$(git rev-parse HEAD)
+          gh workflow run buildapk.yml --ref main
+          echo "::notice title=Android::Build Android APK dispatched on main ($REF); it publishes the release when the signing secrets are set."

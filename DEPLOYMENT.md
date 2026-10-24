@@ -8,16 +8,17 @@ Both applications live on `main`. There are no separate frontend and backend bra
 
 ```text
 branch ─► pull request ─► CI + E2E green ─► merge to main
-                                              ├─► static host builds frontend/  ─► site
-                                              ├─► Deploy Worker (backend/** changed) ─► vinax-api
-                                              └─► Build Android APK ─► repository release (when signing secrets are set)
+                                              ├─► Auto release ─► "release: x.y.z" commit on main
+                                              │        ├─► static host builds frontend/  ─► site
+                                              │        └─► Build Android APK ─► repository release (when signing secrets are set)
+                                              └─► Deploy Worker (backend/** changed) ─► vinax-api
 ```
 
 1. Open a pull request. `ci.yml` runs lint, typecheck, unit tests, build and the bundle budget for `frontend/`, and lint, typecheck, tests and a Worker dry-run for `backend/`. `e2e.yml` builds the app and runs the browser suite.
 2. Merge to `main`.
 3. The static host's Git integration builds and publishes the frontend. No workflow in this repository deploys the frontend.
 4. When the merge touched `backend/**`, `worker-deploy.yml` runs the backend gates again, verifies the deploy token, runs `wrangler deploy`, and polls `/api/status` until it answers `200`. The host's own Git build for the Worker may deploy the same commit as well; that is harmless.
-5. `buildapk.yml` builds the Android package on every push to `main` and publishes a signed release when the signing secrets are present. Pushing a `v*` tag runs `release.yml`, which refuses to publish without the release keystore.
+5. `auto-release.yml` bumps the version and the What's New card from the merge (unless the merge did it by hand) and pushes the release commit; it then dispatches `buildapk.yml`, which builds the Android package and publishes a signed release when the signing secrets are present. Pushing a `v*` tag runs `release.yml`, which refuses to publish without the release keystore.
 
 A pushed commit, green checks and a verified production are three separate milestones. Record which ones have actually happened.
 

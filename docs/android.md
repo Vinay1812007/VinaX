@@ -9,7 +9,7 @@ Two workflows build the package. Neither is run by hand on a developer machine.
 | | Build Android APK | Release APK |
 | --- | --- | --- |
 | File | `.github/workflows/buildapk.yml` | `.github/workflows/release.yml` |
-| Trigger | Every push to `main`, or a manual dispatch | A pushed tag matching `v*` |
+| Trigger | Dispatched by **Auto release** on every merge to `main`, or a manual dispatch | A pushed tag matching `v*` |
 | `versionCode` | `1000 + run number` | `1000000 + run number` |
 | `versionName` | `version` in `frontend/package.json` | The same |
 | `VITE_BUILD_NUMBER` for the web bundle | The `versionCode` | The raw run number, not the `versionCode` |
