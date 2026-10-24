@@ -4,7 +4,7 @@ import type { RegionInfo } from '@/types';
 import { KEYS } from '@/constants/storage-keys';
 import type { AudioQualityPref } from '@/services/audio/engine';
 import { guardedLocalStorage } from '@/services/storage/local';
-import { DEFAULT_TEMPLATE, normalizeTemplate, type TemplateId } from '@/utils/theme';
+import { DEFAULT_TEMPLATE, LEGACY_TEMPLATES, normalizeTemplate, type TemplateId } from '@/utils/theme';
 
 export type DiscoveryMode = 'familiar' | 'balanced' | 'discover';
 
@@ -242,7 +242,7 @@ export type SettingsData = typeof defaults;
 
 const SETTINGS_ENUMS: Partial<Record<keyof SettingsData, readonly string[]>> = {
   theme: ['dark', 'light', 'system', 'amoled', 'auto'],
-  template: ['aura', 'pulse', 'sangam', 'nocturne', 'marquee', 'vibe'],
+  template: ['lumen', 'verdant', 'monsoon', 'harbour', 'verse', 'onyx'],
   uiScale: ['sm', 'md', 'lg'],
   startPage: ['home', 'search', 'library', 'last'],
   density: ['comfortable', 'compact'],
@@ -280,7 +280,12 @@ function pickRegion(v: unknown): RegionInfo | null {
 export function pickSettings(incoming: unknown): Partial<SettingsData> {
   const out: Record<string, unknown> = {};
   if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) return out as Partial<SettingsData>;
-  const rec = incoming as Record<string, unknown>;
+  const rec: Record<string, unknown> = { ...(incoming as Record<string, unknown>) };
+  // 15.0 — a style id from 11.0–14.x (stored settings, an old backup) maps
+  // to its replacement before the enum check, so it is kept, not dropped.
+  if (typeof rec.template === 'string' && Object.prototype.hasOwnProperty.call(LEGACY_TEMPLATES, rec.template)) {
+    rec.template = LEGACY_TEMPLATES[rec.template];
+  }
   for (const key of Object.keys(defaults) as Array<keyof SettingsData>) {
     const want: unknown = defaults[key];
     const got = rec[key];

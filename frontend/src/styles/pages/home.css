@@ -455,6 +455,9 @@ a.vxh-card:hover { background: var(--vxh-tile-hover); }
   scrollbar-width: none;
 }
 .vx-home .vxh-chips::-webkit-scrollbar { display: none; }
+/* 15.0 — the same chips as a row under the greeting; off unless the app
+   style asks for it (templates/verdant.css, monsoon.css, onyx.css). */
+.vx-home .vxh-topchips { display: none; margin-bottom: 20px; }
 .vx-home .vxh-chip {
   position: relative;
   display: inline-flex;

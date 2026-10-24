@@ -1,0 +1,265 @@
+/* ============================================================================
+   Verdant — neutral black, flat panels, a green accent.
+
+   Black shell, a near-black workspace, grey raised panels and a bright
+   green accent with a sky-blue second colour. Nothing is glass. Artwork is
+   a 4px square; "Jump back in" is a two-column grid of grey tiles with the
+   artwork flush left; cards are plain with a green play circle on hover;
+   the sidebar is a rounded panel with the library in a second panel. The
+   mini player is a small tinted bar floating over a tab bar that fades out
+   of the page. Titles are a geometric sans, bold. Motion is a quick fade.
+   Design contract: docs/app-styles.md § Verdant.
+   ========================================================================= */
+
+/* ----------------------------------------------------------------- colour */
+html[data-template='verdant']:not([class*='fest-']) {
+  --ink-950: 0 0 0;
+  --ink-900: 18 18 18;
+  --ink-850: 24 24 24;
+  --ink-800: 40 40 40;
+  --ink-700: 58 58 58;
+  --ink-600: 100 100 100;
+  --ink-500: 160 160 160;
+  --ink-400: 179 179 179;
+  --ink-300: 200 200 200;
+  --ink-200: 230 230 230;
+  --ink-100: 255 255 255;
+}
+html.light[data-template='verdant']:not([class*='fest-']) {
+  --ink-950: 255 255 255;
+  --ink-900: 246 246 246;
+  --ink-850: 238 238 238;
+  --ink-800: 226 226 226;
+  --ink-700: 206 206 206;
+  --ink-600: 130 130 130;
+  --ink-500: 95 95 95;
+  --ink-400: 83 83 83;
+  --ink-300: 60 60 60;
+  --ink-200: 30 30 30;
+  --ink-100: 0 0 0;
+  --art: 140 140 140;
+}
+html[data-template='verdant']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+  --ember-600: 26 170 85;
+  --ember-500: 34 211 106;
+  --ember-400: 90 230 140;
+  --ember-300: 150 240 180;
+  --tide-500: 80 155 245;
+  --tide-400: 130 185 255;
+  --vx-on-accent: #07140b;
+  --art: 80 80 80;
+}
+html.light[data-template='verdant']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+  --ember-600: 12 96 48;
+  --ember-500: 17 122 62;
+  --ember-400: 14 108 54;
+  --ember-300: 20 96 50;
+  --tide-500: 20 90 200;
+  --tide-400: 16 76 176;
+  --vx-on-accent: #fff;
+  --art: 140 140 140;
+}
+
+/* ------------------------------------------------------------------ dials */
+html[data-template='verdant'] {
+  --tpl-r-art: 4px;
+  --tpl-r-art-sm: 4px;
+  --tpl-r-control: 999px;
+  --tpl-r-play: 50%;
+  --tpl-r-play-sm: 50%;
+  --tpl-r-row: 4px;
+  --tpl-r-tile: 4px;
+  --tpl-r-input: 999px;
+  --tpl-r-deck: 0px;
+  --tpl-r-mini: 6px;
+  --tpl-r-np-art: 8px;
+  --vx-font-display: 'Figtree', 'Manrope', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --vx-type-page: clamp(1.75rem, 3.4vw, 3rem);
+  --vx-type-section: 1.25rem;
+  --tpl-title-weight: 800;
+  --tpl-title-tracking: -0.03em;
+  --tpl-section-weight: 700;
+  --tpl-section-tracking: -0.02em;
+  --tpl-card-title-weight: 700;
+  --tpl-enter: tplFade;
+  --tpl-enter-dur: 160ms;
+  --tpl-press: 0.95;
+  --vx-radius-panel: 8px;
+  --vx-radius-card: 6px;
+  --vx-shelf-gap: 32px;
+  --vx-card-gap: 16px;
+  --vx-deck-gap: 0px;
+  --vx-player-h: 80px;
+  --vx-art-shadow: none;
+  --vx-deck-shadow: none;
+  --transition-fast: 110ms var(--ease-calm);
+  --transition-normal: 150ms var(--ease-calm);
+}
+/* Flat: opaque materials whatever colours are on (a festival skin repaints
+   the inks; a see-through bar with no blur would let page text through). */
+html[data-template='verdant'] {
+  --vx-mat-thin: rgb(var(--ink-950));
+  --vx-mat-regular: rgb(var(--ink-850));
+  --vx-mat-chrome: rgb(var(--ink-950));
+  --vx-mat-thick: rgb(var(--ink-850));
+  --vx-mat-specular: transparent;
+  --vx-mat-art: 0;
+}
+/* 13.2 — the light glass rule in base.css has specificity (0,3,1); the
+   second selector matches it and wins by order, the first covers a festival
+   skin where that rule stands down. */
+html.light[data-template='verdant'],
+html.light[data-template='verdant']:not([class*='fest-']) {
+  --vx-mat-thin: rgb(var(--ink-950));
+  --vx-mat-regular: rgb(var(--ink-950));
+  --vx-mat-chrome: rgb(var(--ink-950));
+  --vx-mat-thick: rgb(var(--ink-950));
+}
+html[data-template='verdant'] :is(.vx-mat-thin, .vx-mat-regular, .vx-mat-chrome, .vx-mat-thick) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+@media (max-width: 767px) {
+  html[data-template='verdant'] { --vx-shelf-gap: 28px; --vx-card-gap: 12px; }
+}
+
+/* ------------------------------------------------------------------ shell */
+html[data-template='verdant']:not([class*='fest-']) .vx-shell { background: rgb(var(--ink-950)); }
+/* The page opens on a wash of the playing artwork's colour, then the grey. */
+html[data-template='verdant']:not([class*='fest-']) .vx-workspace {
+  background:
+    linear-gradient(180deg, rgb(var(--art) / 0.4), rgb(var(--art) / 0.12) 200px, transparent 420px) local,
+    rgb(var(--ink-900));
+}
+html.light[data-template='verdant']:not([class*='fest-']) .vx-workspace {
+  background:
+    linear-gradient(180deg, rgb(var(--art) / 0.24), rgb(var(--art) / 0.08) 200px, transparent 420px) local,
+    rgb(var(--ink-900));
+}
+html[data-template='verdant'] .vx-sidebar { box-shadow: none; }
+@media (min-width: 768px) {
+  html[data-template='verdant'] .vx-sidebar { margin: 8px 0 0 8px; border-radius: 8px 8px 0 0; background: rgb(var(--ink-900)); }
+  html[data-template='verdant'] .vx-workspace { margin: 8px 8px 0 8px; border-radius: 8px 8px 0 0; }
+}
+html[data-template='verdant'] .vx-library { background: rgb(var(--ink-900)); border-radius: 8px; margin: 8px 8px 0; }
+html[data-template='verdant'] .vx-brand { font-family: var(--vx-font-display); font-size: 21px; font-weight: 800; letter-spacing: -0.04em; }
+/* Navigation is type, not shapes: the active row is simply white. */
+html[data-template='verdant'] .vx-nav-link { min-height: 42px; border-radius: 6px; font-weight: 700; color: rgb(var(--ink-400)); }
+html[data-template='verdant'] .vx-nav-link:hover { background: transparent; color: rgb(var(--ink-100)); }
+html[data-template='verdant'] :is(.vx-nav-active, .vx-nav-active:hover) { background: transparent; color: rgb(var(--ink-100)); box-shadow: none; font-weight: 800; }
+html[data-template='verdant'] .vx-lib-row { min-height: 56px; border-radius: 4px; }
+html[data-template='verdant'] :is(.vx-lib-row:hover, .vx-track-row:hover) { background: rgb(var(--ink-100) / 0.08); }
+html[data-template='verdant'] .vx-lib-row.is-active { background: rgb(var(--ink-100) / 0.12); }
+html[data-template='verdant'] .vx-lib-row.is-active .vx-lib-title { color: rgb(var(--ember-400)); }
+html[data-template='verdant'] .vx-topbar.is-scrolled { box-shadow: none; }
+
+/* Phone tab bar: no box — it fades up out of the page; plain icons. */
+html[data-template='verdant'] .vx-dock {
+  background-color: transparent;
+  background-image: linear-gradient(180deg, rgb(var(--ink-950) / 0.86), rgb(var(--ink-950)) 34%);
+  box-shadow: none;
+  padding-top: 4px;
+}
+html[data-template='verdant'] .vx-dock-pill { height: 28px; border-radius: 0; }
+html[data-template='verdant'] .vx-dock-active .vx-dock-pill { background: transparent; color: rgb(var(--ink-100)); }
+html[data-template='verdant'] :is(.vx-dock-active, .vx-dock-active:hover) { color: rgb(var(--ink-100)); font-weight: 600; }
+html[data-template='verdant'] .vx-dock-item { gap: 2px; min-height: 56px; font-size: 10px; font-weight: 500; color: rgb(var(--ink-400)); }
+
+/* Mini player: a small bar tinted with the artwork, floating above the tabs. */
+html[data-template='verdant']:not([class*='fest-']) .np-mini {
+  --mat-tint: none;
+  background-color: color-mix(in srgb, rgb(var(--art)) 42%, rgb(var(--ink-800)));
+  box-shadow: none;
+}
+html[data-template='verdant'] .np-mini .np-mini-play { background: transparent; color: rgb(var(--ink-100)); }
+html[data-template='verdant'] .np-mini-progress { left: 8px; right: 8px; background: rgb(var(--ink-100) / 0.25); }
+html[data-template='verdant'] .np-mini-progress > i { background: rgb(var(--ink-100)); }
+html[data-template='verdant'] .np-mini-thumb, html[data-template='verdant'] .np-mini-thumb img { border-radius: 4px; }
+
+/* Player: a solid bar edge to edge, a white round play. */
+html[data-template='verdant'] .vx-deck { box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='verdant'] .vx-deck::before,
+html[data-template='verdant'] .vx-deck::after { display: none; }
+html[data-template='verdant'] .np-play-desktop { width: 36px; height: 36px; background: rgb(var(--ink-100)); color: rgb(var(--ink-950)); box-shadow: none; }
+html[data-template='verdant'] .np-play-desktop:hover { background: rgb(var(--ink-100)); transform: scale(1.06); }
+
+/* ------------------------------------------------------- pages and cards */
+html[data-template='verdant'] .vx-page-header { margin-bottom: 22px; }
+html[data-template='verdant'] .vx-section-header { margin-bottom: 10px; }
+html[data-template='verdant'] .vx-section-link { color: rgb(var(--ink-400)); font-size: 13px; font-weight: 700; padding-inline: 4px; }
+html[data-template='verdant'] .vx-section-link:hover { background: transparent; color: rgb(var(--ink-100)); text-decoration: underline; text-underline-offset: 3px; }
+/* A card is a grey panel that lights up whole; a green play circle appears. */
+html[data-template='verdant'] .vx-media-card { padding: 12px; border-radius: 6px; background: rgb(var(--ink-100) / 0.05); transition: background-color 150ms var(--ease-calm); }
+@media (hover: hover) {
+  html[data-template='verdant'] .vx-media-card:hover { background: rgb(var(--ink-100) / 0.1); }
+  html[data-template='verdant'] .vx-media-card:hover .vx-media-art { transform: none; }
+}
+html[data-template='verdant'] .vx-media-title { margin-top: 10px; font-size: 14.5px; }
+html[data-template='verdant'] .card-play { width: 48px; height: 48px; box-shadow: 0 8px 16px -6px rgb(0 0 0 / 0.6); }
+html[data-template='verdant'] :is(.vx-play-fab, .vx-np-play) { box-shadow: none; }
+html[data-template='verdant'] .vx-np-play { background: rgb(var(--ink-100)); color: rgb(var(--ink-950)); width: 64px; height: 64px; }
+/* Chips: grey capsules; the chosen one is white. */
+html[data-template='verdant'] :is(.vx-chip-idle, .vxh-chip) { background: rgb(var(--ink-100) / 0.1); font-weight: 600; }
+html[data-template='verdant'] .vx-chip-on { background: rgb(var(--ember-500)); border-color: rgb(var(--ember-500)); color: var(--vx-on-accent); }
+html[data-template='verdant'] .vx-track-row { min-height: 56px; }
+html[data-template='verdant'] .vx-track-row.is-current .vx-track-title { color: rgb(var(--ember-400)); }
+html[data-template='verdant'] :is(.vxh-tile, .vxh-card) { box-shadow: none; }
+html[data-template='verdant'] .vxh-hero { border-radius: 8px; box-shadow: none; }
+html[data-template='verdant'] :is(.btn-primary, .btn-secondary, .btn-premium) { font-weight: 700; }
+
+/* Now Playing: the artwork's colour falling to the canvas, not a photo. */
+html[data-template='verdant']:not([class*='fest-']) .vx-np-bg-art { display: none; }
+html[data-template='verdant']:not([class*='fest-']) .vx-np-bg-wash { background: linear-gradient(180deg, color-mix(in srgb, var(--np-warm, rgb(var(--art))) 70%, rgb(var(--ink-900))), rgb(var(--ink-900)) 82%); }
+html[data-template='verdant']:not([class*='fest-']) .vx-np-bg-scrim:not(.is-canvas) { background: none; }
+html[data-template='verdant'] .vx-np-art-img { box-shadow: 0 18px 44px -18px rgb(0 0 0 / 0.7); }
+html[data-template='verdant'] .vx-np-title { font-weight: 700; letter-spacing: -0.01em; }
+html[data-template='verdant'] .vx-np-artist { color: rgb(var(--ink-400)); font-weight: 500; }
+html[data-template='verdant'] .vx-np-tabs [role='tab'] { border-radius: 999px; }
+
+/* ---------------------------------------------------------- layout identity */
+/* Verdant is the GRID: Home is a filter row and a two-column grid of tiles.
+   - Top chips: a filter row (All · languages · Moods …) right under the
+     greeting, grey capsules, the first one white.
+   - Hero: a compact band washed in the artwork colour, no artwork on phones.
+   - Jump back in: two columns of 56px tiles, grey fill, the artwork flush
+     left with no gap, 4px corners.
+   - Tab bar: fades out of the page, white active icon.
+   - Mini player: a tinted bar floating 8px above the tabs. */
+html[data-template='verdant'] .vx-home .vxh-topchips { display: flex; margin-top: -8px; }
+html[data-template='verdant'] .vx-home .vxh-explore .vxh-chips { display: none; }
+html[data-template='verdant'] .vx-home .vxh-topchips .vxh-chip:first-child { background: rgb(var(--ink-100)); color: rgb(var(--ink-950)); }
+@media (max-width: 767px) {
+  html[data-template='verdant'] .vx-home .vx-hero.vxh-hero {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'kicker' 'title' 'desc' 'actions';
+    gap: 4px;
+    padding: 14px 14px 12px;
+    border-radius: 6px;
+  }
+  html[data-template='verdant'] .vx-home .vxh-hero-art { display: none; }
+  html[data-template='verdant'] .vx-home .vxh-hero-title { font-size: 22px; line-height: 1.1; }
+  html[data-template='verdant'] .vx-home .vxh-hero-desc { margin-top: 4px; font-size: 13px; }
+  html[data-template='verdant'] .vx-home .vxh-hero-actions { margin-top: 10px; gap: 8px; }
+  html[data-template='verdant'] .vx-home .vxh-hero .vx-play-fab.is-lg { width: 48px; height: 48px; }
+}
+html[data-template='verdant'] .vx-home .vxh-hero-kicker { font-size: 12px; font-weight: 700; color: rgb(var(--ink-300)); }
+html[data-template='verdant'] .vx-home .vxh-tiles,
+html[data-template='verdant'] .vx-home .vxh-jump .vxh-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@container jump (min-width: 760px) {
+  html[data-template='verdant'] .vx-home .vxh-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+}
+html[data-template='verdant'] .vx-home .vxh-tile {
+  min-height: 56px;
+  gap: 10px;
+  padding: 0 8px 0 0;
+  border-radius: 4px;
+  background: rgb(var(--ink-100) / 0.1);
+  box-shadow: none;
+}
+html[data-template='verdant'] .vx-home .vxh-tile:hover { background: rgb(var(--ink-100) / 0.18); }
+html[data-template='verdant'] .vx-home .vxh-tile img { width: 56px; height: 56px; border-radius: 4px 0 0 4px; }
+html[data-template='verdant'] .vx-home .vxh-tile-title { font-size: 13.5px; font-weight: 700; }
+html[data-template='verdant'] .vx-home .vxh-tile .vxh-disc { display: none; }
+html[data-template='verdant'] .vx-home .vxh-head h2 { font-size: 1.375rem; }
+/* Tab bar: the label small under a plain icon (above). Mini player: square
+   4px art (above). Now Playing: title in one weight (above). */

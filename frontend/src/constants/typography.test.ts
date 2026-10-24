@@ -19,7 +19,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const read = (p: string): string => readFileSync(p, 'utf8');
-const STYLES = ['aura', 'pulse', 'sangam', 'nocturne', 'marquee', 'vibe'] as const;
+const STYLES = ['lumen', 'verdant', 'monsoon', 'harbour', 'verse', 'onyx'] as const;
 
 describe('the app text is in the style face, never the device font', () => {
   it('#root sets no font-family; body carries the boot face', () => {
@@ -42,10 +42,11 @@ describe('the app text is in the style face, never the device font', () => {
 
 describe('display faces', () => {
   const FACES: Record<string, { file: string; licence: string }> = {
+    Inter: { file: 'inter-var.woff2', licence: 'inter-OFL.txt' },
+    Figtree: { file: 'figtree-var.woff2', licence: 'figtree-OFL.txt' },
     Archivo: { file: 'archivo-var.woff2', licence: 'archivo-OFL.txt' },
-    Eczar: { file: 'eczar-var.woff2', licence: 'eczar-OFL.txt' },
-    'Big Shoulders Display': { file: 'big-shoulders-var.woff2', licence: 'big-shoulders-OFL.txt' },
     'Baloo 2': { file: 'baloo2-var.woff2', licence: 'baloo2-OFL.txt' },
+    Roboto: { file: 'roboto-var.woff2', licence: 'roboto-OFL.txt' },
   };
 
   it('every self-hosted face is declared, shipped and licensed (SIL OFL)', () => {
@@ -59,7 +60,7 @@ describe('display faces', () => {
   });
 
   it('each style speaks in its own display face', () => {
-    const want: Record<string, string> = { pulse: 'Archivo', sangam: 'Eczar', nocturne: 'Bricolage Grotesque', marquee: 'Big Shoulders Display', vibe: 'Baloo 2', aura: 'Manrope' };
+    const want: Record<string, string> = { lumen: 'Inter', verdant: 'Figtree', monsoon: 'Manrope', harbour: 'Archivo', verse: 'Baloo 2', onyx: 'Roboto' };
     for (const [id, face] of Object.entries(want)) {
       const css = read(`src/styles/templates/${id}.css`);
       expect(/--vx-font-display:\s*'([^']+)'/.exec(css)?.[1], id).toBe(face);
@@ -73,8 +74,8 @@ describe('display faces', () => {
 });
 
 describe('flat styles stay opaque in the light theme', () => {
-  it('Pulse and Marquee match the light glass rule specificity for all four materials', () => {
-    for (const id of ['pulse', 'marquee']) {
+  it('Verdant, Harbour and Onyx match the light glass rule specificity for all four materials', () => {
+    for (const id of ['verdant', 'harbour', 'onyx']) {
       const css = read(`src/styles/templates/${id}.css`);
       // The selector also opens the style's colour block: find the one that sets the materials.
       const blocks = [...css.matchAll(new RegExp(`html\\.light\\[data-template='${id}'\\]:not\\(\\[class\\*='fest-'\\]\\)\\s*\\{([^}]*)\\}`, 'g'))].map((m) => m[1]);

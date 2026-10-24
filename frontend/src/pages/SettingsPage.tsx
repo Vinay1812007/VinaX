@@ -471,7 +471,7 @@ export default function SettingsPage() {
           </Section>
 
           <Section title="Appearance" id="appearance" lede="App style, language, theme, colour and size.">
-            <Block label="App style" note="Six complete looks: colours, type, shapes, the navigation and the player all change. Your music, library and settings stay as they are." keywords="template look design layout skin ui ux aura pulse sangam nocturne marquee vibe redesign appearance">
+            <Block label="App style" note="Six complete looks: colours, type, shapes, the navigation and the player all change. Your music, library and settings stay as they are." keywords="template look design layout skin ui ux lumen verdant monsoon harbour verse onyx aura pulse sangam nocturne marquee vibe redesign appearance">
               <TemplatePicker value={s.template} onChange={s.setTemplate} />
             </Block>
             <Row stack label="App language" keywords="display language interface">

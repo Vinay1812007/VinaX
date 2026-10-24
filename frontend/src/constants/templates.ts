@@ -9,6 +9,11 @@
  * utils/theme.ts (first-load code); this module is the picker's copy and is
  * only loaded with Settings.
  *
+ * 15.0 — the six styles were replaced (docs/app-styles.md). Each is modelled
+ * on the design language of one kind of music app a listener already knows,
+ * in VinaX's own names and colours; the ids of the 11.0–14.x styles map to
+ * their replacements in utils/theme.ts (LEGACY_TEMPLATES).
+ *
  * A template sets a default accent; the accent picker still wins when the
  * listener has chosen one, and a festival skin repaints the colours of any
  * template while it is on (the layout stays).
@@ -30,46 +35,46 @@ export interface TemplateOption {
 
 export const TEMPLATE_OPTIONS: readonly TemplateOption[] = [
   {
-    id: 'aura',
-    label: 'Aura',
-    tagline: 'Clean glass and large titles',
-    traits: 'Cool graphite, an iris accent, big left-aligned titles, frosted bars, soft rounded artwork.',
-    swatch: { canvas: '#101116', raised: '#202329', accent: '#6e8eff', second: '#40d6be' },
+    id: 'lumen',
+    label: 'Lumen',
+    tagline: 'Clean, editorial, big titles',
+    traits: 'Black or white, a crimson accent, large section titles with a chevron, 8px artwork, a floating frosted mini player.',
+    swatch: { canvas: '#0f0f11', raised: '#222226', accent: '#e0243f', second: '#ff7a3d' },
   },
   {
-    id: 'pulse',
-    label: 'Pulse',
-    tagline: 'Dense, flat and fast',
-    traits: 'Neutral black, a volt accent, compact bold titles, tight corners, a solid bar player, no glass.',
-    swatch: { canvas: '#121212', raised: '#242424', accent: '#c8f53c', second: '#a882ff' },
+    id: 'verdant',
+    label: 'Verdant',
+    tagline: 'Black panels and a green accent',
+    traits: 'Neutral black, flat grey panels, a filter row on Home, a two-column tile grid, square artwork, a tinted mini player.',
+    swatch: { canvas: '#121212', raised: '#282828', accent: '#22d36a', second: '#509bf5' },
   },
   {
-    id: 'sangam',
-    label: 'Sangam',
-    tagline: 'Warm, roomy and colourful',
-    traits: 'Plum and marigold, warm serif titles, big rounded cards, colourful tiles, a floating tab bar.',
-    swatch: { canvas: '#130e16', raised: '#251c2a', accent: '#ffa42e', second: '#26c6ba' },
+    id: 'monsoon',
+    label: 'Monsoon',
+    tagline: 'Charcoal, teal and saffron',
+    traits: 'A teal band and a language row on Home, a wide banner hero, rounded tiles, a solid tab bar, an edge-to-edge mini player.',
+    swatch: { canvas: '#1b1e21', raised: '#262a2e', accent: '#2cc6a8', second: '#ff9f1c' },
   },
   {
-    id: 'nocturne',
-    label: 'Nocturne',
-    tagline: 'Midnight gradients and glow',
-    traits: 'Deep indigo, an orchid accent, lighter titles, gradient headers, glowing play buttons.',
-    swatch: { canvas: '#0e0d22', raised: '#201d40', accent: '#b484ff', second: '#46d2ff' },
+    id: 'harbour',
+    label: 'Harbour',
+    tagline: 'Deep navy, tall banners',
+    traits: 'Navy black, a cyan accent, square corners, a tall banner hero with capitals, hairline rows, a solid bar player.',
+    swatch: { canvas: '#0e1720', raised: '#17222d', accent: '#25c7d5', second: '#4f8df5' },
   },
   {
-    id: 'marquee',
-    label: 'Marquee',
-    tagline: 'Black canvas, picture first',
-    traits: 'True black, an ice accent, tall cinema-sign titles, wide picture cards, square corners.',
-    swatch: { canvas: '#0c0c0d', raised: '#222225', accent: '#2ed0f0', second: '#ff7a59' },
+    id: 'verse',
+    label: 'Verse',
+    tagline: 'Lyrics first, coral and capsules',
+    traits: 'Artwork bleeding over charcoal, a coral accent, a lyric line in the hero, capsule chips, a floating capsule player, springy motion.',
+    swatch: { canvas: '#141418', raised: '#1f1f26', accent: '#ff4d6d', second: '#ffb84d' },
   },
   {
-    id: 'vibe',
-    label: 'Vibe',
-    tagline: 'Immersive, bubbly and bold',
-    traits: 'Deep teal, a coral accent, round bubbly titles, extra-round shapes, a capsule player.',
-    swatch: { canvas: '#0a1619', raised: '#182c31', accent: '#ff7868', second: '#ffcc48' },
+    id: 'onyx',
+    label: 'Onyx',
+    tagline: 'True black, white play, red marks',
+    traits: 'Black, white as the accent, a row of mood chips on Home, overlines and "More" pills, square artwork, a full-width mini player.',
+    swatch: { canvas: '#030303', raised: '#111111', accent: '#ffffff', second: '#ff2b3f' },
   },
 ];
 

@@ -1,0 +1,261 @@
+/* ============================================================================
+   Onyx — true black, white play, a red second colour, mood chips.
+
+   Black with white as the accent (play, progress, the chosen chip) and red
+   as the second colour (progress on the mini player, live marks). Nothing
+   is glass. Home opens on a row of mood chips; every section has a small
+   overline, a big title and a "More" pill; "Jump back in" is a column of
+   quick-pick rows with square 4px artwork. The tab bar is solid black with
+   filled white icons; the mini player is a full-width bar with a thin red
+   progress on its top edge. The full-screen player keeps its three tabs in
+   capitals with a white underline. Titles are a plain, natural-tracking
+   sans. Motion is nearly absent.
+   Design contract: docs/app-styles.md § Onyx.
+   ========================================================================= */
+
+/* ----------------------------------------------------------------- colour */
+html[data-template='onyx']:not([class*='fest-']) {
+  --ink-950: 0 0 0;
+  --ink-900: 3 3 3;
+  --ink-850: 10 10 10;
+  --ink-800: 17 17 17;
+  --ink-700: 40 40 40;
+  --ink-600: 96 96 96;
+  --ink-500: 158 158 158;
+  --ink-400: 176 176 176;
+  --ink-300: 200 200 200;
+  --ink-200: 232 232 232;
+  --ink-100: 255 255 255;
+  --vx-mesh-ember: 0;
+  --vx-mesh-tide: 0;
+}
+html.light[data-template='onyx']:not([class*='fest-']) {
+  --ink-950: 255 255 255;
+  --ink-900: 249 249 249;
+  --ink-850: 242 242 242;
+  --ink-800: 232 232 232;
+  --ink-700: 210 210 210;
+  --ink-600: 128 128 128;
+  --ink-500: 96 96 96;
+  --ink-400: 84 84 84;
+  --ink-300: 60 60 60;
+  --ink-200: 30 30 30;
+  --ink-100: 3 3 3;
+  --art: 150 150 150;
+}
+/* White is the accent; red is the second colour. */
+html[data-template='onyx']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+  --ember-600: 220 220 220;
+  --ember-500: 255 255 255;
+  --ember-400: 240 240 240;
+  --ember-300: 230 230 230;
+  --tide-500: 255 43 63;
+  --tide-400: 255 110 124;
+  --vx-on-accent: #000;
+  --art: 90 90 90;
+}
+html.light[data-template='onyx']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+  --ember-600: 0 0 0;
+  --ember-500: 15 15 15;
+  --ember-400: 40 40 40;
+  --ember-300: 60 60 60;
+  --tide-500: 196 17 31;
+  --tide-400: 176 14 28;
+  --vx-on-accent: #fff;
+  --art: 150 150 150;
+}
+
+/* ------------------------------------------------------------------ dials */
+html[data-template='onyx'] {
+  --tpl-r-art: 4px;
+  --tpl-r-art-sm: 4px;
+  --tpl-r-control: 8px;
+  --tpl-r-play: 50%;
+  --tpl-r-play-sm: 50%;
+  --tpl-r-row: 4px;
+  --tpl-r-tile: 4px;
+  --tpl-r-input: 999px;
+  --tpl-r-deck: 0px;
+  --tpl-r-mini: 0px;
+  --tpl-r-np-art: 4px;
+  --vx-font-display: 'Roboto', 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --vx-type-page: clamp(1.75rem, 3.2vw, 2.5rem);
+  --vx-type-section: 1.375rem;
+  --tpl-title-weight: 700;
+  --tpl-title-tracking: -0.01em;
+  --tpl-section-weight: 700;
+  --tpl-section-tracking: -0.005em;
+  --tpl-card-title-weight: 500;
+  --tpl-enter: tplFade;
+  --tpl-enter-dur: 120ms;
+  --tpl-press: 0.97;
+  --vx-radius-panel: 0px;
+  --vx-radius-card: 4px;
+  --vx-shelf-gap: 36px;
+  --vx-card-gap: 16px;
+  --vx-deck-gap: 0px;
+  --vx-player-h: 72px;
+  --vx-art-shadow: none;
+  --vx-deck-shadow: none;
+  --transition-fast: 90ms linear;
+  --transition-normal: 130ms linear;
+}
+/* Flat: opaque materials whatever colours are on. */
+html[data-template='onyx'] {
+  --vx-mat-thin: rgb(var(--ink-950));
+  --vx-mat-regular: rgb(var(--ink-850));
+  --vx-mat-chrome: rgb(var(--ink-950));
+  --vx-mat-thick: rgb(var(--ink-850));
+  --vx-mat-specular: transparent;
+  --vx-mat-art: 0;
+}
+/* 13.2 — the light glass rule in base.css is (0,3,1); match it and win by order. */
+html.light[data-template='onyx'],
+html.light[data-template='onyx']:not([class*='fest-']) {
+  --vx-mat-thin: rgb(var(--ink-950));
+  --vx-mat-regular: rgb(var(--ink-950));
+  --vx-mat-chrome: rgb(var(--ink-950));
+  --vx-mat-thick: rgb(var(--ink-950));
+}
+html[data-template='onyx'] :is(.vx-mat-thin, .vx-mat-regular, .vx-mat-chrome, .vx-mat-thick) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html[data-template='onyx'] body { letter-spacing: 0; }
+
+/* ------------------------------------------------------------------ shell */
+html[data-template='onyx']:not([class*='fest-']) .vx-shell { background: rgb(var(--ink-950)); }
+html[data-template='onyx']:not([class*='fest-']) .vx-workspace { background: rgb(var(--ink-900)); }
+@media (min-width: 768px) {
+  html[data-template='onyx'] .vx-sidebar { margin: 0; max-height: 100dvh; border-radius: 0; box-shadow: inset -1px 0 0 var(--vx-border); }
+  html[data-template='onyx'] .vx-workspace { margin: 0; }
+}
+html[data-template='onyx'] .vx-library { background: transparent; border-radius: 0; margin: 10px 0 0; box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='onyx'] .vx-brand { font-family: var(--vx-font-display); font-weight: 700; letter-spacing: -0.02em; }
+html[data-template='onyx'] .vx-nav-link { min-height: 44px; border-radius: 8px; font-weight: 500; color: rgb(var(--ink-100)); }
+html[data-template='onyx'] .vx-nav-link:hover { background: rgb(var(--ink-100) / 0.08); }
+html[data-template='onyx'] :is(.vx-nav-active, .vx-nav-active:hover) { background: rgb(var(--ink-100) / 0.12); color: rgb(var(--ink-100)); box-shadow: none; font-weight: 700; }
+html[data-template='onyx'] :is(.vx-lib-row:hover, .vx-track-row:hover) { background: rgb(var(--ink-100) / 0.08); }
+html[data-template='onyx'] .vx-topbar.is-scrolled { box-shadow: inset 0 -1px 0 var(--vx-border); }
+
+/* Phone tab bar: solid black, a filled white icon when active. */
+html[data-template='onyx'] .vx-dock { box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='onyx'] .vx-dock-pill { height: 28px; border-radius: 0; }
+html[data-template='onyx'] .vx-dock-active .vx-dock-pill { background: transparent; color: rgb(var(--ink-100)); }
+html[data-template='onyx'] :is(.vx-dock-active, .vx-dock-active:hover) { color: rgb(var(--ink-100)); font-weight: 500; }
+html[data-template='onyx'] .vx-dock-item { gap: 3px; min-height: 56px; font-size: 10px; font-weight: 500; }
+
+/* Mini player: a full-width bar, red progress on its top edge, white glyphs. */
+@media (max-width: 1023px) {
+  html[data-template='onyx'] [data-tour='player'] { padding: 0; }
+}
+html[data-template='onyx'] .np-mini { --mat-tint: none; border-radius: 0; box-shadow: inset 0 -1px 0 var(--vx-border); }
+html[data-template='onyx'] .np-mini-progress { top: 0; bottom: auto; left: 0; right: 0; border-radius: 0; background: rgb(var(--ink-100) / 0.14); }
+html[data-template='onyx'] .np-mini-progress > i { border-radius: 0; background: rgb(var(--tide-500)); }
+html[data-template='onyx'] .np-mini .np-mini-play { background: transparent; color: rgb(var(--ink-100)); }
+html[data-template='onyx'] .np-mini-thumb, html[data-template='onyx'] .np-mini-thumb img { border-radius: 4px; }
+
+/* Player deck: a solid bar across the screen, red progress hairline. */
+html[data-template='onyx'] .vx-deck { box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='onyx'] .vx-deck::before,
+html[data-template='onyx'] .vx-deck::after { display: none; }
+html[data-template='onyx'] .np-play-desktop { background: transparent; color: rgb(var(--ink-100)); box-shadow: none; width: 48px; height: 48px; }
+html[data-template='onyx'] .np-play-desktop svg { width: 28px; height: 28px; }
+html[data-template='onyx'] .np-play-desktop:hover { background: rgb(var(--ink-100) / 0.1); transform: none; }
+
+/* ------------------------------------------------------- pages and cards */
+/* Section heads: an overline above, a "More" pill at the right. */
+html[data-template='onyx'] :is(.vx-section-header, .vxh-head) { align-items: center; }
+html[data-template='onyx'] .vx-section-link { box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.22); color: rgb(var(--ink-100)); font-size: 12px; font-weight: 500; border-radius: 999px; padding-inline: 14px; min-height: 32px; }
+html[data-template='onyx'] .vx-section-link:hover { background: rgb(var(--ink-100) / 0.1); color: rgb(var(--ink-100)); }
+html[data-template='onyx'] .vx-section-header p { margin: 0 0 2px; font-size: 12px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: rgb(var(--ink-400)); }
+html[data-template='onyx'] .vx-media-title { margin-top: 8px; font-size: 14px; }
+@media (hover: hover) {
+  html[data-template='onyx'] .vx-media-card:hover .vx-media-art { transform: none; }
+  html[data-template='onyx'] .vx-media-card:hover .vx-media-art img { filter: brightness(0.7); }
+}
+/* Play is white on black. */
+html[data-template='onyx'] :is(.vx-play-fab, .vx-np-play, .card-play) { background: rgb(var(--ink-100)); color: rgb(var(--ink-950)); box-shadow: none; }
+html[data-template='onyx'] :is(.vx-play-fab, .vx-np-play, .card-play):hover { background: rgb(var(--ink-200)); }
+/* Chips: outlined grey capsules; the chosen one inverts to white. */
+html[data-template='onyx'] :is(.vx-chip-idle, .vxh-chip) { border-radius: 8px; background: rgb(var(--ink-100) / 0.1); box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.1); font-weight: 500; }
+html[data-template='onyx'] .vx-chip-on { border-radius: 8px; background: rgb(var(--ink-100)); border-color: rgb(var(--ink-100)); color: rgb(var(--ink-950)); }
+html[data-template='onyx'] .vx-track-row.is-current { background: rgb(var(--ink-100) / 0.08); }
+html[data-template='onyx'] .vx-track-row.is-current::before { display: none; }
+html[data-template='onyx'] .vxh-tile { background: rgb(var(--ink-100) / 0.08); }
+html[data-template='onyx'] .vxh-tile img { border-radius: 0; }
+html[data-template='onyx'] .vxh-hero { border-radius: 8px; box-shadow: none; background: rgb(var(--ink-850)); }
+html[data-template='onyx'] :is(.btn-primary, .btn-premium, .btn-secondary) { border-radius: 999px; font-weight: 500; }
+html[data-template='onyx'] .vx-np-tabs [role='tab'] { border-radius: 0; font-size: 12px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; }
+html[data-template='onyx'] .vx-np-tabs [role='tab'][aria-selected='true'] { background: transparent; color: rgb(var(--ink-100)); box-shadow: inset 0 -2px 0 rgb(var(--ink-100)); }
+
+/* Now Playing: black, the artwork's light only at the top; square picture. */
+html[data-template='onyx']:not([class*='fest-']) .vx-np-bg-art { display: none; }
+html[data-template='onyx']:not([class*='fest-']) .vx-np-bg-wash { background: linear-gradient(180deg, color-mix(in srgb, var(--np-warm, rgb(var(--art))) 36%, rgb(var(--ink-950))), rgb(var(--ink-950)) 50%); }
+html[data-template='onyx']:not([class*='fest-']) .vx-np-bg-scrim:not(.is-canvas) { background: none; }
+html[data-template='onyx'] .vx-np-art-img { box-shadow: none; }
+html[data-template='onyx'] .vx-np-play { width: 64px; height: 64px; }
+html[data-template='onyx'] .vx-np-title { font-weight: 700; letter-spacing: 0; }
+html[data-template='onyx'] .vx-np-artist { color: rgb(var(--ink-400)); font-weight: 400; }
+
+/* ---------------------------------------------------------- layout identity */
+/* Onyx is QUICK PICKS: a chip row, then lists.
+   - Top chips: the mood/language row right under the top bar on Home,
+     outlined grey, the first one white.
+   - Hero: hidden on phones; the chips and the quick picks take its place.
+   - Jump back in: one column of 56px rows, square 4px art, no fills, a
+     kebab mark at the right.
+   - Section heads: overline + title + "More" pill (above).
+   - Tab bar: solid black, filled white icon (above).
+   - Mini player: a full-width bar, red progress on top (above). */
+html[data-template='onyx'] .vx-home .vxh-topchips { display: flex; margin-top: -10px; }
+html[data-template='onyx'] .vx-home .vxh-explore .vxh-chips { display: none; }
+html[data-template='onyx'] .vx-home .vxh-topchips .vxh-chip:first-child { background: rgb(var(--ink-100)); box-shadow: none; color: rgb(var(--ink-950)); }
+@media (max-width: 767px) {
+  html[data-template='onyx'] .vx-home .vx-hero.vxh-hero {
+    grid-template-columns: 64px minmax(0, 1fr);
+    grid-template-areas: 'art kicker' 'art title' 'actions actions';
+    gap: 0 12px;
+    padding: 0 0 10px;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: inset 0 -1px 0 var(--vx-border);
+  }
+  html[data-template='onyx'] .vx-home .vxh-hero::before { display: none; }
+  html[data-template='onyx'] .vx-home .vxh-hero-wash { display: none; }
+  html[data-template='onyx'] .vx-home .vxh-hero-art { width: 64px; border-radius: 4px; box-shadow: none; }
+  html[data-template='onyx'] .vx-home .vxh-hero-title { font-size: 18px; line-height: 1.2; }
+  html[data-template='onyx'] .vx-home .vxh-hero-desc { display: none; }
+  html[data-template='onyx'] .vx-home .vxh-hero-actions { margin-top: 10px; }
+  html[data-template='onyx'] .vx-home .vxh-hero .vx-play-fab.is-lg { width: 44px; height: 44px; }
+}
+html[data-template='onyx'] .vx-home .vxh-hero-kicker { color: rgb(var(--ink-400)); font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; }
+html[data-template='onyx'] .vx-home .vxh-tiles,
+html[data-template='onyx'] .vx-home .vxh-jump .vxh-tiles { grid-template-columns: minmax(0, 1fr); gap: 0; }
+@container jump (min-width: 760px) {
+  html[data-template='onyx'] .vx-home .vxh-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; }
+}
+html[data-template='onyx'] .vx-home .vxh-tile {
+  min-height: 56px;
+  gap: 12px;
+  padding: 0 28px 0 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+html[data-template='onyx'] .vx-home .vxh-tile::after {
+  content: '';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 50%;
+  background: rgb(var(--ink-300));
+  box-shadow: 0 -7px 0 rgb(var(--ink-300)), 0 7px 0 rgb(var(--ink-300));
+}
+html[data-template='onyx'] .vx-home .vxh-tile:hover { background: rgb(var(--ink-100) / 0.06); }
+html[data-template='onyx'] .vx-home .vxh-tile img { width: 48px; height: 48px; margin: 4px 0; border-radius: 4px; }
+html[data-template='onyx'] .vx-home .vxh-tile-title { font-size: 14.5px; font-weight: 500; }
+html[data-template='onyx'] .vx-home .vxh-tile .vxh-disc { display: none; }

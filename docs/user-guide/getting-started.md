@@ -26,7 +26,7 @@ On the website you can look around without an account: **Explore VinaX first** o
 
 ## Where things are
 
-There are five destinations: **Home**, **Discover**, **Search**, **Library** and **VinaX AI**. They are always one tap away: a tab bar at the bottom of a phone, a sidebar on a wider screen. Their shape depends on your app style, and the Vibe style shows icons without names on a phone; the five destinations and their order are the same in every style.
+There are five destinations: **Home**, **Discover**, **Search**, **Library** and **VinaX AI**. They are always one tap away: a tab bar at the bottom of a phone, a sidebar on a wider screen. Their shape depends on your app style; the five destinations and their order are the same in every style.
 
 The top bar shows where you are and holds that page's actions. On a keyboard, `Ctrl/⌘ + K` opens the command palette from anywhere: pages, player actions and songs in one place.
 
@@ -36,7 +36,7 @@ Before anything has played on this device, Home opens with **All the music you l
 
 After that, there are three quick ways to start:
 
-- Press play on the **Aura Mix** card at the top of Home. The mix is built from your languages and your listening on this device.
+- Press play on the mix card at the top of Home (it carries your app style's name, **Lumen Mix** to start with). The mix is built from your languages and your listening on this device.
 - Tap **AI Radio** on Home and start endless music from a mood, an artist or a few words. See [The player and the queue](player-and-queue.md).
 - Tap any song anywhere. It starts, and VinaX lines up five more, led by that song's language and starting with familiar songs. Songs you queue yourself play before those.
 
