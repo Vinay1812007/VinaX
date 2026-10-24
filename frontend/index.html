@@ -128,9 +128,10 @@
           try { st = (raw && JSON.parse(raw).state) || {}; } catch (e) { /* corrupt */ }
           var lang = (st.pinnedLanguages && st.pinnedLanguages[0]) || 'hindi';
           var q = 'top ' + lang + ' songs ' + new Date().getFullYear();
-          // v5.6.7 — the prefetch must hit the FIRST ranked base so the
-          // orchestrator consumes it by exact URL match: the VinaX Music API.
-          var url = 'https://musicapi.vinaxmusic.online/api/search/songs?query=' + encodeURIComponent(q) + '&limit=20';
+          // 14.0.4 — the first ranked base is the app's own catalogue route
+          // (the providers live in a Worker secret); the client matches it
+          // by URL with the origin normalised away (services/api/client.ts).
+          var url = location.origin + '/api/cat/search/songs?query=' + encodeURIComponent(q) + '&limit=20';
           window.__vxBoot = {
             url: url,
             json: fetch(url, { headers: { Accept: 'application/json' } })

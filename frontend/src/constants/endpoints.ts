@@ -7,38 +7,23 @@ export interface ApiBase {
 }
 
 /**
- * The upstream music API wrappers. All are community wrappers and may
- * differ in shape, completeness, and availability — the orchestrator in
- * src/services/api treats every one of them as unreliable by default.
- * Pruned 2026-07 (DQA-10): saavn.dev (DNS no longer resolves) and the b4a.run
- * mirror (no CORS headers, so browsers can never read it) only produced
- * console errors and wasted requests. Re-add via VITE_API_BASES if revived.
- * V5.0 (2026-08): first-party catalog API (vinaxmusic.online) leads the
- * list for the web app — song delivery no longer depends on community wrappers.
+ * Where the app gets its catalogue: its OWN origin, and nothing else.
+ *
+ * 14.0.4 — every provider URL left the bundle. /api/cat on the Worker holds
+ * the ordered list of upstream wrappers in a secret (CATALOG_UPSTREAMS),
+ * tries them in order and falls back to its built-in direct translation, so
+ * a provider can be added, reordered or dropped in Cloudflare without a
+ * release — and nobody can read the list out of the app. The same-origin
+ * base leads on the web; the absolute one is the Android app's only base
+ * and the web's fallback when the same-origin route is unreachable.
+ * VITE_API_BASES still overrides the list at build time (and is public, like
+ * every VITE_* value): use it only for local experiments.
  */
 export const DEFAULT_API_BASES: ApiBase[] = isNativePlatform()
-  ? [
-      // v5.6.7 — OWNER DECISION (2026-09-01): the owner-hosted VinaX Music API
-      // is the MAIN catalog source. Known caveats, accepted by the owner: a
-      // free-tier Render dyno cold-starts (~50s) — the 8s request timeout
-      // fails such a call over to the first-party catalog and the health
-      // registry benches the base for a minute — and its /suggestions
-      // endpoint is buggy, which the same fallback absorbs per call.
-      // 11.0.4 — reached through the owner's own domain
-      // (musicapi.vinaxmusic.online) instead of the onrender.com URL.
-      { id: 'vinax-render', url: 'https://musicapi.vinaxmusic.online/api', label: 'VinaX Music API' },
-      { id: 'sirimilla', url: 'https://www.vinaxmusic.online/api/cat', label: 'vinaxmusic.online' },
-    ]
+  ? [{ id: 'sirimilla', url: 'https://www.vinaxmusic.online/api/cat', label: 'VinaX Catalog' }]
   : [
-      // v5.6.7 — the owner's Render wrapper leads on web too (owner decision).
-      { id: 'vinax-render', url: 'https://musicapi.vinaxmusic.online/api', label: 'VinaX Music API' },
-      // Same-origin first-party catalog: the fast, free fallback. In local
-      // Vite development, vite.config.ts mounts /api/cat with the exact same
-      // Cloudflare catalog handler; in production Cloudflare Pages serves
-      // functions/api/cat/[[path]].ts at this path.
       { id: 'local-catalog', url: '/api/cat', label: 'VinaX Catalog' },
-      // Remote first-party fallback when the same-origin function is down.
-      { id: 'sirimilla', url: 'https://www.vinaxmusic.online/api/cat', label: 'vinaxmusic.online' },
+      { id: 'sirimilla', url: 'https://www.vinaxmusic.online/api/cat', label: 'VinaX Catalog (remote)' },
     ];
 
 function basesFromEnv(): ApiBase[] | null {

@@ -94,9 +94,13 @@ jobs:
           else
             echo "::warning title=sameip::no encrypted url available"
           fi
-      - name: catalog API mirrors (2026-08-18 outage probe)
+      # 14.0.4 — the upstream list is a Worker secret; from here only the
+      # self-hosted route (above) can be probed. The bases below are probed
+      # only when CATALOG_PROBE_BASES (a repository variable) names them.
+      - name: catalog API upstreams (2026-08-18 outage probe)
+        if: vars.CATALOG_PROBE_BASES != ''
         run: |
-          for base in https://saavn.sumit.co/api https://nepotuneapi.vercel.app/api; do
+          for base in ${{ vars.CATALOG_PROBE_BASES }}; do
             OUT=$(curl -s -m 12 -o /tmp/r.json -w '%{http_code} %{time_total}s' "$base/search/songs?query=top%20hindi%20songs&limit=3" || echo 'ERR')
             N=$(python3 -c "
           import json
@@ -110,7 +114,7 @@ jobs:
           done
       - name: saavncdn artwork size support (4.19.5 image-quality probe)
         run: |
-          IMG=$(curl -s 'https://saavn.sumit.co/api/search/songs?query=top%20hindi%20songs&limit=1' | python3 -c "
+          IMG=$(curl -s 'https://www.vinaxmusic.online/api/cat/search/songs?query=top%20hindi%20songs&limit=1' | python3 -c "
           import json,sys
           d=json.load(sys.stdin)
           r=(d.get('data') or {}).get('results') or []
