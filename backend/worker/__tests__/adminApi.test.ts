@@ -165,7 +165,7 @@ describe('listeners', () => {
       const p = path(c);
       if (p === 'directory' && c.prefer.includes('count=exact')) return json([], 200, { 'content-range': '0-0/57' });
       if (p === 'directory') {
-        expect(c.url.searchParams.get('or')).toBe('(name.ilike.*vin*,handle.ilike.*vin*,email.ilike.*vin*)');
+        expect(c.url.searchParams.get('or')).toBe('(name.ilike."*vin*",handle.ilike."*vin*",email.ilike."*vin*")');
         expect(c.url.searchParams.get('platform')).toBe('eq.android');
         expect(c.url.searchParams.get('order')).toBe('last_seen.desc');
         expect(c.url.searchParams.get('limit')).toBe('25');
