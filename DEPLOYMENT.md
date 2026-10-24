@@ -1,6 +1,6 @@
 # Deploying VinaX
 
-This document covers how the two halves of VinaX reach production: the static frontend in `frontend/` and the `vinax-api` Worker in `backend/`. It lists the hosting settings, the manual deploy commands, how a release flows from pull request to production, the pre-release checks and where to look when a deploy does not land. Day-two topics — secrets, monitoring, the stale-Worker runbook, the known-red dashboard check and rollback — are in [docs/operations.md](docs/operations.md). Host and secret names appear here because a maintainer has to type them.
+This document covers how the two halves of VinaX reach production: the static frontend in `frontend/` and the `vinax-api` Worker in `backend/`, plus the one-time database setup the Worker needs. It lists the hosting settings, the manual deploy commands, how a release flows from pull request to production, the pre-release checks and where to look when a deploy does not land. Day-two topics — secrets, monitoring, the stale-Worker runbook, the known-red dashboard check and rollback — are in [docs/operations.md](docs/operations.md); the database itself is in [docs/database.md](docs/database.md). Host and secret names appear here because a maintainer has to type them.
 
 Both applications live on `main`. There are no separate frontend and backend branches.
 
@@ -67,6 +67,25 @@ npm run deploy           # wrangler deploy --config worker/wrangler.toml
 
 The **Deploy Worker** workflow is the second deploy path. It needs the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. Without the token it reports that it is not configured and succeeds without deploying. It can be run by hand with `dry_run` to exercise every gate and stop before deploying.
 
+Deploying the Worker also registers its **Cron Trigger** (`[triggers]` in `wrangler.toml`, every 30 minutes). Nothing has to be scheduled on the code host for the status history or the housekeeping jobs; they run inside the Worker and record themselves in the database ([docs/operations.md](docs/operations.md#scheduled-jobs)).
+
+## Database — once per project
+
+The Worker keeps its data in one hosted database. Setting it up is a one-time step; redeploying the Worker never touches it.
+
+1. Create the hosted project.
+2. In its SQL editor, paste `backend/supabase/schema.sql` and run it. It creates every table, the `directory` view, the `stats_*` functions and the deny-all row-level security, and writes schema version 1 into `meta`. It is idempotent: re-running it is safe and deletes nothing. To start over, run `backend/supabase/reset.sql` first (it deletes all data), then `schema.sql` again.
+3. Set the two Worker secrets from `backend/`:
+
+```sh
+npx wrangler secret put SUPABASE_URL --config worker/wrangler.toml
+npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml
+```
+
+4. Open the owner console's **Database** page. It shows the schema version the paste wrote, every table with its size, and the job runs once the Cron Trigger has fired.
+
+Only the Worker holds the service-role key. The frontend and the console never talk to the database; the public anon key can read nothing because every table has row-level security forced with no policy. Everything else about the schema, the Worker's data layer and the admin API is in [docs/database.md](docs/database.md).
+
 ## Android
 
 `buildapk.yml` and `release.yml` generate the Android project in CI (`npx cap add android`, `npx cap sync android`, `node scripts/patch-android.js`), set `versionCode` and `versionName`, and build with the keystore from the `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` secrets. The release body carries a `VersionCode:` line; `/api/version` reads it, and the in-app update check compares it with the installed build. Details are in [docs/android.md](docs/android.md).
@@ -76,7 +95,7 @@ The **Deploy Worker** workflow is the second deploy path. It needs the repositor
 1. Run the frontend and backend gates in [docs/testing.md](docs/testing.md#the-gates), including the bundle budget and the browser suite against `dist/`.
 2. Confirm CI and E2E are green for the exact commit.
 3. After merging, confirm the static host's build succeeded, and read the **Deploy Worker** log when `backend/` changed. Publishing one half does not update the other.
-4. On production, check `/api/status`, Home, Search, album and playlist playback, a queue running to its end, lyrics, VinaX AI and `/admin/`. Use a new browser profile and a returning one, a phone width and a desktop width, light and dark themes.
+4. On production, check `/api/status`, Home, Search, album and playlist playback, a queue running to its end, lyrics, VinaX AI and `/admin/`. On the console, open **Overview** (the tiles answer from the database) and **Database** (schema version 1, every table listed, the latest job run not overdue). Use a new browser profile and a returning one, a phone width and a desktop width, light and dark themes.
 5. Confirm the app shows the new version (Settings, the About page, or `/changelog.json`). Confirm a route the backend change added answers as expected; `/api/version` reports the Android release, not the Worker build.
 6. For Android, run [docs/qa-device-script.md](docs/qa-device-script.md) on a device before pushing a `v*` tag.
 
@@ -89,3 +108,4 @@ The **Deploy Worker** workflow is the second deploy path. It needs the repositor
 | **Deploy Worker** fails at "Verify the Cloudflare token" | Rotate `CLOUDFLARE_API_TOKEN` (same runbook, fix 1) |
 | Visitors are stuck on the boot splash after a deploy | [Rollback](docs/operations.md#rollback): purge the edge cache, or bump the asset URL epoch |
 | Something must be undone now | [Rollback](docs/operations.md#rollback) |
+| Console pages show "the database is not set up"; sign-in sync, rooms and feedback answer `503` | The two database secrets are missing or wrong, or `schema.sql` was not run: [docs/database.md](docs/database.md#setting-it-up). The console's **Database** page names which |

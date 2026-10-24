@@ -14,7 +14,7 @@
  *   200      { intro, songs: [{ songId, title, artist, reason, segue,
  *              confidence, fromPool }], model }
  *   400      bad_request | empty_context | pool_too_small   413 too_large
- *   429      rate_limited   503 ai_not_configured | ai_disabled | ai_over_budget
+ *   429      rate_limited   503 ai_not_configured
  *
  * Every pool pick is matched back to the pool by id or canonical title +
  * artist; discoveries (fromPool false) are verified in the catalogue by the

@@ -15,7 +15,6 @@ const KEY = 'serper-chat-test-key';
 const SERPER = { SERPER_API_KEY: KEY };
 const NV = { NVIDIA_API_KEY: 'k-n' };
 const GEM = { GEMINI_API_KEY: 'AIzaTESTKEY' };
-const DB = { SUPABASE_URL: 'https://db.example.test', SUPABASE_SERVICE_ROLE_KEY: 'svc' };
 
 const ORGANIC = {
   answerBox: { answer: '28°C' },
@@ -43,7 +42,7 @@ const sse = (text: string): Response =>
 const geminiSse = (text: string): Response =>
   new Response(`data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] })}\n\n`, { status: 200, headers: { 'content-type': 'text/event-stream' } });
 
-interface Opts { serper?: () => Response | Promise<Response>; controls?: unknown }
+interface Opts { serper?: () => Response | Promise<Response> }
 function stub(opts: Opts = {}): Call[] {
   const calls: Call[] = [];
   vi.stubGlobal('fetch', vi.fn(async (u: unknown, init?: RequestInit) => {
@@ -53,9 +52,6 @@ function stub(opts: Opts = {}): Call[] {
     try { json = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>; } catch { /* not JSON */ }
     calls.push({ url, method, json });
     if (url.startsWith('https://google.serper.dev/')) return opts.serper ? opts.serper() : new Response(JSON.stringify(ORGANIC), { status: 200 });
-    if (url.includes('/rest/v1/vinax_config')) return new Response(JSON.stringify(opts.controls ? [{ key: 'ai-controls', value: opts.controls }] : []), { status: 200 });
-    if (url.includes('/rest/v1/vinax_ai_events')) return method === 'GET' ? new Response('[]', { status: 200, headers: { 'content-range': '0-0/0' } }) : new Response(null, { status: 201 });
-    if (url.includes('/rest/v1/')) return new Response('[]', { status: 200 });
     if (method === 'GET') return new Response(JSON.stringify(url.includes('generativelanguage') ? GEMINI_LIST : { data: [], models: [] }), { status: 200 });
     if (url.includes(':streamGenerateContent')) return geminiSse('Gemini says hi.');
     return sse('It is sunny [1].');
@@ -63,7 +59,7 @@ function stub(opts: Opts = {}): Call[] {
   return calls;
 }
 const serperCalls = (calls: Call[]): Call[] => calls.filter((c) => c.url.startsWith('https://google.serper.dev/'));
-const modelCalls = (calls: Call[]): Call[] => calls.filter((c) => c.method === 'POST' && !c.url.startsWith('https://google.serper.dev/') && !c.url.includes('/rest/v1/'));
+const modelCalls = (calls: Call[]): Call[] => calls.filter((c) => c.method === 'POST' && !c.url.startsWith('https://google.serper.dev/'));
 const systemOf = (c: Call): string => {
   const msgs = c.json.messages as Array<{ role: string; content: unknown }> | undefined;
   if (msgs) return String(msgs[0]?.content ?? '');
@@ -202,13 +198,6 @@ describe('POST /api/vinaxai — web search results', () => {
     expect(serperCalls(calls)).toHaveLength(0);
   });
 
-  it('never searches when the owner switched web-search off, and the chat still answers', async () => {
-    const calls = stub({ controls: { features: { 'web-search': false } } });
-    const ev = await chat(NOW_Q, { ...NV, ...SERPER, ...DB });
-    expect(serperCalls(calls)).toHaveLength(0);
-    expect(ev.some((e) => typeof e.delta === 'string')).toBe(true);
-    expect(ev.some((e) => e.sources)).toBe(false);
-  });
 
   it('never searches without a key, for a question not about now, or for a music command', async () => {
     let calls = stub();
@@ -275,14 +264,6 @@ describe('POST /api/vinaxai — web search results', () => {
     }
   });
 
-  it('each non-cached search is logged as web-search / serper without the query', async () => {
-    const calls = stub();
-    await chat(NOW_Q, { ...NV, ...SERPER, ...DB });
-    const rows = calls.filter((c) => c.url.includes('/rest/v1/vinax_ai_events') && c.method === 'POST').map((c) => c.json);
-    const row = rows.find((r) => r.feature === 'web-search');
-    expect(row).toMatchObject({ feature: 'web-search', model: 'serper', ok: true, status: 200 });
-    expect(JSON.stringify(row)).not.toContain('Hyderabad');
-  });
 });
 
 describe('the prompt and the helpers', () => {

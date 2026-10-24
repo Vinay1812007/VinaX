@@ -144,16 +144,13 @@ describe('VinaX AI chat audit (11.0)', () => {
     expect(calls[0].body).toContain('fish-audio/s2.1-pro-free:free');
   });
 
-  it('a 400 drops the usage option for that attempt only, and Gemini is not asked the same thing twice', async () => {
-    const calls = stub((_c, n) => (n <= 2 ? new Response('{"error":"bad"}', { status: 400 }) : sse('fine')));
+  it('a 400 walks on to the next engine, no request asks for a usage chunk, and Gemini is not asked the same thing twice', async () => {
+    const calls = stub((_c, n) => (n <= 1 ? new Response('{"error":"bad"}', { status: 400 }) : sse('fine')));
     const { text } = await ask({ mode: 'auto' }, { NVIDIA_API_KEY: 'k-n' });
     expect(text).toContain('fine');
-    expect(calls[0].json.stream_options).toEqual({ include_usage: true });
-    expect(calls[1].json.model).toBe(calls[0].json.model);
-    expect(calls[1].json).not.toHaveProperty('stream_options');
-    // The next engine keeps its usage chunk.
-    expect(calls[2].json.model).not.toBe(calls[0].json.model);
-    expect(calls[2].json.stream_options).toEqual({ include_usage: true });
+    // Without SUPABASE_URL the call log is off, so no request asks for token usage.
+    expect(calls.every((c) => !('stream_options' in c.json))).toBe(true);
+    expect(calls[1].json.model).not.toBe(calls[0].json.model);
     vi.unstubAllGlobals();
     const gem = stub(() => new Response('{"error":{"message":"bad request"}}', { status: 400 }));
     await ask({ mode: 'auto' }, { GEMINI_API_KEY: 'AIzaTESTKEY' });

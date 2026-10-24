@@ -13,6 +13,8 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { onRequestOptions, onRequestPost } from '../functions/api/events';
+import { idFromInstall, signId } from '../functions/_lib/identity';
+import { DB_ENV, fakeDb } from './helpers/fakeDb';
 
 const CLIENT = readFileSync(new URL('../../../frontend/src/services/analytics/telemetry.ts', import.meta.url), 'utf8');
 
@@ -22,7 +24,6 @@ function clientHeaders(): string[] {
   return [...block.matchAll(/'([a-z0-9-]+)'\s*:/gi)].map((m) => m[1].toLowerCase());
 }
 
-const ENV = { SUPABASE_URL: 'https://sb.test', SUPABASE_SERVICE_ROLE_KEY: 'srk', DEVICE_ID_SECRET: 'unit-test-secret' };
 const calls: Array<{ url: string; method: string }> = [];
 beforeEach(() => {
   calls.length = 0;
@@ -49,7 +50,6 @@ const post = (headers: Record<string, string>) => {
       headers: { 'content-type': 'application/json', 'cf-connecting-ip': `10.30.0.${ipSeq % 250}`, ...headers },
       body: JSON.stringify({ deviceId: 'install-uuid-0001', type: 'play', song: { id: 's1', title: 'Orbit' } }),
     }),
-    env: ENV,
   });
 };
 const allowed = (res: Response) => (res.headers.get('access-control-allow-headers') ?? '').split(',').map((h) => h.trim().toLowerCase());
@@ -76,29 +76,79 @@ describe('/api/events preflight', () => {
     expect(res.headers.get('access-control-allow-origin')).toBeNull();
   });
 
-  it('the POST answer carries the same origin grant, so the app can read its signed id', async () => {
+  it('the POST answer carries the same origin grant', async () => {
     const res = await post({ origin: 'https://localhost', 'x-vinax-consent': 'analytics' });
-    expect([200, 204]).toContain(res.status);
+    expect(res.status).toBe(204);
     expect(res.headers.get('access-control-allow-origin')).toBe('https://localhost');
   });
 });
 
-describe('/api/events consent gating is unchanged', () => {
-  it('a post without x-vinax-consent writes nothing', async () => {
-    const res = await post({ origin: 'https://localhost' });
+describe('/api/events writes the event and the device row (14.0)', () => {
+  const SECRET = 'device-secret-for-tests';
+  const ENV = { ...DB_ENV, DEVICE_ID_SECRET: SECRET };
+  const send = (headers: Record<string, string>, body: Record<string, unknown>, env: object = ENV) => {
+    ipSeq += 1;
+    return onRequestPost({
+      request: new Request('https://www.vinaxmusic.online/api/events', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: 'https://localhost', 'cf-connecting-ip': `10.31.0.${ipSeq % 250}`, 'cf-ipcountry': 'IN', ...headers },
+        body: JSON.stringify(body),
+      }),
+      env,
+    });
+  };
+
+  it.each<Record<string, string>>([{}, { 'x-vinax-consent': 'none' }])('a post without consent (%o) answers 204 and writes nothing', async (h) => {
+    const fake = fakeDb();
+    const res = await send(h, { deviceId: 'install-uuid-0001', type: 'play', song: { id: 's1', title: 'Orbit' } });
     expect(res.status).toBe(204);
-    expect(calls).toHaveLength(0);
+    expect(fake.calls).toHaveLength(0);
   });
 
-  it('a post with any other consent value writes nothing', async () => {
-    const res = await post({ origin: 'https://localhost', 'x-vinax-consent': 'none' });
-    expect(res.status).toBe(204);
-    expect(calls).toHaveLength(0);
+  it('without a database or a signing secret the answer is 204 and nothing is sent', async () => {
+    const fake = fakeDb();
+    expect((await send({ 'x-vinax-consent': 'analytics' }, { deviceId: 'install-uuid-0001', type: 'play' }, { DEVICE_ID_SECRET: SECRET })).status).toBe(204);
+    expect((await send({ 'x-vinax-consent': 'analytics' }, { deviceId: 'install-uuid-0001', type: 'play' }, DB_ENV)).status).toBe(204);
+    expect(fake.calls).toHaveLength(0);
   });
 
-  it('a consented post is written', async () => {
-    await post({ 'x-vinax-consent': 'analytics' });
-    expect(calls.some((c) => c.method === 'POST' && c.url.includes('/rest/v1/vinax_events'))).toBe(true);
+  it('first contact: the event and the listener row are written under the derived id, and the signed id is handed back', async () => {
+    const fake = fakeDb();
+    const res = await send({ 'x-vinax-consent': 'analytics' }, {
+      deviceId: 'install-uuid-0001', name: 'Vinay', type: 'play', platform: 'android', appVersion: '14.0.0',
+      song: { id: 's1', title: 'Orbit', artist: 'A', language: 'Telugu', image: 'https://i/x.jpg' }, meta: { ignored: true },
+    });
+    expect(res.status).toBe(200);
+    const out = (await res.json()) as { signed_device_id_next: string };
+    const id = await idFromInstall(SECRET, 'install-uuid-0001');
+    expect(out.signed_device_id_next.startsWith(`${id}.`)).toBe(true);
+    const ev = fake.rows('events')[0];
+    expect(ev).toMatchObject({ listener_id: id, kind: 'play', song_id: 's1', song_title: 'Orbit', song_artist: 'A', language: 'telugu', platform: 'android', app_version: '14.0.0', country: 'IN', verified: false });
+    expect(ev.meta).toBeUndefined();
+    expect(fake.rows('listeners')[0]).toMatchObject({ id, display_name: 'Vinay', platform: 'android', is_playing: true, country: 'IN' });
+    expect((fake.rows('listeners')[0].now_playing as { title: string }).title).toBe('Orbit');
+  });
+
+  it('a proved signed id answers 204, marks the row verified, and recommendation meta is kept (whitelisted)', async () => {
+    const fake = fakeDb();
+    const signed = await signId(SECRET, 'd_' + 'cd'.repeat(16));
+    const res = await send({ 'x-vinax-consent': 'analytics' }, { signed_device_id: signed, type: 'rec_outcome', meta: { outcome: 'skip', heardSec: 12, liked: false, 'bad key!': 1, deep: { nested: { x: 1 } } } });
+    expect(res.status).toBe(204);
+    const ev = fake.rows('events')[0];
+    expect(ev).toMatchObject({ listener_id: 'd_' + 'cd'.repeat(16), kind: 'rec_outcome', verified: true });
+    expect(ev.meta).toEqual({ outcome: 'skip', heardSec: 12, liked: false });
+  });
+
+  it('a forged signed id is just a fresh identity; reserved and malformed kinds are dropped with the same 204', async () => {
+    const fake = fakeDb();
+    const forged = await send({ 'x-vinax-consent': 'analytics' }, { signed_device_id: 'd_' + 'cd'.repeat(16) + '.forged', type: 'open' });
+    expect(forged.status).toBe(200); // a new signed id is issued
+    expect(fake.rows('events')[0].verified).toBe(false);
+    for (const type of ['announcement', 'admin-audit', 'ADMIN', 'Has Space', '']) {
+      const before = fake.calls.length;
+      expect((await send({ 'x-vinax-consent': 'analytics' }, { deviceId: 'install-uuid-0001', type })).status).toBe(204);
+      expect(fake.calls.length).toBe(before);
+    }
   });
 });
 

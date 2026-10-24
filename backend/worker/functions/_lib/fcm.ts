@@ -229,7 +229,7 @@ export async function sendFcm(env: FcmEnv, tokens: string[], msg: FcmMessage): P
   };
 
   // Bounded-concurrency worker pool. Duplicated locally so this helper stays
-  // self-contained; the same shape lives in cron/song-push.ts and admin/push.ts.
+  // self-contained.
   const limit = Math.min(8, tokens.length);
   let cursor = 0;
   let sent = 0;

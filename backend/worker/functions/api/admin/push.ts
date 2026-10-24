@@ -1,60 +1,29 @@
-/** Admin: send a push notification to every subscribed device. */
-import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { logAdminAudit } from '../../_lib/adminAudit';
-import { dbErrorCode, sbInsert, sbSelectResult, sbUpdate, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
-import { pushConfigured, sendPush, type PushSubscriptionRecord, type VapidEnv } from '../../_lib/webpush';
-import { fcmConfigured, sendFcm, type FcmEnv } from '../../_lib/fcm';
-
-type Env = AdminEnv & SupabaseEnv & VapidEnv & FcmEnv;
-
-/** Concurrency-bounded parallel map. Duplicated verbatim from cron/song-push
- *  to avoid an inter-directory helper import that Pages Functions rejects. */
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T, index: number) => Promise<R>,
-): Promise<Array<PromiseSettledResult<R>>> {
-  const results: Array<PromiseSettledResult<R>> = new Array(items.length);
-  let cursor = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (true) {
-      const i = cursor++;
-      if (i >= items.length) return;
-      try {
-        results[i] = { status: 'fulfilled', value: await fn(items[i], i) };
-      } catch (err) {
-        results[i] = { status: 'rejected', reason: err };
-      }
-    }
-  });
-  await Promise.all(workers);
-  return results;
-}
-
-interface SubRow {
-  endpoint: string;
-  p256dh: string;
-  auth: string;
-}
-
-function json(o: unknown, status = 200): Response {
-  return new Response(JSON.stringify(o), {
-    status,
-    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
-  });
-}
+/**
+ * GET  /api/admin/push → { configured, web, fcm, geo, langs, rules }
+ * POST /api/admin/push { title, body, link, filter, activity, dryRun, dedupeKey }
+ *
+ * The owner's push sender. A dry run counts the audience and sends nothing.
+ * A real send writes the `notifications` row first (the dedupe key makes a
+ * double-click a 409), fans out on both channels (_lib/pushSend.ts), writes
+ * the receipt, and — when it went to everyone — publishes the announcement
+ * the Android app reads on open.
+ */
+import { adminJson, badRequest, dbFailure } from '../../_lib/admin';
+import { adminGet, adminPost } from '../../_lib/adminRoute';
+import { db, q, firstFailure } from '../../_lib/db';
+import { clip } from '../../_lib/edge';
+import { fcmConfigured, type FcmEnv } from '../../_lib/fcm';
+import { audienceDevices, audienceOf, fanOut, publishAnnouncement, recordReceipt, type PushEnv } from '../../_lib/pushSend';
+import { setting } from '../../_lib/settings';
+import { pushConfigured, type VapidEnv } from '../../_lib/webpush';
 
 const SITE_ORIGIN = 'https://www.vinaxmusic.online';
 
-/**
- * True only for a link that stays on the product's own origin: a site path
- * ("/song/…") or an absolute URL whose PARSED origin is ours. A string-prefix
- * test is not enough — "https://www.vinaxmusic.online.evil.example" and
- * "…online@evil.example" both pass one — and "//host" or "/\host" are
- * protocol-relative, so the path form is resolved against the origin too.
- */
+/** A link that stays on the product: a site path or an absolute URL on our origin. */
 export function isInternalLink(link: string): boolean {
-  if (!link.startsWith('/') && !link.startsWith('https://')) return false;
+  if (!link.startsWith('/') || link.startsWith('//') || link.startsWith('/\\')) {
+    if (!link.startsWith('https://')) return false;
+  }
   try {
     return new URL(link, SITE_ORIGIN).origin === SITE_ORIGIN;
   } catch {
@@ -62,264 +31,96 @@ export function isInternalLink(link: string): boolean {
   }
 }
 
-interface GeoRow {
-  country: string | null;
-  region: string | null;
-  city: string | null;
-}
+interface GeoRow { country: string | null; region: string | null; city: string | null; lang: string | null }
 
-/** Bucket a list of (country, region, city) rows into three ranked
- *  breakdowns for the admin UI's target picker. Null / empty entries roll
- *  up under 'Unknown' so the counts still add up. */
-function bucketGeo(rows: GeoRow[]): {
-  countries: Array<{ key: string; count: number }>;
-  regions: Array<{ key: string; count: number; country: string | null }>;
-  cities: Array<{ key: string; count: number; region: string | null; country: string | null }>;
-} {
-  const cMap = new Map<string, number>();
-  const rMap = new Map<string, { count: number; country: string | null }>();
-  const ciMap = new Map<string, { count: number; region: string | null; country: string | null }>();
-  for (const row of rows) {
-    const c = row.country ?? 'Unknown';
-    cMap.set(c, (cMap.get(c) ?? 0) + 1);
-    const rk = `${c}|${row.region ?? 'Unknown'}`;
-    const rv = rMap.get(rk) ?? { count: 0, country: row.country };
+function bucket(rows: GeoRow[]) {
+  const countries = new Map<string, number>();
+  const regions = new Map<string, { key: string; country: string | null; count: number }>();
+  const cities = new Map<string, { key: string; region: string | null; country: string | null; count: number }>();
+  const langs = new Map<string, number>();
+  for (const r of rows) {
+    const c = r.country ?? 'Unknown';
+    countries.set(c, (countries.get(c) ?? 0) + 1);
+    const rk = `${c}|${r.region ?? 'Unknown'}`;
+    const rv = regions.get(rk) ?? { key: r.region ?? 'Unknown', country: r.country, count: 0 };
     rv.count += 1;
-    rMap.set(rk, rv);
-    const cik = `${c}|${row.region ?? '-'}|${row.city ?? 'Unknown'}`;
-    const civ = ciMap.get(cik) ?? { count: 0, region: row.region, country: row.country };
-    civ.count += 1;
-    ciMap.set(cik, civ);
+    regions.set(rk, rv);
+    const ck = `${rk}|${r.city ?? 'Unknown'}`;
+    const cv = cities.get(ck) ?? { key: r.city ?? 'Unknown', region: r.region, country: r.country, count: 0 };
+    cv.count += 1;
+    cities.set(ck, cv);
+    const l = (r.lang ?? '').toLowerCase().split('-')[0] || 'unknown';
+    langs.set(l, (langs.get(l) ?? 0) + 1);
   }
+  const desc = <T extends { count: number }>(a: T, b: T) => b.count - a.count;
   return {
-    countries: [...cMap.entries()].map(([k, v]) => ({ key: k, count: v })).sort((a, b) => b.count - a.count).slice(0, 40),
-    regions: [...rMap.entries()].map(([k, v]) => ({ key: k.split('|').slice(1).join('|'), count: v.count, country: v.country })).sort((a, b) => b.count - a.count).slice(0, 80),
-    cities: [...ciMap.entries()].map(([k, v]) => ({ key: k.split('|').slice(2).join('|'), count: v.count, region: v.region, country: v.country })).sort((a, b) => b.count - a.count).slice(0, 120),
+    geo: {
+      countries: [...countries.entries()].map(([key, count]) => ({ key, count })).sort(desc).slice(0, 40),
+      regions: [...regions.values()].sort(desc).slice(0, 80),
+      cities: [...cities.values()].sort(desc).slice(0, 120),
+    },
+    langs: [...langs.entries()].map(([lang, count]) => ({ lang, count })).sort(desc).slice(0, 30),
   };
 }
 
-/** Status for the admin tab: is push configured + how many devices opted in
- *  + a geo breakdown so the composer can populate its "Send to city X"
- *  dropdown with real, live subscriber counts. */
-export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
-  const { request, env } = context;
-  if (!(await isAdminAsync(request, env))) return unauthorized();
-  if (!supabaseConfigured(env)) return json({ configured: pushConfigured(env), subscribers: 0, fcm: 0, geo: bucketGeo([]) });
-  const [webRead, fcmRead] = await Promise.all([
-    sbSelectResult<GeoRow>(
-      env,
-      'vinax_push_subscriptions',
-      'select=country,region,city&active=eq.true&limit=5000',
-    ),
-    sbSelectResult<GeoRow>(
-      env,
-      'vinax_fcm_tokens',
-      'select=country,region,city&active=eq.true&limit=5000',
-    ),
+export const onRequestGet = adminGet(async ({ env }) => {
+  const e = env as unknown as PushEnv;
+  const [web, fcm, geo, rules] = await Promise.all([
+    db.count(env, 'push_devices', q().eq('channel', 'web').eq('active', 'true')),
+    db.count(env, 'push_devices', q().eq('channel', 'fcm').eq('active', 'true')),
+    db.select<GeoRow>(env, 'push_devices', q().eq('active', 'true').select('country,region,city,lang').limit(5000)),
+    setting(env, 'push'),
   ]);
-  // 7.2.0 — "0 subscribers" from a failed read would steer the composer.
-  if (!webRead.ok) return dbFailure(webRead);
-  if (!fcmRead.ok) return dbFailure(fcmRead);
-  const geo = bucketGeo([...webRead.rows, ...fcmRead.rows]);
-  return json({
-    configured: pushConfigured(env),
-    subscribers: webRead.rows.length,
-    fcm: fcmRead.rows.length,
-    geo,
+  const failed = firstFailure(web, fcm, geo);
+  if (failed) return dbFailure(failed);
+  if (!web.ok || !fcm.ok || !geo.ok) return adminJson({ configured: true, error: 'db_unavailable' }, 502);
+  return adminJson({
+    configured: true,
+    web: { configured: pushConfigured(e as VapidEnv), active: web.value },
+    fcm: { configured: fcmConfigured(e as FcmEnv), active: fcm.value },
+    ...bucket(geo.rows),
+    rules: rules ?? null,
   });
-};
+});
 
-export const onRequestPost = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
-  const { request, env } = context;
-  if (!(await isAdminAsync(request, env))) return unauthorized();
-  if (!pushConfigured(env) && !fcmConfigured(env)) return json({ error: 'push_not_configured' }, 400);
-  const body = (await request.json().catch(() => null)) as
-    | { title?: string; body?: string; link?: string; dedupe_key?: string; filter?: { country?: string; region?: string; city?: string; lang?: string; langPrefix?: string } }
-    | null;
-  const title = (body?.title ?? '').toString().slice(0, 120) || 'VinaX';
-  const text = (body?.body ?? '').toString().trim().slice(0, 300);
-  // A blank notification to every subscriber is never intentional (D-20).
-  if (!text) return json({ error: 'body_required' }, 400);
-  const url = (body?.link ?? '/').toString().slice(0, 300) || '/';
-  // Links must stay inside the product — an admin typo (or a compromised
-  // token) must not be able to push arbitrary external URLs to every device.
-  if (!isInternalLink(url)) return json({ error: 'bad_link' }, 400);
-  const dedupeKey = typeof body?.dedupe_key === 'string' ? body.dedupe_key.slice(0, 80) : '';
-  // Optional filter: {country, region, city, lang, langPrefix} — any provided
-  // key becomes an equality (or LIKE for langPrefix) filter on the subs
-  // table. Empty/absent = send to all. `lang` matches exact ("hi") while
-  // `langPrefix` matches ILIKE prefix ("hi" → hi, hi-IN, hi-Latn, etc.).
-  const filter = (body?.filter && typeof body.filter === 'object' ? body.filter : {}) as { country?: string; region?: string; city?: string; lang?: string; langPrefix?: string };
-  const filterCountry = typeof filter.country === 'string' && filter.country ? filter.country.slice(0, 40) : '';
-  const filterRegion = typeof filter.region === 'string' && filter.region ? filter.region.slice(0, 80) : '';
-  const filterCity = typeof filter.city === 'string' && filter.city ? filter.city.slice(0, 80) : '';
-  const filterLang = typeof filter.lang === 'string' && filter.lang ? filter.lang.slice(0, 16) : '';
-  const filterLangPrefix = typeof filter.langPrefix === 'string' && filter.langPrefix ? filter.langPrefix.slice(0, 16) : '';
-  // E10 — activity segment on updated_at (refreshed each time a device
-  // re-subscribes on app open, so it tracks "last check-in", honestly labeled
-  // as such in the composer): active7 / quiet (7-14d) / dormant14.
-  const activity = typeof (body as { activity?: unknown } | null)?.activity === 'string' ? (body as { activity: string }).activity : '';
-  // E10 — dryRun: count the matched audience, send nothing.
-  const dryRun = (body as { dryRun?: unknown } | null)?.dryRun === true;
-  const geoQuery: string[] = [];
-  if (filterCountry) geoQuery.push(`country=eq.${encodeURIComponent(filterCountry)}`);
-  if (filterRegion) geoQuery.push(`region=eq.${encodeURIComponent(filterRegion)}`);
-  if (filterCity) geoQuery.push(`city=eq.${encodeURIComponent(filterCity)}`);
-  if (filterLang) geoQuery.push(`lang=eq.${encodeURIComponent(filterLang)}`);
-  else if (filterLangPrefix) geoQuery.push(`lang=ilike.${encodeURIComponent(filterLangPrefix + '%')}`);
-  const d7 = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const d14 = new Date(Date.now() - 14 * 86_400_000).toISOString();
-  if (activity === 'active7') geoQuery.push(`updated_at=gte.${encodeURIComponent(d7)}`);
-  else if (activity === 'quiet') geoQuery.push(`updated_at=lt.${encodeURIComponent(d7)}`, `updated_at=gte.${encodeURIComponent(d14)}`);
-  else if (activity === 'dormant14') geoQuery.push(`updated_at=lt.${encodeURIComponent(d14)}`);
-  const geoSuffix = geoQuery.length ? '&' + geoQuery.join('&') : '';
-  const geoTagForLog =
-    [filterCountry, filterRegion, filterCity, filterLang || filterLangPrefix, activity || ''].filter(Boolean).join(' / ') || 'everyone';
+export const onRequestPost = adminPost(async ({ env, body, audit, waitUntil }) => {
+  const e = env as unknown as PushEnv;
+  const title = clip(body.title, 120) ?? 'VinaX';
+  const text = clip(body.body, 300);
+  if (!text) return badRequest('body_required');
+  const link = clip(body.link, 300) ?? '/';
+  if (!isInternalLink(link)) return badRequest('bad_link');
+  const audience = audienceOf(body.filter, body.activity);
+  const dryRun = body.dryRun === true;
+  const dedupeKey = clip(body.dedupeKey, 80);
 
-  // Audit finding M-SRV-8: an admin who double-clicks Send used to blast every
-  // subscriber twice. If the caller passes dedupe_key, we check for a matching
-  // announcement in the last 10 minutes and refuse the duplicate. The key
-  // rides inside the JSON message body — no schema migration needed.
-  if (dedupeKey) {
-    const since = new Date(Date.now() - 10 * 60_000).toISOString();
-    const recent = await sbSelectResult<{ message: string | null }>(
-      env,
-      'vinax_events',
-      `type=eq.announcement&device_id=eq.admin&created_at=gte.${encodeURIComponent(since)}&select=message&limit=50&order=created_at.desc`,
-    );
-    // 7.2.0 — if the duplicate check cannot be read, refuse rather than risk
-    // blasting every subscriber twice; the owner can retry.
-    if (!recent.ok) return dbFailure(recent);
-    const needle = `"dedupe_key":${JSON.stringify(dedupeKey)}`;
-    if (recent.rows.some((r) => (r.message ?? '').includes(needle))) {
-      return json({ error: 'duplicate', message: 'This announcement was already sent recently' }, 409);
-    }
-  }
+  const devices = await audienceDevices(env, audience);
+  if (!devices.ok) return dbFailure(devices);
+  const web = devices.rows.filter((d) => d.channel === 'web').length;
+  const fcm = devices.rows.length - web;
+  if (dryRun) return adminJson({ dryRun: true, web, fcm, audience: audience.label });
+  if (!pushConfigured(e as VapidEnv) && !fcmConfigured(e as FcmEnv)) return adminJson({ error: 'push_not_configured' }, 400);
 
-  const subsRead = await sbSelectResult<SubRow>(
-    env,
-    'vinax_push_subscriptions',
-    `select=endpoint,p256dh,auth&active=eq.true&limit=5000${geoSuffix}`,
-  );
-  // 7.2.0 — a failed audience read used to "send" to nobody and report ok.
-  if (!subsRead.ok) return dbFailure(subsRead);
-  const subs = subsRead.rows;
+  const msg = { title, body: text, link };
+  const ts = Date.now();
+  const made = await db.insert<{ id: number }>(env, 'notifications', {
+    kind: 'announcement', title, body: text, link, audience: { ...audience.filter, ...(audience.activity ? { activity: audience.activity } : {}), label: audience.label, ts },
+    web_total: web, fcm_total: fcm, dedupe_key: dedupeKey, sent_by: 'owner',
+  }, { returning: true });
+  if (!made.ok && made.error === 'conflict') return adminJson({ error: 'duplicate', message: 'This notification was already sent' }, 409);
+  if (!made.ok) return dbFailure(made);
+  const id = made.rows[0]?.id ?? null;
 
-  // E10 — preview: report exactly who WOULD receive this, send nothing.
-  // MUST run before ANY persistence: the announcement insert used to sit
-  // above this return, so "preview" published a live announcement to every
-  // Android client and burned the dedupe key (audit D-3).
-  if (dryRun) {
-    if (fcmConfigured(env)) {
-      const toks = await sbSelectResult<{ token: string }>(env, 'vinax_fcm_tokens', `select=token&active=eq.true&limit=5000${geoSuffix}`);
-      if (!toks.ok) return dbFailure(toks);
-      return json({ dryRun: true, web: subs.length, fcm: toks.rows.length, audience: geoTagForLog });
-    }
-    return json({ dryRun: true, web: subs.length, fcm: 0, audience: geoTagForLog });
-  }
-
-  // The Android app has no Web Push — it picks the latest announcement up on
-  // next open. A geo-filtered send is deliberately NOT persisted to the
-  // Android in-app pickup channel (that would show Warangal-targeted news to
-  // a Delhi listener). Only unfiltered "send to everyone" pushes get the
-  // vinax_events row.
-  // 11.7.2 — one timestamp ties this send's announcement row to its
-  // delivery receipt (below), so the console can say who it reached.
-  const sentAt = Date.now();
-  if (!geoQuery.length) {
-    await sbInsert(env, 'vinax_events', {
-      device_id: 'admin',
-      type: 'announcement',
-      message: JSON.stringify({
-        title,
-        body: text,
-        link: url,
-        ts: sentAt,
-        ...(dedupeKey ? { dedupe_key: dedupeKey } : {}),
-      }).slice(0, 900),
-    }).catch(() => false);
-  }
-  // Every REAL send leaves an audit row — geo-filtered sends previously left
-  // zero record anywhere (audit D-7).
-  await logAdminAudit(context, {
-    action: 'push-send',
-    summary: `"${title.slice(0, 60)}" to ${geoTagForLog}`,
-    target: geoTagForLog,
-    after: { title, body: text, link: url, audience: geoTagForLog },
+  const report = await fanOut(e, devices.rows, msg);
+  if (id !== null) await recordReceipt(env, id, report);
+  if (audience.everyone) await publishAnnouncement(env, msg, ts);
+  await audit({ action: 'push-send', summary: `"${title.slice(0, 60)}" to ${audience.label}`, target: audience.label, after: { ...msg, audience: audience.label, web: report.web.sent, fcm: report.fcm.sent } });
+  void waitUntil;
+  return adminJson({
+    ok: true,
+    id,
+    web: { total: report.web.total, sent: report.web.sent, gone: report.web.gone, failed: report.web.failed },
+    fcm: { total: report.fcm.total, sent: report.fcm.sent, failed: report.fcm.failed, ...(report.fcm.error ? { error: report.fcm.error } : {}) },
+    audience: audience.label,
   });
-  // Native Android via FCM — background push, even when closed. 13.7.3: sent
-  // BEFORE the web fan-out. Every browser push is its own outgoing request, and
-  // once a large web audience had used up the Worker's per-request budget the
-  // FCM token exchange and sends failed silently, so Android got nothing.
-  let fcm = 0;
-  let fcmError: string | null = fcmConfigured(env) ? null : 'not_configured';
-  let fcmFailed: Record<string, number> = {};
-  if (fcmConfigured(env)) {
-    const toksRead = await sbSelectResult<{ token: string }>(
-      env,
-      'vinax_fcm_tokens',
-      `select=token&active=eq.true&limit=5000${geoSuffix}`,
-    );
-    // The send is not refused here — the response names the failed Android
-    // read instead of reporting fcm: 0 as if nobody was subscribed.
-    if (!toksRead.ok) fcmError = dbErrorCode(toksRead.error);
-    const toks = toksRead.rows;
-    if (toks.length) {
-      const r = await sendFcm(env, toks.map((t) => t.token), { title, body: text, link: url });
-      fcm = r.sent;
-      fcmFailed = r.failed;
-      if (r.error) fcmError = r.error;
-      // Parallel dead-token cleanup — the old sequential loop compounded the
-      // same wall-clock problem the web-push loop had (audit finding H14).
-      await mapWithConcurrency(r.dead, 16, (dead) =>
-        sbUpdate(env, 'vinax_fcm_tokens', `token=eq.${encodeURIComponent(dead)}`, { active: false }).catch(() => false),
-      );
-    }
-  }
-  // Fan out in parallel with a bounded concurrency. The previous sequential
-  // await-loop over 5000 subscribers (~150 ms each) blew past the Pages
-  // Functions 30 s wall clock and returned a partial count with no retry
-  // semantics (audit finding H14). Bounded at 32 concurrent to stay well
-  // inside per-isolate limits while cutting wall-clock ~30x.
-  const results = await mapWithConcurrency(subs, 32, async (s) => {
-    const r = await sendPush(env, s as PushSubscriptionRecord, {
-      title, body: text, url, icon: '/icons/icon-192.png',
-    });
-    if (r.gone) {
-      await sbUpdate(env, 'vinax_push_subscriptions', `endpoint=eq.${encodeURIComponent(s.endpoint)}`, {
-        active: false,
-      }).catch(() => false);
-    }
-    return r;
-  });
-  let sent = 0;
-  let gone = 0;
-  // 11.7.2 — why a browser did not take it (403 = key mismatch, 0 = timeout, …).
-  const failed: Record<string, number> = {};
-  for (const r of results) {
-    if (r.status !== 'fulfilled') {
-      failed.error = (failed.error ?? 0) + 1;
-      continue;
-    }
-    if (r.value.ok) sent += 1;
-    else if (r.value.gone) gone += 1;
-    else failed[String(r.value.status)] = (failed[String(r.value.status)] ?? 0) + 1;
-  }
-  // 11.7.2 — the delivery receipt. Before this the sent log could only say a
-  // message was SENT, never whether anything received it, so "nobody got my
-  // test" had no answer. Read back by /api/admin/notifylog.
-  await sbInsert(env, 'vinax_events', {
-    device_id: 'admin',
-    type: 'push-receipt',
-    message: JSON.stringify({
-      ts: sentAt,
-      title: title.slice(0, 80),
-      audience: geoTagForLog,
-      web: { total: subs.length, sent, gone, failed },
-      fcm: fcmError ? null : fcm,
-      ...(fcmError ? { fcmError } : {}),
-      ...(Object.keys(fcmFailed).length ? { fcmFailed } : {}),
-    }).slice(0, 900),
-  }).catch(() => false);
-  return json({ ok: true, total: subs.length, sent, gone, failed, fcm: fcmError ? null : fcm, fcmFailed, ...(fcmError ? { fcmError } : {}), target: geoTagForLog }, 200);
-};
+}, { cap: 16_000 });

@@ -1,9 +1,8 @@
 /** Romanize or translate lyric lines via the scholar lane (server-side key;
  *  per-lane provider base — see functions/_lib/ai.ts). Returns the same number
  *  of lines in the same order so synced-lyric timing stays aligned. */
-import { aiBlockCode, aiGate, chat, extractJson, isAiBlocked, logAiEvent, logAiRefusal, type AiBlock, type AiEnv } from '../_lib/ai';
+import { chat, extractJson, type AiEnv } from '../_lib/ai';
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
-import { type SupabaseEnv } from '../_lib/supabase';
 
 const SYS: Record<string, string> = {
   romanize:
@@ -45,7 +44,7 @@ export const onRequestGet = async (): Promise<Response> => methodNotAllowed();
 
 export const onRequestPost = async (context: {
   request: Request;
-  env: AiEnv & SupabaseEnv;
+  env: AiEnv;
   waitUntil?: (p: Promise<unknown>) => void;
 }): Promise<Response> => {
   try {
@@ -59,21 +58,12 @@ export const onRequestPost = async (context: {
 
 async function handlePost(context: {
   request: Request;
-  env: AiEnv & SupabaseEnv;
+  env: AiEnv;
   waitUntil?: (p: Promise<unknown>) => void;
 }): Promise<Response> {
   const { request, env } = context;
-  const isApp = request.headers.get('x-vinax-client') === 'app';
   const limited = await rateLimitAsync(request, 'lyrics-tools', { capacity: 12, refillPerMinute: 6 }, env);
   if (limited) return limited;
-  // 7.2.0 — the owner's AI switches and spend caps.
-  // Refusals are logged (error ai_disabled / ai_over_budget) for the console.
-  const refuse = (b: AiBlock): Response => {
-    void logAiRefusal(env, 'lyrics', b, isApp ? 'app' : 'web', context.waitUntil);
-    return json({ error: aiBlockCode(b) }, 503);
-  };
-  const blocked = await aiGate(env, 'lyrics');
-  if (blocked) return refuse(blocked);
 
   const body = (await request.json().catch(() => null)) as { lines?: unknown; mode?: unknown } | null;
   const mode = typeof body?.mode === 'string' && body.mode in SYS ? body.mode : null;
@@ -96,9 +86,8 @@ async function handlePost(context: {
     // would break synced timing — the client drops those anyway) asks the
     // next engine inside the same deadline. The default ladder now ends with
     // the flagship lane when its key is set.
-    { temperature: 0.3, maxTokens: 4000, lane: 'scholar', json: true, reasoningEffort: 'low', timeoutMs: 10_000, firstTimeoutMs: 12_000, deadlineAt: t0 + 32_000, feature: 'lyrics', accept: (content) => usableLyricsAnswer(mode, content, lines.length) },
+    { temperature: 0.3, maxTokens: 4000, lane: 'scholar', json: true, reasoningEffort: 'low', timeoutMs: 10_000, firstTimeoutMs: 12_000, deadlineAt: t0 + 32_000, accept: (content) => usableLyricsAnswer(mode, content, lines.length) },
   );
-  if (isAiBlocked(r.error)) return refuse(r.error);
   if (mode === 'explain') {
     const parsed = r.error ? null : extractJson<{ summary?: unknown; mood?: unknown; themes?: unknown }>(r.content);
     const summary = typeof parsed?.summary === 'string' ? parsed.summary.slice(0, 800) : '';
@@ -106,18 +95,6 @@ async function handlePost(context: {
     const themes = Array.isArray(parsed?.themes)
       ? parsed.themes.filter((t): t is string => typeof t === 'string').slice(0, 6).map((t) => t.slice(0, 40))
       : [];
-    if (r.error !== 'not_configured') {
-      const log = logAiEvent(env, {
-        feature: 'lyrics',
-        model: r.model ? `${r.model} @${r.keyRole ?? '?'}` : null,
-        ok: !r.error && !!summary,
-        status: r.status ?? null,
-        error: r.error ?? (summary ? null : 'explain_failed'),
-        client: isApp ? 'app' : 'web',
-        latency_ms: Date.now() - t0,
-      });
-      if (typeof context.waitUntil === 'function') context.waitUntil(log);
-    }
     if (r.error === 'not_configured') return json({ error: 'not_configured' }, 503);
     // An upstream rate limit (or every lane cooling down) is "busy", not a crash.
     if (!summary) return json({ error: r.error ?? 'explain_failed' }, r.error && r.status === 429 ? 429 : 500);
@@ -128,20 +105,6 @@ async function handlePost(context: {
   if (!r.error) {
     const parsed = extractJson<{ lines?: unknown }>(r.content);
     out = Array.isArray(parsed?.lines) ? parsed.lines.map((l) => String(l)) : null;
-  }
-  if (r.error !== 'not_configured') {
-    const log = logAiEvent(env, {
-      feature: 'lyrics',
-      model: r.model ? `${r.model} @${r.keyRole ?? '?'}` : null,
-      ok: !r.error && out != null,
-      status: r.status ?? null,
-      error: r.error ?? (out ? null : 'transform_failed'),
-      client: isApp ? 'app' : 'web',
-      latency_ms: Date.now() - t0,
-      prompt_tokens: r.usage?.prompt_tokens,
-      completion_tokens: r.usage?.completion_tokens,
-    });
-    if (typeof context.waitUntil === 'function') context.waitUntil(log);
   }
   if (r.error === 'not_configured') return json({ error: 'not_configured' }, 503);
   if (r.error) return json({ error: r.error }, r.status === 429 ? 429 : 500);

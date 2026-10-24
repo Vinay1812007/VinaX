@@ -135,7 +135,7 @@ The first web tool is the Gemini provider's search grounding, and only on models
 
 #### 12.0 — deep research, reasoning, pictures, titles, small talk
 
-- **Deep research** (`research: true` in the request; the + menu's **Deep research** switch, one message at a time). `planResearch` (`_lib/chatExtras.ts`) asks the fast lane for 3 more searches (a fixed fallback when it can't), the question and those 3 run in parallel (4 credits), `mergeResults` keeps 12 de-duplicated results, and `RESEARCH_RULE` asks for a structured, cited report of 600–1,200 words. Auto answers it on the flagship seat (else the deep seat); grounding is off for it. Runs are capped by `RESEARCH_DAILY_LIMIT` (plain var, default 5) counted from `vinax_ai_events` rows (feature `deep-research`, model `research`, ok), behind the owner switches `web-search` and `deep-research`. Over the cap the turn answers as a normal chat. Status frames: `planning`, `searching` (with `queries`), `searched` (with `count`, `sites`), all with `research: true`.
+- **Deep research** (`research: true` in the request; the + menu's **Deep research** switch, one message at a time). `planResearch` (`_lib/chatExtras.ts`) asks the fast lane for 3 more searches (a fixed fallback when it can't), the question and those 3 run in parallel (4 credits), `mergeResults` keeps 12 de-duplicated results, and `RESEARCH_RULE` asks for a structured, cited report of 600–1,200 words. Auto answers it on the flagship seat (else the deep seat); grounding is off for it. Runs are capped by `RESEARCH_DAILY_LIMIT` (plain var, default 5, `0` = off), counted per isolate (research runs are not written to the database). Over the cap the turn answers as a normal chat. Status frames: `planning`, `searching` (with `queries`), `searched` (with `count`, `sites`), all with `research: true`.
 - **Reasoning** is no longer thrown away: a `<think>` block and the `reasoning` / `reasoning_content` delta fields are sent as `{ think: "…" }` frames (at most 20,000 characters a reply), never as reply text. The page shows it live, then folded as "Thought for Ns" (`Thoughts` in `Message.tsx`); it is kept with the chat.
 - **Pictures**: the search's own images (a result's `imageUrl`, the knowledge panel's image) — no extra search — ride the `sources` frame as `images: [{ src, page, alt }]`, at most 4. `src` is a signed Worker path (`/api/webimg?u=…&s=…`, HMAC with `TELEMETRY_PEPPER`, else `DEVICE_ID_SECRET`), so the browser never contacts the picture's site and the route is not an open proxy; raster images only, ≤ 3 MB, cached a day.
 - **Site logos**: `GET /api/favicon?host=…` (public host names only) fetches a 64-px logo once and caches it for a week; the page falls back to the letter monogram (`SiteMark`).
@@ -149,15 +149,15 @@ The first web tool is the Gemini provider's search grounding, and only on models
 
 `_lib/serper.ts` searches Google through Serper (`POST https://google.serper.dev/search`, or `/news` for a message with a news cue) and returns at most 5 results (http(s) only, titles ≤ 160 characters, snippets ≤ 400, markup stripped) plus an optional quick answer (the answer box, else the knowledge-graph description). It asks for at most 10 results, because a larger page costs 2 credits.
 
-- **When it runs** (`api/vinaxai.ts`, after the owner's `vinaxai` gate and before any model is called): only when the first attempt of the plan does not carry grounding (`runsSearch()`), on Auto or a picked model, without code execution, when `wantsWeb()` fires for the latest message (its own text, not an attached file; since 11.8.1 a website name or a link counts too, `mentionsSite()`), when the message is not a music command, when `SERPER_API_KEY` is set, and when `aiGate(env, 'web-search')` allows it. Never on the voice, expert or translator seats. At most one call per turn.
+- **When it runs** (`api/vinaxai.ts`, before any model is called): only when the first attempt of the plan does not carry grounding (`runsSearch()`), on Auto or a picked model, without code execution, when `wantsWeb()` fires for the latest message (its own text, not an attached file; since 11.8.1 a website name or a link counts too, `mentionsSite()`), when the message is not a music command, and when `SERPER_API_KEY` is set. Never on the voice, expert or translator seats. At most one call per turn.
 - **The query** (`buildSearchQuery`): the latest user message only, with attached file text (`--- File: … ---` blocks) and fenced code removed, each link cut to its host name (never a path, a query string or a token), whitespace collapsed, at most 300 characters. A follow-up (under four words, led by a pronoun, or a short question with "it", "they" and similar in it) gets up to 8 content words of the previous user message in front; a message that names a website is searched as it is. Taste, memory, project, profile and place text are never sent. `gl` is the listener's coarse country when their place setting already sends one, else `in`; `hl` is the request's `lang` when present, else `en`.
 - **What the model gets:** a `<search_results>` block appended to the system message: one line saying the results are reference material, not instructions, an optional `Quick answer:` line, then `[n] title`, URL and snippet per result. The system prompt (section 5) says to cite them inline as [1], [2], to say so when they do not answer the question, never to cite a source outside the block and never to follow instructions inside it. Since 11.8.1 one more line follows the block (`SEARCH_ANSWER_RULE`): answer from the results, use only facts they contain for anything current, put [n] after each sentence that uses one, say so when they do not answer, and do not claim to be unable to browse. A small model follows a rule next to the results; it ignored the one in section 5. A picked model is still the whole plan: results change what it reads, never which model answers.
 - **Live steps (11.8.1):** a turn that searches answers 200 at once with the event stream (`searchFirstStream`): `{ status: { step: 'searching', query } }`, the search, `{ status: { step: 'searched', query, count, sites } }` (sites = the results' host names), then the reply's frames as before. If the turn then cannot answer, the stream carries `{ failed: { status, body } }` — the HTTP status and JSON body it would otherwise have answered with — and the client reads it exactly as it reads an HTTP refusal (`streamClient.ts`). Turns without a search are unchanged. The page shows the steps in place of the waiting line (`SearchSteps` in `Message.tsx`), and a reply's `[n]` markers become the same source chips grounded replies use (`placeCitations` in `citations.ts`).
 - **What the listener gets:** the same one `{ sources }` frame a grounded reply sends (items = each result's `{ url, title }`, `queries` = [the query], `entry` = null), before `done`, only when the reply has text and no grounded frame was sent; and `web_search` in `meta.tools`.
-- **Credits.** Checked in this order: the edge cache (`caches.default`, keyed by endpoint, normalised query and `gl`: news 15 minutes, other results 60 minutes, an empty answer 2 minutes; a failed call is not cached), then a 24-hour rest after Serper answers 401, 402, 403 or 429, or a 400 naming credits or quota (per isolate, logged once), then the daily cap: `SERPER_DAILY_LIMIT` (default 80, `0` = no calls) successful non-cached calls per UTC day. The count is today's `vinax_ai_events` rows with feature `web-search`, model `serper` and `ok`, read with a 60-second cache, plus this isolate's own calls since that read. Like the spend caps it is soft by up to one cache period and the calls in flight.
-- **Trending now (11.9).** The empty chat shows a few current headlines (India news and tech) from `GET /api/ai/headlines`, which only reads `vinax_config` key `ai-headlines` (`_lib/headlines.ts`). A scheduled job (`POST /api/cron/headlines`, every three hours) refreshes it with one fixed news search per topic, never on a listener's request, because the edge cache is per data centre and a refresh-on-request would multiply the searches with traffic. The job passes `capShare: 0.75`, so it stops once today's searches reach 75 % of the cap; a topic whose search fails keeps its previous headlines; the read hides headlines older than a day and everything while `web-search` is off. A tap asks the chat "What's the latest news on this: …", which searches as usual.
+- **Credits.** Checked in this order: the edge cache (`caches.default`, keyed by endpoint, normalised query and `gl`: news 15 minutes, other results 60 minutes, an empty answer 2 minutes; a failed call is not cached), then a 24-hour rest after Serper answers 401, 402, 403 or 429, or a 400 naming credits or quota (per isolate, logged once), then the daily cap: `SERPER_DAILY_LIMIT` (default 80, `0` = no calls) successful non-cached calls per UTC day. The count is kept in isolate memory (web searches are not written to the database), so it is a per-location cap and the global total can be higher.
+- **Trending now (11.9, empty).** `GET /api/ai/headlines` answers `{ topics: [] }`: no job writes headlines in 14.0, and the strip is not shown when there are no topics.
 - **Failure.** A missing key, a timeout (5 s), a non-2xx answer, an unreadable body or any error is "no results": the chat answers exactly as it would have without the search.
-- **Logging.** Each non-cached call writes one `vinax_ai_events` row: feature `web-search`, model `serper`, ok, status, an error code (`timeout`, `network`, `http_<status>`, `credits_exhausted`) and latency. The query is not logged. These rows count as calls in AI Operations but never as tokens or unknown cost. The key is sent only in the `X-API-KEY` header and is never logged or returned.
+- **Logging.** Nothing is logged: neither the query nor the call. The key is sent only in the `X-API-KEY` header and is never logged or returned.
 
 ### Status codes
 
@@ -171,7 +171,6 @@ The first web tool is the Gemini provider's search grounding, and only on models
 | 500 | `{ error: 'upstream', status }` | The last engine answered any other error. Deliberately not 502. |
 | 500 | `{ error: 'exception', message: 'internal_error' }` | An unexpected error in the handler |
 | 503 | `ai_not_configured` | No attempt has a key |
-| 503 | `ai_disabled` / `ai_over_budget` | The owner's controls refused the call |
 | 503 | `engine_unreachable` | No engine returned headers in time |
 
 The other routes that map "every engine is rate-limited" to 429 are listed with their contracts below. Only `/api/vinaxai` sets a `Retry-After` header on that answer; the per-route rate limiter (`_lib/ratelimit.ts`) is the one other place in the Worker that sets the header, on its own `429 rate_limited` (see [Rate limits and body caps](#rate-limits-and-body-caps)).
@@ -199,7 +198,7 @@ A success is a server-sent event stream, one JSON object per `data:` frame.
 
 ## Media routes
 
-Each route sits behind its owner switch, a rate limit and a body cap, and validates a pick against the live list. A route with nothing to serve answers `503 not_configured` (`reason: 'no_key' | 'no_free_model'`).
+Each route sits behind a rate limit and a body cap, and validates a pick against the live list. A route with nothing to serve answers `503 not_configured` (`reason: 'no_key' | 'no_free_model'`).
 
 | Route | Request | Answer |
 | --- | --- | --- |
@@ -292,21 +291,17 @@ The chat restyles itself to the family of the model in use. `chatStyle.ts` is th
 | Natural-language search | On-device vectors |
 | DJ voice | The device's speech engine announces the song |
 
-Three kinds of switch turn AI off on purpose: the listener's settings, the owner's feature flags, and the owner's backend AI controls (below, and [admin-console.md](admin-console.md)).
+Three kinds of switch turn AI off on purpose: the listener's settings, the owner's feature flags (the `flags` setting, published from the console's Publish page) and the owner's server-side AI controls (the `ai-controls` setting: `emergencyOff`, per-feature `features`, `dailyTokenCap`). The Worker checks the controls before every model call (`_lib/aiControls.ts`, in `chat()` and at the top of `/api/vinaxai`) and answers `503 ai_disabled` or `503 ai_over_budget`; the clients treat both as "AI is unavailable here". The token cap sums today's `ai_calls` rows (UTC), read once a minute per isolate.
 
 ## Tests
 
-- Worker, in `backend/worker/__tests__/`: `aiChatAudit.test.ts` and `aiAuditSweep.test.ts` (the 11.0 chat fixes: OpenRouter on the ladder, vision, 429, history budget, unclosed reasoning, cancellation, default speech), `aiFallback.test.ts`, `aiControls.test.ts`, `aiMedia.test.ts`, `aiOps.test.ts`, `aiProviderAdmin.test.ts`, `aiTokens.test.ts`, `aicost.test.ts`, `catalog.test.ts`, `aiWebSearch.test.ts` (grounding), `serper.test.ts` and `serperChat.test.ts` (Serper search, its credit guards and the chat wiring).
+- Worker, in `backend/worker/__tests__/`: `aiChatAudit.test.ts` and `aiAuditSweep.test.ts` (the 11.0 chat fixes: OpenRouter on the ladder, vision, 429, history budget, unclosed reasoning, cancellation, default speech), `aiFallback.test.ts`, `aiMedia.test.ts`, `aiProviderAdmin.test.ts`, `aiTokens.test.ts`, `catalog.test.ts`, `aiWebSearch.test.ts` (grounding), `serper.test.ts` and `serperChat.test.ts` (Serper search, its credit guards and the chat wiring).
 - Chat page, beside the code in `features/ai/chat/`: `streamClient.test.ts`, `streamReducer.test.ts`, `buildChatRequest.test.ts`, `chatStyle.test.ts`, `longThread.test.ts`, `models.test.ts`, `ModelMenu.test.tsx`, `Composer.test.tsx`, `Message.test.tsx`, `media.test.ts`, `storage.test.ts`; in `features/ai/`: `attachments.test.ts`, `pdfText.test.ts`, `memory.test.ts`, `projects.test.ts`; in `components/ai/`: `tokenize.test.ts`, `RichContent.test.tsx`.
 - Browser: `frontend/e2e/vinax-ai.spec.ts`.
 
 ## Observability
 
-`logAiEvent` (`_lib/ai.ts`) writes one row to `vinax_ai_events` per AI request: feature, model (as `model @lane`, or `model @provider` on the media routes), ok, status, error, client (`web` or `app`), latency, and token counts when the provider reports them. It does nothing when the analytics database is not configured.
-
-`_lib/laneHealth.ts` aggregates those rows per lane for the owner console: calls, successes, p50 / p95 / p99 latency, failover hops, empty streams, and 401 / 403 / 429 responses. See [admin-console.md](admin-console.md).
-
-Two things are not in that table. `/api/embed` does not log its calls, so embeddings appear in neither lane health nor the spend caps. `/api/curate` keeps its own 60-second in-memory note per lane and moves a lane that just failed, or answered slower than 6 s, to the back of the order.
+Since 14.0 every attempt that reaches a provider leaves an `ai_calls` row (feature, lane, provider, model, status, latency, tokens; never the prompt), and refused calls leave a row with `error` `ai_disabled` / `ai_over_budget`. The console's **VinaX AI → Usage & health** tab reads them through `GET /api/admin/ai` (`stats_ai`). Streaming chat answers carry no token counts. `/api/curate` keeps its own 60-second in-memory note per lane and moves a lane that just failed, or answered slower than 6 s, to the back of the order.
 
 ## Rate limits and body caps
 
@@ -331,21 +326,6 @@ Bodies are read through a capped reader (`_lib/body.ts`, `readJsonCapped`); a bo
 | `POST /api/music` | 3 / 3 | 4 KB |
 | `GET /api/voices` | 12 / 12 (bucket only, no shared counter) | — |
 | `GET /api/aimodels` | 12 / 12 | — |
-
-## The owner's switches and spend caps
-
-The owner publishes one record, `vinax_config` key `ai-controls`, and the Worker enforces it. It holds an emergency stop, one switch per feature, and a daily token cap and a daily cost cap.
-
-The features are `dj`, `curate-metadata`, `curate-ranking`, `curate-home`, `curate-shelves`, `playlist`, `vinaxai`, `assistant`, `tts`, `lyrics`, `image`, `embed`, `search`, `transcribe`, `music` and `web-search` (the chat's Serper search, 11.8) (`AI_FEATURES` in `_lib/ai.ts`). A feature is on unless its value is exactly `false`.
-
-Every route calls `aiGate(env, feature)` before it contacts a provider, and `chat()` checks again before its first attempt, so a switch flipped mid-request still takes effect.
-
-- A refused call answers `503 { error: 'ai_disabled' }` (the stop, or the feature's switch) or `503 { error: 'ai_over_budget' }` (a cap). Clients treat both as "AI is unavailable here" and use their on-device path; see [When every provider is down](#when-every-provider-is-down).
-- The refusal is logged to `vinax_ai_events` with that error and no model, so it is told apart from a provider failure.
-- Each isolate caches the record for 30 s. A failed read is logged and fails open, except that an emergency stop already in the cache keeps applying until the cached copy is 60 s old.
-- Caps are compared with today's (UTC) token sums from `vinax_ai_events`, priced with the `ai-prices` table and cached for 60 s. Tokens on an unpriced model, and calls whose provider reported no usage, make the cost a lower bound (`costKnown: false`). If the usage read fails, caps are not enforced until it recovers. Caps are therefore soft by up to one cache period plus the calls already in flight.
-
-`aiControlsStatus(env)` returns the same picture for the owner console. The procedures are in [operations.md](operations.md#ai-controls-emergency-stop-feature-switches-and-spend-caps).
 
 ## `POST /api/dj` — the AI DJ
 
@@ -407,7 +387,7 @@ The first attempt gets 3.5 s (`metadata`) or 5 s; later attempts get 4 s. A lane
 
 - `400 bad_request` — unknown task, missing `data`, or a body that is not JSON. `413 too_large`.
 - `502 { error }` — `invalid_output` when every engine answered and none usably, otherwise the failure `chat()` reported (`failed`, `unreachable`). Rate-limited engines land here too, as `502 { error: 'failed' }`: this route has no 429 for them, and the client falls back the same way.
-- `503` — `ai_disabled` or `ai_over_budget` from the owner's controls; `ai_not_configured` (`shelves`) or `not_configured` (the other three tasks) when no lane has a key.
+- `503` — `ai_not_configured` (`shelves`) or `not_configured` (the other three tasks) when no lane has a key.
 
 **Validation** (`sanitizeCurated`). The engine's JSON is never passed through; each answer is rebuilt field by field, and an answer with nothing valid left asks the next lane.
 
@@ -480,7 +460,7 @@ Each engine gets 6 s and the whole ladder 13 s. A failed model rests for 30 minu
 
 ## Other routes that use a lane
 
-Each keeps its key on the Worker, checks the owner's controls, and fails with a JSON error.
+Each keeps its key on the Worker and fails with a JSON error.
 
 | Route | What it does |
 | --- | --- |
@@ -488,27 +468,25 @@ Each keeps its key on the Worker, checks the owner's controls, and fails with a 
 | `POST /api/lyrics-tools` | `mode` is `romanize`, `translate` or `explain`. `scholar` lane, 12 s first attempt, 10 s later, 32 s in all. An answer without JSON, or with a different line count, asks the next engine. No key answers `503 not_configured` |
 | `POST /api/tts`, `GET /api/voices` | Speech, and the speech models and voices the keys serve. If the chosen voice model fails with anything but a 429, the default voice model is asked once. The client falls back to the device's own voice |
 | `POST /api/image`, `POST /api/transcribe`, `POST /api/music` | The chat's media tools (`features/ai/chat/media.ts`) |
-| Scheduled push jobs (`api/cron/ai-daily-push.ts`, `api/cron/song-push.ts`) | Song picks and blurbs under the `dj` feature: 12 s per engine and 30 s in all for the pick, 10 s / 20 s for its retry, 8 s / 15 s for a blurb |
 
 `/api/assistant` and `/api/lyrics-tools` answer `429` instead of 500 when the ladder ends on a rate limit, as the DJ does, without a `Retry-After` header. `/api/tts`, `/api/transcribe` and `/api/music` pass a provider's 429 through as `429` and answer `502` for other provider failures.
 
 ## Which switch stops which call
 
-| Call | Listener setting | Owner flag | Owner control (`ai-controls`) |
-| --- | --- | --- | --- |
-| `/api/dj` | AI in recommendations **and** AI DJ | `aiDj` | `dj` |
-| `/api/curate` `metadata` | AI in recommendations | — | `curate-metadata` |
-| `/api/curate` `ranking` | AI in recommendations | `aiHome` for the Home surfaces | `curate-ranking` |
-| `/api/curate` `home` / `shelves` | AI in recommendations **and** AI-designed shelves on Home | `aiHome` | `curate-home`, `curate-shelves` |
-| `/api/embed` | AI in recommendations | — | `embed` |
-| `/api/playlist` | — (the listener asks for it) | — | `playlist` |
-| `/api/vinaxai`, `/api/assistant` | — (the listener asks for it) | — | `vinaxai`, `assistant` |
-| `/api/lyrics-tools`, `/api/image` | — (the listener asks for it) | — | `lyrics`, `image` |
-| `/api/transcribe`, `/api/music` | — (the listener asks for it) | — | `transcribe`, `music` |
-| `/api/tts` | DJ voice, read aloud | — | `tts` |
-| Scheduled push picks and blurbs | — | — | `dj` |
+| Call | Listener setting | Owner flag (the `flags` setting) |
+| --- | --- | --- |
+| `/api/dj` | AI in recommendations **and** AI DJ | `aiDj` |
+| `/api/curate` `metadata` | AI in recommendations | — |
+| `/api/curate` `ranking` | AI in recommendations | `aiHome` for the Home surfaces |
+| `/api/curate` `home` / `shelves` | AI in recommendations **and** AI-designed shelves on Home | `aiHome` |
+| `/api/embed` | AI in recommendations | — |
+| `/api/playlist` | — (the listener asks for it) | — |
+| `/api/vinaxai`, `/api/assistant` | — (the listener asks for it) | — |
+| `/api/lyrics-tools`, `/api/image` | — (the listener asks for it) | — |
+| `/api/transcribe`, `/api/music` | — (the listener asks for it) | — |
+| `/api/tts` | DJ voice, read aloud | — |
 
-"AI in recommendations" (`aiAssist`) is the listener's master switch for background AI. With it off the device sends nothing to `/api/dj`, `/api/curate` or `/api/embed`, and every surface uses its on-device path. Features a listener invokes by hand are not covered by it; the owner's controls still apply. The emergency stop refuses every row above. `GET /api/voices` and `GET /api/aimodels` only list models and are not gated.
+"AI in recommendations" (`aiAssist`) is the listener's master switch for background AI. With it off the device sends nothing to `/api/dj`, `/api/curate` or `/api/embed`, and every surface uses its on-device path. Features a listener invokes by hand are not covered by it. `GET /api/voices` and `GET /api/aimodels` only list models.
 
 ## Adding or replacing a model
 

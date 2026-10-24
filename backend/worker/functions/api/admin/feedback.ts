@@ -1,54 +1,75 @@
-/** Admin: latest in-app feedback / bug reports. */
-import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelectResult, sbUpdate, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+/**
+ * GET  /api/admin/feedback?status=new|read|resolved|all&kind=&limit=&offset=
+ *        → { configured, total, counts: { new, read, resolved }, rows }
+ * POST /api/admin/feedback { action: 'status', id, status, note? } | { action: 'delete', id } | { action: 'delete_resolved' }
+ */
+import { adminJson, badRequest, dbFailure } from '../../_lib/admin';
+import { adminGet, adminPost, camel, idOf, paging } from '../../_lib/adminRoute';
+import { db, q, firstFailure, type Query } from '../../_lib/db';
+import { clip } from '../../_lib/edge';
 
-type Env = AdminEnv & SupabaseEnv;
+const STATUSES = ['new', 'read', 'resolved'] as const;
+type Status = (typeof STATUSES)[number];
+const KINDS = ['bug', 'idea', 'content', 'other'] as const;
 
-interface FeedbackRow {
-  id: number;
-  type: string | null;
-  name: string | null;
-  message: string | null;
-  app_version: string | null;
-  platform: string | null;
-  country: string | null;
-  city: string | null;
-  status: string | null;
-  created_at: string;
+function filters(url: URL): Query {
+  const query = q();
+  const status = url.searchParams.get('status') ?? 'new';
+  if (status !== 'all' && (STATUSES as readonly string[]).includes(status)) query.eq('status', status);
+  const kind = url.searchParams.get('kind');
+  if (kind && (KINDS as readonly string[]).includes(kind)) query.eq('kind', kind);
+  return query;
 }
 
-export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
-  const { request, env } = context;
-  if (!(await isAdminAsync(request, env))) return unauthorized();
-
-  if (!supabaseConfigured(env)) return adminJson({ configured: false, feedback: [] });
-  const read = await sbSelectResult<FeedbackRow>(
-    env,
-    'vinax_feedback',
-    'select=id,type,name,message,app_version,platform,country,city,status,created_at&type=neq.admin-audit&order=created_at.desc&limit=200',
-  );
-
-  // 7.2.0 — a failed read is not an empty inbox.
-  if (!read.ok) return dbFailure(read);
-  return adminJson({ configured: true, feedback: read.rows });
-};
-
-export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
-  const { request, env } = context;
-  if (!(await isAdminAsync(request, env))) return unauthorized();
-  if (!supabaseConfigured(env)) return adminJson({ ok: false, error: 'not_configured' }, 503);
-
-  const body = (await request.json().catch(() => null)) as { id?: number; status?: string } | null;
-  const id = body && typeof body.id === 'number' ? body.id : null;
-  if (id === null) {
-    return new Response(JSON.stringify({ error: 'bad_request' }), { status: 400, headers: { 'content-type': 'application/json' } });
-  }
-  const status = body && typeof body.status === 'string' ? body.status.slice(0, 16) : 'resolved';
-  const ok = await sbUpdate(env, 'vinax_feedback', `id=eq.${id}`, { status });
-
-  // A failed Supabase write is a SERVER problem, not the client's (D-17).
-  return new Response(JSON.stringify({ ok }), {
-    status: ok ? 200 : 500,
-    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
+export const onRequestGet = adminGet(async ({ env, url }) => {
+  const { limit, offset } = paging(url, 50, 200);
+  const [rows, total, nNew, nRead, nResolved] = await Promise.all([
+    db.select<Record<string, unknown>>(env, 'feedback', filters(url).select('*').order('at', 'desc').limit(limit).offset(offset)),
+    db.count(env, 'feedback', filters(url)),
+    db.count(env, 'feedback', q().eq('status', 'new')),
+    db.count(env, 'feedback', q().eq('status', 'read')),
+    db.count(env, 'feedback', q().eq('status', 'resolved')),
+  ]);
+  const failed = firstFailure(rows, total, nNew, nRead, nResolved);
+  if (failed) return dbFailure(failed);
+  if (!rows.ok || !total.ok || !nNew.ok || !nRead.ok || !nResolved.ok) return adminJson({ configured: true, error: 'db_unavailable' }, 502);
+  return adminJson({
+    configured: true,
+    total: total.value,
+    limit,
+    offset,
+    counts: { new: nNew.value, read: nRead.value, resolved: nResolved.value },
+    rows: rows.rows.map(camel),
   });
-};
+});
+
+export const onRequestPost = adminPost(async ({ env, body, audit }) => {
+  if (body.action === 'status') {
+    const id = idOf(body.id);
+    const status = body.status as Status;
+    if (!id || !STATUSES.includes(status)) return badRequest();
+    const patch: Record<string, unknown> = { status, resolved_at: status === 'resolved' ? new Date().toISOString() : null };
+    if ('note' in body) patch.note = clip(body.note, 1000);
+    const r = await db.update<Record<string, unknown>>(env, 'feedback', q().eq('id', id), patch, { returning: true });
+    if (!r.ok) return dbFailure(r);
+    if (!r.rows.length) return adminJson({ error: 'not_found' }, 404);
+    await audit({ action: 'feedback-status', summary: `feedback #${id} → ${status}`, target: String(id), after: patch });
+    return adminJson({ ok: true, row: camel(r.rows[0]) });
+  }
+  if (body.action === 'delete') {
+    const id = idOf(body.id);
+    if (!id) return badRequest();
+    const r = await db.remove<{ id: number; message: string }>(env, 'feedback', q().eq('id', id).select('id,message'), { returning: true });
+    if (!r.ok) return dbFailure(r);
+    if (!r.rows.length) return adminJson({ error: 'not_found' }, 404);
+    await audit({ action: 'feedback-delete', summary: `deleted feedback #${id}`, target: String(id), before: r.rows[0] });
+    return adminJson({ ok: true, deleted: 1 });
+  }
+  if (body.action === 'delete_resolved') {
+    const r = await db.remove<{ id: number }>(env, 'feedback', q().eq('status', 'resolved').select('id'), { returning: true });
+    if (!r.ok) return dbFailure(r);
+    await audit({ action: 'feedback-delete-resolved', summary: `deleted ${r.rows.length} resolved feedback message${r.rows.length === 1 ? '' : 's'}` });
+    return adminJson({ ok: true, deleted: r.rows.length });
+  }
+  return badRequest('unknown_action');
+});

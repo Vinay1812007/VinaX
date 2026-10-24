@@ -1,17 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { publicClientConfig, maintenanceActive, houseRules, CLIENT_KEYS } from '../functions/_lib/clientConfig';
-import { ALLOWED_KEYS } from '../functions/api/admin/appconfig';
-import { buildQuery, QUERYABLE } from '../functions/api/admin/query';
-import { funnel } from '../functions/api/admin/funnel';
-import { skipTable } from '../functions/api/admin/skips';
-import { usageFromRows } from '../functions/api/admin/usage';
-import { summarise } from '../functions/api/admin/songstats';
+import { publicClientConfig, maintenanceActive, houseRules } from '../functions/_lib/clientConfig';
 
 describe('client config bundle', () => {
-  it('every client key is publishable from the console', () => {
-    for (const k of CLIENT_KEYS) expect(ALLOWED_KEYS.has(k), k).toBe(true);
-    expect(ALLOWED_KEYS.has('ai-rules')).toBe(true);
-  });
   it('sanitises and windows every field', () => {
     const now = new Date('2026-09-08T10:00:00Z');
     const cfg = publicClientConfig({
@@ -55,64 +45,21 @@ describe('client config bundle', () => {
   });
 });
 
-describe('query console', () => {
-  it('rejects unknown tables/columns and unsafe values', () => {
-    expect(buildQuery(new URLSearchParams('table=vinax_push_subscriptions'))).toEqual({ error: 'unknown_table' });
-    expect(buildQuery(new URLSearchParams('table=vinax_events&col=device_id&val=x'))).toEqual({ error: 'unknown_column' });
-    expect(buildQuery(new URLSearchParams('table=vinax_events&col=type&val=play;drop'))).toEqual({ error: 'bad_value' });
-  });
-  it('builds a bounded, ordered, column-limited query', () => {
-    const q = buildQuery(new URLSearchParams('table=vinax_events&hours=99999&limit=9999&col=type&val=play'));
-    expect('error' in q).toBe(false);
-    if ('error' in q) return;
-    expect(q.limit).toBe(500);
-    expect(q.query).toContain('select=' + QUERYABLE.vinax_events.columns.join(','));
-    expect(q.query).toContain('order=created_at.desc');
-    expect(q.query).toContain('type=eq.play');
-    expect(q.query).not.toContain('device_id');
-  });
-});
-
-describe('analytics reducers', () => {
-  it('funnel counts distinct devices per step', () => {
-    const steps = funnel([
-      { type: 'open', device_id: 'a' }, { type: 'play', device_id: 'a' }, { type: 'play', device_id: 'a' },
-      { type: 'open', device_id: 'b' }, { type: 'complete', device_id: 'a' }, { type: 'favorite', device_id: 'a' },
-    ]);
-    const by = Object.fromEntries(steps.map((s) => [s.id, s]));
-    expect(by.open.devices).toBe(2);
-    expect(by.play.devices).toBe(1);
-    expect(by.play.pct).toBe(50);
-    expect(by.favorite.devices).toBe(1);
-    expect(by.share.devices).toBe(0);
-  });
-  it('skip table ranks by rate among songs with enough plays', () => {
-    const row = (type: string, id: string) => ({ type, song_id: id, song_title: id.toUpperCase(), song_artist: 'x', song_image: '' });
-    const rows = [
-      ...Array.from({ length: 10 }, () => row('play', 'a')),
-      ...Array.from({ length: 6 }, () => row('skip', 'a')),
-      row('play', 'b'), row('play', 'b'), row('skip', 'b'),
-    ];
-    const t = skipTable(rows, 5);
-    expect(t).toHaveLength(1);
-    expect(t[0]).toMatchObject({ id: 'a', plays: 10, skips: 6, rate: 60 });
-  });
-  it('usage heatmap buckets plays into IST weekday x hour', () => {
-    const u = usageFromRows([
-      { type: 'play', platform: 'web', device_id: 'a', created_at: '2026-09-08T18:30:00Z' }, // Wed 00:00 IST
-      { type: 'search', platform: 'android', device_id: 'a', created_at: '2026-09-08T18:30:00Z' },
-    ]);
-    expect(u.heatmap[3][0]).toBe(1);
-    expect(u.peak).toEqual({ day: 3, hour: 0, n: 1 });
-    expect(u.byType[0]).toEqual({ type: 'play', n: 1, devices: 1 });
-    expect(u.byPlatform.map((p) => p.platform).sort()).toEqual(['android', 'web']);
-  });
-  it('song summary computes totals, days and skip rate', () => {
-    const r = (type: string, day: string, country = 'IN') => ({ type, song_id: 's', song_title: 'S', song_artist: 'A', song_image: '', device_id: 'd' + day, country, platform: 'web', created_at: `${day}T10:00:00Z` });
-    const s = summarise([r('play', '2026-09-01'), r('play', '2026-09-02'), r('skip', '2026-09-02'), r('complete', '2026-09-01'), r('favorite', '2026-09-01', 'US')]);
-    expect(s.totals).toEqual({ plays: 2, skips: 1, completes: 1, favorites: 1, listeners: 2 });
-    expect(s.byDay).toEqual([{ day: '2026-09-01', plays: 1, skips: 0 }, { day: '2026-09-02', plays: 1, skips: 1 }]);
-    expect(s.skipRate).toBe(50);
-    expect(s.countries).toEqual([{ country: 'IN', n: 2 }]);
+describe('14.0 — banners, festival, flags and site mode', () => {
+  it('banners inside their dates with safe fields, at most 10', async () => {
+    const { activeBanners, publicFestival, publicSiteMode } = await import('../functions/_lib/clientConfig');
+    const now = new Date('2026-10-24T10:00:00Z');
+    const many = Array.from({ length: 14 }, (_, i) => ({ title: `B${i}` }));
+    expect(activeBanners(many, now)).toHaveLength(10);
+    expect(activeBanners([{ title: 'Soon', start: '2026-11-01' }, { title: 'Gone', end: '2026-10-01' }, { title: 'Now', start: '2026-10-01', end: '2026-10-31', linkType: 'bogus', linkId: 'x', img: 'http://insecure/x.png' }], now))
+      .toEqual([{ title: 'Now', start: '2026-10-01', end: '2026-10-31' }]);
+    expect(activeBanners('nope', now)).toEqual([]);
+    expect(publicFestival({ mode: 'force', id: 'Diwali' })).toEqual({ mode: 'force', id: 'diwali' });
+    expect(publicFestival({ mode: 'force' })).toBeNull();
+    expect(publicFestival({ mode: 'off' })).toEqual({ mode: 'off' });
+    expect(publicFestival({ mode: 'party' })).toBeNull();
+    expect(publicSiteMode({}, now)).toEqual({ mode: 'live' });
+    expect(publicSiteMode({ 'site-mode': { mode: 'maintenance', note: 'x' } }, now)).toEqual({ mode: 'maintenance', note: 'x' });
+    expect(publicSiteMode({ 'site-mode': { mode: 'live' }, 'maintenance-window': { start: '2026-10-24T09:00:00Z', end: '2026-10-24T11:00:00Z' } }, now)).toEqual({ mode: 'maintenance' });
   });
 });

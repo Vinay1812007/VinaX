@@ -10,8 +10,6 @@
 // 2026-07) and this file still pointed at it alone, so entity pages were
 // silently serving the PLAIN shell to every crawler. Same list the sitemaps
 // use; first mirror with data wins.
-import type { SupabaseEnv } from './supabase';
-import { artistRows, harvestSoon, seoRow, songRowsDeep, type SeoRow } from './seo';
 
 const BASES = ['https://www.vinaxmusic.online/api/cat', 'https://saavn.sumit.co/api', 'https://nepotuneapi.vercel.app/api'];
 /** 13.6.0 — the build's entity prerender (frontend/scripts/prerender-entities.mjs)
@@ -29,8 +27,7 @@ interface Assets {
   ASSETS: { fetch: (req: Request | string | URL) => Promise<Response> };
 }
 
-type RenderEnv = Assets & SupabaseEnv;
-type WaitUntil = ((p: Promise<unknown>) => void) | undefined;
+type RenderEnv = Assets;
 
 const esc = (s: unknown): string =>
   String(s ?? '')
@@ -220,9 +217,6 @@ interface Meta {
    *  treatment: og:type music.song with duration/album/musician). */
   ogType: string;
   music?: Array<[string, string]>;
-  /** Everything this render learned about the catalog — fed to the SEO URL
-   *  corpus fire-and-forget so crawled pages grow the sitemap (4.15.0). */
-  harvestRows?: SeoRow[];
 }
 
 function songRows(songs: any[]): Array<{ id: string; title: string; artist: string; duration?: number }> {
@@ -313,11 +307,6 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
     return {
       para: albumPara,
       sections: albumSections,
-      harvestRows: [
-        seoRow('album', id, d.name, d.language),
-        ...artistRows(d.artists),
-        ...(Array.isArray(d.songs) ? d.songs : []).flatMap(songRowsDeep),
-      ].filter((r): r is SeoRow => !!r),
       crumbs: [{ name: 'Home', item: `${ORIGIN}/` }, ...hubCrumbs(d.language), { name: String(d.name) }],
       title: `${d.name}${year} — Album · VinaX`,
       ogType: 'music.album',
@@ -359,10 +348,6 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
     const image = bestImg(d.image);
     const tracks = songRows(d.songs);
     return {
-      harvestRows: [
-        seoRow('playlist', id, d.name),
-        ...(Array.isArray(d.songs) ? d.songs : []).flatMap(songRowsDeep),
-      ].filter((r): r is SeoRow => !!r),
       crumbs: [{ name: 'Home', item: `${ORIGIN}/` }, { name: String(d.name) }],
       title: `${d.name} — Playlist · VinaX`,
       ogType: 'music.playlist',
@@ -438,12 +423,6 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
     return {
       para: artistPara,
       sections: artistSections,
-      harvestRows: [
-        seoRow('artist', id, d.name),
-        ...(Array.isArray(d.topSongs) ? d.topSongs : []).flatMap(songRowsDeep),
-        ...(Array.isArray(d.topAlbums) ? d.topAlbums : [])
-          .map((al: any) => seoRow('album', al?.id, al?.name, al?.language)),
-      ].filter((r): r is SeoRow => !!r),
       crumbs: [{ name: 'Home', item: `${ORIGIN}/` }, { name: String(d.name) }],
       title: `${d.name} — Songs & Albums · VinaX`,
       ogType: 'profile',
@@ -532,7 +511,6 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
     hubLinks(lang);
   return {
     sections,
-    harvestRows: songRowsDeep(d),
     crumbs: [
       { name: 'Home', item: `${ORIGIN}/` },
       ...hubCrumbs(lang),
@@ -650,7 +628,6 @@ export async function renderHub(
   mood: string,
   request: Request,
   env: RenderEnv,
-  waitUntil?: WaitUntil,
 ): Promise<Response> {
   try {
     const shellRes = await env.ASSETS.fetch(new URL('/index.html', request.url).toString());
@@ -659,10 +636,7 @@ export async function renderHub(
     const label = capWord(lang);
     const path = `/${lang}-${mood}-songs`;
     const j = await fetchJson(`search/songs?query=${encodeURIComponent(`${lang} ${hub.query}`)}&limit=30`);
-    const rawTracks: any[] = j?.data?.results ?? [];
-    const tracks = songRows(rawTracks);
-    // Every hub crawl teaches the SEO corpus 30 songs (+ albums + artists).
-    harvestSoon(env, rawTracks.flatMap(songRowsDeep), waitUntil);
+    const tracks = songRows(j?.data?.results ?? []);
     const title = `${label} ${hub.label} Songs \u2014 Stream Free | VinaX`;
     const desc = clampDesc(`The best ${label} ${hub.label.toLowerCase()} songs \u2014 ${hub.blurb}. Stream free on VinaX, no login, tuned to you.`);
     const jsonld = [
@@ -738,12 +712,11 @@ export async function renderHub(
 
 /** 13.6.0 — one entity page as HTML, from a shell, or null when the catalogue
  *  has nothing for it. Used by renderEntity (edge) and by the build's
- *  entity prerender; `harvest` receives what the page learned. */
+ *  entity prerender. */
 export async function entityPage(
   type: string,
   id: string,
   shell: string,
-  harvest?: (rows: SeoRow[]) => void,
 ): Promise<{ path: string; html: string } | null> {
   const realId = idOf(id);
   const meta = await buildMeta(type, realId);
@@ -751,7 +724,6 @@ export async function entityPage(
   // Catalog names are unbounded — keep the description inside Bing's
   // 25–160 char window regardless of how long a title runs.
   meta.desc = clampDesc(meta.desc);
-  harvest?.(meta.harvestRows ?? []);
   const path = `/${type}/${slugify(meta.h1)}-${realId}`;
   const img = meta.image
     ? `<meta property="og:image" content="${esc(meta.image)}"/><meta property="og:image:width" content="500"/><meta property="og:image:height" content="500"/><meta name="twitter:image" content="${esc(meta.image)}"/><meta name="twitter:card" content="summary_large_image"/>` +
@@ -810,14 +782,11 @@ export async function renderEntity(
   id: string,
   request: Request,
   env: RenderEnv,
-  waitUntil?: WaitUntil,
 ): Promise<Response> {
   try {
     const shellRes = await env.ASSETS.fetch(new URL('/index.html', request.url).toString());
     const shell = await shellRes.text();
-    // Feed the SEO corpus with everything this page knows (fire-and-forget:
-    // the response never waits on Supabase, failures are invisible).
-    const page = await entityPage(type, id, shell, (rows) => harvestSoon(env, rows, waitUntil));
+    const page = await entityPage(type, id, shell);
     if (!page) return new Response(shell, { headers: { 'content-type': 'text/html; charset=utf-8' } });
     return new Response(page.html, {
       headers: {

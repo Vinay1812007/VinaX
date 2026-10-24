@@ -1,70 +1,51 @@
 /**
- * /api/username — unique-handle claim for the no-login identity model.
+ * /api/username — the unique VinaX handle (older app builds claim one at
+ * onboarding; since 13.0 most listeners are named by their Google account).
  *
- * Display names collide ("VINAY MAC" × 3 devices in User Management), so
- * onboarding now also claims a USERNAME: a unique, lowercase handle stored on
- * the device's vinax_users row. No accounts involved — the handle is bound to
- * the same device identity the telemetry pipeline uses (see _lib/identity.ts:
- * a signed device id when the client has one, otherwise an id derived from
- * the client's own install uuid, otherwise a fresh random id — never an id
- * shared by every client behind one network + browser build).
+ *   GET  /api/username?u=<handle>  → { available }            (400 { available: false, error: 'invalid' })
+ *   POST /api/username { username, name?, deviceId?, signed_device_id?, current_username? }
+ *        → 200 { ok: true, username, signed_device_id_next? }
+ *        → 400 { error: 'invalid' }
+ *        → 409 { error: 'taken', suggestions: [...] }
+ *        → 503 { error: 'unavailable' }
  *
- *   GET  /api/username?u=<handle>            → { available: boolean }
- *   POST /api/username { username, name?, signed_device_id?, deviceId?, current_username?, turnstile_token? }
- *        → 200 { ok, username, signed_device_id_next? }
- *        → 409 { error: "taken", suggestions: [...] }   (already exists)
- *        → 400 { error: "invalid" }                     (bad format)
- *        → 403 { error: "challenge" }                   (human check missing or failed)
- *        → 503 { error: "unavailable" }                 (store unreachable)
- *
- * Uniqueness is enforced case-insensitively: application-level check here
- * plus the partial unique index added in the vinax_users migration
- * (create unique index on lower(username)) as the race-proof backstop.
+ * The handle lives on the caller's `listeners` row (`handle`, unique
+ * case-insensitively — the index is the race backstop). A device may rename
+ * itself or re-claim its own handle; a handle another device holds is taken.
+ * Without a database the answers say `unchecked`, as installed builds expect.
  */
-import { sbSelect, sbSelectRes, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
-import { mintFreshIdentity, resolveIdentity, type IdentityEnv, type ResolvedIdentity } from '../_lib/identity';
+import { db, dbConfigured, like, q, type DbEnv } from '../_lib/db';
+import { asObject, clip, jsonResponse } from '../_lib/edge';
+import { resolveIdentity, type IdentityEnv } from '../_lib/identity';
 import { rateLimit } from '../_lib/ratelimit';
-import { verifyTurnstile, type TurnstileEnv } from '../_lib/turnstile';
 
-type Env = SupabaseEnv & IdentityEnv & TurnstileEnv;
+type Env = DbEnv & IdentityEnv;
 
 const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
 
-/**
- * 7.2.0 — the Android shell loads the app from the production origin today, so
- * these calls are same-origin; a build that bundles the assets (the fix the
- * Capacitor config recommends) runs on https://localhost and would be refused
- * at the preflight without this. The body carries no secret and the route
- * answers the same to anyone, so the allowance is the simple one.
- */
 const CORS: Record<string, string> = {
   'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'POST, OPTIONS',
+  'access-control-allow-methods': 'GET, POST, OPTIONS',
   'access-control-allow-headers': 'content-type',
 };
+const json = (body: unknown, status = 200): Response => jsonResponse(body, status, CORS);
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: CORS });
 
-const json = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...CORS } });
-
-const normalize = (raw: unknown): string | null => {
+export const normalizeHandle = (raw: unknown): string | null => {
   if (typeof raw !== 'string') return null;
   const u = raw.trim().toLowerCase();
   return HANDLE_RE.test(u) ? u : null;
 };
 
-/** Owner device of a handle, or null when the handle is free. */
-async function ownerOf(env: Env, username: string): Promise<string | null> {
-  const rows = await sbSelect<{ device_id: string }>(
-    env,
-    'vinax_users',
-    `username=ilike.${encodeURIComponent(username)}&select=device_id&limit=1`,
-  );
-  return rows[0]?.device_id ?? null;
+/** The device holding a handle, null when free, undefined when the read failed. */
+async function ownerOf(env: Env, handle: string): Promise<string | null | undefined> {
+  const r = await db.one<{ id: string }>(env, 'listeners', q().ilike('handle', like(handle)).select('id'));
+  if (!r.ok) return undefined;
+  return r.value?.id ?? null;
 }
 
-/** vinay → vinay_2814-style alternatives that are actually free right now. */
+/** `name_2814`-style alternatives that are free right now. */
 async function suggest(env: Env, base: string): Promise<string[]> {
   const stem = base.slice(0, 15);
   const out: string[] = [];
@@ -75,101 +56,45 @@ async function suggest(env: Env, base: string): Promise<string[]> {
   return out;
 }
 
-/** The handle stored on a device row: null = no handle, undefined = read failed. */
-async function handleOf(env: Env, deviceId: string): Promise<string | null | undefined> {
-  const res = await sbSelectRes<{ username: string | null }>(
-    env,
-    'vinax_users',
-    `device_id=eq.${encodeURIComponent(deviceId)}&select=username&limit=1`,
-  );
-  if (!res.ok) return undefined;
-  return res.rows[0]?.username ?? null;
-}
-
-/**
- * Resolve who is claiming, then make sure the upsert can only touch a row
- * that belongs to THIS client. When the resolved row already carries a
- * handle the client does not recognise as its own, the identity is abandoned
- * for a fresh one — so a second listener behind the same network (or an
- * unrelated client that landed on a legacy shared id) can never overwrite
- * the first listener's username. Returns null when the store is unreachable.
- */
-async function resolveClaimer(
-  request: Request,
-  env: Env,
-  body: Record<string, unknown>,
-): Promise<ResolvedIdentity | null> {
-  const id = await resolveIdentity(request, env, body);
-  const existing = await handleOf(env, id.deviceId);
-  if (existing === undefined) return null;
-  if (!existing) return id;
-  const current = normalize(body.current_username);
-  const claimed = normalize(body.username);
-  // The row is this client's when it names the handle already stored there,
-  // or is re-claiming that very handle.
-  if (existing === current || existing === claimed) return id;
-  // A device that PROVED its token and named no current handle (an older app
-  // build, or one whose local copy was cleared) is renaming itself: the token
-  // is its proof and it keeps its row. Anything else — an unverified client,
-  // or a verified one whose stored handle disagrees with what it believes it
-  // owns — is a different listener and gets its own identity.
-  const currentProvided = typeof body.current_username === 'string' && body.current_username.trim() !== '';
-  if (id.verified && !currentProvided) return id;
-  return mintFreshIdentity(env);
-}
-
-/** Availability probe — used live while the listener types. */
-export const onRequestGet = async (ctx: { request: Request; env: Env }): Promise<Response> => {
-  const { request, env } = ctx;
-  if (!supabaseConfigured(env)) return json({ available: true, unchecked: true });
-  const limited = rateLimit(request, 'username-check', { capacity: 30, refillPerMinute: 30 }, env);
+export const onRequestGet = async (ctx?: { request: Request; env: Env }): Promise<Response> => {
+  if (!ctx || !dbConfigured(ctx.env)) return json({ available: true, unchecked: true });
+  const limited = rateLimit(ctx.request, 'username-check', { capacity: 30, refillPerMinute: 30 }, ctx.env);
   if (limited) return limited;
-  const username = normalize(new URL(request.url).searchParams.get('u'));
-  if (!username) return json({ available: false, error: 'invalid' }, 400);
-  return json({ available: (await ownerOf(env, username)) === null });
+  const handle = normalizeHandle(new URL(ctx.request.url).searchParams.get('u'));
+  if (!handle) return json({ available: false, error: 'invalid' }, 400);
+  const owner = await ownerOf(ctx.env, handle);
+  if (owner === undefined) return json({ error: 'unavailable' }, 503);
+  return json({ available: owner === null });
 };
 
-/** Claim — called from onboarding's Continue and retried by the client until confirmed. Idempotent per device. */
-export const onRequestPost = async (ctx: { request: Request; env: Env }): Promise<Response> => {
+export const onRequestPost = async (ctx?: { request: Request; env: Env }): Promise<Response> => {
+  if (!ctx || !dbConfigured(ctx.env)) return json({ ok: true, unchecked: true });
   const { request, env } = ctx;
-  if (!supabaseConfigured(env)) return json({ ok: true, unchecked: true });
   const limited = rateLimit(request, 'username-claim', { capacity: 10, refillPerMinute: 5 }, env);
   if (limited) return limited;
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!body) return json({ error: 'invalid' }, 400);
-  const username = normalize(body.username);
-  if (!username) return json({ error: 'invalid' }, 400);
-  // 11.1.0 — a claim writes a row, so a script must not be able to mint
-  // handles in bulk. Checked before any store read. Off while
-  // TURNSTILE_SECRET_KEY is unset (_lib/turnstile.ts).
-  const human = await verifyTurnstile(env, request, body.turnstile_token, 'username');
-  if (human === 'missing' || human === 'invalid') return json({ error: 'challenge' }, 403);
+  const body = asObject(await request.json().catch(() => null));
+  const handle = normalizeHandle(body?.username);
+  if (!body || !handle) return json({ error: 'invalid' }, 400);
 
-  const claimer = await resolveClaimer(request, env, body);
-  if (!claimer) return json({ error: 'unavailable' }, 503);
-  const { deviceId, issued, verified } = claimer;
-  const owner = await ownerOf(env, username);
-  // An existing handle may only be re-claimed by a device that PROVES it is
-  // the owner via a valid signed id. A derived identity is not proof — two
-  // browsers on one machine (e.g. incognito) can share it, which let the
-  // same handle be "created" twice. Unverified claimers always get 409.
-  if (owner && !(verified && owner === deviceId)) {
-    return json({ error: 'taken', suggestions: await suggest(env, username) }, 409);
+  const identity = await resolveIdentity(env, body);
+  if (!identity) return json({ error: 'unavailable' }, 503);
+  const owner = await ownerOf(env, handle);
+  if (owner === undefined) return json({ error: 'unavailable' }, 503);
+  // Another device holds it. An UNVERIFIED claimer never re-claims a held
+  // handle, even one its derived id matches: two browsers on one machine
+  // can share a derived id, a signed token they cannot.
+  if (owner && !(identity.verified && owner === identity.id)) return json({ error: 'taken', suggestions: await suggest(env, handle) }, 409);
+
+  const row: Record<string, unknown> = { id: identity.id, handle, last_seen: new Date().toISOString() };
+  const name = clip(body.name, 80);
+  if (name) row.display_name = name;
+  const saved = await db.upsert(env, 'listeners', row, 'id');
+  if (!saved.ok) {
+    // The unique index refused it: a parallel claim won.
+    if (saved.error === 'conflict') return json({ error: 'taken', suggestions: await suggest(env, handle) }, 409);
+    return json({ error: 'unavailable' }, 503);
   }
-
-  const row: Record<string, unknown> = {
-    device_id: deviceId,
-    username,
-    last_seen: new Date().toISOString(),
-  };
-  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 80) : '';
-  if (name) row.name = name;
-  const saved = await sbUpsert(env, 'vinax_users', row, 'device_id');
-  // The DB's unique index is the race backstop: if a parallel claim won,
-  // the upsert fails and the handle reads as taken.
-  if (!saved) return json({ error: 'taken', suggestions: await suggest(env, username) }, 409);
-
-  const res: Record<string, unknown> = { ok: true, username };
-  if (issued) res.signed_device_id_next = issued;
-  return json(res);
+  const out: Record<string, unknown> = { ok: true, username: handle };
+  if (identity.issued) out.signed_device_id_next = identity.issued;
+  return json(out);
 };

@@ -126,6 +126,13 @@ routes = [
   { pattern = "www.vinaxmusic.online/urdu-workout-songs*", zone_name = "vinaxmusic.online" },
 ]
 
+# 14.0 — the scheduled jobs (worker/functions/_lib/jobs.ts): every 30 minutes
+# the status tick probes the public components; once an hour housekeeping
+# sweeps idle rooms, purges old usage events and retires silent push devices.
+# Nothing runs without the database secrets.
+[triggers]
+crons = ["*/30 * * * *"]
+
 [vars]
 # Host of the Pages deployment serving the static frontend.
 ASSETS_HOST = "vinax.pages.dev"
@@ -201,9 +208,3 @@ enabled = true
 head_sampling_rate = 1
 invocation_logs = true
 persist = true
-
-# 8.5.0 — the status probe round every 30 minutes (index.ts `scheduled`).
-# GitHub's scheduled workflows fired the 30-minute status tick only every
-# 4-6 hours, which read as "API down" on the public status page.
-[triggers]
-crons = ["7,37 * * * *"]

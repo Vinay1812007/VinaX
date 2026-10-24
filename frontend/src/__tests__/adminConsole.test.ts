@@ -9,9 +9,11 @@
  *    and either render() or tabs with unique ids and render functions;
  *  - no console script builds markup from strings (innerHTML and friends),
  *    so listener names, song titles and feedback text are always text;
- *  - every page and tab survives a FRESH DATABASE (every endpoint answering
- *    an empty object) and a DATABASE OUTAGE (every endpoint failing) without
+ *  - every page and tab survives EMPTY ANSWERS (every endpoint answering an
+ *    empty object) and a SERVER FAILURE (every endpoint failing) without
  *    throwing and without printing undefined / NaN / [object Object].
+ *  - 14.0 — the database is back: twelve pages, the console lands on
+ *    Overview, and every page talks to the server only through /api/admin.
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -22,7 +24,7 @@ const read = (rel: string): string => readFileSync(join(ADMIN, rel), 'utf8');
 const indexHtml = read('index.html');
 const pageFiles = readdirSync(join(ADMIN, 'pages')).filter((f) => f.endsWith('.js')).sort();
 const HOSTILE = '<img src=x onerror="window.__pwned=1">';
-const GROUPS = ['Dashboards', 'Audience', 'Music', 'Content', 'Intelligence', 'System'];
+const GROUPS = ['System', 'Audience', 'Intelligence', 'Content'];
 
 interface Tab { id: string; label: string; render: (host: HTMLElement, ctx: unknown) => unknown }
 interface PageDef { id: string; title: string; group: string; icon?: string; render?: Tab['render']; tabs?: Tab[] }
@@ -44,8 +46,6 @@ beforeAll(() => {
   // jsdom has no layout/scroll APIs some panels touch.
   Element.prototype.scrollIntoView = Element.prototype.scrollIntoView || (() => {});
   const w = window as unknown as Record<string, unknown>;
-  w.L = undefined; // the world map must cope without Leaflet loaded
-  w.VX_FESTIVALS = [];
   const run = (src: string, name: string) => {
     new Function('window', 'document', `${src}\n//# sourceURL=${name}`)(window, document);
   };
@@ -82,7 +82,7 @@ describe('page registry', () => {
     expect(pages.length).toBe(pageFiles.length);
     const ids = pages.map((p) => p.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toContain('overview');
+    expect(ids.sort()).toEqual(['ai', 'analytics', 'catalog', 'database', 'experiments', 'feedback', 'health', 'listeners', 'live', 'notify', 'overview', 'publish']);
     for (const p of pages) {
       expect(p.title, p.id).toBeTruthy();
       expect(GROUPS, p.id).toContain(p.group);
@@ -101,10 +101,20 @@ describe('page registry', () => {
     }
   });
 
-  it('the Overview deep links point at tabs that exist', () => {
+  it('the shell lands on Overview; Health keeps its status and secrets tabs', () => {
+    expect(read('app.js')).toContain("segs[0] || 'overview'");
+    expect(read('app.js')).toContain("setHash('overview'");
     const health = VX.pages().find((p) => p.id === 'health');
-    expect(health?.tabs?.map((t) => t.id)).toEqual(expect.arrayContaining(['errors', 'env']));
-    for (const id of ['live', 'music', 'places', 'feedback']) expect(VX.pages().some((p) => p.id === id), id).toBe(true);
+    expect(health?.tabs?.map((t) => t.id)).toEqual(['status', 'errors', 'edge', 'releases', 'env']);
+  });
+
+  it('the console talks to the database only through the Worker (/api/admin), never to Supabase', () => {
+    for (const f of ['index.html', 'core.js', 'app.js', ...pageFiles.map((x) => `pages/${x}`)]) {
+      expect(read(f), f).not.toMatch(/supabase\.co|supabase-js|service_role|SUPABASE_SERVICE_ROLE_KEY=/);
+    }
+    const apiPaths = new Set<string>();
+    for (const f of pageFiles) for (const m of read(`pages/${f}`).matchAll(/VX\.api\.(?:get|post)\('([^']+)'/g)) apiPaths.add(m[1]);
+    for (const p of apiPaths) expect(p, p).toMatch(/^\/api\/(admin\/|aimodels$)/);
   });
 });
 
@@ -172,16 +182,18 @@ async function renderAll(respond: (path: string) => ApiRes): Promise<Array<{ whe
 
 const BAD_TEXT = /\bundefined\b|\bNaN\b|\[object Object\]/;
 
-describe('fresh database', () => {
+describe('empty and failing answers', () => {
   it('every page and tab renders from empty answers without errors or junk text', async () => {
     const results = await renderAll(() => ({ ok: true, status: 200, data: {}, error: null, message: '' }));
     const failures = results.filter((r) => r.error || BAD_TEXT.test(r.text)).map((r) => `${r.where}: ${r.error ? String(r.error) : r.text.match(BAD_TEXT)?.[0]}`);
     expect(failures).toEqual([]);
-    expect(results.length).toBeGreaterThan(20);
+    const tabs = VX.pages().reduce((n, p) => n + (p.tabs ? p.tabs.length : 1), 0);
+    expect(results.length).toBe(tabs);
+    expect(tabs).toBe(32);
   });
 
-  it('every page and tab shows an error state, not a crash, when the database is down', async () => {
-    const results = await renderAll(() => ({ ok: false, status: 502, data: { error: 'db_unavailable' }, error: 'db_unavailable', message: 'The database is not reachable right now.' }));
+  it('every page and tab shows an error state, not a crash, when the server fails', async () => {
+    const results = await renderAll(() => ({ ok: false, status: 502, data: { error: 'upstream_unavailable' }, error: 'upstream_unavailable', message: 'The server could not answer right now.' }));
     const failures = results.filter((r) => r.error || BAD_TEXT.test(r.text)).map((r) => `${r.where}: ${r.error ? String(r.error) : 'junk text'}`);
     expect(failures).toEqual([]);
   });

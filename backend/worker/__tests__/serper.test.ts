@@ -20,7 +20,6 @@ import {
 
 const KEY = 'serper-test-key-0123456789';
 const ENV = { SERPER_API_KEY: KEY };
-const DB = { SUPABASE_URL: 'https://db.example.test', SUPABASE_SERVICE_ROLE_KEY: 'svc' };
 
 const ORGANIC = {
   searchParameters: { q: 'x', gl: 'in', hl: 'en' },
@@ -217,40 +216,16 @@ describe('serperSearch', () => {
     expect(serperDailyLimit({ SERPER_DAILY_LIMIT: ' 120 ' })).toBe(120);
   });
 
-  it('the daily cap reads today\'s logged web-search rows, and each call is logged without the query or key', async () => {
+  it('the daily cap counts this isolate\'s successful calls; only Serper is ever contacted', async () => {
     memoryCache();
-    let today = 79;
-    const logged: Record<string, unknown>[] = [];
-    const seen = stubFetch((url, init) => {
-      if (url.includes('/rest/v1/vinax_ai_events') && (init?.method ?? 'GET') === 'GET') return new Response('[]', { status: 200, headers: { 'content-range': `0-0/${today}` } });
-      if (url.includes('/rest/v1/vinax_ai_events')) {
-        logged.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
-        return new Response(null, { status: 201 });
-      }
-      return ok(ORGANIC);
-    });
-    const waits: Promise<unknown>[] = [];
-    await serperSearch({ ...ENV, ...DB }, 'secret topic today', { waitUntil: (p) => waits.push(p), client: 'app' });
-    await Promise.all(waits);
-    const countRead = seen.find((s) => s.url.includes('/rest/v1/vinax_ai_events') && !s.init?.body);
-    expect(countRead?.url).toContain('feature=eq.web-search');
-    expect(countRead?.url).toContain('model=eq.serper');
-    expect(countRead?.url).toContain('ok=eq.true');
-    expect(logged).toHaveLength(1);
-    expect(logged[0]).toMatchObject({ feature: 'web-search', model: 'serper', ok: true, status: 200, client: 'app' });
-    expect(JSON.stringify(logged)).not.toContain('secret topic');
-    expect(JSON.stringify(logged)).not.toContain(KEY);
-    // 79 logged + this isolate's 1 = the default cap of 80: the next call is refused.
-    today = 79;
-    expect(await serperSearch({ ...ENV, ...DB }, 'another topic today')).toEqual({ results: [] });
-    expect(serperCalls(seen)).toHaveLength(1);
-  });
-
-  it('the database already at the cap means no call at all', async () => {
-    memoryCache();
-    const seen = stubFetch((url) => (url.includes('/rest/v1/') ? new Response('[]', { status: 200, headers: { 'content-range': '0-0/80' } }) : ok(ORGANIC)));
-    expect(await serperSearch({ ...ENV, ...DB }, 'news today')).toEqual({ results: [] });
-    expect(serperCalls(seen)).toHaveLength(0);
+    const seen = stubFetch(() => ok(ORGANIC));
+    const env = { ...ENV, SERPER_DAILY_LIMIT: '2' };
+    expect((await serperSearch(env, 'first topic today')).results.length).toBeGreaterThan(0);
+    expect((await serperSearch(env, 'second topic today')).results.length).toBeGreaterThan(0);
+    // The cap is per isolate (searches are not written to the database), and nothing else is called.
+    expect(await serperSearch(env, 'third topic today')).toEqual({ results: [] });
+    expect(serperCalls(seen)).toHaveLength(2);
+    expect(seen.every((s) => s.url.startsWith('https://google.serper.dev/'))).toBe(true);
   });
 });
 

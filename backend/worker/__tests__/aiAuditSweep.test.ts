@@ -12,7 +12,7 @@
  *      envelope.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { chat, clearLaneCooldowns, resetAiControlsCache, type AiEnv } from '../functions/_lib/ai';
+import { chat, clearLaneCooldowns, type AiEnv } from '../functions/_lib/ai';
 import { onRequestPost as assistantPost } from '../functions/api/assistant';
 import { onRequestPost as lyricsPost } from '../functions/api/lyrics-tools';
 import { onRequestPost as djPost } from '../functions/api/dj';
@@ -55,7 +55,6 @@ const POOL = [
 
 beforeEach(() => {
   clearLaneCooldowns();
-  resetAiControlsCache();
 });
 afterEach(() => vi.unstubAllGlobals());
 

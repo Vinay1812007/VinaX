@@ -3,8 +3,6 @@
 // so "<movie name> songs" searches land on VinaX album pages. Edge-cached.
 // Pruned 2026-07 (DQA-10): saavn.dev DNS is dead and the b4a.run mirror 404s
 // these endpoints — both only added timeout latency to sitemap builds.
-import type { SupabaseEnv } from './_lib/supabase';
-import { artistRows, harvestSoon, seoRow } from './_lib/seo';
 
 const BASES = [
   'https://www.vinaxmusic.online/api/cat',
@@ -49,12 +47,8 @@ async function results(query: string, limit = 30): Promise<any[]> {
   return fetchFirst(`search/albums?query=${encodeURIComponent(query)}&limit=${limit}`);
 }
 
-export const onRequestGet = async (context: {
-  env: SupabaseEnv;
-  waitUntil?: (p: Promise<unknown>) => void;
-}): Promise<Response> => {
+export const onRequestGet = async (): Promise<Response> => {
   const urls = new Set<string>();
-  const harvested: any[] = [];
   const tasks: Promise<any[]>[] = [];
   for (const l of LANGS) {
     tasks.push(results(`${l} movie songs ${YEAR}`));
@@ -70,15 +64,8 @@ export const onRequestGet = async (context: {
       const safeId = String(a.id).replace(/[^\w-]/g, '');
       if (!safeId) continue;
       urls.add(`${ORIGIN}/album/${slugify(a.name)}-${safeId}`);  // no trailing slash: must match the page's canonical (4.16.3)
-      harvested.push(a);
     }
   }
-  // Movie albums join the SEO corpus + walker frontier too.
-  harvestSoon(
-    context.env,
-    harvested.flatMap((a) => [seoRow('album', a?.id, a?.name, a?.language), ...artistRows(a?.artists)]),
-    context.waitUntil,
-  );
   const today = new Date().toISOString().slice(0, 10);
   const body =
     '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' +

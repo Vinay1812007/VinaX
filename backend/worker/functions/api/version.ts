@@ -4,10 +4,10 @@
  * name, the (proxied) APK url, and the APK's SHA-256. No auth needed by callers.
  */
 import { fetchAsset, githubConfigured, latestRelease, type GithubEnv } from '../_lib/github';
+import type { DbEnv } from '../_lib/db';
+import { setting } from '../_lib/settings';
 
-import { readConfig } from '../_lib/clientConfig';
-import type { SupabaseEnv } from '../_lib/supabase';
-type Env = GithubEnv & SupabaseEnv;
+type Env = GithubEnv & DbEnv;
 
 const CORS: Record<string, string> = {
   'access-control-allow-origin': '*',
@@ -64,10 +64,9 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   }
 
   const origin = new URL(request.url).origin;
-  // v5.15.0 — Admin → Minimum App Version: builds below this must update
-  // before they can keep using the app (the client hides Later).
-  const cfg: Record<string, unknown> = await readConfig(env, ['min-version']).catch(() => ({}));
-  const mv = cfg['min-version'] as { build?: unknown } | undefined;
+  // 14.0 — the published `min-version` setting ({ build }): older builds must
+  // update; null (unset or unreadable) lets every build keep running.
+  const mv = await setting<{ build?: unknown }>(env, 'min-version');
   const minBuild = mv && Number.isInteger(mv.build) && (mv.build as number) > 0 ? (mv.build as number) : null;
   return json({ build, version, apkUrl: `${origin}/api/apk`, sha256, minBuild }, 200, 'public, max-age=60');
 };

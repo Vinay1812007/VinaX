@@ -10,20 +10,15 @@
  *   2. a 24 h rest after an answer that says the credits are gone or the key
  *      is refused (401 / 402 / 403 / 429, or a 400 naming credits or quota);
  *   3. a daily cap (SERPER_DAILY_LIMIT, default 80) on successful, non-cached
- *      calls per UTC day, counted from the `web-search` / `serper` rows this
- *      module writes to vinax_ai_events (the same table the owner's AI
- *      Operations panel and spend caps read), plus this isolate's own calls
- *      since the last count.
+ *      calls per UTC day, counted per isolate (web searches are not written to
+ *      the database, so there is no shared count to read).
  * One call asks for at most 10 results (larger pages cost 2 credits).
  *
  * The key (SERPER_API_KEY) is read here only, sent only in the X-API-KEY
  * header to Serper, and never logged or returned. Nothing here throws: every
  * failure is `{ results: [] }` and the chat answers without results.
  */
-import { WEB_SEARCH_LOG_MODEL, logAiEvent } from './ai';
-import { sbCountResult, supabaseConfigured, type SupabaseEnv } from './supabase';
-
-export interface SerperEnv extends SupabaseEnv {
+export interface SerperEnv {
   SERPER_API_KEY?: string;
   /** Plain var: successful non-cached calls allowed per UTC day. Default 80. */
   SERPER_DAILY_LIMIT?: string;
@@ -66,8 +61,6 @@ export interface SerperOptions {
 export const SERPER_SEARCH_URL = 'https://google.serper.dev/search';
 export const SERPER_NEWS_URL = 'https://google.serper.dev/news';
 export const SERPER_IMAGES_URL = 'https://google.serper.dev/images';
-/** The vinax_ai_events `model` value of a Serper call (feature `web-search`). */
-export const SERPER_LOG_MODEL = WEB_SEARCH_LOG_MODEL;
 export const SERPER_DEFAULT_DAILY_LIMIT = 80;
 /** Never above 10: a larger page costs 2 credits. */
 export const SERPER_NUM = 10;
@@ -82,16 +75,13 @@ const NEWS_TTL_S = 15 * 60;
 const WEB_TTL_S = 60 * 60;
 const EMPTY_TTL_S = 2 * 60;
 const EXHAUSTED_REST_MS = 24 * 60 * 60_000;
-const COUNT_TTL_MS = 60_000;
-const COUNT_RETRY_MS = 15_000;
-const COUNT_READ_TIMEOUT_MS = 2_000;
 const DEFAULT_ORIGIN = 'https://serper-cache.vinax.internal';
 
 // ---------------------------------------------------------------- isolate state
 
 let exhaustedUntil = 0;
 let exhaustedLogged = false;
-let countState: { day: string; db: number; local: number; refreshAt: number } | null = null;
+let countState: { day: string; calls: number } | null = null;
 
 /** Tests only: forget the rest, the count and the logged flag. */
 export function resetSerperState(): void {
@@ -325,33 +315,19 @@ function cacheWrite(key: Request, value: SerperSearch, ttl: number, waitUntil?: 
 
 const utcDay = (t: number): string => new Date(t).toISOString().slice(0, 10);
 
-/** Successful non-cached Serper calls today (UTC): the logged rows, plus this isolate's since the last read. */
-export async function serperCallsToday(env: SerperEnv, now = Date.now()): Promise<number> {
-  const day = utcDay(now);
-  if (countState && countState.day !== day) countState = null;
-  if (!supabaseConfigured(env)) return countState?.local ?? 0;
-  if (countState && now < countState.refreshAt) return countState.db + countState.local;
-  const r = await sbCountResult(
-    env,
-    'vinax_ai_events',
-    `feature=eq.web-search&model=eq.${SERPER_LOG_MODEL}&ok=eq.true&created_at=gte.${encodeURIComponent(`${day}T00:00:00.000Z`)}`,
-    { timeoutMs: COUNT_READ_TIMEOUT_MS },
-  ).catch(() => ({ ok: false as const }));
-  if (r.ok) {
-    // A row this isolate wrote moments ago may not be readable yet; never let the fresh count fall below what is known.
-    const known = countState ? countState.db + countState.local : 0;
-    countState = { day, db: Math.max(r.value, known), local: 0, refreshAt: now + COUNT_TTL_MS };
-  } else {
-    // A failed read keeps what is known (this isolate's own calls at least) and retries soon.
-    countState = { day, db: countState?.db ?? 0, local: countState?.local ?? 0, refreshAt: now + COUNT_RETRY_MS };
-  }
-  return countState.db + countState.local;
+/**
+ * Successful non-cached Serper calls today (UTC) in this isolate. Web
+ * searches are not written to the database, so the daily cap applies per
+ * isolate.
+ */
+export function serperCallsToday(now = Date.now()): number {
+  return countState && countState.day === utcDay(now) ? countState.calls : 0;
 }
 
 function noteCall(now: number): void {
   const day = utcDay(now);
-  if (!countState || countState.day !== day) countState = { day, db: 0, local: 0, refreshAt: 0 };
-  countState.local += 1;
+  if (!countState || countState.day !== day) countState = { day, calls: 0 };
+  countState.calls += 1;
 }
 
 // ---------------------------------------------------------------- the call
@@ -381,11 +357,9 @@ export async function serperSearch(env: SerperEnv, query: string, opts: SerperOp
     const limit = serperDailyLimit(env);
     const share = typeof opts.capShare === 'number' && opts.capShare >= 0 && opts.capShare <= 1 ? opts.capShare : 1;
     const allowed = Math.floor(limit * share);
-    if (allowed <= 0 || (await serperCallsToday(env, now)) >= allowed) return empty;
+    if (allowed <= 0 || serperCallsToday(now) >= allowed) return empty;
 
-    const t0 = Date.now();
-    let status = 0;
-    let error: string | null = null;
+    let ok = false;
     let out: SerperSearch = empty;
     try {
       const res = await fetch(images ? SERPER_IMAGES_URL : news ? SERPER_NEWS_URL : SERPER_SEARCH_URL, {
@@ -394,29 +368,23 @@ export async function serperSearch(env: SerperEnv, query: string, opts: SerperOp
         body: JSON.stringify({ q, gl, hl, num: SERPER_NUM }),
         signal: AbortSignal.timeout(SERPER_TIMEOUT_MS),
       });
-      status = res.status;
       if (res.ok) {
         out = mapSerperResponse(await res.json(), news, images);
+        ok = true;
         noteCall(Date.now());
       } else {
         const body = (await res.text().catch(() => '')).slice(0, 2000);
         if (creditsExhausted(res.status, body)) {
           exhaustedUntil = Date.now() + EXHAUSTED_REST_MS;
-          error = 'credits_exhausted';
           if (!exhaustedLogged) {
             exhaustedLogged = true;
             console.warn(`[serper] answered ${res.status}: out of credits or key refused — web search rests for 24 h in this isolate`);
           }
-        } else {
-          error = `http_${res.status}`;
         }
       }
-    } catch (e) {
-      error = e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError') ? 'timeout' : 'network';
+    } catch {
+      /* timeout or network: answer without results */
     }
-    const ok = error === null;
-    const log = logAiEvent(env, { feature: 'web-search', model: SERPER_LOG_MODEL, ok, status, error, client: opts.client ?? 'web', latency_ms: Date.now() - t0 });
-    if (opts.waitUntil) opts.waitUntil(log);
     if (ok) cacheWrite(cacheKey, out, out.results.length || out.quick ? (news ? NEWS_TTL_S : WEB_TTL_S) : EMPTY_TTL_S, opts.waitUntil);
     return out;
   } catch {

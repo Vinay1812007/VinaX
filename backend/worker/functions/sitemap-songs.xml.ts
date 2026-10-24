@@ -6,8 +6,6 @@
 // rebuilds it from live data. Defensive; referenced from the sitemap index.
 // Pruned 2026-07 (DQA-10): saavn.dev DNS is dead and the b4a.run mirror 404s
 // these endpoints — both only added timeout latency to sitemap builds.
-import type { SupabaseEnv } from './_lib/supabase';
-import { harvestSoon, songRowsDeep } from './_lib/seo';
 
 const BASES = [
   'https://www.vinaxmusic.online/api/cat',
@@ -62,12 +60,8 @@ async function results(path: string, query: string, limit = 25): Promise<any[]> 
   return fetchFirst(`${path}?query=${encodeURIComponent(query)}&limit=${limit}`);
 }
 
-export const onRequestGet = async (context: {
-  env: SupabaseEnv;
-  waitUntil?: (p: Promise<unknown>) => void;
-}): Promise<Response> => {
+export const onRequestGet = async (): Promise<Response> => {
   const urls = new Set<string>();
-  const harvested: any[] = [];
   const tasks: Promise<any[]>[] = [];
   // Three complementary seeds per language widen catalog breadth (top / current
   // hits / all-time popular) while staying well under the 50k-URL per-file cap.
@@ -93,12 +87,8 @@ export const onRequestGet = async (context: {
       const safeId = String(s.id).replace(/[^\w-]/g, '');
       if (!safeId) continue;
       urls.add(`${ORIGIN}/song/${slugify(s.name)}-${safeId}`);  // no trailing slash: must match the page's canonical (4.16.3)
-      harvested.push(s);
     }
   }
-  // Every rebuild feeds the persistent SEO corpus (songs + their albums +
-  // artists) — fire-and-forget, the sitemap response never waits on it.
-  harvestSoon(context.env, harvested.flatMap(songRowsDeep), context.waitUntil);
   // Hard cap at the sitemap 50k-URL limit (defensive — the seed set stays far
   // below it, but never emit an oversized file if the catalog ever balloons).
   return respond(xml([...urls].slice(0, 50000)));

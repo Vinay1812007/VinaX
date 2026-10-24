@@ -1,22 +1,26 @@
-/** AI Monitoring: request volume, success rate, models, latency, errors, recent. */
-import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbRpcResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+/**
+ * GET /api/admin/ai?days= → { configured, days, summary, byFeature, byProvider, byModel, byDay, errors, recent }
+ * VinaX AI usage from the ai_calls log (stats_ai).
+ */
+import { adminJson, dbFailure } from '../../_lib/admin';
+import { adminGet } from '../../_lib/adminRoute';
+import { db } from '../../_lib/db';
+import { daysParam } from '../../_lib/edge';
 
-type Env = AdminEnv & SupabaseEnv;
-
-function clampDays(v: string | null): number {
-  const n = parseInt(v ?? '7', 10);
-  return Number.isFinite(n) ? Math.min(Math.max(n, 1), 90) : 7;
-}
-
-export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
-  const { request, env } = context;
-  if (!(await isAdminAsync(request, env))) return unauthorized();
-  const days = clampDays(new URL(request.url).searchParams.get('days'));
-  if (!supabaseConfigured(env)) return adminJson({ configured: false, days, metrics: null });
-  const metrics = await sbRpcResult<Record<string, unknown>>(env, 'vinax_ai_metrics', { p_days: days });
-  // 7.2.0 — a failed read answers 502; `metrics: null` now only means the
-  // function returned nothing.
-  if (!metrics.ok) return dbFailure(metrics);
-  return adminJson({ configured: true, days, metrics: metrics.value ?? null });
-};
+export const onRequestGet = adminGet(async ({ env, url }) => {
+  const days = daysParam(url, 7, 90);
+  const r = await db.rpc<Record<string, unknown>>(env, 'stats_ai', { p_days: days });
+  if (!r.ok) return dbFailure(r);
+  const v = r.value && typeof r.value === 'object' ? r.value : {};
+  return adminJson({
+    configured: true,
+    days,
+    summary: v.summary ?? { total: 0, ok: 0, fail: 0, p50: null, p95: null, promptTokens: 0, completionTokens: 0 },
+    byFeature: v.byFeature ?? [],
+    byProvider: v.byProvider ?? [],
+    byModel: v.byModel ?? [],
+    byDay: v.byDay ?? [],
+    errors: v.errors ?? [],
+    recent: v.recent ?? [],
+  });
+});

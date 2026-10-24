@@ -6,13 +6,14 @@ This is the index of the current documentation. Everything listed here describes
 
 | Document | Read it when you need to know |
 | --- | --- |
-| [architecture.md](architecture.md) | What the pieces are and how data flows: app shell, the look pipeline (app style, theme, accent, festival, chat styles), routes and lazy chunks, stores and persistence, the catalogue client, the audio engine, Listen Together, the service worker, Worker routes, the owner console |
+| [architecture.md](architecture.md) | What the pieces are and how data flows: app shell, the look pipeline (app style, theme, accent, festival, chat styles), routes and lazy chunks, stores and persistence, the catalogue client, the audio engine, Listen Together, the service worker, Worker routes, the database, the owner console |
+| [database.md](database.md) | The database: setting it up, every table and function, the Worker's data layer (`_lib/db.ts` and its companions), the rules every route follows, the admin API contract, the public routes that read or write it, the scheduled jobs, what is stored and for how long |
 | [design-system.md](design-system.md) | The token contract, the six app styles and their selector contract, themes, accents, festival skins, the VinaX AI chat styles, materials, the control scale and hit-area rule, overlays, focus, motion — and how to add an app style |
 | [recommendations.md](recommendations.md) | How the next song is chosen: the pipeline and its weights, session intent, discovery modes, the queue rules, candidate sources, the exposure ledger, Home shelves, the `?debug=recs` breakdown |
 | [ai.md](ai.md) | How AI is used and bounded: lanes, failover and cooldowns, each AI route's contract, timeouts and budgets, the VinaX AI chat page, what happens with every provider down |
 | [ai-music.md](ai-music.md) | The AI music experience end to end: why history stays on the device, the listening signals and taste profile, and the contracts of the recommendation and `/api/ai/*` routes |
 | [ai-assistant-matrix.md](ai-assistant-matrix.md) | What VinaX AI does, feature by feature, with each gap named |
-| [trends.md](trends.md) | Verified trend ingestion: provider adapters, scheduled jobs and quota, catalogue matching, momentum, the review queue |
+| [trends.md](trends.md) | Charts: `GET /api/trends` answers empty (the trend pipeline has no store in the 14.0 schema), how the app labels its lists, and what the pipeline used to be |
 | [evaluation.md](evaluation.md) | The offline evaluation of next-song selection: fixtures, mocks, metrics, and how to read an A/B result |
 | [data-and-privacy.md](data-and-privacy.md) | What is stored where, the backup format, restore / merge / undo rules, what leaves the device and when |
 | [testing.md](testing.md) | The gates, unit tests, the contract tests (app styles, chat styles, festivals, content-security hashes), the browser suite and its harness, fixture shapes, the bundle budget, verifying a commit in a throw-away worktree |
@@ -23,8 +24,8 @@ This is the index of the current documentation. Everything listed here describes
 | Document | Read it when you need to |
 | --- | --- |
 | [../DEPLOYMENT.md](../DEPLOYMENT.md) | Deploy either half, or check a release |
-| [operations.md](operations.md) | Set secrets, understand the scheduled jobs and monitoring, fix a stale Worker, read the known-red build check correctly, roll back |
-| [admin-console.md](admin-console.md) | Use or change the owner console: sections, server-side auth, feature flags, Home layout publishing |
+| [operations.md](operations.md) | Set secrets, move to a new database, understand the scheduled jobs and monitoring, fix a stale Worker, read the known-red build check correctly, roll back, keep or delete listener data |
+| [admin-console.md](admin-console.md) | Use or change the owner console: every page and the routes it calls, server-side auth, the audit trail, the settings vocabulary and how a published setting reaches listeners, the fresh-database checklist |
 | [fcm-push-setup.md](fcm-push-setup.md) | Turn on Android background notifications |
 | [qa-device-script.md](qa-device-script.md) | Check a build on real devices |
 | [legal-copyright.md](legal-copyright.md) | Recall the legal position: content ownership, takedowns, listener data |

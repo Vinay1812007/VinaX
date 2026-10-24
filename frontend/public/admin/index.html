@@ -9,12 +9,11 @@
          script builds DOM through VX.h (text nodes), never innerHTML.
          style-src keeps 'unsafe-inline' for style="" attributes on chart
          bars and swatches. connect-src adds the geocoder used by the map. -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' blob:; connect-src 'self' https://*.supabase.co https://nominatim.openstreetmap.org" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' blob:; connect-src 'self'" />
     <meta name="theme-color" content="#0e0f13" />
     <title>VinaX · Console</title>
     <link rel="icon" href="/favicon.ico" />
     <script src="/admin/theme-boot.js"></script>
-    <link rel="stylesheet" href="/admin/leaflet/leaflet.css" />
     <link rel="stylesheet" href="/admin/console.css" />
   </head>
   <body>
@@ -114,25 +113,19 @@
 
     <div id="toasts" class="toasts" aria-live="polite"></div>
 
-    <script src="/admin/leaflet/leaflet.js"></script>
-    <script src="/admin/festivals.js"></script>
     <script src="/admin/core.js"></script>
     <script src="/admin/pages/overview.js"></script>
     <script src="/admin/pages/live.js"></script>
     <script src="/admin/pages/listeners.js"></script>
-    <script src="/admin/pages/audience.js"></script>
-    <script src="/admin/pages/places.js"></script>
-    <script src="/admin/pages/music.js"></script>
-    <script src="/admin/pages/trends.js"></script>
-    <script src="/admin/pages/catalog.js"></script>
-    <script src="/admin/pages/home.js"></script>
-    <script src="/admin/pages/notify.js"></script>
-    <script src="/admin/pages/ai.js"></script>
-    <script src="/admin/pages/recs.js"></script>
-    <script src="/admin/pages/health.js"></script>
+    <script src="/admin/pages/analytics.js"></script>
     <script src="/admin/pages/feedback.js"></script>
-    <script src="/admin/pages/data.js"></script>
-    <script src="/admin/pages/settings.js"></script>
+    <script src="/admin/pages/experiments.js"></script>
+    <script src="/admin/pages/ai.js"></script>
+    <script src="/admin/pages/catalog.js"></script>
+    <script src="/admin/pages/publish.js"></script>
+    <script src="/admin/pages/notify.js"></script>
+    <script src="/admin/pages/database.js"></script>
+    <script src="/admin/pages/health.js"></script>
     <script src="/admin/app.js"></script>
   </body>
 </html>

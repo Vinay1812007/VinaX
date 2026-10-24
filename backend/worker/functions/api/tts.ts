@@ -25,12 +25,11 @@
  */
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { findMediaModel, isServedVoiceModel, normaliseProvider } from '../_lib/catalog';
-import { aiBlockCode, aiGate, logAiEvent, logAiRefusal, noteProviderFailure, providerKey, type AiEnv } from '../_lib/ai';
+import { noteProviderFailure, providerKey, type AiEnv } from '../_lib/ai';
 import { pickMedia, speak } from '../_lib/media';
 import { readJsonCapped } from '../_lib/body';
-import { type SupabaseEnv } from '../_lib/supabase';
 
-type Env = AiEnv & SupabaseEnv;
+type Env = AiEnv;
 
 const SPEECH_ENDPOINT = 'https://api.groq.com/openai/v1/audio/speech';
 /** Default speech model — used when the caller names none, or names one the
@@ -87,14 +86,6 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
     const other = await pickMedia(env, 'speech', undefined, undefined);
     if (!other.ok) return json({ error: 'not_configured' }, 503);
     return speakPicked(context, { text: body?.text, provider: other.choices[0].provider, model: other.choices[0].model.id }, json);
-  }
-  // 7.2.0 — the owner's AI switches and spend caps; the client falls back to
-  // the device's own speech engine on any non-2xx.
-  const blocked = await aiGate(env, 'tts');
-  if (blocked) {
-    // Logged (error ai_disabled / ai_over_budget) for the console.
-    void logAiRefusal(env, 'tts', blocked, request.headers.get('x-vinax-client') === 'app' ? 'app' : 'web', context.waitUntil);
-    return json({ error: aiBlockCode(blocked) }, 503);
   }
 
   const raw = typeof body?.text === 'string' ? body.text.replace(/\s+/g, ' ').trim() : '';
@@ -195,19 +186,12 @@ async function speakPicked(
   body: { text?: unknown; model?: unknown; voice?: unknown; provider?: unknown },
   json: (b: unknown, status?: number) => Response,
 ): Promise<Response> {
-  const { request, env } = context;
-  const client = request.headers.get('x-vinax-client') === 'app' ? 'app' : 'web';
+  const { env } = context;
   const text = typeof body.text === 'string' ? body.text.replace(/\s+/g, ' ').trim() : '';
   if (!text) return json({ error: 'text_required' }, 400);
   const provider = normaliseProvider(body.provider);
   if (!provider) return json({ error: 'unknown_model' }, 400);
   if (!providerKey(env, provider)) return json({ error: 'not_configured' }, 503);
-  // The owner's switches first: a refused call spends nothing, not even a list read.
-  const blocked = await aiGate(env, 'tts');
-  if (blocked) {
-    void logAiRefusal(env, 'tts', blocked, client, context.waitUntil);
-    return json({ error: aiBlockCode(blocked) }, 503);
-  }
   const pick = typeof body.model === 'string' && body.model.trim()
     ? await findMediaModel(env, provider, 'speech', body.model)
     : await pickMedia(env, 'speech', provider, undefined).then((p) => (p.ok ? p.choices[0].model : null));
@@ -217,10 +201,7 @@ async function speakPicked(
   // Voice names are matched case-insensitively and sent as the list spells them.
   const voice = wantVoice ? (voices.find((v) => v.toLowerCase() === wantVoice.toLowerCase()) ?? null) : (voices[0] ?? null);
   if (wantVoice && !voice) return json({ error: 'unknown_voice' }, 400);
-  const t0 = Date.now();
   const r = await speak(env, provider, pick.id, voice, text);
-  const log = logAiEvent(env, { feature: 'tts', model: `${pick.id} @${provider}`, ok: r.ok, status: r.ok ? 200 : r.status, error: r.ok ? null : r.reason, client, latency_ms: Date.now() - t0 });
-  if (context.waitUntil) context.waitUntil(log);
   if (!r.ok) {
     noteProviderFailure(provider, pick.id, r.status, r.body);
     // 429 passes through so the client can tell budget from breakage — never the provider's raw body.

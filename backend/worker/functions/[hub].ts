@@ -11,15 +11,12 @@ interface Ctx {
   request: Request;
   env: {
     ASSETS: { fetch: (req: Request | string | URL) => Promise<Response> };
-    SUPABASE_URL?: string;
-    SUPABASE_SERVICE_ROLE_KEY?: string;
   };
   next: () => Promise<Response>;
-  waitUntil?: (p: Promise<unknown>) => void;
 }
 
 export const onRequestGet = async (context: Ctx): Promise<Response> => {
   const hub = matchHub(new URL(context.request.url).pathname);
   if (!hub) return context.next();
-  return renderHub(hub.lang, hub.mood, context.request, context.env, context.waitUntil);
+  return renderHub(hub.lang, hub.mood, context.request, context.env);
 };

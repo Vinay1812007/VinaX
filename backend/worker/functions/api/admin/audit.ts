@@ -1,52 +1,18 @@
-/** Admin audit trail: site-mode flips, sends, daily picks, audited deletions. */
-import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { parseAuditMessage } from '../../_lib/adminAudit';
-import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+/**
+ * GET /api/admin/audit?limit=&action= → { configured, rows }
+ * The owner's own trail: every change made from the console.
+ */
+import { adminJson, dbFailure } from '../../_lib/admin';
+import { adminGet, camel, paging } from '../../_lib/adminRoute';
+import { db, q } from '../../_lib/db';
+import { clip } from '../../_lib/edge';
 
-type Env = AdminEnv & SupabaseEnv;
-
-export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
-  const { request, env } = context;
-  if (!(await isAdminAsync(request, env))) return unauthorized();
-  if (!supabaseConfigured(env)) return adminJson({ configured: false, items: [] });
-  const [eventsRead, auditsRead] = await Promise.all([
-    sbSelectResult<{ type: string; message: string | null; created_at: string }>(
-      env,
-      'vinax_events',
-      'type=in.(site-mode,announcement,song-push)&select=type,message,created_at&order=created_at.desc&limit=100',
-    ),
-    sbSelectResult<{ message: string | null; created_at: string }>(
-      env,
-      'vinax_feedback',
-      'type=eq.admin-audit&select=message,created_at&order=created_at.desc&limit=150',
-    ),
-  ]);
-  // 7.2.0 — a trail with a failed half would silently omit actions.
-  if (!eventsRead.ok) return dbFailure(eventsRead);
-  if (!auditsRead.ok) return dbFailure(auditsRead);
-  const events = eventsRead.rows;
-  const audits = auditsRead.rows;
-  const items: Array<Record<string, unknown> & { kind: string; text: string; at: string }> = [
-    ...events.map((e) => ({ kind: e.type, text: e.message ?? '', at: e.created_at })),
-    // Audit rows pack "action|record". 7.2.0 records are JSON and carry the
-    // actor, the request id and redacted before/after values; the older
-    // "kind|text" rows (and pre-E12 rows without a pipe) still read.
-    ...audits.map((a) => {
-      const { action, text, record } = parseAuditMessage(a.message);
-      return record
-        ? {
-            kind: action,
-            text,
-            at: record.at || a.created_at,
-            actor: record.actor?.id ?? null,
-            actorVia: record.actor?.via ?? null,
-            requestId: record.requestId ?? null,
-            ...(record.target !== undefined ? { target: record.target } : {}),
-            ...('before' in record ? { before: record.before } : {}),
-            ...('after' in record ? { after: record.after } : {}),
-          }
-        : { kind: action, text, at: a.created_at };
-    }),
-  ].sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 200); // 13.8 — was 30: too short to be a trail
-  return adminJson({ configured: true, items });
-};
+export const onRequestGet = adminGet(async ({ env, url }) => {
+  const { limit } = paging(url, 100, 200);
+  const query = q().select('*').order('at', 'desc').limit(limit);
+  const action = clip(url.searchParams.get('action'), 40);
+  if (action && /^[\w.:/-]+$/.test(action)) query.eq('action', action);
+  const r = await db.select<Record<string, unknown>>(env, 'audit_log', query);
+  if (!r.ok) return dbFailure(r);
+  return adminJson({ configured: true, rows: r.rows.map(camel) });
+});

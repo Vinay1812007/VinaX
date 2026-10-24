@@ -1,48 +1,34 @@
 /**
- * Public status API + self-probing tick — powers status.vinaxmusic.online.
+ * Public status API — powers status.vinaxmusic.online.
  *
- * GET  /api/status → current state of every monitored component plus 90 days
- *   of daily uptime bars (from Supabase uptime_daily / uptime_last).
- * POST /api/status → runs the probes SERVER-SIDE and records the results.
- *   Called by the status-tick GitHub Action (a second, outside tick). Deliberately
- *   unauthenticated: a caller only *triggers* a probe round — every result
- *   is measured here, never taken from the request — so a stranger can at
- *   worst spend one rate-limited probe round.
+ * GET /api/status → the current state of every monitored component, probed
+ *   live from this Worker (memoised a minute per isolate), plus the uptime
+ *   history the scheduled status tick wrote (`uptime_days` / `uptime_latest`,
+ *   read through `uptime_report`) and the owner's `status-note` setting.
  *
- * The API component carries no live probe on purpose: a Worker cannot fetch
- * its own routes (recursive-subrequest block), so each successful tick
- * records the API as up, and the reader marks it down when ticks stop
- * arriving (stale uptime_last) — which is exactly what an API outage or a
- * dead scheduler looks like from outside.
- *
- * 8.5.0 — the Worker's own Cron Trigger (wrangler.toml `[triggers]`, every
- * 30 min) now runs the same round through `recordProbeRound()`. GitHub's
- * scheduler had been firing the 30-minute workflow only every 4–6 hours
- * (runs on 2026-09-27…30), so `uptime_last` went stale past STALE_MS and the
- * public page read "API down / outage" for most of each day while the API
- * answered normally. A cron event only fires when the Worker runs, so "the
- * tick ran" still means the API is up; the GitHub tick stays as an outside
- * check (two ticks only add rows to the same daily up/total counts).
+ * The API component is up by definition: this answer came from it (a Worker
+ * cannot fetch its own routes). Nothing is recorded on a GET — the tick job
+ * (_lib/jobs.ts) does the recording, so POST and PUT are honest 405s.
  */
+import { db, dbConfigured, type DbEnv } from '../_lib/db';
+import { asObject, clip } from '../_lib/edge';
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
-import { sbCount, sbSelect, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
+import { setting } from '../_lib/settings';
 
 const SITE = 'https://www.vinaxmusic.online';
-/** A tick is expected every 30 min; past this gap a component reads unknown/down. */
-const STALE_MS = 95 * 60_000;
-const WINDOW_DAYS = 90;
+export const WINDOW_DAYS = 90;
+const MEMO_MS = 60_000;
 
-const COMPONENTS: Array<{ id: string; name: string }> = [
+export const COMPONENTS: ReadonlyArray<{ id: string; name: string }> = [
   { id: 'website', name: 'Website (www.vinaxmusic.online)' },
   { id: 'api', name: 'API & app services' },
   { id: 'catalog', name: 'Music catalog & search' },
-  { id: 'database', name: 'Database (config & profiles)' },
   { id: 'admin', name: 'Admin console' },
 ];
 
 const CORS: Record<string, string> = {
   'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'GET, POST, OPTIONS',
+  'access-control-allow-methods': 'GET, OPTIONS',
   'access-control-allow-headers': 'content-type',
 };
 
@@ -57,163 +43,93 @@ function json(body: unknown, status = 200, cacheSeconds = 0): Response {
   });
 }
 
-export const onRequestOptions = async (): Promise<Response> =>
-  new Response(null, { status: 204, headers: CORS });
+export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: CORS });
 
-interface ProbeResult {
-  id: string;
+export interface Probe {
   ok: boolean;
   latency: number | null;
+  checkedAt: string;
 }
 
 /** GET with a hard timeout; ok = 2xx/3xx. Never throws. */
-async function probeUrl(url: string, init?: RequestInit): Promise<{ ok: boolean; latency: number | null }> {
+async function probeUrl(url: string): Promise<Probe> {
   const t0 = Date.now();
   try {
-    const res = await fetch(url, {
-      ...init,
-      redirect: 'follow',
-      signal: AbortSignal.timeout(9_000),
-    });
-    // Read a little of the body so a black-holed response can't fake a 200.
+    const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(9_000) });
     try { await res.body?.cancel(); } catch { /* body already used/absent */ }
-    return { ok: res.status < 400, latency: Date.now() - t0 };
+    return { ok: res.status < 400, latency: Date.now() - t0, checkedAt: new Date().toISOString() };
   } catch {
-    return { ok: false, latency: null };
+    return { ok: false, latency: null, checkedAt: new Date().toISOString() };
   }
 }
 
-async function runProbes(env: SupabaseEnv): Promise<ProbeResult[]> {
-  const [website, admin, catalog, dbCount] = await Promise.all([
+let memo: { at: number; probes: Map<string, Probe> } | null = null;
+
+/** Tests only. */
+export function resetStatusMemo(): void {
+  memo = null;
+}
+
+/** Every component probed once (memoised MEMO_MS); the status tick job calls this too. */
+export async function probeAll(now = Date.now(), fresh = false): Promise<Map<string, Probe>> {
+  if (!fresh && memo && now - memo.at < MEMO_MS) return memo.probes;
+  const [website, catalog, admin] = await Promise.all([
     probeUrl(SITE + '/'),
-    probeUrl(SITE + '/admin/'),
-    // The /api/cat/* catalog route proxies JioSaavn — probe the upstream the
-    // route depends on (probing our own route would be a recursive subrequest).
+    // The /api/cat/* route proxies the upstream catalogue — probe what it depends on
+    // (probing our own route would be a recursive subrequest).
     probeUrl('https://www.jiosaavn.com/api.php?__call=autocomplete.get&query=love&_format=json&_marker=0&ctx=web6dot0'),
-    (async () => {
-      const t0 = Date.now();
-      const n = await sbCount(env, 'vinax_config');
-      return { ok: n !== null, latency: n !== null ? Date.now() - t0 : null };
-    })(),
+    probeUrl(SITE + '/admin/'),
   ]);
-  return [
-    { id: 'website', ok: website.ok, latency: website.latency },
-    // The tick itself ran through the API — that IS the API probe.
-    { id: 'api', ok: true, latency: null },
-    { id: 'catalog', ok: catalog.ok, latency: catalog.latency },
-    { id: 'database', ok: dbCount.ok, latency: dbCount.latency },
-    { id: 'admin', ok: admin.ok, latency: admin.latency },
-  ];
+  const probes = new Map<string, Probe>([
+    ['website', website],
+    ['api', { ok: true, latency: null, checkedAt: new Date(now).toISOString() }],
+    ['catalog', catalog],
+    ['admin', admin],
+  ]);
+  memo = { at: now, probes };
+  return probes;
 }
 
-/** POST — probe everything and record one tick. */
-export const onRequestPost = async (context: { request: Request; env: SupabaseEnv }): Promise<Response> => {
-  const { request, env } = context;
-  const limited = rateLimit(request, 'status-tick', { capacity: 6, refillPerMinute: 1 });
-  if (limited) return limited;
-  if (!supabaseConfigured(env)) return json({ error: 'not_configured' }, 503);
-  const { recorded, results } = await recordProbeRound(env);
-  return json({ ok: true, recorded, results });
-};
-
-/**
- * One probe round, recorded: shared by POST /api/status and the Worker's
- * scheduled (Cron Trigger) handler. Returns how many components were written.
- */
-export async function recordProbeRound(env: SupabaseEnv): Promise<{ recorded: number; results: ProbeResult[] }> {
-  if (!supabaseConfigured(env)) return { recorded: 0, results: [] };
-  const results = await runProbes(env);
-  const now = new Date().toISOString();
-  const day = now.slice(0, 10); // UTC day — the whole page reports in UTC days
-
-  // Existing daily rows in one read, then merge-upsert the incremented counts.
-  const existing = await sbSelect<{ component: string; up: number; total: number }>(
-    env,
-    'uptime_daily',
-    `select=component,up,total&day=eq.${day}`,
-  );
-  const byComp = new Map(existing.map((r) => [r.component, r]));
-  let wrote = 0;
-  for (const r of results) {
-    const prev = byComp.get(r.id);
-    const okDaily = await sbUpsert(
-      env,
-      'uptime_daily',
-      { component: r.id, day, up: (prev?.up ?? 0) + (r.ok ? 1 : 0), total: (prev?.total ?? 0) + 1 },
-      'component,day',
-    );
-    const okLast = await sbUpsert(
-      env,
-      'uptime_last',
-      { component: r.id, ok: r.ok, latency_ms: r.latency, checked_at: now },
-      'component',
-    );
-    if (okDaily && okLast) wrote += 1;
-  }
-  return { recorded: wrote, results };
+interface UptimeRow {
+  component: string;
+  ok: boolean | null;
+  latencyMs: number | null;
+  checkedAt: string | null;
+  uptime: number | null;
+  days: Array<{ day: string; up: number; total: number }>;
 }
 
-/** GET — everything the status page needs, cached a minute at the edge. */
-export const onRequestGet = async (context: { request: Request; env: SupabaseEnv }): Promise<Response> => {
-  const { request, env } = context;
-  const limited = rateLimit(request, 'status', { capacity: 30, refillPerMinute: 20 });
+/** The recorded history per component; empty when there is no database or the read failed. */
+async function history(env: DbEnv): Promise<Map<string, UptimeRow>> {
+  const out = new Map<string, UptimeRow>();
+  if (!dbConfigured(env)) return out;
+  const r = await db.rpc<UptimeRow[]>(env, 'uptime_report', { p_days: WINDOW_DAYS });
+  if (!r.ok || !Array.isArray(r.value)) return out;
+  for (const row of r.value) if (row && typeof row.component === 'string') out.set(row.component, row);
+  return out;
+}
+
+export const onRequestGet = async (context: { request: Request; env?: DbEnv }): Promise<Response> => {
+  const limited = rateLimit(context.request, 'status', { capacity: 30, refillPerMinute: 20 });
   if (limited) return limited;
-
-  const since = new Date(Date.now() - WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10);
-  const configured = supabaseConfigured(env);
-  const [daily, last, noteRows] = configured
-    ? await Promise.all([
-        sbSelect<{ component: string; day: string; up: number; total: number }>(
-          env,
-          'uptime_daily',
-          `select=component,day,up,total&day=gte.${since}&order=day.asc&limit=2000`,
-        ),
-        sbSelect<{ component: string; ok: boolean; latency_ms: number | null; checked_at: string }>(
-          env,
-          'uptime_last',
-          'select=component,ok,latency_ms,checked_at&limit=50',
-        ),
-        // Owner-posted incident note (admin console -> appconfig key 'status-note').
-        sbSelect<{ value: unknown }>(env, 'vinax_config', 'select=value&key=eq.status-note&limit=1'),
-      ])
-    : [[], [], []];
-
-  const lastBy = new Map(last.map((r) => [r.component, r]));
-  const dailyBy = new Map<string, Array<{ day: string; up: number; total: number }>>();
-  for (const r of daily) {
-    const list = dailyBy.get(r.component) ?? [];
-    list.push({ day: r.day, up: r.up, total: r.total });
-    dailyBy.set(r.component, list);
-  }
-
+  const env = context.env ?? {};
+  const [probes, past, noteValue] = await Promise.all([probeAll(Date.now()), history(env), setting(env, 'status-note')]);
   const components = COMPONENTS.map((c) => {
-    const days = dailyBy.get(c.id) ?? [];
-    const sumUp = days.reduce((a, d) => a + d.up, 0);
-    const sumTotal = days.reduce((a, d) => a + d.total, 0);
-    const l = lastBy.get(c.id);
-    const fresh = l ? Date.now() - Date.parse(l.checked_at) < STALE_MS : false;
-    const status: 'up' | 'down' | 'unknown' = !l ? 'unknown' : !fresh ? (c.id === 'api' ? 'down' : 'unknown') : l.ok ? 'up' : 'down';
+    const p = probes.get(c.id);
+    const h = past.get(c.id);
     return {
       id: c.id,
       name: c.name,
-      status,
-      latencyMs: l && fresh ? l.latency_ms : null,
-      checkedAt: l ? l.checked_at : null,
-      uptime90: sumTotal > 0 ? Math.round((sumUp / sumTotal) * 10000) / 100 : null,
-      days,
+      status: !p ? 'unknown' : p.ok ? 'up' : 'down',
+      latencyMs: p?.latency ?? null,
+      checkedAt: p?.checkedAt ?? null,
+      uptime90: typeof h?.uptime === 'number' ? h.uptime : null,
+      days: Array.isArray(h?.days) ? h.days.filter((d) => d && typeof d.day === 'string').map((d) => ({ day: d.day.slice(0, 10), up: Number(d.up) || 0, total: Number(d.total) || 0 })) : [],
     };
   });
   const allUp = components.every((c) => c.status === 'up');
   const anyDown = components.some((c) => c.status === 'down');
-  // Incident note: a plain string, or { text, level } — passed through as-is
-  // (the page treats empty/blank as "no note").
-  const rawNote = noteRows.length ? noteRows[0].value : null;
-  const note =
-    typeof rawNote === 'string'
-      ? rawNote.trim() || null
-      : rawNote && typeof rawNote === 'object' && typeof (rawNote as { text?: unknown }).text === 'string'
-        ? ((rawNote as { text: string }).text.trim() ? rawNote : null)
-        : null;
+  const note = clip(asObject(noteValue)?.text, 500);
   return json(
     {
       generatedAt: new Date().toISOString(),
@@ -227,5 +143,6 @@ export const onRequestGet = async (context: { request: Request; env: SupabaseEnv
   );
 };
 
-/** Anything else: honest 405. */
-export const onRequestPut = async (): Promise<Response> => methodNotAllowed();
+/** Nothing is recorded on a request: POST and PUT are honest 405s (the tick job records). */
+export const onRequestPost = async (): Promise<Response> => methodNotAllowed('GET, OPTIONS');
+export const onRequestPut = async (): Promise<Response> => methodNotAllowed('GET, OPTIONS');

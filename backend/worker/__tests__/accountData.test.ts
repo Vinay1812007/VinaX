@@ -1,42 +1,23 @@
 /**
- * 13.0 — /api/account/data: the synced copy needs a session, a first write
- * creates version 1, a later write must name the stored version, and a stale
- * write gets the newer copy back (409) to merge. No network.
+ * /api/account/data — the signed-in listener's synced copy in
+ * `account_backups`: needs a session; 204 before the first write; versions
+ * climb by one; a stale version is a 409 carrying the newer copy; oversized
+ * bodies are 413; without a database everything is 503 unavailable.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { issueSession } from '../functions/_lib/googleAuth';
+import { onRequestGet, onRequestPut } from '../functions/api/account/data';
+import { DB_ENV, fakeDb } from './helpers/fakeDb';
 
-const ENV = { GOOGLE_CLIENT_ID: 'x.apps.googleusercontent.com', AUTH_SECRET: 'auth-secret', SUPABASE_URL: 'https://db.example.test', SUPABASE_SERVICE_ROLE_KEY: 'svc' };
+const AUTH = { GOOGLE_CLIENT_ID: 'x.apps.googleusercontent.com', AUTH_SECRET: 'auth-secret' };
+const ENV = { ...AUTH, ...DB_ENV };
 const BACKUP = { format: 'vinax-backup', schemaVersion: 2, categories: { library: { 'vinax.library.v1': { state: {} } } } };
 
-interface Db { row: { version: number; updated_at: string; backup: unknown } | null }
-function stub(db: Db): Array<{ url: string; method: string; body: Record<string, unknown> | null }> {
-  const calls: Array<{ url: string; method: string; body: Record<string, unknown> | null }> = [];
-  vi.stubGlobal('fetch', vi.fn(async (u: unknown, init?: RequestInit) => {
-    const url = String(u);
-    const method = init?.method ?? 'GET';
-    const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null;
-    calls.push({ url, method, body });
-    if (method === 'GET') return new Response(JSON.stringify(db.row ? [db.row] : []), { status: 200 });
-    if (method === 'POST') {
-      if (db.row) return new Response('[]', { status: 201 });
-      db.row = { version: 1, updated_at: String(body?.updated_at), backup: body?.backup };
-      return new Response(JSON.stringify([db.row]), { status: 201 });
-    }
-    if (method === 'PATCH') {
-      const want = Number(/version=eq\.(\d+)/.exec(url)?.[1]);
-      if (!db.row || db.row.version !== want) return new Response('[]', { status: 200 });
-      db.row = { version: Number(body?.version), updated_at: String(body?.updated_at), backup: body?.backup };
-      return new Response(JSON.stringify([{ version: db.row.version, updated_at: db.row.updated_at }]), { status: 200 });
-    }
-    return new Response(null, { status: 204 });
-  }));
-  return calls;
-}
-const req = async (method: string, body?: unknown, session?: string | null): Promise<Request> =>
+let ip = 0;
+const req = async (method: string, body?: unknown, session?: string | null, env: { AUTH_SECRET: string } = ENV): Promise<Request> =>
   new Request('https://example.test/api/account/data', {
     method,
-    headers: { 'content-type': 'application/json', 'cf-connecting-ip': '10.66.0.1', ...(session === null ? {} : { authorization: `Bearer ${session ?? (await issueSession(ENV, '1001'))}` }) },
+    headers: { 'content-type': 'application/json', 'cf-connecting-ip': `10.66.0.${++ip % 250}`, ...(session === null ? {} : { authorization: `Bearer ${session ?? (await issueSession(env, '1001'))}` }) },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
 
@@ -44,45 +25,53 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('/api/account/data', () => {
   it('needs a session', async () => {
-    const m = await import('../functions/api/account/data');
-    stub({ row: null });
-    expect((await m.onRequestGet({ request: await req('GET', undefined, null), env: ENV })).status).toBe(401);
-    expect((await m.onRequestPut({ request: await req('PUT', { version: 0, backup: BACKUP }, 'vx1.forged.sig'), env: ENV })).status).toBe(401);
+    fakeDb();
+    expect((await onRequestGet({ request: await req('GET', undefined, null), env: ENV })).status).toBe(401);
+    expect((await onRequestPut({ request: await req('PUT', { version: 0, backup: BACKUP }, 'vx1.forged.sig'), env: ENV })).status).toBe(401);
   });
 
-  it('nothing stored is 204; the first write is version 1; reading returns it', async () => {
-    const m = await import('../functions/api/account/data');
-    const db: Db = { row: null };
-    stub(db);
-    expect((await m.onRequestGet({ request: await req('GET'), env: ENV })).status).toBe(204);
-    const put = await m.onRequestPut({ request: await req('PUT', { version: 0, backup: BACKUP }), env: ENV });
+  it('without a database reading and writing are unavailable and nothing is sent anywhere', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const get = await onRequestGet({ request: await req('GET', undefined, undefined, AUTH), env: AUTH });
+    expect(get.status).toBe(503);
+    expect(await get.json()).toEqual({ error: 'unavailable' });
+    expect((await onRequestPut({ request: await req('PUT', { version: 0, backup: BACKUP }, undefined, AUTH), env: AUTH })).status).toBe(503);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('204 before the first copy, then the copy comes back with its version', async () => {
+    const fake = fakeDb();
+    expect((await onRequestGet({ request: await req('GET'), env: ENV })).status).toBe(204);
+    const put = await onRequestPut({ request: await req('PUT', { version: 0, backup: BACKUP }), env: ENV });
     expect(put.status).toBe(200);
-    expect(await put.json()).toMatchObject({ version: 1 });
-    const got = await m.onRequestGet({ request: await req('GET'), env: ENV });
-    expect(await got.json()).toMatchObject({ version: 1, backup: BACKUP });
+    expect(((await put.json()) as { version: number }).version).toBe(1);
+    const row = fake.rows('account_backups')[0];
+    expect(row).toMatchObject({ account_id: '1001', version: 1, payload: BACKUP });
+    expect(row.bytes).toBe(JSON.stringify(BACKUP).length);
+    const get = await onRequestGet({ request: await req('GET'), env: ENV });
+    expect(get.status).toBe(200);
+    expect(await get.json()).toMatchObject({ version: 1, backup: BACKUP });
   });
 
-  it('a write naming the stored version lands; a stale one gets the newer copy back (409)', async () => {
-    const m = await import('../functions/api/account/data');
-    const db: Db = { row: { version: 3, updated_at: '2026-10-13T00:00:00Z', backup: BACKUP } };
-    const calls = stub(db);
-    const ok = await m.onRequestPut({ request: await req('PUT', { version: 3, backup: { ...BACKUP, n: 1 } }), env: ENV });
-    expect(await ok.json()).toMatchObject({ version: 4 });
-    expect(calls.find((c) => c.method === 'PATCH')?.url).toContain('google_sub=eq.1001&version=eq.3');
-    const stale = await m.onRequestPut({ request: await req('PUT', { version: 3, backup: BACKUP }), env: ENV });
+  it('a write naming the stored version advances it; a stale one is 409 with the newer copy', async () => {
+    const newer = { ...BACKUP, categories: { library: { newer: true } } };
+    fakeDb({ account_backups: [{ account_id: '1001', payload: newer, version: 3, bytes: 10, updated_at: '2026-10-24T09:00:00Z' }] });
+    const ok = await onRequestPut({ request: await req('PUT', { version: 3, backup: BACKUP }), env: ENV });
+    expect(ok.status).toBe(200);
+    expect(((await ok.json()) as { version: number }).version).toBe(4);
+    const stale = await onRequestPut({ request: await req('PUT', { version: 2, backup: BACKUP }), env: ENV });
     expect(stale.status).toBe(409);
-    expect(await stale.json()).toMatchObject({ version: 4, backup: { ...BACKUP, n: 1 } });
-    // A second device's first write when a copy already exists is a conflict too.
-    const late = await m.onRequestPut({ request: await req('PUT', { version: 0, backup: BACKUP }), env: ENV });
-    expect(late.status).toBe(409);
+    const body = (await stale.json()) as { version: number; backup: unknown };
+    expect(body.version).toBe(4);
+    expect(body.backup).toEqual(BACKUP);
   });
 
-  it('refuses anything but a backup file, and more than 2 MB', async () => {
-    const m = await import('../functions/api/account/data');
-    stub({ row: null });
-    expect((await m.onRequestPut({ request: await req('PUT', { version: 0, backup: { format: 'other' } }), env: ENV })).status).toBe(400);
-    expect((await m.onRequestPut({ request: await req('PUT', { version: -1, backup: BACKUP }), env: ENV })).status).toBe(400);
-    const big = { ...BACKUP, pad: 'x'.repeat(m.MAX_BYTES) };
-    expect((await m.onRequestPut({ request: await req('PUT', { version: 0, backup: big }), env: ENV })).status).toBe(413);
+  it('refuses a body that is not a backup, and one that is too large', async () => {
+    fakeDb();
+    expect((await onRequestPut({ request: await req('PUT', { version: 0, backup: { format: 'other' } }), env: ENV })).status).toBe(400);
+    expect((await onRequestPut({ request: await req('PUT', { version: -1, backup: BACKUP }), env: ENV })).status).toBe(400);
+    const huge = { ...BACKUP, blob: 'x'.repeat(2_100_000) };
+    expect((await onRequestPut({ request: await req('PUT', { version: 0, backup: huge }), env: ENV })).status).toBe(413);
   });
 });

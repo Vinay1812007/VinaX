@@ -7,7 +7,7 @@
  *   200      { text, model: <published name>, modelId, provider }
  *   400      { error: 'bad_request' | 'unknown_model' }   413 { error: 'too_large' }
  *   429      rate limited
- *   503      { error: 'not_configured', reason } | { error: 'ai_disabled' | 'ai_over_budget' }
+ *   503      { error: 'not_configured', reason }
  *   502      { error: <upstream reason>, status }
  *
  * Models (from the live free lists, _lib/catalog.ts): Groq's whisper models,
@@ -15,13 +15,12 @@
  * first available, then the next on failure; an exact pick runs alone. The
  * audio is sent to the provider only — it is never stored or logged.
  */
-import { aiBlockCode, aiGate, logAiEvent, logAiRefusal, noteProviderFailure, type AiEnv } from '../_lib/ai';
+import { noteProviderFailure, type AiEnv } from '../_lib/ai';
 import { readJsonCapped } from '../_lib/body';
 import { fromBase64, pickMedia, transcribe } from '../_lib/media';
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
-import { type SupabaseEnv } from '../_lib/supabase';
 
-type Env = AiEnv & SupabaseEnv;
+type Env = AiEnv;
 
 /** About six megabytes of audio, base64-encoded, plus the envelope. */
 export const MAX_BODY_BYTES = 8_000_000;
@@ -74,7 +73,6 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
 
 async function handle(context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> {
   const { request, env } = context;
-  const client = request.headers.get('x-vinax-client') === 'app' ? 'app' : 'web';
   const read = await readJsonCapped<Record<string, unknown> | null>(request, MAX_BODY_BYTES);
   if (!read.ok) return read.reason === 'too_large' ? json({ error: 'too_large' }, 413) : json({ error: 'bad_request' }, 400);
   const body = read.value && typeof read.value === 'object' && !Array.isArray(read.value) ? read.value : null;
@@ -83,11 +81,6 @@ async function handle(context: { request: Request; env: Env; waitUntil?: (p: Pro
   if (!audio) return json({ error: 'bad_request' }, 400);
   const language = typeof body.language === 'string' && /^[a-z]{2,3}$/i.test(body.language.trim()) ? body.language.trim().toLowerCase() : null;
 
-  const blocked = await aiGate(env, 'transcribe');
-  if (blocked) {
-    void logAiRefusal(env, 'transcribe', blocked, client, context.waitUntil);
-    return json({ error: aiBlockCode(blocked) }, 503);
-  }
   const pick = await pickMedia(env, 'transcription', body.provider, body.model);
   if (!pick.ok) return json({ error: pick.error, ...(pick.reason ? { reason: pick.reason } : {}) }, pick.status);
 
@@ -96,8 +89,6 @@ async function handle(context: { request: Request; env: Env; waitUntil?: (p: Pro
   for (const { provider, model } of pick.choices) {
     if (Date.now() - t0 > AUTO_BUDGET_MS) break;
     const r = await transcribe(env, provider, model.id, audio.bytes, audio.mime, language);
-    const log = logAiEvent(env, { feature: 'transcribe', model: `${model.id} @${provider}`, ok: r.ok, status: r.ok ? 200 : r.status, error: r.ok ? null : r.reason, client, latency_ms: Date.now() - t0 });
-    if (context.waitUntil) context.waitUntil(log);
     if (r.ok) return json({ text: r.value, model: model.name, modelId: model.id, provider });
     noteProviderFailure(provider, model.id, r.status, r.body);
     last = { status: r.status, reason: r.reason };
