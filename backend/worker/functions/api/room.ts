@@ -9,12 +9,17 @@
  *   POST { action: 'heartbeat', code, deviceId, name }     presence
  *   POST { action: 'leave', code, deviceId }
  *   POST { action: 'end', code, hostToken }                host only
+ *   15.0:
+ *   POST { action: 'say', code, deviceId, name, text }     a chat line (≤ 200 chars, the room keeps 40)
+ *   POST { action: 'skip', code, deviceId, songId }        vote to skip the current song (one per member)
  *
  * The 6-character code is the JOIN credential (anyone with it may watch and
  * request). The host token, returned exactly once at create, authorises
- * `update` and `end`; it is never sent back to anyone. Guests polling with
- * the code alone get a member COUNT, never names. Rooms live in `rooms` and
- * `room_members`; idle rooms are swept by housekeeping.
+ * `update` and `end`; it is never sent back to anyone. Since 15.0 everyone
+ * in the room sees who is here by the name they gave (`names`), the chat,
+ * and how many have voted to skip; the host's app skips when the votes pass
+ * half the room. Rooms live in `rooms` and `room_members`; idle rooms are
+ * swept by housekeeping.
  */
 import { db, dbConfigured, q, type DbEnv } from '../_lib/db';
 import { asObject, clip, jsonResponse } from '../_lib/edge';
@@ -42,8 +47,12 @@ const ROOM_RL: Record<string, { capacity: number; refillPerMinute: number }> = {
   leave: { capacity: 20, refillPerMinute: 20 },
   update: { capacity: 60, refillPerMinute: 60 },
   end: { capacity: 20, refillPerMinute: 20 },
+  say: { capacity: 30, refillPerMinute: 30 },
+  skip: { capacity: 20, refillPerMinute: 20 },
   GET: { capacity: 200, refillPerMinute: 200 },
 };
+export const CHAT_MAX = 40;
+export const CHAT_TEXT_MAX = 200;
 
 /** The only emojis a reaction may carry. */
 export const REACTION_EMOJI: readonly string[] = ['❤️', '🔥', '😂', '👏', '🎉', '😍'];
@@ -64,6 +73,8 @@ interface RoomRow {
   position: number;
   playing: boolean;
   updated_at: string;
+  messages?: Array<{ by: string; text: string; at: string }>;
+  skip_votes?: string[];
 }
 interface Track { song: unknown; by: string | null }
 
@@ -132,6 +143,9 @@ function publicRoom(r: RoomRow) {
     position: typeof r.position === 'number' ? r.position : 0,
     playing: r.playing === true,
     updated_at: r.updated_at,
+    // 15.0 — the chat and the skip votes for the current song.
+    messages: Array.isArray(r.messages) ? r.messages.slice(-CHAT_MAX) : [],
+    skipVotes: Array.isArray(r.skip_votes) ? r.skip_votes.length : 0,
   };
 }
 
@@ -181,7 +195,11 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     memberCount: present.length,
     reactions,
   };
-  if (hostAuthorized) body.members = present.map((m) => m.name).filter((n): n is string => !!n);
+  // 15.0 — everyone sees the names members gave (a name is what a member
+  // chose to show the room); the host's list is the same list.
+  const names = present.map((m) => m.name).filter((n): n is string => !!n);
+  body.names = names;
+  if (hostAuthorized) body.members = names;
   return json(body);
 };
 
@@ -230,13 +248,17 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     // requests the host says it consumed leave the list.
     const consumed = new Set(Array.isArray(body.consumedIds) ? (body.consumedIds as unknown[]).filter((x): x is string => typeof x === 'string') : []);
     const requests = tracks(host.room.requests).filter((t) => !consumed.has(songId(t)));
+    const nextSong = cleanSong(body.song);
+    const changed = String(nextSong?.id ?? '') !== String(asObject(host.room.current)?.id ?? '');
     const r = await db.update(env, 'rooms', q().eq('code', code), {
-      current: cleanSong(body.song),
+      current: nextSong,
       queue: trackList(body.queue, QUEUE_MAX),
       requests,
       position: typeof body.position === 'number' && Number.isFinite(body.position) ? body.position : 0,
       playing: body.playing === true,
       updated_at: now,
+      // 15.0 — a new song starts with no skip votes.
+      ...(changed ? { skip_votes: [] } : {}),
     });
     return json({ ok: r.ok });
   }
@@ -267,6 +289,35 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     // A heartbeat for a room that no longer exists is refused by the foreign key: tell the guest.
     if (!r.ok && (r.error === 'bad_request' || r.error === 'conflict')) return json({ error: 'not_found' }, 404);
     return json({ ok: r.ok });
+  }
+
+  if (action === 'say') {
+    const text = clip(body.text, CHAT_TEXT_MAX);
+    if (!memberId || !text) return json({ error: 'bad_request' }, 400);
+    const r = await readRoom(env, code);
+    if (!r.ok) return json({ error: 'unavailable' }, 503);
+    if (!r.room) return json({ error: 'not_found' }, 404);
+    const line = { by: clip(body.name, 40) ?? 'Someone', text, at: now };
+    const messages = [...(Array.isArray(r.room.messages) ? r.room.messages : []), line].slice(-CHAT_MAX);
+    const w = await db.update(env, 'rooms', q().eq('code', code), { messages, updated_at: now });
+    // Saying something is being here.
+    void db.upsert(env, 'room_members', { room_code: code, member_id: memberId, name: clip(body.name, 60), last_seen: now }, 'room_code,member_id');
+    return json({ ok: w.ok });
+  }
+
+  if (action === 'skip') {
+    if (!memberId) return json({ error: 'bad_request' }, 400);
+    const r = await readRoom(env, code);
+    if (!r.ok) return json({ error: 'unavailable' }, 503);
+    if (!r.room) return json({ error: 'not_found' }, 404);
+    // A vote names the song it is for, so a late vote never counts against the next one.
+    const forSong = clip(body.songId, 64);
+    const current = String(asObject(r.room.current)?.id ?? '');
+    if (!forSong || forSong !== current) return json({ ok: true, skipVotes: Array.isArray(r.room.skip_votes) ? r.room.skip_votes.length : 0, stale: true });
+    const votes = new Set(Array.isArray(r.room.skip_votes) ? r.room.skip_votes : []);
+    votes.add(memberId);
+    const w = await db.update(env, 'rooms', q().eq('code', code), { skip_votes: [...votes].slice(0, 200) });
+    return json({ ok: w.ok, skipVotes: votes.size });
   }
 
   if (action === 'leave') {

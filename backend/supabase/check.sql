@@ -26,6 +26,12 @@ insert into accounts (id, email, name, listener_id, platform, created_at, last_s
   ('check_a2', 'check-b@example.com', 'Bo',   null,       null,  now(),                    now());
 
 insert into account_backups (account_id, payload, version, bytes) values ('check_a1', '{"v": 1}', 1, 8);
+-- 15.0 — the social layer
+insert into profiles (account_id, handle, public, bio, summary) values ('check_a1', 'check_asha', true, 'hello', '{"topArtists": [{"name": "A", "plays": 3}]}');
+insert into profiles (account_id, handle, public) values ('check_a2', 'check_bo', false);
+insert into follows (follower_id, followee_id) values ('check_a2', 'check_a1');
+insert into shared_playlists (id, owner_id, name, songs, public, collab_token) values ('check_pl0001', 'check_a1', 'Check list', '[{"id": "check_s1"}]', true, 'tok');
+insert into shared_chats (id, owner_id, title, payload, bytes, expires_at) values ('check_ch0001', 'check_a1', 'Hi', '{"messages": []}', 16, now() - interval '1 day');
 
 insert into events (at, listener_id, kind, song_id, song_title, song_artist, song_image, language, platform, app_version, country, region, city, error_kind, message, meta)
 select now() - (g || ' hours')::interval,
@@ -132,6 +138,7 @@ begin
 
   v := room_sweep();
   assert (v ->> 'rooms')::int = 0 and (v ->> 'members')::int = 0, 'room_sweep leaves fresh rooms alone';
+  assert (v ->> 'sharedChats')::int = 1, 'room_sweep removed the expired shared chat';
   n := purge_events(180);
   assert n = 0, 'purge_events keeps recent events';
   n := retire_push_devices(180);
@@ -155,6 +162,12 @@ begin
   assert (v ->> 'listener')::int = 1 and (v ->> 'account')::int = 1 and (v ->> 'events')::int > 0 and (v ->> 'memberships')::int = 1, 'delete_listener by listener';
   select exists (select 1 from account_backups where account_id = 'check_a1') into b;
   assert not b, 'delete_listener: the backup went with the account';
+  select exists (select 1 from profiles where account_id = 'check_a1') into b;
+  assert not b, 'delete_listener: the profile went with the account';
+  select exists (select 1 from follows where followee_id = 'check_a1') into b;
+  assert not b, 'delete_listener: follows of the account went too';
+  select exists (select 1 from shared_playlists where owner_id = 'check_a1') into b;
+  assert not b, 'delete_listener: shared playlists went with the account';
   v := delete_listener(null, 'check_a2');
   assert (v ->> 'account')::int = 1 and (v ->> 'listener')::int = 0, 'delete_listener by account';
 
@@ -167,7 +180,7 @@ begin
   assert not has_table_privilege('authenticated', 'public.events', 'select'), 'authenticated cannot read events';
   assert not has_function_privilege('anon', 'public.stats_overview()', 'execute'), 'anon cannot call stats_overview';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 1, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 2, 'meta.schema.version';
   raise notice 'check.sql: every function answered as expected';
 end $$;
 

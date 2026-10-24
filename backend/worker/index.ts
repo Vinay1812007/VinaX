@@ -71,6 +71,14 @@ import * as m_api_ai_dj from './functions/api/ai/dj';
 import * as m_api_auth_google from './functions/api/auth/google';
 import * as m_api_auth_me from './functions/api/auth/me';
 import * as m_api_account_data from './functions/api/account/data';
+// 15.0 — the social layer: profiles, follows, shared playlists, shared chats.
+import * as m_api_profile from './functions/api/profile';
+import * as m_api_profile_handle from './functions/api/profile/[handle]';
+import * as m_api_follow from './functions/api/follow';
+import * as m_api_shared_playlist from './functions/api/shared-playlist';
+import * as m_api_shared_playlist_id from './functions/api/shared-playlist/[id]';
+import * as m_api_share_chat from './functions/api/share-chat';
+import * as m_api_share_chat_id from './functions/api/share-chat/[id]';
 import * as m_api_ai_headlines from './functions/api/ai/headlines';
 import * as m_api_ai_title from './functions/api/ai/title';
 import * as m_api_favicon from './functions/api/favicon';
@@ -187,6 +195,10 @@ const EXACT: Record<string, Mod> = {
   '/api/auth/google': m_api_auth_google,
   '/api/auth/me': m_api_auth_me,
   '/api/account/data': m_api_account_data,
+  '/api/profile': m_api_profile,
+  '/api/follow': m_api_follow,
+  '/api/shared-playlist': m_api_shared_playlist,
+  '/api/share-chat': m_api_share_chat,
   '/api/ai/headlines': m_api_ai_headlines,
   '/api/ai/title': m_api_ai_title,
   '/api/favicon': m_api_favicon,
@@ -224,6 +236,9 @@ const DYNAMIC: Array<{ re: RegExp; mod: Mod; key: string }> = [
   { re: /^\/playlist\/([^/]+)\/?$/, mod: m_playlist_id, key: 'id' },
   { re: /^\/song\/([^/]+)\/?$/, mod: m_song_id, key: 'id' },
   { re: /^\/api\/recommendations\/similar\/([^/]+)\/?$/, mod: m_api_recs_similar, key: 'songId' },
+  { re: /^\/api\/profile\/([^/]+)\/?$/, mod: m_api_profile_handle, key: 'handle' },
+  { re: /^\/api\/shared-playlist\/([^/]+)\/?$/, mod: m_api_shared_playlist_id, key: 'id' },
+  { re: /^\/api\/share-chat\/([^/]+)\/?$/, mod: m_api_share_chat_id, key: 'id' },
   { re: /^\/sitemaps\/([^/]+)\/?$/, mod: m_sitemaps_map, key: 'map' },
 ];
 

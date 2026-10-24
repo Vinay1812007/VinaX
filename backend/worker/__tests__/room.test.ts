@@ -56,7 +56,7 @@ describe('/api/room', () => {
       ],
     });
     const guest = (await (await get('code=abc234')).json()) as Record<string, unknown>;
-    expect(guest.room).toEqual({ host_name: 'Vinay', song: { id: 's1', title: 'Orbit' }, queue: [], requests: [{ song: { id: 's2' }, by: 'Guest' }], position: 12.5, playing: true, updated_at: now });
+    expect(guest.room).toEqual({ host_name: 'Vinay', song: { id: 's1', title: 'Orbit' }, queue: [], requests: [{ song: { id: 's2' }, by: 'Guest' }], position: 12.5, playing: true, updated_at: now, messages: [], skipVotes: 0 });
     expect(guest.memberCount).toBe(1);
     expect(guest.reactions).toEqual([{ e: '🔥', at: now }]);
     expect(typeof guest.now).toBe('number');

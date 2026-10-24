@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 1
+-- VinaX database · schema version 2
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -94,6 +94,74 @@ create table if not exists account_backups (
   updated_at  timestamptz not null default now(),
   constraint account_backups_payload_shape check (jsonb_typeof(payload) = 'object')
 );
+
+-- 15.0 — the social layer, all opt-in and all keyed by the account.
+--
+-- A public profile: what the listener chose to show (a handle, a line, the
+-- artists and songs they play most, what is playing now). `summary` is the
+-- app's own digest, written by the device with sync; nothing is derived
+-- server-side. `public` false keeps it to the listener and their followers.
+create table if not exists profiles (
+  account_id  text primary key references accounts (id) on delete cascade,
+  handle      text not null,
+  public      boolean not null default false,
+  bio         text,
+  summary     jsonb not null default '{}'::jsonb,       -- { topArtists: [{name, plays}], recentLikes: [song…], topLanguages: [{id, pct}] }
+  now_playing jsonb,                                    -- { id, title, artist, image } when the listener shares it
+  share_now   boolean not null default false,
+  updated_at  timestamptz not null default now(),
+  constraint profiles_handle_shape check (handle ~ '^[a-z0-9_]{3,20}$'),
+  constraint profiles_bio_len check (bio is null or char_length(bio) <= 160),
+  constraint profiles_summary_shape check (jsonb_typeof(summary) = 'object')
+);
+create unique index if not exists profiles_handle_key on profiles (lower(handle));
+
+-- Who follows whom. One direction per row; no approval step (profiles are
+-- public or not, and a private profile shows only to followers it follows back).
+create table if not exists follows (
+  follower_id text not null references accounts (id) on delete cascade,
+  followee_id text not null references accounts (id) on delete cascade,
+  created_at  timestamptz not null default now(),
+  primary key (follower_id, followee_id),
+  constraint follows_not_self check (follower_id <> followee_id)
+);
+create index if not exists follows_followee_idx on follows (followee_id);
+
+-- A playlist that left the device: a public page (`public`), collaborators
+-- through `collab_token` (a secret in the invite link), one owner. `songs`
+-- carries the app's own song records (≤ 500) so a public page needs no
+-- catalogue call. `version` rises by one on every write, like a backup.
+create table if not exists shared_playlists (
+  id           text primary key,                        -- 12 url-safe chars
+  owner_id     text not null references accounts (id) on delete cascade,
+  name         text not null,
+  description  text,
+  songs        jsonb not null default '[]'::jsonb,
+  public       boolean not null default false,
+  collab_token text,
+  version      bigint not null default 1,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  constraint shared_playlists_name_len check (char_length(name) between 1 and 80),
+  constraint shared_playlists_songs_shape check (jsonb_typeof(songs) = 'array')
+);
+create index if not exists shared_playlists_owner_idx on shared_playlists (owner_id, updated_at desc);
+
+-- A VinaX AI conversation the listener chose to share: a read-only copy at
+-- a link, kept 90 days, deleted with the account. Chats never land here
+-- otherwise (see the header).
+create table if not exists shared_chats (
+  id          text primary key,                         -- 12 url-safe chars
+  owner_id    text not null references accounts (id) on delete cascade,
+  title       text,
+  payload     jsonb not null,                           -- { messages: [{role, content}], model? }
+  bytes       integer not null default 0,
+  created_at  timestamptz not null default now(),
+  expires_at  timestamptz not null default now() + interval '90 days',
+  constraint shared_chats_payload_shape check (jsonb_typeof(payload) = 'object')
+);
+create index if not exists shared_chats_owner_idx on shared_chats (owner_id, created_at desc);
+create index if not exists shared_chats_expires_idx on shared_chats (expires_at);
 
 -- ------------------------------------------------------------- 3. events --
 
@@ -191,9 +259,14 @@ create table if not exists rooms (
   position    double precision not null default 0,
   playing     boolean not null default false,
   created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+  updated_at  timestamptz not null default now(),
+  messages    jsonb not null default '[]'::jsonb,        -- 15.0: a short chat (≤ 40 lines: {by, text, at})
+  skip_votes  jsonb not null default '[]'::jsonb         -- 15.0: member ids voting to skip the current song
 );
 create index if not exists rooms_updated_idx on rooms (updated_at desc);
+-- A database made before 15.0 gains the two columns in place.
+alter table rooms add column if not exists messages jsonb not null default '[]'::jsonb;
+alter table rooms add column if not exists skip_votes jsonb not null default '[]'::jsonb;
 
 create table if not exists room_members (
   room_code    text not null references rooms (code) on delete cascade,
@@ -779,14 +852,16 @@ begin
 end;
 $$;
 
--- Rooms nobody touched for six hours, and members not seen for a day.
+-- Rooms nobody touched for six hours, members not seen for a day, and
+-- (15.0) shared chats past their expiry.
 create or replace function room_sweep() returns jsonb
 language plpgsql set search_path = public, pg_temp as $$
-declare n_rooms bigint; n_members bigint;
+declare n_rooms bigint; n_members bigint; n_chats bigint;
 begin
   delete from rooms where updated_at < now() - interval '6 hours'; get diagnostics n_rooms = row_count;
   delete from room_members where last_seen < now() - interval '1 day'; get diagnostics n_members = row_count;
-  return jsonb_build_object('rooms', n_rooms, 'members', n_members);
+  delete from shared_chats where expires_at < now(); get diagnostics n_chats = row_count;
+  return jsonb_build_object('rooms', n_rooms, 'members', n_members, 'sharedChats', n_chats);
 end;
 $$;
 
@@ -864,6 +939,10 @@ language sql stable set search_path = public, pg_temp as $$
     'listeners', (select count(*) from listeners),
     'accounts', (select count(*) from accounts),
     'account_backups', (select count(*) from account_backups),
+    'profiles', (select count(*) from profiles),
+    'follows', (select count(*) from follows),
+    'shared_playlists', (select count(*) from shared_playlists),
+    'shared_chats', (select count(*) from shared_chats),
     'feedback', (select count(*) from feedback),
     'blocked_content', (select count(*) from blocked_content),
     'rooms', (select count(*) from rooms),
@@ -885,7 +964,8 @@ do $$
 declare t text;
 begin
   foreach t in array array[
-    'meta', 'listeners', 'accounts', 'account_backups', 'events', 'ai_calls', 'feedback',
+    'meta', 'listeners', 'accounts', 'account_backups', 'profiles', 'follows', 'shared_playlists', 'shared_chats',
+    'events', 'ai_calls', 'feedback',
     'blocked_content', 'rooms', 'room_members', 'push_devices', 'notifications',
     'settings', 'settings_history', 'experiments', 'audit_log', 'uptime_days', 'uptime_latest', 'job_runs']
   loop
@@ -921,7 +1001,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 1, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 1, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 2, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 2, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 1 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 2 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
