@@ -121,7 +121,7 @@ async function ensureSubscription(reg: ServiceWorkerRegistration, key: string): 
 }
 
 /** Hand the subscription to the server; true only when it says it saved it. */
-async function saveOnServer(sub: PushSubscription, lang?: string): Promise<boolean> {
+async function saveOnServer(sub: PushSubscription, lang?: string, at = Date.now()): Promise<boolean> {
   const data = sub.toJSON();
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
@@ -134,7 +134,7 @@ async function saveOnServer(sub: PushSubscription, lang?: string): Promise<boole
       });
       const saved = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
       if (saved?.ok) {
-        writeConfirmation({ endpoint: sub.endpoint, at: Date.now() });
+        writeConfirmation({ endpoint: sub.endpoint, at });
         return true;
       }
       // A refusal (bad endpoint) will not change on a retry.
@@ -204,7 +204,9 @@ export async function syncPush(now = Date.now()): Promise<'skipped' | 'ok' | 'er
     const key = await vapidKey();
     if (!key) return 'error';
     const sub = await ensureSubscription(reg, key);
-    return (await saveOnServer(sub)) ? 'ok' : 'error';
+    // Stamped with the caller's clock, so "once a day" is measured from the
+    // sync that sent it, not from a few milliseconds later.
+    return (await saveOnServer(sub, undefined, now)) ? 'ok' : 'error';
   } catch (e) {
     report(`sync failed: ${String(e).slice(0, 160)}`);
     return 'error';
