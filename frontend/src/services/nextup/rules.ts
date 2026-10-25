@@ -38,6 +38,8 @@ export interface Candidate {
   via?: string;
   /** When it joined the warm pool. */
   at: number;
+  /** The catalogue answered with streams for its neighbours but none for it: it cannot play. */
+  unplayable?: boolean;
 }
 
 /** The lead artist, normalised the same way the session intent keys it. */
@@ -176,7 +178,7 @@ export const LIKED_COOLDOWN_MS = 18 * 3_600_000;
 export const SERVED_COOLDOWN_MS = 24 * 3_600_000;
 
 export function rejectReason(song: Song, f: FilterContext): RejectReason | null {
-  if (!Array.isArray(song.audio) || !song.audio.some((a) => !!a?.url)) return 'no-audio';
+  if (!song?.id) return 'no-audio';
   const key = f.keyOf(song);
   if (f.queuedIds.has(song.id) || f.queuedKeys.has(key)) return 'queued';
   if (f.skippedIds.has(song.id)) return 'skipped';
@@ -210,9 +212,10 @@ export const SPACING_STEPS: readonly Spacing[] = Object.freeze([SPACING, { gap: 
  * Put a stretch in order: best score first, under the spacing rule, across
  * the songs before it (`before`: history and the queue up to the append
  * point, oldest first). No artist within `gap` songs of itself, at most
- * `maxPerTen` per ten, never the same album twice in a row, never the same
+ * `maxPerTen` per ten, not the same album twice in a row, never the same
  * work twice. When the full rule cannot fill the stretch it loosens step by
- * step, and says so in `relaxed`.
+ * step (the last step — any order, albums included — only when nothing else
+ * is left), and says so in `relaxed`.
  */
 export function pickSequence(ranked: readonly Song[], before: readonly Song[], n: number, keyOf: (s: Song) => string): { songs: Song[]; relaxed: string[] } {
   const out: Song[] = [];

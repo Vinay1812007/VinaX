@@ -1,5 +1,5 @@
 import type { Song } from '@/types';
-import type { RecommendationContext } from '@/services/recommendation/types';
+import type { RecommendationContext, RejectReason as DebugRejectReason } from '@/services/recommendation/types';
 import type { FallbackReason, NextRecommendationOptions, NextSongsPlan } from '@/services/recommendation/engine';
 import { getArtistTopSongs, getSongSuggestions, searchSongs } from '@/services/api/saavn';
 import { songKey } from '@/services/recommendation/songKey';
@@ -12,13 +12,14 @@ import { topArtists, topLanguages } from '@/services/personalization/profile';
 import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import { useReasonStore } from '@/store/reasonStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useDownloadsStore } from '@/store/downloadsStore';
 import { queryClient } from '@/services/queryClient';
 import { kidModeOn } from '@/services/kidMode';
-import { readAnchor, type Anchor } from './anchor';
+import { peekAnchor, readAnchor, type Anchor } from './anchor';
 
 // The player and the library reach the anchor through this module (one lazy chunk).
-export { addAnchorSeed, removeAnchorSeed, startAnchor } from './anchor';
-import { playedMap, recordServed, servedMap } from './memory';
+export { addAnchorSeed, avoidArtist, removeAnchorSeed, startAnchor } from './anchor';
+import { playedMap, recordPlayed, recordServed, servedMap } from './memory';
 import {
   LIKED_COOLDOWN_MS,
   PLAYED_COOLDOWN_MS,
@@ -31,6 +32,7 @@ import {
   scoreCandidate,
   type Candidate,
   type FilterContext,
+  type RejectReason,
   type ScoreContext,
   type Source,
 } from './rules';
@@ -76,8 +78,15 @@ export const POOL_LOW_WATER = 15;
 export const POOL_TTL_MS = 30 * 60_000;
 /** Most candidates the pool holds. */
 export const POOL_CAP = 400;
-/** A sitting's pull at or below this (one skip) keeps the artist out of the session's automatic picks. */
-export const AVOID_PULL = -0.35;
+/** Most candidates one catalogue lookup adds (a refill makes about seven). */
+export const PER_LOOKUP_MAX = 40;
+/**
+ * A sitting's pull at or below this keeps the artist out of the session's
+ * automatic picks: two skips, or a "Not interested". One skip of an AUTOMATIC
+ * song does it on its own (anchor.avoidArtist, from the skip handler); one
+ * skip of the listener's own song does not.
+ */
+export const AVOID_PULL = -0.6;
 
 interface Pool {
   /** The session this pool belongs to (the anchor's start). */
@@ -86,6 +95,8 @@ interface Pool {
   version: number;
   at: number;
   items: Map<string, Candidate>;
+  /** Tune / mood searches already asked of the catalogue for this pool. */
+  asked: Set<string>;
 }
 
 let pool: Pool | null = null;
@@ -121,7 +132,7 @@ function aiDjEnabled(): boolean {
 
 function poolFor(anchor: Anchor, now: number): { pool: Pool; moved: boolean } {
   if (!pool || pool.session !== anchor.startedAt || now - pool.at > POOL_TTL_MS) {
-    pool = { session: anchor.startedAt, version: anchor.version, at: now, items: new Map() };
+    pool = { session: anchor.startedAt, version: anchor.version, at: now, items: new Map(), asked: new Set() };
     refilling = null;
     return { pool, moved: false };
   }
@@ -133,7 +144,19 @@ function poolFor(anchor: Anchor, now: number): { pool: Pool; moved: boolean } {
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, Math.max(0, ms)));
 
+/** Record that a song started playing (the 72-hour no-repeat ledger); it also leaves the pool. */
+export function notePlayed(song: Song): void {
+  if (!song?.id) return;
+  recordPlayed(songKey(song));
+  pool?.items.delete(song.id);
+}
+
+const playable = (s: Song): boolean => Array.isArray(s.audio) && s.audio.some((a) => !!a?.url);
+
 function addToPool(p: Pool, songs: readonly Song[], source: Source, via: string | undefined, now: number): void {
+  // A song with no stream where the rest of its answer had one cannot play
+  // (the catalogue's own sign); a list with no streams at all is details to fetch on play.
+  const anyAudio = songs.some((s) => s && playable(s));
   for (const song of songs) {
     if (!song?.id) continue;
     const have = p.items.get(song.id);
@@ -141,8 +164,26 @@ function addToPool(p: Pool, songs: readonly Song[], source: Source, via: string 
       have.sources.add(source);
       continue;
     }
-    if (p.items.size >= POOL_CAP) return;
-    p.items.set(song.id, { song, sources: new Set([source]), via, at: now });
+    // Full: the oldest candidate makes room (a Map iterates in insertion order),
+    // so a newer lookup — a like, a refill in a new direction — always gets in.
+    while (p.items.size >= POOL_CAP) {
+      const oldest = p.items.keys().next().value;
+      if (oldest === undefined) break;
+      p.items.delete(oldest);
+    }
+    p.items.set(song.id, { song, sources: new Set([source]), via, at: now, ...(anyAudio && !playable(song) ? { unplayable: true } : {}) });
+  }
+}
+
+/**
+ * Drop what can never be picked this session (skipped, blocked, unplayable,
+ * a skipped artist). Songs on a cooldown stay: the last step of the fallback
+ * may shorten it, and the oldest-first eviction makes room anyway.
+ */
+function prune(p: Pool, filter: FilterContext): void {
+  for (const [id, c] of p.items) {
+    const why = rejectReason(c.song, filter);
+    if (why === 'skipped' || why === 'blocked' || why === 'no-audio' || why === 'artist-skipped') p.items.delete(id);
   }
 }
 
@@ -175,7 +216,7 @@ function buildEnv(seed: Song, ctx: RecommendationContext, anchor: Anchor, option
   }
   const intent = ctx.sessionIntent ?? getSessionIntent(now);
   const pull = intent.artistPull ?? {};
-  const avoidLeads = new Set(Object.entries(pull).filter(([, v]) => v <= AVOID_PULL).map(([k]) => k));
+  const avoidLeads = new Set([...Object.entries(pull).filter(([, v]) => v <= AVOID_PULL).map(([k]) => k), ...(anchor.avoided ?? [])]);
   const listener = [...new Set([...ctx.pinnedLanguages, ...topLanguages(ctx.profile, 3).map((l) => l.id)])].map((l) => l.toLowerCase()).filter((l) => l && l !== 'unknown' && !ctx.mutedLanguages.includes(l));
   const tune = options.tune ?? null;
   let languages = anchor.languages.length ? [...anchor.languages] : languageOf(seed) ? [languageOf(seed) as string] : listener;
@@ -218,7 +259,7 @@ function buildEnv(seed: Song, ctx: RecommendationContext, anchor: Anchor, option
     pull,
     avoidLeads,
     skippedIds: new Set(intent.skippedSongIds ?? []),
-    played: playedMap(ctx.history ?? [], songKey),
+    played: playedMap(ctx.history ?? [], songKey, now),
     served: servedMap(now),
     tuneQuery,
     score,
@@ -258,7 +299,9 @@ function filterFor(env: Env, queued: { ids: ReadonlySet<string>; keys: ReadonlyS
 /** The pool's usable candidates under a filter, best first. */
 function rank(p: Pool, env: Env, filter: FilterContext): Candidate[] {
   const scored: Array<{ c: Candidate; s: number }> = [];
+  const downloads = useDownloadsStore.getState().items;
   for (const c of p.items.values()) {
+    if (c.unplayable && !downloads[c.song.id]) continue;
     if (rejectReason(c.song, filter) !== null) continue;
     scored.push({ c, s: scoreCandidate(c, env.score) });
   }
@@ -280,9 +323,18 @@ function seedPoolLocally(p: Pool, env: Env): void {
   addToPool(p, [...counts.values()].filter((r) => r.n >= 2).sort((a, b) => b.n - a.n).slice(0, 30).map((r) => r.song), 'favourite-play', undefined, env.now);
 }
 
-/** Ask the catalogue for more, in the session's direction. Answers past the deadline still warm the pool. */
-function refill(p: Pool, env: Env, deadlineMs: number, signal?: AbortSignal): Promise<void> {
-  if (refilling) return refilling;
+/**
+ * Ask the catalogue for more, in the session's direction. Answers past the
+ * deadline still warm the pool. A refill already running is joined — unless
+ * the anchor moved since it was planned (`fresh`: a like, an add), in which
+ * case a new one follows it, so the new seed is always looked up.
+ */
+function refill(p: Pool, env: Env, deadlineMs: number, signal?: AbortSignal, fresh = false): Promise<void> {
+  if (refilling) {
+    if (!fresh) return refilling;
+    const after = refilling.then(() => refill(p, env, deadlineMs, signal));
+    return after;
+  }
   const pulled: Array<{ id: string; name: string }> = [];
   for (const [lead, v] of Object.entries(env.pull).sort((a, b) => b[1] - a[1])) {
     if (v < 0.3) break;
@@ -290,8 +342,10 @@ function refill(p: Pool, env: Env, deadlineMs: number, signal?: AbortSignal): Pr
     if (s) pulled.push({ id: s.artists[0].id, name: s.artists[0].name });
   }
   const lookups = planLookups({ anchor: env.anchor, favorites: env.ctx.favorites ?? [], pulledArtists: pulled, rotation: rotation++, tuneQuery: env.tuneQuery, api, signal });
+  if (env.tuneQuery) p.asked.add(env.tuneQuery);
+  // One lookup adds at most this many: a single huge answer can never push out what the other lookups (a new like) just brought.
   const merge = (f: Fetched): void => {
-    if (pool === p) addToPool(p, f.songs, f.source, f.via, Date.now());
+    if (pool === p) addToPool(p, f.songs.slice(0, PER_LOOKUP_MAX), f.source, f.via, Date.now());
   };
   const job = runLookups(lookups, deadlineMs, signal, merge).then((results) => {
     for (const f of results) merge(f);
@@ -300,6 +354,63 @@ function refill(p: Pool, env: Env, deadlineMs: number, signal?: AbortSignal): Pr
   });
   refilling = job;
   return job;
+}
+
+/** The developer breakdown's names for this engine's rules. */
+const DEBUG_REASON: Record<RejectReason, DebugRejectReason> = {
+  'no-audio': 'no-audio',
+  queued: 'already-queued',
+  'played-recently': 'recently-played',
+  'served-recently': 'recently-played',
+  skipped: 'skipped-this-session',
+  'artist-skipped': 'skipped-this-session',
+  blocked: 'blocked',
+  explicit: 'explicit',
+  'muted-language': 'muted-language',
+  'other-language': 'off-language',
+  'soft-muted': 'soft-muted',
+};
+
+/** The developer breakdown (`?debug=recs`): only built when it is switched on. */
+function publishDebug(p: Pool, env: Env, filter: FilterContext, songs: Song[], relaxed: string[], latencyMs: number, fallback: FallbackReason | null): void {
+  void import('@/store/recsDebugStore').then((m) => {
+    if (!m.recsDebugEnabled()) return;
+    const rejected: Array<{ song: Song; reason: DebugRejectReason; stage: 'filter' }> = [];
+    const scored: Array<{ c: Candidate; s: number }> = [];
+    const sources: Record<string, number> = {};
+    for (const c of p.items.values()) {
+      for (const src of c.sources) sources[src] = (sources[src] ?? 0) + 1;
+      const why = rejectReason(c.song, filter);
+      if (why) rejected.push({ song: c.song, reason: DEBUG_REASON[why], stage: 'filter' });
+      else scored.push({ c, s: scoreCandidate(c, env.score) });
+    }
+    scored.sort((a, b) => b.s - a.s);
+    const rankOf = new Map(scored.map((x, i) => [x.c.song.id, i + 1]));
+    const scoreOf = new Map(scored.map((x) => [x.c.song.id, x.s]));
+    const chosen = new Set(songs.map((s) => s.id));
+    const sourceOf = (id: string): string => [...(p.items.get(id)?.sources ?? [])].join('+') || 'unknown';
+    m.useRecsDebugStore.getState().publish(
+      songs.map((song, i) => ({ position: i + 1, rank: rankOf.get(song.id), song, finalScore: scoreOf.get(song.id) ?? 0, source: sourceOf(song.id), components: [], picker: 'local' as const })),
+      {
+        trace: {
+          mode: 'balanced',
+          shape: env.mood ?? 'steady',
+          lock: env.languages[0] ?? null,
+          languagePolicy: env.languages.length > 1 ? 'prefer' : 'lock',
+          discoveryShare: 0,
+          intent: null,
+          stages: { candidates: p.items.size, admitted: scored.length, ranked: scored.length, sequenced: songs.length, validated: songs.length },
+          relaxed,
+          repairs: 0,
+          latencyMs,
+          fallback,
+          sources,
+        },
+        rejected,
+        passedOver: scored.filter((x) => !chosen.has(x.c.song.id)).slice(0, 15).map((x) => ({ song: x.c.song, rank: rankOf.get(x.c.song.id) ?? 0, finalScore: x.s, source: sourceOf(x.c.song.id), components: [] })),
+      },
+    );
+  }).catch(() => undefined);
 }
 
 function whyLine(c: Candidate | undefined): string | null {
@@ -332,8 +443,17 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
 
   const { pool: p, moved } = poolFor(anchor, t0);
   if (!p.items.size) seedPoolLocally(p, env);
-  if (moved) void refill(p, env, NEXTUP_DEADLINE_MS * 2);
   const queued = { ids: new Set(options.excludeIds ?? []), keys: new Set(options.excludeKeys ?? []) };
+  prune(p, filterFor(env, queued));
+  // The listener just steered — a like or an add (the anchor moved), or a new
+  // tune or pinned mood nobody has searched for yet: give that lookup time to
+  // land so this stretch already follows it.
+  const newTune = !!env.tuneQuery && !p.asked.has(env.tuneQuery);
+  if (moved || newTune) {
+    const steer = refill(p, env, NEXTUP_DEADLINE_MS * 2, undefined, true);
+    await Promise.race([steer, sleep(newTune ? NEXTUP_DEADLINE_MS : Math.min(1_500, options.deadlineMs ?? 1_500))]);
+    if (signal?.aborted) return empty(null);
+  }
   // The songs the stretch follows, oldest first: recent history, then the queue up to the append point.
   const tail = options.before?.length ? options.before.slice(-12) : [options.previous ?? seed];
   const inTail = new Set(tail.map((s) => s.id));
@@ -360,6 +480,11 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     result = attempt();
   }
   if (result.songs.length < Math.min(limit, 3)) {
+    // The liked songs and repeat plays are always there to fall back on (eviction may have dropped them).
+    seedPoolLocally(p, env);
+    result = attempt();
+  }
+  if (result.songs.length < Math.min(limit, 3)) {
     // Loosen, one step at a time: the listener's other languages, then shorter cooldowns.
     const listener = [...new Set([...env.languages, ...ctx.pinnedLanguages.map((l) => l.toLowerCase()), ...topLanguages(ctx.profile, 3).map((l) => l.id.toLowerCase())])];
     if (listener.length > env.languages.length) {
@@ -376,6 +501,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   if (result.usable - result.songs.length < POOL_LOW_WATER) void refill(p, env, NEXTUP_DEADLINE_MS * 2);
 
   const songs = result.songs;
+  publishDebug(p, env, filterFor(env, queued), songs, relaxed, Date.now() - t0, fallback);
   const committed = new Set<string>();
   const commit = (accepted: Song[]): void => {
     const fresh = accepted.filter((s) => !committed.has(s.id));
@@ -396,9 +522,21 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   };
   const topUp = (seedNow: Song, n: number, exclude: { ids: Set<string>; keys: Set<string> }): Song[] => {
     if (n <= 0) return [];
+    // A reserve from another session (a new list, a new radio) is never used.
+    if (pool !== p || peekAnchor()?.startedAt !== anchor.startedAt) return [];
     const ids = new Set([...queued.ids, ...exclude.ids]);
     const keys = new Set([...queued.keys, ...exclude.keys]);
-    const ranked = rank(p, { ...env, now: Date.now() }, filterFor(env, { ids, keys }));
+    // What the listener did since this plan (skips, likes) holds for the top-up too.
+    const now = Date.now();
+    const intentNow = getSessionIntent(now);
+    const live: Env = {
+      ...env,
+      now,
+      skippedIds: new Set([...env.skippedIds, ...(intentNow.skippedSongIds ?? [])]),
+      avoidLeads: new Set([...env.avoidLeads, ...Object.entries(intentNow.artistPull ?? {}).filter(([, v]) => v <= AVOID_PULL).map(([k]) => k), ...(peekAnchor()?.avoided ?? [])]),
+      played: playedMap(ctx.history ?? [], songKey, now),
+    };
+    const ranked = rank(p, live, filterFor(live, { ids, keys }));
     const picked = pickSequence(ranked.map((c) => c.song), [...before, ...songs, seedNow], Math.min(n, 12), songKey).songs;
     if (ranked.length - picked.length < POOL_LOW_WATER) void refill(p, env, NEXTUP_DEADLINE_MS * 2);
     return picked;

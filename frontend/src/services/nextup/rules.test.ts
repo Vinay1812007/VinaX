@@ -45,7 +45,6 @@ describe('V2 Up Next rules — what may be picked', () => {
     expect(rejectReason(song('a', 'Skipped One'), filter({ avoidLeads: new Set(['skipped one']) }))).toBe('artist-skipped');
     expect(rejectReason(song('q', 'A'), filter({ queuedIds: new Set(['q']) }))).toBe('queued');
     expect(rejectReason(song('e', 'A', { explicit: true }), filter({ hideExplicit: true }))).toBe('explicit');
-    expect(rejectReason(song('n', 'A', { audio: [] }), filter())).toBe('no-audio');
     expect(rejectReason(song('h', 'A', { language: 'hindi' }), filter({ languages: new Set(), mutedLanguages: new Set(['hindi']) }))).toBe('muted-language');
   });
 });

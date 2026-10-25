@@ -6,8 +6,8 @@ import { useHistoryStore } from '@/store/historyStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { getRecommendationContext } from '@/services/recommendation/context';
 import { noteSessionEvent, resetSessionIntent } from '@/services/personalization/sessionIntent';
-import { addAnchorSeed, anchorLanguages, evenSample, readAnchor, resetAnchor, startAnchor, MAX_START_SEEDS, SESSION_GAP_MS } from './anchor';
-import { planNextSongs, poolSize, resetNextUp, setCatalogueApi } from './engine';
+import { addAnchorSeed, anchorLanguages, avoidArtist, evenSample, readAnchor, resetAnchor, startAnchor, MAX_START_SEEDS, SESSION_GAP_MS } from './anchor';
+import { notePlayed, planNextSongs, poolSize, resetNextUp, setCatalogueApi, POOL_CAP } from './engine';
 import { resetServed } from './memory';
 import type { CatalogueApi } from './sources';
 
@@ -97,14 +97,17 @@ describe('V2 Up Next — planning', () => {
     expect(['l1', 'liked', 'liked2']).toContain(p.songs[0].id);
   });
 
-  it('does not repeat what played lately, or an artist the listener just skipped', async () => {
+  it('does not repeat what played lately, or an artist the listener skipped in an automatic pick', async () => {
     const now = Date.now();
     useHistoryStore.setState({ entries: [{ song: song('heard', 'H'), ts: now - 3_600_000, completed: true }] });
-    noteSessionEvent('skip', song('skipped', 'Skipped Artist'));
-    const { api } = fakeCatalogue({ seed: [song('heard', 'H'), song('sk2', 'Skipped Artist'), song('ok1', 'O1'), song('ok2', 'O2')] });
+    const { api } = fakeCatalogue({ seed: [song('heard', 'H'), song('sk2', 'Skipped Artist'), song('ok1', 'O1'), song('ok2', 'O2'), song('mine2', 'Own Artist')] });
     setCatalogueApi(api);
     startAnchor([song('seed', 'Seed')]);
+    avoidArtist('Skipped Artist');
+    // One skip of a song the listener chose is not a verdict on its artist.
+    noteSessionEvent('skip', song('mine', 'Own Artist'));
     const p = await plan(song('seed', 'Seed'));
+    expect(p.songs.map((s) => s.id)).toContain('mine2');
     const ids = p.songs.map((s) => s.id);
     expect(ids).not.toContain('heard');
     expect(ids).not.toContain('sk2');
@@ -154,5 +157,47 @@ describe('V2 Up Next — planning', () => {
     const more = p.topUp(p.songs[4], 5, { ids: new Set(p.songs.map((s) => s.id)), keys: new Set() });
     expect(more).toHaveLength(5);
     expect(more.some((s) => p.songs.some((x) => x.id === s.id))).toBe(false);
+  });
+
+  it('remembers plays beyond the 150-entry history for the 72-hour rule', async () => {
+    notePlayed(song('old', 'Old'));
+    useHistoryStore.setState({ entries: [] });
+    setCatalogueApi(fakeCatalogue({ seed: [song('old', 'Old'), song('new1', 'N1'), song('new2', 'N2'), song('new3', 'N3')] }).api);
+    startAnchor([song('seed', 'Seed')]);
+    const p = await plan(song('seed', 'Seed'));
+    expect(p.songs.map((s) => s.id)).not.toContain('old');
+  });
+
+  it('one huge catalogue answer cannot crowd out a new like’s songs', async () => {
+    const flood = Array.from({ length: POOL_CAP + 50 }, (_, i) => song(`h${i}`, `HA${i}`, { language: 'hindi' }));
+    const fresh = Array.from({ length: 6 }, (_, i) => song(`t${i}`, `TA${i}`));
+    const { api } = fakeCatalogue({ seed: [...flood], liked: fresh });
+    setCatalogueApi(api);
+    startAnchor([song('seed', 'Seed')]);
+    await plan(song('seed', 'Seed'));
+    expect(poolSize()).toBeLessThanOrEqual(POOL_CAP);
+    addAnchorSeed(song('liked', 'Liked'), 'like');
+    const p = await plan(song('seed', 'Seed'));
+    expect(p.songs.filter((s) => s.id.startsWith('t')).length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('a reserve from an earlier session is never used', async () => {
+    const many = Array.from({ length: 20 }, (_, i) => song(`m${i}`, `Artist ${i}`));
+    setCatalogueApi(fakeCatalogue({ seed: many }).api);
+    startAnchor([song('seed', 'Seed')]);
+    const p = await plan(song('seed', 'Seed'));
+    startAnchor([song('other', 'Other', { language: 'hindi' })], Date.now() + 1);
+    expect(p.topUp(p.songs[4], 5, { ids: new Set(), keys: new Set() })).toEqual([]);
+  });
+
+  it('skips a song the catalogue could not stream, but not an answer that carries no streams at all', async () => {
+    const mute = (id: string, a: string) => song(id, a, { audio: [] });
+    setCatalogueApi(fakeCatalogue({ seed: [song('ok1', 'O1'), mute('dead', 'D'), song('ok2', 'O2')] }).api);
+    startAnchor([song('seed', 'Seed')]);
+    expect((await plan(song('seed', 'Seed'))).songs.map((s) => s.id)).not.toContain('dead');
+    resetNextUp();
+    setCatalogueApi(fakeCatalogue({ seed2: [mute('d1', 'D1'), mute('d2', 'D2')] }).api);
+    startAnchor([song('seed2', 'Seed2')], Date.now() + 5);
+    expect((await plan(song('seed2', 'Seed2'))).songs.map((s) => s.id).sort()).toEqual(['d1', 'd2']);
   });
 });

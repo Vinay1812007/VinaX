@@ -6,7 +6,7 @@ import { readListenerEnergy } from '@/services/ai/sessionContext';
 import { sequenceSongs, type ArcShape } from './sequencer';
 import { admitSongs } from './admission';
 import { toast } from '@/store/toastStore';
-import { addAnchorSeed } from '@/services/nextup/anchor';
+import { addAnchorSeed, avoidArtist } from '@/services/nextup/anchor';
 
 /**
  * v6.3.0 — adaptive re-planning. The recommender extends the queue with an
@@ -54,6 +54,7 @@ export function dropSkippedArtist(skipped: Song): number {
   const p = usePlayerStore.getState();
   const lead = leadOf(skipped);
   if (!lead) return 0;
+  avoidArtist(lead);
   const tail = p.autoTail();
   const kept = tail.filter((s) => s.id === skipped.id || leadOf(s) !== lead);
   if (kept.length === tail.length) return 0;

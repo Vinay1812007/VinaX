@@ -34,6 +34,8 @@ export interface Anchor {
   /** Bumped on every change, so a warm pool built for an older anchor is dropped. */
   version: number;
   startedAt: number;
+  /** Lead artists the listener skipped in an automatic pick this session: kept out of what follows. */
+  avoided?: string[];
 }
 
 const KEY = 'vinax.nextup.anchor.v1';
@@ -97,9 +99,9 @@ export function anchorMood(seeds: readonly Song[]): Mood | null {
   return best && bestN / seeds.length >= 0.45 ? best : null;
 }
 
-function derive(seeds: AnchorSeed[], version: number, startedAt: number): Anchor {
+function derive(seeds: AnchorSeed[], version: number, startedAt: number, avoided: string[] = []): Anchor {
   const songs = seeds.map((s) => s.song);
-  return { seeds, languages: anchorLanguages(songs), mood: anchorMood(songs), version, startedAt };
+  return { seeds, languages: anchorLanguages(songs), mood: anchorMood(songs), version, startedAt, avoided };
 }
 
 function save(): void {
@@ -119,7 +121,7 @@ function load(): Anchor | null {
     const parsed = JSON.parse(raw) as { a?: Anchor; t?: number };
     if (!parsed?.a || !Array.isArray(parsed.a.seeds)) return null;
     const seeds = parsed.a.seeds.filter((s) => s?.song?.id);
-    state = derive(seeds, Number(parsed.a.version) || 1, Number(parsed.a.startedAt) || Date.now());
+    state = derive(seeds, Number(parsed.a.version) || 1, Number(parsed.a.startedAt) || Date.now(), Array.isArray(parsed.a.avoided) ? parsed.a.avoided.filter((x) => typeof x === 'string') : []);
     lastTouch = Number(parsed.t) || 0;
     return state;
   } catch {
@@ -157,10 +159,28 @@ export function addAnchorSeed(song: Song, via: 'like' | 'queued', now = Date.now
     const i = seeds.findIndex((s) => s.via !== 'start');
     seeds.splice(i >= 0 && i < seeds.length - 1 ? i : 0, 1);
   }
-  state = derive(seeds, current.version + 1, current.startedAt);
+  state = derive(seeds, current.version + 1, current.startedAt, current.avoided);
   lastTouch = now;
   save();
   return state;
+}
+
+/**
+ * The listener skipped an automatic song: its lead artist stays out of this
+ * session's automatic picks. (A skip of the listener's own song is not a
+ * verdict on the artist — they chose it.)
+ */
+export function avoidArtist(lead: string): void {
+  const current = load();
+  const key = lead.trim().toLowerCase();
+  if (!current || !key || current.avoided?.includes(key)) return;
+  state = { ...current, avoided: [...(current.avoided ?? []), key].slice(-30) };
+  save();
+}
+
+/** The current anchor without touching it (null when none). */
+export function peekAnchor(): Anchor | null {
+  return load();
 }
 
 /** Drop a seed (the listener un-liked it, or skipped it). */
@@ -169,7 +189,7 @@ export function removeAnchorSeed(songId: string): void {
   if (!current) return;
   const seeds = current.seeds.filter((s) => s.song.id !== songId);
   if (seeds.length === current.seeds.length || !seeds.length) return;
-  state = derive(seeds, current.version + 1, current.startedAt);
+  state = derive(seeds, current.version + 1, current.startedAt, current.avoided);
   save();
 }
 

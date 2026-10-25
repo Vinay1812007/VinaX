@@ -307,7 +307,7 @@ export default function SearchPage() {
           />
           <div className="vx-track-list">
             {aiSongs.map((song, i) => (
-              <SongRow key={song.id} song={song} songs={aiSongs} index={i} />
+              <SongRow key={song.id} song={song} songs={aiSongs} index={i} asSeed />
             ))}
           </div>
         </section>
@@ -581,7 +581,7 @@ export default function SearchPage() {
     if (normalizeQuery(input).length >= 2) addRecent(normalizeQuery(input));
     if (item.kind === 'song') {
       const queue = quickSongs.slice(0, TYPEAHEAD_SONGS);
-      playQueue(queue, item.index);
+      playQueue(queue, item.index, { asSeed: true });
       recordSearchPlay(item.song);
     } else if (item.kind === 'artist') {
       navigate(artistPath(item.artist));
@@ -985,7 +985,7 @@ export default function SearchPage() {
             {trendingNow.isLoading && <ListSkeleton rows={6} />}
             <div className="vx-track-list max-w-[960px]">
               {(trendingNow.data ?? []).slice(0, 6).map((song, i) => (
-                <SongRow key={song.id} song={song} songs={trendingNow.data ?? []} index={i} />
+                <SongRow key={song.id} song={song} songs={trendingNow.data ?? []} index={i} asSeed />
               ))}
             </div>
           </section>
@@ -1071,7 +1071,7 @@ export default function SearchPage() {
               <div className="vx-track-list">
                 {lyricMatches.map((m, i) => (
                   <div key={m.song.id}>
-                    <SongRow song={m.song} songs={lyricSongs} index={i} />
+                    <SongRow song={m.song} songs={lyricSongs} index={i} asSeed />
                     {m.source === 'catalogue' && (
                       <p className="search-lyric-note">
                         <span className="search-lyric-badge">Matched by title</span>
@@ -1125,7 +1125,8 @@ export default function SearchPage() {
                                 <SongTopResult
                                   song={topResult}
                                   onPlay={() => {
-                                    playQueue(rankedAllSongs, 0);
+                                    // V2 — a search hit is a seed: the song starts and Up Next builds from it.
+                                    playQueue(rankedAllSongs, 0, { asSeed: true });
                                     recordSearchPlay(topResult);
                                   }}
                                 />
@@ -1139,7 +1140,7 @@ export default function SearchPage() {
                             <div className="search-top-songs">
                               {leadSongs.map((song, i) => (
                                 <SearchPlay key={song.id} song={song}>
-                                  <SongRow song={song} songs={rankedAllSongs} index={leadFrom + i} />
+                                  <SongRow song={song} songs={rankedAllSongs} index={leadFrom + i} asSeed />
                                 </SearchPlay>
                               ))}
                             </div>
@@ -1332,7 +1333,7 @@ export default function SearchPage() {
               <div className="vx-track-list">
                 {displaySongs.map((song, i) => (
                   <SearchPlay key={song.id} song={song}>
-                    <SongRow song={song} songs={displaySongs} index={i} />
+                    <SongRow song={song} songs={displaySongs} index={i} asSeed />
                   </SearchPlay>
                 ))}
               </div>
