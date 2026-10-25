@@ -1,6 +1,6 @@
 # VinaX
 
-VinaX is a free music app with no sign-up. It plays from a public catalogue, learns a listener's taste on their own device, and builds what plays next from that. It ships as a web app and an Android app from one codebase, backed by one edge Worker, and includes VinaX AI, a chat assistant that can play music, search the web and cite its sources. The version number moves with every merge to `main` (`frontend/src/constants/version.ts` is the source of truth; listeners see the major, "VinaX 14"). This README covers what a listener gets, how the code is put together, how to run and check it, how a release is made, and where the rest of the documentation is.
+VinaX is a free music app with no sign-up. It plays from a public catalogue, learns a listener's taste on their own device, and builds what plays next from that. It ships as a web app and an Android app from one codebase, backed by one edge Worker, and includes VinaX AI, a chat assistant that can play music, search the web and cite its sources. The version number moves with every merge to `main` (`frontend/src/constants/version.ts` is the source of truth). The current line is **VinaX V2**, which restarted at 1.0.0 after 15.0.1; listeners see "VinaX V2 1.0" (major and minor). This README covers what a listener gets, how the code is put together, how to run and check it, how a release is made, and where the rest of the documentation is.
 
 [Documentation index](docs/README.md) · [User guide](docs/user-guide/README.md) · [Deployment](DEPLOYMENT.md) · [Operations](docs/operations.md) · [Database](docs/database.md)
 
@@ -172,8 +172,8 @@ Every merge to `main` is a release. The **Auto release** workflow bumps the vers
 
 1. **Work on a branch.** A manual release (the automatic one does the same) changes these together:
    - `version` in `frontend/package.json` and the root entry of `frontend/package-lock.json`;
-   - `LATEST_VERSION` (semver) and `DISPLAY_VERSION` (what listeners see, e.g. "VinaX 14") in `frontend/src/constants/version.ts`;
-   - a new What's New card at the top of `CHANGELOG_V2` in `frontend/src/constants/changelog.ts`, with a title and at least one change;
+   - `LATEST_VERSION` (semver) and `DISPLAY_VERSION` (what listeners see, e.g. "VinaX V2 1.0") in `frontend/src/constants/version.ts`;
+   - a new What's New card at the top of `CHANGELOG_V2` (the VinaX V2 line) in `frontend/src/constants/changelog.ts`, with a title and at least one change. Releases before V2 live in `CHANGELOG_CLASSIC`; their version numbers may repeat on the V2 line, which is fine because nothing compares version names (Android updates compare build numbers, which keep rising);
    - `version` in `backend/package.json` when the Worker changed. The Worker has its own numbering (6.0.0 at frontend 12.0.0).
 
    `frontend/src/constants/release.test.ts` fails when `LATEST_VERSION`, `package.json` and the top changelog entry disagree. If you changed an inline script in `index.html`, build and run `node scripts/csp-hashes.mjs`.

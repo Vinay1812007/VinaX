@@ -66,7 +66,7 @@ export function NotificationSheet({ open, onClose }: { open: boolean; onClose: (
       .then((d: { announcements?: Announcement[] } | null) => setAnns(d?.announcements ?? []))
       .catch(() => setAnns([]));
     void import('@/constants/changelog').then((m) => {
-      const rows = Object.entries(m.CHANGELOG_V2)
+      const rows = [...Object.entries(m.CHANGELOG_V2), ...Object.entries(m.CHANGELOG_CLASSIC ?? {})]
         .slice(0, 3)
         .map(([version, info]) => ({ version, title: (info as { title?: string }).title ?? 'Improvements' }));
       setNotes(rows);
