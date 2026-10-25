@@ -73,6 +73,7 @@ This section records platform behaviour seen in production (most recently on 202
 - The Worker runs on the platform's free plan, which allows a fixed number of requests a day across every route in `wrangler.toml`. That includes the edge-rendered song, album, artist, playlist and landing pages, not only `/api/*`.
 - When the allowance is spent, the platform stops running the Worker until its daily reset and answers those routes with its own error page (error **1027**). The static app shell still loads; every `/api/*` call fails, so search, Home shelves and AI features fail or fall back to on-device paths, and shared song links show the error page.
 - It is not a code failure and a redeploy does not help.
+- Since V2 1.0 no page a crawler reads is a Worker route. The song, album and artist pages, the 72 mood × language hubs and every sitemap (`sitemap.xml`, `sitemap-static.xml`, `sitemap-hubs.xml`, `entity-pages.xml`) are static files the frontend build writes (`frontend/scripts/prerender-entities.mjs`, using the Worker's own renderer). The routes left in `wrangler.toml` are `/api/*`, `/img`, `/apk`, `update.*` and `admin.*`, so search engines can crawl the whole site without spending the daily allowance; it is left for listeners. Do not route a page family to the Worker again; build it statically instead.
 
 Diagnosis:
 

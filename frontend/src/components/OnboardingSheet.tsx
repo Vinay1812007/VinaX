@@ -108,6 +108,13 @@ export function OnboardingSheet() {
   const location = useLocation();
   const navigate = useNavigate();
   const [firstRun, setFirstRun] = useState(() => !getLocal<boolean>(KEYS.onboarded, false));
+  // V2 — a returning account is marked welcomed at sign-in (or by the first
+  // sync pull): re-read the flag whenever the account changes, and close a
+  // welcome that has not gone past its first step when sync proves the
+  // account already had data.
+  useEffect(() => {
+    if (account && getLocal<boolean>(KEYS.onboarded, false)) setFirstRun(false);
+  }, [account]);
   // The sheet steps aside on /handoff so a first-run device can complete the
   // QR "Move to a new device" import (which reloads with the old device's
   // profile, onboarded flag included). Leaving /handoff without importing
@@ -115,6 +122,13 @@ export function OnboardingSheet() {
   // 13.0 — the welcome comes after Google sign-in, never on the public pages a signed-out visitor can read.
   const open = !!account && (firstRun || tourOpen) && location.pathname !== '/handoff';
   const [stage, setStage] = useState<Stage>('you');
+  useEffect(() => {
+    const onReturning = (): void => {
+      if (stage === 'you') setFirstRun(false);
+    };
+    window.addEventListener('vinax:returning-account', onReturning);
+    return () => window.removeEventListener('vinax:returning-account', onReturning);
+  }, [stage]);
   const template = useSettingsStore((st) => st.template);
   const setTemplate = useSettingsStore((st) => st.setTemplate);
   const detected = readBrowserSignals().languages;

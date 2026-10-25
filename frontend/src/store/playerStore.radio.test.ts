@@ -24,7 +24,8 @@ vi.mock('@/services/cast', () => ({
 }));
 vi.mock('@/utils/streak', () => ({ bumpStreak: vi.fn() }));
 const recommendMock = vi.fn(async (_seed: Song, _ctx: unknown, _opts?: { tune?: string | null; previous?: Song | null }): Promise<Song[]> => []);
-vi.mock('@/services/recommendation/engine', () => ({
+vi.mock('@/services/nextup/engine', () => ({
+  warmNextUp: () => undefined,
   NEXT_URGENT_DEADLINE_MS: 3500,
   planNextSongs: async (seed: Song, ctx: unknown, opts?: { tune?: string | null }) => ({ songs: await recommendMock(seed, ctx, opts), picker: 'local', fallback: null, latencyMs: 0, alg: 'test', relaxed: [], discoveryIds: new Set<string>(), language: null, commit: () => undefined, topUp: () => [], refinement: null }),
 }));

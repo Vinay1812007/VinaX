@@ -18,6 +18,8 @@ interface Props {
   songs?: Song[];
   index?: number;
   showArt?: boolean;
+  /** V2 — the list is search hits: a tap starts the song and Up Next builds from it (playQueue `asSeed`). */
+  asSeed?: boolean;
 }
 
 /**
@@ -31,13 +33,16 @@ interface Props {
  * Keyboard: the play target is a real <button> and the heart / menu are its
  * SIBLINGS, never nested inside it — Enter on the heart must not also play.
  */
-function SongRowImpl({ song, songs, index, showArt = true }: Props) {
+function SongRowImpl({ song, songs, index, showArt = true, asSeed = false }: Props) {
   const isCurrent = usePlayerStore((s) => s.queue[s.index]?.id === song.id);
   const isPlaying = usePlayerStore((s) => s.isPlaying && s.queue[s.index]?.id === song.id);
 
   const onPlay = () => {
     const { playQueue } = usePlayerStore.getState();
-    if (songs && index != null) playQueue(songs, index);
+    if (songs && index != null) {
+      if (asSeed) playQueue(songs, index, { asSeed: true });
+      else playQueue(songs, index);
+    }
     else playQueue([song], 0);
   };
   // v5.17.0 — swipe on touch screens: right = add to queue, left = Listen Later.

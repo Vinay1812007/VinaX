@@ -119,7 +119,9 @@ export function insertChangelogEntry(source, version, entry) {
   const marker = 'export const CHANGELOG_V2: Record<string, VersionInfo> = {\n';
   const at = source.indexOf(marker);
   if (at < 0) throw new Error('CHANGELOG_V2 not found in changelog.ts');
-  if (source.includes(`\n  '${version}': {`)) throw new Error(`changelog already has ${version}`);
+  // Only the V2 line counts: the classic history (1.x–15.x) reuses version numbers V2 will reach.
+  const end = source.indexOf('\n};', at);
+  if (source.slice(at, end < 0 ? undefined : end).includes(`\n  '${version}': {`)) throw new Error(`changelog already has ${version}`);
   const card = [
     `  '${version}': {`,
     `    title: ${q(entry.title)},`,
@@ -133,11 +135,11 @@ export function insertChangelogEntry(source, version, entry) {
   return source.slice(0, cut) + card + source.slice(cut);
 }
 
-/** version.ts with the new LATEST_VERSION and the matching DISPLAY_VERSION. */
+/** version.ts with the new LATEST_VERSION and the matching DISPLAY_VERSION ("VinaX V2 <major>.<minor>"). */
 export function updateVersionTs(source, version) {
-  const major = version.split('.')[0];
+  const [major, minor] = version.split('.');
   let out = source.replace(/export const LATEST_VERSION = '[^']+';/, `export const LATEST_VERSION = '${version}';`);
-  out = out.replace(/export const DISPLAY_VERSION = 'VinaX \d+';/, `export const DISPLAY_VERSION = 'VinaX ${major}';`);
+  out = out.replace(/export const DISPLAY_VERSION = '[^']*';/, `export const DISPLAY_VERSION = 'VinaX V2 ${major}.${minor}';`);
   if (!out.includes(`'${version}'`)) throw new Error('LATEST_VERSION not found in version.ts');
   return out;
 }

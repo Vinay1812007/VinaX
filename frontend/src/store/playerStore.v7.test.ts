@@ -26,7 +26,8 @@ vi.mock('@/utils/streak', () => ({ bumpStreak: vi.fn() }));
 vi.mock('@/services/analytics/telemetry', () => ({ trackSkip: vi.fn(), trackComplete: vi.fn() }));
 vi.mock('@/services/recommendation/adaptive', () => ({ noteSkipAndMaybeReplan: vi.fn(), noteCompleted: vi.fn() }));
 const recommendMock = vi.fn(async (): Promise<Song[]> => []);
-vi.mock('@/services/recommendation/engine', () => ({
+vi.mock('@/services/nextup/engine', () => ({
+  warmNextUp: () => undefined,
   NEXT_URGENT_DEADLINE_MS: 3500,
   planNextSongs: async () => ({ songs: await recommendMock(), picker: 'local', fallback: null, latencyMs: 0, alg: 'test', relaxed: [], discoveryIds: new Set<string>(), language: null, commit: () => undefined, topUp: () => [], refinement: null }),
 }));
@@ -119,6 +120,10 @@ describe('manual actions outrank automation', () => {
     let release: (songs: Song[]) => void = () => undefined;
     recommendMock.mockReturnValueOnce(new Promise<Song[]>((resolve) => { release = resolve; }));
     usePlayerStore.getState().playSong(song('first'));
+    // The plan for "first" is in flight (its catalogue answer still pending)...
+    await flush();
+    expect(recommendMock).toHaveBeenCalledTimes(1);
+    // ...when the listener starts something else; then the old answer lands.
     usePlayerStore.getState().playSong(song('second'));
     release([song('stale1'), song('stale2')]);
     await flush();

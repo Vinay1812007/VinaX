@@ -10,8 +10,29 @@ export interface VersionInfo {
   changes: ChangeEntry[];
 }
 
-/** Structured changelog for v2.0.0+; older versions use plain string arrays. */
+/**
+ * VinaX V2 — the release line that starts at 1.0.0 (newest first). The
+ * auto-release script prepends a card here on every merge, and the What's New
+ * sheet, Help and the notifications read the top of it.
+ */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.0.0': {
+    title: 'VinaX V2 1.0 — a new Up Next, playlists in full, faster sign-in',
+    changes: [
+      { type: 'new', text: 'Up Next is rebuilt: it follows the songs you chose this session, puts your liked songs and artists first, and stays in your language and mood.' },
+      { type: 'improved', text: 'No more repeats: a song you heard in the last three days is not queued again on its own, and the same artist never comes back within four songs.' },
+      { type: 'improved', text: 'Playlists and albums play to the end, in order or shuffled; Up Next carries on after the last song in the same direction.' },
+      { type: 'fixed', text: 'Signing in on a new browser with an account you already use no longer starts you over as a new listener: your library comes back.' },
+    ],
+  },
+};
+
+/**
+ * Releases before VinaX V2 (1.x to 15.x), kept for the history and for
+ * backups that name an old version. Structured from 2.0.0; older versions use
+ * the plain string arrays in CHANGELOG below.
+ */
+export const CHANGELOG_CLASSIC: Record<string, VersionInfo> = {
   '15.0.1': {
     title: 'Home crashed when /api/follow answered without a list',
     changes: [
@@ -4169,6 +4190,7 @@ function latestVersionKey(): string {
 export function notesFor(version: string): string[] | VersionInfo {
   const base = baseVersion(version);
   if (base in CHANGELOG_V2) return CHANGELOG_V2[base];
+  if (base in CHANGELOG_CLASSIC) return CHANGELOG_CLASSIC[base];
   if (base in CHANGELOG) return CHANGELOG[base];
   // Unknown or newer build number: show the latest real notes, never a stub.
   return CHANGELOG_V2[latestVersionKey()];

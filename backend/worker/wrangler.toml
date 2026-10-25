@@ -37,8 +37,12 @@ routes = [
   # the four patterns here again — and put a challenge rule in front of them
   # first (docs/operations.md, "Scraper traffic on entity pages").
 
-  # Sitemaps: /sitemap.xml, /sitemap-*.xml AND the paginated /sitemaps/*
-  { pattern = "www.vinaxmusic.online/sitemap*", zone_name = "vinaxmusic.online" },
+  # V2 1.0 — /sitemap* is NOT a Worker route any more. The sitemap index,
+  # sitemap-static.xml and sitemap-hubs.xml are static files the frontend
+  # build writes from these same handlers (frontend/scripts/
+  # prerender-entities.mjs), next to entity-pages.xml. Retired maps 301 to
+  # the index in frontend/public/_redirects. A crawler re-reading the maps
+  # costs nothing from the daily request quota.
 
   # Image proxy + APK download
   { pattern = "www.vinaxmusic.online/img", zone_name = "vinaxmusic.online" },
@@ -50,80 +54,13 @@ routes = [
   # Admin dashboard API (the admin SPA calls /api/* on its own host)
   { pattern = "admin.vinaxmusic.online/api/*", zone_name = "vinaxmusic.online" },
 
-  # SEO hub pages (/<lang>-<mood>-songs — functions/[hub].ts allow-list,
-  # 12 languages x 6 moods, generated to match _lib/render.ts).
-  { pattern = "www.vinaxmusic.online/hindi-romantic-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/hindi-sad-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/hindi-party-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/hindi-devotional-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/hindi-melody-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/hindi-workout-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/telugu-romantic-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/telugu-sad-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/telugu-party-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/telugu-devotional-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/telugu-melody-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/telugu-workout-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/tamil-romantic-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/tamil-sad-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/tamil-party-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/tamil-devotional-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/tamil-melody-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/tamil-workout-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/english-romantic-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/english-sad-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/english-party-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/english-devotional-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/english-melody-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/english-workout-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/punjabi-romantic-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/punjabi-sad-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/punjabi-party-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/punjabi-devotional-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/punjabi-melody-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/punjabi-workout-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/kannada-romantic-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/kannada-sad-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/kannada-party-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/kannada-devotional-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/kannada-melody-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/kannada-workout-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/malayalam-romantic-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/malayalam-sad-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/malayalam-party-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/malayalam-devotional-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/malayalam-melody-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/malayalam-workout-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/bengali-romantic-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/bengali-sad-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/bengali-party-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/bengali-devotional-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/bengali-melody-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/bengali-workout-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/marathi-romantic-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/marathi-sad-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/marathi-party-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/marathi-devotional-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/marathi-melody-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/marathi-workout-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/bhojpuri-romantic-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/bhojpuri-sad-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/bhojpuri-party-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/bhojpuri-devotional-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/bhojpuri-melody-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/bhojpuri-workout-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/gujarati-romantic-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/gujarati-sad-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/gujarati-party-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/gujarati-devotional-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/gujarati-melody-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/gujarati-workout-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/urdu-romantic-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/urdu-sad-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/urdu-party-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/urdu-devotional-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/urdu-melody-songs*", zone_name = "vinaxmusic.online" },
-  { pattern = "www.vinaxmusic.online/urdu-workout-songs*", zone_name = "vinaxmusic.online" },
+  # V2 1.0 — the 72 mood × language hubs (/<lang>-<mood>-songs) are NOT
+  # Worker routes any more: the frontend build renders them with
+  # functions/_lib/render.ts renderHub and the static host serves them as
+  # plain files (dist/<lang>-<mood>-songs.html), with the same words, song
+  # lists, canonical and JSON-LD. A crawler walked those 72 every day; now
+  # the Worker's quota is left for listeners (/api/*). functions/[hub].ts
+  # stays in the code for local runs and the tests.
 ]
 
 # 14.0 — the scheduled jobs (worker/functions/_lib/jobs.ts): every 30 minutes

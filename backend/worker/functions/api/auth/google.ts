@@ -1,6 +1,11 @@
 /**
  * POST /api/auth/google { credential, signed_device_id?, platform?, appVersion? }
- *   → 200 { session, stored, user: { name, email, picture, username } }
+ *   → 200 { session, stored, returning, hasData, user: { name, email, picture, username } }
+ *        `returning`: this Google account signed in before (its row existed);
+ *        `hasData`: it has a synced copy in account_backups. The app skips the
+ *        welcome for a returning account and pulls its copy first (15.0 fix:
+ *        a registered listener signing in on a new browser was greeted, and
+ *        set up, as a new one).
  *   → 401 { error: 'invalid_token' }      the Google token did not verify
  *   → 503 { error: 'not_configured' }     no GOOGLE_CLIENT_ID or no signing secret
  *
@@ -15,7 +20,7 @@
 import { clientIds, issueSession, verifyGoogleIdToken, type AuthEnv } from '../../_lib/googleAuth';
 import { readJsonCapped } from '../../_lib/body';
 import { rateLimitAsync } from '../../_lib/ratelimit';
-import { db, dbConfigured, type DbEnv } from '../../_lib/db';
+import { db, dbConfigured, q, type DbEnv } from '../../_lib/db';
 import { DEVICE_HEADER, verifiedIdentity, type IdentityEnv } from '../../_lib/identity';
 import { accountFacts, accountOf, CORS, handleOf, json, publicUser } from '../../_lib/authShared';
 
@@ -39,9 +44,16 @@ export const onRequestPost = async (ctx: { request: Request; env: Env }): Promis
 
   let stored = false;
   let username: string | null = null;
+  let returning = false;
+  let hasData = false;
   if (dbConfigured(env)) {
     const existing = await accountOf(env, profile.sub);
     const prior = existing.ok ? existing.value : null;
+    returning = !!prior;
+    if (prior) {
+      const backup = await db.one<{ account_id: string }>(env, 'account_backups', q().eq('account_id', profile.sub).select('account_id'));
+      hasData = backup.ok && !!backup.value;
+    }
     // Only a PROVED device id links; a forged or stale claim links nothing.
     const proved = await verifiedIdentity(env, typeof body.signed_device_id === 'string' ? body.signed_device_id : request.headers.get(DEVICE_HEADER));
     const listenerId = proved ?? prior?.listener_id ?? null;
@@ -61,5 +73,5 @@ export const onRequestPost = async (ctx: { request: Request; env: Env }): Promis
     if (!written.ok) console.warn(`[auth] account not stored (${written.error}${written.status ? ` ${written.status}` : ''}${written.code ? ` ${written.code}` : ''})`);
     username = await handleOf(env, listenerId);
   }
-  return json({ session, stored, user: publicUser(profile, username) });
+  return json({ session, stored, returning, hasData, user: publicUser(profile, username) });
 };

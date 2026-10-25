@@ -59,7 +59,7 @@ export default function SemanticMatches({ query, results }: { query: string; res
         />
         <div className="vx-track-list">
           {data.songs.map((song, i) => (
-            <SongRow key={song.id} song={song} songs={data.songs} index={i} />
+            <SongRow key={song.id} song={song} songs={data.songs} index={i} asSeed />
           ))}
         </div>
       </section>

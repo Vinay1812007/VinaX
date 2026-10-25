@@ -34,7 +34,8 @@ vi.mock('@/utils/streak', () => ({ bumpStreak: vi.fn() }));
 vi.mock('@/services/recommendation/adaptive', () => ({ noteSkipAndMaybeReplan: vi.fn(), noteCompleted: vi.fn() }));
 vi.mock('@/services/recommendation/transitions', () => ({ recordTransition: vi.fn(), transitionScore: () => 0 }));
 const planner = vi.hoisted(() => ({ next: null as null | (() => Promise<unknown>) }));
-vi.mock('@/services/recommendation/engine', () => ({
+vi.mock('@/services/nextup/engine', () => ({
+  warmNextUp: () => undefined,
   NEXT_URGENT_DEADLINE_MS: 3500,
   planNextSongs: async () => {
     const next = planner.next;

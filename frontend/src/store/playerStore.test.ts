@@ -19,7 +19,8 @@ vi.mock('@/services/cast', () => ({
 }));
 vi.mock('@/utils/streak', () => ({ bumpStreak: vi.fn() }));
 const recommendMock = vi.fn(async (_seed: Song, _ctx: unknown, _opts?: { tune?: string | null }): Promise<Song[]> => []);
-vi.mock('@/services/recommendation/engine', () => ({
+vi.mock('@/services/nextup/engine', () => ({
+  warmNextUp: () => undefined,
   NEXT_URGENT_DEADLINE_MS: 3500,
   planNextSongs: async (seed: Song, ctx: unknown, opts?: { tune?: string | null }) => ({ songs: await recommendMock(seed, ctx, opts), picker: 'local', fallback: null, latencyMs: 0, alg: 'test', relaxed: [], discoveryIds: new Set<string>(), language: null, commit: () => undefined, topUp: () => [], refinement: null }),
 }));
@@ -106,17 +107,49 @@ describe('selected queue playback', () => {
 });
 
 describe('v6.5.0 — DJ takeover and Tune this queue', () => {
-  it('with the takeover on, a tapped list becomes a seed and the DJ builds the continuation', async () => {
+  it('V2 — with the takeover on, a tapped list still plays in full; Up Next continues after its last song', async () => {
     useSettingsStore.setState({ djTakeover: true });
     recommendMock.mockResolvedValue([song('dj1'), song('dj2')]);
-    const album = [song('a'), song('b'), song('c')];
+    const album = [song('a'), song('b'), song('c'), song('d'), song('e'), song('f')];
     usePlayerStore.getState().playQueue(album, 1);
-    expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['b']);
-    expect(usePlayerStore.getState().index).toBe(0);
+    expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
+    expect(usePlayerStore.getState().index).toBe(1);
+    await vi.advanceTimersByTimeAsync(10);
+    // Four songs of the list are still to come: nothing automatic yet.
+    expect(recommendMock).not.toHaveBeenCalled();
+    usePlayerStore.getState().playAt(4);
     await vi.advanceTimersByTimeAsync(10);
     expect(recommendMock).toHaveBeenCalledOnce();
-    expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['b', 'dj1', 'dj2']);
+    expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'dj1', 'dj2']);
     expect(usePlayerStore.getState().isAutoQueued('dj1')).toBe(true);
+    expect(usePlayerStore.getState().isAutoQueued('f')).toBe(false);
+  });
+
+  it('V2 — a single tapped song is still a seed the DJ continues from', async () => {
+    useSettingsStore.setState({ djTakeover: true });
+    recommendMock.mockResolvedValue([song('dj1')]);
+    usePlayerStore.getState().playQueue([song('solo')], 0);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['solo', 'dj1']);
+  });
+
+  it('V2 — under shuffle the whole list plays before any automatic song', async () => {
+    recommendMock.mockResolvedValue([song('dj1'), song('dj2')]);
+    usePlayerStore.setState({ shuffle: true });
+    usePlayerStore.getState().playQueue([song('a'), song('b'), song('c'), song('d')], 0);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(recommendMock).not.toHaveBeenCalled();
+    const heard = new Set([usePlayerStore.getState().queue[usePlayerStore.getState().index].id]);
+    for (let i = 0; i < 3; i += 1) {
+      usePlayerStore.getState().next(true);
+      await vi.advanceTimersByTimeAsync(10);
+      heard.add(usePlayerStore.getState().queue[usePlayerStore.getState().index].id);
+    }
+    expect([...heard].sort()).toEqual(['a', 'b', 'c', 'd']);
+    usePlayerStore.getState().next(true);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(usePlayerStore.getState().queue[usePlayerStore.getState().index].id).toMatch(/^dj/);
+    usePlayerStore.setState({ shuffle: false });
   });
 
   it('keeps the list when the caller insists (Queue Builder plans) or when autoplay is off', async () => {

@@ -20,9 +20,13 @@
 import { applyBackup, createBackup, parseBackup, type BackupCategoryId } from '@/features/settings/backup';
 import { currentAccount, onAccountChange } from '@/services/auth/google';
 import { isNativePlatform } from '@/services/native';
+import { KEYS } from '@/constants/storage-keys';
+import { getLocal, setLocal } from '@/services/storage/local';
 
 const ORIGIN = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
 export const SYNC_ENDPOINT = `${ORIGIN}/api/account/data`;
+/** V2 — fired when the first pull proves this account already existed. */
+export const RETURNING_EVENT = 'vinax:returning-account';
 /** The categories that follow the account. */
 export const SYNC_CATEGORIES: readonly BackupCategoryId[] = ['settings', 'library', 'smartCollections', 'history', 'taste', 'bookmarks', 'homeLayout'];
 const STATE_KEY = 'vinax.account.sync.v1';
@@ -153,6 +157,14 @@ async function round(fetchImpl: typeof fetch): Promise<void> {
         if (mergeIn(j.backup)) await rehydrate();
         st = { ...st, version: j.version };
         writeState(st);
+      }
+      // V2 — an account with a synced copy is not a new listener, whatever
+      // this browser remembers: mark it welcomed, and tell a welcome that is
+      // still on its first step to close (an older Worker without the
+      // `returning` flag at sign-in lands here).
+      if (j.version > 0 && !getLocal<boolean>(KEYS.onboarded, false)) {
+        setLocal(KEYS.onboarded, true);
+        try { window.dispatchEvent(new CustomEvent(RETURNING_EVENT)); } catch { /* no window */ }
       }
     } else if (got.status !== 204) {
       return setStatus('error');

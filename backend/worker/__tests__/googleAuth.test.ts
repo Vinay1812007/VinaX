@@ -140,15 +140,25 @@ describe('14.0 — sign-in with the database', () => {
     // A forged device claim links nothing.
     const first = await onRequestPost({ request: post({ credential: await token(good()), signed_device_id: `${LISTENER}.forged`, platform: 'android', appVersion: '14.0.0' }), env: DB });
     expect(first.status).toBe(200);
-    const out1 = (await first.json()) as { stored: boolean; user: { username: string | null } };
+    const out1 = (await first.json()) as { stored: boolean; returning: boolean; hasData: boolean; user: { username: string | null } };
     expect(out1.stored).toBe(true);
+    // A first sign-in is a new account with nothing synced yet.
+    expect(out1.returning).toBe(false);
+    expect(out1.hasData).toBe(false);
     expect(out1.user.username).toBeNull();
     expect(fake.rows('accounts')[0]).toMatchObject({ id: '110000000000000000001', email: 'listener@example.com', email_verified: true, name: 'A Listener', listener_id: null, platform: 'android', app_version: '14.0.0', country: 'IN' });
     // The real signed id links the device and the handle comes back.
     const signed = await signId(ENV.DEVICE_ID_SECRET, LISTENER);
     const second = await onRequestPost({ request: post({ credential: await token(good()), signed_device_id: signed }), env: DB });
-    const out2 = (await second.json()) as { user: { username: string | null } };
+    const out2 = (await second.json()) as { returning: boolean; hasData: boolean; user: { username: string | null } };
     expect(out2.user.username).toBe('vinay');
+    // The same Google account again: returning, still without a synced copy.
+    expect(out2.returning).toBe(true);
+    expect(out2.hasData).toBe(false);
+    // Once it has synced, a sign-in on another browser says so.
+    fake.tables.account_backups = [{ account_id: '110000000000000000001', payload: {}, version: 3 }];
+    const third = (await (await onRequestPost({ request: post({ credential: await token(good()) }), env: DB })).json()) as { returning: boolean; hasData: boolean };
+    expect(third).toMatchObject({ returning: true, hasData: true });
     expect(fake.rows('accounts')).toHaveLength(1);
     expect(fake.rows('accounts')[0].listener_id).toBe(LISTENER);
   });

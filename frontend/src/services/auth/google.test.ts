@@ -37,6 +37,23 @@ describe('Google sign-in', () => {
     off();
   });
 
+  it('V2: a returning account is never welcomed as new — the flag is set before the account appears', async () => {
+    let welcomedWhenSet: unknown = 'unset';
+    const off = onAccountChange(() => { welcomedWhenSet = getLocal(KEYS.onboarded, false); });
+    expect(await exchangeGoogleToken('t', ok({ session: 'vx1.p.s', user: USER, returning: true, hasData: true }))).toBe('ok');
+    expect(welcomedWhenSet).toBe(true);
+    off();
+  });
+
+  it('V2: a first-ever sign-in still gets the welcome', async () => {
+    expect(await exchangeGoogleToken('t', ok({ session: 'vx1.p.s', user: USER, returning: false, hasData: false }))).toBe('ok');
+    expect(getLocal(KEYS.onboarded, false)).toBe(false);
+    // An older Worker that sends neither flag behaves as before; the first sync decides.
+    localStorage.clear();
+    expect(await exchangeGoogleToken('t', ok({ session: 'vx1.p.s', user: USER }))).toBe('ok');
+    expect(getLocal(KEYS.onboarded, false)).toBe(false);
+  });
+
   it('names a refused token and an unavailable service; keeps nothing', async () => {
     expect(await exchangeGoogleToken('bad', ok({ error: 'invalid_token' }, 401))).toBe('refused');
     expect(await exchangeGoogleToken('x', ok({ error: 'not_configured' }, 503))).toBe('unavailable');

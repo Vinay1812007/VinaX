@@ -2,10 +2,11 @@
  * 13.6.0 — build-time song/album/artist pages (scripts/prerender-entities.mjs):
  * which entities are picked, and where their pages are written.
  */
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — a plain .mjs build script, no types
-import { fileFor, pickEntities } from '../../scripts/prerender-entities.mjs';
+import { HUB_PATHS, STATIC_SITEMAPS, fileFor, hubFileFor, hubSongIds, pickEntities } from '../../scripts/prerender-entities.mjs';
 
 type Song = { id: string; name: string; language: string; playCount: number; album?: { id: string }; artists?: { primary: Array<{ id: string }> } };
 const song = (id: string, name: string, plays: number, extra: Partial<Song> = {}): Song => ({
@@ -53,5 +54,31 @@ describe('fileFor', () => {
     expect(fileFor('/song/../../etc-x')).toBeNull();
     expect(fileFor('/library')).toBeNull();
     expect(fileFor('/song/Has Space-1')).toBeNull();
+  });
+});
+
+describe('V2 1.0 — hubs and sitemaps are static files, not Worker requests', () => {
+  it('builds all 72 mood × language hubs as flat files', () => {
+    expect(HUB_PATHS).toHaveLength(72);
+    expect(hubFileFor('/telugu-romantic-songs')).toBe(join('dist', 'telugu-romantic-songs.html'));
+    expect(hubFileFor('/telugu-songs')).toBeNull();
+    expect(hubFileFor('/../etc-romantic-songs')).toBeNull();
+  });
+
+  it('reads the songs a hub links to, so their pages are built first', () => {
+    const html = '<ol><li><a href="/song/naa-ready-abc_12">Naa Ready</a></li><li><a href="/song/x-QQ9">X</a></li><li><a href="/song/naa-ready-abc_12">again</a></li></ol>';
+    expect(hubSongIds(html)).toEqual(['abc_12', 'QQ9']);
+  });
+
+  it('writes the sitemap index and the maps it lists', () => {
+    expect(STATIC_SITEMAPS.map(([f]: [string, string]) => f)).toEqual(['sitemap.xml', 'sitemap-static.xml', 'sitemap-hubs.xml']);
+  });
+
+  it('keeps the hubs and sitemaps off the Worker routes', () => {
+    const toml = readFileSync(resolve(__dirname, '../../../backend/worker/wrangler.toml'), 'utf8');
+    const patterns = [...toml.matchAll(/pattern = "([^"]+)"/g)].map((m) => m[1]);
+    expect(patterns.some((p) => /-songs\*?$/.test(p))).toBe(false);
+    expect(patterns.some((p) => p.includes('/sitemap'))).toBe(false);
+    expect(patterns).toContain('www.vinaxmusic.online/api/*');
   });
 });

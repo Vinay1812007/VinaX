@@ -90,9 +90,16 @@ describe('file edits', () => {
   const next = bumpVersion(LATEST_VERSION);
 
   it('version.ts: LATEST_VERSION and DISPLAY_VERSION follow the bump', () => {
-    const out = updateVersionTs(versionTs, '15.2.0');
-    expect(out).toContain("export const LATEST_VERSION = '15.2.0';");
-    expect(out).toContain("export const DISPLAY_VERSION = 'VinaX 15';");
+    const out = updateVersionTs(versionTs, '1.2.0');
+    expect(out).toContain("export const LATEST_VERSION = '1.2.0';");
+    expect(out).toContain("export const DISPLAY_VERSION = 'VinaX V2 1.2';");
+    // A patch keeps the display name.
+    expect(updateVersionTs(versionTs, '1.0.3')).toContain("export const DISPLAY_VERSION = 'VinaX V2 1.0';");
+  });
+
+  it('changelog.ts: a V2 version the classic history already used is still a new card', () => {
+    // 1.1.0 shipped in 2025 on the classic line; the V2 line reaches it again.
+    expect(() => insertChangelogEntry(changelogTs, '1.1.0', { title: 'Next', changes: [{ type: 'new', text: 'x' }] })).not.toThrow();
   });
 
   it('changelog.ts: the new card leads and quotes are escaped', () => {
