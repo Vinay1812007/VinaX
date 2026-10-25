@@ -21,7 +21,21 @@
 // PRERENDER_ENTITIES=1. It never fails the build: a dead mirror or the time
 // budget just means fewer pages. dist/entity-pages.xml (the sitemap the index
 // lists) is always written, with whatever was built.
-/* global fetch, AbortController, setTimeout, clearTimeout */
+//
+// V2 1.0 — the SEO pages cost NO Worker requests at all. Every build also
+// writes, as static files:
+//
+//   dist/<lang>-<mood>-songs.html   the 72 mood × language hubs (renderHub)
+//   dist/sitemap.xml                the sitemap index
+//   dist/sitemap-static.xml         the prerendered app routes
+//   dist/sitemap-hubs.xml           the hubs
+//
+// from the Worker's own renderer and sitemap handlers, so the words and the
+// URLs are the ones the edge used to answer with. Their Worker routes are
+// gone (backend/worker/wrangler.toml): a crawler reading the whole site now
+// spends nothing from the daily request quota. The songs each hub lists are
+// built first, so a hub's links land on real pages.
+/* global fetch, AbortController, setTimeout, clearTimeout, Request, Response */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,10 +51,22 @@ const LANGS = ['telugu', 'hindi', 'tamil', 'punjabi', 'kannada', 'malayalam', 'b
 
 const num = (v, d) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : d);
 const SONGS_PER_LANG = num(process.env.ENTITY_SONGS_PER_LANG, 30);
-const MAX_ALBUMS = num(process.env.ENTITY_MAX_ALBUMS, 200);
-const MAX_ARTISTS = num(process.env.ENTITY_MAX_ARTISTS, 200);
-const CONCURRENCY = num(process.env.ENTITY_CONCURRENCY, 6);
-const BUDGET_MS = num(process.env.ENTITY_BUDGET_MS, 6 * 60_000);
+const MAX_ALBUMS = num(process.env.ENTITY_MAX_ALBUMS, 400);
+const MAX_ARTISTS = num(process.env.ENTITY_MAX_ARTISTS, 400);
+/** Songs linked from the hubs, built ahead of the chart picks (V2 1.0). */
+const MAX_HUB_SONGS = num(process.env.ENTITY_MAX_HUB_SONGS, 1500);
+const CONCURRENCY = num(process.env.ENTITY_CONCURRENCY, 8);
+const BUDGET_MS = num(process.env.ENTITY_BUDGET_MS, 12 * 60_000);
+const WORKER_FN = resolve(dirname(fileURLToPath(import.meta.url)), '../../backend/worker/functions');
+/** The mood × language hubs, as functions/sitemap-hubs.xml.ts lists them. */
+export const HUB_MOODS = ['romantic', 'sad', 'party', 'devotional', 'melody', 'workout'];
+export const HUB_PATHS = LANGS.flatMap((l) => HUB_MOODS.map((m) => `/${l}-${m}-songs`));
+/** The sitemaps written as static files, and the Worker handler each comes from. */
+export const STATIC_SITEMAPS = [
+  ['sitemap.xml', 'sitemap.xml.ts'],
+  ['sitemap-static.xml', 'sitemap-static.xml.ts'],
+  ['sitemap-hubs.xml', 'sitemap-hubs.xml.ts'],
+];
 
 const enabled = process.env.PRERENDER_ENTITIES === '1' || (process.env.CF_PAGES === '1' && process.env.PRERENDER_ENTITIES !== '0');
 
@@ -129,6 +155,57 @@ export async function pickEntities(get = getJson, langs = LANGS, perLang = SONGS
   ];
 }
 
+/** The song ids a rendered hub page links to, in its order. */
+export function hubSongIds(html) {
+  const out = [];
+  for (const m of String(html).matchAll(/href="\/song\/[a-z0-9-]*-(\w+)"/g)) if (!out.includes(m[1])) out.push(m[1]);
+  return out;
+}
+
+/** Where a hub page is written: a flat .html file, served at the path with a 200. */
+export function hubFileFor(path) {
+  if (!HUB_PATHS.includes(path)) return null;
+  return join(DIST, `${path.slice(1)}.html`);
+}
+
+/** Write the static sitemaps from the Worker's own handlers. */
+async function writeStaticSitemaps(vite) {
+  for (const [file, mod] of STATIC_SITEMAPS) {
+    const m = await vite.ssrLoadModule(join(WORKER_FN, mod));
+    const res = await m.onRequestGet({});
+    writeFileSync(join(DIST, file), await res.text());
+  }
+}
+
+/** Render the 72 hubs into dist; returns the song ids they link to. */
+async function writeHubs(render, shell) {
+  const env = { ASSETS: { fetch: async () => new Response(shell, { headers: { 'content-type': 'text/html' } }) } };
+  const songs = [];
+  let written = 0;
+  const todo = [...HUB_PATHS];
+  const worker = async () => {
+    while (todo.length) {
+      const path = todo.shift();
+      const hub = render.matchHub(path);
+      const file = hubFileFor(path);
+      if (!hub || !file) continue;
+      try {
+        const res = await render.renderHub(hub.lang, hub.mood, new Request(`${ORIGIN}${path}`), env);
+        const html = await res.text();
+        if (!res.ok || !html.includes('seo-content')) continue;
+        writeFileSync(file, html);
+        written++;
+        songs.push(...hubSongIds(html));
+      } catch {
+        /* this hub keeps the app shell */
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+  console.log(`hub pages: wrote ${written} of ${HUB_PATHS.length}`);
+  return [...new Set(songs)];
+}
+
 /** Where a rendered page path ("/song/x-1") is written: a flat .html file. */
 export function fileFor(path) {
   if (!/^\/(song|album|artist)\/[a-z0-9-]+-\w+$/.test(path)) return null;
@@ -136,11 +213,6 @@ export function fileFor(path) {
 }
 
 async function main() {
-  if (!enabled) {
-    writeSitemap([]);
-    console.log('entity pages: skipped (static-host builds only; PRERENDER_ENTITIES=1 to run here)');
-    return;
-  }
   const started = Date.now();
   let shell;
   try {
@@ -154,9 +226,19 @@ async function main() {
   const urls = [];
   let failed = 0;
   try {
+    await writeStaticSitemaps(vite);
     const render = await vite.ssrLoadModule(RENDER_TS);
-    render.useCatalogBases(MIRRORS);
-    const todo = await pickEntities();
+    // Off the static host the hubs are written without their song lists (no network, same words and links).
+    render.useCatalogBases(enabled ? MIRRORS : []);
+    const hubSongs = await writeHubs(render, shell);
+    if (!enabled) {
+      console.log('entity pages: skipped (static-host builds only; PRERENDER_ENTITIES=1 to run here)');
+      return;
+    }
+    const picked = await pickEntities();
+    const fromHubs = hubSongs.slice(0, MAX_HUB_SONGS).map((id) => ['song', id]);
+    const have = new Set(fromHubs.map(([, id]) => id));
+    const todo = [...fromHubs, ...picked.filter(([t, id]) => t !== 'song' || !have.has(id))];
     console.log(`entity pages: ${todo.length} to build (${CONCURRENCY} at a time, ${Math.round(BUDGET_MS / 1000)} s budget)`);
     let next = 0;
     const worker = async () => {
