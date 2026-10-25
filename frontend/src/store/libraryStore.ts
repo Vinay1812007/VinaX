@@ -183,6 +183,9 @@ export const useLibraryStore = create<LibraryState>()(
           void import('@/services/analytics/telemetry').then((m) => m.trackFavorite(song)).catch(() => undefined);
           // 8.5.0 — liking the song that is playing steers what comes next right away.
           if (nowPlayingId() === song.id) void import('@/services/recommendation/adaptive').then((m) => m.noteLikeAndMaybeReplan(song)).catch(() => undefined);
+        } else {
+          // V2 — an un-like takes the song out of the session's anchor too.
+          void import('@/services/nextup/engine').then((m) => m.removeAnchorSeed(song.id)).catch(() => undefined);
         }
         const { favorites, saved, hiddenSongIds } = get();
         const exists = favorites.some((s) => s.id === song.id);

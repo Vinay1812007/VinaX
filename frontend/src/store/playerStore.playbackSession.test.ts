@@ -35,7 +35,8 @@ vi.mock('@/services/analytics/telemetry', () => ({ trackSkip: vi.fn(), trackComp
 vi.mock('@/services/recommendation/adaptive', () => ({ noteSkipAndMaybeReplan: vi.fn(), noteCompleted: vi.fn() }));
 vi.mock('@/services/recommendation/transitions', () => ({ recordTransition: vi.fn(), transitionScore: () => 0 }));
 const recommendMock = vi.fn(async (): Promise<Song[]> => []);
-vi.mock('@/services/recommendation/engine', () => ({
+vi.mock('@/services/nextup/engine', () => ({
+  warmNextUp: () => undefined,
   NEXT_URGENT_DEADLINE_MS: 3500,
   planNextSongs: async () => ({ songs: await recommendMock(), picker: 'local', fallback: null, latencyMs: 0, alg: 'test', relaxed: [], discoveryIds: new Set<string>(), language: null, commit: () => undefined, topUp: () => [], refinement: null }),
 }));

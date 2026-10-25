@@ -165,6 +165,13 @@ interface PreviewSnapshot {
 }
 let preview: PreviewSnapshot | null = null;
 
+/** V2 — the Up Next engine, loaded once on demand (every caller shares the one import). */
+let nextUpModule: Promise<typeof import('@/services/nextup/engine')> | null = null;
+function loadNextUp(): Promise<typeof import('@/services/nextup/engine')> {
+  nextUpModule ??= import('@/services/nextup/engine');
+  return nextUpModule;
+}
+
 /** 8.2.0 — AI Radio: the most songs a radio starts with before the DJ takes over. */
 export const RADIO_SEED_MAX = 5;
 /** How many songs one continuation adds. */
@@ -406,8 +413,7 @@ export const usePlayerStore = create<PlayerState>()(
       function topUpFromReserve(seedNow: Song): number {
         const plan = lastPlan;
         if (!plan) return 0;
-        const lang = seedNow.language && seedNow.language !== 'unknown' ? seedNow.language : null;
-        if (plan.language && lang && plan.language !== lang) return 0;
+        // V2 — the plan keeps the session's languages itself (services/nextup/anchor).
         const { queue, index } = get();
         const picks = plan.topUp(seedNow, NEXT_BATCH, { ids: new Set(queue.map((s) => s.id)), keys: new Set(queue.map(songKey)) });
         const { admitted } = admitSongs(picks, { queue, index });
@@ -429,7 +435,9 @@ export const usePlayerStore = create<PlayerState>()(
           try {
             // 7.2.0 — the engine is loaded on demand: it no longer rides the
             // first load with the player store (the service worker precaches it).
-            const { planNextSongs } = await import('@/services/recommendation/engine');
+            // V2 — Up Next is the rewritten engine (services/nextup): planned from the
+            // session's anchor, likes first, no repeats, served from a warm pool.
+            const { planNextSongs } = await loadNextUp();
             if (version !== queueVersion || abort.signal.aborted) return false;
             const { queue } = get();
             // 7.2.0 — a plan: the on-device order inside one end-to-end deadline
@@ -445,6 +453,8 @@ export const usePlayerStore = create<PlayerState>()(
               // The stretch is appended after the last queued song: that is the
               // hand-off the no-repeat-artist rule must judge.
               previous: queue[queue.length - 1] ?? null,
+              // V2 — the whole run-up to the append point, so artist spacing holds across batches.
+              before: queue.slice(-12),
               signal: abort.signal,
               deadlineMs: opts.urgent ? NEXT_URGENT_DEADLINE_MS : undefined,
             });
@@ -551,9 +561,36 @@ export const usePlayerStore = create<PlayerState>()(
         preloadUpcoming();
         // Keep a small tail ready for autoplay and playlist continuation. The
         // async fetch never blocks starting the current song.
-        if (autoplay && canExtend() && get().queue.length - get().index <= 2) {
-          void appendRecommendations(song);
+        // V2 — under shuffle "what is left" is the songs not played yet, not the
+        // songs after the current index: a shuffled playlist plays in full first.
+        if (autoplay && canExtend()) {
+          const left = songsLeft();
+          if (left <= 2) void appendRecommendations(song);
+          else if (left <= 4) warmUpNext(song);
         }
+      }
+
+      /** Songs still to come in this queue (the unplayed ones under shuffle). */
+      function songsLeft(): number {
+        const { queue, index, shuffle } = get();
+        if (!shuffle) return queue.length - index - 1;
+        return queue.filter((s, i) => i !== index && !sessionPlayed.has(s.id)).length;
+      }
+
+      /** V2 — what the listener chose starts the session's anchor (services/nextup/anchor). */
+      function setAnchor(songs: Song[]): void {
+        void loadNextUp().then((m) => m.startAnchor(songs)).catch(() => undefined);
+      }
+      /** V2 — a hand-queued song says "more like this": it joins the anchor. */
+      function noteAnchor(song: Song): void {
+        void loadNextUp().then((m) => m.addAnchorSeed(song, 'queued')).catch(() => undefined);
+      }
+
+      /** V2 — get the first automatic songs ready while the listener's list still plays. */
+      function warmUpNext(song: Song): void {
+        void loadNextUp()
+          .then((m) => m.warmNextUp(song, getRecommendationContext(song, radio ? 'radio' : 'playlist')))
+          .catch(() => undefined);
       }
 
       function maybeRecordSkip(manual: boolean): void {
@@ -655,9 +692,12 @@ export const usePlayerStore = create<PlayerState>()(
       /** Smart shuffle: random among queue songs not yet played this session. */
       function pickShuffleIndex(): number {
         const { queue, index } = get();
-        const unplayed = queue
+        const open = queue
           .map((s, i) => ({ s, i }))
           .filter(({ s, i }) => i !== index && !sessionPlayed.has(s.id));
+        // V2 — the listener's own songs first; automatic songs only once those have played.
+        const own = open.filter(({ s }) => !autoIds.has(s.id));
+        const unplayed = own.length ? own : open;
         if (!unplayed.length && get().repeat !== 'all') return queue.length;
         if (!unplayed.length) {
           sessionPlayed.clear();
@@ -937,19 +977,21 @@ export const usePlayerStore = create<PlayerState>()(
           sessionPlayed.clear();
           lastRemoval = null;
           saveOwnership();
-          // v6.5.0 — DJ takeover: the tapped song is the seed and the DJ
-          // builds the continuation (startTrack asks for it at once because
-          // the queue is one song long). Off, or when the caller insists on
-          // its list, playback follows the tapped list as before.
+          // V2 — a list (a playlist, an album, a chart) plays IN FULL, in its
+          // order or shuffled; Up Next continues only after its last song, in
+          // the list's direction. DJ takeover is for a single tapped song: the
+          // song is the seed and the DJ builds the continuation.
           const settings = useSettingsStore.getState();
-          const takeover = settings.djTakeover && settings.autoplay && !opts.keepList && !get().followMode && get().repeat === 'off';
+          const list = stripExplicit(songs);
+          const takeover = list.length < 2 && settings.djTakeover && settings.autoplay && !opts.keepList && !get().followMode && get().repeat === 'off';
           radio = takeover;
+          setAnchor(list.length >= 2 ? list : [seed]);
           if (takeover) {
             set({ queue: [seed], index: 0, currentTime: 0, duration: 0, loopA: null, loopB: null, tuneIntent: null });
             startTrack(seed, true);
             return;
           }
-          const queue = stripExplicit(songs);
+          const queue = list;
           const index = queue.indexOf(seed);
           set({ queue: [...queue], index, currentTime: 0, duration: 0, loopA: null, loopB: null, tuneIntent: null });
           startTrack(seed, true);
@@ -1018,6 +1060,7 @@ export const usePlayerStore = create<PlayerState>()(
             return;
           }
           recordQueueAdd(song);
+          noteAnchor(song);
           // v7.0.0 — a hand-queued song goes ahead of whatever the recommender
           // appended (after the listener's own list and earlier hand-queued
           // songs), not behind eight automatic picks.
@@ -1065,6 +1108,7 @@ export const usePlayerStore = create<PlayerState>()(
           }
           const { queue, index } = get();
           recordQueueAdd(song);
+          noteAnchor(song);
           // If the song "play next" is invoked on already IS the currently
           // playing track, do nothing — filtering it out and reinserting would
           // corrupt the index (audit finding H2).
@@ -1205,9 +1249,11 @@ export const usePlayerStore = create<PlayerState>()(
               if (playing && canExtend()) {
                 // 7.2.0 — the validated reserve first: the next song starts at
                 // once while a fresh plan is built in the background.
+                const end = queue.length;
                 if (topUpFromReserve(playing) > 0) {
-                  set({ index: index + 1, currentTime: 0, duration: 0 });
-                  startTrack(get().queue[index + 1], true, { from: playing });
+                  // The first appended song (under shuffle, index + 1 may be one already played).
+                  set({ index: end, currentTime: 0, duration: 0 });
+                  startTrack(get().queue[end], true, { from: playing });
                   return;
                 }
                 const version = queueVersion;
@@ -1219,7 +1265,15 @@ export const usePlayerStore = create<PlayerState>()(
                 audioEngine.pause();
                 void appendRecommendations(playing, { urgent: true }).then((added) => {
                   if (version !== queueVersion || ticket !== transition || get().queue[get().index]?.id !== playing.id || !canExtend()) return;
-                  if (added || get().index < get().queue.length - 1) get().next(false);
+                  if (added || get().index < get().queue.length - 1) {
+                    if (get().queue.length > end) {
+                      set({ index: end, currentTime: 0, duration: 0 });
+                      startTrack(get().queue[end], true, { from: playing });
+                    } else get().next(false);
+                    return;
+                  }
+                  // V2 — never a silent stop: say why, so the listener can act.
+                  toast('Up next ran out of songs for this session — pick something or start a radio');
                 });
               } else {
                 set({ isPlaying: false });
@@ -1330,6 +1384,7 @@ export const usePlayerStore = create<PlayerState>()(
           manualIds.clear();
           lastRemoval = null;
           sessionPlayed.clear();
+          setAnchor(queue);
           set({ queue, index: 0, currentTime: 0, duration: 0, isPlaying: true, tuneIntent: tune });
           startTrack(queue[0], true);
           // Plan the first continuation at once, after the last seed, so Up next shows where the radio goes.

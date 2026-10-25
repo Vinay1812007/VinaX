@@ -6,6 +6,7 @@ import { readListenerEnergy } from '@/services/ai/sessionContext';
 import { sequenceSongs, type ArcShape } from './sequencer';
 import { admitSongs } from './admission';
 import { toast } from '@/store/toastStore';
+import { addAnchorSeed } from '@/services/nextup/anchor';
 
 /**
  * v6.3.0 — adaptive re-planning. The recommender extends the queue with an
@@ -40,6 +41,26 @@ export function noteCompleted(): void {
   skipStreak = 0;
 }
 
+const leadOf = (s: Song): string => (s.artists?.[0]?.name ?? s.subtitle?.split(',')[0] ?? '').trim().toLowerCase();
+
+/**
+ * V2 — a skipped automatic song takes its artist out of what is coming: the
+ * upcoming automatic songs by the same lead artist leave the queue at once
+ * (the listener's own songs stay), and the engine keeps the artist out for
+ * the rest of the sitting (services/nextup/engine AVOID_PULL). Returns how
+ * many songs left.
+ */
+export function dropSkippedArtist(skipped: Song): number {
+  const p = usePlayerStore.getState();
+  const lead = leadOf(skipped);
+  if (!lead) return 0;
+  const tail = p.autoTail();
+  const kept = tail.filter((s) => s.id === skipped.id || leadOf(s) !== lead);
+  if (kept.length === tail.length) return 0;
+  p.replaceAutoTail(kept);
+  return tail.length - kept.length;
+}
+
 /** Called after the player records a skip. Returns true when a re-plan ran. */
 export function noteSkipAndMaybeReplan(skipped: Song, now = Date.now()): boolean {
   const p = usePlayerStore.getState();
@@ -47,6 +68,7 @@ export function noteSkipAndMaybeReplan(skipped: Song, now = Date.now()): boolean
     skipStreak = 0;
     return false;
   }
+  dropSkippedArtist(skipped);
   skipStreak += 1;
   if (skipStreak < 2 || now - lastReplanAt < REPLAN_COOLDOWN_MS) return false;
   const current = p.queue[p.index] ?? null;
@@ -83,8 +105,12 @@ export function noteLikeAndMaybeReplan(liked: Song, now = Date.now()): boolean {
   const p = usePlayerStore.getState();
   const current = p.queue[p.index];
   if (!current || current.id !== liked.id) return false;
+  // V2 — the liked song joins the session's anchor, so every later stretch leans its way.
+  addAnchorSeed(liked, 'like', now);
   if (now - lastReplanAt < REPLAN_COOLDOWN_MS) return false;
-  if (p.autoTail().length < 3) return false;
+  // V2 — any automatic tail is re-planned (the queue refills at two songs left,
+  // so the old "three or more" rule meant a like almost never changed anything).
+  if (p.autoTail().length < 1) return false;
   p.regenerateAutoTail();
   skipStreak = 0;
   lastReplanAt = now;
