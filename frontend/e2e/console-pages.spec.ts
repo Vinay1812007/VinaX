@@ -31,9 +31,10 @@ const TABS = [
   'notify/send', 'notify/history', 'notify/audience', 'notify/setup',
   'database/tables', 'database/jobs', 'database/audit', 'database/maintenance',
   'health/status', 'health/errors', 'health/edge', 'health/releases', 'health/env',
+  'seo/overview', 'seo/audit', 'seo/tools',
 ];
 /** Tabs that only call the server when a button is pressed. */
-const ON_DEMAND = new Set(['ai/lab', 'ai/probe']);
+const ON_DEMAND = new Set(['ai/lab', 'ai/probe', 'seo/tools']);
 
 type Json = Record<string, unknown>;
 
@@ -98,6 +99,16 @@ function fixtures(full: boolean): Record<string, Json> {
         ]
         : [],
       lanes: full ? [{ lane: 'dj', provider: 'nvidia', keySet: true }, { lane: 'mini', provider: 'groq', keySet: false }] : [],
+    },
+    '/api/admin/seo': {
+      origin: 'https://www.example.test', checkedAt: iso(0), indexable: full ? 1240 : 0, issues: full ? 2 : 0,
+      robots: { status: 200, sitemaps: full ? ['https://www.example.test/sitemap.xml'] : [], blockedAgents: full ? ['GPTBot', 'CCBot'] : [], disallowAll: false },
+      sitemap: { status: 200, maps: full ? 3 : 0, lastmod: full ? day(0) : null },
+      maps: full ? [{ path: '/sitemap-static.xml', status: 200, urls: 31, lastmod: day(0), sample: ['/'] }, { path: '/sitemap-hubs.xml', status: 200, urls: 72, lastmod: day(0), sample: ['/telugu-romantic-songs'] }, { path: '/entity-pages.xml', status: 200, urls: 1137, lastmod: day(0), sample: ['/song/kesariya-k1'] }] : [],
+      pages: full ? [
+        { path: '/', status: 200, ms: 120, title: 'VinaX — Free Music Streaming for India', description: 'Free music', canonical: 'https://www.example.test/', h1: 'VinaX', jsonLd: ['WebSite', 'Organization'], words: 420, ogImage: true, noindex: false, issues: [] },
+        { path: '/song/kesariya-k1', status: 200, ms: 90, title: 'Kesariya — Arijit Singh | VinaX', description: null, canonical: 'https://www.example.test/song/kesariya-k1', h1: 'Kesariya', jsonLd: ['MusicRecording'], words: 40, ogImage: true, noindex: false, issues: ['no meta description', 'only 40 words of crawlable text'] },
+      ] : [],
     },
     '/api/admin/edge': {
       origin: 'https://www.example.test', checkedAt: iso(0), healthy: !full, problems: full ? 1 : 0,
