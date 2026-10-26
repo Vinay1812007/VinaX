@@ -82,7 +82,7 @@ describe('page registry', () => {
     expect(pages.length).toBe(pageFiles.length);
     const ids = pages.map((p) => p.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.sort()).toEqual(['ai', 'analytics', 'catalog', 'database', 'experiments', 'feedback', 'health', 'listeners', 'live', 'notify', 'overview', 'publish']);
+    expect(ids.sort()).toEqual(['ai', 'analytics', 'catalog', 'database', 'experiments', 'feedback', 'health', 'listeners', 'live', 'notify', 'overview', 'publish', 'seo']);
     for (const p of pages) {
       expect(p.title, p.id).toBeTruthy();
       expect(GROUPS, p.id).toContain(p.group);
@@ -189,7 +189,7 @@ describe('empty and failing answers', () => {
     expect(failures).toEqual([]);
     const tabs = VX.pages().reduce((n, p) => n + (p.tabs ? p.tabs.length : 1), 0);
     expect(results.length).toBe(tabs);
-    expect(tabs).toBe(32);
+    expect(tabs).toBe(35);
   });
 
   it('every page and tab shows an error state, not a crash, when the server fails', async () => {
