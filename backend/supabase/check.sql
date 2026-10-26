@@ -175,6 +175,32 @@ begin
   assert v -> 'account' ->> 'id' = 'check_a1', 'listener_profile: a second device opens its account';
   delete from listeners where id = 'check_l4';
 
+  -- The twin already listed (signed in before its first usage report) folds
+  -- in on the next schema apply; a namesake elsewhere or an hour later does not.
+  insert into accounts (id, email, name, city, created_at, last_seen) values ('check_a5', 'twin@example.com', 'Twin Person', 'Hyderabad', now() - interval '1 hour', now());
+  insert into listeners (id, display_name, city, first_seen, last_seen) values
+    ('check_l5', 'Twin Person', 'Hyderabad', now() - interval '58 minutes', now()),
+    ('check_l6', 'Twin Person', 'Delhi',     now() - interval '58 minutes', now()),
+    ('check_l7', 'Twin Person', 'Hyderabad', now() - interval '5 minutes',  now());
+  update listeners l set account_id = a.id
+    from accounts a
+    where l.account_id is null
+      and not exists (select 1 from accounts x where x.listener_id = l.id)
+      and l.display_name is not null and a.name is not null
+      and lower(btrim(l.display_name)) = lower(btrim(a.name))
+      and coalesce(l.city, '') = coalesce(a.city, '')
+      and abs(extract(epoch from (l.first_seen - a.created_at))) < 900
+      and (select count(*) from accounts b
+           where lower(btrim(b.name)) = lower(btrim(l.display_name))
+             and coalesce(b.city, '') = coalesce(l.city, '')
+             and abs(extract(epoch from (l.first_seen - b.created_at))) < 900) = 1;
+  select count(*) into n from directory where email = 'twin@example.com' or listener_id = 'check_l5';
+  assert n = 1, 'twin folded into its account';
+  select count(*) into n from listeners where id in ('check_l6', 'check_l7') and account_id is null;
+  assert n = 2, 'namesakes elsewhere or later stay separate';
+  delete from listeners where id in ('check_l5', 'check_l6', 'check_l7');
+  delete from accounts where id = 'check_a5';
+
   v := delete_listener('check_l1', null);
   assert (v ->> 'listener')::int = 1 and (v ->> 'account')::int = 1 and (v ->> 'events')::int > 0 and (v ->> 'memberships')::int = 1, 'delete_listener by listener';
   select exists (select 1 from account_backups where account_id = 'check_a1') into b;
