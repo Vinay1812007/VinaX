@@ -27,6 +27,7 @@ import * as m_album_id from './functions/album/[id]';
 import * as m_api_admin_ailab from './functions/api/admin/ailab';
 import * as m_api_admin_catalog_search from './functions/api/admin/catalog-search';
 import * as m_api_admin_edge from './functions/api/admin/edge';
+import * as m_api_admin_seo from './functions/api/admin/seo';
 import { guardVerdict, isEntityPage, isHubPage, plainShell } from './functions/_lib/pageGuard';
 import * as m_api_admin_envcheck from './functions/api/admin/envcheck';
 import * as m_api_admin_enginetest from './functions/api/admin/enginetest';
@@ -150,6 +151,7 @@ const EXACT: Record<string, Mod> = {
   '/api/admin/ailab': m_api_admin_ailab,
   '/api/admin/catalog-search': m_api_admin_catalog_search,
   '/api/admin/edge': m_api_admin_edge,
+  '/api/admin/seo': m_api_admin_seo,
   '/api/admin/envcheck': m_api_admin_envcheck,
   '/api/admin/enginetest': m_api_admin_enginetest,
   '/api/admin/health': m_api_admin_health,
