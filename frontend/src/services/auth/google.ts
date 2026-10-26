@@ -11,6 +11,7 @@
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal, removeLocal, setLocal } from '@/services/storage/local';
 import { isNativePlatform, platformName } from '@/services/native';
+import { installId } from '@/services/identity/installId';
 
 /** 13.7 — the platform and build the account is used on, for the owner console. */
 let reportedVersion: string = __APP_VERSION__;
@@ -67,12 +68,17 @@ export async function exchangeGoogleToken(credential: string, fetchImpl: typeof 
     const res = await fetchImpl(`${ORIGIN}/api/auth/google`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ credential, signed_device_id: getLocal<string>(KEYS.signedDeviceId, '') || undefined, ...(isNativePlatform() ? (await readInstalledVersion(), clientFacts()) : clientFacts()) }),
+      // V2 1.0.1 — the install id too: a browser that signs in before it has
+      // ever reported usage has no signed id yet, and without it the console
+      // listed the person twice (the account, and a "Device only" row).
+      body: JSON.stringify({ credential, signed_device_id: getLocal<string>(KEYS.signedDeviceId, '') || undefined, deviceId: installId(), ...(isNativePlatform() ? (await readInstalledVersion(), clientFacts()) : clientFacts()) }),
     });
     if (res.status === 401) return 'refused';
     if (!res.ok) return 'unavailable';
-    const j = (await res.json()) as { session?: unknown; user?: AccountUser; returning?: unknown; hasData?: unknown };
+    const j = (await res.json()) as { session?: unknown; user?: AccountUser; returning?: unknown; hasData?: unknown; signed_device_id_next?: unknown };
     if (typeof j.session !== 'string' || !j.user) return 'unavailable';
+    // The device's signed id, issued with the link: usage reports from now on are this same row.
+    if (typeof j.signed_device_id_next === 'string' && !getLocal<string>(KEYS.signedDeviceId, '')) setLocal(KEYS.signedDeviceId, j.signed_device_id_next);
     // V2 — a Google account that signed in before is not a new listener: no
     // welcome, and its synced library and settings come back first. Marked
     // BEFORE the account is set, so the welcome never opens for it and its
@@ -181,6 +187,17 @@ export function signOut(): void {
   if (isNativePlatform()) void import('@capgo/capacitor-social-login').then(({ SocialLogin }) => SocialLogin.logout({ provider: 'google' })).catch(() => undefined);
   confirmedSession = null;
   setAccount(null);
+}
+
+/**
+ * V2 1.0.1 — this device just received its signed id (its first usage
+ * report): check the session again so the server links the device to the
+ * signed-in account now, not on the next visit.
+ */
+export function relinkDevice(): Promise<boolean> {
+  if (!currentAccount()) return Promise.resolve(false);
+  confirmedSession = null;
+  return validateSession();
 }
 
 /** Tests only: forget the confirmed session. */

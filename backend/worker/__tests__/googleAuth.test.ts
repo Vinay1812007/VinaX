@@ -8,7 +8,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { issueSession, readSession, resetGoogleKeys, verifyGoogleIdToken } from '../functions/_lib/googleAuth';
-import { signId } from '../functions/_lib/identity';
+import { idFromInstall, signId } from '../functions/_lib/identity';
 import { DB_ENV, fakeDb } from './helpers/fakeDb';
 
 const CLIENT = '152181244509-test.apps.googleusercontent.com';
@@ -161,6 +161,37 @@ describe('14.0 — sign-in with the database', () => {
     expect(third).toMatchObject({ returning: true, hasData: true });
     expect(fake.rows('accounts')).toHaveLength(1);
     expect(fake.rows('accounts')[0].listener_id).toBe(LISTENER);
+    // The proved device carries its account (the console folds devices per person).
+    expect(fake.rows('listeners').find((l) => l.id === LISTENER)?.account_id).toBe('110000000000000000001');
+  });
+
+  it('V2 1.0.1 — a browser that never reported usage is linked by its install id, and gets its signed id', async () => {
+    const fake = fakeDb({}, googleKeys);
+    const { onRequestPost } = await import('../functions/api/auth/google');
+    const install = '3f0c1a52-7d7e-4bb4-9d2e-6c1b8a0e5f11';
+    const res = await onRequestPost({ request: post({ credential: await token(good()), deviceId: install }), env: DB });
+    const out = (await res.json()) as { signed_device_id_next?: string };
+    const expected = await idFromInstall(ENV.DEVICE_ID_SECRET, install);
+    // The device row it WILL report as exists already, owned by the account…
+    expect(fake.rows('listeners')).toEqual([expect.objectContaining({ id: expected, account_id: '110000000000000000001' })]);
+    expect(fake.rows('accounts')[0].listener_id).toBe(expected);
+    // …and the signed id it should echo from now on comes back.
+    expect(out.signed_device_id_next).toBe(await signId(ENV.DEVICE_ID_SECRET, expected));
+    // A malformed install id links nothing.
+    const fake2 = fakeDb({}, googleKeys);
+    await onRequestPost({ request: post({ credential: await token(good()), deviceId: 'x' }), env: DB });
+    expect(fake2.rows('listeners')).toEqual([]);
+  });
+
+  it('V2 1.0.1 — the session check links each device that proves itself to the account', async () => {
+    const LAPTOP = 'd_' + 'ab'.repeat(16);
+    const fake = fakeDb({ accounts: [{ id: '42', email: 'e@x', email_verified: true, name: 'N', picture: null, listener_id: LISTENER, last_seen: new Date().toISOString() }], listeners: [{ id: LISTENER, account_id: '42' }, { id: LAPTOP }] });
+    const me = await import('../functions/api/auth/me');
+    const s = (await issueSession(DB, '42'))!;
+    const headers = { authorization: `Bearer ${s}`, 'x-vinax-device': await signId(ENV.DEVICE_ID_SECRET, LAPTOP) };
+    expect((await me.onRequestGet({ request: new Request('https://example.test/api/auth/me', { headers }), env: DB })).status).toBe(200);
+    expect(fake.rows('listeners').find((l) => l.id === LAPTOP)?.account_id).toBe('42');
+    expect(fake.rows('listeners').find((l) => l.id === LISTENER)?.account_id).toBe('42');
   });
 
   it('the session check answers the account, refreshes it, signs out when the row is gone, and delete removes the row', async () => {

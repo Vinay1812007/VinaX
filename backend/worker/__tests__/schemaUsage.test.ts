@@ -33,8 +33,11 @@ function tablesOf(sql: string): Map<string, Set<string>> {
     }
     out.set(m[1], cols);
   }
-  // The one view: its output columns are the `as alias` names of the first select.
-  const view = /create or replace view (\w+) as\s*select([\s\S]*?)\n\s*from /.exec(sql);
+  // Columns added later by `alter table t add column if not exists c …`.
+  for (const m of sql.matchAll(/alter table (\w+) add column if not exists (\w+)/g)) out.get(m[1])?.add(m[2]);
+  // The one view: its output columns are the `as alias` names of its first
+  // top-level select (indented two spaces; a `with` clause's selects are deeper).
+  const view = /create or replace view (\w+) as[\s\S]*?\n {2}select([\s\S]*?)\n\s*from /.exec(sql);
   if (view) out.set(view[1], new Set([...view[2].matchAll(/as (\w+)/g)].map((x) => x[1]).concat(['listener_id'])));
   return out;
 }

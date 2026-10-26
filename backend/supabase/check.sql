@@ -158,6 +158,23 @@ begin
   select count(*) into n from directory where account_id in ('check_a1', 'check_a2');
   assert n = 2, 'directory: one row per person';
 
+  -- V2 1.0.1 — a signed-in listener on a second device (a new browser) is
+  -- still ONE row: the newest device's facts, the device count, no "Device only" twin.
+  insert into listeners (id, display_name, platform, account_id, first_seen, last_seen) values
+    ('check_l4', 'Asha', 'android', 'check_a1', now() - interval '30 days', now() + interval '1 minute');
+  select count(*) into n from directory where account_id = 'check_a1' or listener_id in ('check_l1', 'check_l4');
+  assert n = 1, 'directory: two devices of one account are one row';
+  select devices into n from directory where account_id = 'check_a1';
+  assert n = 2, 'directory: the row counts both devices';
+  select (platform = 'android' and listener_id = 'check_l4' and first_seen < now() - interval '29 days') into b from directory where account_id = 'check_a1';
+  assert b, 'directory: newest device facts, earliest first-seen';
+  v := stats_platforms();
+  select (e ->> 'listeners')::int into n from jsonb_array_elements(v -> 'platforms') e where e ->> 'platform' = 'android';
+  assert n >= 2, 'stats_platforms counts devices, not directory rows';
+  v := listener_profile('check_l4', null);
+  assert v -> 'account' ->> 'id' = 'check_a1', 'listener_profile: a second device opens its account';
+  delete from listeners where id = 'check_l4';
+
   v := delete_listener('check_l1', null);
   assert (v ->> 'listener')::int = 1 and (v ->> 'account')::int = 1 and (v ->> 'events')::int > 0 and (v ->> 'memberships')::int = 1, 'delete_listener by listener';
   select exists (select 1 from account_backups where account_id = 'check_a1') into b;

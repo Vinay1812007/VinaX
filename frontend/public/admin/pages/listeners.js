@@ -52,7 +52,7 @@
             ui.table({
               columns: [
                 { key: 'name', label: 'Listener', sortVal: who, render: function (r) { return ui.media(r.picture, who(r), [r.handle ? '@' + r.handle : null, r.email].filter(Boolean).join(' · '), true); } },
-                { key: 'account', label: 'Account', sortVal: function (r) { return r.accountId ? 1 : 0; }, render: function (r) { return r.accountId ? ui.pill('Signed in', 'ok') : ui.pill('Device only'); } },
+                { key: 'account', label: 'Account', sortVal: function (r) { return r.accountId ? 1 : 0; }, render: function (r) { return r.accountId ? h('span', ui.pill('Signed in', 'ok'), num(r.devices) > 1 ? h('span.muted.small', ' · ' + num(r.devices) + ' devices') : null) : ui.pill('Device only'); } },
                 { key: 'platform', label: 'Platform', render: function (r) { return h('span', r.platform || 'web', r.appVersion ? h('span.muted.small', ' · ' + r.appVersion) : null); } },
                 { key: 'city', label: 'Place', render: function (r) { return [r.city, r.region, fmt.country(r.country)].filter(function (x) { return x && x !== '—'; }).join(', ') || null; } },
                 { key: 'nowPlaying', label: 'Playing', sort: false, render: function (r) { var s = obj(r.nowPlaying); return s.title ? h('span', r.isPlaying ? ui.dot('ok') : null, ' ', fmt.trunc(s.title, 40)) : null; } },

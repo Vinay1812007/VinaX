@@ -1,6 +1,6 @@
 /**
- * POST /api/auth/google { credential, signed_device_id?, platform?, appVersion? }
- *   → 200 { session, stored, returning, hasData, user: { name, email, picture, username } }
+ * POST /api/auth/google { credential, signed_device_id?, deviceId?, platform?, appVersion? }
+ *   → 200 { session, stored, returning, hasData, user: { name, email, picture, username }, signed_device_id_next? }
  *        `returning`: this Google account signed in before (its row existed);
  *        `hasData`: it has a synced copy in account_backups. The app skips the
  *        welcome for a returning account and pulls its copy first (15.0 fix:
@@ -16,13 +16,20 @@
  * `stored: false`. The device is linked to the account only when it PROVES
  * its signed id (body or the x-vinax-device header), which is how the console
  * shows one listener rather than an account plus a usage row.
+ *
+ * V2 1.0.1 — a brand-new browser signs in BEFORE it has reported usage, so it
+ * has no signed id yet and nothing was linked: the console then listed the
+ * person twice (the account, and a "Device only" row once the browser
+ * reported). Now the app also sends its install id, the device row it WILL
+ * report as (`d_<hmac>` — only that device knows the uuid behind it) is
+ * linked right away, and its signed id comes back as `signed_device_id_next`.
  */
 import { clientIds, issueSession, verifyGoogleIdToken, type AuthEnv } from '../../_lib/googleAuth';
 import { readJsonCapped } from '../../_lib/body';
 import { rateLimitAsync } from '../../_lib/ratelimit';
 import { db, dbConfigured, q, type DbEnv } from '../../_lib/db';
-import { DEVICE_HEADER, verifiedIdentity, type IdentityEnv } from '../../_lib/identity';
-import { accountFacts, accountOf, CORS, handleOf, json, publicUser } from '../../_lib/authShared';
+import { DEVICE_HEADER, resolveIdentity, verifiedIdentity, type IdentityEnv } from '../../_lib/identity';
+import { accountFacts, accountOf, CORS, handleOf, json, linkDevice, publicUser } from '../../_lib/authShared';
 
 type Env = AuthEnv & DbEnv & IdentityEnv;
 
@@ -46,6 +53,7 @@ export const onRequestPost = async (ctx: { request: Request; env: Env }): Promis
   let username: string | null = null;
   let returning = false;
   let hasData = false;
+  let issued: string | null = null;
   if (dbConfigured(env)) {
     const existing = await accountOf(env, profile.sub);
     const prior = existing.ok ? existing.value : null;
@@ -54,9 +62,20 @@ export const onRequestPost = async (ctx: { request: Request; env: Env }): Promis
       const backup = await db.one<{ account_id: string }>(env, 'account_backups', q().eq('account_id', profile.sub).select('account_id'));
       hasData = backup.ok && !!backup.value;
     }
-    // Only a PROVED device id links; a forged or stale claim links nothing.
+    // A PROVED device id links; so does the install id of a device that has
+    // not reported yet (its row id is derived from a uuid only it knows).
+    // A forged signed id links nothing.
     const proved = await verifiedIdentity(env, typeof body.signed_device_id === 'string' ? body.signed_device_id : request.headers.get(DEVICE_HEADER));
-    const listenerId = proved ?? prior?.listener_id ?? null;
+    let fromInstall: string | null = null;
+    if (!proved && typeof body.deviceId === 'string') {
+      const identity = await resolveIdentity(env, { deviceId: body.deviceId });
+      if (identity?.source === 'install') {
+        fromInstall = identity.id;
+        issued = identity.issued;
+      }
+    }
+    const thisDevice = proved ?? fromInstall;
+    const listenerId = thisDevice ?? prior?.listener_id ?? null;
     const now = new Date().toISOString();
     const row = {
       id: profile.sub,
@@ -71,7 +90,8 @@ export const onRequestPost = async (ctx: { request: Request; env: Env }): Promis
     const written = await db.upsert(env, 'accounts', row, 'id');
     stored = written.ok;
     if (!written.ok) console.warn(`[auth] account not stored (${written.error}${written.status ? ` ${written.status}` : ''}${written.code ? ` ${written.code}` : ''})`);
+    else if (thisDevice) await linkDevice(env, thisDevice, profile.sub);
     username = await handleOf(env, listenerId);
   }
-  return json({ session, stored, returning, hasData, user: publicUser(profile, username) });
+  return json({ session, stored, returning, hasData, user: publicUser(profile, username), ...(issued ? { signed_device_id_next: issued } : {}) });
 };

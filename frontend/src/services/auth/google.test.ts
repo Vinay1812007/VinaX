@@ -26,7 +26,7 @@ describe('Google sign-in', () => {
     expect(await exchangeGoogleToken('google.id.token', f)).toBe('ok');
     const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('/api/auth/google');
-    expect(JSON.parse(String(init.body))).toEqual({ credential: 'google.id.token', signed_device_id: 'signed.device', platform: 'web', appVersion: expect.any(String) });
+    expect(JSON.parse(String(init.body))).toEqual({ credential: 'google.id.token', signed_device_id: 'signed.device', deviceId: expect.any(String), platform: 'web', appVersion: expect.any(String) });
     expect(currentAccount()).toEqual({ session: 'vx1.payload.sig', user: USER });
     expect(getLocal(KEYS.userHandle, '')).toBe('vinay');
     expect(getLocal(KEYS.userName, '')).toBe('A Listener');
@@ -133,5 +133,15 @@ describe('Google sign-in', () => {
     expect([a, b]).toEqual([false, false]);
     expect(f).toHaveBeenCalledTimes(1);
     expect(currentAccount()).toBeNull();
+  });
+
+  it('V2 1.0.1 — a browser that never reported usage sends its install id and keeps the signed id it gets back', async () => {
+    localStorage.removeItem(KEYS.signedDeviceId);
+    const f = ok({ session: 'vx1.payload.sig', user: USER, signed_device_id_next: 'd_abc.sig' });
+    expect(await exchangeGoogleToken('google.id.token', f)).toBe('ok');
+    const body = JSON.parse(String((f.mock.calls[0] as unknown as [string, RequestInit])[1].body)) as Record<string, unknown>;
+    expect(body.signed_device_id).toBeUndefined();
+    expect(typeof body.deviceId).toBe('string');
+    expect(getLocal(KEYS.signedDeviceId, '')).toBe('d_abc.sig');
   });
 });

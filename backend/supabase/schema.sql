@@ -83,6 +83,16 @@ create index if not exists accounts_email_trgm on accounts using gin (email exte
 create index if not exists accounts_name_trgm on accounts using gin (name extensions.gin_trgm_ops);
 comment on table accounts is 'Signed-in listeners (Google). Deleting the row deletes the synced backup with it.';
 
+-- V2 1.0.1 — every device a signed-in listener uses carries its account, so
+-- the console lists the PERSON once (accounts.listener_id is only the latest
+-- device). Set at sign-in and on session checks; filled here from the links
+-- that already exist.
+alter table listeners add column if not exists account_id text references accounts (id) on delete set null;
+create index if not exists listeners_account_idx on listeners (account_id) where account_id is not null;
+update listeners l set account_id = a.id
+  from accounts a
+  where a.listener_id = l.id and l.account_id is null;
+
 -- The signed-in listener's synced copy of their library and settings — the
 -- app's own backup-file JSON. `version` rises by one on every write; a write
 -- that names an older version is refused so two devices merge, not overwrite.
@@ -402,31 +412,47 @@ create index if not exists job_runs_job_idx on job_runs (job, started_at desc);
 
 -- ------------------------------------------------------------- 10. views --
 
--- Everyone the console lists: each device row, with its account when linked,
--- plus accounts that never linked a device. One row per person as far as the
--- data can tell.
+-- Everyone the console lists, ONE ROW PER PERSON: a signed-in listener is one
+-- row however many devices they use (the most recent device's platform,
+-- place and what is playing, the earliest first-seen, the latest last-seen,
+-- and how many devices); a device nobody signed in on is a row of its own.
+-- V2 1.0.1 — it used to be one row per device, so a listener who signed in
+-- on a new browser was listed twice ("Device only" + "Signed in").
+-- (`devices` is a new LAST column, so the view is replaced in place.)
 create or replace view directory as
-  select l.id                      as listener_id,
-         a.id                      as account_id,
-         coalesce(a.name, l.display_name) as name,
-         l.handle,
-         a.email,
-         a.picture,
-         l.platform,
-         l.app_version,
-         l.country, l.region, l.city,
-         l.now_playing, l.is_playing,
-         least(l.first_seen, a.created_at) as first_seen,
-         greatest(l.last_seen, a.last_seen) as last_seen
-  from listeners l
-  left join accounts a on a.listener_id = l.id
+  with dev as (
+    select l.*, coalesce(l.account_id, (select a.id from accounts a where a.listener_id = l.id limit 1)) as acct
+    from listeners l
+  ),
+  mine as (
+    select d.*,
+           row_number() over (partition by d.acct order by d.last_seen desc) as rn,
+           count(*) over (partition by d.acct) as n,
+           min(d.first_seen) over (partition by d.acct) as first_any,
+           max(d.last_seen) over (partition by d.acct) as last_any
+    from dev d
+    where d.acct is not null
+  )
+  select d.id as listener_id, null::text as account_id, d.display_name as name, d.handle as handle,
+         null::text as email, null::text as picture, d.platform as platform, d.app_version as app_version,
+         d.country as country, d.region as region, d.city as city, d.now_playing as now_playing, d.is_playing as is_playing,
+         d.first_seen as first_seen, d.last_seen as last_seen, 1::bigint as devices
+  from dev d
+  where d.acct is null
+  union all
+  select m.id, a.id, coalesce(a.name, m.display_name), m.handle, a.email, a.picture,
+         m.platform, m.app_version, m.country, m.region, m.city, m.now_playing, m.is_playing,
+         least(m.first_any, a.created_at), greatest(m.last_any, a.last_seen), m.n
+  from mine m
+  join accounts a on a.id = m.acct
+  where m.rn = 1
   union all
   select null, a.id, a.name, null, a.email, a.picture,
          coalesce(a.platform, 'web'), a.app_version,
          a.country, a.region, a.city,
-         null, false, a.created_at, a.last_seen
+         null, false, a.created_at, a.last_seen, 0::bigint
   from accounts a
-  where a.listener_id is null;
+  where not exists (select 1 from dev d where d.acct = a.id);
 
 -- --------------------------------------------------------- 11. functions --
 
@@ -557,10 +583,13 @@ create or replace function stats_platforms() returns jsonb
 language sql stable set search_path = public, pg_temp as $$
   select jsonb_build_object(
     'platforms', coalesce((select jsonb_agg(t) from (
-        select coalesce(nullif(platform, ''), 'web') as platform,
-               count(*) filter (where listener_id is not null) as listeners,
-               count(*) filter (where account_id is not null) as accounts
-        from directory group by 1 order by 2 desc) t), '[]'::jsonb),
+        -- Devices sharing usage, and accounts, per platform (the directory is one row per PERSON).
+        select p.platform,
+               (select count(*) from listeners l where coalesce(nullif(l.platform, ''), 'web') = p.platform) as listeners,
+               (select count(*) from accounts a where coalesce(nullif(a.platform, ''), 'web') = p.platform) as accounts
+        from (select coalesce(nullif(platform, ''), 'web') as platform from listeners
+              union select coalesce(nullif(platform, ''), 'web') from accounts) p
+        order by 2 desc) t), '[]'::jsonb),
     'versions', coalesce((select jsonb_agg(t) from (
         select coalesce(nullif(platform, ''), 'web') as platform, coalesce(app_version, 'unknown') as "appVersion", count(*) as listeners
         from directory group by 1, 2 order by listeners desc limit 40) t), '[]'::jsonb)
@@ -771,7 +800,8 @@ language sql stable set search_path = public, pg_temp as $$
   ),
   a as (
     select * from accounts
-    where id = p_account or (p_account is null and listener_id = p_listener)
+    where id = p_account
+       or (p_account is null and (listener_id = p_listener or id = (select account_id from listeners where id = p_listener)))
     limit 1
   ),
   ev as (
@@ -807,7 +837,7 @@ create or replace function delete_listener(p_listener text default null, p_accou
 language plpgsql set search_path = public, pg_temp as $$
 declare
   v_listener text := coalesce(p_listener, (select listener_id from accounts where id = p_account));
-  v_account  text := coalesce(p_account, (select id from accounts where listener_id = p_listener limit 1));
+  v_account  text := coalesce(p_account, (select account_id from listeners where id = p_listener), (select id from accounts where listener_id = p_listener limit 1));
   n_events bigint := 0; n_members bigint := 0; n_feedback bigint := 0; n_listener bigint := 0; n_account bigint := 0;
 begin
   if v_listener is not null then
