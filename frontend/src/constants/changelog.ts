@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.0.1': {
+    title: 'Console lists each listener once, however many devices they sign in on',
+    changes: [
+      { type: 'improved', text: 'Sign-in sends the install id too: the device row the browser WILL report.' },
+      { type: 'improved', text: 'The app re-checks the session the moment a signed-in device first gets.' },
+      { type: 'improved', text: 'Every device row now carries its account (listeners.account_id, filled.' },
+      { type: 'improved', text: 'The directory is one row per person: a signed-in listener\'s devices fold.' },
+    ],
+  },
   '1.0.0': {
     title: 'VinaX V2 1.0 — a new Up Next, playlists in full, faster sign-in',
     changes: [
