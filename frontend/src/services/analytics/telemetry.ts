@@ -116,7 +116,11 @@ async function send(type: string, song?: Song | null, extra?: Record<string, unk
     // store it so every later post keeps the same stable identity.
     if (res.status === 200) {
       const j = (await res.json().catch(() => null)) as { signed_device_id_next?: string } | null;
-      if (j?.signed_device_id_next) setLocal(KEYS.signedDeviceId, j.signed_device_id_next);
+      if (j?.signed_device_id_next) {
+        setLocal(KEYS.signedDeviceId, j.signed_device_id_next);
+        // A signed-in listener's device just got its id: link it to the account now (one console row).
+        if (getLocal<unknown>(KEYS.account, null)) void import('@/services/auth/google').then((m) => m.relinkDevice()).catch(() => undefined);
+      }
     }
   } catch {
     /* analytics is best-effort and must never affect playback */

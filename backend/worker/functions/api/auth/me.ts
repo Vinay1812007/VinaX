@@ -17,7 +17,7 @@ import { readJsonCapped } from '../../_lib/body';
 import { rateLimitAsync } from '../../_lib/ratelimit';
 import { db, dbConfigured, q, type DbEnv } from '../../_lib/db';
 import { DEVICE_HEADER, verifiedIdentity, type IdentityEnv } from '../../_lib/identity';
-import { accountFacts, accountOf, CORS, handleOf, json, publicUser, type AccountRow } from '../../_lib/authShared';
+import { accountFacts, accountOf, CORS, handleOf, json, linkDevice, publicUser, type AccountRow } from '../../_lib/authShared';
 
 type Env = AuthEnv & DbEnv & IdentityEnv;
 
@@ -33,6 +33,9 @@ export async function touchAccount(request: Request, env: Env, row: AccountRow):
     patch.last_seen = new Date().toISOString();
     Object.assign(patch, accountFacts(request));
   }
+  // V2 — the device proving itself is this account's, whichever device the
+  // account last linked (several devices fold into one console row).
+  if (proved && patch.listener_id) await linkDevice(env, proved, row.id);
   if (!Object.keys(patch).length) return false;
   const r = await db.update(env, 'accounts', q().eq('id', row.id), patch);
   return r.ok;

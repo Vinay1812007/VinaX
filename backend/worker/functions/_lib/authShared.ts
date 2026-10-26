@@ -37,6 +37,19 @@ export function accountOf(env: DbEnv, sub: string): Promise<Value<AccountRow | n
   return db.one<AccountRow>(env, 'accounts', q().eq('id', sub));
 }
 
+/**
+ * V2 — mark a device as this account's. One account may have several devices
+ * (a phone, a laptop, a second browser); each device row carries the account
+ * it belongs to, and the console's directory shows one row per account. The
+ * row is created when the device has not reported usage yet, so the link is
+ * there the moment it does. Best effort: a failed write only costs the merge.
+ */
+export async function linkDevice(env: DbEnv, listenerId: string | null, accountId: string): Promise<boolean> {
+  if (!listenerId || !accountId) return false;
+  const r = await db.upsert(env, 'listeners', { id: listenerId, account_id: accountId }, 'id');
+  return r.ok;
+}
+
 /** The handle on a linked device row, or null. */
 export async function handleOf(env: DbEnv, listenerId: string | null): Promise<string | null> {
   if (!listenerId) return null;
