@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.0.2': {
+    title: 'Console: merge existing duplicate listeners, and an SEO tab',
+    changes: [
+      { type: 'improved', text: 'Fold the duplicate listener rows already in the console.' },
+      { type: 'improved', text: 'Console: an SEO tab.' },
+      { type: 'improved', text: 'Overview: indexable pages, every sitemap the index lists (URL counts,.' },
+      { type: 'improved', text: 'Page audit: Home, key routes, mood × language hubs and the first song,.' },
+    ],
+  },
   '1.0.1': {
     title: 'Console lists each listener once, however many devices they sign in on',
     changes: [
