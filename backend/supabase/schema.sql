@@ -92,6 +92,22 @@ create index if not exists listeners_account_idx on listeners (account_id) where
 update listeners l set account_id = a.id
   from accounts a
   where a.listener_id = l.id and l.account_id is null;
+-- …and the twins already listed: a device nobody linked that carries an
+-- account's name, in the same place, and first reported within 15 minutes of
+-- that account's first sign-in is that account's browser (the sign-in came
+-- before its first usage report). Only when exactly one account fits.
+update listeners l set account_id = a.id
+  from accounts a
+  where l.account_id is null
+    and not exists (select 1 from accounts x where x.listener_id = l.id)
+    and l.display_name is not null and a.name is not null
+    and lower(btrim(l.display_name)) = lower(btrim(a.name))
+    and coalesce(l.city, '') = coalesce(a.city, '')
+    and abs(extract(epoch from (l.first_seen - a.created_at))) < 900
+    and (select count(*) from accounts b
+         where lower(btrim(b.name)) = lower(btrim(l.display_name))
+           and coalesce(b.city, '') = coalesce(l.city, '')
+           and abs(extract(epoch from (l.first_seen - b.created_at))) < 900) = 1;
 
 -- The signed-in listener's synced copy of their library and settings — the
 -- app's own backup-file JSON. `version` rises by one on every write; a write
