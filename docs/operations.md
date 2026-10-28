@@ -7,7 +7,7 @@ This is the runbook for keeping VinaX running: how each piece deploys and how to
 | Piece | Where it runs | How it deploys |
 | --- | --- | --- |
 | Static frontend (`frontend/dist`) | The static-hosting project `vinax` (`vinax.pages.dev`, the `ASSETS_HOST` in `wrangler.toml`) | The host's Git integration builds `frontend/` on every push to `main` |
-| Worker `vinax-api` (`backend/worker`) | The edge, on the routes in `backend/worker/wrangler.toml`: `/api/*`, the language-and-mood landing pages, `/sitemap*`, `/img`, `/apk`, and the `update.` and `admin.` hosts | The **Deploy Worker** workflow (the path that works), and the host's own Git build (currently broken, see below) |
+| Worker `vinax-api` (`backend/worker`) | The edge, on the routes in `backend/worker/wrangler.toml`: `/api/*`, `/apk`, and the `update.` and `admin.` hosts | The **Deploy Worker** workflow (the path that works), and the host's own Git build (currently broken, see below) |
 | Android package | Built by workflow, published as a repository release | **Build Android APK**, dispatched by **Auto release** on every merge to `main`; **Release APK** on a pushed tag ([android.md](android.md)) |
 | Database | One hosted project; the Worker is its only client, with the service-role key | `backend/supabase/schema.sql` pasted into the SQL editor once; never redeployed with the code ([database.md](database.md#setting-it-up)) |
 
@@ -73,7 +73,7 @@ This section records platform behaviour seen in production (most recently on 202
 - The Worker runs on the platform's free plan, which allows a fixed number of requests a day across every route in `wrangler.toml`. That includes the edge-rendered song, album, artist, playlist and landing pages, not only `/api/*`.
 - When the allowance is spent, the platform stops running the Worker until its daily reset and answers those routes with its own error page (error **1027**). The static app shell still loads; every `/api/*` call fails, so search, Home shelves and AI features fail or fall back to on-device paths, and shared song links show the error page.
 - It is not a code failure and a redeploy does not help.
-- Since V2 1.0 no page a crawler reads is a Worker route. The song, album and artist pages, the 72 mood × language hubs and every sitemap (`sitemap.xml`, `sitemap-static.xml`, `sitemap-hubs.xml`, `entity-pages.xml`) are static files the frontend build writes (`frontend/scripts/prerender-entities.mjs`, using the Worker's own renderer). The routes left in `wrangler.toml` are `/api/*`, `/img`, `/apk`, `update.*` and `admin.*`, so search engines can crawl the whole site without spending the daily allowance; it is left for listeners. Do not route a page family to the Worker again; build it statically instead.
+- Since V2 1.0 no page a crawler reads is a Worker route. The 72 mood × language hubs and every sitemap (`sitemap.xml`, `sitemap-static.xml`, `sitemap-hubs.xml`) are static files the frontend build writes (`frontend/scripts/prerender-seo.mjs`, using the Worker's own renderer). The routes left in `wrangler.toml` are `/api/*`, `/apk`, `update.*` and `admin.*`, so search engines can crawl the whole site without spending the daily allowance; it is left for listeners. Do not route a page family to the Worker again; build it statically instead.
 
 Diagnosis:
 
@@ -120,7 +120,6 @@ The value is typed at the prompt, never pasted into a file or a chat. `npx wrang
 
 | Group | Names | If missing |
 | --- | --- | --- |
-| Catalogue (14.0.4) | `CATALOG_UPSTREAMS`, `CATALOG_DIRECT_URL` (both optional) | `CATALOG_UPSTREAMS` is the ordered, comma-separated list of wrapper base URLs `/api/cat` tries first (6 s each, benched a minute after a failure); without it the Worker uses only its built-in translation against JioSaavn's web API, which `CATALOG_DIRECT_URL` can point elsewhere. The app's bundle holds no provider URL — it only ever calls `/api/cat` — so the list can change in Cloudflare without a release and nobody can read it out of the app. The console's Catalog → Lookup page shows each configured upstream's health by host |
 | AI providers | `NVIDIA_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY` | That provider's models are skipped and its section of the model menu is empty. With none set, AI routes answer `503 ai_not_configured` and the app uses its on-device paths ([ai.md](ai.md)) |
 | Owner console | `ADMIN_LOGIN_PASSWORD` | Nobody can sign in to `/admin/` |
 | Database | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Every data feature answers its "not configured" shape: `/api/room`, `/api/feedback`, `/api/push/subscribe` and `/api/push/fcm-register` answer `503 not_configured`; `/api/account/data` answers `503 unavailable`; `/api/events` accepts and drops; the blocklist, experiments and announcement answer empty; `/api/appconfig` answers the built-in defaults; `/api/status` has no history. Every console page that reads data shows its setup card (`configured: false`) |
@@ -264,7 +263,7 @@ The admin login throttle (`_lib/admin.ts`) locks a source out for 10 minutes aft
 
 ## Images
 
-Artwork is served straight from the catalogue's CDN in pre-sized variants. `/img` exists only so share cards can draw artwork on a canvas from the same origin; it is not a transform layer, and every proxied image costs a Worker request and edge egress.
+There is no image proxy: `/img` left with the music catalogue. Share cards load artwork directly and draw the card without it when the image host does not allow cross-origin reads.
 
 ## After deploying 11.0
 

@@ -4,7 +4,7 @@ import { act, renderHook } from '@testing-library/react';
 import type { Album, Artist, SearchResults, Song } from '@/types';
 
 const { searchAll } = vi.hoisted(() => ({ searchAll: vi.fn() }));
-vi.mock('@/services/api/saavn', () => ({ searchAll }));
+vi.mock('@/services/api', () => ({ searchAll }));
 
 import { QUICK_DEBOUNCE_MS, useQuickResults } from './useQuickResults';
 import {

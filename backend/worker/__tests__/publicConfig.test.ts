@@ -30,13 +30,13 @@ describe('/api/appconfig', () => {
   it('serves the published settings, sanitised, and the defaults without a database', async () => {
     fakeDb({ settings: [
       row('greeting', { text: 'Happy Diwali!' }),
-      row('banners', [{ id: 'b1', title: 'New in Telugu', linkType: 'playlist', linkId: 'p1', img: 'https://i/b.jpg' }, { title: '' }, { title: 'Old', end: '2020-01-01' }]),
+      row('banners', [{ id: 'b1', title: 'New in Telugu', linkType: 'playlist', linkId: 'p1', img: 'https://i/b.jpg' }, { id: 'b2', title: 'Try VinaX AI', img: 'https://i/a.jpg' }, { title: '' }, { title: 'Old', end: '2020-01-01' }]),
       row('festival', { mode: 'force', id: 'Diwali' }),
       row('flags', { codeRun: false, 'bad name': true, count: 3 }),
     ] });
     const client = (await (await appconfig.onRequestGet({ request: req('/api/appconfig?key=client'), env: ENV })).json()) as { greeting: unknown };
     expect(client.greeting).toEqual({ text: 'Happy Diwali!' });
-    expect(await (await appconfig.onRequestGet({ request: req('/api/appconfig?key=banners'), env: ENV })).json()).toEqual({ banners: [{ id: 'b1', title: 'New in Telugu', linkType: 'playlist', linkId: 'p1', img: 'https://i/b.jpg' }] });
+    expect(await (await appconfig.onRequestGet({ request: req('/api/appconfig?key=banners'), env: ENV })).json()).toEqual({ banners: [{ id: 'b2', title: 'Try VinaX AI', img: 'https://i/a.jpg' }] }); // a banner pointing at music is dropped
     expect(await (await appconfig.onRequestGet({ request: req('/api/appconfig?key=festival'), env: ENV })).json()).toEqual({ festival: { mode: 'force', id: 'diwali' } });
     expect(await (await appconfig.onRequestGet({ request: req('/api/appconfig?key=flags'), env: ENV })).json()).toEqual({ flags: { codeRun: false } });
     expect((await appconfig.onRequestGet({ request: req('/api/appconfig?key=nope'), env: ENV })).status).toBe(400);

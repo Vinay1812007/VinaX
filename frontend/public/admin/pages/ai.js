@@ -1,7 +1,7 @@
 /* VinaX console — VinaX AI page.
  * API lab: chat and media bench through POST /api/admin/ailab, model lists
- * from /api/aimodels. Engine probe: /api/admin/enginetest per provider and
- * /api/admin/musicapi for the music catalogue sources. Provider and model
+ * from /api/aimodels. Engine probe: /api/admin/enginetest per provider.
+ * (The music catalogue sources check left with the catalogue.) Provider and model
  * names come from the API and are allowed on this page. (13.9.1 — usage,
  * controls, cost and assistant content went with the database.) */
 (function () {
@@ -27,7 +27,7 @@
     tabs: [
       { id: 'usage', label: 'Usage & health', desc: 'Every model call: volume, failures, latency and tokens by feature, provider and model.', render: renderUsage },
       { id: 'lab', label: 'API lab', desc: 'Send a test prompt to one provider, model or lane — no failover, so you see exactly what it answers.', render: renderLab },
-      { id: 'probe', label: 'Engine probe', desc: 'Check each provider key with a tiny request, and check the music catalogue sources.', render: renderProbe }
+      { id: 'probe', label: 'Engine probe', desc: 'Check each provider key with a tiny request.', render: renderProbe }
     ]
   });
 
@@ -303,13 +303,6 @@
 
   /* ------------------------------------------------------ Engine probe */
 
-  // 14.0.4 — the upstream list lives in the Worker secret CATALOG_UPSTREAMS;
-  // the server labels each by its host, so only the two fixed rows are named here.
-  var SOURCE_LABEL = {
-    'vinax-cat': 'VinaX catalogue (this Worker)',
-    'direct': 'Direct (JioSaavn web API)'
-  };
-
   function renderProbe(host) {
     var results = {};
     var tableHost = h('div');
@@ -350,31 +343,6 @@
       }));
     }
     paint();
-    var sources = h('div');
-    VX.mount(sources, ui.empty('Not checked yet', 'Checks each catalogue source with a one-song search (takes up to 10 seconds).'));
-    function checkSources() {
-      return ui.load(sources, function () { return VX.api.get('/api/admin/musicapi', null, { fresh: true, timeout: 30000 }); }, function (d) {
-        var rows = (d.mirrors || []).map(function (m, i) {
-          var state = !m.ok ? 'down' : Number(m.songs) > 0 ? 'ok' : 'empty';
-          return { label: SOURCE_LABEL[m.id] || m.label || 'Source ' + (i + 1), state: state, songs: m.songs, ms: m.ms, status: m.status, note: m.note };
-        });
-        var up = rows.filter(function (r) { return r.state === 'ok'; }).length;
-        return [
-          ui.notice(fmt.num(up) + ' of ' + fmt.plural(rows.length, 'source') + ' returned songs · checked ' + fmt.time(d.checkedAt), up ? (up === rows.length ? 'ok' : 'warn') : 'bad'),
-          ui.table({
-            rows: rows, exportName: false, search: false, dense: true, empty: 'No sources reported',
-            columns: [
-              { key: 'label', label: 'Source' },
-              { key: 'state', label: 'Result', render: function (r) { return r.state === 'ok' ? ui.pill('Working', 'ok') : r.state === 'empty' ? ui.pill('Answered, no songs', 'warn') : ui.pill('Down', 'bad'); } },
-              { key: 'songs', label: 'Songs', align: 'right', render: function (r) { return fmt.num(r.songs); } },
-              { key: 'ms', label: 'Time', align: 'right', render: function (r) { return fmt.ms(r.ms); } },
-              { key: 'status', label: 'HTTP', align: 'right' },
-              { key: 'note', label: 'Note' }
-            ]
-          })
-        ];
-      });
-    }
     host.appendChild(ui.card({
       title: 'Provider keys', sub: 'Asks one model to reply “OK” (8 tokens) with the provider’s key — 10 probes a minute',
       actions: [ui.button('Probe all', { kind: 'primary', small: true, icon: 'play', onClick: function () {
@@ -385,11 +353,6 @@
           h('div.field', h('span.field-label', { 'aria-hidden': 'true' }, ' '), ui.button('Probe', { kind: 'ghost', icon: 'play', onClick: function () { return probe(provider.value, model.value.trim()); } }))),
         tableHost
       ]
-    }));
-    host.appendChild(ui.card({
-      title: 'Music catalogue sources', sub: 'Where song search and playback data come from',
-      actions: [ui.button('Check sources', { kind: 'primary', small: true, icon: 'refresh', onClick: checkSources })],
-      body: sources
     }));
   }
 

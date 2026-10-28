@@ -49,29 +49,6 @@ const pageScroll = (page: Page) => page.evaluate(() =>
     .filter((e) => e && e.scrollHeight > e.clientHeight + 40 && getComputedStyle(e).overflowY !== 'visible' && !e.closest('[role=menu]'))
     .map((e) => Math.round(e.scrollTop)));
 
-for (const where of [{ name: 'the player', path: '/now-playing' }, { name: 'a song list', path: '/search/telugu' }]) {
-  test(`scrolling the song menu never scrolls ${where.name} behind it`, async ({ page, baseURL }) => {
-    await page.setViewportSize({ width: 412, height: 915 });
-    await seed(page, baseURL!);
-    await page.goto(where.path);
-    await page.getByRole('button', { name: /More options/ }).first().click();
-    const menu = page.getByRole('menu');
-    await expect(menu).toBeVisible();
-    const before = await pageScroll(page);
-    const box = (await menu.boundingBox())!;
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    for (let i = 0; i < 12; i += 1) await page.mouse.wheel(0, 240); // through the list and well past its end
-    await page.waitForTimeout(250);
-    await expect(menu).toBeVisible(); // it used to scroll its own trigger away and close
-    expect(await menu.evaluate((m) => m.scrollTop)).toBeGreaterThan(0); // the menu itself still scrolls
-    await page.mouse.move(12, 700); // the dimmed backdrop
-    for (let i = 0; i < 6; i += 1) await page.mouse.wheel(0, 240);
-    await page.waitForTimeout(250);
-    expect(await pageScroll(page)).toEqual(before);
-    await expect(menu).toBeVisible();
-  });
-}
-
 test('top bar: no search box, Home actions live in it; Discover has no Ads tile on a phone', async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 412, height: 915 });
   await seed(page, baseURL!);

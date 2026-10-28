@@ -8,9 +8,6 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { request } = vi.hoisted(() => ({ request: vi.fn() }));
-vi.mock('@/services/api/client', () => ({ orchestratedRequest: request }));
-
 import {
   clearRescuedQueries,
   fetchSongsPage,
@@ -19,7 +16,6 @@ import {
 } from '../features/search/useInfiniteSongs';
 import type { Song } from '../types';
 import { artistSongsNextPage } from '../features/artists/useArtist';
-import { getArtistTopSongs } from '../services/api/saavn';
 
 const items = (...ids: string[]) => ids.map((id) => ({ id }));
 
@@ -53,34 +49,6 @@ describe('flattenPages', () => {
 });
 
 describe('artist catalogue paging', () => {
-  beforeEach(() => request.mockReset());
-
-  interface Req {
-    paths: string[];
-    validate: (json: unknown) => unknown;
-  }
-  const lastRequest = (): Req => request.mock.calls[request.mock.calls.length - 1][0] as Req;
-  const rawSong = (id: string) => ({ id, name: `Song ${id}`, downloadUrl: [{ quality: '160kbps', url: `https://x/${id}.mp4` }] });
-
-  it('offers the unpaged dialect on the first page only', async () => {
-    request.mockResolvedValue([]);
-    await getArtistTopSongs('42');
-    expect(lastRequest().paths).toHaveLength(2);
-    await getArtistTopSongs('42', 3);
-    expect(lastRequest().paths).toEqual(['/artists/42/songs?page=3&sortBy=popularity&sortOrder=desc']);
-  });
-
-  it('reads a well-formed empty later page as the end, not a shape miss', async () => {
-    request.mockResolvedValue([]);
-    await getArtistTopSongs('42', 2);
-    expect(lastRequest().validate({ data: { songs: [] } })).toEqual([]);
-    expect(lastRequest().validate({ data: { nothing: true } })).toBeNull();
-    // Page 0 keeps falling through so the next dialect / base gets a turn.
-    await getArtistTopSongs('42', 0);
-    expect(lastRequest().validate({ data: { songs: [] } })).toBeNull();
-    expect(lastRequest().validate({ data: { songs: [rawSong('a')] } })).toHaveLength(1);
-  });
-
   it('stops when a mirror serves page 1 again', () => {
     const p1 = items(...Array.from({ length: 10 }, (_, i) => `s${i}`));
     const p2 = items(...Array.from({ length: 10 }, (_, i) => `t${i}`));

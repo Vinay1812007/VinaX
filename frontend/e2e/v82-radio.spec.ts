@@ -53,22 +53,6 @@ async function seed(page: Page, baseURL: string, opts: { queue: Song[] } = { que
 
 const queueIds = (page: Page) => page.evaluate(() => (JSON.parse(localStorage.getItem('vinax.player.v1') ?? '{}').state?.queue ?? []).map((s: { id: string }) => s.id) as string[]);
 
-test('AI Radio is one tap from Home and a mood starts endless radio', async ({ page, baseURL }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  const pool = await seed(page, baseURL!);
-  await page.goto('/');
-  const shortcuts = page.getByRole('group', { name: 'Shortcuts' });
-  await expect(shortcuts).toBeVisible({ timeout: 20_000 });
-  await shortcuts.getByRole('button', { name: 'AI Radio' }).click();
-  await expect(page.getByRole('heading', { name: 'AI Radio', level: 1 })).toBeVisible();
-  await page.getByRole('button', { name: 'Start Melody radio' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Playing AI Radio: Melody' })).toBeVisible({ timeout: 15_000 });
-  await expect.poll(() => queueIds(page).then((q) => q.length), { timeout: 15_000 }).toBeGreaterThan(0);
-  const q = await queueIds(page);
-  expect(pool.some((s) => s.id === q[0])).toBe(true);
-  await page.screenshot({ path: 'test-results/v82-ai-radio-390.png' });
-});
-
 test('Smart Queue is the existing DJ setting, explained, and Refresh up next is on the queue', async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   const listed = Array.from({ length: 3 }, (_, i) => mk(baseURL!, i));

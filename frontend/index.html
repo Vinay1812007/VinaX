@@ -7,11 +7,6 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png?v=14" />
     <link rel="icon" type="image/svg+xml" href="/icons/icon.svg?v=14" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png?v=14" />
-    <!-- Connection warm-up for the LCP chain (4.18.1, revised 4.20.0): the
-         catalog API is now SELF-HOSTED (/api/cat) so it rides the page's own
-         connection — only the artwork/audio CDNs need warming. -->
-    <link rel="preconnect" href="https://c.saavncdn.com" />
-    <link rel="dns-prefetch" href="https://aac.saavncdn.com" />
     <link rel="dns-prefetch" href="https://lrclib.net" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0f0f11" />
@@ -36,6 +31,33 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="VinaX" />
     <title>VinaX</title>
+    <script>
+      // VinaX has no music provider (1.1): forget every song this device
+      // saved, once, BEFORE any app code runs. It must be a classic inline
+      // script: the bundler runs a module's own code after the chunks it
+      // imports, and those chunks create the stores that load saved songs.
+      // src/services/storage/purgeMusic.ts then deletes downloaded audio,
+      // listening events and caches. Tested in purgeMusic.test.ts.
+      (function () {
+        try {
+          var ls = window.localStorage;
+          if (ls.getItem('vinax.music-purged.v1') !== null) return;
+          var drop = ['vinax.player.v1', 'vinax.queue.ownership.v1', 'vinax.resume.v1', 'vinax.library.v1', 'vinax.history.v1',
+            'vinax.downloads.v1', 'vinax.smart-downloads.v1', 'vinax.weekly.v1', 'vinax.karaoke.v1', 'vinax.releases.v1',
+            'vinax.shared-playlists.v1', 'vinax.bookmarks.v1'];
+          var marks = ['"kind":"song"', 'saavncdn', 'jiosaavn', '/api/cat/'];
+          for (var i = 0; i < ls.length; i++) {
+            var k = ls.key(i);
+            if (!k || (k.indexOf('vinax.') !== 0 && k.indexOf('vinax_') !== 0)) continue;
+            var v = ls.getItem(k) || '';
+            for (var j = 0; j < marks.length; j++) if (v.indexOf(marks[j]) !== -1) { drop.push(k); break; }
+          }
+          for (var d = 0; d < drop.length; d++) { try { ls.removeItem(drop[d]); } catch (e) { /* keep going */ } }
+          ls.setItem('vinax.music-purged.v1', new Date().toISOString());
+          ls.setItem('vinax.music-purge-files.v1', '1');
+        } catch (e) { /* storage blocked: nothing saved to forget */ }
+      })();
+    </script>
     <script>
       // Pre-paint theme: read the persisted preference and class <html> before
       // first paint, so light/system users never see a dark flash (and AMOLED
@@ -108,40 +130,6 @@
           if (m) m.setAttribute('content', bg);
         } catch (e) { /* keep the static dark default */ }
         if (!document.documentElement.getAttribute('data-template')) document.documentElement.setAttribute('data-template', 'lumen');
-      })();
-    </script>
-    <script>
-      // First-shelf prefetch (4.18.2): the home page's trending query used to
-      // wait for the full chain HTML -> JS download -> React mount -> hook ->
-      // fetch. This kicks the SAME request off while the JS is still
-      // downloading and parks the parsed-JSON promise on window.__vxBoot;
-      // the API client consumes it by exact URL match (services/api/client.ts,
-      // single use) and falls back to a normal fetch on any miss or failure.
-      // KEEP IN SYNC with trendingSeed() ('top {lang} songs {year}') and
-      // searchSongs()'s first path dialect (/search/songs?query=&limit=20) —
-      // a drift is harmless (prefetch simply goes unused) but wastes a request.
-      (function () {
-        try {
-          if (location.pathname !== '/') return; // only the home route uses it
-          // 13.5.0 — signed out, home is the sign-in screen: nothing would use it.
-          try { if (!localStorage.getItem('vinax.account.v1')) return; } catch (e) { return; }
-          var raw = null;
-          try { raw = localStorage.getItem('vinax.settings.v1'); } catch (e) { /* private mode */ }
-          var st = {};
-          try { st = (raw && JSON.parse(raw).state) || {}; } catch (e) { /* corrupt */ }
-          var lang = (st.pinnedLanguages && st.pinnedLanguages[0]) || 'hindi';
-          var q = 'top ' + lang + ' songs ' + new Date().getFullYear();
-          // 14.0.4 — the first ranked base is the app's own catalogue route
-          // (the providers live in a Worker secret); the client matches it
-          // by URL with the origin normalised away (services/api/client.ts).
-          var url = location.origin + '/api/cat/search/songs?query=' + encodeURIComponent(q) + '&limit=20';
-          window.__vxBoot = {
-            url: url,
-            json: fetch(url, { headers: { Accept: 'application/json' } })
-              .then(function (r) { return r.ok ? r.json() : null; })
-              .catch(function () { return null; }),
-          };
-        } catch (e) { /* never block boot */ }
       })();
     </script>
     <style>

@@ -7,11 +7,6 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
     <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
-    <!-- Connection warm-up for the LCP chain (4.18.1, revised 4.20.0): the
-         catalog API is now SELF-HOSTED (/api/cat) so it rides the page's own
-         connection — only the artwork/audio CDNs need warming. -->
-    <link rel="preconnect" href="https://c.saavncdn.com" />
-    <link rel="dns-prefetch" href="https://aac.saavncdn.com" />
     <link rel="dns-prefetch" href="https://lrclib.net" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0b0c18" />
@@ -88,36 +83,6 @@
           var m = document.querySelector('meta[name="theme-color"]');
           if (m) m.setAttribute('content', bg);
         } catch (e) { /* keep the static dark default */ }
-      })();
-    </script>
-    <script>
-      // First-shelf prefetch (4.18.2): the home page's trending query used to
-      // wait for the full chain HTML -> JS download -> React mount -> hook ->
-      // fetch. This kicks the SAME request off while the JS is still
-      // downloading and parks the parsed-JSON promise on window.__vxBoot;
-      // the API client consumes it by exact URL match (services/api/client.ts,
-      // single use) and falls back to a normal fetch on any miss or failure.
-      // KEEP IN SYNC with trendingSeed() ('top {lang} songs {year}') and
-      // searchSongs()'s first path dialect (/search/songs?query=&limit=20) —
-      // a drift is harmless (prefetch simply goes unused) but wastes a request.
-      (function () {
-        try {
-          if (location.pathname !== '/') return; // only the home route uses it
-          var raw = null;
-          try { raw = localStorage.getItem('vinax.settings.v1'); } catch (e) { /* private mode */ }
-          var st = {};
-          try { st = (raw && JSON.parse(raw).state) || {}; } catch (e) { /* corrupt */ }
-          var lang = (st.pinnedLanguages && st.pinnedLanguages[0]) || 'hindi';
-          var q = 'top ' + lang + ' songs ' + new Date().getFullYear();
-          var catalogOrigin = /^https?:$/.test(location.protocol) ? location.origin : 'https://www.vinaxmusic.online';
-          var url = catalogOrigin + '/api/cat/search/songs?query=' + encodeURIComponent(q) + '&limit=20';
-          window.__vxBoot = {
-            url: url,
-            json: fetch(url, { headers: { Accept: 'application/json' } })
-              .then(function (r) { return r.ok ? r.json() : null; })
-              .catch(function () { return null; }),
-          };
-        } catch (e) { /* never block boot */ }
       })();
     </script>
     <style>

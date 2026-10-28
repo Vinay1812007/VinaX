@@ -2,15 +2,14 @@
  * Search-as-you-type previews ("quick hits"). v5.19.0 fetched six songs per
  * settled keystroke; 10.1 asks the catalogue's combined search once and keeps
  * songs, artists and albums — the same call the results page makes for the
- * same words, so the request layer's in-flight sharing (services/api/client)
- * turns the typeahead and the All tab into ONE network call.
+ * same words.
  *
  * Memoised in a small module cache so backspacing through a query never
  * refetches. Keys are the page's normalised query (trimmed, case- and
  * whitespace-folded), which keeps "arijit" and "arijit " on one entry.
  */
 import type { Album, Artist, SearchResults, Song } from '@/types';
-import { searchAll } from '@/services/api/saavn';
+import { searchAll } from '@/services/api';
 
 export const QUICK_LIMIT = 6;
 export const QUICK_ARTISTS = 3;

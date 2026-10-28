@@ -22,7 +22,6 @@ const MEMO_MS = 60_000;
 export const COMPONENTS: ReadonlyArray<{ id: string; name: string }> = [
   { id: 'website', name: 'Website (www.vinaxmusic.online)' },
   { id: 'api', name: 'API & app services' },
-  { id: 'catalog', name: 'Music catalog & search' },
   { id: 'admin', name: 'Admin console' },
 ];
 
@@ -73,17 +72,10 @@ export function resetStatusMemo(): void {
 /** Every component probed once (memoised MEMO_MS); the status tick job calls this too. */
 export async function probeAll(now = Date.now(), fresh = false): Promise<Map<string, Probe>> {
   if (!fresh && memo && now - memo.at < MEMO_MS) return memo.probes;
-  const [website, catalog, admin] = await Promise.all([
-    probeUrl(SITE + '/'),
-    // The /api/cat/* route proxies the upstream catalogue — probe what it depends on
-    // (probing our own route would be a recursive subrequest).
-    probeUrl('https://www.jiosaavn.com/api.php?__call=autocomplete.get&query=love&_format=json&_marker=0&ctx=web6dot0'),
-    probeUrl(SITE + '/admin/'),
-  ]);
+  const [website, admin] = await Promise.all([probeUrl(SITE + '/'), probeUrl(SITE + '/admin/')]);
   const probes = new Map<string, Probe>([
     ['website', website],
     ['api', { ok: true, latency: null, checkedAt: new Date(now).toISOString() }],
-    ['catalog', catalog],
     ['admin', admin],
   ]);
   memo = { at: now, probes };

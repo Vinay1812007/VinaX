@@ -34,6 +34,19 @@ async function prepareContext(ctx: BrowserContext): Promise<void> {
       /* storage blocked: the test sees the sign-in screen */
     }
   });
+  // VinaX has no music catalogue: on its first open a device forgets every
+  // saved song (src/services/storage/purgeMusic.ts). Specs seed songs to test
+  // the screens that list them, so the suite starts past that purge; a page
+  // opened with ?e2e-unpurged in its address runs it (v150-no-music.spec.ts).
+  await ctx.addInitScript(() => {
+    try {
+      if (!location.search.includes('e2e-unpurged') && localStorage.getItem('vinax.music-purged.v1') === null) {
+        localStorage.setItem('vinax.music-purged.v1', 'e2e');
+      }
+    } catch {
+      /* storage blocked */
+    }
+  });
   // 13.1: the festival greeting is a real once-a-year modal that opens about
   // 1.2 s after boot whenever the run lands on a festival day (the suite runs
   // on the real calendar), and its scrim swallows the spec's next click.

@@ -29,8 +29,7 @@ function handlerRoutes(dir: string, acc: string[] = []): string[] {
     }
     if (!entry.name.endsWith('.ts')) continue;
     if (entry.name.endsWith('.test.ts')) continue;
-    // Dynamic / catch-all segments ([id], [[path]]) are routed by the DYNAMIC
-    // list and the explicit /api/cat branch, not by the EXACT map.
+    // Dynamic segments ([id]) are routed by the DYNAMIC list, not by the EXACT map.
     if (entry.name.includes('[')) continue;
     const rel = relative(API_DIR, full).split(sep).join('/');
     acc.push(`/api/${rel.replace(/\.ts$/, '')}`);

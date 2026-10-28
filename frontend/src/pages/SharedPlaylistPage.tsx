@@ -10,7 +10,7 @@ import { getSharedPlaylist, collabAdd, collabRemove, liteSong, SocialError } fro
 import { resolveSongs } from '@/features/social/resolve';
 import { usePlayerStore } from '@/store/playerStore';
 import { useLibraryStore } from '@/store/libraryStore';
-import { searchSongs } from '@/services/api/saavn';
+import { searchSongs } from '@/services/api';
 import { currentAccount } from '@/services/auth/google';
 import { getLocal } from '@/services/storage/local';
 import { KEYS } from '@/constants/storage-keys';

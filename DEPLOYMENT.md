@@ -34,9 +34,9 @@ Project `vinax`, connected to this repository:
 | Output directory | `dist` |
 | Node version | 22 or newer |
 
-`npm run build` cleans `dist/` and the build caches, typechecks, builds, prerenders the static routes (`scripts/prerender.mjs`), prerenders the song, album and artist pages (`scripts/prerender-entities.mjs`) and writes `dist/changelog.json` (`scripts/changelog-json.mjs`).
+`npm run build` cleans `dist/` and the build caches, typechecks, builds, prerenders the static routes (`scripts/prerender.mjs`), writes the hub pages and sitemaps (`scripts/prerender-seo.mjs`) and writes `dist/changelog.json` (`scripts/changelog-json.mjs`).
 
-The song, album and artist step runs only on the static host's own build, which sets `CF_PAGES=1`; elsewhere it writes an empty `dist/entity-pages.xml` and stops (set `PRERENDER_ENTITIES=1` to run it locally). It picks the most-played songs of each hub language from the public catalogue mirrors, never from this site's `/api`, plus their albums and lead artists (about 750 pages, about a minute), and renders them with the Worker's own `entityPage()` as flat files such as `dist/song/<slug>-<id>.html`, served at `/song/<slug>-<id>`. A dead mirror or the six-minute budget means fewer pages, never a failed build. `dist/entity-pages.xml` lists what was built, and the sitemap index points to it. Limits: `ENTITY_SONGS_PER_LANG`, `ENTITY_MAX_ALBUMS`, `ENTITY_MAX_ARTISTS`, `ENTITY_CONCURRENCY`, `ENTITY_BUDGET_MS`.
+There are no song, album or artist pages: VinaX has no music catalogue any more, so the build makes no catalogue request.
 
 Keep the custom domains (`www.vinaxmusic.online`, the apex, `admin.`, `update.`, `status.`) attached to the static project. It is the origin the Worker passes every unmatched URL to. The static project needs no environment variables and no secrets.
 
