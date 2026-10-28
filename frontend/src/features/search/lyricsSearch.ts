@@ -5,7 +5,7 @@
  */
 import type { Song } from '@/types';
 import type { LyricsSearchHit } from '@/services/lyrics/lrclib';
-import { searchSongs } from '@/services/api/saavn';
+import { searchSongs } from '@/services/api';
 
 /** A lyric hit paired with the catalogue song it resolved to. */
 export interface LyricsMatch {

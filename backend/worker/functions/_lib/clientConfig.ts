@@ -14,7 +14,7 @@ import type { ExperimentVariant } from './experiments';
 
 export const CLIENT_KEYS = [
   'home-layout',
-  'greeting', 'broadcast', 'search-synonyms', 'catalog-sources', 'language-order',
+  'greeting', 'broadcast', 'search-synonyms', 'language-order',
   'ai-starters', 'ai-quick', 'support-faq', 'min-version', 'maintenance-window',
 ] as const;
 
@@ -125,7 +125,6 @@ export interface ClientConfig {
   greeting: { text: string } | null;
   broadcast: { id: string; text: string; link?: string } | null;
   synonyms: Record<string, string>;
-  disabledSources: string[];
   languageOrder: string[];
   aiStarters: string[];
   aiQuick: Array<{ icon: string; label: string; prompt: string; mode?: string }>;
@@ -156,9 +155,6 @@ export function publicClientConfig(raw: Record<string, unknown>, now = new Date(
     }
   }
 
-  const cs = obj(raw['catalog-sources']);
-  const disabledSources = cs ? Object.entries(cs).filter(([k, v]) => v === false && SLUG.test(k)).map(([k]) => k).slice(0, 20) : [];
-
   const lo = raw['language-order'];
   const languageOrder = Array.isArray(lo) ? (lo as unknown[]).filter((x): x is string => typeof x === 'string' && SLUG.test(x)).slice(0, 20) : [];
 
@@ -186,7 +182,7 @@ export function publicClientConfig(raw: Record<string, unknown>, now = new Date(
   const cleanKeys = (v: unknown) => Array.isArray(v) ? [...new Set(v.filter((k): k is string => typeof k === 'string' && keys.includes(k)))] : [];
   const homeLayout = home ? { title: str(home.title, 60), description: str(home.description, 160), order: cleanKeys(home.order), hidden: cleanKeys(home.hidden).slice(0, 12) } : undefined;
   const recConfig = publicRecConfig(raw[REC_CONFIG_KEY]);
-  return { greeting, broadcast, synonyms, disabledSources, languageOrder, aiStarters, aiQuick, faq, minBuild, ...(homeLayout ? { homeLayout } : {}), ...(recConfig ? { recConfig } : {}) };
+  return { greeting, broadcast, synonyms, languageOrder, aiStarters, aiQuick, faq, minBuild, ...(homeLayout ? { homeLayout } : {}), ...(recConfig ? { recConfig } : {}) };
 }
 
 /** Maintenance window: { start, end, note } in ISO; active when now is inside. */

@@ -1,15 +1,8 @@
 import type { Song } from '@/types';
-import { isNativePlatform } from '@/services/native';
 import { bestImage } from '@/utils/images';
 import { shareOrSaveImage } from '@/utils/shareImage';
 
 const trunc = (s: string, n: number): string => (s.length > n ? s.slice(0, n - 1) + '…' : s);
-
-/** Same-origin CORS image proxy so the cover can be drawn on a canvas. */
-function proxied(url: string): string {
-  const base = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
-  return `${base}/img?url=${encodeURIComponent(url)}`;
-}
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -47,7 +40,7 @@ export async function shareSongCard(song: Song): Promise<boolean> {
 
   let art: HTMLImageElement | null;
   try {
-    art = await loadImage(proxied(bestImage(song.images, 500)));
+    art = await loadImage(bestImage(song.images, 500));
   } catch {
     art = null;
   }
@@ -120,7 +113,7 @@ export async function shareSongStoryCard(song: Song): Promise<boolean> {
 
   let art: HTMLImageElement | null;
   try {
-    art = await loadImage(proxied(bestImage(song.images, 500)));
+    art = await loadImage(bestImage(song.images, 500));
   } catch {
     art = null;
   }

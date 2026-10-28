@@ -7,7 +7,7 @@ import {
   searchPlaylistsPage,
   searchSongsPage,
 } from '@/services/api';
-import type { RequestPriority } from '@/services/api/client';
+import type { RequestPriority } from '@/services/api';
 import { useSettingsStore } from '@/store/settingsStore';
 import { normalizeQuery, rankSongs, relaxedQuery, SEARCH_GC_MS, SEARCH_STALE_MS } from './useSearch';
 import { rerankSongs } from './rerank';

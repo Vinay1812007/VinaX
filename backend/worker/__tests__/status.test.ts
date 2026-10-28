@@ -26,17 +26,17 @@ describe('GET /api/status', () => {
     const body = (await res.json()) as { overall: string; note: unknown; components: Array<{ id: string; status: string; days: unknown[]; uptime90: unknown }> };
     expect(body.overall).toBe('operational');
     expect(body.note).toBeNull();
-    expect(body.components.map((c) => [c.id, c.status])).toEqual([['website', 'up'], ['api', 'up'], ['catalog', 'up'], ['admin', 'up']]);
+    expect(body.components.map((c) => [c.id, c.status])).toEqual([['website', 'up'], ['api', 'up'], ['admin', 'up']]);
     expect(body.components.every((c) => c.days.length === 0 && c.uptime90 === null)).toBe(true);
-    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
     await onRequestGet({ request: req() });
-    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 
   it('a failing probe reads down and the overall is an outage', async () => {
-    vi.stubGlobal('fetch', async (u: unknown) => (String(u).includes('jiosaavn') ? new Response('', { status: 503 }) : new Response('ok')));
+    vi.stubGlobal('fetch', async (u: unknown) => (String(u).includes('/admin/') ? new Response('', { status: 503 }) : new Response('ok')));
     const body = (await (await onRequestGet({ request: req() })).json()) as { overall: string; components: Array<{ id: string; status: string }> };
-    expect(body.components.find((c) => c.id === 'catalog')?.status).toBe('down');
+    expect(body.components.find((c) => c.id === 'admin')?.status).toBe('down');
     expect(body.overall).toBe('outage');
   });
 

@@ -13,7 +13,7 @@
  * suggestions stand in, so the buttons always do something.
  */
 import type { Song } from '@/types';
-import { getSong, getSongSuggestions } from '@/services/api/saavn';
+import { getSong, getSongSuggestions } from '@/services/api';
 import { isNativePlatform } from '@/services/native';
 import { useReasonStore } from '@/store/reasonStore';
 import { useSettingsStore } from '@/store/settingsStore';

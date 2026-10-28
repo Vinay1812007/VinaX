@@ -1,6 +1,6 @@
 /* VinaX console — Catalog page.
- * A live catalogue lookup (/api/admin/catalog-search): search songs or albums
- * the way the app does and copy their ids. (13.9.1 — the blocklist, the
+ * Blocked songs, artists and keywords. The live catalogue lookup left with
+ * the music catalogue (no provider remains). (13.9.1 — the blocklist, the
  * search synonyms, catalogue-source switches, language order and the SEO
  * corpus went with the database.) */
 (function () {
@@ -9,60 +9,11 @@
 
   VX.page({
     id: 'catalog', title: 'Catalog', group: 'Content', icon: 'library', noAuto: true,
-    desc: 'Look up the live catalogue the way the app does, and keep blocked songs, artists and keywords out of it.',
+    desc: 'Keep blocked songs, artists and keywords out of the app.',
     tabs: [
-      { id: 'lookup', label: 'Catalog lookup', desc: 'Search the live catalogue the way the app does and copy song or album ids.', render: renderLookup },
       { id: 'blocked', label: 'Blocked content', desc: 'Songs, artists and keywords hidden from search and playback for everyone. Changes reach the app within a minute.', render: renderBlocked }
     ]
   });
-
-  function copy(text) {
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(String(text)).then(function () { VX.toast('Copied', 'ok'); }, function () { VX.toast('Copy failed', 'bad'); });
-    } catch (e) {}
-    VX.toast('Copy is not available in this browser', 'bad');
-    return null;
-  }
-
-  function renderLookup(host, ctx) {
-    var q = String(ctx.params.q || '').trim();
-    var kind = ctx.params.kind === 'album' ? 'album' : 'song';
-    var input = ui.input({ type: 'search', value: q, maxlength: '120', placeholder: 'Song or album name', 'aria-label': 'Search the catalogue' });
-    var body = h('div.page-body');
-    function run() { ctx.setParam('q', input.value.trim()); ctx.refresh(); }
-    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); run(); } });
-    host.appendChild(h('div.toolbar',
-      ui.segmented([{ value: 'song', label: 'Songs' }, { value: 'album', label: 'Albums' }], kind, function (k) { ctx.setParam('kind', k); if (input.value.trim()) run(); }, 'Search for'),
-      h('div.search-box', VX.icon('search'), input),
-      ui.button('Search', { kind: 'primary', icon: 'search', onClick: run })));
-    host.appendChild(body);
-    if (!q) {
-      VX.mount(body, ui.empty('Search the catalogue', 'Type a song or album name and press Enter. Results come from the same catalogue listeners use, so you can find ids here.'));
-      setTimeout(function () { try { input.focus(); } catch (e) {} }, 30);
-      return null;
-    }
-    return ui.load(body, function () {
-      return VX.api.get('/api/admin/catalog-search', { q: q, kind: kind, limit: 20 }).then(function (res) {
-        if (!res.ok && res.error === 'no_mirrors_responded') res.message = 'No catalogue source answered. They may be down or rate-limiting — try again in a minute.';
-        if (!res.ok && res.error === 'rate_limited') res.message = 'Too many lookups in a minute — wait a moment and try again.';
-        return res;
-      });
-    }, function (d) {
-      var items = d.items || [];
-      return ui.card({ title: fmt.plural(items.length, 'result') + ' for “' + q + '”', sub: d.source ? 'Answered by ' + d.source : null, pad: false,
-        body: ui.table({
-          columns: [
-            { key: 'name', label: kind === 'album' ? 'Album' : 'Song', render: function (r) { return ui.media(r.image, r.name || 'Untitled', r.subtitle); } },
-            { key: 'subtitle', label: 'Artist', hide: true },
-            { key: 'id', label: 'Id', render: function (r) { return h('div.actions', ui.mono(r.id), ui.button('', { kind: 'ghost', small: true, icon: 'copy', ariaLabel: 'Copy id ' + r.id, onClick: function () { return copy(r.id); } })); } }
-          ],
-          rows: items, exportName: 'vinax-catalog-' + kind, search: false,
-          empty: 'Nothing found for “' + q + '”', emptyHint: 'Try fewer words or check the spelling.'
-        }) });
-    }, { skeleton: 6 });
-  }
-
-  /* ------------------------------------------------------ Blocked content */
 
   function renderBlocked(host, ctx) {
     var body = h('div');

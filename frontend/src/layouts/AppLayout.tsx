@@ -1,7 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { STORAGE_PREFIX } from '@/constants/storage-keys';
 import { toast } from '@/store/toastStore';
-import { setDisabledSources } from '@/constants/endpoints';
 import { setSearchSynonyms } from '@/services/search/synonyms';
 import { useClientConfig } from '@/features/home/useAppConfig';
 import { Outlet, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
@@ -89,7 +88,6 @@ function useClientConfigEffects(): void {
   useEffect(() => {
     if (!cfg) return;
     setSearchSynonyms(cfg.synonyms);
-    setDisabledSources(cfg.disabledSources);
     const b = cfg.broadcast;
     if (b && getLocal<string>(BROADCAST_SEEN_KEY, '') !== b.id) {
       setLocal(BROADCAST_SEEN_KEY, b.id);

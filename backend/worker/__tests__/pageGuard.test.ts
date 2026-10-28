@@ -4,7 +4,7 @@
  * engines and link previewers get the rendered page.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { guardVerdict, isBrowserImpostor, isEntityPage, isHubPage, isKnownCrawler, networkOf, plainShell } from '../functions/_lib/pageGuard';
+import { guardVerdict, isBrowserImpostor, isHubPage, isKnownCrawler, networkOf, plainShell } from '../functions/_lib/pageGuard';
 import { _resetRateLimitsForTests } from '../functions/_lib/ratelimit';
 
 const CHROME = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36';
@@ -20,9 +20,7 @@ const REAL = { 'sec-ch-ua': '"Chromium";v="144", "Google Chrome";v="144"', 'sec-
 beforeEach(() => _resetRateLimitsForTests());
 
 describe('what is guarded', () => {
-  it('matches the four entity page kinds and the language-mood hubs only', () => {
-    for (const p of ['/song/x-1', '/album/raga-fantasy-3087167', '/artist/ansh-chomal-10062897', '/playlist/abc', '/song/x-1/']) expect(isEntityPage(p), p).toBe(true);
-    for (const p of ['/', '/api/cat/search', '/song', '/song/a/b', '/sitemap.xml', '/telugu-sad-songs']) expect(isEntityPage(p), p).toBe(false);
+  it('matches the language-mood hubs only', () => {
     for (const p of ['/telugu-sad-songs', '/hindi-songs', '/english-workout-songs/']) expect(isHubPage(p), p).toBe(true);
     for (const p of ['/charts', '/song/x-1', '/api/status', '/telugu_sad_songs']) expect(isHubPage(p), p).toBe(false);
   });

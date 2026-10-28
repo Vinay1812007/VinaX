@@ -1,7 +1,7 @@
 import type { Song } from '@/types';
 import type { RecommendationContext, RejectReason as DebugRejectReason } from '@/services/recommendation/types';
 import type { FallbackReason, NextRecommendationOptions, NextSongsPlan } from '@/services/recommendation/engine';
-import { getArtistTopSongs, getSongSuggestions, searchSongs } from '@/services/api/saavn';
+import { getArtistTopSongs, getSongSuggestions, searchSongs } from '@/services/api';
 import { songKey } from '@/services/recommendation/songKey';
 import { inferMood, type Mood } from '@/services/recommendation/mood';
 import { exposureLedger, recordExposure } from '@/services/recommendation/exposure';

@@ -153,8 +153,9 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 /**
- * Loads artwork into a NON-tainting source: a same-origin Cloudflare image
- * proxy on web, or a base64 data URI via CapacitorHttp on native. Returns
+ * Loads artwork into a NON-tainting source: a CORS image load on web (the
+ * old /img proxy left with the music catalogue), or a base64 data URI via
+ * CapacitorHttp on native. Returns
  * null on any failure so the card still renders (without art).
  */
 async function loadArtwork(url: string): Promise<HTMLImageElement | null> {
@@ -165,7 +166,7 @@ async function loadArtwork(url: string): Promise<HTMLImageElement | null> {
       if (res.status !== 200 || typeof res.data !== 'string') return null;
       return await loadImage(`data:image/jpeg;base64,${res.data}`);
     }
-    return await loadImage(`/img?url=${encodeURIComponent(url)}`);
+    return await loadImage(url);
   } catch {
     return null;
   }

@@ -122,9 +122,9 @@ export default defineConfig({
   server: {
     port: 5173,
     // Local dev: run the backend branch's `npm run dev` (wrangler on :8787)
-    // alongside vite — /api (incl. /api/cat), /img and /apk all proxy there.
+    // alongside vite — /api and /apk proxy there.
     proxy: Object.fromEntries(
-      ['/api', '/img', '/apk'].map((p) => [p, { target: 'http://127.0.0.1:8787', changeOrigin: true }]),
+      ['/api', '/apk'].map((p) => [p, { target: 'http://127.0.0.1:8787', changeOrigin: true }]),
     ),
   },
 });

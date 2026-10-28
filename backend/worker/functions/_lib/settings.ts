@@ -38,7 +38,6 @@ export const SETTING_KEYS: readonly SettingSpec[] = [
   { key: 'retention', group: 'Operations', title: 'Data retention', note: 'How long usage events are kept: { eventsDays } (default 180).', shape: 'object' },
   { key: 'push', group: 'Operations', title: 'Push rules', note: '{ minGapHours, quietStart, quietEnd } — frequency cap and quiet hours for pushes.', shape: 'object' },
   { key: 'search-synonyms', group: 'Catalog', title: 'Search synonyms', note: '{ "typed": "meant" } pairs applied to searches.', shape: 'object' },
-  { key: 'catalog-sources', group: 'Catalog', title: 'Catalog sources', note: '{ sourceId: false } disables a catalogue source for everyone.', shape: 'object' },
   { key: 'language-order', group: 'Catalog', title: 'Language order', note: 'Languages in the order Home offers them: ["telugu", "hindi", …].', shape: 'array' },
   { key: 'ai-starters', group: 'VinaX AI', title: 'Starter prompts', note: 'Suggestions on the empty chat: ["…"].', shape: 'array' },
   { key: 'ai-quick', group: 'VinaX AI', title: 'Quick actions', note: '[{ icon, label, prompt, mode? }] under the composer.', shape: 'array' },

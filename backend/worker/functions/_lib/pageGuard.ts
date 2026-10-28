@@ -33,11 +33,6 @@ import { bindingAllows, clientKey, rateLimit, tierFor } from './ratelimit';
 
 type GuardEnv = object & { TELEMETRY_PEPPER?: string };
 
-/** The paths the Worker renders for search engines; everything else is the API or static. */
-export function isEntityPage(pathname: string): boolean {
-  return /^\/(song|album|artist|playlist)\/[^/]+\/?$/.test(pathname);
-}
-
 /** A hub such as /telugu-sad-songs (rendered by [hub].ts). */
 export function isHubPage(pathname: string): boolean {
   return /^\/[a-z]+-[a-z]+-songs\/?$/.test(pathname) || /^\/[a-z]+-songs\/?$/.test(pathname);

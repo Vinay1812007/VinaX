@@ -23,16 +23,13 @@ import * as m_api_curate from './functions/api/curate';
 import * as m_api_dj from './functions/api/dj';
 import * as m_api_embed from './functions/api/embed';
 import * as m_api_voices from './functions/api/voices';
-import * as m_album_id from './functions/album/[id]';
 import * as m_api_admin_ailab from './functions/api/admin/ailab';
-import * as m_api_admin_catalog_search from './functions/api/admin/catalog-search';
 import * as m_api_admin_edge from './functions/api/admin/edge';
 import * as m_api_admin_seo from './functions/api/admin/seo';
-import { guardVerdict, isEntityPage, isHubPage, plainShell } from './functions/_lib/pageGuard';
+import { guardVerdict, isHubPage, plainShell } from './functions/_lib/pageGuard';
 import * as m_api_admin_envcheck from './functions/api/admin/envcheck';
 import * as m_api_admin_enginetest from './functions/api/admin/enginetest';
 import * as m_api_admin_health from './functions/api/admin/health';
-import * as m_api_admin_musicapi from './functions/api/admin/musicapi';
 import * as m_api_admin_fcmcheck from './functions/api/admin/fcmcheck';
 import * as m_api_admin_releases from './functions/api/admin/releases';
 // 14.0 — the database-backed console routes and the scheduled jobs.
@@ -104,20 +101,11 @@ import * as m_api_vinaxai from './functions/api/vinaxai';
 // own routes: the assistant endpoint answers a person, these drive a process
 // that can write to a developer's disk.
 import * as m_apk from './functions/apk';
-import * as m_artist_id from './functions/artist/[id]';
-import * as m_img from './functions/img';
-import * as m_playlist_id from './functions/playlist/[id]';
-import * as m_sitemap_albums_xml from './functions/sitemap-albums.xml';
-import * as m_sitemap_artists_xml from './functions/sitemap-artists.xml';
 import * as m_sitemap_hubs_xml from './functions/sitemap-hubs.xml';
-import * as m_sitemap_movies_xml from './functions/sitemap-movies.xml';
-import * as m_sitemap_songs_xml from './functions/sitemap-songs.xml';
 import * as m_sitemap_static_xml from './functions/sitemap-static.xml';
 import * as m_sitemap_xml from './functions/sitemap.xml';
-import * as m_song_id from './functions/song/[id]';
 import * as m_api_recs_similar from './functions/api/recommendations/similar/[songId]';
 import * as m_hub from './functions/[hub]';
-import * as m_api_cat_path from './functions/api/cat/[[path]]';
 import * as m_sitemaps_map from './functions/sitemaps/[map]';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -149,13 +137,11 @@ interface Env {
 
 const EXACT: Record<string, Mod> = {
   '/api/admin/ailab': m_api_admin_ailab,
-  '/api/admin/catalog-search': m_api_admin_catalog_search,
   '/api/admin/edge': m_api_admin_edge,
   '/api/admin/seo': m_api_admin_seo,
   '/api/admin/envcheck': m_api_admin_envcheck,
   '/api/admin/enginetest': m_api_admin_enginetest,
   '/api/admin/health': m_api_admin_health,
-  '/api/admin/musicapi': m_api_admin_musicapi,
   '/api/admin/fcmcheck': m_api_admin_fcmcheck,
   '/api/admin/releases': m_api_admin_releases,
   '/api/admin/overview': m_api_admin_overview,
@@ -222,21 +208,12 @@ const EXACT: Record<string, Mod> = {
   '/api/version': m_api_version,
   '/api/vinaxai': m_api_vinaxai,
   '/apk': m_apk,
-  '/img': m_img,
-  '/sitemap-albums.xml': m_sitemap_albums_xml,
-  '/sitemap-artists.xml': m_sitemap_artists_xml,
   '/sitemap-hubs.xml': m_sitemap_hubs_xml,
-  '/sitemap-movies.xml': m_sitemap_movies_xml,
-  '/sitemap-songs.xml': m_sitemap_songs_xml,
   '/sitemap-static.xml': m_sitemap_static_xml,
   '/sitemap.xml': m_sitemap_xml,
 };
 
 const DYNAMIC: Array<{ re: RegExp; mod: Mod; key: string }> = [
-  { re: /^\/album\/([^/]+)\/?$/, mod: m_album_id, key: 'id' },
-  { re: /^\/artist\/([^/]+)\/?$/, mod: m_artist_id, key: 'id' },
-  { re: /^\/playlist\/([^/]+)\/?$/, mod: m_playlist_id, key: 'id' },
-  { re: /^\/song\/([^/]+)\/?$/, mod: m_song_id, key: 'id' },
   { re: /^\/api\/recommendations\/similar\/([^/]+)\/?$/, mod: m_api_recs_similar, key: 'songId' },
   { re: /^\/api\/profile\/([^/]+)\/?$/, mod: m_api_profile_handle, key: 'handle' },
   { re: /^\/api\/shared-playlist\/([^/]+)\/?$/, mod: m_api_shared_playlist_id, key: 'id' },
@@ -302,11 +279,6 @@ const route = async (request: Request, env: Env, ctx: ExecCtx): Promise<Response
       }
     }
   }
-  // /api/cat/* — [[path]] catch-all: params.path is the segment array.
-  if (!mod && (path === '/api/cat' || path.startsWith('/api/cat/'))) {
-    mod = m_api_cat_path;
-    params = { path: path.slice('/api/cat/'.length).split('/').filter(Boolean) };
-  }
   // Single-segment fallthrough — the [hub].ts allow-list router. Its own
   // matchHub() decides; misses call next(), which passes through to Pages.
   if (!mod && /^\/[a-z0-9-]+\/?$/i.test(path)) {
@@ -321,7 +293,7 @@ const route = async (request: Request, env: Env, ctx: ExecCtx): Promise<Response
   // 11.0 — the edge-rendered catalogue pages sit behind a guard: a browser
   // impostor, or a network reading pages faster than people do, gets the
   // plain app shell instead of a rendered page (_lib/pageGuard.ts).
-  if (request.method === 'GET' && (isEntityPage(path) || isHubPage(path))) {
+  if (request.method === 'GET' && isHubPage(path)) {
     const verdict = await guardVerdict(request, env);
     if (verdict !== 'render') return plainShell(request, assetsFetch(env), verdict);
   }
