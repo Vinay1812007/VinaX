@@ -49,6 +49,8 @@ jobs:
           [ "$OUT" = "200" ] || echo "::error title=version::the Android update manifest did not answer 200 - installed apps cannot see new releases (GITHUB_TOKEN / GITHUB_REPO on the Worker)"
 
       # No music provider may be named in the app: the catalogue was removed.
+      # index.html is not checked for /api/cat/: its purge script looks for
+      # that text in saved data to forget old songs.
       - name: bundle hygiene (no music provider)
         run: |
           curl -s -m 20 https://www.vinaxmusic.online/ -o /tmp/home.html
@@ -57,7 +59,7 @@ jobs:
             curl -s -m 30 "https://www.vinaxmusic.online$u" -o /tmp/chunk.js
             if grep -qE 'musicapi\.vinaxmusic|saavn\.sumit|nepotune|saavn\.dev|b4a\.run|jiosaavn\.com/api|/api/cat/' /tmp/chunk.js; then echo "::error title=provider-in-bundle::$u names a music provider"; LEAK=1; fi
           done
-          grep -qE 'musicapi\.vinaxmusic|saavn\.sumit|nepotune|jiosaavn\.com/api|/api/cat/' /tmp/home.html && { echo "::error title=provider-in-html::index.html names a music provider"; LEAK=1; }
+          grep -qE 'musicapi\.vinaxmusic|saavn\.sumit|nepotune|jiosaavn\.com/api' /tmp/home.html && { echo "::error title=provider-in-html::index.html names a music provider"; LEAK=1; }
           [ "$LEAK" = 0 ] && echo "::notice title=provider-in-bundle::OK - no music provider named in index.html or its entry scripts"
 
       - name: apex host canonicalization (4.19.2)
