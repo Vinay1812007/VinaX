@@ -45,7 +45,7 @@ import { toast } from '@/store/toastStore';
 import { loadProfile } from '@/services/personalization/storage';
 import { topArtists } from '@/services/personalization/profile';
 import { recordSearchPlay } from '@/services/personalization/updater';
-import { fetchWithTimeout } from '@/utils/fetchWithTimeout';
+import { fetchWithTimeout } from '@/services/api/client';
 import { expertSongSearch } from '@/services/ai/expert';
 import type { Song } from '@/types';
 import { playAlbum, playArtist, playPlaylist } from '@/features/player/playEntity';

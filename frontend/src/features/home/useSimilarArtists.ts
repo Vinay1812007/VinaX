@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { Artist, ArtistRef } from '@/types';
-import { getArtist } from '@/services/api';
+import { getArtist } from '@/services/api/saavn';
 import { artistKey, useLibraryStore } from '@/store/libraryStore';
 import { loadProfile } from '@/services/personalization/storage';
 import { useYourArtists } from './useYourArtists';

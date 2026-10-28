@@ -26,12 +26,12 @@ This document is a map of VinaX: the two deployed services and the database behi
                 ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │ backend/worker  (edge Worker "vinax-api")                            │
-│  host middleware ─ exact routes ─ dynamic routes ─ hubs              │
+│  host middleware ─ exact routes ─ dynamic routes ─ /api/cat/* ─ hubs │
 │  anything unmatched ─► the static site                               │
-│  /api/*  AI lanes, sign-in + sync, events, rooms,                    │
+│  /api/*  AI lanes, catalogue proxy, sign-in + sync, events, rooms,   │
 │          push, status, the owner console's API                       │
 │  hub pages (/<lang>-<mood>-songs)  edge-rendered for crawlers        │
-│  /sitemap*  /apk                                                     │
+│  /sitemap*  /img  /apk                                               │
 │  scheduled handler (Cron Trigger, every 30 min)                      │
 └──────────────────────────────┬───────────────────────────────────────┘
                                │ _lib/db.ts (service-role key, 8 s deadline)
@@ -136,7 +136,29 @@ On rehydrate, the player store treats its record as untrusted input: malformed s
 
 ## Catalogue client
 
-VinaX has no music provider. The JioSaavn catalogue behind `/api/cat`, the community wrappers, the fallback ladder (`constants/endpoints.ts`), the request orchestrator (`services/api/client.ts`) and its health registry were removed. `src/services/api/catalog.ts` keeps every catalogue function's signature (`searchSongs`, `getSong`, `getAlbum`, …) but makes no request: searches answer with empty lists and single lookups reject with `CatalogUnavailableError`, which the screens show as empty or not found. Music videos (`services/api/videos.ts`) find nothing the same way. To bring music back, implement those functions against a new source.
+Catalogue reads go through `orchestratedRequest()` in `src/services/api/client.ts`. Callers (the domain modules next to it in `src/services/api/`) pass path candidates and a validator; pages call them through `@tanstack/react-query` with `retry: 0`, a 5-minute stale time and a 30-minute cache time (`services/queryClient.ts`), because retrying is the orchestrator's job.
+
+**The fallback ladder.** `constants/endpoints.ts` lists the catalogue bases: a dedicated catalogue API host, the same-origin Worker catalogue at `/api/cat` (web only), and the production origin's `/api/cat`. `VITE_API_BASES` replaces the list at build time, and the owner console can switch individual bases off (`setDisabledSources`). For each request the client:
+
+1. **Allots** the request across the bases with the in-memory health registry (`services/api/health.ts`). Each base is ranked by its **expected time to success**: its latency average (an exponentially weighted mean of answer times), plus the odds of failing — a recency-weighted success rate, smoothed so a fresh base counts as 50/50 — times what a failure costs (at least 2 s, or the base's own latency), stretched by half again for each consecutive failure. A fast base that fails half the time therefore ranks behind a slower one that always answers. Bases with a free slot come first, full ones next, cooling ones last. Three failures in a row cool a base for 60 seconds; all bases are still tried when every one is cooling.
+2. Picks the order by **priority** (`RequestPriority`, set by the caller):
+   - `interactive` — the Search page, the typeahead and song lookups (`getSong`): best base first, **hedged**. If that base has not answered within its own p75 answer time (the latency average plus 0.675 of its deviation, bounded to 350–900 ms), the same request starts on the next base; the first valid answer wins and the other is aborted. An aborted loser counts as slow, never as failed. One hedge per pass.
+   - `background` — shelves, recommendations and prefetch (the default for catalogue searches): the first base is **drawn at random, weighted by health** (1 / expected time) among the ready ones, so prefetch traffic spreads instead of queueing on the top base; the rest follow in rank order. Never hedged.
+   - `standard` — everything else: best base first, no hedge.
+3. Honours **back-off**. A 429 or 503 cools that base for its `Retry-After` (seconds or an HTTP date; 30 s when missing, clamped to 1 s–10 min), counts as a failure, and moves the call on; a base that asked to back off gets no new calls until then, unless it is the only one left.
+4. Caps **concurrency**: at most six requests in flight per base. When a base is full a caller waits for a slot, and interactive callers are queued ahead of background ones; a cancelled caller leaves the queue.
+5. Walks each allotted base, trying each path dialect the caller listed, and runs the caller's validator on the payload. A payload the validator rejects is a soft miss: the next dialect is tried and the base takes no health strike. An HTTP 404 is treated the same way — the route is missing there, the base is not down. Any other failure records a health strike and moves to the next base.
+6. Makes up to two full passes, pausing 600 ms before the second.
+
+**Sharing identical calls.** A caller can pass `cacheMs`. Catalogue searches and song lookups use 5 seconds (`SEARCH_MEMO_MS`): identical requests in flight at the same time share one network call (each caller can still cancel its own share; the call is aborted only when every sharer has left), and an answer is reused for 5 seconds (at most 40 kept). This is what lets the Search page's typeahead and its All tab ask the same combined search once.
+
+**Deadlines.** Each attempt has an 8-second timeout (`REQUEST_TIMEOUT_MS`). The whole ladder has a 20-second budget (`REQUEST_DEADLINE_MS`, overridable per request). The last attempt before the deadline only gets the time that is left, and an attempt cut short by the deadline does not count against the base's health.
+
+**Cancellation.** Callers pass the query's `AbortSignal`. A cancel aborts the in-flight fetch, ends a backoff pause early, stops the ladder and is never recorded as a failure. `fetchWithTimeout()` gives the same guarantees to same-origin helpers outside the ladder.
+
+**Boot prefetch.** `index.html` starts the first trending request from an inline script and parks the promise on `window.__vxBoot`. The first matching `fetchJson` call consumes it; any mismatch or failure falls through to the network.
+
+Payloads are normalised in `services/api/normalize.ts`. The catalogue API describes artists as `artists: { primary: [...] }`; the app's own `Song` type, and everything it persists, uses a flat `artists: [...]`.
 
 ## Audio engine, media session and native bridge
 
@@ -188,17 +210,18 @@ The build emits `/precache-manifest.json` (a small plugin in `vite.config.ts`) w
 `backend/worker/index.ts` is a router plus an adapter that gives each handler the context shape `{ request, env, params, next, waitUntil, data }`. Resolution order:
 
 1. Host middleware (`functions/_middleware.ts`): the apex host redirects to `www` (a fallback only: since 11.0.3 the apex is not a Worker route and the static site's `_redirects` does that redirect), the `update.` host redirects to the APK download, the `admin.` host redirects to `/admin/`.
-2. An exact-path table for every `/api/**` handler, `/apk` and the sitemaps. A test (`worker/__tests__/routerCoverage.test.ts`) fails when a handler file has no entry.
-3. Dynamic routes such as `/sitemaps/:map` and `/api/shared-playlist/:id`. The song, album, artist and playlist page handlers were removed with the music catalogue; those paths are served by the static site as the ordinary app.
-4. Single-segment paths go to the hub allow-list (`functions/[hub].ts`).
-5. Anything else is fetched from the static site named by `ASSETS_HOST` in `wrangler.toml`.
+2. An exact-path table for every `/api/**` handler, `/apk`, `/img` and the sitemaps. A test (`worker/__tests__/routerCoverage.test.ts`) fails when a handler file has no entry.
+3. Dynamic entity routes: `/song/:id`, `/album/:id`, `/artist/:id`, `/playlist/:id`, `/sitemaps/:map`. Since 11.0.2 the first four are not Worker routes in `wrangler.toml`, so production never sends them here: the static site serves them as the ordinary app. The handlers remain for the day the routes come back.
+4. `/api/cat/*`, the catalogue. Since 1.2.0 it forwards each request to the music API named in the Worker secret `CATALOG_UPSTREAMS` (`https://musicapi.vinaxmusic.online/api`), whose songs carry direct CDN audio URLs, so audio bytes do not pass through the Worker. No other provider is built in; the JioSaavn web API translation (with `/api/cat/stream` resolving its encrypted URLs at play time) runs only when `CATALOG_DIRECT_URL` is set.
+5. Single-segment paths go to the hub allow-list (`functions/[hub].ts`).
+6. Anything else is fetched from the static site named by `ASSETS_HOST` in `wrangler.toml`.
 
 A matched module with no handler for the request method answers `405`.
 
 | Route family | Purpose |
 | --- | --- |
 | `/api/dj`, `/api/curate`, `/api/playlist`, `/api/vinaxai`, `/api/aimodels`, `/api/assistant`, `/api/tts`, `/api/voices`, `/api/lyrics-tools`, `/api/image`, `/api/embed` (8.2) | AI features — see [ai.md](ai.md) |
-| `/api/preview`, `/api/trending-searches`, `/api/blocklist` | Content |
+| `/api/cat/*`, `/api/preview`, `/api/trending-searches`, `/api/blocklist` | Catalogue and content |
 | `/api/events`, `/api/feedback`, `/api/geo`, `/api/username`, `/api/handoff`, `/api/room` | Consented usage events (an `events` row and the device's `listeners` row; the device is resolved by `_lib/identity.ts`), feedback (a `feedback` row), coarse region, the handle on the device's `listeners` row (`409 taken` with suggestions), device transfer relay (the `HANDOFF` key-value binding), Listen Together rooms (`rooms`, `room_members`) |
 | `/api/appconfig`, `/api/experiments`, `/api/announcements`, `/api/site-mode`, `/api/version`, `/api/status`, `/api/apk` | Client configuration from the `settings` table, sanitised by `_lib/clientConfig.ts` and cached at the edge; active `experiments`; the `announcement` setting; site mode and the maintenance window; live status probes plus the 90-day history from `uptime_report`; Android update source |
 | `/api/push/*` | The public VAPID key; subscribe and register write `push_devices` rows (channel `web` or `fcm`); unsubscribe switches one off |

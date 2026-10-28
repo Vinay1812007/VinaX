@@ -111,6 +111,7 @@ export interface ClientConfig {
   greeting: { text: string } | null;
   broadcast: { id: string; text: string; link?: string } | null;
   synonyms: Record<string, string>;
+  disabledSources: string[];
   languageOrder: string[];
   aiStarters: string[];
   aiQuick: Array<{ icon: string; label: string; prompt: string; mode?: string }>;
@@ -168,6 +169,7 @@ export function useClientConfig(): ClientConfig | null {
         greeting: j.greeting ?? null,
         broadcast: j.broadcast ?? null,
         synonyms: j.synonyms && typeof j.synonyms === 'object' ? j.synonyms : {},
+        disabledSources: Array.isArray(j.disabledSources) ? j.disabledSources : [],
         languageOrder: Array.isArray(j.languageOrder) ? j.languageOrder : [],
         aiStarters: Array.isArray(j.aiStarters) ? j.aiStarters : [],
         aiQuick: Array.isArray(j.aiQuick) ? j.aiQuick : [],

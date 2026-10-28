@@ -31,7 +31,7 @@ describe('/api/room without a database', () => {
 });
 
 describe('/api/room', () => {
-  it('create answers a 6-character code and the host token, and the row never stores a song (no music provider)', async () => {
+  it('create answers a 6-character code and the host token, and the row never carries the raw song junk', async () => {
     const fake = fakeDb();
     const res = await post({ action: 'create', hostName: 'Vinay', song: { id: 's1', title: 'Orbit', subtitle: 'A', image: 'https://i/x.jpg', evil: { nested: true } } });
     expect(res.status).toBe(200);
@@ -41,11 +41,11 @@ describe('/api/room', () => {
     const row = fake.rows('rooms')[0];
     expect(row.code).toBe(out.code);
     expect(row.host_token).toBe(out.hostToken);
-    expect(row.current).toBeNull();
+    expect((row.current as { evil?: unknown }).evil).toBeUndefined();
     expect(fake.calls[0].prefer).toContain('ignore-duplicates');
   });
 
-  it('a guest poll gets the room (never its stored songs), a member count and reactions but no names or host token; the host gets names', async () => {
+  it('a guest poll gets the room, a member count and reactions but no names or host token; the host gets names', async () => {
     const now = new Date().toISOString();
     const old = new Date(Date.now() - 60_000).toISOString();
     fakeDb({
@@ -56,7 +56,7 @@ describe('/api/room', () => {
       ],
     });
     const guest = (await (await get('code=abc234')).json()) as Record<string, unknown>;
-    expect(guest.room).toEqual({ host_name: 'Vinay', song: null, queue: [], requests: [], position: 12.5, playing: true, updated_at: now, messages: [], skipVotes: 0 });
+    expect(guest.room).toEqual({ host_name: 'Vinay', song: { id: 's1', title: 'Orbit' }, queue: [], requests: [{ song: { id: 's2' }, by: 'Guest' }], position: 12.5, playing: true, updated_at: now, messages: [], skipVotes: 0 });
     expect(guest.memberCount).toBe(1);
     expect(guest.reactions).toEqual([{ e: '🔥', at: now }]);
     expect(typeof guest.now).toBe('number');
@@ -79,17 +79,16 @@ describe('/api/room', () => {
     const row = fake.rows('rooms')[0];
     expect(row.requests).toEqual([{ song: { id: 's3' }, by: 'G' }]);
     expect(row.playing).toBe(true);
-    expect(row.current).toBeNull(); // no music provider: songs are not stored
-    expect(row.queue).toEqual([]);
+    expect((row.current as { id: string }).id).toBe('s9');
     expect(await (await post({ action: 'end', code: 'ABC234', hostToken: 'host-secret' })).json()).toEqual({ ok: true });
     expect(fake.rows('rooms')).toHaveLength(0);
   });
 
-  it('a guest song request is refused; reactions only from the allowed set', async () => {
+  it('a guest request goes through room_request; a missing room is 404; reactions only from the allowed set', async () => {
     const fake = fakeDb();
     fake.answer('rpc/room_request', (c) => new Response(JSON.stringify((c.body as { p_code: string }).p_code === 'ABC234'), { headers: { 'content-type': 'application/json' } }));
-    // No music provider: a song request is refused before the room is looked up.
-    expect(await (await post({ action: 'request', code: 'ABC234', song: { id: 's5', title: 'Five' }, by: 'G' })).json()).toEqual({ error: 'bad_song' });
+    expect(await (await post({ action: 'request', code: 'ABC234', song: { id: 's5', title: 'Five' }, by: 'G' })).json()).toEqual({ ok: true });
+    expect((await post({ action: 'request', code: 'ZZZ999', song: { id: 's5' } })).status).toBe(404);
     expect((await post({ action: 'request', code: 'ABC234', song: { title: 'no id' } })).status).toBe(400);
     expect((await post({ action: 'react', code: 'ABC234', deviceId: 'g1', emoji: '💀' })).status).toBe(400);
     expect(await (await post({ action: 'react', code: 'ABC234', deviceId: 'g1', emoji: REACTION_EMOJI[0], name: 'G' })).json()).toEqual({ ok: true });

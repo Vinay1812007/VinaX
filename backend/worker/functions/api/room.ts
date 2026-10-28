@@ -105,9 +105,19 @@ const codeOf = (v: unknown): string | null => {
 };
 const memberOf = (v: unknown): string | null => clip(v, MEMBER_ID_MAX);
 
-/** A song as the room keeps it — none: VinaX has no music provider. */
-function cleanSong(_raw: unknown): Record<string, unknown> | null {
-  return null;
+/** A song as the room keeps it: id, title, subtitle, image and a few display fields, ≤ 2 KB. */
+function cleanSong(raw: unknown): Record<string, unknown> | null {
+  const s = asObject(raw);
+  if (!s) return null;
+  const out: Record<string, unknown> = {};
+  for (const k of ['id', 'title', 'subtitle', 'image', 'url', 'duration', 'language', 'year']) {
+    const v = s[k];
+    if (typeof v === 'string') out[k] = v.slice(0, k === 'url' || k === 'image' ? 512 : 200);
+    else if (typeof v === 'number' && Number.isFinite(v)) out[k] = v;
+  }
+  for (const k of ['artists', 'images', 'downloadUrls']) if (Array.isArray(s[k])) out[k] = (s[k] as unknown[]).slice(0, 8);
+  if (!out.id || typeof out.id !== 'string') return null;
+  return JSON.stringify(out).length <= 4096 ? out : { id: out.id, title: out.title ?? null, subtitle: out.subtitle ?? null, image: out.image ?? null };
 }
 
 function trackList(raw: unknown, cap: number): Track[] {
@@ -127,10 +137,9 @@ const songId = (t: Track): string => String((asObject(t.song)?.id as unknown) ??
 function publicRoom(r: RoomRow) {
   return {
     host_name: r.host_name,
-    // No music provider: a room's stored songs are never shown.
-    song: null,
-    queue: [] as Track[],
-    requests: [] as Track[],
+    song: r.current ?? null,
+    queue: tracks(r.queue),
+    requests: tracks(r.requests),
     position: typeof r.position === 'number' ? r.position : 0,
     playing: r.playing === true,
     updated_at: r.updated_at,

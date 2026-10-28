@@ -189,7 +189,7 @@ describe('empty and failing answers', () => {
     expect(failures).toEqual([]);
     const tabs = VX.pages().reduce((n, p) => n + (p.tabs ? p.tabs.length : 1), 0);
     expect(results.length).toBe(tabs);
-    expect(tabs).toBe(34);
+    expect(tabs).toBe(35);
   });
 
   it('every page and tab shows an error state, not a crash, when the server fails', async () => {

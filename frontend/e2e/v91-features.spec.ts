@@ -95,6 +95,64 @@ test('Home: "Fewer repeats" is named, tappable and does not overflow a narrow sc
   await expect(page.getByRole('status').filter({ hasText: /heard lately|refreshed/i }).first()).toBeVisible({ timeout: 15_000 });
 });
 
+test('AI playlist: Keep, Replace and Refine are all named and reachable', async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seed(page, baseURL!);
+  await page.goto('/ai-playlist');
+  await page.getByLabel(/Describe your perfect mix/i).fill('slow telugu evening');
+  await page.getByRole('button', { name: /Build my playlist/i }).click();
+
+  await expect(page.getByRole('heading', { name: 'Evening mix' })).toBeVisible({ timeout: 30_000 });
+
+  // Keep / Replace carry the song's name, so a screen reader says which row.
+  const keep = page.getByRole('button', { name: /^Keep Song \d+ when building again$/ }).first();
+  await expect(keep).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Replace Song \d+ with another song$/ }).first()).toBeVisible();
+
+  // Keeping a track is announced, not silent. Its name then changes to the
+  // undo wording, which is why it is re-located rather than reused.
+  await keep.click();
+  await expect(page.getByRole('status').filter({ hasText: /track kept/i })).toBeVisible();
+  const kept = page.getByRole('button', { name: /^Stop keeping Song \d+$/ }).first();
+  await expect(kept).toBeVisible();
+  await expect(kept).toHaveAttribute('aria-pressed', 'true');
+
+  // Refine has a label even though its label is visually hidden.
+  await expect(page.getByLabel(/Change something about this playlist/i)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Fewer repeats' })).toBeVisible();
+  await noHorizontalOverflow(page);
+});
+
+test('the track menu offers "Snooze this song…" with named durations', async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await seed(page, baseURL!);
+  // A song ROW (not a card) is what carries the ⋮ menu, so this drives it from
+  // the AI playlist's result list.
+  await page.goto('/ai-playlist');
+  await page.getByLabel(/Describe your perfect mix/i).fill('slow telugu evening');
+  await page.getByRole('button', { name: /Build my playlist/i }).click();
+  await expect(page.getByRole('heading', { name: 'Evening mix' })).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole('button', { name: 'More options' }).first().click();
+  const snooze = page.getByRole('menuitem', { name: /Snooze this song/i });
+  await expect(snooze).toBeVisible();
+  await snooze.click();
+  // The duration view, with a way back.
+  await expect(page.getByRole('menuitem', { name: '7 days' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: '30 days' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Back' })).toBeVisible();
+
+  // Escape steps back to the full menu rather than closing outright.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menuitem', { name: /Snooze this song/i })).toBeVisible();
+
+  // Choosing a duration says what happened and offers Undo.
+  await page.getByRole('menuitem', { name: /Snooze this song/i }).click();
+  await page.getByRole('menuitem', { name: '14 days' }).click();
+  await expect(page.getByText(/paused until/i).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Undo' }).first()).toBeVisible();
+});
+
 test('VinaX AI: Temporary chat, Projects and the artifact toggle are all named', async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await seed(page, baseURL!);

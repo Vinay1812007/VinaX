@@ -6,7 +6,7 @@
  * in, flagged `source: 'catalogue'` for the UI.
  */
 import { useQuery } from '@tanstack/react-query';
-import { searchSongs } from '@/services/api';
+import { searchSongs } from '@/services/api/saavn';
 import { searchLyrics } from '@/services/lyrics/lrclib';
 import { catalogueFallback, resolveLyricsHits, type CatalogueSearch, type LyricsMatch } from './lyricsSearch';
 

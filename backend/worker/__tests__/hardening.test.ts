@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readCapped, readJsonCapped } from '../functions/_lib/body';
 import { chat } from '../functions/_lib/ai';
 import { fetchAsset, latestRelease } from '../functions/_lib/github';
+import { onRequestGet as imgGet } from '../functions/img';
 import { onRequestPost as assistantPost } from '../functions/api/assistant';
 import { onRequestPost as playlistPost } from '../functions/api/playlist';
 import { onRequestPost as vinaxaiPost } from '../functions/api/vinaxai';
@@ -114,6 +115,38 @@ function hangingFetch(): ReturnType<typeof vi.fn> {
 }
 
 describe('outbound timeouts', () => {
+  const imgReq = (): { request: Request } => ({ request: new Request('https://example.test/img?url=' + encodeURIComponent('https://c.saavncdn.com/a.jpg')) });
+
+  it('/img gives up on a hung artwork host with a 504', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', hangingFetch());
+    const pending = imgGet(imgReq());
+    await vi.advanceTimersByTimeAsync(8_100);
+    expect((await pending).status).toBe(504);
+  });
+
+  it('/img clears the leash on headers — a slow image body still streams through', async () => {
+    vi.useFakeTimers();
+    let signal: AbortSignal | undefined;
+    vi.stubGlobal('fetch', (_input: RequestInfo | URL, init?: RequestInit) => {
+      signal = init?.signal ?? undefined;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          setTimeout(() => {
+            controller.enqueue(new Uint8Array([1, 2, 3]));
+            controller.close();
+          }, 20_000);
+        },
+      });
+      return Promise.resolve(new Response(body, { status: 200, headers: { 'content-type': 'image/png' } }));
+    });
+    const res = await imgGet(imgReq());
+    const bytes = res.arrayBuffer();
+    await vi.advanceTimersByTimeAsync(25_000);
+    expect((await bytes).byteLength).toBe(3);
+    expect(signal?.aborted).toBe(false);
+  });
+
   it('the release lookup and asset fetch abandon a hung upstream and report null', async () => {
     vi.useFakeTimers();
     vi.stubGlobal('fetch', hangingFetch());

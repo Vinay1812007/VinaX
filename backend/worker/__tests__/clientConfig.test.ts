@@ -8,6 +8,7 @@ describe('client config bundle', () => {
       greeting: { text: '  Welcome to the festival week  ', start: '2026-09-01', end: '2026-09-30', junk: 1 },
       broadcast: { id: 'b1', text: 'New: Listen Later', link: '/later' },
       'search-synonyms': { ' ARR ': 'A. R. Rahman', bad: '', same: 'same' },
+      'catalog-sources': { 'vinax-render': false, 'local-catalog': true, 'Bad Key': false },
       'language-order': ['telugu', 'hindi', 'not valid!'],
       'ai-starters': ['Suggest 5 {lang} songs', '', 42],
       'ai-quick': [{ icon: 'S', label: 'Songs', prompt: 'Suggest songs for ', mode: 'muse' }, { label: '', prompt: 'x' }],
@@ -17,6 +18,7 @@ describe('client config bundle', () => {
     expect(cfg.greeting).toEqual({ text: 'Welcome to the festival week' });
     expect(cfg.broadcast).toEqual({ id: 'b1', text: 'New: Listen Later', link: '/later' });
     expect(cfg.synonyms).toEqual({ arr: 'A. R. Rahman' });
+    expect(cfg.disabledSources).toEqual(['vinax-render']);
     expect(cfg.languageOrder).toEqual(['telugu', 'hindi']);
     expect(cfg.aiStarters).toEqual(['Suggest 5 {lang} songs']);
     expect(cfg.aiQuick).toEqual([{ icon: 'S', label: 'Songs', prompt: 'Suggest songs for ', mode: 'muse' }]);
@@ -31,7 +33,7 @@ describe('client config bundle', () => {
   });
   it('returns a safe empty bundle for garbage', () => {
     const cfg = publicClientConfig({ greeting: 'nope', 'ai-quick': 'nope', 'min-version': { build: -1 } });
-    expect(cfg).toEqual({ greeting: null, broadcast: null, synonyms: {}, languageOrder: [], aiStarters: [], aiQuick: [], faq: [], minBuild: null });
+    expect(cfg).toEqual({ greeting: null, broadcast: null, synonyms: {}, disabledSources: [], languageOrder: [], aiStarters: [], aiQuick: [], faq: [], minBuild: null });
   });
   it('maintenance window + house rules', () => {
     const now = new Date('2026-09-08T10:00:00Z');

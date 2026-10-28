@@ -37,10 +37,9 @@ describe('/api/profile', () => {
     const put = await profile.onRequestPut({ request: await req('/api/profile', 'PUT', { handle: 'Asha_01', public: true, bio: 'x'.repeat(400), summary: { topArtists: [{ name: 'Sid Sriram', plays: 12.4 }, { name: '' }], topLanguages: [{ id: 'telugu', pct: 140 }], recentLikes: [{ id: 's1', title: 'T', subtitle: 'A', image: 'i', junk: 'no' }, { nope: 1 }] }, nowPlaying: { id: 's2', title: 'Now' }, shareNow: true }), env: ENV });
     expect(put.status).toBe(200);
     const body = (await put.json()) as { profile: Record<string, unknown> };
-    expect(body.profile).toMatchObject({ handle: 'asha_01', name: 'Asha', public: true, topArtists: [{ name: 'Sid Sriram', plays: 12 }], topLanguages: [{ id: 'telugu', pct: 100 }], nowPlaying: null });
+    expect(body.profile).toMatchObject({ handle: 'asha_01', name: 'Asha', public: true, topArtists: [{ name: 'Sid Sriram', plays: 12 }], topLanguages: [{ id: 'telugu', pct: 100 }], nowPlaying: { id: 's2', title: 'Now' } });
     expect((body.profile.bio as string).length).toBe(160);
-    // No music provider: likes and the now-playing song are never stored or shown.
-    expect(body.profile.recentLikes).toEqual([]);
+    expect(body.profile.recentLikes).toEqual([{ id: 's1', title: 'T', subtitle: 'A', image: 'i' }]);
     expect(fake.rows('profiles')[0]).toMatchObject({ account_id: 'a1', handle: 'asha_01' });
     expect(JSON.stringify(body.profile)).not.toContain('a1');
   });
@@ -63,7 +62,7 @@ describe('/api/profile', () => {
     });
     const anon = await profileHandle.onRequestGet({ request: await req('/api/profile/asha', 'GET', undefined, null), env: ENV, params: { handle: 'asha' } });
     expect(anon.status).toBe(200);
-    expect(await anon.json()).toMatchObject({ profile: { handle: 'asha', name: 'Asha', nowPlaying: null, followers: 1 } });
+    expect(await anon.json()).toMatchObject({ profile: { handle: 'asha', name: 'Asha', nowPlaying: { id: 's9' }, followers: 1 } });
     // Bo is private: Asha does not follow Bo, so Asha cannot see Bo.
     expect((await profileHandle.onRequestGet({ request: await req('/api/profile/bobo', 'GET'), env: ENV, params: { handle: 'bobo' } })).status).toBe(404);
     // Asha follows Bo back → mutual → visible.
@@ -105,7 +104,7 @@ describe('/api/follow', () => {
     expect(await on.json()).toEqual({ following: true });
     expect(fake.rows('follows')).toMatchObject([{ follower_id: 'a1', followee_id: 'a2' }]);
     const list = await follow.onRequestGet({ request: await req('/api/follow', 'GET'), env: ENV });
-    expect(await list.json()).toMatchObject({ following: [{ handle: 'bobo', name: 'Bo', nowPlaying: null, following: true }] });
+    expect(await list.json()).toMatchObject({ following: [{ handle: 'bobo', name: 'Bo', nowPlaying: { id: 's1' }, following: true }] });
     await follow.onRequestPost({ request: await req('/api/follow', 'POST', { handle: 'bobo', on: false }), env: ENV });
     expect(fake.rows('follows')).toEqual([]);
     expect(await (await follow.onRequestGet({ request: await req('/api/follow', 'GET'), env: ENV })).json()).toEqual({ following: [] });
@@ -113,13 +112,13 @@ describe('/api/follow', () => {
 });
 
 describe('/api/shared-playlist', () => {
-  it('creates with a collab token and no songs (no music provider); a collaborator cannot add one', async () => {
+  it('creates with a collab token, a collaborator adds by token, the owner then merges on 409', async () => {
     fakeDb({ accounts: ACCOUNTS });
     const made = await playlist.onRequestPost({ request: await req('/api/shared-playlist', 'POST', { name: 'Road trip', songs: [{ id: 's1', title: 'A', subtitle: 'B', image: 'i' }, { id: 's1', title: 'dup' }], public: false, collab: true }), env: ENV });
     expect(made.status).toBe(200);
     const body = (await made.json()) as { playlist: { id: string; version: number; songs: unknown[]; collab: boolean; public: boolean }; collabToken: string };
     expect(body.playlist).toMatchObject({ name: 'Road trip', version: 1, collab: true, public: false, mine: true, owner: 'Asha' });
-    expect(body.playlist.songs).toHaveLength(0);
+    expect(body.playlist.songs).toHaveLength(1);
     expect(body.collabToken).toMatch(/^[A-Za-z0-9_-]{20,}$/);
     const id = body.playlist.id;
     // Private: no token, no session → 404; the token opens it.
@@ -130,16 +129,17 @@ describe('/api/shared-playlist', () => {
     // A collaborator adds a song (no account), wrong token is refused.
     expect((await playlistId.onRequestPost({ request: await req(`/api/shared-playlist/${id}`, 'POST', { token: 'nope', add: { id: 's2', title: 'C' } }, null), env: ENV, params: { id } })).status).toBe(403);
     const added = await playlistId.onRequestPost({ request: await req(`/api/shared-playlist/${id}`, 'POST', { token: body.collabToken, add: { id: 's2', title: 'C' }, by: 'Ravi' }, null), env: ENV, params: { id } });
-    expect(added.status).toBe(400);
-    // The owner's stale write is a 409 carrying the newer copy; with the current version it lands.
-    const stale = await playlist.onRequestPost({ request: await req('/api/shared-playlist', 'POST', { id, name: 'Road trip 2', songs: [], version: 0 }), env: ENV });
+    expect(added.status).toBe(200);
+    expect(await added.json()).toMatchObject({ playlist: { version: 2, songs: [{ id: 's1' }, { id: 's2', by: 'Ravi' }] } });
+    // The owner's stale write (version 1) is a 409 carrying the newer copy; with version 2 it lands.
+    const stale = await playlist.onRequestPost({ request: await req('/api/shared-playlist', 'POST', { id, name: 'Road trip 2', songs: [{ id: 's1' }], version: 1 }), env: ENV });
     expect(stale.status).toBe(409);
-    expect(await stale.json()).toMatchObject({ playlist: { version: 1 } });
-    const ok = await playlist.onRequestPost({ request: await req('/api/shared-playlist', 'POST', { id, name: 'Road trip 2', songs: [{ id: 's1' }, { id: 's2' }, { id: 's3' }], version: 1, public: true }), env: ENV });
-    expect(await ok.json()).toMatchObject({ playlist: { version: 2, public: true, name: 'Road trip 2', songs: [] } });
+    expect(await stale.json()).toMatchObject({ playlist: { version: 2 } });
+    const ok = await playlist.onRequestPost({ request: await req('/api/shared-playlist', 'POST', { id, name: 'Road trip 2', songs: [{ id: 's1' }, { id: 's2' }, { id: 's3' }], version: 2, public: true }), env: ENV });
+    expect(await ok.json()).toMatchObject({ playlist: { version: 3, public: true, name: 'Road trip 2' } });
     // Now public: anyone reads it. Another account cannot write it.
     expect((await playlistId.onRequestGet({ request: await req(`/api/shared-playlist/${id}`, 'GET', undefined, null), env: ENV, params: { id } })).status).toBe(200);
-    expect((await playlist.onRequestPost({ request: await req('/api/shared-playlist', 'POST', { id, name: 'Mine now', songs: [], version: 2 }, 'a2'), env: ENV })).status).toBe(403);
+    expect((await playlist.onRequestPost({ request: await req('/api/shared-playlist', 'POST', { id, name: 'Mine now', songs: [], version: 3 }, 'a2'), env: ENV })).status).toBe(403);
     // The owner lists it and deletes it.
     expect(await (await playlist.onRequestGet({ request: await req('/api/shared-playlist', 'GET'), env: ENV })).json()).toMatchObject({ playlists: [{ id }] });
     expect((await playlist.onRequestDelete({ request: await req(`/api/shared-playlist?id=${id}`, 'DELETE'), env: ENV })).status).toBe(204);

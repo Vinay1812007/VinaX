@@ -3,8 +3,10 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { localStorageUsageBytes } from '@/services/storage/local';
 import { eventCount, storageEstimate } from '@/services/storage/idb';
 import { queryClient } from '@/services/queryClient';
+import { healthRegistry } from '@/services/api';
 import { clearCachedMetadata } from '@/features/settings/actions';
 import { PageHeader } from '@/components/PageHeader';
+import { SectionHeader } from '@/components/SectionHeader';
 import '@/styles/pages/secondary.css';
 
 function fmtBytes(b: number): string {
@@ -26,6 +28,7 @@ export default function CacheInfoPage() {
 
   const localBytes = localStorageUsageBytes();
   const queries = queryClient.getQueryCache().getAll().length;
+  const health = healthRegistry.snapshot();
 
   const tiles: Array<[string, string, string?]> = [
     [fmtBytes(localBytes), 'Preferences', 'Settings and profile'],
@@ -38,7 +41,7 @@ export default function CacheInfoPage() {
     <div className="vx-sec">
       <PageHeader
         title="Cache and offline"
-        subtitle="What is cached here is metadata and your own preferences."
+        subtitle="VinaX streams music. What is cached here is metadata and your own preferences."
         actions={
           <>
             <button onClick={() => setTick((t) => t + 1)} className="vx-sec-pill">Refresh stats</button>
@@ -59,6 +62,43 @@ export default function CacheInfoPage() {
         ))}
       </div>
 
+      <section className="vx-sec-block" aria-label="Source health this session">
+        <SectionHeader title="Source health this session" explanation="How each music source has answered since the app opened." />
+        <div className="overflow-x-auto">
+          <table className="w-full text-[14px]">
+            <thead className="text-ink-400 text-[12.5px] font-semibold">
+              <tr>
+                <th className="text-left pr-4 h-11 font-semibold">Source</th>
+                <th className="text-right px-4 h-11 font-semibold">OK</th>
+                <th className="text-right px-4 h-11 font-semibold">Fail</th>
+                <th className="text-right px-4 h-11 font-semibold">Latency</th>
+                <th className="text-right pl-4 h-11 font-semibold">State</th>
+              </tr>
+            </thead>
+            <tbody>
+              {health.map((h) => (
+                <tr key={h.id} className="border-t border-[color:var(--vx-border)]">
+                  <td className="pr-4 h-[56px] font-semibold text-ink-100">{`Source ${health.indexOf(h) + 1}`}</td>
+                  <td className="px-4 text-right tabular-nums">{h.successes}</td>
+                  <td className="px-4 text-right tabular-nums">{h.failures}</td>
+                  <td className="px-4 text-right tabular-nums text-ink-300">{Math.round(h.latencyEmaMs)} ms</td>
+                  <td className="pl-4 text-right text-[13px]">
+                    {h.cooldownUntil > Date.now() ? (
+                      <span className="text-[color:var(--vx-danger)] font-semibold">Cooling down</span>
+                    ) : (
+                      <span className="text-ink-300">Active</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="vx-sec-foot">
+          Offline, your library, history, queue, taste profile and settings stay available. Streaming and search need a
+          connection and show a retry instead of failing.
+        </p>
+      </section>
     </div>
   );
 }

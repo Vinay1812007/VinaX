@@ -4,7 +4,7 @@ import type { Song } from '@/types';
 
 const getSong = vi.fn();
 const getSongSuggestions = vi.fn();
-vi.mock('@/services/api', () => ({ getSong: (...a: unknown[]) => getSong(...a), getSongSuggestions: (...a: unknown[]) => getSongSuggestions(...a) }));
+vi.mock('@/services/api/saavn', () => ({ getSong: (...a: unknown[]) => getSong(...a), getSongSuggestions: (...a: unknown[]) => getSongSuggestions(...a) }));
 vi.mock('@/services/native', () => ({ isNativePlatform: () => false }));
 
 const song = (id: string, title = id): Song =>

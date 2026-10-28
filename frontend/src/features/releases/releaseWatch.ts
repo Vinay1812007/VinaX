@@ -14,7 +14,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Song } from '@/types';
 import { KEYS } from '@/constants/storage-keys';
-import { getArtistTopSongs } from '@/services/api';
+import { getArtistTopSongs } from '@/services/api/saavn';
 import { isNativePlatform } from '@/services/native';
 import { useLibraryStore } from '@/store/libraryStore';
 

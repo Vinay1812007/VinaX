@@ -5,7 +5,7 @@
  * callers) and drops what the catalogue no longer has.
  */
 import type { Song } from '@/types';
-import { getSong } from '@/services/api';
+import { getSong } from '@/services/api/saavn';
 import type { LiteSong } from '@/services/social/api';
 
 export async function resolveSongs(lite: LiteSong[], limit = 50, signal?: AbortSignal): Promise<Song[]> {

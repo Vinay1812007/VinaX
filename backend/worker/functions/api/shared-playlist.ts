@@ -51,8 +51,7 @@ export function publicPlaylist(p: PlaylistRow, extra: { owner?: string | null; m
     id: p.id,
     name: p.name,
     description: p.description,
-    // No music provider: a shared playlist's stored songs are never shown.
-    songs: [],
+    songs: Array.isArray(p.songs) ? p.songs : [],
     public: p.public,
     collab: !!p.collab_token,
     version: p.version,

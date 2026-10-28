@@ -9,7 +9,7 @@ compatibility_date = "2026-08-01"
 # domain; everything else is served by the Pages project attached to the
 # domain (which must stay attached — it is the fallthrough origin).
 routes = [
-  # API — all endpoints, including
+  # API — all endpoints, including /api/cat/* (self-hosted catalog),
   # /api/admin/*, /api/cron/*, /api/push/*
   { pattern = "www.vinaxmusic.online/api/*", zone_name = "vinaxmusic.online" },
 
@@ -32,17 +32,20 @@ routes = [
   # /api/* call failing for real listeners for the rest of the day. A routed
   # request is counted before any code runs, so only removing the route stops
   # that. The cost: crawlers and link previewers get the app shell, not the
-  # pre-rendered song text and share card. The handlers were removed with
-  # the music catalogue (no provider left to render them from).
+  # pre-rendered song text and share card. The handlers in functions/song,
+  # album, artist and playlist stay in the code; to bring the pages back, put
+  # the four patterns here again — and put a challenge rule in front of them
+  # first (docs/operations.md, "Scraper traffic on entity pages").
 
   # V2 1.0 — /sitemap* is NOT a Worker route any more. The sitemap index,
   # sitemap-static.xml and sitemap-hubs.xml are static files the frontend
   # build writes from these same handlers (frontend/scripts/
-  # prerender-seo.mjs). Retired maps 301 to
+  # prerender-entities.mjs), next to entity-pages.xml. Retired maps 301 to
   # the index in frontend/public/_redirects. A crawler re-reading the maps
   # costs nothing from the daily request quota.
 
-  # APK download
+  # Image proxy + APK download
+  { pattern = "www.vinaxmusic.online/img", zone_name = "vinaxmusic.online" },
   { pattern = "www.vinaxmusic.online/apk", zone_name = "vinaxmusic.online" },
 
   # Host-level redirects handled by functions/_middleware.ts
