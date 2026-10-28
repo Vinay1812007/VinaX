@@ -22,7 +22,6 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
       { type: 'improved', text: 'Music is back: search, Flow, charts, albums, artists, playlists and playback work again, served by VinaX\'s own music API.' },
       { type: 'improved', text: 'Your Library, history and queue are kept again, and sync with your account.' },
       { type: 'improved', text: 'Shared playlists, profiles, Listen Together rooms and Home banners show songs again.' },
-      { type: 'improved', text: '/api/cat forwards to the wrappers in CATALOG_UPSTREAMS. The built-in JioSaavn web API translation is now opt-in: it runs only when CATALOG_DIRECT_URL is set. Without it, a failed wrapper is a 502.' },
     ],
   },
   '1.1.0': {
