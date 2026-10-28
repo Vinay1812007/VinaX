@@ -70,6 +70,29 @@ async function seed(page: Page, baseURL: string, opts: { aiHomeFlag: boolean; ai
 
 const bodyText = (page: Page) => page.evaluate(() => document.body.innerText);
 
+test('Designed for you renders the AI shelves from the catalogue when the flag allows', async ({ page, baseURL }) => {
+  const seen = await seed(page, baseURL!, { aiHomeFlag: true, aiAnswers: true });
+  await page.goto('/');
+  await page.waitForSelector('.vx-hero');
+  for (let i = 0; i < 6; i += 1) {
+    await page.evaluate(() => document.querySelector('#main-content')?.scrollTo(0, 1e9));
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(400);
+  }
+  // The block label is rendered upper-case by CSS, so innerText reads "DESIGNED FOR YOU".
+  await expect.poll(() => bodyText(page), { timeout: 20_000, message: `curate=${JSON.stringify(seen.curateTasks)}` }).toMatch(/designed for you/i);
+  // Shelves sit in `content-visibility: auto` sections, and innerText leaves out
+  // a shelf that is off screen (10.0: Home ends with a taller "Free, and how it
+  // stays free" card, so scrolled to the bottom the first shelf is off screen).
+  // Read the block's DOM text for the shelf titles.
+  const aiText = () => page.evaluate(() => document.querySelector('section[aria-label="Designed for you"]')?.textContent ?? '');
+  await expect.poll(aiText).toMatch(/Late-night Telugu melodies/);
+  await expect.poll(aiText).toMatch(/Artist 1 on repeat/);
+  expect(seen.curateTasks).toContain('shelves');
+  expect(seen.queries.some((q) => q.includes('late night'))).toBe(true);
+  await page.screenshot({ path: 'test-results/v62-ai-home-1280.png', fullPage: true });
+});
+
 test('the owner flag hides the block and stops the AI request entirely', async ({ page, baseURL }) => {
   const seen = await seed(page, baseURL!, { aiHomeFlag: false, aiAnswers: true });
   await page.goto('/');

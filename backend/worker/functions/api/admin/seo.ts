@@ -5,7 +5,7 @@
  *   - robots.txt: reachable, which sitemap it names, which crawlers it blocks;
  *   - the sitemap index and every map it lists: URL counts and last-modified;
  *   - a page audit of a fixed sample (home, key routes, three mood × language
- *     hubs) or of
+ *     hubs, the first song / album / artist pages in entity-pages.xml) or of
  *     one path the owner asks about: status, title, description, canonical,
  *     H1, JSON-LD types, indexable text, social image, and what is wrong.
  *

@@ -102,3 +102,17 @@ test('returning to Home inside the half hour reuses the design and the shelves; 
   await expect.poll(() => seen.curate.filter((t) => t === 'shelves').length, { timeout: 20_000 }).toBe(designs + 1);
 });
 
+test('the wider catalogue mounts (and asks the catalogue) only after "Show more for you"', async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 412, height: 915 });
+  const seen = await seed(page, baseURL!);
+  await page.goto('/');
+  await page.waitForSelector('.vx-hero');
+  await scrollDown(page, 24);
+  await page.waitForTimeout(1000);
+  const text = () => page.evaluate(() => document.body.innerText);
+  expect(await text()).not.toMatch(/Mood playlists|Trending artists|More for you/);
+  expect(seen.searches.some((q) => /trending albums/.test(q))).toBe(false);
+  await page.getByRole('button', { name: /Show more for you/ }).click();
+  await scrollDown(page, 24);
+  await expect.poll(() => seen.searches.some((q) => /trending albums|underrated|new .* artists|artists 20/.test(q)), { timeout: 20_000 }).toBe(true);
+});

@@ -144,6 +144,25 @@ for (const size of SIZES) {
     await expect.poll(() => bodyText(page)).toMatch(/1 song right now/);
   });
 
+  test(`import review step (${tag})`, async ({ page, baseURL }) => {
+    await page.setViewportSize(size);
+    await seed(page, baseURL!, size.theme);
+    await page.goto('/library');
+    await page.getByRole('button', { name: 'Import from text' }).click();
+    await page.fill('#import-playlist-name', 'Reviewed');
+    await page.fill('#import-playlist-text', 'Kesariya — Arijit Singh\nSome Unknown Song — Nobody');
+    await page.getByRole('button', { name: 'Find songs' }).click();
+    await expect.poll(() => bodyText(page), { timeout: 20_000 }).toMatch(/1 matched · 0 closest matches · 1 not found/);
+    await expect(page.getByText('Matched', { exact: true })).toBeVisible();
+    await expect(page.getByText('Not found', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Original' }).last().click();
+    await expect(page.locator('pre', { hasText: 'Some Unknown Song — Nobody' })).toBeVisible();
+    await page.screenshot({ path: `test-results/v61-import-review-${tag}.png` });
+    await page.getByRole('button', { name: /^Save 1 song$/ }).click();
+    await expect.poll(() => bodyText(page)).toMatch(/Reviewed/);
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('vinax.library.v1') ?? '{}').state.collections.length as number)).toBe(3);
+  });
+
   test(`backup center preview, merge restore and undo (${tag})`, async ({ page, baseURL }) => {
     await page.setViewportSize(size);
     await seed(page, baseURL!, size.theme);

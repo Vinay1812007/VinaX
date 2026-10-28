@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { onRequestGet as sitemapIndex } from '../functions/sitemap.xml';
 import { onRequestGet as staticSitemap } from '../functions/sitemap-static.xml';
 
@@ -17,10 +18,10 @@ describe('sitemap index', () => {
     const xml = await res.text();
     expect(xml.startsWith('<?xml')).toBe(true);
     expect(xml).toContain('<sitemapindex');
-    expect(locsOf(xml)).toEqual([`${ORIGIN}/sitemap-static.xml`, `${ORIGIN}/sitemap-hubs.xml`]);
+    expect(locsOf(xml)).toEqual([`${ORIGIN}/sitemap-static.xml`, `${ORIGIN}/sitemap-hubs.xml`, `${ORIGIN}/entity-pages.xml`]);
     // The entity routes serve the app shell (home's text + canonical) since
     // they left the Worker: their live-search and corpus maps advertised copies of home.
-    for (const gone of ['entity-pages.xml', 'sitemap-albums.xml', 'sitemap-movies.xml', 'sitemap-artists.xml', 'sitemap-songs.xml', 'sitemaps/']) {
+    for (const gone of ['sitemap-albums.xml', 'sitemap-movies.xml', 'sitemap-artists.xml', 'sitemap-songs.xml', 'sitemaps/']) {
       expect(xml).not.toContain(`${ORIGIN}/${gone}`);
     }
   });
@@ -53,5 +54,25 @@ describe('static sitemap', () => {
     }
     // Never emit an oversized sitemap (50k-URL spec limit).
     expect(locs.length).toBeLessThanOrEqual(50000);
+  });
+});
+
+describe('dynamic child sitemaps (source contract)', () => {
+  for (const f of ['sitemap-songs', 'sitemap-albums', 'sitemap-artists', 'sitemap-movies']) {
+    it(`${f}: www origin, trailing-slash <loc> template, 30-min edge cache`, () => {
+      const src = readFileSync(`worker/functions/${f}.xml.ts`, 'utf8');
+      expect(src).toContain("const ORIGIN = 'https://www.vinaxmusic.online'");
+      expect(src).toContain('max-age=1800, s-maxage=1800');
+      // Detail URLs are built as `${ORIGIN}/<type>/<slug>-<safeId>` — NO trailing
+      // slash since 4.16.3: sitemap URLs must byte-match the entity canonicals,
+      // or Google files them as "Alternative page with proper canonical tag".
+      expect(src).toMatch(/-\$\{(?:safe)?[Ii]d\}`\)/);
+      expect(src).not.toMatch(/-\$\{(?:safe)?[Ii]d\}\//);
+      // And guard: the sanitisation step must be present.
+      expect(src).toContain("replace(/[^\\w-]/g, '')");
+    });
+  }
+  it('song map guards the 50k-URL sitemap limit', () => {
+    expect(readFileSync('worker/functions/sitemap-songs.xml.ts', 'utf8')).toContain('slice(0, 50000)');
   });
 });

@@ -1,6 +1,5 @@
 import './apexRedirect';
 import './services/storage/earlyMigrations';
-import './services/storage/purgeMusic';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { Capacitor } from '@capacitor/core';

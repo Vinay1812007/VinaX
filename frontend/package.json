@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "vite",
     "prebuild:clean": "rm -rf dist node_modules/.vite node_modules/.vite-temp node_modules/.rolldown node_modules/.cache .vite",
-    "build": "npm run prebuild:clean && tsc --noEmit && vite build && node scripts/prerender.mjs && node scripts/prerender-seo.mjs && node scripts/changelog-json.mjs && node scripts/admin-stamp.mjs",
+    "build": "npm run prebuild:clean && tsc --noEmit && vite build && node scripts/prerender.mjs && node scripts/prerender-entities.mjs && node scripts/changelog-json.mjs && node scripts/admin-stamp.mjs",
     "preview": "vite preview",
     "deploy:pages": "npm run build && wrangler pages deploy dist --project-name vinax",
     "lint": "eslint src scripts --max-warnings 0",

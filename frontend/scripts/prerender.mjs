@@ -108,8 +108,9 @@ try {
 }
 
 // 13.6.0 — keep the plain shell (stylesheet LINKED, #seo-slot unfilled) for
-// scripts/prerender-seo.mjs. The hub pages link the shared, cached
-// stylesheet instead of inlining it. Outside dist/, so it is never deployed.
+// scripts/prerender-entities.mjs. Song/album/artist pages link the shared,
+// cached stylesheet instead of inlining it: hundreds of pages at ~35 KB each,
+// not ~265 KB. Outside dist/, so it is never deployed.
 const SHELL_CACHE = 'node_modules/.cache/vinax/shell.html';
 mkdirSync(dirname(SHELL_CACHE), { recursive: true });
 writeFileSync(SHELL_CACHE, base);

@@ -5,9 +5,9 @@
  *   - sitemap-static.xml — the prerendered pages (Charts, Top songs, language
  *     hubs, About…), generated on request.
  *   - sitemap-hubs.xml — the mood × language hubs this Worker renders.
- *
- * Song, album and artist pages left with the music catalogue (no provider
- * remains), and with them entity-pages.xml.
+ *   - entity-pages.xml — a STATIC file the frontend build writes: the song,
+ *     album and artist pages it prerendered (frontend/scripts/
+ *     prerender-entities.mjs). Served by the static host, not this Worker.
  *
  * Gone from the index: the live-search maps (sitemap-albums/-movies/-artists)
  * and the paginated corpus maps (/sitemaps/<type>-<n>.xml, ~20k URLs). Since
@@ -18,7 +18,7 @@
  * who has them; they are just no longer advertised.
  */
 const ORIGIN = 'https://www.vinaxmusic.online';
-export const INDEX_MAPS = ['sitemap-static.xml', 'sitemap-hubs.xml'];
+export const INDEX_MAPS = ['sitemap-static.xml', 'sitemap-hubs.xml', 'entity-pages.xml'];
 
 export const onRequestGet = async (): Promise<Response> => {
   const today = new Date().toISOString().slice(0, 10);

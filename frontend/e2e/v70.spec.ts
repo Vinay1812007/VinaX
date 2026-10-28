@@ -82,3 +82,42 @@ test('a 6.x device with the explore switch on upgrades to Discover; the three-wa
   await page.screenshot({ path: 'test-results/v70-discovery-mode-390.png' });
 });
 
+test('the built queue obeys the rules, and a hand-queued song goes ahead of the automatic tail', async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await seed(page, baseURL!);
+  await page.goto('/search/telugu?debug=recs');
+  const rows = page.locator('[data-song-id]');
+  await expect(rows.first()).toBeVisible();
+  await rows.first().click();
+  await expect.poll(() => queue(page).then((q) => q.length), { timeout: 15_000 }).toBeGreaterThan(3);
+  const built = await queue(page);
+  // Rules: the seed's language only, nothing muted, one entry per song, no lead artist back to back.
+  expect(built.every((s) => s.language === 'telugu')).toBe(true);
+  expect(new Set(built.map((s) => s.id)).size).toBe(built.length);
+  expect(built.every((s) => s.artists.length > 0)).toBe(true); // the fixture really carries artists, so the next line means something
+  for (let i = 1; i < built.length; i += 1) expect(built[i].artists[0].name).not.toBe(built[i - 1].artists[0].name);
+
+  // Queue a song by hand that is not in the queue yet.
+  const queued = new Set(built.map((s) => s.id));
+  const count = await rows.count();
+  let target: string | null = null;
+  for (let i = 0; i < count; i += 1) {
+    const id = await rows.nth(i).getAttribute('data-song-id');
+    if (id && !queued.has(id) && id !== 'muted-one') { target = id; break; }
+  }
+  expect(target).not.toBeNull();
+  const row = page.locator(`[data-song-id="${target}"]`).first();
+  await row.hover();
+  await row.getByRole('button', { name: /More options/ }).click();
+  await page.getByRole('menuitem', { name: 'Add to queue' }).or(page.getByRole('button', { name: 'Add to queue' })).first().click();
+  await expect.poll(() => queue(page).then((q) => q.map((s) => s.id).indexOf(target!))).toBe(1);
+  const after = await queue(page);
+  expect(after.slice(2).map((s) => s.id)).toEqual(built.slice(1).map((s) => s.id)); // the automatic tail kept its order, behind it
+
+  // Developer breakdown: selected rows, the pipeline trace and the rejected muted song.
+  await page.getByRole('button', { name: /recs debug/ }).click();
+  await expect(page.getByText(/stages: \d+ gathered/)).toBeVisible();
+  await page.getByText(/^rejected ·/).click();
+  await expect(page.getByText('muted-language').first()).toBeVisible();
+  await page.screenshot({ path: 'test-results/v70-queue-debug-1280.png' });
+});

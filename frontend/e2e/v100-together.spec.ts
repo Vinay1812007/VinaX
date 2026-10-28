@@ -157,6 +157,71 @@ async function startListeningIfAsked(p: Page): Promise<void> {
   if (await tap.isVisible().catch(() => false)) await tap.click();
 }
 
+test('a guest follows the host across pages, in sync, and its request is playable', async ({ browser, baseURL }) => {
+  const base = baseURL!;
+  const server = roomServer();
+  const host = await open(browser, base, server, 'Asha', [appSong(base, 'a', 'Song A'), appSong(base, 'b', 'Song B')]);
+  const guest = await open(browser, base, server, 'Ravi', []);
+
+  // Host: start a session and play.
+  await host.goto('/together');
+  await host.getByRole('button', { name: 'Start a session' }).click();
+  await expect(host.locator('.vx-lt-code')).toHaveText('ABC123');
+  await host.getByRole('button', { name: /^Play$/ }).first().click();
+  await expect.poll(async () => (await audioState(host))?.paused, { timeout: 10_000 }).toBe(false);
+
+  // The host leaves the Listen Together page; the session must keep going.
+  await host.getByRole('link', { name: /^Search$/ }).first().click();
+  await expect(host.locator('.vx-lt-pill')).toContainText('Hosting');
+
+  // Guest: the invite link joins by itself.
+  await guest.goto('/together?code=ABC123');
+  await expect(guest.locator('.vx-lt-status')).toBeVisible({ timeout: 10_000 });
+  await startListeningIfAsked(guest);
+  await expect.poll(async () => (await audioState(guest))?.src ?? '', { timeout: 15_000 }).toContain('/t-a.wav');
+
+  // Knock the guest 20 s out of step (a stall, a stray tap on the seek bar):
+  // the follower must pull it back within a second of the host.
+  await expect.poll(async () => guest.evaluate(() => (window as unknown as { __audio?: HTMLMediaElement }).__audio?.seekable.length ?? 0)).toBeGreaterThan(0);
+  await guest.evaluate(() => {
+    const a = (window as unknown as { __audio?: HTMLMediaElement }).__audio;
+    if (a) a.currentTime = Math.max(0, a.currentTime + 20);
+  });
+  await expect
+    .poll(
+      async () => {
+        const [h, g] = await Promise.all([audioState(host), audioState(guest)]);
+        return h && g ? Math.abs(h.t - g.t) : 99;
+      },
+      { timeout: 15_000, intervals: [1000] },
+    )
+    .toBeLessThan(1.0);
+
+  // The host skips from another page; the guest follows.
+  await host.getByRole('button', { name: /^Next/ }).first().click();
+  await expect.poll(async () => (await audioState(guest))?.src ?? '', { timeout: 15_000 }).toContain('/t-b.wav');
+
+  // The guest also browses away and keeps following, with the pill showing it.
+  await guest.getByRole('link', { name: /^Search$/ }).first().click();
+  await expect(guest.locator('.vx-lt-pill')).toContainText(/Listening with Asha/);
+
+  // A guest request reaches the host as a full, playable song.
+  await guest.goto('/together');
+  await guest.getByRole('searchbox', { name: 'Add a song for everyone' }).fill('pick');
+  await guest.getByRole('button', { name: 'Add Guest Pick' }).click();
+  await expect
+    .poll(async () => host.evaluate(() => JSON.parse(localStorage.getItem('vinax.player.v1') ?? '{}')?.state?.queue?.map((s: { id: string; audio?: unknown[] }) => `${s.id}:${s.audio?.length ?? 0}`) ?? []), { timeout: 15_000 })
+    .toContain('g1:1');
+
+  // Ending the session tells the guest.
+  await host.goto('/together');
+  await host.getByRole('button', { name: 'End for everyone' }).click();
+  await expect(guest.getByRole('button', { name: 'Start a session' })).toBeVisible({ timeout: 10_000 });
+
+  await host.context().close();
+  await guest.context().close();
+});
+
 test('a host who reloads the tab is still hosting', async ({ browser, baseURL }) => {
   const base = baseURL!;
   const server = roomServer();

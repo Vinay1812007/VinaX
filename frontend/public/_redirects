@@ -38,7 +38,6 @@ https://status.vinaxmusic.online/ https://status.vinaxmusic.online/status/ 301
 /sitemap-songs.xml    /sitemap.xml  301
 /sitemap-albums.xml   /sitemap.xml  301
 /sitemap-artists.xml  /sitemap.xml  301
-/entity-pages.xml     /sitemap.xml  301
 /sitemap-movies.xml   /sitemap.xml  301
 /sitemaps/*           /sitemap.xml  301
 

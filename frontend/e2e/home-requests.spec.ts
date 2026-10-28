@@ -101,6 +101,40 @@ const report = (label: string, page: Page): void => {
 };
 
 test.describe('Home request load', () => {
+  test('first paint asks the catalogue for the hero and the first two blocks only', async ({ page, baseURL }) => {
+    await seed(page, baseURL!, null);
+    await openHome(page);
+    report('initial', page);
+    const initial = searchCount(page);
+    expect(initial).toBeGreaterThan(0);
+    // Measured 2026-09-16 on this seed (two pinned languages, 30 plays,
+    // five favourites): the untouched HEAD fired 45 logical searches (226
+    // HTTP calls through the fallback ladder) before any scroll; with
+    // visibility-mounted blocks it is 18 (124). The hero (mixes + daily +
+    // trending) and the first two blocks are all that may run unscrolled.
+    // 2026-09-21 (7.2): 23 on an idle machine. This seed writes history and
+    // favourites but no taste profile, so the cold-start path adds the liked
+    // songs' artists and languages as extra searches — on a device with a
+    // profile they do not run, and in production the gather's soft deadline
+    // drops whatever has not answered (here every mock answers instantly).
+    // The ceiling is 28 to leave room for that timing, not for new sources:
+    // a real increase in what Home asks for must be measured and justified here.
+    expect(initial).toBeLessThanOrEqual(28);
+    // Scrolling must still load the rest. Step down the page the way a
+    // listener does: since 8.4.0 Home ends with the About VinaX text, and an
+    // instant jump to the very bottom lands past the visibility-mounted
+    // blocks without ever bringing them near the viewport.
+    for (let i = 0; i < 40; i += 1) {
+      await page.evaluate(() => {
+        document.querySelector('#main-content')?.scrollBy(0, 500);
+        window.scrollBy(0, 500);
+      });
+      await page.waitForTimeout(120);
+    }
+    await settle(page);
+    report('after-scroll', page);
+    expect(searchCount(page)).toBeGreaterThan(initial);
+  });
 
   test('owner-disabled shelves never fetch', async ({ page, baseURL }) => {
     await seed(page, baseURL!, ['moods', 'artists', 'albums', 'discovery', 'seasonal', 'daypicks']);

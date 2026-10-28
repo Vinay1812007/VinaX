@@ -35,13 +35,13 @@ The website shows one labelled advertisement at the end of song, artist, album, 
  │  recommendation engine, audio engine          │
  │  service worker: shell + offline audio        │
  └───────────────────────┬───────────────────────┘
-                         │ same origin (/api, /apk)      
+                         │ same origin (/api, /img, /apk)
  ┌───────────────────────▼───────────────────────┐
  │ backend/worker  edge Worker "vinax-api"       │
- │  /api/*: AI, sign-in and sync, usage events,  │
- │          rooms, push,                         │
+ │  /api/*: catalogue proxy, AI, sign-in and     │
+ │          sync, usage events, rooms, push,     │
  │          status, the owner console's API      │
- │  language-and-mood pages, /sitemap*,          │
+ │  language-and-mood pages, /sitemap*, /img,    │
  │  /apk; anything unmatched → the static site   │
  │  Cron Trigger every 30 min: status tick,      │
  │  housekeeping                                 │
@@ -121,7 +121,7 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173`. The dev server proxies `/api` and `/apk` to the Worker on `127.0.0.1:8787` (`frontend/vite.config.ts`).
+Open `http://localhost:5173`. The dev server proxies `/api`, `/img` and `/apk` to the Worker on `127.0.0.1:8787` (`frontend/vite.config.ts`).
 
 Secrets are optional for a first run. Without them the catalogue works, AI routes answer "not configured" and the app uses its on-device paths, and the owner console cannot sign in. Without the two database secrets the data features answer their "not configured" shapes (no sync, no rooms, no feedback, no push registration) and every console page that reads data shows its setup card. Local secrets go in `backend/worker/.dev.vars`, one `NAME=value` per line; the file is git-ignored. The names are documented in `backend/.env.example`. Never put a secret in a `VITE_*` variable.
 
