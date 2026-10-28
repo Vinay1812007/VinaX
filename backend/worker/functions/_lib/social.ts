@@ -51,20 +51,12 @@ export function newToken(): string {
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-/** A song as the social tables keep it: display fields only, ≤ 4 KB. */
-export function cleanSong(raw: unknown): Record<string, unknown> | null {
-  const s = asObject(raw);
-  if (!s) return null;
-  const out: Record<string, unknown> = {};
-  for (const k of ['id', 'title', 'subtitle', 'image', 'language', 'year']) {
-    const v = s[k];
-    if (typeof v === 'string') out[k] = v.slice(0, k === 'image' ? 512 : 200);
-    else if (typeof v === 'number' && Number.isFinite(v)) out[k] = v;
-  }
-  if (typeof s.duration === 'number' && Number.isFinite(s.duration)) out.duration = s.duration;
-  for (const k of ['artists', 'images']) if (Array.isArray(s[k])) out[k] = (s[k] as unknown[]).slice(0, 6);
-  if (!out.id || typeof out.id !== 'string') return null;
-  return JSON.stringify(out).length <= 4096 ? out : { id: out.id, title: out.title ?? null, subtitle: out.subtitle ?? null, image: out.image ?? null };
+/**
+ * A song as the social tables keep it — none. VinaX has no music provider, so
+ * shared playlists, profiles and likes no longer store or show songs.
+ */
+export function cleanSong(_raw: unknown): Record<string, unknown> | null {
+  return null;
 }
 
 export interface ProfileSummary {
@@ -111,8 +103,6 @@ export interface ProfileRow {
 
 /** What anyone may see of a profile (the account id never leaves). */
 export function publicProfile(p: ProfileRow, extra: { following?: boolean; followers?: number; name?: string | null; picture?: string | null; own?: boolean } = {}) {
-  // Now playing is shared only while fresh (the device writes it with sync).
-  const fresh = p.share_now && p.now_playing && Date.now() - Date.parse(p.updated_at) < 20 * 60_000;
   return {
     handle: p.handle,
     name: extra.name ?? null,
@@ -121,8 +111,9 @@ export function publicProfile(p: ProfileRow, extra: { following?: boolean; follo
     public: p.public,
     topArtists: p.summary?.topArtists ?? [],
     topLanguages: p.summary?.topLanguages ?? [],
-    recentLikes: p.summary?.recentLikes ?? [],
-    nowPlaying: fresh ? p.now_playing : null,
+    // No music provider: stored likes and now-playing songs are never shown.
+    recentLikes: [],
+    nowPlaying: null,
     updatedAt: p.updated_at,
     ...(extra.following !== undefined ? { following: extra.following } : {}),
     ...(extra.followers !== undefined ? { followers: extra.followers } : {}),

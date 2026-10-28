@@ -236,8 +236,8 @@ export function activeBanners(value: unknown, now = new Date()): Banner[] {
     const banner: Banner = { title };
     const id = str(b.id, 40); if (id) banner.id = id;
     const subtitle = str(b.subtitle, 160); if (subtitle) banner.subtitle = subtitle;
-    const linkType = str(b.linkType, 16); if (['song', 'album', 'playlist', 'artist'].includes(linkType)) banner.linkType = linkType;
-    const linkId = str(b.linkId, 80); if (linkId && banner.linkType) banner.linkId = linkId;
+    // No music provider: a banner that points at a song, album, playlist or artist is not shown.
+    if (['song', 'album', 'playlist', 'artist'].includes(str(b.linkType, 16))) continue;
     const img = str(b.img, 500); if (/^https:\/\//.test(img)) banner.img = img;
     if (start) banner.start = start;
     if (end) banner.end = end;

@@ -26,7 +26,7 @@ const TABS = [
   'feedback', 'feedback?status=all',
   'experiments',
   'ai/usage', 'ai/lab', 'ai/probe',
-  'catalog/lookup?q=kesariya', 'catalog/blocked',
+  'catalog/blocked',
   'publish', 'publish?key=site-mode',
   'notify/send', 'notify/history', 'notify/audience', 'notify/setup',
   'database/tables', 'database/jobs', 'database/audit', 'database/maintenance',
@@ -144,10 +144,6 @@ function fixtures(full: boolean): Record<string, Json> {
       })),
       features: { image: false, speech: false, transcribe: false, embed: false, music: false, codeRun: false },
     },
-    '/api/admin/musicapi': { checkedAt: iso(0), mirrors: full ? [{ id: 'vinax-cat', label: 'VinaX catalogue', base: 'https://example.test', ok: true, status: 200, ms: 320, songs: 1, note: null }] : [] },
-    '/api/admin/catalog-search': full
-      ? { items: [{ id: 'k1', name: 'Kesariya', subtitle: 'Arijit Singh', image: '' }], source: 'www.vinaxmusic.online', error: null }
-      : { items: [], source: null, error: null },
     '/api/admin/fcmcheck': full
       ? { configured: true, project: 'vinax-music', token: true, fcm: 'ok', detail: 'INVALID_ARGUMENT' }
       : { configured: false, project: null, token: false, fcm: 'skipped', detail: null },
@@ -261,9 +257,6 @@ test.describe('owner console · pages', () => {
     expect(await visit(page, 'health/releases')).toContain('VinaX 14.0.0');
     expect(await visit(page, 'health/env')).toContain('SUPABASE_URL');
     expect(await visit(page, 'ai/probe')).toContain('No probes yet');
-    await page.getByRole('button', { name: 'Check sources' }).click();
-    await expect(page.locator('#pageBody')).toContainText('VinaX catalogue');
-    expect(await visit(page, 'catalog/lookup?q=kesariya')).toContain('Kesariya');
     const notify = await visit(page, 'notify/setup');
     expect(notify).toContain('FCM_SERVICE_ACCOUNT');
     await expect(page.locator('#pageBody')).toContainText('Android push works');

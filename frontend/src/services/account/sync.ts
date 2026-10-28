@@ -2,9 +2,11 @@
  * 13.0 — the signed-in listener's data follows their Google account.
  *
  * What syncs is the backup file's own categories (features/settings/backup):
- * settings, library and playlists, smart collections, history, taste profile,
- * bookmarks and the Home layout. Never AI chats, searches or this device's
- * identity. The server keeps ONE copy per account (GET/PUT /api/account/data)
+ * settings, smart collections, taste profile and the Home layout. Never AI
+ * chats, searches or this device's identity — and no longer the library,
+ * history or bookmarks: VinaX has no music provider, every saved song was
+ * purged from devices (services/storage/purgeMusic.ts), and pulling the
+ * account's old copy would bring them back. The next push replaces it. The server keeps ONE copy per account (GET/PUT /api/account/data)
  * with a version number:
  *
  *   pull  — on sign-in and on app start: the account's copy is MERGED into
@@ -28,7 +30,7 @@ export const SYNC_ENDPOINT = `${ORIGIN}/api/account/data`;
 /** V2 — fired when the first pull proves this account already existed. */
 export const RETURNING_EVENT = 'vinax:returning-account';
 /** The categories that follow the account. */
-export const SYNC_CATEGORIES: readonly BackupCategoryId[] = ['settings', 'library', 'smartCollections', 'history', 'taste', 'bookmarks', 'homeLayout'];
+export const SYNC_CATEGORIES: readonly BackupCategoryId[] = ['settings', 'smartCollections', 'taste', 'homeLayout'];
 const STATE_KEY = 'vinax.account.sync.v1';
 const PUSH_DELAY_MS = 4_000;
 // 13.5.0 — 10 minutes, was 3. Each tick is a pull (a Worker request) even

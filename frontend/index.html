@@ -32,6 +32,33 @@
     <meta name="apple-mobile-web-app-title" content="VinaX" />
     <title>VinaX</title>
     <script>
+      // VinaX has no music provider (1.1): forget every song this device
+      // saved, once, BEFORE any app code runs. It must be a classic inline
+      // script: the bundler runs a module's own code after the chunks it
+      // imports, and those chunks create the stores that load saved songs.
+      // src/services/storage/purgeMusic.ts then deletes downloaded audio,
+      // listening events and caches. Tested in purgeMusic.test.ts.
+      (function () {
+        try {
+          var ls = window.localStorage;
+          if (ls.getItem('vinax.music-purged.v1') !== null) return;
+          var drop = ['vinax.player.v1', 'vinax.queue.ownership.v1', 'vinax.resume.v1', 'vinax.library.v1', 'vinax.history.v1',
+            'vinax.downloads.v1', 'vinax.smart-downloads.v1', 'vinax.weekly.v1', 'vinax.karaoke.v1', 'vinax.releases.v1',
+            'vinax.shared-playlists.v1', 'vinax.bookmarks.v1'];
+          var marks = ['"kind":"song"', 'saavncdn', 'jiosaavn', '/api/cat/'];
+          for (var i = 0; i < ls.length; i++) {
+            var k = ls.key(i);
+            if (!k || (k.indexOf('vinax.') !== 0 && k.indexOf('vinax_') !== 0)) continue;
+            var v = ls.getItem(k) || '';
+            for (var j = 0; j < marks.length; j++) if (v.indexOf(marks[j]) !== -1) { drop.push(k); break; }
+          }
+          for (var d = 0; d < drop.length; d++) { try { ls.removeItem(drop[d]); } catch (e) { /* keep going */ } }
+          ls.setItem('vinax.music-purged.v1', new Date().toISOString());
+          ls.setItem('vinax.music-purge-files.v1', '1');
+        } catch (e) { /* storage blocked: nothing saved to forget */ }
+      })();
+    </script>
+    <script>
       // Pre-paint theme: read the persisted preference and class <html> before
       // first paint, so light/system users never see a dark flash (and AMOLED
       // users never see a grey one). Mirrors src/utils/theme.ts — keep in sync.

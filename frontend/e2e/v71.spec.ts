@@ -49,32 +49,6 @@ async function seed(page: Page, baseURL: string): Promise<{ queries: string[] }>
 
 const queue = (page: Page) => page.evaluate(() => (JSON.parse(localStorage.getItem('vinax.player.v1') ?? '{}').state?.queue ?? []) as Array<{ id: string; language: string }>);
 
-test('Pin a mood rebuilds Up Next with songs for that mood, five at a time, in the song’s language', async ({ page, baseURL }) => {
-  await page.setViewportSize({ width: 1280, height: 900 });
-  const seen = await seed(page, baseURL!);
-  await page.goto('/now-playing');
-  const moods = page.getByRole('group', { name: 'Pin a mood' });
-  await expect(moods).toBeVisible();
-  await moods.getByRole('button', { name: 'Devotional' }).click();
-  await expect(moods.getByRole('button', { name: 'Devotional' })).toHaveAttribute('aria-pressed', 'true');
-  // The list is rebuilt NOW — not eight songs from now.
-  await expect.poll(() => queue(page).then((q) => q.length), { timeout: 20_000 }).toBeGreaterThan(1);
-  const built = await queue(page);
-  expect(built[0].id).toBe('now'); // the playing song is untouched
-  expect(built.length - 1).toBeLessThanOrEqual(5); // the next five
-  expect(built.slice(1).every((s) => s.language === 'telugu')).toBe(true); // never the Hindi hits, though they are pinned and popular
-  expect(built.slice(1).filter((s) => s.id.startsWith('d')).length).toBeGreaterThanOrEqual(3); // songs fetched FOR the mood lead the rebuild
-  expect(seen.queries.some((q) => q.includes('telugu devotional'))).toBe(true);
-  // Rows read Song – Movie/Album – Artist.
-  await expect(page.getByText(/Bhakti Album \d – Devotee \d/).first()).toBeVisible();
-  await page.screenshot({ path: 'test-results/v71-mood-pin-1280.png' });
-
-  // Unpinning goes back to the usual mix — again at once.
-  await moods.getByRole('button', { name: 'Devotional' }).click();
-  await expect(moods.getByRole('button', { name: 'Devotional' })).toHaveAttribute('aria-pressed', 'false');
-  await expect.poll(() => queue(page).then((q) => q.slice(1).filter((s) => s.id.startsWith('u')).length), { timeout: 20_000 }).toBeGreaterThanOrEqual(3);
-});
-
 test('Home greets by first name, not by a device name', async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 412, height: 915 });
   await seed(page, baseURL!);
