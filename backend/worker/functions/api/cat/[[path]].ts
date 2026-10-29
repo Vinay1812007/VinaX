@@ -78,10 +78,13 @@ async function viaWrapper(base: string, seg: string[], search: string): Promise<
     if (!r.ok || !(r.headers.get('content-type') ?? '').includes('json')) throw new Error(`wrapper ${r.status}`);
     const text = await r.text();
     if (!text.trim().startsWith('{') && !text.trim().startsWith('[')) throw new Error('wrapper body');
+    // 1.3 — radio answers are per-station and the wrapper marks them no-store;
+    // caching them would replay the same "next songs" to every listener.
+    const noStore = /no-store|private/i.test(r.headers.get('cache-control') ?? '');
     return new Response(text, {
       headers: {
         'content-type': 'application/json; charset=utf-8',
-        'cache-control': 'public, max-age=60, s-maxage=600',
+        'cache-control': noStore ? 'no-store' : 'public, max-age=60, s-maxage=600',
         'access-control-allow-origin': '*',
         'x-vinax-source': 'upstream',
       },

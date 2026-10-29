@@ -302,9 +302,11 @@ export function getArtistTopSongs(id: string, page = 0): Promise<Song[]> {
   });
 }
 
+/** 1.3 — asks for synced lines too (the wrapper matches them server-side);
+ *  bases that ignore the flag still answer the plain text. */
 export function getLyrics(id: string): Promise<Lyrics> {
   return orchestratedRequest({
-    paths: [`/songs/${enc(id)}/lyrics`, `/lyrics?id=${enc(id)}`],
+    paths: [`/songs/${enc(id)}/lyrics?synced=true`, `/songs/${enc(id)}/lyrics`, `/lyrics?id=${enc(id)}`],
     // v5.7.2 — lyrics race an 8s UI deadline in useSyncedLyrics. A cold or
     // hung primary must not eat the whole budget before the ladder reaches a
     // base that actually serves the lyrics route: time out fast per attempt.

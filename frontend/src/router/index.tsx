@@ -52,6 +52,9 @@ const HomePage = lazy(() => import('@/pages/HomePage'));
 const DiscoverPage = lazy(() => import('@/pages/DiscoverPage'));
 const ChartsPage = lazy(() => import('@/pages/ChartsPage'));
 const ChartLandingPage = lazy(() => import('@/pages/ChartLandingPage'));
+const BrowseCategoryPage = lazy(() => import('@/pages/BrowseCategoryPage'));
+const PodcastsPage = lazy(() => import('@/pages/PodcastsPage'));
+const PodcastPage = lazy(() => import('@/pages/PodcastPage'));
 const DownloadPage = lazy(() => import('@/pages/DownloadPage'));
 const DriveModePage = lazy(() => import('@/pages/DriveModePage'));
 const MadeForYouPage = lazy(() => import('@/pages/MadeForYouPage'));
@@ -169,6 +172,9 @@ export const router = createBrowserRouter([
       { path: 'explore', element: <ExplorePage /> },
       { path: 'movies', element: <MoviesPage /> },
       { path: 'moods', element: <MoodsPage /> },
+      { path: 'browse/:id', element: <BrowseCategoryPage /> },
+      { path: 'podcasts', element: <PodcastsPage /> },
+      { path: 'podcast/:id', element: <PodcastPage /> },
       { path: 'regions', element: <RegionsPage /> },
       { path: 'taste-profile', element: <TasteProfilePage /> },
       { path: 'videos', element: <VideosPage /> },

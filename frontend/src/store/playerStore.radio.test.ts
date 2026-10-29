@@ -107,3 +107,90 @@ describe('startRadio — AI Radio', () => {
     expect(audioEngine.load).not.toHaveBeenCalled();
   });
 });
+
+describe('startRadio — 1.3 catalogue station feed', () => {
+  const feedOf = (...batches: Array<Song[] | Error>) => {
+    const fn = vi.fn(async (_limit: number, _signal: AbortSignal): Promise<Song[]> => {
+      const b = batches.shift() ?? [];
+      if (b instanceof Error) throw b;
+      return b;
+    });
+    return fn;
+  };
+
+  it('tops the radio up from the station, not the DJ; its songs count as automatic', async () => {
+    recommendMock.mockResolvedValue([song('dj1')]);
+    const feed = feedOf([song('st1'), song('st2')]);
+    usePlayerStore.getState().startRadio(song('seed'), { seeds: [song('a')], feed });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(feed).toHaveBeenCalledOnce();
+    expect(feed.mock.calls[0][0]).toBe(5);
+    expect(recommendMock).not.toHaveBeenCalled();
+    const s = usePlayerStore.getState();
+    expect(s.queue.map((x) => x.id)).toEqual(['seed', 'a', 'st1', 'st2']);
+    expect(s.isAutoQueued('st1')).toBe(true);
+  });
+
+  it('a station that answers nothing (or fails) is covered by the DJ; two misses in a row end it', async () => {
+    recommendMock.mockResolvedValue([song('dj1')]);
+    const feed = feedOf(new Error('down'), [], [song('late')]);
+    usePlayerStore.getState().startRadio(song('seed'), { feed });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(usePlayerStore.getState().queue.map((x) => x.id)).toEqual(['seed', 'dj1']);
+    // The next top-up (the listener reached the end) asks the station again: a second miss.
+    recommendMock.mockResolvedValue([song('dj2')]);
+    usePlayerStore.getState().next();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(feed).toHaveBeenCalledTimes(2);
+    expect(usePlayerStore.getState().queue.map((x) => x.id)).toContain('dj2');
+    // After two misses the DJ alone keeps the radio going.
+    recommendMock.mockResolvedValue([song('dj3')]);
+    usePlayerStore.getState().next();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(feed).toHaveBeenCalledTimes(2);
+  });
+
+  it('a slow station gives way to the DJ at the deadline', async () => {
+    recommendMock.mockResolvedValue([song('dj-slow')]);
+    const feed = vi.fn(() => new Promise<Song[]>(() => undefined));
+    usePlayerStore.getState().startRadio(song('seed'), { feed });
+    await vi.advanceTimersByTimeAsync(7_000);
+    expect(recommendMock).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(usePlayerStore.getState().queue.map((x) => x.id)).toEqual(['seed', 'dj-slow']);
+  });
+
+  it('station songs pass the same gate (hidden, already queued)', async () => {
+    const feed = feedOf([song('seed'), song('x', true), song('fine')]);
+    useSettingsStore.setState({ kidMode: true });
+    usePlayerStore.getState().startRadio(song('seed'), { feed });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(usePlayerStore.getState().queue.map((x) => x.id)).toEqual(['seed', 'fine']);
+  });
+
+  it('a new list, a new radio without a feed, or a tune ends the station', async () => {
+    const feed = feedOf([song('st1')], [song('st2')], [song('st3')]);
+    usePlayerStore.getState().startRadio(song('seed'), { feed });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(feed).toHaveBeenCalledTimes(1);
+
+    usePlayerStore.getState().tuneQueue('melody');
+    await vi.advanceTimersByTimeAsync(10);
+    expect(feed).toHaveBeenCalledTimes(1);
+    expect(recommendMock).toHaveBeenCalled();
+
+    usePlayerStore.getState().startRadio(song('seed2'), { feed });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(feed).toHaveBeenCalledTimes(2);
+    usePlayerStore.getState().playQueue([song('p1'), song('p2')], 0);
+    usePlayerStore.getState().next();
+    await vi.advanceTimersByTimeAsync(10);
+    usePlayerStore.getState().next();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(feed).toHaveBeenCalledTimes(2);
+
+    usePlayerStore.getState().startRadio(song('seed3'));
+    await vi.advanceTimersByTimeAsync(10);
+    expect(feed).toHaveBeenCalledTimes(2);
+  });
+});

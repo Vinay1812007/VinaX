@@ -23,6 +23,13 @@ import { BrowseTile, TileGlyph } from '@/features/discover/BrowseTile';
 import { languageTone, moodTone } from '@/features/discover/tones';
 import { NATIVE_NAMES } from '@/features/discover/scripts';
 import { MOODS as MOOD_SEEDS } from '@/constants/seeds';
+import { Shelf } from '@/components/Shelf';
+import { MediaCard } from '@/components/MediaCard';
+import { playPlaylist } from '@/features/player/playEntity';
+import { playlistPath } from '@/utils/slug';
+import { playlistSubtitle, useCatalogueCharts, useTrendingFeedSongs } from '@/features/home/useCatalogFeeds';
+import { CATALOGUE_TRENDING_PROVENANCE } from '@/features/home/useTrendingShelves';
+import { useShelfSafety } from '@/features/home/useShelfSafety';
 import '@/styles/pages/browse.css';
 import { CATALOGUE_LIST_NOTE, CATALOGUE_LIST_TITLE, movementMarker, provenanceLine, sourceChips, sourceLine, verifiedView } from '@/services/trends/present';
 
@@ -33,7 +40,11 @@ import { CATALOGUE_LIST_NOTE, CATALOGUE_LIST_TITLE, movementMarker, provenanceLi
  *     region, update time and evidence link (services/trends). "Rising" and
  *     "New entry" appear only when the snapshot carries them.
  *   - "Popular in the catalogue": catalogue search results for popular songs.
- *     Not a chart, and never called one.
+ *     Not a chart, and never called one. 1.3 — its "Popular" list reads the
+ *     catalogue's own trending feed first, and says so; the search is the
+ *     fallback.
+ *   - 1.3 — "Catalogue charts": the chart playlists the catalogue publishes,
+ *     shown only when the catalogue answers.
  * The trends client is loaded lazily, and neither section waits for the other.
  */
 
@@ -223,6 +234,19 @@ function VerifiedCharts({ region }: { region: string }) {
   );
 }
 
+/** 1.3 — the catalogue's chart playlists; nothing at all while loading, on a miss or when empty. */
+function CatalogueChartPlaylists() {
+  const charts = useCatalogueCharts();
+  if (charts.isError || !charts.data?.length) return null;
+  return (
+    <Shelf title="Catalogue charts" explanation="Chart playlists the catalogue publishes">
+      {charts.data.map((p) => (
+        <MediaCard key={p.id} to={playlistPath(p)} image={bestImage(p.images)} images={p.images} title={p.title} subtitle={playlistSubtitle(p)} onPlay={() => void playPlaylist(p.id, p.title)} />
+      ))}
+    </Shelf>
+  );
+}
+
 /** Canvas 4c — Charts & Discover. */
 export default function ChartsPage() {
   usePageTitle('Charts');
@@ -231,8 +255,14 @@ export default function ChartsPage() {
   const region = /^[A-Z]{2}$/.test(country) ? country : 'IN';
   const [period, setPeriod] = useSessionState<(typeof PERIODS)[number]['id']>('vinax.charts.period.v1', 'today');
   const q = PERIODS.find((p) => p.id === period)?.q ?? PERIODS[0].q;
-  const songsQ = useInfiniteSongs(q);
-  const songs = flattenSongPages(songsQ.data?.pages).slice(0, 20);
+  // 1.3 — "Popular" is the catalogue's trending feed when it answers; the search only when it does not.
+  const trendingQ = useTrendingFeedSongs(period === 'today');
+  const allowed = useShelfSafety();
+  const trending = period === 'today' && !trendingQ.isError ? (trendingQ.data ?? []).filter(allowed).slice(0, 20) : [];
+  const fromFeed = trending.length > 0;
+  const waitingForFeed = period === 'today' && trendingQ.isLoading;
+  const songsQ = useInfiniteSongs(q, !fromFeed && !waitingForFeed);
+  const songs = fromFeed ? trending : flattenSongPages(songsQ.data?.pages).slice(0, 20);
   const playQueue = usePlayerStore((s) => s.playQueue);
   const playsCount = useHistoryStore((s) => s.entries.length);
 
@@ -244,6 +274,8 @@ export default function ChartsPage() {
       <div className="vx-chart-layout">
         <div className="min-w-0">
           <VerifiedCharts region={region} />
+
+          <CatalogueChartPlaylists />
 
           {/* catalogue list — labelled as what it is */}
           <section aria-labelledby="catalogue-popular">
@@ -257,10 +289,10 @@ export default function ChartsPage() {
                 ))}
               </div>
             </div>
-            <p className="vx-chart-note">{CATALOGUE_LIST_NOTE}</p>
-            {songsQ.isLoading ? (
+            <p className="vx-chart-note">{fromFeed ? CATALOGUE_TRENDING_PROVENANCE.note : CATALOGUE_LIST_NOTE}</p>
+            {waitingForFeed || (!fromFeed && songsQ.isLoading) ? (
               <ListSkeleton />
-            ) : songsQ.isError ? (
+            ) : !fromFeed && songsQ.isError ? (
               <ErrorState retry={() => void songsQ.refetch()} />
             ) : (
               <ul className="vx-track-list">

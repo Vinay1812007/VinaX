@@ -16,7 +16,11 @@ import { ChevronRightIcon, ShuffleIcon, WaveformIcon } from '@/components/Icons'
 import { EntityAction, EntityHeader, EntityMeta, PlayFab, songsLabel } from '@/components/EntityHeader';
 import { HubCover } from '@/features/discover/HubCover';
 import { shuffledSongs } from '@/features/search/workspace';
+import { useMostSearchedFeedSongs, useTrendingFeedSongs } from '@/features/home/useCatalogFeeds';
+import { useShelfSafety } from '@/features/home/useShelfSafety';
 import '@/styles/pages/browse.css';
+import { useSettingsStore } from '@/store/settingsStore';
+import { getTopSearches } from '@/services/api/catalog';
 
 export type ChartVariant = 'top' | 'trending' | 'most-searched';
 
@@ -30,6 +34,8 @@ interface VariantConfig {
   seed: string;
   listName: string;
   showSearches?: boolean;
+  /** 1.3 — the catalogue feed tried before the search seed ("top" has none). */
+  feed?: 'trending' | 'most-searched';
 }
 
 const CONFIG: Record<ChartVariant, VariantConfig> = {
@@ -48,6 +54,7 @@ const CONFIG: Record<ChartVariant, VariantConfig> = {
     desc: `Popular Telugu, Hindi, Tamil, Punjabi and more on VinaX, from the catalogue. Free streaming, refreshed continuously.`,
     seed: `trending songs india this week ${YEAR}`,
     listName: 'Trending Songs on VinaX',
+    feed: 'trending',
   },
   'most-searched': {
     path: '/most-searched',
@@ -57,13 +64,23 @@ const CONFIG: Record<ChartVariant, VariantConfig> = {
     seed: `most searched popular songs india ${YEAR}`,
     listName: 'Most Searched Songs on VinaX',
     showSearches: true,
+    feed: 'most-searched',
   },
 };
 
 function SearchChips() {
+  const langs = useSettingsStore((s) => s.pinnedLanguages);
   const q = useQuery({
-    queryKey: ['most-searched-queries'],
+    queryKey: ['most-searched-queries', langs.join(',')],
     queryFn: async (): Promise<string[]> => {
+      // 1.3 — the catalogue's top searches first; the Worker's list is the fallback.
+      try {
+        const top = await getTopSearches(langs);
+        const names = [...new Set(top.map((t) => t.name.trim()).filter(Boolean))];
+        if (names.length) return names;
+      } catch {
+        /* fall back */
+      }
       const r = await fetch('/api/trending-searches');
       if (!r.ok) return [];
       const j = (await r.json()) as { queries?: unknown };
@@ -89,8 +106,16 @@ function SearchChips() {
 
 export default function ChartLandingPage({ variant }: { variant: ChartVariant }) {
   const cfg = CONFIG[variant];
-  const songsQ = useInfiniteSongs(cfg.seed);
-  const songs = flattenSongPages(songsQ.data?.pages);
+  // 1.3 — the catalogue's own list first (trending feed, "Most Searched" chart); the search seed when it misses.
+  const trendingQ = useTrendingFeedSongs(cfg.feed === 'trending');
+  const mostSearchedQ = useMostSearchedFeedSongs(cfg.feed === 'most-searched');
+  const feedQ = cfg.feed === 'trending' ? trendingQ : cfg.feed === 'most-searched' ? mostSearchedQ : null;
+  const allowed = useShelfSafety();
+  const feedSongs = feedQ && !feedQ.isError ? (feedQ.data ?? []).filter(allowed) : [];
+  const fromFeed = feedSongs.length > 0;
+  const waitingForFeed = !!feedQ?.isLoading;
+  const songsQ = useInfiniteSongs(cfg.seed, !fromFeed && !waitingForFeed);
+  const songs = fromFeed ? feedSongs : flattenSongPages(songsQ.data?.pages);
   const playQueue = usePlayerStore((s) => s.playQueue);
 
   usePageMeta({ title: cfg.title, description: cfg.desc, canonicalPath: cfg.path });
@@ -144,9 +169,9 @@ export default function ChartLandingPage({ variant }: { variant: ChartVariant })
       {cfg.showSearches && <SearchChips />}
 
       <section className="vx-section">
-        {songsQ.isLoading ? (
+        {waitingForFeed || (!fromFeed && songsQ.isLoading) ? (
           <ListSkeleton />
-        ) : songsQ.isError ? (
+        ) : !fromFeed && songsQ.isError ? (
           <ErrorState retry={() => void songsQ.refetch()} />
         ) : (
           <>
@@ -155,11 +180,13 @@ export default function ChartLandingPage({ variant }: { variant: ChartVariant })
                 <SongRow key={song.id} song={song} songs={songs} index={i} />
               ))}
             </div>
-            <InfiniteSentinel
-              onVisible={() => songsQ.hasNextPage && !songsQ.isFetchingNextPage && songsQ.fetchNextPage()}
-              disabled={!songsQ.hasNextPage}
-              loading={songsQ.isFetchingNextPage}
-            />
+            {!fromFeed && (
+              <InfiniteSentinel
+                onVisible={() => songsQ.hasNextPage && !songsQ.isFetchingNextPage && songsQ.fetchNextPage()}
+                disabled={!songsQ.hasNextPage}
+                loading={songsQ.isFetchingNextPage}
+              />
+            )}
           </>
         )}
       </section>

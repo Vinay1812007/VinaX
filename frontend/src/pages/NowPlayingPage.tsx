@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { albumPath, artistPath, songPath } from '@/utils/slug';
+import { isEpisode, podcastPath } from '@/features/podcasts/paths';
 import { filmTitleFromAlbumName } from '@/services/api/movies';
 import { Link, useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -98,7 +99,10 @@ function buildCreditChips(song: Song, filmTitle: string | null): CreditChip[] {
   for (const a of song.artists) if (!roleOf(a)) push('Artist', a.name, linkFor(a));
   // v5.6.0 — the film credit no longer needs an album id: when the catalog
   // sends only a name, it searches it, so the movie is ALWAYS tappable.
-  if (song.album?.name) {
+  // 1.3 — an episode credits its podcast, not a film.
+  if (song.album?.name && isEpisode(song)) {
+    chips.push({ role: 'Podcast', name: song.album.name, to: song.album.id ? podcastPath(song.album) : `/search/${encodeURIComponent(song.album.name)}` });
+  } else if (song.album?.name) {
     chips.push({
       role: 'Film',
       name: filmTitle ?? song.album.name,

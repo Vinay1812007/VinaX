@@ -46,6 +46,7 @@ import { loadProfile } from '@/services/personalization/storage';
 import { topArtists } from '@/services/personalization/profile';
 import { recordSearchPlay } from '@/services/personalization/updater';
 import { fetchWithTimeout } from '@/services/api/client';
+import { getTopSearches } from '@/services/api/catalog';
 import { expertSongSearch } from '@/services/ai/expert';
 import type { Song } from '@/types';
 import { playAlbum, playArtist, playPlaylist } from '@/features/player/playEntity';
@@ -316,9 +317,18 @@ export default function SearchPage() {
   );
   // Community top searches (aggregated + cached) — chips under the bar.
   const trendingQ = useQuery<{ queries: string[] }>({
-    queryKey: ['trending-searches'],
+    queryKey: ['trending-searches', pinnedLangs.join(',')],
     staleTime: 10 * 60_000,
     queryFn: async ({ signal }) => {
+      // 1.3 — what people search for in the catalogue now, in the listener's
+      // languages; the Worker's own list (always empty) stays as the fallback.
+      try {
+        const top = await getTopSearches(pinnedLangs, { signal });
+        const queries = [...new Set(top.map((t) => t.name.trim()).filter(Boolean))];
+        if (queries.length) return { queries };
+      } catch {
+        if (signal?.aborted) throw new Error('cancelled');
+      }
       const base = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
       // Decorative chips: never worth a hung request — 6 s, and gone on unmount.
       const r = await fetchWithTimeout(`${base}/api/trending-searches`, 6000, signal);

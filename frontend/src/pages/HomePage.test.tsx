@@ -23,6 +23,9 @@ vi.mock('@/services/personalization/updater', () => ({
 vi.mock('@/services/downloads', () => ({ downloadSong: vi.fn(), removeDownload: vi.fn() }));
 vi.mock('@/services/feedback', () => ({ sendFeedback: vi.fn(async () => true) }));
 const searched: string[] = [];
+// 1.3 — the catalogue's own feeds; they miss by default (the backup source does not know them).
+const feeds = vi.hoisted(() => ({ charts: undefined as unknown, featured: undefined as unknown, newReleases: undefined as unknown }));
+const answer = (v: unknown) => (v ? Promise.resolve(v) : Promise.reject(new Error('route not found')));
 vi.mock('@/services/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/api')>();
   const { makeSong } = await import('@/__fixtures__/songs');
@@ -30,7 +33,14 @@ vi.mock('@/services/api', async (importOriginal) => {
     searched.push(q);
     return [makeSong(`${q}-1`, { title: `${q} one` }), makeSong(`${q}-2`, { title: `${q} two` })];
   };
-  return { ...actual, searchSongs: vi.fn(async (q: string) => results(q)), searchSongsPage: vi.fn(async (q: string) => results(q)) };
+  return {
+    ...actual,
+    searchSongs: vi.fn(async (q: string) => results(q)),
+    searchSongsPage: vi.fn(async (q: string) => results(q)),
+    getCharts: vi.fn(() => answer(feeds.charts)),
+    getFeaturedPlaylists: vi.fn(() => answer(feeds.featured)),
+    getNewReleases: vi.fn(() => answer(feeds.newReleases)),
+  };
 });
 
 import HomePage from './HomePage';
@@ -68,6 +78,7 @@ beforeEach(() => {
   sessionStorage.clear();
   resetSessionHomeOrder();
   searched.length = 0;
+  feeds.charts = feeds.featured = feeds.newReleases = undefined;
   vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 404 })));
   // Deferred Home blocks come into view at once; the endless feed's sentinel never does.
   vi.stubGlobal('IntersectionObserver', class {
@@ -219,5 +230,35 @@ describe('HomePage 10.0 — the first visit', () => {
     expect(screen.queryByRole('heading', { name: /All the music you love/ })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Everything included, all free' })).toBeNull();
     expect(screen.getByRole('heading', { level: 1 }).textContent).not.toMatch(/Free/);
+  });
+});
+
+describe('HomePage 1.3 — the catalogue’s own feeds', () => {
+  const playlist = (id: string, title: string) => ({ kind: 'playlist', id, title, subtitle: 'JioSaavn', images: [], songs: [], songCount: null, language: 'telugu' });
+
+  it('adds "Top charts", "Featured playlists" and "New albums" when the catalogue has them', async () => {
+    feeds.charts = [playlist('110858205', 'Trending Today')];
+    feeds.featured = [playlist('4562515', 'Karwa Chauth Special')];
+    feeds.newReleases = { songs: [], albums: [{ kind: 'album', id: '82567150', title: 'Rangulu Ranguley', subtitle: 'A.R. Rahman', images: [], artists: [], songs: [], songCount: 1, year: '2026', language: 'telugu' }] };
+    renderHome();
+    await screen.findByRole('group', { name: 'Shortcuts' });
+    await openExplore();
+    expect(await screen.findByRole('heading', { name: 'Top charts' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Featured playlists' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'New albums' })).toBeTruthy();
+    expect(screen.getByText('Trending Today').closest('a')?.getAttribute('href')).toBe('/playlist/trending-today-110858205');
+    expect(screen.getByText('Rangulu Ranguley').closest('a')?.getAttribute('href')).toBe('/album/rangulu-ranguley-82567150');
+  });
+
+  it('hides those shelves entirely, with no error, when the catalogue misses', async () => {
+    renderHome();
+    await screen.findByRole('group', { name: 'Shortcuts' });
+    await openExplore();
+    expect(await screen.findByRole('heading', { name: 'Charts' })).toBeTruthy();
+    await act(async () => {});
+    expect(screen.queryByRole('heading', { name: 'Top charts' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Featured playlists' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'New albums' })).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

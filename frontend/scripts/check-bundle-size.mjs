@@ -104,7 +104,12 @@ const DIST = 'dist';
 // panel and every 6.x page remain lazy (verified in the chunk list above).
 // 188 leaves ~1.8 KB headroom over the measured 186.2; regressions still
 // fail the build.
-const FIRST_LOAD_BUDGET = 188 * 1024; // gzipped
+// 2026-10-29: re-based 188 -> 190 for 1.3 (measured 188.3 KB, main was
+// 187.7). What moved is first-load by nature: the /browse, /podcasts and
+// /podcast routes with their nav and signed-out entries (+0.4 KB in index)
+// and the radio-station feed in playerStore's top-up (+0.2 KB). The pages,
+// the catalogue client and the station controller stay lazy.
+const FIRST_LOAD_BUDGET = 190 * 1024; // gzipped
 const CHUNK_BUDGET = 80 * 1024; // gzipped — chunks that ship in the first load
 const LAZY_CHUNK_BUDGET = 160 * 1024; // gzipped — on-demand chunks (routes, features)
 // Deliberately lazy diagram/math engines (loaded only when VinaX AI renders them).
