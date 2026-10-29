@@ -1,5 +1,5 @@
 import type { Song } from '@/types';
-import { bestImage, isOwnArtwork } from '@/utils/images';
+import { bestImage } from '@/utils/images';
 import { extractAverageColor } from '@/utils/color';
 import { isNativePlatform } from '@/services/native';
 
@@ -165,7 +165,7 @@ async function loadArtwork(url: string): Promise<HTMLImageElement | null> {
       if (res.status !== 200 || typeof res.data !== 'string') return null;
       return await loadImage(`data:image/jpeg;base64,${res.data}`);
     }
-    return await loadImage(isOwnArtwork(url) ? url : `/img?url=${encodeURIComponent(url)}`);
+    return await loadImage(`/img?url=${encodeURIComponent(url)}`);
   } catch {
     return null;
   }

@@ -1,10 +1,9 @@
 /**
  * Live health check for every music catalog source: the self-hosted
  * /api/cat catalog (checked in-process — the exact handler the app uses,
- * wrappers and any direct translation included), then each configured
- * wrapper on its own (CATALOG_UPSTREAMS — the list lives in a Worker
- * secret, nowhere in the code) and, when CATALOG_DIRECT_URL is set, the
- * direct JioSaavn web API. Server-side
+ * wrappers and direct translation included), then each configured wrapper
+ * on its own (CATALOG_UPSTREAMS, 14.0.4 — the list lives in a Worker
+ * secret, nowhere in the code) and the direct JioSaavn web API. Server-side
  * pings (no browser CORS variance) with status + latency + whether real
  * songs came back, so a silent-empty-home always has an obvious cause.
  * Admin-gated: this spends the upstreams' quota.
@@ -78,11 +77,11 @@ function pingSelfCatalog(request: Request, env: CatalogEnv): Promise<SourceHealt
   );
 }
 
-/** The optional direct translation alone (CATALOG_DIRECT_URL), with every wrapper taken out of the way. */
+/** The built-in translation alone, with every wrapper taken out of the way. */
 function pingDirect(request: Request, env: CatalogEnv): Promise<SourceHealth> {
   const url = new URL(request.url);
   const req = new Request(`${url.origin}/api/cat/${QUERY}`, { headers: { accept: 'application/json' } });
-  const direct = env.CATALOG_DIRECT_URL?.trim() ?? '';
+  const direct = env.CATALOG_DIRECT_URL?.trim() || 'https://www.jiosaavn.com/api.php';
   return readHealth('direct', 'Direct (JioSaavn web API)', direct, () =>
     Promise.resolve(catalogGet({ request: req, params: { path: ['search', 'songs'] }, env: { CATALOG_DIRECT_URL: env.CATALOG_DIRECT_URL } })),
   );
@@ -106,7 +105,7 @@ export const onRequestGet = async (context: {
   const sources = await Promise.all([
     pingSelfCatalog(request, env),
     ...mirrorsOf(env).map(pingMirror),
-    ...(env.CATALOG_DIRECT_URL?.trim() ? [pingDirect(request, env)] : []),
+    pingDirect(request, env),
   ]);
   return new Response(JSON.stringify({ checkedAt: new Date().toISOString(), configured: upstreamBases(env).length, mirrors: sources }), {
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },

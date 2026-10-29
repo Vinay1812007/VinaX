@@ -30,69 +30,20 @@
 import { decryptMediaUrl } from '../../_lib/des';
 
 /**
- * 1.2.0 — the catalogue comes from the owner's own wrapper, named in the
- * Worker secret CATALOG_UPSTREAMS (https://musicapi.vinaxmusic.online/api):
- * an ordered, comma-separated list of wrapper base URLs that speak this same
- * dialect. Each request tries them in order, with a 6 s deadline and a
- * one-minute bench after a failure. No other provider is built in: the
- * translation against JioSaavn's web API below runs only when the optional
- * CATALOG_DIRECT_URL secret names one. Nothing here is visible to the
- * browser: the bundle holds /api/cat.
+ * 14.0.4 — every provider lives on the Worker, in secrets, and the app only
+ * ever talks to this route. CATALOG_UPSTREAMS is an ordered, comma-separated
+ * list of wrapper base URLs that speak this same dialect (the owner's own
+ * wrapper leads it); each request tries them in order, with a 6 s deadline
+ * and a one-minute bench after a failure, and falls back to the built-in
+ * translation against JioSaavn's web API (CATALOG_DIRECT_URL overrides that
+ * one). Nothing here is visible to the browser: the bundle holds /api/cat.
  */
 export interface CatalogEnv {
   CATALOG_UPSTREAMS?: string;
   CATALOG_DIRECT_URL?: string;
-  /** Public origin for artwork and audio, e.g. https://media.vinaxmusic.online (optional). */
-  CATALOG_MEDIA_BASE?: string;
 }
 
-/**
- * The Worker's catalogue secrets, set once per request by the router
- * (index.ts) so in-process callers (recommendations, page rendering,
- * sitemaps, admin search) read the same sources as /api/cat.
- */
-let configured: CatalogEnv = {};
-export function configureCatalog(env: CatalogEnv | undefined): void {
-  configured = { CATALOG_UPSTREAMS: env?.CATALOG_UPSTREAMS, CATALOG_DIRECT_URL: env?.CATALOG_DIRECT_URL, CATALOG_MEDIA_BASE: env?.CATALOG_MEDIA_BASE };
-}
-/** The configured public media origin, or '' when unset. */
-export function catalogMediaBase(): string {
-  return mediaBaseOf(configured);
-}
-function mediaBaseOf(env: CatalogEnv | undefined): string {
-  const raw = env?.CATALOG_MEDIA_BASE?.trim().replace(/\/+$/, '') ?? '';
-  return /^https:\/\/[^\s/]+$/.test(raw) ? raw : '';
-}
-
-/**
- * What the browser sees of a wrapper answer. JioSaavn page links (song,
- * album and artist `url` fields) are blanked: the app never reads them, and
- * they name the provider in DevTools. With CATALOG_MEDIA_BASE set, media
- * links on a wrapper's own host (`<wrapper origin>/media/…`, the API's
- * artwork and audio route) move to that public origin, so the API's host
- * stays out of sight too.
- */
-export function cleanWrapperBody(text: string, bases: readonly string[], mediaBase: string): string {
-  // Any JioSaavn host: artist links come on staging.jiosaavn.com too.
-  let out = text.replace(/"https?:\/\/(?:[a-z0-9-]+\.)*jiosaavn\.com\/(?!_i\/)[^"]*"/gi, '""');
-  if (mediaBase) {
-    for (const base of bases) {
-      let origin: string;
-      try {
-        origin = new URL(base).origin;
-      } catch {
-        continue;
-      }
-      if (origin !== mediaBase) out = out.split(`${origin}/media/`).join(`${mediaBase}/media/`);
-    }
-  }
-  return out;
-}
-/** The wrapper bases from the configured secret, in order. */
-export function catalogBases(): string[] {
-  return upstreamBases(configured);
-}
-
+const DEFAULT_DIRECT = 'https://www.jiosaavn.com/api.php';
 const COMMON = '_format=json&_marker=0&api_version=4&ctx=web6dot0';
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
@@ -115,7 +66,7 @@ const benched = new Map<string, number>();
  * it is (it speaks the dialect the app reads), or null when it is benched,
  * slow, errors, or answers something that is not JSON.
  */
-async function viaWrapper(base: string, seg: string[], search: string, env: CatalogEnv): Promise<Response | null> {
+async function viaWrapper(base: string, seg: string[], search: string): Promise<Response | null> {
   if ((benched.get(base) ?? 0) > Date.now()) return null;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), WRAPPER_TIMEOUT_MS);
@@ -127,7 +78,7 @@ async function viaWrapper(base: string, seg: string[], search: string, env: Cata
     if (!r.ok || !(r.headers.get('content-type') ?? '').includes('json')) throw new Error(`wrapper ${r.status}`);
     const text = await r.text();
     if (!text.trim().startsWith('{') && !text.trim().startsWith('[')) throw new Error('wrapper body');
-    return new Response(cleanWrapperBody(text, upstreamBases(env), mediaBaseOf(env)), {
+    return new Response(text, {
       headers: {
         'content-type': 'application/json; charset=utf-8',
         'cache-control': 'public, max-age=60, s-maxage=600',
@@ -143,10 +94,9 @@ async function viaWrapper(base: string, seg: string[], search: string, env: Cata
   }
 }
 
-let directUrl = '';
+let directUrl = DEFAULT_DIRECT;
 
 async function upstream(params: string): Promise<any> {
-  if (!directUrl) throw new Error('no direct catalogue configured');
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 7000);
   try {
@@ -212,14 +162,13 @@ export const onRequestGet = async (context: { request: Request; params: { path?:
   const q = (k: string) => url.searchParams.get(k) ?? '';
   const limit = Math.min(Number(q('limit') || q('n') || 20) || 20, 50);
   const page = Math.max(Number(q('page') || q('p') || 1) || 1, 1);
-  const env = context.env ?? configured;
-  directUrl = env.CATALOG_DIRECT_URL?.trim() ?? '';
+  directUrl = context.env?.CATALOG_DIRECT_URL?.trim() || DEFAULT_DIRECT;
 
   // The configured wrappers first, in order; /stream stays local (its DES
   // step needs no upstream and must stay deterministic for the edge cache).
   if (seg[0] !== 'stream') {
-    for (const base of upstreamBases(env)) {
-      const res = await viaWrapper(base, seg, url.search, env);
+    for (const base of upstreamBases(context.env)) {
+      const res = await viaWrapper(base, seg, url.search);
       if (res) return res;
     }
   }
@@ -244,9 +193,7 @@ export const onRequestGet = async (context: { request: Request; params: { path?:
           headers: { location: url, 'cache-control': 'public, max-age=86400' },
         });
       }
-      // Fallback for inputs the decryptor can't parse: upstream auth token,
-      // only when a direct translation is configured.
-      if (!directUrl) return nf();
+      // Fallback for inputs the decryptor can't parse: upstream auth token.
       const j = await upstream(`__call=song.generateAuthToken&url=${encodeURIComponent(enc)}&bitrate=${rate}`);
       const auth = typeof j?.auth_url === 'string' ? j.auth_url : typeof j?.[0]?.auth_url === 'string' ? j[0].auth_url : '';
       if (!auth.startsWith('http')) return nf();

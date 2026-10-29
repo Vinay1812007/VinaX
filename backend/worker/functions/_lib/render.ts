@@ -6,16 +6,21 @@
  * shell. Fully defensive: any failure falls back to the plain SPA shell, so a
  * dead provider or timeout never breaks the page. Edge-cached for an hour.
  */
-// 1.2.0 — the catalogue is the owner's wrapper named in the Worker secret
-// CATALOG_UPSTREAMS (see api/cat); no provider is written here.
-import { catalogBases, catalogMediaBase, cleanWrapperBody } from '../api/cat/[[path]]';
+// Mirror ladder — saavn.dev's DNS died (see sitemap-songs.xml.ts, pruned
+// 2026-07) and this file still pointed at it alone, so entity pages were
+// silently serving the PLAIN shell to every crawler. Same list the sitemaps
+// use; first mirror with data wins.
 
-let override: readonly string[] | null = null;
-/** Choose the catalogue bases this module reads from (build-time use); an empty list goes back to the secret. */
+const BASES = ['https://www.vinaxmusic.online/api/cat', 'https://saavn.sumit.co/api', 'https://nepotuneapi.vercel.app/api'];
+/** 13.6.0 — the build's entity prerender (frontend/scripts/prerender-entities.mjs)
+ *  renders with the public mirrors only: going through the Worker's own
+ *  /api/cat would spend the Worker request budget once per page per deploy. */
+export const MIRROR_BASES = BASES.filter((b) => !b.startsWith('https://www.vinaxmusic.online'));
+let bases: readonly string[] = BASES;
+/** Choose the catalogue bases this module reads from (build-time use). */
 export function useCatalogBases(list: readonly string[]): void {
-  override = list.length ? list : null;
+  bases = list.length ? list : BASES;
 }
-const basesNow = (): readonly string[] => override ?? catalogBases();
 const ORIGIN = 'https://www.vinaxmusic.online';
 
 interface Assets {
@@ -174,13 +179,13 @@ function within<T>(p: Promise<T>, ms: number): Promise<T | null> {
 }
 
 async function fetchJson(suffix: string): Promise<any> {
-  for (const base of basesNow()) {
+  for (const base of bases) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 2500);
     try {
       const r = await fetch(`${base}/${suffix}`, { signal: ctrl.signal, headers: { accept: 'application/json' } });
       if (r.ok) {
-        const j = JSON.parse(cleanWrapperBody(await r.text(), basesNow(), catalogMediaBase()));
+        const j = await r.json();
         if (j?.data) return j;
       }
     } catch {

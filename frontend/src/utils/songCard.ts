@@ -1,13 +1,12 @@
 import type { Song } from '@/types';
 import { isNativePlatform } from '@/services/native';
-import { bestImage, isOwnArtwork } from '@/utils/images';
+import { bestImage } from '@/utils/images';
 import { shareOrSaveImage } from '@/utils/shareImage';
 
 const trunc = (s: string, n: number): string => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 
 /** Same-origin CORS image proxy so the cover can be drawn on a canvas. */
 function proxied(url: string): string {
-  if (isOwnArtwork(url)) return url;
   const base = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
   return `${base}/img?url=${encodeURIComponent(url)}`;
 }

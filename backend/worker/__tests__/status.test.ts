@@ -7,14 +7,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { COMPONENTS, onRequestGet, onRequestPost, probeAll, resetStatusMemo } from '../functions/api/status';
 import { resetSettingsMemo } from '../functions/_lib/settings';
 import { DB_ENV, fakeDb } from './helpers/fakeDb';
-import { configureCatalog } from '../functions/api/cat/[[path]]';
 
 let ip = 0;
 const req = (): Request => new Request('https://www.vinaxmusic.online/api/status', { headers: { 'cf-connecting-ip': `10.77.0.${++ip % 250}` } });
 
 beforeEach(() => {
-  // The catalogue component probes the wrapper named in CATALOG_UPSTREAMS.
-  configureCatalog({ CATALOG_UPSTREAMS: 'https://musicapi.example/api' });
   resetStatusMemo();
   resetSettingsMemo();
   vi.unstubAllGlobals();
@@ -37,7 +34,7 @@ describe('GET /api/status', () => {
   });
 
   it('a failing probe reads down and the overall is an outage', async () => {
-    vi.stubGlobal('fetch', async (u: unknown) => (String(u).includes('musicapi.example') ? new Response('', { status: 503 }) : new Response('ok')));
+    vi.stubGlobal('fetch', async (u: unknown) => (String(u).includes('jiosaavn') ? new Response('', { status: 503 }) : new Response('ok')));
     const body = (await (await onRequestGet({ request: req() })).json()) as { overall: string; components: Array<{ id: string; status: string }> };
     expect(body.components.find((c) => c.id === 'catalog')?.status).toBe('down');
     expect(body.overall).toBe('outage');
@@ -70,17 +67,5 @@ describe('GET /api/status', () => {
 describe('POST /api/status', () => {
   it('is a 405: nothing is recorded on a request', async () => {
     expect((await onRequestPost()).status).toBe(405);
-  });
-});
-
-describe('the catalogue probe', () => {
-  it('asks the configured music API, and is down when none is configured', async () => {
-    const asked: string[] = [];
-    vi.stubGlobal('fetch', async (u: unknown) => { asked.push(String(u)); return new Response('ok'); });
-    await probeAll(Date.now(), true);
-    expect(asked).toContain('https://musicapi.example/api/search/songs?query=love&limit=1');
-    configureCatalog(undefined);
-    const probes = await probeAll(Date.now(), true);
-    expect(probes.get('catalog')?.ok).toBe(false);
   });
 });
