@@ -72,3 +72,17 @@ export function bestImage(images: ImageVariant[] | undefined, min = 300): string
   const fit = sorted.find((v) => qualityPx(v.quality) >= min);
   return (fit ?? sorted[sorted.length - 1]).url || FALLBACK_ART;
 }
+
+/**
+ * Artwork VinaX's own hosts serve (the music API's /media route) already
+ * allows any origin, so a canvas can draw it directly; the /img proxy is only
+ * for CDNs that send no CORS headers.
+ */
+export function isOwnArtwork(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && (u.hostname === 'vinaxmusic.online' || u.hostname.endsWith('.vinaxmusic.online'));
+  } catch {
+    return false;
+  }
+}
