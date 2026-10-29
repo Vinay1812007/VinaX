@@ -46,13 +46,15 @@ describe('mapSong', () => {
 });
 
 /**
- * 14.0.4 — the upstream list is a secret. CATALOG_UPSTREAMS names wrapper
- * bases tried in order; a wrapper that fails is benched for a minute; with
- * none configured (or all failing) the built-in JioSaavn translation
- * answers; /stream never leaves the Worker.
+ * 1.2.0 — the upstream list is a secret. CATALOG_UPSTREAMS names wrapper
+ * bases tried in order; a wrapper that fails is benched for a minute. The
+ * JioSaavn translation answers only when CATALOG_DIRECT_URL names it;
+ * otherwise a failed wrapper is a 502. /stream never leaves the Worker.
  */
 import { afterEach, beforeEach, vi } from 'vitest';
-import { onRequestGet, upstreamBases } from './[[path]]';
+import { catalogBases, configureCatalog, onRequestGet, upstreamBases } from './[[path]]';
+
+const DIRECT = 'https://www.jiosaavn.com/api.php';
 
 const calls: string[] = [];
 let answer: (url: string) => Response | Promise<Response>;
@@ -91,13 +93,13 @@ describe('/api/cat with CATALOG_UPSTREAMS', () => {
     expect(calls).toEqual(['https://a.example/api/search/songs?query=naatu&limit=3']);
   });
 
-  it('moves to the next wrapper on a failure, then to the direct translation, and benches the failed one', async () => {
+  it('moves to the next wrapper on a failure, then to a configured direct translation, and benches the failed one', async () => {
     answer = (url) => {
       if (url.startsWith('https://a.example/')) return new Response('rate limited', { status: 429 });
       if (url.startsWith('https://b.example/')) return new Response('<html>', { status: 200, headers: { 'content-type': 'text/html' } });
       return jsonRes({ results: [{ id: 'direct', title: 'T', more_info: {} }] }); // JioSaavn's own shape
     };
-    const env = { CATALOG_UPSTREAMS: 'https://a.example/api,https://b.example/api' };
+    const env = { CATALOG_UPSTREAMS: 'https://a.example/api,https://b.example/api', CATALOG_DIRECT_URL: DIRECT };
     const res = await get('search/songs?query=x', env);
     expect(res.status).toBe(200);
     expect(res.headers.get('x-vinax-source')).toBeNull();
@@ -109,14 +111,32 @@ describe('/api/cat with CATALOG_UPSTREAMS', () => {
     expect(calls.map((u) => new URL(u).host)).toEqual(['www.jiosaavn.com']);
   });
 
-  it('without the secret, only the direct translation is used, and CATALOG_DIRECT_URL can move it', async () => {
-    answer = () => jsonRes({ results: [] });
-    await get('search/songs?query=x');
-    expect(calls).toHaveLength(1);
-    expect(calls[0].startsWith('https://www.jiosaavn.com/api.php?')).toBe(true);
+  it('calls no built-in provider: without a direct URL a failed wrapper is a 502', async () => {
+    answer = () => new Response('down', { status: 503 });
+    const res = await get('search/songs?query=x', { CATALOG_UPSTREAMS: 'https://c.example/api' });
+    expect(res.status).toBe(502);
+    expect(calls).toEqual(['https://c.example/api/search/songs?query=x']);
     calls.length = 0;
+    expect((await get('search/songs?query=x')).status).toBe(502);
+    expect(calls).toEqual([]);
+  });
+
+  it('CATALOG_DIRECT_URL turns the translation on, at that URL', async () => {
+    answer = () => jsonRes({ results: [] });
     await get('search/songs?query=x', { CATALOG_DIRECT_URL: 'https://direct.example/api.php' });
     expect(calls[0].startsWith('https://direct.example/api.php?')).toBe(true);
+  });
+
+  it('in-process callers without an env read the secrets the router configured', async () => {
+    answer = (url) => jsonRes({ success: true, data: { results: [{ id: url }] } });
+    configureCatalog({ CATALOG_UPSTREAMS: 'https://d.example/api' });
+    try {
+      expect(catalogBases()).toEqual(['https://d.example/api']);
+      const res = await get('search/songs?query=z');
+      expect((await res.json()).data.results[0].id).toBe('https://d.example/api/search/songs?query=z');
+    } finally {
+      configureCatalog(undefined);
+    }
   });
 
   it('/stream never goes to a wrapper', async () => {

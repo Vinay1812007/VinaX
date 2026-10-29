@@ -16,6 +16,23 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.2.0': {
+    title: 'Bring music back through VinaX\'s own music API',
+    changes: [
+      { type: 'improved', text: 'Music is back: search, Flow, charts, albums, artists, playlists and playback work again, served by VinaX\'s own music API.' },
+      { type: 'improved', text: 'Your Library, history and queue are kept again, and sync with your account.' },
+      { type: 'improved', text: 'Shared playlists, profiles, Listen Together rooms and Home banners show songs again.' },
+    ],
+  },
+  '1.1.0': {
+    title: 'Remove every music provider: no catalogue, no saved songs',
+    changes: [
+      { type: 'improved', text: 'VinaX no longer streams or searches music: every music provider was removed.' },
+      { type: 'improved', text: 'Songs saved on this device (Library, playlists, history, queue and downloads) are cleared the first time the app opens.' },
+      { type: 'improved', text: 'Shared playlists, profiles and Listen Together rooms no longer show songs.' },
+      { type: 'improved', text: 'Home banners that pointed at a song, album, playlist or artist are gone.' },
+    ],
+  },
   '1.0.2': {
     title: 'Console: merge existing duplicate listeners, and an SEO tab',
     changes: [

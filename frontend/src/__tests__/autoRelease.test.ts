@@ -99,7 +99,27 @@ describe('file edits', () => {
 
   it('changelog.ts: a V2 version the classic history already used is still a new card', () => {
     // 1.1.0 shipped in 2025 on the classic line; the V2 line reaches it again.
-    expect(() => insertChangelogEntry(changelogTs, '1.1.0', { title: 'Next', changes: [{ type: 'new', text: 'x' }] })).not.toThrow();
+    // A fixture, not the real file: once V2 itself ships 1.1.0 the real file
+    // rightly refuses a second 1.1.0 card (that broke the 1.1.0 release run).
+    const fixture = [
+      'export const CHANGELOG_V2: Record<string, VersionInfo> = {',
+      "  '1.0.2': {",
+      "    title: 'Before',",
+      '    changes: [],',
+      '  },',
+      '};',
+      '',
+      'export const CHANGELOG_CLASSIC: Record<string, VersionInfo> = {',
+      "  '1.1.0': {",
+      "    title: 'Classic',",
+      '    changes: [],',
+      '  },',
+      '};',
+      '',
+    ].join('\n');
+    const out = insertChangelogEntry(fixture, '1.1.0', { title: 'Next', changes: [{ type: 'new', text: 'x' }] });
+    expect(out.indexOf("'1.1.0'")).toBeLessThan(out.indexOf("'1.0.2'"));
+    expect(() => insertChangelogEntry(out, '1.1.0', { title: 'Again', changes: [] })).toThrow('changelog already has 1.1.0');
   });
 
   it('changelog.ts: the new card leads and quotes are escaped', () => {

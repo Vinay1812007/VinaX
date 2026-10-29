@@ -45,8 +45,13 @@ const DIST = process.env.PRERENDER_DIST || 'dist';
 const ORIGIN = 'https://www.vinaxmusic.online';
 const SHELL_CACHE = 'node_modules/.cache/vinax/shell.html';
 const RENDER_TS = resolve(dirname(fileURLToPath(import.meta.url)), '../../backend/worker/functions/_lib/render.ts');
-/** Public catalogue mirrors, in order. Never this site's own /api. */
-const MIRRORS = ['https://saavn.sumit.co/api', 'https://nepotuneapi.vercel.app/api'];
+/** The music API the build reads (the same one the Worker's CATALOG_UPSTREAMS
+ *  secret names). Never this site's own /api: that would spend the Worker
+ *  request budget once per page per deploy. */
+const MIRRORS = (process.env.CATALOG_UPSTREAMS || 'https://musicapi.vinaxmusic.online/api')
+  .split(',')
+  .map((u) => u.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
 const LANGS = ['telugu', 'hindi', 'tamil', 'punjabi', 'kannada', 'malayalam', 'bengali', 'marathi', 'bhojpuri', 'gujarati', 'urdu', 'english'];
 
 const num = (v, d) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : d);

@@ -30,20 +30,34 @@
 import { decryptMediaUrl } from '../../_lib/des';
 
 /**
- * 14.0.4 — every provider lives on the Worker, in secrets, and the app only
- * ever talks to this route. CATALOG_UPSTREAMS is an ordered, comma-separated
- * list of wrapper base URLs that speak this same dialect (the owner's own
- * wrapper leads it); each request tries them in order, with a 6 s deadline
- * and a one-minute bench after a failure, and falls back to the built-in
- * translation against JioSaavn's web API (CATALOG_DIRECT_URL overrides that
- * one). Nothing here is visible to the browser: the bundle holds /api/cat.
+ * 1.2.0 — the catalogue comes from the owner's own wrapper, named in the
+ * Worker secret CATALOG_UPSTREAMS (https://musicapi.vinaxmusic.online/api):
+ * an ordered, comma-separated list of wrapper base URLs that speak this same
+ * dialect. Each request tries them in order, with a 6 s deadline and a
+ * one-minute bench after a failure. No other provider is built in: the
+ * translation against JioSaavn's web API below runs only when the optional
+ * CATALOG_DIRECT_URL secret names one. Nothing here is visible to the
+ * browser: the bundle holds /api/cat.
  */
 export interface CatalogEnv {
   CATALOG_UPSTREAMS?: string;
   CATALOG_DIRECT_URL?: string;
 }
 
-const DEFAULT_DIRECT = 'https://www.jiosaavn.com/api.php';
+/**
+ * The Worker's catalogue secrets, set once per request by the router
+ * (index.ts) so in-process callers (recommendations, page rendering,
+ * sitemaps, admin search) read the same sources as /api/cat.
+ */
+let configured: CatalogEnv = {};
+export function configureCatalog(env: CatalogEnv | undefined): void {
+  configured = { CATALOG_UPSTREAMS: env?.CATALOG_UPSTREAMS, CATALOG_DIRECT_URL: env?.CATALOG_DIRECT_URL };
+}
+/** The wrapper bases from the configured secret, in order. */
+export function catalogBases(): string[] {
+  return upstreamBases(configured);
+}
+
 const COMMON = '_format=json&_marker=0&api_version=4&ctx=web6dot0';
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
@@ -94,9 +108,10 @@ async function viaWrapper(base: string, seg: string[], search: string): Promise<
   }
 }
 
-let directUrl = DEFAULT_DIRECT;
+let directUrl = '';
 
 async function upstream(params: string): Promise<any> {
+  if (!directUrl) throw new Error('no direct catalogue configured');
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 7000);
   try {
@@ -162,12 +177,13 @@ export const onRequestGet = async (context: { request: Request; params: { path?:
   const q = (k: string) => url.searchParams.get(k) ?? '';
   const limit = Math.min(Number(q('limit') || q('n') || 20) || 20, 50);
   const page = Math.max(Number(q('page') || q('p') || 1) || 1, 1);
-  directUrl = context.env?.CATALOG_DIRECT_URL?.trim() || DEFAULT_DIRECT;
+  const env = context.env ?? configured;
+  directUrl = env.CATALOG_DIRECT_URL?.trim() ?? '';
 
   // The configured wrappers first, in order; /stream stays local (its DES
   // step needs no upstream and must stay deterministic for the edge cache).
   if (seg[0] !== 'stream') {
-    for (const base of upstreamBases(context.env)) {
+    for (const base of upstreamBases(env)) {
       const res = await viaWrapper(base, seg, url.search);
       if (res) return res;
     }
@@ -193,7 +209,9 @@ export const onRequestGet = async (context: { request: Request; params: { path?:
           headers: { location: url, 'cache-control': 'public, max-age=86400' },
         });
       }
-      // Fallback for inputs the decryptor can't parse: upstream auth token.
+      // Fallback for inputs the decryptor can't parse: upstream auth token,
+      // only when a direct translation is configured.
+      if (!directUrl) return nf();
       const j = await upstream(`__call=song.generateAuthToken&url=${encodeURIComponent(enc)}&bitrate=${rate}`);
       const auth = typeof j?.auth_url === 'string' ? j.auth_url : typeof j?.[0]?.auth_url === 'string' ? j[0].auth_url : '';
       if (!auth.startsWith('http')) return nf();

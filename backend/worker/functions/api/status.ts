@@ -14,6 +14,7 @@ import { db, dbConfigured, type DbEnv } from '../_lib/db';
 import { asObject, clip } from '../_lib/edge';
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
 import { setting } from '../_lib/settings';
+import { catalogBases } from './cat/[[path]]';
 
 const SITE = 'https://www.vinaxmusic.online';
 export const WINDOW_DAYS = 90;
@@ -75,9 +76,9 @@ export async function probeAll(now = Date.now(), fresh = false): Promise<Map<str
   if (!fresh && memo && now - memo.at < MEMO_MS) return memo.probes;
   const [website, catalog, admin] = await Promise.all([
     probeUrl(SITE + '/'),
-    // The /api/cat/* route proxies the upstream catalogue — probe what it depends on
-    // (probing our own route would be a recursive subrequest).
-    probeUrl('https://www.jiosaavn.com/api.php?__call=autocomplete.get&query=love&_format=json&_marker=0&ctx=web6dot0'),
+    // The /api/cat/* route forwards to the CATALOG_UPSTREAMS wrapper — probe
+    // that (probing our own route would be a recursive subrequest).
+    catalogBases()[0] ? probeUrl(`${catalogBases()[0]}/search/songs?query=love&limit=1`) : Promise.resolve<Probe>({ ok: false, latency: null, checkedAt: new Date(now).toISOString() }),
     probeUrl(SITE + '/admin/'),
   ]);
   const probes = new Map<string, Probe>([
