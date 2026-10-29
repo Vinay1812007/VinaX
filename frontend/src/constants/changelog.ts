@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.2.2': {
+    title: 'Hide the music provider\'s links from the browser',
+    changes: [
+      { type: 'fixed', text: 'Song, album and artist answers no longer carry links to the music provider\'s own pages.' },
+      { type: 'improved', text: '/api/cat now passes every music API answer through cleanWrapperBody (in functions/api/cat/[[path]].ts). JioSaavn page links (the url fields of songs, albums and artists) become empty strings. The app never reads them, but they showed…' },
+      { type: 'new', text: 'New optional Worker var CATALOG_MEDIA_BASE (commented out in wrangler.toml). When it is set, /api/cat moves the music API\'s media links from its own host (https://musicapi.vinaxmusic.online/media/…) to that origin, so the API\'s host never…' },
+      { type: 'new', text: 'The env check and docs/operations.md list the new var.' },
+    ],
+  },
   '1.2.1': {
     title: 'Share cards draw artwork from the music API directly',
     changes: [
