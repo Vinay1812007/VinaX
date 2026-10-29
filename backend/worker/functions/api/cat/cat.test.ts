@@ -156,7 +156,7 @@ describe('what the browser sees of a wrapper answer', () => {
       album: { id: '1', url: 'https://www.jiosaavn.com/album/brahmastra/x' },
       image: [{ quality: '500x500', url: 'https://musicapi.example/media/abc/500x500.jpg' }],
       downloadUrl: [{ quality: '320kbps', url: 'https://musicapi.example/media/def/320.mp4' }],
-      artists: { primary: [{ image: [{ url: 'https://www.jiosaavn.com/_i/3.0/artist-default-music.png' }] }] },
+      artists: { primary: [{ url: 'https://staging.jiosaavn.com/artist/pritam-songs/OaFg9HPZgq8_', image: [{ url: 'https://www.jiosaavn.com/_i/3.0/artist-default-music.png' }] }] },
     }],
   });
 
@@ -164,6 +164,7 @@ describe('what the browser sees of a wrapper answer', () => {
     const out = JSON.parse(cleanWrapperBody(WRAPPED, ['https://musicapi.example/api'], ''));
     expect(out.data[0].url).toBe('');
     expect(out.data[0].album.url).toBe('');
+    expect(out.data[0].artists.primary[0].url).toBe('');
     expect(out.data[0].artists.primary[0].image[0].url).toContain('/_i/');
     expect(out.data[0].image[0].url).toBe('https://musicapi.example/media/abc/500x500.jpg');
   });
