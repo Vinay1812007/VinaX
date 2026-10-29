@@ -78,7 +78,7 @@ test.describe('owner console shell', () => {
     await page.goto('/admin/#/overview');
     const links = page.locator('#nav .nav-link');
     const count = await links.count();
-    expect(count).toBe(13);
+    expect(count).toBe(13); // V2 1.0.1 — Content → SEO
     for (let i = 0; i < count; i += 1) {
       const link = links.nth(i);
       const name = (await link.innerText()).trim();
