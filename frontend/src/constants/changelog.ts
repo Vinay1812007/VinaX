@@ -17,9 +17,12 @@ export interface VersionInfo {
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
   '1.2.5': {
-    title: 'Merge pull request #174 from Vinay1812007/feat/musicapi-new-endpoints',
+    title: 'Charts, moods and genres, radio stations and podcasts',
     changes: [
-      { type: 'improved', text: 'Charts, moods and genres, radio stations and podcasts from the music API.' },
+      { type: 'new', text: "Home and Charts show the catalogue's real trending songs, new releases, top charts and featured playlists." },
+      { type: 'new', text: 'Browse more than 40 moods and genres, each with its top playlists and songs in your language.' },
+      { type: 'new', text: 'New Podcasts section, and radio stations to tune into, including radio for any artist.' },
+      { type: 'new', text: 'Albums get a More like this shelf, and Search shows what people are searching for right now.' },
     ],
   },
   '1.2.4': {
