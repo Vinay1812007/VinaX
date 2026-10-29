@@ -16,6 +16,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.2.5': {
+    title: 'Merge pull request #174 from Vinay1812007/feat/musicapi-new-endpoints',
+    changes: [
+      { type: 'improved', text: 'Charts, moods and genres, radio stations and podcasts from the music API.' },
+    ],
+  },
   '1.2.4': {
     title: 'Back to the 1.0.2 code: undo the changes of Oct 28 and 29',
     changes: [
