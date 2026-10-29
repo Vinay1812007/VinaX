@@ -119,7 +119,11 @@ test.describe('Home request load', () => {
     // drops whatever has not answered (here every mock answers instantly).
     // The ceiling is 28 to leave room for that timing, not for new sources:
     // a real increase in what Home asks for must be measured and justified here.
-    expect(initial).toBeLessThanOrEqual(28);
+    // 2026-10-29 (1.2.5): 29 measured. Trending Now asks the catalogue's
+    // trending feed (/trending/songs) first; this mock answers it empty, so
+    // the old searches still run after it (+1). With the feed answering, those
+    // four "trending now" searches do not run at all. Ceiling 28 -> 30.
+    expect(initial).toBeLessThanOrEqual(30);
     // Scrolling must still load the rest. Step down the page the way a
     // listener does: since 8.4.0 Home ends with the About VinaX text, and an
     // instant jump to the very bottom lands past the visibility-mounted
