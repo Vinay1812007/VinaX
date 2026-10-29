@@ -16,6 +16,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.2.1': {
+    title: 'Share cards draw artwork from the music API directly',
+    changes: [
+      { type: 'improved', text: 'The music API now serves artwork from its own /media route, which the.' },
+    ],
+  },
   '1.2.0': {
     title: 'Bring music back through VinaX\'s own music API',
     changes: [
