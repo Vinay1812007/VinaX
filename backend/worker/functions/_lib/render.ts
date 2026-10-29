@@ -8,7 +8,7 @@
  */
 // 1.2.0 — the catalogue is the owner's wrapper named in the Worker secret
 // CATALOG_UPSTREAMS (see api/cat); no provider is written here.
-import { catalogBases } from '../api/cat/[[path]]';
+import { catalogBases, catalogMediaBase, cleanWrapperBody } from '../api/cat/[[path]]';
 
 let override: readonly string[] | null = null;
 /** Choose the catalogue bases this module reads from (build-time use); an empty list goes back to the secret. */
@@ -180,7 +180,7 @@ async function fetchJson(suffix: string): Promise<any> {
     try {
       const r = await fetch(`${base}/${suffix}`, { signal: ctrl.signal, headers: { accept: 'application/json' } });
       if (r.ok) {
-        const j = await r.json();
+        const j = JSON.parse(cleanWrapperBody(await r.text(), basesNow(), catalogMediaBase()));
         if (j?.data) return j;
       }
     } catch {

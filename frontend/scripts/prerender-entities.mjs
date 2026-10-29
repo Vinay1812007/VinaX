@@ -233,6 +233,9 @@ async function main() {
   try {
     await writeStaticSitemaps(vite);
     const render = await vite.ssrLoadModule(RENDER_TS);
+    // Artwork on the public media host, as the Worker answers it (CATALOG_MEDIA_BASE).
+    const cat = await vite.ssrLoadModule(join(WORKER_FN, 'api/cat/[[path]].ts'));
+    cat.configureCatalog({ CATALOG_MEDIA_BASE: process.env.CATALOG_MEDIA_BASE });
     // Off the static host the hubs are written without their song lists (no network, same words and links).
     render.useCatalogBases(enabled ? MIRRORS : []);
     const hubSongs = await writeHubs(render, shell);

@@ -71,6 +71,12 @@ routes = [
 crons = ["*/30 * * * *"]
 
 [vars]
+# 1.2.2 — public origin for artwork and audio. The music API answers with
+# links on its own host (https://musicapi.vinaxmusic.online/media/...);
+# /api/cat moves them to this origin so the API's host never shows in the
+# browser. Turn on only once the domain is attached to the music API's Vercel
+# project and answers /media (otherwise every cover and song breaks).
+# CATALOG_MEDIA_BASE = "https://media.vinaxmusic.online"
 # Host of the Pages deployment serving the static frontend.
 ASSETS_HOST = "vinax.pages.dev"
 GITHUB_REPO = "Vinay1812007/VinaX"
