@@ -26,6 +26,7 @@ export const ENV_ITEMS: Array<{ name: string; group: string; required: boolean; 
   { name: 'TURNSTILE_SECRET_KEY', group: 'Data', required: false, note: 'human check on username claims from app versions before 12.2 (off when unset)' },
   { name: 'CATALOG_UPSTREAMS', group: 'Catalogue', required: true, note: 'the music API: comma-separated wrapper base URLs, tried in order (https://musicapi.vinaxmusic.online/api; the app only ever sees /api/cat)' },
   { name: 'CATALOG_DIRECT_URL', group: 'Catalogue', required: false, note: 'optional fallback: a JioSaavn web API URL the catalogue translates when every wrapper fails (off when unset)' },
+  { name: 'CATALOG_MEDIA_BASE', group: 'Catalogue', required: false, note: 'public origin for artwork and audio (https://media.vinaxmusic.online); /api/cat moves the music API host media links there (off when unset)' },
   { name: 'SUPABASE_URL', group: 'Database', required: true, note: 'database project URL' },
   { name: 'SUPABASE_SERVICE_ROLE_KEY', group: 'Database', required: true, note: 'database service-role key (server only)' },
   { name: 'CRON_SECRET', group: 'Cron', required: false, note: 'runs a job by hand through POST /api/cron/run; the Cron Trigger needs no secret' },

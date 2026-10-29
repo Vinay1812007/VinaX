@@ -42,6 +42,8 @@ import { decryptMediaUrl } from '../../_lib/des';
 export interface CatalogEnv {
   CATALOG_UPSTREAMS?: string;
   CATALOG_DIRECT_URL?: string;
+  /** Public origin for artwork and audio, e.g. https://media.vinaxmusic.online (optional). */
+  CATALOG_MEDIA_BASE?: string;
 }
 
 /**
@@ -51,7 +53,39 @@ export interface CatalogEnv {
  */
 let configured: CatalogEnv = {};
 export function configureCatalog(env: CatalogEnv | undefined): void {
-  configured = { CATALOG_UPSTREAMS: env?.CATALOG_UPSTREAMS, CATALOG_DIRECT_URL: env?.CATALOG_DIRECT_URL };
+  configured = { CATALOG_UPSTREAMS: env?.CATALOG_UPSTREAMS, CATALOG_DIRECT_URL: env?.CATALOG_DIRECT_URL, CATALOG_MEDIA_BASE: env?.CATALOG_MEDIA_BASE };
+}
+/** The configured public media origin, or '' when unset. */
+export function catalogMediaBase(): string {
+  return mediaBaseOf(configured);
+}
+function mediaBaseOf(env: CatalogEnv | undefined): string {
+  const raw = env?.CATALOG_MEDIA_BASE?.trim().replace(/\/+$/, '') ?? '';
+  return /^https:\/\/[^\s/]+$/.test(raw) ? raw : '';
+}
+
+/**
+ * What the browser sees of a wrapper answer. JioSaavn page links (song,
+ * album and artist `url` fields) are blanked: the app never reads them, and
+ * they name the provider in DevTools. With CATALOG_MEDIA_BASE set, media
+ * links on a wrapper's own host (`<wrapper origin>/media/…`, the API's
+ * artwork and audio route) move to that public origin, so the API's host
+ * stays out of sight too.
+ */
+export function cleanWrapperBody(text: string, bases: readonly string[], mediaBase: string): string {
+  let out = text.replace(/"https?:\/\/(?:www\.)?jiosaavn\.com\/(?!_i\/)[^"]*"/g, '""');
+  if (mediaBase) {
+    for (const base of bases) {
+      let origin: string;
+      try {
+        origin = new URL(base).origin;
+      } catch {
+        continue;
+      }
+      if (origin !== mediaBase) out = out.split(`${origin}/media/`).join(`${mediaBase}/media/`);
+    }
+  }
+  return out;
 }
 /** The wrapper bases from the configured secret, in order. */
 export function catalogBases(): string[] {
@@ -80,7 +114,7 @@ const benched = new Map<string, number>();
  * it is (it speaks the dialect the app reads), or null when it is benched,
  * slow, errors, or answers something that is not JSON.
  */
-async function viaWrapper(base: string, seg: string[], search: string): Promise<Response | null> {
+async function viaWrapper(base: string, seg: string[], search: string, env: CatalogEnv): Promise<Response | null> {
   if ((benched.get(base) ?? 0) > Date.now()) return null;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), WRAPPER_TIMEOUT_MS);
@@ -92,7 +126,7 @@ async function viaWrapper(base: string, seg: string[], search: string): Promise<
     if (!r.ok || !(r.headers.get('content-type') ?? '').includes('json')) throw new Error(`wrapper ${r.status}`);
     const text = await r.text();
     if (!text.trim().startsWith('{') && !text.trim().startsWith('[')) throw new Error('wrapper body');
-    return new Response(text, {
+    return new Response(cleanWrapperBody(text, upstreamBases(env), mediaBaseOf(env)), {
       headers: {
         'content-type': 'application/json; charset=utf-8',
         'cache-control': 'public, max-age=60, s-maxage=600',
@@ -184,7 +218,7 @@ export const onRequestGet = async (context: { request: Request; params: { path?:
   // step needs no upstream and must stay deterministic for the edge cache).
   if (seg[0] !== 'stream') {
     for (const base of upstreamBases(env)) {
-      const res = await viaWrapper(base, seg, url.search);
+      const res = await viaWrapper(base, seg, url.search, env);
       if (res) return res;
     }
   }

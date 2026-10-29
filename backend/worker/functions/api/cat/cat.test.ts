@@ -52,7 +52,7 @@ describe('mapSong', () => {
  * otherwise a failed wrapper is a 502. /stream never leaves the Worker.
  */
 import { afterEach, beforeEach, vi } from 'vitest';
-import { catalogBases, configureCatalog, onRequestGet, upstreamBases } from './[[path]]';
+import { catalogBases, catalogMediaBase, cleanWrapperBody, configureCatalog, onRequestGet, upstreamBases, type CatalogEnv } from './[[path]]';
 
 const DIRECT = 'https://www.jiosaavn.com/api.php';
 
@@ -70,7 +70,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 const jsonRes = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
-const get = (path: string, env?: { CATALOG_UPSTREAMS?: string; CATALOG_DIRECT_URL?: string }) =>
+const get = (path: string, env?: CatalogEnv) =>
   onRequestGet({ request: new Request(`${ORIGIN}/api/cat/${path}`), params: { path: path.split('?')[0].split('/') }, env });
 
 describe('upstreamBases', () => {
@@ -144,5 +144,56 @@ describe('/api/cat with CATALOG_UPSTREAMS', () => {
     const res = await get('stream?e=junk&q=160', { CATALOG_UPSTREAMS: 'https://a.example/api' });
     expect(res.status).toBe(404);
     expect(calls.some((u) => u.startsWith('https://a.example/'))).toBe(false);
+  });
+});
+
+describe('what the browser sees of a wrapper answer', () => {
+  const WRAPPED = JSON.stringify({
+    success: true,
+    data: [{
+      id: 'rjkrTnma',
+      url: 'https://www.jiosaavn.com/song/kesariya/AgIAQyBeWlI',
+      album: { id: '1', url: 'https://www.jiosaavn.com/album/brahmastra/x' },
+      image: [{ quality: '500x500', url: 'https://musicapi.example/media/abc/500x500.jpg' }],
+      downloadUrl: [{ quality: '320kbps', url: 'https://musicapi.example/media/def/320.mp4' }],
+      artists: { primary: [{ image: [{ url: 'https://www.jiosaavn.com/_i/3.0/artist-default-music.png' }] }] },
+    }],
+  });
+
+  it('blanks JioSaavn page links but keeps its default artwork', () => {
+    const out = JSON.parse(cleanWrapperBody(WRAPPED, ['https://musicapi.example/api'], ''));
+    expect(out.data[0].url).toBe('');
+    expect(out.data[0].album.url).toBe('');
+    expect(out.data[0].artists.primary[0].image[0].url).toContain('/_i/');
+    expect(out.data[0].image[0].url).toBe('https://musicapi.example/media/abc/500x500.jpg');
+  });
+
+  it('moves the API host media links to CATALOG_MEDIA_BASE', () => {
+    const out = cleanWrapperBody(WRAPPED, ['https://musicapi.example/api'], 'https://media.example');
+    expect(out).not.toContain('musicapi.example');
+    expect(JSON.parse(out).data[0].downloadUrl[0].url).toBe('https://media.example/media/def/320.mp4');
+  });
+
+  it('/api/cat serves the cleaned body', async () => {
+    answer = () => jsonRes(JSON.parse(WRAPPED));
+    const res = await get('songs/rjkrTnma', { CATALOG_UPSTREAMS: 'https://e.example/api', CATALOG_MEDIA_BASE: 'https://media.example/' });
+    const text = await res.text();
+    expect(res.status).toBe(200);
+    expect(text).not.toContain('jiosaavn.com/song');
+    expect(text).toContain('musicapi.example/media/');
+    expect(cleanWrapperBody(text, ['https://musicapi.example/api'], 'https://media.example')).not.toContain('musicapi.example');
+  });
+
+  it('takes CATALOG_MEDIA_BASE only as an https origin', () => {
+    try {
+      configureCatalog({ CATALOG_MEDIA_BASE: 'https://media.example/' });
+      expect(catalogMediaBase()).toBe('https://media.example');
+      configureCatalog({ CATALOG_MEDIA_BASE: 'http://media.example' });
+      expect(catalogMediaBase()).toBe('');
+      configureCatalog({ CATALOG_MEDIA_BASE: 'https://media.example/sub' });
+      expect(catalogMediaBase()).toBe('');
+    } finally {
+      configureCatalog(undefined);
+    }
   });
 });
