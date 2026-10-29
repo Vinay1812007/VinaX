@@ -16,6 +16,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.2.4': {
+    title: 'Back to the 1.0.2 code: undo the changes of Oct 28 and 29',
+    changes: [
+      { type: 'improved', text: 'Back to the music setup from 1.0.2.' },
+      { type: 'improved', text: 'The version and changelog (version.ts, changelog.ts, package.json, package-lock.json), so the release moves forward to 1.2.4 rather than back to 1.0.2.' },
+      { type: 'fixed', text: 'The auto-release test fixture (#164) and the console sidebar count of 13 (#162). Both were wrong at 1.0.2 for reasons unrelated to music.' },
+    ],
+  },
   '1.2.3': {
     title: 'Serve artwork and audio from media.vinaxmusic.online',
     changes: [
