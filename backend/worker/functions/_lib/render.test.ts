@@ -6,13 +6,8 @@
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { entityPage, matchHub, renderEntity, renderHub, useCatalogBases } from './render';
-import { configureCatalog } from '../api/cat/[[path]]';
-
-// The catalogue comes from the CATALOG_UPSTREAMS secret: two wrappers here.
-beforeAll(() => configureCatalog({ CATALOG_UPSTREAMS: 'https://musicapi.example/api,https://mirror2.example/api' }));
-afterAll(() => configureCatalog(undefined));
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { entityPage, matchHub, MIRROR_BASES, renderEntity, renderHub, useCatalogBases } from './render';
 
 const shell = readFileSync(resolve(__dirname, '../../../index.html'), 'utf8');
 
@@ -36,7 +31,7 @@ describe('renderEntity — song', () => {
   it('injects unique title/desc, exactly ONE og:title (the entity one), music.* tags and ListenAction', async () => {
     vi.stubGlobal('fetch', (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes('musicapi.example')) return Promise.resolve(Response.json(SONG));
+      if (url.includes('saavn.sumit.co')) return Promise.resolve(Response.json(SONG));
       return Promise.resolve(new Response('nope', { status: 500 }));
     });
     const res = await renderEntity('song', 'chukkala-chunni-abc123', req(), env());
@@ -63,8 +58,8 @@ describe('renderEntity — song', () => {
   it('falls through the mirror ladder when the first mirror is dead', async () => {
     vi.stubGlobal('fetch', (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes('musicapi.example')) return Promise.reject(new Error('ENOTFOUND'));
-      if (url.includes('mirror2.example')) return Promise.resolve(Response.json(SONG));
+      if (url.includes('saavn.sumit.co')) return Promise.reject(new Error('ENOTFOUND'));
+      if (url.includes('nepotuneapi')) return Promise.resolve(Response.json(SONG));
       return Promise.resolve(new Response('', { status: 500 }));
     });
     const res = await renderEntity('song', 'abc123', req(), env());
@@ -145,7 +140,7 @@ describe('renderEntity — prerendered shell (4.17.6 regression)', () => {
   it('replaces the baked-in home #seo-content block when #seo-slot was consumed by prerender', async () => {
     vi.stubGlobal('fetch', (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes('musicapi.example')) return Promise.resolve(Response.json(SONG));
+      if (url.includes('saavn.sumit.co')) return Promise.resolve(Response.json(SONG));
       return Promise.resolve(new Response('nope', { status: 500 }));
     });
     // Simulate dist/index.html: prerender consumed the slot and left the
@@ -174,7 +169,7 @@ describe('renderEntity — prerendered shell (4.17.6 regression)', () => {
   it('also replaces the <main id="seo-content"> block baked by ≥4.17.7 builds', async () => {
     vi.stubGlobal('fetch', (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes('musicapi.example')) return Promise.resolve(Response.json(SONG));
+      if (url.includes('saavn.sumit.co')) return Promise.resolve(Response.json(SONG));
       return Promise.resolve(new Response('nope', { status: 500 }));
     });
     const prerendered = shell.replace(
@@ -195,7 +190,7 @@ describe('renderEntity — prerendered shell (4.17.6 regression)', () => {
   it('slugify strips catalog HTML entities (canonical must match sitemap URLs)', async () => {
     vi.stubGlobal('fetch', (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes('musicapi.example')) {
+      if (url.includes('saavn.sumit.co')) {
         return Promise.resolve(Response.json({
           data: [{ id: '2x_4tjb7', name: 'Sorry Sorry (&quot;Bhojpuriya Raja&quot;)', language: 'bhojpuri', image: [] }],
         }));
@@ -215,7 +210,7 @@ describe('renderEntity — prerendered shell (4.17.6 regression)', () => {
     const longName = `${'Raama'.repeat(12)} ${'Krishna'.repeat(12)} ${'Govinda'.repeat(12)}`;
     vi.stubGlobal('fetch', (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes('musicapi.example')) {
+      if (url.includes('saavn.sumit.co')) {
         return Promise.resolve(Response.json({ data: [{ id: 'idx1', name: longName, language: 'hindi', image: [] }] }));
       }
       return Promise.resolve(new Response('nope', { status: 500 }));
@@ -267,7 +262,7 @@ describe('renderEntity — 8.4.0 content depth (low-value content fix)', () => {
   };
   const catalog = (input: RequestInfo | URL) => {
     const url = String(input);
-    if (!url.includes('musicapi.example')) return Promise.resolve(new Response('', { status: 500 }));
+    if (!url.includes('saavn.sumit.co')) return Promise.resolve(new Response('', { status: 500 }));
     if (url.includes('/songs/')) return Promise.resolve(Response.json(CREDITED));
     if (url.includes('/albums')) return Promise.resolve(Response.json(ALBUM));
     if (url.includes('/artists/')) return Promise.resolve(Response.json(ARTIST));
@@ -311,7 +306,7 @@ describe('renderEntity — 8.4.0 content depth (low-value content fix)', () => {
   it('a slow album/artist mirror drops only those sections, never the page', async () => {
     vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (url.includes('musicapi.example') && url.includes('/songs/')) return Promise.resolve(Response.json(CREDITED));
+      if (url.includes('saavn.sumit.co') && url.includes('/songs/')) return Promise.resolve(Response.json(CREDITED));
       if (!url.includes('/albums') && !url.includes('/artists/')) return Promise.resolve(new Response('', { status: 500 }));
       // Album/artist mirrors hang and ignore aborts: only the render's own cap can end the wait.
       void init;
@@ -355,7 +350,7 @@ describe('13.6.0 — entityPage (shared by the edge and the build-time prerender
 
   it('returns the page path and HTML with one canonical — its own, no trailing slash', async () => {
     vi.stubGlobal('fetch', (input: RequestInfo | URL) =>
-      Promise.resolve(String(input).includes('musicapi.example') ? Response.json(SONG) : new Response('nope', { status: 500 })),
+      Promise.resolve(String(input).includes('saavn.sumit.co') ? Response.json(SONG) : new Response('nope', { status: 500 })),
     );
     const page = await entityPage('song', 'abc123', shell);
     expect(page?.path).toBe('/song/chukkala-chunni-abc123');
@@ -369,17 +364,15 @@ describe('13.6.0 — entityPage (shared by the edge and the build-time prerender
     expect(await entityPage('song', 'gone-404', shell)).toBeNull();
   });
 
-  it('reads the bases from the secret, and the build can choose its own', async () => {
+  it('with the mirror bases, never asks the Worker’s own /api/cat', async () => {
     const asked: string[] = [];
     vi.stubGlobal('fetch', (input: RequestInfo | URL) => {
       asked.push(String(input));
-      return Promise.resolve(String(input).includes('build.example') ? Response.json(SONG) : new Response('nope', { status: 500 }));
+      return Promise.resolve(String(input).includes('saavn.sumit.co') ? Response.json(SONG) : new Response('nope', { status: 500 }));
     });
-    expect(await entityPage('song', 'abc123', shell)).toBeNull();
-    expect(asked.every((u) => u.startsWith('https://musicapi.example/') || u.startsWith('https://mirror2.example/'))).toBe(true);
-    asked.length = 0;
-    useCatalogBases(['https://build.example/api']);
+    useCatalogBases(MIRROR_BASES);
     expect(await entityPage('song', 'abc123', shell)).not.toBeNull();
-    expect(asked.every((u) => u.startsWith('https://build.example/'))).toBe(true);
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked.some((u) => u.startsWith('https://www.vinaxmusic.online/'))).toBe(false);
   });
 });

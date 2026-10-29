@@ -17,8 +17,15 @@
 import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { rateLimitAsync } from '../../_lib/ratelimit';
 
-// 1.2.0 — the wrapper(s) named in the CATALOG_UPSTREAMS secret (api/cat), in order.
-import { catalogBases } from '../cat/[[path]]';
+// Same mirror pool the app's client uses. Order matters — first responder wins.
+// 5.0.0 sweep: the self-hosted catalog (/api/cat) leads everywhere. saavn.dev
+// (DNS dead) and the b4a.run mirror (404s these routes) are dropped — they
+// only burned a timeout apiece before the working base was ever tried.
+const MIRRORS = [
+  'https://www.vinaxmusic.online/api/cat',
+  'https://saavn.sumit.co/api',
+  'https://nepotuneapi.vercel.app/api',
+];
 
 interface RawItem {
   id?: string;
@@ -118,7 +125,7 @@ export const onRequestGet = async (context: { request: Request; env: AdminEnv })
   // old code returned 502 for BOTH, so a valid short/rare query looked like
   // an outage.
   let anyResponded = false;
-  for (const base of catalogBases()) {
+  for (const base of MIRRORS) {
     const r = await searchOne(base, path);
     if (r.ok) anyResponded = true;
     if (r.items.length) {

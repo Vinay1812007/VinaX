@@ -4,13 +4,16 @@
 // Pruned 2026-07 (DQA-10): saavn.dev DNS is dead and the b4a.run mirror 404s
 // these endpoints — both only added timeout latency to sitemap builds.
 
-// 1.2.0 — the wrapper(s) named in the CATALOG_UPSTREAMS secret (api/cat).
-import { catalogBases } from './api/cat/[[path]]';
+const BASES = [
+  'https://www.vinaxmusic.online/api/cat',
+  'https://saavn.sumit.co/api',
+  'https://nepotuneapi.vercel.app/api',
+];
 // Try each catalog mirror until one answers with results (with a per-mirror
 // timeout). Without this, a single degraded provider (e.g. saavn.dev 503)
 // produced an EMPTY sitemap and Google had no song/artist/album pages to index.
 async function fetchFirst(suffix: string): Promise<any[]> {
-  for (const base of catalogBases()) {
+  for (const base of BASES) {
     try {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 6000);

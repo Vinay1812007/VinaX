@@ -53,7 +53,7 @@ jobs:
         run: |
           H=$(curl -s -D - -o /tmp/cat.json -m 20 'https://www.vinaxmusic.online/api/cat/search/songs?query=telugu&limit=1')
           SRC=$(printf '%s' "$H" | tr -d '\r' | grep -i '^x-vinax-source:' | awk '{print $2}')
-          if [ "$SRC" = "upstream" ]; then echo "::notice title=catalogue-secret::OK - CATALOG_UPSTREAMS is set; a configured wrapper answered"; else echo "::error title=catalogue-secret::the music API did not answer /api/cat: CATALOG_UPSTREAMS is unset or https://musicapi.vinaxmusic.online/api is down. Set it: npx wrangler secret put CATALOG_UPSTREAMS --config worker/wrangler.toml"; fi
+          if [ "$SRC" = "upstream" ]; then echo "::notice title=catalogue-secret::OK - CATALOG_UPSTREAMS is set; a configured wrapper answered"; else echo "::warning title=catalogue-secret::CATALOG_UPSTREAMS is not set (or every wrapper failed): the built-in JioSaavn translation answered. Set it: npx wrangler secret put CATALOG_UPSTREAMS --config worker/wrangler.toml"; fi
           curl -s -m 20 https://www.vinaxmusic.online/ -o /tmp/home.html
           LEAK=0
           for u in $(grep -o 'src="/assets/[^"]*\.js"' /tmp/home.html | sed 's/src="//;s/"//'); do

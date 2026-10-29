@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { artSrcSet, bestImage, derivedVariants, FALLBACK_ART, isOwnArtwork } from './images';
+import { artSrcSet, bestImage, derivedVariants, FALLBACK_ART } from './images';
 
 describe('derivedVariants (4.19.5 — CDN serves unlisted 250/350 sizes)', () => {
   const imgs = [
@@ -95,15 +95,5 @@ describe('malformed input (corrupt persisted state) — DQA-04', () => {
   it('artSrcSet never throws on non-array or malformed entries', () => {
     expect(artSrcSet('nope' as never)).toBeUndefined();
     expect(artSrcSet([null, { quality: '50x50' }] as never)).toBeUndefined();
-  });
-});
-
-describe('isOwnArtwork', () => {
-  it('is true only for https links on VinaX hosts (the music API /media route)', () => {
-    expect(isOwnArtwork('https://musicapi.vinaxmusic.online/media/abc/500x500.jpg')).toBe(true);
-    expect(isOwnArtwork('https://c.saavncdn.com/x-500x500.jpg')).toBe(false);
-    expect(isOwnArtwork('https://evilvinaxmusic.online/x.jpg')).toBe(false);
-    expect(isOwnArtwork('http://musicapi.vinaxmusic.online/x.jpg')).toBe(false);
-    expect(isOwnArtwork('not a url')).toBe(false);
   });
 });

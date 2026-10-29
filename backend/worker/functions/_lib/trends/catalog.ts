@@ -1,6 +1,6 @@
 /**
- * Catalogue lookups for the matcher, through the Worker's own catalogue
- * handler (functions/api/cat, which reads the CATALOG_UPSTREAMS wrapper). The handler is called in-process
+ * Catalogue lookups for the matcher, through the Worker's own self-hosted
+ * catalogue handler (functions/api/cat). The handler is called in-process
  * with a synthetic request — no HTTP round trip to this Worker — and only
  * the song search and song-detail routes are used. Metadata only: nothing
  * here resolves or touches audio.
@@ -30,14 +30,10 @@ export function toCandidate(raw: any): CatalogCandidate | null {
   if (!id || !title) return null;
   const info = raw.more_info ?? {};
   const map = info.artistMap ?? {};
-  // Two dialects: JioSaavn's raw more_info.artistMap, and the wrapper's
-  // artists.{primary,featured,all} (CATALOG_UPSTREAMS answers in that one).
-  const wrapped = raw.artists && typeof raw.artists === 'object' && !Array.isArray(raw.artists) ? raw.artists : {};
   let primary = names(map.primary_artists);
-  if (!primary.length) primary = names(wrapped.primary);
   if (!primary.length && typeof raw.primaryArtists === 'string') primary = raw.primaryArtists.split(',').map((s: string) => decodeEntities(s).trim()).filter(Boolean);
-  const featured = [...names(map.featured_artists), ...names(wrapped.featured)];
-  const credits = [...names(map.artists), ...names(wrapped.all), ...String(info.music ?? '').split(',').map((s) => decodeEntities(s).trim()).filter(Boolean)];
+  const featured = names(map.featured_artists);
+  const credits = [...names(map.artists), ...String(info.music ?? '').split(',').map((s) => decodeEntities(s).trim()).filter(Boolean)];
   const album = typeof info.album === 'string' ? decodeEntities(info.album) : typeof raw.album === 'string' ? decodeEntities(raw.album) : typeof raw.album?.name === 'string' ? decodeEntities(raw.album.name) : null;
   const year = Number.parseInt(String(raw.year ?? ''), 10);
   const duration = Number.parseInt(String(info.duration ?? raw.duration ?? ''), 10);

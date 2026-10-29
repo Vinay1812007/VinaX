@@ -118,7 +118,6 @@ import * as m_song_id from './functions/song/[id]';
 import * as m_api_recs_similar from './functions/api/recommendations/similar/[songId]';
 import * as m_hub from './functions/[hub]';
 import * as m_api_cat_path from './functions/api/cat/[[path]]';
-import type { CatalogEnv } from './functions/api/cat/[[path]]';
 import * as m_sitemaps_map from './functions/sitemaps/[map]';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -340,14 +339,12 @@ const route = async (request: Request, env: Env, ctx: ExecCtx): Promise<Response
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecCtx): Promise<Response> {
-    m_api_cat_path.configureCatalog(env as CatalogEnv);
     // Host-level middleware (apex 301, update.* / admin.* redirects), then the router.
     return hostMiddleware({ request, next: () => route(request, env, ctx) });
   },
   // 14.0 — the Cron Trigger (wrangler.toml [triggers]): the status tick every
   // run, housekeeping once an hour. Nothing runs without the database.
   async scheduled(event: { scheduledTime: number }, env: Env, ctx: ExecCtx): Promise<void> {
-    m_api_cat_path.configureCatalog(env as CatalogEnv);
     ctx.waitUntil(runScheduled(env as Record<string, unknown>, event.scheduledTime));
   },
 };
