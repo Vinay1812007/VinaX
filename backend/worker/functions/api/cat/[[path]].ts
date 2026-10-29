@@ -73,7 +73,8 @@ function mediaBaseOf(env: CatalogEnv | undefined): string {
  * stays out of sight too.
  */
 export function cleanWrapperBody(text: string, bases: readonly string[], mediaBase: string): string {
-  let out = text.replace(/"https?:\/\/(?:www\.)?jiosaavn\.com\/(?!_i\/)[^"]*"/g, '""');
+  // Any JioSaavn host: artist links come on staging.jiosaavn.com too.
+  let out = text.replace(/"https?:\/\/(?:[a-z0-9-]+\.)*jiosaavn\.com\/(?!_i\/)[^"]*"/gi, '""');
   if (mediaBase) {
     for (const base of bases) {
       let origin: string;
