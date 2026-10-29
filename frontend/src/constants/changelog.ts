@@ -16,6 +16,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.2.3': {
+    title: 'Serve artwork and audio from media.vinaxmusic.online',
+    changes: [
+      { type: 'improved', text: 'Serve artwork and audio from media.vinaxmusic.online.' },
+    ],
+  },
   '1.2.2': {
     title: 'Hide the music provider\'s links from the browser',
     changes: [
