@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { albumPath, artistPath, songPath } from '@/utils/slug';
+import { artistPath, songPath } from '@/utils/slug';
+import { collectionPath, isEpisode } from '@/features/podcasts/paths';
 import { useNavigate } from 'react-router-dom';
 import type { Song } from '@/types';
 import { usePlayerStore } from '@/store/playerStore';
@@ -390,7 +391,8 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     { label: 'Song details', icon: 'details', action: () => navigate(songPath(song)) },
     // v5.17.0 — your own history with this song, from on-device data.
     { label: 'Your history with this song', icon: 'history', action: onShowMemories },
-    song.album?.id ? { label: 'Go to album', icon: 'album', action: () => navigate(albumPath(song.album!)) } : null,
+    // 1.3 — an episode's "album" is its podcast.
+    song.album?.id ? { label: isEpisode(song) ? 'Go to podcast' : 'Go to album', icon: 'album', action: () => navigate(collectionPath(song)!) } : null,
     song.artists[0]?.id
       ? { label: 'Go to artist', icon: 'artist', action: () => navigate(artistPath(song.artists[0])) }
       : null,

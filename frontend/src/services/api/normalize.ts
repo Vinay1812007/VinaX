@@ -230,7 +230,8 @@ function similarArtistRefs(raw: unknown): ArtistRef[] {
     const id = str(a.id, a.artistId);
     const name = decodeHtml(str(a.name, a.title));
     if (!id || !name) continue;
-    const image = typeof a.image_url === 'string' ? a.image_url : typeof a.image === 'string' ? a.image : null;
+    // A string in the raw dialect, an image array in the wrapper's.
+    const image = typeof a.image_url === 'string' ? a.image_url : firstImageUrl(a.image);
     out.push({ id, name, image });
     if (out.length >= 20) break;
   }
@@ -244,7 +245,21 @@ export function normalizeLyrics(raw: any): Lyrics | null {
   return {
     lyrics: decodeHtml(text).replace(/<br\s*\/?>/gi, '\n'),
     copyright: typeof raw.copyright === 'string' ? decodeHtml(raw.copyright) : null,
+    synced: syncedLines(raw.synced),
   };
+}
+
+/** 1.3 — the API's `synced.lines` ({time, text}) as the player's LRC lines; null when absent or empty. */
+function syncedLines(raw: any): Array<{ t: number; text: string }> | null {
+  const lines = Array.isArray(raw?.lines) ? raw.lines : null;
+  if (!lines) return null;
+  const out: Array<{ t: number; text: string }> = [];
+  for (const l of lines) {
+    const t = typeof l?.time === 'number' ? l.time : Number(l?.time);
+    if (!Number.isFinite(t) || t < 0 || typeof l?.text !== 'string') continue;
+    out.push({ t, text: decodeHtml(l.text) });
+  }
+  return out.length ? out : null;
 }
 
 /** Unwrap `{success, data}` envelopes that most wrappers use. */

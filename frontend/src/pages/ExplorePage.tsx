@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Chip } from '@/components/Chip';
@@ -30,6 +30,8 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { BrowseTile, DestTile, TileGlyph } from '@/features/discover/BrowseTile';
 import { HUB_TONE } from '@/features/discover/HubMoodTiles';
 import { moodTone } from '@/features/discover/tones';
+import { browseLanguage, categoryArt, categoryTone, groupCategories, useBrowseCategories } from '@/features/discover/useBrowse';
+import { FALLBACK_ART } from '@/utils/images';
 import '@/styles/pages/browse.css';
 
 const tiles: Array<{ to: string; label: string; meta: string; tone: number; icon: typeof CompassIcon }> = [
@@ -77,6 +79,39 @@ function MoodLanguageGrid() {
             visual={<TileGlyph emoji>{m.emoji}</TileGlyph>}
           />
         ))}
+      </div>
+    </section>
+  );
+}
+
+const COVER = { '--bx-cover': '48px' } as CSSProperties;
+
+/** 1.3 — a few of the catalogue's moods & genres; nothing at all when the API is down. */
+function CatalogueMoods() {
+  const pinned = useSettingsStore((s) => s.pinnedLanguages);
+  const q = useBrowseCategories(browseLanguage(pinned));
+  const picks = useMemo(() => groupCategories(q.data ?? []).flatMap((g) => g.items).slice(0, 8), [q.data]);
+  if (!picks.length) return null;
+  return (
+    <section className="vx-section" aria-label="Moods and genres">
+      <SectionHeader title="Moods & genres" explanation="Playlists and songs for each, from the catalogue" seeAllTo="/moods" />
+      <div className="bx-tile-grid">
+        {picks.map((c) => {
+          const art = categoryArt(c);
+          return (
+            <BrowseTile
+              key={c.id}
+              to={`/browse/${encodeURIComponent(c.id)}`}
+              tone={categoryTone(c)}
+              title={c.name}
+              visual={art ? (
+                <span className="bx-cover-fan" style={COVER}>
+                  <img src={art} alt="" width={48} height={48} loading="lazy" decoding="async" onError={(e) => (e.currentTarget.src = FALLBACK_ART)} />
+                </span>
+              ) : undefined}
+            />
+          );
+        })}
       </div>
     </section>
   );
@@ -286,6 +321,7 @@ export default function ExplorePage() {
       <DecadeRadio />
       <YearPicker />
       <MoodLanguageGrid />
+      <CatalogueMoods />
       <HubGrid />
     </div>
   );

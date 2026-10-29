@@ -11,6 +11,8 @@ import { PromoBanner } from '@/components/PromoBanner';
 import { PushPromptCard } from '@/components/PushPromptCard';
 import { NotificationSheet } from '@/components/NotificationSheet';
 import { DownloadCta } from '@/components/DownloadCta';
+import { Shelf } from '@/components/Shelf';
+import { MediaCard } from '@/components/MediaCard';
 import { BellIcon, ChevronDownIcon, MoonIcon, SunIcon } from '@/components/Icons';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDiscoveryStore } from '@/store/discoveryStore';
@@ -28,6 +30,10 @@ import { getLocal } from '@/services/storage/local';
 import { KEYS } from '@/constants/storage-keys';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
 import { getStreak } from '@/utils/streak';
+import { bestImage } from '@/utils/images';
+import { albumPath, playlistPath } from '@/utils/slug';
+import { playPlaylist } from '@/features/player/playEntity';
+import type { Playlist } from '@/types';
 import { listeningTotal } from '@/features/stats/listening';
 import { useRegion } from '@/features/location/useRegion';
 import { useExperiment } from '@/features/experiments/useExperiment';
@@ -50,6 +56,7 @@ import { resetShelfDeduper } from '@/features/home/dedupeShelves';
 import { personalMessage } from '@/features/home/personalMessage';
 import { useClientConfig } from '@/features/home/useAppConfig';
 import { useContinueListening, useTrendingNow } from '@/features/home/useHomeShelves';
+import { playlistSubtitle, useCatalogueCharts, useFeaturedPlaylists, useNewAlbums } from '@/features/home/useCatalogFeeds';
 import { useDailyMix } from '@/features/home/useDailyMix';
 import { refreshHome, useHomeVisit } from '@/features/home/homeRefresh';
 import { useShelfSafety } from '@/features/home/useShelfSafety';
@@ -78,6 +85,50 @@ const HOME_BLOCKS: Record<HomeSection, () => ReactNode> = {
   daypicks: DayPicksBlock,
   loved: LovedBlock,
   feed: FeedBlock,
+};
+
+function PlaylistShelf({ title, explanation, playlists }: { title: string; explanation?: string; playlists: Playlist[] }) {
+  return (
+    <Shelf title={title} explanation={explanation}>
+      {playlists.map((p) => (
+        <MediaCard key={p.id} to={playlistPath(p)} image={bestImage(p.images)} images={p.images} title={p.title} subtitle={playlistSubtitle(p)} onPlay={() => void playPlaylist(p.id, p.title)} />
+      ))}
+    </Shelf>
+  );
+}
+
+/**
+ * 1.3 — the catalogue's own feeds, each riding with the block it belongs to
+ * (so a hidden or reordered block takes them along): its chart and featured
+ * playlists after Charts, its new albums after Trending albums. Optional
+ * shelves: nothing shows while they load, on a miss or when they are empty.
+ */
+function CatalogueChartShelves() {
+  const charts = useCatalogueCharts();
+  const featured = useFeaturedPlaylists();
+  return (
+    <>
+      {!charts.isError && !!charts.data?.length && <PlaylistShelf title="Top charts" explanation="The catalogue's own chart playlists" playlists={charts.data} />}
+      {!featured.isError && !!featured.data?.length && <PlaylistShelf title="Featured playlists" playlists={featured.data} />}
+    </>
+  );
+}
+
+function NewAlbumsShelf() {
+  const albums = useNewAlbums();
+  if (albums.isError || !albums.data?.length) return null;
+  return (
+    <Shelf title="New albums">
+      {albums.data.map((album) => (
+        <MediaCard key={album.id} to={albumPath(album)} image={bestImage(album.images)} images={album.images} title={album.title} subtitle={album.subtitle} />
+      ))}
+    </Shelf>
+  );
+}
+
+const BLOCK_EXTRAS: Partial<Record<HomeSection, () => ReactNode>> = {
+  charts: CatalogueChartShelves,
+  albums: NewAlbumsShelf,
 };
 
 // Default order honours the home-shelf-order experiment (personal <-> discovery).
@@ -304,11 +355,13 @@ export default function HomePage() {
   };
   const renderBlock = (k: HomeSection, i: number) => {
     const Block = HOME_BLOCKS[k];
+    const Extra = BLOCK_EXTRAS[k];
+    const body = () => (Extra ? <><Block /><Extra /></> : <Block />);
     return (
       <Fragment key={k}>
         {/* Invisible block markers for the usage signal (features/home/homeTaps.ts). */}
         <span hidden data-home-block={k} />
-        {i < 2 ? <Block /> : <DeferredBlock render={() => <Block />} />}
+        {i < 2 ? body() : <DeferredBlock render={body} />}
         <span hidden data-home-block="" />
       </Fragment>
     );

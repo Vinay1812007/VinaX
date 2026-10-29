@@ -6,6 +6,10 @@ import { useCanonicalRedirect, useJsonLd } from '@/hooks/useSeo';
 import { buildArtistBreadcrumbs, buildArtistJsonLd } from '@/utils/schema';
 import { usePageMeta } from '@/hooks/usePageMeta';
 import { useArtist, useInfiniteArtistSongs } from '@/features/artists/useArtist';
+import { pickRelatedArtists, useSimilarArtistsOf } from '@/features/artists/useSimilar';
+import { playArtistStation } from '@/features/radio/stations';
+import { RadioGlyph } from '@/features/radio/RadioGlyph';
+import { toast } from '@/store/toastStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { playAlbum } from '@/features/player/playEntity';
 import { SongRow } from '@/components/SongRow';
@@ -30,6 +34,8 @@ export default function ArtistPage() {
   const playQueue = usePlayerStore((s) => s.playQueue);
   const startRadio = usePlayerStore((s) => s.startRadio);
   const [showAll, setShowAll] = useState(false);
+  const similar = useSimilarArtistsOf(id);
+  const [radioBusy, setRadioBusy] = useState(false);
   const canonicalPath = artist ? artistPath(artist) : undefined;
   useCanonicalRedirect(canonicalPath);
   usePageMeta({
@@ -58,7 +64,23 @@ export default function ArtistPage() {
   // Short releases (one to three tracks) read as singles; the rest as albums.
   const singles = artist.albums.filter((a) => a.songCount != null && a.songCount <= 3);
   const albums = artist.albums.filter((a) => !singles.includes(a));
-  const related = relatedArtists(artist.id, songs);
+  // 1.3 — the catalogue's similar artists first (they carry pictures); the payload's, then co-credits, as before.
+  const related = pickRelatedArtists(artist.id, [similar.data, artist.similarArtists, relatedArtists(artist.id, songs)]);
+  const aiRadio = () => startRadio(songs[0], { seeds: songs.slice(1, 5) });
+  /** 1.3 — the catalogue's artist station; AI Radio from their songs when it cannot open one. */
+  const artistRadio = async () => {
+    if (radioBusy) return;
+    setRadioBusy(true);
+    try {
+      await playArtistStation(artist.id);
+      toast(`Artist radio: ${artist.name}`);
+    } catch {
+      if (songs.length) aiRadio();
+      else toast(`Couldn’t start ${artist.name} radio right now`);
+    } finally {
+      setRadioBusy(false);
+    }
+  };
   const shufflePlay = () => {
     if (!songs.length) return;
     const p = usePlayerStore.getState();
@@ -88,8 +110,9 @@ export default function ArtistPage() {
           <>
             {songs.length > 0 && <PlayFab size="lg" label="Play top songs" onClick={() => playQueue(songs, 0)} />}
             {songs.length > 0 && <EntityAction label="Shuffle play" onClick={shufflePlay}><ShuffleIcon /></EntityAction>}
+            <EntityAction label="Artist radio" onClick={() => void artistRadio()} disabled={radioBusy}><RadioGlyph /></EntityAction>
             <SaveButton className="vx-ehead-pill vx-follow" entity={{ id: artist.id, kind: 'artist', title: artist.name, subtitle: 'Artist', image: bestImage(artist.images, 300) }} />
-            <EntityMenu items={[songs.length > 0 && { label: 'Start AI Radio', onSelect: () => startRadio(songs[0], { seeds: songs.slice(1, 5) }) }]} />
+            <EntityMenu items={[songs.length > 0 && { label: 'Start AI Radio', onSelect: aiRadio }]} />
           </>
         }
       />

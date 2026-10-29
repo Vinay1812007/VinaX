@@ -109,6 +109,16 @@ describe('/api/cat with CATALOG_UPSTREAMS', () => {
     expect(calls.map((u) => new URL(u).host)).toEqual(['www.jiosaavn.com']);
   });
 
+  it('keeps the wrapper’s no-store (radio) and caches everything else', async () => {
+    const env = { CATALOG_UPSTREAMS: 'https://cachehdr.example/api' };
+    answer = (url) =>
+      new Response(JSON.stringify({ success: true, data: { stationId: 's', songs: [] } }), {
+        headers: { 'content-type': 'application/json', 'cache-control': url.includes('/radio') ? 'no-store' : 'public, max-age=0' },
+      });
+    expect((await get('radio/songs?stationId=s&limit=5', env)).headers.get('cache-control')).toBe('no-store');
+    expect((await get('trending?language=hindi', env)).headers.get('cache-control')).toBe('public, max-age=60, s-maxage=600');
+  });
+
   it('without the secret, only the direct translation is used, and CATALOG_DIRECT_URL can move it', async () => {
     answer = () => jsonRes({ results: [] });
     await get('search/songs?query=x');

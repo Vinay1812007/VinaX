@@ -17,9 +17,11 @@ import { useContinueListening } from '@/features/home/useHomeShelves';
 import { useYourArtists } from '@/features/home/useYourArtists';
 import { byArtist, pickRadioSeeds, RADIO_MOODS, seedsForPrompt } from '@/features/radio/aiRadio';
 import { RadioGlyph } from '@/features/radio/RadioGlyph';
+import { playFeaturedStation, useRadioStations } from '@/features/radio/stations';
 import { languageLabel } from '@/constants/languages';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { letterAvatar } from '@/utils/avatar';
+import type { RadioStation } from '@/services/api';
 import type { Song } from '@/types';
 import '@/styles/pages/radio.css';
 
@@ -31,7 +33,14 @@ const onArtError = (e: React.SyntheticEvent<HTMLImageElement>) => {
 const rotation = () => Math.floor(Math.random() * 8);
 
 /** The last start that was attempted, so a failure can offer Try again. */
-type Attempt = { kind: 'mood'; intent: TuneIntent; label: string } | { kind: 'artist'; name: string } | { kind: 'text'; label: string };
+type Attempt =
+  | { kind: 'mood'; intent: TuneIntent; label: string }
+  | { kind: 'artist'; name: string }
+  | { kind: 'text'; label: string }
+  | { kind: 'station'; station: RadioStation };
+
+/** 1.3 — at most this many featured stations in the row. */
+const STATIONS_MAX = 16;
 
 /**
  * 8.2.0 — AI Radio: endless music from a song, an artist, a mood or a few
@@ -41,6 +50,10 @@ type Attempt = { kind: 'mood'; intent: TuneIntent; label: string } | { kind: 'ar
  * 9.0 "Encore" — the chat's composer for the words, mood pills, artwork-first
  * song cards; the control that was tapped shows it is starting, the live line
  * says what is on air (Lagoon is for live), and a failure offers Try again.
+ *
+ * 1.3 — Stations: the catalogue's featured stations in the listener's pinned
+ * languages. A station plays its own songs (features/radio/stations); the
+ * row is hidden when the catalogue has none.
  */
 export default function AiRadioPage() {
   usePageTitle('AI Radio');
@@ -52,6 +65,7 @@ export default function AiRadioPage() {
   const aiAssist = useSettingsStore((s) => s.aiAssist);
   const recent = useContinueListening(8);
   const artists = useYourArtists(8);
+  const stations = useRadioStations();
   const language = useMemo(() => pinned[0] ?? topLanguages(loadProfile(), 1)[0]?.id ?? null, [pinned]);
 
   const [text, setText] = useState('');
@@ -60,6 +74,8 @@ export default function AiRadioPage() {
   const [busy, setBusy] = useState<{ label: string; ai?: boolean; key: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
+  /** 1.3 — what is on air is a catalogue station, not AI Radio. */
+  const [onStation, setOnStation] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -82,6 +98,7 @@ export default function AiRadioPage() {
     }
     startRadio(seeds[0], { seeds: seeds.slice(1), tune });
     setPlaying(label);
+    setOnStation(false);
     toast(`AI Radio: ${label}`);
   };
   const failed = (label: string, signal: AbortSignal) => {
@@ -103,6 +120,7 @@ export default function AiRadioPage() {
     setError(null);
     startRadio(song);
     setPlaying(song.title);
+    setOnStation(false);
     toast(`AI Radio: ${song.title}`);
   };
 
@@ -157,10 +175,26 @@ export default function AiRadioPage() {
     }
   };
 
+  const fromStation = async (station: RadioStation) => {
+    setAttempt({ kind: 'station', station });
+    const signal = begin(station.name, `station:${station.name}`);
+    try {
+      await playFeaturedStation(station, { signal });
+      if (signal.aborted) return;
+      setBusy(null);
+      setPlaying(station.name);
+      setOnStation(true);
+      toast(`Radio: ${station.name}`);
+    } catch {
+      failed(station.name, signal);
+    }
+  };
+
   const retry = () => {
     if (!attempt) return;
     if (attempt.kind === 'mood') void fromMood(attempt.intent, attempt.label);
     else if (attempt.kind === 'artist') void fromArtist(attempt.name);
+    else if (attempt.kind === 'station') void fromStation(attempt.station);
     else void fromText(attempt.label);
   };
 
@@ -173,6 +207,7 @@ export default function AiRadioPage() {
   const examples = lang ? [`${lang} 90s melodies`, `${lang} DJ remix`, `${lang} folk songs`] : ['90s melodies', 'Romantic', 'Workout'];
   const liveState = busy ? 'busy' : playing ? 'on' : 'idle';
   const seeds = [...(current ? [current] : []), ...recent.filter((s) => s.id !== current?.id)].slice(0, 8);
+  const stationList = stations.data?.slice(0, STATIONS_MAX) ?? [];
 
   return (
     <div className="vx-aistudio vx-radio">
@@ -227,7 +262,7 @@ export default function AiRadioPage() {
             </span>
           ) : playing ? (
             <>
-              Playing AI Radio: {playing}. <Link to="/queue">See what’s next</Link>
+              Playing {onStation ? '' : 'AI Radio: '}{playing}. <Link to="/queue">See what’s next</Link>
             </>
           ) : (
             ''
@@ -285,6 +320,39 @@ export default function AiRadioPage() {
           })}
         </div>
       </section>
+
+      {stationList.length > 0 && (
+        <section className="vx-aistudio-section" aria-labelledby="vx-radio-stations">
+          <h2 id="vx-radio-stations" className="vx-aistudio-title">
+            Stations
+          </h2>
+          <div className="vx-radio-seeds" role="group" aria-label="Stations">
+            {stationList.map((st) => {
+              const starting = busy?.key === `station:${st.name}`;
+              return (
+                <button
+                  key={`${st.language}:${st.name}`}
+                  type="button"
+                  className="vx-radio-seed"
+                  disabled={!!busy}
+                  aria-busy={starting || undefined}
+                  onClick={() => void fromStation(st)}
+                  aria-label={`Start ${st.name} station`}
+                >
+                  <span className="vx-radio-seed-art" style={st.color ? { background: st.color } : undefined}>
+                    <img src={bestImage(st.images, 300)} alt="" width={152} height={152} loading="lazy" decoding="async" onError={onArtError} />
+                    <span className="vx-radio-seed-badge" aria-hidden>
+                      {starting ? <span className="vx-ai-spin" /> : <RadioGlyph />}
+                    </span>
+                  </span>
+                  <span className="vx-radio-seed-title">{st.name}</span>
+                  <span className="vx-radio-seed-sub">{st.description ?? languageLabel(st.language)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {(seeds.length > 0 || artists.length > 0) && (
         <section className="vx-aistudio-section" aria-labelledby="vx-radio-from">

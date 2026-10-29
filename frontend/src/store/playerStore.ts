@@ -22,7 +22,7 @@ import { isValidSong, noteUnavailable, queueAfterClearFrom, reorderQueue, resetS
 import { kidModeOn, stripExplicit } from '@/services/kidMode';
 import { getRecommendationContext } from '@/services/recommendation/context';
 import type { NextSongsPlan } from '@/services/recommendation/engine';
-import { NEXT_URGENT_DEADLINE_MS } from '@/services/recommendation/deadlines';
+import { NEXT_DEADLINE_MS, NEXT_URGENT_DEADLINE_MS } from '@/services/recommendation/deadlines';
 import { songKey } from '@/services/recommendation/songIdentity';
 import { admitSongs } from '@/services/recommendation/admission';
 import { isTuneIntent, randomTune, type TuneIntent } from '@/services/recommendation/tune';
@@ -42,6 +42,13 @@ import {
 } from '@/services/playback/session';
 
 export type RepeatMode = 'off' | 'one' | 'all';
+
+/**
+ * 1.3 — a catalogue station's own continuation (features/radio/stations):
+ * the next songs on the station. While a radio has one, each top-up asks it
+ * first; a miss falls back to the DJ's plan, and two misses in a row end it.
+ */
+export type RadioFeed = (limit: number, signal: AbortSignal) => Promise<Song[]>;
 
 export interface PlayerState {
   queue: Song[];
@@ -109,7 +116,7 @@ export interface PlayerState {
    * `seeds` play first after the song (a mood's or a request's picks, up to
    * RADIO_SEED_MAX in all) and `tune` steers every continuation the DJ adds.
    */
-  startRadio(song?: Song, opts?: { seeds?: Song[]; tune?: TuneIntent | null }): void;
+  startRadio(song?: Song, opts?: { seeds?: Song[]; tune?: TuneIntent | null; feed?: RadioFeed | null }): void;
   /** v6.3.0 — songs the recommender appended (not hand-queued), after the current one. */
   autoTail(): Song[];
   isAutoQueued(id: string): boolean;
@@ -237,6 +244,9 @@ export const usePlayerStore = create<PlayerState>()(
       let queueVersion = 0;
       let transition = 0;
       let radio = false;
+      /** 1.3 — the station keeping this radio going (startRadio's `feed`), and its misses in a row. */
+      let feed: RadioFeed | null = null;
+      let feedMisses = 0;
       let recommendationJob: { version: number; promise: Promise<boolean> } | null = null;
       /** 7.2.0 — cancels the in-flight plan and its AI refinement when the queue moves on. */
       let planAbort: AbortController | null = null;
@@ -427,6 +437,34 @@ export const usePlayerStore = create<PlayerState>()(
         emitPlaybackEvent({ kind: 'served', batch, alg: plan.alg, picker: 'reserve', fallback: 'deadline', latencyMs: 0, n: admitted.length, discovery: admitted.filter((s) => plan.discoveryIds.has(s.id)).length, languageViolations: languageViolations(admitted, plan.language), distinctArtists: distinctLeads(admitted), relaxed: [], refinementPending: false });
         return admitted.length;
       }
+      /**
+       * 1.3 — the station's next songs, through the same gate as the DJ's.
+       * True when some went in; false sends the caller on to the DJ's plan.
+       */
+      async function appendFromFeed(source: RadioFeed, version: number, signal: AbortSignal, urgent: boolean): Promise<boolean> {
+        const started = Date.now();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const songs = await Promise.race([
+          source(NEXT_BATCH, signal),
+          new Promise<Song[]>((resolve) => { timer = setTimeout(() => resolve([]), urgent ? NEXT_URGENT_DEADLINE_MS : NEXT_DEADLINE_MS); }),
+        ]).catch(() => [] as Song[]).finally(() => clearTimeout(timer));
+        if (feed !== source || version !== queueVersion || signal.aborted || !canExtend()) return false;
+        const queue = get().queue;
+        const { admitted } = queue.length ? admitSongs(songs.filter(isValidSong), { queue, index: get().index }) : { admitted: [] as Song[] };
+        if (!admitted.length) {
+          feedMisses += 1;
+          if (feedMisses >= 2) feed = null;
+          return false;
+        }
+        feedMisses = 0;
+        const batch = (batchSeq += 1);
+        markAuto(admitted, { alg: 'station', picker: 'local', batch });
+        set({ queue: [...queue, ...admitted] });
+        preloadUpcoming();
+        emitPlaybackEvent({ kind: 'served', batch, alg: 'station', picker: 'local', fallback: null, latencyMs: Date.now() - started, n: admitted.length, discovery: 0, languageViolations: 0, distinctArtists: distinctLeads(admitted), relaxed: [], refinementPending: false });
+        return true;
+      }
+
       async function appendRecommendations(seed: Song, opts: { urgent?: boolean } = {}): Promise<boolean> {
         if (recommendationJob?.version === queueVersion) return recommendationJob.promise;
         const version = queueVersion;
@@ -435,6 +473,9 @@ export const usePlayerStore = create<PlayerState>()(
         planAbort = abort;
         const promise = (async () => {
           try {
+            // 1.3 — a catalogue station plays its own next songs; the DJ only covers a miss.
+            if (feed && (await appendFromFeed(feed, version, abort.signal, !!opts.urgent))) return true;
+            if (version !== queueVersion || abort.signal.aborted) return false;
             // 7.2.0 — the engine is loaded on demand: it no longer rides the
             // first load with the player store (the service worker precaches it).
             // V2 — Up Next is the rewritten engine (services/nextup): planned from the
@@ -982,6 +1023,7 @@ export const usePlayerStore = create<PlayerState>()(
           invalidateQueue();
           // V2 — a new list is a new session: the last plan's reserve belongs to the old one.
           lastPlan = null;
+          feed = null;
           autoIds.clear();
           autoMetaById.clear();
           manualIds.clear();
@@ -1021,6 +1063,7 @@ export const usePlayerStore = create<PlayerState>()(
           invalidateQueue();
           lastPlan = null; // the reserve was planned for the old tune
           radio = true; // a tuned continuation is endless, like radio
+          if (resolved) feed = null; // 1.3 — a station cannot follow a tune: the DJ takes over
           // 7.2.0 — a rebuild replaces the recommender's picks only. Songs the
           // listener queued by hand AND the list they started (an album, a
           // playlist, a Queue Builder plan) stay: "songs you added stay" has to
@@ -1208,6 +1251,7 @@ export const usePlayerStore = create<PlayerState>()(
           invalidateQueue();
           lastPlan = null;
           radio = false;
+          feed = null;
           clearSleepTimeout();
           autoIds.clear();
           autoMetaById.clear();
@@ -1396,6 +1440,8 @@ export const usePlayerStore = create<PlayerState>()(
           invalidateQueue();
           lastPlan = null;
           radio = true;
+          feed = opts.feed ?? null;
+          feedMisses = 0;
           autoIds.clear();
           autoMetaById.clear();
           manualIds.clear();

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { Artist, ArtistRef } from '@/types';
 import { getArtist } from '@/services/api/saavn';
+import { getSimilarArtists } from '@/services/api/catalog';
 import { artistKey, useLibraryStore } from '@/store/libraryStore';
 import { loadProfile } from '@/services/personalization/storage';
 import { useYourArtists } from './useYourArtists';
@@ -52,16 +53,36 @@ export function mergeSimilarArtists(
     .map(({ order: _order, ...card }) => card);
 }
 
+type SeedArtist = Pick<Artist, 'id' | 'name' | 'similarArtists'>;
+
+/**
+ * 1.3 — one seed's similar artists: the catalogue's similar list (one small
+ * call, with pictures) first, the full artist payload's list when that fails
+ * or is empty. Rejects only when both do.
+ */
+export async function similarSeed(
+  id: string,
+  name: string,
+  deps: { similar?: (id: string) => Promise<ArtistRef[]>; artist?: (id: string) => Promise<SeedArtist> } = {},
+): Promise<SeedArtist> {
+  const similar = deps.similar ?? ((x: string) => getSimilarArtists(x, LIMIT));
+  const artist = deps.artist ?? getArtist;
+  const list = await similar(id).catch(() => [] as ArtistRef[]);
+  if (list.length) return { id, name, similarArtists: list };
+  return artist(id);
+}
+
 export function useSimilarArtists() {
   const yours = useYourArtists(20);
   const hiddenArtists = useLibraryStore((s) => s.hiddenArtists);
-  const seedIds = yours.filter((a) => a.id).slice(0, SEEDS).map((a) => a.id as string);
+  const seedArtists = yours.filter((a) => a.id).slice(0, SEEDS);
+  const seedIds = seedArtists.map((a) => a.id);
   return useQuery({
     queryKey: ['home-similar-artists', seedIds.join(','), hiddenArtists.join(',')],
     enabled: seedIds.length > 0,
     staleTime: 30 * 60_000,
     queryFn: async (): Promise<SimilarArtistCard[]> => {
-      const settled = await Promise.allSettled(seedIds.map((id) => getArtist(id)));
+      const settled = await Promise.allSettled(seedArtists.map((a) => similarSeed(a.id, a.name)));
       const seeds = settled.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
       // Every seed failing is an error the shelf can hide; some failing is just fewer cards.
       if (!seeds.length) throw new Error('similar_artists_unavailable');

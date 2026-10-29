@@ -5,7 +5,7 @@
  * painted over by later rows or clipped by a transformed ancestor).
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/services/audio/engine', () => ({
@@ -220,5 +220,31 @@ describe('placePanel', () => {
     const squeezed = placePanel({ top: 150, bottom: 186, right: 380 }, 288, { width: 400, height: 380 });
     expect(squeezed.top).toBeGreaterThanOrEqual(8);
     expect(squeezed.top + 288).toBeLessThanOrEqual(380 - 8);
+  });
+});
+
+describe('<TrackMenu /> — 1.3 podcast episodes', () => {
+  const Where = () => <p data-testid="where">{useLocation().pathname}</p>;
+  const open = (s: ReturnType<typeof makeSong>) => {
+    render(
+      <MemoryRouter>
+        <TrackMenu song={s} />
+        <Where />
+      </MemoryRouter>,
+    );
+    fireEvent.click(trigger());
+  };
+
+  it('an episode goes to its podcast, not to an album page', () => {
+    open(makeSong('ep', { album: { id: '62', name: 'Talking Music' }, audio: [{ quality: 'original', url: 'https://x/ep.mp3' }] }));
+    expect(screen.queryByRole('menuitem', { name: 'Go to album' })).toBeNull();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Go to podcast' }));
+    expect(screen.getByTestId('where').textContent).toBe('/podcast/talking-music-62');
+  });
+
+  it('a song still goes to its album', () => {
+    open(makeSong('s', { album: { id: '9', name: 'Film' }, audio: [{ quality: '320kbps', url: 'https://x/s.mp4' }] }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Go to album' }));
+    expect(screen.getByTestId('where').textContent).toBe('/album/film-9');
   });
 });

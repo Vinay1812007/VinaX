@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Song } from '@/types';
 
@@ -16,7 +17,15 @@ vi.mock('@/services/personalization/updater', () => ({
   recordComplete: vi.fn(), recordPlay: vi.fn(), recordQueueAdd: vi.fn(), recordSkip: vi.fn(),
 }));
 const search = vi.fn(async (_q: string, _n?: number, _o?: unknown): Promise<Song[]> => []);
-vi.mock('@/services/api', () => ({ searchSongs: (q: string, n?: number, o?: unknown) => search(q, n, o) }));
+const getRadioStations = vi.fn(async (_langs: unknown, _o?: unknown): Promise<unknown[]> => Promise.reject(new Error('down')));
+const startFeaturedStation = vi.fn(async (..._a: unknown[]): Promise<{ stationId: string | null; songs: Song[] }> => Promise.reject(new Error('down')));
+vi.mock('@/services/api', () => ({
+  searchSongs: (q: string, n?: number, o?: unknown) => search(q, n, o),
+  getRadioStations: (l: unknown, o?: unknown) => getRadioStations(l, o),
+  startFeaturedStation: (...a: unknown[]) => startFeaturedStation(...a),
+  startArtistRadio: vi.fn(),
+  nextStationSongs: vi.fn(),
+}));
 const generatePlaylist = vi.fn(async () => ({ ok: false as const, reason: 'empty' as const }));
 vi.mock('@/services/ai/playlist', () => ({ generatePlaylist: (...a: unknown[]) => generatePlaylist(...(a as [])) }));
 
@@ -28,11 +37,19 @@ import { useLibraryStore } from '@/store/libraryStore';
 import { makeSong } from '@/__fixtures__/songs';
 
 const startRadio = vi.fn();
-const mount = () => render(<MemoryRouter><AiRadioPage /></MemoryRouter>);
+const mount = () =>
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <MemoryRouter><AiRadioPage /></MemoryRouter>
+    </QueryClientProvider>,
+  );
 
 beforeEach(() => {
   search.mockReset();
   search.mockResolvedValue([]);
+  getRadioStations.mockReset();
+  getRadioStations.mockRejectedValue(new Error('down'));
+  startFeaturedStation.mockReset();
   generatePlaylist.mockClear();
   startRadio.mockReset();
   usePlayerStore.setState({ startRadio, queue: [], index: 0 });
@@ -124,5 +141,39 @@ describe('AI Radio page', () => {
     await waitFor(() => expect(startRadio).toHaveBeenCalledOnce());
     const [seed, opts] = startRadio.mock.calls[0] as [Song, { seeds: Song[] }];
     expect([seed, ...opts.seeds].map((s) => s.id).sort()).toEqual(['a1', 'a2']);
+  });
+
+  it('1.3 — Stations: the pinned languages\u2019 featured stations; one tap plays the station', async () => {
+    getRadioStations.mockResolvedValue([
+      { name: 'Retro Spin', description: 'Telugu Radio', language: 'telugu', color: '#bf4739', images: [] },
+      { name: 'Love Lines', description: null, language: 'telugu', color: null, images: [] },
+    ]);
+    const songs = ['1', '2', '3', '4', '5', '6', '7'].map((id) => makeSong(`st${id}`));
+    startFeaturedStation.mockResolvedValue({ stationId: 'station-1', songs });
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'Start Retro Spin station' }));
+    await waitFor(() => expect(startRadio).toHaveBeenCalledOnce());
+    expect(getRadioStations.mock.calls[0][0]).toEqual(['telugu']);
+    expect(startFeaturedStation.mock.calls[0].slice(0, 2)).toEqual(['Retro Spin', 'telugu']);
+    const [seed, opts] = startRadio.mock.calls[0] as [Song, { seeds: Song[]; feed: unknown }];
+    expect([seed, ...opts.seeds].map((s) => s.id)).toEqual(['st1', 'st2', 'st3', 'st4', 'st5']);
+    expect(typeof opts.feed).toBe('function');
+    expect(await screen.findByText(/Playing Retro Spin\./)).toBeTruthy();
+  });
+
+  it('1.3 — a station that will not open says so and offers Try again', async () => {
+    getRadioStations.mockResolvedValue([{ name: 'Retro Spin', description: null, language: 'telugu', color: null, images: [] }]);
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'Start Retro Spin station' }));
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Couldn’t start “Retro Spin”/);
+    expect(startRadio).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /Try again/ })).toBeTruthy();
+  });
+
+  it('1.3 — no Stations section when the catalogue has none', async () => {
+    mount();
+    await waitFor(() => expect(getRadioStations).toHaveBeenCalled());
+    expect(screen.queryByRole('heading', { name: 'Stations' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Pick a mood' })).toBeTruthy();
   });
 });

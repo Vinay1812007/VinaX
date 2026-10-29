@@ -87,6 +87,8 @@ export interface Artist {
 export interface Lyrics {
   lyrics: string;
   copyright: string | null;
+  /** 1.3 — time-stamped lines (seconds) when the catalogue matched them; null or absent otherwise. */
+  synced?: Array<{ t: number; text: string }> | null;
 }
 
 export interface SearchResults {

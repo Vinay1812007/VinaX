@@ -23,7 +23,7 @@ describe('DestinationGrid (discover)', () => {
     inRouter(<DestinationGrid area="discover" />);
     const nav = screen.getByRole('navigation', { name: 'Browse music' });
     const hrefs = within(nav).getAllByRole('link').map((a) => a.getAttribute('href'));
-    expect(hrefs).toEqual(['/charts', '/languages', '/moods', '/regions', '/movies', '/videos', '/made-for-you', '/weekly', '/ai-playlist']);
+    expect(hrefs).toEqual(['/charts', '/languages', '/moods', '/regions', '/movies', '/videos', '/podcasts', '/made-for-you', '/weekly', '/ai-playlist']);
     expect(within(nav).getByRole('link', { name: /Charts/ })).toBeTruthy();
     expect(within(nav).queryByRole('link', { name: /Ads/ })).toBeNull();
   });

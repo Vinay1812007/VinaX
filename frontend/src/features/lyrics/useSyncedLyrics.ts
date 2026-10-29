@@ -3,6 +3,7 @@ import type { Song } from '@/types';
 import { getLyrics } from '@/services/api';
 import { fetchLrclibLyrics, type LyricsResult } from '@/services/lyrics/lrclib';
 import { reportLyricMiss } from '@/services/analytics/telemetry';
+import { isEpisode } from '@/features/podcasts/paths';
 
 /**
  * Lyrics resolution chain: LRCLIB synced → LRCLIB plain → upstream wrapper
@@ -16,11 +17,17 @@ export function useSyncedLyrics(song: Song | null | undefined) {
     retry: false,
     queryFn: async () => {
       if (!song) return null;
+      // 1.3 — podcast episodes have no lyrics; a title lookup could only find a wrong song.
+      if (isEpisode(song)) return null;
       const artist = song.artists[0]?.name ?? song.subtitle.split(',')[0] ?? '';
       const fromUpstream = async (): Promise<LyricsResult | null> => {
         try {
           const upstream = await getLyrics(song.id);
-          if (upstream.lyrics) return { plain: upstream.lyrics, synced: null, source: 'upstream' };
+          // 1.3 — the catalogue can match synced lines server-side, which
+          // covers listeners whose network blocks lrclib.net.
+          if (upstream.lyrics || upstream.synced) {
+            return { plain: upstream.lyrics || null, synced: upstream.synced ?? null, source: 'upstream' };
+          }
         } catch {
           /* upstream lyrics missing — normal */
         }
@@ -45,10 +52,13 @@ export function useSyncedLyrics(song: Song | null | undefined) {
         return result;
       }
       const lrc = await fetchLrclibLyrics(song.title, artist, song.duration);
-      if (lrc) return lrc;
-      const up = await withDeadline(fromUpstream(), 8000, null);
-      if (!up) reportLyricMiss(song);
-      return up;
+      if (lrc?.synced) return lrc;
+      // With LRCLIB plain text already in hand, wait less for a synced upgrade.
+      const up = await withDeadline(fromUpstream(), lrc ? 3000 : 8000, null);
+      // Synced from the catalogue beats plain text from LRCLIB.
+      const result = up?.synced ? up : (lrc ?? up);
+      if (!result) reportLyricMiss(song);
+      return result;
     },
   });
 }

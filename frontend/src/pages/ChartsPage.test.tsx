@@ -20,14 +20,28 @@ const playQueue = vi.fn();
 let online = true;
 
 vi.mock('@/services/trends/client', () => ({ fetchVerifiedTrends: (opts: unknown) => fetchVerifiedTrends(opts) }));
-vi.mock('@/services/api', () => ({ getSong: (id: string) => getSong(id) }));
+// 1.3 — the catalogue feeds miss by default (the backup source does not know them), so the search lists show.
+const getTrendingSongs = vi.fn();
+const getCharts = vi.fn();
+vi.mock('@/services/api', () => ({
+  API_LANGUAGES: ['hindi', 'telugu'],
+  getSong: (id: string) => getSong(id),
+  getTrendingSongs: (...a: unknown[]) => getTrendingSongs(...a),
+  getCharts: (...a: unknown[]) => getCharts(...a),
+}));
 vi.mock('@/hooks/useOnlineStatus', () => ({ useOnlineStatus: () => online }));
 vi.mock('@/features/location/useRegion', () => ({ useRegion: () => ({ country: 'IN', regionLabel: null, source: 'manual' }) }));
 vi.mock('@/store/playerStore', () => ({ usePlayerStore: (sel: (s: { playQueue: typeof playQueue }) => unknown) => sel({ playQueue }) }));
 vi.mock('@/store/historyStore', () => ({ useHistoryStore: (sel: (s: { entries: unknown[] }) => unknown) => sel({ entries: [] }) }));
 const catalogueSongs = [makeSong('p1', { title: 'Catalogue One' }), makeSong('p2', { title: 'Catalogue Two' })];
+const searchEnabled: boolean[] = [];
 vi.mock('@/features/search/useInfiniteSongs', () => ({
-  useInfiniteSongs: () => ({ isLoading: false, isError: false, data: { pages: [catalogueSongs] }, refetch: vi.fn() }),
+  useInfiniteSongs: (_q: string, enabled = true) => {
+    searchEnabled.push(enabled);
+    return enabled
+      ? { isLoading: false, isError: false, data: { pages: [catalogueSongs] }, refetch: vi.fn() }
+      : { isLoading: false, isError: false, data: undefined, refetch: vi.fn() };
+  },
   flattenSongPages: (pages?: unknown[][]) => (pages ?? []).flat(),
 }));
 
@@ -84,6 +98,9 @@ beforeEach(() => {
   fetchVerifiedTrends.mockReset();
   getSong.mockReset();
   playQueue.mockReset();
+  getTrendingSongs.mockReset().mockRejectedValue(new Error('route not found'));
+  getCharts.mockReset().mockRejectedValue(new Error('route not found'));
+  searchEnabled.length = 0;
   window.sessionStorage.clear();
 });
 afterEach(cleanup);
@@ -98,6 +115,8 @@ describe('ChartsPage', () => {
     expect(screen.getByText('Catalogue One')).toBeTruthy();
     // The disabled short-video source is never presented as a chart.
     expect(pageText()).not.toMatch(/Short-video audio/);
+    // 1.3 — a feed miss hides the catalogue chart playlists entirely.
+    expect(screen.queryByRole('heading', { name: 'Catalogue charts' })).toBeNull();
     noUnverifiedClaims();
   });
 
@@ -199,5 +218,33 @@ describe('ChartsPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Play Chuttamalle' }));
     expect(await screen.findByRole('alert')).toBeTruthy();
     expect(playQueue).not.toHaveBeenCalled();
+  });
+
+  it('1.3 — "Popular" reads the catalogue’s trending feed first and labels it as that, not a chart', async () => {
+    fetchVerifiedTrends.mockResolvedValue(null);
+    getTrendingSongs.mockResolvedValue([makeSong('t1', { title: 'Feed One' }), makeSong('t2', { title: 'Feed Two' })]);
+    mount();
+    expect(await screen.findByText('Feed One')).toBeTruthy();
+    expect(screen.getByText('The catalogue’s own trending list — not a public chart.')).toBeTruthy();
+    expect(screen.queryByText('Catalogue One')).toBeNull();
+    // The search never runs while the feed answers.
+    expect(searchEnabled[searchEnabled.length - 1]).toBe(false);
+    // "Recent hits" is still the search.
+    fireEvent.click(screen.getByRole('button', { name: 'Recent hits' }));
+    expect(await screen.findByText('Catalogue One')).toBeTruthy();
+    expect(screen.getByText(/not a live chart/)).toBeTruthy();
+    noUnverifiedClaims();
+  });
+
+  it('1.3 — shows the catalogue’s chart playlists, each linking to its playlist page', async () => {
+    fetchVerifiedTrends.mockResolvedValue(null);
+    getCharts.mockResolvedValue([
+      { kind: 'playlist', id: '946682072', title: 'Most Searched Songs - Hindi', subtitle: 'JioSaavn', images: [], songs: [], songCount: null, language: 'hindi' },
+    ]);
+    mount();
+    expect(await screen.findByRole('heading', { name: 'Catalogue charts' })).toBeTruthy();
+    const link = screen.getAllByRole('link').find((a) => a.getAttribute('href')?.startsWith('/playlist/'));
+    expect(link?.getAttribute('href')).toBe('/playlist/most-searched-songs-hindi-946682072');
+    expect(pageText()).not.toMatch(/JioSaavn/);
   });
 });

@@ -9,6 +9,7 @@ import {
   FilmIcon,
   GlobeIcon,
   HeartIcon,
+  MicIcon,
   SparkleIcon,
   VideoIcon,
   WaveformIcon,
@@ -20,6 +21,8 @@ const DESTINATIONS: Array<{ to: string; title: string; meta: string; tone: numbe
   { to: '/regions', title: 'Regions', meta: 'Local favourites', tone: 4, icon: GlobeIcon },
   { to: '/movies', title: 'Movies', meta: 'Film soundtracks', tone: 5, icon: FilmIcon },
   { to: '/videos', title: 'Videos', meta: 'Music videos', tone: 6, icon: VideoIcon },
+  // 1.3 — podcasts sit with the other non-song listening.
+  { to: '/podcasts', title: 'Podcasts', meta: 'Shows and conversations', tone: 10, icon: MicIcon },
   { to: '/made-for-you', title: 'Made for you', meta: 'Mixes from your listening', tone: 7, icon: HeartIcon },
   { to: '/weekly', title: 'Your week', meta: 'Your weekly mix', tone: 8, icon: ClockIcon },
   { to: '/ai-playlist', title: 'AI playlist', meta: 'Describe it, get a playlist', tone: 9, icon: SparkleIcon, ai: true },

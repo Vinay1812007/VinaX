@@ -9,6 +9,7 @@ import {
   HeartIcon,
   HomeIcon,
   LibraryIcon,
+  MicIcon,
   MusicIcon,
   QueueIcon,
   SearchIcon,
@@ -62,6 +63,8 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Explore',
     items: [
       { to: '/videos', label: 'Videos', icon: VideoIcon },
+      // 1.3 — the catalogue's shows.
+      { to: '/podcasts', label: 'Podcasts', icon: MicIcon },
       { to: '/movies', label: 'Movies', icon: FilmIcon },
       { to: '/languages', label: 'Languages', icon: MusicIcon },
       { to: '/moods', label: 'Moods', icon: WaveIcon },

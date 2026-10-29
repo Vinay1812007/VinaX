@@ -4,6 +4,10 @@ import { useCanonicalRedirect, useJsonLd } from '@/hooks/useSeo';
 import { buildAlbumBreadcrumbs, buildAlbumJsonLd } from '@/utils/schema';
 import { usePageMeta } from '@/hooks/usePageMeta';
 import { useAlbum } from '@/features/albums/useAlbum';
+import { useSimilarAlbumsOf } from '@/features/artists/useSimilar';
+import { playAlbum } from '@/features/player/playEntity';
+import { Shelf } from '@/components/Shelf';
+import { MediaCard } from '@/components/MediaCard';
 import { usePlayerStore } from '@/store/playerStore';
 import { SongRow, TrackListHead } from '@/components/SongRow';
 import { EntityAction, EntityHeader, EntityMenu, EntityMeta, PlayFab, songsLabel, totalDuration } from '@/components/EntityHeader';
@@ -23,6 +27,7 @@ export default function AlbumPage() {
   const { data: album, isLoading, isError, refetch } = useAlbum(id);
   const playQueue = usePlayerStore((s) => s.playQueue);
   const enqueueAll = usePlayerStore((s) => s.enqueueAll);
+  const similar = useSimilarAlbumsOf(id);
   const canonicalPath = album ? albumPath(album) : undefined;
   useCanonicalRedirect(canonicalPath);
   usePageMeta({
@@ -41,6 +46,8 @@ export default function AlbumPage() {
 
   const art = bestImage(album.images, 500);
   const artist = album.artists[0];
+  // 1.3 — "More like this": the catalogue's similar albums; nothing when it has none.
+  const moreLikeThis = (similar.data ?? []).filter((a) => a.id !== album.id);
   const shufflePlay = () => {
     if (!album.songs.length) return;
     const p = usePlayerStore.getState();
@@ -87,6 +94,15 @@ export default function AlbumPage() {
         <div className="vx-tracklist no-album">
           <TrackListHead />
           {album.songs.map((song, i) => <SongRow key={song.id} song={song} songs={album.songs} index={i} showArt={false} />)}
+        </div>
+      )}
+      {moreLikeThis.length > 0 && (
+        <div className="vx-esection">
+          <Shelf title="More like this">
+            {moreLikeThis.map((a) => (
+              <MediaCard key={a.id} to={albumPath(a)} image={bestImage(a.images)} images={a.images} title={a.title} subtitle={[a.year, a.subtitle].filter(Boolean).join(' · ')} onPlay={() => void playAlbum(a.id, a.title)} />
+            ))}
+          </Shelf>
         </div>
       )}
       <AdSlot className="vx-esection" />

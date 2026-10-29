@@ -1,0 +1,43 @@
+/* ============================================================================
+   1.3 — podcast episode rows. A track row (tracklist.css) grown for talk:
+   bigger art, a date · length line over the title, and a two-line summary.
+   The current / playing treatment is the track row's own.
+   ========================================================================= */
+
+.vx-episodes { display: flex; flex-direction: column; gap: 2px; }
+.vx-episode { align-items: flex-start; }
+.vx-episode .vx-track-play { align-items: flex-start; gap: 16px; padding: 12px 0; }
+.vx-episode .vx-track-art { width: 72px; height: 72px; border-radius: 12px; }
+.vx-episode .vx-track-more { align-self: center; }
+.vx-episode-meta {
+  display: block;
+  margin-bottom: 4px;
+  color: rgb(var(--ink-400));
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.vx-episode .vx-track-title > span:first-child {
+  display: -webkit-box;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.vx-episode-desc {
+  display: -webkit-box;
+  margin-top: 4px;
+  overflow: hidden;
+  color: rgb(var(--ink-300));
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.vx-episodes-more { display: flex; justify-content: center; margin-top: 20px; }
+.vx-season-rail { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 16px; }
+
+@media (max-width: 767px) {
+  .vx-episode .vx-track-play { gap: 12px; }
+  .vx-episode .vx-track-art { width: 56px; height: 56px; }
+}
