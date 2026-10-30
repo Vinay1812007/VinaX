@@ -55,8 +55,8 @@ export default function AboutPage() {
         </p>
         <p>
           There are no paywalls and no premium tiers. Your favourites, playlists, history and taste profile live on
-          your device. Searches and song requests go to the catalogue so music can play. VinaX uses no AI: what plays
-          next is worked out on your device. Anonymous usage statistics (which song is playing, city-level location, no account) are shared
+          your device. Searches and song requests go to the catalogue so music can play. What plays next is worked
+          out on your device, with no AI; VinaX AI, the optional chat assistant, is the only AI in VinaX. Anonymous usage statistics (which song is playing, city-level location, no account) are shared
           unless you switch that off in Settings. See what VinaX has learned on
           your <Link to="/taste-profile">taste profile</Link>; the Privacy page below lists what leaves your device.
         </p>

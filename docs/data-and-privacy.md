@@ -5,7 +5,7 @@ This document says what VinaX keeps on a listener's device, what leaves the devi
 ## The short version
 
 - **Device first, account second.** Library, history, settings and the taste profile live on the device. A signed-in listener's library, history, taste and settings also sync to their account as one copy. Clearing site or app data removes the device copy; the app offers an export.
-- **Features that need the network send what they need.** Browsing sends search words and ids to the catalogue source. There are no AI features, so nothing goes to an AI service. Listen Together, usernames, feedback, notifications and device transfer each send the fields listed below.
+- **Features that need the network send what they need.** Browsing sends search words and ids to the catalogue source. Nothing about listening goes to an AI service; only what a signed-in listener types into VinaX AI does. Listen Together, usernames, feedback, notifications and device transfer each send the fields listed below.
 - **Usage statistics are on by default, off with one switch.** Since 14.0.3 the box on the welcome sheet is ticked and says so; Settings → Region & privacy has the switch. While it is off, no usage events are sent. Devices that onboarded earlier, with the old unticked box, were switched to the default once and told, with the switch one tap away. **Session insights (third-party, masked replays) are opt-in**, their own switch in Settings, off by default.
 - **The web app shows advertising on some browsing pages.** Those pages load a third-party advertising script, and that is not controlled by the usage-sharing choice. See [Advertising](#advertising).
 - **The server keeps what its features need, in one database, and nothing more.** The tables are listed under [Server-side records](#server-side-records): no IP addresses, no precise location. Usage events are kept for a bounded time and then purged. Rate limiting keys on a hashed network address, not the address itself.
@@ -59,9 +59,19 @@ The app style is a display preference only. No request builder and no usage even
 
 The install id is a random value created on the device the first time something needs it: claiming a username, joining or hosting a room, or sending a usage event.
 
-### No AI
+### AI
 
-VinaX has no AI features and sends nothing to an AI service. What plays next, Radio, Home's shelves and the taste profile are worked out on the device ([recommendations.md](recommendations.md)). Voice search and Drive mode's voice commands use the browser's or the phone's own speech recognition, and the commands are read by simple rules on the device; VinaX never receives or stores audio, only the words that end up in a search.
+Nothing about listening is sent to an AI service. What plays next, Radio, Home's shelves and the taste profile are worked out on the device ([recommendations.md](recommendations.md)). Voice search and Drive mode's voice commands use the browser's or the phone's own speech recognition, and the commands are read by simple rules on the device; VinaX never receives or stores audio, only the words that end up in a search.
+
+VinaX AI ([ai.md](ai.md)), the chat at `/vinaxai`, is the one place AI is used, and only when a signed-in listener uses it:
+- What they type goes from the Worker to one of the AI providers to generate the reply. The privacy page names them.
+- The chat never sees the listening history or anything outside the conversation.
+- Conversations are stored with the account (`ai_conversations`, `ai_messages`; [database.md](database.md)), so they follow it to every device.
+- A deleted chat is hidden at once and removed within a day. Deleting the account removes every chat.
+- The Worker logs only the route, model, provider, latency, status and token counts, never message text.
+- The page keeps nothing about the chat on the device.
+
+Including the chats in the account export is phase 2 of the build.
 
 On first launch after the AI features were removed, the app erases what they left on the device (`services/storage/earlyMigrations.ts`): the AI chats (`vinax_ai_chats_v1`), every `vinax.ai.*`, `vinax.aiplaylist.*` and `vinax.ai<Name>` key, the AI shelf and metadata caches, the old DJ's already-surfaced list, the embedding model name, and the `vinax-embeddings` IndexedDB database.
 

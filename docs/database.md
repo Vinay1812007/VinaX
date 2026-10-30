@@ -5,7 +5,7 @@ VinaX 14.0 brings back a server database, designed from a clean sheet: one schem
 ## Setting it up
 
 1. Create a Supabase project (any region; Mumbai is closest to most listeners).
-2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 3), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
+2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 4), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
 3. Set two Worker secrets from `backend/`:
 
 ```sh
@@ -14,6 +14,10 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml
 ```
 
 4. Open the console's **Database** page: it shows the schema version the paste wrote and every table.
+
+### Moving from version 3
+
+Version 4 adds the VinaX AI tables `ai_conversations`, `ai_messages` and `ai_attachments`, the function `ai_conversation_search`, and their row-level security. It changes nothing that exists. Paste `schema.sql` once in the SQL Editor; the Database page then shows version 4. These names are new: the old AI tables `ai_calls` and `shared_chats` are not reused.
 
 ### Moving from version 2
 
@@ -61,6 +65,9 @@ Only the Worker holds the service-role key. Row-level security is enabled and fo
 | `audit_log` | owner action | actor, action, target, summary, redacted before/after, request id |
 | `uptime_days` / `uptime_latest` | status probe | per component: daily up/total tallies and the latest probe |
 | `job_runs` | scheduled job run | job, started/finished, ok, summary |
+| `ai_conversations` | VinaX AI chat | `account_id`, `title`, `starred`, `model_pref`, `active_leaf_id` (the branch a reload opens), `deleted_at` (hidden; purged a day later); deleted with the account |
+| `ai_messages` | message in a chat | `parent_id` (a tree: an edit or a retry adds a sibling), `role` (user/assistant), `content` (parts), `thinking`, `thinking_ms`, `sources`, `artifacts`, `model_id`, `provider`, `stop_reason`, `usage`; cascade with the chat |
+| `ai_attachments` | file added to a chat | `name`, `mime`, `size`, `storage_path` (private bucket `ai-attachments`), `extracted_text`, `pages`; deleted with the account (used from phase 4) |
 
 The view `directory` merges `listeners` and `accounts` into one row per person (device rows with their account when linked, plus account-only rows).
 
@@ -88,6 +95,7 @@ All `security invoker`, executable by the service role only. Each answers JSON s
 | `retire_push_devices(days)` | switches off devices that stopped checking in |
 | `uptime_tick(component, ok, latencyMs)` / `uptime_report(days)` | the status page's history |
 | `table_stats()` / `table_counts()` | sizes and counts for the Database page |
+| `ai_conversation_search(account, query, before, limit)` | one account's VinaX AI chats whose title or message text contains `query` (wildcards escaped), newest first |
 
 ## The Worker's data layer
 
@@ -175,10 +183,10 @@ The Worker's Cron Trigger (`[triggers] crons` in `wrangler.toml`) fires every 30
 | Job | When | Does |
 | --- | --- | --- |
 | `status-tick` | every run | probes website, catalogue, admin; `uptime_tick` per component |
-| `housekeeping` | once an hour | `room_sweep`, `purge_events(retention.eventsDays)`, `retire_push_devices(180)` |
+| `housekeeping` | once an hour | `room_sweep`, `purge_events(retention.eventsDays)`, `retire_push_devices(180)`, and removes VinaX AI chats deleted more than a day ago (not fatal before schema 4 is applied) |
 
 `POST /api/cron/run { job }` with `x-cron-secret: $CRON_SECRET` (or the owner token) runs a job now; the Database page has a button for it.
 
 ## Privacy
 
-Stored: coarse edge geo, anonymous device ids, display names and handles the listener chose, Google profile basics for signed-in listeners, the synced backup, song facts for plays. Not stored: IP addresses, precise location. Usage events are purged after `retention.eventsDays` (default 180). A listener's **Delete my data** removes the account, its backup and the device row; the console's delete removes everything about one person.
+Stored: coarse edge geo, anonymous device ids, display names and handles the listener chose, Google profile basics for signed-in listeners, the synced backup, song facts for plays. Not stored: IP addresses, precise location. Usage events are purged after `retention.eventsDays` (default 180). VinaX AI chats are stored with the account and removed with it. A listener's **Delete my data** removes the account, its backup, its VinaX AI chats and the device row; the console's delete removes everything about one person.
