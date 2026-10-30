@@ -16,6 +16,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.2.7': {
+    title: 'VinaX AI lists only the models that answer',
+    changes: [
+      { type: 'improved', text: 'VinaX AI\'s model menu now shows only models that answer, checked automatically.' },
+      { type: 'improved', text: 'Image creation is hidden while no image model is working, and returns by itself when one does.' },
+      { type: 'improved', text: 'Voices and speech-to-text use only working models.' },
+    ],
+  },
   '1.2.6': {
     title: 'Trending playlists, fuller Charts, and lyrics in English letters',
     changes: [
