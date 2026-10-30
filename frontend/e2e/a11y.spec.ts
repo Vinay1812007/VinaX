@@ -48,6 +48,8 @@ async function seed(page: Page, theme: Theme, festival: { mode: 'off' } | { mode
     if (url.pathname === '/api/appconfig' && url.searchParams.get('key') === 'festival') {
       return route.fulfill({ json: { festival } });
     }
+    // VinaX AI's page needs its model list to show the chat (not its "unavailable" state).
+    if (url.pathname === '/api/ai/models') return route.fulfill({ json: { enabled: true, configured: true, groups: [], models: [] } });
     if (url.pathname.startsWith('/api/')) return route.fulfill({ json: {} });
     return route.continue();
   });
@@ -88,6 +90,7 @@ const PAGES: { path: string; ready: (p: Page) => Locator }[] = [
   { path: '/about', ready: (p) => p.getByRole('heading', { name: 'VinaX', level: 1 }) },
   { path: '/help', ready: (p) => p.getByRole('heading', { name: 'Help & feedback', level: 1 }) },
   { path: '/privacy', ready: (p) => p.getByRole('heading', { name: 'Privacy', level: 1 }) },
+  { path: '/vinaxai', ready: (p) => p.getByRole('heading', { name: 'VinaX AI', level: 1 }) },
 ];
 
 for (const theme of ['dark', 'light'] as const) {
@@ -105,7 +108,7 @@ for (const theme of ['dark', 'light'] as const) {
 
 test.describe('phone (390×844), dark theme', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
-  for (const { path, ready } of PAGES.filter((p) => ['/', '/search', '/library', '/settings', '/radio'].includes(p.path))) {
+  for (const { path, ready } of PAGES.filter((p) => ['/', '/search', '/library', '/settings', '/radio', '/vinaxai'].includes(p.path))) {
     test(`${path} has no WCAG A/AA violations`, async ({ page }) => {
       await seed(page, 'dark');
       await page.goto(path);

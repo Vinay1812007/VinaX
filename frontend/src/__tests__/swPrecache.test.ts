@@ -78,4 +78,19 @@ describe('splitPrecache', () => {
     expect(precache.sort()).toEqual(['/assets/Home.js', '/assets/Radio.js', '/assets/index.css', '/assets/index.js', '/assets/shared.js']);
     expect(onDemand).toEqual(['/assets/orphan.js']);
   });
+
+  it('keeps the VinaX AI page and what only it reaches on demand', async () => {
+    const splitPrecache = await loadSplit();
+    const chunk = (fileName: string, over: Record<string, unknown> = {}) => ({ type: 'chunk' as const, fileName, imports: [], dynamicImports: [], facadeModuleId: null, isEntry: false, ...over });
+    const bundle = {
+      'assets/index.js': chunk('assets/index.js', { isEntry: true, imports: ['assets/shared.js'], dynamicImports: ['assets/VinaXAIPage.js', 'assets/Home.js'] }),
+      'assets/Home.js': chunk('assets/Home.js', { facadeModuleId: '/repo/frontend/src/pages/HomePage.tsx' }),
+      'assets/VinaXAIPage.js': chunk('assets/VinaXAIPage.js', { facadeModuleId: '/repo/frontend/src/pages/VinaXAIPage.tsx', imports: ['assets/shared.js'], dynamicImports: ['assets/highlight.js'] }),
+      'assets/highlight.js': chunk('assets/highlight.js'),
+      'assets/shared.js': chunk('assets/shared.js'),
+    };
+    const { precache, onDemand } = splitPrecache(bundle);
+    expect(onDemand.sort()).toEqual(['/assets/VinaXAIPage.js', '/assets/highlight.js']);
+    expect(precache).toContain('/assets/shared.js'); // still reached by the app itself
+  });
 });
