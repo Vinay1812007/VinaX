@@ -42,8 +42,10 @@
 import { rateLimitAsync, methodNotAllowed } from '../_lib/ratelimit';
 import { featureFlags, fullCatalog, fullMedia, toolsFor } from '../_lib/catalog';
 import { AI_PROVIDERS, PROVIDER_LABEL, providerKey, type AiEnv } from '../_lib/ai';
+import { filterMediaLists, filterUsable, readHealth } from '../_lib/modelHealth';
+import type { DbEnv } from '../_lib/db';
 
-type Env = AiEnv;
+type Env = AiEnv & DbEnv;
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
@@ -53,7 +55,10 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const limited = await rateLimitAsync(request, 'aimodels', { capacity: 12, refillPerMinute: 12 }, env);
   if (limited) return limited;
 
-  const [lists, media] = await Promise.all([fullCatalog(env), fullMedia(env)]);
+  const [allLists, allMedia, health] = await Promise.all([fullCatalog(env), fullMedia(env), readHealth(env)]);
+  // 1.2.7 — only the models whose last check answered (modelHealth.ts).
+  const lists = filterUsable(health, 'chat', allLists);
+  const media = filterMediaLists(health, allMedia);
   const tools = AI_PROVIDERS.map((id) => toolsFor(id, lists[id]));
   return new Response(
     JSON.stringify({
