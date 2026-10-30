@@ -517,6 +517,8 @@ const HEADER_BUDGET_MS = 40_000;
 const QUICK_HEADER_BUDGET_MS = 22_000;
 /** The shortest leash worth starting a hop with. */
 const MIN_HOP_MS = 2_500;
+/** 1.2.7 — a model the listener picked runs alone, so it may take longer to start than a seat that has others behind it (NVIDIA's free engines queue when busy). */
+const PICK_FIRST_LEASH_MS = 32_000;
 
 /** 8.2.0 — true when Auto should lead with the flagship: its key is set and
  * this isolate has not seen it fail recently (quota, key, model or upstream). */
@@ -1314,7 +1316,8 @@ async function handleChat(
         // The first try always runs; later hops only while there is time for one.
         if (tried > 0 && remaining < MIN_HOP_MS) break;
         if (tried > 0 && obeyCooldown && laneCoolingDown(a.role, a.model)) continue;
-        const leash = Math.max(MIN_HOP_MS, Math.min(tried === 0 ? 18_000 : 10_000, remaining));
+        const first = reqMode === 'model' ? PICK_FIRST_LEASH_MS : 18_000;
+        const leash = Math.max(MIN_HOP_MS, Math.min(tried === 0 ? first : 10_000, remaining));
         tried += 1;
         let res: Response | null;
         try {

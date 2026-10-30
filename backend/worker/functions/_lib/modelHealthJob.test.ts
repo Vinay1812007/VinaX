@@ -34,12 +34,13 @@ vi.mock('./modelHealth', async (orig) => {
   };
 });
 
-import { answerText, dueTargets, RECHECK_MS, runModelHealth, type Target } from './modelHealthJob';
+import { answerText, dueTargets, pacing, RECHECK_MS, recheckAfter, runModelHealth, type Target } from './modelHealthJob';
 import { healthKey, type HealthMap } from './modelHealth';
 
 const env = { NVIDIA_API_KEY: 'n', GROQ_API_KEY: 'g', SUPABASE_URL: 'https://db.example', SUPABASE_SERVICE_ROLE_KEY: 'k' };
 
 beforeEach(() => {
+  pacing.gapMs = 0;
   saved.maps = [];
   saved.stored = null;
   vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
@@ -72,6 +73,17 @@ describe('dueTargets', () => {
     const due = dueTargets([t('chat', 'fresh'), t('chat', 'old'), t('chat', 'new'), t('image', 'i1'), t('image', 'i2')], map, now);
     expect(due.map((x) => x.id)).toEqual(['new', 'i1', 'old']);
     expect(dueTargets([t('chat', 'a'), t('chat', 'b'), t('chat', 'c')], null, now, 2)).toHaveLength(2);
+  });
+});
+
+describe('recheckAfter', () => {
+  const e = (ok: boolean, reason: string | null) => ({ ok, reason, at: 0, fails: ok ? 0 : 1 }) as never;
+  it('asks dead models once a day, OpenRouter twice a day, the rest on the usual beat', () => {
+    expect(recheckAfter({ kind: 'chat', provider: 'nvidia', id: 'x' }, e(false, 'gone'))).toBe(24 * 3_600_000);
+    expect(recheckAfter({ kind: 'chat', provider: 'nvidia', id: 'x' }, e(false, 'down'))).toBe(RECHECK_MS.chat);
+    expect(recheckAfter({ kind: 'chat', provider: 'openrouter', id: 'x' }, e(true, null))).toBe(12 * 3_600_000);
+    expect(recheckAfter({ kind: 'chat', provider: 'groq', id: 'x' }, undefined)).toBe(RECHECK_MS.chat);
+    expect(recheckAfter({ kind: 'image', provider: 'nvidia', id: 'x' }, e(false, 'not_free'))).toBe(24 * 3_600_000);
   });
 });
 
