@@ -16,6 +16,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.2.6': {
+    title: 'Use the rest of the music API: /home, /trending, trending playlists, /health, lyrics in…',
+    changes: [
+      { type: 'improved', text: 'Home reads its catalogue shelves from one /home and one /trending call and.' },
+    ],
+  },
   '1.2.5': {
     title: 'Charts, moods and genres, radio stations and podcasts',
     changes: [
