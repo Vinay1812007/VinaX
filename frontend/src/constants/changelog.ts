@@ -16,6 +16,13 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.2.9': {
+    title: 'VinaX AI waits longer for a picked model; lighter model checks',
+    changes: [
+      { type: 'improved', text: 'VinaX AI waits longer for a model you picked, so slow-starting models answer instead of failing.' },
+      { type: 'improved', text: 'The background model checks are much lighter, leaving the free AI quotas for listeners.' },
+    ],
+  },
   '1.2.8': {
     title: 'VinaX AI\'s menu lists only the models that answered, from now',
     changes: [
