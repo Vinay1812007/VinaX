@@ -56,6 +56,10 @@ import * as m_api_recommendations from './functions/api/recommendations';
 import * as m_api_auth_google from './functions/api/auth/google';
 import * as m_api_auth_me from './functions/api/auth/me';
 import * as m_api_account_data from './functions/api/account/data';
+import * as m_api_ai_chat from './functions/api/ai/chat';
+import * as m_api_ai_models from './functions/api/ai/models';
+import * as m_api_ai_conversations from './functions/api/ai/conversations';
+import * as m_api_ai_conversation_id from './functions/api/ai/conversations/[id]';
 // 15.0 — the social layer: profiles, follows, shared playlists.
 import * as m_api_profile from './functions/api/profile';
 import * as m_api_profile_handle from './functions/api/profile/[handle]';
@@ -98,6 +102,8 @@ interface Mod {
   onRequestPost?: Handler;
   /** 13.0 — /api/account/data writes the synced copy with PUT. */
   onRequestPut?: Handler;
+  onRequestPatch?: Handler;
+  onRequestDelete?: Handler;
   onRequestOptions?: Handler;
 }
 
@@ -150,6 +156,9 @@ const EXACT: Record<string, Mod> = {
   '/api/auth/google': m_api_auth_google,
   '/api/auth/me': m_api_auth_me,
   '/api/account/data': m_api_account_data,
+  '/api/ai/chat': m_api_ai_chat,
+  '/api/ai/models': m_api_ai_models,
+  '/api/ai/conversations': m_api_ai_conversations,
   '/api/profile': m_api_profile,
   '/api/follow': m_api_follow,
   '/api/shared-playlist': m_api_shared_playlist,
@@ -183,6 +192,7 @@ const DYNAMIC: Array<{ re: RegExp; mod: Mod; key: string }> = [
   { re: /^\/api\/recommendations\/similar\/([^/]+)\/?$/, mod: m_api_recs_similar, key: 'songId' },
   { re: /^\/api\/profile\/([^/]+)\/?$/, mod: m_api_profile_handle, key: 'handle' },
   { re: /^\/api\/shared-playlist\/([^/]+)\/?$/, mod: m_api_shared_playlist_id, key: 'id' },
+  { re: /^\/api\/ai\/conversations\/([^/]+)\/?$/, mod: m_api_ai_conversation_id, key: 'id' },
   { re: /^\/sitemaps\/([^/]+)\/?$/, mod: m_sitemaps_map, key: 'map' },
 ];
 
@@ -221,9 +231,13 @@ const pickHandler = (mod: Mod, method: string): Handler | undefined => {
         ? mod.onRequestPost
         : m === 'PUT'
           ? mod.onRequestPut
-          : m === 'OPTIONS'
-          ? mod.onRequestOptions
-          : undefined;
+          : m === 'PATCH'
+            ? mod.onRequestPatch
+            : m === 'DELETE'
+              ? mod.onRequestDelete
+              : m === 'OPTIONS'
+                ? mod.onRequestOptions
+                : undefined;
   return specific ?? mod.onRequest;
 };
 
