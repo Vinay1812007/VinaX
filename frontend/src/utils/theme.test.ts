@@ -28,7 +28,7 @@ function lastValue(varName: string): string {
 describe('color tokens (VinaX 10 "Marigold")', () => {
   it('brand ramps resolve to the recoloured mark: Marigold + Rose over plum-black', () => {
     // 10.0 — ember is "Marigold" (the mark's stroke: play, focus, progress),
-    // tide is "Rose" (live and AI moments), over a deep plum-black chrome.
+    // tide is "Rose" (live moments), over a deep plum-black chrome.
     expect(lastValue('--ember-400')).toBe('255 192 102');
     expect(lastValue('--ember-500')).toBe('255 164 46');
     expect(lastValue('--tide-400')).toBe('255 145 168');

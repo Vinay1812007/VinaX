@@ -111,7 +111,7 @@ html.light .vx-ehead-art { box-shadow: 0 18px 40px -20px rgb(48 22 34 / 0.4); }
 .vx-ehead-icon.vx-ehead-icon[aria-pressed='true'],
 .vx-ehead-icon.vx-ehead-icon[aria-expanded='true'] { color: rgb(var(--ember-400)); background: var(--vx-accent-wash); }
 .vx-ehead-icon svg { width: 24px; height: 24px; }
-/* An outlined pill action (Follow, Lyrics, Save on the AI result). */
+/* An outlined pill action (Follow, Lyrics). */
 .vx-ehead-pill {
   position: relative;
   display: inline-flex;

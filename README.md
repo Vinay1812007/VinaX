@@ -49,7 +49,7 @@ The website shows one labelled advertisement at the end of song, artist, album, 
  ┌───────────────────────▼───────────────────────┐
  │ one hosted database  (backend/supabase/)      │
  │  listeners, accounts + backups, events,       │
- │  ai_calls, feedback, blocked content, rooms,  │
+ │  feedback, blocked content, rooms,            │
  │  push devices, notifications, settings,       │
  │  experiments, audit log, uptime, job runs     │
  └───────────────────────────────────────────────┘

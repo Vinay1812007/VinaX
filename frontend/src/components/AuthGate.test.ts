@@ -14,7 +14,7 @@ describe('browsableSignedOut', () => {
   });
 
   it('keeps Home and the personal pages behind sign-in', () => {
-    for (const p of ['/', '/library', '/favorites', '/later', '/history', '/queue', '/settings', '/stats', '/recap', '/together', '/radio', '/flow', '/now-playing', '/made-for-you', '/weekly', '/VinaXAI', '/collection/1', '/smart/1', '/song/', '/nonsense-songs']) {
+    for (const p of ['/', '/library', '/favorites', '/later', '/history', '/queue', '/settings', '/stats', '/recap', '/together', '/radio', '/flow', '/now-playing', '/made-for-you', '/weekly', '/collection/1', '/smart/1', '/song/', '/nonsense-songs']) {
       expect(browsableSignedOut(p), p).toBe(false);
     }
   });

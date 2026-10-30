@@ -93,7 +93,7 @@ describe('summarise — where the candidates came from and what gave way', () =>
     ]);
   });
 
-  it('counts fallback reasons, and records none when the AI was used', () => {
+  it('counts fallback reasons, and records none for a batch without one', () => {
     const d = summarise([
       batch(['a'], { trace: trace({ fallback: 'ai_timeout' }) }),
       batch(['b'], { trace: trace({ fallback: 'ai_timeout' }) }),

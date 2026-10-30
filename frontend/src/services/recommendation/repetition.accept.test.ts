@@ -17,7 +17,7 @@
  *   - artist diversity holds unless the request narrows to one artist;
  *   - no hard preference restriction is ever broken, including when the engine
  *     has to relax something to fill the list;
- *   - the queue's picks are visible to Home and the AI Playlist, and the other
+ *   - the queue's picks are visible to Home, and the other
  *     way round (one ledger, every surface);
  *   - all of it survives a reload.
  */
@@ -203,7 +203,7 @@ describe('9.1 acceptance — a 120-track fixture (24 artists, all playable, all 
     const seed = makeSong('seed', { title: 'Seed', artist: 'Seed Artist', language: LANGUAGE });
     const out = await generate(seed, 1);
     const ledger = exposureLedger();
-    // Every song the player accepted is now cooling for Home and the AI Playlist.
+    // Every song the player accepted is now cooling for Home.
     for (const s of out) expect(ledger.cooling(songKey(s))).toBe(true);
   });
 

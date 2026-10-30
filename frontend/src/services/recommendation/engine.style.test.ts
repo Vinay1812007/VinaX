@@ -8,7 +8,7 @@ import { makeContext, makePlay, makeSong, warmProfile } from '@/__fixtures__/son
  * 8.3.0 — a DJ remix (or a folk song, or a devotional song) keeps its style:
  * the next stretch is drawn from that style while the pool holds it, film
  * songs fill only what it cannot, one remix of a song ships per sitting, and
- * the AI DJ is told the style and may not water it down.
+ * the style holds for the whole stretch.
  */
 let pool: Candidate[] = [];
 const generate = vi.fn(async (..._args: unknown[]) => pool);

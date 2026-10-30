@@ -6,9 +6,8 @@ import { makeContext, makePlay, makeSong, warmProfile } from '@/__fixtures__/son
 
 /**
  * v7.0.0 — the next-song pipeline, end to end, on fixed fixtures: what goes
- * in is a candidate pool; what comes out must obey every rule whether the
- * local sequencer or the AI DJ chose the order — and the queue must still
- * be built when the AI is off, down, slow or talking nonsense.
+ * in is a candidate pool; what comes out must obey every rule — and the
+ * queue must still be built when a source is slow or down.
  */
 let pool: Candidate[] = [];
 vi.mock('./candidates', () => ({ gatherCandidates: vi.fn(async () => pool), generateNextCandidates: vi.fn(async () => pool) }));
