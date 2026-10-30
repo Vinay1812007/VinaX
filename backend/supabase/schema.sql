@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 3
+-- VinaX database · schema version 4
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -18,8 +18,9 @@
 --   3. usage events               4. feedback and blocked content
 --   5. Listen Together rooms      6. push devices and notifications
 --   7. settings and experiments   8. audit log, uptime, job runs
---   9. views                     10. functions (stats_*, room_*, housekeeping)
---  11. security
+--   9. VinaX AI conversations    10. views
+--  11. functions (stats_*, room_*, housekeeping)
+--  12. security
 -- =============================================================================
 
 -- ----------------------------------------------------------------- 1. meta --
@@ -388,7 +389,91 @@ create table if not exists job_runs (
 );
 create index if not exists job_runs_job_idx on job_runs (job, started_at desc);
 
--- -------------------------------------------------------------- 9. views --
+-- --------------------------------------------- 9. VinaX AI conversations --
+
+-- One chat with VinaX AI. Deleting a chat hides it at once (deleted_at); the
+-- hourly housekeeping removes it, with its messages, a day later. Deleting
+-- the account removes every chat. active_leaf_id is the message the listener
+-- last viewed, so a reload opens that branch.
+create table if not exists ai_conversations (
+  id              uuid primary key,
+  account_id      text not null references accounts (id) on delete cascade,
+  title           text,
+  starred         boolean not null default false,
+  model_pref      text,
+  active_leaf_id  uuid,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+  deleted_at      timestamptz
+);
+create index if not exists ai_conversations_account_idx on ai_conversations (account_id, updated_at desc);
+create index if not exists ai_conversations_deleted_idx on ai_conversations (deleted_at) where deleted_at is not null;
+
+-- The messages form a tree: an edit or a retry adds a sibling under the same
+-- parent, so earlier versions stay. content is the message parts
+-- ([{ type: 'text', text } | { type: 'attachment', id }]).
+create table if not exists ai_messages (
+  id               uuid primary key,
+  conversation_id  uuid not null references ai_conversations (id) on delete cascade,
+  parent_id        uuid references ai_messages (id) on delete cascade,
+  role             text not null,
+  content          jsonb not null,
+  thinking         text,
+  thinking_ms      integer,
+  sources          jsonb,
+  artifacts        jsonb,
+  model_id         text,
+  provider         text,
+  stop_reason      text,
+  usage            jsonb,
+  created_at       timestamptz not null default now(),
+  constraint ai_messages_role_check check (role in ('user', 'assistant'))
+);
+create index if not exists ai_messages_conversation_idx on ai_messages (conversation_id, created_at);
+create index if not exists ai_messages_parent_idx on ai_messages (parent_id) where parent_id is not null;
+
+-- Files added to a chat. The bytes live in the private Storage bucket
+-- ai-attachments at storage_path; the Worker serves them after an ownership
+-- check. extracted_text is a PDF's text for models that cannot read PDFs.
+create table if not exists ai_attachments (
+  id               uuid primary key,
+  account_id       text not null references accounts (id) on delete cascade,
+  conversation_id  uuid references ai_conversations (id) on delete cascade,
+  name             text not null,
+  mime             text not null,
+  size             integer not null,
+  storage_path     text not null,
+  extracted_text   text,
+  pages            integer,
+  created_at       timestamptz not null default now()
+);
+create index if not exists ai_attachments_account_idx on ai_attachments (account_id, created_at desc);
+create index if not exists ai_attachments_conversation_idx on ai_attachments (conversation_id);
+
+-- Search one account's chats by title and message text, newest first.
+-- p_query is plain text: the LIKE wildcards in it are escaped here.
+create or replace function ai_conversation_search(p_account text, p_query text, p_before timestamptz default null, p_limit integer default 30)
+returns setof ai_conversations
+language sql stable set search_path = public, pg_temp as $$
+  with pat as (
+    select '%' || replace(replace(replace(coalesce(p_query, ''), '\', '\\'), '%', '\%'), '_', '\_') || '%' as p
+  )
+  select c.*
+  from ai_conversations c, pat
+  where c.account_id = p_account
+    and c.deleted_at is null
+    and (p_before is null or c.updated_at < p_before)
+    and (c.title ilike pat.p
+         or exists (
+           select 1
+           from ai_messages m,
+                jsonb_array_elements(case when jsonb_typeof(m.content) = 'array' then m.content else '[]'::jsonb end) e
+           where m.conversation_id = c.id and e ->> 'text' ilike pat.p))
+  order by c.updated_at desc
+  limit greatest(1, least(coalesce(p_limit, 30), 100));
+$$;
+
+-- ------------------------------------------------------------- 10. views --
 
 -- Everyone the console lists, ONE ROW PER PERSON: a signed-in listener is one
 -- row however many devices they use (the most recent device's platform,
@@ -432,7 +517,7 @@ create or replace view directory as
   from accounts a
   where not exists (select 1 from dev d where d.acct = a.id);
 
--- --------------------------------------------------------- 10. functions --
+-- --------------------------------------------------------- 11. functions --
 
 -- Everything below is `security invoker`: the Worker's service role runs it,
 -- the public roles cannot execute it (see section 12).
@@ -901,11 +986,13 @@ language sql stable set search_path = public, pg_temp as $$
     'experiments', (select count(*) from experiments),
     'audit_log', (select count(*) from audit_log),
     'job_runs', (select count(*) from job_runs),
+    'ai_conversations', (select count(*) from ai_conversations),
+    'ai_messages', (select count(*) from ai_messages),
     'events', (select greatest(reltuples, 0)::bigint from pg_class where oid = 'public.events'::regclass)
   );
 $$;
 
--- --------------------------------------------------------- 11. security --
+-- --------------------------------------------------------- 12. security --
 
 do $$
 declare t text;
@@ -914,7 +1001,8 @@ begin
     'meta', 'listeners', 'accounts', 'account_backups', 'profiles', 'follows', 'shared_playlists',
     'events', 'feedback',
     'blocked_content', 'rooms', 'room_members', 'push_devices', 'notifications',
-    'settings', 'settings_history', 'experiments', 'audit_log', 'uptime_days', 'uptime_latest', 'job_runs']
+    'settings', 'settings_history', 'experiments', 'audit_log', 'uptime_days', 'uptime_latest', 'job_runs',
+    'ai_conversations', 'ai_messages', 'ai_attachments']
   loop
     execute format('alter table public.%I enable row level security', t);
     execute format('alter table public.%I force row level security', t);
@@ -934,7 +1022,8 @@ begin
       and p.proname in ('_days', 'stats_overview', 'stats_timeline', 'stats_music', 'stats_geo', 'stats_platforms',
                         'stats_engagement', 'stats_retention', 'stats_funnel', 'stats_skips', 'stats_errors',
                         'listener_profile', 'delete_listener', 'room_request', 'room_sweep',
-                        'purge_events', 'retire_push_devices', 'uptime_tick', 'uptime_report', 'table_stats', 'table_counts')
+                        'purge_events', 'retire_push_devices', 'uptime_tick', 'uptime_report', 'table_stats', 'table_counts',
+                        'ai_conversation_search')
   loop
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);
     execute format('grant execute on function %s to service_role', r.sig);
@@ -948,7 +1037,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 3, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 3, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 4, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 4, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 3 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 4 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
