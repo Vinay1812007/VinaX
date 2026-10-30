@@ -1,17 +1,17 @@
 # VinaX backend
 
-This package is the `vinax-api` Worker. It serves everything dynamic on the VinaX domain: `/api/*`, edge-rendered hub pages (song, album, artist and playlist pages are served by the static site since 11.0.2 — see `wrangler.toml`), the sitemaps, the image proxy (`/img`), the Android package download (`/apk`) and the host redirects. Any URL it does not claim is passed to the static frontend. This file covers the layout and the everyday commands; routes, AI lanes, secrets and deployment are in [../docs/](../docs/README.md).
+This package is the `vinax-api` Worker. It serves everything dynamic on the VinaX domain: `/api/*`, edge-rendered hub pages (song, album, artist and playlist pages are served by the static site since 11.0.2 — see `wrangler.toml`), the sitemaps, the image proxy (`/img`), the Android package download (`/apk`) and the host redirects. Any URL it does not claim is passed to the static frontend. This file covers the layout and the everyday commands; routes, secrets and deployment are in [../docs/](../docs/README.md).
 
 ## Layout
 
 | Path | What it is |
 | --- | --- |
 | `worker/index.ts` | The router and the adapter that gives each handler `{ request, env, params, next, waitUntil, data }` |
-| `worker/functions/api/` | Public, AI, cron, push and admin endpoints |
-| `worker/functions/_lib/` | Shared code: AI lanes (`ai.ts`, `models.ts`, `laneHealth.ts`), admin auth (`admin.ts`), catalogue, rate limits, push, rendering |
+| `worker/functions/api/` | Public, account, social, cron, push and admin endpoints |
+| `worker/functions/_lib/` | Shared code: the database client (`db.ts`), admin auth (`admin.ts`), catalogue, rate limits, push, rendering |
 | `worker/functions/_middleware.ts` | Host-level redirects |
 | `worker/wrangler.toml` | Worker name, routes, `[vars]`, bindings |
-| `worker/__tests__/` | Cross-cutting tests, including router coverage, AI failover and the AI chat audit suites (`aiChatAudit.test.ts`, `aiAuditSweep.test.ts`) |
+| `worker/__tests__/` | Cross-cutting tests, including router coverage, the admin API, the schema check (`schemaUsage.test.ts`) and host routing |
 | `index.html` | A snapshot of the app shell used only as a test fixture (`_lib/render.test.ts`). Refresh it from `../frontend/index.html` when the shell's meta tags change. |
 
 A new handler under `worker/functions/api/` needs an import and an exact-path entry in `worker/index.ts`. `worker/__tests__/routerCoverage.test.ts` fails without them.
@@ -37,4 +37,4 @@ npx wrangler deploy --config worker/wrangler.toml --dry-run --outdir /tmp/vinax-
 npm run deploy
 ```
 
-Secrets are set once with `npx wrangler secret put <NAME> --config worker/wrangler.toml`. The full procedure, the second deploy path and the runbooks are in [../DEPLOYMENT.md](../DEPLOYMENT.md) and [../docs/operations.md](../docs/operations.md). Route contracts for the AI endpoints are in [../docs/ai.md](../docs/ai.md); the admin endpoints are described in [../docs/admin-console.md](../docs/admin-console.md).
+Secrets are set once with `npx wrangler secret put <NAME> --config worker/wrangler.toml`. The full procedure, the second deploy path and the runbooks are in [../DEPLOYMENT.md](../DEPLOYMENT.md) and [../docs/operations.md](../docs/operations.md). The admin endpoints are described in [../docs/admin-console.md](../docs/admin-console.md).

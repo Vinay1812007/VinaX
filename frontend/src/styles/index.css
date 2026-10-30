@@ -116,7 +116,7 @@
 
   /* Brand ramps, taken from the VinaX mark. ember = "Iris", the violet of the
      mark's stroke: play buttons, focus rings, active state, progress.
-     tide = "Lagoon", the mark's cyan: live and AI accents, secondary links,
+     tide = "Lagoon", the mark's cyan: live accents, secondary links,
      the one restrained gradient (Iris → Lagoon). Accent-theme selectors
      below override these at runtime. */
   --ember-600: 236 132 20;

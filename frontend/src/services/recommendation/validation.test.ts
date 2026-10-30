@@ -61,7 +61,7 @@ describe('7.2 — validation enforces the sequencer’s final policy', () => {
   const k = (n: number) => makeSong(`k${n}`, { artist: `Known ${n}` });
   const discoveryIds = new Set(['d1', 'd2', 'd3', 'd4']);
 
-  it('an AI order that front-loads three discoveries ships with a familiar opening and within the discovery share', () => {
+  it('an order that front-loads three discoveries ships with a familiar opening and within the discovery share', () => {
     const out = validateSequence([d(1), d(2), d(3), k(1), k(2), k(3), k(4)], { limit: 5, discoveryIds, discoveryShare: 0.2 });
     expect(ids(out.songs)).toEqual(['k1', 'k2', 'd1', 'k3', 'k4']);
     expect(out.songs.filter((s) => discoveryIds.has(s.id))).toHaveLength(1); // ⌊0.2 × 5 + 0.5⌋ = 1

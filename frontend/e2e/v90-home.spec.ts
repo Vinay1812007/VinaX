@@ -4,8 +4,7 @@ import { latestNotesFingerprint } from '../src/constants/changelog';
 /**
  * 9.0 Home from the built bundle, in a real browser, with mocked APIs:
  *  - the refresh policy: leaving Home and coming back inside the half hour
- *    reuses the AI design and the rotating shelves (no new /api/curate
- *    shelves call, no new catalogue searches); "Refresh Home" builds again;
+ *    reuses the rotating shelves (no new catalogue searches); "Refresh Home" builds again;
  *  - progressive disclosure: the wider catalogue mounts (and asks the
  *    catalogue) only after "Show more for you";
  * (Safety at render — a hide leaving every shelf and the opening at once — is

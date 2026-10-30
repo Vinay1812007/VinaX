@@ -1,16 +1,16 @@
 # VinaX
 
-> Free music-streaming web app and Android app. Sign in once with a Google account; there is no subscription and nothing to pay. Recommendations are worked out on your device. Play songs, albums and playlists with synced lyrics, a queue that builds itself from the song you tap, shared listening sessions, an AI chat that can play music, and offline downloads in the Android app. Tuned for regional and Indian music: Telugu, Hindi, Tamil and more.
+> Free music-streaming web app and Android app. Sign in once with a Google account; there is no subscription and nothing to pay. Recommendations are worked out on your device. Play songs, albums and playlists with synced lyrics, a queue that builds itself from the song you tap, shared listening sessions, endless Radio, and offline downloads in the Android app. Tuned for regional and Indian music: Telugu, Hindi, Tamil and more.
 
 ## Pages
 
-- [Home](https://www.vinaxmusic.online/): Personalized, AI-arranged music home
+- [Home](https://www.vinaxmusic.online/): Personalized music home, arranged on your device
 - [Search](https://www.vinaxmusic.online/search): Search songs, albums, artists and playlists
 - [Charts](https://www.vinaxmusic.online/charts): Trending charts
 - [Movies](https://www.vinaxmusic.online/movies): Film soundtracks
 - [Moods](https://www.vinaxmusic.online/moods): Music by mood
 - [For You This Week](https://www.vinaxmusic.online/weekly): A personalized weekly mix
-- [AI Playlist](https://www.vinaxmusic.online/ai-playlist): Build a playlist from a text prompt
+- [Radio](https://www.vinaxmusic.online/radio): Endless music from a song, an artist, a mood or a station
 - [About](https://www.vinaxmusic.online/about): What VinaX is and who makes it
 - [Help](https://www.vinaxmusic.online/help): Step-by-step guides, answers to common questions, keyboard shortcuts and gestures
 
@@ -33,7 +33,7 @@
 
 - Tap any song and VinaX lines up the next five, led by that song's language; songs queued by hand play first.
 - Choose how adventurous the queue is: Familiar, Balanced or Discover.
-- Search by title, by description ("sad telugu songs for rain") or by a line of lyrics.
+- Search by title, artist, album or a line of lyrics.
 - Change the whole look in Settings → Appearance → App style: Aura, Pulse, Sangam, Nocturne, Marquee or Vibe. Theme (Dark, Black, Light, System, Auto) and accent colour are separate choices.
 - On festival days the app takes that festival's colours and shows a greeting once; Settings → Appearance can preview any festival or switch festival themes off.
 - Listen Together: start a session and share a link, a QR code or a room code.

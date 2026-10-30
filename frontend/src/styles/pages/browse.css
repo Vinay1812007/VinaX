@@ -15,7 +15,7 @@
    The language (docs/design-system.md, "9.0 Encore", recoloured for 10.0
    "Marigold"): artwork leads and copy follows; plum-black tiers (warm cream
    paper in light), hairlines only around inputs and between rows;
-   Marigold for play / active / focus, Rose for live and AI moments; squircles
+   Marigold for play / active / focus, Rose for live moments; squircles
    for artwork and play, pills for actions and filters, circles for people;
    140–220 ms on the calm curve, and nothing moves under reduced motion.
    ========================================================================= */
@@ -998,60 +998,6 @@ html.light .vx-browse .search-panel { box-shadow: 0 24px 56px -18px rgb(var(--in
 .vx-browse .search-vibe { width: 100%; }
 .vx-browse .search-moods { margin-top: 16px; margin-bottom: 0; }
 
-/* Ask for songs and the AI chat: Rose is the AI accent. */
-/* minmax(0, 1fr): the implicit auto column grew to its longest unbroken row
-   and ran 6px past a 360px screen. */
-.vx-browse .search-assist { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; max-width: 760px; }
-.vx-browse .search-assist-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-  min-height: 72px;
-  padding: 12px 16px 12px 12px;
-  border-radius: 16px;
-  background: var(--bx-surface);
-  box-shadow: var(--bx-edge);
-  text-align: left;
-  transition: background-color 140ms var(--ease-calm);
-}
-.vx-browse a.search-assist-row:hover,
-.vx-browse button.search-assist-row:hover { background: var(--bx-surface-hover); }
-.vx-browse .search-assist-icon {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  background: rgb(var(--tide-500) / 0.14);
-  color: rgb(var(--tide-400));
-}
-.vx-browse .search-assist-icon.is-accent { background: var(--vx-glow); color: var(--vx-on-accent); }
-.vx-browse .search-assist-icon svg { width: 22px; height: 22px; }
-.vx-browse .search-assist-title { display: block; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; line-height: 1.35; }
-.vx-browse .search-assist-meta { display: block; overflow: hidden; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; line-height: 1.4; white-space: nowrap; text-overflow: ellipsis; }
-.vx-browse .search-assist-chevron { width: 18px; height: 18px; margin-left: auto; flex-shrink: 0; color: rgb(var(--ink-400)); transition: transform 180ms var(--ease-calm); }
-.vx-browse .search-assist.is-open .search-assist-chevron { transform: rotate(180deg); }
-.vx-browse .search-assist-panel { margin-top: -6px; padding: 4px 16px 16px; border-radius: 0 0 16px 16px; background: var(--bx-surface); box-shadow: var(--bx-edge); }
-.vx-browse .search-assist.is-open .search-assist-row.is-toggle { border-radius: 16px 16px 0 0; }
-.vx-browse .search-assist-form { display: flex; gap: 8px; }
-.vx-browse .search-assist-form input {
-  flex: 1;
-  min-width: 0;
-  height: 44px;
-  padding: 0 16px;
-  border: 1px solid var(--vx-border);
-  border-radius: 9999px;
-  background: rgb(var(--ink-900));
-  color: rgb(var(--ink-100));
-  font-size: 15px;
-  outline: none;
-}
-.vx-browse .search-assist-form input:focus { border-color: rgb(var(--tide-500)); box-shadow: 0 0 0 1px rgb(var(--tide-500)); }
-.vx-browse .search-assist-form .btn-primary { min-height: 44px; padding: 0 20px; border-radius: 9999px; font-size: 14px; font-weight: 700; }
-.vx-browse .search-expert-note { margin-top: 12px; color: rgb(var(--ink-400)); font-size: 14px; }
-
 /* ---------------------------------------------------------- results */
 .vx-browse .search-lead-wrap { container-type: inline-size; margin-bottom: var(--vx-shelf-gap); }
 .vx-browse .search-results-lead { display: grid; gap: 28px; }
@@ -1169,8 +1115,6 @@ html.light .vx-browse .search-top-bg { opacity: 0.18; }
 .vx-browse .search-dym button::after { content: ''; position: absolute; inset: -4px -4px; }
 
 /* A natural-language query with no title match asks the expert inline. */
-.vx-browse .search-ask-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-bottom: 16px; }
-.vx-browse .search-ask-inline .vx-meta-line { color: rgb(var(--ink-300)); font-size: 15px; }
 
 .vx-browse .search-empty-help { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: -24px auto var(--vx-shelf-gap); max-width: 520px; }
 
@@ -1540,7 +1484,7 @@ html.light .vx-browse .search-top-bg { opacity: 0.18; }
 @media (prefers-reduced-motion: reduce) {
   .vx-browse .bx-tile, .vx-browse .bx-tile::before, .vx-browse .bx-dest, .vx-browse .bx-lang, .vx-browse .bx-decade,
   .vx-browse .bx-cover-fan img, .vx-browse .bx-glyph-fan > span, .vx-browse .bx-video-thumb, .vx-browse .bx-video-play,
-  .vx-browse .search-sticky, .vx-browse .search-assist-chevron { transition: none !important; }
+  .vx-browse .search-sticky { transition: none !important; }
   .vx-browse .bx-tile:hover, .vx-browse .bx-tile:active, .vx-browse .bx-dest:active, .vx-browse .bx-lang:hover,
   .vx-browse .bx-lang:active, .vx-browse .bx-decade:hover, .vx-browse .bx-decade:active, .vx-browse .bx-video:hover .bx-video-thumb { transform: none; }
   .vx-browse .search-field-btn.is-live::before { animation: none; box-shadow: 0 0 0 3px rgb(var(--tide-500) / 0.3); }

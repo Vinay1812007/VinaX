@@ -9,9 +9,9 @@ import { songKey } from './songKey';
  * know about each other, each with its own key shape, cap and lifetime:
  *
  *   vinax.flow.served.v1          canonical keys, read by Home, the Daily mix
- *                                 and the AI Playlist — but WRITTEN by only the
- *                                 Home hero and the AI Playlist, so the queue,
- *                                 the DJ, Radio and every discovery shelf
+ *                                 and the old AI Playlist — but WRITTEN by only
+ *                                 the Home hero and that playlist, so the queue,
+ *                                 Radio and every discovery shelf
  *                                 surfaced songs that nothing recorded.
  *   vinax.recs.seedmemo.v1        raw catalogue ids (an alternate release of
  *                                 the same song walked straight past it).
@@ -155,8 +155,7 @@ const shownOnly = (r: Row): boolean =>
  * 11.7.0 — which rows survive the cap. Before 11.7 the cap simply kept the
  * newest 600 touches, and one Home visit records a few hundred `shown` rows:
  * two visits pushed every played, skipped and disliked song out of the ledger,
- * and those songs walked straight back into the queue, Home and the AI
- * Playlist. Now the oldest SHOWN-ONLY rows go first; a row carrying anything
+ * and those songs walked straight back into the queue and Home. Now the oldest SHOWN-ONLY rows go first; a row carrying anything
  * the listener actually did is dropped only when there is nothing weaker left.
  * Order is preserved (newest first).
  */

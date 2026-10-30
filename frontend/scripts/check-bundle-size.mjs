@@ -22,7 +22,7 @@ const DIST = 'dist';
 // 2026-08-08: re-based 157 -> 159 for the C3 taste-dials package. The feature
 // itself is entirely LAZY — verified: the dials runtime (personalization/
 // dials.ts), the scoring nudges (recommendation engine chunk), the Taste
-// Profile sliders UI and the AI payload lines all land in on-demand chunks,
+// Profile sliders UI all land in on-demand chunks,
 // none in the entry. The measured first-load move (156.6 -> 158.0 KB gz) is
 // Rolldown re-packing existing modules into the entry chunk once the graph
 // gained a new leaf module plus the eager TasteProfile `sliders?` type field —

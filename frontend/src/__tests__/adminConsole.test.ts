@@ -114,7 +114,7 @@ describe('page registry', () => {
     }
     const apiPaths = new Set<string>();
     for (const f of pageFiles) for (const m of read(`pages/${f}`).matchAll(/VX\.api\.(?:get|post)\('([^']+)'/g)) apiPaths.add(m[1]);
-    for (const p of apiPaths) expect(p, p).toMatch(/^\/api\/(admin\/|aimodels$)/);
+    for (const p of apiPaths) expect(p, p).toMatch(/^\/api\/admin\//);
   });
 });
 
