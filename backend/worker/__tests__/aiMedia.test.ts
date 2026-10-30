@@ -12,6 +12,8 @@
  * that day). Upstreams are mocked: no network.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+// 1.2.7 — these tests cover the media plumbing; the 2026-10-30 model-health seed would hide the real model ids they use.
+vi.mock('../functions/_lib/modelHealthSeed', () => ({ SEED: [], SEED_AT: 0, SEED_MAX_AGE_MS: 0 }));
 import {
   GEMINI_VOICES,
   NVIDIA_IMAGE_MODELS,
