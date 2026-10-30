@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.3.0': {
+    title: 'VinaX is now AI-free: VinaX AI and every AI feature are gone',
+    changes: [
+      { type: 'improved', text: 'VinaX AI, AI Playlist and the AI DJ are gone. Everything that picks your music now works on your phone or computer, with nothing sent to any AI service.' },
+      { type: 'improved', text: 'AI Radio is now simply Radio: start it from a mood, an artist, a song or a station.' },
+      { type: 'improved', text: 'The tab bar has four places: Home, Discover, Search and Library.' },
+      { type: 'improved', text: 'Old AI chats, saved prompts and AI settings are erased from your device the first time you open this version.' },
+    ],
+  },
   '1.2.9': {
     title: 'VinaX AI waits longer for a picked model; lighter model checks',
     changes: [
