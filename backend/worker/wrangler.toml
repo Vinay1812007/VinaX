@@ -47,6 +47,12 @@ routes = [
   # Image proxy + APK download
   { pattern = "www.vinaxmusic.online/img", zone_name = "vinaxmusic.online" },
   { pattern = "www.vinaxmusic.online/apk", zone_name = "vinaxmusic.online" },
+  # 1.3.1 — the retired AI pages: the Worker answers them with a 301 to Home
+  # (index.ts RETIRED_AI_PATH), ahead of the static host and its caches.
+  { pattern = "www.vinaxmusic.online/VinaXAI*", zone_name = "vinaxmusic.online" },
+  { pattern = "www.vinaxmusic.online/vinaxai*", zone_name = "vinaxmusic.online" },
+  { pattern = "www.vinaxmusic.online/ai-playlist*", zone_name = "vinaxmusic.online" },
+  { pattern = "www.vinaxmusic.online/ai/shared/*", zone_name = "vinaxmusic.online" },
 
   # Host-level redirects handled by functions/_middleware.ts
   { pattern = "update.vinaxmusic.online/*", zone_name = "vinaxmusic.online" },
