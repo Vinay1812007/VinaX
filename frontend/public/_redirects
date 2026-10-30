@@ -24,6 +24,14 @@ https://vinaxmusic.online/* https://www.vinaxmusic.online/:splat 301
 # 8.4.0: the standalone Ads page is gone (placements now sit at the end of
 # song, artist, album and hub pages); old links land on Discover.
 /ads  /discover  301
+# 1.3.0: VinaX has no AI features any more. The old AI pages answer a
+# redirect from the static host itself, so a stale copy of their prerendered
+# page can never be served again once it leaves the edge cache.
+/VinaXAI  /  301
+/VinaXAI/*  /  301
+/ai-playlist  /  301
+/ai-playlist/*  /  301
+/ai/shared/*  /  301
 
 # Status page — status.vinaxmusic.online lands on the standalone status
 # app (public/status/, plain static files — fully independent of the SPA
