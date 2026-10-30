@@ -17,9 +17,12 @@ export interface VersionInfo {
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
   '1.2.6': {
-    title: 'Use the rest of the music API: /home, /trending, trending playlists, /health, lyrics in…',
+    title: 'Trending playlists, fuller Charts, and lyrics in English letters',
     changes: [
-      { type: 'improved', text: 'Home reads its catalogue shelves from one /home and one /trending call and.' },
+      { type: 'new', text: 'Home has a new Trending playlists shelf.' },
+      { type: 'improved', text: 'Charts now shows longer lists of trending playlists, trending albums, new albums and featured playlists.' },
+      { type: 'new', text: 'Lyrics can be shown in English letters, set in Settings or with Romanized on the Lyrics page.' },
+      { type: 'improved', text: 'Home loads its catalogue shelves with fewer requests.' },
     ],
   },
   '1.2.5': {
