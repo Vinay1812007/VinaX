@@ -56,7 +56,7 @@ import { resetShelfDeduper } from '@/features/home/dedupeShelves';
 import { personalMessage } from '@/features/home/personalMessage';
 import { useClientConfig } from '@/features/home/useAppConfig';
 import { useContinueListening, useTrendingNow } from '@/features/home/useHomeShelves';
-import { playlistSubtitle, useCatalogueCharts, useFeaturedPlaylists, useNewAlbums } from '@/features/home/useCatalogFeeds';
+import { playlistSubtitle, useCatalogueCharts, useFeaturedPlaylists, useNewAlbums, useTrendingPlaylists } from '@/features/home/useCatalogFeeds';
 import { useDailyMix } from '@/features/home/useDailyMix';
 import { refreshHome, useHomeVisit } from '@/features/home/homeRefresh';
 import { useShelfSafety } from '@/features/home/useShelfSafety';
@@ -105,10 +105,12 @@ function PlaylistShelf({ title, explanation, playlists }: { title: string; expla
  */
 function CatalogueChartShelves() {
   const charts = useCatalogueCharts();
+  const trending = useTrendingPlaylists();
   const featured = useFeaturedPlaylists();
   return (
     <>
       {!charts.isError && !!charts.data?.length && <PlaylistShelf title="Top charts" explanation="The catalogue's own chart playlists" playlists={charts.data} />}
+      {!trending.isError && !!trending.data?.length && <PlaylistShelf title="Trending playlists" playlists={trending.data} />}
       {!featured.isError && !!featured.data?.length && <PlaylistShelf title="Featured playlists" playlists={featured.data} />}
     </>
   );

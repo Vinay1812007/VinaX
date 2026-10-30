@@ -1,5 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
-import { API_LANGUAGES, getCharts, getFeaturedPlaylists, getNewReleases, getPlaylist, getTrendingSongs } from '@/services/api';
+import {
+  API_LANGUAGES,
+  getCharts,
+  getFeaturedPlaylists,
+  getHomeFeed,
+  getNewReleases,
+  getPlaylist,
+  getTrending,
+  getTrendingAlbums,
+  getTrendingPlaylists,
+  getTrendingSongs,
+  type HomeFeed,
+  type TrendingFeed,
+} from '@/services/api';
 import { languageLabel } from '@/constants/languages';
 import { useSettingsStore } from '@/store/settingsStore';
 import type { Album, Playlist, Song } from '@/types';
@@ -42,48 +55,83 @@ function noLanguages(): Promise<never> {
   return Promise.reject(new Error('no catalogue feed for these languages'));
 }
 
-/** The catalogue's chart playlists ("Most Searched Songs - Hindi", "Trending Today"…). */
-export function useCatalogueCharts() {
-  const langs = usePinnedFeedLangs();
-  return useQuery<Playlist[]>({
-    queryKey: ['catalogue-charts', langs],
-    queryFn: ({ signal }) => {
-      const feed = feedLanguages(langs);
-      return feed.length ? getCharts(feed, FEED_LIMIT, { signal }) : noLanguages();
-    },
-    staleTime: STALE,
-    retry: false,
-  });
+function nonEmpty<T>(list: T[], what: string): T[] {
+  if (!list.length) throw new Error(`no ${what}`);
+  return list;
 }
 
-export function useFeaturedPlaylists() {
-  const langs = usePinnedFeedLangs();
-  return useQuery<Playlist[]>({
-    queryKey: ['featured-playlists', langs],
-    queryFn: ({ signal }) => {
-      const feed = feedLanguages(langs);
-      return feed.length ? getFeaturedPlaylists(feed, FEED_LIMIT, { signal }) : noLanguages();
-    },
-    staleTime: STALE,
-    retry: false,
-  });
+/**
+ * 1.3 — Home reads two calls: /home (new releases, charts, featured
+ * playlists) and /trending (songs, albums, playlists). Every Home shelf asks
+ * with the same path, so the client shares one request and memoises it.
+ */
+export function homeBundle(langs: string[], signal?: AbortSignal): Promise<HomeFeed> {
+  return getHomeFeed(langs, FEED_LIMIT, { signal });
 }
 
-/** The albums half of the new-releases feed (the songs half feeds "New releases"). */
-export function useNewAlbums() {
+export function trendingBundle(langs: string[], signal?: AbortSignal): Promise<TrendingFeed> {
+  return getTrending(langs, FEED_LIMIT, { signal });
+}
+
+/** A Home shelf from one section of a bundle; a missing or empty section is a miss. */
+function useBundleList<T>(key: string, pick: (langs: string[], signal?: AbortSignal) => Promise<T[]>) {
   const langs = usePinnedFeedLangs();
-  return useQuery<Album[]>({
-    queryKey: ['new-albums', langs],
+  return useQuery<T[]>({
+    queryKey: [key, langs],
     queryFn: async ({ signal }) => {
       const feed = feedLanguages(langs);
-      if (!feed.length) return noLanguages();
-      const { albums } = await getNewReleases(feed, FEED_LIMIT, { signal });
-      if (!albums.length) throw new Error('no new albums');
-      return albums;
+      return feed.length ? nonEmpty(await pick(feed, signal), key) : noLanguages();
     },
     staleTime: STALE,
     retry: false,
   });
+}
+
+/** Home: the catalogue's chart playlists ("Most Searched Songs - Hindi", "Trending Today"…), from /home. */
+export function useCatalogueCharts() {
+  return useBundleList<Playlist>('catalogue-charts', async (l, signal) => (await homeBundle(l, signal)).charts);
+}
+
+/** Home: featured playlists, from /home. */
+export function useFeaturedPlaylists() {
+  return useBundleList<Playlist>('featured-playlists', async (l, signal) => (await homeBundle(l, signal)).featuredPlaylists);
+}
+
+/** Home: the albums half of the new releases (the songs half feeds "New releases"), from /home. */
+export function useNewAlbums() {
+  return useBundleList<Album>('new-albums', async (l, signal) => (await homeBundle(l, signal)).newAlbums);
+}
+
+/** Home: trending playlists, from /trending. */
+export function useTrendingPlaylists() {
+  return useBundleList<Playlist>('trending-playlists', async (l, signal) => (await trendingBundle(l, signal)).playlists);
+}
+
+/**
+ * The Charts page's longer lists, one route each (/charts, /featured-playlists,
+ * /new-releases, /trending/albums, /trending/playlists). One limit, so the
+ * Most Searched page shares the /charts request.
+ */
+export const CHARTS_LIMIT = 50;
+
+export function useChartPlaylists() {
+  return useBundleList<Playlist>('charts-page-charts', (l, signal) => getCharts(l, CHARTS_LIMIT, { signal }));
+}
+
+export function useChartsFeaturedPlaylists() {
+  return useBundleList<Playlist>('charts-page-featured', (l, signal) => getFeaturedPlaylists(l, CHARTS_LIMIT, { signal }));
+}
+
+export function useChartsNewAlbums() {
+  return useBundleList<Album>('charts-page-new-albums', async (l, signal) => (await getNewReleases(l, CHARTS_LIMIT, { signal })).albums);
+}
+
+export function useChartsTrendingAlbums() {
+  return useBundleList<Album>('charts-page-trending-albums', (l, signal) => getTrendingAlbums(l, CHARTS_LIMIT, { signal }));
+}
+
+export function useChartsTrendingPlaylists() {
+  return useBundleList<Playlist>('charts-page-trending-playlists', (l, signal) => getTrendingPlaylists(l, CHARTS_LIMIT, { signal }));
 }
 
 /** The trending-songs feed as a full list, in the catalogue's order (Charts, /trending). One limit, one shared request. */
@@ -120,8 +168,8 @@ export function useMostSearchedFeedSongs(enabled = true) {
     queryFn: async ({ signal }) => {
       const feed = feedLanguages(langs);
       if (!feed.length) return noLanguages();
-      // FEED_LIMIT: the same /charts request the Home and Charts shelves make.
-      const chart = pickMostSearched(await getCharts(feed, FEED_LIMIT, { signal }), feed[0]);
+      // CHARTS_LIMIT: the same /charts request the Charts page makes.
+      const chart = pickMostSearched(await getCharts(feed, CHARTS_LIMIT, { signal }), feed[0]);
       if (!chart) throw new Error('no most-searched chart');
       const { songs } = await getPlaylist(chart.id);
       if (!songs.length) throw new Error('empty most-searched chart');

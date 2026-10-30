@@ -18,6 +18,7 @@ import {
   startArtistRadio,
 } from './catalog';
 import { normalizeLyrics } from './normalize';
+import { getLyrics } from './saavn';
 
 const img = [
   { quality: '50x50', url: 'https://c.saavncdn.com/a-50x50.jpg' },
@@ -178,6 +179,16 @@ it('pages podcasts: empty first page is a miss, empty later page is the end', as
   const eps = await getPodcastEpisodes('62', { season: 3, page: 2, limit: 5 });
   expect(request.mock.calls[request.mock.calls.length - 1][0].paths).toEqual(['/podcasts/62/episodes?page=2&limit=5&season=3']);
   expect(eps).toHaveLength(1);
+});
+
+it('asks for lyrics in English letters only when told to', async () => {
+  answer({ success: true, data: { lyrics: 'a', copyright: null } });
+  await getLyrics('s1');
+  expect(request.mock.calls[0][0].paths[0]).toBe('/songs/s1/lyrics?synced=true');
+  await getLyrics('s1', { script: 'latin' });
+  expect(request.mock.calls[1][0].paths[0]).toBe('/songs/s1/lyrics?synced=true&script=latin');
+  // Bases that do not know the flags still answer the plain route.
+  expect(request.mock.calls[1][0].paths.slice(1)).toEqual(['/songs/s1/lyrics', '/lyrics?id=s1']);
 });
 
 it('reads synced lyric lines from the lyrics payload', () => {

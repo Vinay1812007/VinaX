@@ -20,8 +20,12 @@ vi.mock('@/services/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/api')>();
   return {
     API_LANGUAGES: actual.API_LANGUAGES,
-    getTrendingSongs: (langs: string[], limit?: number) => getTrendingSongs(langs, limit),
-    getNewReleases: (langs: string[], limit?: number) => getNewReleases(langs, limit),
+    // Home reads the songs halves of /trending and /home; these mocks stand for those halves.
+    getTrending: async (langs: string[], limit?: number) => ({ songs: await getTrendingSongs(langs, limit), albums: [], playlists: [] }),
+    getHomeFeed: async (langs: string[], limit?: number) => {
+      const r = await getNewReleases(langs, limit);
+      return { newSongs: r.songs, newAlbums: r.albums, charts: [], featuredPlaylists: [] };
+    },
     searchSongs: (q: string, limit?: number) => searchSongs(q, limit),
     searchSongsPage: (q: string, page: number, limit: number) => searchSongsPage(q, page, limit),
   };

@@ -1,16 +1,16 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { getNewReleases, getTrendingSongs, searchSongs, searchSongsPage } from '@/services/api';
+import { searchSongs, searchSongsPage } from '@/services/api';
 import { trendingSeed, timeOfDaySeed, newReleasesSeed, popularSeed } from '@/constants/seeds';
 import { rankSongs, useRankSettingsKey } from '@/features/search/useSearch';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useHistoryStore } from '@/store/historyStore';
 import type { Song } from '@/types';
 import { HOME_TTL_MS, homeGeneration, useHomeGeneration } from './homeRefresh';
-import { FEED_LIMIT, feedLanguages } from './useCatalogFeeds';
+import { feedLanguages, homeBundle, trendingBundle } from './useCatalogFeeds';
 
 /**
  * 1.3 — Trending and New releases ask the catalogue's own feeds first
- * (/trending/songs, /new-releases) and keep the search pools below as the
+ * (the songs of /trending and /home) and keep the search pools below as the
  * fallback: when the feed is unavailable, cannot serve every language asked
  * for, or leaves fewer than MIN_FEED_SONGS after the language and mute filters.
  */
@@ -18,9 +18,9 @@ export const MIN_FEED_SONGS = 6;
 
 type FeedSongs = (langs: string[], signal?: AbortSignal) => Promise<Song[]>;
 
-const trendingFeed: FeedSongs = (langs, signal) => getTrendingSongs(langs, FEED_LIMIT, { signal });
-// FEED_LIMIT matches the New albums shelf, so both share one /new-releases call.
-const newReleasesFeed: FeedSongs = async (langs, signal) => (await getNewReleases(langs, FEED_LIMIT, { signal })).songs;
+// The same /trending and /home requests the other Home shelves read.
+const trendingFeed: FeedSongs = async (langs, signal) => (await trendingBundle(langs, signal)).songs;
+const newReleasesFeed: FeedSongs = async (langs, signal) => (await homeBundle(langs, signal)).newSongs;
 
 /**
  * The feed's songs for `langs`, filtered and ranked like a search pool, or

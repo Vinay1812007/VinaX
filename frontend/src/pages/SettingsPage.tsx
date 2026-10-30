@@ -621,6 +621,9 @@ export default function SettingsPage() {
               <Row stack label="Lyrics size" note="Synced lyrics in the player, karaoke and lyrics page." keywords="text">
                 <Segmented label="Lyrics size" value={s.lyricsSize} onChange={s.setLyricsSize} options={[{ value: 'sm', label: 'Small' }, { value: 'md', label: 'Medium' }, { value: 'lg', label: 'Large' }, { value: 'xl', label: 'Huge' }]} />
               </Row>
+              <Row stack label="Lyrics script" note="Show lyrics in Hindi, Tamil, Telugu and other scripts as written, or in English letters." keywords="romanized transliterate latin english letters">
+                <Segmented label="Lyrics script" value={s.lyricsScript} onChange={s.setLyricsScript} options={[{ value: 'original', label: 'As written' }, { value: 'latin', label: 'English letters' }]} />
+              </Row>
               <Row
                 label="DJ voice"
                 note="The DJ introduces each song while the music ducks. The studio voice sends the line to the service; your device’s voice is the offline fallback."

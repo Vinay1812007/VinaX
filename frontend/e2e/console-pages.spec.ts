@@ -144,7 +144,7 @@ function fixtures(full: boolean): Record<string, Json> {
       })),
       features: { image: false, speech: false, transcribe: false, embed: false, music: false, codeRun: false },
     },
-    '/api/admin/musicapi': { checkedAt: iso(0), mirrors: full ? [{ id: 'vinax-cat', label: 'VinaX catalogue', base: 'https://example.test', ok: true, status: 200, ms: 320, songs: 1, note: null }] : [] },
+    '/api/admin/musicapi': { checkedAt: iso(0), mirrors: full ? [{ id: 'vinax-cat', label: 'VinaX catalogue', base: 'https://example.test', ok: true, status: 200, ms: 320, songs: 1, note: null }, { id: 'upstream-1', label: 'wrapper.test', base: 'https://wrapper.test/api', ok: true, status: 200, ms: 210, songs: 1, note: null, health: { status: 'ok', upstreams: [{ name: 'jiosaavn', configured: true, ok: true, latencyMs: 70 }] } }] : [] },
     '/api/admin/catalog-search': full
       ? { items: [{ id: 'k1', name: 'Kesariya', subtitle: 'Arijit Singh', image: '' }], source: 'www.vinaxmusic.online', error: null }
       : { items: [], source: null, error: null },

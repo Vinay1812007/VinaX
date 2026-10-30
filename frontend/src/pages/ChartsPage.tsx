@@ -26,8 +26,17 @@ import { MOODS as MOOD_SEEDS } from '@/constants/seeds';
 import { Shelf } from '@/components/Shelf';
 import { MediaCard } from '@/components/MediaCard';
 import { playPlaylist } from '@/features/player/playEntity';
-import { playlistPath } from '@/utils/slug';
-import { playlistSubtitle, useCatalogueCharts, useTrendingFeedSongs } from '@/features/home/useCatalogFeeds';
+import { albumPath, playlistPath } from '@/utils/slug';
+import {
+  playlistSubtitle,
+  useChartPlaylists,
+  useChartsFeaturedPlaylists,
+  useChartsNewAlbums,
+  useChartsTrendingAlbums,
+  useChartsTrendingPlaylists,
+  useTrendingFeedSongs,
+} from '@/features/home/useCatalogFeeds';
+import type { Album, Playlist } from '@/types';
 import { CATALOGUE_TRENDING_PROVENANCE } from '@/features/home/useTrendingShelves';
 import { useShelfSafety } from '@/features/home/useShelfSafety';
 import '@/styles/pages/browse.css';
@@ -234,16 +243,47 @@ function VerifiedCharts({ region }: { region: string }) {
   );
 }
 
-/** 1.3 — the catalogue's chart playlists; nothing at all while loading, on a miss or when empty. */
-function CatalogueChartPlaylists() {
-  const charts = useCatalogueCharts();
-  if (charts.isError || !charts.data?.length) return null;
+function PlaylistRow({ title, explanation, list }: { title: string; explanation?: string; list: Playlist[] | undefined }) {
+  if (!list?.length) return null;
   return (
-    <Shelf title="Catalogue charts" explanation="Chart playlists the catalogue publishes">
-      {charts.data.map((p) => (
+    <Shelf title={title} explanation={explanation}>
+      {list.map((p) => (
         <MediaCard key={p.id} to={playlistPath(p)} image={bestImage(p.images)} images={p.images} title={p.title} subtitle={playlistSubtitle(p)} onPlay={() => void playPlaylist(p.id, p.title)} />
       ))}
     </Shelf>
+  );
+}
+
+function AlbumRow({ title, list }: { title: string; list: Album[] | undefined }) {
+  if (!list?.length) return null;
+  return (
+    <Shelf title={title}>
+      {list.map((a) => (
+        <MediaCard key={a.id} to={albumPath(a)} image={bestImage(a.images)} images={a.images} title={a.title} subtitle={a.subtitle} />
+      ))}
+    </Shelf>
+  );
+}
+
+/** 1.3 — the catalogue's chart playlists; nothing at all while loading, on a miss or when empty. */
+function CatalogueChartPlaylists() {
+  const charts = useChartPlaylists();
+  return <PlaylistRow title="Catalogue charts" explanation="Chart playlists the catalogue publishes" list={charts.isError ? undefined : charts.data} />;
+}
+
+/** 1.3 — the catalogue's longer lists, one route each; each row hides on a miss. */
+function CatalogueLists() {
+  const trendingPlaylists = useChartsTrendingPlaylists();
+  const trendingAlbums = useChartsTrendingAlbums();
+  const newAlbums = useChartsNewAlbums();
+  const featured = useChartsFeaturedPlaylists();
+  return (
+    <>
+      <PlaylistRow title="Trending playlists" list={trendingPlaylists.isError ? undefined : trendingPlaylists.data} />
+      <AlbumRow title="Trending albums" list={trendingAlbums.isError ? undefined : trendingAlbums.data} />
+      <AlbumRow title="New albums" list={newAlbums.isError ? undefined : newAlbums.data} />
+      <PlaylistRow title="Featured playlists" list={featured.isError ? undefined : featured.data} />
+    </>
   );
 }
 
@@ -320,6 +360,8 @@ export default function ChartsPage() {
               </ul>
             )}
           </section>
+
+          <CatalogueLists />
         </div>
 
         {/* moods · hubs · weekly */}

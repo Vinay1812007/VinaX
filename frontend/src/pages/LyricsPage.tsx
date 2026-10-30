@@ -3,6 +3,7 @@ import { extractId, songPath } from '@/utils/slug';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSongDetails } from '@/features/player/useSongDetails';
 import { useSyncedLyrics } from '@/features/lyrics/useSyncedLyrics';
+import { hasIndicScript } from '@/features/lyrics/script';
 import { SyncedLyrics } from '@/components/SyncedLyrics';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useLyricsOffsetStore } from '@/store/lyricsOffsetStore';
@@ -45,7 +46,11 @@ export default function LyricsPage() {
   const shareLines = lyrics.data?.synced
     ? lyrics.data.synced.map((l) => l.text).filter((t) => !!t && t.trim().length > 0)
     : (lyrics.data?.plain ?? '').split('\n').map((t) => t.trim()).filter(Boolean);
-  const [lmode, setLmode] = useState<'original' | 'romanize' | 'translate'>('original');
+  // 1.3 — "Romanized" is the lyrics-script setting: the catalogue sends the
+  // lines in English letters. The AI romanizer only runs when they still are not.
+  const script = useSettingsStore((s) => s.lyricsScript);
+  const setScript = useSettingsStore((s) => s.setLyricsScript);
+  const [lmode, setLmode] = useState<'original' | 'romanize' | 'translate'>(script === 'latin' ? 'romanize' : 'original');
   const [tlines, setTlines] = useState<string[] | null>(null);
   const [tloading, setTloading] = useState(false);
   const [meaning, setMeaning] = useState<LyricMeaning | null>(null);
@@ -55,7 +60,8 @@ export default function LyricsPage() {
     ? lyrics.data.synced.map((l) => l.text)
     : (lyrics.data?.plain ?? '').split('\n');
   const setMode = async (m: 'original' | 'romanize' | 'translate') => {
-    if (m === 'original') { setLmode('original'); setTlines(null); return; }
+    if (m === 'original') { setScript('original'); setLmode('original'); setTlines(null); return; }
+    if (m === 'romanize') { setScript('latin'); setLmode('romanize'); setTlines(null); return; }
     if (!song) return;
     setLmode(m);
     setTloading(true);
@@ -63,6 +69,23 @@ export default function LyricsPage() {
     setTloading(false);
     if (out) { setTlines(out); } else { setTlines(null); setLmode('original'); toast('Could not transform these lyrics'); }
   };
+  const needsAiRomanize = lmode === 'romanize' && !tlines && !tloading && !lyrics.isFetching && hasIndicScript(transformBase);
+  useEffect(() => {
+    if (!needsAiRomanize || !song) return;
+    let live = true;
+    setTloading(true);
+    void transformLyrics(song.id, 'romanize', transformBase).then((out) => {
+      if (!live) return;
+      setTloading(false);
+      if (out) setTlines(out);
+    });
+    return () => {
+      live = false;
+      setTloading(false);
+    };
+    // Runs once per song and lyrics answer; transformBase is derived from them.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsAiRomanize, song?.id, lyrics.data]);
   const displaySynced = lyrics.data?.synced
     ? lyrics.data.synced.map((l, i) => ({ t: l.t, text: lmode !== 'original' && tlines ? tlines[i] ?? l.text : l.text }))
     : null;

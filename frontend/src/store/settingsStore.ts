@@ -69,6 +69,8 @@ export interface SettingsState {
   resumePlayback: boolean;
   audioQuality: AudioQualityPref;
   lyricsSize: 'sm' | 'md' | 'lg' | 'xl';
+  /** 1.3 — lyrics as written ('original') or in English letters ('latin'). */
+  lyricsScript: 'original' | 'latin';
   uiLanguage: 'en' | 'te' | 'hi' | 'ta';
   dynamicTheme: boolean;
   reduceMotion: boolean;
@@ -159,6 +161,7 @@ export interface SettingsState {
   setResumePlayback(v: boolean): void;
   setAudioQuality(q: AudioQualityPref): void;
   setLyricsSize(v: 'sm' | 'md' | 'lg' | 'xl'): void;
+  setLyricsScript(v: 'original' | 'latin'): void;
   setUiLanguage(v: 'en' | 'te' | 'hi' | 'ta'): void;
   setDynamicTheme(v: boolean): void;
   setReduceMotion(v: boolean): void;
@@ -230,6 +233,7 @@ const defaults = {
   resumePlayback: true,
   audioQuality: 'high' as AudioQualityPref,
   lyricsSize: 'md' as 'sm' | 'md' | 'lg' | 'xl',
+  lyricsScript: 'original' as 'original' | 'latin',
   uiLanguage: 'en' as 'en' | 'te' | 'hi' | 'ta',
   dynamicTheme: false,
   reduceMotion: false,
@@ -268,6 +272,7 @@ const SETTINGS_ENUMS: Partial<Record<keyof SettingsData, readonly string[]>> = {
   density: ['comfortable', 'compact'],
   audioQuality: ['low', 'medium', 'high'],
   lyricsSize: ['sm', 'md', 'lg', 'xl'],
+  lyricsScript: ['original', 'latin'],
   uiLanguage: ['en', 'te', 'hi', 'ta'],
   discoveryMode: ['familiar', 'balanced', 'discover'],
   queueLanguages: ['one', 'mix'],
@@ -367,6 +372,7 @@ export const useSettingsStore = create<SettingsState>()(
       setResumePlayback: (resumePlayback) => set({ resumePlayback }),
       setAudioQuality: (audioQuality) => set({ audioQuality }),
       setLyricsSize: (lyricsSize) => set({ lyricsSize }),
+      setLyricsScript: (lyricsScript) => set({ lyricsScript }),
       setUiLanguage: (uiLanguage) => set({ uiLanguage }),
       setDynamicTheme: (dynamicTheme) => set({ dynamicTheme }),
       setReduceMotion: (reduceMotion) => set({ reduceMotion }),

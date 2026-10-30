@@ -356,7 +356,7 @@
       return ui.load(sources, function () { return VX.api.get('/api/admin/musicapi', null, { fresh: true, timeout: 30000 }); }, function (d) {
         var rows = (d.mirrors || []).map(function (m, i) {
           var state = !m.ok ? 'down' : Number(m.songs) > 0 ? 'ok' : 'empty';
-          return { label: SOURCE_LABEL[m.id] || m.label || 'Source ' + (i + 1), state: state, songs: m.songs, ms: m.ms, status: m.status, note: m.note };
+          return { label: SOURCE_LABEL[m.id] || m.label || 'Source ' + (i + 1), state: state, songs: m.songs, ms: m.ms, status: m.status, note: m.note, health: m.health || null };
         });
         var up = rows.filter(function (r) { return r.state === 'ok'; }).length;
         return [
@@ -369,6 +369,15 @@
               { key: 'songs', label: 'Songs', align: 'right', render: function (r) { return fmt.num(r.songs); } },
               { key: 'ms', label: 'Time', align: 'right', render: function (r) { return fmt.ms(r.ms); } },
               { key: 'status', label: 'HTTP', align: 'right' },
+              // 1.3 — the wrapper's own /health: each upstream it depends on, as it sees them.
+              { key: 'health', label: 'Wrapper health', render: function (r) {
+                var hl = r.health;
+                if (!hl || !arr(hl.upstreams).length) return '—';
+                return h('span', arr(hl.upstreams).map(function (u) {
+                  var text = u.name + (u.latencyMs != null ? ' ' + fmt.ms(u.latencyMs) : '');
+                  return ui.pill(text, !u.configured ? 'warn' : u.ok ? 'ok' : 'bad');
+                }));
+              } },
               { key: 'note', label: 'Note' }
             ]
           })
