@@ -1,0 +1,1 @@
+{"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_x` service tier `on_demand` on requests per minute (RPM): Limit 30, Used 30, Requested 1. Please try again in 2.5s.","type":"requests","code":"rate_limit_exceeded"}}

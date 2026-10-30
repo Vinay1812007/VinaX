@@ -1,0 +1,6 @@
+data: {"candidates":[{"content":{"parts":[{"text":"**Weighing the question** The user wants a short answer.","thought":true}],"role":"model"},"index":0}],"usageMetadata":{"promptTokenCount":120,"totalTokenCount":120},"modelVersion":"gemini-3.5-flash"}
+
+data: {"candidates":[{"content":{"parts":[{"text":"A raga is a melodic "}],"role":"model"},"index":0}],"modelVersion":"gemini-3.5-flash"}
+
+data: {"candidates":[{"content":{"parts":[{"text":"framework."}],"role":"model"},"finishReason":"STOP","index":0}],"usageMetadata":{"promptTokenCount":120,"candidatesTokenCount":9,"thoughtsTokenCount":30,"totalTokenCount":159},"modelVersion":"gemini-3.5-flash"}
+

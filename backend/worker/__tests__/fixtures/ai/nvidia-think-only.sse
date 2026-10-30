@@ -1,0 +1,6 @@
+data: {"id":"c4","choices":[{"index":0,"delta":{"role":"assistant","content":"<think>I will reason for a long time and never"},"finish_reason":null}]}
+
+data: {"id":"c4","choices":[{"index":0,"delta":{"content":" answer"},"finish_reason":"length"}]}
+
+data: [DONE]
+

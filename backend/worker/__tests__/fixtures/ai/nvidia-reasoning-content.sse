@@ -1,0 +1,6 @@
+data: {"id":"c3","choices":[{"index":0,"delta":{"role":"assistant","content":null,"reasoning_content":"Thinking about it."},"finish_reason":null}]}
+
+data: {"id":"c3","choices":[{"index":0,"delta":{"content":"Hello there."},"finish_reason":"stop"}]}
+
+data: [DONE]
+
