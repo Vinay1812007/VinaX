@@ -227,8 +227,20 @@ const pickHandler = (mod: Mod, method: string): Handler | undefined => {
   return specific ?? mod.onRequest;
 };
 
+/**
+ * 1.3.1 — VinaX has no AI features. The old AI pages (the chat, AI Playlist,
+ * shared AI chats) answer a 301 to Home from the Worker itself: a Worker route
+ * runs before the static host and every cache in front of it, so a stale
+ * prerendered copy of the old chat page can never be served again.
+ */
+export const RETIRED_AI_PATH = /^\/(?:vinaxai|ai-playlist)(?:\/.*)?$|^\/ai\/shared(?:\/.*)?$/i;
+
 const route = async (request: Request, env: Env, ctx: ExecCtx): Promise<Response> => {
-  const path = new URL(request.url).pathname;
+  const url = new URL(request.url);
+  const path = url.pathname;
+  if (RETIRED_AI_PATH.test(path)) {
+    return new Response(null, { status: 301, headers: { location: `${url.origin}/`, 'cache-control': 'no-store' } });
+  }
   const passthrough = (): Promise<Response> => assetsFetch(env)(request);
 
   let mod: Mod | undefined = EXACT[path];
