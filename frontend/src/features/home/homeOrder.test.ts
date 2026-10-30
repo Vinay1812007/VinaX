@@ -4,7 +4,7 @@ import type { HomeSection } from '@/services/recommendation/homeDesign';
 import { blockLifts, dayPartOf, MAX_SHIFT, orderHomeBlocks, resetSessionHomeOrder, sessionHomeOrder } from './homeOrder';
 import { emptySignals, type HomeSignals } from './homeSignals';
 
-const BASE: HomeSection[] = ['quick', 'personal', 'aihome', 'discovery', 'charts', 'seasonal', 'moods', 'genres', 'artists', 'albums', 'daypicks', 'loved', 'feed'];
+const BASE: HomeSection[] = ['quick', 'personal', 'discovery', 'charts', 'seasonal', 'moods', 'genres', 'artists', 'albums', 'daypicks', 'loved', 'feed'];
 const NOW = Date.UTC(2026, 8, 28, 12);
 const AFTERNOON = 14;
 

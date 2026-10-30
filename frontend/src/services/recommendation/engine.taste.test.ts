@@ -7,23 +7,12 @@ import { makeContext, makeSong, warmProfile } from '@/__fixtures__/songs';
 /**
  * 8.2.0 — what the next-song plan does with its new memories and signals:
  * the same seed does not hand back the same opening twice, songs the
- * catalogue cannot stream never reach the queue (unless downloaded), learned
- * vectors are warmed in the background for the pool, and the served memory
- * is a penalty, never a rule.
+ * catalogue cannot stream never reach the queue (unless downloaded), and the
+ * served memory is a penalty, never a rule.
  */
 let pool: Candidate[] = [];
-const embedSongs = vi.fn(async (_songs: Song[]) => undefined);
-let cached: Record<string, Float32Array> = {};
 vi.mock('./candidates', () => ({ gatherCandidates: vi.fn(async () => pool), generateNextCandidates: vi.fn(async () => pool) }));
-vi.mock('@/services/ai/recommendations', () => ({ enrichSongs: vi.fn(async (songs: Song[]) => songs), aiRerankSongs: vi.fn(async (songs: Song[]) => songs) }));
-vi.mock('@/services/ai/dj', () => ({ djSequence: vi.fn(async () => null), samplePool: (songs: Song[]) => songs, commitDjSet: vi.fn(), lastDjOutcome: () => 'unavailable' }));
 vi.mock('@/services/queryClient', () => ({ queryClient: { getQueryData: () => undefined } }));
-vi.mock('@/services/ai/embeddings', () => ({
-  getCachedEmbedding: (id: string) => cached[id] ?? null,
-  embedSongs: (songs: Song[]) => embedSongs(songs),
-  embedQuery: async () => null,
-  cosine: () => 0,
-}));
 
 import { planNextSongs, recommendNextSongs } from './engine';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -44,9 +33,7 @@ beforeEach(() => {
   sessionStorage.clear();
   resetTransitionMemory();
   resetRecMemory();
-  embedSongs.mockClear();
-  cached = {};
-  useSettingsStore.setState({ aiDj: false, aiAssist: false, kidMode: false, mutedLanguages: [] });
+  useSettingsStore.setState({ kidMode: false, mutedLanguages: [] });
   useLibraryStore.setState({ hiddenSongIds: [], hiddenArtists: [] });
   useDownloadsStore.setState({ items: {} });
 });
@@ -87,30 +74,5 @@ describe('songs that cannot stream', () => {
     expect(ids((await planNextSongs(seed, ctx(), { limit: 8 })).songs)).not.toContain('mute');
     useDownloadsStore.setState({ items: { mute: { song: pool[10].song, addedAt: NOW } } });
     expect(ids((await planNextSongs(seed, ctx(), { limit: 8 })).songs)).toContain('mute');
-  });
-});
-
-describe('learned vectors', () => {
-  it('warms the embedding cache for the ranked pool without waiting for it', async () => {
-    pool = cands(12);
-    embedSongs.mockImplementationOnce(() => new Promise<undefined>(() => undefined));
-    const plan = await planNextSongs(seed, ctx(), { limit: 5 });
-    expect(plan.songs).toHaveLength(5);
-    expect(embedSongs).toHaveBeenCalledTimes(1);
-    expect(embedSongs.mock.calls[0][0].length).toBeGreaterThan(0);
-  });
-
-  it('lets a cached embedding lift a candidate the taste songs resemble', async () => {
-    pool = cands(12);
-    const favorites = ['f1', 'f2', 'f3'].map((id) => makeSong(id, { artist: `Fav ${id}` }));
-    const base = { ...ctx(), favorites };
-    const plain = await planNextSongs(seed, base, { limit: 5 });
-    const last = pool.map((c) => c.song.id).find((id) => !ids(plain.songs).includes(id))!;
-    const x = Float32Array.from([1, 0]);
-    const y = Float32Array.from([0, 1]);
-    cached = { f1: x, f2: x, f3: x, [last]: x };
-    for (const c of pool) if (c.song.id !== last) cached[c.song.id] = y;
-    const lifted = await planNextSongs(seed, base, { limit: 5 });
-    expect(ids(lifted.songs)).toContain(last);
   });
 });

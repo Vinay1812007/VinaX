@@ -8,15 +8,15 @@ it('migrates retired queue and Home controls while preserving listener preferenc
   localStorage.setItem('vinax.aihome.recent.v1', '[]');
   localStorage.setItem(KEYS.settings, JSON.stringify({
     version: 2,
-    state: { theme: 'light', pinnedLanguages: ['telugu'], autoqueueSimilar: true, hiddenHome: ['personal'], homeOrder: ['feed'] },
+    state: { theme: 'light', pinnedLanguages: ['telugu'], autoqueueSimilar: true, hiddenHome: ['personal'], homeOrder: ['feed'], aiDj: true, aiAssist: true, aiHomeShelves: true, djVoice: true },
   }));
   await useSettingsStore.persist.rehydrate();
   const saved = JSON.parse(localStorage.getItem(KEYS.settings) ?? '{}');
-  expect(saved.version).toBe(4);
+  expect(saved.version).toBe(5);
   expect(localStorage.getItem('vinax.home.shown.v1')).toBeNull();
   expect(localStorage.getItem('vinax.aihome.recent.v1')).toBeNull();
   expect(saved.state).toMatchObject({ theme: 'light', pinnedLanguages: ['telugu'] });
-  for (const key of ['autoqueueSimilar', 'hiddenHome', 'homeOrder']) {
+  for (const key of ['autoqueueSimilar', 'hiddenHome', 'homeOrder', 'aiDj', 'aiAssist', 'aiHomeShelves', 'djVoice']) {
     expect(saved.state).not.toHaveProperty(key);
     expect(useSettingsStore.getState()).not.toHaveProperty(key);
   }

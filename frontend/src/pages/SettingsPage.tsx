@@ -266,7 +266,6 @@ const ERASE_LABELS: Record<string, string> = {
   output: 'Audio output preference',
   roomHostTokens: 'Listen Together host keys',
   updateAttempt: 'Update install attempt marker',
-  aiChats: 'VinaX AI chat history',
 };
 const eraseItems = [
   ...Object.keys(KEYS).map((k) => ERASE_LABELS[k] ?? k),
@@ -567,7 +566,7 @@ export default function SettingsPage() {
           </Section>
 
           <Section title="Playback" id="playback" lede="How songs start, flow into each other and end.">
-            <Row label="Autoplay" note="As your list runs out, similar songs keep the music going. Smart Queue on the Queue page turns this and “DJ builds every queue” on together.">
+            <Row label="Autoplay" note="As your list runs out, similar songs keep the music going. Smart Queue on the Queue page turns this and “Build every queue” on together.">
               <Toggle on={s.autoplay} onChange={s.setAutoplay} label="Autoplay" />
             </Row>
             <Row label="Crossfade" note="Fade between songs and fade new songs in." keywords="smooth transition">
@@ -600,7 +599,7 @@ export default function SettingsPage() {
                 <Toggle on={s.haptics} onChange={s.setHaptics} label="Haptics" />
               </Row>
             )}
-            <Group title="Lyrics and the DJ voice">
+            <Group title="Lyrics">
               {isNativePlatform() && (
                 <Row label="Lock screen lyrics" note="The current synced line on your lock screen and media controls.">
                   <Toggle on={s.lockScreenLyrics} onChange={(v) => { s.setLockScreenLyrics(v); if (v) void ensureNotificationPermission(true).then(() => getNotificationPermission().then(setNotifPerm)); }} label="Lock screen lyrics" />
@@ -623,13 +622,6 @@ export default function SettingsPage() {
               </Row>
               <Row stack label="Lyrics script" note="Show lyrics in Hindi, Tamil, Telugu and other scripts as written, or in English letters." keywords="romanized transliterate latin english letters">
                 <Segmented label="Lyrics script" value={s.lyricsScript} onChange={s.setLyricsScript} options={[{ value: 'original', label: 'As written' }, { value: 'latin', label: 'English letters' }]} />
-              </Row>
-              <Row
-                label="DJ voice"
-                note="The DJ introduces each song while the music ducks. The studio voice sends the line to the service; your device’s voice is the offline fallback."
-                keywords="segue now playing speak voice talk"
-              >
-                <Toggle on={s.djVoice} onChange={s.setDjVoice} label="DJ voice" />
               </Row>
             </Group>
             <Group title="Your goal">
@@ -691,7 +683,7 @@ export default function SettingsPage() {
               </Block>
               <Block
                 label="Trending vs. your taste"
-                note="How much Home and the DJ lean on what is popular right now."
+                note="How much Home and Up Next lean on what is popular right now."
                 keywords="intensity personalization trending against what you actually play"
               >
                 <RangeRow from="Trending" to="Your taste">
@@ -753,34 +745,13 @@ export default function SettingsPage() {
               </Block>
             </Group>
 
-            <Group title="AI" icon={<SparkleIcon className="vx-set-sub-icon" />}>
+            <Group title="Smart Queue">
               <Row
-                label="AI in recommendations"
-                note="Lets AI engines tag songs, re-rank what plays next, run the DJ and read descriptions you type in Search. Off keeps every pick on your device; nothing about your listening is sent for recommendations."
-                keywords="ai assist privacy on-device embeddings ranking"
+                label="Build every queue"
+                note="Tap any song and VinaX builds what follows from it, on this device. Off plays the list you tapped. Songs you queue by hand are never replaced. Needs Autoplay; Smart Queue on the Queue page turns both on."
+                keywords="album playlist shelf queue builder takeover dj"
               >
-                <Toggle on={s.aiAssist} onChange={s.setAiAssist} label="AI in recommendations" />
-              </Row>
-              <Row
-                label="AI DJ"
-                note="The DJ engine orders what plays next — an energy arc, no repeats — and suggests a few songs beyond the app’s picks, each checked against the catalogue. Off keeps the on-device order."
-                keywords="sequence queue reason"
-              >
-                <Toggle on={s.aiDj} onChange={s.setAiDj} label="AI DJ" />
-              </Row>
-              <Row
-                label="DJ builds every queue"
-                note="Tap any song and the DJ builds what follows from it. Off plays the list you tapped. Songs you queue by hand are never replaced. Needs Autoplay; Smart Queue on the Queue page turns both on."
-                keywords="album playlist shelf queue builder takeover"
-              >
-                <Toggle on={s.djTakeover} onChange={s.setDjTakeover} label="DJ builds every queue" />
-              </Row>
-              <Row
-                label="AI-designed shelves on Home"
-                note="A “Designed for you” block titled from your taste and the time of day, and an AI-ordered “Trending for you”. Off keeps Trending in your own order."
-                keywords="home shelves designed for you"
-              >
-                <Toggle on={s.aiHomeShelves} onChange={s.setAiHomeShelves} label="AI-designed shelves" />
+                <Toggle on={s.djTakeover} onChange={s.setDjTakeover} label="Build every queue" />
               </Row>
             </Group>
 

@@ -20,7 +20,6 @@ import * as overview from '../functions/api/admin/overview';
 import * as live from '../functions/api/admin/live';
 import * as listeners from '../functions/api/admin/listeners';
 import * as analytics from '../functions/api/admin/analytics';
-import * as ai from '../functions/api/admin/ai';
 import * as feedback from '../functions/api/admin/feedback';
 import * as content from '../functions/api/admin/content';
 import * as settings from '../functions/api/admin/settings';
@@ -81,7 +80,6 @@ const GETS: Array<[string, Handler, string]> = [
   ['live', live.onRequestGet as Handler, '/api/admin/live'],
   ['listeners', listeners.onRequestGet as Handler, '/api/admin/listeners'],
   ['analytics', analytics.onRequestGet as Handler, '/api/admin/analytics?view=music'],
-  ['ai', ai.onRequestGet as Handler, '/api/admin/ai'],
   ['feedback', feedback.onRequestGet as Handler, '/api/admin/feedback'],
   ['content', content.onRequestGet as Handler, '/api/admin/content'],
   ['settings', settings.onRequestGet as Handler, '/api/admin/settings'],
@@ -131,7 +129,7 @@ describe('every admin GET', () => {
 
 describe('overview', () => {
   it('answers the tiles, the timeline, platforms and attention items', async () => {
-    const kpis = { activeNow: 3, listeners: 120, newListeners24h: 4, accounts: 30, newAccounts7d: 2, plays24h: 400, plays7d: 2600, errors24h: 25, dau: 40, wau: 90, mau: 110, feedbackNew: 2, pushDevices: 0, roomsActive: 1, aiCalls24h: 12 };
+    const kpis = { activeNow: 3, listeners: 120, newListeners24h: 4, accounts: 30, newAccounts7d: 2, plays24h: 400, plays7d: 2600, errors24h: 25, dau: 40, wau: 90, mau: 110, feedbackNew: 2, pushDevices: 0, roomsActive: 1 };
     stub((c) => {
       const p = path(c);
       if (p === 'rpc/stats_overview') return json(kpis);

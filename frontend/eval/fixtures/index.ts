@@ -1,5 +1,5 @@
 import type { HistoryEntry, Song } from '../../src/types';
-import type { AiScript, Behaviour } from '../lib/mocks';
+import type { Behaviour } from '../lib/mocks';
 import type { EvalStyle } from '../lib/rules';
 import { pool, song, versionFamily, WORDS, type LangId } from './catalogue';
 
@@ -9,13 +9,12 @@ import { pool, song, versionFamily, WORDS, type LangId } from './catalogue';
  * Every fixture is a pure function of the timestamp the harness passes in:
  * no clock, no randomness, no network. A fixture describes a listener (taste
  * profile, history, favourites, settings, restrictions), the catalogue the
- * sources would return, what goes wrong with those sources, and what the AI
- * lane answers.
+ * sources would return, and what goes wrong with those sources.
  *
  * Bump EVAL_FIXTURES_VERSION whenever a fixture changes, or two reports stop
  * being comparable.
  */
-export const EVAL_FIXTURES_VERSION = '1.4.0'; // 9.1.0 — `served` gains fourteen alternative search results so its metric measures the exposure penalty instead of pool arithmetic (1.3.0: album/related-artist retrieval, cached embeddings, served songs, a memory sitting, unplayable tracks, sparse history; 1.2.0: DJ-remix and folk; 1.1.0: mixed-queue)
+export const EVAL_FIXTURES_VERSION = '1.5.0'; // 1.3 — the AI scripts and the learned-embedding fixtures went with the AI. Earlier: 9.1.0 — `served` gains fourteen alternative search results so its metric measures the exposure penalty instead of pool arithmetic (1.3.0: album/related-artist retrieval, cached embeddings, served songs, a memory sitting, unplayable tracks, sparse history; 1.2.0: DJ-remix and folk; 1.1.0: mixed-queue)
 
 /** Far enough ahead that a soft mute is active whenever the evaluation runs, without reading the clock. */
 export const FAR_FUTURE = 4_102_444_800_000;
@@ -78,7 +77,6 @@ export interface EvalFixture {
   sessionIntent?: EvalSessionIntent;
   /** 8.1.0 — 'mix' lets the listener's other languages into a stretch; absent = the seed's language only. */
   queueLanguages?: 'one' | 'mix';
-  ai: AiScript;
   /** Batches of five to plan in one sitting. */
   batches: number;
   /**
@@ -95,9 +93,7 @@ export interface EvalFixture {
   similarArtists?: Record<string, Array<{ id: string; name: string }>>;
   /** 9.0.0 — songs only an artist page lists (no search or suggestion returns them). */
   artistSongs?: Song[];
-  /** 9.0.0 — learned vectors the device already holds, by song id. */
-  embeddings?: Record<string, number[]>;
-  /** 9.0.0 — songs another surface (Home, AI Playlist) showed in the last week. */
+  /** 9.0.0 — songs another surface (Home) showed in the last week. */
   served?: Song[];
   /** 9.0.0 — keep the recommendation memories for the sitting: commit each accepted continuation and record how its songs went. */
   memory?: boolean;
@@ -183,7 +179,6 @@ function listener(now: number, language: LangId, over: Partial<EvalFixture> & { 
     favorites: heard.slice(0, 2),
     history: playsOf(heard, now),
     profile: warmProfile(now, { languages: { [language]: 30 }, artists: words.artists.slice(0, 3) }),
-    ai: { mode: 'off' },
     batches: 4,
     ...over,
   };
@@ -200,15 +195,15 @@ export function buildFixtures(now: number): EvalFixture[] {
   cold.favorites = [];
   cold.pinnedLanguages = [];
 
-  const warm = listener(now, 'telugu', { id: 'warm', title: 'Warm listener (Telugu), AI DJ answering', notes: 'A full profile with the AI DJ returning an order of its own: the refinement must pass the same rules.', ai: { mode: 'dj', answer: 'reorder' } });
+  const warm = listener(now, 'telugu', { id: 'warm', title: 'Warm listener (Telugu)', notes: 'A full profile.' });
 
   const familiar = listener(now, 'telugu', { id: 'familiar', title: 'Telugu, Familiar mode', notes: 'Familiar mode: a 5 % discovery allocation and known ground as a candidate source.', discoveryMode: 'familiar' });
 
-  const discover = listener(now, 'hindi', { id: 'discover', title: 'Hindi, Discover mode, AI unavailable', notes: 'Discover mode: 45 % of a stretch may go to never-played artists, and the language lock still holds.', discoveryMode: 'discover', ai: { mode: 'dj', answer: 'unavailable' } });
+  const discover = listener(now, 'hindi', { id: 'discover', title: 'Hindi, Discover mode', notes: 'Discover mode: 45 % of a stretch may go to never-played artists, and the language lock still holds.', discoveryMode: 'discover' });
 
-  const tamil = listener(now, 'tamil', { id: 'tamil', title: 'Tamil, AI DJ times out', notes: 'The DJ never answers in time: the local order must already be the queue.', ai: { mode: 'dj', answer: 'timeout' } });
+  const tamil = listener(now, 'tamil', { id: 'tamil', title: 'Tamil', notes: 'A Tamil listener: the queue keeps the seed’s language.' });
 
-  const punjabi = listener(now, 'punjabi', { id: 'punjabi', title: 'Punjabi', notes: 'A second Indic script, with the AI switched off.' });
+  const punjabi = listener(now, 'punjabi', { id: 'punjabi', title: 'Punjabi', notes: 'A second Indic script.' });
 
   const malayalam = listener(now, 'malayalam', { id: 'malayalam', title: 'Malayalam, Familiar mode', notes: 'A third Indic script; Familiar mode over a small artist set.', discoveryMode: 'familiar' });
 
@@ -218,16 +213,6 @@ export function buildFixtures(now: number): EvalFixture[] {
   mixed.profile = warmProfile(now, { languages: { hindi: 30, telugu: 22, tamil: 14 }, artists: [...hi.artists.slice(0, 2), ...te.artists.slice(0, 2)] });
   mixed.related = [...pool('hindi', { prefix: 'mixed-r', count: 8, offset: 1 }), ...pool('telugu', { prefix: 'mixed-t', count: 6, offset: 2 }), ...pool('tamil', { prefix: 'mixed-x', count: 6, offset: 3 })];
   mixed.search = pool('hindi', { prefix: 'mixed-s', count: 6, offset: 9, artistPattern: [3, 4, 5, 6, 7, 3] });
-  mixed.ai = {
-    mode: 'dj',
-    answer: 'rulebreak',
-    // What an AI must never get past validation: another language, an explicit cut, a hidden artist's song.
-    outsiders: [
-      song('mixed-bad-lang', { title: WORDS.tamil.titles[5], artist: WORDS.tamil.artists[5], language: 'tamil' }),
-      song('mixed-bad-explicit', { title: hi.titles[10], artist: hi.artists[6], language: 'hindi', explicit: true }),
-      song('mixed-bad-hidden', { title: hi.titles[11], artist: hi.artists[7], language: 'hindi' }),
-    ],
-  };
   mixed.hiddenArtists = [hi.artists[7]];
 
   // Mixed preferences: two clusters, quiet melodies and loud dance cuts.
@@ -296,19 +281,11 @@ export function buildFixtures(now: number): EvalFixture[] {
   small.related = pool('telugu', { prefix: 'small-r', count: 6, offset: 2, artistPattern: [0, 1, 2, 0, 3, 1] });
   small.search = [];
 
-  // Kid mode with explicit songs in the pool, and an AI proposing more of them.
-  const kid = listener(now, 'telugu', { id: 'kid-mode', title: 'Kid mode with explicit songs in the pool', notes: 'Every explicit cut must be gone — from the pool and from anything the AI proposes.' });
+  // Kid mode with explicit songs in the pool.
+  const kid = listener(now, 'telugu', { id: 'kid-mode', title: 'Kid mode with explicit songs in the pool', notes: 'Every explicit cut must be gone from the pool.' });
   kid.kidMode = true;
   kid.related = pool('telugu', { prefix: 'kid-r', count: 14, offset: 1, explicitEvery: 3 });
   kid.search = pool('telugu', { prefix: 'kid-s', count: 6, offset: 8, explicitEvery: 2, artistPattern: [4, 5, 6, 7, 4, 5] });
-  kid.ai = {
-    mode: 'dj',
-    answer: 'rulebreak',
-    outsiders: [
-      song('kid-bad-1', { title: te.titles[14], artist: te.artists[6], language: 'telugu', explicit: true }),
-      song('kid-bad-2', { title: te.titles[15], artist: te.artists[7], language: 'telugu', explicit: true }),
-    ],
-  };
 
   // Muted languages, with the pool full of them.
   const muted = listener(now, 'telugu', { id: 'muted-languages', title: 'Muted languages (Hindi, English)', notes: 'A muted language never reaches a queue, not even when the pool is mostly that language.' });
@@ -363,13 +340,12 @@ export function buildFixtures(now: number): EvalFixture[] {
   };
 
   // 8.3.0 — a folk sitting. Folk songs say so only in their ALBUM ("Telugu
-  // Folk Songs Telangana Janapadalu Vol - 6"). The AI DJ answers with an
-  // order of its own, which may not trade folk songs for film songs.
+  // Folk Songs Telangana Janapadalu Vol - 6").
   const folkAlbums = ['Telugu Folk Songs Telangana Janapadalu Vol - 6', 'Telangana Janapadalu, Vol. 2', 'Telugu Folk Songs', 'Palle Patalu (Best Folk Songs)', 'Telugu Folk DJ Songs, Vol. 2'];
   const folkSingers = ['వడ్లకొండ అనిల్', 'జాడల రమేష్', 'ఏ. రమాదేవి', 'అకునూరి దేవయ్య', 'మావూరి మల్లేష్', 'సాయి చంద్'];
   const folkSong = (id: string, t: number, singer: string): Song =>
     song(id, { title: `${te.titles[t]} పల్లె పాట`, artist: singer, language: 'telugu', album: { id: `al-folk-${t % folkAlbums.length}`, name: folkAlbums[t % folkAlbums.length] }, year: String(2016 + (t % 8)), energy: 0.55 + (t % 5) * 0.06, tempo: 100 + (t % 5) * 6, mood: null, genre: null, playCount: 500_000 - t * 10_000 });
-  const folkSession = listener(now, 'telugu', { id: 'folk-session', title: 'Folk sitting (Telugu), AI DJ answering', notes: 'A Telangana folk song is playing (folk only in its album name): what follows should be folk, and the AI DJ’s order may not trade folk for film songs.', ai: { mode: 'dj', answer: 'reorder' } });
+  const folkSession = listener(now, 'telugu', { id: 'folk-session', title: 'Folk sitting (Telugu)', notes: 'A Telangana folk song is playing (folk only in its album name): what follows should be folk.' });
   folkSession.seed = folkSong('seed-folk-session', 0, folkSingers[0]);
   folkSession.related = [...filmOnly(pool('telugu', { prefix: 'folk-r', count: 12, offset: 1 })), folkSong('folk-rr0', 1, folkSingers[1]), folkSong('folk-rr1', 2, folkSingers[2])];
   folkSession.search = filmOnly(pool('telugu', { prefix: 'folk-s', count: 10, offset: 5, artistPattern: [2, 3, 4, 5, 6, 7, 2, 4, 6, 3] }));
@@ -389,24 +365,6 @@ export function buildFixtures(now: number): EvalFixture[] {
   deep.similarArtists = { [`ar-${te.artists[0]}`]: [{ id: `ar-${te.artists[6]}`, name: te.artists[6] }, { id: `ar-${te.artists[7]}`, name: te.artists[7] }] };
   deep.artistSongs = deepArtists;
   deep.tasteTargets = [...deepAlbum, ...deepArtists].map((s) => s.id);
-
-  // 9.0.0 — cached learned embeddings. The candidates' metadata says nothing
-  // about which of them fit; the device's learned vectors do: the listener's
-  // taste songs and half the candidates point one way, the other half another.
-  // The declared taste is the first half. The same listener without vectors is
-  // the control (`embeddings-off`).
-  const near = (i: number): number[] => [1, 0.15 + (i % 3) * 0.05, 0, 0.1, 0, 0, 0.05 * (i % 2), 0];
-  const far = (i: number): number[] => [0, 0.1, 1, 0, 0.15 + (i % 3) * 0.05, 0, 0, 0.05 * (i % 2)];
-  const embedded = listener(now, 'telugu', { id: 'embeddings', title: 'Cached learned embeddings (Telugu)', notes: 'The device holds learned vectors for the taste songs and the candidates; only they tell the fitting candidates apart. Compare with `embeddings-off`.' });
-  // A pool three times the sitting, so the order decides what ships (a sitting that empties its pool ships the same songs in any order).
-  embedded.related = pool('telugu', { prefix: 'emb-r', count: 40, offset: 1 });
-  embedded.search = pool('telugu', { prefix: 'emb-s', count: 20, offset: 5, artistPattern: [2, 3, 4, 5, 6, 7, 2, 4, 6, 3] });
-  embedded.embeddings = {};
-  for (const s of [...embedded.favorites, ...embedded.history.map((e) => e.song)]) embedded.embeddings[s.id] = near(0);
-  const embeddedPool = [...embedded.related, ...embedded.search];
-  embeddedPool.forEach((s, i) => { embedded.embeddings![s.id] = i % 2 === 0 ? near(i) : far(i); });
-  embedded.tasteTargets = embeddedPool.filter((_, i) => i % 2 === 0).map((s) => s.id);
-  const embeddedOff: EvalFixture = { ...embedded, id: 'embeddings-off', title: 'The same listener, no vectors on the device', notes: 'Control for `embeddings`: identical, except the device holds no learned vectors.', embeddings: {} };
 
   // 9.0.0 — Home showed eight of the seed's strongest suggestions this week.
   // 1.4.0 — the pool holds real alternatives. With the default 26-song pool a
@@ -434,12 +392,12 @@ export function buildFixtures(now: number): EvalFixture[] {
   sparseHistory.history = sparseHistory.history.slice(0, 3);
   sparseHistory.profile = warmProfile(now, { languages: { hindi: 3 }, artists: [hi.artists[0]], plays: 3 });
 
-  return [cold, warm, familiar, discover, tamil, punjabi, malayalam, mixed, mixedQueue, prefs, skips, partial, offline, sparse, versions, small, kid, muted, hidden, softMuted, djSession, folkSession, deep, embedded, embeddedOff, served, memorySitting, unplayable, sparseHistory];
+  return [cold, warm, familiar, discover, tamil, punjabi, malayalam, mixed, mixedQueue, prefs, skips, partial, offline, sparse, versions, small, kid, muted, hidden, softMuted, djSession, folkSession, deep, served, memorySitting, unplayable, sparseHistory];
 }
 
 /** The fixture the latency conditions use (a warm Telugu listener with a full pool). */
 export function latencyFixture(now: number): EvalFixture {
-  return listener(now, 'telugu', { id: 'latency', title: 'Latency base (warm Telugu listener)', notes: 'One fixture, seven source and AI conditions.' });
+  return listener(now, 'telugu', { id: 'latency', title: 'Latency base (warm Telugu listener)', notes: 'One fixture, six source conditions.' });
 }
 
 /**

@@ -67,7 +67,7 @@ export default function ArtistPage() {
   // 1.3 — the catalogue's similar artists first (they carry pictures); the payload's, then co-credits, as before.
   const related = pickRelatedArtists(artist.id, [similar.data, artist.similarArtists, relatedArtists(artist.id, songs)]);
   const aiRadio = () => startRadio(songs[0], { seeds: songs.slice(1, 5) });
-  /** 1.3 — the catalogue's artist station; AI Radio from their songs when it cannot open one. */
+  /** 1.3 — the catalogue's artist station; Radio from their songs when it cannot open one. */
   const artistRadio = async () => {
     if (radioBusy) return;
     setRadioBusy(true);
@@ -112,7 +112,7 @@ export default function ArtistPage() {
             {songs.length > 0 && <EntityAction label="Shuffle play" onClick={shufflePlay}><ShuffleIcon /></EntityAction>}
             <EntityAction label="Artist radio" onClick={() => void artistRadio()} disabled={radioBusy}><RadioGlyph /></EntityAction>
             <SaveButton className="vx-ehead-pill vx-follow" entity={{ id: artist.id, kind: 'artist', title: artist.name, subtitle: 'Artist', image: bestImage(artist.images, 300) }} />
-            <EntityMenu items={[songs.length > 0 && { label: 'Start AI Radio', onSelect: aiRadio }]} />
+            <EntityMenu items={[songs.length > 0 && { label: 'Start radio', onSelect: aiRadio }]} />
           </>
         }
       />

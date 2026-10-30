@@ -10,7 +10,7 @@
  *     → 413 too_large                          more than MAX_BYTES
  *   401 signed_out without a valid session; 503 unavailable without a database.
  *
- * `backup` is the app's own backup-file JSON (never AI chats). `version` is
+ * `backup` is the app's own backup-file JSON. `version` is
  * the copy the device last saw (0 = none); the write lands only while that is
  * still the stored version, so two devices merge instead of overwriting.
  * Lives in `account_backups`, one row per account, deleted with the account.

@@ -39,7 +39,7 @@ function mixLine(songs: Song[]): string | null {
 /**
  * 9.0.0 — the top of Home: ONE obvious listening action. The Aura Mix card
  * (artwork-led, the mix's own colours behind it) with a large play button,
- * then quieter ways in — AI Radio, Surprise me, more mixes — and "Jump back
+ * then quieter ways in — Radio, Surprise me, more mixes — and "Jump back
  * in", the songs played last, one tap to resume.
  *
  * 10.0.0 — a first visit passes `lead` (the free-music welcome, HomeWelcome):
@@ -80,7 +80,7 @@ export function HomeHero({ design, songs, recent, lead, onPlay, onResume, onRadi
           <p className="vxh-hero-desc">{line ? `${line}. ` : ''}{design.description}</p>
           <div className="vxh-hero-actions">
             <button type="button" onClick={onPlay} disabled={!songs.length} className="vx-play-fab is-lg" data-tour="hero-play" aria-label={`Play your ${mixName}`}><PlayIcon /></button>
-            <button type="button" onClick={onRadio} className="vxh-pill"><RadioGlyph /> AI Radio</button>
+            <button type="button" onClick={onRadio} className="vxh-pill"><RadioGlyph /> Radio</button>
             <button type="button" onClick={onSurprise} className="vxh-pill is-quiet"><SparkleIcon /> Surprise me</button>
             <Link to="/made-for-you" className="vx-section-link vxh-hero-more">More mixes</Link>
           </div>

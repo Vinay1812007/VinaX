@@ -5,7 +5,7 @@ import { useLibraryStore } from '@/store/libraryStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { toast } from '@/store/toastStore';
 import { Sheet, SheetHeader } from '@/components/Sheet';
-import { fetchPickMatch, parseSongLine, pickQueryKey, type MatchResult, type SongPickRef } from '@/components/ai/SongPick';
+import { fetchPickMatch, parseSongLine, pickQueryKey, type MatchResult, type SongPickRef } from '@/services/import/songLines';
 import { cn } from '@/utils/cn';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import type { Song } from '@/types';
@@ -15,7 +15,7 @@ import type { Song } from '@/types';
  * reply, a screenshot's text, an exported list — one song per line as
  * "Title — Artist" (or "Title - Artist", or just a title) and VinaX resolves
  * each line to the real catalogue song and saves them as a playlist. Reuses
- * the same resolver the AI chat's song cards use.
+ * services/import/songLines.ts.
  *
  * v6.1.0 — a REVIEW step: nothing is saved until the listener has seen what
  * each line resolved to. Matched, closest-match and not-found lines are

@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { classifiedFields, hardFilter, rejectReasonFor } from './filters';
-import { applyMetadata } from '@/services/ai/recommendations';
+import { hardFilter, rejectReasonFor } from './filters';
 import type { Candidate } from './types';
 import { makeSong } from '@/__fixtures__/songs';
 
@@ -81,12 +80,6 @@ describe('7.2 — provenance and soft mutes in the hard filter', () => {
     expect(rejected.map((r) => `${r.song.id}:${r.reason}`)).toEqual(['a:soft-muted']);
   });
 
-  it('names the features the classifier added, and none the catalogue already had', () => {
-    const before = makeSong('s', { mood: 'romantic', genres: [] });
-    const after = applyMetadata([before], [{ id: 's', mood: 'chill', energy: 0.4, tempo: 96, genre: ['film'], vibe: [] }])[0];
-    expect(classifiedFields(before, after)).toEqual(['energy', 'tempo', 'genre']);
-    expect(classifiedFields(before, before)).toEqual([]);
-  });
 });
 
 describe('8.1.0 — the mix policy allow-list', () => {

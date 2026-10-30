@@ -15,7 +15,7 @@ import { toast } from '@/store/toastStore';
  * after a tap (a menu, a tab), leave `target` out and the card is centred.
  *
  * 10.1 — copy brought up to the Marigold + frosted-glass app (the new
- * search, Listen Together, VinaX AI connectors), a Listen Together tour, and
+ * search, Listen Together), a Listen Together tour, and
  * every step driven in a real browser at phone and desktop sizes: a target
  * at the top of the screen takes `placement: 'bottom'` (a card placed above
  * it would sit off-screen), and a target further down a long page needs
@@ -23,7 +23,7 @@ import { toast } from '@/store/toastStore';
  *
  * 11.0 rewrite — every tour re-walked against the six app styles; a title is
  * at most 5 words and a body one or two sentences. New tours: the app's look,
- * festival themes, and VinaX AI models and chat styles. A step whose anchor
+ * festival themes. A step whose anchor
  * is missing is skipped by the runner, and tutorials.test.ts fails when a
  * `data-tour` id or an aria-label a selector names is no longer in the source.
  */
@@ -88,12 +88,6 @@ const reveal = (selector: string) => async (): Promise<void> => {
   await wait(150);
 };
 
-const click = (selector: string) => async (): Promise<void> => {
-  await wait(250);
-  document.querySelector<HTMLElement>(selector)?.click();
-  await wait(350);
-};
-
 const PLAYER = '[data-tour="player"]';
 const SEARCH = '[data-tour="search-input"]';
 
@@ -107,7 +101,7 @@ export const TUTORIALS: Tutorial[] = [
     playsMusic: true,
     steps: [
       { route: '/', title: 'A tour that plays', body: 'This tour runs inside the app and starts a song in your first language.', tip: 'Leave at any time with Esc or Close.' },
-      { route: '/', target: '.vx-topbar', title: 'Where you are', body: 'The top bar holds this page’s actions. Home, Discover, Search, Library and VinaX AI sit in the navigation.', placement: 'bottom' },
+      { route: '/', target: '.vx-topbar', title: 'Where you are', body: 'The top bar holds this page’s actions. Home, Discover, Search and Library sit in the navigation.', placement: 'bottom' },
       { route: '/', target: '[data-tour="hero-play"]', title: 'Your mix', body: 'This button plays a mix built from your languages and listening. Press Next and the tour starts a song.', placement: 'bottom' },
       { target: PLAYER, title: 'The player bar', body: 'Play, pause and skip from here. Tap the artwork or title for the full-screen player.', action: async () => { await playTutorialSong(); await wait(700); }, placement: 'top' },
       { target: `${PLAYER} [aria-label="Add to favorites"], ${PLAYER} [aria-label="Remove from favorites"]`, title: 'Like a song', body: 'The heart adds the song to Liked songs. Your likes shape Home, on this device only.', placement: 'top' },
@@ -125,7 +119,6 @@ export const TUTORIALS: Tutorial[] = [
     steps: [
       { route: '/search', target: SEARCH, title: 'One search box', body: 'Type a song, artist, film or mood in any script. Suggestions open under the box as you type.', placement: 'bottom' },
       { route: '/search', target: SEARCH, title: 'Full results', body: 'Press Enter for the Top result, then Songs, Artists, Albums and Playlists, each with See all.', tip: 'Use ↑, ↓ and Enter in the suggestions. Esc closes them.', placement: 'bottom' },
-      { route: '/search', target: SEARCH, title: 'Describe a song', body: 'Type a description such as “sad telugu songs for rain” and Songs that match lists the closest songs.', placement: 'bottom' },
       { route: '/search', target: SEARCH, title: 'Search by lyrics', body: 'Type five or more words of a lyric and VinaX offers Search by lyrics.', placement: 'bottom' },
       { route: '/search', title: 'Recent and trending', body: 'Long-press or hover a recent search to pin it. Tap a trending chip to search it.', tip: 'Press ⌘/Ctrl+K anywhere for the command palette.' },
       { route: '/discover', target: 'nav[aria-label="Browse music"] a[href="/charts"]', title: 'Discover', body: 'Charts, Languages and Moods lead this grid. Regions, Movies, Videos and mixes follow.', placement: 'bottom' },
@@ -143,32 +136,6 @@ export const TUTORIALS: Tutorial[] = [
       { title: 'The Live pill', body: 'While a session runs, a Live pill sits on every other page. Tap it to return to the room.' },
       { title: 'Tap to start listening', body: 'If your browser holds back sound, the pill says Tap to start listening. One tap puts you in step.' },
       { title: 'Songs and reactions', body: 'Guests add songs for everyone and the host’s queue plays them. Reactions show on every screen in the room.', tip: 'End for everyone closes the room. Leave session takes only you out.' },
-    ],
-  },
-  {
-    id: 'meet-ai',
-    title: 'Ask VinaX AI',
-    blurb: 'The message box, files and connectors, and songs you can play from a reply.',
-    minutes: 1,
-    emoji: '✨',
-    steps: [
-      { route: '/VinaXAI', target: 'textarea[aria-label="Message VinaX AI"]', title: 'The message box', body: 'Ask about writing, code, maths, translation or music. Type / for commands such as /playlist and /lyrics.', placement: 'top' },
-      { route: '/VinaXAI', target: 'button[aria-label="Attach and tools"]', title: 'Files and connectors', body: 'This button uploads files and turns connectors on or off. Connectors that are on show as chips above the box.', placement: 'top' },
-      { route: '/VinaXAI', title: 'Songs you can play', body: 'A “Title — Artist” line in a reply becomes a playable card, with Play all and Save as playlist.' },
-      { route: '/VinaXAI', title: 'Where messages go', body: 'Your messages go to the AI service that answers them. Your library and listening stay on this device.' },
-    ],
-  },
-  {
-    id: 'ai-styles',
-    title: 'VinaX AI: models and chat styles',
-    blurb: 'Pick a model, see the chat change to match its maker, or keep one chat style.',
-    minutes: 1,
-    emoji: '🧩',
-    steps: [
-      { route: '/VinaXAI', target: 'button[aria-label^="Model:"]', title: 'The model menu', body: 'Auto picks a model for each question. Open this menu to search every free model and choose one yourself.', placement: 'top' },
-      { route: '/VinaXAI', title: 'The chat follows the model', body: 'When you choose a model, the chat takes a style that matches its maker: colours, type and message shapes.' },
-      { route: '/VinaXAI', target: 'button[aria-label="Chat settings"]', title: 'Chat settings', body: 'This button opens the default model, reply language, voice and chat storage. Press Next to open it.', placement: 'bottom' },
-      { route: '/VinaXAI', target: '[data-tour="chat-style"] > span', title: 'Chat style', body: 'Match the model changes the style with each model. Pick any other style to keep it for every chat.', action: click('button[aria-label="Chat settings"]'), leave: () => document.querySelector<HTMLElement>('button[aria-label="Close settings"]')?.click(), placement: 'bottom' },
     ],
   },
   {

@@ -2,7 +2,7 @@ import type { Song } from '@/types';
 import { usePlayerStore } from '@/store/playerStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useHistoryStore } from '@/store/historyStore';
-import { readListenerEnergy } from '@/services/ai/sessionContext';
+import { readListenerEnergy } from './listenerEnergy';
 import { sequenceSongs, type ArcShape } from './sequencer';
 import { admitSongs } from './admission';
 import { toast } from '@/store/toastStore';
@@ -20,7 +20,7 @@ let skipStreak = 0;
 let lastReplanAt = 0;
 const REPLAN_COOLDOWN_MS = 90_000;
 
-/** Arc shape for the current session, from the same signals the AI DJ reads. */
+/** Arc shape for the current session, from the listener's recent plays. */
 export function shapeForSession(now = new Date()): ArcShape {
   const energy = readListenerEnergy(useHistoryStore.getState().entries, now.getHours());
   if (energy.startsWith('restless') || energy.startsWith('wavering')) return 'lift';
@@ -90,7 +90,7 @@ export function noteSkipAndMaybeReplan(skipped: Song, now = Date.now()): boolean
   p.replaceAutoTail(admitted);
   skipStreak = 0;
   lastReplanAt = now;
-  toast('Two skips — the DJ re-planned what comes next with surer picks');
+  toast('Two skips — VinaX re-planned what comes next with surer picks');
   return true;
 }
 

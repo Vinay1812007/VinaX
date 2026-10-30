@@ -11,7 +11,7 @@ const AD_SLOT = '';
 /**
  * 8.4.0 — one sponsored placement at the end of a browsing page (song,
  * artist, album, language and mood pages, Help). Never in the player, the
- * queue, VinaX AI, the Android app or Kid mode: the component renders nothing
+ * queue, the Android app or Kid mode: the component renders nothing
  * there, so no ad script loads. The script is injected on first mount only.
  */
 export function AdSlot({ className }: { className?: string }) {

@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { cn } from '@/utils/cn';
-import { CompassIcon, HomeIcon, LibraryIcon, SearchIcon, SparkleIcon } from './Icons';
+import { CompassIcon, HomeIcon, LibraryIcon, SearchIcon } from './Icons';
 import { haptic } from '@/services/native';
 import { useT } from '@/i18n';
 
@@ -15,7 +15,6 @@ const items: DockItem[] = [
   { to: '/discover', label: 'Discover', icon: CompassIcon },
   { to: '/search', label: 'Search', icon: SearchIcon },
   { to: '/library', label: 'Library', icon: LibraryIcon },
-  { to: '/VinaXAI', label: 'VinaX AI', icon: SparkleIcon },
 ];
 
 /** 8.0.0 — the phone tab bar: a translucent strip, each tab an icon over its

@@ -3,19 +3,16 @@ import { extractId, songPath } from '@/utils/slug';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSongDetails } from '@/features/player/useSongDetails';
 import { useSyncedLyrics } from '@/features/lyrics/useSyncedLyrics';
-import { hasIndicScript } from '@/features/lyrics/script';
 import { SyncedLyrics } from '@/components/SyncedLyrics';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useLyricsOffsetStore } from '@/store/lyricsOffsetStore';
 import { LyricShareSheet } from '@/components/LyricShareSheet';
-import { transformLyrics, explainLyrics, type LyricMeaning } from '@/services/lyrics/transform';
-import { toast } from '@/store/toastStore';
 import { EmptyState } from '@/components/States';
 import { ListSkeleton } from '@/components/Skeletons';
 import { useEffect, useState } from 'react';
 import { useCurrentSong, usePlayerStore } from '@/store/playerStore';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
-import { MicIcon, PlayIcon, SparkleIcon } from '@/components/Icons';
+import { MicIcon, PlayIcon } from '@/components/Icons';
 import { cn } from '@/utils/cn';
 import '@/styles/pages/player.css';
 
@@ -47,69 +44,13 @@ export default function LyricsPage() {
     ? lyrics.data.synced.map((l) => l.text).filter((t) => !!t && t.trim().length > 0)
     : (lyrics.data?.plain ?? '').split('\n').map((t) => t.trim()).filter(Boolean);
   // 1.3 — "Romanized" is the lyrics-script setting: the catalogue sends the
-  // lines in English letters. The AI romanizer only runs when they still are not.
+  // lines in English letters.
   const script = useSettingsStore((s) => s.lyricsScript);
   const setScript = useSettingsStore((s) => s.setLyricsScript);
-  const [lmode, setLmode] = useState<'original' | 'romanize' | 'translate'>(script === 'latin' ? 'romanize' : 'original');
-  const [tlines, setTlines] = useState<string[] | null>(null);
-  const [tloading, setTloading] = useState(false);
-  const [meaning, setMeaning] = useState<LyricMeaning | null>(null);
-  const [meaningOpen, setMeaningOpen] = useState(false);
-  const [meaningLoading, setMeaningLoading] = useState(false);
-  const transformBase = lyrics.data?.synced
-    ? lyrics.data.synced.map((l) => l.text)
-    : (lyrics.data?.plain ?? '').split('\n');
-  const setMode = async (m: 'original' | 'romanize' | 'translate') => {
-    if (m === 'original') { setScript('original'); setLmode('original'); setTlines(null); return; }
-    if (m === 'romanize') { setScript('latin'); setLmode('romanize'); setTlines(null); return; }
-    if (!song) return;
-    setLmode(m);
-    setTloading(true);
-    const out = await transformLyrics(song.id, m, transformBase);
-    setTloading(false);
-    if (out) { setTlines(out); } else { setTlines(null); setLmode('original'); toast('Could not transform these lyrics'); }
-  };
-  const needsAiRomanize = lmode === 'romanize' && !tlines && !tloading && !lyrics.isFetching && hasIndicScript(transformBase);
-  useEffect(() => {
-    if (!needsAiRomanize || !song) return;
-    let live = true;
-    setTloading(true);
-    void transformLyrics(song.id, 'romanize', transformBase).then((out) => {
-      if (!live) return;
-      setTloading(false);
-      if (out) setTlines(out);
-    });
-    return () => {
-      live = false;
-      setTloading(false);
-    };
-    // Runs once per song and lyrics answer; transformBase is derived from them.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [needsAiRomanize, song?.id, lyrics.data]);
-  const displaySynced = lyrics.data?.synced
-    ? lyrics.data.synced.map((l, i) => ({ t: l.t, text: lmode !== 'original' && tlines ? tlines[i] ?? l.text : l.text }))
-    : null;
-  const displayPlain = lyrics.data?.plain
-    ? (lmode !== 'original' && tlines ? tlines.join('\n') : lyrics.data.plain)
-    : null;
-
-  const toggleMeaning = async (): Promise<void> => {
-    if (!song) return;
-    if (meaningOpen) {
-      setMeaningOpen(false);
-      return;
-    }
-    setMeaningOpen(true);
-    if (meaning) return;
-    setMeaningLoading(true);
-    const m = await explainLyrics(song.id, shareLines);
-    setMeaningLoading(false);
-    if (m) setMeaning(m);
-    else {
-      setMeaningOpen(false);
-      toast('Could not analyze these lyrics');
-    }
-  };
+  const lmode: 'original' | 'romanize' = script === 'latin' ? 'romanize' : 'original';
+  const setMode = (m: 'original' | 'romanize') => setScript(m === 'romanize' ? 'latin' : 'original');
+  const displaySynced = lyrics.data?.synced ?? null;
+  const displayPlain = lyrics.data?.plain ?? null;
 
   const sizeLabel = { sm: 'Small text', md: 'Medium text', lg: 'Large text', xl: 'Extra large text' } as const;
 
@@ -151,8 +92,8 @@ export default function LyricsPage() {
         <div className="vx-lyrics-toolbar">
           <div className="vx-lyrics-toolbar-group">
             <div className="vx-np-tabs" role="group" aria-label="Lyrics language">
-              {([['original', 'Original'], ['romanize', 'Romanized'], ['translate', 'English']] as const).map(([m, label]) => (
-                <button key={m} type="button" onClick={() => void setMode(m)} aria-pressed={lmode === m} className="vx-seg">
+              {([['original', 'Original'], ['romanize', 'Romanized']] as const).map(([m, label]) => (
+                <button key={m} type="button" onClick={() => setMode(m)} aria-pressed={lmode === m} className="vx-seg">
                   {label}
                 </button>
               ))}
@@ -164,7 +105,6 @@ export default function LyricsPage() {
                 </button>
               ))}
             </div>
-            {tloading && <span className="text-[13px] text-ink-400" role="status">Working…</span>}
           </div>
           {shareLines.length > 0 && (
             <div className="vx-lyrics-toolbar-group">
@@ -173,9 +113,6 @@ export default function LyricsPage() {
                   Karaoke
                 </Link>
               )}
-              <button type="button" onClick={() => void toggleMeaning()} aria-label="Explain the meaning of these lyrics" aria-expanded={meaningOpen} className="vx-np-pill">
-                <SparkleIcon className="w-3.5 h-3.5" /> Meaning
-              </button>
               <button type="button" onClick={() => setShareOpen(true)} className="vx-np-pill">
                 Share lyrics
               </button>
@@ -184,30 +121,6 @@ export default function LyricsPage() {
         </div>
       )}
 
-      {meaningOpen && (
-        <div className="vx-lyrics-meaning animate-fade-up">
-          {meaningLoading && <p className="text-sm text-ink-300">Reading the lyrics…</p>}
-          {!meaningLoading && meaning && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="vx-lyrics-meaning-title">
-                  <SparkleIcon /> Meaning
-                </span>
-                {meaning.mood && <span className="vx-lyrics-tag">{meaning.mood}</span>}
-              </div>
-              <p className="text-[15px] leading-relaxed text-ink-100">{meaning.summary}</p>
-              {meaning.themes.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {meaning.themes.map((th) => (
-                    <span key={th} className="vx-lyrics-tag">{th}</span>
-                  ))}
-                </div>
-              )}
-              <p className="text-[12px] text-ink-400 pt-1">AI summary from the lyrics · may be imperfect</p>
-            </div>
-          )}
-        </div>
-      )}
       {lyrics.data?.synced && song && (
         <div className="vx-lyrics-sync" role="group" aria-label="Lyrics sync offset">
           <span className="vx-lyrics-sync-label">Sync</span>

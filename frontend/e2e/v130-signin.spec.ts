@@ -7,7 +7,7 @@ import { expect, test } from './support/test';
 
 test('signed out, every personal page is the sign-in screen; the legal pages stay readable', async ({ page }) => {
   await page.route('**/accounts.google.com/**', (r) => r.abort());
-  // 13.5.0 — published pages (Charts, hubs, VinaX AI's page…) show their own text instead; see below.
+  // 13.5.0 — published pages (Charts, hubs…) show their own text instead; see below.
   // 13.9 — Search and the song pages open signed out (v139-guest-browse.spec.ts); Home and the personal pages do not.
   for (const path of ['/', '/library', '/settings', '/favorites']) {
     await page.goto(`${path}?e2e-signed-out`);

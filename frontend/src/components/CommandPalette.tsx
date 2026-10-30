@@ -110,7 +110,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
         id: 'a-surprise',
         icon: SparkleIcon,
         label: 'Surprise me',
-        hint: 'AI DJ · retune the queue',
+        hint: 'Retune the queue',
         kind: 'action',
         run: () => {
           const st = p();

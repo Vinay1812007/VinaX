@@ -66,8 +66,8 @@ const CommandPalette = lazy(() => import('@/components/CommandPalette'));
 // hero (the LCP element) paints the moment React commits, ~250ms sooner on
 // throttled mobile. Every navigation after that keeps the animation.
 let hasBooted = false;
-// Separate from the cold-boot animation flag above: AppLayout REMOUNTS on
-// every return from /VinaXAI, and the bootstrap initialisers are not
+// Separate from the cold-boot animation flag above: AppLayout can REMOUNT
+// (a full-screen route outside it), and the bootstrap initialisers are not
 // idempotent (device-change / document / `online` / `resume` listeners would
 // stack, one set per remount → duplicate toasts and duplicate work).
 let hasBootstrapped = false;
@@ -151,7 +151,7 @@ export function AppLayout() {
   // ("two loading animations"), and past ~128px raw drag it ALSO
   // refetched every active query on top of HomePage's own refresh. Worse,
   // it keyed off <main>'s scrollTop, which is permanently 0 on pages that
-  // scroll an inner div (Now Playing lyrics, VinaX AI chat, Karaoke) — so
+  // scroll an inner div (Now Playing lyrics, Karaoke) — so
   // scrolling those fired spurious global refetches. PullToRefresh is the
   // single implementation now.
 
@@ -283,7 +283,6 @@ export function AppLayout() {
       initSpatialNav();
       initAlarm();
       initAudioOutputWatcher();
-      void import('@/features/player/djVoice').then((m) => m.initDjVoice()).catch(() => undefined);
       useCastStore.getState().init();
       // Android 13+: media notification needs notification permission.
       void requestNotificationPermissionOnce();

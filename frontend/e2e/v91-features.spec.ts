@@ -5,10 +5,7 @@ import { latestNotesFingerprint } from '../src/constants/changelog';
  * 9.1 — the interfaces this release added, in a real browser:
  *
  *   - Home's "Fewer repeats" control;
- *   - the AI playlist's Keep / Replace / Refine controls;
- *   - the track menu's "Snooze this song…" submenu;
- *   - VinaX AI's Temporary chat and Projects entry points, and the artifact
- *     panel's toggle.
+ *   - the track menu's "Snooze this song…" submenu.
  *
  * What it checks, for each: an accessible name, a touch target that meets the
  * repo's 44px rule, keyboard reachability, and no horizontal page overflow at
@@ -65,9 +62,6 @@ async function seed(page: Page, baseURL: string): Promise<void> {
     if (!url.origin.startsWith('http://localhost')) return route.abort();
     if (url.pathname.startsWith('/api/cat/')) return route.fulfill({ json: { data: { results: songs } } });
     if (url.pathname === '/api/appconfig') return route.fulfill({ json: { flags: {} } });
-    if (url.pathname === '/api/playlist') {
-      return route.fulfill({ json: { name: 'Evening mix', description: 'Slow ones.', songs: songs.slice(0, 6).map((s) => ({ title: s.title, artist: s.subtitle, reason: 'fits the mood' })) } });
-    }
     if (url.pathname.startsWith('/api/')) return route.fulfill({ json: {} });
     return route.continue();
   });
@@ -95,43 +89,13 @@ test('Home: "Fewer repeats" is named, tappable and does not overflow a narrow sc
   await expect(page.getByRole('status').filter({ hasText: /heard lately|refreshed/i }).first()).toBeVisible({ timeout: 15_000 });
 });
 
-test('AI playlist: Keep, Replace and Refine are all named and reachable', async ({ page, baseURL }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await seed(page, baseURL!);
-  await page.goto('/ai-playlist');
-  await page.getByLabel(/Describe your perfect mix/i).fill('slow telugu evening');
-  await page.getByRole('button', { name: /Build my playlist/i }).click();
-
-  await expect(page.getByRole('heading', { name: 'Evening mix' })).toBeVisible({ timeout: 30_000 });
-
-  // Keep / Replace carry the song's name, so a screen reader says which row.
-  const keep = page.getByRole('button', { name: /^Keep Song \d+ when building again$/ }).first();
-  await expect(keep).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Replace Song \d+ with another song$/ }).first()).toBeVisible();
-
-  // Keeping a track is announced, not silent. Its name then changes to the
-  // undo wording, which is why it is re-located rather than reused.
-  await keep.click();
-  await expect(page.getByRole('status').filter({ hasText: /track kept/i })).toBeVisible();
-  const kept = page.getByRole('button', { name: /^Stop keeping Song \d+$/ }).first();
-  await expect(kept).toBeVisible();
-  await expect(kept).toHaveAttribute('aria-pressed', 'true');
-
-  // Refine has a label even though its label is visually hidden.
-  await expect(page.getByLabel(/Change something about this playlist/i)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Fewer repeats' })).toBeVisible();
-  await noHorizontalOverflow(page);
-});
-
 test('the track menu offers "Snooze this song…" with named durations', async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await seed(page, baseURL!);
   // A song ROW (not a card) is what carries the ⋮ menu, so this drives it from
-  // the AI playlist's result list.
-  await page.goto('/ai-playlist');
-  await page.getByLabel(/Describe your perfect mix/i).fill('slow telugu evening');
-  await page.getByRole('button', { name: /Build my playlist/i }).click();
-  await expect(page.getByRole('heading', { name: 'Evening mix' })).toBeVisible({ timeout: 30_000 });
+  // the liked songs the seed stored.
+  await page.goto('/favorites');
+  await expect(page.getByRole('button', { name: 'More options' }).first()).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole('button', { name: 'More options' }).first().click();
   const snooze = page.getByRole('menuitem', { name: /Snooze this song/i });
@@ -151,31 +115,4 @@ test('the track menu offers "Snooze this song…" with named durations', async (
   await page.getByRole('menuitem', { name: '14 days' }).click();
   await expect(page.getByText(/paused until/i).first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Undo' }).first()).toBeVisible();
-});
-
-test('VinaX AI: Temporary chat, Projects and the artifact toggle are all named', async ({ page, baseURL }) => {
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await seed(page, baseURL!);
-  await page.goto('/VinaXAI');
-  await page.waitForSelector('.ai-root');
-
-  // Both sidebar entry points exist and say what they do.
-  const temp = page.getByRole('button', { name: 'Temporary chat' });
-  await expect(temp).toBeVisible();
-  await expect(temp).toHaveAttribute('title', /never saved on this device/i);
-  const projects = page.getByRole('button', { name: 'Projects' });
-  await expect(projects).toBeVisible();
-
-  // The project sheet is a real modal: labelled, and Escape closes it.
-  await projects.click();
-  const dialog = page.getByRole('dialog', { name: 'Projects' });
-  await expect(dialog).toBeVisible();
-  await expect(page.getByLabel('New project name')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(dialog).toBeHidden();
-
-  // A temporary chat says so, once.
-  await temp.click();
-  await expect(page.getByText(/nothing from it is saved on this device/i)).toBeVisible();
-  await noHorizontalOverflow(page);
 });

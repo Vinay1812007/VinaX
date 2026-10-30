@@ -10,7 +10,7 @@ import { db, q, firstFailure } from '../../_lib/db';
 interface Kpis {
   activeNow: number; listeners: number; newListeners24h: number; accounts: number; newAccounts7d: number;
   plays24h: number; plays7d: number; errors24h: number; dau: number; wau: number; mau: number;
-  feedbackNew: number; pushDevices: number; roomsActive: number; aiCalls24h: number;
+  feedbackNew: number; pushDevices: number; roomsActive: number;
 }
 interface Attention { level: 'bad' | 'warn' | 'info'; text: string; page?: string; tab?: string }
 interface MetaRow { key: string; value: { version?: number; appliedAt?: string } }

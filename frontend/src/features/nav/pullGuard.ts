@@ -4,7 +4,7 @@
  * Pull-to-refresh listens on `window` (the gesture has to be judged before
  * anything else sees it), which meant it armed on EVERY touch that began
  * while the page scroller sat at the top — including touches inside a sheet,
- * a menu, the AI chat transcript or any other inner scroller. Those drags
+ * a menu, the lyrics or any other inner scroller. Those drags
  * were then `preventDefault()`ed as a pull: the inner list refused to move
  * and the screen read as frozen.
  *

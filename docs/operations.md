@@ -11,7 +11,7 @@ This is the runbook for keeping VinaX running: how each piece deploys and how to
 | Android package | Built by workflow, published as a repository release | **Build Android APK**, dispatched by **Auto release** on every merge to `main`; **Release APK** on a pushed tag ([android.md](android.md)) |
 | Database | One hosted project; the Worker is its only client, with the service-role key | `backend/supabase/schema.sql` pasted into the SQL editor once; never redeployed with the code ([database.md](database.md#setting-it-up)) |
 
-The database holds what the Worker needs between requests: listeners and accounts (with the synced copy), consented usage events, AI call counts, feedback, blocked content, Listen Together rooms, push devices and sent notifications, the owner's published settings, experiments, the audit trail, the status history and the job runs. A listener's library, history and settings still live on the device; the account's synced copy is a mirror of them. The Worker also keeps per-isolate memory (rate-limit buckets, one-minute caches of settings) and the `HANDOFF` key-value binding for device transfer.
+The database holds what the Worker needs between requests: listeners and accounts (with the synced copy), consented usage events, feedback, blocked content, Listen Together rooms, push devices and sent notifications, the owner's published settings, experiments, the audit trail, the status history and the job runs. A listener's library, history and settings still live on the device; the account's synced copy is a mirror of them. The Worker also keeps per-isolate memory (rate-limit buckets, one-minute caches of settings) and the `HANDOFF` key-value binding for device transfer.
 
 Production host: `www.vinaxmusic.online`. The Worker owns `admin.` (to `/admin/`) and `update.` (to the package download). The apex is redirected to `www` by the static site (`frontend/public/_redirects`), not the Worker: when the apex was a Worker route, a Worker over its daily quota answered 429 for `https://vinaxmusic.online/robots.txt`, and Search Console reported "Robots.txt unreachable" and stopped crawling the whole domain (fixed in 11.0.3). Keep anything a crawler needs before it can crawl — robots.txt on every host — off Worker routes. `status.` is redirected to `/status/` by `frontend/public/_redirects`.
 
@@ -35,16 +35,13 @@ Every commit shows a check named "Workers Builds: vinax-api". It comes from the 
 
 ### Runbook: the app is newer than the API
 
-**Symptom.** The web app is current (`/changelog.json` shows the latest version) but AI features are silent: no DJ ordering, no AI shelves. Both deploy paths have been down at once before (September 2026), which is how this happens.
+**Symptom.** The web app is current (`/changelog.json` shows the latest version) but a feature that needs the server is missing or falls back to its on-device path. Both deploy paths have been down at once before (September 2026), which is how this happens.
 
 **Probe.**
 
-1. `POST https://www.vinaxmusic.online/api/curate` and `POST …/api/dj` with an empty JSON body. A `404`, a `405` or the app's HTML shell means the deployed Worker does not have the route: it is stale. Any JSON answer, including an error, means the route exists.
-2. `GET …/api/aimodels`. It always lists the five providers with `configured: true|false`; an HTML answer means the same thing as step 1.
-3. Do **not** use `GET /api/version` for this. It reports the newest published Android release (`build`, `version`, `apkUrl`, `sha256`, `minBuild`), not the Worker build.
-4. Compare the Worker's version history in the hosting dashboard with the last backend commit on `main`.
-
-The app notices a `404`/`405` from the DJ route and stays quiet for ten minutes before trying again (`frontend/src/services/ai/dj.ts`), so listeners see on-device ordering, not errors.
+1. Request a route the newest backend added, for example `GET https://www.vinaxmusic.online/api/recommendations/similar/<a real song id>?limit=5`. A `404`, a `405` or the app's HTML shell means the deployed Worker does not have the route: it is stale. Any JSON answer, including an error, means the route exists.
+2. Do **not** use `GET /api/version` for this. It reports the newest published Android release (`build`, `version`, `apkUrl`, `sha256`, `minBuild`), not the Worker build.
+3. Compare the Worker's version history in the hosting dashboard with the last backend commit on `main`.
 
 **Fix, in order of preference.**
 
@@ -71,7 +68,7 @@ If a cached bad asset is the problem (an HTML body served under a hashed script 
 This section records platform behaviour seen in production (most recently on 2026-10-06). Nothing in the repository enforces or reports it.
 
 - The Worker runs on the platform's free plan, which allows a fixed number of requests a day across every route in `wrangler.toml`. That includes the edge-rendered song, album, artist, playlist and landing pages, not only `/api/*`.
-- When the allowance is spent, the platform stops running the Worker until its daily reset and answers those routes with its own error page (error **1027**). The static app shell still loads; every `/api/*` call fails, so search, Home shelves and AI features fail or fall back to on-device paths, and shared song links show the error page.
+- When the allowance is spent, the platform stops running the Worker until its daily reset and answers those routes with its own error page (error **1027**). The static app shell still loads; every `/api/*` call fails, so search and Home shelves fail or fall back to on-device paths, and shared song links show the error page.
 - It is not a code failure and a redeploy does not help.
 - Since V2 1.0 no page a crawler reads is a Worker route. The song, album and artist pages, the 72 mood × language hubs and every sitemap (`sitemap.xml`, `sitemap-static.xml`, `sitemap-hubs.xml`, `entity-pages.xml`) are static files the frontend build writes (`frontend/scripts/prerender-entities.mjs`, using the Worker's own renderer). The routes left in `wrangler.toml` are `/api/*`, `/img`, `/apk`, `update.*` and `admin.*`, so search engines can crawl the whole site without spending the daily allowance; it is left for listeners. Do not route a page family to the Worker again; build it statically instead.
 
@@ -121,7 +118,6 @@ The value is typed at the prompt, never pasted into a file or a chat. `npx wrang
 | Group | Names | If missing |
 | --- | --- | --- |
 | Catalogue (14.0.4) | `CATALOG_UPSTREAMS`, `CATALOG_DIRECT_URL` (both optional) | `CATALOG_UPSTREAMS` is the ordered, comma-separated list of wrapper base URLs `/api/cat` tries first (6 s each, benched a minute after a failure); without it the Worker uses only its built-in translation against JioSaavn's web API, which `CATALOG_DIRECT_URL` can point elsewhere. The app's bundle holds no provider URL — it only ever calls `/api/cat` — so the list can change in Cloudflare without a release and nobody can read it out of the app. The console's Catalog → Lookup page shows each configured upstream's health by host |
-| AI providers | `NVIDIA_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY` | That provider's models are skipped and its section of the model menu is empty. With none set, AI routes answer `503 ai_not_configured` and the app uses its on-device paths ([ai.md](ai.md)) |
 | Owner console | `ADMIN_LOGIN_PASSWORD` | Nobody can sign in to `/admin/` |
 | Database | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Every data feature answers its "not configured" shape: `/api/room`, `/api/feedback`, `/api/push/subscribe` and `/api/push/fcm-register` answer `503 not_configured`; `/api/account/data` answers `503 unavailable`; `/api/events` accepts and drops; the blocklist, experiments and announcement answer empty; `/api/appconfig` answers the built-in defaults; `/api/status` has no history. Every console page that reads data shows its setup card (`configured: false`) |
 | Scheduled jobs by hand | `CRON_SECRET` (optional) | `POST /api/cron/run` accepts only the owner token. The Cron Trigger itself needs no secret |
@@ -129,11 +125,11 @@ The value is typed at the prompt, never pasted into a file or a chat. `npx wrang
 | Web push | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | `/api/push/vapid` answers `key: null`; browser registrations are still stored but nothing can be sent to them |
 | Android background push | `FCM_SERVICE_ACCOUNT` | The console's push self-test has nothing to test; Android registrations are stored but nothing is sent to them ([fcm-push-setup.md](fcm-push-setup.md)) |
 | Request hashing | `TELEMETRY_PEPPER` | Rate-limit keys fall back to a built-in pepper |
-| Optional | `GITHUB_TOKEN` (Android update source), `NVIDIA_BASE_URL`, `VINAX_MAESTRO_MODEL` | Defaults apply; the update lookup is rate-limited without the token |
+| Optional | `GITHUB_TOKEN` (Android update source) | Defaults apply; the update lookup is rate-limited without the token |
 
 Non-secret settings are in `[vars]` in `wrangler.toml`: `ASSETS_HOST` (the static site's host, used for fall-through and for the shell of edge-rendered pages) and `GITHUB_REPO`. The `HANDOFF` key-value binding holds device-transfer ciphertext.
 
-`TURNSTILE_SECRET_KEY` is read by nothing and can be deleted. The `CRON_SECRET` Actions secret is read by no workflow and can be deleted too.
+`TURNSTILE_SECRET_KEY` is read by nothing and can be deleted. VinaX has no AI features any more, so the AI secrets are read by nothing too and can be deleted the same way: `NVIDIA_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY` (and their older `VINAX_…_API_KEY` names), `NVIDIA_BASE_URL`, `VINAX_MAESTRO_MODEL` and `SERPER_API_KEY` (`npx wrangler secret delete <NAME> --config worker/wrangler.toml`). The Worker no longer has the `[ai]` binding or the `SERPER_DAILY_LIMIT` and `RESEARCH_DAILY_LIMIT` vars. The `CRON_SECRET` Actions secret is read by no workflow and can be deleted too.
 
 ## The database
 
@@ -145,12 +141,16 @@ The schema, the Worker's data layer and the admin API are in [database.md](datab
 2. If the project is not empty, run `backend/supabase/reset.sql` in its SQL editor (it deletes every VinaX table).
 3. Run `backend/supabase/schema.sql`. The last line of its output names the schema version and the table count.
 4. Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on the Worker with `npx wrangler secret put`. The change applies on the next request; no deploy.
-5. Open the console's **Database** page: schema version 1, every table present, `reachable: true`. Then **Overview**: the tiles read zero, not an error.
+5. Open the console's **Database** page: schema version 3, every table present, `reachable: true`. Then **Overview**: the tiles read zero, not an error.
 6. Old data does not move. Signed-in listeners keep their session (it is a signed token), their first sync after the move writes a fresh copy from the device, and their device row is created again on the next consented event.
 
 ### Retention and purges
 
-Usage events are the only table that grows without bound. **Housekeeping** (below) purges events older than the `retention` setting's `eventsDays` (default 180) once an hour, sweeps idle rooms and switches off push devices that have not checked in for 180 days. The Database page's **Maintenance** tab runs the same actions now (`purge_events` with a chosen number of days, `sweep_rooms`, `retire_push`), each behind a confirmation and each written to the audit trail. `ai_calls`, `feedback`, `notifications`, `audit_log` and `job_runs` are kept until the owner deletes them.
+Usage events are the only table that grows without bound. **Housekeeping** (below) purges events older than the `retention` setting's `eventsDays` (default 180) once an hour, sweeps idle rooms and switches off push devices that have not checked in for 180 days. The Database page's **Maintenance** tab runs the same actions now (`purge_events` with a chosen number of days, `sweep_rooms`, `retire_push`), each behind a confirmation and each written to the audit trail. `feedback`, `notifications`, `audit_log` and `job_runs` are kept until the owner deletes them.
+
+### Removing the old AI tables
+
+A database that ran schema version 2 still holds the AI tables `ai_calls` and `shared_chats` and the functions `stats_ai` and `ai_usage_since`; version 3 no longer creates them but never deletes data. Run `backend/supabase/remove-ai.sql` once, by hand, in the SQL editor after applying version 3. It deletes the AI call log and every shared AI chat, and nothing else ([database.md](database.md#moving-from-version-2)).
 
 ### Deleting one listener's data
 
@@ -158,44 +158,6 @@ Usage events are the only table that grows without bound. **Housekeeping** (belo
 - **The owner:** on the **Listeners** page, open the person and choose **Delete**; the console asks for a reason and a typed confirmation, then calls `delete_listener`, which removes the device row, every usage event, room memberships, the account and its backup, and detaches their feedback. The audit trail keeps the reason.
 
 Repository Actions secrets: `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (Deploy Worker), `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` (package signing), and `LHCI_GITHUB_APP_TOKEN` (the Lighthouse workflow).
-
-### AI keys: one per provider
-
-Four keys, one per provider; every free model and tool that provider offers runs on its key. `providerKey()` in `backend/worker/functions/_lib/ai.ts` is the only code that reads them. It takes the current name and, while that is unset, the older one.
-
-| Provider | Secret | Where the owner creates the key | Older name still read |
-| --- | --- | --- | --- |
-| NVIDIA | `NVIDIA_API_KEY` | build.nvidia.com → Settings → API keys | `VINAX_NVIDIA_API_KEY` |
-| OpenRouter | `OPENROUTER_API_KEY` | openrouter.ai → Workspace → Keys | `VINAX_OPENROUTER_API_KEY` |
-| Gemini | `GEMINI_API_KEY` | aistudio.google.com → API keys | `VINAX_GGL_GEMINI_API_KEY` |
-| Groq | `GROQ_API_KEY` | console.groq.com → Keys | `VINAX_GROQ_API_KEY` |
-
-- `GET /api/aimodels` shows which providers are configured (`configured: true|false` for each of the five).
-
-### Cloudflare Workers AI (11.2)
-
-The fifth provider needs no key and no secret: it runs on the Worker's AI binding, `[ai] binding = "AI"` in `backend/worker/wrangler.toml`, and is configured whenever that binding is deployed. The free allowance is 10,000 neurons a day for the whole account, reset at 00:00 UTC; every Workers AI model draws on the same pool. Its models appear only as explicit picks in the model menu (never Auto, never a fallback). When the pool is spent the provider answers 429 until the reset and the picked model says so; nothing else is affected. To take it out of the menu, remove the `[ai]` table and deploy. Usage is visible in the Cloudflare dashboard under Workers AI. The console's env checklist shows which name each provider is using.
-- Once a provider is on its current name, its older name can be deleted with `npx wrangler secret delete <NAME> --config worker/wrangler.toml`. Nothing reads any other secret beginning `VINAX_` except `VINAX_MAESTRO_MODEL`; per-model keys left from before 10.3 can be deleted the same way.
-
-### Web search in VinaX AI (11.8)
-
-On a chat turn where Gemini's free grounding does not run, the Worker may make one call to Serper for Google results ([ai.md](ai.md#web-search)). Serper's free allowance is a one-time 2,500 queries, not a monthly one, so every call is capped and cached.
-
-| Setting | Where | Default |
-| --- | --- | --- |
-| `SERPER_API_KEY` | Worker secret (serper.dev → API key). Not an AI key: it is not in `PROVIDER_ENV` | unset = no web search through Serper |
-| `SERPER_DAILY_LIMIT` | Plain var in `backend/worker/wrangler.toml` `[vars]` | `80` successful, non-cached calls per UTC day (about a month of the free allowance); `0` = none. The count is kept per isolate, so the real total across edge locations can be higher |
-
-- **Set the key:** `cd backend && npx wrangler secret put SERPER_API_KEY --config worker/wrangler.toml`, then paste the key at the prompt. It takes effect at once, with no deploy. For `npm run dev`, put `SERPER_API_KEY=...` in `backend/worker/.dev.vars`, which is gitignored. Never put it in `wrangler.toml`, a `VITE_*` variable or a ticket.
-- **Change the cap:** edit `SERPER_DAILY_LIMIT` in `worker/wrangler.toml` and deploy (merge to `main`, or `npm run deploy`). A value set in the dashboard is overwritten by the next deploy.
-- **Read usage:** Serper's own dashboard shows the credits left; the Worker keeps no log of its calls.
-- **Switch it off:** `npx wrangler secret delete SERPER_API_KEY --config worker/wrangler.toml`, or set `SERPER_DAILY_LIMIT = 0` and deploy.
-- **When credits run out:** Serper answers 401/402/403/429 (or a 400 naming credits). Each isolate stops calling for 24 hours and logs `[serper] answered … out of credits` once. The chat keeps answering without results.
-
-### Deep research and pictures (12.0)
-
-- `RESEARCH_DAILY_LIMIT` (plain var in `worker/wrangler.toml`, default 5): deep-research runs a day. Each run spends 4 searches from `SERPER_DAILY_LIMIT`, so 5 runs use at most 20; set it to `0` to switch deep research off. The count is per isolate.
-- Pictures in replies and site logos load through `/api/webimg` and `/api/favicon`. Picture links are signed with `TELEMETRY_PEPPER` (else `DEVICE_ID_SECRET`); with neither set, replies carry no pictures.
 
 ### Google sign-in (12.2; required since 13.0)
 
@@ -245,10 +207,6 @@ Workflows that are checks rather than jobs:
 - **Owner console.** **Overview** is the first look (tiles, the 14-day timeline, an "attention" list naming anything that needs the owner), **Health** the live checks, **Database → Jobs** whether the scheduled jobs are running ([admin-console.md](admin-console.md)). A panel with no data means "unknown", not "healthy".
 - **Uptime issue.** The "Synthetic uptime probe failed" issue is the alert from outside.
 
-### Failover tests
-
-`backend/worker/__tests__/chaos-failover.test.ts` drives the real `/api/vinaxai` handler with sabotaged upstreams on every CI run: a dead primary, a primary answering `400`, an empty stream, every engine dead (the client gets an honest error, never a hang), and streams that stall or break part-way (the reply is flagged `truncated`).
-
 ## Rate limiting
 
 Two layers, both in `backend/worker/functions/_lib/ratelimit.ts`:
@@ -271,14 +229,9 @@ Artwork is served straight from the catalogue's CDN in pre-sized variants. `/img
 Nothing new to configure: 11.0 adds no secret, no binding and no schedule.
 
 1. Confirm **Deploy Worker** is green for the release commit and that its log shows a deploy, then run the probe in "The app is newer than the API".
-2. `GET /api/aimodels` lists the five providers (four since 10.3, Cloudflare since 11.2); each one whose key is set shows `configured: true`.
-3. Send one message in VinaX AI on Auto, and one with a model picked from a second provider.
-4. Expect different numbers on dashboards: when every engine is rate-limited, `/api/vinaxai` now answers `429` with a `retry-after` of 5 to 60 seconds, where it used to answer `500`. `/api/assistant`, `/api/dj`, `/api/playlist` and `/api/lyrics-tools` also answer `429` for an upstream rate limit. Other upstream failures are still `500`. An alert keyed on `500`s will fire less; add `429` to anything that tracks AI availability.
-5. Open the status page and the console's Overview once.
-6. **Run the edge rules once** — this is what stops the daily quota drain from the entity-page scraper: create a token with Zone → Firewall Services → Edit for the production zone, run `CLOUDFLARE_ZONE_TOKEN=… node backend/scripts/cf-edge-rules.mjs`, then revoke the token. See [Scraper traffic on entity pages](#scraper-traffic-on-entity-pages). Over the next day the Worker request graph should lose its spike at the 00:00 UTC reset.
-7. Check the page guard: `curl -sI -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" https://www.vinaxmusic.online/song/x-1 | grep -i x-vinax-page` should print `x-vinax-page: impostor` (with the block rule from step 6 live, the edge blocks it before that). A real browser, or Googlebot's user agent, gets the rendered page and no such header.
-8. Web search: `GET /api/aimodels` shows a `web_search` tool under the gemini provider when that key's catalogue lists a 2.5 Flash model, and `features.web` is true. Pick Gemini 2.5 Flash and ask about today's weather: the reply should carry a Sources row. A key with no 2.5 Flash model shows no tag and no web search; nothing breaks.
-9. Ask VinaX AI "what time is it?" with region inference on: the answer should use your local time zone.
+2. Open the status page and the console's Overview once.
+3. **Run the edge rules once** — this is what stops the daily quota drain from the entity-page scraper: create a token with Zone → Firewall Services → Edit for the production zone, run `CLOUDFLARE_ZONE_TOKEN=… node backend/scripts/cf-edge-rules.mjs`, then revoke the token. See [Scraper traffic on entity pages](#scraper-traffic-on-entity-pages). Over the next day the Worker request graph should lose its spike at the 00:00 UTC reset.
+4. Check the page guard: `curl -sI -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" https://www.vinaxmusic.online/song/x-1 | grep -i x-vinax-page` should print `x-vinax-page: impostor` (with the block rule from step 3 live, the edge blocks it before that). A real browser, or Googlebot's user agent, gets the rendered page and no such header.
 
 ## Search indexing checklist
 

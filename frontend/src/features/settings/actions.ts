@@ -113,8 +113,12 @@ export async function clearPersonalization(): Promise<void> {
 
 export async function resetAppState(): Promise<void> {
   await clearEvents();
-  // 8.2.0 — the song vectors live in their own IndexedDB database.
-  await import('@/services/ai/embeddings').then((m) => m.eraseEmbeddings()).catch(() => undefined);
+  // The song vectors older builds kept in their own IndexedDB database.
+  try {
+    window.indexedDB?.deleteDatabase('vinax-embeddings');
+  } catch {
+    /* storage may be unavailable */
+  }
   clearAllVinaxStorage();
   window.location.assign('/');
 }

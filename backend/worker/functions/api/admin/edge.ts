@@ -28,7 +28,6 @@ const ENDPOINTS: Array<{ name: string; path: string; method?: string; expect?: n
   { name: 'Blocklist', path: '/api/blocklist' },
   { name: 'Trending searches', path: '/api/trending-searches' },
   { name: 'Announcements', path: '/api/announcements' },
-  { name: 'Code preview (CORS preflight)', path: '/api/preview', method: 'OPTIONS', expect: 204 },
   { name: 'Catalog search', path: '/api/cat/search/songs?query=love&limit=1' },
   { name: 'Sitemap index', path: '/sitemap.xml' },
   { name: 'Web manifest', path: '/manifest.webmanifest' },

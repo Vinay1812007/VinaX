@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { DEFAULT_HOME, HOME_SECTIONS, generateHomeDesign, type HomeDesign, type HomeSection } from '@/services/recommendation/homeDesign';
+import { useState } from 'react';
+import { DEFAULT_HOME, HOME_SECTIONS, type HomeDesign, type HomeSection } from '@/services/recommendation/homeDesign';
 import { ChevronDownIcon, SettingsIcon } from '@/components/Icons';
 
 /**
@@ -9,23 +9,9 @@ import { ChevronDownIcon, SettingsIcon } from '@/components/Icons';
  */
 export function HomeStudio({ design, onApply, onReset, locked = [] }: { design: HomeDesign; onApply: (value: HomeDesign) => void; onReset: () => void; locked?: HomeSection[] }) {
   const [draft, setDraft] = useState(design);
-  const [prompt, setPrompt] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState('Describe your listening mood or arrange the shelves yourself.');
-  const request = useRef<AbortController | null>(null);
-  useEffect(() => () => request.current?.abort(), []);
+  const [notice, setNotice] = useState('Arrange the shelves, then apply.');
   function move(index: number, direction: number) {
     setDraft(current => { const order = [...current.order]; [order[index], order[index + direction]] = [order[index + direction], order[index]]; return { ...current, order }; });
-  }
-  async function generate() {
-    request.current?.abort();
-    const controller = new AbortController(); request.current = controller;
-    setBusy(true); setNotice('Arranging your listening space…');
-    const result = await generateHomeDesign(prompt || 'Build a balanced Home for my listening taste', controller.signal);
-    if (controller.signal.aborted) return;
-    setBusy(false);
-    if (result) { setDraft(result); setNotice('Your preview is ready. Review the shelves, then apply.'); }
-    else setNotice('AI is unavailable right now. You can still arrange and apply your shelves below.');
   }
   return <details className="home-studio vxh-studio" onToggle={e => { if (e.currentTarget.open) setDraft(design); }}>
     <summary>
@@ -35,10 +21,8 @@ export function HomeStudio({ design, onApply, onReset, locked = [] }: { design: 
     </summary>
     <div className="home-studio-body">
       <div className="home-studio-editor">
-        <p className="home-studio-lead">Home Studio: describe a mood and VinaX AI arranges your shelves, or order them yourself. Nothing changes until you apply.</p>
-        <label htmlFor="home-direction">What do you want to hear?</label>
-        <textarea id="home-direction" value={prompt} maxLength={500} onChange={e => setPrompt(e.target.value)} placeholder="A calm evening with Telugu melodies and a few new discoveries…" rows={2} />
-        <div className="home-studio-actions"><button className="btn-primary" disabled={busy} onClick={() => void generate()}>{busy ? 'Building preview…' : 'Build with VinaX AI'}</button><button className="btn-secondary" onClick={() => { request.current?.abort(); setBusy(false); setDraft(DEFAULT_HOME); setNotice('Balanced layout ready to preview.'); }}>Balanced layout</button></div>
+        <p className="home-studio-lead">Home Studio: order and hide your shelves. Nothing changes until you apply.</p>
+        <div className="home-studio-actions"><button className="btn-secondary" onClick={() => { setDraft(DEFAULT_HOME); setNotice('Balanced layout ready to preview.'); }}>Balanced layout</button></div>
         <p className="home-studio-notice" role="status">{notice}</p>
         <label htmlFor="home-headline">Featured headline</label><input id="home-headline" value={draft.title} maxLength={60} onChange={e => setDraft({ ...draft, title: e.target.value })} />
         <ol className="home-studio-shelves" aria-label="Shelf order preview">{draft.order.map((key, index) => <li key={key}>
@@ -50,7 +34,7 @@ export function HomeStudio({ design, onApply, onReset, locked = [] }: { design: 
           </label>
           <button aria-label={`Move ${HOME_SECTIONS[key]} up`} disabled={index === 0} onClick={() => move(index, -1)}>↑</button><button aria-label={`Move ${HOME_SECTIONS[key]} down`} disabled={index === draft.order.length - 1} onClick={() => move(index, 1)}>↓</button>
         </li>)}</ol>
-        <div className="home-studio-actions"><button className="btn-primary" disabled={busy || draft.order.every(k => draft.hidden.includes(k) || locked.includes(k))} onClick={() => { onApply(draft); setNotice('Your layout is applied.'); }}>Apply to my Home</button><button className="btn-secondary" onClick={() => { request.current?.abort(); setBusy(false); onReset(); setNotice('Default Home restored.'); }}>Restore default</button></div>
+        <div className="home-studio-actions"><button className="btn-primary" disabled={draft.order.every(k => draft.hidden.includes(k) || locked.includes(k))} onClick={() => { onApply(draft); setNotice('Your layout is applied.'); }}>Apply to my Home</button><button className="btn-secondary" onClick={() => { onReset(); setNotice('Default Home restored.'); }}>Restore default</button></div>
       </div>
     </div>
   </details>;

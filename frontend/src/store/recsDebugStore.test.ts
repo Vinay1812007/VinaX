@@ -12,7 +12,7 @@ beforeEach(() => {
 
 describe('recs debug store', () => {
   it('keeps the last twelve batches, newest first', () => {
-    for (let i = 0; i < 15; i += 1) useRecsDebugStore.getState().publish([{ position: 1, song, finalScore: i, source: 'related', components: [], picker: i % 2 ? 'ai' : 'local' }]);
+    for (let i = 0; i < 15; i += 1) useRecsDebugStore.getState().publish([{ position: 1, song, finalScore: i, source: 'related', components: [], picker: 'local' }]);
     const b = useRecsDebugStore.getState().batches;
     expect(b).toHaveLength(12);
     expect(b[0].rows[0].finalScore).toBe(14);

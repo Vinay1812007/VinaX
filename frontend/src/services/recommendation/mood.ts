@@ -16,7 +16,7 @@ const KEYWORDS: Array<[Mood, RegExp]> = [
  * Best-effort mood inference from a song's title + subtitle keywords.
  * Deterministic and intentionally rough — a true audio mood would need audio
  * analysis the catalog does not expose; this is a lightweight signal that
- * complements the AI curator's deeper mood matching.
+ * is the whole mood signal.
  */
 export function moodFromText(text: string): Mood {
   const t = text.toLowerCase();

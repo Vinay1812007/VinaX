@@ -46,7 +46,7 @@ export type RepeatMode = 'off' | 'one' | 'all';
 /**
  * 1.3 — a catalogue station's own continuation (features/radio/stations):
  * the next songs on the station. While a radio has one, each top-up asks it
- * first; a miss falls back to the DJ's plan, and two misses in a row end it.
+ * first; a miss falls back to the on-device plan, and two misses in a row end it.
  */
 export type RadioFeed = (limit: number, signal: AbortSignal) => Promise<Song[]>;
 
@@ -86,8 +86,8 @@ export interface PlayerState {
   clearLoop(): void;
   /**
    * Start playback. V2: a list (playlist, album, chart, mix) plays in full
-   * from the tapped song, and Up Next continues after it. With the DJ
-   * takeover setting on (default), a single song — or a tap in SEARCH
+   * from the tapped song, and Up Next continues after it. With the smart queue
+   * setting on (default), a single song — or a tap in SEARCH
    * results (`asSeed`), which are hits, not a list anyone made — is a seed:
    * the song starts alone and Up Next builds what follows. `keepList` forces
    * the list to become the queue whatever the setting (Queue Builder plans).
@@ -112,9 +112,9 @@ export interface PlayerState {
   togglePlay(): void;
   next(manual?: boolean): void;
   /**
-   * Endless radio from a song (default: the one playing). 8.2.0 — AI Radio:
+   * Endless radio from a song (default: the one playing). 8.2.0 — Radio:
    * `seeds` play first after the song (a mood's or a request's picks, up to
-   * RADIO_SEED_MAX in all) and `tune` steers every continuation the DJ adds.
+   * RADIO_SEED_MAX in all) and `tune` steers every continuation that follows.
    */
   startRadio(song?: Song, opts?: { seeds?: Song[]; tune?: TuneIntent | null; feed?: RadioFeed | null }): void;
   /** v6.3.0 — songs the recommender appended (not hand-queued), after the current one. */
@@ -124,7 +124,7 @@ export interface PlayerState {
   replaceAutoTail(songs: Song[]): void;
   /** 7.2.0 — was this entry queued by the listener ("Add to queue", "Play next", "Keep this song")? */
   isManualQueued(id: string): boolean;
-  /** 7.2.0 — keep an automatic entry: it becomes the listener's own and survives a rebuild or an AI refinement. */
+  /** 7.2.0 — keep an automatic entry: it becomes the listener's own and survives a rebuild. */
   keepSong(id: string): void;
   /** 7.2.0 — the listener asked for new automatic picks: rebuild everything automatic after the current song. */
   regenerateAutoTail(): void;
@@ -181,12 +181,10 @@ function loadNextUp(): Promise<typeof import('@/services/nextup/engine')> {
   return nextUpModule;
 }
 
-/** 8.2.0 — AI Radio: the most songs a radio starts with before the DJ takes over. */
+/** 8.2.0 — Radio: the most songs a radio starts with before the continuation takes over. */
 export const RADIO_SEED_MAX = 5;
 /** How many songs one continuation adds. */
 const NEXT_BATCH = 5;
-/** 7.2.0 — inside the last seconds of a song the next track is committed: an AI refinement leaves it alone. */
-const NEXT_COMMIT_WINDOW_SEC = 30;
 let autoplayNoticeShown = false;
 
 let engineInitialized = false;
@@ -248,7 +246,7 @@ export const usePlayerStore = create<PlayerState>()(
       let feed: RadioFeed | null = null;
       let feedMisses = 0;
       let recommendationJob: { version: number; promise: Promise<boolean> } | null = null;
-      /** 7.2.0 — cancels the in-flight plan and its AI refinement when the queue moves on. */
+      /** 7.2.0 — cancels the in-flight plan when the queue moves on. */
       let planAbort: AbortController | null = null;
       /** 7.2.0 — the latest accepted plan. Its validated reserve tops up a queue about to run
        *  dry, and — for a queue in the same language — is the last-good fallback. */
@@ -284,7 +282,7 @@ export const usePlayerStore = create<PlayerState>()(
       function invalidateQueue(): void {
         queueVersion += 1;
         transition += 1;
-        // Obsolete work is cancelled, not just ignored: the plan's reads and the DJ request stop.
+        // Obsolete work is cancelled, not just ignored: the plan's reads stop.
         planAbort?.abort();
         planAbort = null;
       }
@@ -354,65 +352,8 @@ export const usePlayerStore = create<PlayerState>()(
         plan.commit(admitted);
         lastPlan = plan;
         preloadUpcoming();
-        emitPlaybackEvent({ kind: 'served', batch, alg: plan.alg, picker: plan.picker, fallback: plan.fallback, latencyMs: plan.latencyMs, n: admitted.length, discovery: admitted.filter((s) => plan.discoveryIds.has(s.id)).length, languageViolations: languageViolations(admitted, plan.language), distinctArtists: distinctLeads(admitted), relaxed: plan.relaxed, refinementPending: !!plan.refinement });
-        if (plan.refinement) {
-          const version = queueVersion;
-          void plan.refinement.then((refined) => {
-            if (!('songs' in refined)) {
-              emitPlaybackEvent({ kind: 'refined', batch, applied: false, fallback: refined.rejected, latencyMs: plan.latencyMs, n: 0, discovery: 0, languageViolations: 0, distinctArtists: 0, relaxed: [] });
-              return;
-            }
-            // A refinement for a queue the listener has since changed is dropped (and never committed).
-            const placed = version === queueVersion && canExtend() ? applyRefinement(refined, batch) : [];
-            const n = placed.length;
-            emitPlaybackEvent({
-              kind: 'refined', batch, applied: n > 0, fallback: n > 0 ? null : 'ai_rejected', latencyMs: refined.latencyMs, n,
-              // Measured on what the AI order actually placed, so the quality
-              // panel compares like with like against the local batch.
-              discovery: placed.filter((s) => refined.discoveryIds.has(s.id)).length,
-              languageViolations: languageViolations(placed, refined.language),
-              distinctArtists: distinctLeads(placed),
-              relaxed: refined.relaxed,
-            });
-          });
-        }
+        emitPlaybackEvent({ kind: 'served', batch, alg: plan.alg, picker: plan.picker, fallback: plan.fallback, latencyMs: plan.latencyMs, n: admitted.length, discovery: admitted.filter((s) => plan.discoveryIds.has(s.id)).length, languageViolations: languageViolations(admitted, plan.language), distinctArtists: distinctLeads(admitted), relaxed: plan.relaxed });
         return admitted.length;
-      }
-
-      /** Is the track after the current one committed, so an AI refinement must not swap it? */
-      function nextCommitted(): boolean {
-        const { queue, index, currentTime, duration } = get();
-        const next = queue[index + 1];
-        if (!next) return false;
-        if (!autoIds.has(next.id) || crossfadeArmed) return true;
-        return duration > 0 && duration - currentTime <= NEXT_COMMIT_WINDOW_SEC;
-      }
-
-      /**
-       * 7.2.0 — the AI's order for a stretch already queued from the local plan.
-       * Only automatic entries that have not started may change: never the
-       * current track, never a committed next track, never the listener's own
-       * songs (they keep their place ahead of the automatic ones).
-       */
-      function applyRefinement(refined: NextSongsPlan, batch: number): Song[] {
-        const { queue, index } = get();
-        const start = index + 1 + (nextCommitted() ? 1 : 0);
-        const eligible = queue.slice(start).filter((s) => autoIds.has(s.id));
-        if (!eligible.length) return [];
-        const eligibleIds = new Set(eligible.map((s) => s.id));
-        const { admitted } = admitSongs(refined.songs, { queue, index, replacing: eligibleIds });
-        const fresh = admitted.slice(0, eligible.length);
-        if (fresh.length < Math.min(3, eligible.length)) return [];
-        const others = queue.slice(start).filter((s) => !eligibleIds.has(s.id));
-        for (const id of eligibleIds) {
-          autoIds.delete(id);
-          autoMetaById.delete(id);
-        }
-        markAuto(fresh, { alg: refined.alg, picker: 'ai', batch });
-        set({ queue: [...queue.slice(0, start), ...others, ...fresh] });
-        refined.commit(fresh);
-        preloadUpcoming();
-        return fresh;
       }
 
       /**
@@ -434,12 +375,12 @@ export const usePlayerStore = create<PlayerState>()(
         markAuto(admitted, { alg: plan.alg, picker: 'reserve', batch });
         set({ queue: [...queue, ...admitted] });
         plan.commit(admitted);
-        emitPlaybackEvent({ kind: 'served', batch, alg: plan.alg, picker: 'reserve', fallback: 'deadline', latencyMs: 0, n: admitted.length, discovery: admitted.filter((s) => plan.discoveryIds.has(s.id)).length, languageViolations: languageViolations(admitted, plan.language), distinctArtists: distinctLeads(admitted), relaxed: [], refinementPending: false });
+        emitPlaybackEvent({ kind: 'served', batch, alg: plan.alg, picker: 'reserve', fallback: 'deadline', latencyMs: 0, n: admitted.length, discovery: admitted.filter((s) => plan.discoveryIds.has(s.id)).length, languageViolations: languageViolations(admitted, plan.language), distinctArtists: distinctLeads(admitted), relaxed: [] });
         return admitted.length;
       }
       /**
-       * 1.3 — the station's next songs, through the same gate as the DJ's.
-       * True when some went in; false sends the caller on to the DJ's plan.
+       * 1.3 — the station's next songs, through the same gate as the plan's.
+       * True when some went in; false sends the caller on to the on-device plan.
        */
       async function appendFromFeed(source: RadioFeed, version: number, signal: AbortSignal, urgent: boolean): Promise<boolean> {
         const started = Date.now();
@@ -461,7 +402,7 @@ export const usePlayerStore = create<PlayerState>()(
         markAuto(admitted, { alg: 'station', picker: 'local', batch });
         set({ queue: [...queue, ...admitted] });
         preloadUpcoming();
-        emitPlaybackEvent({ kind: 'served', batch, alg: 'station', picker: 'local', fallback: null, latencyMs: Date.now() - started, n: admitted.length, discovery: 0, languageViolations: 0, distinctArtists: distinctLeads(admitted), relaxed: [], refinementPending: false });
+        emitPlaybackEvent({ kind: 'served', batch, alg: 'station', picker: 'local', fallback: null, latencyMs: Date.now() - started, n: admitted.length, discovery: 0, languageViolations: 0, distinctArtists: distinctLeads(admitted), relaxed: [] });
         return true;
       }
 
@@ -473,7 +414,7 @@ export const usePlayerStore = create<PlayerState>()(
         planAbort = abort;
         const promise = (async () => {
           try {
-            // 1.3 — a catalogue station plays its own next songs; the DJ only covers a miss.
+            // 1.3 — a catalogue station plays its own next songs; the plan only covers a miss.
             if (feed && (await appendFromFeed(feed, version, abort.signal, !!opts.urgent))) return true;
             if (version !== queueVersion || abort.signal.aborted) return false;
             // 7.2.0 — the engine is loaded on demand: it no longer rides the
@@ -484,11 +425,10 @@ export const usePlayerStore = create<PlayerState>()(
             if (version !== queueVersion || abort.signal.aborted) return false;
             const { queue } = get();
             // 7.2.0 — a plan: the on-device order inside one end-to-end deadline
-            // (shorter when the listener is waiting at the end of the queue), and
-            // the AI DJ's order as a later refinement of the automatic entries.
+            // (shorter when the listener is waiting at the end of the queue).
             const plan = await planNextSongs(seed, getRecommendationContext(seed, radio ? 'radio' : 'playlist'), {
               // v7.1.0 — the next FIVE: a short, tight stretch re-planned more often follows the
-              // listener better than eight songs decided at once (and the DJ answers faster).
+              // listener better than eight songs decided at once.
               limit: NEXT_BATCH,
               excludeIds: queue.map((song) => song.id),
               excludeKeys: queue.map(songKey),
@@ -1032,8 +972,8 @@ export const usePlayerStore = create<PlayerState>()(
           saveOwnership();
           // V2 — a list (a playlist, an album, a chart) plays IN FULL, in its
           // order or shuffled; Up Next continues only after its last song, in
-          // the list's direction. DJ takeover is for a single tapped song: the
-          // song is the seed and the DJ builds the continuation.
+          // the list's direction. Takeover is for a single tapped song: the
+          // song is the seed and VinaX builds the continuation.
           const settings = useSettingsStore.getState();
           const list = stripExplicit(songs);
           const takeover = (list.length < 2 || !!opts.asSeed) && settings.djTakeover && settings.autoplay && !opts.keepList && !get().followMode && get().repeat === 'off';
@@ -1063,11 +1003,11 @@ export const usePlayerStore = create<PlayerState>()(
           invalidateQueue();
           lastPlan = null; // the reserve was planned for the old tune
           radio = true; // a tuned continuation is endless, like radio
-          if (resolved) feed = null; // 1.3 — a station cannot follow a tune: the DJ takes over
+          if (resolved) feed = null; // 1.3 — a station cannot follow a tune: the plan takes over
           // 7.2.0 — a rebuild replaces the recommender's picks only. Songs the
           // listener queued by hand AND the list they started (an album, a
           // playlist, a Queue Builder plan) stay: "songs you added stay" has to
-          // mean every song the DJ did not choose.
+          // mean every song the plan did not choose.
           const kept = [...queue.slice(0, index + 1), ...queue.slice(index + 1).filter((s) => !autoIds.has(s.id))];
           for (const s of queue.slice(index + 1)) autoIds.delete(s.id);
           set({ queue: kept, tuneIntent: resolved });
@@ -1317,7 +1257,7 @@ export const usePlayerStore = create<PlayerState>()(
                 const ticket = ++transition;
                 // Pause immediately so the existing player contract remains
                 // synchronous; resume automatically once the async tail is
-                // available — within the urgent deadline, never an AI's leash.
+                // available — within the urgent deadline.
                 set({ isPlaying: false });
                 audioEngine.pause();
                 void appendRecommendations(playing, { urgent: true }).then((added) => {
@@ -1376,7 +1316,7 @@ export const usePlayerStore = create<PlayerState>()(
         keepSong: (id) => {
           const { queue, index } = get();
           if (!autoIds.has(id) || !queue.some((s, i) => i > index && s.id === id)) return;
-          // It stays where it is, but it is the listener's now: a rebuild or an AI refinement leaves it alone.
+          // It stays where it is, but it is the listener's now: a rebuild leaves it alone.
           autoIds.delete(id);
           autoMetaById.delete(id);
           manualIds.add(id);
@@ -1428,7 +1368,7 @@ export const usePlayerStore = create<PlayerState>()(
           const seed = song ?? get().queue[get().index];
           if (!seed) return;
           if (!requireAccount('listen', () => get().startRadio(song, opts))) return;
-          // 8.2.0 — AI Radio seeds: distinct, valid, Kid-mode safe, at most RADIO_SEED_MAX.
+          // 8.2.0 — Radio seeds: distinct, valid, Kid-mode safe, at most RADIO_SEED_MAX.
           const seen = new Set<string>();
           const queue = stripExplicit([seed, ...(opts.seeds ?? []).filter(isValidSong)])
             .filter((s) => !seen.has(s.id) && !!seen.add(s.id))
@@ -1643,9 +1583,8 @@ export const usePlayerStore = create<PlayerState>()(
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<PersistedPlayerState>;
         // 7.2.0 — a queue stored by an older build can carry energy/tempo an AI
-        // guessed. They were never measured, and the classifier fills them again
-        // from cache when it can, so they are dropped rather than passed on as
-        // catalogue metadata (services/ai/recommendations.ts tracks provenance).
+        // classifier once guessed. They were never measured, so they are dropped
+        // rather than passed on as catalogue metadata.
         const queue = (Array.isArray(p.queue) ? p.queue.filter(isValidSong) : []).map((song) => {
           if (song.energy === undefined && song.tempo === undefined) return song;
           const rest: Song = { ...song };

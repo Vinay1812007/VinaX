@@ -117,7 +117,7 @@ interface PanelItem {
 const FEATURES: PanelItem[] = [
   { icon: 'languages', title: 'Music in 12 languages', text: 'Telugu, Hindi, Tamil, Punjabi, Kannada, Malayalam and more, each with its own charts, new releases and moods.' },
   { icon: 'upnext', title: 'Up next, picked for you', text: 'Tap a song and VinaX lines up the next ones from it, learning from what you finish, like and skip.' },
-  { icon: 'lyrics', title: 'Lyrics, AI Radio and VinaX AI', text: 'Sing along with synced lyrics, play endless radio from a song or a few words, or describe a mood to get a playlist.' },
+  { icon: 'lyrics', title: 'Lyrics and Radio', text: 'Sing along with synced lyrics, or play endless radio from a song, an artist, a mood or a station.' },
   { icon: 'together', title: 'Listen Together', text: 'Share a room with friends and hear the same song at the same moment, on any device.' },
   { icon: 'android', title: 'The Android app', text: 'Background playback and offline downloads, with the same account and library as the website.' },
   { icon: 'everyone', title: 'Made for every listener', text: 'A sleep timer, Drive mode, weekly mixes from your listening and six app styles to choose from.' },
@@ -126,8 +126,8 @@ const FEATURES: PanelItem[] = [
 /** Right of the card: what it costs and what happens to your data. */
 const FACTS: PanelItem[] = [
   { icon: 'rupee', title: '₹0, always', text: 'No subscription, no premium tier, no in-app purchases. Nothing asks for a card.' },
-  { icon: 'noads', title: 'No ads where you listen', text: 'None here, in the player, the queue, your library, VinaX AI, the Android app or Kid mode. The website shows one labelled ad at the end of song, artist, album, language and mood pages.' },
-  { icon: 'lock', title: 'Nothing sold', text: 'Your listening history, favourites, taste profile and AI chats are never shared with advertisers.' },
+  { icon: 'noads', title: 'No ads where you listen', text: 'None here, in the player, the queue, your library, the Android app or Kid mode. The website shows one labelled ad at the end of song, artist, album, language and mood pages.' },
+  { icon: 'lock', title: 'Nothing sold', text: 'Your listening history, favourites and taste profile are never shared with advertisers.' },
   { icon: 'sync', title: 'Your library on every device', text: 'Playlists, history, taste and settings follow your account. Sign in on a new phone and it is all there.' },
   { icon: 'child', title: 'Kid mode', text: 'Hides songs the catalogue marks explicit, keeps a separate taste profile and shows no ads.' },
 ];
@@ -258,7 +258,7 @@ export default function SignInScreen(): ReactNode {
             </div>
             <div>
               <h3>Stays on this device</h3>
-              <p>VinaX AI chats, downloads, searches and your queue.</p>
+              <p>Downloads, searches and your queue.</p>
             </div>
           </div>
           <p className="vx-signin-note">

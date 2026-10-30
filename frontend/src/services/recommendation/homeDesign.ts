@@ -1,7 +1,4 @@
-import { requestCurator } from '@/services/ai/recommendations';
-import { buildTasteSnapshot } from '@/services/ai/taste';
-
-export const HOME_SECTIONS = { quick: 'Quick picks', personal: 'Made for you', aihome: 'Designed for you', discovery: 'Fresh discoveries', charts: 'Charts', seasonal: 'Seasonal listening', moods: 'Moods', genres: 'Genres', artists: 'Artists', albums: 'Albums', daypicks: 'For your day', loved: 'Favorites', feed: 'More to explore' };
+export const HOME_SECTIONS = { quick: 'Quick picks', personal: 'Made for you', discovery: 'Fresh discoveries', charts: 'Charts', seasonal: 'Seasonal listening', moods: 'Moods', genres: 'Genres', artists: 'Artists', albums: 'Albums', daypicks: 'For your day', loved: 'Favorites', feed: 'More to explore' };
 export type HomeSection = keyof typeof HOME_SECTIONS;
 export interface HomeDesign { title: string; description: string; order: HomeSection[]; hidden: HomeSection[] }
 export const DEFAULT_HOME: HomeDesign = { title: 'Your next favorite starts here.', description: 'Familiar voices, fresh discoveries. A mix that grows with you.', order: Object.keys(HOME_SECTIONS) as HomeSection[], hidden: [] };
@@ -17,9 +14,4 @@ export function validateHomeDesign(raw: unknown): HomeDesign {
 }
 export function loadHomeDesign(): HomeDesign | null {
   try { const raw = localStorage.getItem(HOME_DESIGN_KEY); return raw ? validateHomeDesign(JSON.parse(raw)) : null; } catch { return null; }
-}
-export async function generateHomeDesign(prompt: string, signal?: AbortSignal): Promise<HomeDesign | null> {
-  const raw = await requestCurator('home', { request: prompt.slice(0, 500), taste: buildTasteSnapshot(), sections: HOME_SECTIONS }, signal);
-  if (!raw || typeof raw !== 'object' || !Array.isArray((raw as { order?: unknown }).order)) return null;
-  return validateHomeDesign(raw);
 }

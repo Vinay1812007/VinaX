@@ -92,7 +92,7 @@ describe('OnboardingSheet (11.0 welcome)', () => {
     press('Use this look');
 
     // The catalogue returned nothing, so the songs step is left out.
-    await heading('Five places to go');
+    await heading('Four places to go');
     await waitFor(() => expect(screen.getByText('Step 4 of 7')).toBeTruthy());
     press('Next');
     await heading('Tap one song');

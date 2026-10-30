@@ -338,12 +338,12 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
 
   const entries: MenuEntry[] = [
     ...(leadItems?.length ? [...leadItems, 'divider' as const] : []),
-    // 8.2.0 — AI Radio: this song starts, and the DJ keeps adding songs that follow from it.
-    { label: 'Start AI Radio', icon: 'radio', action: () => { startRadio(song); toast(`AI Radio: ${song.title}`); } },
+    // 8.2.0 — Radio: this song starts, and VinaX keeps adding songs that follow from it.
+    { label: 'Start radio', icon: 'radio', action: () => { startRadio(song); toast(`Radio: ${song.title}`); } },
     { label: 'Play next', icon: 'playNext', action: () => enqueueNext(song) },
     { label: 'Add to queue', icon: 'addQueue', action: () => enqueue(song) },
     // 7.2 — steer what comes next. "More like this" is for this sitting and
-    // retunes the DJ picks now; "Less like this" plays the artist less for a
+    // retunes the automatic picks now; "Less like this" plays the artist less for a
     // while (a soft mute that ends on its own).
     { label: 'More like this', icon: 'moreLike', action: moreLike },
     // 15.0 — songs like this one, from the catalogue-ranked route, straight

@@ -8,7 +8,7 @@ Six app styles ship in 15.0. Each is modelled on the design language of one kind
 |---|---|---|---|
 | `lumen` | Lumen (default) | Clean white-and-black editorial: frosted bars, big section titles with a chevron, 8px artwork, a floating frosted mini player, a crimson-pink accent | `aura` |
 | `verdant` | Verdant | Neutral black, flat panels, a green accent, 2-column "jump back in" tiles, 4px artwork, a tinted mini player floating over a fading tab bar | `pulse` |
-| `monsoon` | Monsoon | Charcoal and teal with a saffron second colour, language chips, 6px tiles, a solid five-tab bar, an edge-to-edge mini player with a heart | `sangam` |
+| `monsoon` | Monsoon | Charcoal and teal with a saffron second colour, language chips, 6px tiles, a solid four-tab bar, an edge-to-edge mini player with a heart | `sangam` |
 | `harbour` | Harbour | Deep navy with a cyan accent, tall hero banners, square corners, condensed-bold titles, a solid player bar with progress on its top edge | `nocturne` |
 | `verse` | Verse | Lyrics-first: charcoal under full-bleed artwork, a coral accent, a lyric line in the hero, capsule chips, a floating capsule player, springy motion | `vibe` |
 | `onyx` | Onyx | True black, white play, a red accent, a row of mood chips at the top of Home, overline + title section heads with a "More" pill, square 4px artwork, uppercase player tabs | `marquee` |
@@ -39,7 +39,7 @@ Each row is the value a stylesheet sets. "Hooks" are the shell classes the rule 
 - **Type.** Inter; page title `clamp(2rem, 3.6vw, 2.75rem)` 800 at -0.03em; section 22px 700 at -0.02em; card title 500.
 - **Chrome.** Frosted (keeps the materials); the sidebar's active row is a tinted wash in the accent.
 - **Home.** Hero: a plain title block on the canvas, no pane, the artwork as a 8px square at the right on phones. Jump back in: hairline list rows, 56px art, no fills. Section heads: title then a `›` chevron drawn with `::after`, the "See all" link hidden under it.
-- **Tab bar.** Frosted, 5 items, no pill; the active icon and label in the accent.
+- **Tab bar.** Frosted, 4 items, no pill; the active icon and label in the accent.
 - **Mini player.** A floating frosted pane 8px above the tab bar, 14px radius, art 40px left, play + skip right, no progress line.
 - **Now Playing.** The artwork large with a soft shadow, blurred artwork behind, a white round play, grey scrubber.
 - **Motion.** `tplRise` 240ms; press 0.97.
@@ -63,7 +63,7 @@ Each row is the value a stylesheet sets. "Hooks" are the shell classes the rule 
 - **Type.** Manrope 700; page title `clamp(1.75rem, 3.2vw, 2.5rem)` at -0.02em; section 18px 700; card title 600.
 - **Chrome.** Mostly solid; thin blur only on the top bar. The workspace opens on a teal-to-canvas gradient band 240px tall.
 - **Home.** A language chip row under the greeting (`.vxh-chips`): outlined, the chosen one filled teal. Hero: a wide banner, 8px radius, title bottom-left over a scrim. Jump back in: 2 columns of 8px tiles with a faint teal wash.
-- **Tab bar.** Solid, 5 items, filled icon in teal, 11px label.
+- **Tab bar.** Solid, 4 items, filled icon in teal, 11px label.
 - **Mini player.** Edge to edge above the tab bar, 64px tall, art 48px left, title + artist, a heart (`.np-mini-fav`, when present) and play right, a 2px saffron progress at the bottom.
 - **Now Playing.** Artwork wash gradient; 12px art; teal play 64px; chips for Lyrics / Queue.
 - **Motion.** `tplRise` 220ms; press 0.96.
@@ -99,7 +99,7 @@ Each row is the value a stylesheet sets. "Hooks" are the shell classes the rule 
 - **Type.** Roboto; page title `clamp(1.75rem, 3.2vw, 2.5rem)` 700 at -0.01em; section 22px 700 at -0.005em; card title 500; overline 12px 500 uppercase at 0.1em.
 - **Chrome.** Opaque black, no blur. The top bar carries a row of mood chips on Home (`.vxh-chips`), outlined `rgb(255 255 255 / 0.1)` fill, the chosen one white.
 - **Home.** Section heads: an overline above the title and a "More" outlined pill at the right (the section link). Jump back in: 1 column of 56px rows ("quick picks"), square 4px art, a kebab at the right. Hero hidden on phones in favour of the chip row.
-- **Tab bar.** Solid black, 5 items, filled icon white when active, 10px label.
+- **Tab bar.** Solid black, 4 items, filled icon white when active, 10px label.
 - **Mini player.** A full-width bar, art 40px, title/artist, play and next glyphs, a 2px progress on its top edge in white.
 - **Now Playing.** Black; square art large; white round play 64px; the tabs (`.vx-np-tabs`) uppercase with a white underline for the selected one; the artwork's colour only in a faint light at the top.
 - **Motion.** `tplFade` 120ms; press 0.97.

@@ -1,19 +1,12 @@
 /**
  * Reliability hardening: size-capped request bodies (declared AND streamed),
- * outbound timeouts that never outlive their purpose, and a chat() leash that
- * covers a stalled response body. Deterministic — fetch is stubbed and the
+ * and outbound timeouts that never outlive their purpose. Deterministic — fetch is stubbed and the
  * timer paths run on fake timers.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readCapped, readJsonCapped } from '../functions/_lib/body';
-import { chat } from '../functions/_lib/ai';
 import { fetchAsset, latestRelease } from '../functions/_lib/github';
 import { onRequestGet as imgGet } from '../functions/img';
-import { onRequestPost as assistantPost } from '../functions/api/assistant';
-import { onRequestPost as playlistPost } from '../functions/api/playlist';
-import { onRequestPost as vinaxaiPost } from '../functions/api/vinaxai';
-import { onRequestPost as curatePost } from '../functions/api/curate';
-import { onRequestPost as djPost } from '../functions/api/dj';
 
 /** A chunked upload: no content-length, `total` bytes fed in 8 KB pieces. */
 function chunkedBody(total: number, pulls: { n: number }): ReadableStream<Uint8Array> {
@@ -70,41 +63,6 @@ describe('readCapped / readJsonCapped', () => {
   });
 });
 
-describe('route body caps — a chunked oversized body answers 413 without buffering it', () => {
-  const env = { VINAX_NVIDIA_API_KEY: 'k' };
-  const routes: Array<[string, number, (ctx: { request: Request; env: typeof env }) => Promise<Response>]> = [
-    ['/api/assistant', 64_000, assistantPost],
-    ['/api/playlist', 32_000, playlistPost],
-    ['/api/curate', 32_000, curatePost],
-    ['/api/dj', 48_000, djPost],
-    ['/api/vinaxai', 12_000_000, vinaxaiPost],
-  ];
-
-  it.each(routes)('%s (cap %d bytes)', async (path, cap, handler) => {
-    const fetchSpy = vi.fn(() => Promise.resolve(new Response('{}')));
-    vi.stubGlobal('fetch', fetchSpy);
-    const pulls = { n: 0 };
-    const total = cap * 4;
-    const res = await handler({ request: post(path, chunkedBody(total, pulls)), env });
-    expect(res.status).toBe(413);
-    expect(((await res.json()) as { error: string }).error).toBe('too_large');
-    expect(pulls.n).toBeLessThan(Math.ceil(total / 8_192)); // cut short, not drained
-    expect(fetchSpy).not.toHaveBeenCalled(); // no engine was asked
-  });
-
-  it.each(routes)('%s refuses an oversized declared content-length', async (path, cap, handler) => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response('{}'))));
-    const res = await handler({ request: post(path, '{}', { 'content-length': String(cap + 1) }), env });
-    expect(res.status).toBe(413);
-  });
-
-  it.each(routes)('%s still answers 400 for malformed or non-object JSON', async (path, _cap, handler) => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response('{}'))));
-    expect((await handler({ request: post(path, '{nope'), env })).status).toBe(400);
-    expect((await handler({ request: post(path, 'null'), env })).status).toBe(400);
-  });
-});
-
 /** A fetch that never answers on its own — it only settles when aborted. */
 function hangingFetch(): ReturnType<typeof vi.fn> {
   return vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
@@ -156,30 +114,5 @@ describe('outbound timeouts', () => {
     await vi.advanceTimersByTimeAsync(10_100);
     expect(await release).toBeNull();
     expect(await asset).toBeNull();
-  });
-});
-
-describe('chat() — a response body that stalls after headers', () => {
-  it('is cut by the attempt leash and the ladder moves on', async () => {
-    vi.useFakeTimers();
-    let n = 0;
-    vi.stubGlobal('fetch', (_input: RequestInfo | URL, init?: RequestInit) => {
-      n += 1;
-      if (n > 1) return Promise.resolve(new Response(JSON.stringify({ choices: [{ message: { content: 'rescued' } }] }), { status: 200 }));
-      // Headers at once, then a body that never completes unless aborted.
-      const body = new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode('{"choices":[{"message":{"content":"never fin'));
-          init?.signal?.addEventListener('abort', () => controller.error(new DOMException('aborted', 'AbortError')));
-        },
-      });
-      return Promise.resolve(new Response(body, { status: 200 }));
-    });
-    const env = { VINAX_NVIDIA_API_KEY: 'k1' };
-    const pending = chat(env, [{ role: 'user', content: 'hi' }], { lane: 'chat', timeoutMs: 4_000, deadlineAt: Date.now() + 30_000 });
-    await vi.advanceTimersByTimeAsync(4_100);
-    const r = await pending;
-    expect(r.content).toBe('rescued');
-    expect(n).toBeGreaterThanOrEqual(2);
   });
 });

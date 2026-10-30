@@ -10,7 +10,7 @@ const mount = () => render(<MemoryRouter><SmartQueue /></MemoryRouter>);
 const sw = () => screen.getByRole('switch', { name: 'Smart Queue' });
 
 beforeEach(() => {
-  useSettingsStore.setState({ autoplay: true, djTakeover: true, aiDj: true, aiAssist: true });
+  useSettingsStore.setState({ autoplay: true, djTakeover: true });
   useToastStore.setState({ toasts: [] });
 });
 afterEach(cleanup);
@@ -23,13 +23,12 @@ describe('Smart Queue', () => {
   });
 
   it('explains what it does in each state', () => {
-    expect(smartQueueExplanation({ autoplay: true, djTakeover: true, aiDj: true })).toMatch(/^The DJ builds what plays next/);
-    expect(smartQueueExplanation({ autoplay: true, djTakeover: true, aiDj: false })).toMatch(/on-device recommendations/);
-    expect(smartQueueExplanation({ autoplay: true, djTakeover: false, aiDj: true })).toMatch(/similar songs keep the music going/);
-    expect(smartQueueExplanation({ autoplay: false, djTakeover: false, aiDj: true })).toMatch(/stop at the end/);
+    expect(smartQueueExplanation({ autoplay: true, djTakeover: true })).toMatch(/^VinaX builds what plays next/);
+    expect(smartQueueExplanation({ autoplay: true, djTakeover: false })).toMatch(/similar songs keep the music going/);
+    expect(smartQueueExplanation({ autoplay: false, djTakeover: false })).toMatch(/stop at the end/);
   });
 
-  it('switching off turns the DJ takeover off and leaves Autoplay alone', () => {
+  it('switching off turns the takeover off and leaves Autoplay alone', () => {
     mount();
     expect(sw().getAttribute('aria-checked')).toBe('true');
     expect(sw().getAttribute('aria-describedby')).toBe('vx-smartq-desc');

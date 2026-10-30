@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckIcon, DownloadIcon, GlobeIcon, MicIcon, PlayIcon, SparkleIcon, UsersIcon } from '@/components/Icons';
+import { CheckIcon, DownloadIcon, GlobeIcon, MicIcon, PlayIcon, UsersIcon } from '@/components/Icons';
 import { RadioGlyph } from '@/features/radio/RadioGlyph';
 import { HUB_LANGUAGES } from '@/constants/languages';
 import { greetingName } from '@/utils/greetingName';
@@ -63,8 +63,7 @@ interface Feature {
 }
 
 const FEATURES: Feature[] = [
-  { to: '/VinaXAI', title: 'VinaX AI', line: 'Describe a mood, get a playlist', icon: <SparkleIcon />, tone: 'tide' },
-  { to: '/radio', title: 'AI Radio', line: 'Endless music from one song', icon: <RadioGlyph />, tone: 'tide' },
+  { to: '/radio', title: 'Radio', line: 'Endless music from one song', icon: <RadioGlyph />, tone: 'tide' },
   { to: '/together', title: 'Listen Together', line: 'One queue, shared with friends', icon: <UsersIcon />, tone: 'ember' },
   { to: '/karaoke', title: 'Synced lyrics', line: 'Sing along, line by line', icon: <MicIcon />, tone: 'ember' },
   { to: '/download', title: 'Offline on Android', line: 'Download songs, play without data', icon: <DownloadIcon />, tone: 'ember' },

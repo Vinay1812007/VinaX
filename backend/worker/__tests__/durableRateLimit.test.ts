@@ -59,7 +59,7 @@ describe('rate-limit tiers', () => {
     expect(rl.tierFor({ capacity: 6, refillPerMinute: 3 })?.binding).toBe('RATE_LIMIT_10'); // playlist, image
     expect(rl.tierFor({ capacity: 12, refillPerMinute: 6 })?.binding).toBe('RATE_LIMIT_30'); // curate
     expect(rl.tierFor({ capacity: 15, refillPerMinute: 8 })?.binding).toBe('RATE_LIMIT_30'); // dj
-    expect(rl.tierFor({ capacity: 20, refillPerMinute: 10 })?.binding).toBe('RATE_LIMIT_30'); // vinaxai
+    expect(rl.tierFor({ capacity: 20, refillPerMinute: 10 })?.binding).toBe('RATE_LIMIT_30');
     expect(rl.tierFor({ capacity: 30, refillPerMinute: 30 })?.binding).toBe('RATE_LIMIT_60'); // tts
     expect(rl.tierFor({ capacity: 60, refillPerMinute: 60 })?.binding).toBe('RATE_LIMIT_300'); // events
     expect(rl.tierFor({ capacity: 400, refillPerMinute: 400 })).toBeNull();
@@ -118,18 +118,18 @@ describe('rateLimitAsync', () => {
     warn.mockRestore();
   });
 
-  it('a route answers the binding refusal before doing any work (music: no engine is asked)', async () => {
+  it('a route answers the binding refusal before doing any work (feedback: nothing is stored)', async () => {
     vi.resetModules();
     const rlm = await import('../functions/_lib/ratelimit');
-    const binding = rlm.tierFor({ capacity: 3, refillPerMinute: 3 })?.binding as string;
-    const { onRequestPost } = await import('../functions/api/music');
+    const binding = rlm.tierFor({ capacity: 5, refillPerMinute: 2 })?.binding as string;
+    const { onRequestPost } = await import('../functions/api/feedback');
     const fetchSpy = vi.fn(async () => new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', fetchSpy);
     const res = await onRequestPost({
-      request: new Request('https://www.vinaxmusic.online/api/music', {
+      request: new Request('https://www.vinaxmusic.online/api/feedback', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'cf-connecting-ip': '203.0.113.5' },
-        body: JSON.stringify({ prompt: 'a calm sitar loop' }),
+        body: JSON.stringify({ message: 'The player works well' }),
       }),
       env: { [binding]: fakeBinding(0) } as never,
     });

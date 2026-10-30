@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getFollowing, getMyProfile, getProfile, getSharedChat, getSharedPlaylist, listSharedPlaylists } from './api';
+import { getFollowing, getMyProfile, getProfile, getSharedPlaylist, listSharedPlaylists } from './api';
 
 vi.mock('@/services/auth/google', () => ({ currentAccount: () => ({ session: 'vx1.t', user: {} }) }));
 
@@ -15,7 +15,6 @@ describe('15.0 — the social client never trusts an answer\'s shape', () => {
     expect(await getMyProfile()).toBeNull();
     await expect(getProfile('bobo')).rejects.toMatchObject({ code: 'not_found' });
     await expect(getSharedPlaylist('abcdefghijkl')).rejects.toMatchObject({ code: 'not_found' });
-    await expect(getSharedChat('abcdefghijkl')).rejects.toMatchObject({ code: 'not_found' });
   });
 
   it('fills a partial profile in and drops malformed entries', async () => {

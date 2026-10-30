@@ -213,8 +213,8 @@ function markdown(now, base) {
   for (const c of now.latency) lines.push(`- \`${c.id}\` — ${c.notes}`);
   lines.push('');
   lines.push('## Fixtures', '');
-  lines.push('| Fixture | What it is for | Pool | Mode | AI |', '| --- | --- | ---: | --- | --- |');
-  for (const f of now.fixtures) lines.push(`| ${f.title} (\`${f.id}\`) | ${f.notes} | ${f.related + f.search} | ${f.mode} | ${f.ai} |`);
+  lines.push('| Fixture | What it is for | Pool | Mode |', '| --- | --- | ---: | --- |');
+  for (const f of now.fixtures) lines.push(`| ${f.title} (\`${f.id}\`) | ${f.notes} | ${f.related + f.search} | ${f.mode} |`);
   lines.push('');
   return lines.join('\n');
 }

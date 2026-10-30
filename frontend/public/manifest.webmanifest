@@ -30,7 +30,6 @@
   "shortcuts": [
     { "name": "Search", "short_name": "Search", "url": "/search", "icons": [{ "src": "/icons/icon-192.png?v=14", "sizes": "192x192" }] },
     { "name": "Liked Songs", "short_name": "Liked", "url": "/favorites", "icons": [{ "src": "/icons/icon-192.png?v=14", "sizes": "192x192" }] },
-    { "name": "Listen Later", "short_name": "Later", "url": "/later", "icons": [{ "src": "/icons/icon-192.png?v=14", "sizes": "192x192" }] },
-    { "name": "VinaX AI", "short_name": "AI", "url": "/VinaXAI", "icons": [{ "src": "/icons/icon-192.png?v=14", "sizes": "192x192" }] }
+    { "name": "Listen Later", "short_name": "Later", "url": "/later", "icons": [{ "src": "/icons/icon-192.png?v=14", "sizes": "192x192" }] }
   ]
 }

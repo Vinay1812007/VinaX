@@ -44,7 +44,6 @@ const SEARCH_WORKSPACE_KEY = 'vinax.search.workspace.v1';
 const BOOKMARKS_KEY = 'vinax.bookmarks.v1';
 const STREAK_KEY = 'vinax.streak.v1';
 const NAV_GROUPS_KEY = 'vinax.nav.groups.v1';
-const SAVED_PROMPTS_KEY = 'vinax.aiPrompts';
 export { SMART_COLLECTIONS_KEY };
 
 export type BackupCategoryId =
@@ -57,8 +56,7 @@ export type BackupCategoryId =
   | 'bookmarks'
   | 'homeLayout'
   | 'identity'
-  | 'extras'
-  | 'aiChats';
+  | 'extras';
 
 /** One storage key inside a category. `raw` keys hold a bare string, not JSON. */
 interface KeySpec {
@@ -620,20 +618,13 @@ const LIST_CAPS = { karaoke: 12, prefs: 50 } as const;
 const extrasCategory: BackupCategory = {
   id: 'extras',
   label: 'Alarm, lyrics, streak & app preferences',
-  description: 'Wake-up alarm, lyric sync offsets, karaoke history, listening streak, sidebar groups, saved AI prompts and AI reply preferences.',
+  description: 'Wake-up alarm, lyric sync offsets, karaoke history, listening streak and sidebar groups.',
   keys: [
     { key: KEYS.alarm },
     { key: KEYS.lyricsOffset },
     { key: KEYS.karaoke },
     { key: STREAK_KEY },
     { key: NAV_GROUPS_KEY },
-    { key: SAVED_PROMPTS_KEY },
-    { key: 'vinax.aiDefaultMode', raw: true },
-    { key: 'vinax.aiProfile', raw: true },
-    { key: 'vinax.aiFontSize', raw: true },
-    { key: 'vinax.aiReplyLang', raw: true },
-    { key: 'vinax.aiReplyStyle', raw: true },
-    { key: 'vinax.ai.chatStyle', raw: true },
   ],
   sanitize: (values, ctx) => {
     const out: CategoryValues = {};
@@ -663,9 +654,6 @@ const extrasCategory: BackupCategory = {
       } else if (spec.key === NAV_GROUPS_KEY) {
         if (!Array.isArray(v)) return { error: 'App preference list is malformed.' };
         out[spec.key] = capped(v.filter((g): g is string => typeof g === 'string').map((g) => g.slice(0, 80)), LIST_CAPS.prefs, 'Sidebar groups', ctx);
-      } else if (spec.key === SAVED_PROMPTS_KEY) {
-        if (!Array.isArray(v)) return { error: 'App preference list is malformed.' };
-        out[spec.key] = capped(v.filter(isObj).filter((x) => typeof x.text === 'string'), LIST_CAPS.prefs, 'Saved prompts', ctx);
       }
     }
     return { values: out };
@@ -678,7 +666,6 @@ const extrasCategory: BackupCategory = {
     if (isObj(offsets) && Object.keys(offsets).length) parts.push(`${Object.keys(offsets).length} lyric offsets`);
     const streak = values[STREAK_KEY];
     if (isObj(streak)) parts.push(`streak ${String(streak.count)} (best ${String(streak.best ?? streak.count)})`);
-    if (Array.isArray(values[SAVED_PROMPTS_KEY])) parts.push(`${(values[SAVED_PROMPTS_KEY] as unknown[]).length} saved prompts`);
     return parts.join(' · ') || 'Nothing saved';
   },
   /**
@@ -714,37 +701,7 @@ const extrasCategory: BackupCategory = {
       const mine = current[NAV_GROUPS_KEY] as string[];
       out[NAV_GROUPS_KEY] = [...new Set([...mine, ...(incoming[NAV_GROUPS_KEY] as string[])])].slice(0, Math.max(LIST_CAPS.prefs, mine.length));
     }
-    if (Array.isArray(current[SAVED_PROMPTS_KEY]) && Array.isArray(incoming[SAVED_PROMPTS_KEY])) {
-      const seen = new Set<string>();
-      const idOf = (x: Record<string, unknown>) => (typeof x.id === 'string' && x.id ? `id:${x.id}` : `text:${String(x.text)}`);
-      const mine = current[SAVED_PROMPTS_KEY] as Record<string, unknown>[];
-      out[SAVED_PROMPTS_KEY] = [...mine, ...(incoming[SAVED_PROMPTS_KEY] as Record<string, unknown>[])]
-        .filter((x) => (seen.has(idOf(x)) ? false : (seen.add(idOf(x)), true)))
-        .slice(0, Math.max(LIST_CAPS.prefs, mine.length));
-    }
     return out;
-  },
-};
-
-const aiChatsCategory: BackupCategory = {
-  id: 'aiChats',
-  label: 'VinaX AI chats',
-  description: 'Your conversation history (attachments are never stored).',
-  keys: [{ key: KEYS.aiChats }],
-  sanitize: (values, ctx) => {
-    const v = values[KEYS.aiChats];
-    if (v === undefined || v === null) return { values: {} };
-    if (!Array.isArray(v)) return { error: 'AI chat history is malformed.' };
-    return { values: { [KEYS.aiChats]: capped(v.filter(isObj).filter((c) => typeof c.id === 'string' && Array.isArray(c.messages)), 50, 'VinaX AI chats', ctx) } };
-  },
-  summarize: (values) => {
-    const n = Array.isArray(values[KEYS.aiChats]) ? (values[KEYS.aiChats] as unknown[]).length : 0;
-    return `${n} chat${n === 1 ? '' : 's'}`;
-  },
-  merge: (current, incoming) => {
-    const a = Array.isArray(current[KEYS.aiChats]) ? (current[KEYS.aiChats] as { id: string }[]) : [];
-    const b = Array.isArray(incoming[KEYS.aiChats]) ? (incoming[KEYS.aiChats] as { id: string }[]) : [];
-    return { [KEYS.aiChats]: uniqueById([...a, ...b]).slice(0, 50) };
   },
 };
 
@@ -759,7 +716,6 @@ export const BACKUP_CATEGORIES: readonly BackupCategory[] = [
   homeLayoutCategory,
   identityCategory,
   extrasCategory,
-  aiChatsCategory,
 ];
 
 export const categoryById = (id: string): BackupCategory | undefined => BACKUP_CATEGORIES.find((c) => c.id === id);

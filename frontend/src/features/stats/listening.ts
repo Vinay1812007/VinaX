@@ -2,7 +2,7 @@ import type { HistoryEntry } from '@/types';
 
 /**
  * ONE listening-time rule for Home, Stats, the weekly report, the calendar,
- * the daily goal ring and the AI daily brief.
+ * and the daily goal ring.
  *
  * Before this module each surface did its own maths: Home and Stats summed
  * full track lengths (with Home defaulting unknown lengths to 180 s), while

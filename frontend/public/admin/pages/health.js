@@ -1,22 +1,21 @@
 /* VinaX console — Health page.
- * Is everything working? Live AI-key pings and every lane's key
- * (/api/admin/health — spends a few model tokens, so it runs once per visit
- * and on a button press, never on auto-refresh), the public endpoints and
- * shell assets (/api/admin/edge), releases and CI (/api/admin/releases) and
+ * Is everything working? App errors, the public endpoints and
+ * shell assets (/api/admin/edge), the music catalogue sources
+ * (/api/admin/musicapi, on a button press), releases and CI (/api/admin/releases) and
  * the server secrets checklist (/api/admin/envcheck). (13.9.1 — app errors,
  * scheduled-job footprints, data quality and the status note went with the
  * database.) */
 (function () {
   'use strict';
-  var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt;
+  var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt, arr = VX.arr;
 
   VX.page({
     id: 'health', title: 'Health', group: 'System', icon: 'pulse', noAuto: true,
-    desc: 'Is everything working: AI keys, app errors, endpoints, releases and server secrets.',
+    desc: 'Is everything working: app errors, endpoints, catalogue sources, releases and server secrets.',
     tabs: [
-      { id: 'status', label: 'System status', desc: 'Live check of every AI key, and which lanes have a key set.', render: renderStatus },
       { id: 'errors', label: 'App errors', desc: 'Errors the app reported from listeners’ devices, grouped by kind and message.', render: renderErrors },
       { id: 'edge', label: 'Endpoints', desc: 'The live web app shell, its scripts and styles, and every public endpoint, checked from the server.', render: renderEdge },
+      { id: 'sources', label: 'Catalogue sources', desc: 'Where song search and playback data come from: each source checked with a one-song search.', render: renderSources },
       { id: 'releases', label: 'Releases', desc: 'The newest Android release, recent build runs and commits on main.', render: renderReleases },
       { id: 'env', label: 'Server secrets', desc: 'Which secrets and settings the Worker has. Names only — values are never shown.', render: renderEnv }
     ]
@@ -29,119 +28,57 @@
   }
   function agoCell(iso) { return iso ? h('span', { title: fmt.dateTime(iso) }, fmt.ago(iso)) : h('span.muted', '—'); }
 
-  /* --------------------------------------------------- System status tab */
+  /* --------------------------------------------------- Catalogue sources */
 
-  // One live check per visit: the result is reused for five minutes so the
-  // top bar's refresh and tab switches do not spend model tokens again (the
-  // route also allows only a few checks a minute).
-  var healthCache = null;
-  var HEALTH_TTL = 5 * 60 * 1000;
+  // 14.0.4 — the upstream list lives in the Worker secret CATALOG_UPSTREAMS;
+  // the server labels each by its host, so only the two fixed rows are named here.
+  var SOURCE_LABEL = {
+    'vinax-cat': 'VinaX catalogue (this Worker)',
+    'direct': 'Direct (JioSaavn web API)'
+  };
 
-  function renderStatus(host) {
-    var bar = h('div.toolbar');
-    var body = h('div.page-body');
-    host.appendChild(bar);
-    host.appendChild(body);
-
-    function paintBar() {
-      VX.mount(bar,
-        ui.button(healthCache ? 'Run checks again' : 'Run checks', { kind: 'primary', icon: 'refresh', onClick: run }),
-        healthCache ? ui.muted('Checked ' + fmt.ago(healthCache.at) + ' · each check sends one tiny request to every AI provider') : ui.muted('Sends one tiny request to every AI provider.'));
+  function renderSources(host) {
+    var sources = h('div');
+    VX.mount(sources, ui.empty('Not checked yet', 'Checks each catalogue source with a one-song search (takes up to 10 seconds).'));
+    function checkSources() {
+      return ui.load(sources, function () { return VX.api.get('/api/admin/musicapi', null, { fresh: true, timeout: 30000 }); }, function (d) {
+        var rows = (d.mirrors || []).map(function (m, i) {
+          var state = !m.ok ? 'down' : Number(m.songs) > 0 ? 'ok' : 'empty';
+          return { label: SOURCE_LABEL[m.id] || m.label || 'Source ' + (i + 1), state: state, songs: m.songs, ms: m.ms, status: m.status, note: m.note, health: m.health || null };
+        });
+        var up = rows.filter(function (r) { return r.state === 'ok'; }).length;
+        return [
+          ui.notice(fmt.num(up) + ' of ' + fmt.plural(rows.length, 'source') + ' returned songs · checked ' + fmt.time(d.checkedAt), up ? (up === rows.length ? 'ok' : 'warn') : 'bad'),
+          ui.table({
+            rows: rows, exportName: false, search: false, dense: true, empty: 'No sources reported',
+            columns: [
+              { key: 'label', label: 'Source' },
+              { key: 'state', label: 'Result', render: function (r) { return r.state === 'ok' ? ui.pill('Working', 'ok') : r.state === 'empty' ? ui.pill('Answered, no songs', 'warn') : ui.pill('Down', 'bad'); } },
+              { key: 'songs', label: 'Songs', align: 'right', render: function (r) { return fmt.num(r.songs); } },
+              { key: 'ms', label: 'Time', align: 'right', render: function (r) { return fmt.ms(r.ms); } },
+              { key: 'status', label: 'HTTP', align: 'right' },
+              // 1.3 — the wrapper's own /health: each upstream it depends on, as it sees them.
+              { key: 'health', label: 'Wrapper health', render: function (r) {
+                var hl = r.health;
+                if (!hl || !arr(hl.upstreams).length) return '—';
+                return h('span', arr(hl.upstreams).map(function (u) {
+                  var text = u.name + (u.latencyMs != null ? ' ' + fmt.ms(u.latencyMs) : '');
+                  return ui.pill(text, !u.configured ? 'warn' : u.ok ? 'ok' : 'bad');
+                }));
+              } },
+              { key: 'note', label: 'Note' }
+            ]
+          })
+        ];
+      });
     }
-    function run() {
-      return ui.load(body, function () { return VX.api.get('/api/admin/health', null, { fresh: true, timeout: 40000 }); }, function (d) {
-        healthCache = { at: Date.now(), data: d };
-        paintBar();
-        return statusView(d);
-      }).then(function (res) { if (res === null || (res && !res.ok)) paintBar(); });
-    }
-    paintBar();
-    if (healthCache && Date.now() - healthCache.at < HEALTH_TTL) {
-      VX.mount(body, statusView(healthCache.data));
-      return Promise.resolve();
-    }
-    return run();
+    host.appendChild(ui.card({
+      title: 'Music catalogue sources', sub: 'Where song search and playback data come from',
+      actions: [ui.button('Check sources', { kind: 'primary', small: true, icon: 'refresh', onClick: checkSources })],
+      body: sources
+    }));
+    return Promise.resolve();
   }
-
-  function providerLabel(row) {
-    var k = String(row.key || '').split(' · ')[0];
-    return k || row.provider || '—';
-  }
-
-  function statusView(d) {
-    var ai = d.ai || [];
-    var lanes = d.lanes || [];
-    var configured = ai.filter(function (r) { return r.configured; });
-    var working = configured.filter(function (r) { return r.ok; });
-    var keyed = lanes.filter(function (l) { return l.keySet; });
-
-    var aiTable = ui.table({
-      columns: [
-        { key: 'provider', label: 'Provider', sortVal: providerLabel, render: function (r) { return h('strong', providerLabel(r)); } },
-        { key: 'state', label: 'Key', sortVal: function (r) { return !r.configured ? 'Not set' : r.ok ? 'Working' : 'Failing'; },
-          render: function (r) { return !r.configured ? ui.pill('Not set', 'warn') : r.ok ? ui.pill('Working', 'ok') : ui.pill('Failing', 'bad'); } },
-        { key: 'model', label: 'Test model', render: function (r) { return r.model ? ui.mono(r.model) : null; } },
-        { key: 'envInUse', label: 'Secret', sortVal: function (r) { return r.envInUse || r.env; }, render: function (r) {
-          var name = r.envInUse || r.env;
-          if (!name) return null;
-          var old = r.envInUse && r.env && r.envInUse !== r.env && r.envInUse !== 'AI';
-          return h('span', ui.mono(name), old ? [' ', ui.pill('old name', 'warn')] : null);
-        } },
-        { key: 'lanes', label: 'Lanes', sortVal: function (r) { return (r.lanes || []).length; }, render: function (r) {
-          var l = r.lanes || [];
-          return l.length ? h('span', { title: l.join(', ') }, fmt.plural(l.length, 'lane')) : null;
-        } },
-        { key: 'note', label: 'Result', render: function (r) {
-          if (r.ok) return h('span.muted', r.status ? 'HTTP ' + r.status : 'OK');
-          return r.note ? h('span', fmt.trunc(r.note, 80)) : null;
-        } }
-      ],
-      rows: ai, exportName: 'vinax-ai-keys', search: false,
-      empty: 'No AI providers reported', emptyHint: 'The Worker returned no provider list.',
-      onRow: function (r) { openProvider(r); }
-    });
-
-    var laneTable = ui.table({
-      columns: [
-        { key: 'lane', label: 'Lane', render: function (r) { return ui.mono(r.lane); } },
-        { key: 'provider', label: 'Provider' },
-        { key: 'keySet', label: 'Key', render: function (r) { return r.keySet ? ui.pill('Set', 'ok') : ui.pill('Not set', 'warn'); }, sortVal: function (r) { return r.keySet ? 1 : 0; } }
-      ],
-      rows: lanes, exportName: 'vinax-ai-lanes', search: false, dense: true, pageSize: 20,
-      empty: 'No lanes reported'
-    });
-
-    return [
-      ui.kpis([
-        { label: 'AI keys working', value: fmt.num(working.length) + ' / ' + fmt.num(ai.length), sub: configured.length < ai.length ? fmt.num(ai.length - configured.length) + ' not set' : 'all keys set', tone: !configured.length ? 'bad' : working.length < configured.length ? 'warn' : 'ok' },
-        { label: 'Lanes with a key', value: fmt.num(keyed.length) + ' / ' + fmt.num(lanes.length), tone: keyed.length < lanes.length ? 'warn' : 'ok' }
-      ]),
-      ui.grid([
-        ui.card({ title: 'AI providers', sub: 'A 4-token test request with the model each provider’s lanes use. Click a row for details.', span: 'full', pad: false, body: aiTable }),
-        ui.card({ title: 'AI lanes', sub: 'Each lane and whether its provider’s key is set.', span: 'full', pad: false, body: laneTable })
-      ])
-    ];
-  }
-
-  function openProvider(r) {
-    var dr = VX.drawer({ title: providerLabel(r) });
-    VX.mount(dr.body,
-      ui.dl([
-        ['Key', !r.configured ? 'Not set' : r.ok ? 'Working' : 'Failing'],
-        ['Secret name', r.env ? ui.mono(r.env) : '—'],
-        ['Read from', r.envInUse ? ui.mono(r.envInUse) : 'Not set'],
-        ['Test model', r.model ? ui.mono(r.model) : '—'],
-        ['HTTP status', r.status != null ? String(r.status) : '—'],
-        ['Result', r.note || (r.ok ? 'OK' : '—')]
-      ]),
-      r.envInUse && r.env && r.envInUse !== r.env && r.envInUse !== 'AI' ? ui.notice('This key is set under its previous name ' + r.envInUse + '. Set it as ' + r.env + ' and remove the old one.', 'warn') : null,
-      h('h3', { style: { margin: '16px 0 6px', 'font-size': '14px' } }, 'Lanes'),
-      (r.lanes || []).length ? h('p', (r.lanes || []).join(', ')) : ui.muted('None'),
-      (r.media || []).length ? [h('h3', { style: { margin: '16px 0 6px', 'font-size': '14px' } }, 'Media models'), h('ul.list', r.media.map(function (m) { return h('li', ui.mono(m.id), h('span.grow', m.name || ''), ui.pill(m.kind || '—')); }))] : null,
-      (r.tools || []).length ? [h('h3', { style: { margin: '16px 0 6px', 'font-size': '14px' } }, 'Tools'), h('ul.list', r.tools.map(function (t) { return h('li', h('span.grow', t.name || t.id), ui.muted(fmt.plural((t.models || []).length, 'model'))); }))] : null
-    );
-  }
-
 
   /* --------------------------------------------------------- App errors */
 

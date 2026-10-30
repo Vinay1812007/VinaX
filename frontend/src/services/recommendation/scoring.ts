@@ -32,7 +32,7 @@ function exposureWhy(penalty: number): string {
 import { styleEvidence, type MusicStyle } from './style';
 import { rerankCandidates } from './reranking';
 import { songKey } from './songIdentity';
-import { dot, embeddingTasteVector, songVector, tasteVector } from './vectors';
+import { dot, songVector, tasteVector } from './vectors';
 import type { Song } from '@/types';
 
 const SOURCE_BOOST: Record<Candidate['source'], number> = {
@@ -138,14 +138,6 @@ export interface ScoringFrame {
   day: number;
   /** 8.2.0 — the listener's taste in the on-device vector space (null with no favourites or history). */
   taste: Float32Array | null;
-  /** 8.2.0 — the same in a learned embedding space, from vectors the device holds (null when it holds too few). */
-  embeddingTaste: Float32Array | null;
-  /**
-   * 8.2.0 — the pool's mean embedding fit, set by `rankCandidates`. The
-   * embedding only moves a candidate's taste fit by how far it sits above or
-   * below this, so candidates with and without a cached vector stay comparable.
-   */
-  embeddingPoolMean: number | null;
 }
 
 const MODE_LEAN = { familiar: -1, balanced: 0, discover: 1 } as const;
@@ -186,36 +178,17 @@ export function buildScoringFrame(ctx: RecommendationContext): ScoringFrame {
     year: new Date().getFullYear(),
     day: ctx.dayOfWeek ?? new Date().getDay(),
     taste: tasteVector(ctx.favorites, ctx.history),
-    embeddingTaste: ctx.embeddingOf ? embeddingTasteVector(ctx.favorites, ctx.history, ctx.embeddingOf) : null,
-    embeddingPoolMean: null,
   };
-}
-
-/** A cached learned embedding for a song, or null (a lookup that throws counts as none). */
-function embeddingFor(ctx: RecommendationContext, id: string, dims: number): Float32Array | null {
-  try {
-    const v = ctx.embeddingOf?.(id) ?? null;
-    return v && v.length === dims ? v : null;
-  } catch {
-    return null;
-  }
 }
 
 /**
  * 8.2.0 — how well a candidate fits the listener's taste, 0..1: the cosine
- * of its on-device vector and the taste vector. When the device holds a
- * learned embedding for the candidate AND for enough taste songs, the fit
- * moves by how far the candidate's embedding cosine sits above or below the
- * pool's mean — the two spaces are never compared with each other.
+ * of its on-device vector and the taste vector.
  */
-export function tasteFit(song: Song, ctx: RecommendationContext, frame: ScoringFrame, profile?: SongProfile, classified?: Candidate['classified']): number {
+export function tasteFit(song: Song, _ctx: RecommendationContext, frame: ScoringFrame, profile?: SongProfile, classified?: Candidate['classified']): number {
   if (!frame.taste) return 0;
-  let fit = Math.max(0, dot(songVector(song, classified, profile), frame.taste));
-  if (frame.embeddingTaste && frame.embeddingPoolMean != null) {
-    const e = embeddingFor(ctx, song.id, frame.embeddingTaste.length);
-    if (e) fit += dot(e, frame.embeddingTaste) - frame.embeddingPoolMean;
-  }
-  return Math.max(0, Math.min(1, fit));
+  const fit = Math.max(0, dot(songVector(song, classified, profile), frame.taste));
+  return Math.min(1, fit);
 }
 
 /**
@@ -532,20 +505,6 @@ export function rankCandidates(candidates: Candidate[], ctx: RecommendationConte
   const seen = new Set<string>();
   const out: ScoredCandidate[] = [];
   const frame = buildScoringFrame(ctx);
-  // 8.2.0 — the embedding refinement needs the pool's own mean, and a pool
-  // where too few songs have a cached vector does not get one at all.
-  if (frame.embeddingTaste) {
-    let sum = 0;
-    let n = 0;
-    for (const c of candidates) {
-      const e = embeddingFor(ctx, c.song.id, frame.embeddingTaste.length);
-      if (!e) continue;
-      sum += dot(e, frame.embeddingTaste);
-      n += 1;
-    }
-    if (n >= 3) frame.embeddingPoolMean = sum / n;
-    else frame.embeddingTaste = null;
-  }
   for (const c of candidates) {
     if (seen.has(c.song.id)) continue;
     seen.add(c.song.id);

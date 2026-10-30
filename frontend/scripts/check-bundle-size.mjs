@@ -112,8 +112,6 @@ const DIST = 'dist';
 const FIRST_LOAD_BUDGET = 190 * 1024; // gzipped
 const CHUNK_BUDGET = 80 * 1024; // gzipped — chunks that ship in the first load
 const LAZY_CHUNK_BUDGET = 160 * 1024; // gzipped — on-demand chunks (routes, features)
-// Deliberately lazy diagram/math engines (loaded only when VinaX AI renders them).
-const LAZY_EXEMPT = /mermaid|cytoscape|katex|cynefin|dagre|elk|flowchart|mindmap|treemap/i;
 
 const html = readFileSync(join(DIST, 'index.html'), 'utf8');
 const referenced = [...html.matchAll(/\/assets\/[A-Za-z0-9._-]+\.js/g)].map((m) => m[0].slice(1));
@@ -144,10 +142,6 @@ for (const f of readdirSync(join(DIST, 'assets'))) {
   const rel = join('assets', f);
   const size = gz(rel);
   const inFirstLoad = unique.includes(rel.replace(/\\/g, '/')) || unique.includes(rel);
-  // Audit finding M-OPS-3: LAZY_EXEMPT must ONLY skip on-demand chunks. If a
-  // matched module ever ends up in the first-load set (e.g. an accidental
-  // static import), the budget must still catch it.
-  if (!inFirstLoad && LAZY_EXEMPT.test(f)) continue;
   const cap = inFirstLoad ? CHUNK_BUDGET : LAZY_CHUNK_BUDGET;
   if (size >= cap) {
     console.error(`FAIL: chunk assets/${f} is ${kb(size)} gz (budget ${kb(cap)}${inFirstLoad ? ', first-load' : ', lazy'})`);

@@ -83,7 +83,7 @@ async function seed(page: Page, baseURL: string): Promise<ApiSong[]> {
   await page.addInitScript(({ fp, profile }) => {
     localStorage.setItem(
       'vinax.settings.v1',
-      JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu', 'hindi', 'tamil'], festivalSkins: false, aiDj: false, autoplay: true, djTakeover: true, discoveryMode: 'balanced' }, version: 4 }),
+      JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu', 'hindi', 'tamil'], festivalSkins: false, autoplay: true, djTakeover: true, discoveryMode: 'balanced' }, version: 4 }),
     );
     localStorage.setItem('vinax.onboarded.v1', 'true');
     localStorage.setItem('vinax.user-name', JSON.stringify('Lakshmi'));

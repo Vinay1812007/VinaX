@@ -31,8 +31,6 @@ export interface SettingsState {
   template: TemplateId;
   /** v5.12.0 — daily listening goal in minutes (0 = off). */
   dailyGoalMinutes: number;
-  /** v5.12.0 — radio-DJ voice: announces each song as it starts. */
-  djVoice: boolean;
   /** 5.14.0 — festival skins (accent, canvas, glow, splash). Off = the plain theme all year. */
   festivalSkins: boolean;
   /** v5.17.0 — custom accent hex when `accent === 'custom'`. */
@@ -93,21 +91,8 @@ export interface SettingsState {
    * the stretch and two switches never land back to back.
    */
   queueLanguages: QueueLanguages;
-  /** v6.2.0 — AI DJ: the queue's next stretch is sequenced by the DJ engine
-   *  (from real, already-filtered candidates); off = local recommender only. */
-  aiDj: boolean;
-  /** v6.2.0 — "Designed for you": AI-designed shelves on Home. */
-  aiHomeShelves: boolean;
-  /**
-   * 7.2.0 — the master switch for AI in recommendations. Off: no song data is
-   * sent to an AI engine for recommendations at all — no DJ ordering, no AI
-   * re-ordering (queue, Home, "Trending for you"), no AI song classification,
-   * no AI-designed Home shelves. VinaX AI chat, AI Playlist and the lyric
-   * tools are features the listener invokes and are not covered.
-   */
-  aiAssist: boolean;
-  /** v6.5.0 — the DJ drives every play: tapping a song starts it and the DJ
-   *  builds the continuation, instead of following the tapped list. */
+  /** v6.5.0 — smart queue: tapping a song starts it and VinaX builds the
+   *  continuation on the device, instead of following the tapped list. */
   djTakeover: boolean;
   /** Package C2 — Kid mode: hides explicit-flagged songs and switches to a
    *  separate taste profile. Favorites/downloads/settings stay shared. */
@@ -136,7 +121,6 @@ export interface SettingsState {
 
   setTheme(theme: 'dark' | 'light' | 'system' | 'amoled' | 'auto'): void;
   setDailyGoalMinutes(n: number): void;
-  setDjVoice(v: boolean): void;
   setFestivalSkins(v: boolean): void;
   setAccentCustom(hex: string | null): void;
   setUiScale(v: 'sm' | 'md' | 'lg'): void;
@@ -169,9 +153,6 @@ export interface SettingsState {
   setExploreMode(v: boolean): void;
   setDiscoveryMode(v: DiscoveryMode): void;
   setQueueLanguages(v: QueueLanguages): void;
-  setAiDj(v: boolean): void;
-  setAiHomeShelves(v: boolean): void;
-  setAiAssist(v: boolean): void;
   setDjTakeover(v: boolean): void;
   setKidMode(v: boolean): void;
   setAllowRegionInference(v: boolean): void;
@@ -208,7 +189,6 @@ const defaults = {
   accent: 'crimson',
   template: DEFAULT_TEMPLATE as TemplateId,
   dailyGoalMinutes: 0,
-  djVoice: false,
   festivalSkins: true,
   accentCustom: null,
   uiScale: 'md' as const,
@@ -241,9 +221,6 @@ const defaults = {
   exploreMode: false,
   discoveryMode: 'balanced' as DiscoveryMode,
   queueLanguages: 'mix' as QueueLanguages,
-  aiDj: true,
-  aiHomeShelves: true,
-  aiAssist: true,
   djTakeover: true,
   kidMode: false,
   allowRegionInference: true,
@@ -345,7 +322,6 @@ export const useSettingsStore = create<SettingsState>()(
       ...defaults,
       setTheme: (theme) => set({ theme }),
       setDailyGoalMinutes: (n) => set({ dailyGoalMinutes: Math.max(0, Math.min(600, Math.round(n))) }),
-      setDjVoice: (djVoice) => set({ djVoice }),
       setFestivalSkins: (festivalSkins) => set({ festivalSkins }),
       setAccentCustom: (accentCustom) => set({ accentCustom, accent: accentCustom ? 'custom' : 'crimson' }),
       setUiScale: (uiScale) => set({ uiScale }),
@@ -384,9 +360,6 @@ export const useSettingsStore = create<SettingsState>()(
         const discoveryMode = isDiscoveryMode(mode) ? mode : 'balanced';
         set({ discoveryMode, exploreMode: discoveryMode === 'discover' });
       },
-      setAiDj: (aiDj) => set({ aiDj }),
-      setAiHomeShelves: (aiHomeShelves) => set({ aiHomeShelves }),
-      setAiAssist: (aiAssist) => set({ aiAssist }),
       setDjTakeover: (djTakeover) => set({ djTakeover }),
       setKidMode: (kidMode) => set({ kidMode }),
       setAllowRegionInference: (allowRegionInference) => set({ allowRegionInference }),
@@ -422,12 +395,13 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: KEYS.settings,
-      version: 4,
+      version: 5,
       // One-time migrations: turn off artwork-tinting (v1) and reset to the
       // single brand accent (v2) when the old picker was removed. The picker
       // RETURNED in 4.7.0 with per-accent light ramps — v2 stays as-is so
       // long-time devices keep the default until they choose again.
       // v3 removes retired queue/layout preferences and generated Home caches.
+      // v5 (1.3) removes the AI switches: VinaX has no AI features any more.
       migrate: (persisted: unknown, version: number) => {
         const state = (persisted ?? {}) as Partial<SettingsState>;
         if (version < 1) state.dynamicTheme = false;
@@ -438,6 +412,10 @@ export const useSettingsStore = create<SettingsState>()(
         delete legacy.autoqueueSimilar;
         delete legacy.hiddenHome;
         delete legacy.homeOrder;
+        delete legacy.aiDj;
+        delete legacy.aiHomeShelves;
+        delete legacy.aiAssist;
+        delete legacy.djVoice;
         try {
           window.localStorage.removeItem('vinax.home.shown.v1');
           window.localStorage.removeItem('vinax.aihome.recent.v1');

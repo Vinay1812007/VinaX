@@ -93,18 +93,6 @@ export function useFeatureFlags(): FeatureFlags {
   return q.data ?? {};
 }
 
-/**
- * v7.0.0 — is this feature known to be on? False until the flags have been
- * answered (a failed fetch counts as answered: defaults apply). `flagOn`
- * reads "not loaded yet" as ON, which is right for rendering but wrong for
- * anything that SPENDS something: a surface that fires an AI request gates on
- * this, or an owner kill-switch is ignored for the first moments of every open.
- */
-export function useFeatureEnabled(key: string): boolean {
-  const q = useFeatureFlagsQuery();
-  return q.isFetched && flagOn(q.data, key);
-}
-
 /** v5.15.0 — everything the admin console publishes for the app, in one read. */
 export interface ClientConfig {
   homeLayout?: unknown;

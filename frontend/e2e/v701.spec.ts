@@ -23,7 +23,7 @@ async function seed(page: Page, baseURL: string): Promise<void> {
   // What the app persists is its own song shape (artists as a flat list); only the API speaks { primary }.
   const stored = pool.map((s) => ({ ...s, artists: s.artists.primary }));
   await page.addInitScript(({ stored, fp }) => {
-    localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'], festivalSkins: false, aiDj: false, autoplay: true, djTakeover: false }, version: 4 }));
+    localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'], festivalSkins: false, autoplay: true, djTakeover: false }, version: 4 }));
     localStorage.setItem('vinax.library.v1', JSON.stringify({ state: { favorites: stored.slice(0, 2), saved: [], collections: [], hiddenSongIds: [], later: [], hiddenArtists: [], trash: [] }, version: 0 }));
     localStorage.setItem('vinax.history.v1', JSON.stringify({ state: { entries: stored.slice(0, 4).map((song, i) => ({ song, ts: Date.now() - i * 3_600_000, completed: true })) }, version: 0 }));
     if (!localStorage.getItem('vinax.player.v1')) localStorage.setItem('vinax.player.v1', JSON.stringify({ state: { queue: stored, index: 0, repeat: 'off', shuffle: false, volume: 1, muted: false, rate: 1 }, version: 1 }));

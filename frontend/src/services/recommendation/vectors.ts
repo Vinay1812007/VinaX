@@ -20,11 +20,6 @@ import type { SongFeature } from './types';
  * randomness. Two songs that share nothing can still collide in a slot; with
  * 256 slots and a dozen features a song, that noise is small next to a real
  * shared artist or album.
- *
- * A stronger learned embedding (services/ai/embeddings.ts) can refine the
- * fit when the device already holds vectors for both the listener's taste
- * songs and the candidate. The two spaces are never compared with each
- * other: see `embeddingTasteVector` and the scorer's taste term.
  */
 export const VECTOR_DIM = 256;
 
@@ -47,8 +42,6 @@ const MAX_FAVORITES = 60;
 const MAX_HISTORY = 200;
 /** A history entry's weight by outcome (before age decay). */
 const PLAY_WEIGHT = { completed: 1, skipped: -0.5, other: 0.25 } as const;
-/** The learned-embedding taste needs at least this many taste songs with a cached vector. */
-export const MIN_EMBEDDED_TASTE_SONGS = 3;
 /**
  * 9.0.0 — plays younger than this are the listener's RECENT taste; older plays
  * and favourites are the LONG-TERM taste. Recent listening may hold at most
@@ -182,41 +175,4 @@ export function tasteVector(favorites: readonly Song[], history: readonly Histor
     return vectors.get(song.id) ?? null;
   };
   return blendParts(tasteSongs(favorites, history, now), vectorOf, VECTOR_DIM);
-}
-
-/**
- * The listener's taste in a learned embedding space, from the vectors the
- * device already holds (`lookup` is synchronous and never fetches). Null
- * unless at least MIN_EMBEDDED_TASTE_SONGS distinct taste songs have one, or
- * when their dimensions disagree. Never combined with the on-device space.
- */
-export function embeddingTasteVector(
-  favorites: readonly Song[],
-  history: readonly HistoryEntry[],
-  lookup: (id: string) => Float32Array | null,
-  now = Date.now(),
-): Float32Array | null {
-  let dims = 0;
-  const seen = new Set<string>();
-  const cached = new Map<string, Float32Array | null>();
-  const vectorOf = (song: Song): Float32Array | null => {
-    if (cached.has(song.id)) return cached.get(song.id) ?? null;
-    let v: Float32Array | null;
-    try {
-      v = lookup(song.id);
-    } catch {
-      v = null;
-    }
-    cached.set(song.id, v && v.length ? v : null);
-    return v && v.length ? v : null;
-  };
-  const songs = tasteSongs(favorites, history, now);
-  for (const { song } of songs) {
-    const v = vectorOf(song);
-    if (!v) continue;
-    if (!dims) dims = v.length;
-    if (v.length !== dims) return null;
-    seen.add(song.id);
-  }
-  return dims && seen.size >= MIN_EMBEDDED_TASTE_SONGS ? blendParts(songs, vectorOf, dims) : null;
 }

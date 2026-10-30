@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * 8.2.0 — Home: the AI Radio shortcut, "Your playlists", "Your top genres",
+ * 8.2.0 — Home: the Radio shortcut, "Your playlists", "Your top genres",
  * the usage signal (taps per block) and the dynamic block order, which only
  * applies when nobody chose an order and never changes within a session.
  */
@@ -104,11 +104,11 @@ afterEach(() => {
 });
 
 describe('HomePage 8.2', () => {
-  it('always offers AI Radio as the first shortcut, even to a brand-new listener', async () => {
+  it('always offers Radio as the first shortcut, even to a brand-new listener', async () => {
     renderHome();
     const shortcuts = await screen.findByRole('group', { name: 'Shortcuts' });
     const first = within(shortcuts).getAllByRole('button')[0];
-    expect(first.textContent).toBe('AI Radio');
+    expect(first.textContent).toBe('Radio');
     fireEvent.click(first);
     expect(await screen.findByText('Radio page')).toBeTruthy();
   });
@@ -154,7 +154,7 @@ describe('HomePage 8.2', () => {
     expect(order[0]).toBe('quick');
     expect(order[order.length - 1]).toBe('feed');
     expect(order.indexOf('loved')).toBeLessThan(11);
-    expect(order.indexOf('discovery')).toBeGreaterThan(3);
+    expect(order.indexOf('discovery')).toBeGreaterThan(2);
     unmount();
     // New signals mid-session change nothing until the next session.
     localStorage.setItem(HOME_SIGNALS_KEY, JSON.stringify({ v: 1, taps: { albums: { s: 50, t: now } }, outcomes: {} }));
@@ -167,7 +167,7 @@ describe('HomePage 8.2', () => {
 
   it('keeps the listener\'s Home Studio order exactly', async () => {
     localStorage.setItem(HOME_SIGNALS_KEY, JSON.stringify({ v: 1, taps: { loved: { s: 20, t: Date.now() } }, outcomes: {} }));
-    const chosen = ['quick', 'charts', 'personal', 'aihome', 'discovery', 'seasonal', 'moods', 'genres', 'artists', 'albums', 'daypicks', 'loved', 'feed'];
+    const chosen = ['quick', 'charts', 'personal', 'discovery', 'seasonal', 'moods', 'genres', 'artists', 'albums', 'daypicks', 'loved', 'feed'];
     localStorage.setItem(HOME_DESIGN_KEY, JSON.stringify({ title: 'Mine', description: 'd', order: chosen, hidden: [] }));
     renderHome();
     await screen.findByRole('group', { name: 'Shortcuts' });
@@ -187,7 +187,7 @@ describe('HomePage 9.0', () => {
     expect(markers()).not.toContain('genres');
     expect(searched).not.toContain('telugu melody songs'); // the genres block has not mounted
     await openExplore();
-    expect(markers()).toHaveLength(13);
+    expect(markers()).toHaveLength(12);
     expect(sessionStorage.getItem('vinax.home.open.explore')).toBe('1');
   });
 
@@ -212,9 +212,9 @@ describe('HomePage 10.0 — the first visit', () => {
     renderHome();
     expect(await screen.findByRole('heading', { level: 1, name: /All the music you love\. Free\./ })).toBeTruthy();
     expect(screen.getByText(/Nothing to pay\./)).toBeTruthy();
-    // The six feature tiles link to real destinations.
+    // The five feature tiles link to real destinations.
     const tiles = within(screen.getByRole('region', { name: 'Everything included, all free' })).getAllByRole('link');
-    expect(tiles.map((a) => a.getAttribute('href'))).toEqual(['/VinaXAI', '/radio', '/together', '/karaoke', '/download', '/languages']);
+    expect(tiles.map((a) => a.getAttribute('href'))).toEqual(['/radio', '/together', '/karaoke', '/download', '/languages']);
     // The Aura Mix stays (the guided tour points at its play button).
     const auraPlay = screen.getByRole('button', { name: /^Play your \w+ Mix$/ }) as HTMLButtonElement;
     // Wait for the opening mix, then start it from the welcome.

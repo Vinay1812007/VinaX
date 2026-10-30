@@ -158,7 +158,6 @@ html.light .vx-browse {
 .vx-browse .bx-pill:active { transform: scale(0.97); }
 .vx-browse .bx-pill:disabled { opacity: 0.45; pointer-events: none; }
 .vx-browse .bx-pill svg { width: 15px; height: 15px; }
-.vx-browse .bx-pill.is-ai svg { color: rgb(var(--tide-400)); }
 /* A text button that reads like the section's "Show all" link. */
 .vx-browse .bx-text-btn {
   position: relative;
@@ -439,7 +438,6 @@ html.light .vx-browse .bx-tile[aria-pressed='true'] { --bx-wash: 0.32; }
 .vx-browse .bx-dest:active { transform: scale(0.98); }
 .vx-browse .bx-dest .bx-glyph { width: 44px; height: 44px; border-radius: 13px; }
 .vx-browse .bx-dest .bx-glyph svg { width: 22px; height: 22px; }
-.vx-browse .bx-dest .bx-glyph.is-ai { background: var(--vx-glow); color: var(--vx-on-accent); }
 .vx-browse .bx-dest-text { display: block; min-width: 0; }
 .vx-browse .bx-dest-title { display: block; overflow: hidden; font-size: 15px; font-weight: 700; line-height: 1.3; white-space: nowrap; text-overflow: ellipsis; }
 .vx-browse .bx-dest-meta { display: block; margin-top: 2px; overflow: hidden; color: rgb(var(--ink-400)); font-size: 12.5px; font-weight: 550; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }

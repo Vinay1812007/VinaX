@@ -3,7 +3,7 @@ import { latestNotesFingerprint } from '../src/constants/changelog';
 
 /**
  * v6.5 from the built bundle with a mocked catalogue: tapping a song in a
- * list starts that song alone and the DJ builds the continuation; "Tune this
+ * list starts that song alone and VinaX builds the continuation; "Tune this
  * queue" keeps what played and rebuilds the rest; Settings shows the switch.
  */
 interface Song {
@@ -24,7 +24,7 @@ async function seed(page: Page, baseURL: string, opts: { queue: Song[] } = { que
   const entries = pool.slice(0, 4).map((song, i) => ({ song, ts: now - i * 3_600_000, completed: true }));
   await page.addInitScript(
     ({ pool, entries, fp, queue }) => {
-      localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'], festivalSkins: false, aiDj: false, autoplay: true }, version: 3 }));
+      localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'], festivalSkins: false, autoplay: true }, version: 3 }));
       localStorage.setItem('vinax.library.v1', JSON.stringify({ state: { favorites: pool.slice(0, 2), saved: [], collections: [], hiddenSongIds: [], later: [], hiddenArtists: [], trash: [] }, version: 0 }));
       localStorage.setItem('vinax.history.v1', JSON.stringify({ state: { entries }, version: 0 }));
       // Init scripts run on every navigation: never overwrite a queue the app has since built.
@@ -54,7 +54,7 @@ async function seed(page: Page, baseURL: string, opts: { queue: Song[] } = { que
 const bodyText = (page: Page) => page.evaluate(() => document.body.innerText);
 const queueIds = (page: Page) => page.evaluate(() => (JSON.parse(localStorage.getItem('vinax.player.v1') ?? '{}').state?.queue ?? []).map((s: { id: string }) => s.id) as string[]);
 
-test('tapping a song in a list seeds the DJ instead of playing the list', async ({ page, baseURL }) => {
+test('tapping a song in a list seeds the continuation instead of playing the list', async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await seed(page, baseURL!);
   await page.goto('/search/telugu');
@@ -97,7 +97,7 @@ test('Tune this queue keeps the current song and rebuilds what follows; Settings
   expect(pool.some((s) => s.id === after[1])).toBe(true);
   await page.screenshot({ path: 'test-results/v65-tune-390.png' });
   await page.goto('/settings');
-  await expect.poll(() => bodyText(page)).toMatch(/DJ builds every queue/);
-  const sw = page.getByRole('switch', { name: 'DJ builds every queue' }).or(page.getByLabel('DJ builds every queue'));
+  await expect.poll(() => bodyText(page)).toMatch(/Build every queue/);
+  const sw = page.getByRole('switch', { name: 'Build every queue' }).or(page.getByLabel('Build every queue'));
   await expect(sw.first()).toBeVisible();
 });

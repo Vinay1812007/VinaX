@@ -19,10 +19,7 @@ vi.mock('./candidates', () => ({
     return pool;
   }),
 }));
-vi.mock('@/services/ai/recommendations', () => ({ enrichSongs: vi.fn(async (songs: Song[]) => songs), aiRerankSongs: vi.fn(async (songs: Song[]) => songs) }));
-vi.mock('@/services/ai/dj', () => ({ djSequence: vi.fn(async () => null), samplePool: (songs: Song[]) => songs, commitDjSet: vi.fn(), lastDjOutcome: () => 'unavailable' }));
 vi.mock('@/services/queryClient', () => ({ queryClient: { getQueryData: () => undefined } }));
-vi.mock('@/services/ai/embeddings', () => ({ getCachedEmbedding: () => null, embedSongs: async () => undefined, embedQuery: async () => null, cosine: () => 0 }));
 
 import { planNextSongs, REC_TASTE_ARMS } from './engine';
 import { scoreCandidate } from './scoring';
@@ -41,7 +38,7 @@ beforeEach(() => {
   seen.length = 0;
   pool = cands(12);
   setRecExperimentConfig([]);
-  useSettingsStore.setState({ aiDj: false, aiAssist: false, kidMode: false, mutedLanguages: [] });
+  useSettingsStore.setState({ kidMode: false, mutedLanguages: [] });
 });
 
 describe('rec-next-songs decision point', () => {

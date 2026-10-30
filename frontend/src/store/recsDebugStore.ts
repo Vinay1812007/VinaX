@@ -9,16 +9,14 @@ import type { ReasonComponent, RejectedCandidate } from '@/services/recommendati
  */
 export interface DebugRow {
   position: number;
-  /** v7.0.0 — where the ranker had it before sequencing (absent for a DJ discovery). */
+  /** v7.0.0 — where the ranker had it before sequencing. */
   rank?: number;
   song: Song;
   finalScore: number;
   source: string;
   components: ReasonComponent[];
   /** Who chose the final order. */
-  picker: 'local' | 'ai';
-  /** The DJ's confidence when it picked. */
-  confidence?: number;
+  picker: 'local';
 }
 
 /** v7.0.0 — how the pipeline ran: the knobs that shaped it and how many songs survived each stage. */
@@ -34,7 +32,7 @@ export interface DebugTrace {
   repairs: number;
   /** 9.1.0 — how long the on-device plan took, end to end. */
   latencyMs?: number;
-  /** 9.1.0 — why the AI did not choose this order (null when it did, or was not asked). */
+  /** 9.1.0 — why the plan fell back (null when it did not). */
   fallback?: string | null;
   /** 9.1.0 — how many candidates each source contributed to the gathered pool. */
   sources?: Record<string, number>;

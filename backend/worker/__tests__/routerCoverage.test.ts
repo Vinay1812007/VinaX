@@ -44,8 +44,8 @@ describe('worker router coverage', () => {
 
   it('finds the api handlers at all (guards against a bad glob silently passing)', () => {
     expect(routes.length).toBeGreaterThan(30);
-    expect(routes).toContain('/api/preview');
-    expect(routes).toContain('/api/vinaxai');
+    expect(routes).toContain('/api/status');
+    expect(routes).toContain('/api/recommendations');
   });
 
   it('every functions/api handler has an EXACT route entry in index.ts', () => {

@@ -1,7 +1,7 @@
 /**
  * Published settings — the `settings` table: one key, one JSON value, written
  * only from the owner console, read by the public config routes and by the
- * Worker itself (AI controls, retention, site mode).
+ * Worker itself (retention, site mode).
  *
  * `SETTING_KEYS` is the whole vocabulary: a key not listed here cannot be
  * written. Values are stored as the owner typed them (after a size cap) and
@@ -15,7 +15,7 @@ import { db, dbConfigured, q, type DbEnv, type Rows } from './db';
 
 export interface SettingSpec {
   key: string;
-  group: 'Home & promotion' | 'App' | 'Catalog' | 'VinaX AI' | 'Operations';
+  group: 'Home & promotion' | 'App' | 'Catalog' | 'Operations';
   title: string;
   note: string;
   /** What the value looks like, for the console's editor. */
@@ -30,7 +30,7 @@ export const SETTING_KEYS: readonly SettingSpec[] = [
   { key: 'home-layout', group: 'Home & promotion', title: 'Home layout', note: 'Shelf order and hidden shelves: { title, description, order: [...], hidden: [...] }.', shape: 'object' },
   { key: 'announcement', group: 'Home & promotion', title: 'Announcement', note: 'What the Android app shows on open: { title, body, link?, ts }. Written by the push sender too.', shape: 'object' },
   { key: 'support-faq', group: 'App', title: 'Help center FAQ', note: 'Questions and answers: [{ q, a }].', shape: 'array' },
-  { key: 'flags', group: 'App', title: 'Feature switches', note: 'Boolean flags the app reads: { aiHome, listenTogether, codeRun, … }.', shape: 'boolean-map' },
+  { key: 'flags', group: 'App', title: 'Feature switches', note: 'Boolean flags the app reads: { listenTogether, … }.', shape: 'boolean-map' },
   { key: 'min-version', group: 'App', title: 'Minimum app build', note: 'Older Android builds must update: { build }.', shape: 'object' },
   { key: 'site-mode', group: 'Operations', title: 'Site mode', note: '{ mode: "live" | "maintenance", note? } — maintenance shows the gate to everyone.', shape: 'object' },
   { key: 'maintenance-window', group: 'Operations', title: 'Maintenance window', note: 'A planned window: { start, end, note }. The gate shows inside it.', shape: 'object' },
@@ -40,10 +40,6 @@ export const SETTING_KEYS: readonly SettingSpec[] = [
   { key: 'search-synonyms', group: 'Catalog', title: 'Search synonyms', note: '{ "typed": "meant" } pairs applied to searches.', shape: 'object' },
   { key: 'catalog-sources', group: 'Catalog', title: 'Catalog sources', note: '{ sourceId: false } disables a catalogue source for everyone.', shape: 'object' },
   { key: 'language-order', group: 'Catalog', title: 'Language order', note: 'Languages in the order Home offers them: ["telugu", "hindi", …].', shape: 'array' },
-  { key: 'ai-starters', group: 'VinaX AI', title: 'Starter prompts', note: 'Suggestions on the empty chat: ["…"].', shape: 'array' },
-  { key: 'ai-quick', group: 'VinaX AI', title: 'Quick actions', note: '[{ icon, label, prompt, mode? }] under the composer.', shape: 'array' },
-  { key: 'ai-rules', group: 'VinaX AI', title: 'House rules', note: 'Plain text appended to the assistant’s instructions.', shape: 'string' },
-  { key: 'ai-controls', group: 'VinaX AI', title: 'AI controls', note: '{ emergencyOff, features: { chat|dj|playlist|search|home|title…: bool }, dailyTokenCap } — refused calls answer 503 ai_disabled / ai_over_budget.', shape: 'object' },
 ] as const;
 
 export const SETTING_KEY_SET: ReadonlySet<string> = new Set(SETTING_KEYS.map((s) => s.key));

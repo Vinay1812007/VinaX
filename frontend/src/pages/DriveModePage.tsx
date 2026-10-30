@@ -5,8 +5,8 @@ import { useNavigate } from 'react-router-dom';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { NextIcon, PauseIcon, PlayIcon, PrevIcon, ChevronDownIcon, MicIcon } from '@/components/Icons';
-import { useDictation } from '@/features/ai/chat/useDictation';
-import { tryMusicCommand } from '@/features/ai/chat/musicCommands';
+import { useDictation } from '@/features/voice/useDictation';
+import { tryMusicCommand } from '@/features/voice/musicCommands';
 import { cn } from '@/utils/cn';
 import { EmptyState } from '@/components/States';
 import { Link } from 'react-router-dom';
@@ -29,7 +29,7 @@ export default function DriveModePage() {
   useFocusTrap(dialogRef, !!song, () => navigate(-1));
 
   // 15.0 — a voice button: "play Srivalli", "next", "pause", "queue Kesariya",
-  // "play something in Telugu". The same on-device command parser VinaX AI
+  // "play something in Telugu". The on-device command parser
   // uses (musicCommands.ts) runs the words; the reply is spoken back, since
   // the eyes are on the road.
   const [heard, setHeard] = useState<string>('');

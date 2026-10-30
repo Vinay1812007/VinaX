@@ -8,8 +8,8 @@ import type { RejectedCandidate, Relaxation, RelaxedRule } from './types';
  * that is about to be queued, whoever ordered it.
  *
  * The local sequencer already spaces artists and honours the language lock,
- * but the AI DJ returns its own order, discoveries arrive from a catalogue
- * search, and the short-pool top-up appends in rank order. None of them may
+ * but the short-pool top-up appends in rank order, and a station or an
+ * adaptive re-plan brings its own songs. None of them may
  * bypass the rules, so the final list is checked once more, in code:
  *
  *   1. every song passes the hard filter again (mute, block, explicit, junk,
@@ -40,7 +40,7 @@ import type { RejectedCandidate, Relaxation, RelaxedRule } from './types';
  *      than `style.min` is reported once as a 'style' relaxation.
  *
  * Order is otherwise preserved, so an accepted arc stays an arc. The local
- * order, the AI order and the reserve top-up all pass through here.
+ * order and the reserve top-up both pass through here.
  */
 export interface ValidateOptions extends HardFilterOptions {
   limit: number;

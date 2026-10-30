@@ -37,13 +37,11 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/', label: 'Home', icon: HomeIcon },
       { to: '/search', label: 'Search', icon: SearchIcon },
-      { to: '/VinaXAI', label: 'VinaX AI', icon: SparkleIcon },
       { to: '/discover', label: 'Discover', icon: CompassIcon },
       { to: '/flow', label: 'Flow', icon: FlowIcon },
       { to: '/charts', label: 'Charts', icon: WaveIcon },
       { to: '/made-for-you', label: 'Made For You', icon: SparkleIcon },
       { to: '/weekly', label: 'Your Week', icon: SparkleIcon },
-      { to: '/ai-playlist', label: 'AI Playlist', icon: SparkleIcon },
     ],
   },
   {
@@ -83,5 +81,4 @@ export const PRIMARY_NAV: NavItem[] = [
   // 10.1 — the swipeable song feed (the sidebar list; the phone tab bar keeps its five).
   { to: '/flow', label: 'Flow', icon: FlowIcon },
   { to: '/library', label: 'Library', icon: LibraryIcon },
-  { to: '/VinaXAI', label: 'VinaX AI', icon: SparkleIcon },
 ];

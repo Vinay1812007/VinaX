@@ -36,8 +36,7 @@
           { label: 'Daily · weekly · monthly', value: fmt.compact(k.dau) + ' · ' + fmt.compact(k.wau) + ' · ' + fmt.compact(k.mau), sub: 'active listeners' },
           { label: 'Errors (24 h)', value: fmt.num(k.errors24h), tone: num(k.errors24h) > 0 ? 'warn' : null, sub: 'reported by the app' },
           { label: 'New feedback', value: fmt.num(k.feedbackNew), tone: num(k.feedbackNew) > 0 ? 'warn' : null, hint: 'Messages waiting on the Feedback page' },
-          { label: 'Push devices', value: fmt.compact(k.pushDevices), sub: fmt.num(k.roomsActive) + ' rooms live' },
-          { label: 'AI calls (24 h)', value: fmt.compact(k.aiCalls24h) }
+          { label: 'Push devices', value: fmt.compact(k.pushDevices), sub: fmt.num(k.roomsActive) + ' rooms live' }
         ]),
         ui.grid([
           ui.card({ title: 'Plays and listeners', sub: 'Last ' + fmt.plural(timeline.length || 14, 'day'), span: 2, body: ui.chart({

@@ -128,9 +128,7 @@
     flags: function (value) {
       var v = obj(value);
       var KNOWN = [
-        { key: 'aiHome', label: 'Designed for you (AI Home block)', note: 'Off hides the block for everyone.' },
-        { key: 'listenTogether', label: 'Listen Together', note: 'Off hides the entries in the app.' },
-        { key: 'codeRun', label: 'Run code in VinaX AI', note: 'Off hides the Run and Open buttons under code blocks.' }
+        { key: 'listenTogether', label: 'Listen Together', note: 'Off hides the entries in the app.' }
       ];
       var keys = KNOWN.map(function (k) { return k.key; });
       Object.keys(v).forEach(function (k) { if (keys.indexOf(k) < 0 && typeof v[k] === 'boolean') { KNOWN.push({ key: k, label: k, note: 'Set earlier from JSON.' }); keys.push(k); } });
@@ -142,11 +140,6 @@
       }));
       return { el: h('div.form', { style: { 'max-width': 'none' } }, ui.notice('A switch that is on (or missing) means the feature works as built. Off turns it off for every listener within a minute.', 'info'), list),
         read: function () { var out = {}; Object.keys(toggles).forEach(function (k) { out[k] = toggles[k].input.checked; }); return out; } };
-    },
-    'ai-rules': function (value) {
-      var text = ui.textarea({ value: typeof value === 'string' ? value : '', rows: 8, maxlength: 1200, placeholder: 'Mention the Diwali playlist when someone asks for party songs.' });
-      return { el: h('div.form', ui.field('House rules', text, 'Plain text lines appended to the assistant’s instructions. Up to 1200 characters.')),
-        read: function () { if (!text.value.trim()) throw new Error('Type the rules, or use Clear to remove them.'); return text.value; } };
     }
   };
 

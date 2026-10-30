@@ -57,7 +57,7 @@ export function dedupeByIdentity<T>(items: T[], songOf: (item: T) => Song, optio
  * 9.1.0 — the "shown on another surface" memory is now one slice of the
  * shared exposure ledger (./exposure.ts), which also knows what was queued,
  * played, completed and skipped, and how long ago. These three functions are
- * kept as the names every Home hook and the AI Playlist already call; they
+ * kept as the names every Home hook already calls; they
  * read and write that ledger instead of the old `vinax.flow.served.v1` list.
  * A device's old list is imported once by `migrateLegacyExposure`.
  */

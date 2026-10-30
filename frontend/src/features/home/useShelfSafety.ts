@@ -15,7 +15,7 @@ import { snoozedKeySet } from '@/services/recommendation/exposure';
  * `safetyReasonFor` rules the queue's hard filter applies.
  *
  * Filtering happens when the list RENDERS, so a newly forbidden song is gone
- * on the next render and no query key (and so no AI call) changes for a
+ * on the next render and no query key changes for a
  * safety-only change. The stores re-render on their own; soft mutes live in
  * the taste profile, which is not a store, so this also re-reads them after
  * any tap or key press (the gesture that added one) and when the page comes

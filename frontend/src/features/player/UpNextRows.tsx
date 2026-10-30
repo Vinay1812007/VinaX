@@ -23,7 +23,7 @@ export function UpNextRows({ songs, start, variant }: { songs: Song[]; start: nu
       {songs.map((s, i) => {
         const line = songLine(s);
         const origin = originOf(s.id);
-        // 15.0 — every pick explains itself: the DJ's reason on its own
+        // 15.0 — every pick explains itself: its reason on its own
         // picks, and the catalogue's reason ("Because you played …", "Same
         // artist as …") on songs the listener queued through "Songs like
         // this". A song with no reason recorded shows none.

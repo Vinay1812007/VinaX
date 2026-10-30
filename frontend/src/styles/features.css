@@ -6,13 +6,11 @@
    (or the first paint) use and that have no page stylesheet of their own —
    Home Studio, the listening guide, the queue's ownership marker. A
    feature that gets its own page stylesheet takes its rules with it (9.0:
-   the VinaX AI pieces moved to styles/ai.css, the AI playlist studio to
-   styles/pages/radio.css, the entity hero's loading skeleton to
-   pages/library.css with the entity pages).
+   the Radio page's pieces moved to styles/pages/radio.css, the entity
+   hero's loading skeleton to pages/library.css with the entity pages).
    ========================================================================= */
 /* VinaX Flow: component layout. Theme tokens live only in index.css. */
-/* Home Studio: an optional, quiet editing surface that keeps the listening
-   page useful even when the AI is offline. */
+/* Home Studio: an optional, quiet editing surface for Home's shelves. */
 .home-studio {
   margin: 0 0 24px;
   border: 1px solid rgb(var(--ink-100) / 0.12);

@@ -4,9 +4,8 @@ import type { ArcShape } from './sequencer';
 
 /**
  * v6.5.0 — "Tune this queue": the listener reshapes what plays next with one
- * tap. An intent is a high-priority instruction for the AI DJ plus a
- * deterministic on-device nudge (era, language, title cues) so a tune still
- * works when the model is slow or unavailable.
+ * tap. An intent is a deterministic on-device nudge (era, language, title
+ * cues) plus a catalogue query for songs that fit it.
  */
 export type TuneIntent =
   | 'energetic'
@@ -60,40 +59,6 @@ export function randomTune(): TuneIntent {
 
 const CURRENT_YEAR = new Date().getFullYear();
 
-/** A high-priority instruction the AI DJ follows while this intent is active. */
-export function tunePromptHint(intent: TuneIntent): string {
-  switch (intent) {
-    case 'energetic':
-      return 'Shift the queue toward HIGH-ENERGY, upbeat, fast, danceable songs.';
-    case 'chill':
-      return 'Shift the queue toward CALM, mellow, slow, relaxing songs.';
-    case 'romantic':
-      return 'Shift the queue toward ROMANTIC, love and soft melodic songs.';
-    case 'melody':
-      return 'Favor soulful MELODY-forward songs: strong vocals, gentle instrumentation, unhurried tempo.';
-    case 'mass':
-      return 'Shift toward MASS/DANCE numbers: thumping beats, high tempo, festival and celebration energy.';
-    case 'devotional':
-      return "Shift toward DEVOTIONAL/bhakti songs in the listener's languages; keep it respectful and uplifting.";
-    case 'dj':
-      return "Keep the queue on DJ REMIX songs (DJ versions, remixes) in the listener's language; no ordinary film cuts in between.";
-    case 'folk':
-      return "Keep the queue on FOLK songs (janapada, village and regional folk) in the listener's language; no ordinary film songs in between.";
-    case 'heartbreak':
-      return 'Shift toward SAD, heartbreak, longing and pathos songs.';
-    case 'classics':
-      return 'Favor TIMELESS CLASSICS and older hits from earlier eras.';
-    case 'fresh':
-      return 'Favor NEW and recent releases.';
-    case 'same-language':
-      return 'Keep EVERY song strictly in the current language.';
-    case 'different-language':
-      return "Deliberately SWITCH to a different language than the current one (use the listener's preferred / top languages) while keeping the mood.";
-    case 'surprise':
-      return 'Be more adventurous: add variety, discovery and unexpected-but-fitting picks.';
-  }
-}
-
 /** The energy arc a tune asks the sequencer for; null keeps the session's own read. */
 export function tuneShape(intent: TuneIntent): ArcShape | null {
   switch (intent) {
@@ -114,10 +79,9 @@ export function tuneShape(intent: TuneIntent): ArcShape | null {
 }
 
 /**
- * Deterministic per-song score nudge for an intent, applied on-device so a
- * tune works even when the AI degrades. Era and language come from catalogue
+ * Deterministic per-song score nudge for an intent, applied on-device. Era and language come from catalogue
  * metadata; energy uses the classifier's value when present; the rest lean
- * on title cues and otherwise stay neutral (the DJ carries those intents).
+ * on title cues and otherwise stay neutral.
  */
 /**
  * v7.1.0 — the catalogue search that FETCHES songs for an intent. A tune (or a

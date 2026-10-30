@@ -1,8 +1,8 @@
 /**
  * 7.2.0 — the precache manifest is split: the service worker downloads the
- * `precache` list for every listener, while `onDemand` assets (the diagram and
- * maths engines behind VinaX AI replies) are fetched on first use and must not
- * be pruned afterwards. A plain array (a build before 7.2) is still read.
+ * `precache` list for every listener, while `onDemand` assets (chunks the
+ * entry does not reach) are fetched on first use and must not be pruned
+ * afterwards. A plain array (a build before 7.2) is still read.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -62,24 +62,20 @@ describe('service worker precache', () => {
 });
 
 describe('splitPrecache', () => {
-  it('keeps everything the app reaches and puts only the diagram and maths engines (and what only they reach) on demand', async () => {
+  it('precaches every chunk the app reaches and every asset; only an unreachable chunk is on demand', async () => {
     const splitPrecache = await loadSplit();
     const chunk = (fileName: string, over: Record<string, unknown> = {}) => ({ type: 'chunk' as const, fileName, imports: [], dynamicImports: [], facadeModuleId: null, isEntry: false, ...over });
     const bundle = {
-      'assets/index.js': chunk('assets/index.js', { isEntry: true, dynamicImports: ['assets/AiPage.js', 'assets/Home.js'] }),
+      'assets/index.js': chunk('assets/index.js', { isEntry: true, dynamicImports: ['assets/Radio.js', 'assets/Home.js'] }),
       'assets/Home.js': chunk('assets/Home.js', { imports: ['assets/shared.js'] }),
       'assets/shared.js': chunk('assets/shared.js'),
-      'assets/AiPage.js': chunk('assets/AiPage.js', { dynamicImports: ['assets/mermaid.js', 'assets/katex.js'] }),
-      'assets/mermaid.js': chunk('assets/mermaid.js', { facadeModuleId: '/app/node_modules/mermaid/dist/mermaid.core.mjs', imports: ['assets/cytoscape.js', 'assets/shared.js'] }),
-      'assets/cytoscape.js': chunk('assets/cytoscape.js'),
-      'assets/katex.js': chunk('assets/katex.js', { facadeModuleId: '/app/node_modules/katex/dist/katex.mjs' }),
-      'assets/KaTeX_Main-Regular.woff2': { type: 'asset' as const, fileName: 'assets/KaTeX_Main-Regular.woff2' },
-      'assets/katex-abc.css': { type: 'asset' as const, fileName: 'assets/katex-abc.css' },
+      'assets/Radio.js': chunk('assets/Radio.js'),
+      'assets/orphan.js': chunk('assets/orphan.js'),
       'assets/index.css': { type: 'asset' as const, fileName: 'assets/index.css' },
       'index.html': { type: 'asset' as const, fileName: 'index.html' },
     };
     const { precache, onDemand } = splitPrecache(bundle);
-    expect(precache.sort()).toEqual(['/assets/AiPage.js', '/assets/Home.js', '/assets/index.css', '/assets/index.js', '/assets/shared.js']);
-    expect(onDemand.sort()).toEqual(['/assets/KaTeX_Main-Regular.woff2', '/assets/cytoscape.js', '/assets/katex-abc.css', '/assets/katex.js', '/assets/mermaid.js']);
+    expect(precache.sort()).toEqual(['/assets/Home.js', '/assets/Radio.js', '/assets/index.css', '/assets/index.js', '/assets/shared.js']);
+    expect(onDemand).toEqual(['/assets/orphan.js']);
   });
 });

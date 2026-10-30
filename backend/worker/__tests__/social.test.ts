@@ -1,7 +1,7 @@
 /**
  * 15.0 — the social routes: profiles (own and public), follows, shared
  * playlists (owner writes, collaborator adds through the invite token, public
- * reads), shared chats (create, read by link, expiry) and the room's chat
+ * reads) and the room's chat
  * and vote-to-skip. Everything against the fake PostgREST.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -11,8 +11,6 @@ import * as profileHandle from '../functions/api/profile/[handle]';
 import * as follow from '../functions/api/follow';
 import * as playlist from '../functions/api/shared-playlist';
 import * as playlistId from '../functions/api/shared-playlist/[id]';
-import * as shareChat from '../functions/api/share-chat';
-import * as shareChatId from '../functions/api/share-chat/[id]';
 import { onRequestGet as roomGet, onRequestPost as roomPost } from '../functions/api/room';
 import { DB_ENV, fakeDb } from './helpers/fakeDb';
 
@@ -150,28 +148,6 @@ describe('/api/shared-playlist', () => {
     fakeDb({ accounts: ACCOUNTS });
     expect((await playlist.onRequestPost({ request: await req('/api/shared-playlist', 'POST', { songs: [] }), env: ENV })).status).toBe(400);
     expect((await playlist.onRequestPost({ request: await req('/api/shared-playlist', 'POST', { name: 'x', songs: [] }, null), env: ENV })).status).toBe(401);
-  });
-});
-
-describe('/api/share-chat', () => {
-  it('shares text only, serves it by link, hides it after expiry, and lets the owner delete', async () => {
-    const fake = fakeDb({ accounts: ACCOUNTS });
-    expect((await shareChat.onRequestPost({ request: await req('/api/share-chat', 'POST', { messages: [] }), env: ENV })).status).toBe(400);
-    const made = await shareChat.onRequestPost({ request: await req('/api/share-chat', 'POST', { title: 'Hi', model: 'm', messages: [{ role: 'user', content: 'play something', images: ['data:…'] }, { role: 'assistant', content: 'Sure' }, { role: 'system', content: 'no' }] }), env: ENV });
-    expect(made.status).toBe(200);
-    const body = (await made.json()) as { id: string; url: string };
-    expect(body.url).toBe(`https://example.test/ai/shared/${body.id}`);
-    const stored = fake.rows('shared_chats')[0] as { payload: { messages: unknown[] } };
-    expect(stored.payload.messages).toEqual([{ role: 'user', content: 'play something' }, { role: 'assistant', content: 'Sure' }]);
-    const read = await shareChatId.onRequestGet({ request: await req(`/api/share-chat/${body.id}`, 'GET', undefined, null), env: ENV, params: { id: body.id } });
-    expect(read.status).toBe(200);
-    expect(await read.json()).toMatchObject({ id: body.id, title: 'Hi', model: 'm', messages: [{ role: 'user' }, { role: 'assistant' }] });
-    expect(await (await shareChat.onRequestGet({ request: await req('/api/share-chat', 'GET'), env: ENV })).json()).toMatchObject({ chats: [{ id: body.id, title: 'Hi' }] });
-    // Expired: gone from readers.
-    fake.rows('shared_chats')[0].expires_at = new Date(Date.now() - 1000).toISOString();
-    expect((await shareChatId.onRequestGet({ request: await req(`/api/share-chat/${body.id}`, 'GET', undefined, null), env: ENV, params: { id: body.id } })).status).toBe(404);
-    expect((await shareChat.onRequestDelete({ request: await req(`/api/share-chat?id=${body.id}`, 'DELETE'), env: ENV })).status).toBe(204);
-    expect(fake.rows('shared_chats')).toEqual([]);
   });
 });
 

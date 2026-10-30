@@ -9,9 +9,9 @@ import { useLibraryStore } from '@/store/libraryStore';
 import { useHistoryStore } from '@/store/historyStore';
 import { isNativePlatform } from '@/services/native';
 import { useQuery } from '@tanstack/react-query';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { albumPath, artistPath, playlistPath } from '@/utils/slug';
-import { Link, useNavigate, useNavigationType, useParams } from 'react-router-dom';
+import { useNavigate, useNavigationType, useParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { SongRow } from '@/components/SongRow';
@@ -20,7 +20,7 @@ import { Chip } from '@/components/Chip';
 import { CardGridSkeleton, ListSkeleton } from '@/components/Skeletons';
 import { EmptyState, ErrorState } from '@/components/States';
 import { InfiniteSentinel } from '@/components/InfiniteSentinel';
-import { ChevronDownIcon, MusicIcon, PlayIcon, QueueIcon, SearchIcon, SparkleIcon, XIcon } from '@/components/Icons';
+import { MusicIcon, PlayIcon, QueueIcon, SearchIcon, XIcon } from '@/components/Icons';
 import { normalizeQuery, rankSongs, useSearchAll } from '@/features/search/useSearch';
 import {
   flattenAlbumPages,
@@ -47,7 +47,6 @@ import { topArtists } from '@/services/personalization/profile';
 import { recordSearchPlay } from '@/services/personalization/updater';
 import { fetchWithTimeout } from '@/services/api/client';
 import { getTopSearches } from '@/services/api/catalog';
-import { expertSongSearch } from '@/services/ai/expert';
 import type { Song } from '@/types';
 import { playAlbum, playArtist, playPlaylist } from '@/features/player/playEntity';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
@@ -78,13 +77,11 @@ import {
 import { PageHeader } from '@/components/PageHeader';
 import { SectionHeader } from '@/components/SectionHeader';
 import { Button } from '@/components/Button';
-import { looksLikeNaturalLanguage } from '@/services/ai/musicIntent';
 import { Shelf } from '@/components/Shelf';
 import { IconButton } from '@/components/IconButton';
 import '@/styles/pages/browse.css';
 
 // 8.2.0 — natural-language matches load only for queries that read like a description.
-const SemanticMatches = lazy(() => import('@/features/search/SemanticMatches'));
 
 const TABS = ['All', 'Songs', 'Albums', 'Artists', 'Playlists'] as const;
 type Tab = (typeof TABS)[number];
@@ -192,8 +189,9 @@ export default function SearchPage() {
     }
   }, []);
   const [listening, setListening] = useState(false);
-  // Voice search rides the same STT abstraction as the AI page: Web Speech in
-  // browsers, the system recognizer (native plugin) inside the Android app.
+  // Voice search: Web Speech in browsers, the system recognizer (native
+  // plugin) inside the Android app. Speech is turned into text on the device
+  // or by the browser's own speech service.
   const [voiceReady, setVoiceReady] = useState<boolean>(() => sttSupported());
   useEffect(() => {
     void probeSttSupport().then(setVoiceReady);
@@ -249,72 +247,17 @@ export default function SearchPage() {
   const playQueue = usePlayerStore((s) => s.playQueue);
   const enqueueAll = usePlayerStore((s) => s.enqueueAll);
   const pinnedLangs = useSettingsStore((s) => s.pinnedLanguages);
-  const mutedLangs = useSettingsStore((s) => s.mutedLanguages);
 
-  // Ask AI for songs — the Search page's own music expert (a dedicated,
-  // personalized discovery engine; separate from the AI Playlist builder).
-  const [aiOpen, setAiOpen] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiSongs, setAiSongs] = useState<Song[] | null>(null);
-  const [aiError, setAiError] = useState<string | null>(null);
-
-  const askExpert = async (text: string) => {
-    const p = text.trim();
-    if (!p || aiLoading) return;
-    setAiPrompt(p);
-    setAiLoading(true);
-    setAiError(null);
-    setAiSongs(null);
-    const res = await expertSongSearch(p, pinnedLangs, mutedLangs);
-    setAiLoading(false);
-    if (res.ok) {
-      setAiSongs(res.songs);
-      return;
-    }
-    // 8.2.0 — `not_configured` is now only a real switch-off or a missing
-    // setup; a busy, over-budget or briefly unavailable service is `error`.
-    if (res.reason === 'not_configured') setAiError('The music expert is switched off on this server.');
-    else if (res.reason === 'empty') setAiError('The music expert came up empty — try rephrasing.');
-    else setAiError('The music expert is unavailable right now — try again in a minute.');
-  };
-
-  // A new search query starts a fresh round with the expert — and clears any
-  // language filters chosen for the previous query, so a filtered tab never
+  // A new search query clears any language filters chosen for the previous query, so a filtered tab never
   // silently shows nothing (delta audit P1-12). The local result filter
   // (v5.17.0) resets for the same reason.
   useEffect(() => {
-    setAiSongs(null);
-    setAiError(null);
     setLangFilter(restoredLanguage.current);
     restoredLanguage.current = null;
     setAlbumLang(null);
     setResultFilter('');
   }, [q]);
 
-  const expertPanel = (aiLoading || aiError || (aiSongs?.length ?? 0) > 0) && (
-    <div className="mt-4">
-      {aiLoading && <ListSkeleton />}
-      {!aiLoading && aiError && <p className="search-expert-note" role="status">{aiError}</p>}
-      {!aiLoading && aiSongs && aiSongs.length > 0 && (
-        <section>
-          <SectionHeader
-            title="Expert picks"
-            action={
-              <button type="button" className="bx-pill" onClick={() => playQueue(aiSongs, 0)}>
-                <PlayIcon /> Play all
-              </button>
-            }
-          />
-          <div className="vx-track-list">
-            {aiSongs.map((song, i) => (
-              <SongRow key={song.id} song={song} songs={aiSongs} index={i} asSeed />
-            ))}
-          </div>
-        </section>
-      )}
-    </div>
-  );
   // Community top searches (aggregated + cached) — chips under the bar.
   const trendingQ = useQuery<{ queries: string[] }>({
     queryKey: ['trending-searches', pinnedLangs.join(',')],
@@ -403,7 +346,6 @@ export default function SearchPage() {
   const playlists = useInfinitePlaylists(q, tab === 'Playlists' && !lyricsMode);
 
   const active = q.length > 1;
-  const naturalQuery = useMemo(() => looksLikeNaturalLanguage(q), [q]);
   // v5.17.0 — lyric-line search: the lyrics service finds the candidates and
   // the catalogue resolves each one to a playable song.
   const lyricsQ = useLyricsSearch(q, lyricsMode && active);
@@ -705,13 +647,6 @@ export default function SearchPage() {
     </button>
   );
 
-  const askButton = (
-    <Button variant="secondary" busy={aiLoading} onClick={() => void askExpert(q)} className="inline-flex items-center gap-2 min-h-touch">
-      <SparkleIcon className="w-4 h-4" />
-      {aiLoading ? 'Asking the expert…' : 'Ask AI instead'}
-    </Button>
-  );
-
   // The four "moments": each one searches for a feeling, in the listener's
   // first language where it has one.
   const moments = [
@@ -999,56 +934,6 @@ export default function SearchPage() {
               ))}
             </div>
           </section>
-
-          <section className={cn('search-assist', aiOpen && 'is-open')} aria-label="Ask for songs">
-            <div>
-              <button
-                type="button"
-                onClick={() => setAiOpen((v) => !v)}
-                aria-expanded={aiOpen}
-                className="search-assist-row is-toggle"
-              >
-                <span className="search-assist-icon is-accent" aria-hidden>
-                  <SparkleIcon />
-                </span>
-                <span className="min-w-0">
-                  <span className="search-assist-title">Ask AI for songs</span>
-                  <span className="search-assist-meta">Describe a mood, an era or a memory</span>
-                </span>
-                <ChevronDownIcon className="search-assist-chevron" />
-              </button>
-              {aiOpen && (
-                <div className="search-assist-panel">
-                  <div className="search-assist-form">
-                    <input
-                      value={aiPrompt}
-                      maxLength={200}
-                      onChange={(e) => setAiPrompt(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') void askExpert(aiPrompt);
-                      }}
-                      placeholder="e.g. rainy-evening Telugu melodies"
-                      aria-label="Describe the songs you want"
-                    />
-                    <Button onClick={() => void askExpert(aiPrompt)} disabled={aiLoading || !aiPrompt.trim()} className="shrink-0">
-                      {aiLoading ? 'Asking…' : 'Ask'}
-                    </Button>
-                  </div>
-                  {expertPanel}
-                </div>
-              )}
-            </div>
-            <Link to="/VinaXAI" className="search-assist-row">
-              <span className="search-assist-icon" aria-hidden>
-                <SparkleIcon />
-              </span>
-              <span className="min-w-0">
-                <span className="search-assist-title">Chat with VinaX AI</span>
-                <span className="search-assist-meta">Find songs, talk music, ask anything</span>
-              </span>
-              <ChevronDownIcon className="search-assist-chevron -rotate-90" />
-            </Link>
-          </section>
         </div>
       )}
 
@@ -1117,11 +1002,6 @@ export default function SearchPage() {
                   aria-busy={allPlaceholder}
                   className={cn('transition-opacity', allPlaceholder && 'opacity-40')}
                 >
-                  {naturalQuery && !allPlaceholder && (
-                    <Suspense fallback={null}>
-                      <SemanticMatches key={q} query={q} results={all.data} />
-                    </Suspense>
-                  )}
                   {(topArtist || topResult || rankedAllSongs.length > 1) && (
                     <div className="search-lead-wrap">
                       <div className="search-results-lead">
@@ -1209,22 +1089,12 @@ export default function SearchPage() {
                       ))}
                     </Shelf>
                   )}
-                  {noResults && naturalQuery && (
-                    <div className="search-block">
-                      <div className="search-ask-inline">
-                        <p className="vx-meta-line">No titles use those exact words.</p>
-                        {askButton}
-                      </div>
-                      {expertPanel}
-                    </div>
-                  )}
-                  {noResults && !naturalQuery && (
+                  {noResults && (
                     <>
                       <EmptyState
                         icon={<SearchIcon className="w-8 h-8" />}
                         title="No results"
-                        message={`Nothing matched “${q}”. Try a shorter or transliterated spelling — or ask the AI.`}
-                        action={askButton}
+                        message={`Nothing matched “${q}”. Try a shorter or transliterated spelling.`}
                       />
                       <div className="search-empty-help" role="group" aria-label="Other ways to search">
                         {lyricsChip}
@@ -1237,7 +1107,6 @@ export default function SearchPage() {
                             </Chip>
                           ))}
                       </div>
-                      {expertPanel}
                     </>
                   )}
                 </div>

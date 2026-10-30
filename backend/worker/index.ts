@@ -18,20 +18,12 @@ import { onRequest as hostMiddleware } from './functions/_middleware';
 // orphaned handler falls through to Pages and 405s, which a --dry-run build
 // cannot detect: that is exactly how /api/preview shipped dead in v5.11.2).
 import * as m_api_status from './functions/api/status';
-import * as m_api_aimodels from './functions/api/aimodels';
-import * as m_api_curate from './functions/api/curate';
-import * as m_api_dj from './functions/api/dj';
-import * as m_api_embed from './functions/api/embed';
-import * as m_api_voices from './functions/api/voices';
 import * as m_album_id from './functions/album/[id]';
-import * as m_api_admin_ailab from './functions/api/admin/ailab';
 import * as m_api_admin_catalog_search from './functions/api/admin/catalog-search';
 import * as m_api_admin_edge from './functions/api/admin/edge';
 import * as m_api_admin_seo from './functions/api/admin/seo';
 import { guardVerdict, isEntityPage, isHubPage, plainShell } from './functions/_lib/pageGuard';
 import * as m_api_admin_envcheck from './functions/api/admin/envcheck';
-import * as m_api_admin_enginetest from './functions/api/admin/enginetest';
-import * as m_api_admin_health from './functions/api/admin/health';
 import * as m_api_admin_musicapi from './functions/api/admin/musicapi';
 import * as m_api_admin_fcmcheck from './functions/api/admin/fcmcheck';
 import * as m_api_admin_releases from './functions/api/admin/releases';
@@ -40,7 +32,6 @@ import * as m_api_admin_overview from './functions/api/admin/overview';
 import * as m_api_admin_live from './functions/api/admin/live';
 import * as m_api_admin_listeners from './functions/api/admin/listeners';
 import * as m_api_admin_analytics from './functions/api/admin/analytics';
-import * as m_api_admin_ai from './functions/api/admin/ai';
 import * as m_api_admin_feedback from './functions/api/admin/feedback';
 import * as m_api_admin_content from './functions/api/admin/content';
 import * as m_api_admin_settings from './functions/api/admin/settings';
@@ -51,40 +42,26 @@ import * as m_api_admin_audit from './functions/api/admin/audit';
 import * as m_api_admin_database from './functions/api/admin/database';
 import * as m_api_cron_run from './functions/api/cron/run';
 import { runScheduled } from './functions/_lib/jobs';
-// 7.2.0 — recommendation quality, AI operations, recommendation tuning.
+// 7.2.0 — recommendation quality and tuning.
 import * as m_api_announcements from './functions/api/announcements';
 import * as m_api_apk from './functions/api/apk';
 import * as m_api_appconfig from './functions/api/appconfig';
-import * as m_api_assistant from './functions/api/assistant';
 import * as m_api_blocklist from './functions/api/blocklist';
 import * as m_api_events from './functions/api/events';
 import * as m_api_experiments from './functions/api/experiments';
 import * as m_api_feedback from './functions/api/feedback';
 import * as m_api_geo from './functions/api/geo';
 import * as m_api_handoff from './functions/api/handoff';
-import * as m_api_image from './functions/api/image';
-import * as m_api_lyrics_tools from './functions/api/lyrics-tools';
-import * as m_api_playlist from './functions/api/playlist';
 import * as m_api_recommendations from './functions/api/recommendations';
-import * as m_api_ai_search from './functions/api/ai/search';
-import * as m_api_ai_playlist from './functions/api/ai/playlist';
-import * as m_api_ai_dj from './functions/api/ai/dj';
 import * as m_api_auth_google from './functions/api/auth/google';
 import * as m_api_auth_me from './functions/api/auth/me';
 import * as m_api_account_data from './functions/api/account/data';
-// 15.0 — the social layer: profiles, follows, shared playlists, shared chats.
+// 15.0 — the social layer: profiles, follows, shared playlists.
 import * as m_api_profile from './functions/api/profile';
 import * as m_api_profile_handle from './functions/api/profile/[handle]';
 import * as m_api_follow from './functions/api/follow';
 import * as m_api_shared_playlist from './functions/api/shared-playlist';
 import * as m_api_shared_playlist_id from './functions/api/shared-playlist/[id]';
-import * as m_api_share_chat from './functions/api/share-chat';
-import * as m_api_share_chat_id from './functions/api/share-chat/[id]';
-import * as m_api_ai_headlines from './functions/api/ai/headlines';
-import * as m_api_ai_title from './functions/api/ai/title';
-import * as m_api_favicon from './functions/api/favicon';
-import * as m_api_webimg from './functions/api/webimg';
-import * as m_api_preview from './functions/api/preview';
 import * as m_api_push_fcm_register from './functions/api/push/fcm-register';
 import * as m_api_push_subscribe from './functions/api/push/subscribe';
 import * as m_api_push_unsubscribe from './functions/api/push/unsubscribe';
@@ -93,16 +70,8 @@ import * as m_api_room from './functions/api/room';
 import * as m_api_site_mode from './functions/api/site-mode';
 import * as m_api_trending_searches from './functions/api/trending-searches';
 import * as m_api_trends from './functions/api/trends';
-import * as m_api_tts from './functions/api/tts';
-// 10.3 — speech to text and music generation on the free models.
-import * as m_api_transcribe from './functions/api/transcribe';
-import * as m_api_music from './functions/api/music';
 import * as m_api_username from './functions/api/username';
 import * as m_api_version from './functions/api/version';
-import * as m_api_vinaxai from './functions/api/vinaxai';
-// VinaX CLI — the terminal coding agent's own API family. Deliberately its
-// own routes: the assistant endpoint answers a person, these drive a process
-// that can write to a developer's disk.
 import * as m_apk from './functions/apk';
 import * as m_artist_id from './functions/artist/[id]';
 import * as m_img from './functions/img';
@@ -148,13 +117,10 @@ interface Env {
 }
 
 const EXACT: Record<string, Mod> = {
-  '/api/admin/ailab': m_api_admin_ailab,
   '/api/admin/catalog-search': m_api_admin_catalog_search,
   '/api/admin/edge': m_api_admin_edge,
   '/api/admin/seo': m_api_admin_seo,
   '/api/admin/envcheck': m_api_admin_envcheck,
-  '/api/admin/enginetest': m_api_admin_enginetest,
-  '/api/admin/health': m_api_admin_health,
   '/api/admin/musicapi': m_api_admin_musicapi,
   '/api/admin/fcmcheck': m_api_admin_fcmcheck,
   '/api/admin/releases': m_api_admin_releases,
@@ -162,7 +128,6 @@ const EXACT: Record<string, Mod> = {
   '/api/admin/live': m_api_admin_live,
   '/api/admin/listeners': m_api_admin_listeners,
   '/api/admin/analytics': m_api_admin_analytics,
-  '/api/admin/ai': m_api_admin_ai,
   '/api/admin/feedback': m_api_admin_feedback,
   '/api/admin/content': m_api_admin_content,
   '/api/admin/settings': m_api_admin_settings,
@@ -172,40 +137,22 @@ const EXACT: Record<string, Mod> = {
   '/api/admin/audit': m_api_admin_audit,
   '/api/admin/database': m_api_admin_database,
   '/api/cron/run': m_api_cron_run,
-  '/api/aimodels': m_api_aimodels,
-  '/api/curate': m_api_curate,
-  '/api/dj': m_api_dj,
-  '/api/embed': m_api_embed,
-  '/api/voices': m_api_voices,
   '/api/announcements': m_api_announcements,
   '/api/apk': m_api_apk,
   '/api/appconfig': m_api_appconfig,
-  '/api/assistant': m_api_assistant,
   '/api/blocklist': m_api_blocklist,
   '/api/events': m_api_events,
   '/api/experiments': m_api_experiments,
   '/api/feedback': m_api_feedback,
   '/api/geo': m_api_geo,
   '/api/handoff': m_api_handoff,
-  '/api/image': m_api_image,
-  '/api/lyrics-tools': m_api_lyrics_tools,
-  '/api/playlist': m_api_playlist,
   '/api/recommendations': m_api_recommendations,
-  '/api/ai/search': m_api_ai_search,
-  '/api/ai/playlist': m_api_ai_playlist,
-  '/api/ai/dj': m_api_ai_dj,
   '/api/auth/google': m_api_auth_google,
   '/api/auth/me': m_api_auth_me,
   '/api/account/data': m_api_account_data,
   '/api/profile': m_api_profile,
   '/api/follow': m_api_follow,
   '/api/shared-playlist': m_api_shared_playlist,
-  '/api/share-chat': m_api_share_chat,
-  '/api/ai/headlines': m_api_ai_headlines,
-  '/api/ai/title': m_api_ai_title,
-  '/api/favicon': m_api_favicon,
-  '/api/webimg': m_api_webimg,
-  '/api/preview': m_api_preview,
   '/api/push/fcm-register': m_api_push_fcm_register,
   '/api/push/subscribe': m_api_push_subscribe,
   '/api/push/unsubscribe': m_api_push_unsubscribe,
@@ -215,12 +162,8 @@ const EXACT: Record<string, Mod> = {
   '/api/status': m_api_status,
   '/api/trending-searches': m_api_trending_searches,
   '/api/trends': m_api_trends,
-  '/api/tts': m_api_tts,
-  '/api/transcribe': m_api_transcribe,
-  '/api/music': m_api_music,
   '/api/username': m_api_username,
   '/api/version': m_api_version,
-  '/api/vinaxai': m_api_vinaxai,
   '/apk': m_apk,
   '/img': m_img,
   '/sitemap-albums.xml': m_sitemap_albums_xml,
@@ -240,7 +183,6 @@ const DYNAMIC: Array<{ re: RegExp; mod: Mod; key: string }> = [
   { re: /^\/api\/recommendations\/similar\/([^/]+)\/?$/, mod: m_api_recs_similar, key: 'songId' },
   { re: /^\/api\/profile\/([^/]+)\/?$/, mod: m_api_profile_handle, key: 'handle' },
   { re: /^\/api\/shared-playlist\/([^/]+)\/?$/, mod: m_api_shared_playlist_id, key: 'id' },
-  { re: /^\/api\/share-chat\/([^/]+)\/?$/, mod: m_api_share_chat_id, key: 'id' },
   { re: /^\/sitemaps\/([^/]+)\/?$/, mod: m_sitemaps_map, key: 'map' },
 ];
 
@@ -343,7 +285,7 @@ export default {
     return hostMiddleware({ request, next: () => route(request, env, ctx) });
   },
   // 14.0 — the Cron Trigger (wrangler.toml [triggers]): the status tick every
-  // run, housekeeping once an hour, the AI model check every run (1.2.7).
+  // run, housekeeping once an hour.
   // Nothing runs without the database.
   async scheduled(event: { scheduledTime: number }, env: Env, ctx: ExecCtx): Promise<void> {
     ctx.waitUntil(runScheduled(env as Record<string, unknown>, event.scheduledTime));

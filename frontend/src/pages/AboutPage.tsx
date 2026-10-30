@@ -55,14 +55,13 @@ export default function AboutPage() {
         </p>
         <p>
           There are no paywalls and no premium tiers. Your favourites, playlists, history and taste profile live on
-          your device. Searches and song requests go to the catalogue so music can play, and VinaX AI receives what
-          you ask it. Anonymous usage statistics (which song is playing, city-level location, no account) are shared
+          your device. Searches and song requests go to the catalogue so music can play. VinaX uses no AI: what plays
+          next is worked out on your device. Anonymous usage statistics (which song is playing, city-level location, no account) are shared
           unless you switch that off in Settings. See what VinaX has learned on
           your <Link to="/taste-profile">taste profile</Link>; the Privacy page below lists what leaves your device.
         </p>
         <p>
-          Inside: six app styles that change the whole look, festival themes, VinaX AI with Think and voice chat,
-          synced lyrics, Listen Together, offline downloads in the Android app, Drive mode, weekly mixes and a
+          Inside: six app styles that change the whole look, festival themes, Radio, synced lyrics, Listen Together, offline downloads in the Android app, Drive mode, weekly mixes and a
           Ctrl+K command palette. Music streams from independent public catalogues, and VinaX tries another source
           when one is unavailable.
         </p>

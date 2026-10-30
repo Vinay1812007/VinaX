@@ -14,7 +14,7 @@ The first time you open VinaX, a welcome walks you through a few steps. The top 
 | **Choose your languages** | Pick the languages you listen in. Home, charts and the songs VinaX lines up start from these. **More languages** shows the full list, and **All languages** selects every one. A checkbox, which you may leave unticked, offers to share anonymous usage to help improve VinaX. |
 | **Pick your look** | Choose one of the six app styles. The app changes as you choose. Press **Use this look**, or **Skip** to keep the current one. See [App styles](app-styles.md). |
 | **Tap songs you like** | When VinaX has songs to offer in your languages, tap the ones you like. They are saved to Favorites on this device and give Home something to start from. You can skip this step. |
-| Four short slides | **Five places to go**, **Tap one song**, **Change it any time** and **Yours to keep**. **Next** moves on, and **Start listening** on the last one closes the welcome. The last slide also offers **Live walkthrough**, which starts a guided tutorial. |
+| Four short slides | **Four places to go**, **Tap one song**, **Change it any time** and **Yours to keep**. **Next** moves on, and **Start listening** on the last one closes the welcome. The last slide also offers **Live walkthrough**, which starts a guided tutorial. |
 
 If you already use VinaX on another device, the first step has two links: **Move from old device** (scan a code or type it) and **Import a file** (restore a backup). See [Library and backup](library-and-backup.md).
 
@@ -26,7 +26,7 @@ On the website you can look around without an account: **Explore VinaX first** o
 
 ## Where things are
 
-There are five destinations: **Home**, **Discover**, **Search**, **Library** and **VinaX AI**. They are always one tap away: a tab bar at the bottom of a phone, a sidebar on a wider screen. Their shape depends on your app style; the five destinations and their order are the same in every style.
+There are four destinations: **Home**, **Discover**, **Search** and **Library**. They are always one tap away: a tab bar at the bottom of a phone, a sidebar on a wider screen. Their shape depends on your app style; the four destinations and their order are the same in every style.
 
 The top bar shows where you are and holds that page's actions. On a keyboard, `Ctrl/⌘ + K` opens the command palette from anywhere: pages, player actions and songs in one place.
 
@@ -37,7 +37,7 @@ Before anything has played on this device, Home opens with **All the music you l
 After that, there are three quick ways to start:
 
 - Press play on the mix card at the top of Home (it carries your app style's name, **Lumen Mix** to start with). The mix is built from your languages and your listening on this device.
-- Tap **AI Radio** on Home and start endless music from a mood, an artist or a few words. See [The player and the queue](player-and-queue.md).
+- Tap **Radio** on Home and start endless music from a mood, an artist or a station. See [The player and the queue](player-and-queue.md).
 - Tap any song anywhere. It starts, and VinaX lines up five more, led by that song's language and starting with familiar songs. Songs you queue yourself play before those.
 
 Tap the heart to save a song to your favourites. What you like, finish and skip shapes your recommendations, and that stays on this device. See [Discovery modes](discovery-modes.md).
@@ -52,11 +52,9 @@ Everything about the look is in **Settings → Appearance**:
 - **Festival themes** and **Preview a festival** — see [Festival themes](festival-themes.md).
 - **Display size**, **Density**, **High contrast** and **Reduce motion**, under Size and comfort.
 
-In VinaX AI, the chat takes the style of the model you pick. See [VinaX AI](vinax-ai.md).
-
 ## Learn by doing
 
-Help lists nine live tutorials that run on the real screens and point at the actual controls: Play your first song, Find any song, Listen Together, Ask VinaX AI, VinaX AI: models and chat styles, Change the app's look, Festival themes, Settings worth knowing, and Save and organise. Leave a tutorial at any time with `Esc`.
+Help lists seven live tutorials that run on the real screens and point at the actual controls: Play your first song, Find any song, Listen Together, Change the app's look, Festival themes, Settings worth knowing, and Save and organise. Leave a tutorial at any time with `Esc`.
 
 Help also has short how-to guides, answers to common questions, and the list of keyboard shortcuts and gestures. The search box at the top of Help filters all of them.
 

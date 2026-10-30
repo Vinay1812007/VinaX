@@ -4,8 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Song } from '@/types';
 
 vi.mock('@/services/native', async (importOriginal) => ({ ...(await importOriginal<object>()), isNativePlatform: () => false }));
-vi.mock('@/services/ai/recommendations', () => ({ requestCurator: async () => null }));
-vi.mock('@/services/ai/taste', () => ({ buildTasteSnapshot: () => ({}) }));
 
 import { useHistoryStore } from '@/store/historyStore';
 import { useLibraryStore } from '@/store/libraryStore';

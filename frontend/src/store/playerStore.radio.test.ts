@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * 8.2.0 — AI Radio entry point: startRadio(song, { seeds, tune }). The seeds
+ * 8.2.0 — Radio entry point: startRadio(song, { seeds, tune }). The seeds
  * play first, the DJ continues forever after them (radio mode, whatever the
  * autoplay setting), and the tune steers every continuation.
  */
@@ -50,7 +50,7 @@ beforeEach(() => {
 });
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); });
 
-describe('startRadio — AI Radio', () => {
+describe('startRadio — Radio', () => {
   it('one song: the song plays and the DJ plans the continuation at once (unchanged behaviour)', async () => {
     recommendMock.mockResolvedValue([song('dj1'), song('dj2')]);
     usePlayerStore.getState().startRadio(song('seed'));

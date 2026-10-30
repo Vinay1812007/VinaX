@@ -1,4 +1,4 @@
-/** 8.2.0 — AI Radio mark: a signal source with two arcs. Decorative (aria-hidden). */
+/** 8.2.0 — Radio mark: a signal source with two arcs. Decorative (aria-hidden). */
 export function RadioGlyph({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>

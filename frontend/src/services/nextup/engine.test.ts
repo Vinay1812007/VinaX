@@ -35,7 +35,7 @@ beforeEach(() => {
   resetNextUp();
   resetServed();
   resetSessionIntent();
-  useSettingsStore.setState({ aiDj: false, kidMode: false, mutedLanguages: [], pinnedLanguages: [], queueLanguages: 'mix' });
+  useSettingsStore.setState({ kidMode: false, mutedLanguages: [], pinnedLanguages: [], queueLanguages: 'mix' });
   useLibraryStore.setState({ favorites: [], hiddenSongIds: [], hiddenArtists: [] });
   useHistoryStore.setState({ entries: [] });
 });

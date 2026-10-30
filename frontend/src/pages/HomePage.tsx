@@ -41,7 +41,6 @@ import { EXP_HOME_SHELF_ORDER, homeShelfOrder } from '@/features/experiments/hom
 import { useRecommendations } from '@/features/recommendations/useRecommendations';
 import { HomeHero } from '@/features/home/HomeHero';
 import { HomeFeatures, HomeWelcome } from '@/features/home/HomeWelcome';
-import { MadeForYouCard } from '@/features/home/MadeForYouCard';
 import { ListeningGuide } from '@/features/home/ListeningGuide';
 import { FlowEntryCard } from '@/features/flow/FlowEntryCard';
 import { HomeStudio } from '@/features/home/HomeStudio';
@@ -62,7 +61,7 @@ import { refreshHome, useHomeVisit } from '@/features/home/homeRefresh';
 import { useShelfSafety } from '@/features/home/useShelfSafety';
 import { DeferredBlock, HomeSignalsProvider } from '@/features/home/blocks/shared';
 import { PersonalBlock } from '@/features/home/blocks/PersonalBlock';
-import { AiHomeBlock, DiscoveryBlock } from '@/features/home/blocks/DiscoveryBlocks';
+import { DiscoveryBlock } from '@/features/home/blocks/DiscoveryBlocks';
 import { AlbumsBlock, ArtistsBlock, ChartsBlock, DayPicksBlock, FeedBlock, GenresBlock, LovedBlock, MoodsBlock, QuickBlock, readTaste, SeasonalBlock } from '@/features/home/blocks/CatalogueBlocks';
 
 /**
@@ -74,7 +73,6 @@ import { AlbumsBlock, ArtistsBlock, ChartsBlock, DayPicksBlock, FeedBlock, Genre
 const HOME_BLOCKS: Record<HomeSection, () => ReactNode> = {
   quick: QuickBlock,
   personal: PersonalBlock,
-  aihome: AiHomeBlock,
   discovery: DiscoveryBlock,
   charts: ChartsBlock,
   seasonal: SeasonalBlock,
@@ -134,7 +132,7 @@ const BLOCK_EXTRAS: Partial<Record<HomeSection, () => ReactNode>> = {
 };
 
 // Default order honours the home-shelf-order experiment (personal <-> discovery).
-const HOME_BLOCK_KEYS: HomeSection[] = ['quick', 'personal', 'aihome', 'discovery', 'charts', 'seasonal', 'moods', 'genres', 'artists', 'albums', 'daypicks', 'loved', 'feed'];
+const HOME_BLOCK_KEYS: HomeSection[] = ['quick', 'personal', 'discovery', 'charts', 'seasonal', 'moods', 'genres', 'artists', 'albums', 'daypicks', 'loved', 'feed'];
 /**
  * 9.0.0 — progressive disclosure: the first PRIMARY_BLOCKS visible blocks
  * (by default the shortcuts, For you, Designed for you and Fresh
@@ -408,7 +406,6 @@ export default function HomePage() {
           />
           {firstVisit && <HomeFeatures />}
           <FriendsListening />
-          <MadeForYouCard />
           <ListeningGuide />
           <FlowEntryCard />
 

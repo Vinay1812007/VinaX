@@ -33,7 +33,6 @@ npm run e2e
 | Design tokens, the frame, page styles | `src/styles/index.css`, `src/styles/shell.css`, `src/styles/pages/*.css` — see [../docs/design-system.md](../docs/design-system.md) |
 | An app style, or add one | `src/styles/templates/`, `src/constants/templates.ts`, `src/utils/theme.ts`, the pre-paint script in `index.html` — follow the checklist in the design system document |
 | Festival themes | `src/constants/festivals.ts`, `festivalThemes.ts`, `festivalVisuals.ts`, `festivalEmblems.ts`, then `npm run gen:festivals` (it writes `src/styles/festivals.css`, `public/admin/festivals.js` and the table in `index.html`) |
-| VinaX AI chat styles | `src/features/ai/chat/chatStyle.ts`, `src/styles/ai-styles.css` |
 | The shell (sidebar, top bar, dock, overlays) | `src/layouts/AppLayout.tsx`, `src/components/TopBar.tsx`, `src/components/BottomNav.tsx`, `src/components/Sidebar.tsx` |
 | Routes | `src/router/index.tsx` |
 | What plays next | `src/services/recommendation/`, `src/store/playerStore.ts` — see [../docs/recommendations.md](../docs/recommendations.md) |

@@ -194,7 +194,7 @@ Downloaded files are not part of the backup file; see [data-and-privacy.md](data
 
 ### Voice
 
-Dictation, voice search and live voice use the system speech recogniser through the `@capacitor-community/speech-recognition` plugin (`frontend/src/features/voice/stt.ts`). The web view exposes a speech-recognition constructor with no service behind it, and starting it closes the renderer, so in the app that constructor is never created. The microphone permission is declared by the patch script as well as by the plugin.
+Voice search and Drive mode's voice commands use the system speech recogniser through the `@capacitor-community/speech-recognition` plugin (`frontend/src/features/voice/stt.ts`). The web view exposes a speech-recognition constructor with no service behind it, and starting it closes the renderer, so in the app that constructor is never created. The microphone permission is declared by the patch script as well as by the plugin.
 
 ### Push
 

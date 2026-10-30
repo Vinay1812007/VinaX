@@ -16,11 +16,11 @@ import { useSettingsStore } from '@/store/settingsStore';
 
 /**
  * 1.3 — catalogue stations (featured ones like "Retro Spin", and an artist's
- * radio). A station starts like AI Radio — playerStore.startRadio with its
+ * radio). A station starts like Radio — playerStore.startRadio with its
  * first songs as seeds — and hands the player a `feed`: the rest of the
  * opening batch, then the station's next songs. The player asks the feed
- * whenever its queue is about to run out (the same top-up as the DJ's), and
- * the DJ carries on if the station stops answering.
+ * whenever its queue is about to run out (the same top-up as the on-device
+ * plan's), and the plan carries on if the station stops answering.
  */
 
 /** Songs asked for when a station opens, and per call after that. */

@@ -55,8 +55,8 @@ async function precacheAll() {
     await cacheShell(c0);
     const res = await fetch('/precache-manifest.json', { cache: 'no-cache' });
     if (!res.ok) return;
-    // v15 — { precache, onDemand }: on-demand assets (the diagram and maths
-    // engines behind AI replies) are fetched on first use and cached by the
+    // v15 — { precache, onDemand }: on-demand assets (chunks the entry does
+    // not reach) are fetched on first use and cached by the
     // /assets/ handler, and must not be pruned afterwards. A plain array is
     // still read (a manifest from a build before 7.2).
     const data = await res.json();
