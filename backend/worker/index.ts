@@ -343,7 +343,8 @@ export default {
     return hostMiddleware({ request, next: () => route(request, env, ctx) });
   },
   // 14.0 — the Cron Trigger (wrangler.toml [triggers]): the status tick every
-  // run, housekeeping once an hour. Nothing runs without the database.
+  // run, housekeeping once an hour, the AI model check every run (1.2.7).
+  // Nothing runs without the database.
   async scheduled(event: { scheduledTime: number }, env: Env, ctx: ExecCtx): Promise<void> {
     ctx.waitUntil(runScheduled(env as Record<string, unknown>, event.scheduledTime));
   },

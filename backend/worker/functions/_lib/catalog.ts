@@ -36,6 +36,8 @@
  */
 import { workersAiBinding, workersAiCatalog } from './workersai';
 import { AI_PROVIDERS, LANE_BASE, PROVIDER_LANE, laneCoolingDown, notFreeCooling, providerCoolingDown, providerKey, type AiEnv, type AiProvider } from './ai';
+import { readHealth, usable } from './modelHealth';
+import type { DbEnv } from './db';
 
 export type CatalogProvider = AiProvider;
 
@@ -852,8 +854,11 @@ export async function findMediaModel(env: AiEnv, providerRaw: CatalogProvider | 
 /** 10.3 — every free model of one kind, in provider order, models resting on a
  *  cooldown last (an automatic pick goes to the first that is not resting). */
 export async function mediaChoices(env: AiEnv, kind: MediaKind, order: readonly CatalogProvider[] = AI_PROVIDERS): Promise<Array<{ provider: CatalogProvider; model: MediaModel }>> {
-  const all: Array<{ provider: CatalogProvider; model: MediaModel }> = [];
+  const health = await readHealth(env as DbEnv);
+  let all: Array<{ provider: CatalogProvider; model: MediaModel }> = [];
   for (const provider of order) for (const model of await fetchMedia(env, provider)) if (model.kind === kind) all.push({ provider, model });
+  // 1.2.7 — an automatic pick tries only models whose last check passed.
+  if (kind === 'image' || kind === 'speech' || kind === 'transcription') all = all.filter((c) => usable(health, kind, c.provider, c.model.id));
   return [...all.filter((c) => !providerCoolingDown(c.provider, c.model.id)), ...all.filter((c) => providerCoolingDown(c.provider, c.model.id))];
 }
 

@@ -6,14 +6,17 @@
  *
  *   status-tick    every run    probe the public components, uptime_tick each
  *   housekeeping   hourly       room_sweep · purge_events(retention) · retire_push_devices
+ *   ai-models      every run    check the due AI models; the menus offer only those that answer (1.2.7)
  *
  * Nothing runs without the database: the jobs exist to write into it.
  */
 import { db, dbConfigured, type DbEnv } from './db';
 import { setting } from './settings';
 import { COMPONENTS, probeAll } from '../api/status';
+import { runModelHealth } from './modelHealthJob';
+import type { AiEnv } from './ai';
 
-export type JobId = 'status-tick' | 'housekeeping';
+export type JobId = 'status-tick' | 'housekeeping' | 'ai-models';
 
 export interface JobSpec {
   id: JobId;
@@ -28,6 +31,7 @@ export interface JobSpec {
 export const JOBS: readonly JobSpec[] = [
   { id: 'status-tick', label: 'Status tick', schedule: 'every 30 min', maxAgeMin: 75, due: () => true },
   { id: 'housekeeping', label: 'Housekeeping', schedule: 'hourly', maxAgeMin: 180, due: (at) => at.getUTCMinutes() < 30 },
+  { id: 'ai-models', label: 'AI model check', schedule: 'every 30 min', maxAgeMin: 75, due: () => true },
 ];
 
 export const isJobId = (v: unknown): v is JobId => JOBS.some((j) => j.id === v);
@@ -80,7 +84,8 @@ export async function runJob(env: DbEnv, job: JobId, now = Date.now()): Promise<
   let ok = true;
   let summary: Record<string, unknown> = {};
   try {
-    summary = job === 'status-tick' ? await statusTick(env, now) : await housekeeping(env);
+    summary =
+      job === 'status-tick' ? await statusTick(env, now) : job === 'housekeeping' ? await housekeeping(env) : await runModelHealth(env as DbEnv & AiEnv, now);
   } catch (e) {
     ok = false;
     summary = { ...summary, error: e instanceof Error ? e.message.slice(0, 200) : 'failed' };

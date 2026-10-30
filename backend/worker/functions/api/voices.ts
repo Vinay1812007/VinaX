@@ -21,8 +21,10 @@
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
 import { fetchMedia, fetchVoiceCatalog } from '../_lib/catalog';
 import { AI_PROVIDERS, PROVIDER_LABEL, providerKey, type AiEnv } from '../_lib/ai';
+import { readHealth, usable } from '../_lib/modelHealth';
+import type { DbEnv } from '../_lib/db';
 
-type Env = AiEnv;
+type Env = AiEnv & DbEnv;
 
 /** Personas the speech models accept, with the gender reading listeners
  *  actually pick by. Probed live on the Orpheus pair; kept in step with the
@@ -41,7 +43,10 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const limited = rateLimit(request, 'voices', { capacity: 12, refillPerMinute: 12 });
   if (limited) return limited;
 
-  const [models, media] = await Promise.all([fetchVoiceCatalog(env, 'groq'), Promise.all(AI_PROVIDERS.map((p) => fetchMedia(env, p)))]);
+  const [allModels, allMedia, health] = await Promise.all([fetchVoiceCatalog(env, 'groq'), Promise.all(AI_PROVIDERS.map((p) => fetchMedia(env, p))), readHealth(env)]);
+  // 1.2.7 — only voices whose last check answered (modelHealth.ts).
+  const models = allModels.filter((m) => usable(health, 'speech', 'groq', m.id));
+  const media = allMedia.map((list, i) => list.filter((m) => m.kind !== 'speech' || usable(health, 'speech', AI_PROVIDERS[i], m.id)));
   return new Response(
     JSON.stringify({
       fetchedAt: new Date().toISOString(),

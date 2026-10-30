@@ -65,7 +65,8 @@ routes = [
 
 # 14.0 — the scheduled jobs (worker/functions/_lib/jobs.ts): every 30 minutes
 # the status tick probes the public components; once an hour housekeeping
-# sweeps idle rooms, purges old usage events and retires silent push devices.
+# sweeps idle rooms, purges old usage events and retires silent push devices;
+# every run the AI model check asks the due models a tiny question (1.2.7).
 # Nothing runs without the database secrets.
 [triggers]
 crons = ["*/30 * * * *"]
