@@ -59,6 +59,7 @@ import * as m_api_account_data from './functions/api/account/data';
 import * as m_api_ai_chat from './functions/api/ai/chat';
 import * as m_api_ai_models from './functions/api/ai/models';
 import * as m_api_ai_conversations from './functions/api/ai/conversations';
+import * as m_api_ai_export from './functions/api/ai/export';
 import * as m_api_ai_conversation_id from './functions/api/ai/conversations/[id]';
 // 15.0 — the social layer: profiles, follows, shared playlists.
 import * as m_api_profile from './functions/api/profile';
@@ -159,6 +160,7 @@ const EXACT: Record<string, Mod> = {
   '/api/ai/chat': m_api_ai_chat,
   '/api/ai/models': m_api_ai_models,
   '/api/ai/conversations': m_api_ai_conversations,
+  '/api/ai/export': m_api_ai_export,
   '/api/profile': m_api_profile,
   '/api/follow': m_api_follow,
   '/api/shared-playlist': m_api_shared_playlist,

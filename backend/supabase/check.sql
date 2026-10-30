@@ -206,6 +206,10 @@ begin
   assert n = 0, 'ai_conversation_search: another account sees nothing';
   select count(*) into n from ai_conversation_search('check_a1', '%', null, 30);
   assert n = 0, 'ai_conversation_search: % is literal, not a wildcard';
+  v := ai_export('check_a1');
+  assert v ->> 'format' = 'vinax-ai-chats' and jsonb_array_length(v -> 'conversations') = 1, 'ai_export: one chat';
+  assert jsonb_array_length(v -> 'conversations' -> 0 -> 'messages') = 3, 'ai_export: every message, every branch';
+  assert jsonb_array_length(ai_export('check_a2') -> 'conversations') = 0, 'ai_export: another account gets nothing';
   begin
     insert into ai_messages (id, conversation_id, role, content) values ('00000000-0000-4000-8000-00000000c0ff', '00000000-0000-4000-8000-00000000c001', 'system', '[]');
     assert false, 'ai_messages.role refuses system';

@@ -41,6 +41,7 @@ export function requestBody(req: ChatRequest): Record<string, unknown> {
     ...(req.temperature != null ? { temperature: req.temperature } : {}),
     ...(req.model.params ?? {}),
     ...(req.reasoning === 'high' ? req.model.highParams ?? {} : {}),
+    ...(req.reasoning === 'off' ? req.model.offParams ?? {} : {}),
   };
 }
 

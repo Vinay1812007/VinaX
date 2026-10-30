@@ -30,7 +30,11 @@ export const geminiModelId = (upstream: string): string => upstream.replace(/^mo
 
 export function geminiBody(req: ChatRequest): Record<string, unknown> {
   const { system, messages } = wireMessages(req.model, req.system, req.messages);
-  const merged = { ...(req.model.params ?? {}), ...(req.reasoning === 'high' ? req.model.highParams ?? {} : {}) } as { thinkingConfig?: Record<string, unknown> };
+  const merged = {
+    ...(req.model.params ?? {}),
+    ...(req.reasoning === 'high' ? req.model.highParams ?? {} : {}),
+    ...(req.reasoning === 'off' ? req.model.offParams ?? {} : {}),
+  } as { thinkingConfig?: Record<string, unknown> };
   const generationConfig: Record<string, unknown> = { maxOutputTokens: Math.min(req.maxOutputTokens, req.model.maxOutput) };
   if (req.temperature != null) generationConfig.temperature = req.temperature;
   if (merged.thinkingConfig) generationConfig.thinkingConfig = merged.thinkingConfig;

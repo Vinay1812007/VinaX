@@ -45,6 +45,8 @@ export interface ModelSpec {
   params?: Record<string, unknown>;
   /** Extra request fields when Extended thinking asks for reasoning 'high'. */
   highParams?: Record<string, unknown>;
+  /** Extra request fields when reasoning is 'off' (short backstage tasks such as titles). */
+  offParams?: Record<string, unknown>;
   /** Set when the id still needs confirming against the owner's account (ai-probe). */
   unconfirmed?: boolean;
 }

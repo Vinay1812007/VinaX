@@ -7,13 +7,14 @@
  *                                          // absent = after the conversation's active leaf;
  *                                          // "root" = a new first message (editing the first one)
  *     content: [{ type: "text", text }],   // empty + parentMessageId of a user message = retry
+ *     continueFrom?: uuid,                 // an assistant message that was cut off: write on from where it stopped
  *     mode: "auto" | "model", model?: "<registry id>",
  *     extendedThinking?, webSearch?, artifacts?, timezone?, locale? }
  *
  *   → 200 text/event-stream, named events, one JSON object per data line:
- *       meta     { conversationId, userMessageId, assistantMessageId, model: { id, name, provider } }
+ *       meta     { conversationId, userMessageId, assistantMessageId, model: { id, name, provider }, continued? }
  *                (sent again when a failover changes the model; the page then clears any reasoning shown)
- *       title    { title }
+ *       title    { title }      (new conversations: a generated 2–6 word title, when it arrives in time)
  *       thinking { delta }
  *       text     { delta }
  *       error    { code, message, retryable, alternatives? }
@@ -23,6 +24,7 @@
  *
  * The listener's message is saved before streaming; the reply is saved when
  * it ends (also after a disconnect, with the partial text and 'aborted').
+ * A continued reply is appended to the message it continues.
  * Logs carry route, model, provider, latency, status and token counts, never
  * message text. See docs/ai.md.
  */
@@ -36,11 +38,12 @@ import { aiOpenFor, aiSettings, registryFor } from '../../_lib/ai/config';
 import { isCooling } from '../../_lib/ai/cooldown';
 import { fallbackTitle, latestLeaf, pathTo, textOf, threadChars, toNormalized, trimHistory } from '../../_lib/ai/history';
 import { ladderModels, modelById, type LadderName } from '../../_lib/ai/models';
+import { generateTitle } from '../../_lib/ai/title';
 import { buildSystemPrompt, firstNameOf, safeLocale, safeTimezone } from '../../_lib/ai/prompt';
 import { humanReason, pickLadder, runChat, type RunOptions } from '../../_lib/ai/router';
 import { sseFrame } from '../../_lib/ai/sse';
 import {
-  createConversation, getConversation, insertMessage, isUuid, listMessages, MAX_MESSAGES, updateConversation,
+  createConversation, getConversation, insertMessage, isUuid, listMessages, MAX_MESSAGES, updateConversation, updateMessage,
   type ConversationRow, type MessageRow,
 } from '../../_lib/ai/store';
 import type { ProviderError } from '../../_lib/ai/errors';
@@ -53,6 +56,11 @@ export const FIRST_EVENT_MS = 12_000;
 export const FIRST_EVENT_SLOW_MS = 25_000;
 export const REPLY_BUDGET_MS = 120_000;
 export const REPLY_BUDGET_SLOW_MS = 240_000;
+/** How long the end of a first reply waits for its generated title. */
+export const TITLE_WAIT_MS = 1_500;
+
+/** The turn added to ask a model to carry on a reply that was cut off. */
+export const CONTINUE_PROMPT = 'Continue your previous reply exactly where it stopped. Do not repeat anything you already wrote, do not restart or summarise; if it stopped mid-sentence or mid-code-block, carry on from that point.';
 
 type StopReason = 'end' | 'length' | 'aborted' | 'error';
 
@@ -62,6 +70,7 @@ interface ChatBody {
   content?: unknown;
   mode?: unknown;
   model?: unknown;
+  continueFrom?: unknown;
   extendedThinking?: unknown;
   timezone?: unknown;
   locale?: unknown;
@@ -136,6 +145,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   const parentRaw = body.parentMessageId;
   if (body.conversationId != null && !isUuid(body.conversationId)) return json({ error: 'not_found' }, 404);
   if (parentRaw != null && parentRaw !== 'root' && !isUuid(parentRaw)) return json({ error: 'bad_request' }, 400);
+  const continueFrom = body.continueFrom;
+  if (continueFrom != null && !isUuid(continueFrom)) return json({ error: 'bad_request' }, 400);
 
   // Which models may answer.
   const registry = registryFor(settings).filter((spec) => providerConfigured(env, spec.provider));
@@ -161,7 +172,16 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   }
 
   let userMsg: MessageRow;
-  if (!content.parts.length) {
+  /** The cut-off reply being continued, if this is a Continue. */
+  let continuing: MessageRow | null = null;
+  if (isUuid(continueFrom)) {
+    const target = conv ? rows.find((r) => r.id === continueFrom && r.role === 'assistant') : undefined;
+    const question = target?.parent_id ? rows.find((r) => r.id === target.parent_id && r.role === 'user') : undefined;
+    if (!conv) return json({ error: 'bad_request' }, 400);
+    if (!target || !question) return json({ error: 'not_found' }, 404);
+    continuing = target;
+    userMsg = question;
+  } else if (!content.parts.length) {
     // Retry: a new answer to an existing question.
     const target = conv && isUuid(parentRaw) ? rows.find((r) => r.id === parentRaw && r.role === 'user') : undefined;
     if (!conv) return json({ error: 'bad_request' }, 400);
@@ -193,7 +213,9 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   }
   const isNew = rows.length === 1;
   const conversation = conv;
-  const history = toNormalized(pathTo(rows, userMsg.id));
+  const history = continuing
+    ? [...toNormalized(pathTo(rows, continuing.id)), { role: 'user' as const, text: CONTINUE_PROMPT }]
+    : toNormalized(pathTo(rows, userMsg.id));
   const latestText = textOf(userMsg.content);
 
   if (mode === 'auto') {
@@ -227,7 +249,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     registry.filter((spec) => spec.group !== null && spec.id !== failed.id && !isCooling(spec)).slice(0, 2).map(modelInfo);
 
   const abort = new AbortController();
-  const assistantId = crypto.randomUUID();
+  const assistantId = continuing?.id ?? crypto.randomUUID();
+  const titleCandidates = ladderModels(registry, 'title');
   let open = true;
   let controller!: ReadableStreamDefaultController<Uint8Array>;
   const stream = new ReadableStream<Uint8Array>({
@@ -248,8 +271,18 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     let thinkMs: number | null = null;
     let usage: { input: number; output: number } | null = null;
     let stop: StopReason = 'end';
-    send('meta', { conversationId: conversation.id, userMessageId: userMsg.id, assistantMessageId: assistantId, model: modelInfo(model) });
-    if (isNew) send('title', { title: conversation.title });
+    const metaOf = (m: ModelSpec) => ({ conversationId: conversation.id, userMessageId: userMsg.id, assistantMessageId: assistantId, model: modelInfo(m), ...(continuing ? { continued: true } : {}) });
+    send('meta', metaOf(model));
+    // A new conversation gets a generated title, written in parallel with the reply.
+    let titleJob: Promise<void> | null = null;
+    if (isNew) {
+      send('title', { title: conversation.title });
+      titleJob = generateTitle(env, titleCandidates, textOf(userMsg.content)).then(async (title) => {
+        if (!title || title === conversation.title) return;
+        send('title', { title });
+        await updateConversation(env, sub, conversation.id, { title });
+      }).catch(() => undefined);
+    }
     try {
       for await (const ev of runChat(env, {
         candidates, picked: mode === 'model', build, signal: abort.signal,
@@ -261,7 +294,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
             model = ev.spec;
             thinking = '';
             thinkStart = null;
-            send('meta', { conversationId: conversation.id, userMessageId: userMsg.id, assistantMessageId: assistantId, model: modelInfo(model) });
+            send('meta', metaOf(model));
           }
         } else if (ev.type === 'thinking') {
           thinkStart ??= Date.now();
@@ -292,6 +325,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     }
     if (abort.signal.aborted) stop = 'aborted';
     if (thinkStart != null && thinkMs == null) thinkMs = Date.now() - thinkStart;
+    // Give the title a moment to arrive in this stream; it is saved whenever it comes.
+    if (titleJob && open) await Promise.race([titleJob, new Promise((r) => setTimeout(r, TITLE_WAIT_MS))]);
     send('done', { stopReason: stop, ...(usage ? { usage } : {}) });
     if (open) {
       open = false;
@@ -300,7 +335,16 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
 
     // Save the reply (also a partial or stopped one) and move the active leaf.
     const savedReply = text.trim().length > 0;
-    if (savedReply) {
+    if (continuing) {
+      // Continue: the new text joins the reply it continues.
+      if (savedReply) {
+        await updateMessage(env, conversation.id, continuing.id, {
+          content: [{ type: 'text', text: textOf(continuing.content) + text }],
+          thinking: [continuing.thinking, thinking].filter(Boolean).join('\n\n') || null,
+          model_id: model.id, provider: model.provider, stop_reason: stop, usage,
+        });
+      }
+    } else if (savedReply) {
       await insertMessage(env, {
         id: assistantId, conversation_id: conversation.id, parent_id: userMsg.id, role: 'assistant',
         content: [{ type: 'text', text }], thinking: thinking || null, thinking_ms: thinkMs,
@@ -309,10 +353,11 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     }
     await updateConversation(env, sub, conversation.id, {
       updated_at: new Date().toISOString(),
-      active_leaf_id: savedReply ? assistantId : userMsg.id,
+      active_leaf_id: savedReply || continuing ? assistantId : userMsg.id,
       model_pref: mode === 'model' ? model.id : 'auto',
     });
-    console.log(JSON.stringify({ route: 'ai-chat', model: model.id, provider: model.provider, ladder, ms: Date.now() - started, status: stop, input: usage?.input ?? null, output: usage?.output ?? null }));
+    if (titleJob) await titleJob;
+    console.log(JSON.stringify({ route: 'ai-chat', continued: !!continuing, model: model.id, provider: model.provider, ladder, ms: Date.now() - started, status: stop, input: usage?.input ?? null, output: usage?.output ?? null }));
   };
 
   const job = pump().catch(() => undefined);
