@@ -16,6 +16,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.3.1': {
+    title: 'Old VinaX AI links open Home',
+    changes: [
+      { type: 'improved', text: 'Old VinaX AI and AI Playlist links now go straight to Home.' },
+    ],
+  },
   '1.3.0': {
     title: 'VinaX is now AI-free: VinaX AI and every AI feature are gone',
     changes: [
