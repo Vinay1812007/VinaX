@@ -66,6 +66,23 @@ describe('filters', () => {
       groq: [{ id: 'orpheus', kind: 'speech' }],
     };
     expect(filterMediaLists(m, lists, NOW)).toEqual({ nvidia: [{ id: 'embed', kind: 'embedding' }], groq: [{ id: 'orpheus', kind: 'speech' }] });
-    expect(filterMediaLists(null, lists, NOW)).toBe(lists);
+    const later = NOW + 30 * 24 * 3_600_000;
+    expect(filterMediaLists(null, lists, later)).toBe(lists);
+  });
+});
+
+describe('the 2026-10-30 seed', () => {
+  const dead = 'google/codegemma-1.1-7b';
+  const alive = 'openai/gpt-oss-20b';
+  it('hides the models that failed the full test before the job has checked them', () => {
+    expect(usable(null, 'chat', 'nvidia', dead, NOW)).toBe(false);
+    expect(usable(null, 'chat', 'groq', alive, NOW)).toBe(true);
+    expect(usable(null, 'image', 'nvidia', 'black-forest-labs/flux.1-schnell', NOW)).toBe(false);
+    expect(usable(null, 'chat', 'nvidia', 'a-model-added-later', NOW)).toBe(true);
+  });
+  it('gives way to the job’s own check, and expires after two weeks', () => {
+    const m = map({ [healthKey('chat', 'nvidia', dead)]: ok });
+    expect(usable(m, 'chat', 'nvidia', dead, NOW)).toBe(true);
+    expect(usable(null, 'chat', 'nvidia', dead, NOW + 15 * 24 * 3_600_000)).toBe(true);
   });
 });

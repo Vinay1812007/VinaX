@@ -6,12 +6,15 @@
  * voice list (/api/voices) and the automatic media pick (pickMedia) then offer
  * only models whose last check passed.
  *
- * Safe by default: with no database, no record yet, or a record older than a
- * day (the job stopped), nothing is filtered. Before the first full pass a
- * model with no result yet is still offered; after it, a new model waits for
- * its first passing check (the next run checks new models first).
+ * A model the job has checked follows its last check. One it has not yet
+ * checked follows the 2026-10-30 full test (modelHealthSeed.ts) while that is
+ * under two weeks old, so the menu is right from the first deploy. With
+ * neither (no database, a record older than a day, an old seed), nothing is
+ * filtered. Before the job's first full pass a model with no result at all is
+ * still offered; after it, a new model waits for its first passing check.
  */
 import { db, dbConfigured, q, type DbEnv } from './db';
+import { SEED, SEED_AT, SEED_MAX_AGE_MS } from './modelHealthSeed';
 
 export type HealthKind = 'chat' | 'image' | 'speech' | 'transcription';
 export const HEALTH_KINDS: readonly HealthKind[] = ['chat', 'image', 'speech', 'transcription'];
@@ -99,13 +102,25 @@ export function activeMap(map: HealthMap | null, now = Date.now()): HealthMap | 
   return map && now - map.checkedAt <= HEALTH_MAX_AGE_MS ? map : null;
 }
 
+const SEED_MAP: ReadonlyMap<string, boolean> = new Map(SEED.map(([k, ok]) => [k, ok]));
+const seedActive = (now: number): boolean => now - SEED_AT < SEED_MAX_AGE_MS;
+
+/** Is there anything to filter by right now: a fresh record, or the seed? */
+export function filtering(map: HealthMap | null, now = Date.now()): boolean {
+  return !!activeMap(map, now) || seedActive(now);
+}
+
 /** May this model be offered? */
 export function usable(map: HealthMap | null, kind: HealthKind, provider: string, id: string, now = Date.now()): boolean {
+  const key = healthKey(kind, provider, id);
   const live = activeMap(map, now);
-  if (!live) return true;
-  const e = live.models[healthKey(kind, provider, id)];
-  if (!e) return live.fullPassAt === null;
-  return e.ok;
+  const e = live?.models[key];
+  if (e) return e.ok;
+  if (seedActive(now)) {
+    const seeded = SEED_MAP.get(key);
+    if (seeded !== undefined) return seeded;
+  }
+  return live ? live.fullPassAt === null : true;
 }
 
 /**
@@ -120,7 +135,7 @@ export function filterUsable<T extends { id: string }>(
   lists: Record<string, T[]>,
   now = Date.now(),
 ): Record<string, T[]> {
-  if (!activeMap(map, now)) return lists;
+  if (!filtering(map, now)) return lists;
   const out: Record<string, T[]> = {};
   let kept = 0;
   let total = 0;
@@ -134,7 +149,7 @@ export function filterUsable<T extends { id: string }>(
 
 /** Media lists with the checked kinds (image, speech, transcription) filtered; other kinds pass through. */
 export function filterMediaLists<T extends { id: string; kind: string }>(map: HealthMap | null, lists: Record<string, T[]>, now = Date.now()): Record<string, T[]> {
-  if (!activeMap(map, now)) return lists;
+  if (!filtering(map, now)) return lists;
   const out: Record<string, T[]> = {};
   for (const [provider, list] of Object.entries(lists)) {
     out[provider] = list.filter((m) => !(HEALTH_KINDS as readonly string[]).includes(m.kind) || m.kind === 'chat' || usable(map, m.kind as HealthKind, provider, m.id, now));
