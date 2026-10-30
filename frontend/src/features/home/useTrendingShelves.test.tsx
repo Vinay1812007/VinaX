@@ -20,8 +20,17 @@ vi.mock('@/services/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/api')>();
   return {
     API_LANGUAGES: actual.API_LANGUAGES,
-    getTrendingAlbums: (langs: string[]) => getTrendingAlbums(langs),
-    getTrendingSongs: (langs: string[]) => getTrendingSongs(langs),
+    // Home reads one /trending call; a section that fails here comes back empty.
+    getTrending: async (langs: string[]) => {
+      const part = async <T,>(f: (l: string[]) => Promise<T[]> | undefined): Promise<T[]> => {
+        try {
+          return (await f(langs)) ?? [];
+        } catch {
+          return [];
+        }
+      };
+      return { albums: await part(getTrendingAlbums), songs: await part(getTrendingSongs), playlists: [] };
+    },
     searchAlbums: (q: string) => searchAlbums(q),
     searchSongsPage: (q: string) => searchSongsPage(q),
   };

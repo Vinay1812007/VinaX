@@ -4,14 +4,16 @@ import { getLyrics } from '@/services/api';
 import { fetchLrclibLyrics, type LyricsResult } from '@/services/lyrics/lrclib';
 import { reportLyricMiss } from '@/services/analytics/telemetry';
 import { isEpisode } from '@/features/podcasts/paths';
+import { useSettingsStore } from '@/store/settingsStore';
 
 /**
  * Lyrics resolution chain: LRCLIB synced → LRCLIB plain → upstream wrapper
  * plain. Synced lyrics enable the live-highlight view in the player.
  */
 export function useSyncedLyrics(song: Song | null | undefined) {
+  const script = useSettingsStore((s) => s.lyricsScript);
   return useQuery<LyricsResult | null>({
-    queryKey: ['lyrics-v3', song?.id],
+    queryKey: ['lyrics-v3', song?.id, script],
     enabled: !!song,
     staleTime: 60 * 60_000,
     retry: false,
@@ -22,7 +24,7 @@ export function useSyncedLyrics(song: Song | null | undefined) {
       const artist = song.artists[0]?.name ?? song.subtitle.split(',')[0] ?? '';
       const fromUpstream = async (): Promise<LyricsResult | null> => {
         try {
-          const upstream = await getLyrics(song.id);
+          const upstream = await getLyrics(song.id, { script });
           // 1.3 — the catalogue can match synced lines server-side, which
           // covers listeners whose network blocks lrclib.net.
           if (upstream.lyrics || upstream.synced) {
@@ -38,6 +40,15 @@ export function useSyncedLyrics(song: Song | null | undefined) {
       // that long. The promise keeps running in the background harmlessly.
       const withDeadline = <T,>(p: Promise<T>, ms: number, fallback: T): Promise<T> =>
         Promise.race([p, new Promise<T>((resolve) => window.setTimeout(() => resolve(fallback), ms))]);
+      // 1.3 — English letters: only the catalogue can rewrite lyrics (synced
+      // lines included), so it goes first; LRCLIB as written is the fallback.
+      if (script === 'latin') {
+        const up = await withDeadline(fromUpstream(), 8000, null);
+        if (up) return up;
+        const lrc = await fetchLrclibLyrics(song.title, artist, song.duration);
+        if (!lrc) reportLyricMiss(song);
+        return lrc;
+      }
       // When the catalog says the song HAS lyrics, the upstream copy is
       // authoritative (film songs rarely exist on LRCLIB) — but a synced
       // LRCLIB hit still wins over plain text.

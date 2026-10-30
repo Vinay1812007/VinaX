@@ -35,6 +35,61 @@ interface SourceHealth {
   ms: number;
   songs: number;
   note: string | null;
+  /** 1.3 — the wrapper's own /health report (wrappers only; null when it has none). */
+  health?: WrapperHealth | null;
+}
+
+/** One upstream as a wrapper's /health names it. Names and numbers only — never its error text. */
+interface UpstreamHealth {
+  name: string;
+  configured: boolean;
+  ok: boolean;
+  latencyMs: number | null;
+}
+
+interface WrapperHealth {
+  status: string;
+  upstreams: UpstreamHealth[];
+}
+
+/**
+ * 1.3 — read a wrapper's GET /health ({ data: { status, <name>: { configured,
+ * ok, latencyMs, error } } }). Only the shape above is kept; an error string
+ * becomes ok: false, never a note (audit M-SRV-5).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function parseWrapperHealth(j: any): WrapperHealth | null {
+  const d = j?.data ?? j;
+  if (!d || typeof d !== 'object' || typeof d.status !== 'string') return null;
+  const upstreams: UpstreamHealth[] = [];
+  for (const [name, v] of Object.entries(d)) {
+    if (!v || typeof v !== 'object' || Array.isArray(v) || !/^[a-z][a-z0-9_-]{0,31}$/i.test(name)) continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const u = v as any;
+    if (typeof u.ok !== 'boolean') continue;
+    upstreams.push({
+      name,
+      configured: u.configured !== false,
+      ok: u.ok,
+      latencyMs: typeof u.latencyMs === 'number' && Number.isFinite(u.latencyMs) ? Math.round(u.latencyMs) : null,
+    });
+    if (upstreams.length >= 8) break;
+  }
+  return { status: d.status.slice(0, 16), upstreams };
+}
+
+async function wrapperHealth(base: string): Promise<WrapperHealth | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`${base}/health`, { headers: { accept: 'application/json' }, signal: controller.signal });
+    if (!r.ok) return null;
+    return parseWrapperHealth(await r.json());
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -87,13 +142,17 @@ function pingDirect(request: Request, env: CatalogEnv): Promise<SourceHealth> {
   );
 }
 
-function pingMirror(m: Mirror): Promise<SourceHealth> {
-  return readHealth(m.id, m.label, m.base, () => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
-    return fetch(`${m.base}/${QUERY}`, { headers: { accept: 'application/json' }, signal: controller.signal })
-      .finally(() => clearTimeout(timer));
-  });
+async function pingMirror(m: Mirror): Promise<SourceHealth> {
+  const [search, health] = await Promise.all([
+    readHealth(m.id, m.label, m.base, () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      return fetch(`${m.base}/${QUERY}`, { headers: { accept: 'application/json' }, signal: controller.signal })
+        .finally(() => clearTimeout(timer));
+    }),
+    wrapperHealth(m.base),
+  ]);
+  return { ...search, health };
 }
 
 export const onRequestGet = async (context: {

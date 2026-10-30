@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { Album, Song } from '@/types';
-import { getTrendingAlbums, getTrendingSongs, searchAlbums, searchSongsPage } from '@/services/api';
+import { searchAlbums, searchSongsPage } from '@/services/api';
 import { rankSongs } from '@/features/search/useSearch';
 import { dailyBucket } from './dailyRotation';
 import type { ArtistCard } from './useYourArtists';
-import { feedLanguages, usePinnedFeedLangs } from './useCatalogFeeds';
+import { feedLanguages, trendingBundle, usePinnedFeedLangs } from './useCatalogFeeds';
 
 const YEAR = new Date().getFullYear();
 const STALE = 4 * 60 * 60_000;
@@ -67,7 +67,7 @@ export function useTrendingAlbums() {
     queryFn: ({ signal }) =>
       trendingOrSearch(
         langs,
-        async (known) => (await getTrendingAlbums(known, 18, { signal })).slice(0, 18),
+        async (known) => (await trendingBundle(known, signal)).albums.slice(0, 18),
         async () => (await searchAlbums(`trending albums ${YEAR}`, 18)).slice(0, 18),
         signal,
       ),
@@ -106,7 +106,7 @@ export function useTrendingArtists(limit = 12) {
     queryKey: ['trending-artists-src', langs, bucket],
     staleTime: STALE,
     queryFn: ({ signal }) =>
-      trendingOrSearch(langs, async (known) => rankSongs(await getTrendingSongs(known, 50, { signal })), () => artistSearchPool(langs), signal),
+      trendingOrSearch(langs, async (known) => rankSongs((await trendingBundle(known, signal)).songs), () => artistSearchPool(langs), signal),
   });
   const data = useMemo<ArtistCard[]>(() => {
     const songs = query.data?.items ?? [];

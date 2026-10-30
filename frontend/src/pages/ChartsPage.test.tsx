@@ -23,11 +23,19 @@ vi.mock('@/services/trends/client', () => ({ fetchVerifiedTrends: (opts: unknown
 // 1.3 — the catalogue feeds miss by default (the backup source does not know them), so the search lists show.
 const getTrendingSongs = vi.fn();
 const getCharts = vi.fn();
+const getTrendingAlbums = vi.fn();
+const getTrendingPlaylists = vi.fn();
+const getNewReleases = vi.fn();
+const getFeaturedPlaylists = vi.fn();
 vi.mock('@/services/api', () => ({
   API_LANGUAGES: ['hindi', 'telugu'],
   getSong: (id: string) => getSong(id),
   getTrendingSongs: (...a: unknown[]) => getTrendingSongs(...a),
   getCharts: (...a: unknown[]) => getCharts(...a),
+  getTrendingAlbums: (...a: unknown[]) => getTrendingAlbums(...a),
+  getTrendingPlaylists: (...a: unknown[]) => getTrendingPlaylists(...a),
+  getNewReleases: (...a: unknown[]) => getNewReleases(...a),
+  getFeaturedPlaylists: (...a: unknown[]) => getFeaturedPlaylists(...a),
 }));
 vi.mock('@/hooks/useOnlineStatus', () => ({ useOnlineStatus: () => online }));
 vi.mock('@/features/location/useRegion', () => ({ useRegion: () => ({ country: 'IN', regionLabel: null, source: 'manual' }) }));
@@ -100,6 +108,7 @@ beforeEach(() => {
   playQueue.mockReset();
   getTrendingSongs.mockReset().mockRejectedValue(new Error('route not found'));
   getCharts.mockReset().mockRejectedValue(new Error('route not found'));
+  for (const f of [getTrendingAlbums, getTrendingPlaylists, getNewReleases, getFeaturedPlaylists]) f.mockReset().mockRejectedValue(new Error('route not found'));
   searchEnabled.length = 0;
   window.sessionStorage.clear();
 });
@@ -246,5 +255,21 @@ describe('ChartsPage', () => {
     const link = screen.getAllByRole('link').find((a) => a.getAttribute('href')?.startsWith('/playlist/'));
     expect(link?.getAttribute('href')).toBe('/playlist/most-searched-songs-hindi-946682072');
     expect(pageText()).not.toMatch(/JioSaavn/);
+  });
+
+  it('1.3 — shows the catalogue’s longer lists, one route each, and hides the ones that miss', async () => {
+    fetchVerifiedTrends.mockResolvedValue(null);
+    const pl = (id: string, title: string) => ({ kind: 'playlist', id, title, subtitle: '', images: [], songs: [], songCount: 12, language: 'hindi' });
+    const al = (id: string, title: string) => ({ kind: 'album', id, title, subtitle: 'Artist', images: [], artists: [], songs: [], songCount: 5, year: '2026', language: 'hindi' });
+    getTrendingPlaylists.mockResolvedValue([pl('89652091', 'Paisa Paisa')]);
+    getTrendingAlbums.mockResolvedValue([al('38682222', 'Bhediya')]);
+    getNewReleases.mockResolvedValue({ songs: [], albums: [al('82064668', 'Udta Teer')] });
+    mount();
+    expect(await screen.findByRole('heading', { name: 'Trending playlists' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Trending albums' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'New albums' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Featured playlists' })).toBeNull();
+    expect(screen.getByText('Udta Teer').closest('a')?.getAttribute('href')).toBe('/album/udta-teer-82064668');
+    expect(getTrendingPlaylists.mock.calls[0][1]).toBe(50);
   });
 });
