@@ -6,7 +6,7 @@ import { inferMood, type Mood } from '@/services/recommendation/mood';
  *
  * A rolling window of the last N songs the listener actually played THIS
  * browsing session, so recommendations can follow the current mood arc
- * without an AI round-trip. Three sad songs in a row nudge the next pick
+ * on the device. Three sad songs in a row nudge the next pick
  * sadder; a Telugu run keeps the momentum Telugu — all computed locally
  * from the window, all reset when the tab closes (sessionStorage, not
  * localStorage: "session" means the browsing session, not forever).

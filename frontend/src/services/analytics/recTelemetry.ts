@@ -12,10 +12,7 @@ import { consented, trackStructured, type TelemetryMeta } from './telemetry';
  * already carries; the Worker whitelists and clips `meta` and keeps
  * aggregates.
  *
- *   rec_served   once per automatic continuation, when its FINAL picker is
- *                known: at once when no AI refinement is pending, otherwise
- *                when the matching `refined` event arrives, or after
- *                REFINE_WAIT_MS (the refinement never settled).
+ *   rec_served   once per automatic continuation, as it is queued.
  *                meta = { alg, picker, fallback, latencyMs, n, discovery,
  *                         languageViolations, distinctArtists, relaxed, exp }
  *   rec_outcome  when a playback instance of an AUTOMATIC queue entry ends.
@@ -30,13 +27,8 @@ import { consented, trackStructured, type TelemetryMeta } from './telemetry';
  * judges nothing and sends nothing. One outcome per run: a repeat-one loop of
  * an automatic song reports once.
  *
- * When an AI refinement replaced the stretch, `n` counts the songs it placed,
- * `distinctArtists` is re-counted from the queue entries of that continuation
- * as they stand after the refinement, and `discovery`, `languageViolations`
- * and `relaxed` describe the AI's own order: since 7.2 the player measures a
- * refinement exactly as it measures the local batch, so the two are comparable.
- * `latencyMs` is always the queue-ready latency — from the plan call to a
- * queueable order — whoever picked. `exp` is the continuation's exposure map
+ * `latencyMs` is the queue-ready latency — from the plan call to a queueable
+ * order. `exp` is the continuation's exposure map
  * (features/experiments/recExperiment.ts), including an applied owner
  * tuning rollout under `rec-config`.
  *
@@ -45,20 +37,18 @@ import { consented, trackStructured, type TelemetryMeta } from './telemetry';
  * REC_SESSION_CAP events in one session, new events are dropped. A long
  * session, or a burst of skips, cannot flood the endpoint.
  */
-export type RecPicker = 'local' | 'ai' | 'reserve';
-export type RecFallback = null | 'ai_timeout' | 'ai_unavailable' | 'ai_rejected' | 'deadline' | 'error';
+export type RecPicker = 'local' | 'reserve';
+export type RecFallback = null | 'deadline' | 'error';
 export type RecOutcome = 'complete' | 'skip' | 'early_skip' | 'partial';
 
-/** Longer than the engine's AI budget (24 s): a refinement that has not settled by then never will. */
-export const REFINE_WAIT_MS = 35_000;
 export const REC_BUCKET = 12;
 export const REC_REFILL_MS = 5_000;
 export const REC_OUTBOX_CAP = 40;
 export const REC_SESSION_CAP = 400;
 
-const FALLBACKS = new Set(['ai_timeout', 'ai_unavailable', 'ai_rejected', 'deadline', 'error']);
+const FALLBACKS = new Set(['deadline', 'error']);
 const fallbackOf = (f: string | null | undefined): RecFallback => (f == null ? null : FALLBACKS.has(f) ? (f as RecFallback) : 'error');
-const pickerOf = (p: string): RecPicker => (p === 'ai' || p === 'reserve' ? p : 'local');
+const pickerOf = (p: string): RecPicker => (p === 'reserve' ? p : 'local');
 const whole = (n: number): number => (Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0);
 
 /**
@@ -76,16 +66,8 @@ export function classifyOutcome(heardSec: number, durationSec: number, reason: P
 }
 
 type Served = Extract<PlaybackEvent, { kind: 'served' }>;
-type Refined = Extract<PlaybackEvent, { kind: 'refined' }>;
 type Ended = Extract<PlaybackEvent, { kind: 'end' }>;
 
-interface PendingBatch {
-  served: Served;
-  exp: Record<string, string>;
-  timer: ReturnType<typeof setTimeout>;
-}
-
-const pendingBatches = new Map<number, PendingBatch>();
 const outbox: Array<{ type: string; meta: TelemetryMeta }> = [];
 const reportedRuns = new Set<string>();
 let tokens = REC_BUCKET;
@@ -130,54 +112,22 @@ function enqueue(type: 'rec_served' | 'rec_outcome', meta: TelemetryMeta): void 
   pump();
 }
 
-function sendServed(served: Served, exp: Record<string, string>, refined: Refined | null, timedOut: boolean): void {
-  const aiApplied = !!refined?.applied;
-  const fallback: RecFallback = aiApplied
-    ? null
-    : refined
-      ? fallbackOf(refined.fallback) ?? fallbackOf(served.fallback)
-      : timedOut
-        ? fallbackOf(served.fallback) ?? 'ai_timeout'
-        : fallbackOf(served.fallback);
-  enqueue('rec_served', {
-    alg: served.alg,
-    picker: aiApplied ? 'ai' : pickerOf(served.picker),
-    fallback,
-    latencyMs: whole(served.latencyMs),
-    n: whole(aiApplied ? refined!.n : served.n),
-    // 7.2.0 — an applied AI order reports what IT placed (the player measures
-    // the refinement the same way as the local batch), so the two are comparable.
-    discovery: whole(aiApplied ? refined!.discovery : served.discovery),
-    languageViolations: whole(aiApplied ? refined!.languageViolations : served.languageViolations),
-    distinctArtists: whole(aiApplied ? refined!.distinctArtists : served.distinctArtists),
-    relaxed: (aiApplied ? refined!.relaxed : served.relaxed).slice(0, 4).map((r) => String(r).slice(0, 24)),
-    exp,
-  });
-}
-
 function onServed(e: Served): void {
   // A listener who opted in mid-session: read the experiment config now (once).
   void loadRecExperiments();
   const exp = claimExposure(e.batch, { reserve: e.picker === 'reserve' });
-  if (!e.refinementPending) {
-    sendServed(e, exp, null, false);
-    return;
-  }
-  const timer = setTimeout(() => {
-    const p = pendingBatches.get(e.batch);
-    if (!p) return;
-    pendingBatches.delete(e.batch);
-    sendServed(p.served, p.exp, null, true);
-  }, REFINE_WAIT_MS);
-  pendingBatches.set(e.batch, { served: e, exp, timer });
-}
-
-function onRefined(e: Refined): void {
-  const p = pendingBatches.get(e.batch);
-  if (!p) return;
-  clearTimeout(p.timer);
-  pendingBatches.delete(e.batch);
-  sendServed(p.served, p.exp, e, false);
+  enqueue('rec_served', {
+    alg: e.alg,
+    picker: pickerOf(e.picker),
+    fallback: fallbackOf(e.fallback),
+    latencyMs: whole(e.latencyMs),
+    n: whole(e.n),
+    discovery: whole(e.discovery),
+    languageViolations: whole(e.languageViolations),
+    distinctArtists: whole(e.distinctArtists),
+    relaxed: e.relaxed.slice(0, 4).map((r) => String(r).slice(0, 24)),
+    exp,
+  });
 }
 
 function onEnded(e: Ended): void {
@@ -211,13 +161,10 @@ export function initRecTelemetry(): () => void {
   const unsubscribe = onPlaybackEvent((e) => {
     if (!consented()) return;
     if (e.kind === 'served') onServed(e);
-    else if (e.kind === 'refined') onRefined(e);
     else if (e.kind === 'end') onEnded(e);
   });
   stop = () => {
     unsubscribe();
-    for (const p of pendingBatches.values()) clearTimeout(p.timer);
-    pendingBatches.clear();
     if (drainTimer != null) clearTimeout(drainTimer);
     drainTimer = null;
     outbox.length = 0;

@@ -3,7 +3,7 @@
  * profile and a shared playlist may hold (every field clipped and checked
  * here, never trusted from the body), and short url-safe ids.
  *
- * Tables: profiles, follows, shared_playlists, shared_chats
+ * Tables: profiles, follows, shared_playlists
  * (backend/supabase/schema.sql § 2). Only the Worker reads or writes them.
  */
 import { bearer, readSession, type AuthEnv } from './googleAuth';
@@ -17,7 +17,6 @@ export const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
 export const MAX_SUMMARY_BYTES = 24_000;
 export const MAX_PLAYLIST_SONGS = 500;
 export const MAX_PLAYLIST_BYTES = 600_000;
-export const MAX_CHAT_BYTES = 400_000;
 
 /** A session or the 401; a database or the 503. */
 export async function requireAccount(env: SocialEnv, request: Request): Promise<{ sub: string } | { fail: Response }> {

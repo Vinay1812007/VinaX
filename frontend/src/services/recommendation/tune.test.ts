@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Song } from '@/types';
-import { TUNE_OPTIONS, isTuneIntent, randomTune, tunePromptHint, tuneScoreAdjust, tuneSearchQuery, tuneShape } from './tune';
+import { TUNE_OPTIONS, isTuneIntent, randomTune, tuneScoreAdjust, tuneSearchQuery, tuneShape } from './tune';
 
 const song = (extra: Partial<Song>): Song => ({
   kind: 'song', id: 'x', title: 'Song', subtitle: 'A', artists: [{ id: 'a', name: 'A' }], album: null, images: [], audio: [],
@@ -9,8 +9,7 @@ const song = (extra: Partial<Song>): Song => ({
 const YEAR = new Date().getFullYear();
 
 describe('tune intents', () => {
-  it('every option has a prompt hint and Surprise resolves to a concrete intent', () => {
-    for (const o of TUNE_OPTIONS) expect(tunePromptHint(o.id).length).toBeGreaterThan(10);
+  it('Surprise resolves to a concrete intent', () => {
     expect(isTuneIntent('chill')).toBe(true);
     expect(isTuneIntent('nope')).toBe(false);
     for (let i = 0; i < 20; i += 1) expect(randomTune()).not.toBe('surprise');
@@ -67,6 +66,5 @@ describe('8.3.0 — DJ remix and Folk tunes', () => {
     expect(tuneSearchQuery('dj', 'telugu')).toBe('telugu dj remix');
     expect(tuneSearchQuery('folk', 'kannada')).toBe('kannada folk songs');
     expect(tuneShape('dj')).toBeNull();
-    expect(tunePromptHint('folk')).toMatch(/FOLK/);
   });
 });

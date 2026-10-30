@@ -34,8 +34,7 @@ A backup is one file. It holds these categories:
 | Song bookmarks | Moments you marked inside songs |
 | Home layout | Shelf order, hidden shelves and headline |
 | Name & username | Your display name and the username you chose |
-| Alarm, lyrics, streak & app preferences | Wake-up alarm, lyric timing adjustments, karaoke history, listening streak, sidebar groups, saved AI prompts, and your VinaX AI preferences, including the chat style |
-| VinaX AI chats | Your conversations. Attachments are never stored. |
+| Alarm, lyrics, streak & app preferences | Wake-up alarm, lyric timing adjustments, karaoke history, listening streak and sidebar groups |
 
 ## What a backup leaves out
 

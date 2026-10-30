@@ -2,7 +2,7 @@
  * 15.0 — "Songs like this" and seeded recommendations from the Worker's
  * catalogue-ranked routes (`/api/recommendations/similar/:id` and
  * `/api/recommendations?seeds=`; backend/worker/functions/_lib/recs.ts).
- * Both were built in 14.x and never called (docs/ai-music.md § Known gaps);
+ * Both were built in 14.x and never called;
  * this module is their client.
  *
  * The routes return light `RecTrack`s (id, title, artist, a reason line).

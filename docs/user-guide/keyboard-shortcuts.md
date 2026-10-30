@@ -32,7 +32,7 @@ Press `?` again or `Esc` to close it. The list shows the playback keys from the 
 - Anywhere inside an open dialog.
 - `Space`, `Enter`, the arrow keys, `Home`, `End`, `Page Up` and `Page Down` belong to a focused button, link, slider, tab, switch, checkbox or menu item. `Space` on a button presses that button and does not also pause the music. Letter keys still work there.
 - Any combination with `Ctrl`, `⌘` or `Alt` is left to your browser, apart from the ones listed below.
-- The playback keys work on the pages that show the player. On the VinaX AI page, use the keys in its own section.
+- The playback keys work on the pages that show the player.
 
 ## Command palette
 
@@ -74,18 +74,6 @@ These keys apply while Flow is open. See [Flow](flow.md).
 | `↑`, `Page Up` or `k` | Previous song |
 | `Space` | Play or pause the song on screen |
 | `Esc` | Close Flow |
-
-## VinaX AI
-
-| Key | Action |
-|---|---|
-| `Esc` | Close the open tool panel in the message box |
-| `Enter` | Send the message. `Shift` + `Enter` adds a new line. |
-| `/` at the start of the message, then `Tab` | Complete the command you started typing |
-
-`Ctrl` + `K` (or `⌘` + `K`) opens the app's command palette here as everywhere else; VinaX AI has no chat-list shortcut.
-
-If you change the send setting in VinaX AI, the keys swap: `Ctrl` + `Enter` or `⌘` + `Enter` sends and `Enter` adds a new line. The hint under the message box always shows the current keys. See [VinaX AI](vinax-ai.md).
 
 ## Other places
 

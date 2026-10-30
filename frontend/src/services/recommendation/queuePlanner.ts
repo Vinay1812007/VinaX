@@ -3,7 +3,6 @@ import { gatherCandidates, generateNextCandidates } from './candidates';
 import { buildScoringFrame, rankCandidates } from './scoring';
 import { validateSequence } from './validation';
 import { getRecommendationContext } from './context';
-import { enrichSongs } from '@/services/ai/recommendations';
 import { freshSongs } from './freshness';
 import { songKey } from './songIdentity';
 import { inferMood, moodMatchScore, type Mood } from './mood';
@@ -12,7 +11,6 @@ import { stripExplicit } from '@/services/kidMode';
 import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import { useHistoryStore } from '@/store/historyStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { queryClient } from '@/services/queryClient';
 import type { Candidate } from './types';
 
 /**
@@ -21,8 +19,7 @@ import type { Candidate } from './types';
  * is given, taste-wide otherwise), admit them through the same gates every
  * queue passes (language, mute, block, explicit, junk, de-dup), rank by
  * taste, then let the arc sequencer lay them out to the requested shape and
- * duration. Optionally the AI DJ adds an intro, reasons and segues. The
- * plan is a PREVIEW: nothing touches the queue until the listener applies it.
+ * duration. The plan is a PREVIEW: nothing touches the queue until the listener applies it.
  */
 export type DiscoveryLevel = 'low' | 'medium' | 'high';
 
@@ -33,25 +30,13 @@ export interface PlanRequest {
   minutes: number;
   discovery: DiscoveryLevel;
   language?: string | null;
-  /** Plain words for the DJ ("for a night drive"). */
-  goal?: string;
-  useDj?: boolean;
 }
 
 export interface QueuePlan {
   songs: SequencedSong[];
   totalSec: number;
   arcError: number;
-  intro: string | null;
-  /** True when the AI DJ contributed reasons/segues. */
-  djTouched: boolean;
   candidates: number;
-  /**
-   * 7.2.0 — publish the DJ's notes for the songs the listener actually put in
-   * the queue. A plan that is only previewed, rebuilt or dismissed leaves no
-   * trace in the DJ's memory or in "Why this song?".
-   */
-  commit?: (accepted: Song[]) => void;
 }
 
 const DISCOVERY_SHARE: Record<DiscoveryLevel, number> = { low: 0.05, medium: 0.2, high: 0.4 };
@@ -74,10 +59,8 @@ export async function planQueue(req: PlanRequest): Promise<QueuePlan> {
   const history = useHistoryStore.getState().entries;
   const recentKeys = new Set([...(seed ? [songKey(seed)] : []), ...history.slice(0, 10).map((e) => songKey(e.song))]);
   const admitted = admitForPlan([...seeded, ...wide], req, { muted: useSettingsStore.getState().mutedLanguages, blocked: (s) => isSongBlocked(s, lib), recentKeys });
-  if (!admitted.length) return { songs: [], totalSec: 0, arcError: 0, intro: null, djTouched: false, candidates: 0 };
-  const enriched = await enrichSongs(admitted.map((c) => c.song), { waitMs: 1_500 });
-  const byId = new Map(enriched.map((s) => [s.id, s]));
-  const ranked = rankCandidates(admitted.map((c) => ({ ...c, song: byId.get(c.song.id) ?? c.song })), { ...ctx, seedSong: seed });
+  if (!admitted.length) return { songs: [], totalSec: 0, arcError: 0, candidates: 0 };
+  const ranked = rankCandidates(admitted, { ...ctx, seedSong: seed });
   const pool = ranked.map((r) => r.candidate.song);
   // v7.0.0 — "discovery" means an artist this listener has never played (or an
   // explore pick), the same definition the next-song pipeline uses; it used to
@@ -92,26 +75,5 @@ export async function planQueue(req: PlanRequest): Promise<QueuePlan> {
   // blocks); the arc's order is kept, a rejected song simply leaves it.
   const allowed = new Set(validateSequence(arc.songs.map((s) => s.song), { seed, limit: arc.songs.length, artistCap: Math.max(2, Math.ceil(arc.songs.length / 4)), mutedLanguages: useSettingsStore.getState().mutedLanguages, blocked: (s) => isSongBlocked(s, lib) }).songs.map((s) => s.id));
   arc.songs = arc.songs.filter((s) => allowed.has(s.song.id));
-  let intro: string | null = null;
-  let djTouched = false;
-  let songs = arc.songs;
-  let commit: QueuePlan['commit'];
-  // 7.2.0 — the master switch and the owner's kill switch apply to the Queue Builder too.
-  const djAllowed = useSettingsStore.getState().aiAssist && useSettingsStore.getState().aiDj && queryClient.getQueryData<Record<string, boolean>>(['feature-flags'])?.aiDj !== false;
-  if (req.useDj && arc.songs.length >= 3 && djAllowed) {
-    try {
-      const { djSequence, commitDjSet } = await import('@/services/ai/dj');
-      const set = await djSequence(seed, { ...ctx, seedSong: seed }, arc.songs.map((s) => s.song), arc.songs.length, undefined, { shape: req.shape, goal: req.goal });
-      if (set) {
-        intro = set.intro || null;
-        djTouched = true;
-        const notes = new Map(set.picks.map((p) => [p.song.id, p.reason]));
-        songs = arc.songs.map((s) => (notes.get(s.song.id) ? { ...s, why: notes.get(s.song.id) as string } : s));
-        commit = (accepted) => commitDjSet(set, accepted);
-      }
-    } catch {
-      /* the local plan stands */
-    }
-  }
-  return { songs, totalSec: arc.totalSec, arcError: arc.arcError, intro, djTouched, candidates: admitted.length, commit };
+  return { songs: arc.songs, totalSec: arc.totalSec, arcError: arc.arcError, candidates: admitted.length };
 }

@@ -1,6 +1,6 @@
 # Owner console
 
-The owner console is served at `/admin/`. Since 14.0 it reads and writes the database described in [database.md](database.md): twelve pages in four groups cover what is happening now, who is listening, what they play and report, what the owner publishes to every app, notifications, VinaX AI, the catalogue, the database itself and the health of the deployment. Every page is verified against a full database, an empty one and a database outage.
+The owner console is served at `/admin/`. Since 14.0 it reads and writes the database described in [database.md](database.md): twelve pages in four groups cover what is happening now, who is listening, what they play and report, what the owner publishes to every app, notifications, the catalogue, the database itself and the health of the deployment. Every page is verified against a full database, an empty one and a database outage.
 
 This document covers sign-in, the audit trail, the files, the framework every page uses (`VX` in `core.js`), how to add a page, every page with the routes it calls, the settings vocabulary and how a published setting reaches listeners, the fresh-database checklist, and the tests.
 
@@ -119,21 +119,20 @@ The admin API each page calls is specified route by route in [database.md](datab
 | **System · Overview** (landing) | — | `overview`: the tiles (`stats_overview`), the 14-day timeline, platforms, and an **attention** list naming anything the owner should look at (missing secrets, new feedback, failing jobs, errors rising) with a link to the page that fixes it |
 | **System · Live** | Now listening · Activity feed · Listen Together | `live` (polled every 15 s): who is listening now with the song, the newest events, open rooms with member counts; `end_room` and `end_all_rooms` behind a confirm |
 | **System · Database** | Tables · Jobs · Audit trail · Maintenance | `database` (schema version, every table with rows and size, exact counts, the scheduled jobs with last run and overdue flag), `audit`; `purge_events { days }`, `sweep_rooms`, `retire_push { days }` and `run_job { job }` behind confirms; a fresh-database checklist when `configured` is false or the schema is missing |
-| **System · Health** | System status · Endpoints · Releases · Server secrets · App errors | `health` (pings every AI key with a 4-token request; spends model tokens, so once per visit and on demand), `edge`, `releases` (names a rejected `GITHUB_TOKEN`), `envcheck` (now includes the two database secrets as required and `CRON_SECRET` as optional), `analytics?view=errors` with `clear_errors` |
+| **System · Health** | App errors · Endpoints · Catalogue sources · Releases · Server secrets | `analytics?view=errors` with `clear_errors`, `edge`, `musicapi` (each music catalogue source checked with a one-song search, on a button press), `releases` (names a rejected `GITHUB_TOKEN`), `envcheck` (now includes the two database secrets as required and `CRON_SECRET` as optional) |
 | **Audience · Listeners** | All listeners · Profile (drawer) | `listeners` (the `directory` view: devices with their accounts and account-only rows, search on name, handle and email, platform and activity filters, counts by platform, CSV); `listeners?id=` / `?account=` for the profile drawer (`listener_profile`: facts, counts, top songs, languages, the last 300 events; JSON and CSV downloads); `delete { id, account, reason }` behind a typed confirm |
 | **Audience · Analytics** | Music · Places · Engagement · Retention · Funnel · Skips · Errors | `analytics?view=…&days=`: top songs, artists, languages and what is rising; countries and cities; the event mix, hour-of-week heat map (IST), platforms and app versions, segments; weekly cohorts; the onboarding funnel; skip rates; app errors |
 | **Audience · Feedback** | Inbox | `feedback` with status and kind filters; `status { id, status, note }` (new → read → resolved, with an owner note), `delete { id }`, `delete_resolved` |
-| **Intelligence · VinaX AI** | Usage & health · API lab · Engine probe | `ai?days=` (`stats_ai`: volume, failures, latency p50/p95, tokens by model, errors, the newest calls); `POST ailab` (chat and media bench, no failover), `/api/aimodels`, `enginetest`, `musicapi` |
 | **Intelligence · Experiments** | — | `experiments`; `save { key, name, variants, active }` (variants sum to at most 100), `delete { key }`. Assignment stays on the device; the server never learns who is in which variant |
 | **Content · Catalog** | Catalog lookup · Blocked content | `catalog-search`; `content` (blocked songs, artists and keywords, plus the most-played songs as block suggestions), `block { kind, value, label, reason }`, `unblock { id }` |
-| **Content · Publish** | One tab per group: Home & promotion · App · Catalog · VinaX AI · Operations | `settings` (every key with its current value, who changed it and when), `settings?key=` (the value and its history), `POST settings { key, value }` (null clears). Editors per key: banners, festival theme (from `festivals.js`), greeting, broadcast, Home layout, announcement, FAQ, feature switches, minimum build, site mode and status note, maintenance window, retention, push rules, synonyms, catalogue sources, language order, AI starters, quick actions, house rules, AI controls |
+| **Content · Publish** | One tab per group: Home & promotion · App · Catalog · Operations | `settings` (every key with its current value, who changed it and when), `settings?key=` (the value and its history), `POST settings { key, value }` (null clears). Editors per key: banners, festival theme (from `festivals.js`), greeting, broadcast, Home layout, announcement, FAQ, feature switches, minimum build, site mode and status note, maintenance window, retention, push rules, synonyms, catalogue sources, language order |
 | **Content · Notifications** | Send · History · Audience · Push setup | `push` (what is configured, active devices per channel, audience counts by country, region, city and language); `POST push` with `dryRun: true` first, then the send (a `dedupeKey` refuses a double-click; everyone needs a confirm); `notifications` with `retract { id }`; `envcheck` (the Push group) and `fcmcheck` |
 
-The admin routes that read no storage are `ailab`, `catalog-search`, `edge`, `enginetest`, `envcheck`, `fcmcheck`, `health`, `musicapi` and `releases`.
+The admin routes that read no storage are `catalog-search`, `edge`, `envcheck`, `fcmcheck`, `musicapi` and `releases`.
 
 ### Fresh database
 
-When the database secrets are set but `schema.sql` has not been run, every data route answers `502 db_not_found` and the **Database** page shows the checklist: paste `backend/supabase/schema.sql`, confirm the schema version, set the secrets if they are missing, run the status tick once. When the secrets are missing, every data page shows the setup card instead of its content; Health, the API lab, the engine probe and the catalogue lookup keep working.
+When the database secrets are set but `schema.sql` has not been run, every data route answers `502 db_not_found` and the **Database** page shows the checklist: paste `backend/supabase/schema.sql`, confirm the schema version, set the secrets if they are missing, run the status tick once. When the secrets are missing, every data page shows the setup card instead of its content; Health and the catalogue lookup keep working.
 
 ## Published settings
 
@@ -148,15 +147,11 @@ Everything the owner publishes to every app is a row in `settings`: one key, one
 | | `home-layout` | Shelf order and hidden shelves: `{ title, description, order, hidden }` (at most 12 hidden, so one shelf always stays) |
 | | `announcement` | What the Android app shows on open: `{ title, body, link?, ts }`. The push sender writes it too |
 | App | `support-faq` | Help center questions and answers: `[{ q, a }]` |
-| | `flags` | Boolean feature switches the app reads: `aiHome`, `listenTogether`, `codeRun`, … |
+| | `flags` | Boolean feature switches the app reads: `listenTogether`, … |
 | | `min-version` | Older Android builds must update: `{ build }` |
 | Catalog | `search-synonyms` | `{ "typed": "meant" }` pairs applied to searches |
 | | `catalog-sources` | `{ sourceId: false }` disables a catalogue source for everyone |
 | | `language-order` | Languages in the order Home offers them |
-| VinaX AI | `ai-starters` | Suggestions on the empty chat |
-| | `ai-quick` | `[{ icon, label, prompt, mode? }]` under the composer |
-| | `ai-rules` | Plain text appended to the assistant's instructions |
-| | `ai-controls` | `{ emergencyOff, features: { name: bool }, dailyTokenCap, dailyCostCapUsd }` |
 | Operations | `site-mode` | `{ mode: "live" \| "maintenance", note? }`: maintenance shows the gate to everyone |
 | | `maintenance-window` | A planned window `{ start, end, note }`; the gate shows inside it |
 | | `status-note` | An owner note at the top of the status page: `{ text }` |
@@ -175,31 +170,29 @@ Publish page ──POST /api/admin/settings { key, value }──▶ Worker
 
 | Public key | Returns | Edge cache |
 | --- | --- | --- |
-| `client` | One bundle read at app boot: Home layout, greeting, broadcast, synonyms, disabled catalogue sources, language order, AI starters, quick actions, FAQ, minimum build | 60 s |
+| `client` | One bundle read at app boot: Home layout, greeting, broadcast, synonyms, disabled catalogue sources, language order, FAQ, minimum build | 60 s |
 | `flags` | Boolean feature flags | 60 s |
 | `festival` | The festival theme override | 60 s |
 | `banners` | Banners inside their start/end dates, at most 10 | 300 s |
 
-`/api/site-mode` reads `site-mode` and `maintenance-window`; `/api/announcements` reads `announcement` (and answers none when the matching notification was retracted); `/api/status` reads `status-note`; the AI routes read `ai-controls` and `ai-rules`; housekeeping reads `retention`; the push sender reads `push`. A listener sees a change within the edge cache time plus the Worker's one-minute memo, at most about six minutes for banners.
+`/api/site-mode` reads `site-mode` and `maintenance-window`; `/api/announcements` reads `announcement` (and answers none when the matching notification was retracted); `/api/status` reads `status-note`; housekeeping reads `retention`; the push sender reads `push`. A listener sees a change within the edge cache time plus the Worker's one-minute memo, at most about six minutes for banners.
 
 Feature flags the app reads and what "off" means:
 
 | Flag | Off means |
 | --- | --- |
-| `aiHome` | The "Designed for you" block on Home is hidden for everyone |
 | `listenTogether` | The Listen Together entries are hidden |
-| `codeRun` | The Run and Open buttons under code blocks in VinaX AI are hidden ([ai.md](ai.md)) |
 
 ## Tests
 
 - `frontend/src/__tests__/adminConsole.test.ts` (`npm test`) loads the real `core.js` and every page into a DOM. It checks `index.html` loads every page file in order under the strict CSP, every page registers a unique id, a known group and an existing icon, the shell lands on Overview, no console script assigns HTML strings or calls `fetch` directly, and **every page and tab renders from empty answers, from `configured: false` and from failing ones** without throwing or printing `undefined`, `NaN` or `[object Object]`.
 - `frontend/e2e/console-shell.spec.ts`: sign-in (wrong and right password, sign out, landing on Overview), every sidebar page, Ctrl+K, a slow tab left behind, the phone menu.
-- `frontend/e2e/console-pages.spec.ts`: every tab with data, with empty answers and with a failing server, the exact bodies the AI lab, the settings editor and the push sender post. All mock `/api/**` and block non-local network.
-- `backend/worker/__tests__/`: one test file per admin route against a mocked database (the `configured: false`, failed-read and data answers), plus `aiProviderAdmin.test.ts` (AI Lab, engine test, Health, the secrets checklist), `admin-endpoints.test.ts` (the brute-force lockout), `fcmcheck.test.ts` and `aiMedia.test.ts`.
+- `frontend/e2e/console-pages.spec.ts`: every tab with data, with empty answers and with a failing server, the exact bodies the settings editor and the push sender post. All mock `/api/**` and block non-local network.
+- `backend/worker/__tests__/`: one test file per admin route against a mocked database (the `configured: false`, failed-read and data answers), plus `admin-endpoints.test.ts` (the brute-force lockout), `fcmcheck.test.ts` and `functions/api/admin/musicapi.test.ts` (the catalogue sources check).
 
 ## Limits
 
 - One shared password: the audit trail records `owner` for every action.
 - The failed-attempt throttle counts per edge location, not globally.
-- Counts on the Database page's Tables tab are the planner's estimates for the two large tables (`events`, `ai_calls`); the small tables are exact.
+- Counts on the Database page's Tables tab are the planner's estimates for the large `events` table; the small tables are exact.
 - Analytics read at most 90 days; longer trends need the data exported.

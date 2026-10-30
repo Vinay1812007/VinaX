@@ -22,14 +22,15 @@ async function setup(page: Page, theme: string) {
 }
 
 for (const size of [{ width: 1440, height: 1000, theme: 'dark' }, { width: 390, height: 844, theme: 'light' }]) {
-  test(`Home and playlist fit ${size.width}px ${size.theme}`, async ({ page }) => {
+  test(`Home and Radio fit ${size.width}px ${size.theme}, and nothing calls an AI route`, async ({ page }) => {
     await page.setViewportSize(size);
     await setup(page, size.theme);
     const errors: string[] = [];
     const retiredRequests: string[] = [];
     page.on('request', (request) => {
       const url = new URL(request.url());
-      if (['/api/dj', '/api/home'].includes(url.pathname) || url.searchParams.get('key') === 'home-config') retiredRequests.push(url.pathname);
+      // 1.3 — VinaX has no AI: none of the removed AI routes is ever called.
+      if (['/api/dj', '/api/home', '/api/curate', '/api/embed', '/api/playlist', '/api/vinaxai', '/api/aimodels', '/api/voices', '/api/tts', '/api/transcribe'].includes(url.pathname) || url.pathname.startsWith('/api/ai/') || url.searchParams.get('key') === 'home-config') retiredRequests.push(url.pathname);
     });
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto('/');
@@ -37,15 +38,10 @@ for (const size of [{ width: 1440, height: 1000, theme: 'dark' }, { width: 390, 
     await expect(page.locator('.vx-layout-toggle')).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
-    await page.goto('/ai-playlist');
-    const generated = page.waitForRequest((r) => new URL(r.url()).pathname === '/api/playlist');
-    await page.getByRole('group', { name: 'Ideas' }).getByRole('button').first().click();
-    // v6.5.0 — an example prompt fills the box AND starts building at once.
-    await expect(page.locator('#playlist-idea')).toHaveValue(/Telugu/);
-    await expect(page.locator('#playlist-idea')).toHaveValue(/focused afternoon/);
-    await generated;
+    await page.goto('/radio');
+    await expect(page.getByRole('heading', { name: 'Radio', level: 1 })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.screenshot({ path: `test-results/playlist-studio-${size.width}.png` });
+    await page.screenshot({ path: `test-results/radio-${size.width}.png` });
     expect(errors).toEqual([]);
     expect(retiredRequests).toEqual([]);
   });

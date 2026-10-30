@@ -1,6 +1,6 @@
 # Discovery modes
 
-This page explains the recommendation settings you can change: Familiar, Balanced and Discover, the trending slider, queue languages, pinned and muted languages, the AI switches, the song-menu choices that steer what you hear, Fewer repeats, and how to start over. Everything here is in **Settings → Recommendations** unless noted.
+This page explains the recommendation settings you can change: Familiar, Balanced and Discover, the trending slider, queue languages, pinned and muted languages, Smart Queue, the song-menu choices that steer what you hear, Fewer repeats, and how to start over. Everything here is in **Settings → Recommendations** unless noted.
 
 ## What VinaX thinks you like
 
@@ -34,18 +34,11 @@ The shares are approximate. What you skip and what you finish in a sitting moves
 
 To change language for the songs coming up without touching these settings, use **Tune this queue → Switch language**. See [The player and the queue](player-and-queue.md).
 
-## The AI switches
+## Smart Queue
 
-These are under **Settings → Recommendations → AI**.
+**Settings → Recommendations → Smart Queue → Build every queue**: tap a song and VinaX builds what follows from it, on this device. Off makes playback follow the list you tapped. Songs you queue by hand are never replaced.
 
-| Setting | What it does |
-|---|---|
-| **AI in recommendations** | Lets AI engines tag songs, re-rank what plays next, run the DJ and read descriptions you type in Search. Off keeps every pick on your device, and nothing about your listening is sent for recommendations. |
-| **AI DJ** | Lets the AI help choose and order what plays next. |
-| **DJ builds every queue** | Tap a song and the DJ builds what follows. Off makes playback follow the list you tapped. |
-| **AI-designed shelves on Home** | Shows the **Designed for you** shelves on Home. |
-
-The **Smart Queue** switch on the Queue page is a quicker way to turn the DJ on and off. See [The player and the queue](player-and-queue.md).
+The **Smart Queue** switch on the Queue page is a quicker way to turn this and Autoplay on and off. See [The player and the queue](player-and-queue.md).
 
 ## Steer from a song menu
 
@@ -72,7 +65,7 @@ The choices that reduce or hide something show an **Undo** right after you choos
 
 ## Fewer repeats
 
-If Home feels too familiar, tap **Fewer repeats**, next to **Refresh Home**. Home is rebuilt once, leaving out what you have heard or been shown lately. The same button sits next to **Build it again** on an AI playlist.
+If Home feels too familiar, tap **Fewer repeats**, next to **Refresh Home**. Home is rebuilt once, leaving out what you have heard or been shown lately.
 
 VinaX keeps this memory of what it has put in front of you on your device. It holds up to 600 songs and forgets a song after 45 days without any contact.
 

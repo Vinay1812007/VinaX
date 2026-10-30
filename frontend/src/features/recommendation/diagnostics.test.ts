@@ -3,7 +3,7 @@ import type { DebugBatch } from '@/store/recsDebugStore';
 import { makeSong } from '@/__fixtures__/songs';
 import { pct, summarise } from './diagnostics';
 
-const row = (id: string, over: { artist?: string; picker?: 'local' | 'ai'; title?: string } = {}) => ({
+const row = (id: string, over: { artist?: string; picker?: 'local'; title?: string } = {}) => ({
   position: 1,
   song: makeSong(id, { artist: over.artist ?? `Artist ${id}`, ...(over.title ? { title: over.title } : {}) }),
   finalScore: 1,
@@ -133,12 +133,6 @@ describe('summarise — where the candidates came from and what gave way', () =>
     expect(d.latency.samples).toBe(3);
     expect(d.latency.max).toBe(300);
     expect(d.latency.p50).toBe(200);
-  });
-
-  it('splits who chose each order', () => {
-    const b = batch([]);
-    b.rows = [row('1', { picker: 'ai' }), row('2', { picker: 'ai' }), row('3', { picker: 'local' })];
-    expect(summarise([b]).pickers).toEqual({ local: 1, ai: 2 });
   });
 
   it('survives a batch with no trace at all', () => {

@@ -79,8 +79,8 @@ export function DeferredBlock({ render }: { render?: () => ReactNode }) {
 
 /**
  * 9.1.0 — a shelf records the songs it PUT ON SCREEN in the shared exposure
- * ledger, so the next Home generation (and the queue, the Daily mix and the AI
- * Playlist) know they have been seen.
+ * ledger, so the next Home generation (and the queue and the Daily mix) know
+ * they have been seen.
  *
  * Why here, and not where the songs are fetched: a fetched-but-never-rendered
  * list is not an impression. Home's blocks are visibility-mounted, so a shelf

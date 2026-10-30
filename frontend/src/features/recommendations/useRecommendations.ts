@@ -16,7 +16,7 @@ export { getRecommendationContext } from '@/services/recommendation/context';
  * 9.0.0 — built once per Home generation and taste stamp
  * (features/home/homeRefresh.ts). v7.0.0 froze the raw profile stamp per
  * mount, which stopped shelves jumping while Home was open but rebuilt the
- * whole pipeline (and its optional AI re-rank) on every return to Home after
+ * whole pipeline on every return to Home after
  * a single play. Now:
  *   - the taste stamp is coarse (five plays, a like or dislike, a skip
  *     streak, a "Less like this") and read once per visit;

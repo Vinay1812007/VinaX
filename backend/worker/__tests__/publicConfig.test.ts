@@ -32,13 +32,13 @@ describe('/api/appconfig', () => {
       row('greeting', { text: 'Happy Diwali!' }),
       row('banners', [{ id: 'b1', title: 'New in Telugu', linkType: 'playlist', linkId: 'p1', img: 'https://i/b.jpg' }, { title: '' }, { title: 'Old', end: '2020-01-01' }]),
       row('festival', { mode: 'force', id: 'Diwali' }),
-      row('flags', { codeRun: false, 'bad name': true, count: 3 }),
+      row('flags', { festivalBar: false, 'bad name': true, count: 3 }),
     ] });
     const client = (await (await appconfig.onRequestGet({ request: req('/api/appconfig?key=client'), env: ENV })).json()) as { greeting: unknown };
     expect(client.greeting).toEqual({ text: 'Happy Diwali!' });
     expect(await (await appconfig.onRequestGet({ request: req('/api/appconfig?key=banners'), env: ENV })).json()).toEqual({ banners: [{ id: 'b1', title: 'New in Telugu', linkType: 'playlist', linkId: 'p1', img: 'https://i/b.jpg' }] });
     expect(await (await appconfig.onRequestGet({ request: req('/api/appconfig?key=festival'), env: ENV })).json()).toEqual({ festival: { mode: 'force', id: 'diwali' } });
-    expect(await (await appconfig.onRequestGet({ request: req('/api/appconfig?key=flags'), env: ENV })).json()).toEqual({ flags: { codeRun: false } });
+    expect(await (await appconfig.onRequestGet({ request: req('/api/appconfig?key=flags'), env: ENV })).json()).toEqual({ flags: { festivalBar: false } });
     expect((await appconfig.onRequestGet({ request: req('/api/appconfig?key=nope'), env: ENV })).status).toBe(400);
     vi.unstubAllGlobals();
     resetSettingsMemo();
@@ -50,7 +50,7 @@ describe('/api/appconfig', () => {
   });
 
   it('one settings read serves every key for a minute', async () => {
-    const fake = fakeDb({ settings: [row('flags', { aiHome: true })] });
+    const fake = fakeDb({ settings: [row('flags', { listenTogether: true })] });
     await appconfig.onRequestGet({ request: req('/api/appconfig?key=flags'), env: ENV });
     await appconfig.onRequestGet({ request: req('/api/appconfig?key=client'), env: ENV });
     await siteMode.onRequestGet({ env: ENV });

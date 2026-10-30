@@ -6,8 +6,8 @@ This document covers the offline evaluation of VinaX's next-song selection: a ha
 
 | Step | What happens | Where |
 | --- | --- | --- |
-| 1. Fixtures | 29 synthetic listeners, each with a seed song, a profile, a history, settings and a pool of fictional songs | `frontend/eval/fixtures/index.ts` — `buildFixtures(now)` |
-| 2. Mocks | Five network-facing modules are replaced; everything else is the app's own code | `frontend/eval/lib/mocks.ts`, wired by `vi.mock` in `frontend/eval/recs.eval.ts` |
+| 1. Fixtures | Synthetic listeners, each with a seed song, a profile, a history, settings and a pool of fictional songs | `frontend/eval/fixtures/index.ts` — `buildFixtures(now)` |
+| 2. Mocks | The catalogue client and the query cache are replaced; everything else is the app's own code | `frontend/eval/lib/mocks.ts`, wired by `vi.mock` in `frontend/eval/recs.eval.ts` |
 | 3. Sittings | Each fixture runs once per salt (12 by default). A sitting is four continuations of five songs, a queue of twenty | `runSession` in `frontend/eval/lib/run.ts` |
 | 4. Measuring | Every queued song is checked against rules written out again for the harness | `frontend/eval/lib/rules.ts` |
 | 5. Extra runs | One determinism re-run, one "asked again from the same song" run, eight latency conditions | `frontend/eval/recs.eval.ts` |
@@ -15,7 +15,7 @@ This document covers the offline evaluation of VinaX's next-song selection: a ha
 | 7. Gate | Three assertions; the process exits 0 or 1 | `frontend/eval/recs.eval.ts`, `frontend/scripts/eval-recs.mjs` |
 | 8. Reports | A JSON file per pipeline, a combined JSON file and a Markdown file | `frontend/scripts/eval-recs.mjs` |
 
-A default run plans 1 308 continuations in 348 sittings and takes a little over three minutes.
+A default run takes a little over three minutes.
 
 ## Running it
 
@@ -58,18 +58,18 @@ An unknown flag exits with code 2. The runner passes these on as environment var
 
 ## Fixtures
 
-`buildFixtures(now)` returns 29 fixtures, each a pure function of the timestamp the harness passes in (`NOW = 1_800_000_000_000`). Songs, titles and artists are fictional, in Telugu, Hindi, Tamil, Punjabi, Malayalam and Latin scripts (`frontend/eval/fixtures/catalogue.ts`). `EVAL_FIXTURES_VERSION` is `1.4.0`; bump it whenever a fixture changes, because two reports with different fixture versions are not comparable.
+`buildFixtures(now)` returns the fixtures below, each a pure function of the timestamp the harness passes in (`NOW = 1_800_000_000_000`). Songs, titles and artists are fictional, in Telugu, Hindi, Tamil, Punjabi, Malayalam and Latin scripts (`frontend/eval/fixtures/catalogue.ts`). `EVAL_FIXTURES_VERSION` is `1.4.0`; bump it whenever a fixture changes, because two reports with different fixture versions are not comparable.
 
 | Fixture | What it is for |
 | --- | --- |
 | `cold` | No profile, no history, no favourites |
-| `warm` | A full profile; the AI DJ answers with an order of its own |
+| `warm` | A full profile |
 | `familiar` | Familiar mode: a 5 % discovery allocation |
-| `discover` | Discover mode (Hindi), AI unavailable |
-| `tamil` | Tamil; the DJ times out |
-| `punjabi` | Punjabi, AI off |
+| `discover` | Discover mode (Hindi) |
+| `tamil` | Tamil |
+| `punjabi` | Punjabi |
 | `malayalam` | Malayalam, Familiar mode |
-| `mixed` | A listener who plays Hindi, Telugu and Tamil; the DJ proposes an off-language song, an explicit one and a hidden artist |
+| `mixed` | A listener who plays Hindi, Telugu and Tamil |
 | `mixed-queue` | The same listener with `queueLanguages: 'mix'`: Hindi seed, three languages pinned, and Punjabi in the pool, which must stay out |
 | `prefs` | A quiet cluster and a loud one in one pool |
 | `skips` | A skip streak of three, with the skipped songs in the pool |
@@ -78,13 +78,12 @@ An unknown flag exits with code 2. The runner passes these on as environment var
 | `sparse` | No energy, tempo, mood, genre, year or duration |
 | `versions` | One work in several cuts, plus a zero-width joiner, a Latin accent and a featured credit |
 | `small-catalogue` | Six candidates for a sitting that wants twenty |
-| `kid-mode` | Kid mode with explicit songs in the pool and a DJ proposing more |
+| `kid-mode` | Kid mode with explicit songs in the pool |
 | `muted-languages` | Hindi and English muted, with a pool full of them |
 | `hidden-artists` | Two hidden artists (one in an Indic script, one Latin) and hidden songs |
 | `soft-muted` | Two lead artists under "show fewer like this" |
 | `dj-session`, `folk-session` | A DJ-remix sitting and a folk sitting; what follows should stay in style |
 | `deep-sources` | Thin suggestions; the album page and two similar artists' pages hold songs no search returns. Declares those as its taste |
-| `embeddings`, `embeddings-off` | The device holds learned vectors that tell the fitting half of a 60-song pool apart; `-off` is the same listener without them |
 | `served` | Eight of the strongest suggestions were shown on Home this week. 1.4.0 — the pool holds fourteen alternative search results, so the metric measures the exposure penalty instead of pool arithmetic (the 26-song pool had saturated it at 37.5 %; the same engine reads 27.5 % with room to avoid) |
 | `memory` | Every continuation is committed and its first four songs end (three finished, one skipped) |
 | `unplayable` | The suggestions response can stream only half its songs |
@@ -94,15 +93,12 @@ Two more fixtures serve the latency conditions only: `latencyFixture` (a warm Te
 
 ## How the real engine is loaded
 
-`recs.eval.ts` imports `@/services/recommendation/engine` and calls `planNextSongs` when the tree exports it, otherwise `recommendNextSongs`. The `@` alias points at `frontend/src`, or at `EVAL_SRC` for a baseline. Five modules are replaced, and nothing else:
+`recs.eval.ts` imports `@/services/recommendation/engine` and calls `planNextSongs` when the tree exports it, otherwise `recommendNextSongs`. The `@` alias points at `frontend/src`, or at `EVAL_SRC` for a baseline. Two modules are replaced, and nothing else:
 
 | Replaced | By |
 | --- | --- |
 | `@/services/api` (the catalogue client) | The fixture's pool, with scripted failures, delays and never-settling calls. Album pages, artist pages, artist top songs and exact-name artist searches answer as the catalogue does |
-| `@/services/ai/recommendations` | A classifier that never answers, and the re-rank the real client returns when the curator is unreachable |
-| `@/services/ai/dj` | A scripted DJ: off, unavailable, timing out, never answering, re-ordering, or proposing songs that break the rules |
 | `@/services/queryClient` | No cached data |
-| `@/services/ai/embeddings` | Only the vectors a fixture says the device holds; no network |
 
 The mock sits one level below `candidates.ts` on purpose: the candidate stage has rules of its own (soft mutes, Kid mode, blocked songs), and replacing the whole module would remove them from the measurement.
 
@@ -121,14 +117,14 @@ The rules are written out again in `eval/lib/rules.ts` rather than imported from
 | Hard-rule violation | A queued song that is: explicit under Kid mode; in a muted language; credited to a hidden artist; hidden by id; led by a soft-muted artist; the same id or work as one of the last 20 plays; skipped in this sitting; unplayable; or the same id or work as a song already in the queue or earlier in the same continuation (`breaksRule`, `violationsOf`) |
 | Off-language under the lock | A queued song in a known language other than the lock's. Excused when fewer than three eligible in-language candidates were left for that continuation; otherwise a hard violation |
 | Mix rules (`queueLanguages: 'mix'`) | `off-language`: a known language outside the listener's set. `language-opening`: slot 1 or 2 not in the lead language. `language-run`: two off-lead songs in a row. Hard violations unless the engine reported the `language-mix` relaxation |
-| Queue-ready violations | The same count on the order the player could queue first, before any AI refinement |
+| Queue-ready violations | The same count on the order the player could queue first |
 | Same lead back to back | Adjacent queue entries with the same lead artist. Also counted: those at a boundary between two continuations, and those "avoidable" because another lead artist was still eligible |
 | Same lead within three | The lead artist also leads one of the three songs before, when not already counted as back to back |
 | Identity repeats | The same work adjacent, or anywhere earlier in the sitting |
 | Artist coverage | Distinct lead artists per continuation; distinct lead artists per sitting as a share of its songs |
 | Discovery share | Songs whose lead artist the listener has never played, over songs queued. The allocation is `DISCOVERY_SHARE` (familiar 0.05, balanced 0.2, discover 0.45) times the continuation's length, rounded. A continuation is "over the allocation" only when familiar candidates were available |
 | Familiar-first | Slot 1 is not a discovery, counted where a familiar eligible candidate existed. Slot 2 is tracked for continuations of four or more |
-| Pickers, fallbacks, relaxations | Who chose the final order (`local`, `ai`), `plan.fallback`, and the relaxations the engine reported |
+| Pickers, fallbacks, relaxations | Who chose the final order, `plan.fallback`, and the relaxations the engine reported |
 | Style continuity | For `dj-session` and `folk-session`: the share of a continuation in the sitting's style, and how many continuations held at least ⌈0.8 n⌉ in style |
 | Retrieval depth | Queued songs only an album page or an artist page could supply, over songs queued |
 | Declared-taste agreement | For fixtures with `tasteTargets`: the share of each continuation inside the declared taste |
@@ -143,14 +139,12 @@ Each runs sequentially on one fixture with salt 7. A run that hits its cap is "c
 
 | Condition | What is scripted | Runs | Cap |
 | --- | --- | ---: | ---: |
-| `instant-sources` | Every source answers at once, AI off | 24 | 12 s |
+| `instant-sources` | Every source answers at once | 24 | 12 s |
 | `slow-sources` | Every catalogue call answers after 140–900 ms | 8 | 12 s |
 | `source-throws` | The seed-suggestions source fails at once | 8 | 12 s |
 | `source-never-settles` | A search never settles, pool of 26 | 5 | 10 s |
 | `source-never-settles-large-pool` | Later searches never settle, pool of 104 | 5 | 10 s |
 | `source-never-settles-urgent` | The same with `deadlineMs: 3_500`; current pipeline only | 5 | 6 s |
-| `ai-slow` | The DJ answers after 2 s | 8 | 8 s |
-| `ai-never` | The DJ never answers | 5 | 8 s |
 
 ## The gate
 
@@ -166,7 +160,7 @@ Each runs sequentially on one fixture with salt 7. A run that hits its cap is "c
 
 ## Reading the output
 
-`node scripts/eval-recs.mjs --no-baseline` on the working tree prints:
+`node scripts/eval-recs.mjs --no-baseline` on the working tree prints a summary like this one, from an older run (fixtures 1.3.0); a run on today's tree prints different counts:
 
 ```
  Test Files  1 passed (1)
@@ -178,7 +172,7 @@ continuations 1308 · songs 5760 · empty 84 · reproducible yes
 hard-rule violations 0 (queue-ready 0) · off-language under a relaxed lock 54
 same lead back to back 36 (batch boundary 12, avoidable 24) · identity repeats 0
 distinct artists per continuation 3.944 · discovery 35.8 % against an allocation of 17.9 %
-familiar-first compliance 95.4 % · pickers {"local":1236,"ai":72} · fallbacks {"none":1308}
+familiar-first compliance 95.4 % · pickers {…} · fallbacks {"none":1308}
 queue-ready latency p50 12.3 ms · p95 196 ms (instant sources, 1308 samples)
 declared-taste agreement 48.3 % (synthetic) · album/artist-page songs 1.5 % · pushed-away artists queued 0 · served songs queued 37.5 %
 asked again from one song: 3 of 3 opening songs repeat without memory, 1 with it
@@ -197,16 +191,14 @@ The per-condition latency of the same run (`recs-eval.md`, "Latency"):
 | `source-never-settles` | 7 435 / 7 500 ms | same | 5 |
 | `source-never-settles-large-pool` | 56.7 / 2 083 ms | same | 5 |
 | `source-never-settles-urgent` | 2 804 / 2 805 ms | same | 5 |
-| `ai-slow` | 3.9 / 7.8 ms | 2 005 / 2 009 ms | 5 |
-| `ai-never` | 2.8 / 5.7 ms | cut off at 8 s | 5 |
 
-Two things to take from it. A slow or silent AI does not delay the queue: the local order is ready in milliseconds and the refinement arrives later or never. A catalogue source that never settles costs the whole deadline when the rest of the pool is small, and almost nothing when the pool is large.
+The thing to take from it: a catalogue source that never settles costs the whole deadline when the rest of the pool is small, and almost nothing when the pool is large.
 
 ### When the gate fails
 
 | Symptom | Where to look |
 | --- | --- |
-| `hard-rule violations` above 0 | `quality.overall.violations` in the JSON names the kind; `quality.perFixture` names the fixture. If `queue-ready` is 0 and the total is not, the AI refinement let the song in |
+| `hard-rule violations` above 0 | `quality.overall.violations` in the JSON names the kind; `quality.perFixture` names the fixture |
 | `reproducible NO` | `determinismDiff` in the JSON holds both orders. Look for state that survives `localStorage.clear()` (module-level memory), an unfrozen clock, or randomness not derived from the salt |
 | `No report written for <pipeline>` | The harness did not start. The runner prints the test output; an unresolved import in the tree under test is the usual cause |
 | A metric moved and no gate failed | Compare `quality.perFixture` between the two JSON files to find which fixture moved, then read that fixture's notes |
@@ -258,7 +250,7 @@ It mocks a catalogue of 120 playable songs in one language by 24 artists, so a m
 Why the evaluation cannot do this job. Its repetition metrics saturate, for three reasons found in the code:
 
 - Every continuation is called with the whole queue as `excludeIds` and `excludeKeys` (`eval/lib/run.ts`, `runSession`). A repeat inside a sitting is excluded by the caller, so "identity repeats" reads 0 whatever the engine remembers.
-- `applyFixture` clears `localStorage`, where the exposure ledger lives, before every continuation of every fixture except `memory`. A plan is committed only in `memory` and in one arm of the seed-memory replay. In the other 27 fixtures the engine always plans with an empty ledger.
+- `applyFixture` clears `localStorage`, where the exposure ledger lives, before every continuation of every fixture except `memory`. A plan is committed only in `memory` and in one arm of the seed-memory replay. In every other fixture the engine always plans with an empty ledger.
 - Each sitting starts from the fixture's state, and no metric compares the songs of one sitting with the songs of another. The harness contains no reference to the ledger at all.
 
 The one number that touches the subject is the seed-memory replay (the opening three songs, on one fixture). It cannot tell a build that brings back most of a 20-song list from one that does not.
@@ -268,7 +260,7 @@ The one number that touches the subject is the seed-memory replay (the opening t
 - **Enjoyment.** A queue can break no rule, space every artist and ship in a millisecond, and still be a bad half hour of music. "Declared-taste agreement" is agreement with what a synthetic fixture says, nothing more.
 - **Repetition across sittings and surfaces.** See above.
 - **A real catalogue.** Pools hold 6 to 104 songs. Discovery share, artist coverage and empty continuations are bounded by pool size as much as by policy.
-- **A real AI.** The DJ is scripted; `ai` picker counts describe the scripts. The classifier never answers, so mood, energy and tempo are only what a fixture provides.
+- **Audio features.** The catalogue has no mood, energy or tempo of its own, so those are only what a fixture provides.
 - **The profile updater and the player's admission gate.** The harness measures the engine's output; the player filters once more before queuing.
 - **Field latency.** One machine, one process, no network.
 

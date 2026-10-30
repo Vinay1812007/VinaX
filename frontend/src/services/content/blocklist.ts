@@ -3,7 +3,7 @@ import { isNativePlatform } from '@/services/native';
 /**
  * Song blocklist managed from the admin Content dashboard. The app fetches the
  * blocked ids once at startup and filters them out of all normalized song
- * lists (search, shelves, charts, AI/local queue resolution).
+ * lists (search, shelves, charts, queue resolution).
  */
 const ENDPOINT = isNativePlatform()
   ? 'https://www.vinaxmusic.online/api/blocklist'

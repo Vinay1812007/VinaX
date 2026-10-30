@@ -1,7 +1,7 @@
 import type { Song } from '@/types';
 import { isJunkTitle, songKey } from './songIdentity';
 
-/** One admission gate for radio, AI and emergency queue top-ups. */
+/** One admission gate for radio and emergency queue top-ups. */
 export function freshSongs(
   songs: Song[],
   options: {

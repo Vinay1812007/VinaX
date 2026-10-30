@@ -72,13 +72,6 @@ vi.mock('@/services/api', () => ({
   getArtistTopSongs: async () => [],
   getSong: async (id: string) => CATALOGUE.find((s) => s.id === id) ?? null,
 }));
-vi.mock('@/services/ai/recommendations', () => ({
-  enrichSongs: async (songs: Song[]) => songs,
-  aiRerankSongs: async () => [],
-  requestCurator: async () => null,
-}));
-vi.mock('@/services/ai/dj', () => ({ djSequence: async () => null, samplePool: (x: Song[]) => x, lastDjOutcome: () => 'unavailable', commitDjSet: () => undefined, matchesProposal: () => false }));
-vi.mock('@/services/ai/embeddings', () => ({ getCachedEmbedding: () => null, embedSongs: async () => undefined, embedQueryDetailed: async () => null, cosine: () => 0, activeEmbeddingModel: () => null }));
 vi.mock('@/services/queryClient', () => ({ queryClient: { getQueryData: () => undefined } }));
 
 import { planNextSongs } from './engine';
@@ -105,7 +98,7 @@ function context(over: Parameters<typeof makeContext>[0] = {}) {
 /** One continuation, committed the way the player commits what it accepted. */
 async function generate(seed: Song, salt: number, over: Parameters<typeof makeContext>[0] = {}): Promise<Song[]> {
   resetCandidateCache();
-  const plan = await planNextSongs(seed, context({ salt, ...over }), { limit: BATCH, deadlineMs: 8_000, aiBudgetMs: 0 });
+  const plan = await planNextSongs(seed, context({ salt, ...over }), { limit: BATCH, deadlineMs: 8_000 });
   plan.commit(plan.songs);
   return plan.songs;
 }
@@ -117,7 +110,7 @@ beforeEach(() => {
   resetRecMemory();
   resetCandidateCache();
   resetTrendSignal();
-  useSettingsStore.setState({ aiAssist: false, aiDj: false, kidMode: false, mutedLanguages: [] });
+  useSettingsStore.setState({ kidMode: false, mutedLanguages: [] });
   useLibraryStore.setState({ hiddenSongIds: [], hiddenArtists: [], favorites: [] });
 });
 
@@ -251,7 +244,7 @@ describe('9.1 acceptance — a 120-track fixture (24 artists, all playable, all 
         resetExposure();
         resetRecMemory();
         resetCandidateCache();
-        const plan = await planNextSongs(seed, context({ salt, discoveryMode: mode, history }), { limit: BATCH, deadlineMs: 8_000, aiBudgetMs: 0 });
+        const plan = await planNextSongs(seed, context({ salt, discoveryMode: mode, history }), { limit: BATCH, deadlineMs: 8_000 });
         const strangers = plan.songs.filter((s) => !known.includes(lead(s))).length;
         runs.push(plan.songs.length ? strangers / plan.songs.length : 0);
       }

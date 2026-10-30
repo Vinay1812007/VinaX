@@ -43,7 +43,6 @@ const ROUTES = [
   { p: '/made-for-you', t: 'Made For You', d: 'Personal mixes built from your listening — private and on-device.', h1: 'Made for you' },
   { p: '/about', t: 'About', d: 'VinaX is a free music app for India. Private by design, tuned to you.', h1: 'About VinaX', ld: { '@context': 'https://schema.org', '@type': 'AboutPage', '@id': 'https://www.vinaxmusic.online/about/#page', name: 'About VinaX', url: 'https://www.vinaxmusic.online/about/', mainEntity: { '@id': 'https://www.vinaxmusic.online/#org' } } },
   { p: '/help', t: 'Help & Feedback', d: 'FAQs, how-tos, and how to report a problem.', h1: 'Help & Feedback' },
-  { p: '/VinaXAI', t: 'VinaX AI — ask anything', d: 'Chat with VinaX AI — ask anything and get clean answers with code, tables and images. Free and private.', h1: 'VinaX AI' },
   { p: '/download', t: 'Get the App', d: 'Install VinaX on Android for background playback and offline downloads.', h1: 'Get VinaX for Android' },
   { p: '/privacy', t: 'Privacy', d: 'What VinaX stores with your Google account, what stays on your device, and how to export or delete it.', h1: 'Privacy' },
   { p: '/terms', t: 'Terms of Use', d: 'Content is sourced from third parties; no DRM circumvention. Plain-language terms.', h1: 'Terms of Use' },
@@ -211,8 +210,8 @@ let bodies;
 /** Home's hero line: the free promise, as the first-visit welcome states it (features/home/HomeWelcome.tsx). */
 const HOME_PROMISE =
   '<p><strong>All the music you love. Free.</strong> Free forever, with no subscription: ' +
-  'sign in with Google once and press play. Hindi, Telugu, Tamil, Punjabi and 8 more languages, with synced lyrics, AI Radio, ' +
-  'Listen Together rooms, VinaX AI and offline downloads in the Android app.</p>';
+  'sign in with Google once and press play. Hindi, Telugu, Tamil, Punjabi and 8 more languages, with synced lyrics, Radio, ' +
+  'Listen Together rooms and offline downloads in the Android app.</p>';
 
 /** The crawlable body for one route: the real page text, then the nav. */
 function bodyFor(r) {

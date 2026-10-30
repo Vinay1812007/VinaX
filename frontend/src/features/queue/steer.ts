@@ -63,7 +63,7 @@ export interface MoreLikeThisResult {
 /**
  * "More like this": a positive signal for this sitting only (the same pull a
  * like gives the song's artist and language; nothing is written to the
- * long-term profile), then an immediate rebuild of the DJ picks — toward the
+ * long-term profile), then an immediate rebuild of the automatic picks — toward the
  * song's mood when it has a clear one, otherwise with the active tune kept.
  */
 export function moreLikeThis(song: Song): MoreLikeThisResult {

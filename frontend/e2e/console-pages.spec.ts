@@ -3,20 +3,17 @@ import { test, expect, type Page } from './support/test';
 /**
  * 14.0 — owner console pages (/admin/, static files) against a mocked
  * Worker that answers the admin API contract in docs/database.md: Overview,
- * Live, Listeners, Analytics, Feedback, Experiments, VinaX AI, Catalog,
+ * Live, Listeners, Analytics, Feedback, Experiments, Catalog,
  * Publish, Notifications, Database and Health.
  *
  * Every tab renders with realistic answers, with empty answers and with the
- * server failing (inline error with retry); the AI lab sends the exact body
- * the server expects; the push composer previews before it sends. All
+ * server failing (inline error with retry); the push composer previews before it sends. All
  * non-localhost network is aborted; zero page or console errors allowed; no
  * "undefined" / "NaN" / "null" on screen.
  */
 
 const iso = (hoursAgo: number): string => new Date(Date.now() - hoursAgo * 3_600_000).toISOString();
 const day = (daysAgo: number): string => new Date(Date.now() - daysAgo * 86_400_000).toISOString().slice(0, 10);
-const SSE = ['{"meta":{"model":"meta/llama-3.3-70b-instruct","name":"Llama 3.3 70B","provider":"nvidia","lane":"chat"}}', '{"delta":"Hello from the lab."}', '{"done":true,"chars":19}']
-  .map((l) => `data: ${l}\n\n`).join('');
 
 const TABS = [
   'overview',
@@ -25,16 +22,15 @@ const TABS = [
   'analytics/music', 'analytics/places', 'analytics/engagement', 'analytics/retention', 'analytics/funnel', 'analytics/skips',
   'feedback', 'feedback?status=all',
   'experiments',
-  'ai/usage', 'ai/lab', 'ai/probe',
   'catalog/lookup?q=kesariya', 'catalog/blocked',
   'publish', 'publish?key=site-mode',
   'notify/send', 'notify/history', 'notify/audience', 'notify/setup',
   'database/tables', 'database/jobs', 'database/audit', 'database/maintenance',
-  'health/status', 'health/errors', 'health/edge', 'health/releases', 'health/env',
+  'health/errors', 'health/edge', 'health/sources', 'health/releases', 'health/env',
   'seo/overview', 'seo/audit', 'seo/tools',
 ];
 /** Tabs that only call the server when a button is pressed. */
-const ON_DEMAND = new Set(['ai/lab', 'ai/probe', 'seo/tools']);
+const ON_DEMAND = new Set(['health/sources', 'seo/tools']);
 
 type Json = Record<string, unknown>;
 
@@ -61,9 +57,6 @@ function fixtures(full: boolean): Record<string, Json> {
     '/api/admin/experiments': full
       ? { configured: true, rows: [{ key: 'home-shelf-order', name: 'Shelf order', variants: [{ name: 'control', pct: 50 }, { name: 'charts-first', pct: 50 }], active: true, createdAt: iso(100), updatedAt: iso(10) }] }
       : { configured: true, rows: [] },
-    '/api/admin/ai': full
-      ? { configured: true, days: 7, summary: { total: 120, ok: 110, fail: 10, p50: 900, p95: 3200, promptTokens: 40000, completionTokens: 12000 }, byFeature: [{ feature: 'chat', total: 80, ok: 75, fail: 5, p50: 800, p95: 3000 }], byProvider: [{ provider: 'nvidia', total: 100, ok: 92, fail: 8 }], byModel: [{ model: 'meta/llama-3.3-70b-instruct', provider: 'nvidia', calls: 100, fail: 8, promptTokens: 30000, completionTokens: 9000 }], byDay: timeline(true).map((t) => ({ day: t.day, total: t.plays, ok: t.plays - 3, fail: 3 })), errors: [{ error: 'timeout', count: 6 }], recent: [{ at: iso(0), feature: 'chat', lane: 'chat', provider: 'nvidia', model: 'meta/llama-3.3-70b-instruct', ok: true, status: 200, client: 'web', latencyMs: 850 }] }
-      : { configured: true, days: 7, summary: {}, byFeature: [], byProvider: [], byModel: [], byDay: [], errors: [], recent: [] },
     '/api/admin/content': full
       ? { configured: true, blocked: [{ id: 1, kind: 'song', value: 'x9', label: 'Bad Song', reason: 'copyright', createdAt: iso(30) }], suggestions: [{ ...song, plays: 320 }] }
       : { configured: true, blocked: [], suggestions: [] },
@@ -74,9 +67,8 @@ function fixtures(full: boolean): Record<string, Json> {
         { key: 'flags', group: 'App', title: 'Feature switches', note: 'Boolean flags.', shape: 'boolean-map' },
         { key: 'site-mode', group: 'Operations', title: 'Site mode', note: 'live or maintenance.', shape: 'object' },
         { key: 'retention', group: 'Operations', title: 'Data retention', note: '{ eventsDays }.', shape: 'object' },
-        { key: 'ai-rules', group: 'VinaX AI', title: 'House rules', note: 'Plain text.', shape: 'string' },
         { key: 'search-synonyms', group: 'Catalog', title: 'Search synonyms', note: 'Pairs.', shape: 'object' },
-      ], values: { greeting: { text: 'Good evening' }, flags: { aiHome: true, codeRun: false } }, updated: { greeting: { at: iso(3), by: 'owner' }, flags: { at: iso(30), by: 'owner' } } }
+      ], values: { greeting: { text: 'Good evening' }, flags: { listenTogether: true } }, updated: { greeting: { at: iso(3), by: 'owner' }, flags: { at: iso(30), by: 'owner' } } }
       : { configured: true, keys: [{ key: 'greeting', group: 'Home & promotion', title: 'Home greeting', note: 'A line under the Home title.', shape: 'object' }], values: {}, updated: {} },
     '/api/admin/push': full
       ? { configured: true, web: { configured: true, active: 40 }, fcm: { configured: true, active: 15 }, geo: { countries: [{ key: 'IN', count: 50 }], regions: [{ key: 'Telangana', count: 20, country: 'IN' }], cities: [{ key: 'Hyderabad', count: 15, region: 'Telangana', country: 'IN' }] }, langs: [{ lang: 'te', count: 30 }, { lang: 'en-IN', count: 25 }], rules: { minGapHours: 20 } }
@@ -90,16 +82,6 @@ function fixtures(full: boolean): Record<string, Json> {
     '/api/admin/database': full
       ? { configured: true, reachable: true, schema: { version: 1, appliedAt: iso(50) }, tables: [{ name: 'events', rows: 120000, bytes: 52_000_000 }, { name: 'listeners', rows: 120, bytes: 80_000 }], counts: { listeners: 120, events: 120000 }, jobs: [{ job: 'status-tick', schedule: 'every 30 min', lastAt: iso(0.2), ok: true, summary: { probes: 3 }, overdue: false }, { job: 'housekeeping', schedule: 'hourly', lastAt: iso(5), ok: false, summary: null, overdue: true }], retention: { eventsDays: 180 }, missing: [] }
       : { configured: true, reachable: true, schema: null, tables: [], counts: {}, jobs: [], retention: {}, missing: [] },
-    '/api/admin/health': {
-      time: iso(0),
-      ai: full
-        ? [
-          { key: 'NVIDIA · dj, chat', provider: 'nvidia', env: 'NVIDIA_API_KEY', envInUse: 'NVIDIA_API_KEY', lanes: ['dj', 'chat'], media: [], tools: [], configured: true, ok: true, status: 200, model: 'meta/llama-3.3-70b-instruct', note: null },
-          { key: 'Groq · mini', provider: 'groq', env: 'GROQ_API_KEY', envInUse: null, lanes: ['mini'], media: [], tools: [], configured: false, ok: false, status: null, model: null, note: 'not configured' },
-        ]
-        : [],
-      lanes: full ? [{ lane: 'dj', provider: 'nvidia', keySet: true }, { lane: 'mini', provider: 'groq', keySet: false }] : [],
-    },
     '/api/admin/seo': {
       origin: 'https://www.example.test', checkedAt: iso(0), indexable: full ? 1240 : 0, issues: full ? 2 : 0,
       robots: { status: 200, sitemaps: full ? ['https://www.example.test/sitemap.xml'] : [], blockedAgents: full ? ['GPTBot', 'CCBot'] : [], disallowAll: false },
@@ -131,18 +113,8 @@ function fixtures(full: boolean): Record<string, Json> {
         ? [
           { name: 'SUPABASE_URL', group: 'Database', required: true, note: 'the database project', set: false },
           { name: 'FCM_SERVICE_ACCOUNT', group: 'Push', required: false, note: 'Android push (FCM v1)', set: true },
-          { name: 'OPENROUTER_API_KEY', group: 'AI', required: false, note: 'OpenRouter', set: true, fallback: 'VINAX_OPENROUTER_API_KEY', usingFallback: true },
         ]
         : [],
-    },
-    '/api/aimodels': {
-      fetchedAt: iso(0),
-      providers: ['nvidia', 'openrouter', 'groq', 'gemini', 'cloudflare'].map((id) => ({
-        id, label: id, configured: full && id !== 'groq',
-        models: full && id === 'nvidia' ? [{ id: 'meta/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', maker: 'meta', context: 128000, vision: false }] : [],
-        media: [], tools: [],
-      })),
-      features: { image: false, speech: false, transcribe: false, embed: false, music: false, codeRun: false },
     },
     '/api/admin/musicapi': { checkedAt: iso(0), mirrors: full ? [{ id: 'vinax-cat', label: 'VinaX catalogue', base: 'https://example.test', ok: true, status: 200, ms: 320, songs: 1, note: null }, { id: 'upstream-1', label: 'wrapper.test', base: 'https://wrapper.test/api', ok: true, status: 200, ms: 210, songs: 1, note: null, health: { status: 'ok', upstreams: [{ name: 'jiosaavn', configured: true, ok: true, latencyMs: 70 }] } }] : [] },
     '/api/admin/catalog-search': full
@@ -199,13 +171,11 @@ async function open(page: Page, mode: 'full' | 'empty' | 'down'): Promise<Backen
     if (req.method() === 'POST') {
       const body = JSON.parse(req.postData() || '{}') as Json;
       backend.posts.push({ path: p, body });
-      if (p === '/api/admin/ailab') return route.fulfill({ status: 200, contentType: 'text/event-stream; charset=utf-8', body: SSE });
       if (p === '/api/admin/push' && body.dryRun === true) return route.fulfill({ json: { dryRun: true, web: 40, fcm: 15, audience: 'everyone' } });
       if (p === '/api/admin/push') return route.fulfill({ json: { ok: true, id: 8, web: { total: 40, sent: 39, gone: 1, failed: {} }, fcm: { total: 15, sent: 15, failed: {} }, audience: 'everyone' } });
       return route.fulfill({ json: { ok: true } });
     }
     if (mode === 'down') return route.fulfill({ status: 502, json: { error: 'db_unavailable' } });
-    if (p === '/api/admin/enginetest') return route.fulfill({ json: { key: url.searchParams.get('key'), provider: 'nvidia', model: 'm', status: 200, ms: 500, head: 'OK', media: [], tools: [] } });
     const dyn = dynamic(full, p, url);
     if (dyn) return route.fulfill({ json: dyn });
     const body = fx[p];
@@ -248,19 +218,17 @@ test.describe('owner console · pages', () => {
     expect(await visit(page, 'analytics/retention')).toContain('40%');
     expect(await visit(page, 'feedback')).toContain('The lyrics stop scrolling');
     expect(await visit(page, 'experiments')).toContain('home-shelf-order');
-    expect(await visit(page, 'ai/usage')).toContain('meta/llama-3.3-70b-instruct');
     expect(await visit(page, 'catalog/blocked')).toContain('Bad Song');
     expect(await visit(page, 'publish?key=flags')).toContain('Feature switches');
     expect(await visit(page, 'notify/history')).toContain('Diwali playlist');
     expect(await visit(page, 'database/tables')).toContain('events');
     expect(await visit(page, 'database/jobs')).toContain('Overdue');
     expect(await visit(page, 'database/audit')).toContain('greeting published');
-    expect(await visit(page, 'health/status')).toContain('AI providers');
     expect(await visit(page, 'health/errors')).toContain('decode failed');
     expect(await visit(page, 'health/edge')).toContain('Catalogue search');
     expect(await visit(page, 'health/releases')).toContain('VinaX 14.0.0');
     expect(await visit(page, 'health/env')).toContain('SUPABASE_URL');
-    expect(await visit(page, 'ai/probe')).toContain('No probes yet');
+    expect(await visit(page, 'health/sources')).toContain('Not checked yet');
     await page.getByRole('button', { name: 'Check sources' }).click();
     await expect(page.locator('#pageBody')).toContainText('VinaX catalogue');
     expect(await visit(page, 'catalog/lookup?q=kesariya')).toContain('Kesariya');
@@ -300,20 +268,6 @@ test.describe('owner console · pages', () => {
     });
     expect(await visit(page, 'overview')).toContain('Database not set up');
     expect(await visit(page, 'listeners')).toContain('schema.sql');
-    expect(errors).toEqual([]);
-  });
-
-  test('the AI lab sends the bench body the server expects and shows the reply', async ({ page }) => {
-    const errors = collectErrors(page);
-    const backend = await open(page, 'full');
-    await visit(page, 'ai/lab');
-    await page.getByRole('button', { name: 'Run', exact: true }).first().click();
-    await expect(page.locator('#pageBody')).toContainText('Hello from the lab.');
-    expect(backend.posts.filter((p) => p.path === '/api/admin/ailab').at(-1)?.body).toEqual({
-      provider: 'nvidia',
-      messages: [{ role: 'user', content: 'Suggest three upbeat Telugu songs for a morning walk, one line each.' }],
-      maxTokens: 300,
-    });
     expect(errors).toEqual([]);
   });
 

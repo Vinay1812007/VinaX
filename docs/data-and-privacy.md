@@ -1,20 +1,20 @@
 # Data and privacy
 
-This document says what VinaX keeps on a listener's device, what leaves the device (when, to what kind of service, and under which setting), what the usage-sharing choice controls, what the AI features send, and how backup, restore, device transfer and erasing behave. It is written from the code: the storage registry (`frontend/src/constants/storage-keys.ts`), the backup module (`frontend/src/features/settings/backup.ts`), the network clients under `frontend/src/services/` and `frontend/src/features/`, and the Worker routes under `backend/worker/functions/api/`. The listener-facing version is [user-guide/library-and-backup.md](user-guide/library-and-backup.md); the in-app text is `frontend/src/pages/PrivacyPage.tsx`.
+This document says what VinaX keeps on a listener's device, what leaves the device (when, to what kind of service, and under which setting), what the usage-sharing choice controls, and how backup, restore, device transfer and erasing behave. It is written from the code: the storage registry (`frontend/src/constants/storage-keys.ts`), the backup module (`frontend/src/features/settings/backup.ts`), the network clients under `frontend/src/services/` and `frontend/src/features/`, and the Worker routes under `backend/worker/functions/api/`. The listener-facing version is [user-guide/library-and-backup.md](user-guide/library-and-backup.md); the in-app text is `frontend/src/pages/PrivacyPage.tsx`.
 
 ## The short version
 
-- **Device first, account second.** Library, history, settings, the taste profile and AI chats live on the device. A signed-in listener's library, history, taste and settings also sync to their account as one copy; AI chats never do. Clearing site or app data removes the device copy; the app offers an export.
-- **Features that need the network send what they need.** Browsing sends search words and ids to the catalogue source. AI features send a bounded summary of taste and recent listening (song titles and artist names) with no install id and no name attached. Listen Together, usernames, feedback, notifications and device transfer each send the fields listed below.
+- **Device first, account second.** Library, history, settings and the taste profile live on the device. A signed-in listener's library, history, taste and settings also sync to their account as one copy. Clearing site or app data removes the device copy; the app offers an export.
+- **Features that need the network send what they need.** Browsing sends search words and ids to the catalogue source. There are no AI features, so nothing goes to an AI service. Listen Together, usernames, feedback, notifications and device transfer each send the fields listed below.
 - **Usage statistics are on by default, off with one switch.** Since 14.0.3 the box on the welcome sheet is ticked and says so; Settings → Region & privacy has the switch. While it is off, no usage events are sent. Devices that onboarded earlier, with the old unticked box, were switched to the default once and told, with the switch one tap away. **Session insights (third-party, masked replays) are opt-in**, their own switch in Settings, off by default.
 - **The web app shows advertising on some browsing pages.** Those pages load a third-party advertising script, and that is not controlled by the usage-sharing choice. See [Advertising](#advertising).
-- **The server keeps what its features need, in one database, and nothing more.** The tables are listed under [Server-side records](#server-side-records): no IP addresses, no precise location, no prompts or replies, no AI chats. Usage events are kept for a bounded time and then purged. Rate limiting keys on a hashed network address, not the address itself.
+- **The server keeps what its features need, in one database, and nothing more.** The tables are listed under [Server-side records](#server-side-records): no IP addresses, no precise location. Usage events are kept for a bounded time and then purged. Rate limiting keys on a hashed network address, not the address itself.
 
 ## Your Google account
 
 VinaX needs a Google account: until a listener signs in, every page is the sign-in screen (the Privacy, Terms and Contact pages stay readable). Signing in sends Google's ID token to the Worker, which checks it with Google and stores one row in `accounts`: the Google account ID, email address (and whether Google verified it), name, profile picture address, the linked device (`listener_id`) when the device proves its signed ID, and the time. The device is linked at sign-in or on the app's session check once per load; that check also refreshes the time at most every 10 minutes. The row also holds coarse sign-in facts, written at sign-in and on that same refresh: the edge's geo for the request (`country`, `region`, `city`; the IP address is never stored), `platform` (web, android, ios) and `app_version`. The owner console's Listeners page shows every account with its name, email, profile photo and these facts, whether or not the listener shares usage; plays, searches and favourites reach the server only while usage sharing is on (the default). The Privacy page says so.
 
-**What syncs.** The account also holds one copy of the listener's data in `account_backups`, in the same format as the backup file: settings, library and playlists, smart collections, listening history, taste profile, bookmarks and the Home layout. It is merged into each device the listener signs in on and updated a few seconds after a change; a version number makes two devices merge instead of overwrite each other. **AI chats, searches and this device's identity never sync.** The copy is at most 2 MB.
+**What syncs.** The account also holds one copy of the listener's data in `account_backups`, in the same format as the backup file: settings, library and playlists, smart collections, listening history, taste profile, bookmarks and the Home layout. It is merged into each device the listener signs in on and updated a few seconds after a change; a version number makes two devices merge instead of overwrite each other. **Searches and this device's identity never sync.** The copy is at most 2 MB.
 
 **Session and deletion.** The session is kept on the device and sent only to `/api/auth/*` and `/api/account/*`. **Sign out** forgets it on the device (the data stays on the device and in the account). **Delete account** (Settings → Profile, also reached from the top-bar avatar menu) removes the account row and, with it, the synced copy from the server. On the website the sign-in button and its script load from Google; in the Android app the system's Google account sheet is used.
 
@@ -23,18 +23,16 @@ VinaX needs a Google account: until a listener signs in, every page is the sign-
 | Where | What | Notes |
 | --- | --- | --- |
 | `localStorage`, registry keys (`vinax.*`) | Settings (`vinax.settings.v1`, which includes the app style as `template`), player state and queue, library, history (last 150 plays), search state, taste profile and the separate Kid-mode profile, region, welcome-done flag, last-seen version, name, username and pending username, alarm, lyric offsets, karaoke history, weekly mix, output choice, downloads index, room host keys, update reminders, the install id (`vinax.device-id`), the signed id issued by the service (`vinax.signed-device-id`), the usage-sharing choice (`vinax.analytics-consent`) | `constants/storage-keys.ts` is the registry. |
-| `localStorage`, feature keys (`vinax.*`) | Bookmarks, smart collections, search workspace, streak, sidebar groups, Home layout, Home signals (`vinax.home.signals.v1`), recommendation memories (`vinax.recs.outcomes.v1`, `vinax.recs.seedmemo.v1`, `vinax.recs.exposure.v1`, `vinax.recs.snoozed.v1`), the DJ's already-surfaced list, AI shelf caches, AI Playlist rounds and avoid list, dismissed banners, the embedding model name (`vinax.embed.model.v1`) | Each feature owns its key next to the registry. |
-| `localStorage`, VinaX AI | Chats (`vinax_ai_chats_v1`), projects (`vinax.ai.projects.v1`), memory lines and the memory switch (`vinax.ai.memory.v1`, `vinax.ai.memoryOn`), the code tool switch (`vinax.ai.codeOn`), chat style (`vinax.ai.chatStyle`), reply language, reply style, profile text, font size, default mode, saved prompts, voice, last and recent models | Attachments are stripped from chats before saving. A temporary chat is never written. |
+| `localStorage`, feature keys (`vinax.*`) | Bookmarks, smart collections, search workspace, streak, sidebar groups, Home layout, Home signals (`vinax.home.signals.v1`), recommendation memories (`vinax.recs.outcomes.v1`, `vinax.recs.seedmemo.v1`, `vinax.recs.exposure.v1`, `vinax.recs.snoozed.v1`), dismissed banners | Each feature owns its key next to the registry. |
 | `sessionStorage` | Boot and chunk-reload counters, the restore Undo snapshot (`vinax.backup.undo.v1`), this session's Home order, session intent, and the live Listen Together session (`vinax.together.session.v1`: mode and room code, so a reload rejoins) | Gone when the tab closes. |
 | IndexedDB `tarang-db` | The listen-event log behind taste insights | `services/storage/idb.ts`. |
-| IndexedDB `vinax-embeddings` | Song vectors from the embedding route: song id, model name, vector, time stored; at most 5,000 songs | `services/ai/embeddings.ts`. The vectors describe songs, not the listener. |
 | Cache storage `vinax-shell-*` | App shell and build assets | Managed by the service worker. |
 | Cache storage `vinax-audio-v1` | Downloaded songs | Not cleared by a service-worker update or by boot recovery. |
 | Android app storage | Downloaded audio files | Android only; paths are in the downloads index. |
 
 Every persisted store writes through the guarded layer described in [architecture.md](architecture.md#stores-and-persistence): a full device shows one warning instead of breaking playback, and writes are frozen between a restore and its reload.
 
-The app style and the chat style are display preferences only. No request builder and no usage event reads them, so neither is sent anywhere.
+The app style is a display preference only. No request builder and no usage event reads it, so it is not sent anywhere.
 
 ## What leaves the device
 
@@ -49,8 +47,7 @@ The app style and the chat style are display preferences only. No request builde
 | Showing artwork | The artwork host; the Worker's image route only when a share card needs a same-origin copy | Image URLs. The content-security policy (`frontend/public/_headers`) allows images from any `https:` host plus `data:` and `blob:`; it names no specific image host, so there is no unused host to remove, and `frontend/index.html` sets no `img-src` of its own |
 | Opening lyrics | An open lyrics database, then the catalogue source as fallback | Track title, artist and duration |
 | Searching by lyric words (Search page) | The same open lyrics database (`services/lyrics/lrclib.ts`) | The words typed |
-| Running code VinaX AI wrote (the Run button, `POST /api/preview`) | The Worker, which serves it back into a sandboxed frame and stores nothing | The HTML, SVG or JavaScript being run |
-| App config, flags, festival window, announcements, blocklist, site mode, version and update check, experiment list, model and voice lists, trending searches | The Worker | Nothing personal |
+| App config, flags, festival window, announcements, blocklist, site mode, version and update check, experiment list, trending searches | The Worker | Nothing personal |
 | Trends shelves (`/api/trends`) | The Worker | A two-letter region code, a language and a limit, when set |
 | Region guess (`/api/geo`) | The Worker | Nothing beyond the request itself. The answer is a country code, a region name, the edge's approximate city and a time zone. Asked only while region inference is allowed (`allowRegionInference` in settings) and no manual override is set, and at most once every 12 hours unless the listener refreshes it. The answer is cached on the device under the region key. |
 | Choosing a username (`/api/username`) | The Worker, which keeps the handle on the device's `listeners` row | The username, display name, install id, the signed id when one exists, and the current username when changing it. Checking availability sends only the candidate username. |
@@ -60,44 +57,13 @@ The app style and the chat style are display preferences only. No request builde
 | Move to a new device (`/api/handoff`) | The Worker's short-lived relay | Ciphertext only. Kept at most ten minutes and deleted on first read. |
 | Casting to another device | A cast framework script, loaded from its vendor only when the device picker is opened (web only) | A normal script request |
 
-The install id is a random value created on the device the first time something needs it: claiming a username, joining or hosting a room, or sending a usage event. It is never attached to AI requests.
+The install id is a random value created on the device the first time something needs it: claiming a username, joining or hosting a room, or sending a usage event.
 
-### AI features
+### No AI
 
-Each route goes to the Worker, which forwards the request text to hosted AI model endpoints run by third parties and returns the answer. None of these requests carries the install id, the signed id, the display name or the username. The recommendation routes are skipped while **AI in recommendations** is off in Settings.
+VinaX has no AI features and sends nothing to an AI service. What plays next, Radio, Home's shelves and the taste profile are worked out on the device ([recommendations.md](recommendations.md)). Voice search and Drive mode's voice commands use the browser's or the phone's own speech recognition, and the commands are read by simple rules on the device; VinaX never receives or stores audio, only the words that end up in a search.
 
-| Feature (route) | What is sent |
-| --- | --- |
-| DJ ordering and queue extension (`/api/dj`) | The seed song; preferred and muted languages (up to 5 each); a pinned mood or tune instruction; up to 12 recently played, 10 finished, 10 skipped and 15 liked song lines; top artists and languages; taste-dial lines; up to 40 candidate songs described by title, artist, album or film, year and whether the listener knows them |
-| Home AI shelves and ranking (`/api/curate`) | A task name with candidate songs and a taste summary |
-| AI Playlist and AI Radio (`/api/playlist`) | The prompt, languages, the taste snapshot and titles to avoid |
-| Search understanding (`/api/ai/search`, and the search helper on `/api/vinaxai`) | The search words (up to 200 characters) and up to three preferred languages |
-| Embeddings (`/api/embed`) | Search words, or short text descriptions of songs built from catalogue details such as title, artists, album and language. Candidate songs, favourites and recent plays can be described this way. |
-| Lyrics tools (`/api/lyrics-tools`) | The lyric lines being translated, transliterated or explained (up to 80 lines for an explanation) |
-| VinaX AI chat (`/api/vinaxai`) | See below |
-| Read-aloud and the DJ voice (`/api/tts`) | The text to speak and the chosen voice |
-| Dictation (`/api/transcribe`) | The audio recording, its type and an optional language |
-| Image or music creation (`/api/image`, `/api/music`) | The prompt and the chosen model |
-
-A VinaX AI chat message sends:
-
-- the conversation so far, trimmed oldest-first when long, and the reply preferences (language, style);
-- the taste snapshot (`services/ai/taste.ts`): time of day, day of week, a session mood and energy label, a festival label when one is on, up to 5 preferred and 5 avoided languages, up to 10 top artists, up to 8 top songs, 8 liked songs and 10 recently played songs (each line is "title — artists", at most 90 characters), taste-dial lines, and the songs already recommended in this chat;
-- the profile text the listener wrote in VinaX AI settings, when there is one;
-- attached images (up to 6 per message), and the text of attached text files and PDFs. PDF text is extracted on the device (`features/ai/pdfText.ts`); the file itself is not uploaded. Each file contributes at most 6,000 characters, within one budget per message. A scanned, encrypted or unreadable PDF sends nothing, and the composer says so;
-- only while each is switched on: the listener's memory lines; a project's instructions and reference files; the playing song's details with up to 40 lyric lines; and the coarse place (below).
-
-**Place.** A chat request carries a coarse place so dates and times in answers fit the listener, or says there is none. The rule lives in `services/location/assistantPlace.ts` (`assistantPlaceRequest`): with a manual override, the chosen country and region go with the device time zone and never a city; with region inference allowed, the inferred country, region, approximate city and time zone go; with region inference off and no override, the request carries `{ off: true }` and the server uses Indian Standard Time without inferring anything. When inference is allowed but the device has not resolved a place yet, the server derives the same four coarse fields from the connection at the edge (country, region, approximate city, time zone — the values `/api/geo` would return; the network address itself is not read into the prompt, stored or logged) and the prompt labels them approximate and unconfirmed. Since 11.0 there is no separate Place switch in the chat: the app-wide **Allow region inference** setting is the one control.
-
-**Web search.** When the model answering is a Gemini 2.5 Flash model (your pick, or Auto for a question about current events), the provider may run its own web search as part of answering. VinaX sends the message exactly as before; the provider decides what to search. The pages it drew on, the queries it ran and its search-suggestion snippet come back with the reply and are kept in your chat on the device like the reply text. No other AI provider searches the web, and VinaX never fetches a web page itself.
-
-Since 11.8, when that search is not used for a message about current events, the Worker may search Google through Serper once for that message. Serper receives only the search query and the coarse country. The query is built from that one message, with attached files and code removed and each link cut to its site name (never the rest of the address) and at most 8 words of your previous message added for a short follow-up. The country is your coarse country, sent only when your place setting already sends one to the chat, and otherwise India. Taste, memory, projects, profile, region, city and identifiers are never sent. The results (titles, links and short snippets) go to the AI model with your message and come back as the reply's sources, kept on the device like the reply text. The Worker keeps results in the edge cache for up to an hour so the same search is not repeated, and logs that a search happened (not the query). What Serper retains is governed by its own terms.
-
-**Deep research, pictures and logos (12.0).** Deep research sends up to four search queries for one message: the message's own query and three written by an AI model from it — nothing else about you. Pictures in answers and the sites' logos load through the Worker, so your browser does not contact those sites; the Worker fetches a site's logo from a public logo service by its host name only. A new chat's first message is also sent to a fast AI model to write the chat's short title.
-
-**Trending now (11.9).** A new chat shows a few current headlines. The app reads them from the Worker (`/api/ai/headlines`) and sends nothing with the request. The Worker fetches them on a schedule with fixed searches (India news, tech), the same for everyone. Tapping one sends its title to VinaX AI as a question, like any other message.
-
-**What the server records about AI calls.** One row per call in `ai_calls`: feature name, lane, provider, model name, success flag, status, error code, client kind (web, android, ios), latency, and token counts when the model endpoint reports them. Prompts, replies, attachments and taste summaries are not written to it. What the third-party model endpoints retain is governed by their own terms and cannot be checked from this repository.
+On first launch after the AI features were removed, the app erases what they left on the device (`services/storage/earlyMigrations.ts`): the AI chats (`vinax_ai_chats_v1`), every `vinax.ai.*`, `vinax.aiplaylist.*` and `vinax.ai<Name>` key, the AI shelf and metadata caches, the old DJ's already-surfaced list, the embedding model name, and the `vinax-embeddings` IndexedDB database.
 
 ### Only with usage sharing on
 
@@ -117,7 +83,7 @@ A `play` is sent only when the play counts: at least 5 seconds heard, or 70 % of
 | Where is it stored? | `vinax.analytics-consent` on the device; absent means on. `vinax.usage-sharing-default-on.v1` marks the one-time switch of pre-14.0.3 devices. Session insights: `vinax.session-insights-consent.v1`, absent means off. |
 | What does it turn on? | Usage events only. Session insights have their own switch. Nothing else. |
 | How is it enforced? | `consented()` is read on every send. Each event carries an `x-vinax-consent` header and the Worker ignores events without it. `sessionInsightsConsented()` gates the third-party tag. |
-| What still happens when it is off? | Every functional and AI request in the tables above, and advertising on the web. |
+| What still happens when it is off? | Every functional request in the tables above, and advertising on the web. |
 | Where can it be changed? | **Settings → Region & Privacy → Share anonymous usage** (off at once) and **→ Session insights** (off after the next reload). |
 | Do backups carry it? | No. A restore never writes it. |
 | Does device transfer carry it? | Yes. |
@@ -126,9 +92,9 @@ Rows already sent while sharing was on stay on the server after it is turned off
 
 ## Advertising
 
-On the web, the song, artist, album, language-hub and mood-hub pages end with one advertising slot (`frontend/src/components/AdSlot.tsx`). The first time such a page is opened, the browser loads a script from a third-party advertising network, which then makes its own requests and may set its own cookies. The slot is not rendered — and no advertising script loads — in the Android app or in Kid mode, and it does not appear in the player, the queue or VinaX AI.
+On the web, the song, artist, album, language-hub and mood-hub pages end with one advertising slot (`frontend/src/components/AdSlot.tsx`). The first time such a page is opened, the browser loads a script from a third-party advertising network, which then makes its own requests and may set its own cookies. The slot is not rendered — and no advertising script loads — in the Android app or in Kid mode, and it does not appear in the player or the queue.
 
-Advertising is not gated on the usage-sharing choice. VinaX passes the advertising network no listening data: nothing from history, favourites, the taste profile or AI chats is handed to it. Asking for consent to advertising cookies in regions that require it is done by the advertising network's own prompt, not by code in this repository.
+Advertising is not gated on the usage-sharing choice. VinaX passes the advertising network no listening data: nothing from history, favourites or the taste profile is handed to it. Asking for consent to advertising cookies in regions that require it is done by the advertising network's own prompt, not by code in this repository.
 
 ## Server-side records
 
@@ -144,7 +110,6 @@ Everything the server keeps about listeners is in one database ([database.md](da
 | `push_devices` | Endpoint and keys or token, platform, language, time-zone offset, edge country/region/city, active flag, last pushed | Marked inactive on unsubscribe or after 180 days without a check-in; not deleted by those paths |
 | `rooms`, `room_members` | Room state; member rows (device id, name, last seen, reaction) | The room and its members when the host ends it; a member row on leave; rooms idle 6 hours and members unseen 1 day by housekeeping |
 | `notifications` | What the owner sent (title, body, link, audience filter, delivery counts); nothing about who received it | The owner retracts it (kept, marked) |
-| `ai_calls` | Counts and timings, no content, no listener | No removal path in the app |
 | `settings`, `experiments`, `audit_log`, `uptime_*`, `job_runs`, `blocked_content`, `meta` | The owner's published settings and their history, experiments, the owner's own actions, the status history, job runs, blocked content, the schema version | Nothing about listeners |
 | Device-transfer relay (`HANDOFF`, outside the database) | Ciphertext | After ten minutes, or on first read |
 | Rate limiting (isolate memory and bindings) | Counters keyed by route and a hash of the network address, hashed with a server-side pepper (`_lib/ratelimit.ts`) | Short-lived counters; the raw address is not part of the key |
@@ -177,10 +142,9 @@ Two deletion paths exist. **The listener** deletes their account from Settings �
 | `bookmarks` | Song bookmarks | Moments marked inside songs |
 | `homeLayout` | Home layout | Shelf order, hidden shelves and headline |
 | `identity` | Name & username | Display name, username, the welcome-done flag |
-| `extras` | Alarm, lyrics, streak & app preferences | Alarm, lyric offsets, karaoke history, streak, sidebar groups, saved AI prompts, and the AI preferences: default mode, profile text, font size, reply language, reply style and chat style |
-| `aiChats` | VinaX AI chats | Conversation history without attachments or temporary chats |
+| `extras` | Alarm, lyrics, streak & app preferences | Alarm, lyric offsets, karaoke history, streak, sidebar groups |
 
-A backup never contains (`BACKUP_EXCLUSIONS`): downloaded audio or download paths; the install id or the signed id; Listen Together host keys; the usage-sharing choice; the queue, playback position or caches; update reminders and the What's New read state. VinaX AI projects and memory lines are not in any category either.
+A backup never contains (`BACKUP_EXCLUSIONS`): downloaded audio or download paths; the install id or the signed id; Listen Together host keys; the usage-sharing choice; the queue, playback position or caches; update reminders and the What's New read state. Backups no longer include AI chats, saved AI prompts or AI reply preferences; an older file's `aiChats` section is ignored with a warning.
 
 ### Reading a file
 
@@ -215,14 +179,14 @@ This is the only path that carries identity. The payload is a backup plus the in
 | --- | --- |
 | Clear history, Clear favorites | Clears the list and offers Undo |
 | The personalization reset (`clearPersonalization`) | Resets the taste profile, the recommendation memories and the Home signals; favourites stay |
-| Reset app state → Erase everything | Clears the listen-event log, deletes the `vinax-embeddings` database and removes every `localStorage` key that starts with `vinax` (AI chats included), then reloads (`resetAppState`) |
+| Reset app state → Erase everything | Clears the listen-event log, deletes the `vinax-embeddings` database older builds kept, and removes every `localStorage` key that starts with `vinax`, then reloads (`resetAppState`) |
 
 `resetAppState` does not itself clear the downloaded-audio cache or `sessionStorage`. Nothing on the server is removed by a local erase: usage rows sent while sharing was on, feedback, a claimed username and push registrations remain until the retention purge or a deletion ([Server-side records](#server-side-records)). **Delete account** is the listener's path to removing the server copy of their account and synced data.
 
 ## Secrets
 
-The frontend holds no secrets. `VITE_*` variables are visible to every visitor and must never carry keys. Model-endpoint keys, the database URL and service-role key, the admin password, the device-id signing secret, push keys and the optional cron secret are Worker secrets, handled in [operations.md](operations.md). The database's public anon key is never used: every table has row-level security forced with no policy, so it can read nothing.
+The frontend holds no secrets. `VITE_*` variables are visible to every visitor and must never carry keys. The database URL and service-role key, the admin password, the device-id signing secret, push keys and the optional cron secret are Worker secrets, handled in [operations.md](operations.md). The database's public anon key is never used: every table has row-level security forced with no policy, so it can read nothing.
 
 ## Changing what is collected
 
-`services/analytics/telemetry.ts`, `services/analytics/recTelemetry.ts` and `services/analytics/sessionInsights.ts` gate on the same choice. Any change to what they send, to what an AI request carries, or to where advertising appears must be reflected in `frontend/src/pages/PrivacyPage.tsx` and in this document in the same change. [ai.md](ai.md) lists each AI route's contract.
+`services/analytics/telemetry.ts`, `services/analytics/recTelemetry.ts` and `services/analytics/sessionInsights.ts` gate on the same choice. Any change to what they send, or to where advertising appears, must be reflected in `frontend/src/pages/PrivacyPage.tsx` and in this document in the same change.

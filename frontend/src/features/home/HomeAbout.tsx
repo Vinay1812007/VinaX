@@ -29,7 +29,7 @@ export function HomeAbout() {
           </li>
           <li>
             <strong>One labelled ad, on the website only</strong>
-            <span>At the end of song, artist, album, language and mood pages. Never in the player, the queue, VinaX AI, your library, the Android app or Kid mode.</span>
+            <span>At the end of song, artist, album, language and mood pages. Never in the player, the queue, your library, the Android app or Kid mode.</span>
           </li>
           <li>
             <strong>Your taste stays yours</strong>
@@ -65,17 +65,16 @@ export function HomeAbout() {
         <p>
           VinaX learns what you like from the languages you pin and the songs you finish, like and skip. That taste
           profile is worked out on your device, not on a server; a copy syncs with your account so it follows you to
-          every device, and the Taste Profile page shows everything it has learned. When you tap a song, the DJ builds the next five songs from it, led by that song’s language, and
+          every device, and the Taste Profile page shows everything it has learned. When you tap a song, VinaX builds the next five songs from it, led by that song’s language, and
           keeps adding more as you listen. Choose Familiar, Balanced or Discover in Settings to decide how many new
           artists it brings in.
         </p>
 
         <h2>More than a player</h2>
         <p>
-          Synced lyrics you can sing along to, AI Radio that plays endlessly from a song, an artist or a few words,
-          Listen Together rooms for sharing a queue with friends, a sleep timer, Drive mode, weekly mixes built from
-          your listening, and VinaX AI, a chat assistant that can answer questions and turn a described mood into a
-          playlist you can play straight away.
+          Synced lyrics you can sing along to, Radio that plays endlessly from a song, an artist, a mood or a station,
+          Listen Together rooms for sharing a queue with friends, a sleep timer, Drive mode, and weekly mixes built from
+          your listening.
         </p>
 
         <p className="vxh-about-links">

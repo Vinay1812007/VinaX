@@ -4,7 +4,7 @@ import { STYLE_WEIGHTS } from './weights';
 import { songKey as songKeyOf } from './songIdentity';
 import type { Candidate, RecommendationContext } from './types';
 import { createEmptyProfile, type TasteSliders } from '../personalization/profile';
-import { sliderDialLines, DEFAULT_SLIDERS } from '../personalization/dials';
+import { DEFAULT_SLIDERS } from '../personalization/dials';
 import type { Song } from '../../types';
 
 function song(over: Partial<Song> = {}): Song {
@@ -157,19 +157,6 @@ describe('festival boost (A10)', () => {
   });
 });
 
-describe('sliderDialLines (C3)', () => {
-  it('emits nothing while every dial sits near neutral', () => {
-    expect(sliderDialLines(DEFAULT_SLIDERS)).toEqual([]);
-  });
-
-  it('summarizes only the dials moved off centre', () => {
-    const lines = sliderDialLines({ ...DEFAULT_SLIDERS, adventurous: 0.9, energy: 0.1 });
-    expect(lines).toHaveLength(2);
-    expect(lines.some((l) => /adventurous/i.test(l))).toBe(true);
-    expect(lines.some((l) => /mellow|melody/i.test(l))).toBe(true);
-  });
-});
-
 describe('rankCandidates', () => {
   it('dedupes by song id and drops non-positive (muted) scores', () => {
     const out = rankCandidates(
@@ -219,19 +206,6 @@ describe('8.2.0 — taste fit and served memory', () => {
     expect(repeat.score).toBeCloseTo(base - 0.1, 6);
   });
 
-  it('uses a learned embedding only relative to the pool, and never for a candidate without one', () => {
-    const x = Float32Array.from([1, 0]);
-    const y = Float32Array.from([0, 1]);
-    const favorites = ['f1', 'f2', 'f3'].map((id) => song({ id, artists: [{ id: 'sid', name: 'Sid Sriram' }] }));
-    const vectors: Record<string, Float32Array> = { f1: x, f2: x, f3: x, a: x, b: y, c: y };
-    const pool = ['a', 'b', 'c', 'd'].map((id) => cand(song({ id, artists: [{ id: `ar-${id}`, name: `Artist ${id}` }] })));
-    const withVectors = rankCandidates(pool, ctx({ favorites, embeddingOf: (id) => vectors[id] ?? null }));
-    const without = rankCandidates(pool, ctx({ favorites }));
-    const fit = (list: typeof withVectors, id: string) => taste(list.find((s) => s.candidate.song.id === id)!);
-    expect(fit(withVectors, 'a')).toBeGreaterThan(fit(without, 'a'));
-    expect(fit(withVectors, 'b')).toBeLessThanOrEqual(fit(without, 'b'));
-    expect(fit(withVectors, 'd')).toBeCloseTo(fit(without, 'd'), 9); // no vector: the on-device fit alone
-  });
 });
 
 describe('8.2.0 — an artist skipped in this sitting sinks (verified, unchanged)', () => {

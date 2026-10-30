@@ -15,7 +15,7 @@ export const UI_LANGS: { id: UiLang; label: string }[] = [
 const TE: Record<string, string> = {
   Listen: 'వినండి', 'Your Music': 'మీ సంగీతం', Explore: 'అన్వేషించండి',
   Home: 'హోమ్', Discover: 'డిస్కవర్', Charts: 'చార్ట్స్', 'Made For You': 'మీ కోసం',
-  'Your Week': 'మీ వారం', 'AI Playlist': 'AI ప్లేలిస్ట్', Search: 'వెతకండి',
+  'Your Week': 'మీ వారం', Search: 'వెతకండి',
   Library: 'లైబ్రరీ', Favorites: 'ఇష్టమైనవి', History: 'చరిత్ర', Queue: 'క్యూ',
   'Your VinaX': 'మీ VinaX', Downloads: 'డౌన్‌లోడ్‌లు', 'Listen Together': 'కలిసి వినండి',
   Movies: 'సినిమాలు', Languages: 'భాషలు', Moods: 'మూడ్స్', Regions: 'ప్రాంతాలు',
@@ -27,7 +27,7 @@ const TE: Record<string, string> = {
 const HI: Record<string, string> = {
   Listen: 'सुनें', 'Your Music': 'आपका संगीत', Explore: 'एक्सप्लोर',
   Home: 'होम', Discover: 'खोजें', Charts: 'चार्ट', 'Made For You': 'आपके लिए',
-  'Your Week': 'आपका सप्ताह', 'AI Playlist': 'AI प्लेलिस्ट', Search: 'खोज',
+  'Your Week': 'आपका सप्ताह', Search: 'खोज',
   Library: 'लाइब्रेरी', Favorites: 'पसंदीदा', History: 'इतिहास', Queue: 'क़तार',
   'Your VinaX': 'आपका VinaX', Downloads: 'डाउनलोड', 'Listen Together': 'साथ सुनें',
   Movies: 'फ़िल्में', Languages: 'भाषाएँ', Moods: 'मूड', Regions: 'क्षेत्र',
@@ -39,7 +39,7 @@ const HI: Record<string, string> = {
 const TA: Record<string, string> = {
   Listen: 'கேளுங்கள்', 'Your Music': 'உங்கள் இசை', Explore: 'ஆராயுங்கள்',
   Home: 'முகப்பு', Discover: 'கண்டறி', Charts: 'சார்ட்ஸ்', 'Made For You': 'உங்களுக்காக',
-  'Your Week': 'உங்கள் வாரம்', 'AI Playlist': 'AI பிளேலிஸ்ட்', Search: 'தேடல்',
+  'Your Week': 'உங்கள் வாரம்', Search: 'தேடல்',
   Library: 'நூலகம்', Favorites: 'பிடித்தவை', History: 'வரலாறு', Queue: 'வரிசை',
   'Your VinaX': 'உங்கள் VinaX', Downloads: 'பதிவிறக்கங்கள்', 'Listen Together': 'சேர்ந்து கேளுங்கள்',
   Movies: 'திரைப்படங்கள்', Languages: 'மொழிகள்', Moods: 'மனநிலைகள்', Regions: 'பகுதிகள்',

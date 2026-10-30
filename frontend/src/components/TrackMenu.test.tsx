@@ -194,14 +194,14 @@ describe('<TrackMenu />', () => {
     remove.mockRestore();
   });
 
-  it('8.2 — "Start AI Radio" starts endless radio from the song and says so', () => {
+  it('8.2 — "Start radio" starts endless radio from the song and says so', () => {
     const startRadio = vi.fn();
     usePlayerStore.setState({ startRadio });
     mount();
     fireEvent.click(trigger());
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Start AI Radio' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Start radio' }));
     expect(startRadio).toHaveBeenCalledWith(song);
-    expect(useToastStore.getState().toasts.slice(-1)[0]?.message).toBe(`AI Radio: ${song.title}`);
+    expect(useToastStore.getState().toasts.slice(-1)[0]?.message).toBe(`Radio: ${song.title}`);
   });
 });
 

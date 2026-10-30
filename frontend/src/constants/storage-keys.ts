@@ -61,9 +61,6 @@ export const KEYS = {
   /** "Update later" — {build, until}: the update gate stays down for this
    *  build until `until`; a newer build or a manual check ignores it. */
   updateSnooze: `${STORAGE_PREFIX}.update-snooze.v1`,
-  // VinaX AI chat history — persisted (with base64 attachments stripped) so
-  // "erase everything" clears it too. Legacy key predates the vinax. prefix.
-  aiChats: 'vinax_ai_chats_v1',
 } as const;
 
 export const CURRENT_SCHEMA_VERSION = 2;

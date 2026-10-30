@@ -3,7 +3,9 @@
 --
 -- Drops every VinaX table, view and function so schema.sql can be applied to
 -- a clean slate. THIS DELETES ALL DATA. Run it only when you mean to start
--- over; then paste schema.sql and run that.
+-- over; then paste schema.sql and run that. It also drops the AI tables and
+-- functions schema versions 1 and 2 had (ai_calls, shared_chats, stats_ai,
+-- ai_usage_since), in case they are still there.
 -- =============================================================================
 
 drop view if exists directory;

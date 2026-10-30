@@ -10,7 +10,7 @@ import type { Relaxation, RelaxedRule } from './types';
  * into a listening ARC from real, per-song signals instead of trusting a
  * prompt to "build gently and peak at two thirds":
  *
- *   energy   — song.energy from the AI classifier when present, else the
+ *   energy   — song.energy from the catalogue when present, else the
  *              mood-derived estimate the session tracker already uses, with
  *              a small tempo nudge; the arc shape gives every slot a target.
  *   mood     — keeps emotional continuity (sad stays sad, party stays party).

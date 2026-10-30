@@ -4,7 +4,7 @@ name: E2E
 # Playwright suite (audit §6): the smoke script, then `playwright test` over
 # frontend/e2e/ against the BUILT bundle (served by e2e/support/serve-dist.mjs)
 # with all external network aborted. Deterministic by construction (no live
-# catalog, no AI backend), so a red run means the app broke, not the internet.
+# catalog, no live backend), so a red run means the app broke, not the internet.
 on:
   push:
     branches: [main]

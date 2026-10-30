@@ -17,10 +17,7 @@ import { dirname, resolve } from 'node:path';
  *   npx vitest run --config eval/vitest.config.ts     (or: node scripts/eval-recs.mjs)
  */
 vi.mock('@/services/api', async () => (await import('./lib/mocks')).apiMock);
-vi.mock('@/services/ai/recommendations', async () => (await import('./lib/mocks')).recommendationsMock);
-vi.mock('@/services/ai/dj', async () => (await import('./lib/mocks')).djMock);
 vi.mock('@/services/queryClient', async () => (await import('./lib/mocks')).queryClientMock);
-vi.mock('@/services/ai/embeddings', async () => (await import('./lib/mocks')).embeddingsMock);
 
 import * as engineModule from '@/services/recommendation/engine';
 import * as candidatesModule from '@/services/recommendation/candidates';
@@ -63,9 +60,6 @@ function applyFixture(fixture: EvalFixture): void {
   resetCandidateCache?.();
   useSettingsStore.setState({
     kidMode: fixture.kidMode,
-    aiDj: fixture.ai.mode === 'dj',
-    aiAssist: true,
-    djVoice: false,
     mutedLanguages: fixture.mutedLanguages,
     pinnedLanguages: fixture.pinnedLanguages,
     // 8.1.0 — absent = the seed's language only (what every engine before 8.1 does).
@@ -128,7 +122,6 @@ interface LatencyCondition {
   search?: 'throw' | 'never';
   /** Searches after this many calls never settle; the earlier ones answer. */
   searchNeverAfter?: number;
-  ai?: EvalFixture['ai'];
   deadlineMs?: number;
   /** Run against a production-sized pool instead of the small fixture pool. */
   largePool?: boolean;
@@ -136,17 +129,15 @@ interface LatencyCondition {
   currentOnly?: boolean;
 }
 
-/** Every run is sequential: the scripted sources and AI are one shared script, so two runs at once would read each other's. */
+/** Every run is sequential: the scripted sources are one shared script, so two runs at once would read each other's. */
 const LONG_RUNS = Math.max(3, Math.min(LATENCY_RUNS, 5));
 const CONDITIONS: LatencyCondition[] = [
-  { id: 'instant-sources', notes: 'Every source answers at once, AI off: the cost of the on-device pipeline itself.', runs: Math.max(20, LATENCY_RUNS * 3) },
+  { id: 'instant-sources', notes: 'Every source answers at once: the cost of the on-device pipeline itself.', runs: Math.max(20, LATENCY_RUNS * 3) },
   { id: 'slow-sources', notes: 'Every catalogue call answers after 140–900 ms, taken in order from a fixed ladder.', runs: LATENCY_RUNS, slow: true },
   { id: 'source-throws', notes: 'The seed-suggestions source fails at once; the searches answer.', runs: LATENCY_RUNS, suggestions: 'throw' },
   { id: 'source-never-settles', notes: 'A search never settles and the rest of the pool stays small; the default deadline applies.', runs: LONG_RUNS, search: 'never', capMs: 10_000 },
   { id: 'source-never-settles-large-pool', notes: 'Two searches answer with a production-sized pool and every later one never settles: the gather may stop waiting once the pool is useful.', runs: LONG_RUNS, searchNeverAfter: 2, largePool: true, capMs: 10_000 },
   { id: 'source-never-settles-urgent', notes: 'A search never settles while the listener waits at the end of the queue (urgent deadline).', runs: LONG_RUNS, search: 'never', deadlineMs: 3_500, capMs: 6_000, currentOnly: true },
-  { id: 'ai-slow', notes: 'The AI DJ answers after 2 s with an order of its own.', runs: LATENCY_RUNS, ai: { mode: 'dj', answer: 'reorder', delayMs: 2_000 }, capMs: 8_000 },
-  { id: 'ai-never', notes: 'The AI DJ never answers (its client would hold 30 s).', runs: LONG_RUNS, ai: { mode: 'dj', answer: 'never' }, capMs: 8_000 },
 ];
 
 it('evaluates next-song selection against the versioned fixtures', { timeout: 30 * 60_000 }, async () => {
@@ -208,8 +199,8 @@ it('evaluates next-song selection against the versioned fixtures', { timeout: 30
       continue;
     }
     const base = condition.largePool ? large : small;
-    applyFixture({ ...base, ai: condition.ai ?? { mode: 'off' } });
-    armFixture(base, base.seed.id, { suggestions: condition.suggestions, search: condition.search, searchNeverAfter: condition.searchNeverAfter ?? null, slow: condition.slow, ai: condition.ai ?? { mode: 'off' } });
+    applyFixture(base);
+    armFixture(base, base.seed.id, { suggestions: condition.suggestions, search: condition.search, searchNeverAfter: condition.searchNeverAfter ?? null, slow: condition.slow });
     const options = {
       limit: LIMIT,
       excludeIds: [base.seed.id],
@@ -219,8 +210,8 @@ it('evaluates next-song selection against the versioned fixtures', { timeout: 30
     const capMs = Math.min(condition.capMs ?? LATENCY_CAP_MS, LATENCY_CAP_MS);
     const outcomes = [];
     for (let i = 0; i < condition.runs; i += 1) {
-      // Re-arm before every run: a never-settling source and a scripted AI answer are per-run state.
-      armFixture(base, base.seed.id, { suggestions: condition.suggestions, search: condition.search, searchNeverAfter: condition.searchNeverAfter ?? null, slow: condition.slow, ai: condition.ai ?? { mode: 'off' } });
+      // Re-arm before every run: a never-settling source is per-run state.
+      armFixture(base, base.seed.id, { suggestions: condition.suggestions, search: condition.search, searchNeverAfter: condition.searchNeverAfter ?? null, slow: condition.slow });
       outcomes.push(await planOnce(engine, base.seed, buildContext(base, 7), options, capMs));
     }
     latency.push({
@@ -248,7 +239,7 @@ it('evaluates next-song selection against the versioned fixtures', { timeout: 30
     fixturesVersion: EVAL_FIXTURES_VERSION,
     harnessVersion: EVAL_HARNESS_VERSION,
     salts: SALTS,
-    fixtures: fixtures.map((f) => ({ id: f.id, title: f.title, notes: f.notes, batches: f.batches, related: f.related.length, search: f.search.length, mode: f.discoveryMode, ai: f.ai.mode === 'off' ? 'off' : `dj:${f.ai.answer}` })),
+    fixtures: fixtures.map((f) => ({ id: f.id, title: f.title, notes: f.notes, batches: f.batches, related: f.related.length, search: f.search.length, mode: f.discoveryMode })),
     deterministic,
     // When a repeat run differs, both orders are kept: a reproducible harness is the whole point.
     determinismDiff: deterministic ? null : { first: first?.queueIds ?? [], repeat: repeat.queueIds },

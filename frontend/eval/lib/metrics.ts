@@ -29,7 +29,7 @@ export interface Summary {
   hardViolations: number;
   /** Off-language songs under a lock the pipeline was allowed to relax. */
   offLanguageExcused: number;
-  /** Rule breaks in the order that was queued first (before any AI refinement). */
+  /** Rule breaks in the order that was queued first. */
   queueReadyHardViolations: number;
   repetition: {
     sameLeadBackToBack: number;
@@ -61,7 +61,6 @@ export interface Summary {
   fallbacks: Record<string, number>;
   refinements: Record<string, number>;
   relaxed: Record<string, number>;
-  aiSongsShipped: number;
   /** 8.1.0 — language-opening / language-run breaks the engine reported as its own `language-mix` give-way (nothing in the queue language was left). */
   languageMixExcused: number;
   latency: { p50: number; p95: number; max: number; samples: number };
@@ -163,7 +162,6 @@ function summariseBatches(sessions: SessionRecord[]): Summary {
     fallbacks: count(batches.map((b) => b.fallback ?? 'none')),
     refinements: count(batches.map((b) => b.refinement)),
     relaxed,
-    aiSongsShipped: batches.reduce((n, b) => n + b.aiSongsShipped, 0),
     retrieval: { deepShipped: batches.reduce((n, b) => n + (b.deepShipped ?? 0), 0), deepShare: songs ? round(batches.reduce((n, b) => n + (b.deepShipped ?? 0), 0) / songs) : 0 },
     taste: (() => {
       const t = batches.filter((b) => b.tasteHits !== null && b.tasteHits !== undefined && b.n > 0);

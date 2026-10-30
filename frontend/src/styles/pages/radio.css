@@ -1,31 +1,25 @@
 /* ============================================================================
-   VinaX 9 "Encore" — the AI studio pages in the shell: AI Radio, AI playlist,
-   and the Queue's Smart Queue card.
+   VinaX 9 "Encore" — the Radio page and the Queue's Smart Queue card.
 
-   Imported by pages/AiRadioPage.tsx, pages/AIPlaylistPage.tsx and
-   features/queue/SmartQueue.tsx, so it ships in their lazy chunks only.
-   (9.0 moved the AI playlist studio here from the global features.css.)
+   Imported by pages/RadioPage.tsx and features/queue/SmartQueue.tsx, so it
+   ships in their lazy chunks only. Work in progress is a Rose shimmer with a
+   Stop, and a failure is a quiet notice with the next useful step. Pills for
+   actions, squircles for artwork, sentence case, motion off under either
+   reduced-motion switch.
+   =========================================================================
 
-   One language with the VinaX AI chat (styles/ai.css): the prompt is the
-   chat's composer — an ink-850 card with a hairline that turns into the one
-   Marigold → Rose ring on focus — the VinaX sparkle marks AI moments, work in
-   progress is a Rose shimmer with a Stop, and a failure is a quiet notice
-   with the next useful step. Pills for actions, squircles for artwork,
-   sentence case, motion off under either reduced-motion switch.
-   ========================================================================= */
-
-.vx-aistudio {
+.vx-studio {
   --vxs-raised: rgb(var(--ink-850));
   --vxs-raised-hover: rgb(var(--ink-800));
   --vxs-field: rgb(var(--ink-850));
   max-width: 960px;
   padding-bottom: 48px;
 }
-html.light .vx-aistudio {
+html.light .vx-studio {
   --vxs-field: rgb(var(--ink-950));
 }
-.vx-aistudio-section { margin-top: 40px; }
-.vx-aistudio-title {
+.vx-studio-section { margin-top: 40px; }
+.vx-studio-title {
   margin-bottom: 14px;
   color: rgb(var(--ink-100));
   font-size: var(--vx-type-section);
@@ -34,163 +28,13 @@ html.light .vx-aistudio {
   letter-spacing: -0.025em;
 }
 @media (max-width: 767px) {
-  .vx-aistudio-section { margin-top: 32px; }
-  .vx-aistudio-title { font-size: 20px; }
+  .vx-studio-section { margin-top: 32px; }
+  .vx-studio-title { font-size: 20px; }
 }
-
-/* ------------------------------------------------------------ the sparkle */
-.vx-ai-mark {
-  display: inline-grid;
-  flex-shrink: 0;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  background: var(--vx-glow);
-  color: var(--vx-on-accent);
-}
-.vx-ai-mark svg { width: 16px; height: 16px; }
-.vx-ai-mark.is-working { animation: vxs-breathe 1.6s ease-in-out infinite; }
-
-/* ------------------------------------------------- the prompt (composer) */
-.vx-aiprompt {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px 14px 12px 18px;
-  border: 1px solid var(--glass-border-strong);
-  border-radius: 24px;
-  background: var(--vxs-field);
-  transition: box-shadow 200ms var(--ease-calm);
-}
-html.light .vx-aiprompt { box-shadow: 0 1px 2px rgb(48 22 34 / 0.04); }
-.vx-aiprompt:focus-within {
-  border-color: transparent;
-  background: linear-gradient(var(--vxs-field), var(--vxs-field)) padding-box, var(--vx-glow) border-box;
-  box-shadow: 0 14px 40px -22px rgb(var(--ember-500) / 0.75);
-}
-.vx-aiprompt-label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: rgb(var(--ink-200));
-  font-size: 14px;
-  font-weight: 700;
-}
-.vx-aiprompt-label .vx-ai-mark { width: 28px; height: 28px; border-radius: 9px; }
-.vx-aiprompt-label .vx-ai-mark svg { width: 14px; height: 14px; }
-.vx-aiprompt textarea,
-.vx-aiprompt input {
-  width: 100%;
-  min-width: 0;
-  border: 0;
-  outline: none;
-  background: transparent;
-  color: rgb(var(--ink-100));
-  font: inherit;
-  font-size: 17px;
-  font-weight: 500;
-  line-height: 1.55;
-}
-.vx-aiprompt textarea { min-height: 84px; padding: 0; resize: none; }
-.vx-aiprompt textarea:focus-visible,
-.vx-aiprompt input:focus-visible { outline: none; box-shadow: none; }
-.vx-aiprompt textarea::placeholder,
-.vx-aiprompt input::placeholder { color: rgb(var(--ink-500)); opacity: 1; }
-.vx-aiprompt-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.vx-aiprompt-hint {
-  flex: 1 1 220px;
-  min-width: 0;
-  color: rgb(var(--ink-400));
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.45;
-}
-.vx-aiprompt-row .btn-primary,
-.vx-aiprompt-row .btn-secondary { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
-.vx-aiprompt-row svg { width: 16px; height: 16px; }
-
-/* One line: [sparkle] [input] [Start]. A pill, like a search field. */
-.vx-aiprompt.is-inline {
-  flex-direction: row;
-  align-items: center;
-  gap: 12px;
-  min-height: 64px;
-  padding: 8px 8px 8px 16px;
-  border-radius: 9999px;
-}
-.vx-aiprompt.is-inline input { flex: 1; height: 48px; font-size: 16px; }
-.vx-aiprompt.is-inline .btn-primary { flex-shrink: 0; min-height: 48px; padding-inline: 22px; }
-@media (max-width: 479px) {
-  .vx-aiprompt { padding: 14px 12px 10px 14px; border-radius: 22px; }
-  .vx-aiprompt textarea { font-size: 16px; }
-  .vx-aiprompt.is-inline { gap: 8px; padding-left: 10px; }
-  .vx-aiprompt.is-inline .vx-ai-mark { width: 28px; height: 28px; border-radius: 9px; }
-  .vx-aiprompt.is-inline .btn-primary { padding-inline: 16px; }
-}
-
-/* Example prompts under the field: quiet pills. */
-.vx-aistudio-chips {
-  display: flex;
-  gap: 8px;
-  margin: 12px calc(-1 * var(--vx-gutter)) 0;
-  padding: 4px var(--vx-gutter);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.vx-aistudio-chips::-webkit-scrollbar { display: none; }
-.vx-aistudio-chip {
-  position: relative;
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 6px;
-  min-height: 36px;
-  padding: 0 14px;
-  border-radius: 9999px;
-  background: rgb(var(--ink-100) / 0.07);
-  color: rgb(var(--ink-100));
-  font-size: 13px;
-  font-weight: 650;
-  white-space: nowrap;
-  transition: background-color 140ms var(--ease-calm);
-}
-.vx-aistudio-chip::after { content: ''; position: absolute; inset: -4px 0; }
-.vx-aistudio-chip:hover:not(:disabled) { background: rgb(var(--ink-100) / 0.13); }
-.vx-aistudio-chip:disabled { opacity: 0.55; }
-.vx-aistudio-chip svg { width: 14px; height: 14px; color: rgb(var(--tide-400)); }
 
 /* ------------------------------------------------- working / notice states */
-.vx-aistate {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-top: 20px;
-  padding: 14px 14px 14px 16px;
-  border-radius: var(--vx-radius-panel);
-  background: rgb(var(--ink-100) / 0.04);
-}
-html.light .vx-aistate { background: rgb(var(--ink-850)); }
-.vx-aistate-text { flex: 1; min-width: 0; }
-.vx-aistate-title {
-  color: rgb(var(--ink-100));
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
-.vx-aistate-sub { margin-top: 2px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; line-height: 1.45; }
-.vx-aistate .btn-secondary { flex-shrink: 0; min-height: 40px; padding-inline: 16px; font-size: 13px; }
-.vx-aistate .btn-secondary::after { content: ''; position: absolute; inset: -2px 0; }
 /* The working line: a slow Rose shimmer across the words. */
-.vx-ai-shimmer {
+.vx-shimmer {
   background: linear-gradient(90deg, rgb(var(--ink-100)) 0%, rgb(var(--ink-100)) 38%, rgb(var(--tide-400)) 50%, rgb(var(--ink-100)) 62%, rgb(var(--ink-100)) 100%);
   background-size: 260% 100%;
   -webkit-background-clip: text;
@@ -198,9 +42,8 @@ html.light .vx-aistate { background: rgb(var(--ink-850)); }
   color: transparent;
   animation: vxs-shimmer 2.2s linear infinite;
 }
-.vx-aistate + .vx-aistudio-skel { margin-top: 12px; opacity: 0.7; }
 
-.vx-ainote {
+.vx-note {
   display: flex;
   align-items: flex-start;
   gap: 14px;
@@ -209,7 +52,7 @@ html.light .vx-aistate { background: rgb(var(--ink-850)); }
   border-radius: var(--vx-radius-panel);
   background: rgb(var(--ink-850));
 }
-.vx-ainote-icon {
+.vx-note-icon {
   display: grid;
   flex-shrink: 0;
   place-items: center;
@@ -219,19 +62,19 @@ html.light .vx-aistate { background: rgb(var(--ink-850)); }
   background: rgb(var(--ink-100) / 0.07);
   color: rgb(var(--ink-200));
 }
-.vx-ainote-icon svg { width: 18px; height: 18px; }
-.vx-ainote-text { flex: 1; min-width: 0; padding-top: 1px; }
-.vx-ainote-title { color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; line-height: 1.35; }
-.vx-ainote-msg { margin-top: 2px; color: rgb(var(--ink-300)); font-size: 14px; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; }
-.vx-ainote-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.vx-ainote-actions .btn-primary,
-.vx-ainote-actions .btn-secondary { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding-inline: 16px; font-size: 13px; }
-.vx-ainote-actions .btn-primary::after,
-.vx-ainote-actions .btn-secondary::after { content: ''; position: absolute; inset: -2px 0; }
-.vx-ainote-actions svg { width: 15px; height: 15px; }
+.vx-note-icon svg { width: 18px; height: 18px; }
+.vx-note-text { flex: 1; min-width: 0; padding-top: 1px; }
+.vx-note-title { color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; line-height: 1.35; }
+.vx-note-msg { margin-top: 2px; color: rgb(var(--ink-300)); font-size: 14px; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; }
+.vx-note-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.vx-note-actions .btn-primary,
+.vx-note-actions .btn-secondary { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding-inline: 16px; font-size: 13px; }
+.vx-note-actions .btn-primary::after,
+.vx-note-actions .btn-secondary::after { content: ''; position: absolute; inset: -2px 0; }
+.vx-note-actions svg { width: 15px; height: 15px; }
 
 /* A small inline spinner (a control that is starting). Still under reduced motion. */
-.vx-ai-spin {
+.vx-spin {
   display: inline-block;
   flex-shrink: 0;
   width: 16px;
@@ -242,168 +85,7 @@ html.light .vx-aistate { background: rgb(var(--ink-850)); }
   animation: vxs-spin 0.8s linear infinite;
 }
 
-/* ------------------------------------------------------------ AI playlist */
-.vx-aip-ideas {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-@media (max-width: 899px) { .vx-aip-ideas { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.vx-aip-idea {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  min-height: 112px;
-  padding: 16px;
-  border-radius: var(--vx-radius-card);
-  background: var(--vxs-raised);
-  text-align: left;
-  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
-}
-html.light .vx-aip-idea { background: rgb(var(--ink-950)); box-shadow: inset 0 0 0 1px var(--vx-border); }
-.vx-aip-idea:hover:not(:disabled) { background: var(--vxs-raised-hover); }
-html.light .vx-aip-idea:hover:not(:disabled) { background: rgb(var(--ink-850)); }
-.vx-aip-idea:active:not(:disabled) { transform: scale(0.98); }
-.vx-aip-idea:disabled { opacity: 0.55; }
-.vx-aip-idea > svg { width: 20px; height: 20px; color: rgb(var(--tide-400)); }
-.vx-aip-idea strong { display: block; margin-top: 18px; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; line-height: 1.3; }
-.vx-aip-idea span { display: block; margin-top: 4px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; line-height: 1.4; }
-
-.vx-aip-result { margin-top: 36px; }
-.vx-aip-head { display: flex; align-items: flex-end; gap: 24px; }
-.vx-aip-art {
-  flex-shrink: 0;
-  width: 168px;
-  height: 168px;
-  overflow: hidden;
-  border-radius: 16px;
-  box-shadow: var(--vx-art-shadow);
-}
-.vx-aip-body { min-width: 0; }
-.vx-aip-kind {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: rgb(var(--ink-300));
-  font-size: 13px;
-  font-weight: 700;
-}
-.vx-aip-kind svg { width: 14px; height: 14px; color: rgb(var(--tide-400)); }
-.vx-aip-title {
-  margin: 6px 0 8px;
-  color: rgb(var(--ink-100));
-  font-size: clamp(1.75rem, 3vw, 2.5rem);
-  font-weight: 800;
-  line-height: 1.08;
-  letter-spacing: -0.035em;
-  overflow-wrap: anywhere;
-}
-.vx-aip-desc { max-width: 60ch; margin-bottom: 6px; color: rgb(var(--ink-300)); font-size: 14px; font-weight: 500; line-height: 1.5; }
-.vx-aip-prompt { margin-top: 2px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
-.vx-aip-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 24px 0 12px; }
-.vx-aip-actions .btn-secondary { min-height: 44px; }
-@media (max-width: 767px) {
-  .vx-aip-head { gap: 16px; }
-  .vx-aip-art { width: 112px; height: 112px; border-radius: 14px; }
-  .vx-aip-actions { gap: 4px; margin-top: 20px; }
-  .vx-aip-actions .vx-play-fab { margin-right: 8px; }
-  .vx-aip-actions .btn-secondary { padding-inline: 14px; font-size: 14px; }
-}
-/* The curator's one-line reason under each pick, aligned with the title
-   column (tracklist.css: row padding 8 + number 26 + gap 14 + art 44 + gap
-   14; phones drop the number and pad 6 + art 44 + gap 12). */
-.vx-aip-reason {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  margin: -4px 0 10px;
-  padding-inline: 106px 12px;
-  color: rgb(var(--ink-400));
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-.vx-aip-reason svg { flex-shrink: 0; width: 12px; height: 12px; margin-top: 3px; color: rgb(var(--tide-400)); }
-@media (max-width: 767px) { .vx-aip-reason { padding-inline-start: 62px; } }
-
-/* 9.1.0 — keep / replace, per track. Aligned with the reason line above, so the
-   two sit in the same column under the title. "Kept" tracks survive the next
-   build; "Replace" swaps one song and leaves the rest alone. */
-.vx-aip-locknote {
-  margin: 4px 0 10px;
-  color: rgb(var(--ink-400));
-  font-size: 13px;
-  font-weight: 600;
-}
-.vx-aip-trackacts {
-  display: flex;
-  gap: 8px;
-  margin: -4px 0 8px;
-  padding-inline: 106px 12px;
-}
-.vx-aip-lock,
-.vx-aip-swap {
-  min-height: 32px;
-  padding: 4px 12px;
-  border: 1px solid rgb(var(--ink-100));
-  border-radius: 999px;
-  background: transparent;
-  color: rgb(var(--ink-400));
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
-}
-.vx-aip-lock:hover,
-.vx-aip-swap:hover { color: rgb(var(--ink-600)); border-color: rgb(var(--ink-200)); }
-.vx-aip-lock[aria-pressed='true'] {
-  border-color: rgb(var(--tide-400));
-  background: rgb(var(--tide-400) / 0.12);
-  color: rgb(var(--tide-500));
-}
-.vx-aip-swap:disabled { opacity: 0.5; cursor: default; }
-.vx-aip-track.is-locked { border-radius: 12px; background: rgb(var(--tide-400) / 0.05); }
-@media (max-width: 767px) { .vx-aip-trackacts { padding-inline-start: 62px; } }
-
-/* 9.1.0 — refine the list on screen, and the honest note when it came out short. */
-.vx-aip-shortfall {
-  margin: 10px 0 0;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgb(var(--ink-100) / 0.05);
-  color: rgb(var(--ink-300));
-  font-size: 13px;
-  line-height: 1.5;
-}
-.vx-aip-refine {
-  display: flex;
-  gap: 8px;
-  margin: 12px 0 4px;
-}
-.vx-aip-refine input {
-  flex: 1 1 0%;
-  min-width: 0;
-  min-height: 44px;
-  padding: 0 14px;
-  border: 1px solid rgb(var(--ink-100) / 0.12);
-  border-radius: 12px;
-  background: rgb(var(--ink-100) / 0.05);
-  color: rgb(var(--ink-100));
-  font-size: 14px;
-}
-.vx-aip-refine input::placeholder { color: rgb(var(--ink-400)); }
-.vx-aip-refine input:focus { outline: none; border-color: rgb(var(--tide-400) / 0.7); }
-.vx-aip-refine input:disabled { opacity: 0.6; }
-@media (max-width: 767px) {
-  .vx-aip-refine { flex-direction: column; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .vx-aip-lock,
-  .vx-aip-swap { transition: none; }
-}
-
-/* --------------------------------------------------------------- AI Radio */
+/* ------------------------------------------------------------------ Radio */
 .vx-radio {
   /* Mood tones — deep and theme-fixed. 10.0 "Marigold": one warm family
      (marigold, rose, terracotta, plum, chili, mulberry, henna, dusk mauve)
@@ -587,7 +269,7 @@ html.light .vx-radio-seed-badge { background: rgb(var(--tide-500)); color: #fff;
 .vx-radio-artist-art { position: relative; display: block; }
 .vx-radio-artist img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; box-shadow: var(--vx-art-shadow); transition: transform 140ms var(--ease-calm); }
 .vx-radio-artist:hover:not(:disabled) img { transform: scale(1.04); }
-.vx-radio-artist .vx-ai-spin { position: absolute; right: 0; bottom: 0; width: 22px; height: 22px; background: rgb(var(--ink-900)); }
+.vx-radio-artist .vx-spin { position: absolute; right: 0; bottom: 0; width: 22px; height: 22px; background: rgb(var(--ink-900)); }
 .vx-radio-artist > span:last-child { display: block; width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .vx-radio-artist:disabled { opacity: 0.6; }
 
@@ -648,19 +330,15 @@ html.light .vx-smartq [role='switch'] { background: rgb(var(--ink-100) / 0.16); 
 html.light .vx-smartq [role='switch'][aria-checked='true'] { background: rgb(var(--ember-500)); }
 
 /* ------------------------------------------------------------------ motion */
-@keyframes vxs-breathe {
-  0%, 100% { opacity: 0.6; transform: scale(0.94); }
-  50% { opacity: 1; transform: scale(1); }
-}
 @keyframes vxs-shimmer {
   from { background-position: 100% 0; }
   to { background-position: -160% 0; }
 }
 @keyframes vxs-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
-  .vx-aistudio *, .vx-smartq * { animation: none !important; transition: none !important; }
-  .vx-ai-shimmer { background: none; color: rgb(var(--ink-100)); }
+  .vx-studio *, .vx-smartq * { animation: none !important; transition: none !important; }
+  .vx-shimmer { background: none; color: rgb(var(--ink-100)); }
 }
-html.reduce-motion .vx-aistudio *,
+html.reduce-motion .vx-studio *,
 html.reduce-motion .vx-smartq * { animation: none !important; transition: none !important; }
-html.reduce-motion .vx-ai-shimmer { background: none; color: rgb(var(--ink-100)); }
+html.reduce-motion .vx-shimmer { background: none; color: rgb(var(--ink-100)); }

@@ -2,7 +2,7 @@
  * v5.15.0 — search synonyms published from the admin console
  * (Admin → Search Synonyms). A query that matches a key (whole query or a
  * whole word, case-insensitive) is rewritten before it reaches the catalogue,
- * so "arr" finds A. R. Rahman everywhere: Search, AI music commands, radio.
+ * so "arr" finds A. R. Rahman everywhere: Search, voice music commands, radio.
  */
 let table: Record<string, string> = {};
 

@@ -73,9 +73,9 @@ export function BrowseTile(props: LinkTile | ButtonTile) {
 }
 
 /** One icon or character in a toned squircle. */
-export function TileGlyph({ children, emoji, lang, ai }: { children: ReactNode; emoji?: boolean; lang?: string; ai?: boolean }) {
+export function TileGlyph({ children, emoji, lang }: { children: ReactNode; emoji?: boolean; lang?: string }) {
   return (
-    <span className={cn('bx-glyph', emoji && 'is-emoji', ai && 'is-ai')} lang={lang}>
+    <span className={cn('bx-glyph', emoji && 'is-emoji')} lang={lang}>
       {children}
     </span>
   );
@@ -139,10 +139,10 @@ export function CoverFan({ songs }: { songs: readonly Song[] }) {
 }
 
 /** A destination row: a toned icon squircle, the name and one quiet line. */
-export function DestTile({ to, title, meta, tone, icon, ai }: { to: string; title: string; meta?: string; tone?: string; icon: ReactNode; ai?: boolean }) {
+export function DestTile({ to, title, meta, tone, icon }: { to: string; title: string; meta?: string; tone?: string; icon: ReactNode }) {
   return (
     <Link to={to} className={cn('bx-dest', tone)}>
-      <TileGlyph ai={ai}>{icon}</TileGlyph>
+      <TileGlyph>{icon}</TileGlyph>
       <span className="bx-dest-text">
         <span className="bx-dest-title">{title}</span>
         {meta && <span className="bx-dest-meta">{meta}</span>}

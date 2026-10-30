@@ -42,7 +42,7 @@ export function readTaste(): { genres: Record<string, number>; languages: Record
   return { genres: user.genres, languages: Object.fromEntries(Object.entries(profile.languages).map(([k, v]) => [k, v.score])) };
 }
 
-/** Shortcuts into the listener's own collections: one quiet row of small tiles. AI Radio is always first. */
+/** Shortcuts into the listener's own collections: one quiet row of small tiles. Radio is always first. */
 export function QuickBlock() {
   const navigate = useNavigate();
   const playQueue = usePlayerStore((s) => s.playQueue);
@@ -53,7 +53,7 @@ export function QuickBlock() {
   const weekly = useWeeklyMix();
   const mostListened = useMostListened();
   const tiles = [
-    { label: 'AI Radio', image: '', go: () => navigate('/radio') },
+    { label: 'Radio', image: '', go: () => navigate('/radio') },
     continueListening.length && { label: 'Continue listening', image: bestImage(continueListening[0].images, 120), go: () => playQueue(continueListening, 0) },
     favorites.length && { label: 'Liked songs', image: bestImage(favorites[0].images, 120), go: () => navigate('/favorites') },
     onRepeat.length && { label: 'On repeat', image: bestImage(onRepeat[0].images, 120), go: () => playQueue(onRepeat, 0) },

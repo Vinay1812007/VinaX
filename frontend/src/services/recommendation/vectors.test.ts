@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makePlay, makeSong } from '@/__fixtures__/songs';
-import { dot, embeddingTasteVector, songVector, tasteVector, TASTE_HALF_LIFE_MS, VECTOR_DIM } from './vectors';
+import { dot, songVector, tasteVector, TASTE_HALF_LIFE_MS, VECTOR_DIM } from './vectors';
 
 /** 8.2.0 — the on-device taste vectors: deterministic, unit length, and about what they claim. */
 const NOW = 1_800_000_000_000;
@@ -83,26 +83,5 @@ describe('tasteVector — long-term and recent taste (9.0.0)', () => {
   it('a thin long-term taste is not protected: with two favourites, a week of listening is the taste', () => {
     const taste = tasteVector(favourites.slice(0, 2), binge, NOW);
     expect(dot(songVector(bingeLike), taste)).toBeGreaterThan(dot(songVector(longTermLike), taste));
-  });
-});
-
-describe('embeddingTasteVector', () => {
-  const unit = (...xs: number[]) => {
-    const n = Math.hypot(...xs);
-    return Float32Array.from(xs.map((x) => x / n));
-  };
-
-  it('needs at least three taste songs with a cached vector', () => {
-    const songs = ['a', 'b', 'c'].map((id) => makeSong(id));
-    const lookup = (id: string) => (id === 'a' || id === 'b' ? unit(1, 0) : null);
-    expect(embeddingTasteVector(songs, [], lookup, NOW)).toBeNull();
-    const all = () => unit(1, 1);
-    expect(length(embeddingTasteVector(songs, [], all, NOW))).toBeCloseTo(1, 5);
-  });
-
-  it('refuses vectors whose dimensions disagree, and survives a lookup that throws', () => {
-    const songs = ['a', 'b', 'c', 'd'].map((id) => makeSong(id));
-    expect(embeddingTasteVector(songs, [], (id) => (id === 'd' ? unit(1, 0, 0) : unit(1, 0)), NOW)).toBeNull();
-    expect(embeddingTasteVector(songs, [], () => { throw new Error('boom'); }, NOW)).toBeNull();
   });
 });

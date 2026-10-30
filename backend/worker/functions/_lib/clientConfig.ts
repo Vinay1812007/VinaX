@@ -15,7 +15,7 @@ import type { ExperimentVariant } from './experiments';
 export const CLIENT_KEYS = [
   'home-layout',
   'greeting', 'broadcast', 'search-synonyms', 'catalog-sources', 'language-order',
-  'ai-starters', 'ai-quick', 'support-faq', 'min-version', 'maintenance-window',
+  'support-faq', 'min-version', 'maintenance-window',
 ] as const;
 
 /**
@@ -108,8 +108,6 @@ export function publicRecConfig(raw: unknown): PublicRecConfig | null {
 }
 
 const str = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
-// Quick-action prompts keep their trailing space on purpose ("Write a ").
-const strRaw = (v: unknown, max: number): string => (typeof v === 'string' ? v.slice(0, max) : '');
 const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
 const inWindow = (start: unknown, end: unknown, now: Date): boolean => {
   const s = typeof start === 'string' && start ? Date.parse(start) : NaN;
@@ -127,8 +125,6 @@ export interface ClientConfig {
   synonyms: Record<string, string>;
   disabledSources: string[];
   languageOrder: string[];
-  aiStarters: string[];
-  aiQuick: Array<{ icon: string; label: string; prompt: string; mode?: string }>;
   faq: Array<{ q: string; a: string }>;
   minBuild: number | null;
   /** 7.2.0 — present only while a weight override targets someone (see publicRecConfig). */
@@ -162,16 +158,6 @@ export function publicClientConfig(raw: Record<string, unknown>, now = new Date(
   const lo = raw['language-order'];
   const languageOrder = Array.isArray(lo) ? (lo as unknown[]).filter((x): x is string => typeof x === 'string' && SLUG.test(x)).slice(0, 20) : [];
 
-  const st = raw['ai-starters'];
-  const aiStarters = Array.isArray(st) ? (st as unknown[]).map((x) => str(x, 160)).filter(Boolean).slice(0, 24) : [];
-
-  const qa = raw['ai-quick'];
-  const aiQuick = Array.isArray(qa)
-    ? (qa as unknown[]).map(obj).filter((x): x is Record<string, unknown> => !!x)
-      .map((x) => ({ icon: str(x.icon, 4), label: str(x.label, 20), prompt: strRaw(x.prompt, 200), ...(SLUG.test(str(x.mode, 20)) ? { mode: str(x.mode, 20) } : {}) }))
-      .filter((x) => x.label && x.prompt.trim()).slice(0, 8)
-    : [];
-
   const fq = raw['support-faq'];
   const faq = Array.isArray(fq)
     ? (fq as unknown[]).map(obj).filter((x): x is Record<string, unknown> => !!x)
@@ -182,11 +168,11 @@ export function publicClientConfig(raw: Record<string, unknown>, now = new Date(
   const minBuild = mv && Number.isInteger(mv.build) && (mv.build as number) > 0 ? (mv.build as number) : null;
 
   const home = obj(raw['home-layout']);
-  const keys = ['quick', 'personal', 'aihome', 'discovery', 'charts', 'seasonal', 'moods', 'genres', 'artists', 'albums', 'daypicks', 'loved', 'feed'];
+  const keys = ['quick', 'personal', 'discovery', 'charts', 'seasonal', 'moods', 'genres', 'artists', 'albums', 'daypicks', 'loved', 'feed'];
   const cleanKeys = (v: unknown) => Array.isArray(v) ? [...new Set(v.filter((k): k is string => typeof k === 'string' && keys.includes(k)))] : [];
   const homeLayout = home ? { title: str(home.title, 60), description: str(home.description, 160), order: cleanKeys(home.order), hidden: cleanKeys(home.hidden).slice(0, 12) } : undefined;
   const recConfig = publicRecConfig(raw[REC_CONFIG_KEY]);
-  return { greeting, broadcast, synonyms, disabledSources, languageOrder, aiStarters, aiQuick, faq, minBuild, ...(homeLayout ? { homeLayout } : {}), ...(recConfig ? { recConfig } : {}) };
+  return { greeting, broadcast, synonyms, disabledSources, languageOrder, faq, minBuild, ...(homeLayout ? { homeLayout } : {}), ...(recConfig ? { recConfig } : {}) };
 }
 
 /** Maintenance window: { start, end, note } in ISO; active when now is inside. */
@@ -198,18 +184,6 @@ export function maintenanceActive(raw: unknown, now = new Date()): { note: strin
   if (Number.isNaN(s) || Number.isNaN(e) || e <= s) return null;
   const t = now.getTime();
   return t >= s && t <= e ? { note: str(m.note, 200) } : null;
-}
-
-/** House rules for the assistant: plain text lines the team appends to the
- *  system prompt (a promo, a correction, a tone note). Clipped hard. */
-export function houseRules(raw: unknown): string {
-  const s = str(raw, 1200);
-  let out = '';
-  for (const ch of s) {
-    const c = ch.charCodeAt(0);
-    if (c >= 32 || ch === '\n' || ch === '\t') out += ch;
-  }
-  return out;
 }
 
 // --------------------------------------------------------------- 14.0 — the other public keys

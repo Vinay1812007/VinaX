@@ -16,7 +16,7 @@ export default function PrivacyPage() {
           You sign in with Google. VinaX stores your Google account ID, email, name and profile photo, and keeps a copy
           of your library and playlists, listening history, taste profile, smart collections, bookmarks, Home layout and
           settings with your account, so they follow you to every device you sign in on. This copy is stored by our
-          database provider and is only readable by VinaX&rsquo;s server. <strong>VinaX AI chats, downloads, searches
+          database provider and is only readable by VinaX&rsquo;s server. <strong>Downloads, searches
           and your queue are not synced</strong> — they stay on the device. Delete account (Settings → Profile)
           removes the account and its synced copy.
         </p>
@@ -40,8 +40,8 @@ export default function PrivacyPage() {
         <p>
           A song counts as played once you have heard at least 5 seconds of it, the same rule your taste profile uses,
           so flipping past a song is not counted. The same sharing sends two short reports about the songs VinaX adds to
-          your queue by itself. When it adds a batch: which version of the recommender chose it, whether the on-device
-          engine or the AI chose the order (and why not the AI, if it didn&rsquo;t), how long it took, how many songs it
+          your queue by itself. When it adds a batch: which version of the recommender chose it, whether it came late
+          (and why), how long it took, how many songs it
           added, how many were by artists you haven&rsquo;t played or by different artists, whether a queue rule had to
           be relaxed, and which test group your device is in, if any. When one of those songs stops: its place in the
           batch, how many seconds of it you heard out of its length, whether you finished it, skipped it or liked it, and
@@ -52,7 +52,7 @@ export default function PrivacyPage() {
           A separate switch in Settings &rarr; Region &amp; privacy, off by default, turns on anonymous session
           insights: heatmaps and replays of how the app is used (taps, scrolls and which screens load), processed by
           an analytics provider so we can find confusing spots and fix them. <strong>All text on screen is masked on
-          your device before anything is sent</strong> — song titles, your name, your history and your AI chats never
+          your device before anything is sent</strong> — song titles, your name and your history never
           appear in them. This provider sets its own analytics cookies, and only if you opted in; if you didn&rsquo;t,
           it never loads.
         </p>
@@ -62,15 +62,12 @@ export default function PrivacyPage() {
           we store, and turning notifications off deletes it. At most one song suggestion per day, plus rare owner
           announcements.
         </p>
-        <H>AI features</H>
+        <H>No AI</H>
         <p>
-          When the AI picks songs or builds your home screen, it receives a short, capped summary of your taste: your
-          languages and liked styles, and short lists of songs you recently played, finished, skipped or liked (titles
-          and artists only, at most a few dozen) so it can avoid repeats and follow your mood. It never receives your
-          name, your username or anything else that identifies you. VinaX AI chats are stored only
-          in your browser; the messages you send are processed to generate a reply and are not used to identify you.
-          Voice chat and mic dictation use your device&rsquo;s speech engine — in supporting browsers and in the
-          Android app, speech is recognised on your device — and VinaX never stores audio.
+          VinaX has no AI features and sends nothing to an AI service. What plays next, Radio, Home&rsquo;s shelves and
+          your taste profile are worked out on your device. Voice search and Drive mode&rsquo;s voice commands use your
+          device&rsquo;s own speech engine — in supporting browsers and in the Android app, speech is recognised on your
+          device — and VinaX never receives or stores audio.
         </p>
         <H>Listen Together</H>
         <p>
@@ -85,7 +82,7 @@ export default function PrivacyPage() {
         </p>
         <p>
           <b>Where ads appear.</b> On the website, one clearly labelled advertisement sits at the end of browsing pages:
-          song, artist, album, language and mood pages. There are never ads in the player, the queue, VinaX AI, your
+          song, artist, album, language and mood pages. There are never ads in the player, the queue, your
           library, the Android app or Kid mode, and the ad code is not loaded on those screens at all.
         </p>
         <p>
@@ -101,7 +98,7 @@ export default function PrivacyPage() {
             aboutads.info
           </a>
           . Visitors in regions that require consent are asked before any advertising cookie is set. Nothing VinaX
-          stores about your listening — history, favorites, taste profile, AI chats — is ever shared with an
+          stores about your listening — history, favorites, taste profile — is ever shared with an
           advertiser.
         </p>
         <H>Your controls</H>

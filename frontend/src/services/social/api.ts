@@ -1,9 +1,8 @@
 /**
- * 15.0 — the social layer's client: profiles, follows, shared playlists and
- * shared chats (backend/worker/functions/api/{profile,follow,shared-playlist,
- * share-chat}.ts). Every call that writes needs the Google session; public
- * reads (a profile by handle, a public playlist, a shared chat) work signed
- * out. Nothing is cached here: the hooks in features/social do that.
+ * 15.0 — the social layer's client: profiles, follows and shared playlists
+ * (backend/worker/functions/api/{profile,follow,shared-playlist}.ts). Every
+ * call that writes needs the Google session; public reads (a profile by
+ * handle, a public playlist) work signed out. Nothing is cached here: the hooks in features/social do that.
  */
 import type { Song } from '@/types';
 import { currentAccount } from '@/services/auth/google';
@@ -46,7 +45,6 @@ export interface SharedPlaylist {
   updatedAt: string;
 }
 
-export interface SharedChat { id: string; title: string | null; messages: Array<{ role: 'user' | 'assistant'; content: string }>; model: string | null; createdAt: string; expiresAt: string }
 
 export class SocialError extends Error {
   constructor(public status: number, public code: string) {
@@ -133,12 +131,3 @@ export const getSharedPlaylist = (id: string, token?: string | null) =>
 export const collabAdd = (id: string, token: string, song: LiteSong, by?: string) => call<{ playlist: SharedPlaylist }>(`/shared-playlist/${encodeURIComponent(id)}`, { method: 'POST', body: JSON.stringify({ token, add: song, by }) }).then((r) => r.playlist);
 export const collabRemove = (id: string, token: string, songId: string) => call<{ playlist: SharedPlaylist }>(`/shared-playlist/${encodeURIComponent(id)}`, { method: 'POST', body: JSON.stringify({ token, remove: songId }) }).then((r) => r.playlist);
 
-// ------------------------------------------------------------ shared chats
-export const shareChat = (body: { title?: string | null; model?: string | null; messages: Array<{ role: 'user' | 'assistant'; content: string }> }) => call<{ id: string; url: string; expiresAt: string }>('/share-chat', { method: 'POST', body: JSON.stringify(body), auth: true });
-export const getSharedChat = (id: string) =>
-  call<Partial<SharedChat>>(`/share-chat/${encodeURIComponent(id)}`).then((r): SharedChat => {
-    const messages = Array.isArray(r?.messages) ? r.messages.filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string') : null;
-    if (!r || typeof r.id !== 'string' || !messages) throw new SocialError(404, 'not_found');
-    return { id: r.id, title: typeof r.title === 'string' ? r.title : null, messages, model: typeof r.model === 'string' ? r.model : null, createdAt: String(r.createdAt ?? ''), expiresAt: String(r.expiresAt ?? '') };
-  });
-export const deleteSharedChat = (id: string) => call<null>(`/share-chat?id=${encodeURIComponent(id)}`, { method: 'DELETE', auth: true });

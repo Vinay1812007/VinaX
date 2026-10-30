@@ -695,7 +695,6 @@ html.amoled .np-mini { --mat-tint: none; }
 :focus-visible { outline: 2px solid var(--vx-focus); outline-offset: 3px; }
 html.light :focus-visible { outline-color: var(--vx-focus); box-shadow: none; }
 .glass-card, .glass-panel { box-shadow: none; }
-.bg-ai-accent { background: var(--vx-glow); box-shadow: none; }
 html[data-density='compact'] .vx-shelf { margin-bottom: 28px; }
 @media (hover: none), (pointer: coarse) {
   .card-play { opacity: 1; }
@@ -802,10 +801,10 @@ html.amoled .vx-snack { --mat-fill: rgb(var(--ink-800)); }
 
 /* ---------------------------------------------------------------- motion */
 @media (prefers-reduced-motion: reduce) {
-  .vx-shell *, .ai-root * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .vx-shell * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
-html.reduce-motion .vx-shell *, html.reduce-motion .ai-root * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
-/* The snackbar host also mounts outside the shell (the VinaX AI route). */
+html.reduce-motion .vx-shell * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+/* The snackbar host also mounts outside the shell. */
 @media (prefers-reduced-motion: reduce) { .vx-snack { animation: none !important; transition: none !important; } }
 html.reduce-motion .vx-snack { animation: none !important; transition: none !important; }
 

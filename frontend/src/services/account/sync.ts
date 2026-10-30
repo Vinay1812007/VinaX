@@ -3,7 +3,7 @@
  *
  * What syncs is the backup file's own categories (features/settings/backup):
  * settings, library and playlists, smart collections, history, taste profile,
- * bookmarks and the Home layout. Never AI chats, searches or this device's
+ * bookmarks and the Home layout. Never searches or this device's
  * identity. The server keeps ONE copy per account (GET/PUT /api/account/data)
  * with a version number:
  *

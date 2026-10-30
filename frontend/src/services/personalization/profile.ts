@@ -47,7 +47,7 @@ export interface TasteProfile {
   /** Song-level negative/positive memories used by recommendations. */
   skippedSongIds?: string[];
   likedSongIds?: string[];
-  /** 8.5.0 — songs marked "Not interested" (newest first, capped at 200). The library hides them; this list is what the AI briefs and the taste page read. */
+  /** 8.5.0 — songs marked "Not interested" (newest first, capped at 200). The library hides them; this list is what the taste page reads. */
   dislikedSongIds?: string[];
   /** Per-language play counts bucketed by 6h slice (0=night,1=morning,2=afternoon,3=evening). */
   hourBuckets: Record<string, number[]>;
@@ -81,7 +81,7 @@ export type SliderKey = keyof TasteSliders;
 
 // The dials' runtime (defaults, summariser, setter) lives in the lazy-loaded
 // ./dials module, not here — profile.ts is first-load, and only lazy surfaces
-// (the Taste Profile page and the AI payload builders) ever touch that runtime,
+// (the Taste Profile page and the scorer) ever touch that runtime,
 // so keeping it out holds the first-load bundle flat. Only the TYPES stay here.
 
 // Half-lives live in ./eventWeights (v6.4.0) so tuning has one home.

@@ -840,46 +840,6 @@ button:disabled,
 .bg-premium { background: var(--gradient-premium); }
 
 /* ============================================================================
-   VinaX AI accent skin (4.19.0) — the AI room wears the listener's accent.
-   Owner request: "match user's accent" instead of the fixed indigo premium
-   gradient. Tokens only (never literal colors), so every data-accent ramp
-   AND the light-theme ramps adapt with zero extra rules.
-   ========================================================================= */
-/* 4.20.0 visibility fix: on the DEFAULT accent the ember ramp is the same
-   indigo as the old fixed bg-premium gradient, so the 4.19.0 skin looked
-   unchanged unless the listener had picked a custom accent. The AI identity
-   is now a two-tone accent→tide sweep — still led by the user's accent, but
-   unmistakably different from the flat indigo on every palette. */
-.bg-ai-accent {
-  background: linear-gradient(135deg, rgb(var(--ember-500)), rgb(var(--tide-500)));
-  box-shadow: 0 6px 18px -8px rgb(var(--ember-500) / 0.55);
-}
-/* Gradient wordmark for the "VinaX AI" title — light theme flips to the
-   darker end of the ramps so it stays AA on white surfaces. */
-.ai-title {
-  background: linear-gradient(90deg, rgb(var(--ember-400)), rgb(var(--tide-400)));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-html.light .ai-title {
-  background: linear-gradient(90deg, rgb(var(--ember-600)), rgb(var(--tide-500)));
-  -webkit-background-clip: text;
-  background-clip: text;
-}
-/* Soft accent ambience at the top of the conversation — a static gradient on
-   the scroll container (no extra layers, no animation, zero main-thread or
-   compositor cost; the 4.18.x performance work stays intact). */
-.ai-ambient {
-  background:
-    radial-gradient(46% 30% at 24% 0%, rgb(var(--ember-500) / 0.12), transparent 70%),
-    radial-gradient(46% 30% at 76% 0%, rgb(var(--tide-500) / 0.10), transparent 70%);
-}
-/* Assistant bubbles keep the glass surface but take a whisper of accent in
-   the border so the conversation reads as "tinted by you". */
-.ai-bubble { border-color: rgb(var(--ember-500) / 0.18); }
-
-/* ============================================================================
    Range inputs — accent-tinted track fill driven by --fill.
    ========================================================================= */
 input[type='range'] {
@@ -987,18 +947,8 @@ html.light .theme-ico-moon { transform: translateY(-14px) rotate(-90deg); opacit
 html.light .theme-ico-sun { transform: translateY(0) rotate(0deg); opacity: 1; }
 
 /* ============================================================================
-   VinaX AI chat + voice orb.
+   Loading dots and the signature equalizer.
    ========================================================================= */
-.vx-caret {
-  display: inline-block;
-  width: 2px;
-  height: 1em;
-  margin-left: 2px;
-  vertical-align: -0.15em;
-  background: rgb(var(--ember-400));
-  animation: vx-blink 1s steps(2) infinite;
-}
-
 .vx-dots i {
   width: 5px;
   height: 5px;
@@ -1028,78 +978,6 @@ html.light .theme-ico-sun { transform: translateY(0) rotate(0deg); opacity: 1; }
 }
 .vx-eq i:nth-child(2) { animation-delay: 0.18s; }
 .vx-eq i:nth-child(3) { animation-delay: 0.34s; }
-
-/* Live voice overlay — full-screen orb during hands-free chat. */
-.lvo-bg {
-  background:
-    radial-gradient(60% 46% at 50% -4%, rgb(var(--art) / 0.16), transparent 62%),
-    radial-gradient(46% 38% at 82% 104%, rgb(var(--tide-500) / 0.12), transparent 60%),
-    rgba(13, 9, 15, 0.97);
-  backdrop-filter: blur(22px);
-  -webkit-backdrop-filter: blur(22px);
-}
-.lvo-orb {
-  --lvl: 0;
-  position: relative;
-  width: clamp(150px, 38vw, 210px);
-  aspect-ratio: 1;
-  border-radius: 9999px;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.lvo-core {
-  position: absolute;
-  inset: 12%;
-  border-radius: inherit;
-  background: conic-gradient(from 210deg,
-    rgb(var(--art)), rgb(var(--tide-500)), rgb(var(--ember-400)), rgb(var(--art)));
-  filter: saturate(1.15);
-  transform: scale(calc(1 + var(--lvl) * 0.22));
-  transition: transform 90ms linear;
-  box-shadow: inset 0 0 34px rgba(255, 255, 255, 0.25);
-}
-.lvo-glow {
-  position: absolute;
-  inset: -6%;
-  border-radius: inherit;
-  background: radial-gradient(circle,
-    rgb(var(--art) / 0.55), rgb(var(--tide-500) / 0.25) 55%, transparent 72%);
-  filter: blur(26px);
-  opacity: calc(0.45 + var(--lvl) * 0.55);
-  transform: scale(calc(1 + var(--lvl) * 0.5));
-  transition: transform 120ms linear, opacity 120ms linear;
-}
-.lvo-ring {
-  position: absolute;
-  inset: 4%;
-  border-radius: inherit;
-  border: 1.5px solid rgba(255, 255, 255, 0.22);
-  opacity: 0;
-}
-.lvo--listening .lvo-core { animation: lvoBreath 3.2s ease-in-out infinite; }
-.lvo--speaking .lvo-ring { animation: lvoRipple 1.6s ease-out infinite; }
-.lvo--speaking .lvo-ring-2 { animation-delay: 0.8s; }
-.lvo--thinking .lvo-core { animation: lvoSpin 3.4s linear infinite; }
-.lvo--muted .lvo-core { filter: saturate(0.25) brightness(0.7); }
-.lvo-dots {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-}
-.lvo-dots i {
-  width: 10px;
-  height: 10px;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.9);
-  animation: lvoDot 1.2s ease-in-out infinite;
-}
-.lvo-dots i:nth-child(2) { animation-delay: 0.15s; }
-.lvo-dots i:nth-child(3) { animation-delay: 0.3s; }
 
 /* ============================================================================
    Living blobs — the AuroraBackground layer.
@@ -1514,10 +1392,6 @@ html.light .glass-sidebar::before {
   33% { transform: translate(-4vw, 6vw) scale(1.16); }
   66% { transform: translate(3vw, -3vw) scale(0.86); }
 }
-@keyframes vx-blink {
-  0%, 49% { opacity: 1; }
-  50%, 100% { opacity: 0; }
-}
 @keyframes vx-bounce {
   0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
   30% { transform: translateY(-4px); opacity: 1; }
@@ -1536,21 +1410,6 @@ html.light .glass-sidebar::before {
   30% { transform: scale(1.12); }
   65% { transform: scale(0.96); }
 }
-@keyframes lvoBreath {
-  0%, 100% { box-shadow: inset 0 0 34px rgba(255, 255, 255, 0.25); }
-  50% { box-shadow: inset 0 0 48px rgba(255, 255, 255, 0.4); }
-}
-@keyframes lvoRipple {
-  0% { transform: scale(0.9); opacity: 0.55; }
-  100% { transform: scale(1.35); opacity: 0; }
-}
-@keyframes lvoSpin {
-  to { transform: scale(calc(1 + var(--lvl) * 0.22)) rotate(360deg); }
-}
-@keyframes lvoDot {
-  0%, 100% { transform: translateY(0); opacity: 0.6; }
-  50% { transform: translateY(-7px); opacity: 1; }
-}
 
 /* ============================================================================
    Reduced motion — one cascade neutralises every animation everywhere.
@@ -1566,10 +1425,9 @@ html.reduce-motion *::after {
 @media (prefers-reduced-motion: reduce) {
   .reveal, .hero-animated, .animate-marquee, .animate-fade-up, .skeleton,
   .animate-pulse-bar, .vx-stagger > *, .vx-blob-a, .vx-blob-b, .vx-blob-c,
-  .vx-blob-d, .vx-eq i, .karaoke-fill, .lvo-core,
-  .lvo-ring, .lvo-dots i, .skeleton::after,
+  .vx-blob-d, .vx-eq i, .karaoke-fill, .skeleton::after,
   .np-mini.np-changed, .np-mini[data-buffering='true'] .np-mini-thumb::after,
-  .vx-ai-pulse, .vx-dock-active {
+  .vx-dock-active {
     animation: none !important;
   }
   .btn-primary::after,
@@ -1688,9 +1546,7 @@ html.light .btn-primary,
 html.light .btn-premium,
 html.light .card-play,
 html.light .bg-ember-500.text-black,
-html.light .bg-ember-400.text-black,
-html.light .bg-ai-accent.text-black,
-html.light .bg-ai-accent { color: #fff; }
+html.light .bg-ember-400.text-black { color: #fff; }
 html.light .btn-primary:hover,
 html.light .btn-premium:hover { background: rgb(var(--ember-400)); border-color: rgb(var(--ember-400)); }
 html.light .btn-secondary { border-color: rgb(var(--ink-600)); }
@@ -1711,286 +1567,6 @@ html.hc a:focus-visible, html.hc button:focus-visible { outline: 3px solid rgb(v
 
 /* v5.17.0 — ambient mode artwork breathes slowly. */
 @keyframes ambient-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.035); } }
-
-/* ============================================================================
-   v5.25.0 — VinaX AI page. A calm, editorial reading surface: a warm neutral
-   ground, hairline structure instead of filled tiles, and the accent spent
-   only where it means something (send, active, focus).
-
-   Everything is scoped under .ai-root and every rule is prefixed .ai-, so no
-   other page can be touched by it. The page paints its OWN warm surface
-   tokens — the app's cool greys read as clinical at this density — but it
-   still reads --ember-* from the global palette, so the listener's chosen
-   accent and all three themes carry through unchanged.
-   ========================================================================= */
-.ai-root {
-  --ai-bg: var(--vx-bg-base); --ai-panel: var(--vx-surface);
-  --ai-raised: var(--vx-surface-raised); --ai-line: var(--vx-border);
-  --ai-line-soft: var(--vx-border); --ai-hover: var(--vx-bg-hover);
-  --ai-text: var(--vx-text-primary); --ai-text-2: var(--vx-text-secondary);
-  --ai-text-3: var(--vx-text-muted); --ai-shadow: var(--vx-shadow-overlay);
-  --ai-serif: 'Manrope', system-ui, sans-serif;
-  background: var(--ai-bg); color: var(--ai-text);
-}
-
-/* ---------- Structure ---------- */
-.ai-panel { background: var(--ai-panel); }
-.ai-raised { background: var(--ai-raised); }
-.ai-hairline { border-color: var(--ai-line); }
-.ai-hairline-soft { border-color: var(--ai-line-soft); }
-.ai-t1 { color: var(--ai-text); }
-.ai-t2 { color: var(--ai-text-2); }
-.ai-t3 { color: var(--ai-text-3); }
-
-/* Section label — the only place small caps are used. */
-.ai-eyebrow {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ai-text-3);
-}
-
-/* ---------- Display ---------- */
-/* The greeting. Serif, light, generously tracked-in — one clear focal point
-   instead of the old gradient-filled headline. */
-.ai-display {
-  font-family: var(--ai-serif);
-  font-size: clamp(2rem, 1.4rem + 2.2vw, 3.05rem);
-  font-weight: 400;
-  letter-spacing: -0.021em;
-  line-height: 1.12;
-  color: var(--ai-text);
-}
-/* The name inside the greeting: italic serif, not a colour wash. It has to
-   survive a long or odd name (a device name pasted at onboarding, say)
-   without breaking the line box. */
-.ai-display-name {
-  font-style: italic;
-  color: var(--ai-text-2);
-  overflow-wrap: anywhere;
-}
-
-/* ---------- Buttons ---------- */
-.ai-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  border-radius: 0.625rem;
-  border: 1px solid var(--ai-line);
-  background: transparent;
-  padding: 0.5rem 0.75rem;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ai-text-2);
-  transition: background-color 130ms var(--ease-calm), color 130ms var(--ease-calm), border-color 130ms var(--ease-calm);
-}
-.ai-btn:hover:not(:disabled) { background: var(--ai-hover); color: var(--ai-text); }
-.ai-btn:disabled { opacity: 0.45; }
-
-/* Chips carry no fill until they are ON — a wall of outlined pills reads as
-   one calm row rather than nine competing buttons. */
-.ai-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  border-radius: 9999px;
-  border: 1px solid var(--ai-line);
-  background: transparent;
-  padding: 0.34rem 0.7rem;
-  font-size: 12.5px;
-  font-weight: 550;
-  line-height: 1.3;
-  color: var(--ai-text-2);
-  white-space: nowrap;
-  transition: background-color 130ms var(--ease-calm), color 130ms var(--ease-calm), border-color 130ms var(--ease-calm);
-}
-.ai-chip:hover:not(:disabled) { background: var(--ai-hover); color: var(--ai-text); border-color: var(--ai-line); }
-.ai-chip:disabled { opacity: 0.45; }
-.ai-chip-on,
-.ai-chip-on:hover:not(:disabled) {
-  border-color: rgb(var(--ember-500) / 0.5);
-  background: rgb(var(--ember-500) / 0.1);
-  color: rgb(var(--ember-300));
-}
-.ai-chip-solid,
-.ai-chip-solid:hover:not(:disabled) {
-  background: var(--ai-text);
-  border-color: var(--ai-text);
-  color: var(--ai-bg);
-}
-.ai-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 0.5rem;
-  color: var(--ai-text-3);
-  flex-shrink: 0;
-  transition: background-color 130ms var(--ease-calm), color 130ms var(--ease-calm);
-}
-.ai-icon-btn:hover { background: var(--ai-hover); color: var(--ai-text); }
-.ai-icon-btn-on,
-.ai-icon-btn-on:hover { color: var(--ai-text); background: var(--ai-hover); }
-/* The one saturated element on the page. */
-.ai-send {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 0.5rem;
-  background: rgb(var(--ember-500));
-  color: #fff;
-  transition: opacity 130ms var(--ease-calm), transform 130ms var(--ease-calm);
-}
-html.light .ai-send { color: #fff; }
-.ai-send:disabled { opacity: 0.3; }
-.ai-send:hover:not(:disabled) { opacity: 0.9; }
-
-/* ---------- Sidebar ---------- */
-.ai-side-row {
-  display: flex;
-  align-items: center;
-  gap: 0.125rem;
-  border-radius: 0.5rem;
-  padding: 0.4rem 0.5rem 0.4rem 0.625rem;
-  font-size: 13.5px;
-  color: var(--ai-text-2);
-  cursor: pointer;
-  transition: background-color 120ms var(--ease-calm), color 120ms var(--ease-calm);
-}
-.ai-side-row:hover { background: var(--ai-hover); color: var(--ai-text); }
-.ai-side-row-on,
-.ai-side-row-on:hover { background: var(--ai-hover); color: var(--ai-text); font-weight: 600; }
-.ai-side-row .ai-side-actions { opacity: 0; transition: opacity 120ms var(--ease-calm); }
-.ai-side-row:hover .ai-side-actions,
-.ai-side-row:focus-within .ai-side-actions { opacity: 1; }
-@media (hover: none) { .ai-side-row .ai-side-actions { opacity: 1; } }
-
-/* ---------- Surfaces ---------- */
-.ai-card {
-  background: transparent;
-  border: 1px solid var(--ai-line);
-  border-radius: 0.875rem;
-}
-.ai-popover {
-  background: var(--ai-raised);
-  border: 1px solid var(--ai-line);
-  border-radius: 0.875rem;
-  box-shadow: var(--ai-shadow);
-  padding: 0.3125rem;
-}
-.ai-menu-item {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 0.625rem;
-  padding: 0.45rem 0.5rem;
-  border-radius: 0.5rem;
-  font-size: 13px;
-  font-weight: 550;
-  text-align: left;
-  color: var(--ai-text-2);
-  transition: background-color 110ms var(--ease-calm), color 110ms var(--ease-calm);
-}
-.ai-menu-item:hover { background: var(--ai-hover); color: var(--ai-text); }
-.ai-menu-item[aria-pressed='true'],
-.ai-menu-item[aria-selected='true'] { color: var(--ai-text); font-weight: 650; }
-.ai-menu-sep { height: 1px; margin: 0.3125rem 0.5rem; background: var(--ai-line-soft); }
-
-/* ---------- Composer ---------- */
-.ai-composer {
-  background: var(--ai-raised);
-  border: 1px solid var(--ai-line);
-  border-radius: 1rem;
-  box-shadow: none;
-  transition: border-color 150ms var(--ease-calm), box-shadow 150ms var(--ease-calm);
-}
-.ai-composer:focus-within {
-  border-color: rgb(var(--ember-500) / 0.45);
-  box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.1);
-}
-.ai-composer textarea:focus-visible,
-.ai-field input:focus-visible,
-.ai-field:focus-visible,
-.ai-select:focus-visible { box-shadow: none; outline: none; }
-.ai-field {
-  background: transparent;
-  border: 1px solid var(--ai-line);
-  border-radius: 0.5rem;
-  transition: border-color 130ms var(--ease-calm);
-}
-.ai-field:focus,
-.ai-field:focus-within { border-color: rgb(var(--ember-500) / 0.45); }
-.ai-select {
-  appearance: none;
-  -webkit-appearance: none;
-  background: transparent;
-  border: 0;
-  outline: none;
-  padding: 0;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-}
-
-/* ---------- Messages ---------- */
-.ai-user-bubble {
-  background: var(--ai-hover);
-  border: 1px solid var(--ai-line-soft);
-  color: var(--ai-text);
-}
-.ai-toolbar { opacity: 0; transition: opacity 140ms var(--ease-calm); }
-.ai-msg:hover .ai-toolbar,
-.ai-msg:focus-within .ai-toolbar,
-.ai-toolbar:has([aria-expanded='true']) { opacity: 1; }
-@media (hover: none) { .ai-toolbar { opacity: 1; } }
-.ai-tool {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.28rem 0.45rem;
-  border-radius: 0.4rem;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1;
-  color: var(--ai-text-3);
-  white-space: nowrap;
-  transition: background-color 130ms var(--ease-calm), color 130ms var(--ease-calm);
-}
-.ai-tool:hover { background: var(--ai-hover); color: var(--ai-text); }
-.ai-tool[aria-pressed='true'],
-.ai-tool[aria-expanded='true'] { color: var(--ai-text); }
-
-/* ---------- Misc ---------- */
-.ai-scroll-x {
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  -webkit-overflow-scrolling: touch;
-}
-.ai-scroll-x::-webkit-scrollbar { display: none; }
-.ai-pick {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  border-radius: 0.75rem;
-  border: 1px solid var(--ai-line);
-  background: transparent;
-  transition: background-color 130ms var(--ease-calm), border-color 130ms var(--ease-calm);
-}
-.ai-pick-live:hover { border-color: var(--ai-line); background: var(--ai-hover); }
-/* The page paints its own ground, so the app's ambient wash must not show
-   through it. */
-.ai-root .ai-ambient { background: none; }
-@media (prefers-reduced-motion: reduce) {
-  .ai-toolbar, .ai-chip, .ai-tool, .ai-composer, .ai-pick, .ai-side-row, .ai-btn { transition: none; }
-}
-
 
 /* ============================================================================
    Keyboard focus for non-text inputs (last in the file on purpose: the thumb

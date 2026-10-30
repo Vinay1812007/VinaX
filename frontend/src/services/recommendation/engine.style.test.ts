@@ -11,11 +11,8 @@ import { makeContext, makePlay, makeSong, warmProfile } from '@/__fixtures__/son
  * the AI DJ is told the style and may not water it down.
  */
 let pool: Candidate[] = [];
-const djSequence = vi.fn();
 const generate = vi.fn(async (..._args: unknown[]) => pool);
 vi.mock('./candidates', () => ({ gatherCandidates: vi.fn(async () => pool), generateNextCandidates: (...args: unknown[]) => generate(...args) }));
-vi.mock('@/services/ai/recommendations', () => ({ enrichSongs: vi.fn(async (songs: Song[]) => songs), aiRerankSongs: vi.fn(async (songs: Song[]) => songs) }));
-vi.mock('@/services/ai/dj', () => ({ djSequence: (...args: unknown[]) => djSequence(...args), samplePool: (songs: Song[]) => songs, commitDjSet: vi.fn(), lastDjOutcome: () => 'ok' }));
 vi.mock('@/services/queryClient', () => ({ queryClient: { getQueryData: () => undefined } }));
 
 import { planNextSongs, recommendNextSongs } from './engine';
@@ -50,9 +47,8 @@ beforeEach(() => {
   sessionStorage.clear();
   resetTransitionMemory();
   resetRecMemory();
-  djSequence.mockReset();
   generate.mockClear();
-  useSettingsStore.setState({ aiDj: false, aiAssist: false, kidMode: false, mutedLanguages: [] });
+  useSettingsStore.setState({ kidMode: false, mutedLanguages: [] });
   useLibraryStore.setState({ hiddenSongIds: [], hiddenArtists: [] });
 });
 
@@ -170,15 +166,4 @@ describe('8.3.0 — a style keeps going', () => {
     expect(lastGatherCtx()).toMatchObject({ style: null });
   });
 
-  it('tells the AI DJ the style, and turns away an order that drops it', async () => {
-    useSettingsStore.setState({ aiDj: true, aiAssist: true });
-    pool = djPool();
-    // The DJ answers with film songs only.
-    djSequence.mockImplementation(async (_seed: Song, _ctx: unknown, p: Song[]) => ({ intro: '', picks: p.filter((s) => !matchesStyle(s, 'dj')).slice(0, 5).map((song) => ({ song, reason: 'x', segue: '' })) }));
-    const plan = await planNextSongs(seed, ctx(), { limit: 5, aiBudgetMs: 10_000 });
-    expect(plan.refinement).not.toBeNull();
-    const refined = await plan.refinement!;
-    expect(djSequence.mock.calls[0][5]).toMatchObject({ style: 'dj' });
-    expect(refined).toEqual({ rejected: 'ai_rejected' });
-  });
 });

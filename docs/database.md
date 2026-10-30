@@ -5,7 +5,7 @@ VinaX 14.0 brings back a server database, designed from a clean sheet: one schem
 ## Setting it up
 
 1. Create a Supabase project (any region; Mumbai is closest to most listeners).
-2. SQL Editor, paste `backend/supabase/schema.sql`, Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
+2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 3), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
 3. Set two Worker secrets from `backend/`:
 
 ```sh
@@ -14,6 +14,10 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml
 ```
 
 4. Open the console's **Database** page: it shows the schema version the paste wrote and every table.
+
+### Moving from version 2
+
+Version 3 no longer creates the AI tables `ai_calls` and `shared_chats` or the functions `stats_ai` and `ai_usage_since`, because VinaX has no AI features any more. `schema.sql` never deletes data, so a database that ran version 2 still holds them. To remove them, run `backend/supabase/remove-ai.sql` once, by hand, in the SQL Editor after applying version 3. It deletes every row of those two tables and nothing else, and is safe to re-run. The Schema workflow below never runs it.
 
 ### From CI instead of the SQL editor
 
@@ -45,9 +49,7 @@ Only the Worker holds the service-role key. Row-level security is enabled and fo
 | `profiles` | signed-in account (15.0) | opt-in public profile: `handle` (unique, case-insensitive), `public`, `bio`, `summary` (the device's digest), `now_playing`, `share_now`; deleted with the account |
 | `follows` | account → account (15.0) | `follower_id`, `followee_id`; no self-follow; both sides cascade |
 | `shared_playlists` | signed-in account (15.0) | `name`, `songs` (display fields, ≤ 500), `public`, `collab_token` (invite secret), `version` for merges; deleted with the account |
-| `shared_chats` | signed-in account (15.0) | a VinaX AI conversation the listener shared: text only, `expires_at` 90 days; swept by `room_sweep()` |
 | `events` | consented usage event | `kind` (play, pause, heartbeat, open, error, search, skip, favorite, share, rec_served…), song facts, language, platform, geo, error kind/message, `meta` (≤ 2 KB), `verified` |
-| `ai_calls` | model call | feature, lane, provider, model, ok, status, error, client, latency, prompt/completion tokens |
 | `feedback` | message from a listener | kind (bug/idea/content/other), message, platform, geo, `status` (new/read/resolved), owner `note` |
 | `blocked_content` | blocked thing | `kind` (song/artist/keyword), `value`, `label`, `reason`; unique per kind + value |
 | `rooms` | Listen Together room | `code`, `host_token`, host name, `current`, `queue` (≤ 12), `requests` (≤ 20), position, playing |
@@ -68,7 +70,7 @@ All `security invoker`, executable by the service role only. Each answers JSON s
 
 | Function | Answers |
 | --- | --- |
-| `stats_overview()` | the Overview tiles: activeNow, listeners, newListeners24h, accounts, newAccounts7d, plays24h, plays7d, errors24h, dau, wau, mau, feedbackNew, pushDevices, roomsActive, aiCalls24h |
+| `stats_overview()` | the Overview tiles: activeNow, listeners, newListeners24h, accounts, newAccounts7d, plays24h, plays7d, errors24h, dau, wau, mau, feedbackNew, pushDevices, roomsActive |
 | `stats_timeline(days)` | `[{ day, plays, listeners, newListeners, errors, searches }]`, every day present |
 | `stats_music(days, limit)` | `{ songs, artists, languages, rising }` |
 | `stats_geo(days)` | `{ countries, cities }` |
@@ -78,8 +80,6 @@ All `security invoker`, executable by the service role only. Each answers JSON s
 | `stats_funnel(days)` | `[{ id, label, listeners }]` |
 | `stats_skips(days, min)` | `[{ id, title, artist, image, plays, skips, rate }]` |
 | `stats_errors(days, limit)` | `{ total, byDay, top: [{ errorKind, message, hits, lastSeen, platforms, versions }] }` |
-| `stats_ai(days)` | `{ summary, byFeature, byProvider, byModel, byDay, errors, recent }` |
-| `ai_usage_since(since)` | today's tokens by model (the spend caps) |
 | `listener_profile(listener, account)` | `{ listener, account, backup, stats, topSongs, languages, events }` |
 | `delete_listener(listener, account)` | removes the person everywhere; answers the counts |
 | `room_request(code, song, by)` | atomic guest request append (false = no such room) |
@@ -117,7 +117,6 @@ Companions in `_lib/`:
 | `identity.ts` | device identity: signed ids (`signed_device_id` in, `signed_device_id_next` out), `d_…` ids derived from the install id, fresh `r_…` ids |
 | `settings.ts` | `SETTING_KEYS` (the whole vocabulary), `readSettings` (memoised a minute), `setting`, `settingsMap`, `writeSetting` (with history) |
 | `audit.ts` | `audit(ctx, { action, summary, target, before, after })` with secret redaction |
-| `aiLog.ts` | `logAiCall(env, call, waitUntil)` → `ai_calls` |
 | `admin.ts` | `isAdminAsync`, `adminJson`, `notConfigured()`, `dbFailure(fail)`, `badRequest()` |
 
 ### Rules every route follows
@@ -138,7 +137,6 @@ All under `/api/admin/`, gated by `isAdminAsync`. `?days=` is 1..90 (default 7).
 | `live` | `{ configured, now, listening: [{ id, name, handle, platform, country, city, song, isPlaying, lastSeen }], feed: [{ at, kind, listener, song, message, platform, country }], rooms: [{ code, hostName, members, song, playing, updatedAt, createdAt }] }` | `end_room { code }`, `end_all_rooms` |
 | `listeners` | list `?q=&platform=&days=&limit=&offset=` → `{ configured, total, rows: directory rows camel-cased, counts: { listeners, accounts, byPlatform } }`; profile `?id=<listener>` or `?account=<sub>` → `{ configured, profile }` (`listener_profile`) | `delete { id?, account?, reason }` |
 | `analytics` | `?view=music|geo|engagement|retention|funnel|skips|errors` → `{ configured, days, view, data }` where `data` is the matching function's answer (engagement also carries `timeline` and `platforms`) | `clear_errors` |
-| `ai` | `{ configured, days, …stats_ai }` | — |
 | `feedback` | `?status=new|read|resolved|all&kind=&limit=&offset=` → `{ configured, total, counts: { new, read, resolved }, rows }` | `status { id, status, note? }`, `delete { id }`, `delete_resolved` |
 | `content` | `{ configured, blocked: [...], suggestions: [{ id, title, artist, image, plays }] }` | `block { kind, value, label?, reason? }`, `unblock { id }` |
 | `settings` | `{ configured, keys: SETTING_KEYS, values, updated: { key: { at, by } } }`; `?key=` → `{ configured, key, value, updatedAt, updatedBy, history: [{ at, by, value }] }` | `{ key, value }` (null clears) → `{ ok, key, value, updatedAt }`; `400 unknown_key`, `413 too_large` |
@@ -162,7 +160,6 @@ All under `/api/admin/`, gated by `isAdminAsync`. `?days=` is 1..90 (default 7).
 | `GET/PUT/DELETE /api/profile`, `GET /api/profile/<handle>` | `profiles` (+ `follows` for counts and private visibility) |
 | `GET/POST /api/follow` | `follows`, `profiles`, `accounts` (name, picture) |
 | `GET/POST/DELETE /api/shared-playlist`, `GET/POST /api/shared-playlist/<id>` | `shared_playlists`; collaborator writes need the invite token; owner writes `409 { playlist }` on a stale version |
-| `GET/POST/DELETE /api/share-chat`, `GET /api/share-chat/<id>` | `shared_chats` |
 | `GET/POST /api/username` | the handle on `listeners`; `409 taken` with suggestions |
 | `GET /api/experiments` | active experiments |
 | `GET /api/announcements` | the `announcement` setting (ignored when retracted) |
@@ -184,4 +181,4 @@ The Worker's Cron Trigger (`[triggers] crons` in `wrangler.toml`) fires every 30
 
 ## Privacy
 
-Stored: coarse edge geo, anonymous device ids, display names and handles the listener chose, Google profile basics for signed-in listeners, the synced backup (never AI chats), song facts for plays. Not stored: IP addresses, precise location, prompts, answers. Usage events are purged after `retention.eventsDays` (default 180). A listener's **Delete my data** removes the account, its backup and the device row; the console's delete removes everything about one person.
+Stored: coarse edge geo, anonymous device ids, display names and handles the listener chose, Google profile basics for signed-in listeners, the synced backup, song facts for plays. Not stored: IP addresses, precise location. Usage events are purged after `retention.eventsDays` (default 180). A listener's **Delete my data** removes the account, its backup and the device row; the console's delete removes everything about one person.

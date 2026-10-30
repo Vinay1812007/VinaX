@@ -1,6 +1,6 @@
 # Recommendations
 
-This document covers how VinaX decides what to play next and what to show on Home: the next-song pipeline, its scoring weights, the taste profile and the session intent that feed it, the exposure ledger that keeps surfaces from repeating each other, the queue rules in the player, and the Home shelves. Everything described here runs on the device; the engine exists so that a free app with no account requirement can still continue a queue sensibly, in the listener's languages, without sending listening history to a server. The optional AI steps are described in [ai.md](ai.md), the outside chart signal in [trends.md](trends.md), the offline evaluation in [evaluation.md](evaluation.md), and what is stored or leaves the device in [data-and-privacy.md](data-and-privacy.md).
+This document covers how VinaX decides what to play next and what to show on Home: the next-song pipeline, its scoring weights, the taste profile and the session intent that feed it, the exposure ledger that keeps surfaces from repeating each other, the queue rules in the player, and the Home shelves. Everything described here runs on the device; the engine exists so that a free app with no account requirement can still continue a queue sensibly, in the listener's languages, without sending listening history to a server. The outside chart signal in [trends.md](trends.md), the offline evaluation in [evaluation.md](evaluation.md), and what is stored or leaves the device in [data-and-privacy.md](data-and-privacy.md).
 
 All paths are relative to `frontend/src/` unless they start with `backend/` or `frontend/`.
 
@@ -12,15 +12,13 @@ A continuation is one call to `planNextSongs(seed, ctx, options)` in `services/r
 | --- | --- | --- | --- |
 | 1 | Candidate generation | `candidates.ts` | Gathers a pool from several sources in parallel. A failed source shrinks the pool and nothing else. |
 | 2 | Hard filtering | `filters.ts` | Applies rules, not preferences. Every rejection has a named reason. Versions of one song collapse onto the best cut. |
-| 3 | Feature extraction | `services/ai/recommendations.ts` (`enrichSongs`) | Adds classifier metadata (mood, vibe, genre, energy, tempo) when it is cached or arrives within 1.8 s. Optional. |
-| 4 | Scoring | `scoring.ts`, `weights.ts`, `vectors.ts` | Scores each candidate against the seed, the taste profile, the hour, the weekday, the session window, this sitting's intent, the discovery mode and the exposure ledger. Every term is recorded as a reason, and the reasons sum to the score. |
-| 5 | Ranking | `scoring.ts`, `reranking.ts`, `engine.ts` | Sorts, shuffles within 0.05-wide score bands using the session salt, re-ranks greedily for diversity (artist, genre and language against the last four picks), then applies an active tune's per-song nudge. With the AI DJ off, an optional AI re-rank of the top 30 adds up to +0.12 per song. |
-| 6 | Sequencing | `sequencer.ts` | Orders the top 40 into a stretch: energy arc, mood flow, transition memory, artist and album spacing, era, language policy, familiar first. |
-| 7 | AI DJ (optional) | `services/ai/dj.ts` | May re-order a sample of the pool and propose a few catalogue-verified songs. Arrives later, as a refinement. |
-| 8 | Validation | `validation.ts` | Re-checks the final order, whoever produced it, against every rule. This is the final policy for the on-device order, the DJ's order and a top-up from the reserve. |
-| 9 | Admission | `admission.ts` | The player re-checks every automatic queue change against the listener's state at that moment. |
+| 3 | Scoring | `scoring.ts`, `weights.ts`, `vectors.ts` | Scores each candidate against the seed, the taste profile, the hour, the weekday, the session window, this sitting's intent, the discovery mode and the exposure ledger. Every term is recorded as a reason, and the reasons sum to the score. |
+| 4 | Ranking | `scoring.ts`, `reranking.ts`, `engine.ts` | Sorts, shuffles within 0.05-wide score bands using the session salt, re-ranks greedily for diversity (artist, genre and language against the last four picks), then applies an active tune's per-song nudge. |
+| 5 | Sequencing | `sequencer.ts` | Orders the top 40 into a stretch: energy arc, mood flow, transition memory, artist and album spacing, era, language policy, familiar first. |
+| 6 | Validation | `validation.ts` | Re-checks the final order against every rule. This is the final policy for the on-device order and a top-up from the reserve. |
+| 7 | Admission | `admission.ts` | The player re-checks every automatic queue change against the listener's state at that moment. |
 
-Three things hold everywhere: hard rules never relax; the AI never writes to the queue (its output passes stages 8 and 9); and a penalty is never a rule (a song that is clearly the best fit still wins).
+Two things hold everywhere: hard rules never relax, and a penalty is never a rule (a song that is clearly the best fit still wins). Songs carry the catalogue's own metadata only; nothing outside the device fills in or re-orders them.
 
 `limit` is clamped to 0–40 and defaults to 8; the player asks for 5. `recommendNextSongs` wraps `planNextSongs` for radio, playlist continuation and tests. `buildRecommendations(ctx)` runs the same sources, filter and scorer without a seed for Home. The engine is loaded when a queue is first extended; it is not in the first-load bundle.
 
@@ -124,7 +122,7 @@ Passive listening teaches less as one sitting goes on (`updater.ts`). A `PLAY` a
 
 Canonical identity (`identityCore.ts`, `songKey`) is the normalised title plus the primary artist. The Worker uses the same file, and both test suites run the vectors in `shared/identity-vectors.json` (`identityContract.test.ts`). Normalisation is Unicode-safe: NFKC, invisible characters dropped, Latin accents folded, every other combining mark kept so Indic vowel signs survive. It strips version decorations (film credit, remix, remaster, live, a year and so on) and featured credits. `recordingKey` adds the version tag, so a remix stays distinguishable from its work family.
 
-### 3–5. Scoring and ranking (`scoring.ts`, `weights.ts`)
+### 3–4. Scoring and ranking (`scoring.ts`, `weights.ts`)
 
 `SCORING_WEIGHTS_VERSION` is `1.3.0`. Feature values are normalised to 0–1 before they are multiplied.
 
@@ -155,7 +153,7 @@ Canonical identity (`identityCore.ts`, `songKey`) is the normalised title plus t
 | `intentEnergy` | 0.30 | Energy steer × the candidate's distance from mid energy |
 | `intentSkippedSong` | 0.40 | Subtracted for a song skipped in this sitting |
 
-Terms that depend on the taste profile are multiplied by a personal blend of `(0.3 + 0.7 × profile confidence) × (0.4 + 0.6 × intensity)`, where intensity is the recommendation-intensity setting. A new profile therefore leans on popularity and a warm one on taste. Unknown features score 0 rather than a guessed value, and classifier-filled or title-inferred features are scaled by confidence. A candidate in a muted language scores −1, and candidates scoring 0 or less are dropped with reason `low-score`.
+Terms that depend on the taste profile are multiplied by a personal blend of `(0.3 + 0.7 × profile confidence) × (0.4 + 0.6 × intensity)`, where intensity is the recommendation-intensity setting. A new profile therefore leans on popularity and a warm one on taste. Unknown features score 0 rather than a guessed value, and title-inferred features are scaled by confidence. A candidate in a muted language scores −1, and candidates scoring 0 or less are dropped with reason `low-score`.
 
 Each candidate also receives a boost for its primary source:
 
@@ -179,11 +177,11 @@ Three further terms live in `TASTE_WEIGHTS`, outside the override table:
 | `seedRepeat` | 0.10 | Subtracted when the song opened the last continuation accepted after this same seed; reason `served` |
 | `servedRecently` | 0.04 | A fallback only: subtracted when the caller passes `servedKeys` and no exposure penalty applies. The live plan passes `exposurePenaltyOf` instead (see [The exposure ledger](#the-exposure-ledger)). |
 
-The taste fit is the cosine of the candidate's vector and the listener's taste vector (`vectors.ts`). Each song hashes its artists, album, language, genres, mood, vibes and release decade into 256 signed slots. The taste vector sums favourites and decayed history (finished positive, skipped negative). Plays of the last seven days are the recent taste; once the long-term taste weighs at least 3 (`MIN_LONG_TERM_MASS`), recent listening may hold at most 40 % of the vector (`RECENT_SHARE`), so one unusual night moves the taste without taking it over. With nothing to go on the vector is null and the term is 0. When learned embeddings are already on the device the fit is adjusted by them; the plan never waits for that module.
+The taste fit is the cosine of the candidate's vector and the listener's taste vector (`vectors.ts`). Each song hashes its artists, album, language, genres, mood, vibes and release decade into 256 signed slots. The taste vector sums favourites and decayed history (finished positive, skipped negative). Plays of the last seven days are the recent taste; once the long-term taste weighs at least 3 (`MIN_LONG_TERM_MASS`), recent listening may hold at most 40 % of the vector (`RECENT_SHARE`), so one unusual night moves the taste without taking it over. With nothing to go on the vector is null and the term is 0.
 
 **Owner overrides.** The owner console's Recommendation Tuning can publish a versioned set of overrides for the 24 keys in the first table (config key `rec-config`, see [admin-console.md](admin-console.md)). Each value is clamped to between half and double its default (`WEIGHT_OVERRIDE_MIN_FACTOR`, `WEIGHT_OVERRIDE_MAX_FACTOR`). The app applies them (`applyWeightOverrides`, loaded lazily by `remoteWeights.ts`) only when the rollout targets this device. `activeWeightsVersion()` then reads, for example, `1.3.0+rc7`, and that string is part of every continuation's `alg` stamp. The Worker mirrors the table key for key (`REC_WEIGHT_TERMS` in `backend/worker/functions/api/admin/recconfig.ts`).
 
-### 6. The sequencer (`sequencer.ts`)
+### 5. The sequencer (`sequencer.ts`)
 
 `sequenceSongs` is greedy and deterministic. For each slot it computes a target energy from the arc shape and picks the candidate with the lowest cost.
 
@@ -205,7 +203,7 @@ The taste fit is the cosine of the candidate's vector and the listener's taste v
 
 Arc shapes are `steady`, `build`, `wind-down`, `wave` and `lift`. The engine picks the active tune's shape, else `lift` when the sitting has a skip streak of two or more, else a read of the listener's energy (restless → `lift`, late hours → `wind-down`, otherwise `steady`). One recording family appears once per stretch. Transition memory (`transitions.ts`, `transitionTracker.ts`) records how each hand-off went from heard time: 70 % or more heard counts as completed, under 30 % as skipped, failed playback judges nothing. Every soft rule a small pool forced to give way is reported in `relaxed`.
 
-### 8. Validation (`validation.ts`)
+### 6. Validation (`validation.ts`)
 
 `validateSequence` receives the sequenced stretch followed by the rest of the ranked pool as a reserve, and applies:
 
@@ -225,16 +223,15 @@ When nothing else fits, soft rules give way in the order a listener minds least:
 | Part | What it is |
 | --- | --- |
 | `songs` | The validated on-device order, built inside one deadline: 8 s normally (`NEXT_DEADLINE_MS`), 3.5 s when the listener is waiting at the end of the queue (`NEXT_URGENT_DEADLINE_MS`, `deadlines.ts`). |
-| `refinement` | The AI DJ's order for the same stretch, a separate promise with a 24-second budget (`AI_BUDGET_MS`). The player applies it only to automatic entries that have not started: never the current song, a committed next song, or a song the listener queued or kept. |
-| `commit(accepted)` | Publishes "why this song" lines, DJ segues, the `queued` exposure and the seed memory for the songs the player actually accepted. A rejected or cancelled proposal publishes nothing. |
+| `commit(accepted)` | Publishes "why this song" lines, the `queued` exposure and the seed memory for the songs the player actually accepted. A rejected or cancelled proposal publishes nothing. |
 | `topUp(seedNow, n)` | The rest of the ranked pool, re-validated against the song now at the end of the queue. When the queue runs dry before a new plan is ready, the player plays from it instead of pausing. A reserve in another language is never used. |
-| `fallback`, `latencyMs`, `alg` | Why the AI did not choose the order, how long the plan took, and the pipeline version (`PIPELINE_VERSION`, `9.1.0`) with the weights version. |
+| `fallback`, `latencyMs`, `alg` | Why the plan fell short (`deadline` or `error`), how long the plan took, and the pipeline version (`PIPELINE_VERSION`, `9.1.0`) with the weights version. |
 
-The DJ's order is accepted only if at least `min(3, limit)` of its own picks survive validation and its arc error is no worse than the local order's plus 0.08 (plus 0.2 while a tune is active). Otherwise the local order stays. The player cancels a plan and its DJ request when the queue changes.
+The player cancels a plan when the queue changes.
 
-### 9. The admission gate (`admission.ts`)
+### 7. The admission gate (`admission.ts`)
 
-Every automatic change to the queue — a continuation, a refinement, the adaptive re-plan, a reserve top-up — passes `admitSongs`, which reads the listener's restrictions at that moment, after any await: valid metadata, junk and too-short cuts, explicit songs in Kid mode, hidden songs and artists, muted languages, a soft-muted lead artist, another cut of the playing song, anything already queued, recent plays and songs skipped in this sitting. A Queue Builder plan the listener installs keeps its order and passes only the explicit restrictions.
+Every automatic change to the queue — a continuation, the adaptive re-plan, a reserve top-up — passes `admitSongs`, which reads the listener's restrictions at that moment, after any await: valid metadata, junk and too-short cuts, explicit songs in Kid mode, hidden songs and artists, muted languages, a soft-muted lead artist, another cut of the playing song, anything already queued, recent plays and songs skipped in this sitting. A Queue Builder plan the listener installs keeps its order and passes only the explicit restrictions.
 
 ## The exposure ledger
 
@@ -242,8 +239,8 @@ Every automatic change to the queue — a continuation, a refinement, the adapti
 
 | Event | Recorded by | Penalty at its freshest | Decays linearly over | Cools a discovery surface for |
 | --- | --- | ---: | --- | --- |
-| `shown` | A Home shelf when it renders, the AI Playlist | 0.14 | 3 d | 12 h |
-| `queued` | The plan's `commit`, the DJ's set | 0.24 | 7 d | 2 d |
+| `shown` | A Home shelf when it renders | 0.14 | 3 d | 12 h |
+| `queued` | The plan's `commit` | 0.24 | 7 d | 2 d |
 | `played` | The playback bus's `counted` event | 0.30 | 10 d | 3 d |
 | `completed` | The playback bus's `end`, at the completion ratio | 0.22 | 14 d | 3 d |
 | `skipped` | An early manual skip | 0.30 per skip, 3 at most | 21 d | 14 d |
@@ -251,13 +248,13 @@ Every automatic change to the queue — a continuation, a refinement, the adapti
 | `liked` | Favouriting | Pays a quarter of everything else (`LIKED_FORGIVENESS`); never cooled | — | — |
 | `replayed` | An explicit "play this again" | Lifts the cooling for 7 d | — | — |
 
-- A cancelled request, a rejected model suggestion and a prefetched song nobody saw are not recorded.
+- A cancelled request and a prefetched song nobody saw are not recorded.
 - The penalty reaches the scorer as `ctx.exposurePenaltyOf` with reason `served`. It can never admit a song the hard filter rejects. A plan takes one ledger snapshot so a long stretch cannot reorder under its own feet.
 - The ledger holds 600 rows (`EXPOSURE_CAP`) with a 45-day row TTL under the `localStorage` key `vinax.recs.exposure.v1`, with an in-memory mirror used only while storage refuses writes. "Clear personalization profile" and "Erase everything" clear it (`resetExposure`).
 
 **Snooze.** `snoozeSong(song, days)` is the per-song counterpart of the per-artist soft mute: 7, 14 or 30 days (`SNOOZE_DAYS`, 14 by default), keyed by canonical identity so every release of the song goes quiet, with an undo. It is a hard rule while it lasts (`snoozed` in `filters.ts`) and expires on its own.
 
-**Refresh with fewer repeats.** One generation under a stricter rule, on Home (`strict` in `homeRefresh.ts`, read by `surfacePolicy.ts`) and on an AI playlist (`fewerRepeats`). A discovery surface then removes everything with any live exposure instead of moving it to the back. A shelf can come out shorter, and the app says so.
+**Refresh with fewer repeats.** One generation of Home under a stricter rule (`refreshHome({ fewerRepeats: true })`, `strict` in `homeRefresh.ts`, read by `surfacePolicy.ts`). A discovery surface then removes everything with any live exposure instead of moving it to the back. A shelf can come out shorter, and the app says so.
 
 ### The engine's memory of its own picks
 
@@ -290,30 +287,30 @@ Settings → Recommendations → Queue languages (`queueLanguages` in `store/set
 - **Mix.** The hard filter receives `allowedLanguages` (the seed's language plus the listener's) and rejects any other known language as `off-language`. The sequencer runs with `languagePolicy: 'prefer'` and validation with `leadLanguage`. Three mix rules are hard under `prefer`: the seed's language fills slots 1 and 2, an off-lead song never follows another, and off-lead songs fill at most ⌊limit ÷ 2⌋ of the stretch. They give way only when no candidate satisfies them, and the trace records `language-mix`. In the sequencer an off-target song in one of the listener's languages costs +0.6 (or −0.35 once three or more target-language songs have run in a row); any other known language costs +2.5.
 - **Lock.** `languagePolicy: 'lock'` on the seed's language. Candidates whose known language differs never enter. Validation relaxes the lock only when fewer than three songs would remain: first the listener's own languages are let back in, then the rest. The trace records `language-lock`.
 
-Songs with no language, or `unknown`, pass under both settings. The AI DJ is told which rule is in force and its proposals are gated the same way. The "Switch language" tune moves a lock to another language for that stretch; "Same language" is a score nudge and a DJ instruction, not a policy change.
+Songs with no language, or `unknown`, pass under both settings. The "Switch language" tune moves a lock to another language for that stretch; "Same language" is a score nudge, not a policy change.
 
 ### Tunes, pinned moods and styles
 
 `tune.ts` defines the tune intents (`TuneIntent`): energetic, chill, romantic, melody, beats (`mass`), devotional, heartbreak, classics, new (`fresh`), same language, switch language, surprise, and the two style intents `dj` and `folk`. "Surprise me" resolves to one of the others at random. "Pin a mood" on the Now Playing page is stored in `sessionStorage` for 45 minutes, overrides the session window's mood and energy, and calls the same rebuild as the matching tune.
 
-`tuneQueue(intent)` keeps everything already played, the current song and every hand-queued song, removes the rest, and requests a new continuation seeded by the current song. An active intent changes four things: it adds the `intent` candidate source (`tuneSearchQuery`, a two-word phrase prefixed with the queue's language — the catalogue returns nothing for longer phrasings); it adjusts scores (`tuneScoreAdjust`: +0.35 for the asked-for mood plus per-intent nudges); it sets the arc (energetic and beats → `build`; chill, melody, romantic, heartbreak, devotional → `wind-down`; surprise → `wave`); and it briefs the DJ, whose arc tolerance is relaxed to 0.2. The tune is cleared when the listener starts a new queue.
+`tuneQueue(intent)` keeps everything already played, the current song and every hand-queued song, removes the rest, and requests a new continuation seeded by the current song. An active intent changes three things: it adds the `intent` candidate source (`tuneSearchQuery`, a two-word phrase prefixed with the queue's language — the catalogue returns nothing for longer phrasings); it adjusts scores (`tuneScoreAdjust`: +0.35 for the asked-for mood plus per-intent nudges); and it sets the arc (energetic and beats → `build`; chill, melody, romantic, heartbreak, devotional → `wind-down`; surprise → `wave`). The tune is cleared when the listener starts a new queue.
 
 #### Staying in a style
 
-`style.ts` reads three styles from a song: `dj` (DJ remixes), `folk` and `devotional`. Words in the title, album, subtitle and credited artists are strong evidence; genre and mood are weak evidence. `sessionStyle` decides the style the listener is in: a style tune sets it, a seed whose words carry a style sets it, a metadata-only seed needs 2 of the last 3 plays to agree, and an ordinary song played by hand clears it. While a style is active: the required `style` source searches catalogue phrases for it; scoring adds `STYLE_WEIGHTS` (+0.4 for a word match, +0.25 for a metadata-only match, −0.3 off-style, 0.1 source boost); validation keeps at least ⌈0.8 × limit⌉ songs in the style while the pool has them (`STYLE_MIN_SHARE`); only one remix of each song plays per sitting (`remixWorkKey`); and a DJ order with fewer style songs than the local order is rejected.
+`style.ts` reads three styles from a song: `dj` (DJ remixes), `folk` and `devotional`. Words in the title, album, subtitle and credited artists are strong evidence; genre and mood are weak evidence. `sessionStyle` decides the style the listener is in: a style tune sets it, a seed whose words carry a style sets it, a metadata-only seed needs 2 of the last 3 plays to agree, and an ordinary song played by hand clears it. While a style is active: the required `style` source searches catalogue phrases for it; scoring adds `STYLE_WEIGHTS` (+0.4 for a word match, +0.25 for a metadata-only match, −0.3 off-style, 0.1 source boost); validation keeps at least ⌈0.8 × limit⌉ songs in the style while the pool has them (`STYLE_MIN_SHARE`); and only one remix of each song plays per sitting (`remixWorkKey`).
 
 ## The queue rules in the player (`store/playerStore.ts`)
 
 - **The next five.** One continuation adds five songs (`NEXT_BATCH`). The player asks for one when a song starts and two or fewer songs remain after it, provided autoplay (or radio) is on, follow mode is off and repeat is off. One request runs per queue version; a queue change cancels it, and a late result is discarded. Additions pass the admission gate and are marked automatic.
-- **The DJ builds every queue.** With `djTakeover` (the default) and Autoplay on, tapping a song makes it the seed: the queue becomes that one song and the first continuation is requested at once. Callers that pass `keepList` keep their list. Smart Queue (`features/queue/SmartQueue.tsx`) is one switch over these two settings: it reads on when `autoplay && djTakeover`, and turning it off clears `djTakeover` only.
+- **Build every queue.** With `djTakeover` (the default; the setting is called "Build every queue") and Autoplay on, tapping a song makes it the seed: the queue becomes that one song and the first continuation is requested at once. Callers that pass `keepList` keep their list. Smart Queue (`features/queue/SmartQueue.tsx`) is one switch over these two settings: it reads on when `autoplay && djTakeover`, and turning it off clears `djTakeover` only.
 - **Hand-queued songs go first.** The player tracks which ids the recommender appended and which the listener queued. "Add to queue" inserts before the first automatic song; "Play next" inserts directly after the current song. A re-plan or a tune replaces only the automatic tail. "Keep this song" turns an automatic entry into the listener's own; `regenerateAutoTail` rebuilds every automatic entry after the current song on purpose.
 - **Familiar first.** Discovery is held out of slot 1, and out of slot 2 in a stretch of four or more, while any non-discovery candidate remains.
 - **Adaptive re-plan (`adaptive.ts`).** Two consecutive skips of automatic songs re-sequence the remaining automatic tail (three songs or more) with the `lift` shape, bringing in a few favourites in the playing song's language, under a lock on that language. Everything passes the admission gate; if fewer than three songs survive, nothing changes. It cannot run again for 90 seconds (`REPLAN_COOLDOWN_MS`).
-- **AI Radio (`features/radio/aiRadio.ts`, `pages/AiRadioPage.tsx`).** The page only finds the first songs. `startRadio` puts at most `RADIO_SEED_MAX` (5) seeds in the queue as the listener's list, sets radio mode (so continuations run even with Autoplay off) and an optional tune, and plans the first continuation from the last seed. Seeds come from a song, an artist's top songs, a mood chip's tune query, or free text parsed by `parseRadioPrompt` into a language, decade and mood.
+- **Radio (`features/radio/radioSeeds.ts`, `pages/RadioPage.tsx`).** The page only finds the first songs. `startRadio` puts at most `RADIO_SEED_MAX` (5) seeds in the queue as the listener's list, sets radio mode (so continuations run even with Autoplay off) and an optional tune, and plans the first continuation from the last seed. Seeds come from a song, an artist's top songs or a mood chip's tune query (`pickRadioSeeds`).
 
 ## Home shelves
 
-`buildRecommendations(ctx)` gathers, filters, enriches and ranks without a seed, moves identities the ledger says are still cooling behind the rest, and assembles shelves in `mixes.ts`. The result is memoised for ten minutes per profile state, ledger size and trend-snapshot size. `features/recommendations/useRecommendations.ts` is the hook Home reads it through.
+`buildRecommendations(ctx)` gathers, filters and ranks without a seed, moves identities the ledger says are still cooling behind the rest, and assembles shelves in `mixes.ts`. The result is memoised for ten minutes per profile state, ledger size and trend-snapshot size. `features/recommendations/useRecommendations.ts` is the hook Home reads it through.
 
 **Refresh (`features/home/homeRefresh.ts`).** Every Home query that designs or rotates content carries the Home generation in its key and is cached for 30 minutes (`HOME_TTL_MS`). The generation moves only on an explicit refresh and when Home opens more than 30 minutes after it started; never while the listener is on Home. Safety changes (Kid mode, a hide, a muted language, "Less like this") rebuild nothing: every list filters by the current safety settings when it renders (`features/home/blocks/shared.tsx`). Made For You is also keyed on a coarse taste stamp (`tasteStamp`).
 
@@ -323,21 +320,36 @@ Songs with no language, or `unknown`, pass under both settings. The AI DJ is tol
 | --- | --- | --- |
 | `resume` — Continue listening, Recently played and the like | Kept (they are the content) | Kept |
 | `personal` — Made For You, the Daily mix, Because you liked | Moved to the back, never removed | Moved to the back |
-| `discovery` — trending, new releases, popular picks, mood and AI-designed shelves, the feed | Removed | Moved to the back (removed under "fewer repeats") |
+| `discovery` — trending, new releases, popular picks, mood shelves, the feed | Removed | Moved to the back (removed under "fewer repeats") |
 | The automatic queue | Hard rules (`filters.ts`) | The exposure penalty |
 
-**Popular picks for you (`services/ai/trending.ts`, `features/home/useAiTrending.ts`).** Built from the catalogue's trending results and nothing else. The pool passes the hard filter and is collapsed by identity; the on-device scorer orders it. An optional AI re-order of the top 30 may replace that order; it answers with ids from the list it was given, so it can change the order and never the contents.
+**Popular picks for you (`services/recommendation/trendingForYou.ts`, `features/home/useTrendingForYou.ts`).** Built from the catalogue's trending results and nothing else. The pool passes the hard filter and is collapsed by identity; the on-device scorer orders it.
 
 **Home's own order (`features/home/homeOrder.ts`).** When neither the listener nor the owner chose an order, `orderHomeBlocks` reorders the visible blocks from the time of day, taps inside each block (`homeTaps.ts`, 14-day half-life), outcomes of songs started from a block (`homeSignals.ts`) and genre affinity. Each block moves at most three places; `sessionHomeOrder` computes the order once per session so nothing moves while the listener scrolls.
 
 **De-duplication (`features/home/shelfLedger.ts`).** A shelf filters out songs already claimed by any shelf earlier in display order, by catalogue id and by canonical identity, then records its own claim. A shelf that had at least six songs keeps at least six (`SHELF_FLOOR`).
+
+**Taste profile page and Similar artists.** `features/taste-profile/useTasteInsights.ts` shows the skip rate, the top moods and the new-to-you share: the share of the last 30 days' plays whose lead artist has at most 3 counted plays, shown only from 10 plays. `features/home/useSimilarArtists.ts` builds the Similar artists shelf from the catalogue's similar-artist lists for the 3 most-played artists.
+
+## Catalogue recommendation routes
+
+Two Worker routes answer "songs like these" from the catalogue alone (`backend/worker/functions/_lib/recs.ts`). They are anonymous, store nothing and are separate from the on-device engine. `services/recs/similar.ts` calls them for "Songs like this" (the ⋮ menu and Now Playing → Player tools) and the Discover 5 card on Home, resolves each track to a catalogue song through `getSong`, and falls back to the catalogue's own suggestions.
+
+Candidates come from two pools, in this order: the catalogue's similar-songs list for the seed (`reason: "similar"`), then songs the catalogue **credits** to the seed's lead artist (`reason: "same_artist"`; a text match on the name is not enough). At most `max(2, ⌈limit / 5⌉)` songs per artist.
+
+| Route | Query | Rate limit | 200 answer |
+| --- | --- | --- | --- |
+| `GET /api/recommendations/similar/:songId` | `songId` matches `^[A-Za-z0-9_-]{2,40}$`; `limit` 1–30 (default 20); `languages`, at most 6 lower-case names | 30 burst, 30 per minute | `{ seed, tracks, source: "catalogue" }`, cached `public, max-age=600, s-maxage=3600` |
+| `GET /api/recommendations?seeds=…` | `seeds`, 1–5 song ids (required); `limit` and `languages` as above; `exclude`, up to 100 ids never to return | 10 burst, 10 per minute | `{ seeds, tracks, source: "catalogue" }`, cached `private, max-age=600`. Seeds take turns so one seed cannot fill the list; seeds and `exclude` ids never come back. |
+
+Each track carries `id`, `title`, `artist`, `artists` (at most four), `album`, `language`, `year`, `durationSec`, `reason` and `reasonText` ("Similar to “<seed title>”" or "More by <seed artist>"). Errors: `400 invalid_song_id` (similar route) or `bad_request`; `404 song_not_found` (for the seeds route, only when none of the seeds exist); `429 rate_limited` with `retry-after`; `502 catalogue_unavailable`; `405` for POST. Tests: `backend/worker/functions/api/recommendations.test.ts`, `frontend/src/services/recs/similar.test.ts`.
 
 ## Observing and debugging
 
 The developer breakdown is on when the URL has `?debug=recs`, when `localStorage` has `vinax.debug.recs` set to `1`, or in a development build (`store/recsDebugStore.ts`). The panel (`features/recommendation/RecsDebugPanel.tsx`) is a lazy chunk, and the engine publishes nothing while the switch is off. For each recent continuation it shows:
 
 - **Trace** — mode, arc shape, language policy, discovery share, this sitting's intent, how many songs survived each stage, spacing repairs and relaxed rules.
-- **Selected songs** — position, rank before sequencing, score, source, every scoring component, and whether the local engine or the AI chose the order.
+- **Selected songs** — position, rank before sequencing, score, source and every scoring component.
 - **Passed over** — the best ranked songs that were not chosen.
 - **Rejected** — up to 80 candidates with the rule that turned each away and the stage (`filter`, `rank` or `validate`).
 
@@ -359,5 +371,5 @@ For a listener, the track menu's "Why this song?" (`explanations.ts`) turns the 
 - **`servedRecently` (0.04) is a leftover.** It was the only cross-surface penalty before the exposure ledger and was too small to change any order. The scorer keeps it as a fallback for callers that pass `servedKeys`; the ledger's penalties (0.14–0.80) are what act in the app. [history/audit-9.1.md](history/audit-9.1.md) records the five separate memories the ledger replaced.
 - **Adjacency relaxes last.** An earlier order gave the back-to-back rule away first, so a Familiar-mode queue (almost no discovery budget) shipped runs of one artist. The relaxation order above is the fix; do not reorder the tiers without the evaluation.
 - **`trending` is not a chart.** The source tag predates the verified chart signal. It is a catalogue search, which is why its listener-facing reason avoids the word.
-- **File names.** `services/ai/trending.ts` and `useAiTrending.ts` are named for the shelf's earlier title; the shelf is "Popular picks for you". `features/home/dedupeShelves.ts` is an older identity-based de-duplicator: Home de-duplicates through `shelfLedger.ts` and imports only `resetShelfDeduper` from the older file.
-- **A server endpoint with a similar name.** `backend/worker/functions/api/recommendations.ts` serves "songs like these" from the catalogue for a list of seed ids. It is not part of this engine and nothing in `frontend/src` calls it.
+- **File names.** `features/home/dedupeShelves.ts` is an older identity-based de-duplicator: Home de-duplicates through `shelfLedger.ts` and imports only `resetShelfDeduper` from the older file.
+- **A server endpoint with a similar name.** `backend/worker/functions/api/recommendations.ts` serves "songs like these" from the catalogue. It is not part of this engine; see [Catalogue recommendation routes](#catalogue-recommendation-routes).

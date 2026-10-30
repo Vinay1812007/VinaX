@@ -63,7 +63,7 @@ interface QueueRowProps {
   pos: number;
   rowKey: string;
   origin: QueueOrigin;
-  /** The DJ's own one-line reason for an automatic pick, when it recorded one. */
+  /** The one-line reason for an automatic pick, when one was recorded. */
   reason?: string;
   isFirst: boolean;
   isLast: boolean;
@@ -502,7 +502,7 @@ export default function QueuePage() {
           action={
             <span className="flex flex-wrap gap-2 justify-center">
               <button type="button" onClick={() => setBuilding(true)} className="vx-tap px-5 py-2.5 rounded-full btn-primary">Build a queue</button>
-              <Link to="/radio" className="vx-tap px-5 py-2.5 rounded-full btn-secondary inline-flex items-center">Start AI Radio</Link>
+              <Link to="/radio" className="vx-tap px-5 py-2.5 rounded-full btn-secondary inline-flex items-center">Start radio</Link>
               <Link to="/" className="vx-tap px-5 py-2.5 rounded-full btn-secondary inline-flex items-center">Browse Home</Link>
             </span>
           }

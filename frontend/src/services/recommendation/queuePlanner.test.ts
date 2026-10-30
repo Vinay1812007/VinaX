@@ -23,7 +23,6 @@ const pool: Candidate[] = [
   { song: song('10', 'One more', 'J', { energy: 0.45 }), source: 'related' },
 ];
 vi.mock('./candidates', () => ({ gatherCandidates: async () => pool, generateNextCandidates: async () => pool.slice(0, 3) }));
-vi.mock('@/services/ai/recommendations', () => ({ enrichSongs: async (s: Song[]) => s, requestCurator: async () => null, classifySongs: async () => [], applyMetadata: (s: Song[]) => s, aiRerankSongs: async (s: Song[]) => s }));
 
 import { admitForPlan, planQueue } from './queuePlanner';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -31,7 +30,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
-  useSettingsStore.setState({ pinnedLanguages: ['telugu'], mutedLanguages: [], aiDj: false, kidMode: false });
+  useSettingsStore.setState({ pinnedLanguages: ['telugu'], mutedLanguages: [], kidMode: false });
 });
 
 describe('admitForPlan', () => {
@@ -57,8 +56,6 @@ describe('planQueue', () => {
     expect(plan.totalSec).toBeLessThan(12 * 60 + 300);
     expect(plan.songs.every((s) => s.song.language === 'telugu')).toBe(true);
     expect(plan.songs.every((s) => typeof s.why === 'string' && s.why.length > 0)).toBe(true);
-    expect(plan.intro).toBeNull();
-    expect(plan.djTouched).toBe(false);
   });
   it('returns an empty plan when nothing is admissible', async () => {
     const plan = await planQueue({ seed: null, shape: 'steady', minutes: 30, discovery: 'low', language: 'tamil' });

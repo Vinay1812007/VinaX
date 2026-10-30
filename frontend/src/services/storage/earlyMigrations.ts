@@ -6,6 +6,10 @@
  *
  * v1 → v2: brand rename moved every localStorage key from `tarang.*` to
  * `vinax.*`. Idempotent; never overwrites an existing new-prefix key.
+ *
+ * 1.3: VinaX has no AI features any more, so what they kept on the device —
+ * chat history, saved prompts, model and voice choices, AI caches, the song
+ * vectors database — is erased once, on the first launch of this build.
  */
 const OLD_PREFIX = 'tarang.';
 const NEW_PREFIX = 'vinax.';
@@ -59,4 +63,37 @@ try {
   // Private mode / storage unavailable — app still works, just unpersisted.
 }
 
-export {};
+/** Keys the removed AI features wrote (VinaX AI, AI Playlist, the AI DJ, AI Home shelves). */
+const AI_KEYS = new Set([
+  'vinax_ai_chats_v1',
+  'vinax.dj.surfaced.v1',
+  'vinax.embed.model.v1',
+  'vinax.home.ai-shelves.shown.v1',
+  'vinax.home.ai-shelves.songs.v1',
+  'vinax.recommendation.ai-metadata.v2',
+  'vinax.recommendation.ai-metadata.v3',
+  'vinax.aihome.recent.v1',
+]);
+/** `vinax.ai.*`, `vinax.aiplaylist.*` and the `vinax.aiSomething` preferences. */
+const AI_KEY_RE = /^vinax\.ai(\.|playlist\.|[A-Z])/;
+
+export function isRetiredAiKey(key: string): boolean {
+  return AI_KEYS.has(key) || AI_KEY_RE.test(key);
+}
+
+try {
+  const storage = window.localStorage;
+  const retired: string[] = [];
+  for (let i = 0; i < storage.length; i++) {
+    const k = storage.key(i);
+    if (k && isRetiredAiKey(k)) retired.push(k);
+  }
+  for (const k of retired) storage.removeItem(k);
+} catch {
+  /* storage unavailable — nothing to erase */
+}
+try {
+  window.indexedDB?.deleteDatabase('vinax-embeddings');
+} catch {
+  /* no IndexedDB here */
+}

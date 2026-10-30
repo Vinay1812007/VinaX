@@ -13,12 +13,12 @@ import { greetingName } from '../src/utils/greetingName';
 
 const ROUTES = [
   '/', '/discover', '/charts', '/top-songs', '/trending', '/most-searched',
-  '/made-for-you', '/ai-playlist', '/weekly', '/mixes', '/search',
+  '/made-for-you', '/radio', '/weekly', '/mixes', '/search',
   '/search/tum%20hi%20ho', '/library', '/favorites', '/history', '/queue',
   '/now-playing', '/languages', '/explore', '/movies', '/moods', '/regions',
   '/taste-profile', '/settings', '/handoff', '/cache-info', '/about',
   '/privacy', '/terms', '/contact', '/dmca', '/help', '/stats', '/offline',
-  '/together', '/karaoke', '/quiz', '/download', '/drive', '/VinaXAI',
+  '/together', '/karaoke', '/quiz', '/download', '/drive',
   '/hindi-songs', '/telugu-songs',
   '/song/qa1', '/album/qa1', '/artist/qa1', '/playlist/qa1', '/lyrics/qa1',
   '/collection/none', '/no-such-page-404',

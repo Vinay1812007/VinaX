@@ -18,7 +18,7 @@ const steps = TUTORIALS.flatMap((t) => t.steps.map((s, i) => ({ where: `${t.id} 
 describe('guided tours', () => {
   it('covers the 11.0 additions and keeps the older tours', () => {
     expect(TUTORIALS.map((t) => t.id)).toEqual([
-      'first-song', 'find-anything', 'listen-together', 'meet-ai', 'ai-styles', 'app-look', 'festival-themes', 'make-it-yours', 'save-organise',
+      'first-song', 'find-anything', 'listen-together', 'app-look', 'festival-themes', 'make-it-yours', 'save-organise',
     ]);
     expect(new Set(TUTORIALS.map((t) => t.id)).size).toBe(TUTORIALS.length);
     expect(tutorialById('app-look')?.title).toBe('Change the app’s look');

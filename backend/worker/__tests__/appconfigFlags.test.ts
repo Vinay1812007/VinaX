@@ -4,8 +4,8 @@ import { publicFlags } from '../functions/api/appconfig';
 
 describe('publicFlags', () => {
   it('keeps boolean flags with sane names and drops everything else', () => {
-    expect(publicFlags({ codeRun: false, listenTogether: true, 'bad name': true, nested: { a: 1 }, count: 3, '9x': true })).toEqual({
-      codeRun: false,
+    expect(publicFlags({ festivalBar: false, listenTogether: true, 'bad name': true, nested: { a: 1 }, count: 3, '9x': true })).toEqual({
+      festivalBar: false,
       listenTogether: true,
     });
   });

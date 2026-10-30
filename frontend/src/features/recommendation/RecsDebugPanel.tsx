@@ -6,7 +6,7 @@ import { pct, summarise } from './diagnostics';
 /**
  * v6.4.0 / v7.0.0 — development-only recommendation debug view: every queue
  * continuation with the final score, each scoring component, the candidate
- * source and whether the AI DJ or the local engine chose the order. Since
+ * source. Since
  * 7.0 it also shows how the pipeline ran (mode, arc, language policy, this
  * sitting's intent, how many songs survived each stage), the songs that
  * scored but were passed over, and every rejected candidate with the rule
@@ -92,12 +92,11 @@ export function RecsDebugPanel() {
             <div className="py-0.5">
               latency: p50 {diag.latency.p50} ms · p95 {diag.latency.p95} ms · max {diag.latency.max} ms ({diag.latency.samples} samples)
             </div>
-            <div className="py-0.5">picked by: local {diag.pickers.local} · AI {diag.pickers.ai}</div>
             {!!diag.sources.length && (
               <div className="py-0.5 text-white/70">sources: {diag.sources.map((x) => `${x.source} ${x.count}`).join(' · ')}</div>
             )}
             {!!diag.fallbacks.length && (
-              <div className="py-0.5 text-amber-200">AI not used: {diag.fallbacks.map((x) => `${x.reason} ×${x.count}`).join(' · ')}</div>
+              <div className="py-0.5 text-amber-200">fallbacks: {diag.fallbacks.map((x) => `${x.reason} ×${x.count}`).join(' · ')}</div>
             )}
             {!!diag.relaxed.length && (
               <div className="py-0.5 text-amber-200">relaxed: {diag.relaxed.map((x) => `${x.rule} ×${x.count}`).join(' · ')}</div>
@@ -140,8 +139,7 @@ export function RecsDebugPanel() {
           {latest?.rows.map((r) => (
             <div key={`${r.position}-${r.song.id}`} className="border-t border-white/10 py-1">
               <div>
-                #{r.position} <b>{r.song.title}</b> · {r.song.subtitle} · <span className={r.picker === 'ai' ? 'text-emerald-300' : 'text-amber-300'}>{r.picker === 'ai' ? 'AI selected' : 'LOCAL FALLBACK'}</span>
-                {typeof r.confidence === 'number' && ` · self-rated fit ${r.confidence.toFixed(2)} (the model's own claim, not a probability)`}
+                #{r.position} <b>{r.song.title}</b> · {r.song.subtitle}
               </div>
               <div>final {r.finalScore.toFixed(3)} · source {r.source}{typeof r.rank === 'number' && ` · ranked #${r.rank}`}</div>
               <div className="text-white/70">{fmtComponents(r.components)}</div>

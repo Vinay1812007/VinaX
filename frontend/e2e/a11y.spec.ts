@@ -80,7 +80,7 @@ const PAGES: { path: string; ready: (p: Page) => Locator }[] = [
   // A fresh profile has nothing queued; the empty page keeps an h1 (sr-only).
   { path: '/queue', ready: (p) => p.getByRole('heading', { name: 'Queue', level: 1 }) },
   { path: '/settings', ready: (p) => p.getByRole('heading', { name: 'Settings', level: 1 }) },
-  { path: '/VinaXAI', ready: (p) => p.getByRole('heading', { name: 'New chat' }) },
+  { path: '/radio', ready: (p) => p.getByRole('heading', { name: 'Radio', level: 1 }) },
   { path: '/stats', ready: (p) => p.getByRole('heading', { name: 'Your VinaX', level: 1 }) },
   { path: '/taste-profile', ready: (p) => p.getByRole('heading', { name: 'Your taste profile', level: 1 }) },
   { path: '/charts', ready: (p) => p.getByRole('heading', { name: 'Charts', level: 1 }) },
@@ -105,7 +105,7 @@ for (const theme of ['dark', 'light'] as const) {
 
 test.describe('phone (390×844), dark theme', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
-  for (const { path, ready } of PAGES.filter((p) => ['/', '/search', '/library', '/settings', '/VinaXAI'].includes(p.path))) {
+  for (const { path, ready } of PAGES.filter((p) => ['/', '/search', '/library', '/settings', '/radio'].includes(p.path))) {
     test(`${path} has no WCAG A/AA violations`, async ({ page }) => {
       await seed(page, 'dark');
       await page.goto(path);

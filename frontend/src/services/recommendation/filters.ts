@@ -3,13 +3,13 @@ import type { TasteProfile } from '@/services/personalization/profile';
 import { dedupeByIdentity, isJunkTitle, songKey } from './songIdentity';
 import { isJunkTrack } from './quality';
 import { softMutedArtist } from './profiles';
-import { mergeCandidates, type Candidate, type RejectedCandidate, type RejectReason, type SongFeature } from './types';
+import { mergeCandidates, type Candidate, type RejectedCandidate, type RejectReason } from './types';
 
 /**
  * v7.0.0 — stage 2 of the next-song pipeline: hard filtering.
  *
  * Every rule here is a RULE, not a preference — a candidate that fails one
- * never reaches scoring, whatever the AI or the ranker thinks of it. Unlike
+ * never reaches scoring, whatever the ranker thinks of it. Unlike
  * the older `freshSongs` gate (still used by emergency top-ups), this one
  * says WHY each candidate was turned away, so the developer breakdown can
  * show rejected songs next to selected ones, and it collapses versions of
@@ -95,26 +95,6 @@ export function rejectReasonFor(song: Song, o: HardFilterOptions): RejectReason 
   // 8.1.0 — the mix policy admits the listener's languages, never a stranger's.
   if (o.allowedLanguages && song.language && song.language !== 'unknown' && !o.allowedLanguages.has(song.language)) return 'off-language';
   return null;
-}
-
-/**
- * 7.2.0 — the features the classifier added: present on `after` (the
- * enriched song), absent on `before` (the catalogue's). The pipeline stores
- * them as `Candidate.classified` so the scorer trusts them less than catalogue
- * metadata. Lives here, in the lazily loaded rules module, because the engine
- * already holds this module when it enriches.
- */
-export function classifiedFields(before: Song, after: Song): SongFeature[] {
-  const out: SongFeature[] = [];
-  const empty = (v: unknown): boolean => v == null || v === '' || (Array.isArray(v) && !v.length);
-  const added = (a: unknown, b: unknown): boolean => empty(a) && !empty(b);
-  if (added(before.mood, after.mood)) out.push('mood');
-  if (added(before.energy, after.energy)) out.push('energy');
-  if (added(before.tempo, after.tempo)) out.push('tempo');
-  if (added(before.genre || before.genres, after.genre || after.genres)) out.push('genre');
-  if (added(before.vibe || before.vibes, after.vibe || after.vibes)) out.push('vibe');
-  if (added(before.dialect, after.dialect)) out.push('dialect');
-  return out;
 }
 
 export function hardFilter(candidates: Candidate[], options: HardFilterOptions = {}): HardFilterResult {

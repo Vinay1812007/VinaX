@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { publicClientConfig, maintenanceActive, houseRules } from '../functions/_lib/clientConfig';
+import { publicClientConfig, maintenanceActive } from '../functions/_lib/clientConfig';
 
 describe('client config bundle', () => {
   it('sanitises and windows every field', () => {
@@ -10,8 +10,6 @@ describe('client config bundle', () => {
       'search-synonyms': { ' ARR ': 'A. R. Rahman', bad: '', same: 'same' },
       'catalog-sources': { 'vinax-render': false, 'local-catalog': true, 'Bad Key': false },
       'language-order': ['telugu', 'hindi', 'not valid!'],
-      'ai-starters': ['Suggest 5 {lang} songs', '', 42],
-      'ai-quick': [{ icon: 'S', label: 'Songs', prompt: 'Suggest songs for ', mode: 'muse' }, { label: '', prompt: 'x' }],
       'support-faq': [{ q: 'How?', a: 'Like this.' }, { q: 'Empty' }],
       'min-version': { build: 42 },
     }, now);
@@ -20,8 +18,6 @@ describe('client config bundle', () => {
     expect(cfg.synonyms).toEqual({ arr: 'A. R. Rahman' });
     expect(cfg.disabledSources).toEqual(['vinax-render']);
     expect(cfg.languageOrder).toEqual(['telugu', 'hindi']);
-    expect(cfg.aiStarters).toEqual(['Suggest 5 {lang} songs']);
-    expect(cfg.aiQuick).toEqual([{ icon: 'S', label: 'Songs', prompt: 'Suggest songs for ', mode: 'muse' }]);
     expect(cfg.faq).toEqual([{ q: 'How?', a: 'Like this.' }]);
     expect(cfg.minBuild).toBe(42);
   });
@@ -32,16 +28,14 @@ describe('client config bundle', () => {
     expect(cfg.broadcast).toEqual({ id: 'b', text: 'y' });
   });
   it('returns a safe empty bundle for garbage', () => {
-    const cfg = publicClientConfig({ greeting: 'nope', 'ai-quick': 'nope', 'min-version': { build: -1 } });
-    expect(cfg).toEqual({ greeting: null, broadcast: null, synonyms: {}, disabledSources: [], languageOrder: [], aiStarters: [], aiQuick: [], faq: [], minBuild: null });
+    const cfg = publicClientConfig({ greeting: 'nope', 'support-faq': 'nope', 'min-version': { build: -1 } });
+    expect(cfg).toEqual({ greeting: null, broadcast: null, synonyms: {}, disabledSources: [], languageOrder: [], faq: [], minBuild: null });
   });
-  it('maintenance window + house rules', () => {
+  it('maintenance window', () => {
     const now = new Date('2026-09-08T10:00:00Z');
     expect(maintenanceActive({ start: '2026-09-08T09:00:00Z', end: '2026-09-08T11:00:00Z', note: 'DB upgrade' }, now)).toEqual({ note: 'DB upgrade' });
     expect(maintenanceActive({ start: '2026-09-08T11:00:00Z', end: '2026-09-08T12:00:00Z' }, now)).toBeNull();
     expect(maintenanceActive({ start: 'x', end: 'y' }, now)).toBeNull();
-    expect(houseRules('  Be brief. ')).toBe('Be brief.');
-    expect(houseRules(5)).toBe('');
   });
 });
 

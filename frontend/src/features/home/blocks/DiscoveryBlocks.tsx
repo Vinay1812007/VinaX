@@ -3,9 +3,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
 import { trendingSeed } from '@/constants/seeds';
 import { useRegion } from '@/features/location/useRegion';
-import { useAiHome } from '../useAiHome';
-import { useFeatureEnabled } from '../useAppConfig';
-import { useAiTrending } from '../useAiTrending';
+import { useTrendingForYou } from '../useTrendingForYou';
 import { useTrendingForLanguage, useNewReleases, usePopular } from '../useHomeShelves';
 import { useFreshFinds, useHiddenGems, useTrendingNearYou } from '../useDiscoveryShelves';
 import { useMoodShelf } from '../useMoodShelves';
@@ -14,25 +12,6 @@ import { MoreShelves, SongShelf, useShelfLens } from './shared';
 
 const hubOrSearch = (language: string): string =>
   (HUB_LANGUAGES as readonly string[]).includes(language) ? `/${language}-songs` : `/search/${encodeURIComponent(trendingSeed(language))}`;
-
-/** v6.2.0 — "Designed for you": AI-titled shelves resolved against the catalogue. Renders nothing until they exist. */
-export function AiHomeBlock() {
-  const dedupe = useShelfDedupe('aihome');
-  const lens = useShelfLens();
-  const allowed = useFeatureEnabled('aiHome');
-  const shelves = useAiHome(allowed);
-  if (!allowed || !shelves.data?.length) {
-    return shelves.isLoading && allowed ? <ShelfSkeleton /> : null;
-  }
-  return (
-    <section aria-label="Designed for you" className="vxh-band">
-      <h2 className="vxh-band-title">Designed for you</h2>
-      {shelves.data.map((shelf) => (
-        <SongShelf key={shelf.title} title={shelf.title} explanation={shelf.description || shelf.reason} songs={dedupe(lens(shelf.songs, 'discovery'))} seeAllTo={`/search/${encodeURIComponent(shelf.query)}`} />
-      ))}
-    </section>
-  );
-}
 
 /**
  * Fresh discoveries: what is popular near the listener and in their
@@ -48,7 +27,7 @@ export function DiscoveryBlock() {
   const pinned = useSettingsStore((s) => s.pinnedLanguages);
   const primaryLang = pinned[0] ?? 'hindi';
   const nearYou = useTrendingNearYou();
-  const trendingNow = useAiTrending();
+  const trendingNow = useTrendingForYou();
   const trending = useTrendingForLanguage(primaryLang);
   const newReleases = useNewReleases();
   return (
@@ -56,11 +35,11 @@ export function DiscoveryBlock() {
       {nearYou.isLoading ? <ShelfSkeleton /> : (
         <SongShelf title={region?.country ? `Trending near you · ${region.regionLabel ?? region.country}` : 'Trending near you'} songs={dedupe(lens(nearYou.data, 'discovery'))} />
       )}
-      {/* Popular picks for you — the catalogue's popular pool, ordered by taste (and by the AI when it is on). Public charts with real provenance live on the Charts page. */}
+      {/* Popular picks for you — the catalogue's popular pool, ordered by taste. Public charts with real provenance live on the Charts page. */}
       {trendingNow.isLoading ? <ShelfSkeleton /> : (
         <SongShelf
           title="Popular picks for you"
-          explanation={trendingNow.by === 'ai' ? 'Popular in the catalogue, put in your order by VinaX AI' : 'Popular in the catalogue, in the order your taste suggests'}
+          explanation="Popular in the catalogue, in the order your taste suggests"
           songs={dedupe(lens(trendingNow.songs, 'discovery'))}
           seeAllTo="/charts"
         />

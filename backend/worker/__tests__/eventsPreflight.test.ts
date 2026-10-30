@@ -153,7 +153,7 @@ describe('/api/events writes the event and the device row (14.0)', () => {
 });
 
 describe('7.2.0 — the other routes a bundled app calls cross-origin', () => {
-  it('username and push registration answer a preflight, and the read-only lists are readable', async () => {
+  it('username and push registration answer a preflight', async () => {
     const username = await import('../functions/api/username');
     const fcm = await import('../functions/api/push/fcm-register');
     for (const mod of [username, fcm]) {
@@ -162,11 +162,5 @@ describe('7.2.0 — the other routes a bundled app calls cross-origin', () => {
       expect(res.headers.get('access-control-allow-headers')).toContain('content-type');
       expect(res.headers.get('access-control-allow-methods')).toContain('POST');
     }
-    const voices = await import('../functions/api/voices');
-    const models = await import('../functions/api/aimodels');
-    const voicesRes = await voices.onRequestGet({ request: new Request('https://x.test/api/voices'), env: {} } as never);
-    expect(voicesRes.headers.get('access-control-allow-origin')).toBe('*');
-    const modelsRes = await models.onRequestGet({ request: new Request('https://x.test/api/aimodels'), env: {} } as never);
-    expect(modelsRes.headers.get('access-control-allow-origin')).toBe('*');
   });
 });

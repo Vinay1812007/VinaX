@@ -1,6 +1,6 @@
 # Architecture
 
-This document is a map of VinaX: the two deployed services and the database behind the Worker, the app shell and its routes, how the look is applied (app style, theme, accent, festival skin, and the chat styles of VinaX AI), the stores and how they persist, the catalogue client, the audio engine with its media session and native bridge, Listen Together, the service worker, the Worker's routes, its data layer and scheduled jobs, and the owner console. Each section names the files to open.
+This document is a map of VinaX: the two deployed services and the database behind the Worker, the app shell and its routes, how the look is applied (app style, theme, accent, festival skin), the stores and how they persist, the catalogue client, the audio engine with its media session and native bridge, Listen Together, the service worker, the Worker's routes, its data layer and scheduled jobs, and the owner console. Each section names the files to open.
 
 ## The pieces
 
@@ -15,7 +15,7 @@ This document is a map of VinaX: the two deployed services and the database behi
 │                              │   IndexedDB event log                 │
 │        recommendation engine ┤                                       │
 │        catalogue client ─────┼──► catalogue bases (fallback ladder)  │
-│        AI clients ───────────┼──► /api/dj  /api/curate  /api/playlist│
+│        API clients ──────────┼──► /api/* on the same origin          │
 │        audio engine ─────────┼──► one <audio> element ─► audio CDN   │
 │        media session ────────┼──► browser media session              │
 │                              └──► native media plugin (Android)      │
@@ -28,8 +28,8 @@ This document is a map of VinaX: the two deployed services and the database behi
 │ backend/worker  (edge Worker "vinax-api")                            │
 │  host middleware ─ exact routes ─ dynamic routes ─ /api/cat/* ─ hubs │
 │  anything unmatched ─► the static site                               │
-│  /api/*  AI lanes, catalogue proxy, sign-in + sync, events, rooms,   │
-│          push, status, the owner console's API                       │
+│  /api/*  catalogue proxy, sign-in + sync, events, rooms, push,       │
+│          status, the owner console's API                             │
 │  hub pages (/<lang>-<mood>-songs)  edge-rendered for crawlers        │
 │  /sitemap*  /img  /apk                                               │
 │  scheduled handler (Cron Trigger, every 30 min)                      │
@@ -38,7 +38,7 @@ This document is a map of VinaX: the two deployed services and the database behi
                                ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │ one hosted database  (backend/supabase/schema.sql)                   │
-│  listeners · accounts · account_backups · events · ai_calls          │
+│  listeners · accounts · account_backups · events                     │
 │  feedback · blocked_content · rooms · room_members · push_devices    │
 │  notifications · settings (+history) · experiments · audit_log       │
 │  uptime_days · uptime_latest · job_runs · meta                       │
@@ -46,7 +46,7 @@ This document is a map of VinaX: the two deployed services and the database behi
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-VinaX deploys as two services plus one database: the static site, the Worker, and the hosted database only the Worker talks to ([database.md](database.md)). The frontend is a static build. The Worker owns every dynamic URL on the same domain, so the app calls same-origin paths and needs no cross-origin setup on the web. The Android app runs the same bundle from a local origin, so its clients call the production origin by absolute URL (see `isNativePlatform()` checks in `src/services/ai/*.ts` and `src/services/analytics/telemetry.ts`).
+VinaX deploys as two services plus one database: the static site, the Worker, and the hosted database only the Worker talks to ([database.md](database.md)). The frontend is a static build. The Worker owns every dynamic URL on the same domain, so the app calls same-origin paths and needs no cross-origin setup on the web. The Android app runs the same bundle from a local origin, so its clients call the production origin by absolute URL (see `isNativePlatform()` checks in `src/services/recs/similar.ts` and `src/services/analytics/telemetry.ts`).
 
 | Layer | Packages (from `frontend/package.json` and `backend/package.json`) |
 | --- | --- |
@@ -67,7 +67,7 @@ VinaX deploys as two services plus one database: the static site, the Worker, an
 5. Sets `device-phone|tablet|desktop|tv` and `pointer-coarse|pointer-fine` classes on `<html>`, so styles can key on capability instead of width alone.
 6. Registers `/sw.js` in production builds on the web, and asks it to precache the full asset graph on every boot and whenever the network returns.
 
-`src/layouts/AppLayout.tsx` is the frame for every route except VinaX AI. It renders the sidebar (from 768px; always the 80px rail below 1100px), the top bar, the routed page inside an error boundary (the workspace is a rounded sheet inside the chrome), the player (a compact card above the five-destination tab bar on phones and tablets, the floating deck from 1024px), the Now Playing panel on wide workspaces, snackbars (`components/Toasts.tsx`), the welcome sheet, the command palette and — only while a Listen Together session is live — the lazily loaded `TogetherController` (see [Listen Together](#listen-together)). It also runs the one-time bootstrap: storage migrations, `initEngine()` on the player store, downloads, telemetry (consent-gated), lock-screen lyrics, TV spatial navigation, the alarm, the output watcher, the DJ voice and cast. A module-level flag keeps that bootstrap from running again when the layout remounts after a visit to `/VinaXAI`.
+`src/layouts/AppLayout.tsx` is the frame for every route. It renders the sidebar (from 768px; always the 80px rail below 1100px), the top bar, the routed page inside an error boundary (the workspace is a rounded sheet inside the chrome), the player (a compact card above the four-destination tab bar on phones and tablets, the floating deck from 1024px), the Now Playing panel on wide workspaces, snackbars (`components/Toasts.tsx`), the welcome sheet, the command palette and — only while a Listen Together session is live — the lazily loaded `TogetherController` (see [Listen Together](#listen-together)). It also runs the one-time bootstrap: storage migrations, `initEngine()` on the player store, downloads, telemetry (consent-gated), lock-screen lyrics, TV spatial navigation, the alarm, the output watcher and cast. A module-level flag keeps that bootstrap from running again if the layout remounts.
 
 The layout also owns scroll memory per history entry, hardware-back handling for overlays, and the wheel rescue described in [design-system.md](design-system.md#overlays).
 
@@ -92,14 +92,10 @@ settingsStore (vinax.settings.v1): template, theme, accent, accentCustom, dynami
 
 - **App style.** `src/constants/templates.ts` lists the six styles; `TEMPLATE_CANVAS` in `utils/theme.ts` and the table in the pre-paint script hold each style's canvas and must agree. `src/features/settings/TemplatePicker.tsx` writes the setting; the welcome sheet's "Pick your look" step writes the same one. The setting is part of a backup.
 - **Festival.** `src/constants/festivals.ts` holds the dates, `festivalThemes.ts` the palettes, `festivalVisuals.ts` and `festivalEmblems.ts` the emblem, particles, blurb and search query. `npm run gen:festivals` turns them into `src/styles/festivals.css`, `public/admin/festivals.js` and the window table in `index.html`. At run time `components/FestiveSplash.tsx` shows the greeting card, `features/home/FestivalBanner.tsx` the Home strip, `features/festival/festivalPreview.ts` the session-only preview, and `services/recommendation/festival.ts` lets the date inform picks.
-- **VinaX AI chat styles.** The chat page is outside `AppLayout` and has a second, scoped layer: `src/features/ai/chat/chatStyle.ts` maps the selected model's maker family to one of nine styles, `ChatStyleScope.tsx` writes `data-chat-style` and the `data-cs-*` layout attributes on `.ai-root` and `.ai-scope`, and `src/styles/ai-styles.css` styles only those. The preference is stored under `vinax.ai.chatStyle`.
 
 ## Routing and lazy chunks
 
-`src/router/index.tsx` builds one browser router with two top-level entries:
-
-- `/VinaXAI` renders the VinaX AI page on its own, outside `AppLayout`.
-- `/` renders `AppLayout` with every other page as a child.
+`src/router/index.tsx` builds one browser router: `/` renders `AppLayout` with every page as a child. Old links to removed pages (`/VinaXAI`, `/ai-playlist`) redirect to Home.
 
 Every page is imported with `lazy()`, so each page is its own chunk. Language hub pages (`/<language>-songs`) and mood hub pages (`/<language>-<mood>-songs`) are generated from `constants/languages.ts` and `constants/hubs.ts`. Two redirects run before the router is created: an offline Android boot with saved downloads opens `/offline`, and the "Startup page" setting can open Search, Library or the last main route.
 
@@ -203,7 +199,7 @@ Before 10.0 a session lived in the Listen Together page's component state: a hos
 | `/offline-audio/<id>` | Served from the `vinax-audio-v1` cache with Range support, so downloaded songs can seek |
 | Catalogue APIs, artwork, audio streams, `/api/*`, `/admin/`, the status page | Passed through, never cached |
 
-The build emits `/precache-manifest.json` (a small plugin in `vite.config.ts`) with two lists. `precache` is everything reachable from the entry without passing through the diagram and maths engines behind VinaX AI replies; `onDemand` is those engines, what only they reach, and the maths typeface. On install, and on every `PRECACHE` message from the app, the worker downloads the `precache` list, refreshes the shell entries and prunes assets that are in neither list. On-demand assets are cached by the `/assets/` handler the first time a reply needs them. Measured on the 7.2 build: 624 KB gzip precached instead of 2,476 KB. The audio cache is never cleared on activate. The worker also shows push notifications and routes their clicks.
+The build emits `/precache-manifest.json` (a small plugin in `vite.config.ts`) with two lists. `precache` is everything reachable from the entry; `onDemand` is any chunk nothing reaches, which in practice is none, so the whole app is precached. On install, and on every `PRECACHE` message from the app, the worker downloads the `precache` list, refreshes the shell entries and prunes assets that are in neither list. On-demand assets are cached by the `/assets/` handler the first time they are used. The audio cache is never cleared on activate. The worker also shows push notifications and routes their clicks.
 
 ## Worker routes
 
@@ -220,19 +216,18 @@ A matched module with no handler for the request method answers `405`.
 
 | Route family | Purpose |
 | --- | --- |
-| `/api/dj`, `/api/curate`, `/api/playlist`, `/api/vinaxai`, `/api/aimodels`, `/api/assistant`, `/api/tts`, `/api/voices`, `/api/lyrics-tools`, `/api/image`, `/api/embed` (8.2) | AI features — see [ai.md](ai.md) |
-| `/api/cat/*`, `/api/preview`, `/api/trending-searches`, `/api/blocklist` | Catalogue and content |
+| `/api/cat/*`, `/api/recommendations`, `/api/trending-searches`, `/api/blocklist` | Catalogue and content; "songs like these" from the catalogue ([recommendations.md](recommendations.md#catalogue-recommendation-routes)) |
 | `/api/events`, `/api/feedback`, `/api/geo`, `/api/username`, `/api/handoff`, `/api/room` | Consented usage events (an `events` row and the device's `listeners` row; the device is resolved by `_lib/identity.ts`), feedback (a `feedback` row), coarse region, the handle on the device's `listeners` row (`409 taken` with suggestions), device transfer relay (the `HANDOFF` key-value binding), Listen Together rooms (`rooms`, `room_members`) |
 | `/api/appconfig`, `/api/experiments`, `/api/announcements`, `/api/site-mode`, `/api/version`, `/api/status`, `/api/apk` | Client configuration from the `settings` table, sanitised by `_lib/clientConfig.ts` and cached at the edge; active `experiments`; the `announcement` setting; site mode and the maintenance window; live status probes plus the 90-day history from `uptime_report`; Android update source |
 | `/api/push/*` | The public VAPID key; subscribe and register write `push_devices` rows (channel `web` or `fcm`); unsubscribe switches one off |
 | `/api/auth/*`, `/api/account/data` | Google sign-in with a signed 30-day session and an `accounts` row (refreshed on the session check); the synced copy in `account_backups` with optimistic versions (`200`, `204`, `409`) |
 | `/api/cron/run` | Runs one scheduled job now, with `x-cron-secret` or the owner token |
-| `/api/trends`, `/api/ai/headlines` | Always empty (`sources: []`, `topics: []`): the trend pipeline and the headlines job have no store in the 14.0 schema |
+| `/api/trends` | Always empty (`sources: []`): the trend pipeline has no store in the 14.0 schema |
 | `/api/admin/*` | The owner console's API, all behind server-side admin auth — see [admin-console.md](admin-console.md) and the contract in [database.md](database.md#admin-api) |
 
 ### The data layer
 
-`backend/worker/functions/_lib/db.ts` is the only code that talks to the database: a small client over the database's REST interface with the service-role key, a query builder that encodes every value, an 8-second deadline on every request, transparent paging for reads above 1,000 rows, and result objects that never throw (`{ ok, rows }` or `{ ok: false, error }` where `error` is `not_configured`, `unauthorized`, `not_found`, `conflict`, `bad_request` or `unavailable`). Beside it: `edge.ts` (edge geo, platform and version headers, clipping helpers), `identity.ts` (signed device ids), `settings.ts` (the published-settings vocabulary and a one-minute memo), `audit.ts` (the audit trail with redaction) and `aiLog.ts` (one `ai_calls` row per model call). Every route follows the same rules: a public route without the database answers the shape the app already handles; an admin GET answers `{ configured: false }`, and a failed call answers `502` with the reason, never a zero.
+`backend/worker/functions/_lib/db.ts` is the only code that talks to the database: a small client over the database's REST interface with the service-role key, a query builder that encodes every value, an 8-second deadline on every request, transparent paging for reads above 1,000 rows, and result objects that never throw (`{ ok, rows }` or `{ ok: false, error }` where `error` is `not_configured`, `unauthorized`, `not_found`, `conflict`, `bad_request` or `unavailable`). Beside it: `edge.ts` (edge geo, platform and version headers, clipping helpers), `identity.ts` (signed device ids), `settings.ts` (the published-settings vocabulary and a one-minute memo) and `audit.ts` (the audit trail with redaction). Every route follows the same rules: a public route without the database answers the shape the app already handles; an admin GET answers `{ configured: false }`, and a failed call answers `502` with the reason, never a zero.
 
 ### Scheduled jobs
 
@@ -246,7 +241,7 @@ A matched module with no handler for the request method answers `405`.
 
 1. The listener taps a song. The page calls `playQueue()` on the player store.
 2. The store runs the intake gates (Kid mode drops explicit songs, duplicates of the same song collapse into one slot), starts a playback instance, loads the song into the audio engine and publishes it to the media session.
-3. With "DJ builds every queue" on, the store loads the recommendation engine (a lazy chunk) and asks it for a plan: the next five songs, in the seed song's language, familiar first, built on the device inside one deadline. The songs pass the admission gate and are appended; the AI DJ's order may later refine the automatic entries that have not started. See [recommendations.md](recommendations.md).
+3. With "Build every queue" on, the store loads the recommendation engine (a lazy chunk) and asks it for a plan: the next five songs, in the seed song's language, familiar first, built on the device inside one deadline. The songs pass the admission gate and are appended. See [recommendations.md](recommendations.md).
 4. The playback instance measures what is heard. A play counts toward the taste profile once five seconds of it have been heard; seeks, pauses and buffering add nothing. A song left before that is marked skipped in history and in the session signals, and the long-term profile is left alone.
 5. Persisted player fields change (queue, index), so the de-duplicated storage writes once. Progress ticks do not write.
 
@@ -267,10 +262,9 @@ A matched module with no handler for the request method answers `405`.
 **Candidates become the next five.**
 
 ```text
-seed song ─► candidates (inside the plan's deadline) ─► hard filter ─► classifier metadata (bounded)
+seed song ─► candidates (inside the plan's deadline) ─► hard filter
   ─► scoring and ranking ─► sequencer (arc, familiar first, one language) ─► validation
   ─► plan.songs ─► admission gate (current state) ─► queue ─► plan.commit(accepted)
-                 └─ plan.refinement (AI DJ, bounded) ─► validation ─► gate ─► automatic entries not yet started
 ```
 
 **Owner settings reach clients.** The console writes one `settings` row per key through `POST /api/admin/settings` (server-side auth on every request, the change appended to `settings_history`, an audit row); the app reads them through `/api/appconfig` and related public routes, sanitised on the way out by `_lib/clientConfig.ts` and cached for up to a few minutes. [admin-console.md](admin-console.md#published-settings) has the table of keys.

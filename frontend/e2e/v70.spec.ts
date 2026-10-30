@@ -29,7 +29,7 @@ async function seed(page: Page, baseURL: string, settings: Record<string, unknow
   await page.addInitScript(
     ({ stored, entries, fp, settings }) => {
       // A 6.x device: settings envelope v3, no discoveryMode yet.
-      if (!localStorage.getItem('vinax.settings.v1')) localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'], mutedLanguages: ['punjabi'], festivalSkins: false, aiDj: false, autoplay: true, ...settings }, version: 3 }));
+      if (!localStorage.getItem('vinax.settings.v1')) localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'], mutedLanguages: ['punjabi'], festivalSkins: false, autoplay: true, ...settings }, version: 3 }));
       localStorage.setItem('vinax.library.v1', JSON.stringify({ state: { favorites: stored.slice(0, 2), saved: [], collections: [], hiddenSongIds: [], later: [], hiddenArtists: [], trash: [] }, version: 0 }));
       localStorage.setItem('vinax.history.v1', JSON.stringify({ state: { entries }, version: 0 }));
       localStorage.setItem('vinax.onboarded.v1', 'true');

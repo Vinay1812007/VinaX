@@ -10,14 +10,13 @@ import {
   GlobeIcon,
   HeartIcon,
   MicIcon,
-  SparkleIcon,
   VideoIcon,
   WaveformIcon,
 } from './Icons';
 import '@/styles/pages/browse.css';
 
 /** The rest of the browse destinations: route, name, one line, tone, icon. */
-const DESTINATIONS: Array<{ to: string; title: string; meta: string; tone: number; icon: typeof GlobeIcon; ai?: boolean }> = [
+const DESTINATIONS: Array<{ to: string; title: string; meta: string; tone: number; icon: typeof GlobeIcon }> = [
   { to: '/regions', title: 'Regions', meta: 'Local favourites', tone: 4, icon: GlobeIcon },
   { to: '/movies', title: 'Movies', meta: 'Film soundtracks', tone: 5, icon: FilmIcon },
   { to: '/videos', title: 'Videos', meta: 'Music videos', tone: 6, icon: VideoIcon },
@@ -25,7 +24,6 @@ const DESTINATIONS: Array<{ to: string; title: string; meta: string; tone: numbe
   { to: '/podcasts', title: 'Podcasts', meta: 'Shows and conversations', tone: 10, icon: MicIcon },
   { to: '/made-for-you', title: 'Made for you', meta: 'Mixes from your listening', tone: 7, icon: HeartIcon },
   { to: '/weekly', title: 'Your week', meta: 'Your weekly mix', tone: 8, icon: ClockIcon },
-  { to: '/ai-playlist', title: 'AI playlist', meta: 'Describe it, get a playlist', tone: 9, icon: SparkleIcon, ai: true },
 ];
 const LIBRARY_ROUTES = ['/favorites', '/later', '/offline', '/history', '/stats', '/taste-profile'];
 
@@ -79,8 +77,8 @@ export function DestinationGrid({ area, chartSongs }: { area: 'discover' | 'libr
           meta="For how you feel"
           visual={<GlyphFan emoji items={[MOODS[0].emoji, MOODS[2].emoji, MOODS[3].emoji]} />}
         />
-        {DESTINATIONS.map(({ to, title, meta, tone, icon: Icon, ai }) => (
-          <DestTile key={to} to={to} title={title} meta={meta} tone={`vx-tone-${tone}`} icon={<Icon />} ai={ai} />
+        {DESTINATIONS.map(({ to, title, meta, tone, icon: Icon }) => (
+          <DestTile key={to} to={to} title={title} meta={meta} tone={`vx-tone-${tone}`} icon={<Icon />} />
         ))}
       </div>
     </nav>

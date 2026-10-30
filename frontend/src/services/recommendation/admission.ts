@@ -10,7 +10,7 @@ import { getSessionIntent } from '@/services/personalization/sessionIntent';
 
 /**
  * 7.2.0 — the one admission gate for every AUTOMATIC queue mutation: a
- * continuation append, an adaptive re-plan, an AI refinement of the automatic
+ * continuation append, an adaptive re-plan, a rebuild of the automatic
  * tail, a reserve top-up. It reads the listener's restrictions AT CALL TIME
  * (never a snapshot taken before an await), so a song that became forbidden
  * while a request was in flight — Kid mode switched on, a song or artist

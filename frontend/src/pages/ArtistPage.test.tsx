@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * 1.3 — the artist page's catalogue extras: "Artist radio" opens the
- * catalogue's artist station (AI Radio from their songs when it cannot), and
+ * catalogue's artist station (Radio from their songs when it cannot), and
  * "Related artists" prefers the catalogue's similar artists.
  */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -83,7 +83,7 @@ describe('ArtistPage — 1.3', () => {
     expect(typeof opts.feed).toBe('function');
   });
 
-  it('when the station will not open, Artist radio falls back to AI Radio from their songs', async () => {
+  it('when the station will not open, Artist radio falls back to Radio from their songs', async () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'Artist radio' }));
     await waitFor(() => expect(startRadio).toHaveBeenCalledOnce());

@@ -32,14 +32,13 @@ export interface Diagnostics {
   repeats: RepeatRates;
   /** Candidates contributed per source, newest batch first, summed. */
   sources: Array<{ source: string; count: number }>;
-  /** How often each fallback reason came up (an AI order that was not used). */
+  /** How often each fallback reason came up. */
   fallbacks: Array<{ reason: string; count: number }>;
   /** Which soft rules had to give, and how often. */
   relaxed: Array<{ rule: string; count: number }>;
   /** Hard-filter rejections by rule — where a thin pool actually went. */
   rejections: Array<{ reason: string; count: number }>;
   latency: { p50: number; p95: number; max: number; samples: number };
-  pickers: { local: number; ai: number };
 }
 
 const EMPTY: Diagnostics = {
@@ -49,7 +48,6 @@ const EMPTY: Diagnostics = {
   relaxed: [],
   rejections: [],
   latency: { p50: 0, p95: 0, max: 0, samples: 0 },
-  pickers: { local: 0, ai: 0 },
 };
 
 const lead = (song: { artists?: Array<{ name?: string }>; subtitle?: string }): string =>
@@ -77,8 +75,6 @@ export function summarise(batches: readonly DebugBatch[]): Diagnostics {
   const relaxed = new Map<string, number>();
   const rejections = new Map<string, number>();
   const latencies: number[] = [];
-  let local = 0;
-  let ai = 0;
 
   let songs = 0;
   let overlapWithPrevious = 0;
@@ -104,8 +100,6 @@ export function summarise(batches: readonly DebugBatch[]): Diagnostics {
     for (const r of batch.rows) {
       const name = lead(r.song);
       if (name) leads.set(name, (leads.get(name) ?? 0) + 1);
-      if (r.picker === 'ai') ai += 1;
-      else local += 1;
     }
     artistSum += leads.size;
     if (keys.length) worstArtistShare = Math.max(worstArtistShare, Math.max(0, ...leads.values()) / keys.length);
@@ -136,7 +130,6 @@ export function summarise(batches: readonly DebugBatch[]): Diagnostics {
     relaxed: tally(relaxed).map(({ source, count }) => ({ rule: source, count })),
     rejections: tally(rejections).map(({ source, count }) => ({ reason: source, count })),
     latency: { p50: percentile(sorted, 50), p95: percentile(sorted, 95), max: sorted.length ? sorted[sorted.length - 1] : 0, samples: sorted.length },
-    pickers: { local, ai },
   };
 }
 

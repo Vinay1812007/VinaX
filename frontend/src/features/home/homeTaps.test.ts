@@ -6,7 +6,7 @@ const root = document.createElement('div');
 root.innerHTML = `
   <header><a id="lang" href="#">Telugu</a></header>
   <span hidden data-home-block="quick"></span>
-  <div><button id="tile">AI Radio</button></div>
+  <div><button id="tile">Radio</button></div>
   <span hidden data-home-block=""></span>
   <div class="more"><button id="chip">Charts</button></div>
   <span hidden data-home-block="discovery"></span>

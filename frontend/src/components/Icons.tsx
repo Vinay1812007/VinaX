@@ -51,6 +51,14 @@ export const RepeatIcon = ({ className }: IconProps) => (
     <path d="M21 13v2a4 4 0 01-4 4H3" />
   </svg>
 );
+export const RefreshIcon = ({ className }: IconProps) => (
+  <svg {...base(className)}>
+    <path d="M20 11a8 8 0 0 0-14.5-4.5L4 8" />
+    <path d="M4 3v5h5" />
+    <path d="M4 13a8 8 0 0 0 14.5 4.5L20 16" />
+    <path d="M20 21v-5h-5" />
+  </svg>
+);
 export const HeartIcon = ({ className, filled }: IconProps & { filled?: boolean }) => (
   <svg {...base(className)} fill={filled ? 'currentColor' : 'none'}>
     <path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 000-7.8z" />

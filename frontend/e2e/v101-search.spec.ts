@@ -74,7 +74,7 @@ async function seed(page: Page, baseURL: string, primaryDelayMs = 0): Promise<Hi
   const pool = TITLES.map((_, i) => song(baseURL, i));
   const hits: Hit[] = [];
   await page.addInitScript(({ fp }) => {
-    localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'], festivalSkins: false, aiDj: false, autoplay: false }, version: 4 }));
+    localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'], festivalSkins: false, autoplay: false }, version: 4 }));
     localStorage.setItem('vinax.search.v1', JSON.stringify({ state: { recent: ['kesariya lofi', 'arijit singh'], pinned: [], songSort: 'relevance' }, version: 0 }));
     localStorage.setItem('vinax.onboarded.v1', 'true');
     localStorage.setItem('vinax.user-name', JSON.stringify('Tester'));

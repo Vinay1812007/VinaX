@@ -1,6 +1,6 @@
 # Friends and sharing
 
-This page covers what VinaX 15 added for listening with other people and for finding new music every day: your public profile, following friends, Blend, shared playlists, Listen Together's chat and vote-to-skip, sharing a VinaX AI chat, Discover 5, release alerts, weekly goals and your year as a story. Everything here is off until you switch it on, and works on the web and the Android app.
+This page covers what VinaX 15 added for listening with other people and for finding new music every day: your public profile, following friends, Blend, shared playlists, Listen Together's chat and vote-to-skip, Discover 5, release alerts, weekly goals and your year as a story. Everything here is off until you switch it on, and works on the web and the Android app.
 
 ## Your public profile
 
@@ -30,10 +30,6 @@ On any of your playlists, open **⋯ → Share…**.
 
 Rooms (see [Listen together](listen-together.md)) now show everyone's name to everyone in the room, have a short **Chat** (the last 40 lines), and a **⏭** button: the host skips; guests vote, and the song moves on once more than half the room has voted. **Save this session as a playlist** keeps every song the room played.
 
-## Share a VinaX AI chat
-
-In a chat, open **Export → Share as a link…**. The link opens a read-only copy of the conversation's text (no pictures or attached files) for 90 days. You need to be signed in to share.
-
 ## Discover 5
 
 A card among your daily cards on Home: five songs you have not heard, one at a time. **Keep** saves it to Listen Later, **Skip** moves on, **Play** plays it. On a phone, swipe right to keep and left to skip. A new five arrives the next day.
@@ -59,4 +55,3 @@ Save an artist (the **Save** button on their page) and VinaX checks their songs 
 - **Drive Mode voice** — the mic button: "play Srivalli", "next", "pause", "play something in Telugu".
 - **Import a playlist from a file** — Library → Import, then **Open a file**: CSV exports from other apps, M3U playlists or plain text.
 - **Smart downloads** (Android) — Settings → Playback: keeps this week's Weekly Mix downloaded, on Wi-Fi only.
-- **VinaX AI attachments** — Word, Excel, PowerPoint and EPUB files are read for their text, on your device.

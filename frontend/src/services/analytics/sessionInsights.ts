@@ -11,7 +11,7 @@ import { getLocal } from '@/services/storage/local';
  * in the provider dashboard:
  *   - every piece of on-screen text is masked on the device before upload
  *     (`data-clarity-mask` on <body>), so song titles, names, history and
- *     VinaX AI chats never appear in a replay — only layout, taps and scrolls;
+ *     typed text never appears in a replay — only layout, taps and scrolls;
  *   - the consent signal says analytics storage is granted and ad storage is
  *     denied — session insights are never used for advertising.
  *

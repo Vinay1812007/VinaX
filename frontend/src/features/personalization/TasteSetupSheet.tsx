@@ -72,7 +72,7 @@ export function TasteSetupSheet({ onClose, onSaved }: { onClose: () => void; onS
   const save = (): void => {
     const chosen = (artists ?? []).filter((a) => picked.includes(a.id || a.name));
     const n = declareArtists(chosen);
-    if (n) toast(`Saved — Home and the DJ will lean toward ${n} ${n === 1 ? 'artist' : 'artists'}`);
+    if (n) toast(`Saved — Home and Up Next will lean toward ${n} ${n === 1 ? 'artist' : 'artists'}`);
     onSaved?.();
     onClose();
   };

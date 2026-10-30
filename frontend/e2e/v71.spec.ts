@@ -23,7 +23,7 @@ async function seed(page: Page, baseURL: string): Promise<{ queries: string[] }>
   const devotional = Array.from({ length: 8 }, (_, i) => song(baseURL, `d${i}`, `Govinda Bhajan ${i}`, `Devotee ${i}`, `Bhakti Album ${i}`));
   const playing = { ...song(baseURL, 'now', 'Samajavaragamana', 'Sid Sriram', 'Ala Vaikunthapurramuloo'), artists: [{ id: 'a-sid', name: 'Sid Sriram' }] };
   await page.addInitScript(({ playing, fp }) => {
-    localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu', 'hindi'], festivalSkins: false, aiDj: false, autoplay: true }, version: 4 }));
+    localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu', 'hindi'], festivalSkins: false, autoplay: true }, version: 4 }));
     if (!localStorage.getItem('vinax.player.v1')) localStorage.setItem('vinax.player.v1', JSON.stringify({ state: { queue: [playing], index: 0, repeat: 'off', shuffle: false, volume: 1, muted: false, rate: 1 }, version: 1 }));
     localStorage.setItem('vinax.onboarded.v1', 'true');
     localStorage.setItem('vinax.user-name', JSON.stringify("Vinays'S CG-IT-SA-NA-001 MacBook Air M1"));

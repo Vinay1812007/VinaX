@@ -60,9 +60,9 @@ interface TourSlide {
 const TOUR: TourSlide[] = [
   {
     icon: <CompassIcon className="w-7 h-7" />,
-    title: 'Five places to go',
+    title: 'Four places to go',
     lines: [
-      'Home, Discover, Search, Library and VinaX AI are always one tap away.',
+      'Home, Discover, Search and Library are always one tap away.',
       'The top bar shows where you are and holds that page’s actions.',
     ],
   },
@@ -80,7 +80,7 @@ const TOUR: TourSlide[] = [
     title: 'Change it any time',
     lines: [
       'Settings → Appearance holds the app style, theme, accent colour and festival themes.',
-      'In VinaX AI, the chat takes the style of the model you pick.',
+      'Customise Home, at the end of Home, reorders or hides its shelves.',
     ],
   },
   {

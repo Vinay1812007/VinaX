@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 2
+-- VinaX database · schema version 3
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -10,17 +10,16 @@
 -- policy exists, so the public anon key can read and write nothing. The app
 -- and the owner console never hold a database key.
 --
--- What is NOT here: raw IP addresses, precise locations, AI chats, the
--- listener's library. Geo is Cloudflare's edge country / region / city.
+-- What is NOT here: raw IP addresses, precise locations, the listener's
+-- library. Geo is Cloudflare's edge country / region / city.
 --
 -- Layout
 --   1. extensions and meta        2. listeners and accounts
---   3. usage events               4. AI calls
---   5. feedback and blocked content
---   6. Listen Together rooms      7. push devices and notifications
---   8. settings and experiments   9. audit log, uptime, job runs
---  10. views                     11. functions (stats_*, room_*, housekeeping)
---  12. security
+--   3. usage events               4. feedback and blocked content
+--   5. Listen Together rooms      6. push devices and notifications
+--   7. settings and experiments   8. audit log, uptime, job runs
+--   9. views                     10. functions (stats_*, room_*, housekeeping)
+--  11. security
 -- =============================================================================
 
 -- ----------------------------------------------------------------- 1. meta --
@@ -173,22 +172,6 @@ create table if not exists shared_playlists (
 );
 create index if not exists shared_playlists_owner_idx on shared_playlists (owner_id, updated_at desc);
 
--- A VinaX AI conversation the listener chose to share: a read-only copy at
--- a link, kept 90 days, deleted with the account. Chats never land here
--- otherwise (see the header).
-create table if not exists shared_chats (
-  id          text primary key,                         -- 12 url-safe chars
-  owner_id    text not null references accounts (id) on delete cascade,
-  title       text,
-  payload     jsonb not null,                           -- { messages: [{role, content}], model? }
-  bytes       integer not null default 0,
-  created_at  timestamptz not null default now(),
-  expires_at  timestamptz not null default now() + interval '90 days',
-  constraint shared_chats_payload_shape check (jsonb_typeof(payload) = 'object')
-);
-create index if not exists shared_chats_owner_idx on shared_chats (owner_id, created_at desc);
-create index if not exists shared_chats_expires_idx on shared_chats (expires_at);
-
 -- ------------------------------------------------------------- 3. events --
 
 -- Append-only usage log, written only after the listener opted in.
@@ -221,28 +204,7 @@ create index if not exists events_listener_at_idx on events (listener_id, at des
 create index if not exists events_song_idx on events (song_id) where kind = 'play';
 comment on table events is 'Consented usage events. Purged by housekeeping after settings.retention.eventsDays (default 180).';
 
--- ---------------------------------------------------------- 4. AI calls --
-
-create table if not exists ai_calls (
-  id                 bigint generated always as identity primary key,
-  at                 timestamptz not null default now(),
-  feature            text not null,                     -- chat | dj | playlist | search | home | title | …
-  lane               text,
-  provider           text,
-  model              text,
-  ok                 boolean not null default false,
-  status             integer,
-  error              text,
-  client             text,                              -- web | android | ios | console
-  latency_ms         integer,
-  prompt_tokens      integer,
-  completion_tokens  integer
-);
-create index if not exists ai_calls_at_idx on ai_calls (at desc);
-create index if not exists ai_calls_feature_at_idx on ai_calls (feature, at desc);
-comment on table ai_calls is 'One row per model call: what, which model, how long, how many tokens. Never the prompt.';
-
--- ------------------------------------------- 5. feedback, blocked content --
+-- ------------------------------------------- 4. feedback, blocked content --
 
 create table if not exists feedback (
   id           bigint generated always as identity primary key,
@@ -273,7 +235,7 @@ create table if not exists blocked_content (
 );
 create unique index if not exists blocked_content_key on blocked_content (kind, lower(value));
 
--- ------------------------------------------------------ 6. Listen Together --
+-- ------------------------------------------------------ 5. Listen Together --
 
 create table if not exists rooms (
   code        text primary key,                          -- 6 chars, the join credential
@@ -305,7 +267,7 @@ create table if not exists room_members (
 );
 create index if not exists room_members_seen_idx on room_members (room_code, last_seen desc);
 
--- ------------------------------------------- 7. push devices, notifications --
+-- ------------------------------------------- 6. push devices, notifications --
 
 -- Every device that can receive a push, on either channel.
 --   web: `target` is the browser push endpoint, p256dh/auth are its keys
@@ -355,7 +317,7 @@ create table if not exists notifications (
 create unique index if not exists notifications_dedupe_key on notifications (dedupe_key) where dedupe_key is not null;
 create index if not exists notifications_at_idx on notifications (at desc);
 
--- --------------------------------------------- 8. settings, experiments --
+-- --------------------------------------------- 7. settings, experiments --
 
 -- Published settings: one key, one JSON value. Read by the public config
 -- routes (cached), written only from the owner console.
@@ -385,7 +347,7 @@ create table if not exists experiments (
   constraint experiments_key_shape check (key ~ '^[a-z0-9-]{1,40}$')
 );
 
--- ------------------------------------------- 9. audit, uptime, job runs --
+-- ------------------------------------------- 8. audit, uptime, job runs --
 
 create table if not exists audit_log (
   id          bigint generated always as identity primary key,
@@ -426,7 +388,7 @@ create table if not exists job_runs (
 );
 create index if not exists job_runs_job_idx on job_runs (job, started_at desc);
 
--- ------------------------------------------------------------- 10. views --
+-- -------------------------------------------------------------- 9. views --
 
 -- Everyone the console lists, ONE ROW PER PERSON: a signed-in listener is one
 -- row however many devices they use (the most recent device's platform,
@@ -470,7 +432,7 @@ create or replace view directory as
   from accounts a
   where not exists (select 1 from dev d where d.acct = a.id);
 
--- --------------------------------------------------------- 11. functions --
+-- --------------------------------------------------------- 10. functions --
 
 -- Everything below is `security invoker`: the Worker's service role runs it,
 -- the public roles cannot execute it (see section 12).
@@ -496,8 +458,7 @@ language sql stable set search_path = public, pg_temp as $$
     'mau',             (select count(distinct listener_id) from events where at > now() - interval '30 days'),
     'feedbackNew',     (select count(*) from feedback where status = 'new'),
     'pushDevices',     (select count(*) from push_devices where active),
-    'roomsActive',     (select count(*) from rooms where updated_at > now() - interval '15 minutes'),
-    'aiCalls24h',      (select count(*) from ai_calls where at > now() - interval '24 hours')
+    'roomsActive',     (select count(*) from rooms where updated_at > now() - interval '15 minutes')
   );
 $$;
 
@@ -750,62 +711,6 @@ language sql stable set search_path = public, pg_temp as $$
   );
 $$;
 
--- AI usage: volume, health, latency, tokens.
-create or replace function stats_ai(p_days int default 7) returns jsonb
-language sql stable set search_path = public, pg_temp as $$
-  with ev as (
-    select * from ai_calls where at > now() - make_interval(days => _days(p_days))
-  ),
-  days as (
-    select generate_series((current_date - (_days(p_days) - 1))::date, current_date, '1 day')::date as day
-  )
-  select jsonb_build_object(
-    'summary', jsonb_build_object(
-      'total', (select count(*) from ev),
-      'ok', (select count(*) filter (where ok) from ev),
-      'fail', (select count(*) filter (where not ok) from ev),
-      'p50', (select percentile_cont(0.5) within group (order by latency_ms) from ev where latency_ms is not null),
-      'p95', (select percentile_cont(0.95) within group (order by latency_ms) from ev where latency_ms is not null),
-      'promptTokens', (select coalesce(sum(prompt_tokens), 0) from ev),
-      'completionTokens', (select coalesce(sum(completion_tokens), 0) from ev)),
-    'byFeature', coalesce((select jsonb_agg(t) from (
-        select feature, count(*) as total, count(*) filter (where ok) as ok, count(*) filter (where not ok) as fail,
-               percentile_cont(0.5) within group (order by latency_ms) as p50,
-               percentile_cont(0.95) within group (order by latency_ms) as p95
-        from ev group by 1 order by total desc) t), '[]'::jsonb),
-    'byProvider', coalesce((select jsonb_agg(t) from (
-        select coalesce(provider, 'unknown') as provider, count(*) as total, count(*) filter (where ok) as ok,
-               count(*) filter (where not ok) as fail
-        from ev group by 1 order by total desc) t), '[]'::jsonb),
-    'byModel', coalesce((select jsonb_agg(t) from (
-        select coalesce(model, 'unknown') as model, coalesce(provider, 'unknown') as provider, count(*) as calls,
-               count(*) filter (where not ok) as fail,
-               coalesce(sum(prompt_tokens), 0) as "promptTokens", coalesce(sum(completion_tokens), 0) as "completionTokens"
-        from ev group by 1, 2 order by calls desc limit 60) t), '[]'::jsonb),
-    'byDay', coalesce((select jsonb_agg(jsonb_build_object('day', to_char(d.day, 'YYYY-MM-DD'),
-        'total', coalesce(x.total, 0), 'ok', coalesce(x.ok, 0), 'fail', coalesce(x.fail, 0)) order by d.day)
-        from days d left join (select at::date as day, count(*) as total, count(*) filter (where ok) as ok,
-                                      count(*) filter (where not ok) as fail from ev group by 1) x on x.day = d.day), '[]'::jsonb),
-    'errors', coalesce((select jsonb_agg(t) from (
-        select error, count(*) as count from ev where error is not null group by 1 order by count desc limit 15) t), '[]'::jsonb),
-    'recent', coalesce((select jsonb_agg(t) from (
-        select at, feature, lane, provider, model, ok, status, error, client, latency_ms as "latencyMs"
-        from ev order by at desc limit 40) t), '[]'::jsonb)
-  );
-$$;
-
--- Today's token use by model (the AI spend caps read this, never whole rows).
-create or replace function ai_usage_since(p_since timestamptz) returns jsonb
-language sql stable set search_path = public, pg_temp as $$
-  select coalesce(jsonb_agg(t), '[]'::jsonb) from (
-    select coalesce(model, 'unknown') as model, coalesce(provider, 'unknown') as provider, count(*) as calls,
-           coalesce(sum(prompt_tokens), 0) as "promptTokens", coalesce(sum(completion_tokens), 0) as "completionTokens"
-    from ai_calls
-    where at >= greatest(p_since, now() - interval '2 days')
-      and (error is null or error not in ('ai_disabled', 'ai_over_budget'))
-    group by 1, 2 order by calls desc limit 200) t;
-$$;
-
 -- One listener in full: the row, the account, the backup facts, counts, tastes, recent events.
 create or replace function listener_profile(p_listener text default null, p_account text default null) returns jsonb
 language sql stable set search_path = public, pg_temp as $$
@@ -898,16 +803,14 @@ begin
 end;
 $$;
 
--- Rooms nobody touched for six hours, members not seen for a day, and
--- (15.0) shared chats past their expiry.
+-- Rooms nobody touched for six hours, members not seen for a day.
 create or replace function room_sweep() returns jsonb
 language plpgsql set search_path = public, pg_temp as $$
-declare n_rooms bigint; n_members bigint; n_chats bigint;
+declare n_rooms bigint; n_members bigint;
 begin
   delete from rooms where updated_at < now() - interval '6 hours'; get diagnostics n_rooms = row_count;
   delete from room_members where last_seen < now() - interval '1 day'; get diagnostics n_members = row_count;
-  delete from shared_chats where expires_at < now(); get diagnostics n_chats = row_count;
-  return jsonb_build_object('rooms', n_rooms, 'members', n_members, 'sharedChats', n_chats);
+  return jsonb_build_object('rooms', n_rooms, 'members', n_members);
 end;
 $$;
 
@@ -988,7 +891,6 @@ language sql stable set search_path = public, pg_temp as $$
     'profiles', (select count(*) from profiles),
     'follows', (select count(*) from follows),
     'shared_playlists', (select count(*) from shared_playlists),
-    'shared_chats', (select count(*) from shared_chats),
     'feedback', (select count(*) from feedback),
     'blocked_content', (select count(*) from blocked_content),
     'rooms', (select count(*) from rooms),
@@ -999,19 +901,18 @@ language sql stable set search_path = public, pg_temp as $$
     'experiments', (select count(*) from experiments),
     'audit_log', (select count(*) from audit_log),
     'job_runs', (select count(*) from job_runs),
-    'events', (select greatest(reltuples, 0)::bigint from pg_class where oid = 'public.events'::regclass),
-    'ai_calls', (select greatest(reltuples, 0)::bigint from pg_class where oid = 'public.ai_calls'::regclass)
+    'events', (select greatest(reltuples, 0)::bigint from pg_class where oid = 'public.events'::regclass)
   );
 $$;
 
--- --------------------------------------------------------- 12. security --
+-- --------------------------------------------------------- 11. security --
 
 do $$
 declare t text;
 begin
   foreach t in array array[
-    'meta', 'listeners', 'accounts', 'account_backups', 'profiles', 'follows', 'shared_playlists', 'shared_chats',
-    'events', 'ai_calls', 'feedback',
+    'meta', 'listeners', 'accounts', 'account_backups', 'profiles', 'follows', 'shared_playlists',
+    'events', 'feedback',
     'blocked_content', 'rooms', 'room_members', 'push_devices', 'notifications',
     'settings', 'settings_history', 'experiments', 'audit_log', 'uptime_days', 'uptime_latest', 'job_runs']
   loop
@@ -1031,8 +932,8 @@ begin
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
       and p.proname in ('_days', 'stats_overview', 'stats_timeline', 'stats_music', 'stats_geo', 'stats_platforms',
-                        'stats_engagement', 'stats_retention', 'stats_funnel', 'stats_skips', 'stats_errors', 'stats_ai',
-                        'ai_usage_since', 'listener_profile', 'delete_listener', 'room_request', 'room_sweep',
+                        'stats_engagement', 'stats_retention', 'stats_funnel', 'stats_skips', 'stats_errors',
+                        'listener_profile', 'delete_listener', 'room_request', 'room_sweep',
                         'purge_events', 'retire_push_devices', 'uptime_tick', 'uptime_report', 'table_stats', 'table_counts')
   loop
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);
@@ -1047,7 +948,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 2, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 2, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 3, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 3, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 2 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 3 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;

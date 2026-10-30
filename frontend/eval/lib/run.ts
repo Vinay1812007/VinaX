@@ -1,6 +1,6 @@
 import type { Song } from '../../src/types';
 import type { EvalFixture } from '../fixtures';
-import { ai, resetAi, resetCatalogue, type Behaviour } from './mocks';
+import { resetCatalogue, type Behaviour } from './mocks';
 import { addViolations, eligible, inEvalStyle, leadName, noViolations, violationsOf, workKey, type RuleContext, type Violations } from './rules';
 
 /**
@@ -10,7 +10,7 @@ import { addViolations, eligible, inEvalStyle, leadName, noViolations, violation
  *
  * The harness only ever calls the two public entry points, so it keeps
  * working when the modules underneath them change:
- *   planNextSongs      (7.2: a plan now, an AI refinement later)
+ *   planNextSongs      (7.2: a plan, on the device)
  *   recommendNextSongs (the whole continuation as one list — the baseline's only entry point)
  */
 export const LIMIT = 5;
@@ -30,7 +30,6 @@ export interface PlanLike {
   relaxed: string[];
   discoveryIds: ReadonlySet<string>;
   language: string | null;
-  refinement: Promise<PlanLike | { rejected: string }> | null;
 }
 
 export interface EngineLike {
@@ -68,7 +67,6 @@ export interface BatchRecord {
   slot1Discovery: boolean;
   slot2Discovery: boolean;
   distinctArtists: number;
-  aiSongsShipped: number;
   timedOut: boolean;
   /** 8.3.0 — songs of this continuation in the fixture's style (null when the fixture has none). */
   inStyle: number | null;
@@ -159,39 +157,23 @@ export async function planOnce(engine: EngineLike, seed: Song, ctx: unknown, opt
       controller.abort();
       return { commit: null, queueReady: [], final: [], discoveryIds: null, picker: 'none', fallback: 'timeout', refinement: 'none', queueReadyMs, finalMs: queueReadyMs, engineLatencyMs: null, relaxed: [], timedOut: true };
     }
-    let final = plan.songs;
-    let commit = plan.commit ?? null;
-    let picker = plan.picker;
-    let refinement = 'none';
-    let finalMs = queueReadyMs;
-    if (plan.refinement) {
-      const refined = await withCap(plan.refinement, Math.max(0, capMs - (performance.now() - started)));
-      finalMs = performance.now() - started;
-      if (!refined.value) {
-        refinement = 'unresolved';
-        controller.abort();
-      } else if ('songs' in refined.value) {
-        refinement = 'applied';
-        final = refined.value.songs;
-        commit = refined.value.commit ?? commit;
-        picker = 'ai';
-      } else {
-        refinement = refined.value.rejected;
-      }
-    }
+    const final = plan.songs;
+    const commit = plan.commit ?? null;
+    const picker = plan.picker;
+    const refinement = 'none';
+    const finalMs = queueReadyMs;
     return { commit, queueReady: plan.songs, final, discoveryIds: plan.discoveryIds, picker, fallback: plan.fallback, refinement, queueReadyMs, finalMs, engineLatencyMs: plan.latencyMs, relaxed: [...plan.relaxed], timedOut: false };
   }
-  // The baseline: one call that returns the whole continuation, AI included.
+  // The baseline: one call that returns the whole continuation.
   const out = await withCap(engine.recommendNextSongs(seed, ctx, options), capMs);
   const elapsed = performance.now() - started;
   const songs = out.value ?? [];
-  const aiShipped = songs.filter((s) => ai.proposed.has(s.id)).length;
   return {
     commit: null,
     queueReady: songs,
     final: songs,
     discoveryIds: null,
-    picker: out.timedOut ? 'none' : aiShipped >= Math.min(3, LIMIT) ? 'ai' : 'local',
+    picker: out.timedOut ? 'none' : 'local',
     fallback: out.timedOut ? 'timeout' : null,
     refinement: 'n/a',
     queueReadyMs: elapsed,
@@ -202,8 +184,8 @@ export async function planOnce(engine: EngineLike, seed: Song, ctx: unknown, opt
   };
 }
 
-/** Put a fixture's catalogue and AI script into the mocks. */
-export function armFixture(fixture: EvalFixture, seedId: string, over: { suggestions?: Behaviour; search?: Behaviour; searchNeverAfter?: number | null; slow?: boolean; ai?: EvalFixture['ai'] } = {}): void {
+/** Put a fixture's catalogue into the mocks. */
+export function armFixture(fixture: EvalFixture, seedId: string, over: { suggestions?: Behaviour; search?: Behaviour; searchNeverAfter?: number | null; slow?: boolean } = {}): void {
   resetCatalogue({
     seedId,
     related: fixture.related,
@@ -216,9 +198,7 @@ export function armFixture(fixture: EvalFixture, seedId: string, over: { suggest
     albums: fixture.albums ?? {},
     similarArtists: fixture.similarArtists ?? {},
     artistSongs: fixture.artistSongs ?? [],
-    embeddings: fixture.embeddings ?? {},
   });
-  resetAi(over.ai ?? fixture.ai);
 }
 
 function ruleContext(fixture: EvalFixture, queue: Song[], played: Song[], seed: Song = fixture.seed): RuleContext {
@@ -332,7 +312,6 @@ export async function runSession(engine: EngineLike, fixture: EvalFixture, salt:
       slot1Discovery: !!outcome.final[0] && isDiscovery(outcome.final[0]),
       slot2Discovery: outcome.final.length >= 4 && !!outcome.final[1] && isDiscovery(outcome.final[1]),
       distinctArtists: new Set(outcome.final.map(leadName)).size,
-      aiSongsShipped: outcome.final.filter((s) => ai.proposed.has(s.id)).length,
       timedOut: outcome.timedOut,
       inStyle: style ? outcome.final.filter((s) => inEvalStyle(s, style)).length : null,
       styleAvailable: style ? new Set(stylePool.map(workKey)).size : null,

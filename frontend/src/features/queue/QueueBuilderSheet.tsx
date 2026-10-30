@@ -44,7 +44,6 @@ export function QueueBuilderSheet({ onClose }: { onClose(): void }) {
   const current = useCurrentSong();
   const favorites = useLibraryStore((s) => s.favorites);
   const pinned = useSettingsStore((s) => s.pinnedLanguages);
-  const aiDj = useSettingsStore((s) => s.aiDj);
   const applyPlan = usePlayerStore((s) => s.applyPlan);
   const [seedMode, setSeedMode] = useState<'current' | 'favourite' | 'none'>(current ? 'current' : 'none');
   const [favSeedId, setFavSeedId] = useState(favorites[0]?.id ?? '');
@@ -53,7 +52,6 @@ export function QueueBuilderSheet({ onClose }: { onClose(): void }) {
   const [minutes, setMinutes] = useState(30);
   const [discovery, setDiscovery] = useState<DiscoveryLevel>('medium');
   const [language, setLanguage] = useState<string>(current?.language && current.language !== 'unknown' ? current.language : pinned[0] ?? '');
-  const [goal, setGoal] = useState('');
   const [plan, setPlan] = useState<QueuePlan | null>(null);
   const [busy, setBusy] = useState(false);
   const runRef = useRef(0);
@@ -67,7 +65,7 @@ export function QueueBuilderSheet({ onClose }: { onClose(): void }) {
     setBusy(true);
     setPlan(null);
     try {
-      const p = await planQueue({ seed, mood, shape, minutes, discovery, language: language || null, goal: goal.trim() || undefined, useDj: aiDj });
+      const p = await planQueue({ seed, mood, shape, minutes, discovery, language: language || null });
       if (run !== runRef.current) return;
       setPlan(p);
       if (!p.songs.length) toast('Nothing matched that brief — try another mood, language or a wider discovery setting');
@@ -81,8 +79,6 @@ export function QueueBuilderSheet({ onClose }: { onClose(): void }) {
     if (!plan?.songs.length) return;
     const chosen = plan.songs.map((s) => s.song);
     applyPlan(chosen, mode);
-    // 7.2.0 — the DJ's notes are published only now that the plan was applied.
-    plan.commit?.(chosen);
     toast(mode === 'replace' ? `Playing your ${minutes}-minute plan` : `Added ${plan.songs.length} songs after the current one`);
     onClose();
   };
@@ -150,22 +146,17 @@ export function QueueBuilderSheet({ onClose }: { onClose(): void }) {
               {langOptions.map((l) => <option key={l} value={l}>{languageLabel(l)}</option>)}
             </select>
           </div>
-          <div>
-            <label htmlFor="qb-goal" className="block text-xs font-semibold text-ink-300 mb-1">Tell the DJ <span className="font-normal text-ink-500">(optional)</span></label>
-            <input id="qb-goal" value={goal} onChange={(e) => setGoal(e.target.value.slice(0, 160))} placeholder="a night drive, a study hour, cooking with family…" className="glass-input w-full px-3 py-2 rounded-xl text-sm" />
-          </div>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2 items-center">
           <button type="button" onClick={() => void build()} disabled={busy} className="btn-primary px-4 py-2 text-sm min-h-[44px] disabled:opacity-50">{busy ? 'Planning…' : plan ? 'Plan again' : 'Preview my queue'}</button>
           <span className="text-[11px] text-ink-400" role="status" aria-live="polite">
-            {busy ? 'Gathering real songs and laying out the arc…' : plan ? `${plan.songs.length} songs · ${Math.round(plan.totalSec / 60)} min · from ${plan.candidates} candidates${plan.djTouched ? ' · AI DJ notes' : ''}` : ''}
+            {busy ? 'Gathering real songs and laying out the arc…' : plan ? `${plan.songs.length} songs · ${Math.round(plan.totalSec / 60)} min · from ${plan.candidates} candidates` : ''}
           </span>
         </div>
 
         {plan && plan.songs.length > 0 && (
           <section aria-label="Planned queue" className="mt-4">
-            {plan.intro && <p className="text-sm italic text-ink-200 mb-2">“{plan.intro}”</p>}
             <div className="flex items-end gap-[3px] h-10 mb-2" role="img" aria-label="Energy arc of the planned queue">
               {plan.songs.map((s, i) => (
                 <span key={`${s.song.id}-${i}`} className="flex-1 rounded-t bg-ember-500/70" style={{ height: `${Math.round(20 + s.energy * 80)}%` }} title={`${s.song.title} · energy ${Math.round(s.energy * 100)}%`} />

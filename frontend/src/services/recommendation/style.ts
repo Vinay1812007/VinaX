@@ -420,7 +420,7 @@ export function styleQueries(style: MusicStyle, language: string | null | undefi
   ];
 }
 
-/** The one catalogue phrase for a style (AI Radio seeds, a style tune, the playlist pool). */
+/** The one catalogue phrase for a style (Radio seeds, a style tune, the playlist pool). */
 export function stylePhrase(style: MusicStyle, language: string | null | undefined): string {
   return styleQueries(style, language, 0)[0].query;
 }

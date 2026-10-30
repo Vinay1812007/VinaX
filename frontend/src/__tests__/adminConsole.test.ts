@@ -82,7 +82,7 @@ describe('page registry', () => {
     expect(pages.length).toBe(pageFiles.length);
     const ids = pages.map((p) => p.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.sort()).toEqual(['ai', 'analytics', 'catalog', 'database', 'experiments', 'feedback', 'health', 'listeners', 'live', 'notify', 'overview', 'publish', 'seo']);
+    expect(ids.sort()).toEqual(['analytics', 'catalog', 'database', 'experiments', 'feedback', 'health', 'listeners', 'live', 'notify', 'overview', 'publish', 'seo']);
     for (const p of pages) {
       expect(p.title, p.id).toBeTruthy();
       expect(GROUPS, p.id).toContain(p.group);
@@ -101,11 +101,11 @@ describe('page registry', () => {
     }
   });
 
-  it('the shell lands on Overview; Health keeps its status and secrets tabs', () => {
+  it('the shell lands on Overview; Health keeps its errors and secrets tabs', () => {
     expect(read('app.js')).toContain("segs[0] || 'overview'");
     expect(read('app.js')).toContain("setHash('overview'");
     const health = VX.pages().find((p) => p.id === 'health');
-    expect(health?.tabs?.map((t) => t.id)).toEqual(['status', 'errors', 'edge', 'releases', 'env']);
+    expect(health?.tabs?.map((t) => t.id)).toEqual(['errors', 'edge', 'sources', 'releases', 'env']);
   });
 
   it('the console talks to the database only through the Worker (/api/admin), never to Supabase', () => {
@@ -189,7 +189,7 @@ describe('empty and failing answers', () => {
     expect(failures).toEqual([]);
     const tabs = VX.pages().reduce((n, p) => n + (p.tabs ? p.tabs.length : 1), 0);
     expect(results.length).toBe(tabs);
-    expect(tabs).toBe(35);
+    expect(tabs).toBe(32);
   });
 
   it('every page and tab shows an error state, not a crash, when the server fails', async () => {

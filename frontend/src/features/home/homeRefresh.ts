@@ -4,7 +4,7 @@ import { loadProfile } from '@/services/personalization/storage';
 /**
  * 9.0.0 — when Home builds itself again.
  *
- * Every Home query that DESIGNS or ROTATES content (the AI-designed shelves,
+ * Every Home query that ROTATES content (the
  * Made For You, the trending / new / popular rotations, the endless feed)
  * carries the Home GENERATION in its key, and caches for HOME_TTL_MS. The
  * generation moves only:
@@ -20,14 +20,12 @@ import { loadProfile } from '@/services/personalization/storage';
  * replace newer preferences (each answer lands under its own key).
  *
  * Preferences that change WHAT should be built (pinned and muted languages,
- * the discovery mode and round, recommendation intensity, the AI-shelves
- * switch) are in each query's own key and rebuild that query at once. Safety
+ * the discovery mode and round, recommendation intensity) are in each query's own key and rebuild that query at once. Safety
  * settings (Kid mode, muted languages, hidden songs and artists, "Less like
  * this", the blocklist) never rebuild anything: they filter every shelf when
  * it renders (./useShelfSafety.ts), cached shelves included.
  *
- * Before 9.0 the AI shelves used a random nonce per mount with no stale time,
- * so every visit to Home paid for a new design; Made For You froze the profile
+ * Before 9.0 Made For You froze the profile
  * stamp per mount, so returning after any play rebuilt the whole pipeline.
  */
 export const HOME_TTL_MS = 30 * 60_000;

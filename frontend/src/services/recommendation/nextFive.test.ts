@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Song } from '@/types';
 import type { Candidate, RecommendationContext } from './types';
-import { makeContext, makePlay, makeSong, warmProfile } from '@/__fixtures__/songs';
+import { makeContext, makeSong, warmProfile } from '@/__fixtures__/songs';
 
 /**
  * v7.1.0 — "the next five": same language as the seed, the strongest and most
@@ -15,18 +15,14 @@ vi.mock('./candidates', () => ({
   gatherCandidates: vi.fn(async () => pool),
   generateNextCandidates: vi.fn(async (_seed: Song, ctx: RecommendationContext) => { seenCtx.push(ctx); return pool; }),
 }));
-vi.mock('@/services/ai/recommendations', () => ({ enrichSongs: vi.fn(async (songs: Song[]) => songs), aiRerankSongs: vi.fn(async (songs: Song[]) => songs) }));
-vi.mock('@/services/ai/dj', () => ({ djSequence: vi.fn(async () => null), samplePool: (songs: Song[]) => songs }));
 vi.mock('@/services/queryClient', () => ({ queryClient: { getQueryData: () => undefined } }));
 
 import { recommendNextSongs } from './engine';
 import { sequenceSongs } from './sequencer';
 import { tuneSearchQuery } from './tune';
-import { describePoolSong, knownTo } from '@/services/ai/dj';
 import { useSettingsStore } from '@/store/settingsStore';
 import { resetTransitionMemory } from './transitions';
 
-vi.unmock('@/services/ai/dj');
 
 const NOW = 1_800_000_000_000;
 const seed = makeSong('seed', { title: 'Seed', artist: 'Sid Sriram' });
@@ -37,7 +33,7 @@ beforeEach(() => {
   sessionStorage.clear();
   resetTransitionMemory();
   seenCtx.length = 0;
-  useSettingsStore.setState({ aiDj: false, kidMode: false, mutedLanguages: [] });
+  useSettingsStore.setState({ kidMode: false, mutedLanguages: [] });
 });
 
 describe('the next five', () => {
@@ -85,16 +81,5 @@ describe('the next five', () => {
     ];
     const out = await recommendNextSongs(seed, makeContext({ profile: warmProfile(NOW) }), { limit: 5, tune: 'devotional' });
     expect(out.filter((s) => s.id.startsWith('d')).length).toBeGreaterThanOrEqual(4);
-  });
-});
-
-describe('what the DJ is told about a pool song', () => {
-  it('adds album, year and familiarity — and nothing that identifies the listener', () => {
-    const played = makeSong('played', { artist: 'Known Artist', album: { id: 'al', name: 'Ala Vaikunthapurramuloo' } as never, year: '2020' });
-    const ctx = makeContext({ history: [makePlay(played, NOW)], favorites: [] });
-    const known = knownTo(ctx);
-    expect(describePoolSong(played, known)).toEqual({ id: 'played', title: 'Song played', artist: 'Known Artist', language: 'telugu', album: 'Ala Vaikunthapurramuloo', year: '2020', known: true });
-    expect(describePoolSong(makeSong('other', { artist: 'Known Artist', year: 'soon' }), known)).toEqual({ id: 'other', title: 'Song other', artist: 'Known Artist', language: 'telugu', known: true });
-    expect(describePoolSong(makeSong('new', { artist: 'Stranger' }), known)).not.toHaveProperty('known');
   });
 });

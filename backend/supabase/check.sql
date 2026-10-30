@@ -31,7 +31,6 @@ insert into profiles (account_id, handle, public, bio, summary) values ('check_a
 insert into profiles (account_id, handle, public) values ('check_a2', 'check_bo', false);
 insert into follows (follower_id, followee_id) values ('check_a2', 'check_a1');
 insert into shared_playlists (id, owner_id, name, songs, public, collab_token) values ('check_pl0001', 'check_a1', 'Check list', '[{"id": "check_s1"}]', true, 'tok');
-insert into shared_chats (id, owner_id, title, payload, bytes, expires_at) values ('check_ch0001', 'check_a1', 'Hi', '{"messages": []}', 16, now() - interval '1 day');
 
 insert into events (at, listener_id, kind, song_id, song_title, song_artist, song_image, language, platform, app_version, country, region, city, error_kind, message, meta)
 select now() - (g || ' hours')::interval,
@@ -41,11 +40,6 @@ select now() - (g || ' hours')::interval,
        (array['te', 'hi', 'en'])[1 + g % 3], 'web', '14.0.1', 'IN', 'TG', 'Hyderabad',
        case when g % 10 = 2 then 'TypeError' end, case when g % 10 = 2 then 'boom' end, '{"a": 1}'::jsonb
 from generate_series(0, 400) g;
-
-insert into ai_calls (at, feature, lane, provider, model, ok, status, error, client, latency_ms, prompt_tokens, completion_tokens)
-select now() - (g || ' minutes')::interval, 'chat', 'fast', 'groq', 'check_m' || (g % 2), g % 5 <> 0, 200,
-       case when g % 5 = 0 then 'timeout' end, 'web', 100 + g, 10, 20
-from generate_series(0, 50) g;
 
 insert into feedback (listener_id, name, kind, message) values ('check_l1', 'Asha', 'bug', 'x'), (null, null, 'idea', 'y');
 insert into blocked_content (kind, value, label) values ('song', 'check_s1', 'Check Song 1');
@@ -117,12 +111,6 @@ begin
   v := stats_errors(7, 50);
   assert (v ->> 'total')::int > 0 and jsonb_array_length(v -> 'top') > 0, 'stats_errors';
 
-  v := stats_ai(7);
-  assert (v -> 'summary' ->> 'total')::int = 51 and (v -> 'summary' ->> 'fail')::int = 11, 'stats_ai.summary';
-
-  v := ai_usage_since(now() - interval '1 day');
-  assert jsonb_array_length(v) = 2, 'ai_usage_since: two models';
-
   v := listener_profile('check_l1', null);
   assert (v -> 'listener' ->> 'id') = 'check_l1' and (v -> 'account' ->> 'id') = 'check_a1', 'listener_profile by listener';
   assert (v -> 'backup' ->> 'version')::int = 1, 'listener_profile.backup';
@@ -138,7 +126,6 @@ begin
 
   v := room_sweep();
   assert (v ->> 'rooms')::int = 0 and (v ->> 'members')::int = 0, 'room_sweep leaves fresh rooms alone';
-  assert (v ->> 'sharedChats')::int = 1, 'room_sweep removed the expired shared chat';
   n := purge_events(180);
   assert n = 0, 'purge_events keeps recent events';
   n := retire_push_devices(180);
@@ -223,7 +210,7 @@ begin
   assert not has_table_privilege('authenticated', 'public.events', 'select'), 'authenticated cannot read events';
   assert not has_function_privilege('anon', 'public.stats_overview()', 'execute'), 'anon cannot call stats_overview';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 2, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 3, 'meta.schema.version';
   raise notice 'check.sql: every function answered as expected';
 end $$;
 

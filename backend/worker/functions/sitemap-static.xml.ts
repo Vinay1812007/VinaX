@@ -16,7 +16,6 @@ const ROUTES: Array<[path: string, changefreq: string, priority: string]> = [
   ['/languages', 'weekly', '0.6'],
   ['/regions', 'weekly', '0.6'],
   ['/made-for-you', 'daily', '0.8'],
-  ['/VinaXAI', 'weekly', '0.8'],
   ['/download', 'weekly', '0.9'],
   ['/about', 'monthly', '0.4'],
   ['/help', 'monthly', '0.4'],

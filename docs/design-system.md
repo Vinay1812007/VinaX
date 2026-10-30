@@ -1,6 +1,6 @@
 # Design system
 
-This document describes how VinaX looks and how that look is built: the token contract every stylesheet reads, the six app styles and the rules they obey, themes, accents, festival skins, the separate styling layer of the VinaX AI chat, and the shared components and rules (materials, control scale, hit areas, overlays, focus, motion). It ends with a checklist for adding an app style.
+This document describes how VinaX looks and how that look is built: the token contract every stylesheet reads, the six app styles and the rules they obey, themes, accents, festival skins, and the shared components and rules (materials, control scale, hit areas, overlays, focus, motion). It ends with a checklist for adding an app style.
 
 ## How the layers stack
 
@@ -91,17 +91,6 @@ Since 11.0 the light theme is glass as well. `styles/templates/base.css` gives e
 
 On a festival's days `<html>` gains `fest-<id>` (the window table is inlined in `index.html` so the class is there before first paint). A skin supplies an accent ramp for dark and an AA-safe light one, a tinted canvas, a top ribbon and an ambient backdrop; because style colour blocks stand down, the skin looks the same over all six styles while each style's layout stays. The definitions are in `frontend/src/constants/festivals.ts`, `festivalThemes.ts`, `festivalVisuals.ts` and `festivalEmblems.ts`. Do not edit `festivals.css` by hand: change the definitions and run `npm run gen:festivals` (`frontend/scripts/gen-festivals.mjs`, core in `festivals-gen-core.mjs`), which rewrites `src/styles/festivals.css`, `public/admin/festivals.js` and the table in `index.html`. The backdrop's particles are not rendered under either reduced-motion switch or with Data saver on. Settings → Appearance → Preview a festival applies any skin for the session (`frontend/src/features/festival/festivalPreview.ts`).
 
-## VinaX AI chat styles
-
-The chat has its own, scoped styling layer; the app shell around it keeps the listener's app style. `frontend/src/features/ai/chat/chatStyle.ts` defines nine styles (`CHAT_STYLE_IDS`): `vinax`, `mono`, `spectrum`, `paper`, `loop`, `void`, `forge`, `circuit` and `deep`. Each is an original design mapped to one or more maker families of models; `makerFamily` classifies the selected model and `styleForFamily` picks the style, falling back to `deep`.
-
-- **Scope.** `ChatStyleScope.tsx` puts `data-chat-style='<id>'` on the chat surface (`.ai-root`) and on portalled sheets (`.ai-scope`). `frontend/src/styles/ai-styles.css` matches only those.
-- **Colour.** A chat style re-points the ink and accent ramps that `ai.css` already reads, with dark as the base and `html.light` and `html.amoled` blocks for every style. `vinax` has no ramp of its own and reads the app's tokens.
-- **Layout.** Each style also has layout facts (`ChatLayout`): composer shape, dock, greeting alignment, starter layout, user and assistant message treatment, avatar, model-chip position, density, engine. `layoutAttrs` emits them as `data-cs-*` attributes and the CSS keys on those, so two styles that share a composer shape share its rules. Shape variables are named `--cs-*`.
-- **Preference.** VinaX AI settings → General → Chat style stores `match` (the default), or one fixed style id, under `vinax.ai.chatStyle`. `resolveChatStyle` combines the preference with the selected model.
-
-`chatStyle.test.ts` guards the mapping and the list.
-
 ## Adding an app style
 
 1. `frontend/src/utils/theme.ts` — add the id to `TemplateId` and its `[dark, light]` canvas to `TEMPLATE_CANVAS`.
@@ -142,7 +131,7 @@ Tokens in `:root` of `index.css`; the utilities `.vx-mat-thin`, `.vx-mat-regular
 
 - **Shape.** A compact pill of `thick` glass (one step lighter than the chrome in dark, white glass in light, solid in Black), radius 20, at least 48px tall, at most 480px wide, rising above the tab bar and the compact player on phones and above the deck on computers. An optional 36px artwork thumbnail leads, one line of text follows, and at most **one action** (View, Undo…) sits at the end.
 - **Timing.** About 4 s on screen (5 s with an action, or the caller's `duration`). At most **two** at once; a third pushes the oldest out. The same words twice show once.
-- **Keyed replacement.** A toast with a `key` replaces the older one with the same key and inherits its artwork and action when it has none. Liking the playing song used to show "Added to Liked songs" and the DJ's "Liked — more like this is coming up next" side by side; both now use the key `like`, so the second updates the first and keeps its cover and View.
+- **Keyed replacement.** A toast with a `key` replaces the older one with the same key and inherits its artwork and action when it has none. Liking the playing song used to show "Added to Liked songs" and the queue's "Liked — more like this is coming up next" side by side; both now use the key `like`, so the second updates the first and keeps its cover and View.
 - **Interaction.** Hovering or focusing the stack pauses every timer; leaving resumes each with what it had left (at least 1 s). Swipe a snackbar down (36px) or press Esc to dismiss the newest — Esc is left to an open sheet or menu unless focus is in the snackbar. The live region is always in the DOM (`role="status"`, polite) so the first message is announced. Entry and exit motion (220 / 180 ms) stops under either reduced-motion switch.
 - **Where they carry artwork and an action.** Liked songs (View, or Undo on removal), Added to queue and Playing next (View → the Queue page). The right-click menu's duplicate queue toasts were removed.
 
@@ -258,8 +247,8 @@ It also skips events an overlay already handled (`defaultPrevented`). The rule f
 
 - One easing, `--ease-calm` (`cubic-bezier(0.32, 0.72, 0, 1)`), and three durations: 140ms (`--vx-motion-fast`), 200ms (`--vx-motion-normal`), 320ms (`--transition-slow`).
 - The base motion is quiet by design: no bounce, no pulsing glow; cards lift 3px on hover and their play button rises in. Shell and Home transitions run 140–240ms.
-- Two switches silence motion: the OS `prefers-reduced-motion` setting and the in-app "Reduce motion" setting, which sets `html.reduce-motion`. `index.css` collapses every animation and transition under that class; `shell.css` does the same for `.vx-shell` and `.ai-root` under either switch. Marquee text falls back to an ellipsis.
-- CSS cannot stop a scripted scroll. Every scripted scroll asks `frontend/src/utils/motion.ts` first: `reducedMotion()` is true for either switch, and `scrollBehavior()` returns `'auto'` or `'smooth'` accordingly. Pass `behavior: scrollBehavior()` to `scrollIntoView`, `scrollTo` and `scrollBy`; never hard-code `'smooth'`. The shelf arrows, synced lyrics, the tutorial runner and the VinaX AI thread already do.
+- Two switches silence motion: the OS `prefers-reduced-motion` setting and the in-app "Reduce motion" setting, which sets `html.reduce-motion`. `index.css` collapses every animation and transition under that class; `shell.css` does the same for `.vx-shell` under either switch. Marquee text falls back to an ellipsis.
+- CSS cannot stop a scripted scroll. Every scripted scroll asks `frontend/src/utils/motion.ts` first: `reducedMotion()` is true for either switch, and `scrollBehavior()` returns `'auto'` or `'smooth'` accordingly. Pass `behavior: scrollBehavior()` to `scrollIntoView`, `scrollTo` and `scrollBy`; never hard-code `'smooth'`. The shelf arrows, synced lyrics and the tutorial runner already do.
 - `prefers-reduced-transparency` replaces glass surfaces with solid ones.
 - Moving parts follow the same switches: Now Playing's drifting backdrop and the snackbars' entry and exit stop under either one.
 

@@ -23,7 +23,7 @@ import { songKey } from './songIdentity';
  *              another surface this week goes to the back of the shelf. It is
  *              never removed, so a short personal shelf is never emptied.
  *   discovery  Trending, new releases, popular picks, fresh finds, hidden gems,
- *              mood, genre and AI-designed shelves. Songs heard in the last
+ *              mood and genre shelves. Songs heard in the last
  *              stretch or skipped this sitting are removed; songs shown on
  *              another surface this week go to the back.
  *   queue      The automatic queue (./engine.ts). Recently played, skipped this

@@ -9,8 +9,6 @@ import { KEYS } from '@/constants/storage-keys';
 import type { Song } from '@/types';
 
 vi.mock('@/services/native', async (importOriginal) => ({ ...(await importOriginal<object>()), isNativePlatform: () => false }));
-vi.mock('@/services/ai/recommendations', () => ({ requestCurator: async () => null }));
-vi.mock('@/services/ai/taste', () => ({ buildTasteSnapshot: () => ({}) }));
 
 import {
   BACKUP_CATEGORIES,
@@ -80,8 +78,6 @@ function seedDevice(): void {
   set(KEYS.onboarded, true);
   set(KEYS.alarm, { state: { enabled: true, time: '06:30', action: 'favorites', collectionId: null, fadeIn: true, lastFired: '' }, version: 0 });
   set('vinax.streak.v1', { count: 4, lastDay: '2026-09-15', best: 9 });
-  localStorage.setItem('vinax.aiReplyStyle', 'concise');
-  localStorage.setItem('vinax.ai.chatStyle', 'paper');
   // Things that must NOT travel:
   set(KEYS.signedDeviceId, 'abc.sig');
   set(KEYS.deviceId, 'uuid-1');
@@ -148,8 +144,6 @@ describe('round trip', () => {
     expect((get('vinax.search.workspace.v1') as { state: { presets: Array<{ name: string }> } }).state.presets[0].name).toBe('Telugu 90s');
     expect(get('vinax.home.design.v1')).toMatchObject({ hidden: ['charts'] });
     expect(get(KEYS.userName)).toBe('Vinay');
-    expect(localStorage.getItem('vinax.aiReplyStyle')).toBe('concise');
-    expect(localStorage.getItem('vinax.ai.chatStyle')).toBe('paper');
     expect(get('vinax.streak.v1')).toEqual({ count: 4, lastDay: '2026-09-15', best: 9 });
     // Identity is a claim, not a fact: the username is re-confirmed, not written.
     expect(get(KEYS.userHandle)).toBeNull();
@@ -486,7 +480,7 @@ describe('validated import keeps wrong types out', () => {
 });
 
 describe('merge mode for the categories that used to be replaced', () => {
-  it('extras: streak, offsets, karaoke, prompts, sidebar groups and the alarm', () => {
+  it('extras: streak, offsets, karaoke, sidebar groups and the alarm', () => {
     const json = fileWith({
       extras: {
         [KEYS.alarm]: { state: { enabled: false, time: '09:00', action: 'resume', collectionId: null, fadeIn: true, lastFired: '' }, version: 0 },
@@ -494,14 +488,11 @@ describe('merge mode for the categories that used to be replaced', () => {
         [KEYS.karaoke]: [{ song: song('k1'), at: 50 }, { song: song('k2'), at: 10 }],
         'vinax.streak.v1': { count: 2, lastDay: '2026-09-16', best: 30 },
         'vinax.nav.groups.v1': ['Explore', 'Library'],
-        'vinax.aiPrompts': [{ id: 'p1', title: 'One', text: 'one', createdAt: 1 }, { id: 'p2', title: 'Two', text: 'two', createdAt: 2 }],
-        'vinax.aiReplyStyle': 'detailed',
       },
     });
     set(KEYS.lyricsOffset, { state: { offsets: { s1: -3, s9: 1 } }, version: 0 });
     set(KEYS.karaoke, [{ song: song('k1'), at: 90 }, { song: song('k3'), at: 20 }]);
     set('vinax.nav.groups.v1', ['Library', 'You']);
-    set('vinax.aiPrompts', [{ id: 'p2', title: 'Two (mine)', text: 'two', createdAt: 5 }, { id: 'p3', title: 'Three', text: 'three', createdAt: 6 }]);
     expect(applyBackup(parseOk(json), { mode: 'merge', categories: ['extras'] }).ok).toBe(true);
     // The alarm on this device is kept as-is.
     expect((get(KEYS.alarm) as { state: { time: string; enabled: boolean } }).state).toMatchObject({ time: '06:30', enabled: true });
@@ -510,8 +501,6 @@ describe('merge mode for the categories that used to be replaced', () => {
     // Device streak (4, 2026-09-15, best 9) vs file (2, 2026-09-16, best 30): later day wins, best is the max.
     expect(get('vinax.streak.v1')).toEqual({ count: 2, lastDay: '2026-09-16', best: 30 });
     expect(get('vinax.nav.groups.v1')).toEqual(['Library', 'You', 'Explore']);
-    expect((get('vinax.aiPrompts') as Array<{ id: string; title: string }>).map((p) => [p.id, p.title])).toEqual([['p2', 'Two (mine)'], ['p3', 'Three'], ['p1', 'One']]);
-    expect(localStorage.getItem('vinax.aiReplyStyle')).toBe('detailed');
   });
 
   it('streak: an older file never rolls the device back, and lists are capped', () => {
@@ -548,10 +537,10 @@ describe('size caps', () => {
 
   it('a merge never trims what is already on this device', () => {
     set(KEYS.library, { state: { favorites: [], collections: [], saved: [], hiddenSongIds: [], later: [], hiddenArtists: Array.from({ length: 620 }, (_, i) => `artist ${i}`), trash: [] }, version: 0 });
-    set('vinax.aiPrompts', Array.from({ length: 58 }, (_, i) => ({ id: `d${i}`, title: `t${i}`, text: `text ${i}`, createdAt: i })));
+    set('vinax.nav.groups.v1', Array.from({ length: 58 }, (_, i) => `group ${i}`));
     const json = fileWith({
       library: { [KEYS.library]: { state: { favorites: [song('f9')], hiddenArtists: ['from file'] }, version: 0 } },
-      extras: { 'vinax.aiPrompts': [{ id: 'fromFile', title: 'f', text: 'from file', createdAt: 1 }] },
+      extras: { 'vinax.nav.groups.v1': ['from file'] },
     });
     applyBackup(parseOk(json), { mode: 'merge' });
     const lib = (get(KEYS.library) as { state: { favorites: Song[]; hiddenArtists: string[] } }).state;
@@ -559,10 +548,10 @@ describe('size caps', () => {
     // 620 never-play artists is over the import cap of 500 — every one of them stays.
     expect(lib.hiddenArtists).toHaveLength(620);
     expect(lib.hiddenArtists[619]).toBe('artist 619');
-    // 58 saved prompts on the device is over the import cap of 50 — all 58 stay.
-    const prompts = get('vinax.aiPrompts') as Array<{ id: string }>;
-    expect(prompts).toHaveLength(58);
-    expect(prompts.every((x) => x.id.startsWith('d'))).toBe(true);
+    // 58 sidebar groups on the device is over the import cap of 50 — all 58 stay.
+    const groups = get('vinax.nav.groups.v1') as string[];
+    expect(groups).toHaveLength(58);
+    expect(groups.every((x) => x.startsWith('group '))).toBe(true);
   });
 
   it('warns in the preview when a cap cut the file short', () => {

@@ -1,10 +1,10 @@
 # Search
 
-This page covers the Search destination: suggestions as you type, the results and their filters, sorting, searching by description, searching by lyrics, voice search, recent and trending searches, and the shortcut grid on Discover for when you would rather browse.
+This page covers the Search destination: suggestions as you type, the results and their filters, sorting, searching by lyrics, voice search, recent and trending searches, and the shortcut grid on Discover for when you would rather browse.
 
 ## Find a song
 
-Search is one of the five main destinations: Home, Discover, **Search**, Library and VinaX AI. The search field is on the Search page.
+Search is one of the four main destinations: Home, Discover, **Search** and Library. The search field is on the Search page.
 
 1. Open **Search** and type a song, an artist, a film or a mood.
 2. Suggestions open under the field. Tap a song to play it straight away, or tap an artist or album to open it.
@@ -21,13 +21,7 @@ The results open with a **Top result** card, then **Songs**, **Artists**, **Albu
 - **Play all** plays the songs you are looking at. **Queue all** adds them to the queue.
 - If a search finds no songs, VinaX may offer **Did you mean …?** with a close match. Tap it to search that instead.
 
-Songs in your pinned languages are placed a little higher. Tapping a song starts it, and the DJ builds what follows, as anywhere else in the app. See [The player and the queue](player-and-queue.md).
-
-## Search by description
-
-Describe what you want to hear, such as "sad telugu songs for rain" or "90s hindi dance". When your search has three or more words and names a mood, an activity or a decade, the results open with **Songs that match**. **Play all** plays them. **Artists that fit** and **Playlists that fit** follow when there are any.
-
-**Ask AI instead** hands your words to VinaX AI's music expert and shows its answer as **Expert picks**. For a longer conversation about music, see [VinaX AI](vinax-ai.md).
+Songs in your pinned languages are placed a little higher. Tapping a song starts it, and VinaX builds what follows, as anywhere else in the app. See [The player and the queue](player-and-queue.md).
 
 ## Search by lyrics
 
@@ -69,7 +63,7 @@ Open **Discover** when you do not have a song in mind. It starts with a shortcut
 | Videos | Music videos |
 | Made for you | Mixes from your listening |
 | Your week | Your weekly mix |
-| AI playlist | Describe a moment and get a playlist |
+| Podcasts | Shows and conversations |
 
 Further down, **Any mood, your language** lets you pick a language and then a mood.
 

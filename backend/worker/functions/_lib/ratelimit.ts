@@ -1,5 +1,5 @@
 /**
- * Rate limiting for the unauthenticated AI + feedback + telemetry endpoints
+ * Rate limiting for the unauthenticated feedback, telemetry and catalogue endpoints
  * (DQA-05/16, security H-SRV-11). Two layers:
  *
  * 1. `rateLimit()` — a per-isolate token bucket in module memory (sync). It

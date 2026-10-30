@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canonKey } from '../functions/api/dj';
+import { canonicalKey as canonKey } from '../functions/_lib/identityCore';
 
 /**
  * Review probe 3 (2026-09-19): the Worker's canonical identity stripped

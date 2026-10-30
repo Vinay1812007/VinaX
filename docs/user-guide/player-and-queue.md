@@ -1,6 +1,6 @@
 # The player and the queue
 
-This page covers what happens after you tap a song: the mini player and Now Playing, how the DJ builds what comes next, AI Radio, the Smart Queue switch, queueing songs yourself, the Queue page, Tune this queue, Pin a mood, and the player's other tools (sleep timer, speed, looping a passage, marks, resume, history). For the recommendation settings see [Discovery modes](discovery-modes.md).
+This page covers what happens after you tap a song: the mini player and Now Playing, how VinaX builds what comes next, Radio, the Smart Queue switch, queueing songs yourself, the Queue page, Tune this queue, Pin a mood, and the player's other tools (sleep timer, speed, looping a passage, marks, resume, history). For the recommendation settings see [Discovery modes](discovery-modes.md).
 
 ## The mini player and Now Playing
 
@@ -8,12 +8,12 @@ When a song is playing, a mini player stays on screen with play or pause, previo
 
 The mini player and Now Playing look different in each app style. In one style the mini player is a solid bar, in another a rounded capsule, in another a full-width bar with the progress line along its top edge, and the Now Playing backdrop changes too. The controls and their labels are the same in every style. See [App styles](app-styles.md).
 
-## Tap a song: the DJ builds what follows
+## Tap a song: VinaX builds what follows
 
-Tap any song, in a shelf, an album, a playlist or search results. With the default settings the song starts and the DJ adds the next five songs to follow it. As the queue runs low, the DJ adds five more.
+Tap any song, in a shelf, an album, a playlist or search results. With the default settings the song starts and VinaX adds the next five songs to follow it, on your device. As the queue runs low, VinaX adds five more.
 
 - To see why a song was picked: open its menu → **Why this song?**
-- To make playback follow the list you tapped, in order: turn off **Settings → Recommendations → AI → DJ builds every queue**, or turn off **Smart Queue** on the Queue page.
+- To make playback follow the list you tapped, in order: turn off **Settings → Recommendations → Smart Queue → Build every queue**, or turn off **Smart Queue** on the Queue page.
 - To choose which languages a queue may use: **Settings → Recommendations → Languages → Queue languages**. See [Discovery modes](discovery-modes.md).
 
 ## Queue a song yourself
@@ -24,19 +24,19 @@ Open a song's menu with the ⋯ button on the song. With a mouse, a right-click 
 - To add a song to the queue: open its menu → **Add to queue**.
 - On a touch screen, swipe a song row to the right to add it to the queue. Swipe left to save it to Listen Later.
 
-Songs you add yourself stay in the queue when the DJ rebuilds its own picks.
+Songs you add yourself stay in the queue when VinaX rebuilds its own picks.
 
-## AI Radio
+## Radio
 
-AI Radio plays endless music from one starting point. Open it from **AI Radio** on Home, or from **Start AI Radio** on an empty Queue page.
+Radio plays endless music from one starting point. Open it from **Radio** on Home, or from **Start radio** on an empty Queue page.
 
 | Start from | What you do |
 |---|---|
-| A description | Type a few words in the field at the top, or use one of the examples. |
 | **Pick a mood** | Tap Melody, Romantic, Dance, Chill, Sad, Devotional, DJ remix, Folk, Beats, Classics or New. |
+| **Stations** | Tap one of the stations for your languages. |
 | **From a song or artist** | Tap one of the songs or artists listed. |
 
-Every song menu also has **Start AI Radio**: that song starts and the DJ keeps adding songs that follow from it. An artist page has the same item in its menu.
+Every song menu also has **Start radio**: that song starts and VinaX keeps adding songs that follow from it. An artist page has the same item in its menu.
 
 ## The Queue page
 
@@ -55,7 +55,7 @@ The page has up to three groups: **Now playing**, **Your songs** (what you added
 | The handle on a row | Drag to reorder. With a keyboard, focus the handle and press `↑` or `↓`. |
 | ⋯ on a row | **Keep this song**, **Move up**, **Move down**, **Clear from here down**, **Remove from queue**. |
 | **Keep this song** | Turns a VinaX pick into one of your songs, so a rebuild leaves it alone. |
-| **Refresh up next** | Asks the DJ for a fresh set. Songs you added stay. |
+| **Refresh up next** | Builds a fresh set. Songs you added stay. |
 | Sort chips | Reorder the upcoming songs: **Energy**, **Calm first**, **Newest**, **Classics**, **Mood arc**. |
 | **Save as playlist** | Saves the queue as a playlist you keep. |
 | **Build a queue** | Plans a longer session for you to review and add. |
@@ -66,7 +66,7 @@ If you remove a song by mistake, tap **Undo** in the message that appears.
 
 **Smart Queue** is a switch on the Queue page. The line next to it says what it is doing:
 
-- On: "The next song you start leads, and the DJ builds the rest."
+- On: "VinaX builds what plays next around each song you start and keeps the music going. Songs you add always play first."
 - Off: "Your songs play in the order you chose."
 
 **More in Settings** opens the full recommendation settings.

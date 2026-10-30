@@ -286,12 +286,6 @@ export interface RecommendationContext {
    * earn a bonus. Each is already matched to a catalogue id by the server.
    */
   trendItems?: readonly { catalogId: string; title: string; artist: string; language: string | null; sourceLabel: string; sourceRank: number }[];
-  /**
-   * 8.2.0 — a learned song embedding the device already holds (synchronous,
-   * never fetches), for the taste term's optional refinement. Absent = the
-   * on-device taste vector alone.
-   */
-  embeddingOf?: (songId: string) => Float32Array | null;
   /** 8.2.0 — canonical keys other surfaces showed recently (songIdentity's served memory): a small penalty, never a rule. */
   servedKeys?: ReadonlySet<string>;
   /**

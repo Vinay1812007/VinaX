@@ -11,9 +11,7 @@ import { getSessionIntent } from '@/services/personalization/sessionIntent';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
 import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import { useReasonStore } from '@/store/reasonStore';
-import { useSettingsStore } from '@/store/settingsStore';
 import { useDownloadsStore } from '@/store/downloadsStore';
-import { queryClient } from '@/services/queryClient';
 import { kidModeOn } from '@/services/kidMode';
 import { peekAnchor, readAnchor, type Anchor } from './anchor';
 
@@ -63,10 +61,7 @@ import { planLookups, runLookups, type CatalogueApi, type Fetched } from './sour
  *    and then for at most four seconds. When nothing is left, the rules
  *    loosen step by step (spacing, then the listener's other languages,
  *    then shorter cooldowns) rather than leaving the player paused.
- *
- * The AI DJ may still re-order a stretch, but only in the background and
- * only through the same rules: it can never bring back a repeat or a song in
- * another language.
+
  */
 
 export const NEXTUP_VERSION = '2.0.0';
@@ -121,13 +116,6 @@ export function resetNextUp(): void {
 }
 export function poolSize(): number {
   return pool?.items.size ?? 0;
-}
-
-function aiDjEnabled(): boolean {
-  const settings = useSettingsStore.getState();
-  if (!settings.aiAssist || !settings.aiDj) return false;
-  const flags = queryClient.getQueryData<Record<string, boolean>>(['feature-flags']);
-  return flags?.aiDj !== false;
 }
 
 function poolFor(anchor: Anchor, now: number): { pool: Pool; moved: boolean } {
@@ -428,7 +416,7 @@ function whyLine(c: Candidate | undefined): string | null {
 /**
  * Plan the next stretch of the queue. Same contract as the 7.2 plan: the
  * songs now, side effects only on `commit`, a `topUp` from the same pool,
- * and an optional AI refinement in the background.
+ * all decided on the device.
  */
 export async function planNextSongs(seed: Song, ctx: RecommendationContext, options: NextRecommendationOptions & { before?: Song[] } = {}): Promise<NextSongsPlan> {
   const t0 = Date.now();
@@ -438,7 +426,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   const anchor = readAnchor(seed, t0, ctx.history?.[0]?.ts ?? 0);
   const env = buildEnv(seed, ctx, anchor, options, t0);
   const language = env.languages[0] ?? null;
-  const empty = (fallback: FallbackReason | null): NextSongsPlan => ({ songs: [], picker: 'local', fallback, latencyMs: Date.now() - t0, alg, relaxed: [], discoveryIds: new Set(), language, commit: () => undefined, topUp: () => [], refinement: null });
+  const empty = (fallback: FallbackReason | null): NextSongsPlan => ({ songs: [], picker: 'local', fallback, latencyMs: Date.now() - t0, alg, relaxed: [], discoveryIds: new Set(), language, commit: () => undefined, topUp: () => [] });
   if (!limit || signal?.aborted) return empty(null);
 
   const { pool: p, moved } = poolFor(anchor, t0);
@@ -542,40 +530,8 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     return picked;
   };
   const discoveryIds = new Set(songs.filter((s) => !env.likedLeads.has(leadOf(s)) && !env.score.tasteLeads.has(leadOf(s))).map((s) => s.id));
-  const plan: NextSongsPlan = { songs, picker: 'local', fallback, latencyMs: Date.now() - t0, alg, relaxed, discoveryIds, language, commit, topUp, refinement: null };
+  const plan: NextSongsPlan = { songs, picker: 'local', fallback, latencyMs: Date.now() - t0, alg, relaxed, discoveryIds, language, commit, topUp };
 
-  // The AI DJ may re-order the stretch — in the background, through the same rules.
-  if (songs.length >= 3 && aiDjEnabled() && !signal?.aborted) {
-    plan.refinement = (async (): Promise<NextSongsPlan | { rejected: FallbackReason }> => {
-      const dj = await import('@/services/ai/dj');
-      const filter = filterFor(env, queued);
-      const candidates = rank(p, env, filter).slice(0, 30).map((c) => c.song);
-      const gate = { language: null, admit: (s: Song) => rejectReason(s, filter) === null };
-      const set = await dj.djSequence(seed, ctx, candidates, limit, signal, { discover: true, gate, shape: 'steady' });
-      if (!set || set.picks.length < 3) {
-        const outcome = typeof dj.lastDjOutcome === 'function' ? dj.lastDjOutcome() : 'unavailable';
-        return { rejected: outcome === 'timeout' ? 'ai_timeout' : outcome === 'empty' ? 'ai_rejected' : outcome === 'error' ? 'error' : 'ai_unavailable' };
-      }
-      const allowed = set.picks.map((x) => x.song).filter((s) => rejectReason(s, filter) === null);
-      for (const s of allowed) addToPool(p, [s], 'anchor', undefined, Date.now());
-      const ordered = pickSequence(allowed, before, limit, songKey).songs;
-      if (ordered.length < 3) return { rejected: 'ai_rejected' };
-      const djSet = set;
-      return {
-        ...plan,
-        songs: ordered,
-        picker: 'ai',
-        fallback: null,
-        latencyMs: Date.now() - t0,
-        relaxed: [],
-        commit: (accepted) => {
-          if (typeof dj.commitDjSet === 'function') dj.commitDjSet(djSet, accepted);
-          commit(accepted);
-        },
-        refinement: null,
-      };
-    })().catch((): { rejected: FallbackReason } => ({ rejected: 'error' }));
-  }
   return plan;
 }
 

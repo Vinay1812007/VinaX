@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy } from 'react';
 import { SiteGate } from '@/components/SiteGate';
 import { AuthGate } from '@/components/AuthGate';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
@@ -58,7 +58,6 @@ const PodcastPage = lazy(() => import('@/pages/PodcastPage'));
 const DownloadPage = lazy(() => import('@/pages/DownloadPage'));
 const DriveModePage = lazy(() => import('@/pages/DriveModePage'));
 const MadeForYouPage = lazy(() => import('@/pages/MadeForYouPage'));
-const AIPlaylistPage = lazy(() => import('@/pages/AIPlaylistPage'));
 const WeeklyMixPage = lazy(() => import('@/pages/WeeklyMixPage'));
 const MixesPage = lazy(() => import('@/pages/MixesPage'));
 const SearchPage = lazy(() => import('@/pages/SearchPage'));
@@ -91,7 +90,6 @@ const RecapPage = lazy(() => import('@/pages/RecapPage'));
 const RecapStoryPage = lazy(() => import('@/pages/RecapStoryPage'));
 const ProfilePage = lazy(() => import('@/pages/ProfilePage'));
 const SharedPlaylistPage = lazy(() => import('@/pages/SharedPlaylistPage'));
-const SharedChatPage = lazy(() => import('@/pages/SharedChatPage'));
 const OfflinePage = lazy(() => import('@/pages/OfflinePage'));
 const ListenTogetherPage = lazy(() => import('@/pages/ListenTogetherPage'));
 const CollectionPage = lazy(() => import('@/pages/CollectionPage'));
@@ -103,29 +101,17 @@ const TermsPage = lazy(() => import('@/pages/TermsPage'));
 const ContactPage = lazy(() => import('@/pages/ContactPage'));
 const DmcaPage = lazy(() => import('@/pages/DmcaPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
-const VinaXAIPage = lazy(() => import('@/pages/VinaXAIPage'));
 // v5.7.9 — music videos: browse + cinematic player.
 const VideosPage = lazy(() => import('@/pages/VideosPage'));
 const VideoPage = lazy(() => import('@/pages/VideoPage'));
-// 8.2.0 — AI Radio: endless radio from a song, an artist, a mood or a few words.
-const AiRadioPage = lazy(() => import('@/pages/AiRadioPage'));
+// 8.2.0 — Radio: endless music from a song, an artist, a mood or a station.
+const RadioPage = lazy(() => import('@/pages/RadioPage'));
 // 10.1 — Flow: a full-screen, swipeable feed of song previews.
 const FlowPage = lazy(() => import('@/pages/FlowPage'));
 
 export const router = createBrowserRouter([
-  {
-    path: '/VinaXAI',
-    element: (
-      <SiteGate>
-      <AuthGate>
-      <Suspense fallback={<div className="h-[100dvh] grid place-items-center bg-ink-950 text-ink-300">Loading VinaX AI…</div>}>
-        <VinaXAIPage />
-      </Suspense>
-            </AuthGate>
-      </SiteGate>
-    ),
-    errorElement: <RouteError />,
-  },
+  // 1.3 — the retired chat page: an old link or app shortcut lands on Home.
+  { path: '/VinaXAI', element: <Navigate to="/" replace /> },
   {
     path: '/',
     element: (
@@ -145,7 +131,7 @@ export const router = createBrowserRouter([
       { path: 'trending', element: <ChartLandingPage variant="trending" /> },
       { path: 'most-searched', element: <ChartLandingPage variant="most-searched" /> },
       { path: 'made-for-you', element: <MadeForYouPage /> },
-      { path: 'ai-playlist', element: <AIPlaylistPage /> },
+      { path: 'ai-playlist', element: <Navigate to="/" replace /> },
       { path: 'weekly', element: <WeeklyMixPage /> },
       { path: 'mixes', element: <MixesPage /> },
       { path: 'search', element: <SearchPage /> },
@@ -160,7 +146,7 @@ export const router = createBrowserRouter([
       { path: 'later', element: <ListenLaterPage /> },
       { path: 'history', element: <HistoryPage /> },
       { path: 'queue', element: <QueuePage /> },
-      { path: 'radio', element: <AiRadioPage /> },
+      { path: 'radio', element: <RadioPage /> },
       { path: 'flow', element: <FlowPage /> },
       { path: 'now-playing', element: <NowPlayingPage /> },
       { path: 'languages', element: <LanguagesPage /> },
@@ -193,7 +179,6 @@ export const router = createBrowserRouter([
       { path: 'recap/story', element: <RecapStoryPage /> },
       { path: 'u/:handle', element: <ProfilePage /> },
       { path: 'p/:id', element: <SharedPlaylistPage /> },
-      { path: 'ai/shared/:id', element: <SharedChatPage /> },
       { path: 'offline', element: <OfflinePage /> },
       { path: 'together', element: <ListenTogetherPage /> },
       { path: 'collection/:id', element: <CollectionPage /> },

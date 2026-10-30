@@ -11,10 +11,7 @@ import { makeContext, makePlay, makeSong, warmProfile } from '@/__fixtures__/son
  * be built when the AI is off, down, slow or talking nonsense.
  */
 let pool: Candidate[] = [];
-const djSequence = vi.fn();
 vi.mock('./candidates', () => ({ gatherCandidates: vi.fn(async () => pool), generateNextCandidates: vi.fn(async () => pool) }));
-vi.mock('@/services/ai/recommendations', () => ({ enrichSongs: vi.fn(async (songs: Song[]) => songs), aiRerankSongs: vi.fn(async (songs: Song[]) => songs) }));
-vi.mock('@/services/ai/dj', () => ({ djSequence: (...args: unknown[]) => djSequence(...args), samplePool: (songs: Song[]) => songs, commitDjSet: vi.fn(), lastDjOutcome: () => 'ok' }));
 vi.mock('@/services/queryClient', () => ({ queryClient: { getQueryData: () => undefined } }));
 
 import { recommendNextSongs } from './engine';
@@ -36,13 +33,12 @@ beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
   resetTransitionMemory();
-  djSequence.mockReset();
-  useSettingsStore.setState({ aiDj: false, kidMode: false, mutedLanguages: [] });
+  useSettingsStore.setState({ kidMode: false, mutedLanguages: [] });
   useLibraryStore.setState({ hiddenSongIds: [], hiddenArtists: [] });
   useRecsDebugStore.getState().clear();
 });
 
-describe('recommendNextSongs — rules hold with the AI off', () => {
+describe('recommendNextSongs — the rules hold', () => {
   it('keeps the queue in the seed language, drops muted languages and never repeats the seed or a version of it', async () => {
     pool = [
       ...telugu(10),
@@ -155,64 +151,5 @@ describe('recommendNextSongs — 8.1.0 queue languages', () => {
     pool = mixedPool();
     const out = await recommendNextSongs(seed, ctx({ queueLanguages: 'mix', pinnedLanguages: ['telugu'], profile: { ...warmProfile(NOW), languages: {} } }), { limit: 6 });
     expect(out.every((s) => s.language === 'telugu')).toBe(true);
-  });
-});
-
-describe('recommendNextSongs — the AI DJ is optional and never trusted', () => {
-  beforeEach(() => useSettingsStore.setState({ aiDj: true }));
-
-  it('ships the local order when the DJ is unavailable, slow or fails', async () => {
-    pool = telugu(12);
-    useSettingsStore.setState({ aiDj: false });
-    const local = await recommendNextSongs(seed, ctx(), { limit: 8 });
-    useSettingsStore.setState({ aiDj: true });
-    // Each call starts without the memories the previous one left (the per-seed
-    // opening, 8.2.0, and the exposure ledger, 9.1.0), so only the DJ differs.
-    resetRecMemory();
-    resetExposure();
-    djSequence.mockResolvedValueOnce(null); // timed out / 503 / unconfigured all surface as null
-    expect((await recommendNextSongs(seed, ctx(), { limit: 8 })).map((s) => s.id)).toEqual(local.map((s) => s.id));
-    resetRecMemory();
-    resetExposure();
-    djSequence.mockResolvedValueOnce({ intro: '', picks: [] }); // an answer with nothing usable in it
-    expect((await recommendNextSongs(seed, ctx(), { limit: 8 })).map((s) => s.id)).toEqual(local.map((s) => s.id));
-  });
-
-  it('runs whatever the DJ returns through validation: muted, off-language, duplicate and already-queued picks never play', async () => {
-    const te = telugu(12);
-    pool = te;
-    const pick = (song: Song, discovered = false) => ({ song, reason: 'r', segue: '', confidence: 0.9, discovered });
-    djSequence.mockResolvedValueOnce({
-      intro: 'hi',
-      picks: [
-        pick(makeSong('dj-muted', { artist: 'M', language: 'punjabi' }), true),
-        pick(makeSong('dj-hindi', { artist: 'H', language: 'hindi' }), true),
-        pick(makeSong('dj-queued', { artist: 'Q' }), true),
-        pick(te[0].song),
-        pick(makeSong('te0-remix', { title: `${te[0].song.title} (Remix)`, artist: lead(te[0].song) }), true),
-        pick(te[1].song),
-        pick(te[2].song),
-      ],
-    });
-    const out = await recommendNextSongs(seed, ctx({ mutedLanguages: ['punjabi'] }), { limit: 8, excludeIds: ['dj-queued'] });
-    const idsOut = out.map((s) => s.id);
-    for (const bad of ['dj-muted', 'dj-hindi', 'dj-queued', 'te0-remix']) expect(idsOut).not.toContain(bad);
-    // The DJ's usable picks lead, in its order — proof its answer was accepted, then cleaned.
-    expect(idsOut.slice(0, 3)).toEqual(['te0', 'te1', 'te2']);
-    expect(out.every((s) => s.language === 'telugu')).toBe(true);
-    expect(out).toHaveLength(8);
-  });
-
-  it('gives the DJ a gate that applies the same rules to its catalogue discoveries', async () => {
-    pool = telugu(12);
-    djSequence.mockResolvedValueOnce(null);
-    await recommendNextSongs(seed, ctx({ mutedLanguages: ['punjabi'] }), { limit: 8, excludeIds: ['already'] });
-    const hints = djSequence.mock.calls[0][5] as { gate: { language: string | null; admit: (s: Song) => boolean } };
-    expect(hints.gate.language).toBe('telugu');
-    expect(hints.gate.admit(makeSong('fresh', { artist: 'F' }))).toBe(true);
-    expect(hints.gate.admit(makeSong('already', { artist: 'F' }))).toBe(false);
-    expect(hints.gate.admit(makeSong('m', { artist: 'F', language: 'punjabi' }))).toBe(false);
-    expect(hints.gate.admit(makeSong('j', { title: 'Film Jukebox', artist: 'F' }))).toBe(false);
-    expect(hints.gate.admit(seed)).toBe(false);
   });
 });

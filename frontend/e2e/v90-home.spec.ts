@@ -28,7 +28,7 @@ async function seed(page: Page, baseURL: string): Promise<{ curate: string[]; se
   const entries = stored.slice(0, 8).map((song, i) => ({ song, ts: Date.now() - i * 3_600_000, completed: true }));
   await page.addInitScript(
     ({ stored, entries, fp }) => {
-      localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'], festivalSkins: false, aiHomeShelves: true }, version: 3 }));
+      localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'], festivalSkins: false }, version: 3 }));
       localStorage.setItem('vinax.library.v1', JSON.stringify({ state: { favorites: stored.slice(0, 3), saved: [], collections: [], hiddenSongIds: [], later: [], hiddenArtists: [], trash: [] }, version: 0 }));
       localStorage.setItem('vinax.history.v1', JSON.stringify({ state: { entries }, version: 0 }));
       localStorage.setItem('vinax.onboarded.v1', 'true');

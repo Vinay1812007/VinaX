@@ -1,29 +1,28 @@
 # VinaX
 
-VinaX is a free music app with no sign-up. It plays from a public catalogue, learns a listener's taste on their own device, and builds what plays next from that. It ships as a web app and an Android app from one codebase, backed by one edge Worker, and includes VinaX AI, a chat assistant that can play music, search the web and cite its sources. The version number moves with every merge to `main` (`frontend/src/constants/version.ts` is the source of truth). The current line is **VinaX V2**, which restarted at 1.0.0 after 15.0.1; listeners see "VinaX V2 1.0" (major and minor). This README covers what a listener gets, how the code is put together, how to run and check it, how a release is made, and where the rest of the documentation is.
+VinaX is a free music app with no sign-up. It plays from a public catalogue, learns a listener's taste on their own device, and builds what plays next from that. It ships as a web app and an Android app from one codebase, backed by one edge Worker. VinaX uses no AI: recommendations, Radio and Up Next are worked out on the listener's device. The version number moves with every merge to `main` (`frontend/src/constants/version.ts` is the source of truth). The current line is **VinaX V2**, which restarted at 1.0.0 after 15.0.1; listeners see "VinaX V2 1.0" (major and minor). This README covers what a listener gets, how the code is put together, how to run and check it, how a release is made, and where the rest of the documentation is.
 
 [Documentation index](docs/README.md) · [User guide](docs/user-guide/README.md) · [Deployment](DEPLOYMENT.md) · [Operations](docs/operations.md) · [Database](docs/database.md)
 
 ## What a listener gets
 
-- **Sign in with Google.** One tap; the Google photo is the profile picture, and the library, playlists, history, taste and settings follow the account to every device. There is no password or payment. Home, Discover, Search, Library and VinaX AI are the five destinations. Search suggests as you type; Discover has charts, languages, moods, regions and films. On the website, Explore, Discover, Charts, Search and every song, album and artist page can be browsed before signing in; play, like and save ask for the account right there (13.9).
-- **A queue that builds itself.** Tap a song and the queue fills five songs at a time. AI Radio plays endlessly from a song, an artist, a mood or a few words. Pin a mood or Tune this queue rebuilds Up Next at once; Familiar, Balanced and Discover set how adventurous the picks are.
+- **Sign in with Google.** One tap; the Google photo is the profile picture, and the library, playlists, history, taste and settings follow the account to every device. There is no password or payment. Home, Discover, Search and Library are the four destinations. Search suggests as you type; Discover has charts, languages, moods, regions and films. On the website, Explore, Discover, Charts, Search and every song, album and artist page can be browsed before signing in; play, like and save ask for the account right there (13.9).
+- **A queue that builds itself.** Tap a song and the queue fills five songs at a time. Radio plays endlessly from a song, an artist, a mood or a station. Pin a mood or Tune this queue rebuilds Up Next at once; Familiar, Balanced and Discover set how adventurous the picks are.
 - **A full player.** Reorderable queue, synced lyrics where available, sleep timer, crossfade, sound settings, lock-screen and headset controls, casting, drive mode and karaoke. A video canvas plays the song's clip behind the player, with a full-screen view (double-tap to like, a quality chip that plays the best rendition the source has). Flow is a full-screen feed of song previews.
 - **A library on the device.** Favourites, playlists, Listen Later, smart collections, history and listening stats. One-file backup with preview, merge or replace, and Undo; an encrypted one-time link moves everything to another device.
-- **VinaX AI.** A chat that knows a summary of the listener's taste and can play or queue the songs it mentions.
   - **Models.** Auto picks a model for each question and moves on by itself when one is busy, or the listener picks any free model from the providers configured for the deployment, listed under its real name. The chat restyles itself to match the selected model's family, or stays on one of its own styles.
   - **Web search with sources.** When a question needs current information, it searches the web, shows what it is searching for, and links each fact to a source chip that shows the site's logo. Answers that use the web can show pictures from the search.
   - **Deep research.** A switch in the + menu: it plans several searches, runs them together and writes a longer report with every fact linked to its source.
   - **Visible reasoning.** When a model thinks before answering, its reasoning shows while it works, then folds away as "Thought for Ns".
   - Also: attachments (pictures, text and code files, PDF, and since 15.0 Word, Excel, PowerPoint and EPUB), dictation, live voice and read-aloud, image creation, running code, projects, an opt-in memory, temporary chats, short automatic chat titles and instant replies to small talk.
-- **Friends and sharing (15.0).** An opt-in public profile at `/u/<handle>` (top artists, languages, recent likes, what is playing when shared); follow listeners and see "Friends are listening" on Home; Blend a mix from your likes and a friend's; share a playlist as a public page or an invite link that lets friends add songs; Listen Together rooms with names, a chat, vote-to-skip and "save this session"; share a VinaX AI chat as a read-only link.
+- **Friends and sharing (15.0).** An opt-in public profile at `/u/<handle>` (top artists, languages, recent likes, what is playing when shared); follow listeners and see "Friends are listening" on Home; Blend a mix from your likes and a friend's; share a playlist as a public page or an invite link that lets friends add songs; Listen Together rooms with names, a chat, vote-to-skip and "save this session".
 - **New every day (15.0).** Discover 5 (five unheard songs a day, keep or skip), "Songs like this" with a reason on every pick, release alerts for saved artists, weekly goals with streaks, a Wrapped-style story of the year, focus sounds (rain, wind, noise) with a timer, Auto EQ that follows the song, drive-mode voice commands, playlist import from CSV/M3U files, and on Android smart downloads that keep the Weekly Mix offline on Wi-Fi.
 - **Looks.** Six app styles (Lumen is the default; each is modelled on the design language of a music app listeners already know, in VinaX's own names and colours — see [docs/app-styles.md](docs/app-styles.md)), each with dark, light and true-black themes and every accent. On a festival's days the app takes that festival's colours and backdrop and offers a greeting card once; any of the 43 festival skins can be previewed in Settings → Appearance.
 - **Comfort.** Keyboard shortcuts, reduced motion, high contrast, display size, Kid mode, app language and guided tours.
 - **Android app.** The same app with background playback, notification and lock-screen controls, home-screen widgets, offline downloads, push notifications and in-app updates.
-- **Device-first data.** Library, history, settings, the taste profile and AI chats stay on the device. A service worker keeps the app shell and downloaded songs available offline. Anonymous usage statistics (which song is playing, city-level location, no account) are shared by default and can be switched off in Settings; third-party session insights are off unless turned on.
+- **Device-first data.** Library, history, settings and the taste profile stay on the device. A service worker keeps the app shell and downloaded songs available offline. Anonymous usage statistics (which song is playing, city-level location, no account) are shared by default and can be switched off in Settings; third-party session insights are off unless turned on.
 
-The website shows one labelled advertisement at the end of song, artist, album, language and mood pages, and nowhere else; none in the Android app or in Kid mode. Music and AI results depend on the catalogue and on the AI providers configured for the deployment. When AI is slow, switched off or not configured, the features that use it fall back to an on-device path.
+The website shows one labelled advertisement at the end of song, artist, album, language and mood pages, and nowhere else; none in the Android app or in Kid mode. Music depends on the catalogue.
 
 ## Architecture
 
@@ -38,7 +37,7 @@ The website shows one labelled advertisement at the end of song, artist, album, 
                          │ same origin (/api, /img, /apk)
  ┌───────────────────────▼───────────────────────┐
  │ backend/worker  edge Worker "vinax-api"       │
- │  /api/*: catalogue proxy, AI, sign-in and     │
+ │  /api/*: catalogue proxy, sign-in and         │
  │          sync, usage events, rooms, push,     │
  │          status, the owner console's API      │
  │  language-and-mood pages, /sitemap*, /img,    │
@@ -61,7 +60,7 @@ Since 14.0 the Worker has one hosted database, designed from a clean sheet: the 
 | Piece | What it is | How it deploys |
 | --- | --- | --- |
 | Static frontend | `frontend/` built to `dist/`: a single-page app in which every page is a lazy chunk, plus the prerendered static routes, the owner console (`/admin/`) and the status page (`/status/`) | The static host's Git integration builds `frontend/` on every push to `main`. No workflow in this repository deploys it. |
-| Worker `vinax-api` | `backend/worker/`: one Worker, no framework. It answers only the routes listed in `backend/worker/wrangler.toml`; everything else falls through to the static site. It also has a key-value store for device-transfer links, rate-limit bindings, a built-in AI binding and a Cron Trigger. | The **Deploy Worker** workflow on a push to `main` that touches `backend/**`. |
+| Worker `vinax-api` | `backend/worker/`: one Worker, no framework. It answers only the routes listed in `backend/worker/wrangler.toml`; everything else falls through to the static site. It also has a key-value store for device-transfer links, rate-limit bindings and a Cron Trigger. | The **Deploy Worker** workflow on a push to `main` that touches `backend/**`. |
 | Database | One hosted project; the schema is `backend/supabase/schema.sql` (tables, the `directory` view, the `stats_*` functions, deny-all row-level security). The Worker is its only client. | Paste `schema.sql` into the project's SQL editor once (it is idempotent); set the two Worker secrets ([docs/database.md](docs/database.md#setting-it-up)). |
 | Android package | The same bundle in a generated wrapper project with a native media service | **Build Android APK**, dispatched by **Auto release** on every merge to `main`; **Release APK** on a `v*` tag. |
 
@@ -77,11 +76,11 @@ frontend/
   src/layouts/AppLayout.tsx   the frame: sidebar, top bar, dock, player, overlays
   src/pages/                  routed pages
   src/components/             shared UI
-  src/features/               feature folders (ai, home, search, player, together, settings, festival, …)
+  src/features/               feature folders (home, search, player, radio, together, settings, festival, …)
   src/store/                  state stores (player, settings, library, history, …)
-  src/services/               recommendation, personalization, ai, api, audio, media-session, push, storage, …
+  src/services/               recommendation, personalization, api, audio, media-session, push, storage, …
   src/constants/              app styles, festivals, version.ts, changelog.ts (the What's New card)
-  src/styles/                 tokens (index.css), frame (shell.css), templates/, pages/, festivals.css, ai-styles.css
+  src/styles/                 tokens (index.css), frame (shell.css), templates/, pages/, festivals.css
   public/                     sw.js (service worker), admin/ (owner console), status/ (status page), _headers, _redirects
   scripts/                    prerender, changelog.json, bundle budget, CSP hashes, browser smoke test, edge integrity, Android patch, festivals, evaluation
   e2e/                        browser test specs and their harness
@@ -89,8 +88,8 @@ frontend/
   native-android/, android-res/   native code and resources copied into the generated Android project
 backend/
   worker/index.ts             the router and the scheduled handler
-  worker/functions/api/       public, AI (ai/), auth (auth/), account, push, cron and admin (admin/) endpoints
-  worker/functions/_lib/      shared code: the database client (db.ts) and its companions, AI lanes, catalogue, admin auth, rate limits, web search
+  worker/functions/api/       public, auth (auth/), account, push, cron and admin (admin/) endpoints
+  worker/functions/_lib/      shared code: the database client (db.ts) and its companions, catalogue, admin auth, rate limits
   worker/__tests__/           Worker tests
   worker/wrangler.toml        Worker name, routes, vars, bindings, the Cron Trigger
   supabase/schema.sql         the whole database: tables, view, functions, security (idempotent)
@@ -123,7 +122,7 @@ npm run dev
 
 Open `http://localhost:5173`. The dev server proxies `/api`, `/img` and `/apk` to the Worker on `127.0.0.1:8787` (`frontend/vite.config.ts`).
 
-Secrets are optional for a first run. Without them the catalogue works, AI routes answer "not configured" and the app uses its on-device paths, and the owner console cannot sign in. Without the two database secrets the data features answer their "not configured" shapes (no sync, no rooms, no feedback, no push registration) and every console page that reads data shows its setup card. Local secrets go in `backend/worker/.dev.vars`, one `NAME=value` per line; the file is git-ignored. The names are documented in `backend/.env.example`. Never put a secret in a `VITE_*` variable.
+Secrets are optional for a first run. Without them the catalogue works and the owner console cannot sign in. Without the two database secrets the data features answer their "not configured" shapes (no sync, no rooms, no feedback, no push registration) and every console page that reads data shows its setup card. Local secrets go in `backend/worker/.dev.vars`, one `NAME=value` per line; the file is git-ignored. The names are documented in `backend/.env.example`. Never put a secret in a `VITE_*` variable.
 
 Other scripts:
 
@@ -204,12 +203,11 @@ The data jobs do not run on the code host. The Worker's own Cron Trigger (`[trig
 
 ## Configuration
 
-- **Worker secrets** are set on the Worker, never in `wrangler.toml` or in the frontend. `backend/.env.example` lists every name with what it does. [docs/operations.md](docs/operations.md#secrets) has the table of what each secret turns on and what happens without it, and covers the AI keys and web search with its daily caps.
+- **Worker secrets** are set on the Worker, never in `wrangler.toml` or in the frontend. `backend/.env.example` lists every name with what it does. [docs/operations.md](docs/operations.md#secrets) has the table of what each secret turns on and what happens without it.
 - **The database** is set up once with `backend/supabase/schema.sql` and the two secrets `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`: [docs/database.md](docs/database.md). Everything the owner publishes (banners, flags, Home layout, site mode, the announcement) is a row in its `settings` table, written from the console.
 - **Non-secret Worker settings** are the `[vars]` in `backend/worker/wrangler.toml`.
 - **Repository secrets** for deploying and signing the Android package are listed in [DEPLOYMENT.md](DEPLOYMENT.md) and [docs/operations.md](docs/operations.md#secrets).
 - **Android background notifications** need extra setup: [docs/fcm-push-setup.md](docs/fcm-push-setup.md).
-- **AI behaviour** (providers, Auto, failover, web search, deep research): [docs/ai.md](docs/ai.md).
 
 ## Contributing rules that are enforced
 
@@ -236,7 +234,6 @@ Do not commit secrets, generated build folders (`dist/`, `frontend/android/`) or
 | [docs/database.md](docs/database.md) | The database: setup, every table and function, the Worker's data layer, the admin API contract, scheduled jobs |
 | [docs/design-system.md](docs/design-system.md) | Tokens, app styles, themes, accents, festival skins, chat styles |
 | [docs/recommendations.md](docs/recommendations.md) | How the next song is chosen |
-| [docs/ai.md](docs/ai.md), [docs/ai-music.md](docs/ai-music.md), [docs/ai-assistant-matrix.md](docs/ai-assistant-matrix.md) | AI lanes and route contracts, the AI music experience, VinaX AI feature by feature |
 | [docs/data-and-privacy.md](docs/data-and-privacy.md) | What is stored where and what leaves the device |
 | [docs/testing.md](docs/testing.md) | Gates, contract tests, the browser suite, the bundle budget |
 | [docs/android.md](docs/android.md) | The Android project and what needs a device |
@@ -247,6 +244,6 @@ Do not commit secrets, generated build folders (`dist/`, `frontend/android/`) or
 
 ## Privacy and legal
 
-Listeners sign in with a Google account. The account row holds the Google ID, email, name and picture, the linked device and coarse sign-in facts, and one synced copy of the library, history, taste profile and settings; AI chats stay on the device ([docs/data-and-privacy.md](docs/data-and-privacy.md#your-google-account)). Searching, AI features, Listen Together, notifications and device transfer send only the fields listed in [docs/data-and-privacy.md](docs/data-and-privacy.md); AI calls are logged as counts and timings, without prompts or replies. Anonymous usage statistics are shared by default (a pre-ticked box at the welcome, a switch in Settings → Region & privacy) and are purged after the retention period (180 days by default); third-party session insights have their own switch, off by default. A listener can delete their account and data from Settings; the owner can delete one person from the console. The advertisement on the website's browsing pages is not covered by the usage choice and is described in the same document.
+Listeners sign in with a Google account. The account row holds the Google ID, email, name and picture, the linked device and coarse sign-in facts, and one synced copy of the library, history, taste profile and settings ([docs/data-and-privacy.md](docs/data-and-privacy.md#your-google-account)). Searching, Listen Together, notifications and device transfer send only the fields listed in [docs/data-and-privacy.md](docs/data-and-privacy.md). Anonymous usage statistics are shared by default (a pre-ticked box at the welcome, a switch in Settings → Region & privacy) and are purged after the retention period (180 days by default); third-party session insights have their own switch, off by default. A listener can delete their account and data from Settings; the owner can delete one person from the console. The advertisement on the website's browsing pages is not covered by the usage choice and is described in the same document.
 
 The repository carries no licence file. The legal position on content, takedowns and listener data is in [docs/legal-copyright.md](docs/legal-copyright.md).
