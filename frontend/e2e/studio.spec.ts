@@ -22,14 +22,15 @@ async function setup(page: Page, theme: string) {
 }
 
 for (const size of [{ width: 1440, height: 1000, theme: 'dark' }, { width: 390, height: 844, theme: 'light' }]) {
-  test(`Home and Radio fit ${size.width}px ${size.theme}, and nothing calls an AI route`, async ({ page }) => {
+  test(`Home and Radio fit ${size.width}px ${size.theme}, and neither calls an AI route`, async ({ page }) => {
     await page.setViewportSize(size);
     await setup(page, size.theme);
     const errors: string[] = [];
     const retiredRequests: string[] = [];
     page.on('request', (request) => {
       const url = new URL(request.url());
-      // 1.3 — VinaX has no AI: none of the removed AI routes is ever called.
+      // Home and Radio never call an AI route: none of the removed ones, and
+      // not VinaX AI's /api/ai/* either (that chat lives only at /vinaxai).
       if (['/api/dj', '/api/home', '/api/curate', '/api/embed', '/api/playlist', '/api/vinaxai', '/api/aimodels', '/api/voices', '/api/tts', '/api/transcribe'].includes(url.pathname) || url.pathname.startsWith('/api/ai/') || url.searchParams.get('key') === 'home-config') retiredRequests.push(url.pathname);
     });
     page.on('pageerror', (e) => errors.push(e.message));
