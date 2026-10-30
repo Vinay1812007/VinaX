@@ -5,28 +5,47 @@
  * — within a budget, providers in parallel and one at a time within a
  * provider, so no provider sees a burst.
  *
- *   chat           "Reply with exactly: OK"   every 2 h
+ *   chat           "Reply with exactly: OK"   every 2 h (OpenRouter: 12 h)
  *   speech         one short line             every 6 h
  *   transcription  that line, transcribed     every 6 h (needs a working voice this run)
  *   image          one small picture          every 12 h, at most one per run
+ *
+ * The checks share the free quotas listeners use, so they stay light: a model
+ * whose last check was a hard failure (gone, refused, not free, empty) is
+ * asked again only once a day, OpenRouter's working models twice a day (its
+ * free tier allows about 50 requests a day), and checks to one provider are
+ * spaced out instead of sent back to back.
  */
 import { isMaestroEndpoint, laneEndpoint, PROVIDER_LANE, providerKey, type AiEnv, type AiProvider } from './ai';
 import { fullCatalog, fullMedia } from './catalog';
 import type { DbEnv } from './db';
 import { maestroFetch } from './maestro';
 import { generateImage, speak, transcribe, type MediaResult } from './media';
-import { classify, healthKey, nextEntry, readHealth, writeHealth, type HealthKind, type HealthMap, type HealthReason } from './modelHealth';
+import { classify, healthKey, nextEntry, readHealth, writeHealth, type HealthEntry, type HealthKind, type HealthMap, type HealthReason } from './modelHealth';
 import { isWorkersAiEndpoint, workersAiBinding, workersAiFetch } from './workersai';
 
 type Env = AiEnv & DbEnv;
 
 const HOUR = 60 * 60_000;
 export const RECHECK_MS: Record<HealthKind, number> = { chat: 2 * HOUR, speech: 6 * HOUR, transcription: 6 * HOUR, image: 12 * HOUR };
+const DEAD_RECHECK_MS = 24 * HOUR;
+const OPENROUTER_CHAT_RECHECK_MS = 12 * HOUR;
+const HARD: ReadonlySet<string> = new Set(['gone', 'refused', 'not_free', 'empty']);
+/** Pause between two checks to the same provider (tests set it to 0). */
+export const pacing = { gapMs: 2_000 };
+
+/** How long until a model is due again, from its last result. */
+export function recheckAfter(t: Target, e: HealthEntry | undefined): number {
+  if (e && !e.ok && e.reason && HARD.has(e.reason)) return DEAD_RECHECK_MS;
+  if (t.kind === 'chat' && t.provider === 'openrouter') return OPENROUTER_CHAT_RECHECK_MS;
+  return RECHECK_MS[t.kind];
+}
 /** Checks per run, and the wall-clock budget after which no new check starts. */
-export const RUN_BUDGET = 60;
+export const RUN_BUDGET = 25;
 const SAVE_EVERY = 10;
 export const RUN_TIME_MS = 4 * 60_000;
-const CHAT_TIMEOUT_MS = 25_000;
+/** Matches the chat route's wait for a picked model (vinaxai PICK_FIRST_LEASH_MS). */
+const CHAT_TIMEOUT_MS = 32_000;
 const SPEECH_LINE = 'VinaX plays your favourite songs.';
 
 export interface Target {
@@ -51,8 +70,9 @@ export async function listTargets(env: AiEnv): Promise<Target[]> {
 /** The targets due now: never checked first, then the longest unchecked; at most one image. */
 export function dueTargets(targets: Target[], map: HealthMap | null, now: number, budget = RUN_BUDGET): Target[] {
   const due = targets
-    .map((t) => ({ t, at: map?.models[healthKey(t.kind, t.provider, t.id)]?.at ?? 0 }))
-    .filter(({ t, at }) => now - at >= RECHECK_MS[t.kind])
+    .map((t) => ({ t, e: map?.models[healthKey(t.kind, t.provider, t.id)] }))
+    .map(({ t, e }) => ({ t, e, at: e?.at ?? 0 }))
+    .filter(({ t, e, at }) => now - at >= recheckAfter(t, e))
     .sort((a, b) => a.at - b.at);
   const out: Target[] = [];
   let images = 0;
@@ -121,8 +141,9 @@ async function checkProvider(
   record: (t: Target, reason: HealthReason | null) => Promise<void>,
 ): Promise<{ audio: Uint8Array; mime: string } | null> {
   let heard = sample;
-  for (const t of targets) {
+  for (const [i, t] of targets.entries()) {
     if (Date.now() > deadline) break;
+    if (i > 0 && pacing.gapMs > 0) await new Promise((r) => setTimeout(r, pacing.gapMs));
     let reason: HealthReason | null;
     if (t.kind === 'chat') reason = await checkChat(env, t.provider, t.id);
     else if (t.kind === 'image') reason = mediaReason(await generateImage(env, t.provider, t.id, 'A small red guitar on a wooden table, simple illustration'), (v) => v.length > 100);
