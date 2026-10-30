@@ -93,6 +93,13 @@ GOOGLE_CLIENT_ID = "152181244509-biv1p3bge1endo5pd8qpc1ormhb4a75l.apps.googleuse
 binding = "HANDOFF"
 id = "34a611e441644d0b9eb77cbbe584a766"
 
+# VinaX AI — Cloudflare Workers AI, the last model in Auto's default ladder
+# (worker/functions/_lib/ai/adapters/workersAi.ts). The free pool is about
+# 10,000 neurons a day for the whole account; a spent pool rests until
+# 00:00 UTC. See docs/ai.md.
+[ai]
+binding = "AI"
+
 # Workers Rate Limiting (7.2.0) — see worker/functions/_lib/ratelimit.ts.
 # Counters are shared by every isolate in ONE Cloudflare location (not
 # global), permissive and eventually consistent. Each tier is "requests per
