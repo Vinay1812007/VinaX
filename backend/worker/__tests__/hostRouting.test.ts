@@ -98,10 +98,10 @@ describe('worker entry point on the update host', () => {
   });
 });
 
-describe('1.3.1 — the retired AI pages', () => {
+describe('the retired AI pages', () => {
   const ctx = { waitUntil: () => undefined };
   it('answer a 301 to Home from the Worker, never the old page', async () => {
-    for (const path of ['/VinaXAI', '/VinaXAI/', '/vinaxai/index.html', '/ai-playlist', '/ai-playlist/', '/ai/shared/abc123']) {
+    for (const path of ['/ai-playlist', '/ai-playlist/', '/AI-Playlist', '/ai/shared/abc123']) {
       const res = await worker.fetch(new Request(`https://www.vinaxmusic.online${path}`), { ASSETS_HOST: 'vinax.pages.dev' }, ctx);
       expect(res.status, path).toBe(301);
       expect(res.headers.get('location'), path).toBe('https://www.vinaxmusic.online/');
@@ -111,5 +111,19 @@ describe('1.3.1 — the retired AI pages', () => {
   it('leaves look-alike paths alone', async () => {
     const { RETIRED_AI_PATH } = await import('../index');
     for (const p of ['/radio', '/ai', '/airplay', '/ai-playlists-x', '/VinaXAIx', '/about']) expect(RETIRED_AI_PATH.test(p), p).toBe(false);
+  });
+});
+
+describe('VinaX AI lives at /vinaxai', () => {
+  it('is never redirected by the Worker', async () => {
+    const { RETIRED_AI_PATH } = await import('../index');
+    for (const p of ['/vinaxai', '/vinaxai/', '/vinaxai/c/abc', '/VinaXAI', '/VinaXAI/']) expect(RETIRED_AI_PATH.test(p), p).toBe(false);
+  });
+  it('is not a Worker route in wrangler.toml (the static host serves the app shell)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const toml = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8');
+    expect(toml).not.toMatch(/vinaxmusic\.online\/vinaxai/i);
+    expect(toml).toMatch(/vinaxmusic\.online\/ai-playlist\*/);
+    expect(toml).toMatch(/vinaxmusic\.online\/ai\/shared\/\*/);
   });
 });
