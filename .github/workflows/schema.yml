@@ -68,7 +68,8 @@ jobs:
     timeout-minutes: 10
     services:
       postgres:
-        image: postgres:16
+        # Postgres 16 with the vector extension the personal engine's tables need (the hosted project ships it).
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: vinax
@@ -82,7 +83,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Prove schema.sql on a fresh Postgres 16
+      - name: Prove schema.sql on a fresh Postgres 16 with the vector extension
         run: backend/supabase/ci.sh check "postgresql://postgres:postgres@localhost:5432/vinax"
 
   apply:

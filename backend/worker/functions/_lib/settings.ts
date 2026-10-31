@@ -32,6 +32,7 @@ export const SETTING_KEYS: readonly SettingSpec[] = [
   { key: 'support-faq', group: 'App', title: 'Help center FAQ', note: 'Questions and answers: [{ q, a }].', shape: 'array' },
   { key: 'flags', group: 'App', title: 'Feature switches', note: 'Boolean flags the app reads: { listenTogether, … }.', shape: 'boolean-map' },
   { key: 'vinax-ai', group: 'App', title: 'VinaX AI', note: '{ enabled, testers: ["<account id>", …], search, models: { "<model id>": { enabled, order } } } — VinaX AI stays off for everyone but the testers until enabled is true.', shape: 'object' },
+  { key: 'personal-config', group: 'App', title: 'Personal engine', note: '{ enabled, composer, embedModel, weights: { tasteFit, artist, … } } — the account-side recommendation engine; weights are clamped to 0.5–2× their defaults.', shape: 'object' },
   { key: 'min-version', group: 'App', title: 'Minimum app build', note: 'Older Android builds must update: { build }.', shape: 'object' },
   { key: 'site-mode', group: 'Operations', title: 'Site mode', note: '{ mode: "live" | "maintenance", note? } — maintenance shows the gate to everyone.', shape: 'object' },
   { key: 'maintenance-window', group: 'Operations', title: 'Maintenance window', note: 'A planned window: { start, end, note }. The gate shows inside it.', shape: 'object' },

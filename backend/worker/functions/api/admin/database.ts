@@ -18,6 +18,7 @@ export const EXPECTED_TABLES = [
   'meta', 'listeners', 'accounts', 'account_backups', 'profiles', 'follows', 'shared_playlists', 'events', 'feedback', 'blocked_content', 'rooms', 'room_members',
   'push_devices', 'notifications', 'settings', 'settings_history', 'experiments', 'audit_log', 'uptime_days', 'uptime_latest', 'job_runs',
   'ai_conversations', 'ai_messages', 'ai_attachments', 'ai_daily_usage',
+  'personal_songs', 'personal_events', 'personal_taste', 'personal_exposure', 'personal_pages', 'personal_colisten',
 ] as const;
 
 interface MetaRow { value: { version?: number; appliedAt?: string } }

@@ -19,13 +19,15 @@ begin
     where n.nspname = 'public'
       and (p.proname like 'stats\_%' or p.proname in ('_days', 'ai_usage_since', 'listener_profile', 'delete_listener',
            'room_request', 'room_sweep', 'purge_events', 'retire_push_devices', 'uptime_tick', 'uptime_report',
-           'table_stats', 'table_counts', 'ai_conversation_search', 'ai_export', 'ai_take_daily'))
+           'table_stats', 'table_counts', 'ai_conversation_search', 'ai_export', 'ai_take_daily')
+           or p.proname like 'personal\_%')
   loop
     execute format('drop function if exists %s cascade', r.sig);
   end loop;
 end $$;
 
 drop table if exists
+  personal_colisten, personal_pages, personal_exposure, personal_taste, personal_events, personal_songs,
   ai_daily_usage, ai_attachments, ai_messages, ai_conversations,
   job_runs, uptime_latest, uptime_days, audit_log, experiments, settings_history, settings,
   notifications, push_devices, room_members, rooms, blocked_content, feedback, ai_calls, events,

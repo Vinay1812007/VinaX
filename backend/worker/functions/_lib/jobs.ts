@@ -7,15 +7,19 @@
  *   status-tick    every run    probe the public components, uptime_tick each
  *   housekeeping   hourly       room_sweep · purge_events(retention) · retire_push_devices
  *                               · VinaX AI chats deleted more than a day ago, and files never sent
+ *                               · the personal engine: co-listening rebuilt, old events and pages purged
+ *   personal-embed every run    embed up to 200 songs the personal engine met that have no vector yet
  *
  * Nothing runs without the database: the jobs exist to write into it.
  */
 import { DAY_MS, db, dbConfigured, q, since, type DbEnv } from './db';
 import { setting } from './settings';
 import { purgeAiChats } from './ai/cleanup';
+import { personalConfig } from './personal/config';
+import { runEmbedBacklog, type EmbedEnv } from './personal/embed';
 import { COMPONENTS, probeAll } from '../api/status';
 
-export type JobId = 'status-tick' | 'housekeeping';
+export type JobId = 'status-tick' | 'housekeeping' | 'personal-embed';
 
 export interface JobSpec {
   id: JobId;
@@ -30,6 +34,7 @@ export interface JobSpec {
 export const JOBS: readonly JobSpec[] = [
   { id: 'status-tick', label: 'Status tick', schedule: 'every 30 min', maxAgeMin: 75, due: () => true },
   { id: 'housekeeping', label: 'Housekeeping', schedule: 'hourly', maxAgeMin: 180, due: (at) => at.getUTCMinutes() < 30 },
+  { id: 'personal-embed', label: 'Personal engine: embed', schedule: 'every 30 min', maxAgeMin: 75, due: () => true },
 ];
 
 export const isJobId = (v: unknown): v is JobId => JOBS.some((j) => j.id === v);
@@ -61,7 +66,7 @@ async function statusTick(env: DbEnv, now: number): Promise<Record<string, unkno
 async function housekeeping(env: DbEnv): Promise<Record<string, unknown>> {
   const retention = await setting<{ eventsDays?: unknown }>(env, 'retention');
   const keep = typeof retention?.eventsDays === 'number' && Number.isFinite(retention.eventsDays) ? Math.min(3650, Math.max(7, Math.round(retention.eventsDays))) : 180;
-  const [rooms, purged, retired, chats] = await Promise.all([
+  const [rooms, purged, retired, chats, , colisten, personalPurged] = await Promise.all([
     db.rpc<{ rooms: number; members: number }>(env, 'room_sweep'),
     db.rpc<number>(env, 'purge_events', { p_keep_days: keep }),
     db.rpc<number>(env, 'retire_push_devices', { p_days: 180 }),
@@ -69,6 +74,9 @@ async function housekeeping(env: DbEnv): Promise<Record<string, unknown>> {
     purgeAiChats(env),
     // VinaX AI's daily allowance rows are only needed for today; keep a quarter for the record.
     db.remove(env, 'ai_daily_usage', q().lt('day', since(90 * DAY_MS).slice(0, 10))),
+    // The personal engine: who plays what together (last 30 days), and what it no longer needs.
+    db.rpc<{ pairs: number }>(env, 'personal_refresh_colisten', { p_days: 30, p_cap: 50 }, { timeoutMs: 60_000 }),
+    db.rpc<{ events: number; pages: number }>(env, 'personal_purge', { p_keep_days: 365 }),
   ]);
   const out: Record<string, unknown> = { eventsKeptDays: keep };
   out.roomsSwept = rooms.ok ? rooms.value : `failed: ${rooms.error}`;
@@ -77,8 +85,18 @@ async function housekeeping(env: DbEnv): Promise<Record<string, unknown>> {
   // Not fatal: before schema v4 is applied the table does not exist yet.
   out.aiChatsPurged = chats.chats;
   out.aiFilesPurged = chats.files;
+  // Not fatal: before schema v7 is applied the personal tables do not exist yet.
+  out.colistenPairs = colisten.ok ? colisten.value?.pairs : `failed: ${colisten.error}`;
+  out.personalPurged = personalPurged.ok ? personalPurged.value : `failed: ${personalPurged.error}`;
   if (!rooms.ok || !purged.ok || !retired.ok) throw new Error('housekeeping: a step failed');
   return out;
+}
+
+async function personalEmbed(env: DbEnv): Promise<Record<string, unknown>> {
+  const config = await personalConfig(env);
+  if (!config.enabled) return { skipped: 'disabled' };
+  const r = await runEmbedBacklog(env as EmbedEnv, config.embedModel, 200);
+  return { model: config.embedModel, embedded: r.embedded, backlog: r.backlog };
 }
 
 /** Run one job now, recording the run. Never throws. */
@@ -90,7 +108,7 @@ export async function runJob(env: DbEnv, job: JobId, now = Date.now()): Promise<
   let summary: Record<string, unknown> = {};
   try {
     summary =
-      job === 'status-tick' ? await statusTick(env, now) : await housekeeping(env);
+      job === 'status-tick' ? await statusTick(env, now) : job === 'personal-embed' ? await personalEmbed(env) : await housekeeping(env);
   } catch (e) {
     ok = false;
     summary = { ...summary, error: e instanceof Error ? e.message.slice(0, 200) : 'failed' };
