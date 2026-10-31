@@ -10,11 +10,13 @@ export const PREFS_KEY = 'vinax.vxai.prefs.v1';
 
 export interface ChatPrefs {
   model: string;
+  /** Web search: 'auto' searches when a message is about something current. */
+  webSearch: 'auto' | 'on' | 'off';
   extendedThinking: boolean;
   sidebarCollapsed: boolean;
 }
 
-const DEFAULTS: ChatPrefs = { model: 'auto', extendedThinking: false, sidebarCollapsed: false };
+const DEFAULTS: ChatPrefs = { model: 'auto', webSearch: 'auto', extendedThinking: false, sidebarCollapsed: false };
 
 function load(): ChatPrefs {
   try {
@@ -22,6 +24,7 @@ function load(): ChatPrefs {
     if (!raw || typeof raw !== 'object') return DEFAULTS;
     return {
       model: typeof raw.model === 'string' && raw.model.length < 200 ? raw.model : 'auto',
+      webSearch: raw.webSearch === 'on' || raw.webSearch === 'off' ? raw.webSearch : 'auto',
       extendedThinking: raw.extendedThinking === true,
       sidebarCollapsed: raw.sidebarCollapsed === true,
     };
@@ -38,7 +41,7 @@ export const usePrefs = create<PrefsStore>()((set, get) => ({
   ...load(),
   set: (patch) => {
     set(patch);
-    const { model, extendedThinking, sidebarCollapsed } = get();
-    try { localStorage.setItem(PREFS_KEY, JSON.stringify({ model, extendedThinking, sidebarCollapsed })); } catch { /* storage blocked: this session only */ }
+    const { model, webSearch, extendedThinking, sidebarCollapsed } = get();
+    try { localStorage.setItem(PREFS_KEY, JSON.stringify({ model, webSearch, extendedThinking, sidebarCollapsed })); } catch { /* storage blocked: this session only */ }
   },
 }));

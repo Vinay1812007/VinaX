@@ -6,7 +6,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { ArrowUpIcon, StopIcon } from './icons';
 import { ModelPicker } from './ModelPicker';
-import { PlusMenu } from './PlusMenu';
+import { PlusMenu, type WebSearch } from './PlusMenu';
 import type { PickerModel } from './types';
 
 interface Props {
@@ -23,11 +23,13 @@ interface Props {
   onModel?(id: string): void;
   thinking?: boolean;
   onThinking?(v: boolean): void;
+  /** Present when web search is offered. */
+  search?: { value: WebSearch; onChange(v: WebSearch): void };
 }
 
 export interface ComposerHandle { focus(): void }
 
-export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ value, onChange, onSend, onStop, streaming, disabled, placeholder, models, model, onModel, thinking, onThinking }, ref): ReactNode {
+export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ value, onChange, onSend, onStop, streaming, disabled, placeholder, models, model, onModel, thinking, onThinking, search }, ref): ReactNode {
   const area = useRef<HTMLTextAreaElement>(null);
   useImperativeHandle(ref, () => ({
     focus: () => {
@@ -76,7 +78,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
       />
       <div className="vx-ai-composer-row">
         <div className="vx-ai-composer-tools">
-          {onThinking && <PlusMenu thinking={!!thinking} onThinking={onThinking} />}
+          {onThinking && <PlusMenu thinking={!!thinking} onThinking={onThinking} search={search} />}
+          {search?.value === 'on' && <span className="vx-ai-pill">Web search</span>}
           {thinking && <span className="vx-ai-pill">Extended thinking</span>}
         </div>
         {models && onModel ? <ModelPicker models={models} value={model ?? 'auto'} onChange={onModel} /> : <span className="vx-ai-composer-mode">Auto</span>}

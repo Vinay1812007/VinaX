@@ -220,6 +220,7 @@ export function ChatView(): ReactNode {
       onModel={(m) => prefs.set({ model: m })}
       thinking={prefs.extendedThinking}
       onThinking={(v) => prefs.set({ extendedThinking: v })}
+      search={models.data?.search ? { value: prefs.webSearch, onChange: (v) => prefs.set({ webSearch: v }) } : undefined}
     />
   );
   const noticeEl = notice && (

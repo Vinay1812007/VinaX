@@ -46,16 +46,23 @@ const OPENROUTER_CTX = 100_000;
 
 const geminiThink = { thinkingConfig: { includeThoughts: true } };
 const geminiThinkHigh = { thinkingConfig: { includeThoughts: true, thinkingLevel: 'high' } };
-const gemini = (upstream: string, name: string, group: ModelGroup | null, tier: 'fast' | 'full' = 'full', description = ''): ModelSpec =>
-  m('gemini', upstream, name, group, {
+const gemini = (upstream: string, name: string, group: ModelGroup | null, tier: 'fast' | 'full' = 'full', description = '', extra: Partial<ModelSpec> & { grounding?: boolean } = {}): ModelSpec => {
+  const { grounding, ...rest } = extra;
+  return m('gemini', upstream, name, group, {
     tier,
     description,
     maxContextChars: GEMINI_CTX,
     maxOutput: tier === 'fast' ? 8_192 : 16_384,
     params: geminiThink,
     highParams: geminiThinkHigh,
-    flags: { vision: true, pdf: true, reasoning: true, artifacts: tier === 'full', thinkFormat: 'parts' },
+    ...rest,
+    flags: { vision: true, pdf: true, reasoning: true, artifacts: tier === 'full', thinkFormat: 'parts', grounding: grounding === true },
   });
+};
+
+// Gemini 2.5 takes a thinking budget, not a level.
+const gemini25High = { thinkingConfig: { includeThoughts: true, thinkingBudget: 16_384 } };
+const gemini25Off = { thinkingConfig: { thinkingBudget: 0 } };
 
 export const MODELS: readonly ModelSpec[] = [
   // ---- Fast
@@ -114,6 +121,12 @@ export const MODELS: readonly ModelSpec[] = [
   gemini('gemini-3.5-flash-lite', 'Gemini 3.5 Flash Lite', null, 'fast'),
   gemini('gemini-3.1-flash-lite', 'Gemini 3.1 Flash Lite', null, 'fast'),
   gemini('gemini-flash-lite-latest', 'Gemini Flash Lite', null, 'fast'),
+  // Web search only (the `grounded` ladder): Google's pricing page (checked
+  // 2026-10-31) gives free Search grounding on the free tier to these two
+  // alone, 500 grounded requests a day shared between them. Every Gemini 3.x
+  // model says "Not available" there. Not in the picker.
+  gemini('gemini-2.5-flash', 'Gemini 2.5 Flash', null, 'full', 'Answers with Google Search', { grounding: true, highParams: gemini25High }),
+  gemini('gemini-2.5-flash-lite', 'Gemini 2.5 Flash-Lite', null, 'fast', 'Answers with Google Search', { grounding: true, highParams: gemini25High, offParams: gemini25Off }),
   m('nvidia', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', 'Nemotron 3 Nano Omni', null, {
     maxContextChars: NVIDIA_CTX, flags: { vision: true, reasoning: true, thinkFormat: 'tags' },
   }),
@@ -137,7 +150,7 @@ export const MODELS: readonly ModelSpec[] = [
   }),
 ];
 
-export type LadderName = 'vision' | 'long' | 'deep' | 'code' | 'fast' | 'default' | 'title';
+export type LadderName = 'vision' | 'long' | 'deep' | 'code' | 'fast' | 'default' | 'title' | 'grounded';
 
 /** Auto's ladders, best first (docs/ai.md "Auto"). */
 export const LADDERS: Readonly<Record<LadderName, readonly string[]>> = {
@@ -151,6 +164,8 @@ export const LADDERS: Readonly<Record<LadderName, readonly string[]>> = {
     'openrouter:nvidia/nemotron-3.5-lightning:free', 'nvidia:openai/gpt-oss-20b', 'cloudflare:@cf/meta/llama-3.3-70b-instruct-fp8-fast',
   ],
   title: ['groq:qwen/qwen3.8-27b', 'gemini:gemini-3.5-flash-lite'],
+  /** Put first in Auto's ladder when a reply searches the web: free Google Search grounding. */
+  grounded: ['gemini:gemini-2.5-flash', 'gemini:gemini-2.5-flash-lite'],
 };
 
 export const PICKER_GROUPS: readonly ModelGroup[] = ['fast', 'balanced', 'smart', 'vision', 'code', 'cloudflare'];

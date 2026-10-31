@@ -28,3 +28,4 @@ export const SidebarIcon = ({ className }: P) => (<svg {...base(className)}><rec
 export const ThinkIcon = ({ className }: P) => (<svg {...base(className)}><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.8V16h5v-.3c0-.7.4-1.4 1-1.8A6 6 0 0 0 12 3z" /></svg>);
 export const ContinueIcon = ({ className }: P) => (<svg {...base(className)}><path d="M5 12h12M13 6l6 6-6 6" /></svg>);
 export const CloseIcon = ({ className }: P) => (<svg {...base(className)}><path d="M6 6l12 12M18 6 6 18" /></svg>);
+export const GlobeSmallIcon = ({ className }: P) => (<svg {...base(className)}><circle cx="12" cy="12" r="8.5" /><path d="M3.5 12h17M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5s-1.2 6.1-3.6 8.5c-2.4-2.4-3.6-5.2-3.6-8.5S9.6 5.9 12 3.5z" /></svg>);

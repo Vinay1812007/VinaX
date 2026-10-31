@@ -11,7 +11,7 @@ import { classifyHttp, errorText, ProviderError } from '../errors';
 import { parseJson, sseData } from '../sse';
 import { ThinkSplitter } from '../think';
 import { wireMessages } from '../wire';
-import type { Adapter, AiEnv, ChatRequest, ProviderEvent } from '../types';
+import type { Adapter, AiEnv, ChatRequest, GroundingSupport, ProviderEvent, Source } from '../types';
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
@@ -19,16 +19,49 @@ interface Chunk {
   candidates?: Array<{
     content?: { parts?: Array<{ text?: string; thought?: boolean }> };
     finishReason?: string;
+    groundingMetadata?: GroundingMetadata;
   }>;
   promptFeedback?: { blockReason?: string };
   usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number };
   error?: { code?: number; message?: string };
 }
 
+interface GroundingMetadata {
+  webSearchQueries?: string[];
+  searchEntryPoint?: { renderedContent?: string };
+  groundingChunks?: Array<{ web?: { uri?: string; title?: string } }>;
+  groundingSupports?: Array<{ segment?: { endIndex?: number; text?: string }; groundingChunkIndices?: number[] }>;
+}
+
+/** Google's grounding data as numbered sources (1-based, in chunk order) and the text each supports. */
+export function groundingEvent(g: GroundingMetadata): Extract<ProviderEvent, { type: 'sources' }> | null {
+  const chunks = (g.groundingChunks ?? []).filter((c) => c.web?.uri);
+  if (!chunks.length) return null;
+  const items: Source[] = chunks.slice(0, 20).map((c, i) => {
+    const title = (c.web?.title ?? '').trim();
+    // The uri is Google's redirect; the title is the site's domain.
+    return { n: i + 1, url: c.web!.uri!, title: title || 'Source', site: title.replace(/^www\./, '') || 'source' };
+  });
+  const supports: GroundingSupport[] = (g.groundingSupports ?? [])
+    .map((s) => ({
+      text: s.segment?.text ?? '',
+      endIndex: s.segment?.endIndex ?? -1,
+      ns: (s.groundingChunkIndices ?? []).filter((i) => i >= 0 && i < items.length).map((i) => i + 1),
+    }))
+    .filter((s) => s.ns.length > 0 && (s.text || s.endIndex >= 0));
+  return {
+    type: 'sources',
+    items,
+    queries: (g.webSearchQueries ?? []).slice(0, 5),
+    ...(g.searchEntryPoint?.renderedContent ? { entryPointHtml: g.searchEntryPoint.renderedContent.slice(0, 50_000) } : {}),
+    supports,
+  };
+}
+
 /** Registry ids carry no `models/` prefix; strip it if one slips in. */
 export const geminiModelId = (upstream: string): string => upstream.replace(/^models\//, '');
 
-export function geminiBody(req: ChatRequest): Record<string, unknown> {
+export function geminiBody(req: ChatRequest, grounding = req.webSearch && req.model.flags.grounding): Record<string, unknown> {
   const { system, messages } = wireMessages(req.model, req.system, req.messages);
   const merged = {
     ...(req.model.params ?? {}),
@@ -42,6 +75,7 @@ export function geminiBody(req: ChatRequest): Record<string, unknown> {
     ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
     contents: messages.map((msg) => ({ role: msg.role === 'assistant' ? 'model' : 'user', parts: [{ text: msg.text }] })),
     generationConfig,
+    ...(grounding ? { tools: [{ googleSearch: {} }] } : {}),
   };
 }
 
@@ -57,13 +91,23 @@ export const gemini: Adapter = {
   async *stream(env: AiEnv, req: ChatRequest): AsyncGenerator<ProviderEvent> {
     const key = env.GEMINI_API_KEY?.trim();
     if (!key) throw new ProviderError('not_configured');
-    const res = await fetch(`${BASE}/${encodeURIComponent(geminiModelId(req.model.upstream))}:streamGenerateContent?alt=sse`, {
+    const call = (grounding: boolean) => fetch(`${BASE}/${encodeURIComponent(geminiModelId(req.model.upstream))}:streamGenerateContent?alt=sse`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify(geminiBody(req)),
+      body: JSON.stringify(geminiBody(req, grounding)),
       signal: req.signal,
     });
+    const grounding = req.webSearch && req.model.flags.grounding;
+    let res = await call(grounding);
+    if (!res.ok && grounding && (res.status === 400 || res.status === 429)) {
+      // Grounding itself refused (its own quota, or not offered for this key):
+      // ask once more without it rather than failing the model.
+      const body = await errorText(res);
+      if (/ground|search/i.test(body)) res = await call(false);
+      else throw classifyHttp(res.status, res.headers, body);
+    }
     if (!res.ok) throw classifyHttp(res.status, res.headers, await errorText(res));
+    let grounded: Extract<ProviderEvent, { type: 'sources' }> | null = null;
     const split = new ThinkSplitter();
     let reason: 'stop' | 'length' | 'content_filter' = 'stop';
     let usage: { input: number; output: number } | null = null;
@@ -80,6 +124,7 @@ export const gemini: Adapter = {
       }
       const f = finish(cand?.finishReason);
       if (f) reason = f;
+      if (cand?.groundingMetadata) grounded = groundingEvent(cand.groundingMetadata) ?? grounded;
       const u = j.usageMetadata;
       if (u) usage = { input: u.promptTokenCount ?? 0, output: (u.candidatesTokenCount ?? 0) + (u.thoughtsTokenCount ?? 0) };
     }
@@ -92,6 +137,7 @@ export const gemini: Adapter = {
       }
       throw new ProviderError('empty');
     }
+    if (grounded) yield grounded;
     if (usage) yield { type: 'usage', ...usage };
     yield { type: 'end', reason };
   },

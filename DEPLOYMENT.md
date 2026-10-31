@@ -75,7 +75,7 @@ Deploying the Worker also registers its **Cron Trigger** (`[triggers]` in `wrang
 The Worker keeps its data in one hosted database. Setting it up is a one-time step; redeploying the Worker never touches it.
 
 1. Create the hosted project.
-2. In its SQL editor, paste `backend/supabase/schema.sql` and run it. It creates every table, the `directory` view, the `stats_*` functions and the deny-all row-level security, and writes schema version 4 into `meta` (version 4 added the VinaX AI tables; pasting it again over version 3 is the whole upgrade). It is idempotent: re-running it is safe and deletes nothing. A database that ran an older version still holds the old AI tables; `backend/supabase/remove-ai.sql`, run once by hand, removes them (it deletes that data). To start over, run `backend/supabase/reset.sql` first (it deletes all data), then `schema.sql` again. The **Schema** workflow can do the apply from CI once a `SUPABASE_DB_URL` secret is set ([docs/database.md](docs/database.md#from-ci-instead-of-the-sql-editor)); it also proves every change to `backend/supabase/**` on a scratch Postgres in pull requests.
+2. In its SQL editor, paste `backend/supabase/schema.sql` and run it. It creates every table, the `directory` view, the `stats_*` functions and the deny-all row-level security, and writes schema version 5 into `meta` (versions 4 and 5 added the VinaX AI tables and its search allowances; pasting it again over an older version is the whole upgrade). It is idempotent: re-running it is safe and deletes nothing. A database that ran an older version still holds the old AI tables; `backend/supabase/remove-ai.sql`, run once by hand, removes them (it deletes that data). To start over, run `backend/supabase/reset.sql` first (it deletes all data), then `schema.sql` again. The **Schema** workflow can do the apply from CI once a `SUPABASE_DB_URL` secret is set ([docs/database.md](docs/database.md#from-ci-instead-of-the-sql-editor)); it also proves every change to `backend/supabase/**` on a scratch Postgres in pull requests.
 3. Set the two Worker secrets from `backend/`:
 
 ```sh
@@ -91,7 +91,7 @@ Only the Worker holds the service-role key. The frontend and the console never t
 
 The chat at `/vinaxai` ([docs/ai.md](docs/ai.md)) runs on free tiers of five providers, all called from the Worker. Any one is enough.
 
-1. Apply schema version 4 (above) before the Worker that uses it, or the chat answers `503 unavailable` for lack of its tables.
+1. Apply schema version 5 (above) before the Worker that uses it, or the chat answers `503 unavailable` for lack of its tables, and web search stays off (its daily allowance lives there).
 2. Set the keys you have, from `backend/`. Each is optional:
 
 ```sh
@@ -100,6 +100,14 @@ npx wrangler secret put GEMINI_API_KEY --config worker/wrangler.toml      # Goog
 npx wrangler secret put OPENROUTER_API_KEY --config worker/wrangler.toml  # OpenRouter: the :free models
 npx wrangler secret put NVIDIA_API_KEY --config worker/wrangler.toml      # NVIDIA NIM (build.nvidia.com)
 ```
+
+   Web search needs nothing more when Gemini is set: free Google Search grounding on Gemini 2.5 Flash covers up to 450 searches a day. For models without grounding, add a search API key ([Tavily](https://tavily.com) by default):
+
+```sh
+npx wrangler secret put SEARCH_API_KEY --config worker/wrangler.toml
+```
+
+   Two optional plain vars (dashboard → the Worker → Settings → Variables, or `[vars]` in `wrangler.toml`): `SEARCH_API_PROVIDER` = `tavily` (default) or `serper`, and `SEARCH_DAILY_LIMIT` = search API calls per day for everyone (default 100; `0` switches the search API off).
 
    Workers AI needs no secret: `[ai] binding = "AI"` in `wrangler.toml` binds it on deploy. Its free pool is about 10,000 neurons a day for the whole account.
 3. Check the keys with the console's environment checklist (group **VinaX AI**). Before switching the chat on, run `npm run ai:probe` locally with the same keys in `backend/worker/.dev.vars` (gitignored). Add `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` there to probe Workers AI too.

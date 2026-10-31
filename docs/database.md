@@ -5,7 +5,7 @@ VinaX 14.0 brings back a server database, designed from a clean sheet: one schem
 ## Setting it up
 
 1. Create a Supabase project (any region; Mumbai is closest to most listeners).
-2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 4), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
+2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 5), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
 3. Set two Worker secrets from `backend/`:
 
 ```sh
@@ -14,6 +14,10 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml
 ```
 
 4. Open the console's **Database** page: it shows the schema version the paste wrote and every table.
+
+### Moving from version 4
+
+Version 5 adds `ai_daily_usage` and the function `ai_take_daily`: the daily allowances VinaX AI's web search shares across every Worker. These are the search API calls (`SEARCH_DAILY_LIMIT`) and Google Search grounding (450 a day). Paste `schema.sql` once; nothing that exists changes.
 
 ### Moving from version 3
 
@@ -67,6 +71,7 @@ Only the Worker holds the service-role key. Row-level security is enabled and fo
 | `job_runs` | scheduled job run | job, started/finished, ok, summary |
 | `ai_conversations` | VinaX AI chat | `account_id`, `title`, `starred`, `model_pref`, `active_leaf_id` (the branch a reload opens), `deleted_at` (hidden; purged a day later); deleted with the account |
 | `ai_messages` | message in a chat | `parent_id` (a tree: an edit or a retry adds a sibling), `role` (user/assistant), `content` (parts), `thinking`, `thinking_ms`, `sources`, `artifacts`, `model_id`, `provider`, `stop_reason`, `usage`; cascade with the chat |
+| `ai_daily_usage` | UTC day × kind | VinaX AI's shared daily allowances (`search`, `grounding`): `count` taken so far; rows older than 90 days are removed by the hourly housekeeping |
 | `ai_attachments` | file added to a chat | `name`, `mime`, `size`, `storage_path` (private bucket `ai-attachments`), `extracted_text`, `pages`; deleted with the account (used from phase 4) |
 
 The view `directory` merges `listeners` and `accounts` into one row per person (device rows with their account when linked, plus account-only rows).
@@ -95,6 +100,7 @@ All `security invoker`, executable by the service role only. Each answers JSON s
 | `retire_push_devices(days)` | switches off devices that stopped checking in |
 | `uptime_tick(component, ok, latencyMs)` / `uptime_report(days)` | the status page's history |
 | `table_stats()` / `table_counts()` | sizes and counts for the Database page |
+| `ai_take_daily(kind, limit)` | takes one from today's allowance of `kind`: true when taken, false once `limit` is used (or when it is 0); atomic, so every isolate shares one count |
 | `ai_export(account)` | every VinaX AI chat of one account with all its messages (every branch), newest first, as the file `GET /api/ai/export` downloads; deleted chats left out |
 | `ai_conversation_search(account, query, before, limit)` | one account's VinaX AI chats whose title or message text contains `query` (wildcards escaped), newest first |
 

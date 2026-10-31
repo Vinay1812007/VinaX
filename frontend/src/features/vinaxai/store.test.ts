@@ -5,7 +5,7 @@ import { usePrefs } from './prefs';
 
 beforeEach(() => {
   resetChat();
-  usePrefs.setState({ model: 'auto', extendedThinking: false });
+  usePrefs.setState({ model: 'auto', extendedThinking: false, webSearch: 'auto' });
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -65,9 +65,9 @@ describe('what the controller asks for', () => {
   });
 
   it('the composer model and Extended thinking go with every message', async () => {
-    usePrefs.setState({ model: 'groq:openai/gpt-oss-120b', extendedThinking: true });
+    usePrefs.setState({ model: 'groq:openai/gpt-oss-120b', extendedThinking: true, webSearch: 'on' });
     await sendMessage('hello');
-    expect(bodies[0]).toMatchObject({ conversationId: 'c1', parentMessageId: 'a1', mode: 'model', model: 'groq:openai/gpt-oss-120b', extendedThinking: true });
+    expect(bodies[0]).toMatchObject({ conversationId: 'c1', parentMessageId: 'a1', mode: 'model', model: 'groq:openai/gpt-oss-120b', extendedThinking: true, webSearch: 'on' });
   });
 
   it('an edit of the first message is sent as a new root', async () => {

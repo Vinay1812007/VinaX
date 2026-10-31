@@ -11,7 +11,7 @@ import { resetSettingsMemo } from '../functions/_lib/settings';
 import { _resetRateLimitsForTests } from '../functions/_lib/ratelimit';
 import { _resetCooldowns } from '../functions/_lib/ai/cooldown';
 import { DB_ENV, fakeDb, type FakeDb } from './helpers/fakeDb';
-import { openAiSse, readEvents, sseResponse } from './helpers/aiStreams';
+import { fixture, openAiSse, readEvents, sseResponse } from './helpers/aiStreams';
 
 const BASE = { GOOGLE_CLIENT_ID: 'x.apps.googleusercontent.com', AUTH_SECRET: 'auth-secret', ...DB_ENV };
 const KEYS = { GROQ_API_KEY: 'gsk_test', GEMINI_API_KEY: 'gem_test', NVIDIA_API_KEY: 'nv_test' };
@@ -294,5 +294,110 @@ describe('continue', () => {
     expect((await post({ conversationId: CONV, continueFrom: U1, content: [] })).status).toBe(404);
     expect((await post({ conversationId: CONV, continueFrom: '33333333-3333-4333-8333-333333333333', content: [] })).status).toBe(404);
     expect((await post({ conversationId: null, continueFrom: A1, content: [] })).status).toBe(400);
+  });
+});
+
+describe('web search', () => {
+  const TAVILY = JSON.stringify({ results: [{ url: 'https://www.espncricinfo.com/final', title: 'Final report', content: 'India won by 6 runs.' }, { url: 'https://bbc.com/sport', title: 'BBC Sport', content: 'Match report.' }] });
+  const SEARCH_ENV = { ...ENV, SEARCH_API_KEY: 'tvly-test' };
+  const take = (fake: FakeDb, value: boolean) => fake.answer('rpc/ai_take_daily', () => new Response(String(value), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+  it('search API: status, then sources before the text; results go into the system prompt; saved with the reply', async () => {
+    let groqBody: { messages: Array<{ role: string; content: string }> } | null = null;
+    const fake = seed({}, (url, init) => {
+      if (url.includes('tavily')) return new Response(TAVILY, { status: 200 });
+      if (url.includes('groq')) { groqBody = JSON.parse(String(init?.body)); return sseResponse(openAiSse('India won the final.[1]')); }
+      return new Response('{}', { status: 500 });
+    });
+    // No grounding allowance today, so the search API answers.
+    fake.answer('rpc/ai_take_daily', (call) => new Response(String((call.body as { p_kind: string }).p_kind === 'search'), { status: 200, headers: { 'content-type': 'application/json' } }));
+    const events = await readEvents(await post(ask('Who won the final today?'), { env: SEARCH_ENV }));
+    await settle();
+    const names = events.map((e) => e.event);
+    expect(names.indexOf('status')).toBeLessThan(names.indexOf('sources'));
+    expect(names.indexOf('sources')).toBeLessThan(names.indexOf('text'));
+    expect(events.filter((e) => e.event === 'status').map((e) => e.data)).toEqual([
+      { step: 'searching', query: 'Who won the final today?' },
+      { step: 'searched', count: 2, sites: ['espncricinfo.com', 'bbc.com'] },
+    ]);
+    expect(events.find((e) => e.event === 'sources')?.data).toMatchObject({ via: 'search', items: [{ n: 1, site: 'espncricinfo.com' }, { n: 2 }] });
+    const system = groqBody!.messages[0].content;
+    expect(system).toContain('<search_results>');
+    expect(system).toContain('[1] Final report — https://www.espncricinfo.com/final');
+    expect(system).toContain('# Citations');
+    expect(fake.rows('ai_messages')[1]).toMatchObject({ sources: { via: 'search', items: [{ n: 1 }, { n: 2 }] } });
+  });
+
+  it('grounding: Gemini 2.5 goes first, sources come after the text with markers, and the saved text carries [n]', async () => {
+    let geminiBody: Record<string, unknown> | null = null;
+    const fake = seed({}, (url, init) => {
+      if (url.includes('gemini-2.5-flash:')) { geminiBody = JSON.parse(String(init?.body)); return sseResponse(fixture('gemini-grounded.sse')); }
+      return new Response('{}', { status: 500 });
+    });
+    take(fake, true);
+    const events = await readEvents(await post(ask('Who won the final today?')));
+    await settle();
+    expect(geminiBody).toMatchObject({ tools: [{ googleSearch: {} }] });
+    expect((events[0].data.model as { id: string }).id).toBe('gemini:gemini-2.5-flash');
+    const names = events.map((e) => e.event);
+    expect(names.indexOf('sources')).toBeGreaterThan(names.lastIndexOf('text'));
+    const src = events.find((e) => e.event === 'sources')!.data as { via: string; markers: Array<{ at: number; ns: number[] }>; entryPointHtml: string };
+    expect(src.via).toBe('grounding');
+    expect(src.markers.map((m) => m.ns)).toEqual([[1, 2], [2]]);
+    expect(src.entryPointHtml).toContain('chip');
+    const reply = fake.rows('ai_messages')[1] as { content: Array<{ text: string }>; sources: { via: string } };
+    expect(reply.content[0].text).toBe('India won the final by 6 runs.[1][2] The next match is on Sunday — in Chennai.[2]');
+    expect(reply.sources.via).toBe('grounding');
+    expect(fake.calls.find((c) => c.table === 'rpc/ai_take_daily')?.body).toEqual({ p_kind: 'grounding', p_limit: 450 });
+  });
+
+  it('when the grounded models fail, the next model gets the search API results instead', async () => {
+    let groqSystem = '';
+    const fake = seed({}, (url, init) => {
+      if (url.includes('generativelanguage')) return new Response('{}', { status: 503 });
+      if (url.includes('tavily')) return new Response(TAVILY, { status: 200 });
+      if (url.includes('groq')) { groqSystem = (JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> }).messages[0].content; return sseResponse(openAiSse('Answer [1]')); }
+      return new Response('{}', { status: 500 });
+    });
+    take(fake, true);
+    const events = await readEvents(await post(ask('latest news on the final'), { env: SEARCH_ENV }));
+    await settle();
+    expect(groqSystem).toContain('<search_results>');
+    expect(events.filter((e) => e.event === 'sources').map((e) => e.data.via)).toEqual(['search']);
+    expect(events.at(-1)?.data).toMatchObject({ stopReason: 'end' });
+  });
+
+  it('no search when the owner switched it off, when the toggle is off, or for a Continue', async () => {
+    let searched = 0;
+    const upstream: Upstream = (url, init) => {
+      if (url.includes('tavily') || url.includes('generativelanguage')) searched += 1;
+      return groqOk(url, init);
+    };
+    let fake = seed({}, upstream, { enabled: true, search: false });
+    take(fake, true);
+    await readEvents(await post(ask('latest news'), { env: SEARCH_ENV }));
+    await settle();
+    resetSettingsMemo();
+    fake = seed({}, upstream);
+    take(fake, true);
+    await readEvents(await post(ask('latest news', { webSearch: 'off' }), { env: SEARCH_ENV }));
+    await settle();
+    resetSettingsMemo();
+    fake = seed(existing(), upstream);
+    take(fake, true);
+    await readEvents(await post({ conversationId: CONV, continueFrom: A1, content: [], mode: 'auto', webSearch: 'on' }, { env: SEARCH_ENV }));
+    await settle();
+    expect(searched).toBe(0);
+    expect(fake.calls.some((c) => c.table === 'rpc/ai_take_daily')).toBe(false);
+  });
+
+  it('a failed search is not an error: the reply is written without it', async () => {
+    const fake = seed({}, (url, init) => (url.includes('tavily') ? new Response('{}', { status: 500 }) : groqOk(url, init)));
+    fake.answer('rpc/ai_take_daily', (call) => new Response(String((call.body as { p_kind: string }).p_kind === 'search'), { status: 200, headers: { 'content-type': 'application/json' } }));
+    const events = await readEvents(await post(ask('Search the web: today’s weather', { webSearch: 'on' }), { env: SEARCH_ENV }));
+    await settle();
+    expect(events.find((e) => e.data.step === 'searched')?.data).toEqual({ step: 'searched', count: 0, sites: [] });
+    expect(events.some((e) => e.event === 'sources')).toBe(false);
+    expect(events.at(-1)?.data).toMatchObject({ stopReason: 'end' });
   });
 });

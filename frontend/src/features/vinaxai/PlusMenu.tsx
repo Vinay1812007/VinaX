@@ -1,12 +1,27 @@
 /**
- * VinaX AI — the composer's + menu. Today it holds Extended thinking; web
- * search and attachments join it in later phases.
+ * VinaX AI — the composer's + menu: Web search (Auto, On, Off) when it is
+ * offered, and Extended thinking. Attachments join it in a later phase.
  */
 import { useRef, useState, type ReactNode } from 'react';
 import { moveFocus, useDismiss } from './useDismiss';
-import { PlusSmallIcon, ThinkIcon } from './icons';
+import { GlobeSmallIcon, PlusSmallIcon, ThinkIcon } from './icons';
 
-export function PlusMenu({ thinking, onThinking, disabled }: { thinking: boolean; onThinking(v: boolean): void; disabled?: boolean }): ReactNode {
+export type WebSearch = 'auto' | 'on' | 'off';
+const SEARCH_CHOICES: Array<{ value: WebSearch; label: string; note: string }> = [
+  { value: 'auto', label: 'Auto', note: 'Searches when you ask about something current' },
+  { value: 'on', label: 'On', note: 'Searches for every message' },
+  { value: 'off', label: 'Off', note: 'Never searches' },
+];
+
+interface Props {
+  thinking: boolean;
+  onThinking(v: boolean): void;
+  /** Present when web search is offered. */
+  search?: { value: WebSearch; onChange(v: WebSearch): void };
+  disabled?: boolean;
+}
+
+export function PlusMenu({ thinking, onThinking, search, disabled }: Props): ReactNode {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -20,20 +35,51 @@ export function PlusMenu({ thinking, onThinking, disabled }: { thinking: boolean
       <button
         ref={button}
         type="button"
-        className={`vx-ai-icon-btn${thinking ? ' is-on' : ''}`}
+        className={`vx-ai-icon-btn${thinking || search?.value === 'on' ? ' is-on' : ''}`}
         aria-label="More options"
         aria-haspopup="menu"
         aria-expanded={open}
         disabled={disabled}
         onClick={() => {
           setOpen((o) => !o);
-          requestAnimationFrame(() => moveFocus(menu.current, '[role="menuitemcheckbox"]', 'first'));
+          requestAnimationFrame(() => moveFocus(menu.current, '[role^="menuitem"]', 'first'));
         }}
       >
         <PlusSmallIcon className="w-5 h-5" />
       </button>
       {open && (
-        <div ref={menu} role="menu" aria-label="Options" className="vx-ai-pop vx-ai-plus-menu">
+        <div
+          ref={menu}
+          role="menu"
+          aria-label="Options"
+          className="vx-ai-pop vx-ai-plus-menu"
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowDown') { e.preventDefault(); moveFocus(menu.current, '[role^="menuitem"]', 1); }
+            if (e.key === 'ArrowUp') { e.preventDefault(); moveFocus(menu.current, '[role^="menuitem"]', -1); }
+          }}
+        >
+          {search && (
+            <div role="group" aria-labelledby="vx-ai-websearch-h">
+              <div id="vx-ai-websearch-h" className="vx-ai-pop-head"><GlobeSmallIcon className="w-3.5 h-3.5" /> Web search</div>
+              {SEARCH_CHOICES.map((c) => (
+                <div
+                  key={c.value}
+                  role="menuitemradio"
+                  aria-checked={search.value === c.value}
+                  tabIndex={-1}
+                  className="vx-ai-menu-item"
+                  onClick={() => search.onChange(c.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); search.onChange(c.value); } }}
+                >
+                  <span className={`vx-ai-radio${search.value === c.value ? ' is-on' : ''}`} aria-hidden />
+                  <span className="vx-ai-menu-text">
+                    <span>{c.label}</span>
+                    <span className="vx-ai-opt-sub">{c.note}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           <div
             role="menuitemcheckbox"
             aria-checked={thinking}

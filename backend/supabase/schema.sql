@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 4
+-- VinaX database · schema version 5
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -494,6 +494,35 @@ language sql stable set search_path = public, pg_temp as $$
       ) order by c.updated_at desc)
       from ai_conversations c
       where c.account_id = p_account and c.deleted_at is null), '[]'::jsonb));
+$$;
+
+-- Global daily allowances for VinaX AI's paid or capped calls: 'search' (the
+-- search API, SEARCH_DAILY_LIMIT) and 'grounding' (Google Search grounding,
+-- kept under the free tier). One row per UTC day and kind.
+create table if not exists ai_daily_usage (
+  day    date not null,
+  kind   text not null,
+  count  integer not null default 0,
+  primary key (day, kind)
+);
+
+-- Take one from today's allowance of `kind`: true when taken, false when
+-- today's `p_limit` is already used (or the limit is 0). Atomic, so every
+-- Worker isolate shares one count.
+create or replace function ai_take_daily(p_kind text, p_limit integer)
+returns boolean
+language plpgsql set search_path = public, pg_temp as $$
+declare n integer;
+begin
+  if p_limit is null or p_limit <= 0 then
+    return false;
+  end if;
+  insert into ai_daily_usage as u (day, kind, count)
+    values ((now() at time zone 'utc')::date, p_kind, 1)
+    on conflict (day, kind) do update set count = u.count + 1 where u.count < p_limit
+    returning u.count into n;
+  return n is not null;
+end
 $$;
 
 -- ------------------------------------------------------------- 10. views --
@@ -1025,7 +1054,7 @@ begin
     'events', 'feedback',
     'blocked_content', 'rooms', 'room_members', 'push_devices', 'notifications',
     'settings', 'settings_history', 'experiments', 'audit_log', 'uptime_days', 'uptime_latest', 'job_runs',
-    'ai_conversations', 'ai_messages', 'ai_attachments']
+    'ai_conversations', 'ai_messages', 'ai_attachments', 'ai_daily_usage']
   loop
     execute format('alter table public.%I enable row level security', t);
     execute format('alter table public.%I force row level security', t);
@@ -1046,7 +1075,7 @@ begin
                         'stats_engagement', 'stats_retention', 'stats_funnel', 'stats_skips', 'stats_errors',
                         'listener_profile', 'delete_listener', 'room_request', 'room_sweep',
                         'purge_events', 'retire_push_devices', 'uptime_tick', 'uptime_report', 'table_stats', 'table_counts',
-                        'ai_conversation_search', 'ai_export')
+                        'ai_conversation_search', 'ai_export', 'ai_take_daily')
   loop
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);
     execute format('grant execute on function %s to service_role', r.sig);
@@ -1060,7 +1089,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 4, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 4, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 5, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 5, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 4 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 5 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
