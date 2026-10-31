@@ -75,6 +75,12 @@ export function cooldownSnapshot(now = Date.now()): { rests: Array<{ key: string
   return { rests: list, lastErrors: errs };
 }
 
+/** A model answered (the owner's probe): end its rest, and its provider's. */
+export function clearRest(spec: Pick<ModelSpec, 'provider' | 'upstream'>): void {
+  rests.delete(modelKey(spec));
+  rests.delete(providerKey(spec.provider));
+}
+
 /** Workers AI's spent pool resets at 00:00 UTC. */
 export const workersAiResetAt = nextUtcMidnight;
 

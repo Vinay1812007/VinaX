@@ -25,6 +25,7 @@ import * as m_api_admin_seo from './functions/api/admin/seo';
 import { guardVerdict, isEntityPage, isHubPage, plainShell } from './functions/_lib/pageGuard';
 import * as m_api_admin_envcheck from './functions/api/admin/envcheck';
 import * as m_api_admin_musicapi from './functions/api/admin/musicapi';
+import * as m_api_admin_ai from './functions/api/admin/ai';
 import * as m_api_admin_fcmcheck from './functions/api/admin/fcmcheck';
 import * as m_api_admin_releases from './functions/api/admin/releases';
 // 14.0 — the database-backed console routes and the scheduled jobs.
@@ -135,6 +136,7 @@ const EXACT: Record<string, Mod> = {
   '/api/admin/seo': m_api_admin_seo,
   '/api/admin/envcheck': m_api_admin_envcheck,
   '/api/admin/musicapi': m_api_admin_musicapi,
+  '/api/admin/ai': m_api_admin_ai,
   '/api/admin/fcmcheck': m_api_admin_fcmcheck,
   '/api/admin/releases': m_api_admin_releases,
   '/api/admin/overview': m_api_admin_overview,

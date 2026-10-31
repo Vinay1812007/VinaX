@@ -5,10 +5,11 @@ This document covers VinaX AI, the chat assistant at `/vinaxai`:
 - the providers and their secrets;
 - the model registry and Auto's ladders, and failover and cooldowns;
 - the stream protocol;
+- web search, files, artifacts and the sandbox, and voice;
 - how conversations are stored;
-- the owner's switches, the probe script, and what happens when a provider is down.
+- the owner's switches, the console's providers card, the probe script, and what happens when a provider is down.
 
-VinaX AI is the only AI in VinaX. Recommendations, Radio and Up Next stay on the listener's device ([recommendations.md](recommendations.md)). The chat is built in phases. This page describes what exists now; phases still to come are listed at the end.
+VinaX AI is the only AI in VinaX. Recommendations, Radio and Up Next stay on the listener's device ([recommendations.md](recommendations.md)). The listener's guide is [user-guide/vinax-ai.md](user-guide/vinax-ai.md).
 
 ## How a message travels
 
@@ -123,7 +124,7 @@ Cooldowns (`_lib/ai/cooldown.ts`) live in each isolate's memory. A resting model
 | 5xx | 30 seconds |
 | timeout, network error, other 4xx, empty answer | no rest |
 
-**When a provider is down,** its models rest after their first failure and Auto answers from the next provider. If every model fails, the page shows "VinaX AI is busy right now. Try again in a moment." with a Retry button.
+**When a provider is down,** its models rest after their first failure and Auto answers from the next provider. If every model fails, the page shows "VinaX AI is busy right now. Try again in a moment." with a Retry button. The console's providers card ([below](#the-consoles-providers-card)) shows what is resting and why.
 
 ## Reasoning
 
@@ -383,20 +384,35 @@ Schema version 4 adds `ai_conversations`, `ai_messages` (a tree through `parent_
 
 ## The owner's switches
 
-The `vinax-ai` setting (console → Publish → App → VinaX AI, JSON editor):
+The `vinax-ai` setting, edited in the console under **Publish → App → VinaX AI**. The page has a form: on or off, testers, web search, and each model's switch and picker order. Its JSON editor writes the same value:
 
 ```json
 { "enabled": false, "testers": ["<account id>"], "search": true, "models": { "groq:openai/gpt-oss-20b": { "enabled": false }, "gemini:gemini-3.6-flash": { "order": 0 } } }
 ```
 
 - `enabled` is the kill switch. A missing key, or anything but `true`, means off: `/api/ai/chat` answers `503 ai_disabled` and the page says "VinaX AI is taking a break."
-- `testers` are account ids (Google subject ids, the `accounts.id` column; the console's listener profile carries it as `account=` in its address). Testers may use VinaX AI while it is off.
-- `models` switches a model off everywhere (picker and ladders) or reorders it inside its picker group.
+- `testers` are account ids (Google subject ids, the `accounts.id` column; the console's listener profile carries it as `account=` in its address). Testers may use VinaX AI while it is off. At most 50.
+- `models` switches a model off everywhere (picker and ladders) or reorders it inside its picker group: a lower `order` comes first; no `order` keeps the registry's place. The form keeps entries for ids the registry no longer has.
 - `search: false` switches web search off for everyone; the + menu then hides it.
 
 The setting is memoised for a minute per isolate.
 
 The setting key is `vinax-ai`, not the brief's dotted `ai.enabled` / `ai.models.overrides` / `ai.search.enabled`: the settings vocabulary only has kebab-case keys, each holding one JSON value.
+
+## The console's providers card
+
+**Health → VinaX AI** in the console (`GET /api/admin/ai`, owner only) shows:
+- whether VinaX AI is on, and how many testers it has;
+- each provider's key as set or missing (never the value), whether the whole provider is resting, and its last error (the kind, the HTTP status and when);
+- every registry model: its picker group (or Auto only), the owner's switch, and whether it is ready, resting (why, and until when) or without a key;
+- today's free grounded searches and search API calls against their daily limits (`ai_daily_usage`);
+- which voice features have a key, and which voice models are resting.
+
+Rests and last errors live in each Worker instance's memory, so the card shows what the instance that answered has seen since it started. Another instance may know different things.
+
+**Probe** sends each enabled model with a key one tiny request ("Reply with OK"), one model per `POST /api/admin/ai { model }`, one after another. Each row shows the time to the first word, or why it failed. A failure rests the model as any chat failure would; an answer ends its rest at once (`clearRest`). Probes spend a little of each provider's free allowance, so they run only on a button press; nothing probes on a schedule. A row's **Probe** button checks one model.
+
+The probe script ([The probe](#the-probe)) is the fuller check: reasoning, system role, images, limits and voice. Run it locally after a key or registry change.
 
 ## The page
 
@@ -449,11 +465,3 @@ The setting key is `vinax-ai`, not the brief's dotted `ai.enabled` / `ai.models.
 - An item in the profile menu.
 - A command in the command palette.
 - The phone tab bar keeps its four tabs.
-
-## Not built yet
-
-These phases are still to come:
-
-| Phase | What it adds |
-| --- | --- |
-| 7 | The console's providers card and Probe button |

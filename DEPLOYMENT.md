@@ -113,12 +113,14 @@ npx wrangler secret put SEARCH_API_KEY --config worker/wrangler.toml
 
    Voice needs no more keys. Dictation and Read aloud work with Groq or Gemini. Live voice needs Gemini: the page talks to Gemini Live with a one-use token from the Worker, and the app's CSP allows that one socket. On Android the microphone also needs `MODIFY_AUDIO_SETTINGS`, which the APK build declares. An APK built before the voice release cannot use the in-page mic, so ask Android testers to update the app. Groq's Read aloud voice (Orpheus) may need its terms accepted once in the Groq console. If the probe's Orpheus rows say no, check there ([docs/ai.md](docs/ai.md#voice)).
 3. Check the keys with the console's environment checklist (group **VinaX AI**). Before switching the chat on, run `npm run ai:probe` locally with the same keys in `backend/worker/.dev.vars` (gitignored). Add `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` there to probe Workers AI too. `npm run ai:probe -- --voice-only` checks just the voice models, the Live token and a Live handshake.
-4. VinaX AI stays **off** until the `vinax-ai` setting says otherwise (console → Publish → App → VinaX AI):
+4. VinaX AI stays **off** until the `vinax-ai` setting says otherwise (console → Publish → App → VinaX AI, a form with the same choices as the JSON):
    - `{ "enabled": false, "testers": ["<your account id>"] }` lets only your account in;
    - `{ "enabled": true }` opens it to every signed-in listener;
    - `{ "enabled": false }` is the kill switch.
 
    The account id is the `accounts.id` column, which is also the `account=` part of the console's listener profile address. A change reaches every isolate within a minute.
+
+After a deploy, **Health → VinaX AI** in the console shows which keys the Worker sees, what is resting and why, and probes each enabled model on a button press ([docs/ai.md](docs/ai.md#the-consoles-providers-card)).
 
 `/vinaxai` is an ordinary app page served by the static host. The old `/VinaXAI` spelling is redirected by the app's router, not by `_redirects` (a rule there could match `/vinaxai` too and loop). AI Playlist and shared-chat links from the old build still 301 to Home from the Worker.
 

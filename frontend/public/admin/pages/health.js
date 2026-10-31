@@ -1,7 +1,8 @@
 /* VinaX console — Health page.
  * Is everything working? App errors, the public endpoints and
  * shell assets (/api/admin/edge), the music catalogue sources
- * (/api/admin/musicapi, on a button press), releases and CI (/api/admin/releases) and
+ * (/api/admin/musicapi, on a button press), VinaX AI's providers
+ * (/api/admin/ai; probes on a button press), releases and CI (/api/admin/releases) and
  * the server secrets checklist (/api/admin/envcheck). (13.9.1 — app errors,
  * scheduled-job footprints, data quality and the status note went with the
  * database.) */
@@ -11,11 +12,12 @@
 
   VX.page({
     id: 'health', title: 'Health', group: 'System', icon: 'pulse', noAuto: true,
-    desc: 'Is everything working: app errors, endpoints, catalogue sources, releases and server secrets.',
+    desc: 'Is everything working: app errors, endpoints, catalogue sources, VinaX AI, releases and server secrets.',
     tabs: [
       { id: 'errors', label: 'App errors', desc: 'Errors the app reported from listeners’ devices, grouped by kind and message.', render: renderErrors },
       { id: 'edge', label: 'Endpoints', desc: 'The live web app shell, its scripts and styles, and every public endpoint, checked from the server.', render: renderEdge },
       { id: 'sources', label: 'Catalogue sources', desc: 'Where song search and playback data come from: each source checked with a one-song search.', render: renderSources },
+      { id: 'ai', label: 'VinaX AI', desc: 'VinaX AI’s providers: which keys are set, what is resting and why, and a probe of each model.', render: renderAi },
       { id: 'releases', label: 'Releases', desc: 'The newest Android release, recent build runs and commits on main.', render: renderReleases },
       { id: 'env', label: 'Server secrets', desc: 'Which secrets and settings the Worker has. Names only — values are never shown.', render: renderEnv }
     ]
@@ -78,6 +80,112 @@
       body: sources
     }));
     return Promise.resolve();
+  }
+
+  /* ----------------------------------------------------------- VinaX AI */
+
+  var REST_REASON = {
+    rate: 'Rate limited', quota: 'Daily allowance spent', gone: 'Model not found', auth: 'Key refused',
+    forbidden: 'Not allowed for this key', upstream: 'Provider error', timeout: 'Too slow', network: 'Unreachable',
+    empty: 'Empty answer', bad_request: 'Request refused', not_configured: 'No key'
+  };
+  function reason(kind) { return REST_REASON[kind] || kind || '—'; }
+  function untilCell(iso) { return iso ? h('span', { title: fmt.dateTime(iso) }, 'until ' + fmt.time(iso)) : null; }
+
+  function renderAi(host) {
+    var obj = VX.obj;
+    var body = h('div.page-body');
+    host.appendChild(h('div.toolbar', ui.button('Refresh', { icon: 'refresh', onClick: function () { return load(); } }),
+      ui.muted('Rests and last errors are what this server instance has seen since it started; other instances keep their own.')));
+    host.appendChild(body);
+    function load() {
+      return ui.load(body, function () { return VX.api.get('/api/admin/ai', null, { fresh: true }); }, function (d) {
+        var st = d.settings || {};
+        var providers = arr(d.providers), models = arr(d.models);
+        var search = d.search || {}, voice = d.voice || {};
+        var keyed = providers.filter(function (p) { return p.configured; }).length;
+        var resting = models.filter(function (m) { return m.restingUntil; }).length;
+        var testers = arr(st.testers).length;
+        var state = st.enabled ? ui.notice('VinaX AI is on for every signed-in listener.', 'ok')
+          : ui.notice(testers ? 'VinaX AI is off for listeners; ' + fmt.plural(testers, 'tester') + ' can use it.' : 'VinaX AI is switched off.', 'warn');
+        var probeCells = {};
+        var probeable = models.filter(function (m) { return m.configured && m.ownerEnabled; });
+        var progress = h('span.muted');
+        function probeOne(m) {
+          var cell = probeCells[m.id];
+          VX.mount(cell, ui.muted('Probing…'));
+          return VX.api.post('/api/admin/ai', { model: m.id }, { timeout: 45000 }).then(function (res) {
+            var r = obj(res.data);
+            if (!res.ok) return VX.mount(cell, ui.pill(res.message || 'Failed', 'bad'));
+            VX.mount(cell, r.ok ? ui.pill('OK · ' + fmt.ms(r.firstTokenMs), 'ok') : h('span', ui.pill(reason(r.kind), 'bad'), r.status ? ui.muted(' HTTP ' + r.status) : null));
+          });
+        }
+        function probeAll() {
+          var i = 0;
+          function next() {
+            if (i >= probeable.length) { progress.textContent = 'Probed ' + fmt.plural(probeable.length, 'model') + ' · ' + fmt.time(new Date().toISOString()); return Promise.resolve(); }
+            var m = probeable[i];
+            i += 1;
+            progress.textContent = 'Probing ' + i + ' of ' + probeable.length + '…';
+            return probeOne(m).then(next);
+          }
+          return next();
+        }
+        var num = function (v) { return v == null ? '—' : fmt.num(v); };
+        return [
+          state,
+          ui.kpis([
+            { label: 'Providers with a key', value: keyed + ' / ' + providers.length, tone: keyed ? null : 'bad' },
+            { label: 'Models resting', value: fmt.num(resting), sub: 'of ' + fmt.num(models.length), tone: resting ? 'warn' : 'ok' },
+            { label: 'Free grounded searches today', value: num(obj(search.grounding).usedToday), sub: 'of ' + fmt.num(obj(search.grounding).dailyLimit) + (obj(search.grounding).configured ? '' : ' · no Gemini key') },
+            { label: 'Search API calls today', value: num(obj(search.api).usedToday), sub: obj(search.api).configured ? 'of ' + fmt.num(obj(search.api).dailyLimit) + ' · ' + obj(search.api).provider : 'not set up' }
+          ]),
+          ui.card({ title: 'Providers', sub: 'Keys are shown as set or missing, never their values', pad: false, body: ui.table({
+            rows: providers, exportName: false, search: false, dense: true,
+            columns: [
+              { key: 'name', label: 'Provider' },
+              { key: 'configured', label: 'Key', render: function (p) { return p.configured ? ui.pill('Set', 'ok') : ui.pill('Missing', 'warn'); } },
+              { key: 'restingUntil', label: 'Whole provider resting', render: function (p) { return untilCell(p.restingUntil) || '—'; } },
+              { key: 'lastError', label: 'Last error', sort: false, render: function (p) {
+                var e = p.lastError;
+                return e ? h('span', reason(e.kind), e.status ? ui.muted(' · HTTP ' + e.status) : null, ui.muted(' · ' + fmt.ago(e.at))) : '—';
+              } }
+            ]
+          }) }),
+          ui.card({ title: 'Models', sub: 'Probe sends each enabled model one tiny request, one model at a time. It uses a little of each provider’s free allowance, so it only runs when you press it.',
+            actions: [progress, ui.button('Probe enabled models', { kind: 'primary', small: true, icon: 'refresh', disabled: !probeable.length, onClick: probeAll })],
+            pad: false,
+            body: ui.table({
+              rows: models, exportName: 'vinax-ai-models', search: models.length > 12, dense: true,
+              columns: [
+                { key: 'name', label: 'Model', render: function (m) { return h('span', m.name, h('br'), ui.mono(m.id)); } },
+                { key: 'provider', label: 'Provider' },
+                { key: 'group', label: 'Picker', render: function (m) { return m.group ? m.group : ui.muted('Auto only'); } },
+                { key: 'ownerEnabled', label: 'Switch', render: function (m) { return m.ownerEnabled ? ui.pill('On', 'ok') : ui.pill('Off'); } },
+                { key: 'restingUntil', label: 'State', render: function (m) {
+                  if (!m.configured) return ui.muted('No key');
+                  if (m.restingUntil) return h('span', ui.pill(reason(m.restKind), 'warn'), ' ', untilCell(m.restingUntil));
+                  return ui.pill('Ready', 'ok');
+                } },
+                { key: 'probe', label: 'Probe', sort: false, render: function (m) {
+                  var cell = h('span', m.configured ? ui.button('Probe', { small: true, ariaLabel: 'Probe ' + m.name, onClick: function () { return probeOne(m); } }) : ui.muted('—'));
+                  probeCells[m.id] = cell;
+                  return cell;
+                } }
+              ]
+            }) }),
+          ui.card({ title: 'Voice', sub: 'Dictation, Read aloud and Live voice', body: h('div.stack',
+            ui.dl([
+              ['Dictation', voice.dictation ? ui.pill('Available', 'ok') : ui.pill('Needs a Groq or Gemini key', 'warn')],
+              ['Read aloud', voice.readAloud ? ui.pill('Available', 'ok') : ui.pill('Needs a Groq or Gemini key', 'warn')],
+              ['Live voice', voice.live ? ui.pill('Available', 'ok') : ui.pill('Needs a Gemini key', 'warn')],
+              ['Voice models resting', arr(voice.resting).length ? h('span', arr(voice.resting).map(function (r) { return h('span', ui.mono(r.model), ' ', untilCell(r.until), h('br')); })) : '—']
+            ])) }),
+          ui.muted('Switch VinaX AI on or off, choose testers and turn models off in Publish → App → VinaX AI. Run npm run ai:probe locally for the full model and voice table.')
+        ];
+      }, { skeleton: 6 });
+    }
+    return load();
   }
 
   /* --------------------------------------------------------- App errors */

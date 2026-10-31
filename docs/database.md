@@ -29,7 +29,7 @@ Version 4 adds the VinaX AI tables `ai_conversations`, `ai_messages` and `ai_att
 
 ### Moving from version 2
 
-Version 3 no longer creates the AI tables `ai_calls` and `shared_chats` or the functions `stats_ai` and `ai_usage_since`, because VinaX has no AI features any more. `schema.sql` never deletes data, so a database that ran version 2 still holds them. To remove them, run `backend/supabase/remove-ai.sql` once, by hand, in the SQL Editor after applying version 3. It deletes every row of those two tables and nothing else, and is safe to re-run. The Schema workflow below never runs it.
+Version 3 no longer creates the AI tables `ai_calls` and `shared_chats` or the functions `stats_ai` and `ai_usage_since`, because they belonged to the AI features that were removed (VinaX AI, added later, has its own tables from version 4 onward). `schema.sql` never deletes data, so a database that ran version 2 still holds them. To remove them, run `backend/supabase/remove-ai.sql` once, by hand, in the SQL Editor after applying version 3. It deletes every row of those two tables and nothing else, and is safe to re-run. The Schema workflow below never runs it.
 
 ### From CI instead of the SQL editor
 

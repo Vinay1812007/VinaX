@@ -99,6 +99,11 @@ export function noteVoiceFailure(model: string, err: ProviderError, now = Date.n
   if ((rests.get(model) ?? 0) < rest.until) rests.set(model, rest.until);
 }
 
+/** Voice models resting now, for the owner's Health card. */
+export function voiceRestSnapshot(now = Date.now()): Array<{ model: string; until: string }> {
+  return [...rests].filter(([, until]) => until > now).map(([model, until]) => ({ model, until: new Date(until).toISOString() }));
+}
+
 /** Test seam. */
 export function _resetVoiceRests(): void {
   rests.clear();
