@@ -45,27 +45,32 @@ Any one of them is enough for the chat to work. With none, `/api/ai/*` answers `
 
 `backend/worker/functions/_lib/ai/models.ts` is the only place that names a model id. Each entry has:
 - a registry id, `<provider>:<upstream id>`;
-- a display name and a picker group (`fast`, `balanced`, `smart`, `vision`, `code`, `cloudflare`, or none for failover-only models);
+- a display name and a picker group (`fast`, `balanced`, `smart`, `vision`, `code`, `more`, `cloudflare`, or none for the web-search-only models);
 - a tier (`fast` models get the compact prompt);
 - flags: `vision`, `pdf`, `grounding`, `reasoning`, `artifacts`, `systemRole`, `thinkFormat`;
 - `maxContextChars`, `maxOutput`;
-- extra request fields in `params`, plus `highParams` for Extended thinking.
+- extra request fields in `params`, plus `highParams` for Extended thinking;
+- `firstEventMs` for a model that is slow to start (below).
 
-Models in the picker, in group order:
+Every chat model the owner's providers offer is in the picker (2026-10-31, from the owner's latency run). A model reached through a second service says so in its name, so no two picker entries share a name. In group order:
 
 | Group | Models |
 | --- | --- |
-| Fast | Qwen 3.8 27B (Groq), GPT-OSS 20B (Groq) |
-| Balanced | **GPT-OSS 120B** (Groq; Auto's default), Gemini 3.5 Flash, Nemotron 3.5 Lightning (NVIDIA) |
-| Smart | Gemini 3.6 Flash, Nemotron 3 Ultra 550B (NVIDIA), Step 5 Preview (NVIDIA) |
-| Vision | Nemotron 3.5 Super VL (NVIDIA) |
-| Code | North Mini Code, Laguna S 2.1 (OpenRouter `:free`) |
+| Fast | Qwen 3.8 27B (Groq), GPT-OSS 20B (Groq), Gemini 3.5 Flash Lite, Gemini 3.1 Flash Lite, Gemini 3.1 Flash Lite Preview, Gemini Flash Lite (latest), LFM 2.5 2.6B (OpenRouter `:free`) |
+| Balanced | **GPT-OSS 120B** (Groq; Auto's default), Gemini 3.5 Flash, Gemini 3 Flash Preview, Nemotron 3.5 Lightning (NVIDIA), Nemotron 3.5 Lightning (OpenRouter), GPT-OSS 20B (NVIDIA) |
+| Smart | Gemini 3.6 Flash, Nemotron 3 Ultra 550B (NVIDIA), Nemotron 3 Ultra 550B (OpenRouter), Step 5 Preview (NVIDIA) |
+| Vision | Nemotron 3.5 Super VL (NVIDIA), Nemotron 3.5 Super VL (OpenRouter), Nemotron 3 Nano Omni (NVIDIA), Nemotron 3 Nano Omni (OpenRouter), Llama 3.2 90B Vision (NVIDIA, slow) |
+| Code | North Mini Code, Laguna S 2.1, Laguna XS 2.1 (OpenRouter `:free`), Laguna XS 2.1 (NVIDIA) |
+| More models | Dots 3 Note Preview (OpenRouter `:free`), ALLaM 2 7B (Groq; Arabic and English), Riva Translate 4B (NVIDIA; a translator), Ising Calibration 1.5 31B (NVIDIA), Gemini Robotics ER 2 Preview, Muse Glimmer 30B (NVIDIA, slow), Nemotron 3.5 Bolt (NVIDIA, slow) |
 | Cloudflare | Llama 3.3 70B, Llama 3.1 8B (Workers AI) |
 
-Failover-only models:
-- Gemini 3 Flash Preview, 3.5 Flash Lite, 3.1 Flash Lite and Flash Lite (latest);
-- Nemotron 3 Nano Omni and GPT-OSS 20B on NVIDIA;
-- the OpenRouter `:free` mirrors of Lightning, Ultra, Super VL and Nano Omni, and Laguna XS 2.1.
+Not in the picker:
+- Gemini 2.5 Flash and 2.5 Flash-Lite answer only when a reply searches the web ([Web search](#web-search)): their free grounding is a shared daily allowance.
+- `UTILITY_MODELS` in the same file lists the models that cannot hold a conversation: the safety and prompt guards (Llama Guard 4 12B, Nemotron Safety Guard 8B v3, Llama Prompt Guard 2 22M and 86M, GPT-OSS Safeguard 20B), the embeddings (Gemini Embedding 001, 2 and 2 Preview; Nemotron 3 / 3.5 Embed 1B, 3.5 Embed 8B, Llama Nemotron Embed VL 1B v2), the document parsers (Nemotron Parse and Parse 2.0) and Gemini AQA. They are never in the picker or a ladder; the console's Health → VinaX AI lists them read-only. Voice models are in `voice.ts` ([Voice](#voice)).
+
+**Slow to start.** Llama 3.2 90B Vision, Muse Glimmer 30B and Nemotron 3.5 Bolt took 30–45 seconds to start in the owner's run. They carry `firstEventMs: 60000`: picked, or probed from the console, they get a minute for their first event instead of 25 seconds. They are never in an Auto ladder. The picker's description says "slow to start".
+
+With 35 models the picker has a search box (name, provider or description). Enter picks the first match.
 
 The Workers AI ids were taken from Cloudflare's public model list, because the build could not see the owner's account. They are marked `unconfirmed` until the probe confirms them.
 
@@ -406,11 +411,12 @@ The setting key is `vinax-ai`, not the brief's dotted `ai.enabled` / `ai.models.
 - each provider's key as set or missing (never the value), whether the whole provider is resting, and its last error (the kind, the HTTP status and when);
 - every registry model: its picker group (or Auto only), the owner's switch, and whether it is ready, resting (why, and until when) or without a key;
 - today's free grounded searches and search API calls against their daily limits (`ai_daily_usage`);
-- which voice features have a key, and which voice models are resting.
+- which voice features have a key, and which voice models are resting;
+- the utility models (guards, embeddings, parsers, AQA) with their provider and whether its key is set, read-only.
 
 Rests and last errors live in each Worker instance's memory, so the card shows what the instance that answered has seen since it started. Another instance may know different things.
 
-**Probe** sends each enabled model with a key one tiny request ("Reply with OK"), one model per `POST /api/admin/ai { model }`, one after another. Each row shows the time to the first word, or why it failed. A failure rests the model as any chat failure would; an answer ends its rest at once (`clearRest`). Probes spend a little of each provider's free allowance, so they run only on a button press; nothing probes on a schedule. A row's **Probe** button checks one model.
+**Probe** sends each enabled model with a key one tiny request ("Reply with OK"), one model per `POST /api/admin/ai { model }`, one after another. Each row shows the time to the first word, or why it failed. A failure rests the model as any chat failure would; an answer ends its rest at once (`clearRest`). A slow-to-start model gets its own `firstEventMs` here too. Probes spend a little of each provider's free allowance, so they run only on a button press; nothing probes on a schedule. A row's **Probe** button checks one model.
 
 The probe script ([The probe](#the-probe)) is the fuller check: reasoning, system role, images, limits and voice. Run it locally after a key or registry change.
 
