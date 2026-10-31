@@ -106,6 +106,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
       { id: 'a-shuffle', icon: ShuffleIcon, label: 'Toggle shuffle', hint: 'Player', kind: 'action', run: () => p().toggleShuffle() },
       { id: 'a-repeat', icon: RepeatIcon, label: 'Cycle repeat', hint: 'Player', kind: 'action', run: () => p().cycleRepeat() },
       { id: 'a-mute', icon: VolumeIcon, label: 'Mute / Unmute', hint: 'Player', kind: 'action', run: () => p().toggleMute() },
+      { id: 'a-vinaxai', icon: SparkleIcon, label: 'VinaX AI', hint: 'Chat with the assistant', kind: 'action', run: () => navigate('/vinaxai') },
       {
         id: 'a-surprise',
         icon: SparkleIcon,

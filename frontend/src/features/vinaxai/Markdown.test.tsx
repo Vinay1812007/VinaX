@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, render, waitFor } from '@testing-library/react';
 import { Markdown, safeUrl } from './Markdown';
 
 afterEach(cleanup);
@@ -33,7 +33,7 @@ describe('<Markdown />: model output is untrusted', () => {
     expect(c.textContent).toContain('a chart');
   });
 
-  it('renders GFM: tables, task lists, strikethrough, and code blocks with a language label and Copy', () => {
+  it('renders GFM: tables, task lists, strikethrough, and code blocks with a language label and Copy', async () => {
     const c = html('| a | b |\n|---|---|\n| 1 | 2 |\n\n- [x] done\n\n~~old~~\n\n```python\nprint("hi")\n```');
     expect(c.querySelector('table td')?.textContent).toBe('1');
     expect(c.querySelector('input[type="checkbox"]')).not.toBeNull();
@@ -41,6 +41,15 @@ describe('<Markdown />: model output is untrusted', () => {
     expect(c.querySelector('.vx-ai-code-lang')?.textContent).toBe('python');
     expect(c.querySelector('pre code')?.textContent).toBe('print("hi")');
     expect(c.querySelector('button[aria-label="Copy code"]')).not.toBeNull();
+    // The highlighter arrives lazily; wait for it so no import is left pending when the file ends.
+    await waitFor(() => expect(c.querySelector('code.hljs')).not.toBeNull());
+  });
+
+  it('renders maths with KaTeX once loaded, and keeps prices as text', async () => {
+    const c = html('Euler: $e^{i\\pi}+1=0$. It costs $5 and $10.');
+    await waitFor(() => expect(c.querySelector('.katex')).not.toBeNull(), { timeout: 5_000 });
+    expect(c.querySelectorAll('.katex')).toHaveLength(1);
+    expect(c.textContent).toContain('It costs $5 and $10.');
   });
 
   it('safeUrl', () => {

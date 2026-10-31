@@ -5,8 +5,10 @@
  * applied at once, in order.
  */
 import { create } from 'zustand';
-import { AiError, noticeFor, streamChat, type ChatRequestBody } from './api';
-import { chatReducer, initialChat, parentForNext, type ChatAction, type ChatState } from './chatState';
+import { queryClient } from '@/services/queryClient';
+import { AiError, noticeFor, patchConversation, streamChat, type ChatRequestBody } from './api';
+import { chatReducer, initialChat, leafUnder, parentForNext, type ChatAction, type ChatState } from './chatState';
+import { usePrefs } from './prefs';
 import type { StreamEvent } from './types';
 
 interface Store extends ChatState {
@@ -34,17 +36,26 @@ function flush(): void {
   if (batch.length) dispatch(batch);
 }
 
+/** The conversation list changes when a chat is created, titled or answered. */
+const refreshList = (): void => { void queryClient.invalidateQueries({ queryKey: ['vinaxai', 'conversations'] }).catch(() => undefined); };
+
 function enqueue(ev: StreamEvent): void {
   queue.push({ type: 'stream', ev, now: Date.now() });
+  if (ev.event === 'title' || ev.event === 'done') queueMicrotask(refreshList);
   if (ev.event === 'text' || ev.event === 'thinking') {
     frame ??= raf(flush);
   } else flush();
 }
 
-function requestBase(): Pick<ChatRequestBody, 'mode' | 'timezone' | 'locale'> {
+/** Which model answers: the composer's choice, or an explicit one (Retry with…). */
+export type ModelChoice = { mode: 'auto' } | { mode: 'model'; model: string };
+
+function requestBase(choice?: ModelChoice): Pick<ChatRequestBody, 'mode' | 'model' | 'extendedThinking' | 'timezone' | 'locale'> {
   let timezone = 'UTC';
   try { timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { /* keep UTC */ }
-  return { mode: 'auto', timezone, locale: typeof navigator !== 'undefined' ? navigator.language : 'en' };
+  const prefs = usePrefs.getState();
+  const pick: ModelChoice = choice ?? (prefs.model === 'auto' ? { mode: 'auto' } : { mode: 'model', model: prefs.model });
+  return { ...pick, extendedThinking: prefs.extendedThinking, timezone, locale: typeof navigator !== 'undefined' ? navigator.language : 'en' };
 }
 
 /** `beforeStart`: nothing was saved, so the page puts the text back in the composer. */
@@ -96,11 +107,15 @@ async function run(body: ChatRequestBody): Promise<RunOutcome> {
   }
 }
 
-/** Send a new message after the branch on screen. */
-export function sendMessage(text: string): Promise<RunOutcome> {
+/**
+ * Send a message. By default it follows the branch on screen; an edit passes
+ * the edited message's parent (null for the first message), which makes the
+ * new message its sibling.
+ */
+export function sendMessage(text: string, opts: { parentId?: string | null } = {}): Promise<RunOutcome> {
   const s = useChatStore.getState();
   if (s.streaming || !text.trim()) return Promise.resolve({ ok: true });
-  const parent = parentForNext(s);
+  const parent = opts.parentId !== undefined ? opts.parentId : parentForNext(s);
   dispatch({ type: 'send', text, parentId: parent, now: new Date().toISOString() });
   return run({
     ...requestBase(),
@@ -110,12 +125,29 @@ export function sendMessage(text: string): Promise<RunOutcome> {
   });
 }
 
-/** A new answer to the question `userId`. */
-export function retryReply(userId: string): Promise<RunOutcome> {
+/** A new answer to the question `userId`, from the composer's model or `choice`. */
+export function retryReply(userId: string, choice?: ModelChoice): Promise<RunOutcome> {
   const s = useChatStore.getState();
   if (s.streaming || !s.conversationId) return Promise.resolve({ ok: true });
   dispatch({ type: 'retry', userId, now: new Date().toISOString() });
-  return run({ ...requestBase(), conversationId: s.conversationId, parentMessageId: userId, content: [] });
+  return run({ ...requestBase(choice), conversationId: s.conversationId, parentMessageId: userId, content: [] });
+}
+
+/** Carry on a reply that was cut off; the new text joins it. */
+export function continueReply(messageId: string): Promise<RunOutcome> {
+  const s = useChatStore.getState();
+  if (s.streaming || !s.conversationId || !s.messages[messageId]) return Promise.resolve({ ok: true });
+  dispatch({ type: 'continue', messageId });
+  return run({ ...requestBase(), conversationId: s.conversationId, continueFrom: messageId, content: [] });
+}
+
+/** Show the branch through `messageId` (the ‹ 2 / 3 › switcher) and remember it for the next visit. */
+export function selectBranch(messageId: string): void {
+  const s = useChatStore.getState();
+  if (s.streaming || !s.messages[messageId]) return;
+  const leaf = leafUnder(s.messages, messageId);
+  dispatch({ type: 'select-leaf', leafId: leaf });
+  if (s.conversationId && !s.messages[leaf].local) void patchConversation(s.conversationId, { activeLeafId: leaf }).catch(() => undefined);
 }
 
 /** Stop the reply being written (the server keeps what was written so far). */

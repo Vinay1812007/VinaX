@@ -24,6 +24,8 @@ export interface ChatState {
   notice: { code: string; message: string } | null;
   /** Counts finished replies; the live region announces on each change. */
   finished: number;
+  /** While a cut-off reply is being continued: what it looked like before, to restore if the request is refused. */
+  resume: { id: string; text: string; stopReason: ChatMessage['stopReason']; error: ChatMessage['error'] } | null;
 }
 
 export type ChatAction =
@@ -31,13 +33,15 @@ export type ChatAction =
   | { type: 'load'; conversation: ServerConversation; messages: ServerMessage[] }
   | { type: 'send'; text: string; parentId: string | null; now: string }
   | { type: 'retry'; userId: string; now: string }
+  | { type: 'continue'; messageId: string }
+  | { type: 'select-leaf'; leafId: string }
   | { type: 'stream'; ev: StreamEvent; now: number }
   | { type: 'stopped' }
   | { type: 'fail'; code: string; message: string }
   | { type: 'dismiss' };
 
 export const initialChat = (): ChatState => ({
-  conversationId: null, title: null, messages: {}, leafId: null, streaming: false, replyId: null, thinkingStartedAt: null, notice: null, finished: 0,
+  conversationId: null, title: null, messages: {}, leafId: null, streaming: false, replyId: null, thinkingStartedAt: null, notice: null, finished: 0, resume: null,
 });
 
 const blank = (id: string, parentId: string | null, role: 'user' | 'assistant', text: string, now: string): ChatMessage => ({
@@ -63,6 +67,28 @@ export function latestLeaf(messages: Record<string, ChatMessage>): string | null
   let best: ChatMessage | null = null;
   for (const m of Object.values(messages)) if (!parents.has(m.id) && (!best || m.createdAt >= best.createdAt)) best = m;
   return best?.id ?? null;
+}
+
+/** The messages that share this one's parent and role, oldest first (edits and retries make siblings). */
+export function siblingsOf(messages: Record<string, ChatMessage>, m: ChatMessage): ChatMessage[] {
+  return Object.values(messages)
+    .filter((x) => x.parentId === m.parentId && x.role === m.role)
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
+}
+
+/** The leaf a branch opens on: from `id`, follow the newest child down. */
+export function leafUnder(messages: Record<string, ChatMessage>, id: string): string {
+  const children = new Map<string, ChatMessage[]>();
+  for (const m of Object.values(messages)) if (m.parentId) children.set(m.parentId, [...(children.get(m.parentId) ?? []), m]);
+  let cur = id;
+  const seen = new Set<string>();
+  while (!seen.has(cur)) {
+    seen.add(cur);
+    const kids = children.get(cur);
+    if (!kids?.length) break;
+    cur = kids.reduce((a, b) => (b.createdAt >= a.createdAt ? b : a)).id;
+  }
+  return cur;
 }
 
 /** Where a new message should hang: after the leaf, skipping a failed reply that was never saved. */
@@ -101,7 +127,12 @@ function patchReply(state: ChatState, fn: (m: ChatMessage) => Partial<ChatMessag
 /** The reply ended: tidy up a reply that never got any text. */
 function finish(state: ChatState): ChatState {
   const reply = state.replyId ? state.messages[state.replyId] : undefined;
-  const next: ChatState = { ...state, streaming: false, thinkingStartedAt: null, finished: state.finished + 1 };
+  const next: ChatState = { ...state, streaming: false, thinkingStartedAt: null, finished: state.finished + 1, resume: null };
+  // A Continue that added nothing (stopped at once) leaves the reply as it was.
+  const r = state.resume;
+  if (r && reply && reply.id === r.id && reply.text === r.text && !reply.error) {
+    return { ...next, messages: { ...state.messages, [r.id]: { ...reply, stopReason: r.stopReason, error: r.error } } };
+  }
   if (reply && !reply.text.trim() && !reply.error) {
     if (reply.stopReason === 'aborted' || reply.stopReason === null) {
       // Stopped before anything arrived: nothing to keep.
@@ -148,6 +179,20 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, notice: null, messages: { ...base, [LOCAL_REPLY]: reply }, leafId: LOCAL_REPLY, replyId: LOCAL_REPLY, streaming: true, thinkingStartedAt: null };
     }
 
+    case 'continue': {
+      const m = state.messages[action.messageId];
+      if (state.streaming || !m || m.role !== 'assistant') return state;
+      return {
+        ...state, notice: null, streaming: true, replyId: m.id, leafId: leafUnder(state.messages, m.id) === m.id ? m.id : state.leafId, thinkingStartedAt: null,
+        resume: { id: m.id, text: m.text, stopReason: m.stopReason, error: m.error },
+        messages: { ...state.messages, [m.id]: { ...m, stopReason: null, error: null } },
+      };
+    }
+
+    case 'select-leaf':
+      if (state.streaming || !state.messages[action.leafId]) return state;
+      return { ...state, leafId: action.leafId };
+
     case 'stopped': {
       if (!state.streaming) return state;
       // Stopped before the server named the messages: as if it was never sent
@@ -162,6 +207,11 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     }
 
     case 'fail': {
+      // A refused Continue: the reply goes back to how it was.
+      if (state.resume && state.messages[state.resume.id]) {
+        const r = state.resume;
+        return { ...state, messages: { ...state.messages, [r.id]: { ...state.messages[r.id], stopReason: r.stopReason, error: r.error } }, streaming: false, replyId: null, resume: null, thinkingStartedAt: null, notice: { code: action.code, message: action.message } };
+      }
       // The request failed before the stream began: undo the optimistic messages.
       const user = state.messages[LOCAL_USER];
       const reply = state.replyId ? state.messages[state.replyId] : undefined;

@@ -19,7 +19,7 @@ begin
     where n.nspname = 'public'
       and (p.proname like 'stats\_%' or p.proname in ('_days', 'ai_usage_since', 'listener_profile', 'delete_listener',
            'room_request', 'room_sweep', 'purge_events', 'retire_push_devices', 'uptime_tick', 'uptime_report',
-           'table_stats', 'table_counts', 'ai_conversation_search'))
+           'table_stats', 'table_counts', 'ai_conversation_search', 'ai_export'))
   loop
     execute format('drop function if exists %s cascade', r.sig);
   end loop;

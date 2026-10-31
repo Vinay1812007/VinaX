@@ -5,6 +5,9 @@
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { ArrowUpIcon, StopIcon } from './icons';
+import { ModelPicker } from './ModelPicker';
+import { PlusMenu } from './PlusMenu';
+import type { PickerModel } from './types';
 
 interface Props {
   value: string;
@@ -14,13 +17,26 @@ interface Props {
   streaming: boolean;
   disabled?: boolean;
   placeholder?: string;
+  /** The picker's models; without them the composer shows "Auto" and no picker. */
+  models?: PickerModel[];
+  model?: string;
+  onModel?(id: string): void;
+  thinking?: boolean;
+  onThinking?(v: boolean): void;
 }
 
 export interface ComposerHandle { focus(): void }
 
-export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ value, onChange, onSend, onStop, streaming, disabled, placeholder }, ref): ReactNode {
+export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ value, onChange, onSend, onStop, streaming, disabled, placeholder, models, model, onModel, thinking, onThinking }, ref): ReactNode {
   const area = useRef<HTMLTextAreaElement>(null);
-  useImperativeHandle(ref, () => ({ focus: () => area.current?.focus() }), []);
+  useImperativeHandle(ref, () => ({
+    focus: () => {
+      const el = area.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    },
+  }), []);
 
   useEffect(() => {
     const el = area.current;
@@ -59,7 +75,11 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
         autoComplete="off"
       />
       <div className="vx-ai-composer-row">
-        <span className="vx-ai-composer-mode">Auto</span>
+        <div className="vx-ai-composer-tools">
+          {onThinking && <PlusMenu thinking={!!thinking} onThinking={onThinking} />}
+          {thinking && <span className="vx-ai-pill">Extended thinking</span>}
+        </div>
+        {models && onModel ? <ModelPicker models={models} value={model ?? 'auto'} onChange={onModel} /> : <span className="vx-ai-composer-mode">Auto</span>}
         {/* Separate keys: React must not turn the clicked Stop button into a
             submit button mid-click, or the browser would finish that click as
             a submit and send the restored text again. */}

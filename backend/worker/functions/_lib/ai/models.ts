@@ -61,7 +61,7 @@ export const MODELS: readonly ModelSpec[] = [
   // ---- Fast
   m('groq', 'qwen/qwen3.8-27b', 'Qwen 3.8 27B', 'fast', {
     tier: 'fast', description: 'Quickest replies for everyday questions', maxContextChars: GROQ_CTX, maxOutput: 4_096,
-    params: { reasoning_format: 'parsed' }, flags: { reasoning: true, thinkFormat: 'field' },
+    params: { reasoning_format: 'parsed' }, offParams: { reasoning_effort: 'none' }, flags: { reasoning: true, thinkFormat: 'field' },
   }),
   m('groq', 'openai/gpt-oss-20b', 'GPT-OSS 20B', 'fast', {
     tier: 'fast', description: 'Fast, light reasoning', maxContextChars: GROQ_CTX, maxOutput: 4_096,

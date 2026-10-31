@@ -80,5 +80,7 @@ export const PRIMARY_NAV: NavItem[] = [
   { to: '/discover', label: 'Discover', icon: CompassIcon },
   // 10.1 — the swipeable song feed (the sidebar list; the phone tab bar keeps its five).
   { to: '/flow', label: 'Flow', icon: FlowIcon },
+  // The chat assistant (desktop side nav only; the phone tab bar keeps its four).
+  { to: '/vinaxai', label: 'VinaX AI', icon: SparkleIcon },
   { to: '/library', label: 'Library', icon: LibraryIcon },
 ];

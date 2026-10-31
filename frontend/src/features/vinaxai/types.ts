@@ -59,6 +59,16 @@ export interface ServerMessage {
   createdAt: string;
 }
 
+/** One row of the conversation list. */
+export interface ConversationSummary {
+  id: string;
+  title: string | null;
+  starred: boolean;
+  activeLeafId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ServerConversation {
   id: string;
   title: string | null;
@@ -70,7 +80,7 @@ export interface ServerConversation {
 
 /** The named events of the chat stream. */
 export type StreamEvent =
-  | { event: 'meta'; data: { conversationId: string; userMessageId: string; assistantMessageId: string; model: ModelLabel } }
+  | { event: 'meta'; data: { conversationId: string; userMessageId: string; assistantMessageId: string; model: ModelLabel; continued?: boolean } }
   | { event: 'title'; data: { title: string } }
   | { event: 'thinking'; data: { delta: string } }
   | { event: 'text'; data: { delta: string } }

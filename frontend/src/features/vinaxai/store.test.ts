@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetChat, sendMessage, stopReply, useChatStore } from './store';
+import { continueReply, resetChat, retryReply, sendMessage, stopReply, useChatStore } from './store';
+import { usePrefs } from './prefs';
 
-beforeEach(() => resetChat());
+beforeEach(() => {
+  resetChat();
+  usePrefs.setState({ model: 'auto', extendedThinking: false });
+});
 afterEach(() => vi.unstubAllGlobals());
 
 const sse = (events: Array<[string, unknown]>): string => events.map(([e, d]) => `event: ${e}\ndata: ${JSON.stringify(d)}\n\n`).join('');
@@ -48,5 +52,34 @@ describe('the chat controller', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(body, { status: 200 })));
     await expect(sendMessage('Hi')).resolves.toMatchObject({ ok: false, beforeStart: false });
     expect(useChatStore.getState().messages.a1).toMatchObject({ text: 'Half', stopReason: 'error', error: { retryable: true } });
+  });
+});
+
+describe('what the controller asks for', () => {
+  const ok = sse([['meta', { conversationId: 'c1', userMessageId: 'u1', assistantMessageId: 'a2', model: { id: 'm', name: 'M', provider: 'P' } }], ['text', { delta: 'x' }], ['done', { stopReason: 'end' }]]);
+  const bodies: Array<Record<string, unknown>> = [];
+  beforeEach(() => {
+    bodies.length = 0;
+    vi.stubGlobal('fetch', vi.fn(async (_u: string, init: RequestInit) => { bodies.push(JSON.parse(String(init.body))); return new Response(ok, { status: 200 }); }));
+    useChatStore.setState({ conversationId: 'c1', messages: { u1: { id: 'u1', parentId: null, role: 'user', text: 'q', thinking: '', thinkingMs: null, model: null, stopReason: null, error: null, createdAt: '1' }, a1: { id: 'a1', parentId: 'u1', role: 'assistant', text: 'cut', thinking: '', thinkingMs: null, model: null, stopReason: 'length', error: null, createdAt: '2' } }, leafId: 'a1' });
+  });
+
+  it('the composer model and Extended thinking go with every message', async () => {
+    usePrefs.setState({ model: 'groq:openai/gpt-oss-120b', extendedThinking: true });
+    await sendMessage('hello');
+    expect(bodies[0]).toMatchObject({ conversationId: 'c1', parentMessageId: 'a1', mode: 'model', model: 'groq:openai/gpt-oss-120b', extendedThinking: true });
+  });
+
+  it('an edit of the first message is sent as a new root', async () => {
+    await sendMessage('better', { parentId: null });
+    expect(bodies[0]).toMatchObject({ parentMessageId: 'root', content: [{ type: 'text', text: 'better' }] });
+  });
+
+  it('Retry with a model overrides the composer; Continue sends continueFrom', async () => {
+    await retryReply('u1', { mode: 'auto' });
+    expect(bodies[0]).toMatchObject({ parentMessageId: 'u1', content: [], mode: 'auto' });
+    useChatStore.setState({ leafId: 'a1' });
+    await continueReply('a1');
+    expect(bodies[1]).toMatchObject({ continueFrom: 'a1', content: [] });
   });
 });

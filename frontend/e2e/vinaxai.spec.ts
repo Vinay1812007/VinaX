@@ -32,6 +32,8 @@ async function setup(page: Page, chat: (route: Route) => Promise<void> | void = 
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
     if (!url.origin.startsWith('http://localhost')) return route.abort();
+    // The festival calendar is switched off so its greeting never lands mid-test.
+    if (url.pathname === '/api/appconfig' && url.searchParams.get('key') === 'festival') return route.fulfill({ json: { festival: { mode: 'off' } } });
     if (url.pathname === '/api/ai/models') return route.fulfill({ json: MODELS });
     if (url.pathname === '/api/ai/chat') {
       posted.push(route.request().postDataJSON());

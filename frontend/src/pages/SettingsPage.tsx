@@ -333,6 +333,26 @@ function AccountRow() {
 }
 
 /** 5.14.0 — festival skins switch with a live "today / next" line. */
+/** VinaX AI: download every chat (signed in only). The export code ships with the chat, not with Settings. */
+function AiChatsExportRow() {
+  const account = useAccount();
+  if (!account) return null;
+  return (
+    <Row label="Export VinaX AI chats" note="A JSON file of every chat you had with VinaX AI, with all its versions. Your chats stay with your account; the file is yours to keep." keywords="assistant conversations download json">
+      <RowButton
+        onClick={() => {
+          void import('@/features/vinaxai/exportChats')
+            .then((m) => m.downloadAiChats())
+            .then(() => toast('VinaX AI chats downloaded'))
+            .catch(() => toast('Couldn’t download your chats. Try again.'));
+        }}
+      >
+        Export
+      </RowButton>
+    </Row>
+  );
+}
+
 function FestivalRow() {
   const on = useSettingsStore((x) => x.festivalSkins);
   const setOn = useSettingsStore((x) => x.setFestivalSkins);
@@ -943,6 +963,7 @@ export default function SettingsPage() {
               >
                 <RowButton onClick={() => { downloadProfileExport(); toast('Backup file downloaded'); }}>Export</RowButton>
               </Row>
+              <AiChatsExportRow />
               <Row label="Restore a backup (quick)" note="Replaces the same categories on this device. A damaged file changes nothing." keywords="import older exports migrated">
                 <>
                   <input

@@ -17,7 +17,7 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml
 
 ### Moving from version 3
 
-Version 4 adds the VinaX AI tables `ai_conversations`, `ai_messages` and `ai_attachments`, the function `ai_conversation_search`, and their row-level security. It changes nothing that exists. Paste `schema.sql` once in the SQL Editor; the Database page then shows version 4. These names are new: the old AI tables `ai_calls` and `shared_chats` are not reused.
+Version 4 adds the VinaX AI tables `ai_conversations`, `ai_messages` and `ai_attachments`, the functions `ai_conversation_search` and `ai_export`, and their row-level security. It changes nothing that exists. Paste `schema.sql` once in the SQL Editor; the Database page then shows version 4. These names are new: the old AI tables `ai_calls` and `shared_chats` are not reused.
 
 ### Moving from version 2
 
@@ -95,6 +95,7 @@ All `security invoker`, executable by the service role only. Each answers JSON s
 | `retire_push_devices(days)` | switches off devices that stopped checking in |
 | `uptime_tick(component, ok, latencyMs)` / `uptime_report(days)` | the status page's history |
 | `table_stats()` / `table_counts()` | sizes and counts for the Database page |
+| `ai_export(account)` | every VinaX AI chat of one account with all its messages (every branch), newest first, as the file `GET /api/ai/export` downloads; deleted chats left out |
 | `ai_conversation_search(account, query, before, limit)` | one account's VinaX AI chats whose title or message text contains `query` (wildcards escaped), newest first |
 
 ## The Worker's data layer

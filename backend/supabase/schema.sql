@@ -473,6 +473,29 @@ language sql stable set search_path = public, pg_temp as $$
   limit greatest(1, least(coalesce(p_limit, 30), 100));
 $$;
 
+-- One account's chats with every message (all branches), newest chat first:
+-- the file GET /api/ai/export hands the listener. Deleted chats are left out.
+create or replace function ai_export(p_account text)
+returns jsonb
+language sql stable set search_path = public, pg_temp as $$
+  select jsonb_build_object(
+    'format', 'vinax-ai-chats',
+    'version', 1,
+    'exportedAt', now(),
+    'conversations', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', c.id, 'title', c.title, 'starred', c.starred,
+        'createdAt', c.created_at, 'updatedAt', c.updated_at, 'activeLeafId', c.active_leaf_id,
+        'messages', coalesce((
+          select jsonb_agg(jsonb_build_object(
+            'id', m.id, 'parentId', m.parent_id, 'role', m.role, 'content', m.content, 'thinking', m.thinking,
+            'model', m.model_id, 'stopReason', m.stop_reason, 'createdAt', m.created_at) order by m.created_at)
+          from ai_messages m where m.conversation_id = c.id), '[]'::jsonb)
+      ) order by c.updated_at desc)
+      from ai_conversations c
+      where c.account_id = p_account and c.deleted_at is null), '[]'::jsonb));
+$$;
+
 -- ------------------------------------------------------------- 10. views --
 
 -- Everyone the console lists, ONE ROW PER PERSON: a signed-in listener is one
@@ -1023,7 +1046,7 @@ begin
                         'stats_engagement', 'stats_retention', 'stats_funnel', 'stats_skips', 'stats_errors',
                         'listener_profile', 'delete_listener', 'room_request', 'room_sweep',
                         'purge_events', 'retire_push_devices', 'uptime_tick', 'uptime_report', 'table_stats', 'table_counts',
-                        'ai_conversation_search')
+                        'ai_conversation_search', 'ai_export')
   loop
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);
     execute format('grant execute on function %s to service_role', r.sig);
