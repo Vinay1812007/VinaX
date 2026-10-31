@@ -7,6 +7,7 @@
  *         models: [{ id, name, provider, group, ownerEnabled, order, configured, restingUntil, restKind }],
  *         search: { api: { configured, provider, dailyLimit, usedToday }, grounding: { configured, dailyLimit, usedToday } },
  *         voice: { dictation, readAloud, live, resting: [{ model, until }] },
+ *         utility: [{ id, name, provider, kind: guard|embedding|parse|aqa, configured }],
  *         checkedAt }
  *   POST /api/admin/ai { model: "<registry id>" }
  *     → { model, ok, ms, firstTokenMs, kind?, status? }
@@ -25,7 +26,7 @@ import { db, dbConfigured, q } from '../../_lib/db';
 import { PROVIDER_NAMES, PROVIDERS, providerConfigured } from '../../_lib/ai/adapters';
 import { aiSettings, registryFor, sanitizeAiSettings } from '../../_lib/ai/config';
 import { clearRest, coolingUntil, cooldownSnapshot } from '../../_lib/ai/cooldown';
-import { MODELS, ladderModels, modelById } from '../../_lib/ai/models';
+import { MODELS, UTILITY_MODELS, ladderModels, modelById } from '../../_lib/ai/models';
 import { runChat } from '../../_lib/ai/router';
 import { dailyLimit, GROUNDING_DAILY_LIMIT, providerOf, searchConfigured } from '../../_lib/ai/search';
 import { voiceAvailability, voiceRestSnapshot } from '../../_lib/ai/voice';
@@ -84,6 +85,7 @@ export const onRequestGet = async (ctx: { request: Request; env: Env }): Promise
       grounding: { configured: ladderModels(registry, 'grounded').some((s) => providerConfigured(env, s.provider)), dailyLimit: GROUNDING_DAILY_LIMIT, usedToday: used ? used.grounding ?? 0 : null },
     },
     voice: { ...voiceAvailability(env), resting: voiceRestSnapshot(now) },
+    utility: UTILITY_MODELS.map((x) => ({ id: x.id, name: x.name, provider: PROVIDER_NAMES[x.provider], kind: x.kind, configured: providerConfigured(env, x.provider) })),
     checkedAt: new Date(now).toISOString(),
   });
 };
@@ -100,8 +102,8 @@ export async function probeModel(env: AiEnv, id: string): Promise<{ model: strin
       picked: true,
       build: (s) => ({ model: s, system: 'You are a health check. Reply with the single word OK.', messages: [{ role: 'user', text: 'Reply with OK.' }], maxOutputTokens: 256, reasoning: 'off', webSearch: false }),
       signal: ac.signal,
-      firstEventMs: 15_000,
-      budgetMs: 25_000,
+      firstEventMs: Math.max(15_000, spec.firstEventMs ?? 0),
+      budgetMs: Math.max(25_000, (spec.firstEventMs ?? 0) + 10_000),
     })) {
       if (ev.type === 'failed') return { model: id, ok: false, ms: Date.now() - t0, firstTokenMs, kind: ev.error.kind, status: ev.error.status };
       if ((ev.type === 'text' || ev.type === 'thinking') && firstTokenMs == null) firstTokenMs = Date.now() - t0;

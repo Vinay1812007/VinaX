@@ -5,7 +5,8 @@
  * reply being saved, and the order of the SSE events.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { onRequestPost } from '../functions/api/ai/chat';
+import { FIRST_EVENT_MS, FIRST_EVENT_SLOW_MS, firstEventMsFor, onRequestPost } from '../functions/api/ai/chat';
+import { MODELS, modelById } from '../functions/_lib/ai/models';
 import { issueSession } from '../functions/_lib/googleAuth';
 import { resetSettingsMemo } from '../functions/_lib/settings';
 import { _resetRateLimitsForTests } from '../functions/_lib/ratelimit';
@@ -209,6 +210,14 @@ describe('failover and failures', () => {
     expect(events.at(-1)?.data).toEqual({ stopReason: 'error' });
     expect(fake.rows('ai_messages').map((m) => m.role)).toEqual(['user']);
     expect(JSON.stringify(events)).not.toMatch(/groq\.com|gsk_test/);
+  });
+
+  it('a picked model that is slow to start gets its own longer wait; Auto never does', () => {
+    const slow = modelById(MODELS, 'nvidia:nvidia/nemotron-3.5-bolt-e4b')!;
+    expect(slow.firstEventMs).toBe(60_000);
+    expect(firstEventMsFor(true, slow)).toBe(60_000);
+    expect(firstEventMsFor(true, modelById(MODELS, 'groq:openai/gpt-oss-120b')!)).toBe(FIRST_EVENT_SLOW_MS);
+    expect(firstEventMsFor(false, null)).toBe(FIRST_EVENT_MS);
   });
 
   it('when every Auto model fails, says VinaX AI is busy', async () => {

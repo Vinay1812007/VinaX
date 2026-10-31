@@ -24,8 +24,8 @@ export interface ModelFlags {
   thinkFormat: ThinkFormat;
 }
 
-/** Picker groups; null = failover only, never shown. */
-export type ModelGroup = 'fast' | 'balanced' | 'smart' | 'vision' | 'code' | 'cloudflare';
+/** Picker groups; null = never shown (web search only). `more` holds niche and slow-to-start models. */
+export type ModelGroup = 'fast' | 'balanced' | 'smart' | 'vision' | 'code' | 'more' | 'cloudflare';
 
 export interface ModelSpec {
   /** Registry id, unique across providers: `<provider>:<upstream id>`. */
@@ -49,6 +49,12 @@ export interface ModelSpec {
   offParams?: Record<string, unknown>;
   /** Set when the id still needs confirming against the owner's account (ai-probe). */
   unconfirmed?: boolean;
+  /**
+   * Time to wait for this model's first event when it is picked or probed,
+   * for models that take tens of seconds to start (the owner's probe timed
+   * them). Never in an Auto ladder: Auto moves on long before this.
+   */
+  firstEventMs?: number;
 }
 
 export interface MessagePart {
