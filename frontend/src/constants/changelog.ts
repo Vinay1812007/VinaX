@@ -16,6 +16,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.3.7': {
+    title: 'VinaX AI reads your images, PDFs and files',
+    changes: [
+      { type: 'improved', text: 'VinaX AI: files in chats (server).' },
+      { type: 'improved', text: 'VinaX AI: files in chats (page and docs).' },
+      { type: 'new', text: 'Name the 1.3.5 What\'s New card for listeners.' },
+    ],
+  },
   '1.3.6': {
     title: 'VinaX AI searches the web and cites its sources',
     changes: [
