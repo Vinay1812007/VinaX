@@ -16,6 +16,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.3.9': {
+    title: 'Keep the search provider setting in wrangler.toml',
+    changes: [
+      { type: 'improved', text: 'The Worker dashboard has SEARCH_API_PROVIDER = tavily, but wrangler.toml.' },
+    ],
+  },
   '1.3.8': {
     title: 'VinaX AI shows code, pages and diagrams in a side panel',
     changes: [
