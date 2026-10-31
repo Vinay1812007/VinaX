@@ -84,6 +84,9 @@ GITHUB_REPO = "Vinay1812007/VinaX"
 # "VinaX Music" project (comma-separate several). Not a secret. Sessions are
 # signed with the AUTH_SECRET secret (else DEVICE_ID_SECRET).
 GOOGLE_CLIENT_ID = "152181244509-biv1p3bge1endo5pd8qpc1ormhb4a75l.apps.googleusercontent.com"
+# VinaX AI — which web search API backs the SEARCH_API_KEY secret:
+# "tavily" (the default) or "serper". See docs/ai.md.
+SEARCH_API_PROVIDER = "tavily"
 
 # Secrets (set with `npx wrangler secret put <NAME> --config worker/wrangler.toml`
 # or the Workers dashboard, never in this file) — every name documented in
