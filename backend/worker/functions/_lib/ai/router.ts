@@ -65,7 +65,8 @@ export interface RunOptions {
   candidates: readonly ModelSpec[];
   /** The listener picked this model: never swap it. */
   picked: boolean;
-  build(spec: ModelSpec): Omit<ChatRequest, 'signal'>;
+  /** The request for a model; may wait (a web search for a model that cannot search itself). */
+  build(spec: ModelSpec): Omit<ChatRequest, 'signal'> | Promise<Omit<ChatRequest, 'signal'>>;
   signal: AbortSignal;
   /** Time allowed until the model's first event. */
   firstEventMs: number;
@@ -84,6 +85,9 @@ export async function* runChat(env: AiEnv, o: RunOptions): AsyncGenerator<Router
 
   for (const spec of order) {
     if (o.signal.aborted) return;
+    // Built before the clock starts: a search is not the model's first-event time.
+    const req = await o.build(spec);
+    if (o.signal.aborted) return;
     const ac = new AbortController();
     const onOuter = (): void => ac.abort(o.signal.reason);
     o.signal.addEventListener('abort', onOuter, { once: true });
@@ -92,7 +96,7 @@ export async function* runChat(env: AiEnv, o: RunOptions): AsyncGenerator<Router
     let announced = false;
     let textStarted = false;
     try {
-      for await (const ev of adapters[spec.provider].stream(env, { ...o.build(spec), signal: ac.signal })) {
+      for await (const ev of adapters[spec.provider].stream(env, { ...req, signal: ac.signal })) {
         if (first) {
           clearTimeout(first);
           first = undefined;

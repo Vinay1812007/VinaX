@@ -29,7 +29,7 @@ describe('/api/admin/envcheck', () => {
 
   it('lists the VinaX AI provider keys, none of them required', () => {
     const ai = ENV_ITEMS.filter((i) => i.group === 'VinaX AI');
-    expect(ai.map((i) => i.name)).toEqual(['GROQ_API_KEY', 'GEMINI_API_KEY', 'OPENROUTER_API_KEY', 'NVIDIA_API_KEY', 'AI']);
+    expect(ai.map((i) => i.name)).toEqual(['GROQ_API_KEY', 'GEMINI_API_KEY', 'OPENROUTER_API_KEY', 'NVIDIA_API_KEY', 'AI', 'SEARCH_API_KEY', 'SEARCH_API_PROVIDER', 'SEARCH_DAILY_LIMIT']);
     expect(ai.every((i) => !i.required)).toBe(true);
     // The old build's names stay gone.
     expect(ENV_ITEMS.map((i) => i.name).join(' ')).not.toMatch(/MAESTRO|RESEARCH/);

@@ -66,6 +66,8 @@ async function housekeeping(env: DbEnv): Promise<Record<string, unknown>> {
     db.rpc<number>(env, 'retire_push_devices', { p_days: 180 }),
     // Deleted VinaX AI chats are hidden at once and removed (with their messages) a day later.
     db.remove<{ id: string }>(env, 'ai_conversations', q().lt('deleted_at', since(DAY_MS)).select('id'), { returning: true }),
+    // VinaX AI's daily allowance rows are only needed for today; keep a quarter for the record.
+    db.remove(env, 'ai_daily_usage', q().lt('day', since(90 * DAY_MS).slice(0, 10))),
   ]);
   const out: Record<string, unknown> = { eventsKeptDays: keep };
   out.roomsSwept = rooms.ok ? rooms.value : `failed: ${rooms.error}`;

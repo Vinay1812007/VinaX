@@ -74,6 +74,13 @@ export interface ChatRequest {
   signal: AbortSignal;
 }
 
+/** A stretch of the answer (ending with `text`, at UTF-8 byte `endIndex`) backed by sources `ns` (1-based). */
+export interface GroundingSupport {
+  text: string;
+  endIndex: number;
+  ns: number[];
+}
+
 export interface Source {
   n: number;
   url: string;
@@ -85,7 +92,8 @@ export interface Source {
 export type ProviderEvent =
   | { type: 'text'; delta: string }
   | { type: 'thinking'; delta: string }
-  | { type: 'sources'; items: Source[]; queries: string[]; entryPointHtml?: string }
+  /** Search grounding: the sources, the queries the model ran, Google's search-suggestions HTML, and which text each source supports. */
+  | { type: 'sources'; items: Source[]; queries: string[]; entryPointHtml?: string; supports?: GroundingSupport[] }
   | { type: 'usage'; input: number; output: number }
   | { type: 'end'; reason: 'stop' | 'length' | 'content_filter' };
 
@@ -100,6 +108,9 @@ export interface AiKeysEnv {
   OPENROUTER_API_KEY?: string;
   NVIDIA_API_KEY?: string;
   AI?: WorkersAiBinding;
+  SEARCH_API_KEY?: string;
+  SEARCH_API_PROVIDER?: string;
+  SEARCH_DAILY_LIMIT?: string;
 }
 
 export type AiEnv = AuthEnv & DbEnv & AiKeysEnv & { TELEMETRY_PEPPER?: string };

@@ -206,6 +206,13 @@ begin
   assert n = 0, 'ai_conversation_search: another account sees nothing';
   select count(*) into n from ai_conversation_search('check_a1', '%', null, 30);
   assert n = 0, 'ai_conversation_search: % is literal, not a wildcard';
+  -- VinaX AI daily allowances: a limit of 2 gives two, then no; 0 gives none
+  delete from ai_daily_usage where kind = 'check_kind';
+  assert ai_take_daily('check_kind', 2) and ai_take_daily('check_kind', 2), 'ai_take_daily: within the limit';
+  assert not ai_take_daily('check_kind', 2), 'ai_take_daily: the limit holds';
+  assert not ai_take_daily('check_kind_zero', 0), 'ai_take_daily: 0 means off';
+  assert (select count from ai_daily_usage where kind = 'check_kind') = 2, 'ai_take_daily: counted once each';
+
   v := ai_export('check_a1');
   assert v ->> 'format' = 'vinax-ai-chats' and jsonb_array_length(v -> 'conversations') = 1, 'ai_export: one chat';
   assert jsonb_array_length(v -> 'conversations' -> 0 -> 'messages') = 3, 'ai_export: every message, every branch';
@@ -246,7 +253,7 @@ begin
   assert not has_table_privilege('anon', 'public.ai_messages', 'select'), 'anon cannot read VinaX AI messages';
   assert not has_function_privilege('anon', 'public.ai_conversation_search(text, text, timestamptz, integer)', 'execute'), 'anon cannot search VinaX AI chats';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 4, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 5, 'meta.schema.version';
   raise notice 'check.sql: every function answered as expected';
 end $$;
 

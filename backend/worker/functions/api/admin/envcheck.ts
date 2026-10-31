@@ -38,6 +38,9 @@ export const ENV_ITEMS: Array<{ name: string; group: string; required: boolean; 
   { name: 'OPENROUTER_API_KEY', group: 'VinaX AI', required: false, note: 'OpenRouter free models' },
   { name: 'NVIDIA_API_KEY', group: 'VinaX AI', required: false, note: 'NVIDIA NIM chat models' },
   { name: 'AI', group: 'VinaX AI', required: false, note: 'Workers AI binding ([ai] in wrangler.toml; last in the failover order)' },
+  { name: 'SEARCH_API_KEY', group: 'VinaX AI', required: false, note: 'web search API key (when free Google grounding is not used)' },
+  { name: 'SEARCH_API_PROVIDER', group: 'VinaX AI', required: false, note: 'plain var: tavily (default) or serper' },
+  { name: 'SEARCH_DAILY_LIMIT', group: 'VinaX AI', required: false, note: 'plain var: search API calls per day for everyone (default 100, 0 = off)' },
 ];
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {

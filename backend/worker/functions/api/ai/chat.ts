@@ -15,6 +15,10 @@
  *       meta     { conversationId, userMessageId, assistantMessageId, model: { id, name, provider }, continued? }
  *                (sent again when a failover changes the model; the page then clears any reasoning shown)
  *       title    { title }      (new conversations: a generated 2–6 word title, when it arrives in time)
+ *       status   { step: "searching", query } · { step: "searched", count, sites }
+ *       sources  { items: [{ n, url, title, site, snippet? }], via: "grounding" | "search", queries?, entryPointHtml?, markers? }
+ *                (search: before the text, the model cites [n] itself; grounding: after the text,
+ *                 with `markers` [{ at, ns }] saying where [n] goes in it)
  *       thinking { delta }
  *       text     { delta }
  *       error    { code, message, retryable, alternatives? }
@@ -39,7 +43,11 @@ import { isCooling } from '../../_lib/ai/cooldown';
 import { fallbackTitle, latestLeaf, pathTo, textOf, threadChars, toNormalized, trimHistory } from '../../_lib/ai/history';
 import { ladderModels, modelById, type LadderName } from '../../_lib/ai/models';
 import { generateTitle } from '../../_lib/ai/title';
-import { buildSystemPrompt, firstNameOf, safeLocale, safeTimezone } from '../../_lib/ai/prompt';
+import { buildSystemPrompt, firstNameOf, safeLocale, safeTimezone, type SearchBlock } from '../../_lib/ai/prompt';
+import {
+  applyMarkers, buildQuery, GROUNDING_DAILY_LIMIT, placeMarkers, searchMode, searchWeb, takeDaily, topicOf, wantsSearch,
+  type Marker, type SearchResult,
+} from '../../_lib/ai/search';
 import { humanReason, pickLadder, runChat, type RunOptions } from '../../_lib/ai/router';
 import { sseFrame } from '../../_lib/ai/sse';
 import {
@@ -47,7 +55,7 @@ import {
   type ConversationRow, type MessageRow,
 } from '../../_lib/ai/store';
 import type { ProviderError } from '../../_lib/ai/errors';
-import type { AiEnv, MessagePart, ModelSpec } from '../../_lib/ai/types';
+import type { AiEnv, MessagePart, ModelSpec, Source } from '../../_lib/ai/types';
 
 /** Files travel separately (POST /api/ai/attachments, by id), so a chat body is only text. */
 export const MAX_BODY_BYTES = 2_000_000;
@@ -71,6 +79,7 @@ interface ChatBody {
   mode?: unknown;
   model?: unknown;
   continueFrom?: unknown;
+  webSearch?: unknown;
   extendedThinking?: unknown;
   timezone?: unknown;
   locale?: unknown;
@@ -226,6 +235,23 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     if (!candidates.length) return json({ error: 'ai_not_configured' }, 503);
   }
 
+  // Web search: at most one per turn, never for a Continue.
+  const pathRows = pathTo(rows, userMsg.id);
+  const previousUser = [...pathRows].reverse().find((r) => r.role === 'user' && r.id !== userMsg.id);
+  const doSearch = !continuing && settings.search && wantsSearch(latestText, searchMode(body.webSearch));
+  const query = doSearch ? buildQuery(latestText, previousUser ? textOf(previousUser.content) : null) : '';
+  const topic = topicOf(latestText);
+  let grounding = false;
+  if (doSearch && query) {
+    // Free Google Search grounding first, while today's allowance lasts.
+    const grounded = ladderModels(registry, 'grounded');
+    if (mode === 'model') grounding = candidates[0].flags.grounding && (await takeDaily(env, 'grounding', GROUNDING_DAILY_LIMIT));
+    else if (grounded.length && (await takeDaily(env, 'grounding', GROUNDING_DAILY_LIMIT))) {
+      grounding = true;
+      candidates = [...grounded, ...candidates.filter((c) => !grounded.includes(c))];
+    }
+  }
+
   const account = await accountOf(env, sub);
   const vars = {
     now: new Date(),
@@ -234,15 +260,37 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     firstName: firstNameOf(account.ok ? account.value?.name : null),
   };
   const slow = ladder === 'deep' || mode === 'model';
-  const build: RunOptions['build'] = (spec) => {
-    const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: false });
+  // The search API runs once, and only if a model that cannot search itself answers.
+  let apiSearch: Promise<SearchResult> | null = null;
+  let searched: { items: Source[]; via: 'grounding' | 'search'; queries: string[]; entryPointHtml?: string } | null = null;
+  let searchLog: Record<string, unknown> | null = null;
+  const sitesOf = (items: Source[]) => [...new Set(items.map((i) => i.site))].slice(0, 4);
+  const runApiSearch = (): Promise<SearchResult> => (apiSearch ??= (async () => {
+    send('status', { step: 'searching', query });
+    const r = await searchWeb(env, query, topic);
+    if (r.ok) {
+      searched = { items: r.sources, via: 'search', queries: [query] };
+      send('status', { step: 'searched', count: r.sources.length, sites: sitesOf(r.sources) });
+      send('sources', { items: r.sources, via: 'search' });
+    } else send('status', { step: 'searched', count: 0, sites: [] });
+    searchLog = { via: 'search', ok: r.ok, ...(r.ok ? { count: r.sources.length, cached: r.cached, provider: r.provider } : { reason: r.reason }) };
+    return r;
+  })());
+  const build: RunOptions['build'] = async (spec) => {
+    const ground = grounding && spec.flags.grounding;
+    let search: SearchBlock | null = null;
+    if (doSearch && query && !ground) {
+      const r = await runApiSearch();
+      if (r.ok) search = { sources: r.sources };
+    }
+    const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: false, search });
     return {
       model: spec,
       system,
       messages: trimHistory(history, Math.max(4_000, spec.maxContextChars - system.length)),
       maxOutputTokens: spec.maxOutput,
       reasoning: extendedThinking ? 'high' : 'default',
-      webSearch: false,
+      webSearch: ground,
     };
   };
   const alternativesFor = (failed: ModelSpec): Array<{ id: string; name: string; provider: string }> =>
@@ -271,6 +319,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     let thinkMs: number | null = null;
     let usage: { input: number; output: number } | null = null;
     let stop: StopReason = 'end';
+    let markers: Marker[] = [];
     const metaOf = (m: ModelSpec) => ({ conversationId: conversation.id, userMessageId: userMsg.id, assistantMessageId: assistantId, model: modelInfo(m), ...(continuing ? { continued: true } : {}) });
     send('meta', metaOf(model));
     // A new conversation gets a generated title, written in parallel with the reply.
@@ -283,6 +332,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
         await updateConversation(env, sub, conversation.id, { title });
       }).catch(() => undefined);
     }
+    if (grounding) send('status', { step: 'searching', query });
     try {
       for await (const ev of runChat(env, {
         candidates, picked: mode === 'model', build, signal: abort.signal,
@@ -296,6 +346,13 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
             thinkStart = null;
             send('meta', metaOf(model));
           }
+        } else if (ev.type === 'sources') {
+          // Grounding: the sources arrive with the end of the answer.
+          markers = placeMarkers(text, ev.supports ?? []);
+          searched = { items: ev.items, via: 'grounding', queries: ev.queries, ...(ev.entryPointHtml ? { entryPointHtml: ev.entryPointHtml } : {}) };
+          searchLog = { via: 'grounding', count: ev.items.length };
+          send('status', { step: 'searched', count: ev.items.length, sites: sitesOf(ev.items) });
+          send('sources', { ...searched, markers });
         } else if (ev.type === 'thinking') {
           thinkStart ??= Date.now();
           thinking += ev.delta;
@@ -335,6 +392,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
 
     // Save the reply (also a partial or stopped one) and move the active leaf.
     const savedReply = text.trim().length > 0;
+    const finalText = markers.length ? applyMarkers(text, markers) : text;
     if (continuing) {
       // Continue: the new text joins the reply it continues.
       if (savedReply) {
@@ -347,7 +405,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     } else if (savedReply) {
       await insertMessage(env, {
         id: assistantId, conversation_id: conversation.id, parent_id: userMsg.id, role: 'assistant',
-        content: [{ type: 'text', text }], thinking: thinking || null, thinking_ms: thinkMs,
+        content: [{ type: 'text', text: finalText }], thinking: thinking || null, thinking_ms: thinkMs,
+        sources: searched,
         model_id: model.id, provider: model.provider, stop_reason: stop, usage,
       });
     }
@@ -357,7 +416,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       model_pref: mode === 'model' ? model.id : 'auto',
     });
     if (titleJob) await titleJob;
-    console.log(JSON.stringify({ route: 'ai-chat', continued: !!continuing, model: model.id, provider: model.provider, ladder, ms: Date.now() - started, status: stop, input: usage?.input ?? null, output: usage?.output ?? null }));
+    console.log(JSON.stringify({ route: 'ai-chat', continued: !!continuing, search: searchLog, model: model.id, provider: model.provider, ladder, ms: Date.now() - started, status: stop, input: usage?.input ?? null, output: usage?.output ?? null }));
   };
 
   const job = pump().catch(() => undefined);
