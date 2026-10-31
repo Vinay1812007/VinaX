@@ -28,11 +28,14 @@ import { useDismiss } from './useDismiss';
 import { usePendingFiles } from './usePendingFiles';
 import { PendingChips } from './FileChips';
 import type { FileRef } from './types';
+import { ArtifactPanel } from './ArtifactPanel';
+import { usePanel } from './artifactStore';
+import { artifactsOf, collectVersions, hasPreview } from './artifacts';
 import { ArrowDownIcon, MenuIcon, NewChatIcon, SidebarIcon, SparkIcon } from './icons';
 
 /** Markdown made readable aloud: code blocks named, not read; markup characters dropped. */
 export function plainText(md: string): string {
-  return md.replace(/```[\s\S]*?(```|$)/g, ' (code) ').replace(/[*_`#>|~]+/g, '').replace(/\[(\d+)\]/g, '').replace(/\s+/g, ' ').trim();
+  return md.replace(/<artifact[\s\S]*?(<\/artifact>|$)/g, ' (an artifact) ').replace(/```[\s\S]*?(```|$)/g, ' (code) ').replace(/[*_`#>|~]+/g, '').replace(/\[(\d+)\]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 export function greeting(hour: number, name: string | null): string {
@@ -97,6 +100,33 @@ export function ChatView(): ReactNode {
   const finished = useChatStore((s) => s.finished);
   const dispatch = useChatStore((s) => s.dispatch);
   const thread = useMemo(() => pathTo(messages, leafId), [messages, leafId]);
+  const versions = useMemo(() => collectVersions(thread), [thread]);
+  const panel = usePanel();
+  const versionOf = (id: string, messageId: string) => (versions.get(id)?.findIndex((v) => v.messageId === messageId) ?? 0) + 1;
+  const openArtifact = (a: { id: string; type: Parameters<typeof hasPreview>[0] }, messageId: string) =>
+    panel.show(a.id, Math.max(0, versionOf(a.id, messageId) - 1), { tab: hasPreview(a.type) ? 'preview' : 'code' });
+
+  // While a reply writes an artifact, the panel opens on it and fills live
+  // (once per artifact: closing it is respected); when the reply is done it
+  // turns to Preview.
+  const autoOpened = useRef(new Set<string>());
+  const liveReply = streaming && replyId ? messages[replyId] : undefined;
+  const liveArtifact = liveReply?.text.includes('<artifact') ? artifactsOf(liveReply.text).pop() : undefined;
+  useEffect(() => {
+    if (!liveArtifact || !replyId) return;
+    const key = `${replyId}:${liveArtifact.id}`;
+    if (autoOpened.current.has(key)) return;
+    autoOpened.current.add(key);
+    panel.show(liveArtifact.id, null, { tab: 'code', following: true });
+  }, [liveArtifact?.id, replyId, panel, liveArtifact]);
+  useEffect(() => {
+    if (streaming || !panel.following || !panel.open) return;
+    const latest = versions.get(panel.open.id)?.slice(-1)[0]?.artifact;
+    if (latest && hasPreview(latest.type)) panel.setTab('preview');
+    else usePanel.setState({ following: false });
+  }, [streaming, panel, versions]);
+  // Another chat closes the panel.
+  useEffect(() => { usePanel.getState().close(); }, [conversationId]);
 
   usePageTitle(title ?? 'VinaX AI');
 
@@ -316,6 +346,8 @@ export function ChatView(): ReactNode {
                     message={m}
                     live={streaming && m.id === replyId}
                     models={pickerModels}
+                    versionOf={versionOf}
+                    onOpenArtifact={openArtifact}
                     onRetry={m.parentId && conversationId ? (choice) => void retryReply(m.parentId!, choice) : undefined}
                     onContinue={conversationId && !m.local ? () => void continueReply(m.id) : undefined}
                   />
@@ -392,6 +424,9 @@ export function ChatView(): ReactNode {
         </header>
         <div className={`vx-ai-main${empty ? ' is-empty' : ''}`}>{body}</div>
       </div>
+      {panel.open && (
+        <ArtifactPanel versions={versions.get(panel.open.id) ?? []} live={streaming} sheet={!wide} />
+      )}
       <div className="sr-only" aria-live="polite">{announce}</div>
     </div>
   );

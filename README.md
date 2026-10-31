@@ -96,6 +96,7 @@ backend/
   supabase/reset.sql          drops everything so schema.sql can start over
   scripts/                    an operator script for the zone's edge rules (see docs/operations.md)
 shared/identity-vectors.json  song-identity test vectors run by both packages
+sandbox/                      VinaX AI's artifact preview runner, its own static site (see DEPLOYMENT.md)
 docs/                         current documentation; docs/history/ holds dated records
 .github/workflows/            checks, deploys, Android builds and the uptime probe
 ```

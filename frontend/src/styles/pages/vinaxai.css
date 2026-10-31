@@ -619,3 +619,37 @@
 .vx-ai-file-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .vx-ai-notice-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .vx-ai.is-dragging .vx-ai-composer { border-color: rgb(var(--ember-500)); box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.35); }
+
+/* ------------------------------------------------------------- artifacts */
+.vx-ai-artifact-card {
+  display: flex; align-items: center; gap: 12px; width: 100%; max-width: 420px; margin: 4px 0 12px; padding: 10px 14px 10px 10px;
+  border-radius: var(--vx-radius-card); border: 1px solid var(--glass-border); background: rgb(var(--ink-850)); text-align: left; color: inherit;
+}
+.vx-ai-artifact-card:hover { background: rgb(var(--ink-800)); }
+.vx-ai-artifact-icon {
+  display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: var(--vx-radius-control);
+  background: rgb(var(--ember-500) / 0.16); color: rgb(var(--ember-300)); font-weight: 800; font-family: var(--vx-font-display);
+}
+.vx-ai-artifact-card .vx-ai-file-name { font-size: 0.9375rem; font-weight: 600; white-space: normal; }
+.vx-ai-artifact-card .vx-ai-file-meta { font-size: 0.75rem; }
+.vx-ai-artifact-resize { width: 6px; flex-shrink: 0; cursor: col-resize; background: transparent; border-left: 1px solid var(--glass-border); touch-action: none; }
+.vx-ai-artifact-resize:hover, .vx-ai-artifact-resize:focus-visible { background: rgb(var(--ember-500) / 0.35); }
+.vx-ai-artifact { display: flex; flex-direction: column; min-width: 0; min-height: 0; flex-grow: 0; flex-shrink: 0; background: rgb(var(--ink-900)); }
+.vx-ai-artifact.is-sheet { position: fixed; inset: 0; z-index: 50; padding-top: var(--safe-top); padding-bottom: var(--safe-bottom); }
+.vx-ai-artifact-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 10px 8px 16px; border-bottom: 1px solid var(--glass-border); min-height: 56px; }
+.vx-ai-artifact-title { flex: 1; min-width: 120px; display: flex; flex-direction: column; }
+.vx-ai-artifact-title h2 { margin: 0; font-size: 0.9875rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vx-ai-artifact-tools { display: flex; align-items: center; gap: 2px; }
+.vx-ai-tabs { display: inline-flex; padding: 2px; margin-right: 6px; border-radius: var(--vx-radius-control); background: rgb(var(--ink-850)); border: 1px solid var(--glass-border); }
+.vx-ai-tabs button { min-height: 30px; padding: 0 12px; border-radius: 8px; font-size: 0.8125rem; color: rgb(var(--ink-300)); }
+.vx-ai-tabs button[aria-selected='true'] { background: rgb(var(--ink-700)); color: rgb(var(--ink-100)); font-weight: 600; }
+.vx-ai-tabs button:disabled { opacity: 0.45; }
+.vx-ai-artifact-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.vx-ai-artifact-body > .vx-ai-code { margin: 0; border: 0; border-radius: 0; flex: 1; }
+.vx-ai-artifact-body > .vx-ai-code pre { min-height: 100%; }
+.vx-ai-artifact-doc { padding: 20px 24px; }
+.vx-ai-runner { position: relative; flex: 1; display: flex; flex-direction: column; min-height: 320px; }
+.vx-ai-runner-frame { flex: 1; width: 100%; border: 0; background: #fff; }
+.vx-ai-runner-missing { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 24px; text-align: center; color: rgb(var(--ink-300)); }
+.vx-ai-runner-missing p { margin: 0; }
+.vx-ai-runner-error { margin: 0; padding: 8px 14px; font-size: 0.8125rem; background: rgb(var(--ink-850)); color: var(--vx-danger); border-top: 1px solid var(--glass-border); }
