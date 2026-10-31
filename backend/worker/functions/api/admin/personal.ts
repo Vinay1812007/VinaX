@@ -10,7 +10,7 @@ import { candidatesFor } from '../../_lib/ai/complete';
 import type { AiEnv } from '../../_lib/ai/types';
 import { db } from '../../_lib/db';
 import { personalConfig } from '../../_lib/personal/config';
-import { embedConfigured, runEmbedBacklog, type EmbedEnv } from '../../_lib/personal/embed';
+import { embedConfigured, runEmbedBacklog, runVerifyBacklog, type EmbedEnv } from '../../_lib/personal/embed';
 
 export const onRequestGet = adminGet(async ({ env }) => {
   const config = await personalConfig(env);
@@ -31,9 +31,10 @@ export const onRequestGet = adminGet(async ({ env }) => {
 export const onRequestPost = adminPost(async ({ env, body, audit }) => {
   const config = await personalConfig(env);
   if (body.action === 'embed') {
+    const v = await runVerifyBacklog(env as unknown as EmbedEnv, 25);
     const r = await runEmbedBacklog(env as unknown as EmbedEnv, config.embedModel, 200);
-    await audit({ action: 'personal.embed', summary: `embedded ${r.embedded}, backlog ${r.backlog}` });
-    return adminJson(r);
+    await audit({ action: 'personal.embed', summary: `verified ${v.verified}, dropped ${v.dropped}, embedded ${r.embedded}, backlog ${r.backlog}` });
+    return adminJson({ ...r, verified: v.verified, dropped: v.dropped });
   }
   if (body.action === 'colisten') {
     const r = await db.rpc<Record<string, unknown>>(env, 'personal_refresh_colisten', { p_days: 30, p_cap: 50 });

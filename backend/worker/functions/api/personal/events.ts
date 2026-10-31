@@ -18,7 +18,7 @@ import { gate, options, personalJson } from '../../_lib/personal/route';
 export const onRequestOptions = options('POST, OPTIONS');
 
 export const onRequestPost = async (ctx: { request: Request; env: PersonalEnv; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
-  const g = await gate(ctx.env, ctx.request, 'personal-events', { capacity: 60, refillPerMinute: 60, perAccount: 'RATE_LIMIT_300' });
+  const g = await gate(ctx.env, ctx.request, 'personal-events', { capacity: 60, refillPerMinute: 60, perAccount: 'RATE_LIMIT_60' });
   if ('fail' in g) return g.fail;
   const read = await readJsonCapped<unknown>(ctx.request, MAX_BATCH_BYTES);
   if (!read.ok) return json({ error: read.reason === 'too_large' ? 'too_large' : 'bad_request' }, read.reason === 'too_large' ? 413 : 400);

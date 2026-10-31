@@ -1,7 +1,7 @@
 import type { Song } from '@/types';
 import type { RecommendationContext, RejectReason as DebugRejectReason } from '@/services/recommendation/types';
 import type { FallbackReason, NextRecommendationOptions, NextSongsPlan } from '@/services/recommendation/engine';
-import { getArtistTopSongs, getSong, getSongSuggestions, searchSongs } from '@/services/api/saavn';
+import { getArtistTopSongs, getSongSuggestions, searchSongs } from '@/services/api/saavn';
 import { fetchPersonalRecommendations, personalEnabled } from '@/services/personal/api';
 import { toSong } from '@/services/personal/types';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -105,14 +105,10 @@ const defaultApi: CatalogueApi = {
   similar: (id, limit, signal) => getSongSuggestions(id, limit, { signal }),
   artistTop: (id) => getArtistTopSongs(id, 0),
   personalOn: () => personalEnabled(),
-  // The server answers display records; the first few are resolved to full songs here so the
-  // player can preload them, the rest resolve when they start (the player refetches a song without audio).
-  personal: async (seedId, limit, signal) => {
-    const list = await fetchPersonalRecommendations({ seed: seedId, limit, signal, mode: useSettingsStore.getState().discoveryMode });
-    const songs = list.map(toSong);
-    const resolved = await Promise.all(songs.slice(0, 6).map((s) => getSong(s.id, { signal, priority: 'background' }).catch(() => s)));
-    return [...resolved, ...songs.slice(6)];
-  },
+  // The server answers display records without audio; each resolves when it starts (the player
+  // refetches a song that has none). Nothing is resolved here on purpose: a list in which some
+  // songs carry audio and others do not marks the others unplayable (addToPool).
+  personal: async (seedId, limit, signal) => (await fetchPersonalRecommendations({ seed: seedId, limit, signal, mode: useSettingsStore.getState().discoveryMode })).map(toSong),
   search: (q, limit, signal) => searchSongs(q, limit, { signal }),
 };
 let api: CatalogueApi = defaultApi;

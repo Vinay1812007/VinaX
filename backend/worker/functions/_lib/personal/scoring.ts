@@ -45,8 +45,9 @@ export function exposureOf(row: ExposureRow | undefined, now: number): Exposure 
   add('played', ms(row.last_played));
   add('completed', ms(row.last_completed));
   add('skipped', ms(row.last_skipped), row.skipped);
-  if (row.disliked) add('disliked', ms(row.last_skipped) || ms(row.last_played) || now);
-  if (row.liked) penalty *= LIKED_FORGIVENESS;
+  if (row.disliked) add('disliked', ms(row.last_disliked) || ms(row.last_skipped) || ms(row.last_played) || now);
+  // A liked song pays a quarter and never cools, as on the device.
+  if (row.liked) { penalty *= LIKED_FORGIVENESS; cooling = false; }
   const lastPlayed = ms(row.last_played);
   return { penalty, cooling, recentlyPlayed: lastPlayed > 0 && now - lastPlayed < RECENT_PLAY_GUARD_MS, disliked: row.disliked };
 }
@@ -157,14 +158,26 @@ export interface RerankOptions {
   dropCooling?: boolean;
 }
 
-const overlap = (a: SongRow, b: SongRow): number => {
+/** The re-rank's view of a song, computed once: the keys the diversity cost compares. */
+interface Keyed { s: Scored; artist: string; album: string | null; language: string | null }
+
+const keyed = (s: Scored): Keyed => ({
+  s,
+  artist: s.song.artist_id ?? `name:${s.song.artist.toLowerCase()}`,
+  album: s.song.album_id,
+  language: s.song.language ? s.song.language.toLowerCase() : null,
+});
+
+const overlap = (a: Keyed, b: Keyed): number => {
   let n = 0;
-  if (a.artist_id && a.artist_id === b.artist_id) n += 1;
-  else if (a.artist.toLowerCase() === b.artist.toLowerCase()) n += 1;
-  if (a.album_id && a.album_id === b.album_id) n += 0.5;
+  if (a.artist === b.artist) n += 1;
+  if (a.album && a.album === b.album) n += 0.5;
   if (a.language && a.language === b.language) n += 0.25;
   return n;
 };
+
+/** The re-rank looks at no more than this many candidates: each shelf takes at most SHELF_SIZE, and the list arrives sorted. */
+export const RERANK_WINDOW = 300;
 
 /**
  * Greedy, maximal-marginal-relevance style: each pick is the best score
@@ -175,37 +188,47 @@ const overlap = (a: SongRow, b: SongRow): number => {
 export function rerank(scored: readonly Scored[], o: RerankOptions): Scored[] {
   const cap = o.artistCap ?? 3;
   const claimed = o.claimed ?? new Set<string>();
-  const pick = (from: Scored[], out: Scored[], keys: Set<string>, artists: Map<string, number>) => {
-    const remaining = from.slice();
-    while (out.length < o.limit && remaining.length) {
-      let bestI = -1;
-      let best = -Infinity;
-      for (let i = 0; i < remaining.length; i += 1) {
-        const s = remaining[i];
-        const akey = s.song.artist_id ?? `name:${s.song.artist.toLowerCase()}`;
-        if (keys.has(s.song.key) || keys.has(s.song.id) || claimed.has(s.song.key) || claimed.has(s.song.id)) { remaining.splice(i, 1); i -= 1; continue; }
-        if ((artists.get(akey) ?? 0) >= cap) { remaining.splice(i, 1); i -= 1; continue; }
-        const last = out[out.length - 1];
-        if (last && (last.song.artist_id ?? `name:${last.song.artist.toLowerCase()}`) === akey && remaining.length > 1) continue;
-        let cost = 0;
-        for (const prev of out.slice(-4)) cost += overlap(s.song, prev.song);
-        const utility = s.score - 0.12 * cost;
-        if (utility > best) { best = utility; bestI = i; }
-      }
-      if (bestI < 0) break;
-      const [chosen] = remaining.splice(bestI, 1);
-      out.push(chosen);
-      keys.add(chosen.song.key);
-      keys.add(chosen.song.id);
-      const akey = chosen.song.artist_id ?? `name:${chosen.song.artist.toLowerCase()}`;
-      artists.set(akey, (artists.get(akey) ?? 0) + 1);
-    }
-  };
   const out: Scored[] = [];
+  const picked: Keyed[] = [];
   const keys = new Set<string>();
   const artists = new Map<string, number>();
-  pick(scored.filter((s) => !s.cooling), out, keys, artists);
-  if (!o.dropCooling && out.length < o.limit) pick(scored.filter((s) => s.cooling), out, keys, artists);
+  const pick = (from: Keyed[]) => {
+    const done = new Uint8Array(from.length);
+    while (out.length < o.limit) {
+      let bestI = -1;
+      let best = -Infinity;
+      const last = picked[picked.length - 1];
+      const tail = picked.slice(-4);
+      let open = 0;
+      for (let i = 0; i < from.length; i += 1) {
+        if (done[i]) continue;
+        const k = from[i];
+        const song = k.s.song;
+        if (keys.has(song.key) || keys.has(song.id) || claimed.has(song.key) || claimed.has(song.id) || (artists.get(k.artist) ?? 0) >= cap) { done[i] = 1; continue; }
+        open += 1;
+        if (last && last.artist === k.artist && open > 1) continue;
+        let cost = 0;
+        for (const prev of tail) cost += overlap(k, prev);
+        const utility = k.s.score - 0.12 * cost;
+        if (utility > best) { best = utility; bestI = i; }
+      }
+      if (bestI < 0) {
+        // Only same-artist songs were left (the back-to-back rule skipped them all): take the best of those.
+        for (let i = 0; i < from.length; i += 1) if (!done[i]) { bestI = i; break; }
+        if (bestI < 0) break;
+      }
+      const chosen = from[bestI];
+      done[bestI] = 1;
+      out.push(chosen.s);
+      picked.push(chosen);
+      keys.add(chosen.s.song.key);
+      keys.add(chosen.s.song.id);
+      artists.set(chosen.artist, (artists.get(chosen.artist) ?? 0) + 1);
+    }
+  };
+  const window = scored.slice(0, RERANK_WINDOW);
+  pick(window.filter((s) => !s.cooling).map(keyed));
+  if (!o.dropCooling && out.length < o.limit) pick(window.filter((s) => s.cooling).map(keyed));
   return out;
 }
 

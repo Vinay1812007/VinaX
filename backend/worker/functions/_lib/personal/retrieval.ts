@@ -8,7 +8,7 @@
 import type { DbEnv } from '../db';
 import { db } from '../db';
 import { catalogueArtistTop, catalogueSearch, catalogueSimilar } from './catalogue';
-import { fetchSongs, upsertSongs } from './songs';
+import { fetchSongs, touchSongs } from './songs';
 import { tasteLanguages, tasteSongs, topArtists } from './taste';
 import type { Candidate, CandidateSource, SongFacts, SongRow, Taste } from './types';
 
@@ -19,7 +19,7 @@ type CatalogueEnv = DbEnv & { CATALOG_UPSTREAMS?: string; CATALOG_DIRECT_URL?: s
 export interface Pool {
   candidates: Map<string, Candidate>;
   songs: Map<string, SongRow>;
-  /** Songs the catalogue handed over that the engine had not met (to embed). */
+  /** Songs the catalogue handed over that are not yet embedded in this model (to embed). */
   fresh: SongFacts[];
 }
 
@@ -53,6 +53,25 @@ interface Neighbour { id: string; similarity: number }
 interface Partner { id: string; weight: number }
 interface Trend { id: string; plays: number }
 
+/** The community's trending list is the same for everyone with these languages: memoised per isolate for five minutes. */
+const TREND_MEMO_MS = 5 * 60_000;
+const trendMemo = new Map<string, { at: number; value: Trend[] }>();
+
+async function trending(env: DbEnv, languages: string[] | null, now: number): Promise<Trend[]> {
+  const key = (languages ?? ['*']).slice().sort().join(',');
+  const hit = trendMemo.get(key);
+  if (hit && now - hit.at < TREND_MEMO_MS) return hit.value;
+  const r = await db.rpc<Trend[]>(env, 'personal_trending', { p_languages: languages, p_days: 7, p_limit: 60 });
+  const value = r.ok && Array.isArray(r.value) ? r.value : [];
+  if (r.ok) trendMemo.set(key, { at: now, value });
+  return value;
+}
+
+/** For tests. */
+export function _resetTrendMemo(): void {
+  trendMemo.clear();
+}
+
 export async function gatherPool(env: CatalogueEnv, o: GatherOptions): Promise<Pool> {
   const now = o.now ?? Date.now();
   const { taste } = o;
@@ -71,7 +90,7 @@ export async function gatherPool(env: CatalogueEnv, o: GatherOptions): Promise<P
       if (r.ok && Array.isArray(r.value)) for (const n of r.value) add(pool, n.id, 'neighbours', { similarity: n.similarity, seedId: o.seed! });
     }));
   } else {
-    tasks.push(db.rpc<Neighbour[]>(env, 'personal_neighbours', { p_account: o.accountId, p_model: o.embedModel, p_limit: 150, p_languages: languages, p_cooling_hours: 72 }).then((r) => {
+    tasks.push(db.rpc<Neighbour[]>(env, 'personal_neighbours', { p_account: o.accountId, p_model: o.embedModel, p_limit: 150, p_languages: languages, p_cooling: true }).then((r) => {
       if (r.ok && Array.isArray(r.value)) for (const n of r.value) add(pool, n.id, 'neighbours', { similarity: n.similarity });
     }));
   }
@@ -106,8 +125,8 @@ export async function gatherPool(env: CatalogueEnv, o: GatherOptions): Promise<P
 
   // 5. what the community plays in these languages
   if (!o.seed) {
-    tasks.push(db.rpc<Trend[]>(env, 'personal_trending', { p_languages: languages, p_days: 7, p_limit: 60 }).then((r) => {
-      if (r.ok && Array.isArray(r.value)) r.value.forEach((t, i) => add(pool, t.id, 'trending', { rank: i, trendPlays: t.plays }));
+    tasks.push(trending(env, languages, now).then((list) => {
+      list.forEach((t, i) => add(pool, t.id, 'trending', { rank: i, trendPlays: t.plays }));
     }));
   }
 
@@ -125,14 +144,12 @@ export async function gatherPool(env: CatalogueEnv, o: GatherOptions): Promise<P
 
   await Promise.all(tasks);
 
-  // Known rows first; whatever the catalogue brought that we had not met is written and read back.
+  // What the catalogue brought is written first (verified: it came from the catalogue, not a
+  // device), then the whole pool is read once; only verified rows come back.
+  const catalogued = dedupe(facts);
+  if (catalogued.length) await touchSongs(env, catalogued, true);
   const songs = await fetchSongs(env, [...pool.keys()]);
-  const fresh = dedupe(facts.filter((f) => !songs.has(f.id)));
-  if (fresh.length) {
-    await upsertSongs(env, fresh);
-    const added = await fetchSongs(env, fresh.map((f) => f.id));
-    for (const [id, row] of added) songs.set(id, row);
-  }
+  const fresh = catalogued.filter((f) => songs.get(f.id)?.embed_model !== o.embedModel);
   for (const id of [...pool.keys()]) if (!songs.has(id)) pool.delete(id);
   return { candidates: pool, songs, fresh };
 }

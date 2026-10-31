@@ -12,10 +12,14 @@
  * same language and era, sit near each other; what listeners actually do
  * with them comes in through co-listening and the taste model's affinities.
  */
-import { db, type DbEnv } from '../db';
+import { db, q, type DbEnv } from '../db';
 import type { AiKeysEnv, WorkersAiBinding } from '../ai/types';
+import { catalogueSongs } from './catalogue';
 import { EMBED_DIMENSIONS } from './config';
+import { touchSongs } from './songs';
 import type { SongFacts, SongRow } from './types';
+
+type CatalogueEnv = { CATALOG_UPSTREAMS?: string; CATALOG_DIRECT_URL?: string };
 
 export type EmbedEnv = DbEnv & Pick<AiKeysEnv, 'AI' | 'GEMINI_API_KEY'>;
 
@@ -125,11 +129,28 @@ export async function embedSongs(env: EmbedEnv, model: string, rows: readonly (S
   return written;
 }
 
-/** The backlog job: embed up to `limit` songs that have no vector. */
+/** The backlog job: embed up to `limit` verified songs that have no vector in this model's space. */
 export async function runEmbedBacklog(env: EmbedEnv, model: string, limit = 200): Promise<{ embedded: number; backlog: number }> {
   if (!embedConfigured(env, model)) return { embedded: 0, backlog: -1 };
-  const r = await db.rpc<SongRow[]>(env, 'personal_embed_backlog', { p_limit: limit });
+  const r = await db.rpc<SongRow[]>(env, 'personal_embed_backlog', { p_limit: limit, p_model: model });
   if (!r.ok || !Array.isArray(r.value)) return { embedded: 0, backlog: -1 };
   const embedded = await embedSongs(env, model, r.value);
   return { embedded, backlog: r.value.length - embedded };
+}
+
+/**
+ * Confirm device-asserted songs against the catalogue: a song the catalogue
+ * knows is rewritten with the catalogue's facts and verified; a song it does
+ * not know is removed (it never reached a page). `limit` bounds the catalogue
+ * calls one run makes.
+ */
+export async function runVerifyBacklog(env: EmbedEnv & CatalogueEnv, limit = 25): Promise<{ verified: number; dropped: number; left: number }> {
+  const r = await db.rpc<SongRow[]>(env, 'personal_unverified', { p_limit: limit });
+  if (!r.ok || !Array.isArray(r.value) || !r.value.length) return { verified: 0, dropped: 0, left: 0 };
+  const found = await catalogueSongs(env, r.value.map((s) => s.id), limit);
+  const known = new Set(found.map((f) => f.id));
+  if (found.length) await touchSongs(env, found, true);
+  const missing = r.value.map((s) => s.id).filter((id) => !known.has(id));
+  if (missing.length) await db.remove(env, 'personal_songs', q().in('id', missing).eq('verified', 'false'));
+  return { verified: found.length, dropped: missing.length, left: r.value.length === limit ? -1 : 0 };
 }

@@ -584,13 +584,19 @@ create table if not exists personal_songs (
   completes    bigint not null default 0,
   skips        bigint not null default 0,
   likes        bigint not null default 0,
+  -- A row a device asserted is unverified until the catalogue confirmed it (the engine's
+  -- own lookups write verified rows). Only verified rows reach other listeners' pages.
+  verified     boolean not null default false,
   first_seen   timestamptz not null default now(),
   last_seen    timestamptz not null default now(),
   constraint personal_songs_artists_check check (jsonb_typeof(artists) = 'array'),
   constraint personal_songs_facets_check check (jsonb_typeof(facets) = 'object')
 );
+-- A database that took an earlier draft of version 7 gains the column in place.
+alter table personal_songs add column if not exists verified boolean not null default false;
 create index if not exists personal_songs_embedding_idx on personal_songs using hnsw (embedding extensions.vector_cosine_ops);
 create index if not exists personal_songs_backlog_idx on personal_songs (first_seen) where embedding is null;
+create index if not exists personal_songs_unverified_idx on personal_songs (first_seen) where not verified;
 create index if not exists personal_songs_language_idx on personal_songs (language, last_seen desc);
 create index if not exists personal_songs_artist_idx on personal_songs (artist_id) where artist_id is not null;
 create index if not exists personal_songs_key_idx on personal_songs (key);
@@ -616,6 +622,8 @@ create table if not exists personal_events (
 create unique index if not exists personal_events_client_key on personal_events (account_id, client_id) where client_id is not null;
 create index if not exists personal_events_account_idx on personal_events (account_id, at desc);
 create index if not exists personal_events_song_idx on personal_events (song_id, at desc) where kind = 'play';
+create index if not exists personal_events_kind_at_idx on personal_events (kind, at desc);
+create index if not exists personal_events_at_idx on personal_events (at);
 
 -- The taste model: one row per account, folded by the Worker from events
 -- (the JSON maps) and recomputed here (the vector). `version` rises with
@@ -658,9 +666,11 @@ create table if not exists personal_exposure (
   last_played    timestamptz,
   last_completed timestamptz,
   last_skipped   timestamptz,
+  last_disliked  timestamptz,
   updated_at     timestamptz not null default now(),
   primary key (account_id, song_id)
 );
+alter table personal_exposure add column if not exists last_disliked timestamptz;
 create index if not exists personal_exposure_recent_idx on personal_exposure (account_id, updated_at desc);
 
 -- Pages the engine composed: a Home (served from here for its lifetime), a
@@ -673,6 +683,7 @@ create table if not exists personal_pages (
   prompt      text,
   page        jsonb not null,
   taste_version integer,
+  events_seen integer,                                  -- the model's event count when the page was built (staleness)
   model_id    text,
   composed    boolean not null default false,          -- the language model shaped it (false = deterministic fallback)
   built_ms    integer,
@@ -681,6 +692,7 @@ create table if not exists personal_pages (
   constraint personal_pages_kind_check check (kind in ('home', 'playlist', 'radio')),
   constraint personal_pages_page_check check (jsonb_typeof(page) = 'object')
 );
+alter table personal_pages add column if not exists events_seen integer;
 create index if not exists personal_pages_account_idx on personal_pages (account_id, kind, created_at desc);
 create index if not exists personal_pages_expires_idx on personal_pages (expires_at) where expires_at is not null;
 
@@ -720,7 +732,7 @@ begin
     v_new := v_new || coalesce(v_client, '');
 
     insert into personal_exposure as x (account_id, song_id, shown, queued, played, completed, skipped, liked, disliked,
-                                        last_shown, last_queued, last_played, last_completed, last_skipped, updated_at)
+                                        last_shown, last_queued, last_played, last_completed, last_skipped, last_disliked, updated_at)
       values (p_account, v_song,
               case when v_kind = 'shown' then 1 else 0 end,
               case when v_kind = 'queue' then 1 else 0 end,
@@ -733,15 +745,19 @@ begin
               case when v_kind in ('play', 'search_play', 'radio_start') then v_at end,
               case when v_kind = 'complete' then v_at end,
               case when v_kind = 'skip' then v_at end,
+              case when v_kind = 'dislike' then v_at end,
               now())
       on conflict (account_id, song_id) do update set
         shown = x.shown + excluded.shown, queued = x.queued + excluded.queued, played = x.played + excluded.played,
-        completed = x.completed + excluded.completed, skipped = x.skipped + excluded.skipped,
+        completed = x.completed + excluded.completed,
+        -- a play or a completion forgives earlier skips, as the device's ledger does
+        skipped = case when v_kind in ('play', 'search_play', 'radio_start', 'complete') then 0 else x.skipped + excluded.skipped end,
         liked = case when v_kind = 'like' then true when v_kind in ('unlike', 'dislike') then false else x.liked end,
         disliked = case when v_kind = 'dislike' then true when v_kind = 'like' then false else x.disliked end,
         last_shown = greatest(x.last_shown, excluded.last_shown), last_queued = greatest(x.last_queued, excluded.last_queued),
         last_played = greatest(x.last_played, excluded.last_played), last_completed = greatest(x.last_completed, excluded.last_completed),
-        last_skipped = greatest(x.last_skipped, excluded.last_skipped), updated_at = now();
+        last_skipped = greatest(x.last_skipped, excluded.last_skipped), last_disliked = greatest(x.last_disliked, excluded.last_disliked),
+        updated_at = now();
 
     update personal_songs set
         plays = plays + case when v_kind in ('play', 'search_play', 'radio_start') then 1 else 0 end,
@@ -753,6 +769,63 @@ begin
   end loop;
   return jsonb_build_object('inserted', to_jsonb(v_new));
 end;
+$$;
+
+-- Songs the engine met, written safely: p_rows is an array of song facts
+-- (the device's shape). A new row is inserted (verified when p_verified: the
+-- facts came from the catalogue, not a device). An existing row only gains
+-- what it lacked and a newer last_seen — a device can never rewrite another
+-- listener's title, artist or artwork — unless the facts are verified, which
+-- replace a device's version. Returns how many rows were new.
+create or replace function personal_touch_songs(p_rows jsonb, p_verified boolean default false) returns integer
+language plpgsql set search_path = public, pg_temp as $$
+declare n integer;
+begin
+  if jsonb_typeof(p_rows) <> 'array' then return 0; end if;
+  with src as (
+    select r ->> 'id' as id, r ->> 'title' as title, r ->> 'artist' as artist, r ->> 'artistId' as artist_id,
+           coalesce(r -> 'artists', '[]'::jsonb) as artists, r ->> 'album' as album, r ->> 'albumId' as album_id,
+           r ->> 'language' as language, (r ->> 'year')::integer as year, (r ->> 'duration')::integer as duration,
+           r ->> 'image' as image, r ->> 'key' as key, coalesce(r -> 'facets', '{}'::jsonb) as facets
+    from jsonb_array_elements(p_rows) r
+    where (r ->> 'id') is not null and (r ->> 'title') is not null and (r ->> 'artist') is not null and (r ->> 'key') is not null
+  ), ins as (
+    insert into personal_songs as s (id, title, artist, artist_id, artists, album, album_id, language, year, duration, image, key, facets, verified, last_seen)
+      select id, title, artist, artist_id, artists, album, album_id, language, year, duration, image, key, facets, p_verified, now() from src
+      on conflict (id) do update set
+        title = case when p_verified then excluded.title else s.title end,
+        artist = case when p_verified then excluded.artist else s.artist end,
+        artist_id = case when p_verified then coalesce(excluded.artist_id, s.artist_id) else coalesce(s.artist_id, excluded.artist_id) end,
+        artists = case when p_verified or jsonb_array_length(s.artists) = 0 then excluded.artists else s.artists end,
+        album = case when p_verified then coalesce(excluded.album, s.album) else coalesce(s.album, excluded.album) end,
+        album_id = case when p_verified then coalesce(excluded.album_id, s.album_id) else coalesce(s.album_id, excluded.album_id) end,
+        language = case when p_verified then coalesce(excluded.language, s.language) else coalesce(s.language, excluded.language) end,
+        year = case when p_verified then coalesce(excluded.year, s.year) else coalesce(s.year, excluded.year) end,
+        duration = case when p_verified then coalesce(excluded.duration, s.duration) else coalesce(s.duration, excluded.duration) end,
+        image = case when p_verified then coalesce(excluded.image, s.image) else coalesce(s.image, excluded.image) end,
+        key = case when p_verified then excluded.key else s.key end,
+        facets = s.facets || excluded.facets,
+        verified = s.verified or p_verified,
+        last_seen = greatest(s.last_seen, now())
+      returning (xmax = 0) as inserted
+  )
+  select count(*) filter (where inserted) into n from ins;
+  return coalesce(n, 0);
+end;
+$$;
+
+-- Unverified rows the catalogue should confirm, oldest first (the job's work list).
+create or replace function personal_unverified(p_limit integer default 40)
+returns setof personal_songs
+language sql stable set search_path = public, pg_temp as $$
+  select * from personal_songs where not verified order by first_seen limit greatest(1, least(coalesce(p_limit, 40), 500));
+$$;
+
+-- One account's exposure for a set of songs (the pool), instead of its whole ledger.
+create or replace function personal_exposure_for(p_account text, p_songs text[])
+returns setof personal_exposure
+language sql stable set search_path = public, pg_temp as $$
+  select * from personal_exposure where account_id = p_account and song_id = any (p_songs);
 $$;
 
 -- Recompute one account's taste vector from its song scores: the score-
@@ -789,42 +862,49 @@ begin
 end;
 $$;
 
--- The songs nearest to an account's taste vector, leaving out what the
--- account was shown or played within the cooling window and, when asked,
--- anything outside p_languages. (id, similarity 0..1, language, artist_id).
+-- The songs nearest to an account's taste vector, among verified songs,
+-- leaving out what the account was shown, queued, played or skipped within
+-- that kind's cooling window (the device's: shown 12 h, queued 2 d, played
+-- and completed 3 d, skipped 14 d; disliked never comes back) and, when
+-- asked, anything outside p_languages. p_cooling = false lifts the windows.
+-- The index scan is widened (ef_search, iterative scan) so the filters do
+-- not starve the answer. (id, similarity 0..1, language, artist_id).
 create or replace function personal_neighbours(p_account text, p_model text, p_limit integer default 120,
-                                               p_languages text[] default null, p_cooling_hours integer default 72)
+                                               p_languages text[] default null, p_cooling boolean default true)
 returns table (id text, similarity real, language text, artist_id text)
-language sql stable set search_path = public, extensions, pg_temp as $$
-  with t as (select vector from personal_taste where account_id = p_account and embed_model = p_model and vector is not null),
-  near as (
-    select s.id, s.language, s.artist_id, (1 - (s.embedding <=> t.vector))::real as similarity
-    from personal_songs s, t
-    where s.embedding is not null and s.embed_model = p_model
+language sql stable
+set search_path = public, extensions, pg_temp
+set hnsw.ef_search = 400
+set hnsw.iterative_scan = relaxed_order
+as $$
+  with near as (
+    select s.id, s.language, s.artist_id,
+           (1 - (s.embedding <=> (select t.vector from personal_taste t where t.account_id = p_account and t.embed_model = p_model)))::real as similarity
+    from personal_songs s
+    where s.embedding is not null and s.embed_model = p_model and s.verified
       and (p_languages is null or s.language = any (p_languages))
-    order by s.embedding <=> t.vector
-    limit greatest(coalesce(p_limit, 120) * 4, 200)
+      and exists (select 1 from personal_taste t where t.account_id = p_account and t.embed_model = p_model and t.vector is not null)
+      and not exists (
+        select 1 from personal_exposure x
+        where x.account_id = p_account and x.song_id = s.id
+          and (x.disliked or (p_cooling and (
+                 x.last_shown > now() - interval '12 hours' or x.last_queued > now() - interval '2 days'
+              or x.last_played > now() - interval '3 days' or x.last_completed > now() - interval '3 days'
+              or x.last_skipped > now() - interval '14 days'))))
+    order by s.embedding <=> (select t.vector from personal_taste t where t.account_id = p_account and t.embed_model = p_model)
+    limit greatest(1, least(coalesce(p_limit, 120), 500))
   )
-  select n.id, n.similarity, n.language, n.artist_id
-  from near n
-  where not exists (
-    select 1 from personal_exposure x
-    where x.account_id = p_account and x.song_id = n.id
-      and (x.disliked
-           or greatest(x.last_shown, x.last_queued, x.last_played, x.last_completed, x.last_skipped)
-              > now() - make_interval(hours => greatest(coalesce(p_cooling_hours, 72), 0))))
-  order by n.similarity desc
-  limit greatest(1, least(coalesce(p_limit, 120), 500));
+  select n.id, n.similarity, n.language, n.artist_id from near n order by n.similarity desc;
 $$;
 
 -- The songs nearest to one song's embedding (the song itself left out).
 create or replace function personal_similar_songs(p_song text, p_model text, p_limit integer default 40)
 returns table (id text, similarity real)
-language sql stable set search_path = public, extensions, pg_temp as $$
+language sql stable set search_path = public, extensions, pg_temp set hnsw.ef_search = 200 as $$
   with seed as (select embedding from personal_songs where id = p_song and embedding is not null and embed_model = p_model)
   select s.id, (1 - (s.embedding <=> seed.embedding))::real as similarity
   from personal_songs s, seed
-  where s.id <> p_song and s.embedding is not null and s.embed_model = p_model
+  where s.id <> p_song and s.embedding is not null and s.embed_model = p_model and s.verified
   order by s.embedding <=> seed.embedding
   limit greatest(1, least(coalesce(p_limit, 40), 200));
 $$;
@@ -861,6 +941,7 @@ begin
       from events where kind = 'play' and at >= v_since and listener_id is not null and song_id is not null
     ) p where rn <= 150;
   delete from _plays where who in (select who from _plays group by who having count(*) < 3);
+  create index on _plays (who, at);
   create temp table _pairs on commit drop as
     select a.song_id, b.song_id as other_id, count(distinct a.who)::real as weight
     from _plays a join _plays b
@@ -878,18 +959,20 @@ end;
 $$;
 
 -- What the community played most in the window, in the given languages (any
--- language when null), from personal and anonymous plays. (id, plays).
+-- language when null), from personal and anonymous plays: LISTENERS who
+-- played a song, not plays, so one account cannot push a song up. Verified
+-- songs only. (id, plays = distinct listeners).
 create or replace function personal_trending(p_languages text[] default null, p_days integer default 7, p_limit integer default 60)
 returns table (id text, plays bigint)
 language sql stable set search_path = public, pg_temp as $$
   with since as (select now() - make_interval(days => least(greatest(coalesce(p_days, 7), 1), 90)) as t),
   plays as (
-    select song_id from personal_events, since where kind = 'play' and at >= since.t
-    union all
-    select song_id from events, since where kind = 'play' and at >= since.t and song_id is not null
+    select song_id, 'a:' || account_id as who from personal_events, since where kind = 'play' and at >= since.t
+    union
+    select song_id, 'd:' || listener_id from events, since where kind = 'play' and at >= since.t and song_id is not null and listener_id is not null
   )
-  select p.song_id as id, count(*) as plays
-  from plays p join personal_songs s on s.id = p.song_id
+  select p.song_id as id, count(distinct p.who) as plays
+  from plays p join personal_songs s on s.id = p.song_id and s.verified
   where p_languages is null or s.language = any (p_languages)
   group by p.song_id
   order by plays desc
@@ -927,11 +1010,14 @@ begin
 end;
 $$;
 
--- Songs with no embedding yet, oldest first: the backlog job's work list.
-create or replace function personal_embed_backlog(p_limit integer default 200)
+-- Verified songs with no embedding in p_model's space yet (none at all, or
+-- one from an earlier model), oldest first: the backlog job's work list.
+create or replace function personal_embed_backlog(p_limit integer default 200, p_model text default null)
 returns setof personal_songs
 language sql stable set search_path = public, pg_temp as $$
-  select * from personal_songs where embedding is null order by first_seen limit greatest(1, least(coalesce(p_limit, 200), 1000));
+  select * from personal_songs
+  where verified and (embedding is null or (p_model is not null and embed_model is distinct from p_model))
+  order by first_seen limit greatest(1, least(coalesce(p_limit, 200), 1000));
 $$;
 
 -- Everything the engine holds about one account, gone. Returns what went.
@@ -970,7 +1056,8 @@ language sql stable set search_path = public, pg_temp as $$
     'eventsWeek', (select count(*) from personal_events where at >= now() - interval '7 days'),
     'songs', (select count(*) from personal_songs),
     'songsEmbedded', (select count(*) from personal_songs where embedding is not null),
-    'backlog', (select count(*) from personal_songs where embedding is null),
+    'backlog', (select count(*) from personal_songs where verified and embedding is null),
+    'unverified', (select count(*) from personal_songs where not verified),
     'models', coalesce((select jsonb_object_agg(embed_model, n) from (select embed_model, count(*) as n from personal_songs where embed_model is not null group by 1) m), '{}'::jsonb),
     'pagesDay', (select count(*) from personal_pages where created_at >= now() - interval '1 day'),
     'pagesComposedDay', (select count(*) from personal_pages where created_at >= now() - interval '1 day' and composed),
@@ -1540,6 +1627,7 @@ begin
                         'ai_conversation_search', 'ai_export', 'ai_take_daily',
                         'personal_record_events', 'personal_recompute_vector', 'personal_neighbours', 'personal_similar_songs',
                         'personal_colisten_for', 'personal_refresh_colisten', 'personal_trending', 'personal_embed_backlog', 'personal_set_embeddings', 'personal_mark_shown',
+                        'personal_touch_songs', 'personal_unverified', 'personal_exposure_for',
                         'personal_erase', 'personal_purge', 'personal_stats')
   loop
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);

@@ -53,12 +53,13 @@ export interface SongRow {
   completes: number;
   skips: number;
   likes: number;
+  verified: boolean;
   first_seen: string;
   last_seen: string;
 }
 
 /** The columns a page needs (never the vector). */
-export const SONG_COLUMNS = 'id,title,artist,artist_id,artists,album,album_id,language,year,duration,image,key,facets,embed_model,embedded_at,plays,completes,skips,likes,first_seen,last_seen';
+export const SONG_COLUMNS = 'id,title,artist,artist_id,artists,album,album_id,language,year,duration,image,key,facets,embed_model,embedded_at,plays,completes,skips,likes,verified,first_seen,last_seen';
 
 /** A song on the wire: what a shelf or a playlist carries. */
 export interface SongRecord extends SongFacts {
@@ -172,6 +173,7 @@ export interface ExposureRow {
   last_played: string | null;
   last_completed: string | null;
   last_skipped: string | null;
+  last_disliked: string | null;
 }
 
 // ------------------------------------------------------------- candidates --

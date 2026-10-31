@@ -33,13 +33,13 @@ export const onRequestPost = async (ctx: { request: Request; env: PersonalEnv; w
   const count = typeof read.value?.count === 'number' && Number.isFinite(read.value.count) ? Math.round(read.value.count) : PLAYLIST_DEFAULT;
   const { hour } = localTime({ hour: read.value?.hour });
   const now = Date.now();
-  const [loaded, exposure] = await Promise.all([loadTaste(ctx.env, g.sub), loadExposure(ctx.env, g.sub)]);
+  const loaded = await loadTaste(ctx.env, g.sub);
   if (!loaded.ok) return json({ error: 'unavailable' }, 503);
-  const built = await buildPlaylist(ctx.env, { accountId: g.sub, prompt, count, taste: loaded.taste, exposure, config: g.config, hour, now });
+  const built = await buildPlaylist(ctx.env, { accountId: g.sub, prompt, count, taste: loaded.taste, exposure: (ids) => loadExposure(ctx.env, g.sub, ids), config: g.config, hour, now });
   if (!built.songs.length) return json({ error: 'nothing_found' }, 422);
   const page: PlaylistPage = { id: crypto.randomUUID(), title: built.title, description: built.description, songs: built.songs, plan: built.plan, model: built.composed ? built.model : null, generatedAt: new Date(now).toISOString() };
   const work = (async () => {
-    await savePage(ctx.env, g.sub, 'playlist', page, { id: page.id, prompt, tasteVersion: loaded.taste.version, modelId: built.model, composed: built.composed, builtMs: Date.now() - now, expiresAt: new Date(now + PLAYLIST_TTL_MS).toISOString() });
+    await savePage(ctx.env, g.sub, 'playlist', page, { id: page.id, prompt, tasteVersion: loaded.taste.version, eventsSeen: loaded.taste.eventsSeen, modelId: built.model, composed: built.composed, builtMs: Date.now() - now, expiresAt: new Date(now + PLAYLIST_TTL_MS).toISOString() });
     await embedSongs(ctx.env, g.config.embedModel, built.pool.fresh);
   })().catch(() => undefined);
   if (ctx.waitUntil) ctx.waitUntil(work); else await work;

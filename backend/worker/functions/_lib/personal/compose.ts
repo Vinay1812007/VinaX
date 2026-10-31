@@ -92,8 +92,9 @@ export function applyComposition(c: Composition, shelves: readonly Shelf[], pool
       const sources = cs.from.map((k) => byKey.get(k)).filter((s): s is Shelf => !!s && !used.has(s.key));
       if (sources.length < 2) continue;
       const songs: SongRecord[] = [];
+      const seen = new Set<string>();
       const per = Math.ceil(SHELF_SIZE / sources.length);
-      for (const s of sources) songs.push(...unclaimed(s.songs).slice(0, per));
+      for (const s of sources) for (const song of unclaimed(s.songs).slice(0, per)) if (!seen.has(song.id)) { seen.add(song.id); songs.push(song); }
       if (songs.length < MIN_SHELF) continue;
       for (const s of sources) used.add(s.key);
       claim(songs);
@@ -113,7 +114,8 @@ export function applyComposition(c: Composition, shelves: readonly Shelf[], pool
     if (!base || used.has(base.key)) continue;
     used.add(base.key);
     const songs = unclaimed(base.songs);
-    if (songs.length < MIN_SHELF) { out.push({ ...base, title: cs.title, reason: cs.reason || base.reason }); claim(base.songs); continue; }
+    // A shelf the composer's own themed or merged shelf emptied is left out rather than repeated.
+    if (songs.length < MIN_SHELF) continue;
     claim(songs);
     out.push({ key: base.key, title: cs.title, reason: cs.reason || base.reason, songs });
   }

@@ -9,7 +9,8 @@
  *                               · VinaX AI chats deleted more than a day ago, and files never sent
  *                               · the personal engine: old events and pages purged, and once a day
  *                                 (the 21:00 UTC run) co-listening rebuilt
- *   personal-embed every run    embed up to 200 songs the personal engine met that have no vector yet
+ *   personal-embed every run    confirm up to 25 device-asserted songs with the catalogue, then embed
+ *                               up to 200 verified songs that have no vector in the configured model yet
  *
  * Nothing runs without the database: the jobs exist to write into it.
  */
@@ -17,7 +18,7 @@ import { DAY_MS, db, dbConfigured, q, since, type DbEnv } from './db';
 import { setting } from './settings';
 import { purgeAiChats } from './ai/cleanup';
 import { personalConfig } from './personal/config';
-import { runEmbedBacklog, type EmbedEnv } from './personal/embed';
+import { runEmbedBacklog, runVerifyBacklog, type EmbedEnv } from './personal/embed';
 import { COMPONENTS, probeAll } from '../api/status';
 
 export type JobId = 'status-tick' | 'housekeeping' | 'personal-embed';
@@ -100,8 +101,9 @@ async function housekeeping(env: DbEnv, now = Date.now()): Promise<Record<string
 async function personalEmbed(env: DbEnv): Promise<Record<string, unknown>> {
   const config = await personalConfig(env);
   if (!config.enabled) return { skipped: 'disabled' };
+  const v = await runVerifyBacklog(env as EmbedEnv, 25);
   const r = await runEmbedBacklog(env as EmbedEnv, config.embedModel, 200);
-  return { model: config.embedModel, embedded: r.embedded, backlog: r.backlog };
+  return { model: config.embedModel, verified: v.verified, dropped: v.dropped, embedded: r.embedded, backlog: r.backlog };
 }
 
 /** Run one job now, recording the run. Never throws. */

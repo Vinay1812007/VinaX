@@ -16,12 +16,12 @@ const iso = (ms: number) => new Date(ms).toISOString();
 const row = (id: string, over: Partial<SongRow> = {}): SongRow => ({
   id, title: `Song ${id}`, artist: 'Sid Sriram', artist_id: 'ar1', artists: [{ id: 'ar1', name: 'Sid Sriram' }], album: 'Album', album_id: 'al1',
   language: 'telugu', year: 2026, duration: 240, image: null, key: `song ${id}|sid sriram`, facets: {}, embed_model: 'm', embedded_at: iso(NOW),
-  plays: 100, completes: 50, skips: 5, likes: 10, first_seen: iso(NOW - 100 * DAY), last_seen: iso(NOW), ...over,
+  plays: 100, completes: 50, skips: 5, likes: 10, verified: true, first_seen: iso(NOW - 100 * DAY), last_seen: iso(NOW), ...over,
 });
 const cand = (id: string, sources: CandidateSource[], over: Partial<Candidate> = {}): Candidate => ({ id, sources: new Set(sources), ...over });
 const exposure = (over: Partial<ExposureRow> = {}): ExposureRow => ({
   song_id: 'x', shown: 0, queued: 0, played: 0, completed: 0, skipped: 0, liked: false, disliked: false,
-  last_shown: null, last_queued: null, last_played: null, last_completed: null, last_skipped: null, ...over,
+  last_shown: null, last_queued: null, last_played: null, last_completed: null, last_skipped: null, last_disliked: null, ...over,
 });
 
 const tasteWith = (): Taste => foldEvents(emptyTaste(NOW - DAY), [
@@ -60,10 +60,13 @@ describe('exposureOf', () => {
     const liked = exposureOf(exposure({ skipped: 3, last_skipped: iso(NOW), liked: true }), NOW);
     expect(liked.penalty).toBeCloseTo(0.225, 5);
   });
-  it('a dislike cools for 45 days', () => {
-    const d = exposureOf(exposure({ disliked: true, last_played: iso(NOW - 40 * DAY) }), NOW);
+  it('a dislike cools for 45 days; a liked song never cools', () => {
+    const d = exposureOf(exposure({ disliked: true, last_disliked: iso(NOW - 40 * DAY) }), NOW);
     expect(d.disliked).toBe(true);
     expect(d.cooling).toBe(true);
+    const liked = exposureOf(exposure({ liked: true, played: 1, last_played: iso(NOW - HOUR) }), NOW);
+    expect(liked.cooling).toBe(false);
+    expect(liked.recentlyPlayed).toBe(true);
   });
 });
 

@@ -33,20 +33,23 @@ export default function PrivacyPage() {
           Signed in, VinaX keeps a <b>taste model</b> for your account on its own server and uses it to build Home,
           playlists and radio for you. While the switch in Settings &rarr; Region &amp; privacy is on, the app sends,
           in small batches, what you play, finish, skip, like, un-like, mark as not interested, save to a playlist,
-          queue or play from search &mdash; each with the song&rsquo;s title, artists, album, language, year and
-          artwork link, how many seconds you heard, the hour and weekday on your clock, your time zone name, and which
-          shelf it came from. The server keeps these events for a year, the model they add up to (your artists,
-          languages, moods, hours and songs as scores, and a vector that stands for your taste), what it has shown you,
-          and the pages it built, all tied to your account and to no one else. <strong>Nothing goes to an
-          advertiser.</strong>
+          queue or play from search &mdash; each with the song&rsquo;s title, artists (with their catalogue ids), album,
+          language, year, length, artwork link and the mood, genre or energy the app guessed for it, how many seconds
+          you heard, the hour and weekday on your clock, your time zone name, which shelf it came from and where on
+          it, and your Familiar / Balanced / Discover setting. The server keeps these events for a year, the model
+          they add up to (your artists, languages, moods, hours and songs as scores, and a vector that stands for your
+          taste), what it has shown you, and the pages it built, all tied to your account and to no one else. Your
+          plays also count, without your name or account, in two community figures every listener&rsquo;s Home draws
+          on: how many listeners played a song this week, and which songs listeners tend to play together.{' '}
+          <strong>Nothing goes to an advertiser.</strong>
         </p>
         <p>
           Two things about it use an AI model. A short embedding of each song&rsquo;s catalogue words (title,
           artists, album, language, year) is computed with an AI model so that similar songs sit near each other;
           this is about the song, never about you. And the page Home shows and the playlists you ask for are arranged
           by one of the AI models VinaX AI also uses, which is given a few plain lines about your taste
-          (&ldquo;listens mostly to Telugu, top artists&hellip;&rdquo;), the hour, the day and your first name, and the
-          candidate songs &mdash; never your event history. Which AI providers can be involved is listed in the AI
+          (&ldquo;listens mostly to Telugu, top artists&hellip;&rdquo;), the hour, the day, the festival if one is on,
+          your first name, and the candidate songs &mdash; never your event history. Which AI providers can be involved is listed in the AI
           section below. Switching the engine off stops the reporting at once and Home goes back to the on-device
           engine; <b>Erase my taste model</b> in the same place removes everything the engine holds about your account,
           and deleting your account removes it too. Kid mode never reports: the kid profile stays on the device.

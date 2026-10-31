@@ -36,18 +36,37 @@ const song = (id: string, over: Record<string, unknown> = {}) => ({
 });
 const row = (id: string, over: Record<string, unknown> = {}) => ({
   id, title: `Song ${id}`, artist: 'Sid Sriram', artist_id: 'ar1', artists: [{ id: 'ar1', name: 'Sid Sriram' }], album: 'Album', album_id: 'al1', language: 'telugu',
-  year: 2024, duration: 240, image: null, key: `song ${id}|sid sriram`, facets: {}, embed_model: 'm', embedded_at: null, plays: 3, completes: 1, skips: 0, likes: 0,
+  year: 2024, duration: 240, image: null, key: `song ${id}|sid sriram`, facets: {}, embed_model: 'm', embedded_at: null, plays: 3, completes: 1, skips: 0, likes: 0, verified: true,
   first_seen: '2026-10-01T00:00:00.000Z', last_seen: '2026-10-30T00:00:00.000Z', ...over,
 });
 
-/** The recording function as the database does it: new client ids are inserted, repeats skipped. */
-function recordingRpc(fake: FakeDb) {
+const jsonRes = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+
+/** The database functions as the database does them: new client ids are inserted (and kept as rows), repeats skipped; touched songs land in the table without rewriting known rows. */
+function recordingRpc(fake: FakeDb, o: { failFold?: boolean } = {}) {
   const seen = new Set<string>();
   fake.answer('rpc/personal_record_events', (call) => {
-    const body = call.body as { p_events: Array<{ id: string }> };
-    const inserted = body.p_events.filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true))).map((e) => e.id);
-    return new Response(JSON.stringify({ inserted }), { headers: { 'content-type': 'application/json' } });
+    const body = call.body as { p_account: string; p_events: Array<{ id: string; kind: string; songId: string }> };
+    const inserted = body.p_events.filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true)));
+    for (const e of inserted) fake.rows('personal_events').push({ account_id: body.p_account, client_id: e.id, kind: e.kind, song_id: e.songId });
+    return jsonRes({ inserted: inserted.map((e) => e.id) });
   });
+  fake.answer('rpc/personal_touch_songs', (call) => {
+    const body = call.body as { p_rows: Array<Record<string, unknown>>; p_verified: boolean };
+    let n = 0;
+    for (const r of body.p_rows) {
+      const existing = fake.rows('personal_songs').find((x) => x.id === r.id);
+      if (existing) { if (body.p_verified) Object.assign(existing, { title: r.title, verified: true }); continue; }
+      n += 1;
+      fake.rows('personal_songs').push({ id: r.id, title: r.title, artist: r.artist, artist_id: r.artistId, artists: r.artists, album: r.album, album_id: r.albumId, language: r.language, year: r.year, duration: r.duration, image: r.image, key: r.key, facets: r.facets, embed_model: null, embedded_at: null, plays: 0, completes: 0, skips: 0, likes: 0, verified: body.p_verified, first_seen: new Date().toISOString(), last_seen: new Date().toISOString() });
+    }
+    return jsonRes(n);
+  });
+  fake.answer('rpc/personal_exposure_for', (call) => {
+    const body = call.body as { p_account: string; p_songs: string[] };
+    return jsonRes(fake.rows('personal_exposure').filter((x) => x.account_id === body.p_account && body.p_songs.includes(String(x.song_id))));
+  });
+  if (o.failFold) fake.answer('personal_taste', () => new Response('{"message":"down"}', { status: 503, headers: { 'content-type': 'application/json' } }));
 }
 
 const waits: Promise<unknown>[] = [];
@@ -107,9 +126,11 @@ describe('POST /api/personal/events', () => {
     const res = await events.onRequestPost({ request: await req('/api/personal/events', { method: 'POST', body }), env: ENV, waitUntil });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ accepted: 2, duplicates: 0, version: 2, dropped: 2 });
-    // the song that no event named is not written
+    // the song that no event named is not written; the device's row starts unverified
     expect(fake.rows('personal_songs').map((r) => r.id)).toEqual(['s1']);
-    expect(fake.rows('personal_songs')[0]).toMatchObject({ key: 'songs1|sidsriram', language: 'telugu', facets: { mood: 'romantic' } });
+    expect(fake.rows('personal_songs')[0]).toMatchObject({ key: 'songs1|sidsriram', language: 'telugu', facets: { mood: 'romantic' }, verified: false });
+    const touched = fake.calls.find((c) => c.table === 'rpc/personal_touch_songs')!.body as { p_verified: boolean };
+    expect(touched.p_verified).toBe(false);
     const recorded = fake.calls.find((c) => c.table === 'rpc/personal_record_events')!.body as { p_account: string; p_events: Array<Record<string, unknown>> };
     expect(recorded.p_account).toBe(SUB);
     expect(recorded.p_events.map((e) => e.id)).toEqual(['ev-1', 'ev-2']);
@@ -146,6 +167,28 @@ describe('POST /api/personal/events', () => {
     expect(model.songs.s1.score).toBeCloseTo(3);
   });
 
+  it('takes the events back out when the fold cannot be saved, so the retry counts them', async () => {
+    const fake = fakeDb();
+    recordingRpc(fake, { failFold: true });
+    const body = { events: [{ id: 'ev-1', kind: 'play', at: Date.now(), songId: 's1' }], songs: [song('s1')] };
+    const res = await events.onRequestPost({ request: await req('/api/personal/events', { method: 'POST', body }), env: ENV, waitUntil });
+    expect(res.status).toBe(503);
+    const removal = fake.calls.find((c) => c.method === 'DELETE' && c.table === 'personal_events');
+    expect(removal?.query).toContain('client_id=in.');
+    expect(removal?.query).toContain('ev-1');
+  });
+
+  it('a batch with nothing new and the same mode does not touch the model', async () => {
+    const fake = fakeDb();
+    recordingRpc(fake);
+    const body = { events: [{ id: 'ev-1', kind: 'play', at: Date.now(), songId: 's1' }], songs: [song('s1')], mode: 'balanced' };
+    await events.onRequestPost({ request: await req('/api/personal/events', { method: 'POST', body }), env: ENV, waitUntil });
+    const before = fake.calls.length;
+    const again = await events.onRequestPost({ request: await req('/api/personal/events', { method: 'POST', body }), env: ENV, waitUntil });
+    expect(await again.json()).toMatchObject({ accepted: 0, duplicates: 1, version: null });
+    expect(fake.calls.slice(before).some((c) => c.method === 'PATCH' && c.table === 'personal_taste')).toBe(false);
+  });
+
   it('refuses a body over 64 KB and ignores an empty batch', async () => {
     fakeDb();
     const big = { events: [], songs: [], pad: 'x'.repeat(70_000) };
@@ -171,6 +214,7 @@ describe('GET /api/personal/home', () => {
   it('builds a page from the pool, saves it, and serves the saved page next time', async () => {
     const pool = Array.from({ length: 30 }, (_, i) => row(`n${i}`, { artist: `Artist ${i % 8}`, artist_id: `ar${i % 8}`, key: `song n${i}|artist ${i % 8}`, language: i % 3 ? 'telugu' : 'hindi' }));
     const fake = fakeDb({ personal_taste: [tasteRow()], personal_songs: [...pool, row('seed')], accounts: [{ id: SUB, name: 'Asha Rao' }] });
+    recordingRpc(fake);
     fake.answer('rpc/personal_neighbours', () => new Response(JSON.stringify(pool.map((p, i) => ({ id: p.id, similarity: 0.9 - i * 0.01, language: p.language, artist_id: p.artist_id }))), { headers: { 'content-type': 'application/json' } }));
     fake.answer('rpc/personal_trending', () => new Response(JSON.stringify(pool.slice(0, 10).map((p, i) => ({ id: p.id, plays: 100 - i }))), { headers: { 'content-type': 'application/json' } }));
     const res = await home.onRequestGet({ request: await req('/api/personal/home?hour=21&dow=6&mode=balanced'), env: ENV, waitUntil });
@@ -188,7 +232,7 @@ describe('GET /api/personal/home', () => {
     await Promise.all(waits);
     const saved = fake.rows('personal_pages');
     expect(saved).toHaveLength(1);
-    expect(saved[0]).toMatchObject({ account_id: SUB, kind: 'home', composed: false, taste_version: 4 });
+    expect(saved[0]).toMatchObject({ account_id: SUB, kind: 'home', composed: false, taste_version: 4, events_seen: 6 });
     const shown = fake.calls.find((c) => c.table === 'rpc/personal_mark_shown')!.body as { p_account: string; p_songs: string[] };
     expect(shown.p_account).toBe(SUB);
     expect(new Set(shown.p_songs)).toEqual(new Set(all));
@@ -202,6 +246,24 @@ describe('GET /api/personal/home', () => {
 
     const fresh = await home.onRequestGet({ request: await req('/api/personal/home?fresh=1'), env: ENV, waitUntil });
     expect(((await fresh.json()) as { cached: boolean }).cached).toBe(false);
+
+    // the saved page goes stale once the model took in 30 more events
+    (fake.rows('personal_taste')[0] as { events_seen: number }).events_seen = 6 + 30;
+    const stale = await home.onRequestGet({ request: await req('/api/personal/home'), env: ENV, waitUntil });
+    expect(((await stale.json()) as { cached: boolean }).cached).toBe(false);
+  });
+
+  it('never shows a song the catalogue has not confirmed', async () => {
+    const pool = Array.from({ length: 12 }, (_, i) => row(`n${i}`, { artist: `Artist ${i}`, artist_id: `ar${i}`, key: `song n${i}|artist ${i}`, verified: i % 2 === 0 }));
+    const fake = fakeDb({ personal_taste: [tasteRow()], personal_songs: pool });
+    recordingRpc(fake);
+    fake.answer('rpc/personal_neighbours', () => jsonRes(pool.map((p, i) => ({ id: p.id, similarity: 0.9 - i * 0.01, language: p.language, artist_id: p.artist_id }))));
+    const res = await home.onRequestGet({ request: await req('/api/personal/home?hour=21'), env: ENV, waitUntil });
+    expect(res.status).toBe(200);
+    const page = (await res.json()) as { shelves: Array<{ songs: Array<{ id: string }> }> };
+    const shown = page.shelves.flatMap((s) => s.songs.map((x) => x.id));
+    expect(shown.length).toBeGreaterThan(0);
+    for (const id of shown) expect(Number(id.slice(1)) % 2).toBe(0);
   });
 });
 
@@ -209,6 +271,7 @@ describe('GET /api/personal/recommend', () => {
   it('ranks around a seed and leaves the seed and the excluded out', async () => {
     const pool = Array.from({ length: 12 }, (_, i) => row(`r${i}`, { artist: `A${i % 5}`, artist_id: `a${i % 5}`, key: `r${i}|a${i % 5}` }));
     const fake = fakeDb({ personal_songs: [...pool, row('seed')] });
+    recordingRpc(fake);
     fake.answer('rpc/personal_similar_songs', () => new Response(JSON.stringify(pool.map((p, i) => ({ id: p.id, similarity: 0.8 - i * 0.02 }))), { headers: { 'content-type': 'application/json' } }));
     const res = await recommend.onRequestGet({ request: await req('/api/personal/recommend?seed=seed&limit=5&exclude=r0,r1'), env: ENV, waitUntil });
     expect(res.status).toBe(200);
@@ -239,6 +302,7 @@ describe('POST /api/personal/playlist', () => {
       return new Response(JSON.stringify({ success: true, data: { results } }), { headers: { 'content-type': 'application/json' } });
     };
     const fake = fakeDb({}, (url) => catalogue(url));
+    recordingRpc(fake);
     const res = await playlist.onRequestPost({ request: await req('/api/personal/playlist', { method: 'POST', body: { prompt: 'rainy evening telugu songs', count: 8 } }), env: { ...ENV, CATALOG_UPSTREAMS: 'https://wrapper.example' }, waitUntil });
     expect(res.status).toBe(200);
     const page = (await res.json()) as { id: string; title: string; songs: Array<{ id: string; title: string }>; plan: { queries: string[] }; model: string | null };
@@ -247,6 +311,7 @@ describe('POST /api/personal/playlist', () => {
     expect(page.model).toBeNull();
     expect(page.plan.queries).toEqual(['rainy evening telugu songs']);
     expect(fake.rows('personal_songs').length).toBeGreaterThanOrEqual(12);
+    expect(fake.rows('personal_songs').every((r) => r.verified === true)).toBe(true);
     await Promise.all(waits);
     expect(fake.rows('personal_pages')[0]).toMatchObject({ kind: 'playlist', prompt: 'rainy evening telugu songs', composed: false });
     const got = await playlist.onRequestGet({ request: await req(`/api/personal/playlist?id=${page.id}`), env: ENV });

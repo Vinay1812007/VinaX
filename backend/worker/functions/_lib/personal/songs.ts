@@ -5,7 +5,7 @@
  * page carries. Upsert and fetch live here too.
  */
 import { canonicalKey } from '../identityCore';
-import { db, q, type DbEnv, type Rows } from '../db';
+import { db, q, type DbEnv, type Value } from '../db';
 import { asObject, clip } from '../edge';
 import { SONG_COLUMNS, type ArtistRef, type SongFacets, type SongFacts, type SongRecord, type SongRow } from './types';
 
@@ -102,15 +102,6 @@ export function songFromCatalogue(raw: unknown): SongFacts | null {
 
 export const songKey = (f: Pick<SongFacts, 'title' | 'artist'>): string => canonicalKey(f.title, f.artist);
 
-/** The row an upsert writes (counters and timestamps are the database's). */
-export function toRow(f: SongFacts, now = new Date()): Record<string, unknown> {
-  return {
-    id: f.id, title: f.title, artist: f.artist, artist_id: f.artistId, artists: f.artists,
-    album: f.album, album_id: f.albumId, language: f.language, year: f.year, duration: f.duration,
-    image: f.image, key: songKey(f), facets: f.facets, last_seen: now.toISOString(),
-  };
-}
-
 export function toFacts(row: SongRow): SongFacts {
   return {
     id: row.id, title: row.title, artist: row.artist, artistId: row.artist_id, artists: Array.isArray(row.artists) ? row.artists : [],
@@ -122,24 +113,32 @@ export function toFacts(row: SongRow): SongFacts {
 export const toRecord = (row: SongRow, reason?: string): SongRecord => ({ ...toFacts(row), ...(reason ? { reason } : {}) });
 
 /**
- * Write songs the engine met. Known rows keep their embedding and counters:
- * only the display facts and `last_seen` move (and a facet the device knows
- * that the row did not).
+ * Write songs the engine met, through `personal_touch_songs`: a new row is
+ * inserted; a known row only gains what it lacked and a newer `last_seen`.
+ * Facts from a device are never allowed to rewrite a row another listener
+ * sees (`verified: false`, the row stays unverified until the catalogue
+ * confirms it); facts from the catalogue (`verified: true`) replace a
+ * device's version and verify the row. Answers how many rows were new.
  */
-export async function upsertSongs(env: DbEnv, songs: readonly SongFacts[]): Promise<Rows<unknown>> {
-  if (!songs.length) return { ok: true, rows: [] };
+export async function touchSongs(env: DbEnv, songs: readonly SongFacts[], verified: boolean): Promise<Value<number>> {
+  if (!songs.length) return { ok: true, value: 0 };
   const seen = new Set<string>();
-  const rows = songs.filter((s) => (seen.has(s.id) ? false : (seen.add(s.id), true))).map((s) => toRow(s));
-  // on_conflict merge sends every column named here; the embedding and the counters are not named, so they stay.
-  return db.upsert(env, 'personal_songs', rows, 'id');
+  const rows = songs.filter((s) => (seen.has(s.id) ? false : (seen.add(s.id), true))).map((s) => ({ ...s, key: songKey(s) }));
+  return db.rpc<number>(env, 'personal_touch_songs', { p_rows: rows, p_verified: verified });
 }
 
-/** Rows by id, in a map (ids the pool does not know are simply absent). */
-export async function fetchSongs(env: DbEnv, ids: readonly string[]): Promise<Map<string, SongRow>> {
+/**
+ * Rows by id, in a map (ids the pool does not know are simply absent).
+ * Verified rows only unless `all`: a page never carries a song no catalogue
+ * lookup has confirmed.
+ */
+export async function fetchSongs(env: DbEnv, ids: readonly string[], o: { all?: boolean } = {}): Promise<Map<string, SongRow>> {
   const out = new Map<string, SongRow>();
   const unique = [...new Set(ids)].filter((id) => SONG_ID_RE.test(id));
   for (let i = 0; i < unique.length; i += 200) {
-    const r = await db.select<SongRow>(env, 'personal_songs', q().in('id', unique.slice(i, i + 200)).select(SONG_COLUMNS));
+    const query = q().in('id', unique.slice(i, i + 200)).select(SONG_COLUMNS);
+    if (!o.all) query.eq('verified', 'true');
+    const r = await db.select<SongRow>(env, 'personal_songs', query);
     if (!r.ok) continue;
     for (const row of r.rows) out.set(row.id, row);
   }

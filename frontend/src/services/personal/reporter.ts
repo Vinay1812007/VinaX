@@ -16,12 +16,15 @@ import { onAccountChange } from '@/services/auth/google';
 import { onTasteEvent, type TasteEvent } from '@/services/personalization/tasteEvents';
 import { getLocal, setLocal } from '@/services/storage/local';
 import { useSettingsStore } from '@/store/settingsStore';
-import { personalEnabled, postPersonalEvents } from './api';
+import { PersonalError, personalEnabled, postPersonalEvents } from './api';
 import { factsOf } from './types';
 
 export const FLUSH_MS = 15_000;
 export const FLUSH_AT = 25;
 export const MAX_QUEUE = 400;
+/** Events per batch; halved after a 413 (the server and `keepalive` both cap a body at 64 KB). */
+const BATCH_MAX = 100;
+let batchSize = BATCH_MAX;
 const WEEK_MS = 7 * 86_400_000;
 const SOURCE_WINDOW_MS = 8_000;
 
@@ -120,19 +123,21 @@ export function flush(o: { keepalive?: boolean; fetchImpl?: typeof fetch } = {})
     const q = load();
     prune(q);
     if (!q.events.length || !personalEnabled()) { save(); return; }
-    const events = q.events.slice(0, 100);
+    const events = q.events.slice(0, batchSize);
     const songIds = new Set(events.map((e) => e.songId));
     const songs = Object.values(q.songs).filter((s) => songIds.has(s.id));
+    const drop = (ids: Set<string>) => { q.events = q.events.filter((e) => !ids.has(e.id)); prune(q); save(); };
     try {
       await postPersonalEvents({ events, songs, mode: useSettingsStore.getState().discoveryMode }, o);
-      const sent = new Set(events.map((e) => e.id));
-      q.events = q.events.filter((e) => !sent.has(e.id));
-      prune(q);
-      save();
+      batchSize = Math.min(BATCH_MAX, batchSize * 2);
+      drop(new Set(events.map((e) => e.id)));
       if (q.events.length) arm();
-    } catch {
-      // Kept for the next flush; a signed-out answer clears everything (the session is gone).
-      arm();
+    } catch (e) {
+      const status = e instanceof PersonalError ? e.status : 0;
+      if (status === 401) { clearQueue(); return; }              // the session is gone: nothing can be sent
+      if (status === 413) { batchSize = Math.max(5, Math.floor(batchSize / 2)); arm(); return; }  // too big: smaller next time
+      if (status >= 400 && status < 500 && status !== 429) { drop(new Set(events.map((e) => e.id))); if (q.events.length) arm(); return; }  // refused for good: not again
+      arm();                                                      // 429, 5xx, network: kept for the next flush
     }
   })().finally(() => { flushing = null; });
   return flushing;
@@ -153,9 +158,10 @@ export function installPersonalReporter(): () => void {
   installed = true;
   const offTaste = onTasteEvent(enqueue);
   const onHide = () => { if (document.visibilityState === 'hidden') void flush({ keepalive: true }); };
+  const onPageHide = () => void flush({ keepalive: true });
   const onOnline = () => void flush();
   document.addEventListener('visibilitychange', onHide);
-  window.addEventListener('pagehide', () => void flush({ keepalive: true }));
+  window.addEventListener('pagehide', onPageHide);
   window.addEventListener('online', onOnline);
   const offAccount = onAccountChange((a) => { if (!a) clearQueue(); });
   const offSettings = useSettingsStore.subscribe((s, prev) => {
@@ -168,6 +174,7 @@ export function installPersonalReporter(): () => void {
     offAccount();
     offSettings();
     document.removeEventListener('visibilitychange', onHide);
+    window.removeEventListener('pagehide', onPageHide);
     window.removeEventListener('online', onOnline);
   };
 }
@@ -175,6 +182,7 @@ export function installPersonalReporter(): () => void {
 /** For tests. */
 export function _resetReporterForTests(): void {
   queue = null;
+  batchSize = BATCH_MAX;
   recentSource = null;
   if (timer !== null) { window.clearTimeout(timer); timer = null; }
   flushing = null;

@@ -18,6 +18,8 @@ export const PLAYLIST_DEFAULT = 25;
 export const PLAYLIST_MAX = 50;
 export const PLAN_BUDGET_MS = 6_000;
 export const CURATE_BUDGET_MS = 12_000;
+/** The whole build, model calls and retrieval together (the device waits 30 s). */
+export const PLAYLIST_BUDGET_MS = 24_000;
 
 export const PLAN_SYSTEM = `You turn a listener's request for a playlist into a retrieval plan for a music catalogue of Indian and international songs. Read the request (inside <request>) and what is known of the listener (inside <listener>), and answer with exactly one JSON object:
 {"title": string (2-6 words, no quotes),
@@ -35,6 +37,14 @@ export const CURATE_SYSTEM = `You curate a playlist for one listener from a pool
 Never invent ids. Use each id once. Pick exactly the number asked for when the pool allows.`;
 
 const text = (v: unknown, max: number): string | null => (typeof v === 'string' && v.trim() ? v.replace(/\s+/g, ' ').trim().slice(0, max) : null);
+
+/** "90s", "1990", "the 1990s", "2010's" → "1990s" / "2010s"; anything else is dropped. */
+export function normaliseEra(raw: string): string | null {
+  const m = /^(?:the\s*)?(?:(19|20)?(\d)0)(?:'?s)?$/.exec(raw.trim().toLowerCase());
+  if (!m) return null;
+  const century = m[1] ?? (Number(m[2]) >= 3 ? '19' : '20');
+  return `${century}${m[2]}0s`;
+}
 const words = (v: unknown, max: number, each = 40): string[] =>
   Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === 'string').map((x) => x.trim().toLowerCase().slice(0, each)).filter(Boolean))].slice(0, max) : [];
 
@@ -49,7 +59,7 @@ export function validatePlan(raw: unknown): PlaylistPlan | null {
     languages: words(o.languages, 4),
     moods: words(o.moods, 4),
     artists: Array.isArray(o.artists) ? o.artists.filter((x): x is string => typeof x === 'string').map((x) => x.trim().slice(0, 80)).filter(Boolean).slice(0, 6) : [],
-    eras: words(o.eras, 3, 10),
+    eras: [...new Set((Array.isArray(o.eras) ? o.eras : []).filter((x): x is string => typeof x === 'string').map(normaliseEra).filter((x): x is string => !!x))].slice(0, 3),
     energy,
     familiarity,
     queries,
@@ -103,7 +113,8 @@ export interface BuildPlaylistInput {
   prompt: string;
   count: number;
   taste: Taste;
-  exposure: ReadonlyMap<string, ExposureRow>;
+  /** The account's exposure for the pool's ids, read once the pool is known. */
+  exposure: (songIds: string[]) => Promise<ReadonlyMap<string, ExposureRow>>;
   config: PersonalConfig;
   hour: number | null;
   now: number;
@@ -122,12 +133,16 @@ export interface BuiltPlaylist {
 
 export async function buildPlaylist(env: PlaylistEnv, input: BuildPlaylistInput): Promise<BuiltPlaylist> {
   const { taste } = input;
+  const started = Date.now();
+  const left = () => PLAYLIST_BUDGET_MS - (Date.now() - started);
+  // One budget for the whole build: the outer signal ends a model call however many models the ladder has.
+  const signal = input.signal ?? AbortSignal.timeout(PLAYLIST_BUDGET_MS);
   const count = Math.min(PLAYLIST_MAX, Math.max(5, input.count || PLAYLIST_DEFAULT));
   const planned = input.config.composer
     ? await completeJson(env, {
         system: PLAN_SYSTEM,
         user: `<listener>\n${taste.summary.lines.join('\n') || 'No listening yet.'}\n</listener>\n<request>\n${input.prompt.slice(0, 500)}\n</request>`,
-        ladder: 'fast', maxOutputTokens: 600, temperature: 0.3, firstEventMs: 3_000, budgetMs: PLAN_BUDGET_MS, validate: validatePlan, signal: input.signal,
+        ladder: 'fast', maxOutputTokens: 600, temperature: 0.3, firstEventMs: 3_000, budgetMs: PLAN_BUDGET_MS, validate: validatePlan, signal: AbortSignal.any([signal, AbortSignal.timeout(PLAN_BUDGET_MS)]),
       })
     : null;
   const plan = planned?.value ?? fallbackPlan(input.prompt);
@@ -138,7 +153,8 @@ export async function buildPlaylist(env: PlaylistEnv, input: BuildPlaylistInput)
     accountId: input.accountId, taste, embedModel: input.config.embedModel,
     queries, languages: plan.languages.length ? plan.languages : undefined, own: plan.familiarity !== 'new', now: input.now,
   });
-  const scored = scorePool(pool.candidates, pool.songs, { taste, exposure: input.exposure, weights: input.config.weights, now: input.now, hour: input.hour, intent: 'taste' })
+  const exposure = await input.exposure([...pool.candidates.keys()]);
+  const scored = scorePool(pool.candidates, pool.songs, { taste, exposure, weights: input.config.weights, now: input.now, hour: input.hour, intent: 'taste' })
     .filter((s) => fitsPlan(s, plan, taste));
   // Mood and energy are soft: a match floats up.
   for (const s of scored) {
@@ -159,11 +175,12 @@ export async function buildPlaylist(env: PlaylistEnv, input: BuildPlaylistInput)
   let order: Array<{ id: string; reason?: string }> = [];
   let model: string | null = planned?.spec?.id ?? null;
   let composed = false;
-  if (input.config.composer && ranked.length >= 5) {
+  const curateBudget = Math.min(CURATE_BUDGET_MS, left());
+  if (input.config.composer && ranked.length >= 5 && curateBudget > 4_000) {
     const curated = await completeJson(env, {
       system: CURATE_SYSTEM,
       user: `<request>\n${input.prompt.slice(0, 500)}\n</request>\n<plan>${JSON.stringify(plan)}</plan>\n<count>${count}</count>\n<pool>\n${ranked.map((s) => `${s.song.id}|${s.song.title} — ${s.song.artist}|${s.song.language ?? ''}|${s.song.year ?? ''}|${s.song.facets?.mood ?? ''}`).join('\n')}\n</pool>`,
-      ladder: 'default', maxOutputTokens: 1_800, temperature: 0.5, firstEventMs: 5_000, budgetMs: CURATE_BUDGET_MS, validate: validateCuration, signal: input.signal,
+      ladder: 'default', maxOutputTokens: 1_800, temperature: 0.5, firstEventMs: 5_000, budgetMs: curateBudget, validate: validateCuration, signal: AbortSignal.any([signal, AbortSignal.timeout(curateBudget)]),
     });
     if (curated) {
       order = curated.value.songs.filter((s) => byId.has(s.id));

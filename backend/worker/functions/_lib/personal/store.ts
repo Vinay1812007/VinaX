@@ -58,32 +58,32 @@ export async function saveTaste(env: DbEnv, accountId: string, t: Taste, readVer
   return { ok: true, value: r.rows.length > 0 };
 }
 
-/** The account's recent exposure rows (the newest 2000), keyed by song. */
-export async function loadExposure(env: DbEnv, accountId: string, limit = 2000): Promise<Map<string, ExposureRow>> {
+/** The account's exposure rows for a set of songs (the pool), keyed by song. */
+export async function loadExposure(env: DbEnv, accountId: string, songIds: readonly string[]): Promise<Map<string, ExposureRow>> {
   const out = new Map<string, ExposureRow>();
-  const r = await db.select<ExposureRow>(env, 'personal_exposure',
-    q().eq('account_id', accountId).select('song_id,shown,queued,played,completed,skipped,liked,disliked,last_shown,last_queued,last_played,last_completed,last_skipped').order('updated_at', 'desc').limit(limit));
-  if (r.ok) for (const row of r.rows) out.set(row.song_id, row);
+  if (!songIds.length) return out;
+  const r = await db.rpc<ExposureRow[]>(env, 'personal_exposure_for', { p_account: accountId, p_songs: [...new Set(songIds)] });
+  if (r.ok && Array.isArray(r.value)) for (const row of r.value) out.set(row.song_id, row);
   return out;
 }
 
-interface PageRow<T> { id: string; page: T; taste_version: number | null; model_id: string | null; composed: boolean; created_at: string; expires_at: string | null }
+interface PageRow<T> { id: string; page: T; taste_version: number | null; events_seen: number | null; model_id: string | null; composed: boolean; created_at: string; expires_at: string | null }
 
 /** The newest unexpired page of a kind, or null. */
 export async function loadPage<T>(env: DbEnv, accountId: string, kind: 'home' | 'playlist' | 'radio', now = Date.now()): Promise<PageRow<T> | null> {
   const r = await db.one<PageRow<T>>(env, 'personal_pages',
-    q().eq('account_id', accountId).eq('kind', kind).gt('expires_at', new Date(now).toISOString()).select('id,page,taste_version,model_id,composed,created_at,expires_at').order('created_at', 'desc'));
+    q().eq('account_id', accountId).eq('kind', kind).gt('expires_at', new Date(now).toISOString()).select('id,page,taste_version,events_seen,model_id,composed,created_at,expires_at').order('created_at', 'desc'));
   return r.ok ? r.value : null;
 }
 
-export async function savePage(env: DbEnv, accountId: string, kind: 'home' | 'playlist' | 'radio', page: HomePage | PlaylistPage, o: { id: string; prompt?: string | null; tasteVersion: number | null; modelId: string | null; composed: boolean; builtMs: number; expiresAt: string | null }): Promise<void> {
+export async function savePage(env: DbEnv, accountId: string, kind: 'home' | 'playlist' | 'radio', page: HomePage | PlaylistPage, o: { id: string; prompt?: string | null; tasteVersion: number | null; eventsSeen: number | null; modelId: string | null; composed: boolean; builtMs: number; expiresAt: string | null }): Promise<void> {
   await db.insert(env, 'personal_pages', {
-    id: o.id, account_id: accountId, kind, prompt: o.prompt ?? null, page, taste_version: o.tasteVersion,
+    id: o.id, account_id: accountId, kind, prompt: o.prompt ?? null, page, taste_version: o.tasteVersion, events_seen: o.eventsSeen,
     model_id: o.modelId, composed: o.composed, built_ms: o.builtMs, expires_at: o.expiresAt,
   });
 }
 
 export async function loadPlaylistPage(env: DbEnv, accountId: string, id: string): Promise<PlaylistPage | null> {
-  const r = await db.one<PageRow<PlaylistPage>>(env, 'personal_pages', q().eq('account_id', accountId).eq('kind', 'playlist').eq('id', id).select('id,page,taste_version,model_id,composed,created_at,expires_at'));
+  const r = await db.one<PageRow<PlaylistPage>>(env, 'personal_pages', q().eq('account_id', accountId).eq('kind', 'playlist').eq('id', id).select('id,page,taste_version,events_seen,model_id,composed,created_at,expires_at'));
   return r.ok && r.value ? r.value.page : null;
 }

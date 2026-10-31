@@ -86,6 +86,26 @@ describe('the personal reporter', () => {
     expect(queuedCount()).toBe(0);
   });
 
+  it('a signed-out answer clears the queue; a 413 halves the batch; another 4xx drops the batch; a 429 keeps it', async () => {
+    signIn();
+    const fetchWith = (status: number) => vi.fn(async () => new Response(JSON.stringify({ error: 'x' }), { status })) as unknown as typeof fetch;
+    for (let i = 0; i < 12; i += 1) enqueue({ kind: 'play', song: makeSong(`s${i}`), at: Date.now() });
+    await flush({ fetchImpl: fetchWith(429) });
+    expect(queuedCount()).toBe(12);
+    await flush({ fetchImpl: fetchWith(413) });
+    expect(queuedCount()).toBe(12);
+    const f = vi.fn(async () => ok()) as unknown as typeof fetch;
+    await flush({ fetchImpl: f });
+    const sent = JSON.parse(String((vi.mocked(f).mock.calls[0] as unknown as [string, RequestInit])[1].body)) as { events: unknown[] };
+    expect(sent.events).toHaveLength(12);
+    for (let i = 0; i < 3; i += 1) enqueue({ kind: 'play', song: makeSong(`t${i}`), at: Date.now() });
+    await flush({ fetchImpl: fetchWith(400) });
+    expect(queuedCount()).toBe(0);
+    enqueue({ kind: 'play', song: makeSong('u1'), at: Date.now() });
+    await flush({ fetchImpl: fetchWith(401) });
+    expect(queuedCount()).toBe(0);
+  });
+
   it('drops events older than a week', async () => {
     signIn();
     enqueue({ kind: 'play', song: makeSong('old'), at: Date.now() - 8 * 86_400_000 });

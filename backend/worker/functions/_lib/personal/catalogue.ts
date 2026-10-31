@@ -51,13 +51,13 @@ export async function catalogueSearch(env: CatalogueEnv, query: string, limit = 
   return facts(data?.results);
 }
 
-/** Full facts for ids the engine does not know yet (one call per id, capped). */
+/** Full facts for ids (one call per id, capped, a few in flight at a time); ids the catalogue does not know are left out. */
 export async function catalogueSongs(env: CatalogueEnv, ids: readonly string[], cap = 10): Promise<SongFacts[]> {
   const out: SongFacts[] = [];
-  for (const id of ids.slice(0, cap)) {
-    if (!SONG_ID_RE.test(id)) continue;
-    const data = await call(env, ['songs', id], {});
-    out.push(...facts(data));
+  const list = ids.filter((id) => SONG_ID_RE.test(id)).slice(0, cap);
+  for (let i = 0; i < list.length; i += 5) {
+    const batch = await Promise.all(list.slice(i, i + 5).map((id) => call(env, ['songs', id], {})));
+    for (const data of batch) out.push(...facts(data));
   }
   return out;
 }

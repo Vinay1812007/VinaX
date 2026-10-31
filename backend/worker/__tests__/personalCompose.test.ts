@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { extractJson } from '../functions/_lib/ai/complete';
 import { applyComposition, composePrompt, validateComposition } from '../functions/_lib/personal/compose';
-import { fallbackPlan, fitsPlan, validateCuration, validatePlan } from '../functions/_lib/personal/playlist';
+import { fallbackPlan, fitsPlan, normaliseEra, validateCuration, validatePlan } from '../functions/_lib/personal/playlist';
 import { buildShelves, isoWeekOf } from '../functions/_lib/personal/shelves';
 import { emptyTaste, foldEvents } from '../functions/_lib/personal/taste';
 import type { Scored, Shelf, SongRecord, SongRow } from '../functions/_lib/personal/types';
@@ -81,11 +81,15 @@ describe('applyComposition', () => {
     expect(out.map((s) => s.key)).toEqual(['made-for-you', 'language:telugu', 'discover', 'trending']);
   });
 
-  it('merges two shelves into one, half from each, and consumes both', () => {
+  it('merges two shelves into one, half from each, once per song, and consumes both', () => {
     const out = applyComposition({ greeting: null, shelves: [{ key: 'merge', from: ['language:telugu', 'trending'], title: 'Telugu and trending', reason: 'Two in one' }] }, base, pool);
     expect(out[0].key).toBe('merge:language:telugu+trending');
     expect(out[0].songs.length).toBeGreaterThanOrEqual(16);
     expect(out.map((s) => s.key)).toEqual(['merge:language:telugu+trending', 'made-for-you', 'discover']);
+    const shared = [shelf('made-for-you', ids('a', 20)), shelf('because:x', [...ids('a', 6), ...ids('b', 6)])];
+    const merged = applyComposition({ greeting: null, shelves: [{ key: 'merge', from: ['made-for-you', 'because:x'], title: 'Both', reason: '' }] }, shared, new Map(shared.flatMap((s) => s.songs).map((s) => [s.id, s])));
+    const list = merged[0].songs.map((s) => s.id);
+    expect(new Set(list).size).toBe(list.length);
   });
 
   it('a merge that names one real shelf, or a shelf twice, is ignored', () => {
@@ -107,7 +111,7 @@ describe('applyComposition', () => {
 describe('buildShelves', () => {
   const row = (id: string, over: Partial<SongRow> = {}): SongRow => ({
     ...rec(id), artist_id: `ar${id[0]}`, album_id: null, key: `song ${id}|artist ${id[0]}`, embed_model: 'm', embedded_at: null,
-    plays: 10, completes: 5, skips: 0, likes: 1, first_seen: new Date(NOW).toISOString(), last_seen: new Date(NOW).toISOString(), ...over,
+    plays: 10, completes: 5, skips: 0, likes: 1, verified: true, first_seen: new Date(NOW).toISOString(), last_seen: new Date(NOW).toISOString(), ...over,
   } as SongRow);
   const scored = (id: string, extra: Partial<Scored> & { sources?: string[] } = {}): Scored => ({
     song: row(id), candidate: { id, sources: new Set((extra.sources ?? ['neighbours']) as never[]), seedId: extra.candidate?.seedId },
@@ -145,8 +149,9 @@ describe('buildShelves', () => {
 
 describe('the playlist builder validators', () => {
   it('reads a plan and clips it', () => {
-    const p = validatePlan({ title: 'Wedding night', languages: ['Telugu', 'hindi', 'telugu'], moods: ['Party'], artists: ['DSP'], eras: ['2010s'], energy: 'high', familiarity: 'mixed', queries: ['telugu wedding songs', ' dsp hits '] });
-    expect(p).toMatchObject({ title: 'Wedding night', languages: ['telugu', 'hindi'], moods: ['party'], artists: ['DSP'], eras: ['2010s'], energy: 'high', familiarity: 'mixed', queries: ['telugu wedding songs', 'dsp hits'] });
+    const p = validatePlan({ title: 'Wedding night', languages: ['Telugu', 'hindi', 'telugu'], moods: ['Party'], artists: ['DSP'], eras: ['2010s', '90s', 'the 1990s', 'old'], energy: 'high', familiarity: 'mixed', queries: ['telugu wedding songs', ' dsp hits '] });
+    expect(p).toMatchObject({ title: 'Wedding night', languages: ['telugu', 'hindi'], moods: ['party'], artists: ['DSP'], eras: ['2010s', '1990s'], energy: 'high', familiarity: 'mixed', queries: ['telugu wedding songs', 'dsp hits'] });
+    expect(['80s', '2000', "2020's", '1970s', 'x'].map(normaliseEra)).toEqual(['1980s', '2000s', '2020s', '1970s', null]);
     expect(validatePlan({ energy: 'loud', familiarity: 'x' })).toMatchObject({ title: 'Your playlist', energy: 'any', familiarity: 'mixed', queries: [] });
     expect(validatePlan('nope')).toBeNull();
     expect(fallbackPlan('  slow   telugu songs ').queries).toEqual(['slow telugu songs']);
@@ -159,7 +164,7 @@ describe('the playlist builder validators', () => {
   it('applies the plan\'s hard rules', () => {
     const taste = foldEvents(emptyTaste(NOW), [{ id: 'e', kind: 'play', songId: 'k', at: NOW }], new Map(), NOW);
     const mk = (id: string, over: Partial<SongRow> = {}, sources: string[] = ['search']): Scored => ({
-      song: { ...rec(id), artist_id: 'x', album_id: null, key: id, embed_model: null, embedded_at: null, plays: 0, completes: 0, skips: 0, likes: 0, first_seen: '', last_seen: '', ...over } as SongRow,
+      song: { ...rec(id), artist_id: 'x', album_id: null, key: id, embed_model: null, embedded_at: null, plays: 0, completes: 0, skips: 0, likes: 0, verified: true, first_seen: '', last_seen: '', ...over } as SongRow,
       candidate: { id, sources: new Set(sources as never[]) }, score: 1, reasons: [], cooling: false,
     });
     const plan = { ...fallbackPlan('x'), languages: ['telugu'], eras: ['2020s'] };
