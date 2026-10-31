@@ -21,7 +21,7 @@ const mk = (base: string, id: string, title: string, artist: string): Song => ({
   duration: 200, language: 'telugu', year: '2020', explicit: false, hasLyrics: false, playCount: 5,
 });
 
-async function seed(page: Page, baseURL: string): Promise<{ curate: string[]; searches: string[] }> {
+async function seed(page: Page, baseURL: string): Promise<{ searches: string[] }> {
   const songs = Array.from({ length: 16 }, (_, i) => mk(baseURL, `s${i}`, `Song ${i}`, `Artist ${i % 5}`));
   const stored = songs.map((s) => ({ ...s, artists: s.artists }));
   const entries = stored.slice(0, 8).map((song, i) => ({ song, ts: Date.now() - i * 3_600_000, completed: true }));
@@ -38,23 +38,10 @@ async function seed(page: Page, baseURL: string): Promise<{ curate: string[]; se
     },
     { stored, entries, fp: latestNotesFingerprint() },
   );
-  const curate: string[] = [];
   const searches: string[] = [];
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
     if (!url.origin.startsWith('http://localhost')) return route.abort();
-    if (url.pathname === '/api/appconfig' && url.searchParams.get('key') === 'flags') return route.fulfill({ json: { flags: { aiHome: true } } });
-    if (url.pathname === '/api/curate') {
-      const body = route.request().postDataJSON() as { task?: string };
-      curate.push(body?.task ?? '?');
-      if (body?.task === 'shelves') {
-        return route.fulfill({ json: { data: { sections: [
-          { title: 'Late-night Telugu melodies', query: 'telugu late night melodies', why: 'Slow songs for the hour.' },
-          { title: 'Artist 1 on repeat', query: 'artist 1 hits', why: 'Your most played voice this week.' },
-        ] } } });
-      }
-      return route.fulfill({ json: { error: 'invalid_output' }, status: 502 });
-    }
     if (url.pathname.startsWith('/api/cat/')) {
       const q = (url.searchParams.get('query') ?? url.pathname).toLowerCase();
       searches.push(`${q}|${url.searchParams.get('page') ?? '1'}`);
@@ -63,7 +50,7 @@ async function seed(page: Page, baseURL: string): Promise<{ curate: string[]; se
     if (url.pathname.startsWith('/api/')) return route.fulfill({ json: {} });
     return route.continue();
   });
-  return { curate, searches };
+  return { searches };
 }
 
 /** Step down the page the way a listener does, so visibility-mounted blocks load. */
@@ -74,16 +61,15 @@ async function scrollDown(page: Page, steps = 16): Promise<void> {
   }
 }
 
-test('returning to Home inside the half hour reuses the design and the shelves; Refresh Home builds again', async ({ page, baseURL }) => {
+test('returning to Home inside the half hour reuses the shelves; Refresh Home builds again', async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   const seen = await seed(page, baseURL!);
   await page.goto('/');
   await page.waitForSelector('.vx-hero');
   await scrollDown(page);
-  await expect.poll(() => seen.curate.filter((t) => t === 'shelves').length, { timeout: 20_000 }).toBe(1);
+  await expect.poll(() => seen.searches.length, { timeout: 20_000 }).toBeGreaterThan(0);
   await page.waitForTimeout(1500);
   const before = new Set(seen.searches);
-  const designs = seen.curate.filter((t) => t === 'shelves').length;
 
   // Away and back, client-side, the way a listener moves around.
   await page.getByRole('link', { name: 'Library' }).first().click();
@@ -92,13 +78,13 @@ test('returning to Home inside the half hour reuses the design and the shelves; 
   await page.waitForSelector('.vx-hero');
   await scrollDown(page);
   await page.waitForTimeout(1500);
-  expect(seen.curate.filter((t) => t === 'shelves').length).toBe(designs);
   // Rotating shelves were answered from the cache: no search Home had not asked before.
   expect(seen.searches.filter((q) => !before.has(q))).toEqual([]);
+  const settled = seen.searches.length;
 
-  // An explicit refresh designs again.
+  // An explicit refresh asks the catalogue again.
   await page.getByRole('button', { name: 'Refresh Home' }).click();
-  await expect.poll(() => seen.curate.filter((t) => t === 'shelves').length, { timeout: 20_000 }).toBe(designs + 1);
+  await expect.poll(() => seen.searches.length, { timeout: 20_000 }).toBeGreaterThan(settled);
 });
 
 test('the wider catalogue mounts (and asks the catalogue) only after "Show more for you"', async ({ page, baseURL }) => {

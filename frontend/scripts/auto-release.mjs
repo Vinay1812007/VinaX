@@ -8,7 +8,10 @@
  * src/constants/release.test.ts fails when they disagree. Doing this by hand
  * on every merge meant it rarely happened: five builds of "14.0.1" shipped on
  * one day and no listener saw an update. This script does it in CI
- * (.github/workflows/auto-release.yml) from the merge commit's title and body.
+ * (.github/workflows/auto-release.yml). The card is written from the merged
+ * pull request's title and description (RELEASE_PR_MESSAGE, which the
+ * workflow looks up), whatever merge method was used; without a pull
+ * request, from the merge commit's own title and body.
  *
  *   node scripts/auto-release.mjs            bump from HEAD's commit message
  *   node scripts/auto-release.mjs --dry-run  print what would change
@@ -17,9 +20,10 @@
  * a line of the body is exactly "release: minor" / "release: major". The
  * merge is left alone when it already changed the version (a manual
  * release), or when the subject says `[skip release]` or a body line is
- * exactly "release: skip". A squash merge's body is the pull request's
- * description, which may *talk about* these markers (the first automatic
- * release was skipped by its own documentation), so prose never counts.
+ * exactly "release: skip", in the merge commit or in the pull request (its
+ * title, or a line of its description). A description may *talk about*
+ * these markers (the first automatic release was skipped by its own
+ * documentation), so prose never counts.
  *
  * Exports are pure so they can be unit-tested (src/__tests__/autoRelease.test.ts).
  */
@@ -54,6 +58,30 @@ export function directiveOf(message) {
   if (/(^|\s)#major\b/.test(subject) || own('major')) return 'major';
   if (/(^|\s)#minor\b/.test(subject) || own('minor')) return 'minor';
   return 'patch';
+}
+
+const DIRECTIVE_RANK = { patch: 0, minor: 1, major: 2, skip: 3 };
+
+/**
+ * What the merge asks of the release, read from the merge commit and from
+ * the pull request it came from (its title and description): the stronger
+ * request wins, and either one asking to skip skips.
+ */
+export function directiveOfMerge(commitMessage, prMessage = '') {
+  const a = directiveOf(commitMessage);
+  const b = prMessage && prMessage.trim() ? directiveOf(prMessage) : 'patch';
+  return DIRECTIVE_RANK[b] > DIRECTIVE_RANK[a] ? b : a;
+}
+
+/**
+ * The message the What's New card is written from: the pull request's
+ * title and description when the merge came from one, else the merge
+ * commit's own message. A squash merged from GitHub's button does not
+ * carry the description: its body lists the branch's commits ("* subject"),
+ * and those internal lines used to become the card (1.3.8, 1.3.10, 1.3.11).
+ */
+export function cardMessage(commitMessage, prMessage = '') {
+  return prMessage && prMessage.trim() ? prMessage : commitMessage;
 }
 
 /** The bump level a commit message asks for (never 'skip'). */
@@ -160,19 +188,22 @@ function git(...args) {
 export function main(argv = process.argv.slice(2)) {
   const dry = argv.includes('--dry-run');
   const message = process.env.RELEASE_COMMIT_MESSAGE ?? git('log', '-1', '--format=%B');
+  // The merged pull request's "<title>\n\n<description>", found by the workflow (empty when there is none).
+  const prMessage = process.env.RELEASE_PR_MESSAGE ?? '';
   const pkgPath = join(ROOT, 'package.json');
   const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
   const current = pkg.version;
 
-  if (directiveOf(message) === 'skip') return done('skipped', `the merge asked to skip the release; staying at ${current}`);
+  const directive = directiveOfMerge(message, prMessage);
+  if (directive === 'skip') return done('skipped', `the merge asked to skip the release; staying at ${current}`);
   // A merge that already bumped the version is a manual release: leave it.
   let before = null;
   try { before = JSON.parse(git('show', 'HEAD~1:frontend/package.json')).version; } catch { /* first commit or shallow */ }
   if (before && before !== current) return done('manual', `the merge already moved the version ${before} → ${current}; nothing to bump`);
 
-  const level = levelOf(message);
+  const level = directive;
   const next = bumpVersion(current, level);
-  const entry = entryFromMessage(message);
+  const entry = entryFromMessage(cardMessage(message, prMessage));
   const files = {
     'package.json': (s) => updatePackageJson(s, next),
     'package-lock.json': (s) => updatePackageJson(s, next),

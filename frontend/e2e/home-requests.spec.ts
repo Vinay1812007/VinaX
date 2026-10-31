@@ -123,7 +123,12 @@ test.describe('Home request load', () => {
     // trending feed (/trending/songs) first; this mock answers it empty, so
     // the old searches still run after it (+1). With the feed answering, those
     // four "trending now" searches do not run at all. Ceiling 28 -> 30.
-    expect(initial).toBeLessThanOrEqual(30);
+    // 2026-10-31 (1.3.11): 32–35 measured locally over five runs, 33 in each
+    // of three CI runs. #177 made Home read two shared feeds, /home and
+    // /trending; this mock answers both empty, so they count (+2) and the
+    // shelves behind them still fall back to their searches. With the feeds
+    // answering, those fallback searches do not run. Ceiling 30 -> 36.
+    expect(initial).toBeLessThanOrEqual(36);
     // Scrolling must still load the rest. Step down the page the way a
     // listener does: since 8.4.0 Home ends with the About VinaX text, and an
     // instant jump to the very bottom lands past the visibility-mounted
