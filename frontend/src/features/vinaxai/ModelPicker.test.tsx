@@ -52,6 +52,53 @@ describe('<ModelPicker />', () => {
   });
 });
 
+describe('a long list', () => {
+  const MANY = [
+    ...Array.from({ length: 12 }, (_, i) => m(`groq:f${i}`, `Fast ${i}`, 'fast')),
+    m('nvidia:riva', 'Riva Translate 4B', 'more', { provider: 'NVIDIA', description: 'Translates text between languages' }),
+    m('openrouter:lfm', 'LFM 2.5 2.6B', 'fast', { provider: 'OpenRouter', available: false, reason: 'busy' }),
+    m('openrouter:dots', 'Dots 3 Note Preview', 'more', { provider: 'OpenRouter' }),
+  ];
+
+  it('short lists have no search box', () => {
+    render(<ModelPicker models={MODELS} value="auto" onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Model: Auto' }));
+    expect(screen.queryByRole('searchbox')).toBeNull();
+  });
+
+  it('labels the More models group and searches name, provider and description', () => {
+    render(<ModelPicker models={MANY} value="auto" onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Model: Auto' }));
+    expect(screen.getByText('More models')).toBeTruthy();
+    const box = screen.getByRole('searchbox', { name: 'Search models' });
+    fireEvent.change(box, { target: { value: 'translate' } });
+    expect(screen.getAllByRole('option').map((o) => o.querySelector('.vx-ai-opt-name')?.textContent)).toEqual(['Riva Translate 4B']);
+    fireEvent.change(box, { target: { value: 'openrouter' } });
+    expect(screen.getAllByRole('option')).toHaveLength(2);
+    fireEvent.change(box, { target: { value: 'zzz' } });
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+    expect(screen.getByRole('status').textContent).toContain('zzz');
+  });
+
+  it('Enter in the search box picks the first available match', () => {
+    const onChange = vi.fn();
+    render(<ModelPicker models={MANY} value="auto" onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Model: Auto' }));
+    const box = screen.getByRole('searchbox', { name: 'Search models' });
+    fireEvent.change(box, { target: { value: 'openrouter' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(onChange).toHaveBeenCalledWith('openrouter:dots');
+    expect(screen.queryByRole('listbox')).toBeNull();
+  });
+
+  it('Escape in the search box closes the picker', () => {
+    render(<ModelPicker models={MANY} value="auto" onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Model: Auto' }));
+    fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Escape' });
+    expect(screen.queryByRole('listbox')).toBeNull();
+  });
+});
+
 describe('Escape belongs to the overlay that has focus', () => {
   it('an Escape aimed at another dialog does not close the picker', () => {
     render(<><ModelPicker models={MODELS} value="auto" onChange={vi.fn()} /><div role="dialog"><button type="button">Other</button></div></>);

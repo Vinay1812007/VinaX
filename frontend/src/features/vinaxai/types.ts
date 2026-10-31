@@ -7,7 +7,7 @@ export interface ModelLabel {
 }
 
 export interface PickerModel extends ModelLabel {
-  group: 'fast' | 'balanced' | 'smart' | 'vision' | 'code' | 'cloudflare';
+  group: 'fast' | 'balanced' | 'smart' | 'vision' | 'code' | 'more' | 'cloudflare';
   description: string;
   flags: { vision: boolean; web: boolean; thinking: boolean; code: boolean };
   available: boolean;
