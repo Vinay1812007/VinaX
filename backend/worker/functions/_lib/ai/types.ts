@@ -55,12 +55,22 @@ export interface MessagePart {
   type: 'text' | 'attachment';
   text?: string;
   id?: string;
+  /** Attachments: what the page shows without another query. */
+  name?: string;
+  mime?: string;
+  kind?: 'image' | 'pdf' | 'text';
+  size?: number;
+  pages?: number;
 }
 
 /** One turn as the adapters see it. */
 export interface NormalizedMessage {
   role: 'user' | 'assistant';
   text: string;
+  /** Images for a vision model (base64). */
+  images?: Array<{ mime: string; data: string }>;
+  /** Files Gemini reads itself (Files API uris), e.g. PDFs. */
+  files?: Array<{ mime: string; uri: string }>;
 }
 
 export interface ChatRequest {

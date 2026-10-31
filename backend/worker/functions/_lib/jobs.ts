@@ -6,12 +6,13 @@
  *
  *   status-tick    every run    probe the public components, uptime_tick each
  *   housekeeping   hourly       room_sweep · purge_events(retention) · retire_push_devices
- *                               · VinaX AI chats deleted more than a day ago
+ *                               · VinaX AI chats deleted more than a day ago, and files never sent
  *
  * Nothing runs without the database: the jobs exist to write into it.
  */
 import { DAY_MS, db, dbConfigured, q, since, type DbEnv } from './db';
 import { setting } from './settings';
+import { purgeAiChats } from './ai/cleanup';
 import { COMPONENTS, probeAll } from '../api/status';
 
 export type JobId = 'status-tick' | 'housekeeping';
@@ -64,8 +65,8 @@ async function housekeeping(env: DbEnv): Promise<Record<string, unknown>> {
     db.rpc<{ rooms: number; members: number }>(env, 'room_sweep'),
     db.rpc<number>(env, 'purge_events', { p_keep_days: keep }),
     db.rpc<number>(env, 'retire_push_devices', { p_days: 180 }),
-    // Deleted VinaX AI chats are hidden at once and removed (with their messages) a day later.
-    db.remove<{ id: string }>(env, 'ai_conversations', q().lt('deleted_at', since(DAY_MS)).select('id'), { returning: true }),
+    // Deleted VinaX AI chats are hidden at once and removed (with messages and files) a day later.
+    purgeAiChats(env),
     // VinaX AI's daily allowance rows are only needed for today; keep a quarter for the record.
     db.remove(env, 'ai_daily_usage', q().lt('day', since(90 * DAY_MS).slice(0, 10))),
   ]);
@@ -74,7 +75,8 @@ async function housekeeping(env: DbEnv): Promise<Record<string, unknown>> {
   out.eventsPurged = purged.ok ? purged.value : `failed: ${purged.error}`;
   out.pushRetired = retired.ok ? retired.value : `failed: ${retired.error}`;
   // Not fatal: before schema v4 is applied the table does not exist yet.
-  out.aiChatsPurged = chats.ok ? chats.rows.length : `failed: ${chats.error}`;
+  out.aiChatsPurged = chats.chats;
+  out.aiFilesPurged = chats.files;
   if (!rooms.ok || !purged.ok || !retired.ok) throw new Error('housekeeping: a step failed');
   return out;
 }

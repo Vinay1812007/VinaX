@@ -40,13 +40,19 @@ export function latestLeaf<T extends TreeMessage>(rows: readonly T[]): T | null 
   return best;
 }
 
-/** The text of a message's parts. Attachments become a short placeholder until phase 4 sends them. */
+/** The text of a message's parts; files appear as "[file: name]" (materialize.ts sends the files themselves). */
 export function textOf(content: MessagePart[] | null | undefined): string {
   if (!Array.isArray(content)) return '';
   return content
-    .map((p) => (p?.type === 'text' ? String(p.text ?? '') : p?.type === 'attachment' ? '[attachment]' : ''))
+    .map((p) => (p?.type === 'text' ? String(p.text ?? '') : p?.type === 'attachment' ? `[file: ${p.name ?? 'attachment'}]` : ''))
     .filter(Boolean)
     .join('\n\n');
+}
+
+/** Only the typed text of a message, without its files. */
+export function typedText(content: MessagePart[] | null | undefined): string {
+  if (!Array.isArray(content)) return '';
+  return content.filter((p) => p?.type === 'text').map((p) => String(p.text ?? '')).filter(Boolean).join('\n\n');
 }
 
 /**

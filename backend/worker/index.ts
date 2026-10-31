@@ -60,6 +60,8 @@ import * as m_api_ai_chat from './functions/api/ai/chat';
 import * as m_api_ai_models from './functions/api/ai/models';
 import * as m_api_ai_conversations from './functions/api/ai/conversations';
 import * as m_api_ai_export from './functions/api/ai/export';
+import * as m_api_ai_attachments from './functions/api/ai/attachments';
+import * as m_api_ai_attachment_id from './functions/api/ai/attachments/[id]';
 import * as m_api_ai_conversation_id from './functions/api/ai/conversations/[id]';
 // 15.0 — the social layer: profiles, follows, shared playlists.
 import * as m_api_profile from './functions/api/profile';
@@ -161,6 +163,7 @@ const EXACT: Record<string, Mod> = {
   '/api/ai/models': m_api_ai_models,
   '/api/ai/conversations': m_api_ai_conversations,
   '/api/ai/export': m_api_ai_export,
+  '/api/ai/attachments': m_api_ai_attachments,
   '/api/profile': m_api_profile,
   '/api/follow': m_api_follow,
   '/api/shared-playlist': m_api_shared_playlist,
@@ -195,6 +198,7 @@ const DYNAMIC: Array<{ re: RegExp; mod: Mod; key: string }> = [
   { re: /^\/api\/profile\/([^/]+)\/?$/, mod: m_api_profile_handle, key: 'handle' },
   { re: /^\/api\/shared-playlist\/([^/]+)\/?$/, mod: m_api_shared_playlist_id, key: 'id' },
   { re: /^\/api\/ai\/conversations\/([^/]+)\/?$/, mod: m_api_ai_conversation_id, key: 'id' },
+  { re: /^\/api\/ai\/attachments\/([^/]+)\/?$/, mod: m_api_ai_attachment_id, key: 'id' },
   { re: /^\/sitemaps\/([^/]+)\/?$/, mod: m_sitemaps_map, key: 'map' },
 ];
 

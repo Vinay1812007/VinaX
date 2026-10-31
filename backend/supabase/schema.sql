@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 5
+-- VinaX database · schema version 6
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -449,6 +449,26 @@ create table if not exists ai_attachments (
 );
 create index if not exists ai_attachments_account_idx on ai_attachments (account_id, created_at desc);
 create index if not exists ai_attachments_conversation_idx on ai_attachments (conversation_id);
+
+-- Version 6: what kind of file it is, and the Gemini Files API copy of a PDF
+-- (Google keeps it 48 hours; the Worker re-uploads after that).
+alter table ai_attachments add column if not exists kind text check (kind in ('image', 'pdf', 'text'));
+alter table ai_attachments add column if not exists gemini_uri text;
+alter table ai_attachments add column if not exists gemini_expires_at timestamptz;
+create index if not exists ai_attachments_loose_idx on ai_attachments (created_at) where conversation_id is null;
+
+-- The private Storage bucket the files live in (Supabase only; a plain
+-- Postgres, such as the Schema workflow's, has no storage schema). Private:
+-- the Worker reads it with the service-role key, nobody else can.
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_schema = 'storage' and table_name = 'buckets') then
+    insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+      values ('ai-attachments', 'ai-attachments', false, 20971520,
+              array['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'application/pdf', 'text/plain'])
+      on conflict (id) do update set public = false, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+  end if;
+end $$;
 
 -- Search one account's chats by title and message text, newest first.
 -- p_query is plain text: the LIKE wildcards in it are escaped here.
@@ -1089,7 +1109,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 5, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 5, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 6, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 6, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 5 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 6 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
