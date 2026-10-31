@@ -5,7 +5,7 @@ VinaX 14.0 brings back a server database, designed from a clean sheet: one schem
 ## Setting it up
 
 1. Create a Supabase project (any region; Mumbai is closest to most listeners).
-2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 5), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
+2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 6), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
 3. Set two Worker secrets from `backend/`:
 
 ```sh
@@ -14,6 +14,10 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml
 ```
 
 4. Open the console's **Database** page: it shows the schema version the paste wrote and every table.
+
+### Moving from version 5
+
+Version 6 adds three columns to `ai_attachments`: `kind` (image, pdf or text), and `gemini_uri` with `gemini_expires_at` (the Gemini Files API copy of a PDF). It also creates the private Storage bucket `ai-attachments` that VinaX AI's files live in. The bucket is created only on Supabase, where the `storage` schema exists; a plain Postgres skips it. Paste `schema.sql` once; nothing that exists changes.
 
 ### Moving from version 4
 
@@ -72,7 +76,7 @@ Only the Worker holds the service-role key. Row-level security is enabled and fo
 | `ai_conversations` | VinaX AI chat | `account_id`, `title`, `starred`, `model_pref`, `active_leaf_id` (the branch a reload opens), `deleted_at` (hidden; purged a day later); deleted with the account |
 | `ai_messages` | message in a chat | `parent_id` (a tree: an edit or a retry adds a sibling), `role` (user/assistant), `content` (parts), `thinking`, `thinking_ms`, `sources`, `artifacts`, `model_id`, `provider`, `stop_reason`, `usage`; cascade with the chat |
 | `ai_daily_usage` | UTC day × kind | VinaX AI's shared daily allowances (`search`, `grounding`): `count` taken so far; rows older than 90 days are removed by the hourly housekeeping |
-| `ai_attachments` | file added to a chat | `name`, `mime`, `size`, `storage_path` (private bucket `ai-attachments`), `extracted_text`, `pages`; deleted with the account (used from phase 4) |
+| `ai_attachments` | file added to a chat | `name`, `mime`, `size`, `kind` (image / pdf / text), `storage_path` (private bucket `ai-attachments`, at `<account>/<conversation or new>/<id>`), `extracted_text` (a text file, or the text the page read out of a PDF), `pages`, `gemini_uri` / `gemini_expires_at` (the Gemini Files API copy of a PDF). The rows go with the account or the chat; the stored files are removed by the Worker first (account deletion, the console's delete, the hourly housekeeping), and files never sent are removed after a day |
 
 The view `directory` merges `listeners` and `accounts` into one row per person (device rows with their account when linked, plus account-only rows).
 

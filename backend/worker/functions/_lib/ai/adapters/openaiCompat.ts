@@ -30,9 +30,14 @@ interface Chunk {
 
 export function requestBody(req: ChatRequest): Record<string, unknown> {
   const { system, messages } = wireMessages(req.model, req.system, req.messages);
-  const wire: Array<{ role: string; content: string }> = [];
+  const wire: Array<{ role: string; content: string | Array<Record<string, unknown>> }> = [];
   if (system) wire.push({ role: 'system', content: system });
-  for (const msg of messages) wire.push({ role: msg.role, content: msg.text });
+  for (const msg of messages) {
+    // Images go as image_url parts (data URLs) beside the text.
+    wire.push(msg.images?.length
+      ? { role: msg.role, content: [{ type: 'text', text: msg.text }, ...msg.images.map((im) => ({ type: 'image_url', image_url: { url: `data:${im.mime};base64,${im.data}` } }))] }
+      : { role: msg.role, content: msg.text });
+  }
   return {
     model: req.model.upstream,
     messages: wire,

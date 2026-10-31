@@ -6,7 +6,8 @@
  *     parentMessageId?: uuid | "root",     // where the new message hangs (edit = a sibling);
  *                                          // absent = after the conversation's active leaf;
  *                                          // "root" = a new first message (editing the first one)
- *     content: [{ type: "text", text }],   // empty + parentMessageId of a user message = retry
+ *     content: [{ type: "text", text }, { type: "attachment", id }],   // files from POST /api/ai/attachments;
+ *                                          // empty + parentMessageId of a user message = retry
  *     continueFrom?: uuid,                 // an assistant message that was cut off: write on from where it stopped
  *     mode: "auto" | "model", model?: "<registry id>",
  *     extendedThinking?, webSearch?, artifacts?, timezone?, locale? }
@@ -23,6 +24,7 @@
  *       text     { delta }
  *       error    { code, message, retryable, alternatives? }
  *       done     { stopReason: end | length | aborted | error, usage? }
+ *   → 400 bad_request | bad_attachment | too_many_images | model_cannot_see_images · 409 too_many_files
  *   → 400 bad_request · 401 signed_out · 404 not_found · 409 conversation_full · 413 too_large
  *   → 429 rate_limited · 503 ai_not_configured | ai_disabled | unavailable
  *
@@ -36,11 +38,15 @@ import { bearer, readSession } from '../../_lib/googleAuth';
 import { CORS, accountOf, json } from '../../_lib/authShared';
 import { readJsonCapped } from '../../_lib/body';
 import { bindingAllows, rateLimitAsync } from '../../_lib/ratelimit';
-import { dbConfigured } from '../../_lib/db';
+import { db, dbConfigured, q } from '../../_lib/db';
+import {
+  attachmentPart, loadAttachments, MAX_FILES_PER_CONVERSATION, MAX_FILES_PER_MESSAGE, MAX_IMAGES_PER_MESSAGE, type AttachmentRow,
+} from '../../_lib/ai/attachments';
+import { fileSignals, materialize, newMemo, toTurns } from '../../_lib/ai/materialize';
 import { anyProviderConfigured, PROVIDER_NAMES, providerConfigured } from '../../_lib/ai/adapters';
 import { aiOpenFor, aiSettings, registryFor } from '../../_lib/ai/config';
 import { isCooling } from '../../_lib/ai/cooldown';
-import { fallbackTitle, latestLeaf, pathTo, textOf, threadChars, toNormalized, trimHistory } from '../../_lib/ai/history';
+import { fallbackTitle, latestLeaf, pathTo, textOf, trimHistory, typedText } from '../../_lib/ai/history';
 import { ladderModels, modelById, type LadderName } from '../../_lib/ai/models';
 import { generateTitle } from '../../_lib/ai/title';
 import { buildSystemPrompt, firstNameOf, safeLocale, safeTimezone, type SearchBlock } from '../../_lib/ai/prompt';
@@ -100,21 +106,22 @@ const SSE_HEADERS = {
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: { ...CORS, 'access-control-allow-methods': 'POST, OPTIONS' } });
 
-/** The text parts of a message body, or an error code. */
-export function parseContent(raw: unknown): { ok: true; parts: MessagePart[]; text: string } | { ok: false; error: string } {
-  if (raw == null) return { ok: true, parts: [], text: '' };
+/** The text parts and the attachment ids of a message body, or an error code. */
+export function parseContent(raw: unknown): { ok: true; parts: MessagePart[]; text: string; files: string[] } | { ok: false; error: string } {
+  if (raw == null) return { ok: true, parts: [], text: '', files: [] };
   if (!Array.isArray(raw) || raw.length > 50) return { ok: false, error: 'bad_request' };
   const parts: MessagePart[] = [];
+  const files: string[] = [];
   for (const p of raw as Array<Record<string, unknown>>) {
     if (!p || typeof p !== 'object') return { ok: false, error: 'bad_request' };
     if (p.type === 'text' && typeof p.text === 'string') parts.push({ type: 'text', text: p.text });
-    // Attachments arrive in phase 4; until then they are refused, not dropped.
-    else if (p.type === 'attachment') return { ok: false, error: 'attachments_unavailable' };
+    else if (p.type === 'attachment' && isUuid(p.id)) { if (!files.includes(p.id)) files.push(p.id); }
     else return { ok: false, error: 'bad_request' };
   }
+  if (files.length > MAX_FILES_PER_MESSAGE) return { ok: false, error: 'bad_attachment' };
   const text = textOf(parts);
   if (text.length > MAX_TEXT_CHARS) return { ok: false, error: 'too_long' };
-  return { ok: true, parts: text.trim() ? parts : [], text };
+  return { ok: true, parts: text.trim() ? parts : [], text, files };
 }
 
 const errorCode = (err: ProviderError, exhausted: boolean): string => {
@@ -190,7 +197,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     if (!target || !question) return json({ error: 'not_found' }, 404);
     continuing = target;
     userMsg = question;
-  } else if (!content.parts.length) {
+  } else if (!content.parts.length && !content.files.length) {
     // Retry: a new answer to an existing question.
     const target = conv && isUuid(parentRaw) ? rows.find((r) => r.id === parentRaw && r.role === 'user') : undefined;
     if (!conv) return json({ error: 'bad_request' }, 400);
@@ -198,6 +205,23 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     userMsg = target;
   } else {
     if (rows.length >= MAX_MESSAGES) return json({ error: 'conversation_full' }, 409);
+    // Files: the account's own, not yet in another conversation, within the limits.
+    let newFiles: AttachmentRow[] = [];
+    if (content.files.length) {
+      const r = await loadAttachments(env, sub, content.files);
+      if (!r.ok) return json({ error: 'unavailable' }, 503);
+      const byId = new Map(r.rows.map((a) => [a.id, a]));
+      newFiles = content.files.map((id) => byId.get(id)).filter((a): a is AttachmentRow => !!a);
+      if (newFiles.length !== content.files.length || newFiles.some((a) => a.conversation_id && a.conversation_id !== conv?.id)) return json({ error: 'bad_attachment' }, 400);
+      const images = newFiles.filter((a) => a.kind === 'image').length;
+      if (images > MAX_IMAGES_PER_MESSAGE) return json({ error: 'too_many_images' }, 400);
+      if (images && mode === 'model' && !candidates[0].flags.vision) return json({ error: 'model_cannot_see_images' }, 400);
+      if (conv) {
+        const have = await db.count(env, 'ai_attachments', q().eq('conversation_id', conv.id));
+        const adding = newFiles.filter((a) => !a.conversation_id).length;
+        if (have.ok && have.value + adding > MAX_FILES_PER_CONVERSATION) return json({ error: 'too_many_files' }, 409);
+      }
+    }
     let parentId: string | null;
     if (parentRaw === 'root') parentId = null;
     else if (isUuid(parentRaw)) {
@@ -208,13 +232,19 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       parentId = active ?? latestLeaf(rows)?.id ?? null;
     }
     if (!conv) {
-      const made = await createConversation(env, { id: crypto.randomUUID(), account_id: sub, title: fallbackTitle(content.text), model_pref: mode === 'model' ? candidates[0].id : 'auto' });
+      const made = await createConversation(env, { id: crypto.randomUUID(), account_id: sub, title: fallbackTitle(content.text || newFiles.map((a) => a.name).join(', ')), model_pref: mode === 'model' ? candidates[0].id : 'auto' });
       // 23503: the account row is gone (deleted elsewhere), so the session no longer stands.
       if (!made.ok) return made.code === '23503' ? json({ error: 'signed_out' }, 401) : json({ error: 'unavailable' }, 503);
       if (!made.rows[0]) return json({ error: 'unavailable' }, 503);
       conv = made.rows[0];
     }
-    const row = { id: crypto.randomUUID(), conversation_id: conv.id, parent_id: parentId, role: 'user' as const, content: content.parts, created_at: new Date().toISOString() };
+    const unlinked = newFiles.filter((a) => !a.conversation_id).map((a) => a.id);
+    if (unlinked.length) {
+      const linked = await db.update(env, 'ai_attachments', q().eq('account_id', sub).in('id', unlinked).is('conversation_id', 'null'), { conversation_id: conv.id });
+      if (!linked.ok) return json({ error: 'unavailable' }, 503);
+    }
+    // Files first, as the page shows them above the text.
+    const row = { id: crypto.randomUUID(), conversation_id: conv.id, parent_id: parentId, role: 'user' as const, content: [...newFiles.map(attachmentPart), ...content.parts], created_at: new Date().toISOString() };
     const saved = await insertMessage(env, row);
     if (!saved.ok) return json({ error: 'unavailable' }, 503);
     userMsg = { thinking: null, thinking_ms: null, sources: null, artifacts: null, model_id: null, provider: null, stop_reason: null, usage: null, ...row };
@@ -222,13 +252,21 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   }
   const isNew = rows.length === 1;
   const conversation = conv;
-  const history = continuing
-    ? [...toNormalized(pathTo(rows, continuing.id)), { role: 'user' as const, text: CONTINUE_PROMPT }]
-    : toNormalized(pathTo(rows, userMsg.id));
-  const latestText = textOf(userMsg.content);
+  const turns = toTurns(pathTo(rows, continuing ? continuing.id : userMsg.id));
+  if (continuing) turns.push({ role: 'user', text: CONTINUE_PROMPT, files: [] });
+  // Every file the thread refers to, loaded once.
+  const fileIds = [...new Set(turns.flatMap((t) => t.files))];
+  const fileRows = new Map<string, AttachmentRow>();
+  if (fileIds.length) {
+    const r = await loadAttachments(env, sub, fileIds);
+    if (r.ok) for (const a of r.rows) fileRows.set(a.id, a);
+  }
+  const signals = fileSignals(turns, fileRows);
+  const threadSize = turns.reduce((n, t) => n + t.text.length + t.files.reduce((m, id) => m + (fileRows.get(id)?.extracted_text?.length ?? 0), 0), 0);
+  const latestText = typedText(userMsg.content);
 
   if (mode === 'auto') {
-    ladder = pickLadder({ text: latestText, threadChars: threadChars(history), hasImages: false, hasPdf: false, extendedThinking });
+    ladder = pickLadder({ text: latestText, threadChars: threadSize, hasImages: signals.hasImages, hasPdf: signals.hasPdf, extendedThinking });
     candidates = ladderModels(registry, ladder);
     if (!candidates.length) candidates = ladderModels(registry, 'default');
     if (!candidates.length) candidates = registry.filter((spec) => spec.group !== null);
@@ -239,7 +277,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   const pathRows = pathTo(rows, userMsg.id);
   const previousUser = [...pathRows].reverse().find((r) => r.role === 'user' && r.id !== userMsg.id);
   const doSearch = !continuing && settings.search && wantsSearch(latestText, searchMode(body.webSearch));
-  const query = doSearch ? buildQuery(latestText, previousUser ? textOf(previousUser.content) : null) : '';
+  const query = doSearch ? buildQuery(latestText, previousUser ? typedText(previousUser.content) : null) : '';
   const topic = topicOf(latestText);
   let grounding = false;
   if (doSearch && query) {
@@ -276,6 +314,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     searchLog = { via: 'search', ok: r.ok, ...(r.ok ? { count: r.sources.length, cached: r.cached, provider: r.provider } : { reason: r.reason }) };
     return r;
   })());
+  const memo = newMemo();
   const build: RunOptions['build'] = async (spec) => {
     const ground = grounding && spec.flags.grounding;
     let search: SearchBlock | null = null;
@@ -284,10 +323,11 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       if (r.ok) search = { sources: r.sources };
     }
     const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: false, search });
+    const messages = await materialize(env, turns, spec, fileRows, memo);
     return {
       model: spec,
       system,
-      messages: trimHistory(history, Math.max(4_000, spec.maxContextChars - system.length)),
+      messages: trimHistory(messages, Math.max(4_000, spec.maxContextChars - system.length)),
       maxOutputTokens: spec.maxOutput,
       reasoning: extendedThinking ? 'high' : 'default',
       webSearch: ground,

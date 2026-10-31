@@ -8,7 +8,7 @@
  *   fake.rows('events')        → what was inserted / upserted
  *   fake.answer('rpc/x', fn)   → custom answer for a path (table or rpc/<fn>)
  *
- * Filters understood on GET/PATCH/DELETE: `col=eq.v`, `col=ilike.pattern`,
+ * Filters understood on GET/PATCH/DELETE: `col=eq.v`, `col=in.("a","b")`, `col=ilike.pattern`,
  * `limit`, `select`, `order` (ignored). Everything else matches every row.
  */
 import { vi } from 'vitest';
@@ -40,6 +40,12 @@ function matches(row: Row, query: string): boolean {
   const params = new URLSearchParams(query);
   for (const [k, v] of params.entries()) {
     if (['select', 'limit', 'offset', 'order', 'on_conflict'].includes(k)) continue;
+    const inList = /^in\.\((.*)\)$/s.exec(v);
+    if (inList) {
+      const values = inList[1] ? inList[1].split(',').map((x) => x.replace(/^"|"$/g, '')) : [];
+      if (!values.includes(String(row[k]))) return false;
+      continue;
+    }
     const m = /^(eq|neq|ilike|gte|lte|gt|lt|is)\.(.*)$/s.exec(v);
     if (!m) continue;
     const [, op, raw] = m;
@@ -57,6 +63,8 @@ function matches(row: Row, query: string): boolean {
       }
       if (!new RegExp(re + '$', 'i').test(String(cell ?? ''))) return false;
     }
+    // SQL: comparing with null is unknown, so the row does not match.
+    if ((op === 'gte' || op === 'gt' || op === 'lte' || op === 'lt') && cell == null) return false;
     if ((op === 'gte' || op === 'gt' || op === 'lte' || op === 'lt') && cell != null) {
       const a = String(cell), b = raw;
       if (op === 'gte' && a < b) return false;

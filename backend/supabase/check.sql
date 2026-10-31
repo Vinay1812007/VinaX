@@ -61,8 +61,8 @@ insert into ai_messages (id, conversation_id, parent_id, role, content, created_
   ('00000000-0000-4000-8000-00000000c010', '00000000-0000-4000-8000-00000000c001', null, 'user', '[{"type": "text", "text": "What is a raga?"}]', now() - interval '2 minutes'),
   ('00000000-0000-4000-8000-00000000c011', '00000000-0000-4000-8000-00000000c001', '00000000-0000-4000-8000-00000000c010', 'assistant', '[{"type": "text", "text": "A melodic framework, like Yaman."}]', now() - interval '1 minute'),
   ('00000000-0000-4000-8000-00000000c012', '00000000-0000-4000-8000-00000000c001', null, 'user', '[{"type": "text", "text": "Explain a raga simply"}]', now());
-insert into ai_attachments (id, account_id, conversation_id, name, mime, size, storage_path) values
-  ('00000000-0000-4000-8000-00000000c020', 'check_a1', '00000000-0000-4000-8000-00000000c001', 'notes.txt', 'text/plain', 12, 'check_a1/00000000-0000-4000-8000-00000000c001/00000000-0000-4000-8000-00000000c020');
+insert into ai_attachments (id, account_id, conversation_id, name, mime, size, kind, storage_path) values
+  ('00000000-0000-4000-8000-00000000c020', 'check_a1', '00000000-0000-4000-8000-00000000c001', 'notes.txt', 'text/plain', 12, 'text', 'check_a1/00000000-0000-4000-8000-00000000c001/00000000-0000-4000-8000-00000000c020');
 
 -- ------------------------------------------------------------- functions --
 do $$
@@ -213,6 +213,12 @@ begin
   assert not ai_take_daily('check_kind_zero', 0), 'ai_take_daily: 0 means off';
   assert (select count from ai_daily_usage where kind = 'check_kind') = 2, 'ai_take_daily: counted once each';
 
+  begin
+    insert into ai_attachments (id, account_id, name, mime, size, kind, storage_path) values ('00000000-0000-4000-8000-00000000c021', 'check_a1', 'x', 'x', 1, 'video', 'x');
+    assert false, 'ai_attachments.kind refuses an unknown kind';
+  exception when check_violation then null;
+  end;
+
   v := ai_export('check_a1');
   assert v ->> 'format' = 'vinax-ai-chats' and jsonb_array_length(v -> 'conversations') = 1, 'ai_export: one chat';
   assert jsonb_array_length(v -> 'conversations' -> 0 -> 'messages') = 3, 'ai_export: every message, every branch';
@@ -253,7 +259,7 @@ begin
   assert not has_table_privilege('anon', 'public.ai_messages', 'select'), 'anon cannot read VinaX AI messages';
   assert not has_function_privilege('anon', 'public.ai_conversation_search(text, text, timestamptz, integer)', 'execute'), 'anon cannot search VinaX AI chats';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 5, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 6, 'meta.schema.version';
   raise notice 'check.sql: every function answered as expected';
 end $$;
 

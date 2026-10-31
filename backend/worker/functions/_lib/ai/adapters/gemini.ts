@@ -73,7 +73,14 @@ export function geminiBody(req: ChatRequest, grounding = req.webSearch && req.mo
   if (merged.thinkingConfig) generationConfig.thinkingConfig = merged.thinkingConfig;
   return {
     ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
-    contents: messages.map((msg) => ({ role: msg.role === 'assistant' ? 'model' : 'user', parts: [{ text: msg.text }] })),
+    contents: messages.map((msg) => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [
+        ...(msg.files ?? []).map((f) => ({ file_data: { mime_type: f.mime, file_uri: f.uri } })),
+        ...(msg.images ?? []).map((im) => ({ inline_data: { mime_type: im.mime, data: im.data } })),
+        { text: msg.text },
+      ],
+    })),
     generationConfig,
     ...(grounding ? { tools: [{ googleSearch: {} }] } : {}),
   };

@@ -5,6 +5,7 @@
  *
  * The directory view merges devices and accounts into one row per person.
  */
+import { removeAccountFiles } from '../../_lib/ai/attachments';
 import { adminJson, badRequest, dbFailure } from '../../_lib/admin';
 import { adminGet, adminPost, camel, paging } from '../../_lib/adminRoute';
 import { db, like, q, since, DAY_MS, firstFailure, type Query } from '../../_lib/db';
@@ -66,6 +67,9 @@ export const onRequestPost = adminPost(async ({ env, body, audit }) => {
   if (!id && !account) return badRequest();
   if ((id && !ID_RE.test(id)) || (account && !SUB_RE.test(account))) return badRequest('bad_id');
   const reason = clip(body.reason, 200) ?? 'no reason given';
+  // VinaX AI files live in Storage, not in a row that cascades: remove them first.
+  const accounts = account ? [account] : (await db.select<{ id: string }>(env, 'accounts', q().eq('listener_id', id).select('id'))).rows.map((a) => a.id);
+  for (const a of accounts) await removeAccountFiles(env, a);
   const r = await db.rpc<Record<string, number>>(env, 'delete_listener', { p_listener: id, p_account: account });
   if (!r.ok) return dbFailure(r);
   const deleted = r.value ?? {};

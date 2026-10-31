@@ -12,6 +12,7 @@
  * so a listener who ticked "share usage" after signing in is still one row
  * in the console. Best effort, after the answer.
  */
+import { removeAccountFiles } from '../../_lib/ai/attachments';
 import { bearer, readSession, type AuthEnv } from '../../_lib/googleAuth';
 import { readJsonCapped } from '../../_lib/body';
 import { rateLimitAsync } from '../../_lib/ratelimit';
@@ -67,6 +68,8 @@ export const onRequestPost = async (ctx: { request: Request; env: Env }): Promis
   const read = await readJsonCapped<{ delete?: unknown } | null>(request, 1_000);
   if (!read.ok || read.value?.delete !== true) return json({ error: 'bad_request' }, 400);
   if (!dbConfigured(env)) return json({ ok: true });
-  const r = await db.remove(env, 'accounts', q().eq('id', sub)); // the backup cascades
+  // VinaX AI files live in Storage, not in a row that cascades: remove them first.
+  await removeAccountFiles(env, sub);
+  const r = await db.remove(env, 'accounts', q().eq('id', sub)); // the backup, chats and their rows cascade
   return r.ok ? json({ ok: true }) : json({ error: 'unavailable' }, 503);
 };

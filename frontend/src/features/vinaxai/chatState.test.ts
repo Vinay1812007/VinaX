@@ -175,3 +175,13 @@ describe('chatReducer: web search', () => {
     expect(s.messages.a.sources?.items).toEqual([src]);
   });
 });
+
+describe('chatReducer: files', () => {
+  const file = { id: 'f1', name: 'a.png', kind: 'image' as const, mime: 'image/png', size: 10, preview: 'blob:x' };
+  it('a sent message keeps its files; a loaded one reads them from its content', () => {
+    const s = run([{ type: 'send', text: '', parentId: null, now: '1', files: [file] }, meta()]);
+    expect(s.messages.u1.files).toEqual([file]);
+    const loaded = run([{ type: 'load', conversation: { id: 'c', title: 't', starred: false, activeLeafId: 'u', createdAt: '', updatedAt: '' }, messages: [{ id: 'u', parentId: null, role: 'user', content: [{ type: 'attachment', id: 'f1', name: 'a.png', kind: 'image', mime: 'image/png', size: 10 }, { type: 'text', text: 'what is it' }], thinking: null, thinkingMs: null, model: null, stopReason: null, createdAt: '1' }] }]);
+    expect(loaded.messages.u).toMatchObject({ text: 'what is it', files: [{ id: 'f1', name: 'a.png', kind: 'image' }] });
+  });
+});

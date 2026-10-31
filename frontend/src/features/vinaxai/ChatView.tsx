@@ -25,6 +25,9 @@ import { usePrefs } from './prefs';
 import { Sidebar } from './Sidebar';
 import { continueReply, resetChat, retryReply, sendMessage, stopReply, useChatStore } from './store';
 import { useDismiss } from './useDismiss';
+import { usePendingFiles } from './usePendingFiles';
+import { PendingChips } from './FileChips';
+import type { FileRef } from './types';
 import { ArrowDownIcon, MenuIcon, NewChatIcon, SidebarIcon, SparkIcon } from './icons';
 
 /** Markdown made readable aloud: code blocks named, not read; markup characters dropped. */
@@ -129,17 +132,34 @@ export function ChatView(): ReactNode {
   const [draft, setDraft] = useState('');
   const composer = useRef<ComposerHandle>(null);
   const stick = useRef(true);
+  // Files in this chat so far, against the 20-per-chat limit.
+  const filesInChat = useMemo(() => Object.values(messages).reduce((n, m) => n + (m.files?.length ?? 0), 0), [messages]);
+  const tray = usePendingFiles(conversationId, filesInChat);
+  const pickedModel = prefs.model === 'auto' ? null : pickerModels.find((m) => m.id === prefs.model) ?? null;
+  const cannotSee = tray.hasImages && !!pickedModel && !pickedModel.flags.vision;
+  const visionModel = pickerModels.find((m) => m.flags.vision && m.available);
   const send = async () => {
     const text = draft;
+    const files = tray.take();
     setDraft('');
     haptic('light');
     stick.current = true;
-    const out = await sendMessage(text);
-    if (!out.ok && out.beforeStart) setDraft((d) => d || text);
+    const out = await sendMessage(text, { files });
+    if (!out.ok && out.beforeStart) {
+      setDraft((d) => d || text);
+      tray.restore(files);
+    }
   };
-  const edit = (parentId: string | null) => (text: string) => {
+  const edit = (parentId: string | null, files?: FileRef[]) => (text: string) => {
     stick.current = true;
-    void sendMessage(text, { parentId });
+    void sendMessage(text, { parentId, files });
+  };
+  const [dragging, setDragging] = useState(false);
+  const onDrop = (e: React.DragEvent) => {
+    if (!e.dataTransfer.files.length) return;
+    e.preventDefault();
+    setDragging(false);
+    tray.add(e.dataTransfer.files);
   };
 
   // Follow new output unless the listener scrolled up.
@@ -201,6 +221,7 @@ export function ChatView(): ReactNode {
 
   const newChat = () => {
     resetChat();
+    tray.clear();
     setDraft('');
     setDrawer(false);
     navigate('/vinaxai');
@@ -221,7 +242,26 @@ export function ChatView(): ReactNode {
       thinking={prefs.extendedThinking}
       onThinking={(v) => prefs.set({ extendedThinking: v })}
       search={models.data?.search ? { value: prefs.webSearch, onChange: (v) => prefs.set({ webSearch: v }) } : undefined}
+      tray={<PendingChips files={tray.files} onRemove={tray.remove} />}
+      onFiles={(fs) => tray.add(fs)}
+      hasFiles={tray.files.some((f) => f.status === 'ready')}
+      sendBlocked={tray.busy || cannotSee}
     />
+  );
+  const visionChip = cannotSee && (
+    <div className="vx-ai-notice" role="alert">
+      <span>{pickedModel!.name} can’t see images. Switch to a vision model or Auto?</span>
+      <span className="vx-ai-notice-actions">
+        {visionModel && <button type="button" className="vx-ai-chip" onClick={() => prefs.set({ model: visionModel.id })}>Use {visionModel.name}</button>}
+        <button type="button" className="vx-ai-chip is-primary" onClick={() => prefs.set({ model: 'auto' })}>Use Auto</button>
+      </span>
+    </div>
+  );
+  const fileNotice = tray.notice && (
+    <div className="vx-ai-notice" role="alert">
+      <span>{tray.notice}</span>
+      <button type="button" onClick={tray.dismissNotice} aria-label="Dismiss">×</button>
+    </div>
   );
   const noticeEl = notice && (
     <div className="vx-ai-notice" role="alert">
@@ -247,6 +287,8 @@ export function ChatView(): ReactNode {
             <h2>{greeting(new Date().getHours(), firstName)}</h2>
           </div>
           {noticeEl}
+          {fileNotice}
+          {visionChip}
           {composerEl}
           <div className="vx-ai-starters" role="group" aria-label="Start with">
             {STARTERS.map((s) => (
@@ -267,7 +309,7 @@ export function ChatView(): ReactNode {
             <section className="vx-ai-thread" aria-label="Conversation">
               {thread.map((m) =>
                 m.role === 'user' ? (
-                  <UserMessage key={m.id} message={m} onEdit={conversationId ? edit(m.parentId) : undefined} />
+                  <UserMessage key={m.id} message={m} onEdit={conversationId ? edit(m.parentId, m.files) : undefined} />
                 ) : (
                   <AssistantMessage
                     key={m.id}
@@ -290,6 +332,8 @@ export function ChatView(): ReactNode {
         <div className="vx-ai-dock">
           <div className="vx-ai-column">
             {noticeEl}
+            {fileNotice}
+            {visionChip}
             {composerEl}
             {footer}
           </div>
@@ -299,7 +343,13 @@ export function ChatView(): ReactNode {
   }
 
   return (
-    <div className={`vx-ai${sideOpen && wide ? ' has-side' : ''}`} ref={root}>
+    <div
+      className={`vx-ai${sideOpen && wide ? ' has-side' : ''}${dragging ? ' is-dragging' : ''}`}
+      ref={root}
+      onDragOver={(e) => { if ([...e.dataTransfer.types].includes('Files')) { e.preventDefault(); setDragging(true); } }}
+      onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }}
+      onDrop={onDrop}
+    >
       {sideOpen && (
         <>
           {!wide && <div className="vx-ai-scrim vx-ai-drawer-scrim" aria-hidden onClick={() => setDrawer(false)} />}

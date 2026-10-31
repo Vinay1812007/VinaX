@@ -10,6 +10,6 @@ export function wireMessages(spec: ModelSpec, system: string, messages: Normaliz
   const i = messages.findIndex((msg) => msg.role === 'user');
   if (i < 0) return { system: null, messages: [{ role: 'user', text: system }, ...messages] };
   const out = messages.slice();
-  out[i] = { role: 'user', text: `${system}\n\n---\n\n${messages[i].text}` };
+  out[i] = { ...messages[i], text: `${system}\n\n---\n\n${messages[i].text}` };
   return { system: null, messages: out };
 }

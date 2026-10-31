@@ -94,9 +94,9 @@ describe('gates', () => {
     expect((await post(ask('hi'))).status).toBe(503);
   });
 
-  it('400 for attachments (phase 4), an unknown model or a bad body', async () => {
+  it('400 for a file that is not the account\'s, an unknown model or a bad body', async () => {
     seed();
-    expect(await (await post({ ...ask('hi'), content: [{ type: 'attachment', id: CONV }] })).json()).toEqual({ error: 'attachments_unavailable' });
+    expect(await (await post({ ...ask('hi'), content: [{ type: 'attachment', id: CONV }] })).json()).toEqual({ error: 'bad_attachment' });
     expect(await (await post({ ...ask('hi'), mode: 'model', model: 'groq:nope' })).json()).toEqual({ error: 'unknown_model' });
     expect((await post({ ...ask('hi'), content: 'not parts' })).status).toBe(400);
   });

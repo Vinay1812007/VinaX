@@ -1,10 +1,10 @@
 /**
- * VinaX AI — the composer's + menu: Web search (Auto, On, Off) when it is
- * offered, and Extended thinking. Attachments join it in a later phase.
+ * VinaX AI — the composer's + menu: Add photos and files, Web search (Auto,
+ * On, Off) when it is offered, and Extended thinking.
  */
 import { useRef, useState, type ReactNode } from 'react';
 import { moveFocus, useDismiss } from './useDismiss';
-import { GlobeSmallIcon, PlusSmallIcon, ThinkIcon } from './icons';
+import { GlobeSmallIcon, PaperclipIcon, PlusSmallIcon, ThinkIcon } from './icons';
 
 export type WebSearch = 'auto' | 'on' | 'off';
 const SEARCH_CHOICES: Array<{ value: WebSearch; label: string; note: string }> = [
@@ -18,10 +18,12 @@ interface Props {
   onThinking(v: boolean): void;
   /** Present when web search is offered. */
   search?: { value: WebSearch; onChange(v: WebSearch): void };
+  /** Open the file picker. */
+  onAddFiles?(): void;
   disabled?: boolean;
 }
 
-export function PlusMenu({ thinking, onThinking, search, disabled }: Props): ReactNode {
+export function PlusMenu({ thinking, onThinking, search, onAddFiles, disabled }: Props): ReactNode {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -58,6 +60,21 @@ export function PlusMenu({ thinking, onThinking, search, disabled }: Props): Rea
             if (e.key === 'ArrowUp') { e.preventDefault(); moveFocus(menu.current, '[role^="menuitem"]', -1); }
           }}
         >
+          {onAddFiles && (
+            <div
+              role="menuitem"
+              tabIndex={-1}
+              className="vx-ai-menu-item"
+              onClick={() => { close(false); onAddFiles(); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); close(false); onAddFiles(); } }}
+            >
+              <PaperclipIcon className="w-4 h-4" />
+              <span className="vx-ai-menu-text">
+                <span>Add photos and files</span>
+                <span className="vx-ai-opt-sub">Images, PDFs, text and code</span>
+              </span>
+            </div>
+          )}
           {search && (
             <div role="group" aria-labelledby="vx-ai-websearch-h">
               <div id="vx-ai-websearch-h" className="vx-ai-pop-head"><GlobeSmallIcon className="w-3.5 h-3.5" /> Web search</div>

@@ -24,7 +24,7 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
     ],
   },
   '1.3.5': {
-    title: 'Vinaxai/phase 2 ux',
+    title: 'VinaX AI gets a Claude-style chat',
     changes: [
       { type: 'improved', text: 'VinaX AI: generated titles, Continue, and a chats export.' },
       { type: 'improved', text: 'VinaX AI: render maths, loaded only when a reply needs it.' },

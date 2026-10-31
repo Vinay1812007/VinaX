@@ -29,3 +29,5 @@ export const ThinkIcon = ({ className }: P) => (<svg {...base(className)}><path 
 export const ContinueIcon = ({ className }: P) => (<svg {...base(className)}><path d="M5 12h12M13 6l6 6-6 6" /></svg>);
 export const CloseIcon = ({ className }: P) => (<svg {...base(className)}><path d="M6 6l12 12M18 6 6 18" /></svg>);
 export const GlobeSmallIcon = ({ className }: P) => (<svg {...base(className)}><circle cx="12" cy="12" r="8.5" /><path d="M3.5 12h17M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5s-1.2 6.1-3.6 8.5c-2.4-2.4-3.6-5.2-3.6-8.5S9.6 5.9 12 3.5z" /></svg>);
+export const FileIcon = ({ className }: P) => (<svg {...base(className)}><path d="M14 3.5H7.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8z" /><path d="M14 3.5V8h4.5M9 13h6M9 16.5h4" /></svg>);
+export const PaperclipIcon = ({ className }: P) => (<svg {...base(className)}><path d="m20 11.5-8 8a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.7 17a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6" /></svg>);
