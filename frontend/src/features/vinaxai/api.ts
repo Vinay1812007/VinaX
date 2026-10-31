@@ -111,7 +111,7 @@ export interface LiveTokenReply {
   expiresAt: string;
 }
 
-export const liveToken = (opts: { thinking: boolean; skip: string[]; voice?: string }): Promise<LiveTokenReply> =>
+export const liveToken = (opts: { thinking: boolean; skip: string[]; voice?: string; model?: string }): Promise<LiveTokenReply> =>
   call('/live-token', { method: 'POST', body: JSON.stringify({ ...opts, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, locale: navigator.language }) });
 
 export const saveLiveTranscript = (body: { conversationId: string | null; parentMessageId?: string; model: string; turns: Array<{ role: 'user' | 'assistant'; text: string }> }): Promise<{ conversationId: string; messageIds: string[] }> =>

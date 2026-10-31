@@ -37,4 +37,4 @@ export const MicOffIcon = ({ className }: P) => (<svg {...base(className)}><path
 export const WaveIcon = ({ className }: P) => (<svg {...base(className)}><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4" /></svg>);
 export const SpeakerIcon = ({ className }: P) => (<svg {...base(className)}><path d="M4.5 9.5h3l4.5-4v13l-4.5-4h-3zM15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" /></svg>);
 export const CheckIcon = ({ className }: P) => (<svg {...base(className)}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>);
-export const VoiceSettingsIcon = ({ className }: P) => (<svg {...base(className)}><path d="M4 9v6M8 6v12M12 9v6M16 11v2" /><circle cx="19" cy="17" r="2.5" /></svg>);
+export const SettingsIcon = ({ className }: P) => (<svg {...base(className)}><circle cx="12" cy="12" r="3" /><path d="M12 3.5v2.2M12 18.3v2.2M20.5 12h-2.2M5.7 12H3.5M18 6l-1.6 1.6M7.6 16.4 6 18M18 18l-1.6-1.6M7.6 7.6 6 6" /></svg>);

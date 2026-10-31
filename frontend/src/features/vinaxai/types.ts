@@ -33,6 +33,8 @@ export interface VoiceInfo {
   voices: string[];
   /** Live voices (Gemini), also used when Gemini reads aloud. */
   liveVoices: string[];
+  /** Live models the listener may pick (Auto tries them in this order). */
+  liveModels?: Array<{ id: string; name: string; note?: string }>;
 }
 
 export type StopReason = 'end' | 'length' | 'aborted' | 'error';

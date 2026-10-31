@@ -461,8 +461,8 @@
 .vx-ai-me-initial { display: grid; place-items: center; background: rgb(var(--ember-500)); color: var(--vx-on-accent); font-weight: 700; }
 .vx-ai-me-name { font-size: 0.875rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vx-ai-side-links { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.8125rem; }
-.vx-ai-side-links a { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; color: rgb(var(--ink-300)); }
-.vx-ai-side-links a:hover { color: rgb(var(--ink-100)); }
+.vx-ai-side-links a, .vx-ai-side-link { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; color: rgb(var(--ink-300)); font: inherit; }
+.vx-ai-side-links a:hover, .vx-ai-side-link:hover { color: rgb(var(--ink-100)); }
 
 /* --------------------------------------------- popovers, menus, dialogs */
 .vx-ai-icon-btn {
@@ -671,11 +671,38 @@
 }
 .vx-ai-rec-meter i:nth-child(2), .vx-ai-rec-meter i:nth-child(4) { height: calc(4px + 11px * var(--vx-rec-level, 0)); }
 .vx-ai-rec-meter i:nth-child(1), .vx-ai-rec-meter i:nth-child(5) { height: calc(4px + 6px * var(--vx-rec-level, 0)); }
+.vx-ai-rec-silent { font-size: 0.8125rem; color: rgb(var(--ember-300)); }
 .vx-ai-rec-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgb(var(--ink-500)); border-top-color: rgb(var(--ember-500)); animation: vx-ai-spin 0.8s linear infinite; }
 @keyframes vx-ai-spin { to { transform: rotate(360deg); } }
 
-/* Voice settings. */
-.vx-ai-voice-dialog h2 { margin-bottom: 14px; }
+/* VinaX AI settings: a sheet from the right (full screen on a phone). */
+.vx-ai-settings-scrim { place-items: stretch end; padding: 0; }
+.vx-ai-settings {
+  width: min(420px, 100vw); height: 100%; display: flex; flex-direction: column;
+  background: rgb(var(--ink-850)); border-left: 1px solid var(--glass-border); box-shadow: var(--vx-shadow-overlay);
+  padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+}
+.vx-ai-settings-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 12px 8px 20px; border-bottom: 1px solid var(--glass-border); }
+.vx-ai-settings-head h2 { margin: 0; font-size: 1.1rem; font-family: var(--vx-font-display); }
+.vx-ai-settings-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 8px 20px 24px; }
+.vx-ai-settings-body section { padding: 14px 0 6px; border-bottom: 1px solid var(--glass-border); }
+.vx-ai-settings-body section:last-child { border-bottom: 0; }
+.vx-ai-settings-body h3 { margin: 0 0 12px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: rgb(var(--ink-400)); }
+.vx-ai-settings-body .vx-ai-chip { display: inline-flex; align-items: center; gap: 6px; }
+.vx-ai-settings-note { margin: 10px 0 0; font-size: 0.8125rem; color: rgb(var(--ink-400)); }
+.vx-ai-settings-note a { color: rgb(var(--ember-400)); text-decoration: underline; }
+.vx-ai-setting-switch {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; margin-bottom: 14px;
+  text-align: left; font: inherit; color: rgb(var(--ink-200));
+}
+.vx-ai-setting-switch .vx-ai-menu-text { flex: 1; }
+.vx-ai-field select { width: 100%; }
+.vx-ai-mic-test { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 4px; }
+.vx-ai-mic-live { display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+.vx-ai-mic-bar { position: relative; flex: 0 0 96px; height: 8px; border-radius: 999px; background: rgb(var(--ink-700)); overflow: hidden; }
+.vx-ai-mic-bar i { position: absolute; inset: 0 auto 0 0; background: rgb(var(--ember-500)); border-radius: inherit; transition: width 80ms linear; }
+.vx-ai-mic-name { font-size: 0.75rem; color: rgb(var(--ink-400)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+@media (prefers-reduced-motion: reduce) { .vx-ai-mic-bar i { transition: none; } }
 .vx-ai-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; font-size: 0.875rem; color: rgb(var(--ink-200)); }
 .vx-ai-field select {
   min-height: 40px; padding: 0 10px; border-radius: var(--vx-radius-control);
@@ -696,6 +723,12 @@
 .vx-ai-live-top .vx-ai-icon-btn { margin-left: auto; }
 .vx-ai-live-model { font-size: 0.8125rem; color: rgb(var(--ink-400)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vx-ai-live-stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; min-height: 0; text-align: center; }
+.vx-ai-live-mic { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 12px; max-width: min(420px, 100%); }
+.vx-ai-live-mic .vx-ai-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vx-ai-live-mic select {
+  min-height: 40px; max-width: 100%; padding: 0 10px; border-radius: var(--vx-radius-control);
+  border: 1px solid var(--glass-border); background: rgb(var(--ink-800)); color: rgb(var(--ink-100)); font: inherit;
+}
 .vx-ai-live-orb {
   --vx-live-level: 0;
   width: 168px; height: 168px; border-radius: 50%;
