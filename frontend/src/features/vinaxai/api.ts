@@ -65,6 +65,7 @@ export interface ChatRequestBody {
   model?: string;
   extendedThinking?: boolean;
   webSearch?: 'auto' | 'on' | 'off';
+  artifacts?: boolean;
   timezone?: string;
   locale?: string;
 }

@@ -19,34 +19,37 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
   '1.3.7': {
     title: 'VinaX AI reads your images, PDFs and files',
     changes: [
-      { type: 'improved', text: 'VinaX AI: files in chats (server).' },
-      { type: 'improved', text: 'VinaX AI: files in chats (page and docs).' },
-      { type: 'new', text: 'Name the 1.3.5 What\'s New card for listeners.' },
+      { type: 'new', text: 'Add photos, PDFs and text or code files to a VinaX AI chat from the + menu, by pasting, or by dropping them on the page.' },
+      { type: 'new', text: 'VinaX AI sees your images and reads your PDFs and files, and shows them in the conversation.' },
+      { type: 'improved', text: 'Photos are shrunk on your phone or computer before they are sent, so they upload quickly.' },
+      { type: 'improved', text: 'If the model you chose can\'t see images, the chat offers one that can, or Auto, before you send.' },
     ],
   },
   '1.3.6': {
     title: 'VinaX AI searches the web and cites its sources',
     changes: [
-      { type: 'improved', text: 'VinaX AI: web search with citations (server).' },
-      { type: 'improved', text: 'VinaX AI: web search with citations (page and docs).' },
+      { type: 'new', text: 'VinaX AI can search the web when you ask about something current, such as news, scores, prices or weather.' },
+      { type: 'new', text: 'Small numbered chips in a reply show where each fact came from; tap one to open the source.' },
+      { type: 'new', text: 'A Sources list under the reply shows every page it used.' },
+      { type: 'new', text: 'Choose Web search Auto, On or Off from the + menu in the chat.' },
     ],
   },
   '1.3.5': {
     title: 'VinaX AI gets a Claude-style chat',
     changes: [
-      { type: 'improved', text: 'VinaX AI: generated titles, Continue, and a chats export.' },
-      { type: 'improved', text: 'VinaX AI: render maths, loaded only when a reply needs it.' },
-      { type: 'improved', text: 'VinaX AI: the Claude-style chat interface.' },
-      { type: 'improved', text: 'VinaX AI: entry points, chats export, and docs.' },
+      { type: 'new', text: 'A sidebar keeps your VinaX AI chats: search them, and star, rename or delete them.' },
+      { type: 'new', text: 'Choose a model yourself, or let Auto pick one for each message.' },
+      { type: 'new', text: 'Edit a message to try it another way, and switch between versions with the arrows.' },
+      { type: 'new', text: 'Continue a reply that was cut short, see maths as proper formulas, and download your chats from Settings.' },
     ],
   },
   '1.3.4': {
-    title: 'Vinaxai/phase 1 foundation',
+    title: 'Getting VinaX AI ready',
     changes: [
-      { type: 'improved', text: 'Stop redirecting /vinaxai in the Worker.' },
-      { type: 'new', text: 'Add schema version 4: VinaX AI conversations.' },
-      { type: 'new', text: 'Add the VinaX AI model layer.' },
-      { type: 'new', text: 'Add the VinaX AI chat and conversation routes.' },
+      { type: 'new', text: 'VinaX AI, a chat assistant for signed-in listeners, gets its own page at /vinaxai.' },
+      { type: 'new', text: 'Its replies appear as they are written, with the thinking behind them folded away.' },
+      { type: 'new', text: 'Your chats are saved with your Google account, so they follow you to every device.' },
+      { type: 'improved', text: 'Old /VinaXAI links open VinaX AI instead of Home.' },
     ],
   },
   '1.3.3': {

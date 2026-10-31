@@ -120,6 +120,21 @@ npx wrangler secret put SEARCH_API_KEY --config worker/wrangler.toml
 
 `/vinaxai` is an ordinary app page served by the static host. The old `/VinaXAI` spelling is redirected by the app's router, not by `_redirects` (a rule there could match `/vinaxai` too and loop). AI Playlist and shared-chat links from the old build still 301 to Home from the Worker.
 
+## VinaX AI sandbox
+
+VinaX AI previews artifacts (HTML pages, React components, SVG, Mermaid diagrams) in `sandbox/`. It is a one-page static site that must live on **its own origin**, `https://sandbox.vinaxmusic.online`, so nothing an artifact runs can reach the app, its storage or a session. Until it exists, the panel says "Preview needs the sandbox host" and everything else works. It has no build step, no secrets and nothing to configure. Set it up once:
+
+1. Cloudflare dashboard → **Workers & Pages** → **Create** → **Pages** → **Connect to Git** → this repository.
+2. Project name `vinax-sandbox`; production branch `main`; framework preset **None**; build command **empty**; build output directory **`sandbox`**; root directory empty.
+3. Under **Settings → Build → Build watch paths**, include only `sandbox/*`, so the project rebuilds only when the runner changes.
+4. When the first deployment finishes: **Custom domains** → **Set up a custom domain** → `sandbox.vinaxmusic.online`. The zone is in the same account, so Cloudflare adds the DNS record (a proxied CNAME to `vinax-sandbox.pages.dev`) itself.
+5. Check it: `curl -sI https://sandbox.vinaxmusic.online/` answers 200 with `content-security-policy: default-src 'none'; …` and `frame-ancestors https://www.vinaxmusic.online …`. Opening the address in a browser shows an empty page, which is right: it only draws what VinaX sends it.
+6. In VinaX AI, ask for "a small HTML page that says hello", open the artifact and choose Preview.
+
+Instead of the Git connection, you can upload it by hand: `npx wrangler pages deploy sandbox --project-name vinax-sandbox` from the repository root, then step 4.
+
+The app already allows the frame (`frame-src https://sandbox.vinaxmusic.online` in `frontend/public/_headers`). Using another host name means changing `VITE_AI_SANDBOX_ORIGIN` at build time, that `frame-src`, and the runner's `ALLOWED` origins and `frame-ancestors` together ([docs/ai.md](docs/ai.md#artifacts)).
+
 ## Android
 
 `buildapk.yml` and `release.yml` generate the Android project in CI (`npx cap add android`, `npx cap sync android`, `node scripts/patch-android.js`), set `versionCode` and `versionName`, and build with the keystore from the `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` secrets. The release body carries a `VersionCode:` line; `/api/version` reads it, and the in-app update check compares it with the installed build. Details are in [docs/android.md](docs/android.md).

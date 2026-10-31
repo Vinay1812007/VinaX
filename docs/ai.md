@@ -175,7 +175,7 @@ A failed or empty search is not an error: the status says "No useful results" an
 
 `_lib/ai/prompt.ts` holds the owner's VinaX AI prompt verbatim. A snapshot test (`__tests__/aiPrompt.test.ts`) keeps it from drifting. The prompt is built in this order:
 1. The full prompt, or the compact one for `fast`-tier models, with the listener's local time and time zone, first name, language setting, and the answering model and provider filled in.
-2. The artifacts contract, only for models flagged `artifacts` and only once phase 5 turns artifacts on.
+2. The artifacts contract, only for models flagged `artifacts` and unless the page sends `artifacts: false`.
 3. `<search_results>` and the citation rules, only when search ran (phase 3).
 
 Nothing else is added: no taste profile and no listening history. Models flagged `systemRole: false` get the system text in front of the first user turn.
@@ -270,6 +270,45 @@ At most 10 files go in a message and 20 in a chat. The page checks these limits,
 - Deleting the account (yours, or the console's delete) removes the account's stored files before the rows cascade.
 - The hourly housekeeping removes a deleted chat's files with the chat, and removes files never sent after a day.
 
+## Artifacts
+
+Substantial, self-contained output goes in an artifact: a page, a component, a diagram, an SVG, a document or a file of code. Models flagged `artifacts` are told the contract in the system prompt (`ARTIFACTS_BLOCK` in `prompt.ts`): `<artifact id="…" type="code|html|svg|mermaid|markdown|react" title="…" language="…">…</artifact>`, with the complete content again under the same id to update one.
+
+**Parsing.** `artifacts.ts` has the same parser on both sides: the Worker's in `_lib/ai/`, the page's in `features/vinaxai/`. It is tolerant:
+- attributes in any order, with either quotes;
+- an unknown type reads as code; a missing id comes from the title;
+- a tag still arriving is a placeholder;
+- a missing `</artifact>` closes at the end of the reply, marked incomplete;
+- a tag inside a code fence is left as code.
+
+The Worker saves each reply's artifacts in `ai_messages.artifacts`, also after a Continue. The reply's text keeps the tags, so a later turn sends the model its own current version.
+
+**On the page.**
+- Each artifact in a reply becomes a card: "Creating Title…" while it is written, then the title, its kind and its version.
+- A card opens the **artifacts panel**. While a reply writes an artifact, the panel opens on it by itself and fills live in Code view, then turns to Preview when the reply is done. Closing it is respected for the rest of that reply.
+- Versions are the artifact's id across the thread's replies, oldest first, with "v2 of 3" and ‹ › to step between them.
+- The panel has Preview / Code, Copy, Download (a name and type from the title and kind) and Close.
+- On a wide screen the panel sits beside the chat and resizes from 40% to 60% (drag the edge, or arrow keys on it; kept on the device). Narrower, it is a full-screen sheet.
+- Code has no Preview. Markdown previews in the chat's own renderer (no raw HTML). HTML, SVG, Mermaid and React preview in the sandbox runner.
+
+**The sandbox runner** (`sandbox/index.html`, its own site at `https://sandbox.vinaxmusic.online/`; setup in [../DEPLOYMENT.md](../DEPLOYMENT.md#vinax-ai-sandbox)).
+- **Framing.** The panel frames it with `sandbox="allow-scripts allow-modals"` and no `allow-same-origin`, so it runs on an opaque origin. That origin is not VinaX's and has no storage, cookies or session.
+- **Messages.** The panel sends `{ type: 'render', kind, content, theme }` with `postMessage`. The runner listens only to `https://www.vinaxmusic.online` (and localhost for development) and only answers `ready`, `rendered` or `error`. The panel trusts messages by their frame, since the runner's origin is opaque.
+- **Its own CSP** (`sandbox/_headers`):
+  - `default-src 'none'`;
+  - scripts only from cdnjs and two pinned jsDelivr paths;
+  - `connect-src 'none'` (no network calls at all);
+  - `frame-ancestors https://www.vinaxmusic.online http://localhost:*`.
+
+  The Android app loads the live site, so it frames the runner from the same origin.
+- **What it renders:**
+  - HTML: in a nested sandboxed frame. A browser test proves the artifact's own script can reach neither the app's page nor any storage.
+  - SVG: as an `<img>` from a blob, so its scripts never run.
+  - Mermaid: Mermaid 11.12.0 from cdnjs, `securityLevel: 'strict'`.
+  - React: compiled by Babel standalone 7.26.10 and mounted with React 18.3.1 (cdnjs). It is given React hooks, Recharts 2.15.3 (cdnjs), Tailwind's in-browser build 4.3.3 and lucide 1.57.0 icons. A small shim gives `lucide-react`'s names to lucide's icon data, because cdnjs has no lucide-react, Tailwind browser or lucide build. Any other import fails with a clear message.
+- **When the site is not there.** If the runner does not say it is ready within 8 seconds, Preview says "Preview needs the sandbox host". Code, Copy and Download still work.
+- **Another host.** Build with `VITE_AI_SANDBOX_ORIGIN`, add it to `frame-src` in `frontend/public/_headers`, and keep the runner's `ALLOWED` origins and `frame-ancestors` in step.
+
 ## Storage
 
 Schema version 4 adds `ai_conversations`, `ai_messages` (a tree through `parent_id`) and `ai_attachments`, all removed with the account through `on delete cascade`. See [database.md](database.md). `ai_conversations.active_leaf_id` is the branch a reload opens.
@@ -347,6 +386,5 @@ These phases are still to come:
 
 | Phase | What it adds |
 | --- | --- |
-| 5 | Artifacts and the sandbox |
 | 6 | Voice |
 | 7 | The console's providers card and Probe button |

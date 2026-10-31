@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>VinaX AI preview</title>
+<style>
+  html, body { margin: 0; height: 100%; }
+  body { font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: #fff; color: #111; }
+  body.dark { background: #15121c; color: #eee; }
+  #root { min-height: 100%; }
+  .frame { border: 0; width: 100%; height: 100vh; display: block; background: #fff; }
+  .center { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 16px; box-sizing: border-box; }
+  .center img, .center svg { max-width: 100%; height: auto; }
+  .error { margin: 16px; padding: 12px 14px; border-radius: 10px; background: #fde8e8; color: #7a1414; font: 13px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; }
+  body.dark .error { background: #3a1820; color: #ffd7dc; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+/*
+ * VinaX AI artifact runner. VinaX frames this page from its own origin with
+ * sandbox="allow-scripts allow-modals" (no allow-same-origin) and sends one
+ * artifact at a time with postMessage:
+ *
+ *   in   { type: 'render', kind: 'html' | 'svg' | 'mermaid' | 'react', content, theme: 'dark' | 'light' }
+ *   out  { source: 'vinax-runner', type: 'ready' }          once, when loaded
+ *        { source: 'vinax-runner', type: 'rendered' }       after each render
+ *        { source: 'vinax-runner', type: 'error', message } when a render fails
+ *
+ * Only VinaX's origin (and localhost, for development) is listened to, and
+ * nothing but those three messages is ever sent back.
+ */
+(function () {
+  'use strict';
+  var ALLOWED = /^(https:\/\/www\.vinaxmusic\.online|https?:\/\/localhost(:\d+)?)$/;
+  var CDN = 'https://cdnjs.cloudflare.com/ajax/libs/';
+  var LIBS = {
+    react: CDN + 'react/18.3.1/umd/react.production.min.js',
+    reactDom: CDN + 'react-dom/18.3.1/umd/react-dom.production.min.js',
+    propTypes: CDN + 'prop-types/15.8.1/prop-types.min.js',
+    recharts: CDN + 'recharts/2.15.3/Recharts.min.js',
+    babel: CDN + 'babel-standalone/7.26.10/babel.min.js',
+    mermaid: CDN + 'mermaid/11.12.0/mermaid.min.js',
+    tailwind: 'https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3/dist/index.global.js',
+    lucide: 'https://cdn.jsdelivr.net/npm/lucide@1.57.0/dist/umd/lucide.min.js'
+  };
+  var root = document.getElementById('root');
+  var parentOrigin = null;
+  var loaded = {};
+
+  function post(msg) {
+    msg.source = 'vinax-runner';
+    window.parent.postMessage(msg, parentOrigin || '*');
+  }
+
+  function load(src) {
+    if (!loaded[src]) {
+      loaded[src] = new Promise(function (resolve, reject) {
+        var s = document.createElement('script');
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = function () { reject(new Error('Could not load ' + src.replace(/^https:\/\/[^/]+\/(ajax\/libs\/|npm\/)?/, ''))); };
+        document.head.appendChild(s);
+      });
+    }
+    return loaded[src];
+  }
+
+  function clear() { root.innerHTML = ''; }
+
+  function fail(err) {
+    clear();
+    var box = document.createElement('div');
+    box.className = 'error';
+    box.textContent = String(err && err.message || err).slice(0, 2000);
+    root.appendChild(box);
+    post({ type: 'error', message: String(err && err.message || err).slice(0, 500) });
+  }
+
+  function renderHtml(content) {
+    // A nested frame keeps this page (and its message listener) alive and
+    // gives the artifact a blank document of its own.
+    var f = document.createElement('iframe');
+    f.className = 'frame';
+    f.setAttribute('sandbox', 'allow-scripts allow-modals allow-forms allow-popups');
+    f.setAttribute('title', 'HTML preview');
+    f.srcdoc = content;
+    root.appendChild(f);
+  }
+
+  function renderSvg(content) {
+    // As an image, an SVG's scripts never run.
+    var url = URL.createObjectURL(new Blob([content], { type: 'image/svg+xml' }));
+    var wrap = document.createElement('div');
+    wrap.className = 'center';
+    var img = document.createElement('img');
+    img.alt = 'SVG preview';
+    img.onerror = function () { fail(new Error('This SVG could not be drawn.')); };
+    img.src = url;
+    wrap.appendChild(img);
+    root.appendChild(wrap);
+  }
+
+  async function renderMermaid(content, theme) {
+    await load(LIBS.mermaid);
+    window.mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: theme === 'dark' ? 'dark' : 'default' });
+    var out = await window.mermaid.render('vx-diagram-' + Date.now(), content);
+    var wrap = document.createElement('div');
+    wrap.className = 'center';
+    wrap.innerHTML = out.svg;
+    root.appendChild(wrap);
+  }
+
+  /** lucide-react's named icons, drawn from lucide's icon data (cdnjs has no lucide-react build). */
+  function lucideReact(React) {
+    var icons = (window.lucide && window.lucide.icons) || {};
+    var cache = {};
+    function make(name) {
+      var key = name.replace(/^Lucide/, '').replace(/Icon$/, '');
+      var node = icons[key] || icons[name];
+      var Icon = function (props) {
+        props = props || {};
+        var size = props.size || 24;
+        var children = (node || []).map(function (c, i) { return React.createElement(c[0], Object.assign({ key: i }, c[1])); });
+        var rest = Object.assign({}, props);
+        delete rest.size; delete rest.color; delete rest.strokeWidth; delete rest.absoluteStrokeWidth;
+        return React.createElement('svg', Object.assign({
+          xmlns: 'http://www.w3.org/2000/svg', width: size, height: size, viewBox: '0 0 24 24', fill: 'none',
+          stroke: props.color || 'currentColor', strokeWidth: props.strokeWidth || 2, strokeLinecap: 'round', strokeLinejoin: 'round'
+        }, rest), children);
+      };
+      Icon.displayName = key;
+      return Icon;
+    }
+    return new Proxy({}, { get: function (_t, name) {
+      if (typeof name !== 'string') return undefined;
+      if (name === '__esModule') return true;
+      return cache[name] || (cache[name] = make(name));
+    } });
+  }
+
+  async function renderReact(content) {
+    await load(LIBS.react);
+    await load(LIBS.reactDom);
+    await load(LIBS.propTypes);
+    await Promise.all([load(LIBS.babel), load(LIBS.recharts), load(LIBS.tailwind), load(LIBS.lucide)]);
+    var code = window.Babel.transform(content, {
+      presets: [['react', { runtime: 'classic' }]],
+      plugins: ['transform-modules-commonjs'],
+      filename: 'artifact.jsx'
+    }).code;
+    var React = window.React;
+    var modules = {
+      react: Object.assign({ default: React, __esModule: true }, React),
+      'react-dom': window.ReactDOM,
+      'react-dom/client': window.ReactDOM,
+      recharts: window.Recharts,
+      'lucide-react': lucideReact(React)
+    };
+    var module = { exports: {} };
+    var require = function (name) {
+      if (Object.prototype.hasOwnProperty.call(modules, name)) return modules[name];
+      throw new Error('"' + name + '" is not available in previews. React, lucide-react and recharts are.');
+    };
+    // eslint-disable-next-line no-new-func
+    new Function('require', 'module', 'exports', 'React', code)(require, module, module.exports, React);
+    var App = module.exports.default || module.exports;
+    if (typeof App !== 'function') throw new Error('The component needs a default export.');
+    var Boundary = function (props) { return props.children; };
+    var mount = document.createElement('div');
+    root.appendChild(mount);
+    class Catch extends React.Component {
+      constructor(p) { super(p); this.state = { error: null }; }
+      static getDerivedStateFromError(error) { return { error: error }; }
+      componentDidCatch(error) { post({ type: 'error', message: String(error && error.message || error).slice(0, 500) }); }
+      render() { return this.state.error ? React.createElement('div', { className: 'error' }, String(this.state.error.message || this.state.error)) : this.props.children; }
+    }
+    window.ReactDOM.createRoot(mount).render(React.createElement(Catch, null, React.createElement(Boundary, null, React.createElement(App))));
+  }
+
+  window.addEventListener('message', async function (e) {
+    if (e.source !== window.parent || !ALLOWED.test(e.origin)) return;
+    var m = e.data;
+    if (!m || m.type !== 'render' || typeof m.content !== 'string') return;
+    parentOrigin = e.origin;
+    document.body.classList.toggle('dark', m.theme === 'dark' && m.kind !== 'html');
+    clear();
+    try {
+      if (m.kind === 'html') renderHtml(m.content);
+      else if (m.kind === 'svg') renderSvg(m.content);
+      else if (m.kind === 'mermaid') await renderMermaid(m.content, m.theme);
+      else if (m.kind === 'react') await renderReact(m.content);
+      else throw new Error('Nothing to preview for this kind of artifact.');
+      post({ type: 'rendered' });
+    } catch (err) {
+      fail(err);
+    }
+  });
+  window.addEventListener('error', function (e) { post({ type: 'error', message: String(e.message || 'Error').slice(0, 500) }); });
+  post({ type: 'ready' });
+})();
+</script>
+</body>
+</html>

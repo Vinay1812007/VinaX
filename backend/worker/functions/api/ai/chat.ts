@@ -10,7 +10,7 @@
  *                                          // empty + parentMessageId of a user message = retry
  *     continueFrom?: uuid,                 // an assistant message that was cut off: write on from where it stopped
  *     mode: "auto" | "model", model?: "<registry id>",
- *     extendedThinking?, webSearch?, artifacts?, timezone?, locale? }
+ *     extendedThinking?, webSearch?, artifacts? (default true), timezone?, locale? }
  *
  *   → 200 text/event-stream, named events, one JSON object per data line:
  *       meta     { conversationId, userMessageId, assistantMessageId, model: { id, name, provider }, continued? }
@@ -56,6 +56,7 @@ import {
 } from '../../_lib/ai/search';
 import { humanReason, pickLadder, runChat, type RunOptions } from '../../_lib/ai/router';
 import { sseFrame } from '../../_lib/ai/sse';
+import { artifactsOf } from '../../_lib/ai/artifacts';
 import {
   createConversation, getConversation, insertMessage, isUuid, listMessages, MAX_MESSAGES, updateConversation, updateMessage,
   type ConversationRow, type MessageRow,
@@ -86,6 +87,7 @@ interface ChatBody {
   model?: unknown;
   continueFrom?: unknown;
   webSearch?: unknown;
+  artifacts?: unknown;
   extendedThinking?: unknown;
   timezone?: unknown;
   locale?: unknown;
@@ -322,7 +324,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       const r = await runApiSearch();
       if (r.ok) search = { sources: r.sources };
     }
-    const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: false, search });
+    // Artifacts are offered to capable models (flag `artifacts`) unless the page turned them off.
+    const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: body.artifacts !== false, search });
     const messages = await materialize(env, turns, spec, fileRows, memo);
     return {
       model: spec,
@@ -436,8 +439,11 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     if (continuing) {
       // Continue: the new text joins the reply it continues.
       if (savedReply) {
+        const joined = textOf(continuing.content) + text;
+        const found = artifactsOf(joined);
         await updateMessage(env, conversation.id, continuing.id, {
-          content: [{ type: 'text', text: textOf(continuing.content) + text }],
+          content: [{ type: 'text', text: joined }],
+          artifacts: found.length ? found : null,
           thinking: [continuing.thinking, thinking].filter(Boolean).join('\n\n') || null,
           model_id: model.id, provider: model.provider, stop_reason: stop, usage,
         });
@@ -447,6 +453,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
         id: assistantId, conversation_id: conversation.id, parent_id: userMsg.id, role: 'assistant',
         content: [{ type: 'text', text: finalText }], thinking: thinking || null, thinking_ms: thinkMs,
         sources: searched,
+        artifacts: (() => { const found = artifactsOf(finalText); return found.length ? found : null; })(),
         model_id: model.id, provider: model.provider, stop_reason: stop, usage,
       });
     }

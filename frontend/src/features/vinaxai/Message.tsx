@@ -14,6 +14,8 @@ import { selectBranch, useChatStore, type ModelChoice } from './store';
 import { moveFocus, useDismiss } from './useDismiss';
 import { SearchStatusLine, SourcesRow } from './Sources';
 import { MessageFiles } from './FileChips';
+import { ArtifactCard } from './ArtifactPanel';
+import { parseArtifacts, type Artifact } from './artifacts';
 import { ChevronDownSmallIcon, ChevronIcon, ContinueIcon, CopyIcon, PencilIcon, RetryIcon } from './icons';
 import type { ChatMessage, PickerModel } from './types';
 
@@ -168,11 +170,14 @@ interface ReplyProps {
   message: ChatMessage;
   live: boolean;
   models: PickerModel[];
+  /** Which version of each artifact this reply holds (1 = first), and how to open one. */
+  versionOf?(id: string, messageId: string): number;
+  onOpenArtifact?(artifact: Artifact, messageId: string): void;
   onRetry?(choice?: ModelChoice): void;
   onContinue?(): void;
 }
 
-export function AssistantMessage({ message, live, models, onRetry, onContinue }: ReplyProps): ReactNode {
+export function AssistantMessage({ message, live, models, onRetry, onContinue, versionOf, onOpenArtifact }: ReplyProps): ReactNode {
   const { text, error, stopReason, model } = message;
   const waiting = live && !text && !message.thinking && !error && !message.status;
   const cutOff = !live && !!text && (stopReason === 'length' || stopReason === 'error');
@@ -182,7 +187,11 @@ export function AssistantMessage({ message, live, models, onRetry, onContinue }:
       {live && !text && message.status && <SearchStatusLine status={message.status} />}
       <ThinkingFold message={message} live={live} />
       {waiting && <span className="vx-ai-pending" role="status" aria-label="VinaX AI is writing"><i /><i /><i /></span>}
-      {text && <Markdown text={text} sources={message.sources?.items} />}
+      {text && (text.includes('<artifact')
+        ? parseArtifacts(text).map((seg, i) => (seg.kind === 'text'
+          ? <Markdown key={i} text={seg.text} sources={message.sources?.items} />
+          : <ArtifactCard key={i} artifact={seg.artifact} live={live} version={versionOf?.(seg.artifact.id, message.id) ?? 1} onOpen={() => onOpenArtifact?.(seg.artifact, message.id)} />))
+        : <Markdown text={text} sources={message.sources?.items} />)}
       {live && text && <span className="vx-ai-cursor" aria-hidden />}
       {!live && message.sources && <SourcesRow sources={message.sources} />}
       {!live && stopReason === 'length' && !error && <p className="vx-ai-note">The reply was cut short.</p>}
