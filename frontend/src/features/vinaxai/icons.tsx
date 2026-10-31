@@ -32,3 +32,9 @@ export const GlobeSmallIcon = ({ className }: P) => (<svg {...base(className)}><
 export const FileIcon = ({ className }: P) => (<svg {...base(className)}><path d="M14 3.5H7.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8z" /><path d="M14 3.5V8h4.5M9 13h6M9 16.5h4" /></svg>);
 export const PaperclipIcon = ({ className }: P) => (<svg {...base(className)}><path d="m20 11.5-8 8a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.7 17a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6" /></svg>);
 export const DownloadIcon = ({ className }: P) => (<svg {...base(className)}><path d="M12 4.5v11M7 11l5 5 5-5M5 19.5h14" /></svg>);
+export const MicIcon = ({ className }: P) => (<svg {...base(className)}><rect x="9" y="3.5" width="6" height="11" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5" /></svg>);
+export const MicOffIcon = ({ className }: P) => (<svg {...base(className)}><path d="M15 9.5V6.5a3 3 0 0 0-5.6-1.5M9 9v2.5a3 3 0 0 0 4.6 2.5M5.5 11.5a6.5 6.5 0 0 0 10.4 5.2M18.5 11.5a6.4 6.4 0 0 1-.6 2.7M12 18v2.5M4 4l16 16" /></svg>);
+export const WaveIcon = ({ className }: P) => (<svg {...base(className)}><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4" /></svg>);
+export const SpeakerIcon = ({ className }: P) => (<svg {...base(className)}><path d="M4.5 9.5h3l4.5-4v13l-4.5-4h-3zM15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" /></svg>);
+export const CheckIcon = ({ className }: P) => (<svg {...base(className)}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>);
+export const VoiceSettingsIcon = ({ className }: P) => (<svg {...base(className)}><path d="M4 9v6M8 6v12M12 9v6M16 11v2" /><circle cx="19" cy="17" r="2.5" /></svg>);

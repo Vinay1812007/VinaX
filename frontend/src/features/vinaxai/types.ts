@@ -21,6 +21,18 @@ export interface ModelsResponse {
   search?: boolean;
   groups: string[];
   models: PickerModel[];
+  /** Voice features that have a provider key, and the voices to offer (phase 6). */
+  voice?: VoiceInfo;
+}
+
+export interface VoiceInfo {
+  dictation: boolean;
+  readAloud: boolean;
+  live: boolean;
+  /** Read aloud voices (Groq Orpheus). */
+  voices: string[];
+  /** Live voices (Gemini), also used when Gemini reads aloud. */
+  liveVoices: string[];
 }
 
 export type StopReason = 'end' | 'length' | 'aborted' | 'error';

@@ -1,8 +1,9 @@
 /**
  * VinaX AI — this device's chat preferences: the model picked in the
- * composer ('auto' or a registry id), Extended thinking, and whether the
- * desktop sidebar is collapsed. Kept in localStorage under a key the boot
- * migration does not sweep (it clears the old `vinax.ai…` keys).
+ * composer ('auto' or a registry id), Extended thinking, whether the
+ * desktop sidebar is collapsed, and the voices for Read aloud and Live.
+ * Kept in localStorage under a key the boot migration does not sweep (it
+ * clears the old `vinax.ai…` keys).
  */
 import { create } from 'zustand';
 
@@ -14,9 +15,14 @@ export interface ChatPrefs {
   webSearch: 'auto' | 'on' | 'off';
   extendedThinking: boolean;
   sidebarCollapsed: boolean;
+  /** Read aloud voice (Groq Orpheus id); the server checks it against its list. */
+  voice: string;
+  /** Live voice (a Gemini voice), also used when Gemini reads aloud. */
+  liveVoice: string;
 }
 
-const DEFAULTS: ChatPrefs = { model: 'auto', webSearch: 'auto', extendedThinking: false, sidebarCollapsed: false };
+const DEFAULTS: ChatPrefs = { model: 'auto', webSearch: 'auto', extendedThinking: false, sidebarCollapsed: false, voice: 'troy', liveVoice: 'Kore' };
+const VOICE_ID = /^[A-Za-z]{2,20}$/;
 
 function load(): ChatPrefs {
   try {
@@ -27,6 +33,8 @@ function load(): ChatPrefs {
       webSearch: raw.webSearch === 'on' || raw.webSearch === 'off' ? raw.webSearch : 'auto',
       extendedThinking: raw.extendedThinking === true,
       sidebarCollapsed: raw.sidebarCollapsed === true,
+      voice: typeof raw.voice === 'string' && VOICE_ID.test(raw.voice) ? raw.voice : DEFAULTS.voice,
+      liveVoice: typeof raw.liveVoice === 'string' && VOICE_ID.test(raw.liveVoice) ? raw.liveVoice : DEFAULTS.liveVoice,
     };
   } catch {
     return DEFAULTS;
@@ -41,7 +49,7 @@ export const usePrefs = create<PrefsStore>()((set, get) => ({
   ...load(),
   set: (patch) => {
     set(patch);
-    const { model, webSearch, extendedThinking, sidebarCollapsed } = get();
-    try { localStorage.setItem(PREFS_KEY, JSON.stringify({ model, webSearch, extendedThinking, sidebarCollapsed })); } catch { /* storage blocked: this session only */ }
+    const { model, webSearch, extendedThinking, sidebarCollapsed, voice, liveVoice } = get();
+    try { localStorage.setItem(PREFS_KEY, JSON.stringify({ model, webSearch, extendedThinking, sidebarCollapsed, voice, liveVoice })); } catch { /* storage blocked: this session only */ }
   },
 }));
