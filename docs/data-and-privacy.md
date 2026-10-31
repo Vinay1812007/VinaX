@@ -71,7 +71,7 @@ VinaX AI ([ai.md](ai.md)), the chat at `/vinaxai`, is the one place AI is used, 
 - The Worker logs only the route, model, provider, latency, status and token counts, never message text.
 - The page keeps nothing about the chat on the device.
 
-Including the chats in the account export is phase 2 of the build.
+Settings → Your data → **Export VinaX AI chats** downloads every chat, with all its versions, as one JSON file (`GET /api/ai/export`). The file is separate from the app's backup: the chats already live with the account, so a backup neither carries nor restores them.
 
 On first launch after the AI features were removed, the app erases what they left on the device (`services/storage/earlyMigrations.ts`): the AI chats (`vinax_ai_chats_v1`), every `vinax.ai.*`, `vinax.aiplaylist.*` and `vinax.ai<Name>` key, the AI shelf and metadata caches, the old DJ's already-surfaced list, the embedding model name, and the `vinax-embeddings` IndexedDB database.
 

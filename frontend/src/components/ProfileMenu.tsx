@@ -29,6 +29,7 @@ export const PROFILE_ITEMS: Item[] = [
 ];
 
 export const APP_ITEMS: Item[] = [
+  { label: 'VinaX AI', to: '/vinaxai', icon: SparkleIcon },
   { label: 'Appearance', to: '/settings#appearance', icon: SunIcon },
   { label: 'Playback', to: '/settings#playback', icon: PlayIcon },
   { label: 'Notifications', to: '/settings#notifications', icon: BellIcon },

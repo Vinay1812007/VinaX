@@ -155,6 +155,7 @@ Nothing else is added: no taste profile and no listening history. Models flagged
 - A message id: under that message (an edit makes a sibling).
 - `"root"`: a new first message (editing the first one).
 - Empty `content` with `parentMessageId` set to a user message: a retry, which adds a new answer as a sibling.
+- `continueFrom` set to an assistant message: Continue. The model gets the thread up to that reply, its partial text, and one more turn asking it to carry on where it stopped without repeating anything. The new text is appended to the same message, which keeps its id.
 
 **History.** It is the path from the root to the new message, trimmed to the model's `maxContextChars`:
 - the latest turn always stays, clipped from the middle if it alone is too long;
@@ -165,14 +166,20 @@ The answer is `text/event-stream`, with named events and one JSON object per `da
 
 | Event | Data |
 | --- | --- |
-| `meta` | `{ conversationId, userMessageId, assistantMessageId, model: { id, name, provider } }`; again after a failover |
-| `title` | `{ title }`. Phase 1 sends a title cut from the first message (up to six words); phase 2 adds a generated one |
+| `meta` | `{ conversationId, userMessageId, assistantMessageId, model: { id, name, provider }, continued? }`; again after a failover |
+| `title` | `{ title }`. A new conversation first gets a title cut from its first message (up to six words), then a generated one (below) when it arrives |
 | `thinking` | `{ delta }` |
 | `text` | `{ delta }` |
 | `error` | `{ code, message, retryable, alternatives? }`. Codes: `model_busy`, `model_timeout`, `model_unavailable`, `empty_reply`, `all_busy` |
 | `done` | `{ stopReason: end \| length \| aborted \| error, usage? }` |
 
 When the page disconnects, the stream's `cancel()` aborts the upstream request. The reply is still saved with its partial text and `stop_reason = 'aborted'`. A reply with no text is not saved; the question stays, and Retry asks again.
+
+**Titles.** For a new conversation, a 2–6 word title is written in parallel with the first reply (`_lib/ai/title.ts`):
+- It uses the `title` ladder (Qwen 3.8 27B, then Gemini 3.5 Flash Lite) with reasoning off.
+- The first message goes in as material inside `<message>`, never as instructions, and the answer is cleaned to plain words.
+- The end of the reply waits up to 1.5 s for it, so it usually arrives in the same stream. Either way it is saved to the conversation.
+- If the title model fails, the cut title stays.
 
 Refusals before the stream: `400 bad_request | unknown_model | attachments_unavailable`, `401 signed_out`, `404 not_found`, `409 conversation_full` (2,000 messages), `413 too_large | too_long`, `429 rate_limited`, `503 ai_not_configured | ai_disabled | unavailable`.
 
@@ -185,6 +192,7 @@ Refusals before the stream: `400 bad_request | unknown_model | attachments_unava
 | `GET /api/ai/conversations/:id` | The conversation and its whole message tree, each reply labelled with its model's name and provider |
 | `PATCH /api/ai/conversations/:id` | `{ title?, starred?, activeLeafId? }` |
 | `DELETE /api/ai/conversations/:id` | Hides the chat at once; the hourly housekeeping removes it, with its messages, a day later |
+| `GET /api/ai/export` | Every chat of the account with every message and branch, as one JSON file to download (`ai_export`; Settings → Your data → Export VinaX AI chats). It is not part of the app's backup file and is never imported: the chats already live with the account |
 
 Every query is filtered by the session's account. Someone else's conversation, a deleted one or a malformed id answers 404. The Worker's router dispatches `PATCH` and `DELETE` to `onRequestPatch` / `onRequestDelete`.
 
@@ -218,15 +226,46 @@ The setting key is `vinax-ai`, not the brief's dotted `ai.enabled` / `ai.models.
 - Music keeps playing; the header has a now-playing pill.
 - Signed-out visitors see the sign-in screen, with one line about VinaX AI.
 
+**Layout.**
+- At 1024 px and wider, the conversation sidebar is a 260 px column (`Sidebar.tsx`). It can be collapsed; the choice is kept on the device.
+- Narrower, the sidebar is a slide-over drawer from the header's ☰. It closes on Escape, on Android's back button, or when you pick a chat.
+- The sidebar holds New chat and a search over titles and message text. Below that come Starred, then Recents grouped by Today, Yesterday, Previous 7 days and Older (`sidebarGroups.ts`).
+- Each row has a ⋯ menu: Star, Rename (inline), and Delete (after a confirmation).
+- The sidebar's foot shows the account, Settings, and Back to VinaX.
+- A new chat opens on a time-aware greeting, with the composer in the middle and four chips (Write, Learn, Code, Music). The chips fill in a starter and never send.
+- The composer stays above an on-screen keyboard that does not resize the page (`visualViewport`).
+
+**The composer.**
+- The + menu holds Extended thinking.
+- The model picker (`ModelPicker.tsx`) lists Auto, then the groups. Each model shows a one-line description and Vision / Web / Thinking / Code badges; models that cannot answer now are greyed with the reason.
+- The choice and Extended thinking are kept on the device (`prefs.ts`, key `vinax.vxai.prefs.v1`). A model the owner switches off falls back to Auto.
+
+**Messages.**
+- Edit on a question sends the change as a sibling: the old version and its answers stay.
+- A message with more than one version shows ‹ 2 / 3 ›. Switching follows the newest reply down that branch and saves it as the conversation's active leaf.
+- Retry has a menu: Retry with Auto, or with another available model.
+- A reply cut short (`length`, or `error` with text) offers Continue.
+- When a picked model fails, the error offers Retry, Try with Auto and up to two alternatives.
+- Opening another chat while a reply is being written stops it; the server keeps what was written.
+
 **Code.**
-- `store.ts` holds the open conversation (`chatState.ts`, a pure reducer) and the send / retry / stop controller. Text and reasoning deltas are applied once per animation frame.
+- `store.ts` holds the open conversation (`chatState.ts`, a pure reducer) and the send / retry / continue / stop controller. Text and reasoning deltas are applied once per animation frame.
 - Stop works at once, even while the request is still waiting. When nothing had come back yet, the text goes back into the composer.
 - `Markdown.tsx` renders GFM with `react-markdown` + `remark-gfm`:
   - raw HTML is shown as text;
   - only `http(s)` and `mailto` links survive, opening in a new tab with `rel="noopener noreferrer nofollow"`;
   - images show as links and are never loaded.
 - Code blocks have a language label and Copy. Highlighting comes from `highlight.js` core with 22 languages, in its own on-demand chunk, and is skipped over 20,000 characters.
-- The page and the highlighter are on demand in the service worker's precache (`ON_DEMAND_PAGES` in `vite.config.ts`). A listener who never opens the chat does not download them.
+- **Maths.** `$inline$` and `$$display$$` render with KaTeX through `remark-math` + `rehype-katex` (`trust: false`).
+  - They load in their own chunk (`math.ts`), with KaTeX's CSS and fonts, the first time a reply contains a dollar sign.
+  - So that prices are not read as maths, `mathText.ts` applies Pandoc's rule first: a `$…$` span is maths only when no space sits just inside either dollar and no digit follows the closing one. Other dollars are escaped. Code is never touched.
+- **Precache.** The page, the highlighter, the maths chunk, their stylesheets and KaTeX's fonts are all on demand in the service worker's precache (`ON_DEMAND_PAGES` and `ON_DEMAND_ASSETS` in `vite.config.ts`). A listener who never opens the chat does not download them.
+
+**Entry points.**
+- A "VinaX AI" row in the desktop side navigation (`constants/nav.ts`).
+- An item in the profile menu.
+- A command in the command palette.
+- The phone tab bar keeps its four tabs.
 
 ## Not built yet
 
@@ -234,7 +273,6 @@ These phases are still to come:
 
 | Phase | What it adds |
 | --- | --- |
-| 2 | The conversation sidebar (search, star, rename, delete), the model picker, edit and branch switching, generated titles, the empty state's suggestions, the mobile drawer, error alternatives and Continue, maths (KaTeX), entry points in the nav, profile menu and command palette, the privacy page and the AI-chats account export |
 | 3 | Web search with citations |
 | 4 | Attachments |
 | 5 | Artifacts and the sandbox |

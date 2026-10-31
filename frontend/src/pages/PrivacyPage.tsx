@@ -74,7 +74,8 @@ export default function PrivacyPage() {
           it is sent through VinaX&rsquo;s server to an AI provider to write the reply: Groq, Google (Gemini),
           OpenRouter, NVIDIA or Cloudflare Workers AI, depending on the model. VinaX AI never sees your listening
           history. Your chats are stored with your Google account so they follow you to every device; deleting a chat
-          removes it within a day, and deleting your account removes every chat.
+          removes it within a day, and deleting your account removes every chat. Settings → Your data → Export VinaX AI
+          chats downloads them all.
         </p>
         <H>Listen Together</H>
         <p>
