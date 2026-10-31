@@ -68,7 +68,7 @@ export function insertMessage(env: DbEnv, row: Partial<MessageRow> & Pick<Messag
 }
 
 /** Change a message of a conversation that already passed the ownership check. */
-export function updateMessage(env: DbEnv, conversationId: string, id: string, patch: Partial<Pick<MessageRow, 'content' | 'thinking' | 'model_id' | 'provider' | 'stop_reason' | 'usage'>>): Promise<Rows<MessageRow>> {
+export function updateMessage(env: DbEnv, conversationId: string, id: string, patch: Partial<Pick<MessageRow, 'content' | 'thinking' | 'artifacts' | 'model_id' | 'provider' | 'stop_reason' | 'usage'>>): Promise<Rows<MessageRow>> {
   return db.update<MessageRow>(env, 'ai_messages', q().eq('id', id).eq('conversation_id', conversationId), patch);
 }
 
