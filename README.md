@@ -1,6 +1,6 @@
 # VinaX
 
-VinaX is a free music app with no sign-up. It plays from a public catalogue, learns a listener's taste on their own device, and builds what plays next from that. It ships as a web app and an Android app from one codebase, backed by one edge Worker. Recommendations, Radio and Up Next are worked out on the listener's device; the only AI is VinaX AI, an opt-in chat assistant for signed-in listeners at `/vinaxai` ([docs/ai.md](docs/ai.md)). The version number moves with every merge to `main` (`frontend/src/constants/version.ts` is the source of truth). The current line is **VinaX V2**, which restarted at 1.0.0 after 15.0.1; listeners see "VinaX V2 1.0" (major and minor). This README covers what a listener gets, how the code is put together, how to run and check it, how a release is made, and where the rest of the documentation is.
+VinaX is a free music app with no sign-up. It plays from a public catalogue, learns a listener's taste on their own device, and builds what plays next from that. It ships as a web app and an Android app from one codebase, backed by one edge Worker. Signed out, Recommendations, Radio and Up Next are worked out on the listener's device; signed in, the personal engine keeps a taste model with the account and composes Home, playlists and radio from it ([docs/personalisation.md](docs/personalisation.md)). VinaX AI is the opt-in chat assistant for signed-in listeners at `/vinaxai` ([docs/ai.md](docs/ai.md)). The version number moves with every merge to `main` (`frontend/src/constants/version.ts` is the source of truth). The current line is **VinaX V2**, which restarted at 1.0.0 after 15.0.1; listeners see "VinaX V2 1.0" (major and minor). This README covers what a listener gets, how the code is put together, how to run and check it, how a release is made, and where the rest of the documentation is.
 
 [Documentation index](docs/README.md) · [User guide](docs/user-guide/README.md) · [Deployment](DEPLOYMENT.md) · [Operations](docs/operations.md) · [Database](docs/database.md)
 
@@ -11,6 +11,7 @@ VinaX is a free music app with no sign-up. It plays from a public catalogue, lea
 - **A full player.** Reorderable queue, synced lyrics where available, sleep timer, crossfade, sound settings, lock-screen and headset controls, casting, drive mode and karaoke. A video canvas plays the song's clip behind the player, with a full-screen view (double-tap to like, a quality chip that plays the best rendition the source has). Flow is a full-screen feed of song previews.
 - **A library on the device.** Favourites, playlists, Listen Later, smart collections, history and listening stats. One-file backup with preview, merge or replace, and Undo; an encrypted one-time link moves everything to another device.
 - **VinaX AI, if you want it.** A chat assistant at `/vinaxai` for signed-in listeners ([guide](docs/user-guide/vinax-ai.md)). Auto picks a model for each question and moves on when one is busy, or the listener picks one. It searches the web with numbered sources when a question needs current facts, shows its reasoning, and reads photos, PDFs and text or code files. Code, pages and diagrams open in a side panel with a safe preview. Dictation, Read aloud and Live voice let you talk to it. Chats follow the account, and can be exported or deleted. Music, Radio and what plays next never use it.
+- **The personal engine (V2 1.4).** Signed in, Home opens with shelves composed for you and for the moment — "Made for you", "Because you liked…", your languages, discoveries, rediscoveries, what listeners like you play — built from a taste model your account keeps on the server and arranged by VinaX AI with a one-line reason under each shelf. **Make me a playlist** turns a request in plain words ("slow Telugu melodies for a rainy evening", "something new, nothing I've heard") into a playlist to play or save. Up Next asks the same engine. One switch in Settings → Region & privacy turns it off and Home goes back to the on-device engine; **Erase my taste model** removes everything it learned ([guide](docs/user-guide/personal-engine.md)).
 - **Friends and sharing (15.0).** An opt-in public profile at `/u/<handle>` (top artists, languages, recent likes, what is playing when shared); follow listeners and see "Friends are listening" on Home; Blend a mix from your likes and a friend's; share a playlist as a public page or an invite link that lets friends add songs; Listen Together rooms with names, a chat, vote-to-skip and "save this session".
 - **New every day (15.0).** Discover 5 (five unheard songs a day, keep or skip), "Songs like this" with a reason on every pick, release alerts for saved artists, weekly goals with streaks, a Wrapped-style story of the year, focus sounds (rain, wind, noise) with a timer, Auto EQ that follows the song, drive-mode voice commands, playlist import from CSV/M3U files, and on Android smart downloads that keep the Weekly Mix offline on Wi-Fi.
 - **Looks.** Six app styles (Lumen is the default; each is modelled on the design language of a music app listeners already know, in VinaX's own names and colours — see [docs/app-styles.md](docs/app-styles.md)), each with dark, light and true-black themes and every accent. On a festival's days the app takes that festival's colours and backdrop and offers a greeting card once; any of the 43 festival skins can be previewed in Settings → Appearance.
@@ -35,11 +36,13 @@ The website shows one labelled advertisement at the end of song, artist, album, 
  │ backend/worker  edge Worker "vinax-api"       │
  │  /api/*: catalogue proxy, sign-in and         │
  │          sync, usage events, rooms, push,     │
- │          status, the owner console's API      │
+ │          status, the owner console's API,     │
+ │          the personal engine (/api/personal)  │
+ │          and VinaX AI (/api/ai)               │
  │  language-and-mood pages, /sitemap*, /img,    │
  │  /apk; anything unmatched → the static site   │
  │  Cron Trigger every 30 min: status tick,      │
- │  housekeeping                                 │
+ │  housekeeping, the personal engine's embeds   │
  └───────────────────────┬───────────────────────┘
                          │ service-role key (Worker secret)
  ┌───────────────────────▼───────────────────────┐
@@ -47,7 +50,9 @@ The website shows one labelled advertisement at the end of song, artist, album, 
  │  listeners, accounts + backups, events,       │
  │  feedback, blocked content, rooms,            │
  │  push devices, notifications, settings,       │
- │  experiments, audit log, uptime, job runs     │
+ │  experiments, audit log, uptime, job runs,    │
+ │  VinaX AI chats, the personal engine's taste  │
+ │  models, events, song pool and pages          │
  └───────────────────────────────────────────────┘
 ```
 
@@ -230,7 +235,8 @@ Do not commit secrets, generated build folders (`dist/`, `frontend/android/`) or
 | [docs/architecture.md](docs/architecture.md) | The pieces and how data flows |
 | [docs/database.md](docs/database.md) | The database: setup, every table and function, the Worker's data layer, the admin API contract, scheduled jobs |
 | [docs/design-system.md](docs/design-system.md) | Tokens, app styles, themes, accents, festival skins, chat styles |
-| [docs/recommendations.md](docs/recommendations.md) | How the next song is chosen |
+| [docs/recommendations.md](docs/recommendations.md) | How the next song is chosen on the device |
+| [docs/personalisation.md](docs/personalisation.md) | The personal engine: the account's taste model, candidate sources, ranking, the AI composer, the playlist builder, the device side |
 | [docs/data-and-privacy.md](docs/data-and-privacy.md) | What is stored where and what leaves the device |
 | [docs/testing.md](docs/testing.md) | Gates, contract tests, the browser suite, the bundle budget |
 | [docs/android.md](docs/android.md) | The Android project and what needs a device |

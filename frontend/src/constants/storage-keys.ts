@@ -47,6 +47,8 @@ export const KEYS = {
   goalLedger: `${STORAGE_PREFIX}.goal-ledger.v1`,
   /** 15.0 — the own public profile and following list (features/social/store.ts). */
   social: `${STORAGE_PREFIX}.social.v1`,
+  /** V2 1.4 — the personal engine's outgoing event queue (services/personal/reporter.ts). */
+  personalQueue: `${STORAGE_PREFIX}.personal-queue.v1`,
   /** 15.0 — local playlist id → its shared copy (id, invite token, version). */
   sharedPlaylists: `${STORAGE_PREFIX}.shared-playlists.v1`,
   /** 15.0 — release alerts: seen top-song ids per saved artist, the new ones (features/releases). */

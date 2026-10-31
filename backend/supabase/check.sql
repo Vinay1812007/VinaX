@@ -63,6 +63,20 @@ insert into ai_messages (id, conversation_id, parent_id, role, content, created_
   ('00000000-0000-4000-8000-00000000c012', '00000000-0000-4000-8000-00000000c001', null, 'user', '[{"type": "text", "text": "Explain a raga simply"}]', now());
 insert into ai_attachments (id, account_id, conversation_id, name, mime, size, kind, storage_path) values
   ('00000000-0000-4000-8000-00000000c020', 'check_a1', '00000000-0000-4000-8000-00000000c001', 'notes.txt', 'text/plain', 12, 'text', 'check_a1/00000000-0000-4000-8000-00000000c001/00000000-0000-4000-8000-00000000c020');
+-- The personal engine: seven songs, five embedded in a toy space where song n
+-- points along axis n (so s1 and s2 are far apart and the taste vector is a
+-- mix), one account with a taste model, one with nothing yet.
+insert into personal_songs (id, title, artist, artist_id, artists, album, language, year, duration, image, key, facets, verified, embedding, embed_model, embedded_at)
+select 'check_s' || g, 'Check Song ' || g, 'Check Artist ' || (g % 3), 'check_ar' || (g % 3),
+       jsonb_build_array(jsonb_build_object('id', 'check_ar' || (g % 3), 'name', 'Check Artist ' || (g % 3))),
+       'Check Album', (array['te', 'hi', 'en'])[1 + g % 3], 2020 + g, 200 + g, 'img', 'check song ' || g || '|check artist ' || (g % 3),
+       jsonb_build_object('mood', 'chill'), true,
+       case when g < 5 then (select array_agg(case when i = g + 1 then 1.0 when i = 6 then 0.5 else 0.0 end order by i) from generate_series(1, 1024) i)::extensions.vector end,
+       case when g < 5 then 'check-model' end,
+       case when g < 5 then now() end
+from generate_series(0, 6) g;
+insert into personal_taste (account_id, songs, artists, languages, version) values
+  ('check_a1', '{"check_s0": {"score": 6}, "check_s1": {"score": 3}, "check_s5": {"score": 2}}', '{"check_ar0": {"name": "Check Artist 0", "score": 5}}', '{"te": {"score": 5}}', 1);
 
 -- ------------------------------------------------------------- functions --
 do $$
@@ -229,8 +243,105 @@ begin
   exception when check_violation then null;
   end;
 
+  -- the personal engine
+  v := personal_record_events('check_a1', '[
+    {"id": "check_e1", "kind": "play", "songId": "check_s0", "heardSec": 120, "durationSec": 200, "source": "home:made-for-you", "context": {"hour": 9}},
+    {"id": "check_e2", "kind": "complete", "songId": "check_s0"},
+    {"id": "check_e3", "kind": "skip", "songId": "check_s1", "heardSec": 5},
+    {"id": "check_e4", "kind": "like", "songId": "check_s2"},
+    {"id": "check_e5", "kind": "shown", "songId": "check_s3"},
+    {"id": "check_e6", "kind": "play", "songId": "check_s4"},
+    {"id": "check_e7", "kind": "play", "songId": "check_s5"}]');
+  assert jsonb_array_length(v -> 'inserted') = 7, 'personal_record_events: seven new events';
+  v := personal_record_events('check_a1', '[{"id": "check_e1", "kind": "play", "songId": "check_s0"}, {"id": "check_e8", "kind": "dislike", "songId": "check_s4"}]');
+  assert v -> 'inserted' = '["check_e8"]'::jsonb, 'personal_record_events: a repeated client id is skipped, a new one taken';
+  select count(*) into n from personal_events where account_id = 'check_a1';
+  assert n = 8, 'personal_events: one row per new event';
+  assert (select played from personal_exposure where account_id = 'check_a1' and song_id = 'check_s0') = 1, 'personal_exposure: played counted once';
+  assert (select completed from personal_exposure where account_id = 'check_a1' and song_id = 'check_s0') = 1, 'personal_exposure: completed';
+  assert (select liked from personal_exposure where account_id = 'check_a1' and song_id = 'check_s2'), 'personal_exposure: liked';
+  assert (select disliked from personal_exposure where account_id = 'check_a1' and song_id = 'check_s4'), 'personal_exposure: disliked';
+  assert (select plays from personal_songs where id = 'check_s0') = 1 and (select likes from personal_songs where id = 'check_s2') = 1, 'personal_songs: community counters';
+  begin
+    perform personal_record_events('check_a1', '[{"id": "check_bad", "kind": "teleport", "songId": "check_s0"}]');
+    assert false, 'personal_events.kind refuses an unknown kind';
+  exception when check_violation then null;
+  end;
+
+  -- a device batch cannot rewrite a known song; the catalogue can; a new song arrives unverified
+  assert personal_touch_songs('[{"id": "check_s0", "title": "Hijacked", "artist": "Nobody", "key": "hijacked|nobody", "image": "https://evil.example/x.png", "album": "Filled in"},
+                                {"id": "check_new1", "title": "New Song", "artist": "Check Artist 9", "key": "new song|check artist 9"}]'::jsonb, false) = 1, 'personal_touch_songs: one new row';
+  assert (select title from personal_songs where id = 'check_s0') = 'Check Song 0', 'personal_touch_songs: a device cannot rename a known song';
+  assert (select image from personal_songs where id = 'check_s0') = 'img', 'personal_touch_songs: a device cannot replace artwork';
+  assert (select album from personal_songs where id = 'check_s0') = 'Check Album', 'personal_touch_songs: a device fills only what was missing';
+  assert not (select verified from personal_songs where id = 'check_new1'), 'personal_touch_songs: a device row starts unverified';
+  assert personal_touch_songs('[{"id": "check_new1", "title": "Real Title", "artist": "Real Artist", "key": "real title|real artist", "language": "te"}]'::jsonb, true) = 0, 'personal_touch_songs: a catalogue row is not new';
+  assert (select title = 'Real Title' and verified from personal_songs where id = 'check_new1'), 'personal_touch_songs: the catalogue verifies and corrects';
+  select count(*) into n from personal_unverified(10);
+  assert n = 0, 'personal_unverified: none left';
+  select count(*) into n from personal_exposure_for('check_a1', array['check_s0', 'check_s1', 'check_nope']);
+  assert n = 2, 'personal_exposure_for: the pool rows only';
+  assert (select skipped from personal_exposure where account_id = 'check_a1' and song_id = 'check_s1') = 1, 'personal_exposure: skipped counted';
+  perform personal_record_events('check_a1', '[{"id": "check_e9", "kind": "play", "songId": "check_s1"}]');
+  assert (select skipped from personal_exposure where account_id = 'check_a1' and song_id = 'check_s1') = 0, 'personal_exposure: a play forgives the skips';
+  assert (select last_disliked is not null from personal_exposure where account_id = 'check_a1' and song_id = 'check_s4'), 'personal_exposure: last_disliked';
+
+  assert personal_recompute_vector('check_a1', 'check-model', 150) = 2, 'personal_recompute_vector: two of the three scored songs are embedded in this model';
+  assert (select vector is not null and embed_model = 'check-model' from personal_taste where account_id = 'check_a1'), 'personal_recompute_vector: wrote the vector';
+  assert personal_recompute_vector('check_a2', 'check-model', 150) = 0, 'personal_recompute_vector: no taste row, nothing done';
+
+  -- s0 (score 6) dominates the taste vector; s2 is unseen and shares axis 6, s3 was shown just now, s4 is disliked
+  select count(*) into n from personal_neighbours('check_a1', 'check-model', 10, null, true);
+  assert n = 1, 'personal_neighbours: only the song never shown, played or disliked remains in the window';
+  assert (select id from personal_neighbours('check_a1', 'check-model', 10, null, true) limit 1) = 'check_s2', 'personal_neighbours: the unseen song';
+  select count(*) into n from personal_neighbours('check_a1', 'check-model', 10, null, false);
+  assert n = 4, 'personal_neighbours: with no cooling window the played and shown songs come back, the disliked one never';
+  select count(*) into n from personal_neighbours('check_a1', 'check-model', 10, array['te'], false);
+  assert n = 2, 'personal_neighbours: language filter';
+  select count(*) into n from personal_neighbours('check_a2', 'check-model', 10, null, true);
+  assert n = 0, 'personal_neighbours: an account with no vector gets nothing';
+  update personal_songs set verified = false where id = 'check_s2';
+  select count(*) into n from personal_neighbours('check_a1', 'check-model', 10, null, true);
+  assert n = 0, 'personal_neighbours: an unverified song never reaches a page';
+  update personal_songs set verified = true where id = 'check_s2';
+  select count(*) into n from personal_similar_songs('check_s0', 'check-model', 10);
+  assert n = 4, 'personal_similar_songs: every other embedded song, the seed left out';
+  assert (select id from personal_similar_songs('check_s0', 'check-model', 1)) in ('check_s1', 'check_s2', 'check_s3', 'check_s4'), 'personal_similar_songs: nearest first';
+
+  v := personal_refresh_colisten(30, 50);
+  assert (v ->> 'pairs')::int > 0, 'personal_refresh_colisten: pairs from the account''s plays and the anonymous plays';
+  select count(*) into n from personal_colisten_for(array['check_s0'], 10);
+  assert n > 0, 'personal_colisten_for: partners of a played song';
+  select count(*) into n from personal_trending(null, 7, 10);
+  assert n > 0, 'personal_trending: the community played something this week';
+  select count(*) into n from personal_trending(array['xx'], 7, 10);
+  assert n = 0, 'personal_trending: an unknown language has no plays';
+  select count(*) into n from personal_embed_backlog(10, 'check-model');
+  assert n = 3, 'personal_embed_backlog: the three verified songs without an embedding';
+  select count(*) into n from personal_embed_backlog(10, 'other-model');
+  assert n = 8, 'personal_embed_backlog: a new model re-embeds everything';
+  assert personal_set_embeddings('check-model', jsonb_build_object('check_s5', (select '[' || string_agg(case when i = 7 then '1' else '0' end, ',' order by i) || ']' from generate_series(1, 1024) i), 'check_nope', '[1]')) = 1, 'personal_set_embeddings: one known row took a vector';
+  select count(*) into n from personal_embed_backlog(10, 'check-model');
+  assert n = 2, 'personal_embed_backlog: two left';
+
+  assert personal_mark_shown('check_a1', array['check_s0', 'check_s6']) = 2, 'personal_mark_shown: two rows';
+  assert (select shown from personal_exposure where account_id = 'check_a1' and song_id = 'check_s0') = 1, 'personal_mark_shown: counted on a known row';
+  assert (select shown from personal_exposure where account_id = 'check_a1' and song_id = 'check_s6') = 1, 'personal_mark_shown: made a row';
+  v := personal_stats();
+  assert (v ->> 'accounts')::int = 1 and (v ->> 'songs')::int = 8 and (v ->> 'backlog')::int = 2 and (v ->> 'unverified')::int = 0 and (v ->> 'eventsDay')::int = 9, 'personal_stats';
+  v := personal_purge(365);
+  assert (v ->> 'events')::int = 0, 'personal_purge: nothing old enough';
+  v := personal_erase('check_a1');
+  assert (v ->> 'events')::int = 9 and (v ->> 'taste')::int = 1 and (v ->> 'exposure')::int = 7, 'personal_erase';
+  insert into personal_taste (account_id) values ('check_a1');
+  insert into personal_pages (id, account_id, kind, page) values ('00000000-0000-4000-8000-00000000c030', 'check_a1', 'home', '{"shelves": []}');
+
   v := delete_listener('check_l1', null);
   assert (v ->> 'listener')::int = 1 and (v ->> 'account')::int = 1 and (v ->> 'events')::int > 0 and (v ->> 'memberships')::int = 1, 'delete_listener by listener';
+  select exists (select 1 from personal_taste where account_id = 'check_a1') into b;
+  assert not b, 'delete_listener: the taste model went with the account';
+  select exists (select 1 from personal_pages where account_id = 'check_a1') into b;
+  assert not b, 'delete_listener: the composed pages went with the account';
   select exists (select 1 from account_backups where account_id = 'check_a1') into b;
   assert not b, 'delete_listener: the backup went with the account';
   select exists (select 1 from profiles where account_id = 'check_a1') into b;
@@ -258,8 +369,10 @@ begin
   assert not has_function_privilege('anon', 'public.stats_overview()', 'execute'), 'anon cannot call stats_overview';
   assert not has_table_privilege('anon', 'public.ai_messages', 'select'), 'anon cannot read VinaX AI messages';
   assert not has_function_privilege('anon', 'public.ai_conversation_search(text, text, timestamptz, integer)', 'execute'), 'anon cannot search VinaX AI chats';
+  assert not has_table_privilege('anon', 'public.personal_events', 'select'), 'anon cannot read personal events';
+  assert not has_function_privilege('anon', 'public.personal_neighbours(text, text, integer, text[], boolean)', 'execute'), 'anon cannot call the personal engine';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 6, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 7, 'meta.schema.version';
   raise notice 'check.sql: every function answered as expected';
 end $$;
 

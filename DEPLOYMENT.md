@@ -75,7 +75,7 @@ Deploying the Worker also registers its **Cron Trigger** (`[triggers]` in `wrang
 The Worker keeps its data in one hosted database. Setting it up is a one-time step; redeploying the Worker never touches it.
 
 1. Create the hosted project.
-2. In its SQL editor, paste `backend/supabase/schema.sql` and run it. It creates every table, the `directory` view, the `stats_*` functions and the deny-all row-level security, and writes schema version 6 into `meta` (versions 4–6 added the VinaX AI tables, its search allowances and its files; pasting it again over an older version is the whole upgrade). On Supabase it also creates the private Storage bucket `ai-attachments` that VinaX AI's files live in: no dashboard step is needed. It is idempotent: re-running it is safe and deletes nothing. A database that ran an older version still holds the old AI tables; `backend/supabase/remove-ai.sql`, run once by hand, removes them (it deletes that data). To start over, run `backend/supabase/reset.sql` first (it deletes all data), then `schema.sql` again. The **Schema** workflow can do the apply from CI once a `SUPABASE_DB_URL` secret is set ([docs/database.md](docs/database.md#from-ci-instead-of-the-sql-editor)); it also proves every change to `backend/supabase/**` on a scratch Postgres in pull requests.
+2. In its SQL editor, paste `backend/supabase/schema.sql` and run it. It creates every table, the `directory` view, the `stats_*` functions and the deny-all row-level security, and writes schema version 7 into `meta` (versions 4–6 added the VinaX AI tables, its search allowances and its files; version 7 adds the personal engine's tables and the `vector` extension they need, which hosted projects ship; pasting it again over an older version is the whole upgrade). On Supabase it also creates the private Storage bucket `ai-attachments` that VinaX AI's files live in: no dashboard step is needed. It is idempotent: re-running it is safe and deletes nothing. A database that ran an older version still holds the old AI tables; `backend/supabase/remove-ai.sql`, run once by hand, removes them (it deletes that data). To start over, run `backend/supabase/reset.sql` first (it deletes all data), then `schema.sql` again. The **Schema** workflow can do the apply from CI once a `SUPABASE_DB_URL` secret is set ([docs/database.md](docs/database.md#from-ci-instead-of-the-sql-editor)); it also proves every change to `backend/supabase/**` on a scratch Postgres in pull requests.
 3. Set the two Worker secrets from `backend/`:
 
 ```sh
@@ -91,7 +91,7 @@ Only the Worker holds the service-role key. The frontend and the console never t
 
 The chat at `/vinaxai` ([docs/ai.md](docs/ai.md)) runs on free tiers of five providers, all called from the Worker. Any one is enough.
 
-1. Apply schema version 6 (above) before the Worker that uses it, or the chat answers `503 unavailable` for lack of its tables, and web search stays off (its daily allowance lives there).
+1. Apply schema version 7 (above) before the Worker that uses it, or the chat and every `/api/personal/*` route answer `503 unavailable` for lack of their tables, and web search stays off (its daily allowance lives there).
 2. Set the keys you have, from `backend/`. Each is optional:
 
 ```sh
@@ -122,6 +122,17 @@ npx wrangler secret put SEARCH_API_KEY --config worker/wrangler.toml
 
 After a deploy, **Health → VinaX AI** in the console shows which keys the Worker sees, what is resting and why, and probes each enabled model on a button press ([docs/ai.md](docs/ai.md#the-consoles-providers-card)).
 
+## The personal engine
+
+The account-side recommendation engine ([docs/personalisation.md](docs/personalisation.md)) needs nothing new to switch on: schema version 7 (above) and the Worker. It is **on** for every signed-in listener unless the `personal-config` setting says otherwise (console → Publish → App → Personal engine):
+
+- `{ "enabled": false }` switches the whole engine off: the routes answer `503 personal_disabled`, the devices stop reporting, Home uses the on-device engine;
+- `{ "composer": false }` keeps the engine but serves deterministic pages (no language model);
+- `{ "embedModel": "cloudflare:@cf/baai/bge-m3" }` (the default) or `"gemini:gemini-embedding-001"` names the embedding model; changing it starts a re-embed of the pool through the half-hourly job, and pages compare only vectors of the named model meanwhile;
+- `{ "weights": { "tasteFit": 0.3, … } }` tunes the ranking (clamped to 0.5–2× the defaults in `backend/worker/functions/_lib/personal/config.ts`).
+
+Embedding uses the `[ai] binding = "AI"` from the VinaX AI setup by default (the multilingual model `@cf/baai/bge-m3`, roughly one neuron per song, out of the account's free pool), or `GEMINI_API_KEY` when a Gemini model is named. The composer and the playlist builder use whichever VinaX AI providers have keys, through the same ladders as the chat; with no key at all, pages are deterministic and playlists are ranked without a title from the model. **Health → Personal engine** in the console shows accounts with a model, events, the song pool and its embedding backlog, the pages composed, and runs the embed and co-listening jobs on a button press.
+
 `/vinaxai` is an ordinary app page served by the static host. The old `/VinaXAI` spelling is redirected by the app's router, not by `_redirects` (a rule there could match `/vinaxai` too and loop). AI Playlist and shared-chat links from the old build still 301 to Home from the Worker.
 
 ## VinaX AI sandbox
@@ -148,7 +159,7 @@ The app already allows the frame (`frame-src https://sandbox.vinaxmusic.online` 
 1. Run the frontend and backend gates in [docs/testing.md](docs/testing.md#the-gates), including the bundle budget and the browser suite against `dist/`.
 2. Confirm CI and E2E are green for the exact commit.
 3. After merging, confirm the static host's build succeeded, and read the **Deploy Worker** log when `backend/` changed. Publishing one half does not update the other.
-4. On production, check `/api/status`, Home, Search, album and playlist playback, a queue running to its end, lyrics, Radio and `/admin/`. On the console, open **Overview** (the tiles answer from the database) and **Database** (schema version 3, every table listed, the latest job run not overdue). Use a new browser profile and a returning one, a phone width and a desktop width, light and dark themes.
+4. On production, check `/api/status`, Home, Search, album and playlist playback, a queue running to its end, lyrics, Radio and `/admin/`. On the console, open **Overview** (the tiles answer from the database) and **Database** (schema version 7, every table listed, the latest job run not overdue). Use a new browser profile and a returning one, a phone width and a desktop width, light and dark themes.
 5. Confirm the app shows the new version (Settings, the About page, or `/changelog.json`). Confirm a route the backend change added answers as expected; `/api/version` reports the Android release, not the Worker build.
 6. For Android, run [docs/qa-device-script.md](docs/qa-device-script.md) on a device before pushing a `v*` tag.
 

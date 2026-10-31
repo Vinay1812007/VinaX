@@ -16,6 +16,9 @@ export interface CatalogueApi {
   similar(id: string, limit: number, signal?: AbortSignal): Promise<Song[]>;
   artistTop(id: string): Promise<Song[]>;
   search?(query: string, limit: number, signal?: AbortSignal): Promise<Song[]>;
+  /** V2 1.4 — the personal engine's list around a seed; `personalOn` says whether to ask at all. */
+  personal?(seedId: string, limit: number, signal?: AbortSignal): Promise<Song[]>;
+  personalOn?(): boolean;
 }
 
 export interface Fetched {
@@ -93,6 +96,12 @@ export function planLookups(i: SourcePlanInput): Lookup[] {
     const q = i.tuneQuery;
     const search = api.search;
     out.push({ label: q, source: 'tune', run: () => search(q, 25, signal) });
+  }
+  // The personal engine, around the newest anchor: one lookup, first in the list so it is never the one the deadline cuts.
+  const seed = anchorSongs[0];
+  if (seed && api.personal && api.personalOn?.()) {
+    const personal = api.personal;
+    out.unshift({ label: 'Personal engine', source: 'personal', run: () => personal(seed.id, 20, signal) });
   }
   return out;
 }

@@ -11,7 +11,8 @@ This is the index of the current documentation. Everything listed here describes
 | [app-styles.md](app-styles.md) | The six 15.0 app styles as a design contract: what each is modelled on, its face, colours, shapes, Home, tab bar, mini player and Now Playing, and the legacy id map |
 | [design-system.md](design-system.md) | The token contract, the six app styles and their selector contract, themes, accents, festival skins, materials, the control scale and hit-area rule, overlays, focus, motion — and how to add an app style |
 | [ai.md](ai.md) | VinaX AI, the chat at `/vinaxai`: providers and secrets, the model registry and Auto, failover and cooldowns, the stream protocol, web search, files, artifacts and the sandbox, voice, storage, the owner's switches, the console's providers card, the probe script |
-| [recommendations.md](recommendations.md) | How the next song is chosen: the pipeline and its weights, the listening signals and taste profile, session intent, discovery modes, the queue rules, candidate sources, the exposure ledger, Home shelves, the catalogue recommendation routes, the `?debug=recs` breakdown |
+| [personalisation.md](personalisation.md) | The personal engine for signed-in listeners: the taste model and how events move it, the six candidate sources, the ranking and its exposure rules, the deterministic shelves, the AI composer and its limits, the playlist builder, radio, the device side (reporter, Home block, setting), jobs, the console tab, tests |
+| [recommendations.md](recommendations.md) | How the next song is chosen on the device: the pipeline and its weights, the listening signals and taste profile, session intent, discovery modes, the queue rules, candidate sources, the exposure ledger, Home shelves, the catalogue recommendation routes, the `?debug=recs` breakdown |
 | [trends.md](trends.md) | Charts: `GET /api/trends` answers empty (the trend pipeline has no store in the 14.0 schema), how the app labels its lists, and what the pipeline used to be |
 | [evaluation.md](evaluation.md) | The offline evaluation of next-song selection: fixtures, mocks, metrics, and how to read an A/B result |
 | [data-and-privacy.md](data-and-privacy.md) | What is stored where, the backup format, restore / merge / undo rules, what leaves the device and when |
@@ -35,6 +36,7 @@ This is the index of the current documentation. Everything listed here describes
 | --- | --- |
 | [user-guide/README.md](user-guide/README.md) | The guide's index |
 | [user-guide/getting-started.md](user-guide/getting-started.md) | First run and the welcome, the four destinations, playing a first song |
+| [user-guide/personal-engine.md](user-guide/personal-engine.md) | The personal engine: what Home shows signed in, Make me a playlist, Familiar / Balanced / Discover, the switch and erasing the taste model |
 | [user-guide/app-styles.md](user-guide/app-styles.md) | The six app styles, themes and accents, and how to switch |
 | [user-guide/friends-and-sharing.md](user-guide/friends-and-sharing.md) | Everything 15.0 added for listening with others and daily discovery |
 | [user-guide/festival-themes.md](user-guide/festival-themes.md) | What happens on a festival, the greeting card, previewing a skin |

@@ -5,7 +5,8 @@ This document says what VinaX keeps on a listener's device, what leaves the devi
 ## The short version
 
 - **Device first, account second.** Library, history, settings and the taste profile live on the device. A signed-in listener's library, history, taste and settings also sync to their account as one copy. Clearing site or app data removes the device copy; the app offers an export.
-- **Features that need the network send what they need.** Browsing sends search words and ids to the catalogue source. Nothing about listening goes to an AI service; only what a signed-in listener types into VinaX AI does. Listen Together, usernames, feedback, notifications and device transfer each send the fields listed below.
+- **The personal engine, on while signed in, off with one switch.** Since V2 1.4 a signed-in listener's plays, completes, skips, likes and saves are also reported to a taste model kept with the account on the server, which builds Home, playlists and radio ([personalisation.md](personalisation.md)). Settings → Region & privacy has the switch and **Erase my taste model**; Kid mode never reports. The section [The personal engine](#the-personal-engine) lists every field.
+- **Features that need the network send what they need.** Browsing sends search words and ids to the catalogue source. Signed out, or with the personal engine off, nothing about listening goes to an AI service; only what a signed-in listener types into VinaX AI does. Listen Together, usernames, feedback, notifications and device transfer each send the fields listed below.
 - **Usage statistics are on by default, off with one switch.** Since 14.0.3 the box on the welcome sheet is ticked and says so; Settings → Region & privacy has the switch. While it is off, no usage events are sent. Devices that onboarded earlier, with the old unticked box, were switched to the default once and told, with the switch one tap away. **Session insights (third-party, masked replays) are opt-in**, their own switch in Settings, off by default.
 - **The web app shows advertising on some browsing pages.** Those pages load a third-party advertising script, and that is not controlled by the usage-sharing choice. See [Advertising](#advertising).
 - **The server keeps what its features need, in one database, and nothing more.** The tables are listed under [Server-side records](#server-side-records): no IP addresses, no precise location. Usage events are kept for a bounded time and then purged. Rate limiting keys on a hashed network address, not the address itself.
@@ -16,7 +17,7 @@ VinaX needs a Google account: until a listener signs in, every page is the sign-
 
 **What syncs.** The account also holds one copy of the listener's data in `account_backups`, in the same format as the backup file: settings, library and playlists, smart collections, listening history, taste profile, bookmarks and the Home layout. It is merged into each device the listener signs in on and updated a few seconds after a change; a version number makes two devices merge instead of overwrite each other. **Searches and this device's identity never sync.** The copy is at most 2 MB.
 
-**Session and deletion.** The session is kept on the device and sent only to `/api/auth/*` and `/api/account/*`. **Sign out** forgets it on the device (the data stays on the device and in the account). **Delete account** (Settings → Profile, also reached from the top-bar avatar menu) removes the account row and, with it, the synced copy from the server. On the website the sign-in button and its script load from Google; in the Android app the system's Google account sheet is used.
+**Session and deletion.** The session is kept on the device and sent only to the Worker's account routes: `/api/auth/*`, `/api/account/*`, `/api/personal/*`, `/api/ai/*`, `/api/profile`, `/api/follow` and `/api/shared-playlist`. **Sign out** forgets it on the device (the data stays on the device and in the account). **Delete account** (Settings → Profile, also reached from the top-bar avatar menu) removes the account row and, with it, the synced copy from the server. On the website the sign-in button and its script load from Google; in the Android app the system's Google account sheet is used.
 
 ## What is stored on the device
 
@@ -59,9 +60,23 @@ The app style is a display preference only. No request builder and no usage even
 
 The install id is a random value created on the device the first time something needs it: claiming a username, joining or hosting a room, or sending a usage event.
 
+### The personal engine
+
+Only while signed in, with the setting on, and not in Kid mode (`services/personal/api.ts` `personalEnabled`). Switching the engine off stops the reporter at once and clears its queue; the on-device engine takes over.
+
+| When | Goes to | What is sent |
+| --- | --- | --- |
+| A play is counted, a song is completed or skipped, liked or un-liked, marked not interested, saved to a playlist, queued, or played from search (`services/personal/reporter.ts`, from `services/personalization/tasteEvents.ts`) | The Worker, `POST /api/personal/events`, in batches every 15 s, at 25 events, when the page hides and when the connection returns | Per event: a device-minted event id, the kind, the time, the song id, seconds heard and the song's length, which surface it came from (a Home shelf's key and the position on it, radio, search, the playlist maker), and the local hour, weekday and time-zone name. Per song in the batch, once: id, title, artists (with catalogue ids), album, language, year, length, artwork link and the facets the device inferred (mood, genre, vibe, energy, tempo). The batch also carries the Familiar / Balanced / Discover setting. The account's plays also count, anonymously, in two community figures every listener's Home draws on (how many listeners played a song this week; which songs are played together). |
+| Home opens, or Refresh Home (`features/home/personal/usePersonalHome.ts`) | The Worker, `GET /api/personal/home` | The local hour and weekday, the discovery mode, the active festival's id |
+| Make me a playlist (`features/home/personal/PlaylistMaker.tsx`) | The Worker, `POST /api/personal/playlist` | The request text (3–500 characters), the number of songs wanted, the local hour |
+| Up Next refills while the engine is on (`services/nextup/engine.ts`) | The Worker, `GET /api/personal/recommend` | The newest anchor song's id, the discovery mode, the local hour |
+| Erase my taste model | The Worker, `DELETE /api/personal/taste` | Nothing but the session |
+
+On the server, an event batch is folded into the account's taste model (`personal_taste`: artists, languages, moods, decades and hours as decaying scores, the songs with their scores, a short summary, and a 1024-dimension vector), the songs join the shared song pool (`personal_songs`, no account attached), and what the account was shown or played is kept in `personal_exposure`. Two steps use an AI model: each song's catalogue words (title, artists, album, language, year, facets) are embedded once, which says nothing about any listener; and the Home page and a requested playlist are arranged by one of the models VinaX AI uses, which is given the taste summary's few lines, the hour, the day, the first name and the candidate songs — never the event history. The providers are the ones [ai.md](ai.md) lists. Events are kept for a year; a composed Home page for 30 minutes, a playlist for 30 days. Deleting the account removes all of it; **Erase my taste model** removes all of it and keeps the account.
+
 ### AI
 
-Nothing about listening is sent to an AI service. What plays next, Radio, Home's shelves and the taste profile are worked out on the device ([recommendations.md](recommendations.md)). Voice search and Drive mode's voice commands use the browser's or the phone's own speech recognition, and the commands are read by simple rules on the device; VinaX never receives or stores audio, only the words that end up in a search.
+Signed out, or with the personal engine off, nothing about listening is sent to an AI service: what plays next, Radio, Home's shelves and the taste profile are worked out on the device ([recommendations.md](recommendations.md)). With the engine on, the section above says exactly what reaches a model. Voice search and Drive mode's voice commands use the browser's or the phone's own speech recognition, and the commands are read by simple rules on the device; VinaX never receives or stores audio, only the words that end up in a search.
 
 VinaX AI ([ai.md](ai.md)), the chat at `/vinaxai`, is the one place AI is used, and only when a signed-in listener uses it:
 - What they type goes from the Worker to one of the AI providers to generate the reply. The privacy page names them.
@@ -122,6 +137,11 @@ Everything the server keeps about listeners is in one database ([database.md](da
 | `listeners` | One row per device that shared usage or claimed a handle: a server-derived device id (never the install id), display name, handle, platform, app version, edge country/region/city, what is playing now, first and last seen | The owner deletes the person from the console |
 | `accounts` | Signed-in listeners: Google id, email, name, picture, the linked device, coarse sign-in facts, times | **Delete account** in the app, or the owner's delete |
 | `account_backups` | The synced copy (the backup-file JSON), its version and size | With the account |
+| `personal_taste` | The account's taste model: scores for artists, languages, moods, decades, hours and songs, a summary, the mode, the vector | With the account, or **Erase my taste model** |
+| `personal_events` | The listener's reported events (kind, time, song id, seconds heard, source, local hour and weekday, time zone) | Purged after a year by housekeeping (`personal_purge`), with the account, or on erase |
+| `personal_exposure` | Per account and song: how often shown, queued, played, completed, skipped; liked, disliked; when | With the account, or on erase |
+| `personal_pages` | The composed Home pages and the playlists the account asked for (the request text, the songs, which model shaped it) | Pages a day past their expiry by housekeeping, with the account, or on erase |
+| `personal_songs`, `personal_colisten` | The shared song pool (catalogue facts, facets, community play counts, the embedding; a device's facts never overwrite a row the catalogue confirmed) and which songs listeners play together; no account attached | Nothing about a person; the trending figure counts listeners, not plays; co-listening is rebuilt once a day from the last 30 days of plays |
 | `events` | Usage events as listed above; written only with usage sharing on | Purged after `retention.eventsDays` (default 180) by the hourly housekeeping job, on the owner's purge, or with the person |
 | `feedback` | Message, type, name, device id, platform, version, country, city, status, the owner's note | The owner resolves and deletes it; a deleted person's feedback stays but is detached from them |
 | `push_devices` | Endpoint and keys or token, platform, language, time-zone offset, edge country/region/city, active flag, last pushed | Marked inactive on unsubscribe or after 180 days without a check-in; not deleted by those paths |
@@ -131,7 +151,7 @@ Everything the server keeps about listeners is in one database ([database.md](da
 | Device-transfer relay (`HANDOFF`, outside the database) | Ciphertext | After ten minutes, or on first read |
 | Rate limiting (isolate memory and bindings) | Counters keyed by route and a hash of the network address, hashed with a server-side pepper (`_lib/ratelimit.ts`) | Short-lived counters; the raw address is not part of the key |
 
-Two deletion paths exist. **The listener** deletes their account from Settings → Profile, which removes `accounts` and `account_backups` for them. **The owner** deletes a person from the console's Listeners page, which removes their device row, every usage event, room memberships, the account and its backup, and detaches their feedback; the reason is kept in the audit trail. The owner's **Database → Maintenance** tab can also purge usage events older than a chosen number of days for everyone.
+Three deletion paths exist. **The listener** erases their taste model from Settings → Region & privacy, which removes every `personal_*` row of theirs, or deletes their account from Settings → Profile, which removes `accounts`, `account_backups` and every `personal_*` row for them. **The owner** deletes a person from the console's Listeners page, which removes their device row, every usage event, room memberships, the account and its backup, and detaches their feedback; the reason is kept in the audit trail. The owner's **Database → Maintenance** tab can also purge usage events older than a chosen number of days for everyone.
 
 ## The backup file
 
@@ -206,4 +226,4 @@ The frontend holds no secrets. `VITE_*` variables are visible to every visitor a
 
 ## Changing what is collected
 
-`services/analytics/telemetry.ts`, `services/analytics/recTelemetry.ts` and `services/analytics/sessionInsights.ts` gate on the same choice. Any change to what they send, or to where advertising appears, must be reflected in `frontend/src/pages/PrivacyPage.tsx` and in this document in the same change.
+`services/analytics/telemetry.ts`, `services/analytics/recTelemetry.ts` and `services/analytics/sessionInsights.ts` gate on the same choice; `services/personal/reporter.ts` gates on the personal engine's switch. Any change to what they send, or to where advertising appears, must be reflected in `frontend/src/pages/PrivacyPage.tsx` and in this document in the same change.

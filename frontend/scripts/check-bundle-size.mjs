@@ -109,7 +109,13 @@ const DIST = 'dist';
 // /podcast routes with their nav and signed-out entries (+0.4 KB in index)
 // and the radio-station feed in playerStore's top-up (+0.2 KB). The pages,
 // the catalogue client and the station controller stay lazy.
-const FIRST_LOAD_BUDGET = 190 * 1024; // gzipped
+// 2026-10-31: re-based 190 -> 192 for 1.4 (measured 190.1 KB, main was
+// 189.8). What moved is first-load by nature: the taste-event emitter the
+// updater calls on every play (+0.2 KB in core, it sits on the player's boot
+// path) and the personal-engine setting. The personal Home block, its client,
+// the reporter and the playlist maker all stay lazy (verified in the chunk
+// list above).
+const FIRST_LOAD_BUDGET = 192 * 1024; // gzipped
 const CHUNK_BUDGET = 80 * 1024; // gzipped — chunks that ship in the first load
 const LAZY_CHUNK_BUDGET = 160 * 1024; // gzipped — on-demand chunks (routes, features)
 

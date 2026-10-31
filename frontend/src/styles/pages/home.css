@@ -963,3 +963,67 @@ html.light .vx-home .vxh-free-facts li::before {
 .vx-home .vxh-friend-sub { display: block; overflow: hidden; color: rgb(var(--ink-400)); font-size: 12.5px; white-space: nowrap; text-overflow: ellipsis; }
 .vx-home .vxh-friend-play { display: grid; place-items: center; width: 34px; height: 34px; border-radius: var(--tpl-r-play-sm, 12px); background: rgb(var(--ember-500)); color: var(--vx-on-accent); flex-shrink: 0; }
 .vx-home .vxh-friend-play svg { width: 16px; height: 16px; margin-left: 2px; }
+
+/* ------------------------------------------------------ personal engine */
+/* V2 1.4 — the composed shelves (features/home/personal). Shelves and cards
+   are the shared ones; only the greeting, the note and the playlist maker
+   are styled here, from tokens. */
+.vx-home .vxh-personal { margin-bottom: var(--vxh-section); }
+.vx-home .vxh-personal-greeting {
+  margin: 0 0 18px;
+  font-family: var(--vx-font-display);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: rgb(var(--ink-100));
+}
+.vx-home .vxh-personal-note { margin: -4px 0 18px; font-size: 12.5px; color: rgb(var(--ink-400)); }
+.vx-home .vxh-personal-note a { color: rgb(var(--ink-300)); }
+
+.vx-maker-form { display: grid; gap: 10px; }
+.vx-maker-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 56px;
+  padding: 12px 14px;
+  border-radius: var(--vx-radius-control, 14px);
+  background: rgb(var(--ink-850));
+  color: rgb(var(--ink-100));
+  box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.14);
+  font: inherit;
+  line-height: 1.4;
+}
+.vx-maker-input:focus-visible { outline: 2px solid rgb(var(--ember-500)); outline-offset: 1px; }
+.vx-maker-actions, .vx-maker-head-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.vx-maker-build, .vx-maker-quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--vx-control-h, 42px);
+  padding: 0 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.vx-maker-build { background: rgb(var(--ember-500)); color: var(--vx-on-accent); }
+.vx-maker-build:disabled { opacity: 0.6; }
+.vx-maker-quiet { box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.22); color: rgb(var(--ink-200)); }
+.vx-maker-quiet:hover, .vx-maker-chip:hover { background: var(--vx-hover); }
+.vx-maker-ideas { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.vx-maker-chip {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: rgb(var(--ink-200));
+  box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.16);
+  text-align: left;
+}
+.vx-maker-error { margin-top: 12px; color: rgb(var(--ember-400)); font-size: 14px; }
+.vx-maker-result { margin-top: 18px; }
+.vx-maker-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.vx-maker-title { font-family: var(--vx-font-display); font-size: 20px; font-weight: 800; letter-spacing: -0.02em; color: rgb(var(--ink-100)); }
+.vx-maker-desc { margin-top: 2px; color: rgb(var(--ink-300)); font-size: 14px; }
+.vx-maker-meta { margin-top: 4px; color: rgb(var(--ink-400)); font-size: 12.5px; }
+.vx-maker-list { list-style: none; margin: 0; padding: 0; }
+.vx-maker-reason { margin: -6px 0 8px 56px; font-size: 12px; color: rgb(var(--ink-400)); }

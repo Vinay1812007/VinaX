@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { FriendsListening } from '@/features/social/FriendsListening';
 import { FestivalBannerSlot } from '@/features/home/FestivalBannerSlot';
 import { Link, useNavigate } from 'react-router-dom';
@@ -61,6 +61,8 @@ import { refreshHome, useHomeVisit } from '@/features/home/homeRefresh';
 import { useShelfSafety } from '@/features/home/useShelfSafety';
 import { DeferredBlock, HomeSignalsProvider } from '@/features/home/blocks/shared';
 import { PersonalBlock } from '@/features/home/blocks/PersonalBlock';
+// V2 1.4 — the personal engine's block loads beside Home, not in the first-load bundle (it renders nothing signed out).
+const PersonalHome = lazy(() => import('@/features/home/personal/PersonalHome').then((m) => ({ default: m.PersonalHome })));
 import { DiscoveryBlock } from '@/features/home/blocks/DiscoveryBlocks';
 import { AlbumsBlock, ArtistsBlock, ChartsBlock, DayPicksBlock, FeedBlock, GenresBlock, LovedBlock, MoodsBlock, QuickBlock, readTaste, SeasonalBlock } from '@/features/home/blocks/CatalogueBlocks';
 
@@ -408,6 +410,8 @@ export default function HomePage() {
           <FriendsListening />
           <ListeningGuide />
           <FlowEntryCard />
+          {/* V2 1.4 — the personal engine's page first (nothing when signed out, switched off or the model is new). */}
+          <Suspense fallback={null}><PersonalHome generation={generation} /></Suspense>
 
           {primary.map(renderBlock)}
 
