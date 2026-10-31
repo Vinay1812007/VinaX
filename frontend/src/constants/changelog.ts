@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.3.11': {
+    title: 'A guide to VinaX AI, and clearer notes for the last two updates',
+    changes: [
+      { type: 'improved', text: 'VinaX AI: the console\'s providers card (server).' },
+      { type: 'improved', text: 'Console: VinaX AI on Health, and a form for its setting on Publish.' },
+      { type: 'new', text: 'Rewrite the 1.3.8 and 1.3.10 What\'s New lines for listeners.' },
+      { type: 'improved', text: 'VinaX AI docs: the listener\'s guide, the console card, and stale AI lines.' },
+    ],
+  },
   '1.3.10': {
     title: 'VinaX AI can take dictation, read replies aloud and talk with you live',
     changes: [
