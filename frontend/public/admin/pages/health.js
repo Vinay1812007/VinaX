@@ -2,7 +2,8 @@
  * Is everything working? App errors, the public endpoints and
  * shell assets (/api/admin/edge), the music catalogue sources
  * (/api/admin/musicapi, on a button press), VinaX AI's providers
- * (/api/admin/ai; probes on a button press), releases and CI (/api/admin/releases) and
+ * (/api/admin/ai; probes on a button press), the personal engine
+ * (/api/admin/personal; jobs on a button press), releases and CI (/api/admin/releases) and
  * the server secrets checklist (/api/admin/envcheck). (13.9.1 — app errors,
  * scheduled-job footprints, data quality and the status note went with the
  * database.) */
@@ -18,6 +19,7 @@
       { id: 'edge', label: 'Endpoints', desc: 'The live web app shell, its scripts and styles, and every public endpoint, checked from the server.', render: renderEdge },
       { id: 'sources', label: 'Catalogue sources', desc: 'Where song search and playback data come from: each source checked with a one-song search.', render: renderSources },
       { id: 'ai', label: 'VinaX AI', desc: 'VinaX AI’s providers: which keys are set, what is resting and why, and a probe of each model.', render: renderAi },
+      { id: 'personal', label: 'Personal engine', desc: 'The account-side recommendation engine: accounts with a taste model, events, the song pool and its embedding backlog, the pages it composed, and the jobs you can run now.', render: renderPersonal },
       { id: 'releases', label: 'Releases', desc: 'The newest Android release, recent build runs and commits on main.', render: renderReleases },
       { id: 'env', label: 'Server secrets', desc: 'Which secrets and settings the Worker has. Names only — values are never shown.', render: renderEnv }
     ]
@@ -80,6 +82,64 @@
       body: sources
     }));
     return Promise.resolve();
+  }
+
+  /* ---------------------------------------------------- Personal engine */
+
+  // V2 1.4 — /api/admin/personal: the engine's health in one answer, and two
+  // jobs on a button press (embed the backlog, rebuild co-listening).
+  function renderPersonal(host) {
+    var body = h('div.page-body');
+    var busy = h('span.muted');
+    function run(action, label) {
+      busy.textContent = label + '…';
+      return VX.api.post('/api/admin/personal', { action: action }, { timeout: 90000 }).then(function (res) {
+        busy.textContent = '';
+        if (!res.ok) { VX.toast(res.message || 'Failed', 'bad'); return; }
+        var d = VX.obj(res.data);
+        VX.toast(action === 'embed' ? 'Embedded ' + fmt.num(d.embedded) + ' songs · backlog ' + fmt.num(d.backlog) : 'Co-listening rebuilt · ' + fmt.plural(d.pairs, 'pair'), 'ok');
+        return load();
+      });
+    }
+    host.appendChild(h('div.toolbar',
+      ui.button('Refresh', { icon: 'refresh', onClick: function () { return load(); } }),
+      ui.button('Embed backlog now', { small: true, onClick: function () { return run('embed', 'Embedding'); } }),
+      ui.button('Rebuild co-listening', { small: true, onClick: function () { return run('colisten', 'Rebuilding'); } }),
+      busy));
+    host.appendChild(body);
+    function load() {
+      return ui.load(body, function () { return VX.api.get('/api/admin/personal', null, { fresh: true }); }, function (d) {
+        var st = VX.obj(d.stats), cfg = VX.obj(d.config), embed = VX.obj(d.embed), composer = VX.obj(d.composer);
+        var num = function (v) { return v == null ? '—' : fmt.num(v); };
+        var models = VX.obj(st.models);
+        var model = embed.model || 'the configured model';
+        var state = cfg.enabled === false ? ui.notice('The personal engine is switched off (personal-config.enabled).', 'warn')
+          : !embed.configured ? ui.notice('The engine is on, but nothing can embed: ' + model + ' has no provider on this Worker. Pages still build from co-listening, the catalogue and affinities.', 'warn')
+          : ui.notice('The personal engine is on. Embedding with ' + model + '.' + (composer.enabled ? ' The composer runs on ' + fmt.plural(arr(composer.candidates).length, 'model') + '.' : ' The composer is off: pages are deterministic.'), 'ok');
+        return [
+          state,
+          ui.kpis([
+            { label: 'Accounts with a model', value: num(st.accounts), sub: num(st.accountsWithVector) + ' with a vector' },
+            { label: 'Events today', value: num(st.eventsDay), sub: num(st.eventsWeek) + ' this week' },
+            { label: 'Songs known', value: num(st.songs), sub: num(st.songsEmbedded) + ' embedded' },
+            { label: 'Embedding backlog', value: num(st.backlog), tone: Number(st.backlog) > 1000 ? 'warn' : undefined },
+            { label: 'Pages today', value: num(st.pagesDay), sub: num(st.pagesComposedDay) + ' composed by the model · ' + num(st.playlistsDay) + ' playlists' },
+            { label: 'Co-listening pairs', value: fmt.compact(st.colistenPairs || 0), sub: st.colistenUpdatedAt ? 'rebuilt ' + fmt.ago(st.colistenUpdatedAt) : 'never rebuilt' }
+          ]),
+          ui.card({
+            title: 'Embedding spaces', sub: 'Rows per embedding model; a page only compares vectors of the configured one',
+            body: ui.table({ rows: Object.keys(models).map(function (k) { return { model: k, rows: models[k] }; }), search: false, exportName: false, dense: true, empty: 'Nothing embedded yet',
+              columns: [{ key: 'model', label: 'Model' }, { key: 'rows', label: 'Songs', align: 'right', render: function (r) { return fmt.num(r.rows); } }] })
+          }),
+          ui.card({
+            title: 'Weights', sub: 'personal-config.weights, after clamping (0.5–2× the defaults)',
+            body: ui.table({ rows: Object.keys(VX.obj(cfg.weights)).map(function (k) { return { key: k, value: cfg.weights[k] }; }), search: false, exportName: false, dense: true,
+              columns: [{ key: 'key', label: 'Term' }, { key: 'value', label: 'Weight', align: 'right', render: function (r) { return r.value == null ? '—' : String(r.value); } }] })
+          })
+        ];
+      });
+    }
+    return load();
   }
 
   /* ----------------------------------------------------------- VinaX AI */

@@ -1,12 +1,13 @@
 # VinaX listener guide
 
-This folder is the guide for people who listen with VinaX. It covers setting up, playing music, steering what plays next, searching, changing the look, festival themes, keeping your library safe, listening with friends, the VinaX AI assistant, keyboard shortcuts and the Android app. VinaX is free, with no subscription and no sign-up, and nothing here needs a developer to make sense of it; the engineering documents are one level up in the [docs index](../README.md).
+This folder is the guide for people who listen with VinaX. It covers setting up, playing music, steering what plays next, the personal engine that composes Home for signed-in listeners, searching, changing the look, festival themes, keeping your library safe, listening with friends, the VinaX AI assistant, keyboard shortcuts and the Android app. VinaX is free, with no subscription and no sign-up, and nothing here needs a developer to make sense of it; the engineering documents are one level up in the [docs index](../README.md).
 
 | Guide | What it answers |
 |---|---|
 | [Getting started](getting-started.md) | The welcome, the four destinations, playing a first song, where to change the look, keeping your music safe |
 | [The player and the queue](player-and-queue.md) | Playing, the full-screen player, what plays next, the queue and its tools |
 | [Discovery modes](discovery-modes.md) | Familiar, Balanced and Discover, and the other recommendation settings |
+| [The personal engine](personal-engine.md) | Why Home looks different signed in, the shelves it composes, Make me a playlist, what it learns from, the switch and erasing the taste model |
 | [Search](search.md) | Suggestions as you type, results, searching by lyrics |
 | [App styles](app-styles.md) | The six looks, how to switch, and how they work with the theme, the accent colour and festivals |
 | [Festival themes](festival-themes.md) | What happens on a festival day, previewing a festival, switching festival themes off, the list of festivals |

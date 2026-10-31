@@ -135,6 +135,8 @@ export async function buildHome(env: PersonalEnv, accountId: string, o: HomeOpti
   };
   background(o.waitUntil, (async () => {
     await savePage(env, accountId, 'home', page, { id: crypto.randomUUID(), tasteVersion: taste.version, modelId: composed.model, composed: composed.composed, builtMs, expiresAt: page.expiresAt });
+    // Everything on the page counts as shown once, so the next page and the other devices know.
+    await db.rpc(env, 'personal_mark_shown', { p_account: accountId, p_songs: [...new Set(page.shelves.flatMap((s) => s.songs.map((x) => x.id)))] });
     await embedSongs(env, config.embedModel, pool.fresh);
   })());
   console.log(JSON.stringify({ route: 'personal-home', composed: composed.composed, model: composed.model, shelves: page.shelves.length, pool: pool.candidates.size, ms: builtMs }));

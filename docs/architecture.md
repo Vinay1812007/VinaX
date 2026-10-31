@@ -232,7 +232,7 @@ A matched module with no handler for the request method answers `405`.
 
 ### Scheduled jobs
 
-`index.ts` exports a `scheduled` handler next to `fetch`. The Cron Trigger in `wrangler.toml` fires it every 30 minutes; `_lib/jobs.ts` runs the status tick every time and housekeeping once an hour, and records each run in `job_runs`. [operations.md](operations.md#scheduled-jobs) covers running a job by hand and reading the Jobs tab.
+`index.ts` exports a `scheduled` handler next to `fetch`. The Cron Trigger in `wrangler.toml` fires it every 30 minutes; `_lib/jobs.ts` runs the status tick and the personal engine's embed step every time and housekeeping once an hour, and records each run in `job_runs`. [operations.md](operations.md#scheduled-jobs) covers running a job by hand and reading the Jobs tab.
 
 ## Owner console
 

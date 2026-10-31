@@ -189,6 +189,9 @@ describe('GET /api/personal/home', () => {
     const saved = fake.rows('personal_pages');
     expect(saved).toHaveLength(1);
     expect(saved[0]).toMatchObject({ account_id: SUB, kind: 'home', composed: false, taste_version: 4 });
+    const shown = fake.calls.find((c) => c.table === 'rpc/personal_mark_shown')!.body as { p_account: string; p_songs: string[] };
+    expect(shown.p_account).toBe(SUB);
+    expect(new Set(shown.p_songs)).toEqual(new Set(all));
 
     const callsBefore = fake.calls.length;
     const again = await home.onRequestGet({ request: await req('/api/personal/home?hour=22'), env: ENV, waitUntil });

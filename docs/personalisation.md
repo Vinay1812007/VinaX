@@ -87,7 +87,7 @@ The weights live in the `personal-config` setting with these defaults in `_lib/p
 1. **Deterministic shelves.** `_lib/personal/shelves.ts` builds up to twelve candidate shelves from the ranked pool, each with a key, a working title, the reason it exists and 20 song ids: `made-for-you`, `because:<songId>` (two, from the strongest recent seeds), `artist:<artistId>` (the top artist with unheard songs), `language:<lang>` (the top two languages), `discover`, `rediscover`, `hour` (songs matching this hour's habit), `community` (co-listening picks), `trending`, and `new-this-week` (a weekly-salted subset of discovery that has never been shown). A shelf with fewer than six songs is dropped.
 2. **The composer.** The page, the taste summary, the time of day, the day of the week, the active festival if any, and the listener's first name are given to a language model through `_lib/ai/complete.ts`, which runs the existing provider ladder without streaming and returns parsed JSON. The composer may **order** the shelves, **rename** each in the listener's voice with a one-line reason, **merge** two shelves into one themed shelf, and **add** one themed shelf drawn from the pool for the moment ("Rainy evening melodies"), but it may only use song ids that were in the pool: any other id is dropped and a shelf that loses too many songs falls back to its deterministic form. It answers in at most 8 seconds; when it does not, or the JSON cannot be repaired, the deterministic page is served and the failure is logged.
 
-The page is saved in `personal_pages` (`kind = 'home'`) and served from there for 30 minutes, or sooner when the taste row's version moved by more than one batch, or when the device asks for `?fresh=1` (the "Refresh" action, limited to one a minute). The answer is `{generatedAt, expiresAt, greeting, shelves: [{key, title, reason, songs: [Song…]}], model}`, with full song records so the device renders without a catalogue round trip; playback resolves the audio from the catalogue when the song starts, as any shelf does today.
+The page is saved in `personal_pages` (`kind = 'home'`), every song on it is marked shown in `personal_exposure` (`personal_mark_shown`), and it is served from the saved copy for 30 minutes, or sooner when the taste row's version moved by more than two folds, or when the device asks for `?fresh=1` (the "Refresh Home" action, limited by the per-account rate tier). The answer is `{generatedAt, expiresAt, greeting, shelves: [{key, title, reason, songs: [Song…]}], model}`, with full song records so the device renders without a catalogue round trip; playback resolves the audio from the catalogue when the song starts, as any shelf does today.
 
 ## Building a playlist
 
@@ -110,7 +110,8 @@ The result is saved in `personal_pages` (`kind = 'playlist'`) and returned as `{
 | Client | `services/personal/api.ts` | The calls above, with the session header, a 12 s deadline (25 s for a playlist) and typed answers validated before use. |
 | Reporter | `services/personal/reporter.ts` | Subscribes to the playback event bus, the library store and the shelf renderer, builds events, queues and flushes them. Off unless signed in and the setting is on. |
 | Home | `features/home/personal/*` | `usePersonalHome()` fetches the page; `PersonalShelves` renders it with the existing `Shelf`, `MediaCard` and `SongShelf` so exposure, dedupe and the "why" line work as on any shelf; `PlaylistMaker` is the prompt box and result sheet. `HomePage` shows the personal page as its first block when it is on and loaded, and the on-device blocks after it (and alone otherwise). |
-| Setting | `store/settingsStore.ts` `personalEngine` | On by default. Settings → Region & privacy has the toggle, the "what is sent" line and **Erase my taste model** (`DELETE /api/personal/taste`). |
+| Setting | `store/settingsStore.ts` `personalEngine` | On by default. Settings → Region & privacy has the toggle, the "what is sent" line and **Erase my taste model** (`DELETE /api/personal/taste`). Kid mode pauses the engine (the kid profile stays on the device). |
+| Up Next | `services/nextup/sources.ts` `personal` | One lookup per refill, first in the list, around the newest anchor song; the first six answers are resolved to full songs so the player can preload them. |
 
 Switching the engine off stops the reporter at once and clears the queue; the taste model stays until erased or the account is deleted (`accounts` cascades to every `personal_*` table).
 
@@ -120,17 +121,17 @@ The half-hourly `housekeeping` run gained three steps, logged in `job_runs` like
 
 ## Owner console
 
-`GET /api/admin/personal` reports the engine's health: accounts with a taste model, events in the last day, songs known and the embedding backlog, pages composed and how many fell back, the active embedding model and the composer ladder's last failures. The console's **Personal** page shows it.
+`GET /api/admin/personal` reports the engine's health: accounts with a taste model, events in the last day and week, songs known and the embedding backlog per model, pages and playlists built today and how many the model shaped, the active embedding model and whether this Worker can use it, the composer's candidates and the weights after clamping. `POST /api/admin/personal { action }` runs the embed backlog (`embed`) or the co-listening rebuild (`colisten`) now. The console's **Health → Personal engine** tab shows it, with a button for each job.
 
 ## Tests
 
-- `backend/worker/__tests__/personalTaste.test.ts`: the fold (weights, decay, caps, order independence), the summary.
-- `personalRank.test.ts`: scoring terms, the re-rank's artist rules, exposure cooling.
-- `personalCompose.test.ts`: JSON extraction and repair, id validation, merge and add rules, fallback to the deterministic page, the time budget.
-- `personalRoutes.test.ts`: every route against the fake database — auth, batch caps, idempotent events, the page cache, erase.
-- `aiComplete.test.ts`: the non-streaming completion over the ladder, including failover.
-- Device: `services/personal/reporter.test.ts` (queueing, flush rules, consent) and `features/home/personal/*.test.tsx` (rendering, fallback).
-- `backend/supabase/check.sql` seeds the new tables and calls every new function.
+- `backend/worker/__tests__/personalTaste.test.ts`: the fold (weights, decay, caps, order independence, the hours histogram), the summary.
+- `personalRank.test.ts`: the exposure penalty and cooling windows, the score terms and their reasons, Familiar / Discover, the re-rank's artist, identity and cooling rules.
+- `personalCompose.test.ts`: JSON extraction, the composition's validation and application (order, merge, one themed shelf, unknown ids dropped), the deterministic shelves, the playlist plan and curation validators and hard rules.
+- `personalRoutes.test.ts`: every route against the fake database — the gates, batch caps and cleaning, idempotent events, the model's versions, the page and its cache, recommend, the playlist builder with a stubbed catalogue, erase.
+- `aiComplete.test.ts`: the non-streaming completion over the ladder with failover, the JSON variant's repair turn, and the composer end to end with a stubbed provider.
+- Device: `services/personal/reporter.test.ts` (the gate, queueing, flush, retry, pruning, the switch), `services/personal/api.test.ts` (answers checked, errors, records to songs and back) and `features/home/personal/PersonalHome.test.tsx` (nothing signed out, the shelves and greeting, the fallback).
+- `backend/supabase/check.sql` seeds the new tables and calls every new function; `routerCoverage` and `schemaUsage` cover the routes and the columns as for every other table.
 
 ## What it does not do yet
 

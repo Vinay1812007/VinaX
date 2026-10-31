@@ -894,6 +894,21 @@ language sql stable set search_path = public, pg_temp as $$
   limit greatest(1, least(coalesce(p_limit, 60), 500));
 $$;
 
+-- The page served: every song on it counts as shown once, so the next page
+-- (and the device) know. Returns how many rows moved.
+create or replace function personal_mark_shown(p_account text, p_songs text[]) returns integer
+language plpgsql set search_path = public, pg_temp as $$
+declare n integer;
+begin
+  if p_account is null or p_songs is null then return 0; end if;
+  insert into personal_exposure as x (account_id, song_id, shown, last_shown, updated_at)
+    select p_account, s, 1, now(), now() from unnest(p_songs) s
+    on conflict (account_id, song_id) do update set shown = x.shown + 1, last_shown = now(), updated_at = now();
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
 -- Write vectors for many songs in one call: p_rows is {"<song id>": "[…]"}.
 -- Returns how many rows took one.
 create or replace function personal_set_embeddings(p_model text, p_rows jsonb) returns integer
@@ -1522,7 +1537,7 @@ begin
                         'purge_events', 'retire_push_devices', 'uptime_tick', 'uptime_report', 'table_stats', 'table_counts',
                         'ai_conversation_search', 'ai_export', 'ai_take_daily',
                         'personal_record_events', 'personal_recompute_vector', 'personal_neighbours', 'personal_similar_songs',
-                        'personal_colisten_for', 'personal_refresh_colisten', 'personal_trending', 'personal_embed_backlog', 'personal_set_embeddings',
+                        'personal_colisten_for', 'personal_refresh_colisten', 'personal_trending', 'personal_embed_backlog', 'personal_set_embeddings', 'personal_mark_shown',
                         'personal_erase', 'personal_purge', 'personal_stats')
   loop
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);

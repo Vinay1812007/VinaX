@@ -5,7 +5,7 @@
  * wrote one, and the way into the playlist maker. Renders nothing at all
  * when there is no personal page, so the on-device Home shows unchanged.
  */
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Shelf } from '@/components/Shelf';
 import { MediaCard } from '@/components/MediaCard';
 import { ShelfSkeleton } from '@/components/Skeletons';
@@ -26,10 +26,15 @@ function PersonalShelf({ shelf }: { shelf: PersonalShelfView }) {
   const playQueue = usePlayerStore((s) => s.playQueue);
   const lens = useShelfLens();
   const songs = lens(shelf.items, 'personal');
+  // As every shelf does: what went on screen is recorded in the exposure ledger, once per list.
+  const fingerprint = songs.map((s) => s.id).join(',');
+  useEffect(() => {
+    if (songs.length) recordExposure(songs, 'shown');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one write per distinct list of songs
+  }, [fingerprint]);
   if (songs.length < 4) return null;
   const play = (song: Song, i: number) => {
     markPersonalSource(song.id, `home:${shelf.key.split(':')[0]}`, shelf.key, i);
-    recordExposure(songs, 'shown');
     playQueue(songs, i);
   };
   return (

@@ -300,12 +300,15 @@ begin
   select count(*) into n from personal_embed_backlog(10);
   assert n = 1, 'personal_embed_backlog: one left';
 
+  assert personal_mark_shown('check_a1', array['check_s0', 'check_s6']) = 2, 'personal_mark_shown: two rows';
+  assert (select shown from personal_exposure where account_id = 'check_a1' and song_id = 'check_s0') = 1, 'personal_mark_shown: counted on a known row';
+  assert (select shown from personal_exposure where account_id = 'check_a1' and song_id = 'check_s6') = 1, 'personal_mark_shown: made a row';
   v := personal_stats();
   assert (v ->> 'accounts')::int = 1 and (v ->> 'songs')::int = 7 and (v ->> 'backlog')::int = 1 and (v ->> 'eventsDay')::int = 8, 'personal_stats';
   v := personal_purge(365);
   assert (v ->> 'events')::int = 0, 'personal_purge: nothing old enough';
   v := personal_erase('check_a1');
-  assert (v ->> 'events')::int = 8 and (v ->> 'taste')::int = 1 and (v ->> 'exposure')::int = 6, 'personal_erase';
+  assert (v ->> 'events')::int = 8 and (v ->> 'taste')::int = 1 and (v ->> 'exposure')::int = 7, 'personal_erase';
   insert into personal_taste (account_id) values ('check_a1');
   insert into personal_pages (id, account_id, kind, page) values ('00000000-0000-4000-8000-00000000c030', 'check_a1', 'home', '{"shelves": []}');
 

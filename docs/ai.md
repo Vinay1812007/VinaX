@@ -131,6 +131,8 @@ Cooldowns (`_lib/ai/cooldown.ts`) live in each isolate's memory. A resting model
 
 **When a provider is down,** its models rest after their first failure and Auto answers from the next provider. If every model fails, the page shows "VinaX AI is busy right now. Try again in a moment." with a Retry button. The console's providers card ([below](#the-consoles-providers-card)) shows what is resting and why.
 
+**One answer, not a stream.** `_lib/ai/complete.ts` runs the same ladder and failover without streaming: `completeText` collects the answer of the first model that answers, and `completeJson` parses it as JSON (reasoning tags and code fences stripped, the first balanced value taken), validates it with a caller's type guard, and asks the same model once more with the broken answer quoted when it does not fit. The personal engine's composer and playlist builder ([personalisation.md](personalisation.md)) use it with the `default` and `fast` ladders; every failure is a null, and the caller has a deterministic answer ready.
+
 ## Reasoning
 
 `ThinkSplitter` (`_lib/ai/think.ts`) is shared by every adapter. It sends reasoning to `thinking` events whichever way it arrives:

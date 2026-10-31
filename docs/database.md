@@ -5,7 +5,7 @@ VinaX 14.0 brings back a server database, designed from a clean sheet: one schem
 ## Setting it up
 
 1. Create a Supabase project (any region; Mumbai is closest to most listeners).
-2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 6), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
+2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 7), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
 3. Set two Worker secrets from `backend/`:
 
 ```sh
@@ -14,6 +14,10 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml
 ```
 
 4. Open the console's **Database** page: it shows the schema version the paste wrote and every table.
+
+### Moving from version 6
+
+Version 7 adds the personal engine ([personalisation.md](personalisation.md)): the tables `personal_songs`, `personal_events`, `personal_taste`, `personal_exposure`, `personal_pages` and `personal_colisten`, their functions (`personal_*`), and the `vector` extension the embeddings need (hosted projects ship it; the Schema workflow's scratch container uses an image that has it). It changes nothing that exists. Paste `schema.sql` once; the Database page then shows version 7. Apply it before deploying the Worker that uses it, or every `/api/personal/*` route answers `503 unavailable` for lack of its tables.
 
 ### Moving from version 5
 
@@ -76,6 +80,12 @@ Only the Worker holds the service-role key. Row-level security is enabled and fo
 | `ai_conversations` | VinaX AI chat | `account_id`, `title`, `starred`, `model_pref`, `active_leaf_id` (the branch a reload opens), `deleted_at` (hidden; purged a day later); deleted with the account |
 | `ai_messages` | message in a chat | `parent_id` (a tree: an edit or a retry adds a sibling), `role` (user/assistant), `content` (parts), `thinking`, `thinking_ms`, `sources`, `artifacts`, `model_id`, `provider`, `stop_reason`, `usage`; cascade with the chat |
 | `ai_daily_usage` | UTC day × kind | VinaX AI's shared daily allowances (`search`, `grounding`): `count` taken so far; rows older than 90 days are removed by the hourly housekeeping |
+| `personal_songs` | catalogue song the personal engine met | title, artist and `artist_id`, `artists`, album, language, year, duration, image, identity `key`, `facets` (mood, genre, vibe, energy, tempo), the `embedding` (1024 dimensions) with `embed_model` and `embedded_at`, community counters (`plays`, `completes`, `skips`, `likes`), first/last seen; no account attached |
+| `personal_events` | event a signed-in listener's device reported | `account_id`, `at`, `kind` (play, complete, skip, like, unlike, dislike, save, queue, search_play, shown, radio_start), `song_id`, `heard_sec`, `duration_sec`, `source`, `context` (hour, dow, tz, shelf, position), `client_id` (unique per account: a retried batch inserts nothing twice); cascade with the account |
+| `personal_taste` | signed-in account | the taste model: `vector` (+ `embed_model`), `artists`, `languages`, `facets`, `hours`, `songs` (score maps), `summary`, `mode` (familiar / balanced / discover), `events_seen`, `version` (rises with every fold; the update lands only while it is the version read); cascade with the account |
+| `personal_exposure` | account × song | `shown`, `queued`, `played`, `completed`, `skipped` counts, `liked`, `disliked`, the `last_*` times; cascade with the account |
+| `personal_pages` | page the engine built | `kind` (home / playlist / radio), `prompt`, `page` (the whole answer with its song records), `taste_version`, `model_id`, `composed` (the language model shaped it), `built_ms`, `expires_at`; cascade with the account |
+| `personal_colisten` | song × partner song | `weight` (listeners who played both within an hour, last 30 days; top 50 partners per song), rebuilt hourly |
 | `ai_attachments` | file added to a chat | `name`, `mime`, `size`, `kind` (image / pdf / text), `storage_path` (private bucket `ai-attachments`, at `<account>/<conversation or new>/<id>`), `extracted_text` (a text file, or the text the page read out of a PDF), `pages`, `gemini_uri` / `gemini_expires_at` (the Gemini Files API copy of a PDF). The rows go with the account or the chat; the stored files are removed by the Worker first (account deletion, the console's delete, the hourly housekeeping), and files never sent are removed after a day |
 
 The view `directory` merges `listeners` and `accounts` into one row per person (device rows with their account when linked, plus account-only rows).
@@ -107,6 +117,17 @@ All `security invoker`, executable by the service role only. Each answers JSON s
 | `ai_take_daily(kind, limit)` | takes one from today's allowance of `kind`: true when taken, false once `limit` is used (or when it is 0); atomic, so every isolate shares one count |
 | `ai_export(account)` | every VinaX AI chat of one account with all its messages (every branch), newest first, as the file `GET /api/ai/export` downloads; deleted chats left out |
 | `ai_conversation_search(account, query, before, limit)` | one account's VinaX AI chats whose title or message text contains `query` (wildcards escaped), newest first |
+| `personal_record_events(account, events)` | inserts the new events of a batch (a repeated `client_id` is skipped), updates the exposure rows and the community counters; answers `{ inserted: [client ids] }` |
+| `personal_recompute_vector(account, model, top)` | the taste vector from the account's strongest `top` songs embedded in `model`'s space; answers how many went in |
+| `personal_neighbours(account, model, limit, languages, coolingHours)` | the songs nearest the taste vector, outside the cooling window and never disliked: `(id, similarity, language, artist_id)` |
+| `personal_similar_songs(song, model, limit)` | the songs nearest one song's embedding |
+| `personal_colisten_for(songs, limit)` | co-listening partners of a set of songs, summed |
+| `personal_refresh_colisten(days, cap)` | rebuilds `personal_colisten` from personal and anonymous plays; answers `{ pairs, since }` |
+| `personal_trending(languages, days, limit)` | the community's most played in the window, in those languages |
+| `personal_embed_backlog(limit)` / `personal_set_embeddings(model, rows)` | songs without a vector, oldest first / write vectors for many songs in one call |
+| `personal_erase(account)` | everything the engine holds about one account; answers the counts |
+| `personal_purge(keepDays)` | events past `keepDays` and pages a day past their expiry |
+| `personal_stats()` | the console's Personal engine tab in one call |
 
 ## The Worker's data layer
 
@@ -194,10 +215,11 @@ The Worker's Cron Trigger (`[triggers] crons` in `wrangler.toml`) fires every 30
 | Job | When | Does |
 | --- | --- | --- |
 | `status-tick` | every run | probes website, catalogue, admin; `uptime_tick` per component |
-| `housekeeping` | once an hour | `room_sweep`, `purge_events(retention.eventsDays)`, `retire_push_devices(180)`, and removes VinaX AI chats deleted more than a day ago (not fatal before schema 4 is applied) |
+| `housekeeping` | once an hour | `room_sweep`, `purge_events(retention.eventsDays)`, `retire_push_devices(180)`, removes VinaX AI chats deleted more than a day ago (not fatal before schema 4 is applied), `personal_refresh_colisten(30, 50)` and `personal_purge(365)` (not fatal before schema 7) |
+| `personal-embed` | every run | embeds up to 200 songs the personal engine met that have no vector yet, with the configured embedding model; skipped while the engine is off |
 
 `POST /api/cron/run { job }` with `x-cron-secret: $CRON_SECRET` (or the owner token) runs a job now; the Database page has a button for it.
 
 ## Privacy
 
-Stored: coarse edge geo, anonymous device ids, display names and handles the listener chose, Google profile basics for signed-in listeners, the synced backup, song facts for plays. Not stored: IP addresses, precise location. Usage events are purged after `retention.eventsDays` (default 180). VinaX AI chats are stored with the account and removed with it. A listener's **Delete my data** removes the account, its backup, its VinaX AI chats and the device row; the console's delete removes everything about one person.
+Stored: coarse edge geo, anonymous device ids, display names and handles the listener chose, Google profile basics for signed-in listeners, the synced backup, song facts for plays, and — for signed-in listeners who keep the personal engine on — their reported listening events, taste model, exposure and composed pages. Not stored: IP addresses, precise location. Usage events are purged after `retention.eventsDays` (default 180); personal events after a year. VinaX AI chats are stored with the account and removed with it. A listener's **Erase my taste model** removes every `personal_*` row of theirs; **Delete my data** removes the account, its backup, its VinaX AI chats, its personal-engine rows and the device row; the console's delete removes everything about one person.
