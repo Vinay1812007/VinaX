@@ -5,6 +5,8 @@ export interface VersionInfo { title: string; changes: ChangeEntry[] }
 export function bumpVersion(version: string, level?: BumpLevel): string;
 export function directiveOf(message: string): BumpLevel | 'skip';
 export function levelOf(message: string): BumpLevel;
+export function directiveOfMerge(commitMessage: string, prMessage?: string): BumpLevel | 'skip';
+export function cardMessage(commitMessage: string, prMessage?: string): string;
 export function entryFromMessage(message: string): VersionInfo;
 export function insertChangelogEntry(source: string, version: string, entry: VersionInfo): string;
 export function updateVersionTs(source: string, version: string): string;

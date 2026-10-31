@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { bumpVersion, directiveOf, entryFromMessage, insertChangelogEntry, levelOf, updatePackageJson, updateVersionTs } from '../../scripts/auto-release.mjs';
+import { bumpVersion, cardMessage, directiveOf, directiveOfMerge, entryFromMessage, insertChangelogEntry, levelOf, updatePackageJson, updateVersionTs } from '../../scripts/auto-release.mjs';
 import { CHANGELOG_V2 } from '../constants/changelog';
 import { LATEST_VERSION } from '../constants/version';
 
@@ -79,6 +79,63 @@ describe('entryFromMessage', () => {
     const long = entryFromMessage(`Title\n\n- ${'word '.repeat(80)}`).changes[0].text;
     expect(long.length).toBeLessThanOrEqual(240);
     expect(long.endsWith('…')).toBe(true);
+  });
+});
+
+describe('the card comes from the pull request, whatever merge method', () => {
+  // What GitHub's own squash button wrote for #193: the PR title, then the branch's commits.
+  const squashFromButton = [
+    'A guide to VinaX AI, and clearer notes for the last two updates (#193)',
+    '',
+    "* VinaX AI: the console's providers card (server)",
+    '',
+    'GET /api/admin/ai: keys set or missing, rests and last errors per provider.',
+    '',
+    'Co-Authored-By: Claude <noreply@anthropic.com>',
+    '',
+    '* Console: VinaX AI on Health, and a form for its setting on Publish',
+  ].join('\n');
+  const pr = [
+    'A guide to VinaX AI, and clearer notes for the last two updates',
+    '',
+    '- A new guide to VinaX AI explains asking, choosing a model, web search, adding files, the side panel, voice and keeping your chats.',
+    '- The notes for the last two updates now say plainly what you can do.',
+    '',
+    'Phase 7 of VinaX AI. Checks run locally.',
+    '',
+    '🤖 Generated with [Claude Code](https://claude.com/claude-code)',
+  ].join('\n');
+
+  it('uses the pull request title and its listener bullets, not the commit list', () => {
+    const entry = entryFromMessage(cardMessage(squashFromButton, pr));
+    expect(entry.title).toBe('A guide to VinaX AI, and clearer notes for the last two updates');
+    expect(entry.changes.map((c) => c.text)).toEqual([
+      'A new guide to VinaX AI explains asking, choosing a model, web search, adding files, the side panel, voice and keeping your chats.',
+      'The notes for the last two updates now say plainly what you can do.',
+    ]);
+    // Without the lookup, the commit list became the card: the bug this guards.
+    expect(entryFromMessage(squashFromButton).changes[0].text).toBe("VinaX AI: the console's providers card (server).");
+  });
+
+  it('falls back to the commit message when there is no pull request', () => {
+    expect(cardMessage('Fix the player\n\n- Songs resume after a call', '')).toBe('Fix the player\n\n- Songs resume after a call');
+    expect(cardMessage('Fix the player', '   \n')).toBe('Fix the player');
+  });
+
+  it('a skip or a bigger bump asked in either the commit or the pull request counts; prose never does', () => {
+    expect(directiveOfMerge('Notes (#194)', 'Clearer notes [skip release]\n\nNotes only.')).toBe('skip');
+    expect(directiveOfMerge('Clearer notes [skip release] (#194)', 'Clearer notes')).toBe('skip');
+    expect(directiveOfMerge('Voice (#192)', 'Voice #minor\n\n- Talk to VinaX AI')).toBe('minor');
+    expect(directiveOfMerge('Big one #major (#9)', 'Big one #minor')).toBe('major');
+    expect(directiveOfMerge('Docs (#9)', 'Docs\n\nThe title can say [skip release] to skip the release.')).toBe('patch');
+    expect(directiveOfMerge('Docs (#9)', '')).toBe('patch');
+  });
+
+  it('the workflow looks the pull request up and hands it to the script', () => {
+    const wf = readFileSync(resolve(__dirname, '../../../.github/workflows/auto-release.yml'), 'utf8');
+    expect(wf).toMatch(/pull-requests: read/);
+    expect(wf).toContain('repos/$REPO/commits/$SHA/pulls');
+    expect(wf).toContain('RELEASE_PR_MESSAGE: ${{ steps.pr.outputs.message }}');
   });
 });
 

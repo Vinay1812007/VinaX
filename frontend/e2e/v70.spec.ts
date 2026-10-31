@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { test, expect, type Page } from './support/test';
 import { latestNotesFingerprint } from '../src/constants/changelog';
 
@@ -63,6 +64,9 @@ async function seed(page: Page, baseURL: string, settings: Record<string, unknow
   return pool;
 }
 
+/** The settings store's current persisted version (a migration always lands on it). */
+const SETTINGS_VERSION = Number(/\n\s+version: (\d+),\n/.exec(readFileSync(new URL('../src/store/settingsStore.ts', import.meta.url), 'utf8'))![1]);
+
 const queue = (page: Page) => page.evaluate(() => (JSON.parse(localStorage.getItem('vinax.player.v1') ?? '{}').state?.queue ?? []) as Array<{ id: string; language: string; artists: Array<{ name: string }> }>);
 const settingsState = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem('vinax.settings.v1') ?? '{}') as { version?: number; state?: Record<string, unknown> });
 
@@ -76,7 +80,7 @@ test('a 6.x device with the explore switch on upgrades to Discover; the three-wa
   await expect(group.getByRole('radio', { name: 'Familiar' })).toHaveAttribute('aria-checked', 'true');
   await expect.poll(() => settingsState(page).then((s) => s.state?.discoveryMode)).toBe('familiar');
   const saved = await settingsState(page);
-  expect(saved.version).toBe(4);
+  expect(saved.version).toBe(SETTINGS_VERSION);
   expect(saved.state?.exploreMode).toBe(false);
   expect(saved.state?.pinnedLanguages).toEqual(['telugu']); // nothing else was lost in the migration
   await page.screenshot({ path: 'test-results/v70-discovery-mode-390.png' });
