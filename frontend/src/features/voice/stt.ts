@@ -312,6 +312,23 @@ export async function probeSttSupport(): Promise<boolean> {
   return nativeAvailable;
 }
 
+/**
+ * The Android app: ask for the microphone through the same system prompt
+ * voice search uses (the speech plugin's permission). True when granted.
+ * VinaX AI's recorder calls this before it opens the mic in the page. On
+ * the web the browser asks by itself, so this is true there.
+ */
+export async function nativeMicPermission(): Promise<boolean> {
+  if (!isNative()) return true;
+  if (!Capacitor.isPluginAvailable('SpeechRecognition')) return true;
+  try {
+    const p = await NativeStt.requestPermissions();
+    return (p?.speechRecognition ?? '') === 'granted';
+  } catch {
+    return false;
+  }
+}
+
 /** Test seam: reset the cached native probe. */
 export function resetSttProbeForTests(): void {
   nativeAvailable = null;

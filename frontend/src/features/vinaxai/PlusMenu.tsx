@@ -1,10 +1,11 @@
 /**
  * VinaX AI — the composer's + menu: Add photos and files, Web search (Auto,
- * On, Off) when it is offered, and Extended thinking.
+ * On, Off) when it is offered, Extended thinking, and Voice settings when
+ * voice is offered.
  */
 import { useRef, useState, type ReactNode } from 'react';
 import { moveFocus, useDismiss } from './useDismiss';
-import { GlobeSmallIcon, PaperclipIcon, PlusSmallIcon, ThinkIcon } from './icons';
+import { GlobeSmallIcon, PaperclipIcon, PlusSmallIcon, ThinkIcon, VoiceSettingsIcon } from './icons';
 
 export type WebSearch = 'auto' | 'on' | 'off';
 const SEARCH_CHOICES: Array<{ value: WebSearch; label: string; note: string }> = [
@@ -20,10 +21,12 @@ interface Props {
   search?: { value: WebSearch; onChange(v: WebSearch): void };
   /** Open the file picker. */
   onAddFiles?(): void;
+  /** Open Voice settings. */
+  onVoiceSettings?(): void;
   disabled?: boolean;
 }
 
-export function PlusMenu({ thinking, onThinking, search, onAddFiles, disabled }: Props): ReactNode {
+export function PlusMenu({ thinking, onThinking, search, onAddFiles, onVoiceSettings, disabled }: Props): ReactNode {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -112,6 +115,21 @@ export function PlusMenu({ thinking, onThinking, search, onAddFiles, disabled }:
             </span>
             <span className={`vx-ai-switch${thinking ? ' is-on' : ''}`} aria-hidden />
           </div>
+          {onVoiceSettings && (
+            <div
+              role="menuitem"
+              tabIndex={-1}
+              className="vx-ai-menu-item"
+              onClick={() => { close(false); onVoiceSettings(); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); close(false); onVoiceSettings(); } }}
+            >
+              <VoiceSettingsIcon className="w-4 h-4" />
+              <span className="vx-ai-menu-text">
+                <span>Voice settings</span>
+                <span className="vx-ai-opt-sub">Voices for Read aloud and Live voice</span>
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>

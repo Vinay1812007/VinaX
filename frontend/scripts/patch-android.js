@@ -153,7 +153,12 @@ if (fs.existsSync(manifestPath)) {
     // Voice chat / dictation / voice search (v3.3.0): the speech-recognition
     // plugin's own manifest also declares RECORD_AUDIO — this is belt and
     // braces so a plugin manifest change can never silently drop the mic.
-    '<uses-permission android:name="android.permission.RECORD_AUDIO" />'
+    '<uses-permission android:name="android.permission.RECORD_AUDIO" />',
+    // VinaX AI voice (phase 6): dictation and Live voice open the mic from the
+    // page (getUserMedia). Capacitor's WebView asks for RECORD_AUDIO AND
+    // MODIFY_AUDIO_SETTINGS together and refuses the page if either is not
+    // declared, so this one is required for the page's mic to work at all.
+    '<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />'
   ];
   // REQUEST_INSTALL_PACKAGES is restricted by Google Play policy (only
   // installer / updater apps qualify) and would cause a Play Store listing

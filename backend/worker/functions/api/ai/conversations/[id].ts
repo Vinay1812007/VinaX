@@ -17,6 +17,7 @@ import {
   deleteConversation, getConversation, isUuid, listMessages, publicConversation, publicMessage, updateConversation, type ConversationRow,
 } from '../../../_lib/ai/store';
 import type { AiEnv } from '../../../_lib/ai/types';
+import { liveLabel } from '../../../_lib/ai/voice';
 
 interface Ctx { request: Request; env: AiEnv; params?: { id?: string } }
 
@@ -38,6 +39,8 @@ async function owned(ctx: Ctx, route: string): Promise<{ sub: string; conv: Conv
 }
 
 const label = (modelId: string): { name: string; provider: string } | null => {
+  const live = liveLabel(modelId);
+  if (live) return live;
   const spec = modelById(MODELS, modelId);
   return spec ? { name: spec.name, provider: PROVIDER_NAMES[spec.provider] } : null;
 };

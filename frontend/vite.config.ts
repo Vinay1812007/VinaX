@@ -24,8 +24,8 @@ const APP_VERSION = BUILD_NUMBER ? `${pkg.version}+${BUILD_NUMBER}` : pkg.versio
  *  the maths fonts: it needs the network anyway, and a listener who never
  *  opens the chat should not download it. */
 export const ON_DEMAND_PAGES = /\/src\/pages\/VinaXAIPage\.tsx$/;
-/** The maths engine's fonts (loaded by its on-demand stylesheet) and the PDF reader's worker (loaded when a PDF is added). */
-export const ON_DEMAND_ASSETS = /^assets\/(KaTeX_[\w-]+\.(woff2?|ttf)|pdf\.worker[\w.-]*\.m?js)$/;
+/** The maths engine's fonts (loaded by its on-demand stylesheet), the PDF reader's worker (loaded when a PDF is added) and Live voice's mic tap (loaded when Live voice opens). */
+export const ON_DEMAND_ASSETS = /^assets\/(KaTeX_[\w-]+\.(woff2?|ttf)|pdf\.worker[\w.-]*\.m?js|micTap\.worklet[\w.-]*\.js)$/;
 
 type BundleItem = {
   type: 'chunk' | 'asset';
@@ -109,6 +109,9 @@ export default defineConfig({
     // obfuscation for security.
     sourcemap: false,
     target: 'es2020',
+    // Audio worklets (VinaX AI Live voice's mic tap) load with addModule(),
+    // which the CSP allows only from this origin: never inline them as data: URLs.
+    assetsInlineLimit: (file: string) => (/\.worklet\.js$/.test(file) ? false : undefined),
     rollupOptions: {
       output: {
         // URL epoch: bump ('b3' → 'b4' …) to change EVERY asset URL at once,

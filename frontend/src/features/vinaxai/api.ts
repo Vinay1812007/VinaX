@@ -70,6 +70,68 @@ export interface ChatRequestBody {
   locale?: string;
 }
 
+// ---------- voice (phase 6) ----------
+
+/** A dictation clip becomes text (never sent as a message by itself). */
+export async function transcribeClip(clip: Blob, signal?: AbortSignal): Promise<string> {
+  const type = (clip.type || 'audio/webm').split(';')[0];
+  let res: Response;
+  try {
+    res = await fetch(`${AI_BASE}/transcribe`, { method: 'POST', headers: { ...headers(), 'content-type': type }, body: clip, signal });
+  } catch (e) {
+    if (signal?.aborted) throw e;
+    throw new AiError(0, 'network');
+  }
+  const body = (await res.json().catch(() => ({}))) as { text?: unknown; error?: unknown };
+  if (!res.ok) throw new AiError(res.status, typeof body.error === 'string' ? body.error : `http_${res.status}`);
+  return typeof body.text === 'string' ? body.text : '';
+}
+
+/** Start Read aloud: the response streams speech frames (see speechStream.ts). */
+export async function speakText(text: string, voices: { voice?: string; liveVoice?: string }, signal: AbortSignal): Promise<Response> {
+  let res: Response;
+  try {
+    res = await fetch(`${AI_BASE}/speak`, { method: 'POST', headers: headers(true), body: JSON.stringify({ text, ...voices }), signal });
+  } catch (e) {
+    if (signal.aborted) throw e;
+    throw new AiError(0, 'network');
+  }
+  if (!res.ok || !res.body) {
+    const err = (await res.json().catch(() => ({}))) as { error?: unknown };
+    throw new AiError(res.status, typeof err.error === 'string' ? err.error : `http_${res.status}`);
+  }
+  return res;
+}
+
+export interface LiveTokenReply {
+  token: string;
+  url: string;
+  setup: Record<string, unknown> & { model: string };
+  model: { id: string; name: string };
+  expiresAt: string;
+}
+
+export const liveToken = (opts: { thinking: boolean; skip: string[]; voice?: string }): Promise<LiveTokenReply> =>
+  call('/live-token', { method: 'POST', body: JSON.stringify({ ...opts, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, locale: navigator.language }) });
+
+export const saveLiveTranscript = (body: { conversationId: string | null; parentMessageId?: string; model: string; turns: Array<{ role: 'user' | 'assistant'; text: string }> }): Promise<{ conversationId: string; messageIds: string[] }> =>
+  call('/live-transcript', { method: 'POST', body: JSON.stringify(body) });
+
+/** What a failed voice request means for the listener. */
+export function voiceNotice(code: string): string {
+  switch (code) {
+    case 'voice_busy': return 'Voice is busy right now. Try again in a minute.';
+    case 'rate_limited': return 'That’s a lot of voice requests at once. Wait a minute, then try again.';
+    case 'too_large': return 'That recording is too long. Keep it under two minutes.';
+    case 'unsupported_type': return 'That recording couldn’t be read. Try again.';
+    case 'network': return 'You seem to be offline. Check your connection and try again.';
+    case 'signed_out':
+    case 'ai_disabled':
+    case 'ai_not_configured': return noticeFor(code);
+    default: return 'Voice isn’t available right now. Try again later.';
+  }
+}
+
 /** What a failed request means for the listener (never a raw error). */
 export function noticeFor(code: string): string {
   switch (code) {

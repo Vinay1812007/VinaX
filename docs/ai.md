@@ -31,8 +31,8 @@ Every provider call goes through the Worker. No key, upstream host or raw upstre
 
 | Secret / binding | Provider | Used for |
 | --- | --- | --- |
-| `GROQ_API_KEY` | Groq (OpenAI-compatible) | The fast default models (GPT-OSS, Qwen) |
-| `GEMINI_API_KEY` | Google Gemini (native `streamGenerateContent?alt=sse`) | Images, PDFs and long threads (phases 3–4 add grounding and files) |
+| `GROQ_API_KEY` | Groq (OpenAI-compatible) | The fast default models (GPT-OSS, Qwen); dictation (Whisper) and Read aloud (Orpheus) |
+| `GEMINI_API_KEY` | Google Gemini (native `streamGenerateContent?alt=sse`) | Images, PDFs and long threads (phases 3–4 add grounding and files); Live voice, and the dictation and Read aloud fallbacks |
 | `OPENROUTER_API_KEY` | OpenRouter (OpenAI-compatible) | `:free` code models and mirrors |
 | `NVIDIA_API_KEY` | NVIDIA NIM (OpenAI-compatible) | Reasoning and vision models |
 | `AI` (`[ai] binding = "AI"`) | Cloudflare Workers AI | Last resort in the default ladder |
@@ -76,7 +76,8 @@ Groq's free tier counts tokens per minute, so Groq models keep a short history (
 - It reads `worker/.dev.vars`. For Workers AI over REST it also needs `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`.
 - For every registry model it sends one streamed request, plus one image request for models flagged `vision`.
 - It prints time to first token, whether the reply streamed, where reasoning arrived (`field`, `tags`, `parts` or none), whether the system message was followed, whether the image was read, and the context and output limits the provider reports.
-- Options: `--only <text>` limits it to ids containing the text; `--no-image` skips the image check.
+- It then checks voice: each Whisper and Gemini transcription model on a one-second test tone, each Orpheus and Gemini TTS model (with which voice field Gemini accepts and the audio type it returns), which Live token body Google accepts, and a real Live handshake (setup, then `setupComplete`) on each Live model.
+- Options: `--only <text>` limits it to ids containing the text; `--no-image` skips the image check; `--voice-only` runs only the voice checks; `--no-voice` skips them.
 - It prints nothing secret and writes nothing.
 
 Use its table to set the registry flags. Use the owner's latency measurements to choose models.
@@ -226,7 +227,7 @@ Refusals before the stream: `400 bad_request | unknown_model | bad_attachment | 
 
 | Route | What it does |
 | --- | --- |
-| `GET /api/ai/models` | Public. `{ enabled, configured, groups, models: [{ id, name, provider, group, description, flags: { vision, web, thinking, code }, available, reason? }] }`. `available` is false when the provider has no key (`not_configured`) or the model is resting (`busy`). A session, when sent, only decides `enabled` for testers |
+| `GET /api/ai/models` | Public. `{ enabled, configured, groups, models: [{ id, name, provider, group, description, flags: { vision, web, thinking, code }, available, reason? }], voice: { dictation, readAloud, live, voices, liveVoices } }`. `available` is false when the provider has no key (`not_configured`) or the model is resting (`busy`). `voice` says which voice features have a key ([Voice](#voice)). A session, when sent, only decides `enabled` for testers |
 | `GET /api/ai/conversations?cursor=&q=` | The account's chats, newest first, 30 a page. `q` searches titles and message text through `ai_conversation_search` |
 | `GET /api/ai/conversations/:id` | The conversation and its whole message tree, each reply labelled with its model's name and provider |
 | `PATCH /api/ai/conversations/:id` | `{ title?, starred?, activeLeafId? }` |
@@ -309,6 +310,73 @@ The Worker saves each reply's artifacts in `ai_messages.artifacts`, also after a
 - **When the site is not there.** If the runner does not say it is ready within 8 seconds, Preview says "Preview needs the sandbox host". Code, Copy and Download still work.
 - **Another host.** Build with `VITE_AI_SANDBOX_ORIGIN`, add it to `frame-src` in `frontend/public/_headers`, and keep the runner's `ALLOWED` origins and `frame-ancestors` in step.
 
+## Voice
+
+`_lib/ai/voice.ts`, `voiceGate.ts`; the routes `functions/api/ai/transcribe.ts`, `speak.ts`, `live-token.ts` and `live-transcript.ts`; on the page `mic.ts`, `useVoiceDictation.ts`, `speechText.ts`, `speechStream.ts`, `readAloud.ts`, `musicHold.ts`, `VoiceSettings.tsx` and `live/` (`LiveView.tsx`, `liveSession.ts`, `liveProtocol.ts`, `micTap.worklet.js`).
+
+Provider details were checked against Groq's and Google's docs on 2026-10-31. Where they differ from the brief, the docs won:
+- Orpheus takes at most **200 characters** a request and returns WAV only. Its free allowance is small: about 10 requests a minute, 100 a day and 1,200 tokens a minute.
+- Gemini TTS now names the voice `speechConfig.voiceConfig.voice`. Older models take `prebuiltVoiceConfig.voiceName`, so a 400 on the first shape retries with the second.
+- Ephemeral tokens and the Live socket are **v1beta**, not v1alpha.
+- `gemini-2.5-flash-native-audio-latest` is not in Google's docs. The documented `gemini-2.5-flash-native-audio-preview-12-2025` is used instead.
+- `gemini-3.5-transcribe` exists, but its documented example uses an uploaded file, and some users report empty transcripts. So the clip is uploaded through the Files API, and an empty answer is asked again of `gemini-3.8-flash`.
+
+**Every voice route** first runs the per-address bucket, then needs a session. It then checks the account's `RATE_LIMIT_10` tier, a key for that feature, and the owner's switch (`voiceGate`). Failures answer `voice_busy` (429, every engine out of allowance or resting) or `voice_unavailable` (503), never a provider's words. Each failure rests that voice model the way chat models rest ([Failover and cooldowns](#failover-and-cooldowns)). Logs carry route, provider, model, status and timings, never audio or text.
+
+### Dictation: `POST /api/ai/transcribe`
+
+The composer's mic records a clip with `MediaRecorder` (WebM/Opus in Chromium, MP4 in Safari), at most two minutes. Music pauses while the mic is open. ✓ finishes, × cancels. The clip's raw bytes are the body (not multipart), with their `Content-Type`. The Worker checks the type, the size (25 MB, Groq's free cap) and the first bytes. It then tries:
+
+1. Groq `whisper-large-v3-turbo`.
+2. Groq `whisper-large-v3`.
+3. Gemini: the clip is uploaded once through the Files API, so the Worker never base64s it, then `gemini-3.5-transcribe`, then `gemini-3.8-flash` with a "transcribe exactly" prompt.
+
+The answer is `{ text }`. The page puts the text into the composer, after anything already typed, and **never sends it**: speech-to-text mishears, so the listener reads it first. Nothing is stored. Groq bills a clip under 10 seconds as 10 seconds.
+
+### Read aloud: `POST /api/ai/speak`
+
+The speaker under a reply reads it. `speechText.ts` turns the reply into words first:
+- code blocks become one line saying a code block is there;
+- citation markers, link addresses (a bare link says its site), table pipes and maths source go;
+- an artifact is named, not read;
+- at most 6,000 characters, cut at a sentence.
+
+`{ text, voice, liveVoice }` goes to the Worker, which chooses who reads (`planSpeech`):
+- **Orpheus** (`canopylabs/orpheus-v1-english` with the listener's voice, default Troy) reads replies up to 800 characters. Arabic text gets `canopylabs/orpheus-arabic-saudi` with Abdullah.
+- **Gemini TTS** (`gemini-3.8-flash-tts`, then `-flash-lite-tts`, then `gemini-2.5-flash-preview-tts`) reads longer replies with the Live voice from start to end, in 600-character pieces. A voice that changes half-way through a reply sounds broken, and Orpheus's 200 characters and small allowance cannot carry a long reply. If Orpheus fails part-way, the rest goes to Gemini.
+
+The first piece is made before the answer starts, so a failure is a proper error. The rest stream as frames, `[kind 1 byte][length 4 bytes][payload]`:
+- kind 1 is an audio file (`"<mime>\n"` + bytes);
+- kind 2 is base64 audio as Gemini sent it (`"<mime>\n<base64>"`; the Worker does not decode it, to save CPU);
+- kind 3 is `{ error }` when a later piece failed.
+
+The page decodes WAV and 16-bit PCM itself, because a streamed WAV header may say its length is unknown, and plays the pieces back to back with Web Audio. One Read aloud makes at most 40 upstream calls (the free plan allows 50 subrequests). One reply reads at a time. Music plays on at 20% of its volume (a "duck"), and comes back when the reading ends or is stopped.
+
+### Live voice: `POST /api/ai/live-token`, `POST /api/ai/live-transcript`
+
+The waveform button (where Send is while the composer is empty) opens a full-screen view. Music pauses. Then:
+
+1. The page opens the mic. In the Android app the system prompt is voice search's own: the speech plugin's permission first, then `getUserMedia`. Capacitor's WebView also needs `MODIFY_AUDIO_SETTINGS`, which `scripts/patch-android.js` declares.
+2. The page asks the Worker for a token: `{ thinking, skip, voice }` returns `{ token, url, setup, model }`.
+   - The models are tried in order: `gemini-3.8-live`, `gemini-3.1-flash-live-preview`, then `gemini-2.5-flash-native-audio-preview-12-2025`. With Extended thinking on, `gemini-3.8-live-extended-thinking` goes first.
+   - The token is minted with `POST /v1beta/auth_tokens`: one use, 2 minutes to start, 30 minutes to live.
+   - The token is locked to the setup where Google allows it. The guide's `liveConnectConstraints` body is tried first, then the API reference's `bidiGenerateContentSetup`, then an unlocked one-use token, so a change in Google's field names cannot take Live down. The probe reports which body was accepted.
+   - The setup carries the short spoken prompt (`VOICE_PROMPT` in `prompt.ts`), the chosen Gemini voice, input and output transcription, and sliding-window compression.
+3. The page opens `wss://generativelanguage.googleapis.com/ws/…BidiGenerateContentConstrained?access_token=…` and sends the setup. The key never reaches the page; the app's CSP allows only this socket (`connect-src`).
+   - If the socket closes before `setupComplete`, the page asks for a token for the next model, at most three times.
+4. Mic audio goes through an AudioWorklet (`micTap.worklet.js`), a same-origin file, because the CSP has no `blob:` or `data:` scripts. The build never inlines it (`assetsInlineLimit` in `vite.config.ts`).
+   - The page resamples to 16 kHz and sends 16-bit PCM as `realtimeInput.audio` (`audio/pcm;rate=16000`).
+   - Gemini's 24 kHz PCM plays as it arrives. Talking over it stops it (`interrupted`).
+   - Captions come from the transcriptions. Mute sends `audioStreamEnd`.
+5. Gemini ends a session after about ten minutes (`goAway`), and the page says so. Session resumption is not used yet.
+6. When the view closes, what was said is saved with `POST /api/ai/live-transcript` (`{ conversationId, parentMessageId?, model, turns: [{ role, text }] }`).
+   - The turns become ordinary messages, each hanging on the one before, after the chat's active leaf. A new chat is started when there was none.
+   - Replies are saved with model id `gemini-live:<model>` and labelled with the Live model's name.
+   - The chat then reloads to show them. They sync, export and delete like any other turn.
+   - A session that ends because the page itself is closed is not saved.
+
+**Voice settings** (the + menu) chooses the Read aloud voice from Orpheus's English voices, and the Live voice from ten of Gemini's voices. The Live voice also reads long replies. Both are kept on the device (`vinax.vxai.prefs.v1`), and the Worker checks them against its own lists.
+
 ## Storage
 
 Schema version 4 adds `ai_conversations`, `ai_messages` (a tree through `parent_id`) and `ai_attachments`, all removed with the account through `on delete cascade`. See [database.md](database.md). `ai_conversations.active_leaf_id` is the branch a reload opens.
@@ -349,7 +417,8 @@ The setting key is `vinax-ai`, not the brief's dotted `ai.enabled` / `ai.models.
 - The composer stays above an on-screen keyboard that does not resize the page (`visualViewport`).
 
 **The composer.**
-- The + menu holds Extended thinking.
+- The + menu holds Extended thinking, and Voice settings when voice is offered.
+- The mic dictates into the text; with nothing typed, the Live voice button stands where Send goes ([Voice](#voice)). Without voice keys neither shows.
 - The model picker (`ModelPicker.tsx`) lists Auto, then the groups. Each model shows a one-line description and Vision / Web / Thinking / Code badges; models that cannot answer now are greyed with the reason.
 - The choice and Extended thinking are kept on the device (`prefs.ts`, key `vinax.vxai.prefs.v1`). A model the owner switches off falls back to Auto.
 
@@ -357,6 +426,7 @@ The setting key is `vinax-ai`, not the brief's dotted `ai.enabled` / `ai.models.
 - Edit on a question sends the change as a sibling: the old version and its answers stay.
 - A message with more than one version shows ‹ 2 / 3 ›. Switching follows the newest reply down that branch and saves it as the conversation's active leaf.
 - Retry has a menu: Retry with Auto, or with another available model.
+- Read aloud (the speaker) reads a reply; it becomes Stop while it reads ([Voice](#voice)).
 - A reply cut short (`length`, or `error` with text) offers Continue.
 - When a picked model fails, the error offers Retry, Try with Auto and up to two alternatives.
 - Opening another chat while a reply is being written stops it; the server keeps what was written.
@@ -372,7 +442,7 @@ The setting key is `vinax-ai`, not the brief's dotted `ai.enabled` / `ai.models.
 - **Maths.** `$inline$` and `$$display$$` render with KaTeX through `remark-math` + `rehype-katex` (`trust: false`).
   - They load in their own chunk (`math.ts`), with KaTeX's CSS and fonts, the first time a reply contains a dollar sign.
   - So that prices are not read as maths, `mathText.ts` applies Pandoc's rule first: a `$…$` span is maths only when no space sits just inside either dollar and no digit follows the closing one. Other dollars are escaped. Code is never touched.
-- **Precache.** The page, the highlighter, the maths chunk, their stylesheets and KaTeX's fonts are all on demand in the service worker's precache (`ON_DEMAND_PAGES` and `ON_DEMAND_ASSETS` in `vite.config.ts`). A listener who never opens the chat does not download them.
+- **Precache.** The page, the highlighter, the maths chunk, Live voice's chunk and mic worklet, their stylesheets and KaTeX's fonts are all on demand in the service worker's precache (`ON_DEMAND_PAGES` and `ON_DEMAND_ASSETS` in `vite.config.ts`). A listener who never opens the chat does not download them.
 
 **Entry points.**
 - A "VinaX AI" row in the desktop side navigation (`constants/nav.ts`).
@@ -386,5 +456,4 @@ These phases are still to come:
 
 | Phase | What it adds |
 | --- | --- |
-| 6 | Voice |
 | 7 | The console's providers card and Probe button |

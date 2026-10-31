@@ -111,7 +111,10 @@ function keysOfPayload(node: ts.Node | undefined, checker: ts.TypeChecker): Set<
     return a && b ? new Set([...a, ...b]) : null;
   }
   // A variable or call: its static type's properties (a `Record<string, unknown>` has none → unknown).
-  const t = checker.getTypeAtLocation(node);
+  let t = checker.getTypeAtLocation(node);
+  // An array of rows (a bulk insert): the columns are its element type's.
+  const element = t.getNumberIndexType();
+  if (element && t.getProperty('length')) t = element;
   const props = (t.isUnion() ? t.types : [t]).flatMap((x) => x.getProperties());
   return props.length ? new Set(props.map((p) => p.name)) : null;
 }

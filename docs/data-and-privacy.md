@@ -71,6 +71,11 @@ VinaX AI ([ai.md](ai.md)), the chat at `/vinaxai`, is the one place AI is used, 
 - A deleted chat is hidden at once and removed within a day. Deleting the account removes every chat.
 - Files added to a chat stay with the account, in a private Storage bucket that only the Worker can read. Images are shrunk on the device first; a PDF's text is read on the device. They are sent to the AI provider that answers, and removed with their chat or the account. Files added but never sent are removed after a day.
 - The Worker logs only the route, model, provider, latency, status and token counts, never message text.
+- Voice is used only when the listener presses a voice button:
+  - **Dictation** sends the recorded clip from the Worker to Groq (Whisper), or to Google (Gemini) when Groq cannot take it, and returns the text to the composer. Neither the clip nor the text is stored until the listener sends the message.
+  - **Read aloud** sends the reply's words to Groq (Orpheus) or Google (Gemini) and plays the audio. Nothing is stored.
+  - **Live voice** streams the microphone from the device straight to Google (Gemini Live), with a one-use token the Worker makes. The key stays in the Worker. What both sides say is saved in the chat as ordinary messages when Live voice closes. The audio itself is not stored.
+  - Music pauses while the mic is open.
 - The page keeps nothing about the chat on the device.
 
 Settings → Your data → **Export VinaX AI chats** downloads every chat, with all its versions, as one JSON file (`GET /api/ai/export`). The file is separate from the app's backup: the chats already live with the account, so a backup neither carries nor restores them.

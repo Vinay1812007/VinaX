@@ -279,6 +279,12 @@ describe('scripts/patch-android.js', () => {
     }
   });
 
+  it('declares both microphone permissions the WebView asks for when VinaX AI opens the mic', () => {
+    // Capacitor's onPermissionRequest asks for these two together; one missing denies the page.
+    expect(patchScript).toContain('<uses-permission android:name="android.permission.RECORD_AUDIO" />');
+    expect(patchScript).toContain('<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />');
+  });
+
   it('declares the typed, exported media service, the media-button receiver and both widgets', () => {
     expect(patchScript).toContain('android:foregroundServiceType="mediaPlayback"');
     expect(patchScript).toContain('android:name="androidx.media.session.MediaButtonReceiver" android:exported="true"');

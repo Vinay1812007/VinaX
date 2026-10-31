@@ -107,10 +107,11 @@ describe('splitPrecache', () => {
       'assets/math-c7.css': asset('assets/math-c7.css'),
       'assets/KaTeX_Main-Regular-d4.woff2': asset('assets/KaTeX_Main-Regular-d4.woff2'),
       'assets/pdf.worker.min-f6.mjs': asset('assets/pdf.worker.min-f6.mjs'),
+      'assets/micTap.worklet-g8.js': asset('assets/micTap.worklet-g8.js'),
       'assets/inter-e5.woff2': asset('assets/inter-e5.woff2'),
     };
     const { precache, onDemand } = splitPrecache(bundle);
-    expect(onDemand.sort()).toEqual(['/assets/KaTeX_Main-Regular-d4.woff2', '/assets/VinaXAIPage-b2.js', '/assets/VinaXAIPage-b9.css', '/assets/math-c3.js', '/assets/math-c7.css', '/assets/pdf.worker.min-f6.mjs']);
+    expect(onDemand.sort()).toEqual(['/assets/KaTeX_Main-Regular-d4.woff2', '/assets/VinaXAIPage-b2.js', '/assets/VinaXAIPage-b9.css', '/assets/math-c3.js', '/assets/math-c7.css', '/assets/micTap.worklet-g8.js', '/assets/pdf.worker.min-f6.mjs']);
     expect(precache.sort()).toEqual(['/assets/index-a1.css', '/assets/index-a1.js', '/assets/inter-e5.woff2']);
   });
 });

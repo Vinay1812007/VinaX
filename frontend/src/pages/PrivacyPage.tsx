@@ -79,6 +79,13 @@ export default function PrivacyPage() {
           removes it within a day, and deleting your account removes every chat. Settings → Your data → Export VinaX AI
           chats downloads them all.
         </p>
+        <p>
+          VinaX AI&rsquo;s voice features work only when you press them. Dictation sends your recording to Groq (or
+          Google Gemini) to turn it into text, which lands in the message box for you to check; Read aloud sends a
+          reply&rsquo;s words to Groq or Google Gemini to speak them. Neither recording nor speech is stored. Live voice
+          sends your microphone straight to Google Gemini while it is open, and what you both say is saved in that chat
+          like typed messages.
+        </p>
         <H>Listen Together</H>
         <p>
           Rooms are ephemeral: a room code, first names, and the shared queue exist while the session lives and are

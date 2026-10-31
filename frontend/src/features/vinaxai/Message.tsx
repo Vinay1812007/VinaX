@@ -16,7 +16,8 @@ import { SearchStatusLine, SourcesRow } from './Sources';
 import { MessageFiles } from './FileChips';
 import { ArtifactCard } from './ArtifactPanel';
 import { parseArtifacts, type Artifact } from './artifacts';
-import { ChevronDownSmallIcon, ChevronIcon, ContinueIcon, CopyIcon, PencilIcon, RetryIcon } from './icons';
+import { ChevronDownSmallIcon, ChevronIcon, ContinueIcon, CopyIcon, PencilIcon, RetryIcon, SpeakerIcon, StopIcon } from './icons';
+import { readAloud, stopReading, useReadAloud } from './readAloud';
 import type { ChatMessage, PickerModel } from './types';
 
 export const thoughtLabel = (ms: number | null): string => (ms == null ? 'Thought process' : `Thought for ${Math.max(1, Math.round(ms / 1000))}s`);
@@ -175,9 +176,29 @@ interface ReplyProps {
   onOpenArtifact?(artifact: Artifact, messageId: string): void;
   onRetry?(choice?: ModelChoice): void;
   onContinue?(): void;
+  /** Read aloud is offered. */
+  canReadAloud?: boolean;
 }
 
-export function AssistantMessage({ message, live, models, onRetry, onContinue, versionOf, onOpenArtifact }: ReplyProps): ReactNode {
+/** Read aloud: the speaker under a reply; Stop while this reply is being read. */
+function ReadAloudButton({ id, text }: { id: string; text: string }): ReactNode {
+  const reading = useReadAloud((s) => (s.messageId === id ? s.phase : 'idle'));
+  const on = reading !== 'idle';
+  return (
+    <button
+      type="button"
+      className={`vx-ai-act${on ? ' is-on' : ''}`}
+      onClick={() => (on ? stopReading() : void readAloud(id, text))}
+      aria-label={on ? 'Stop reading' : 'Read aloud'}
+      aria-pressed={on}
+      title={on ? 'Stop reading' : 'Read aloud'}
+    >
+      {on ? <StopIcon className={`w-4 h-4${reading === 'loading' ? ' vx-ai-pulse' : ''}`} /> : <SpeakerIcon className="w-4 h-4" />}
+    </button>
+  );
+}
+
+export function AssistantMessage({ message, live, models, onRetry, onContinue, versionOf, onOpenArtifact, canReadAloud }: ReplyProps): ReactNode {
   const { text, error, stopReason, model } = message;
   const waiting = live && !text && !message.thinking && !error && !message.status;
   const cutOff = !live && !!text && (stopReason === 'length' || stopReason === 'error');
@@ -231,6 +252,7 @@ export function AssistantMessage({ message, live, models, onRetry, onContinue, v
               <CopyIcon className="w-4 h-4" />
             </button>
           )}
+          {canReadAloud && text && <ReadAloudButton id={message.id} text={text} />}
           {onRetry && !error && <RetryMenu models={models} onRetry={onRetry} />}
           {cutOff && !error && onContinue && (
             <button type="button" className="vx-ai-chip vx-ai-continue" onClick={onContinue}>

@@ -9,9 +9,9 @@
  * visitors never get here: the app's sign-in gate answers first.
  * See docs/ai.md.
  */
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAccount } from '@/components/useAccount';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -32,6 +32,12 @@ import { ArtifactPanel } from './ArtifactPanel';
 import { usePanel } from './artifactStore';
 import { artifactsOf, collectVersions, hasPreview } from './artifacts';
 import { ArrowDownIcon, MenuIcon, NewChatIcon, SidebarIcon, SparkIcon } from './icons';
+import { useVoiceDictation } from './useVoiceDictation';
+import { dismissReadNotice, stopReading, useReadAloud } from './readAloud';
+import { VoiceSettings } from './VoiceSettings';
+
+/** Live voice loads only when someone opens it. */
+const LiveView = lazy(() => import('./live/LiveView'));
 
 /** Markdown made readable aloud: code blocks named, not read; markup characters dropped. */
 export function plainText(md: string): string {
@@ -161,6 +167,33 @@ export function ChatView(): ReactNode {
 
   const [draft, setDraft] = useState('');
   const composer = useRef<ComposerHandle>(null);
+  const qc = useQueryClient();
+
+  // Voice: dictation into the draft, Read aloud, Live voice and its settings.
+  const voice = models.data?.voice;
+  const dictation = useVoiceDictation((text) => {
+    setDraft((d) => (d.trim() ? `${d.replace(/\s+$/, '')} ${text}` : text));
+    requestAnimationFrame(() => composer.current?.focus());
+  });
+  const readNotice = useReadAloud((s) => s.notice);
+  const [liveOpen, setLiveOpen] = useState(false);
+  const [voiceSettings, setVoiceSettings] = useState(false);
+  useEffect(() => () => stopReading(), []);
+  useEffect(() => { stopReading(); }, [conversationId]);
+  const openLive = () => {
+    stopReading();
+    if (streaming) stopReply();
+    setLiveOpen(true);
+  };
+  const closeLive = (savedTo: string | null) => {
+    setLiveOpen(false);
+    if (!savedTo) return;
+    void qc.invalidateQueries({ queryKey: ['vinaxai', 'conversations'] });
+    // Reload the chat so the spoken turns show in the thread (not from a cached copy of it).
+    qc.removeQueries({ queryKey: ['vinaxai', 'conversation', savedTo] });
+    resetChat();
+    navigate(`/vinaxai/c/${savedTo}`, { replace: !!id && id === savedTo });
+  };
   const stick = useRef(true);
   // Files in this chat so far, against the 20-per-chat limit.
   const filesInChat = useMemo(() => Object.values(messages).reduce((n, m) => n + (m.files?.length ?? 0), 0), [messages]);
@@ -276,6 +309,9 @@ export function ChatView(): ReactNode {
       onFiles={(fs) => tray.add(fs)}
       hasFiles={tray.files.some((f) => f.status === 'ready')}
       sendBlocked={tray.busy || cannotSee}
+      dictation={voice?.dictation ? dictation : undefined}
+      onLive={voice?.live ? openLive : undefined}
+      onVoiceSettings={voice && (voice.readAloud || voice.live) ? () => setVoiceSettings(true) : undefined}
     />
   );
   const visionChip = cannotSee && (
@@ -291,6 +327,13 @@ export function ChatView(): ReactNode {
     <div className="vx-ai-notice" role="alert">
       <span>{tray.notice}</span>
       <button type="button" onClick={tray.dismissNotice} aria-label="Dismiss">×</button>
+    </div>
+  );
+  const voiceNoticeText = dictation.notice ?? readNotice;
+  const voiceNoticeEl = voiceNoticeText && (
+    <div className="vx-ai-notice" role="alert">
+      <span>{voiceNoticeText}</span>
+      <button type="button" onClick={() => { dictation.dismiss(); dismissReadNotice(); }} aria-label="Dismiss">×</button>
     </div>
   );
   const noticeEl = notice && (
@@ -317,6 +360,7 @@ export function ChatView(): ReactNode {
             <h2>{greeting(new Date().getHours(), firstName)}</h2>
           </div>
           {noticeEl}
+          {voiceNoticeEl}
           {fileNotice}
           {visionChip}
           {composerEl}
@@ -350,6 +394,7 @@ export function ChatView(): ReactNode {
                     onOpenArtifact={openArtifact}
                     onRetry={m.parentId && conversationId ? (choice) => void retryReply(m.parentId!, choice) : undefined}
                     onContinue={conversationId && !m.local ? () => void continueReply(m.id) : undefined}
+                    canReadAloud={!!voice?.readAloud}
                   />
                 ),
               )}
@@ -364,6 +409,7 @@ export function ChatView(): ReactNode {
         <div className="vx-ai-dock">
           <div className="vx-ai-column">
             {noticeEl}
+            {voiceNoticeEl}
             {fileNotice}
             {visionChip}
             {composerEl}
@@ -428,6 +474,12 @@ export function ChatView(): ReactNode {
         <ArtifactPanel versions={versions.get(panel.open.id) ?? []} live={streaming} sheet={!wide} />
       )}
       <div className="sr-only" aria-live="polite">{announce}</div>
+      {voiceSettings && voice && <VoiceSettings voice={voice} onClose={() => setVoiceSettings(false)} />}
+      {liveOpen && (
+        <Suspense fallback={<div className="vx-ai-live" role="status" aria-label="Opening Live voice" />}>
+          <LiveView conversationId={conversationId} parentMessageId={leafId} thinking={prefs.extendedThinking} voice={prefs.liveVoice} onClose={closeLive} />
+        </Suspense>
+      )}
     </div>
   );
 }

@@ -17,9 +17,9 @@ export interface VersionInfo {
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
   '1.3.9': {
-    title: 'Keep the search provider setting in wrangler.toml',
+    title: 'Behind-the-scenes upkeep for VinaX AI',
     changes: [
-      { type: 'improved', text: 'The Worker dashboard has SEARCH_API_PROVIDER = tavily, but wrangler.toml.' },
+      { type: 'improved', text: 'VinaX AI’s web search keeps its settings when the app updates.' },
     ],
   },
   '1.3.8': {
