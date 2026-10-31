@@ -17,7 +17,7 @@ test.use({
 
 const C1 = '0b6c2f6e-1c1e-4b51-9a57-3d1f3e2a9b10';
 const MODEL = { id: 'groq:openai/gpt-oss-120b', name: 'GPT-OSS 120B', provider: 'Groq' };
-const VOICE = { dictation: true, readAloud: true, live: true, voices: ['troy', 'hannah'], liveVoices: ['Kore', 'Puck'] };
+const VOICE = { dictation: true, readAloud: true, live: true, voices: ['troy', 'hannah'], liveVoices: ['Kore', 'Puck'], liveModels: [{ id: 'gemini-3.8-live', name: 'Gemini 3.8 Live' }, { id: 'gemini-2.5-flash-native-audio-latest', name: 'Gemini 2.5 Flash Native Audio' }] };
 const sse = (events: Array<[string, unknown]>): string => events.map(([e, d]) => `event: ${e}\ndata: ${JSON.stringify(d)}\n\n`).join('');
 /** The production CSP (public/_headers), so the mic worklet and the Live socket are held to it. */
 const APP_CSP = /Content-Security-Policy: (.+)/.exec(readFileSync(new URL('../public/_headers', import.meta.url), 'utf8'))![1];
@@ -42,10 +42,10 @@ const frame = (kind: number, payload: Buffer): Buffer => {
   return Buffer.concat([h, payload]);
 };
 
-interface Server { transcribe: Array<{ type: string; size: number }>; speak: Array<Record<string, unknown>>; chats: number; saved: Array<Record<string, unknown>>; tokens: number }
+interface Server { transcribe: Array<{ type: string; size: number }>; speak: Array<Record<string, unknown>>; chats: number; saved: Array<Record<string, unknown>>; tokens: number; tokenBodies: Array<Record<string, unknown>> }
 
 async function setup(page: Page, opts: { voice?: typeof VOICE | null; csp?: boolean } = {}): Promise<Server> {
-  const server: Server = { transcribe: [], speak: [], chats: 0, saved: [], tokens: 0 };
+  const server: Server = { transcribe: [], speak: [], chats: 0, saved: [], tokens: 0, tokenBodies: [] };
   await page.addInitScript((fp) => {
     localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'] }, version: 5 }));
     localStorage.setItem('vinax.onboarded.v1', 'true');
@@ -75,6 +75,7 @@ async function setup(page: Page, opts: { voice?: typeof VOICE | null; csp?: bool
     }
     if (url.pathname === '/api/ai/live-token') {
       server.tokens += 1;
+      server.tokenBodies.push(r.postDataJSON() as Record<string, unknown>);
       return route.fulfill({ json: { token: 'auth_tokens/test', url: LIVE_URL, setup: { model: 'models/gemini-3.8-live', generationConfig: { responseModalities: ['AUDIO'] } }, model: { id: 'gemini-3.8-live', name: 'Gemini 3.8 Live' }, expiresAt: '2099-01-01T00:00:00Z' } });
     }
     if (url.pathname === '/api/ai/live-transcript') {
@@ -146,21 +147,33 @@ test('read aloud: the reply’s words (no markup or code) are read, and the butt
   await expect(page.getByRole('button', { name: 'Read aloud' })).toHaveAttribute('aria-pressed', 'false');
 });
 
-test('voice settings: the chosen voices go with Read aloud', async ({ page }) => {
+test('VinaX AI settings: the chosen voices go with Read aloud, and the mic test hears the mic', async ({ page }) => {
   const server = await setup(page);
   await page.goto('/vinaxai');
   await page.getByRole('button', { name: 'More options' }).click();
-  await page.getByRole('menuitem', { name: /Voice settings/ }).click();
-  const dialog = page.getByRole('dialog', { name: 'Voice' });
+  await page.getByRole('menuitem', { name: /Settings/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'VinaX AI settings' });
   await dialog.getByLabel('Read aloud voice').selectOption('hannah');
-  await dialog.getByLabel('Live voice').selectOption('Puck');
-  await dialog.getByRole('button', { name: 'Done' }).click();
+  await dialog.getByLabel('Live voice', { exact: true }).selectOption('Puck');
+  // The fake mic plays a tone: the test hears it and names the device.
+  await dialog.getByRole('button', { name: 'Test microphone' }).click();
+  await expect(dialog.getByRole('status', { name: 'Hearing sound' })).toBeVisible({ timeout: 5_000 });
+  await dialog.getByRole('button', { name: 'Stop test' }).click();
+  await expect(dialog.getByText(/works\.$/)).toBeVisible();
+  await dialog.getByLabel('Live voice model').selectOption('gemini-2.5-flash-native-audio-latest');
+  await dialog.getByRole('button', { name: 'Close settings' }).click();
   const box = page.getByRole('textbox', { name: 'Message VinaX AI' });
   await box.fill('Hi');
   await box.press('Enter');
   await page.getByRole('button', { name: 'Read aloud' }).click();
   await expect.poll(() => server.speak.length).toBe(1);
   expect(server.speak[0]).toMatchObject({ voice: 'hannah', liveVoice: 'Puck' });
+  // The picked Live model goes with the token request.
+  await page.getByRole('textbox', { name: 'Message VinaX AI' }).fill('');
+  await page.getByRole('button', { name: 'Start Live voice' }).click();
+  // (No Live socket here, so the page goes on to ask for the next model: it keeps naming the pick.)
+  await expect.poll(() => server.tokenBodies.length).toBeGreaterThan(0);
+  expect(server.tokenBodies[0]).toMatchObject({ model: 'gemini-2.5-flash-native-audio-latest', voice: 'Puck', skip: [] });
 });
 
 test('Live voice: talks over Gemini Live’s protocol, shows captions, and saves the session into the chat', async ({ page }) => {
@@ -191,6 +204,9 @@ test('Live voice: talks over Gemini Live’s protocol, shows captions, and saves
   await expect(live).toBeVisible();
   await expect(live.getByText('A raga is a melodic framework.')).toBeVisible({ timeout: 10_000 });
   await expect(live.getByText('What is a raga?')).toBeVisible();
+  // The orb follows the sound (the fake mic's tone, then the voice), and the mic in use is named.
+  await expect.poll(() => live.locator('.vx-ai-live-orb').evaluate((el) => Number((el as HTMLElement).style.getPropertyValue('--vx-live-level') || 0))).toBeGreaterThan(0.2);
+  await expect(live.locator('.vx-ai-live-mic .vx-ai-chip')).toHaveText(/\S/);
   // The page sent the setup first, then mic audio in the format Live reads.
   expect(fromPage[0]).toMatchObject({ setup: { model: 'models/gemini-3.8-live' } });
   const audio = fromPage.find((m) => (m.realtimeInput as { audio?: unknown } | undefined)?.audio) as { realtimeInput: { audio: { mimeType: string; data: string } } };
@@ -293,6 +309,14 @@ for (const theme of ['dark', 'light'] as const) {
     let results = await new AxeBuilder({ page }).withTags(tags).analyze();
     expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).slice(0, 3).join(', ')}`)).toEqual([]);
     await page.getByRole('button', { name: 'Cancel dictation' }).click();
+    // VinaX AI settings, with the mic test running.
+    await page.getByRole('button', { name: 'VinaX AI settings' }).click();
+    const settings = page.getByRole('dialog', { name: 'VinaX AI settings' });
+    await settings.getByRole('button', { name: 'Test microphone' }).click();
+    await expect(settings.getByRole('button', { name: 'Stop test' })).toBeVisible();
+    results = await new AxeBuilder({ page }).withTags(tags).analyze();
+    expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).slice(0, 3).join(', ')}`)).toEqual([]);
+    await settings.getByRole('button', { name: 'Close settings' }).click();
     await page.getByRole('button', { name: 'Start Live voice' }).click();
     await expect(page.getByRole('dialog', { name: 'Live voice' }).getByRole('status')).toHaveText('Listening', { timeout: 10_000 });
     results = await new AxeBuilder({ page }).withTags(tags).analyze();

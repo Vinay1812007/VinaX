@@ -211,7 +211,7 @@ describe('music steps aside', () => {
 
 describe('<Composer /> voice', () => {
   const dictation = (over: Partial<Dictation> = {}): Dictation => ({
-    phase: 'idle', seconds: 0, level: 0, notice: null, supported: true,
+    phase: 'idle', seconds: 0, level: 0, silent: false, notice: null, noticeIsMic: false, supported: true,
     start: vi.fn(), finish: vi.fn(), cancel: vi.fn(), dismiss: vi.fn(), ...over,
   });
   const props = { onChange: vi.fn(), onSend: vi.fn(), onStop: vi.fn(), streaming: false };
@@ -247,6 +247,11 @@ describe('<Composer /> voice', () => {
     expect(rec.cancel).toHaveBeenCalled();
     rerender(<Composer {...props} value="" dictation={dictation({ phase: 'transcribing' })} />);
     expect(screen.getByRole('status').textContent).toContain('Transcribing');
+  });
+
+  it('a mic that gives only silence says so in place of the meter', () => {
+    render(<Composer {...props} value="" dictation={dictation({ phase: 'recording', seconds: 3, silent: true })} />);
+    expect(screen.getByText('No sound from your mic').getAttribute('role')).toBe('status');
   });
 
   it('no mic while a reply is written', () => {

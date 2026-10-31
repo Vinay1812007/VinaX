@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { onRequestGet, onRequestPost } from '../functions/api/admin/ai';
 import { _resetCooldowns, isCooling, noteFailure } from '../functions/_lib/ai/cooldown';
 import { ProviderError } from '../functions/_lib/ai/errors';
-import { MODELS, modelById } from '../functions/_lib/ai/models';
+import { MODELS, modelById, UTILITY_MODELS } from '../functions/_lib/ai/models';
 import { _resetVoiceRests, noteVoiceFailure } from '../functions/_lib/ai/voice';
 import { resetSettingsMemo } from '../functions/_lib/settings';
 import { _resetRateLimitsForTests } from '../functions/_lib/ratelimit';
@@ -68,6 +68,8 @@ describe('GET /api/admin/ai', () => {
     expect(body.search.grounding).toMatchObject({ configured: true, dailyLimit: 450, usedToday: 12 });
     expect(body.voice).toMatchObject({ dictation: true, readAloud: true, live: true });
     expect(body.voice.resting.map((r: { model: string }) => r.model)).toEqual(['canopylabs/orpheus-v1-english']);
+    expect(body.utility).toHaveLength(UTILITY_MODELS.length);
+    expect(body.utility.find((x: { id: string }) => x.id === 'nvidia:meta/llama-guard-4-12b')).toEqual({ id: 'nvidia:meta/llama-guard-4-12b', name: 'Llama Guard 4 12B', provider: 'NVIDIA', kind: 'guard', configured: false });
   });
 });
 

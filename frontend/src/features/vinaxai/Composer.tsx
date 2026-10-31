@@ -39,8 +39,8 @@ interface Props {
   dictation?: Dictation;
   /** Open Live voice, when it is offered. */
   onLive?(): void;
-  /** Open Voice settings (from the + menu). */
-  onVoiceSettings?(): void;
+  /** Open VinaX AI settings (from the + menu). */
+  onSettings?(): void;
 }
 
 export interface ComposerHandle { focus(): void }
@@ -61,7 +61,9 @@ function RecordingBar({ d }: { d: Dictation }): ReactNode {
       <span className="vx-ai-rec-time" role="status" aria-label={d.phase === 'starting' ? 'Starting the microphone' : `Recording, ${d.seconds} seconds`}>
         {d.phase === 'starting' ? '…' : clock(d.seconds)}
       </span>
-      <span className="vx-ai-rec-meter" aria-hidden style={{ ['--vx-rec-level' as string]: String(d.level) }}><i /><i /><i /><i /><i /></span>
+      {d.silent
+        ? <span className="vx-ai-rec-silent" role="status">No sound from your mic</span>
+        : <span className="vx-ai-rec-meter" aria-hidden style={{ ['--vx-rec-level' as string]: String(d.level) }}><i /><i /><i /><i /><i /></span>}
       <button type="button" className="vx-ai-send" onClick={d.finish} disabled={d.phase !== 'recording'} aria-label="Finish dictation">
         <CheckIcon className="w-4 h-4" />
       </button>
@@ -69,7 +71,7 @@ function RecordingBar({ d }: { d: Dictation }): ReactNode {
   );
 }
 
-export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ value, onChange, onSend, onStop, streaming, disabled, placeholder, models, model, onModel, thinking, onThinking, search, tray, onFiles, hasFiles, sendBlocked, dictation, onLive, onVoiceSettings }, ref): ReactNode {
+export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ value, onChange, onSend, onStop, streaming, disabled, placeholder, models, model, onModel, thinking, onThinking, search, tray, onFiles, hasFiles, sendBlocked, dictation, onLive, onSettings }, ref): ReactNode {
   const area = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   useImperativeHandle(ref, () => ({
@@ -147,7 +149,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
       {dictation && dictating ? <RecordingBar d={dictation} /> : (
       <div className="vx-ai-composer-row">
         <div className="vx-ai-composer-tools">
-          {onThinking && <PlusMenu thinking={!!thinking} onThinking={onThinking} search={search} onAddFiles={onFiles ? () => picker.current?.click() : undefined} onVoiceSettings={onVoiceSettings} />}
+          {onThinking && <PlusMenu thinking={!!thinking} onThinking={onThinking} search={search} onAddFiles={onFiles ? () => picker.current?.click() : undefined} onSettings={onSettings} />}
           {search?.value === 'on' && <span className="vx-ai-pill">Web search</span>}
           {thinking && <span className="vx-ai-pill">Extended thinking</span>}
         </div>

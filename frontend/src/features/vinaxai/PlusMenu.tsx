@@ -1,11 +1,11 @@
 /**
  * VinaX AI — the composer's + menu: Add photos and files, Web search (Auto,
- * On, Off) when it is offered, Extended thinking, and Voice settings when
- * voice is offered.
+ * On, Off) when it is offered, Extended thinking, and Settings (the VinaX
+ * AI settings panel: model, voice, microphone).
  */
 import { useRef, useState, type ReactNode } from 'react';
 import { moveFocus, useDismiss } from './useDismiss';
-import { GlobeSmallIcon, PaperclipIcon, PlusSmallIcon, ThinkIcon, VoiceSettingsIcon } from './icons';
+import { GlobeSmallIcon, PaperclipIcon, PlusSmallIcon, SettingsIcon, ThinkIcon } from './icons';
 
 export type WebSearch = 'auto' | 'on' | 'off';
 const SEARCH_CHOICES: Array<{ value: WebSearch; label: string; note: string }> = [
@@ -21,12 +21,12 @@ interface Props {
   search?: { value: WebSearch; onChange(v: WebSearch): void };
   /** Open the file picker. */
   onAddFiles?(): void;
-  /** Open Voice settings. */
-  onVoiceSettings?(): void;
+  /** Open VinaX AI settings. */
+  onSettings?(): void;
   disabled?: boolean;
 }
 
-export function PlusMenu({ thinking, onThinking, search, onAddFiles, onVoiceSettings, disabled }: Props): ReactNode {
+export function PlusMenu({ thinking, onThinking, search, onAddFiles, onSettings, disabled }: Props): ReactNode {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -115,18 +115,18 @@ export function PlusMenu({ thinking, onThinking, search, onAddFiles, onVoiceSett
             </span>
             <span className={`vx-ai-switch${thinking ? ' is-on' : ''}`} aria-hidden />
           </div>
-          {onVoiceSettings && (
+          {onSettings && (
             <div
               role="menuitem"
               tabIndex={-1}
               className="vx-ai-menu-item"
-              onClick={() => { close(false); onVoiceSettings(); }}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); close(false); onVoiceSettings(); } }}
+              onClick={() => { close(false); onSettings(); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); close(false); onSettings(); } }}
             >
-              <VoiceSettingsIcon className="w-4 h-4" />
+              <SettingsIcon className="w-4 h-4" />
               <span className="vx-ai-menu-text">
-                <span>Voice settings</span>
-                <span className="vx-ai-opt-sub">Voices for Read aloud and Live voice</span>
+                <span>Settings</span>
+                <span className="vx-ai-opt-sub">Model, voices and microphone</span>
               </span>
             </div>
           )}

@@ -349,7 +349,13 @@ describe('POST /api/ai/live-token', () => {
   it('Extended thinking puts the thinking Live model first; skipped models are left out', () => {
     expect(liveCandidates(true, [])[0].id).toBe('gemini-3.8-live-extended-thinking');
     expect(liveCandidates(false, ['gemini-3.8-live'])[0].id).toBe('gemini-3.1-flash-live-preview');
-    expect(liveCandidates(false, ['gemini-3.8-live', 'gemini-3.1-flash-live-preview', 'gemini-2.5-flash-native-audio-preview-12-2025'])).toEqual([]);
+    expect(liveCandidates(false, ['gemini-3.8-live', 'gemini-3.1-flash-live-preview', 'gemini-2.5-flash-native-audio-latest', 'gemini-2.5-flash-native-audio-preview-12-2025', 'gemini-2.5-flash-native-audio-preview-09-2025'])).toEqual([]);
+    // A model picked in settings goes first, once; the others stay as fallbacks.
+    const picked = liveCandidates(true, [], Date.now(), 'gemini-2.5-flash-native-audio-latest').map((m) => m.id);
+    expect(picked.slice(0, 3)).toEqual(['gemini-2.5-flash-native-audio-latest', 'gemini-3.8-live-extended-thinking', 'gemini-3.8-live']);
+    expect(new Set(picked).size).toBe(picked.length);
+    // An unknown pick is ignored.
+    expect(liveCandidates(false, [], Date.now(), 'gpt-5')[0].id).toBe('gemini-3.8-live');
   });
 
   it('needs a Gemini key, and a refused key is a calm 503', async () => {

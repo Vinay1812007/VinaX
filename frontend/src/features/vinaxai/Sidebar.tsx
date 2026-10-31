@@ -114,9 +114,11 @@ interface Props {
   onCollapse?(): void;
   /** Shown as a slide-over drawer. */
   drawer?: boolean;
+  /** Open VinaX AI settings (else Settings goes to the app's settings). */
+  onSettings?(): void;
 }
 
-export function Sidebar({ onNavigate, onNewChat, onCollapse, drawer }: Props): ReactNode {
+export function Sidebar({ onNavigate, onNewChat, onCollapse, drawer, onSettings }: Props): ReactNode {
   const account = useAccount();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -200,7 +202,7 @@ export function Sidebar({ onNavigate, onNewChat, onCollapse, drawer }: Props): R
           <span className="vx-ai-me-name">{name}</span>
         </div>
         <div className="vx-ai-side-links">
-          <Link to="/settings" onClick={onNavigate}>Settings</Link>
+          {onSettings ? <button type="button" className="vx-ai-side-link" onClick={onSettings}>Settings</button> : <Link to="/settings" onClick={onNavigate}>Settings</Link>}
           <Link to="/" onClick={onNavigate} className="vx-ai-side-back">
             <ArrowLeftIcon className="w-4 h-4" /> Back to VinaX
           </Link>

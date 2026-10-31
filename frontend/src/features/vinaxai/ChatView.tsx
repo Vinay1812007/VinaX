@@ -31,10 +31,10 @@ import type { FileRef } from './types';
 import { ArtifactPanel } from './ArtifactPanel';
 import { usePanel } from './artifactStore';
 import { artifactsOf, collectVersions, hasPreview } from './artifacts';
-import { ArrowDownIcon, MenuIcon, NewChatIcon, SidebarIcon, SparkIcon } from './icons';
+import { ArrowDownIcon, MenuIcon, NewChatIcon, SettingsIcon, SidebarIcon, SparkIcon } from './icons';
 import { useVoiceDictation } from './useVoiceDictation';
 import { dismissReadNotice, stopReading, useReadAloud } from './readAloud';
-import { VoiceSettings } from './VoiceSettings';
+import { SettingsPanel, type SettingsSection } from './SettingsPanel';
 
 /** Live voice loads only when someone opens it. */
 const LiveView = lazy(() => import('./live/LiveView'));
@@ -177,7 +177,7 @@ export function ChatView(): ReactNode {
   });
   const readNotice = useReadAloud((s) => s.notice);
   const [liveOpen, setLiveOpen] = useState(false);
-  const [voiceSettings, setVoiceSettings] = useState(false);
+  const [settings, setSettings] = useState<SettingsSection | null>(null);
   useEffect(() => () => stopReading(), []);
   useEffect(() => { stopReading(); }, [conversationId]);
   const openLive = () => {
@@ -311,7 +311,7 @@ export function ChatView(): ReactNode {
       sendBlocked={tray.busy || cannotSee}
       dictation={voice?.dictation ? dictation : undefined}
       onLive={voice?.live ? openLive : undefined}
-      onVoiceSettings={voice && (voice.readAloud || voice.live) ? () => setVoiceSettings(true) : undefined}
+      onSettings={() => setSettings(voice && (voice.dictation || voice.readAloud || voice.live) ? 'voice' : 'chat')}
     />
   );
   const visionChip = cannotSee && (
@@ -333,6 +333,11 @@ export function ChatView(): ReactNode {
   const voiceNoticeEl = voiceNoticeText && (
     <div className="vx-ai-notice" role="alert">
       <span>{voiceNoticeText}</span>
+      {dictation.notice && dictation.noticeIsMic && (
+        <span className="vx-ai-notice-actions">
+          <button type="button" className="vx-ai-chip" onClick={() => { dictation.dismiss(); setSettings('voice'); }}>Microphone settings</button>
+        </span>
+      )}
       <button type="button" onClick={() => { dictation.dismiss(); dismissReadNotice(); }} aria-label="Dismiss">×</button>
     </div>
   );
@@ -437,7 +442,7 @@ export function ChatView(): ReactNode {
             {...(wide ? {} : { role: 'dialog', 'aria-modal': true, 'aria-label': 'Chats' })}
             onKeyDown={trapTab}
           >
-            <Sidebar drawer={!wide} onNavigate={() => setDrawer(false)} onNewChat={newChat} onCollapse={wide ? () => prefs.set({ sidebarCollapsed: true }) : () => setDrawer(false)} />
+            <Sidebar drawer={!wide} onNavigate={() => setDrawer(false)} onSettings={() => { setDrawer(false); setSettings('chat'); }} onNewChat={newChat} onCollapse={wide ? () => prefs.set({ sidebarCollapsed: true }) : () => setDrawer(false)} />
           </div>
         </>
       )}
@@ -461,6 +466,9 @@ export function ChatView(): ReactNode {
           </div>
           <div className="vx-ai-header-end">
             <NowPlayingPill />
+            <button type="button" className="vx-ai-icon-btn" onClick={() => setSettings('chat')} aria-label="VinaX AI settings" title="Settings">
+              <SettingsIcon className="w-5 h-5" />
+            </button>
             {!(wide && sideOpen) && (
               <button type="button" className="vx-ai-icon-btn" onClick={newChat} aria-label="New chat" title="New chat">
                 <NewChatIcon className="w-5 h-5" />
@@ -474,10 +482,19 @@ export function ChatView(): ReactNode {
         <ArtifactPanel versions={versions.get(panel.open.id) ?? []} live={streaming} sheet={!wide} />
       )}
       <div className="sr-only" aria-live="polite">{announce}</div>
-      {voiceSettings && voice && <VoiceSettings voice={voice} onClose={() => setVoiceSettings(false)} />}
+      {settings && (
+        <SettingsPanel
+          models={pickerModels}
+          groups={models.data?.groups ?? []}
+          voice={voice}
+          search={!!models.data?.search}
+          section={settings}
+          onClose={() => setSettings(null)}
+        />
+      )}
       {liveOpen && (
         <Suspense fallback={<div className="vx-ai-live" role="status" aria-label="Opening Live voice" />}>
-          <LiveView conversationId={conversationId} parentMessageId={leafId} thinking={prefs.extendedThinking} voice={prefs.liveVoice} onClose={closeLive} />
+          <LiveView conversationId={conversationId} parentMessageId={leafId} thinking={prefs.extendedThinking} voice={prefs.liveVoice} model={prefs.liveModel} micId={prefs.micId} onClose={closeLive} />
         </Suspense>
       )}
     </div>
