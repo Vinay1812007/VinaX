@@ -87,8 +87,8 @@ Use its table to set the registry flags. Use the owner's latency measurements to
 
 | Signal | Ladder |
 | --- | --- |
-| The message has images (phase 4) | vision: Gemini 3.6 Flash → Gemini 3.5 Flash → Nemotron 3.5 Super VL → its OpenRouter mirror |
-| A PDF (phase 4), or the thread is over 150,000 characters | long: Gemini 3.6 Flash → Gemini 3.5 Flash → Gemini 3 Flash Preview → GPT-OSS 120B |
+| One of the last three questions has an image | vision: Gemini 3.6 Flash → Gemini 3.5 Flash → Nemotron 3.5 Super VL → its OpenRouter mirror |
+| The thread has a PDF, or is over 150,000 characters (files' text counted) | long: Gemini 3.6 Flash → Gemini 3.5 Flash → Gemini 3 Flash Preview → GPT-OSS 120B |
 | Extended thinking is on | deep: Gemini 3.6 Flash → Nemotron 3 Ultra → its OpenRouter mirror → GPT-OSS 120B, all with high reasoning |
 | Code cues (a fence, a stack trace, "function", "bug", a file extension…) | code: GPT-OSS 120B → Gemini 3.6 Flash → North Mini Code → Laguna S 2.1 |
 | Short small talk (under six words, no question, starts like a greeting or thanks) | fast: Qwen 3.8 27B → GPT-OSS 20B → Gemini 3.5 Flash Lite |
@@ -186,7 +186,7 @@ Nothing else is added: no taste profile and no listening history. Models flagged
 
 **Limits:**
 - Two rate limits: the per-IP limiter (`RATE_LIMIT_30` tier) and `RATE_LIMIT_30` keyed by account.
-- The body is capped at 2 MB. Files travel separately by id (phase 4), so chat bodies are only text.
+- The body is capped at 2 MB. Files travel separately (`POST /api/ai/attachments`) and the message names them by id, so chat bodies are only text.
 - Text is capped at 400,000 characters.
 
 **Where the new message goes:**
@@ -220,7 +220,7 @@ When the page disconnects, the stream's `cancel()` aborts the upstream request. 
 - The end of the reply waits up to 1.5 s for it, so it usually arrives in the same stream. Either way it is saved to the conversation.
 - If the title model fails, the cut title stays.
 
-Refusals before the stream: `400 bad_request | unknown_model | attachments_unavailable`, `401 signed_out`, `404 not_found`, `409 conversation_full` (2,000 messages), `413 too_large | too_long`, `429 rate_limited`, `503 ai_not_configured | ai_disabled | unavailable`.
+Refusals before the stream: `400 bad_request | unknown_model | bad_attachment | too_many_images | model_cannot_see_images`, `409 too_many_files`, `401 signed_out`, `404 not_found`, `409 conversation_full` (2,000 messages), `413 too_large | too_long`, `429 rate_limited`, `503 ai_not_configured | ai_disabled | unavailable`.
 
 ## Other routes
 
@@ -234,6 +234,41 @@ Refusals before the stream: `400 bad_request | unknown_model | attachments_unava
 | `GET /api/ai/export` | Every chat of the account with every message and branch, as one JSON file to download (`ai_export`; Settings → Your data → Export VinaX AI chats). It is not part of the app's backup file and is never imported: the chats already live with the account |
 
 Every query is filtered by the session's account. Someone else's conversation, a deleted one or a malformed id answers 404. The Worker's router dispatches `PATCH` and `DELETE` to `onRequestPatch` / `onRequestDelete`.
+
+## Files
+
+`_lib/ai/attachments.ts`, `materialize.ts`, `storage.ts`, `geminiFiles.ts`; the routes `functions/api/ai/attachments.ts` and `attachments/[id].ts`; on the page `files.ts`, `pdf.ts`, `usePendingFiles.ts`, `FileChips.tsx`.
+
+**What can be added.** Files come from the + menu ("Add photos and files"), a paste, or a drop on the page.
+
+| Kind | Types | Limit |
+| --- | --- | --- |
+| Image | png, jpg, webp, gif (first frame) | 5 per message. Shrunk on the device to 1568 px on the long edge and sent as WebP (JPEG where the browser cannot make WebP); the server takes at most 5 MB |
+| PDF | pdf | 20 MB and 100 pages |
+| Text | text, markdown, csv, json and common source code | 1 MB |
+
+At most 10 files go in a message and 20 in a chat. The page checks these limits, and the server checks them again.
+
+**Upload.**
+- Each file is uploaded as soon as it is added, so Send only names it. Removing a chip deletes the upload.
+- `POST /api/ai/attachments?name=…&conversationId=…` takes the raw bytes, not multipart, with their type and length. The Worker checks the type, the length and the first bytes (the PNG, JPEG, GIF, WebP or `%PDF-` signature, and no binary inside text).
+- The file is then streamed into the **private** Storage bucket `ai-attachments` at `<account>/<conversation or new>/<id>` without being buffered. A text file is read whole: its text is kept for the model.
+- A PDF's page count and text are read on the device by pdf.js and sent with `PATCH /api/ai/attachments/:id`. pdf.js and its worker load only when a PDF is added, and neither is precached. The worker is about 370 KB gzipped, an `.mjs` asset outside the bundle budget's `.js` check.
+- `GET /api/ai/attachments/:id` gives the owner their file: its own type, `nosniff`, a sandboxing CSP, and `inline` for images only. The page turns it into an object URL, since a session cannot ride in an `<img src>`.
+- No public or signed URL is ever made.
+
+**Sending.** Each model gets each file in the form it can use (`materialize.ts`):
+- **Images:** a vision model gets image parts (base64), from the last three questions only; older images become "[image: name]". A model that cannot see gets "[image: name (this model cannot see images)]".
+  - If you picked a model that cannot see, the composer says so before sending, offering a vision model or Auto. The server refuses such a message with `400 model_cannot_see_images`.
+- **PDFs:**
+  - Gemini reads the file itself through the **Files API**. The Worker streams the PDF from Storage to Google instead of base64-encoding up to 20 MB, which its CPU budget cannot afford. The file's address is saved on the attachment, and the PDF is uploaded again an hour before Google's 48 hours run out.
+  - Every other model gets the device-read text as a `<document name="…">` block, or a note that its text could not be read.
+- **Text files:** `<document>` blocks. Document text is material, and `</document>` inside it is defused.
+- **Auto:** images send the message to the vision ladder, and a PDF to the long ladder.
+
+**Deleting.** The files go along with the account, the chat, or the message that never got sent:
+- Deleting the account (yours, or the console's delete) removes the account's stored files before the rows cascade.
+- The hourly housekeeping removes a deleted chat's files with the chat, and removes files never sent after a day.
 
 ## Storage
 
@@ -312,7 +347,6 @@ These phases are still to come:
 
 | Phase | What it adds |
 | --- | --- |
-| 4 | Attachments |
 | 5 | Artifacts and the sandbox |
 | 6 | Voice |
 | 7 | The console's providers card and Probe button |

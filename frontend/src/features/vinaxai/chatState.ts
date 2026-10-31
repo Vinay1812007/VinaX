@@ -4,7 +4,7 @@
  * and each event of the reply stream. Pure, so it is tested directly
  * (chatState.test.ts); the Zustand store in store.ts only holds it.
  */
-import type { ChatMessage, Marker, ServerConversation, ServerMessage, StreamEvent } from './types';
+import type { ChatMessage, FileRef, Marker, ServerConversation, ServerMessage, StreamEvent } from './types';
 
 /** The text with grounding's markers written in as [n] (they arrive after the text). */
 export function applyMarkers(text: string, markers: Marker[]): string {
@@ -42,7 +42,7 @@ export interface ChatState {
 export type ChatAction =
   | { type: 'reset' }
   | { type: 'load'; conversation: ServerConversation; messages: ServerMessage[] }
-  | { type: 'send'; text: string; parentId: string | null; now: string }
+  | { type: 'send'; text: string; parentId: string | null; now: string; files?: FileRef[] }
   | { type: 'retry'; userId: string; now: string }
   | { type: 'continue'; messageId: string }
   | { type: 'select-leaf'; leafId: string }
@@ -168,6 +168,9 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         messages[m.id] = {
           id: m.id, parentId: m.parentId, role: m.role,
           text: m.content.filter((p) => p.type === 'text').map((p) => p.text ?? '').join('\n\n'),
+          files: m.content
+            .filter((p) => p.type === 'attachment' && typeof p.id === 'string')
+            .map((p) => ({ id: p.id!, name: p.name ?? 'file', kind: p.kind ?? 'text', mime: p.mime ?? '', size: p.size ?? 0, ...(p.pages ? { pages: p.pages } : {}) })),
           thinking: m.thinking ?? '', thinkingMs: m.thinkingMs, model: m.model, stopReason: m.stopReason, error: null, createdAt: m.createdAt,
           sources: m.sources && Array.isArray(m.sources.items) ? m.sources : null,
         };
@@ -179,7 +182,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'send': {
       if (state.streaming) return state;
       const base = dropFailedLocals(state.messages);
-      const user = blank(LOCAL_USER, action.parentId, 'user', action.text, action.now);
+      const user = { ...blank(LOCAL_USER, action.parentId, 'user', action.text, action.now), ...(action.files?.length ? { files: action.files } : {}) };
       const reply = blank(LOCAL_REPLY, LOCAL_USER, 'assistant', '', action.now);
       return { ...state, notice: null, messages: { ...base, [LOCAL_USER]: user, [LOCAL_REPLY]: reply }, leafId: LOCAL_REPLY, replyId: LOCAL_REPLY, streaming: true, thinkingStartedAt: null };
     }

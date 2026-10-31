@@ -70,6 +70,11 @@ describe('what the controller asks for', () => {
     expect(bodies[0]).toMatchObject({ conversationId: 'c1', parentMessageId: 'a1', mode: 'model', model: 'groq:openai/gpt-oss-120b', extendedThinking: true, webSearch: 'on' });
   });
 
+  it('files go first in the content; a message may be files alone', async () => {
+    await sendMessage('', { files: [{ id: 'f1', name: 'a.png', kind: 'image', mime: 'image/png', size: 1 }] });
+    expect(bodies[0]).toMatchObject({ content: [{ type: 'attachment', id: 'f1' }] });
+  });
+
   it('an edit of the first message is sent as a new root', async () => {
     await sendMessage('better', { parentId: null });
     expect(bodies[0]).toMatchObject({ parentMessageId: 'root', content: [{ type: 'text', text: 'better' }] });

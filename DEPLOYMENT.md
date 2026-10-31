@@ -75,7 +75,7 @@ Deploying the Worker also registers its **Cron Trigger** (`[triggers]` in `wrang
 The Worker keeps its data in one hosted database. Setting it up is a one-time step; redeploying the Worker never touches it.
 
 1. Create the hosted project.
-2. In its SQL editor, paste `backend/supabase/schema.sql` and run it. It creates every table, the `directory` view, the `stats_*` functions and the deny-all row-level security, and writes schema version 5 into `meta` (versions 4 and 5 added the VinaX AI tables and its search allowances; pasting it again over an older version is the whole upgrade). It is idempotent: re-running it is safe and deletes nothing. A database that ran an older version still holds the old AI tables; `backend/supabase/remove-ai.sql`, run once by hand, removes them (it deletes that data). To start over, run `backend/supabase/reset.sql` first (it deletes all data), then `schema.sql` again. The **Schema** workflow can do the apply from CI once a `SUPABASE_DB_URL` secret is set ([docs/database.md](docs/database.md#from-ci-instead-of-the-sql-editor)); it also proves every change to `backend/supabase/**` on a scratch Postgres in pull requests.
+2. In its SQL editor, paste `backend/supabase/schema.sql` and run it. It creates every table, the `directory` view, the `stats_*` functions and the deny-all row-level security, and writes schema version 6 into `meta` (versions 4–6 added the VinaX AI tables, its search allowances and its files; pasting it again over an older version is the whole upgrade). On Supabase it also creates the private Storage bucket `ai-attachments` that VinaX AI's files live in: no dashboard step is needed. It is idempotent: re-running it is safe and deletes nothing. A database that ran an older version still holds the old AI tables; `backend/supabase/remove-ai.sql`, run once by hand, removes them (it deletes that data). To start over, run `backend/supabase/reset.sql` first (it deletes all data), then `schema.sql` again. The **Schema** workflow can do the apply from CI once a `SUPABASE_DB_URL` secret is set ([docs/database.md](docs/database.md#from-ci-instead-of-the-sql-editor)); it also proves every change to `backend/supabase/**` on a scratch Postgres in pull requests.
 3. Set the two Worker secrets from `backend/`:
 
 ```sh
@@ -91,7 +91,7 @@ Only the Worker holds the service-role key. The frontend and the console never t
 
 The chat at `/vinaxai` ([docs/ai.md](docs/ai.md)) runs on free tiers of five providers, all called from the Worker. Any one is enough.
 
-1. Apply schema version 5 (above) before the Worker that uses it, or the chat answers `503 unavailable` for lack of its tables, and web search stays off (its daily allowance lives there).
+1. Apply schema version 6 (above) before the Worker that uses it, or the chat answers `503 unavailable` for lack of its tables, and web search stays off (its daily allowance lives there).
 2. Set the keys you have, from `backend/`. Each is optional:
 
 ```sh

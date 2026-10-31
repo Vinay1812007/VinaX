@@ -13,6 +13,7 @@ import { siblingsOf } from './chatState';
 import { selectBranch, useChatStore, type ModelChoice } from './store';
 import { moveFocus, useDismiss } from './useDismiss';
 import { SearchStatusLine, SourcesRow } from './Sources';
+import { MessageFiles } from './FileChips';
 import { ChevronDownSmallIcon, ChevronIcon, ContinueIcon, CopyIcon, PencilIcon, RetryIcon } from './icons';
 import type { ChatMessage, PickerModel } from './types';
 
@@ -74,7 +75,7 @@ export const UserMessage = memo(function UserMessage({ message, onEdit }: UserPr
   const save = () => {
     const t = draft.trim();
     setEditing(false);
-    if (t && t !== message.text.trim()) onEdit?.(t);
+    if ((t || message.files?.length) && t !== message.text.trim()) onEdit?.(t);
   };
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); save(); }
@@ -94,7 +95,8 @@ export const UserMessage = memo(function UserMessage({ message, onEdit }: UserPr
         </div>
       ) : (
         <>
-          <div className="vx-ai-bubble">{message.text}</div>
+          {message.files?.length ? <MessageFiles files={message.files} /> : null}
+          {message.text && <div className="vx-ai-bubble">{message.text}</div>}
           <div className="vx-ai-user-actions">
             <BranchSwitcher message={message} />
             {onEdit && !message.local && (

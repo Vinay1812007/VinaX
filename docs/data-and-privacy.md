@@ -69,6 +69,7 @@ VinaX AI ([ai.md](ai.md)), the chat at `/vinaxai`, is the one place AI is used, 
 - When a reply searches the web, the search words (the latest message, with links cut to their site names) go either to Google, through Gemini's Search grounding, or to the search provider (Tavily or Serper). A search's results are cached at the edge for up to an hour, keyed by a hash of the query.
 - Conversations are stored with the account (`ai_conversations`, `ai_messages`; [database.md](database.md)), so they follow it to every device.
 - A deleted chat is hidden at once and removed within a day. Deleting the account removes every chat.
+- Files added to a chat stay with the account, in a private Storage bucket that only the Worker can read. Images are shrunk on the device first; a PDF's text is read on the device. They are sent to the AI provider that answers, and removed with their chat or the account. Files added but never sent are removed after a day.
 - The Worker logs only the route, model, provider, latency, status and token counts, never message text.
 - The page keeps nothing about the chat on the device.
 

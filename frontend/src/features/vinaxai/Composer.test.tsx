@@ -90,3 +90,22 @@ describe('<Composer /> web search', () => {
     expect(screen.queryAllByRole('menuitemradio')).toHaveLength(0);
   });
 });
+
+describe('<Composer /> files', () => {
+  const props = { value: '', onChange: vi.fn(), onSend: vi.fn(), onStop: vi.fn(), streaming: false, thinking: false, onThinking: vi.fn() };
+  it('files alone can be sent; sending waits while files are being added or a model cannot see them', () => {
+    const { rerender } = render(<Composer {...props} onFiles={vi.fn()} hasFiles />);
+    expect(screen.getByRole('button', { name: 'Send message' })).toHaveProperty('disabled', false);
+    rerender(<Composer {...props} onFiles={vi.fn()} hasFiles sendBlocked />);
+    expect(screen.getByRole('button', { name: 'Send message' })).toHaveProperty('disabled', true);
+  });
+  it('the + menu adds files; pasted files go to the tray', () => {
+    const onFiles = vi.fn();
+    render(<Composer {...props} onFiles={onFiles} />);
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    expect(screen.getByRole('menuitem', { name: /Add photos and files/ })).toBeTruthy();
+    const pasted = new File(['x'], 'shot.png', { type: 'image/png' });
+    fireEvent.paste(screen.getByRole('textbox', { name: 'Message VinaX AI' }), { clipboardData: { files: [pasted] } });
+    expect(onFiles).toHaveBeenCalledWith([pasted]);
+  });
+});

@@ -596,3 +596,26 @@
 .vx-ai-radio { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgb(var(--ink-400)); flex-shrink: 0; }
 .vx-ai-radio.is-on { border-color: rgb(var(--ember-500)); box-shadow: inset 0 0 0 3px rgb(var(--ink-850)); background: rgb(var(--ember-500)); }
 .vx-ai-pop-head svg { display: inline; vertical-align: -2px; margin-right: 4px; }
+
+/* ------------------------------------------------------------- files */
+.vx-ai-files { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: min(100%, 600px); }
+.vx-ai-files.is-tray { justify-content: flex-start; margin: 0 0 8px; max-width: none; }
+.vx-ai-file {
+  position: relative; display: flex; align-items: center; gap: 8px; max-width: 240px; min-height: 44px; padding: 5px 10px 5px 8px;
+  border-radius: var(--vx-radius-card); border: 1px solid var(--glass-border); background: rgb(var(--ink-800)); color: rgb(var(--ink-300));
+}
+.vx-ai-files.is-tray .vx-ai-file { padding-right: 34px; background: rgb(var(--ink-900)); }
+.vx-ai-files li.is-error .vx-ai-file { border-color: var(--vx-danger); }
+.vx-ai-file-text { display: flex; flex-direction: column; min-width: 0; }
+.vx-ai-file-name { font-size: 0.8125rem; color: rgb(var(--ink-100)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vx-ai-file-meta { font-size: 0.6875rem; color: rgb(var(--ink-400)); }
+.vx-ai-file-mini { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+.vx-ai-file-x {
+  position: absolute; top: 50%; right: 4px; transform: translateY(-50%); display: grid; place-items: center;
+  width: 26px; height: 26px; border-radius: 50%; color: rgb(var(--ink-300));
+}
+.vx-ai-file-x:hover { background: rgb(var(--ink-700)); color: rgb(var(--ink-100)); }
+.vx-ai-file-thumb { display: block; width: 120px; height: 120px; border-radius: var(--vx-radius-card); overflow: hidden; border: 1px solid var(--glass-border); background: rgb(var(--ink-800)); }
+.vx-ai-file-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.vx-ai-notice-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.vx-ai.is-dragging .vx-ai-composer { border-color: rgb(var(--ember-500)); box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.35); }

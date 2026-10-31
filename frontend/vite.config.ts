@@ -24,8 +24,8 @@ const APP_VERSION = BUILD_NUMBER ? `${pkg.version}+${BUILD_NUMBER}` : pkg.versio
  *  the maths fonts: it needs the network anyway, and a listener who never
  *  opens the chat should not download it. */
 export const ON_DEMAND_PAGES = /\/src\/pages\/VinaXAIPage\.tsx$/;
-/** The maths engine's fonts, only ever loaded by its on-demand stylesheet. */
-export const ON_DEMAND_ASSETS = /^assets\/KaTeX_[\w-]+\.(woff2?|ttf)$/;
+/** The maths engine's fonts (loaded by its on-demand stylesheet) and the PDF reader's worker (loaded when a PDF is added). */
+export const ON_DEMAND_ASSETS = /^assets\/(KaTeX_[\w-]+\.(woff2?|ttf)|pdf\.worker[\w.-]*\.m?js)$/;
 
 type BundleItem = {
   type: 'chunk' | 'asset';

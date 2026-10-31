@@ -9,7 +9,7 @@ import { queryClient } from '@/services/queryClient';
 import { AiError, noticeFor, patchConversation, streamChat, type ChatRequestBody } from './api';
 import { chatReducer, initialChat, leafUnder, parentForNext, type ChatAction, type ChatState } from './chatState';
 import { usePrefs } from './prefs';
-import type { StreamEvent } from './types';
+import type { FileRef, StreamEvent } from './types';
 
 interface Store extends ChatState {
   dispatch(actions: ChatAction | ChatAction[]): void;
@@ -112,16 +112,17 @@ async function run(body: ChatRequestBody): Promise<RunOutcome> {
  * the edited message's parent (null for the first message), which makes the
  * new message its sibling.
  */
-export function sendMessage(text: string, opts: { parentId?: string | null } = {}): Promise<RunOutcome> {
+export function sendMessage(text: string, opts: { parentId?: string | null; files?: FileRef[] } = {}): Promise<RunOutcome> {
   const s = useChatStore.getState();
-  if (s.streaming || !text.trim()) return Promise.resolve({ ok: true });
+  const files = opts.files ?? [];
+  if (s.streaming || (!text.trim() && !files.length)) return Promise.resolve({ ok: true });
   const parent = opts.parentId !== undefined ? opts.parentId : parentForNext(s);
-  dispatch({ type: 'send', text, parentId: parent, now: new Date().toISOString() });
+  dispatch({ type: 'send', text, parentId: parent, now: new Date().toISOString(), files });
   return run({
     ...requestBase(),
     conversationId: s.conversationId,
     ...(s.conversationId ? { parentMessageId: parent ?? 'root' } : {}),
-    content: [{ type: 'text', text }],
+    content: [...files.map((f) => ({ type: 'attachment' as const, id: f.id })), ...(text.trim() ? [{ type: 'text' as const, text }] : [])],
   });
 }
 

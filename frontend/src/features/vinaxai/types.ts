@@ -57,11 +57,24 @@ export interface ReplyError {
   alternatives?: ModelLabel[];
 }
 
+/** A file in a message (as sent, or as saved in its content). */
+export interface FileRef {
+  id: string;
+  name: string;
+  kind: 'image' | 'pdf' | 'text';
+  mime: string;
+  size: number;
+  pages?: number;
+  /** This device's own copy of an image just sent (an object URL). */
+  preview?: string;
+}
+
 export interface ChatMessage {
   id: string;
   parentId: string | null;
   role: 'user' | 'assistant';
   text: string;
+  files?: FileRef[];
   thinking: string;
   /** How long the model reasoned, once its answer began (ms). */
   thinkingMs: number | null;
@@ -81,7 +94,7 @@ export interface ServerMessage {
   id: string;
   parentId: string | null;
   role: 'user' | 'assistant';
-  content: Array<{ type: string; text?: string }>;
+  content: Array<{ type: string; text?: string; id?: string; name?: string; kind?: FileRef['kind']; mime?: string; size?: number; pages?: number }>;
   thinking: string | null;
   thinkingMs: number | null;
   model: ModelLabel | null;

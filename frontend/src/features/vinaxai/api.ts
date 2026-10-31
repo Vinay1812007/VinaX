@@ -60,7 +60,7 @@ export interface ChatRequestBody {
   conversationId: string | null;
   parentMessageId?: string | 'root';
   continueFrom?: string;
-  content: Array<{ type: 'text'; text: string }>;
+  content: Array<{ type: 'text'; text: string } | { type: 'attachment'; id: string }>;
   mode: 'auto' | 'model';
   model?: string;
   extendedThinking?: boolean;
