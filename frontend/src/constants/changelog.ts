@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.3.5': {
+    title: 'Vinaxai/phase 2 ux',
+    changes: [
+      { type: 'improved', text: 'VinaX AI: generated titles, Continue, and a chats export.' },
+      { type: 'improved', text: 'VinaX AI: render maths, loaded only when a reply needs it.' },
+      { type: 'improved', text: 'VinaX AI: the Claude-style chat interface.' },
+      { type: 'improved', text: 'VinaX AI: entry points, chats export, and docs.' },
+    ],
+  },
   '1.3.4': {
     title: 'Vinaxai/phase 1 foundation',
     changes: [
