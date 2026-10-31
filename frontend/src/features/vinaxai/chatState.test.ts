@@ -115,3 +115,40 @@ describe('chatReducer: retry, load and branches', () => {
     expect(next.messages.a3).toBeUndefined(); // the failed placeholder is tidied away
   });
 });
+
+describe('chatReducer: continue and branches', () => {
+  const MODEL2 = { id: 'gemini:g', name: 'Gemini', provider: 'Google Gemini' };
+  const base = () => run([send('q'), meta(), ev({ event: 'text', data: { delta: 'A melodic fra' } }), ev({ event: 'done', data: { stopReason: 'length' } })]);
+
+  it('Continue appends to the same reply and clears its cut-off state', () => {
+    const s = run([
+      { type: 'continue', messageId: 'a1' },
+      ev({ event: 'meta', data: { conversationId: 'c1', userMessageId: 'u1', assistantMessageId: 'a1', model: MODEL2, continued: true } }),
+      ev({ event: 'text', data: { delta: 'mework.' } }),
+      ev({ event: 'done', data: { stopReason: 'end' } }),
+    ], base());
+    expect(s.messages.a1).toMatchObject({ text: 'A melodic framework.', stopReason: 'end', model: MODEL2 });
+    expect(Object.keys(s.messages)).toHaveLength(2);
+    expect(s.resume).toBeNull();
+  });
+
+  it('a refused Continue, or one stopped before any text, leaves the reply as it was', () => {
+    let s = run([{ type: 'continue', messageId: 'a1' }, { type: 'fail', code: 'rate_limited', message: 'Wait.' }], base());
+    expect(s.messages.a1).toMatchObject({ text: 'A melodic fra', stopReason: 'length' });
+    expect(s.notice?.code).toBe('rate_limited');
+    s = run([{ type: 'continue', messageId: 'a1' }, { type: 'stopped' }], base());
+    expect(s.messages.a1).toMatchObject({ text: 'A melodic fra', stopReason: 'length' });
+  });
+
+  it('siblings, leafUnder and select-leaf follow the tree', async () => {
+    const { siblingsOf, leafUnder } = await import('./chatState');
+    const m = (id: string, parentId: string | null, role: 'user' | 'assistant', at: string) => ({ id, parentId, role, text: id, thinking: '', thinkingMs: null, model: null, stopReason: null, error: null, createdAt: at });
+    const messages = { u1: m('u1', null, 'user', '1'), a1: m('a1', 'u1', 'assistant', '2'), u2: m('u2', null, 'user', '3'), a2: m('a2', 'u2', 'assistant', '4'), a3: m('a3', 'u2', 'assistant', '5') };
+    expect(siblingsOf(messages, messages.u2).map((x) => x.id)).toEqual(['u1', 'u2']);
+    expect(siblingsOf(messages, messages.a2).map((x) => x.id)).toEqual(['a2', 'a3']);
+    expect(leafUnder(messages, 'u2')).toBe('a3');
+    expect(leafUnder(messages, 'u1')).toBe('a1');
+    const s = run([{ type: 'select-leaf', leafId: 'a1' }], { ...initialChat(), messages, leafId: 'a3' });
+    expect(thread(s).map((x) => x.id)).toEqual(['u1', 'a1']);
+  });
+});

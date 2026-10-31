@@ -6,7 +6,7 @@
 import { currentAccount } from '@/services/auth/google';
 import { isNativePlatform } from '@/services/native';
 import { SseParser } from './sse';
-import type { ModelsResponse, ServerConversation, ServerMessage, StreamEvent } from './types';
+import type { ConversationSummary, ModelsResponse, ServerConversation, ServerMessage, StreamEvent } from './types';
 
 const ORIGIN = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
 export const AI_BASE = `${ORIGIN}/api/ai`;
@@ -36,9 +36,30 @@ export const getModels = (): Promise<ModelsResponse> => call<ModelsResponse>('/m
 export const getConversation = (id: string): Promise<{ conversation: ServerConversation; messages: ServerMessage[] }> =>
   call(`/conversations/${encodeURIComponent(id)}`);
 
+export const listConversations = (opts: { q?: string; cursor?: string | null } = {}): Promise<{ items: ConversationSummary[]; nextCursor: string | null }> => {
+  const p = new URLSearchParams();
+  if (opts.q) p.set('q', opts.q);
+  if (opts.cursor) p.set('cursor', opts.cursor);
+  const qs = p.toString();
+  return call(`/conversations${qs ? `?${qs}` : ''}`);
+};
+
+export const patchConversation = (id: string, patch: { title?: string; starred?: boolean; activeLeafId?: string }): Promise<{ conversation: ConversationSummary }> =>
+  call(`/conversations/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) });
+
+export const deleteConversation = (id: string): Promise<{ ok: true }> => call(`/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
+/** Every chat as one JSON file (GET /api/ai/export). */
+export async function fetchExport(): Promise<Blob> {
+  const res = await fetch(`${AI_BASE}/export`, { headers: headers() });
+  if (!res.ok) throw new AiError(res.status, `http_${res.status}`);
+  return res.blob();
+}
+
 export interface ChatRequestBody {
   conversationId: string | null;
   parentMessageId?: string | 'root';
+  continueFrom?: string;
   content: Array<{ type: 'text'; text: string }>;
   mode: 'auto' | 'model';
   model?: string;

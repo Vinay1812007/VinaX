@@ -57,3 +57,17 @@ describe('<Composer />', () => {
     expect(onChange).toHaveBeenCalledWith('raga');
   });
 });
+
+describe('<Composer /> + menu', () => {
+  it('toggles Extended thinking and shows it on the composer', () => {
+    const onThinking = vi.fn();
+    const { rerender } = render(<Composer value="" onChange={vi.fn()} onSend={vi.fn()} onStop={vi.fn()} streaming={false} thinking={false} onThinking={onThinking} />);
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    const item = screen.getByRole('menuitemcheckbox', { name: /Extended thinking/ });
+    expect(item.getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(item);
+    expect(onThinking).toHaveBeenCalledWith(true);
+    rerender(<Composer value="" onChange={vi.fn()} onSend={vi.fn()} onStop={vi.fn()} streaming={false} thinking onThinking={onThinking} />);
+    expect(screen.getAllByText('Extended thinking').length).toBeGreaterThan(0);
+  });
+});
