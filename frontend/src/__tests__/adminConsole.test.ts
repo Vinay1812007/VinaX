@@ -105,7 +105,7 @@ describe('page registry', () => {
     expect(read('app.js')).toContain("segs[0] || 'overview'");
     expect(read('app.js')).toContain("setHash('overview'");
     const health = VX.pages().find((p) => p.id === 'health');
-    expect(health?.tabs?.map((t) => t.id)).toEqual(['errors', 'edge', 'sources', 'releases', 'env']);
+    expect(health?.tabs?.map((t) => t.id)).toEqual(['errors', 'edge', 'sources', 'ai', 'releases', 'env']);
   });
 
   it('the console talks to the database only through the Worker (/api/admin), never to Supabase', () => {
@@ -189,7 +189,7 @@ describe('empty and failing answers', () => {
     expect(failures).toEqual([]);
     const tabs = VX.pages().reduce((n, p) => n + (p.tabs ? p.tabs.length : 1), 0);
     expect(results.length).toBe(tabs);
-    expect(tabs).toBe(32);
+    expect(tabs).toBe(33);
   });
 
   it('every page and tab shows an error state, not a crash, when the server fails', async () => {

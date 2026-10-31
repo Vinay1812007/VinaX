@@ -140,6 +140,58 @@
       }));
       return { el: h('div.form', { style: { 'max-width': 'none' } }, ui.notice('A switch that is on (or missing) means the feature works as built. Off turns it off for every listener within a minute.', 'info'), list),
         read: function () { var out = {}; Object.keys(toggles).forEach(function (k) { out[k] = toggles[k].input.checked; }); return out; } };
+    },
+    // VinaX AI: the switch, testers, web search and the per-model switches
+    // and picker order. The model list comes from /api/admin/ai; entries for
+    // ids it no longer lists are kept as they were.
+    'vinax-ai': function (value) {
+      var v = obj(value);
+      var enabled = ui.toggle('Open to every signed-in listener', v.enabled === true, null, { 'aria-label': 'VinaX AI on for everyone' });
+      var testers = ui.textarea({ value: arr(v.testers).join('\n'), rows: 3, spellcheck: 'false', placeholder: 'One account id per line' });
+      var search = ui.toggle('Web search', v.search !== false, null, { 'aria-label': 'Web search' });
+      var before = obj(v.models);
+      var rows = {};
+      var modelsHost = h('div', ui.loading('Loading the models…'));
+      VX.api.get('/api/admin/ai', null, { fresh: true }).then(function (res) {
+        if (!res.ok) { VX.mount(modelsHost, ui.notice('The model list could not load (' + res.message + '). Use the JSON editor for model switches.', 'warn')); return; }
+        var models = arr(obj(res.data).models);
+        VX.mount(modelsHost, h('ul.list', models.map(function (m) {
+          var o = obj(before[m.id]);
+          var on = ui.toggle(m.name, o.enabled !== false, null, { 'aria-label': m.name + ' on' });
+          var order = ui.input({ type: 'number', step: '1', value: typeof o.order === 'number' ? String(o.order) : '', placeholder: 'Order', 'aria-label': m.name + ' order', style: { width: '6em' } });
+          rows[m.id] = { on: on, order: order };
+          return h('li', on, h('span.grow.muted.small', m.provider + ' · ' + (m.group ? m.group : 'Auto only')), m.group ? order : null);
+        })));
+      });
+      return {
+        el: h('div.form', { style: { 'max-width': 'none' } },
+          ui.notice('Off keeps VinaX AI closed to everyone except the testers below. Changes reach every server within a minute.', 'info'),
+          enabled,
+          ui.field('Testers', testers, 'Account ids that may use VinaX AI while it is off (the account= part of a listener’s profile address). Up to 50.'),
+          search,
+          ui.field('Models', modelsHost, 'A model switched off leaves the picker and every Auto ladder. Order sorts a model inside its picker group: lower first; empty keeps the built-in order.')),
+        read: function () {
+          var ids = testers.value.split(/[\s,]+/).map(function (t) { return t.trim(); }).filter(Boolean);
+          if (ids.length > 50) throw new Error('At most 50 testers.');
+          var models = {};
+          Object.keys(before).forEach(function (id) { if (!rows[id]) models[id] = before[id]; });
+          Object.keys(rows).forEach(function (id) {
+            var r = rows[id];
+            var entry = {};
+            if (!r.on.input.checked) entry.enabled = false;
+            var raw = r.order.value.trim();
+            if (raw) {
+              var n = Number(raw);
+              if (!isFinite(n)) throw new Error('Order must be a number.');
+              entry.order = n;
+            }
+            if (Object.keys(entry).length) models[id] = entry;
+          });
+          var out = { enabled: enabled.input.checked, testers: ids, search: search.input.checked };
+          if (Object.keys(models).length) out.models = models;
+          return out;
+        }
+      };
     }
   };
 
