@@ -95,7 +95,7 @@ settingsStore (vinax.settings.v1): template, theme, accent, accentCustom, dynami
 
 ## Routing and lazy chunks
 
-`src/router/index.tsx` builds one browser router: `/` renders `AppLayout` with every page as a child. Old links to removed pages (`/VinaXAI`, `/ai-playlist`) redirect to Home.
+`src/router/index.tsx` builds one browser router: `/` renders `AppLayout` with every page as a child. `/vinaxai` and `/vinaxai/c/:id` are VinaX AI, the chat assistant ([ai.md](ai.md)); AppLayout hides its chrome there, as for Now Playing. The old spelling `/VinaXAI` redirects to `/vinaxai` (a case-sensitive route), and the removed `/ai-playlist` redirects to Home.
 
 Every page is imported with `lazy()`, so each page is its own chunk. Language hub pages (`/<language>-songs`) and mood hub pages (`/<language>-<mood>-songs`) are generated from `constants/languages.ts` and `constants/hubs.ts`. Two redirects run before the router is created: an offline Android boot with saved downloads opens `/offline`, and the "Startup page" setting can open Search, Library or the last main route.
 

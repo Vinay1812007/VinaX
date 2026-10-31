@@ -6,10 +6,11 @@
  *
  *   status-tick    every run    probe the public components, uptime_tick each
  *   housekeeping   hourly       room_sweep · purge_events(retention) · retire_push_devices
+ *                               · VinaX AI chats deleted more than a day ago
  *
  * Nothing runs without the database: the jobs exist to write into it.
  */
-import { db, dbConfigured, type DbEnv } from './db';
+import { DAY_MS, db, dbConfigured, q, since, type DbEnv } from './db';
 import { setting } from './settings';
 import { COMPONENTS, probeAll } from '../api/status';
 
@@ -59,15 +60,19 @@ async function statusTick(env: DbEnv, now: number): Promise<Record<string, unkno
 async function housekeeping(env: DbEnv): Promise<Record<string, unknown>> {
   const retention = await setting<{ eventsDays?: unknown }>(env, 'retention');
   const keep = typeof retention?.eventsDays === 'number' && Number.isFinite(retention.eventsDays) ? Math.min(3650, Math.max(7, Math.round(retention.eventsDays))) : 180;
-  const [rooms, purged, retired] = await Promise.all([
+  const [rooms, purged, retired, chats] = await Promise.all([
     db.rpc<{ rooms: number; members: number }>(env, 'room_sweep'),
     db.rpc<number>(env, 'purge_events', { p_keep_days: keep }),
     db.rpc<number>(env, 'retire_push_devices', { p_days: 180 }),
+    // Deleted VinaX AI chats are hidden at once and removed (with their messages) a day later.
+    db.remove<{ id: string }>(env, 'ai_conversations', q().lt('deleted_at', since(DAY_MS)).select('id'), { returning: true }),
   ]);
   const out: Record<string, unknown> = { eventsKeptDays: keep };
   out.roomsSwept = rooms.ok ? rooms.value : `failed: ${rooms.error}`;
   out.eventsPurged = purged.ok ? purged.value : `failed: ${purged.error}`;
   out.pushRetired = retired.ok ? retired.value : `failed: ${retired.error}`;
+  // Not fatal: before schema v4 is applied the table does not exist yet.
+  out.aiChatsPurged = chats.ok ? chats.rows.length : `failed: ${chats.error}`;
   if (!rooms.ok || !purged.ok || !retired.ok) throw new Error('housekeeping: a step failed');
   return out;
 }

@@ -143,3 +143,29 @@ describe('sw.js navigation shell caching', () => {
     expect(res.body).toBe('app');
   });
 });
+
+describe('sw.js and VinaX AI', () => {
+  it('serves /vinaxai and a chat address the app shell, also offline', async () => {
+    const pages: Record<string, FakeResponse> = { '/vinaxai': response('app-chat') };
+    const worker = boot((url) => {
+      const hit = pages[new URL(url).pathname];
+      return hit ? Promise.resolve(hit) : Promise.reject(new TypeError('offline'));
+    });
+    await navigate(worker.onFetch, '/vinaxai');
+    expect(worker.shell.get('/')?.body).toBe('app-chat');
+    const res = await navigate(worker.onFetch, '/vinaxai/c/0b6c2f6e-1c1e-4b51-9a57-3d1f3e2a9b10');
+    expect(res.body).toBe('app-chat');
+  });
+
+  it('never answers or caches /api/ai/* (the chat stream is a POST; the rest are API reads)', () => {
+    const worker = boot(() => Promise.reject(new TypeError('should not be called')));
+    for (const [method, path] of [['POST', '/api/ai/chat'], ['GET', '/api/ai/models'], ['GET', '/api/ai/conversations']]) {
+      let handled = false;
+      worker.onFetch({
+        request: { method, mode: 'cors', url: ORIGIN + path, headers: new Headers() },
+        respondWith: () => { handled = true; },
+      });
+      expect(handled, `${method} ${path}`).toBe(false);
+    }
+  });
+});

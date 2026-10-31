@@ -125,11 +125,12 @@ The value is typed at the prompt, never pasted into a file or a chat. `npx wrang
 | Web push | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | `/api/push/vapid` answers `key: null`; browser registrations are still stored but nothing can be sent to them |
 | Android background push | `FCM_SERVICE_ACCOUNT` | The console's push self-test has nothing to test; Android registrations are stored but nothing is sent to them ([fcm-push-setup.md](fcm-push-setup.md)) |
 | Request hashing | `TELEMETRY_PEPPER` | Rate-limit keys fall back to a built-in pepper |
+| VinaX AI | `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `NVIDIA_API_KEY` (each optional; any one is enough), plus the `[ai]` Workers AI binding in `wrangler.toml` | Without any of them `/api/ai/*` answers `503 ai_not_configured` and `/vinaxai` says VinaX AI is unavailable. A missing key just leaves that provider's models out of the picker and of Auto ([ai.md](ai.md)) |
 | Optional | `GITHUB_TOKEN` (Android update source) | Defaults apply; the update lookup is rate-limited without the token |
 
 Non-secret settings are in `[vars]` in `wrangler.toml`: `ASSETS_HOST` (the static site's host, used for fall-through and for the shell of edge-rendered pages) and `GITHUB_REPO`. The `HANDOFF` key-value binding holds device-transfer ciphertext.
 
-`TURNSTILE_SECRET_KEY` is read by nothing and can be deleted. VinaX has no AI features any more, so the AI secrets are read by nothing too and can be deleted the same way: `NVIDIA_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY` (and their older `VINAX_…_API_KEY` names), `NVIDIA_BASE_URL`, `VINAX_MAESTRO_MODEL` and `SERPER_API_KEY` (`npx wrangler secret delete <NAME> --config worker/wrangler.toml`). The Worker no longer has the `[ai]` binding or the `SERPER_DAILY_LIMIT` and `RESEARCH_DAILY_LIMIT` vars. The `CRON_SECRET` Actions secret is read by no workflow and can be deleted too.
+`TURNSTILE_SECRET_KEY` is read by nothing and can be deleted. So are the old AI build's names that VinaX AI does not use: the older `VINAX_…_API_KEY` key names, `NVIDIA_BASE_URL`, `VINAX_MAESTRO_MODEL` and `SERPER_API_KEY` (`npx wrangler secret delete <NAME> --config worker/wrangler.toml`), and the `SERPER_DAILY_LIMIT` and `RESEARCH_DAILY_LIMIT` vars. Keep `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY` and `NVIDIA_API_KEY`: VinaX AI reads them. The `CRON_SECRET` Actions secret is read by no workflow and can be deleted too.
 
 ## The database
 

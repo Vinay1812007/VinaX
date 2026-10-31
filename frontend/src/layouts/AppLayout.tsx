@@ -186,7 +186,9 @@ export function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { pathname } = location;
-  const isFullScreenPlayer = pathname === '/now-playing';
+  // VinaX AI is full screen too: its own header, no app chrome (the player keeps playing).
+  const isChat = pathname === '/vinaxai' || pathname.startsWith('/vinaxai/');
+  const isFullScreenPlayer = pathname === '/now-playing' || isChat;
   useKeyboardShortcuts();
 
   // Android hardware back: close the topmost open overlay first (sheet, menu,
@@ -506,10 +508,10 @@ export function AppLayout() {
       </a>
       <GetAppSlot />
       <div className="flex flex-1 min-h-0">
-        <Sidebar />
-        <main ref={mainRef} id="main-content" tabIndex={-1} className="vx-workspace flex-1 min-w-0 overflow-y-auto px-4 md:px-8 pb-[calc(var(--player-safe-offset)+2rem)] md:pb-28">
+        {!isChat && <Sidebar />}
+        <main ref={mainRef} id="main-content" tabIndex={-1} className={isChat ? 'vx-workspace flex-1 min-w-0 overflow-hidden' : 'vx-workspace flex-1 min-w-0 overflow-y-auto px-4 md:px-8 pb-[calc(var(--player-safe-offset)+2rem)] md:pb-28'}>
           {!isFullScreenPlayer && <TopBar onCommands={() => setPaletteOpen(true)} />}
-          <MobileBackBar />
+          {!isChat && <MobileBackBar />}
           <DiagBanner />
           <OfflineBanner />
           <ErrorBoundary resetKey={pathname}>
@@ -517,7 +519,7 @@ export function AppLayout() {
               {/* Search keeps one mount across /search → /search/:q so
                   committing a query doesn't reset filters/scroll (P1-17);
                   every other route remounts for the page-enter animation. */}
-              <div key={pathname.startsWith('/search') ? '/search' : pathname} className={coldBoot ? undefined : 'animate-fade-up'}>
+              <div key={pathname.startsWith('/search') ? '/search' : isChat ? '/vinaxai' : pathname} className={isChat ? 'h-full' : coldBoot ? undefined : 'animate-fade-up'}>
                 <Outlet />
               </div>
             </Suspense>
@@ -530,7 +532,7 @@ export function AppLayout() {
       <Toasts />
       <PlayerErrorBoundary silent>
         <NowPlayingAnnouncer />
-        {hasTrack && <Suspense fallback={null}><NextUpCard /></Suspense>}
+        {hasTrack && !isChat && <Suspense fallback={null}><NextUpCard /></Suspense>}
       {recsDebugWanted && <Suspense fallback={null}><RecsDebugPanel /></Suspense>}
       {inSession && <Suspense fallback={null}><TogetherController /></Suspense>}
       </PlayerErrorBoundary>

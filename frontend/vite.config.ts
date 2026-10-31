@@ -19,8 +19,10 @@ const APP_VERSION = BUILD_NUMBER ? `${pkg.version}+${BUILD_NUMBER}` : pkg.versio
  *  offline hit a failed chunk import (v5.3.1 offline-downloads fix). */
 /** 7.2.0 — every chunk the entry can reach is precached; a chunk nothing
  *  reaches is listed ON DEMAND (fetched and runtime-cached on first use,
- *  never pruned afterwards). 1.3 — the diagram and maths engines that used to
- *  be on demand went with VinaX AI, so in practice everything is precached. */
+ *  never pruned afterwards). The VinaX AI page (its Markdown renderer and
+ *  code highlighter) is on demand too: it needs the network anyway, and a
+ *  listener who never opens the chat should not download it. */
+export const ON_DEMAND_PAGES = /\/src\/pages\/VinaXAIPage\.tsx$/;
 
 /** Split the build's assets into what the service worker precaches and what it fetches on demand. */
 export function splitPrecache(bundle: Record<string, { type: 'chunk' | 'asset'; fileName: string; isEntry?: boolean; facadeModuleId?: string | null; imports?: string[]; dynamicImports?: string[] }>): { precache: string[]; onDemand: string[] } {
@@ -34,7 +36,12 @@ export function splitPrecache(bundle: Record<string, { type: 'chunk' | 'asset'; 
     if (reached.has(f)) continue;
     reached.add(f);
     const c = byFile.get(f);
-    if (c) stack.push(...(c.imports ?? []), ...(c.dynamicImports ?? []));
+    if (!c) continue;
+    stack.push(...(c.imports ?? []));
+    for (const d of c.dynamicImports ?? []) {
+      // Stop at an on-demand page: what only it reaches stays on demand.
+      if (!ON_DEMAND_PAGES.test(byFile.get(d)?.facadeModuleId ?? '')) stack.push(d);
+    }
   }
   const onDemand = all.filter((f) => bundle[f].type === 'chunk' && !reached.has(f));
   const skip = new Set(onDemand);

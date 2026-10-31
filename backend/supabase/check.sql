@@ -54,6 +54,15 @@ insert into settings_history (key, value) values ('check_setting', '{"on": true}
 insert into experiments (key, name) values ('check-exp', 'Check');
 insert into audit_log (action, summary) values ('check', 'check');
 insert into job_runs (job) values ('check');
+-- VinaX AI: one chat with a question, an answer and an edited question (a branch)
+insert into ai_conversations (id, account_id, title, active_leaf_id) values
+  ('00000000-0000-4000-8000-00000000c001', 'check_a1', 'Check chat about ragas', '00000000-0000-4000-8000-00000000c012');
+insert into ai_messages (id, conversation_id, parent_id, role, content, created_at) values
+  ('00000000-0000-4000-8000-00000000c010', '00000000-0000-4000-8000-00000000c001', null, 'user', '[{"type": "text", "text": "What is a raga?"}]', now() - interval '2 minutes'),
+  ('00000000-0000-4000-8000-00000000c011', '00000000-0000-4000-8000-00000000c001', '00000000-0000-4000-8000-00000000c010', 'assistant', '[{"type": "text", "text": "A melodic framework, like Yaman."}]', now() - interval '1 minute'),
+  ('00000000-0000-4000-8000-00000000c012', '00000000-0000-4000-8000-00000000c001', null, 'user', '[{"type": "text", "text": "Explain a raga simply"}]', now());
+insert into ai_attachments (id, account_id, conversation_id, name, mime, size, storage_path) values
+  ('00000000-0000-4000-8000-00000000c020', 'check_a1', '00000000-0000-4000-8000-00000000c001', 'notes.txt', 'text/plain', 12, 'check_a1/00000000-0000-4000-8000-00000000c001/00000000-0000-4000-8000-00000000c020');
 
 -- ------------------------------------------------------------- functions --
 do $$
@@ -188,6 +197,21 @@ begin
   delete from listeners where id in ('check_l5', 'check_l6', 'check_l7');
   delete from accounts where id = 'check_a5';
 
+  -- VinaX AI: search by title and by message text, scoped to the account
+  select count(*) into n from ai_conversation_search('check_a1', 'ragas', null, 30);
+  assert n = 1, 'ai_conversation_search: by title';
+  select count(*) into n from ai_conversation_search('check_a1', 'yaman', null, 30);
+  assert n = 1, 'ai_conversation_search: by message text';
+  select count(*) into n from ai_conversation_search('check_a2', 'ragas', null, 30);
+  assert n = 0, 'ai_conversation_search: another account sees nothing';
+  select count(*) into n from ai_conversation_search('check_a1', '%', null, 30);
+  assert n = 0, 'ai_conversation_search: % is literal, not a wildcard';
+  begin
+    insert into ai_messages (id, conversation_id, role, content) values ('00000000-0000-4000-8000-00000000c0ff', '00000000-0000-4000-8000-00000000c001', 'system', '[]');
+    assert false, 'ai_messages.role refuses system';
+  exception when check_violation then null;
+  end;
+
   v := delete_listener('check_l1', null);
   assert (v ->> 'listener')::int = 1 and (v ->> 'account')::int = 1 and (v ->> 'events')::int > 0 and (v ->> 'memberships')::int = 1, 'delete_listener by listener';
   select exists (select 1 from account_backups where account_id = 'check_a1') into b;
@@ -198,6 +222,12 @@ begin
   assert not b, 'delete_listener: follows of the account went too';
   select exists (select 1 from shared_playlists where owner_id = 'check_a1') into b;
   assert not b, 'delete_listener: shared playlists went with the account';
+  select exists (select 1 from ai_conversations where account_id = 'check_a1') into b;
+  assert not b, 'delete_listener: VinaX AI chats went with the account';
+  select exists (select 1 from ai_messages where conversation_id = '00000000-0000-4000-8000-00000000c001') into b;
+  assert not b, 'delete_listener: VinaX AI messages went with their chat';
+  select exists (select 1 from ai_attachments where account_id = 'check_a1') into b;
+  assert not b, 'delete_listener: VinaX AI attachments went with the account';
   v := delete_listener(null, 'check_a2');
   assert (v ->> 'account')::int = 1 and (v ->> 'listener')::int = 0, 'delete_listener by account';
 
@@ -209,8 +239,10 @@ begin
   assert not has_table_privilege('anon', 'public.listeners', 'select'), 'anon cannot read listeners';
   assert not has_table_privilege('authenticated', 'public.events', 'select'), 'authenticated cannot read events';
   assert not has_function_privilege('anon', 'public.stats_overview()', 'execute'), 'anon cannot call stats_overview';
+  assert not has_table_privilege('anon', 'public.ai_messages', 'select'), 'anon cannot read VinaX AI messages';
+  assert not has_function_privilege('anon', 'public.ai_conversation_search(text, text, timestamptz, integer)', 'execute'), 'anon cannot search VinaX AI chats';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 3, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 4, 'meta.schema.version';
   raise notice 'check.sql: every function answered as expected';
 end $$;
 

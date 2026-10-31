@@ -3,9 +3,9 @@
 --
 -- Drops every VinaX table, view and function so schema.sql can be applied to
 -- a clean slate. THIS DELETES ALL DATA. Run it only when you mean to start
--- over; then paste schema.sql and run that. It also drops the AI tables and
--- functions schema versions 1 and 2 had (ai_calls, shared_chats, stats_ai,
--- ai_usage_since), in case they are still there.
+-- over; then paste schema.sql and run that. It also drops the old AI tables
+-- and functions schema versions 1 and 2 had (ai_calls, shared_chats,
+-- stats_ai, ai_usage_since), in case they are still there.
 -- =============================================================================
 
 drop view if exists directory;
@@ -19,13 +19,14 @@ begin
     where n.nspname = 'public'
       and (p.proname like 'stats\_%' or p.proname in ('_days', 'ai_usage_since', 'listener_profile', 'delete_listener',
            'room_request', 'room_sweep', 'purge_events', 'retire_push_devices', 'uptime_tick', 'uptime_report',
-           'table_stats', 'table_counts'))
+           'table_stats', 'table_counts', 'ai_conversation_search'))
   loop
     execute format('drop function if exists %s cascade', r.sig);
   end loop;
 end $$;
 
 drop table if exists
+  ai_attachments, ai_messages, ai_conversations,
   job_runs, uptime_latest, uptime_days, audit_log, experiments, settings_history, settings,
   notifications, push_devices, room_members, rooms, blocked_content, feedback, ai_calls, events,
   shared_chats, shared_playlists, follows, profiles,

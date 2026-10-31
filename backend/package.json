@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint worker --max-warnings 0",
-    "format": "prettier --write \"worker/**/*.ts\""
+    "format": "prettier --write \"worker/**/*.ts\"",
+    "ai:probe": "node scripts/ai-probe.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

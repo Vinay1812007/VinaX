@@ -75,7 +75,7 @@ Deploying the Worker also registers its **Cron Trigger** (`[triggers]` in `wrang
 The Worker keeps its data in one hosted database. Setting it up is a one-time step; redeploying the Worker never touches it.
 
 1. Create the hosted project.
-2. In its SQL editor, paste `backend/supabase/schema.sql` and run it. It creates every table, the `directory` view, the `stats_*` functions and the deny-all row-level security, and writes schema version 3 into `meta`. It is idempotent: re-running it is safe and deletes nothing. A database that ran an older version still holds the old AI tables; `backend/supabase/remove-ai.sql`, run once by hand, removes them (it deletes that data). To start over, run `backend/supabase/reset.sql` first (it deletes all data), then `schema.sql` again. The **Schema** workflow can do the apply from CI once a `SUPABASE_DB_URL` secret is set ([docs/database.md](docs/database.md#from-ci-instead-of-the-sql-editor)); it also proves every change to `backend/supabase/**` on a scratch Postgres in pull requests.
+2. In its SQL editor, paste `backend/supabase/schema.sql` and run it. It creates every table, the `directory` view, the `stats_*` functions and the deny-all row-level security, and writes schema version 4 into `meta` (version 4 added the VinaX AI tables; pasting it again over version 3 is the whole upgrade). It is idempotent: re-running it is safe and deletes nothing. A database that ran an older version still holds the old AI tables; `backend/supabase/remove-ai.sql`, run once by hand, removes them (it deletes that data). To start over, run `backend/supabase/reset.sql` first (it deletes all data), then `schema.sql` again. The **Schema** workflow can do the apply from CI once a `SUPABASE_DB_URL` secret is set ([docs/database.md](docs/database.md#from-ci-instead-of-the-sql-editor)); it also proves every change to `backend/supabase/**` on a scratch Postgres in pull requests.
 3. Set the two Worker secrets from `backend/`:
 
 ```sh
@@ -86,6 +86,31 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml
 4. Open the owner console's **Database** page. It shows the schema version the paste wrote, every table with its size, and the job runs once the Cron Trigger has fired.
 
 Only the Worker holds the service-role key. The frontend and the console never talk to the database; the public anon key can read nothing because every table has row-level security forced with no policy. Everything else about the schema, the Worker's data layer and the admin API is in [docs/database.md](docs/database.md).
+
+## VinaX AI
+
+The chat at `/vinaxai` ([docs/ai.md](docs/ai.md)) runs on free tiers of five providers, all called from the Worker. Any one is enough.
+
+1. Apply schema version 4 (above) before the Worker that uses it, or the chat answers `503 unavailable` for lack of its tables.
+2. Set the keys you have, from `backend/`. Each is optional:
+
+```sh
+npx wrangler secret put GROQ_API_KEY --config worker/wrangler.toml        # Groq: the fast default models
+npx wrangler secret put GEMINI_API_KEY --config worker/wrangler.toml      # Google AI Studio: images, PDFs, long threads
+npx wrangler secret put OPENROUTER_API_KEY --config worker/wrangler.toml  # OpenRouter: the :free models
+npx wrangler secret put NVIDIA_API_KEY --config worker/wrangler.toml      # NVIDIA NIM (build.nvidia.com)
+```
+
+   Workers AI needs no secret: `[ai] binding = "AI"` in `wrangler.toml` binds it on deploy. Its free pool is about 10,000 neurons a day for the whole account.
+3. Check the keys with the console's environment checklist (group **VinaX AI**). Before switching the chat on, run `npm run ai:probe` locally with the same keys in `backend/worker/.dev.vars` (gitignored). Add `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` there to probe Workers AI too.
+4. VinaX AI stays **off** until the `vinax-ai` setting says otherwise (console → Publish → App → VinaX AI):
+   - `{ "enabled": false, "testers": ["<your account id>"] }` lets only your account in;
+   - `{ "enabled": true }` opens it to every signed-in listener;
+   - `{ "enabled": false }` is the kill switch.
+
+   The account id is the `accounts.id` column, which is also the `account=` part of the console's listener profile address. A change reaches every isolate within a minute.
+
+`/vinaxai` is an ordinary app page served by the static host. The old `/VinaXAI` spelling is redirected by the app's router, not by `_redirects` (a rule there could match `/vinaxai` too and loop). AI Playlist and shared-chat links from the old build still 301 to Home from the Worker.
 
 ## Android
 

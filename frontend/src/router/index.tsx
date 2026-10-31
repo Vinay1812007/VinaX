@@ -108,10 +108,14 @@ const VideoPage = lazy(() => import('@/pages/VideoPage'));
 const RadioPage = lazy(() => import('@/pages/RadioPage'));
 // 10.1 — Flow: a full-screen, swipeable feed of song previews.
 const FlowPage = lazy(() => import('@/pages/FlowPage'));
+// VinaX AI — the chat assistant (src/features/vinaxai, docs/ai.md).
+const VinaXAIPage = lazy(() => import('@/pages/VinaXAIPage'));
 
 export const router = createBrowserRouter([
-  // 1.3 — the retired chat page: an old link or app shortcut lands on Home.
-  { path: '/VinaXAI', element: <Navigate to="/" replace /> },
+  // The old spelling of the chat address. Case-sensitive on purpose: the
+  // router ignores case by default, which would catch /vinaxai itself.
+  { path: '/VinaXAI', caseSensitive: true, element: <Navigate to="/vinaxai" replace /> },
+  { path: '/VinaXAI/*', caseSensitive: true, element: <Navigate to="/vinaxai" replace /> },
   {
     path: '/',
     element: (
@@ -132,6 +136,8 @@ export const router = createBrowserRouter([
       { path: 'most-searched', element: <ChartLandingPage variant="most-searched" /> },
       { path: 'made-for-you', element: <MadeForYouPage /> },
       { path: 'ai-playlist', element: <Navigate to="/" replace /> },
+      { path: 'vinaxai', caseSensitive: true, element: <VinaXAIPage /> },
+      { path: 'vinaxai/c/:id', caseSensitive: true, element: <VinaXAIPage /> },
       { path: 'weekly', element: <WeeklyMixPage /> },
       { path: 'mixes', element: <MixesPage /> },
       { path: 'search', element: <SearchPage /> },

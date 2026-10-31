@@ -1,7 +1,7 @@
 /**
  * The owner console's server-secrets checklist (/api/admin/envcheck): names
- * only, never values; required names that are missing are listed; and no AI
- * key is on the list any more (VinaX has no AI features).
+ * only, never values; required names that are missing are listed; and the
+ * VinaX AI provider keys are listed, all optional.
  */
 import { describe, expect, it } from 'vitest';
 import { ENV_ITEMS, onRequestGet } from '../functions/api/admin/envcheck';
@@ -27,9 +27,21 @@ describe('/api/admin/envcheck', () => {
     expect(JSON.stringify(body)).not.toContain('https://db.test');
   });
 
-  it('lists no AI key or web-search setting', () => {
-    const names = ENV_ITEMS.map((i) => i.name).join(' ');
-    expect(names).not.toMatch(/NVIDIA|OPENROUTER|GROQ|GEMINI|MAESTRO|SERPER|RESEARCH/);
-    expect(ENV_ITEMS.some((i) => i.group === 'AI')).toBe(false);
+  it('lists the VinaX AI provider keys, none of them required', () => {
+    const ai = ENV_ITEMS.filter((i) => i.group === 'VinaX AI');
+    expect(ai.map((i) => i.name)).toEqual(['GROQ_API_KEY', 'GEMINI_API_KEY', 'OPENROUTER_API_KEY', 'NVIDIA_API_KEY', 'AI']);
+    expect(ai.every((i) => !i.required)).toBe(true);
+    // The old build's names stay gone.
+    expect(ENV_ITEMS.map((i) => i.name).join(' ')).not.toMatch(/MAESTRO|RESEARCH/);
+  });
+
+  it('counts a bound Workers AI binding as set', async () => {
+    const res = await onRequestGet({ request: req(TOKEN), env: { ADMIN_LOGIN_PASSWORD: TOKEN, AI: { run: () => null }, GROQ_API_KEY: 'gsk_test' } });
+    const body = (await res.json()) as { items: Array<{ name: string; set: boolean }> };
+    const set = Object.fromEntries(body.items.map((i) => [i.name, i.set]));
+    expect(set.AI).toBe(true);
+    expect(set.GROQ_API_KEY).toBe(true);
+    expect(set.GEMINI_API_KEY).toBe(false);
+    expect(JSON.stringify(body)).not.toContain('gsk_test');
   });
 });

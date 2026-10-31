@@ -14,7 +14,7 @@
  * stay further down.
  */
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { GoogleSignIn } from './GoogleSignIn';
 import { rememberGuestBrowse } from '@/services/auth/gate';
 import '@/styles/signin.css';
@@ -200,6 +200,8 @@ const FAQ: { q: string; a: ReactNode }[] = [
 ];
 
 export default function SignInScreen(): ReactNode {
+  // VinaX AI's address shows the same sign-in, with one line about the chat.
+  const forChat = /^\/vinaxai(\/|$)/i.test(useLocation().pathname);
   const backToTop = () => {
     document.getElementById('vx-signin-title')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
@@ -211,7 +213,11 @@ export default function SignInScreen(): ReactNode {
           <h1 id="vx-signin-title" className="vx-signin-title">
             Welcome to VinaX
           </h1>
-          <p className="vx-signin-lede">Sign in with your Google account to start listening. Your library, playlists, history and taste follow you to every device.</p>
+          <p className="vx-signin-lede">
+            {forChat
+              ? 'Sign in with your Google account to chat with VinaX AI, the assistant built into VinaX. Your chats are saved with your account.'
+              : 'Sign in with your Google account to start listening. Your library, playlists, history and taste follow you to every device.'}
+          </p>
           <div className="vx-signin-button">
             <GoogleSignIn />
           </div>

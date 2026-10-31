@@ -62,12 +62,19 @@ export default function PrivacyPage() {
           we store, and turning notifications off deletes it. At most one song suggestion per day, plus rare owner
           announcements.
         </p>
-        <H>No AI</H>
+        <H>AI</H>
         <p>
-          VinaX has no AI features and sends nothing to an AI service. What plays next, Radio, Home&rsquo;s shelves and
-          your taste profile are worked out on your device. Voice search and Drive mode&rsquo;s voice commands use your
-          device&rsquo;s own speech engine — in supporting browsers and in the Android app, speech is recognised on your
-          device — and VinaX never receives or stores audio.
+          Your music is never sent to an AI service. What plays next, Radio, Home&rsquo;s shelves and your taste profile
+          are worked out on your device. Voice search and Drive mode&rsquo;s voice commands use your device&rsquo;s own
+          speech engine — in supporting browsers and in the Android app, speech is recognised on your device — and
+          VinaX never receives or stores audio.
+        </p>
+        <p>
+          VinaX AI, the chat assistant at /vinaxai, is the one exception, and only when you use it. What you type in
+          it is sent through VinaX&rsquo;s server to an AI provider to write the reply: Groq, Google (Gemini),
+          OpenRouter, NVIDIA or Cloudflare Workers AI, depending on the model. VinaX AI never sees your listening
+          history. Your chats are stored with your Google account so they follow you to every device; deleting a chat
+          removes it within a day, and deleting your account removes every chat.
         </p>
         <H>Listen Together</H>
         <p>
