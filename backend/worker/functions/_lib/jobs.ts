@@ -7,7 +7,8 @@
  *   status-tick    every run    probe the public components, uptime_tick each
  *   housekeeping   hourly       room_sweep · purge_events(retention) · retire_push_devices
  *                               · VinaX AI chats deleted more than a day ago, and files never sent
- *                               · the personal engine: co-listening rebuilt, old events and pages purged
+ *                               · the personal engine: old events and pages purged, and once a day
+ *                                 (the 21:00 UTC run) co-listening rebuilt
  *   personal-embed every run    embed up to 200 songs the personal engine met that have no vector yet
  *
  * Nothing runs without the database: the jobs exist to write into it.
@@ -63,8 +64,12 @@ async function statusTick(env: DbEnv, now: number): Promise<Record<string, unkno
   return out;
 }
 
-async function housekeeping(env: DbEnv): Promise<Record<string, unknown>> {
+/** The daily step runs on the housekeeping run after 21:00 UTC (the quiet early hours in India). */
+export const COLISTEN_HOUR_UTC = 21;
+
+async function housekeeping(env: DbEnv, now = Date.now()): Promise<Record<string, unknown>> {
   const retention = await setting<{ eventsDays?: unknown }>(env, 'retention');
+  const daily = new Date(now).getUTCHours() === COLISTEN_HOUR_UTC;
   const keep = typeof retention?.eventsDays === 'number' && Number.isFinite(retention.eventsDays) ? Math.min(3650, Math.max(7, Math.round(retention.eventsDays))) : 180;
   const [rooms, purged, retired, chats, , colisten, personalPurged] = await Promise.all([
     db.rpc<{ rooms: number; members: number }>(env, 'room_sweep'),
@@ -74,8 +79,8 @@ async function housekeeping(env: DbEnv): Promise<Record<string, unknown>> {
     purgeAiChats(env),
     // VinaX AI's daily allowance rows are only needed for today; keep a quarter for the record.
     db.remove(env, 'ai_daily_usage', q().lt('day', since(90 * DAY_MS).slice(0, 10))),
-    // The personal engine: who plays what together (last 30 days), and what it no longer needs.
-    db.rpc<{ pairs: number }>(env, 'personal_refresh_colisten', { p_days: 30, p_cap: 50 }, { timeoutMs: 60_000 }),
+    // The personal engine: what it no longer needs, and once a day who plays what together (last 30 days).
+    daily ? db.rpc<{ pairs: number }>(env, 'personal_refresh_colisten', { p_days: 30, p_cap: 50 }, { timeoutMs: 120_000 }) : Promise.resolve(null),
     db.rpc<{ events: number; pages: number }>(env, 'personal_purge', { p_keep_days: 365 }),
   ]);
   const out: Record<string, unknown> = { eventsKeptDays: keep };
@@ -86,7 +91,7 @@ async function housekeeping(env: DbEnv): Promise<Record<string, unknown>> {
   out.aiChatsPurged = chats.chats;
   out.aiFilesPurged = chats.files;
   // Not fatal: before schema v7 is applied the personal tables do not exist yet.
-  out.colistenPairs = colisten.ok ? colisten.value?.pairs : `failed: ${colisten.error}`;
+  if (colisten) out.colistenPairs = colisten.ok ? colisten.value?.pairs : `failed: ${colisten.error}`;
   out.personalPurged = personalPurged.ok ? personalPurged.value : `failed: ${personalPurged.error}`;
   if (!rooms.ok || !purged.ok || !retired.ok) throw new Error('housekeeping: a step failed');
   return out;
@@ -108,7 +113,7 @@ export async function runJob(env: DbEnv, job: JobId, now = Date.now()): Promise<
   let summary: Record<string, unknown> = {};
   try {
     summary =
-      job === 'status-tick' ? await statusTick(env, now) : job === 'personal-embed' ? await personalEmbed(env) : await housekeeping(env);
+      job === 'status-tick' ? await statusTick(env, now) : job === 'personal-embed' ? await personalEmbed(env) : await housekeeping(env, now);
   } catch (e) {
     ok = false;
     summary = { ...summary, error: e instanceof Error ? e.message.slice(0, 200) : 'failed' };

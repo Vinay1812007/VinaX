@@ -53,7 +53,7 @@ For a Home page, a playlist or a radio the engine gathers a pool of a few hundre
 | `neighbours` | Nearest songs to the taste vector among embedded songs (`personal_neighbours`), excluding anything in this account's exposure within its cooling window. This is where discovery across the whole community pool comes from. |
 | `similar` | Catalogue "similar songs" lists for the account's strongest recent seeds (liked or completed in the last fortnight), and `personal_similar_songs` (nearest to a seed's embedding). |
 | `artist` | The catalogue's top songs for the account's top-affinity artists that the account has not heard. |
-| `colisten` | `personal_colisten`: songs that the same listeners play in the same stretch, built hourly from the last 30 days of personal and anonymous play events (top 50 partners per song, a listener counts once per pair). |
+| `colisten` | `personal_colisten`: songs that the same listeners play in the same stretch, rebuilt once a day from the last 30 days of personal and anonymous play events (a listener's last 150 plays, top 50 partners per song, a listener counts once per pair). |
 | `trending` | What the community played most in the last 7 days in the account's languages (`personal_trending`). |
 | `own` | The account's own `songs` with a high score not played for 21 days (rediscovery) and its liked songs. |
 
@@ -117,7 +117,7 @@ Switching the engine off stops the reporter at once and clears the queue; the ta
 
 ## Jobs
 
-The half-hourly `housekeeping` run gained three steps, logged in `job_runs` like the others: `personal_embed` (embed up to 200 songs that have none), `personal_colisten` (rebuild the co-listening table from the last 30 days, once an hour), and `personal_purge` (events older than a year, pages past their expiry).
+The Cron Trigger gained one job and housekeeping two steps, logged in `job_runs` like the others: `personal-embed` (every run: embed up to 200 songs that have none), and inside the hourly `housekeeping`, `personal_purge` (events older than a year, pages a day past their expiry) and, on the 21:00 UTC run only, `personal_refresh_colisten` (the co-listening table from the last 30 days).
 
 ## Owner console
 

@@ -85,7 +85,7 @@ Only the Worker holds the service-role key. Row-level security is enabled and fo
 | `personal_taste` | signed-in account | the taste model: `vector` (+ `embed_model`), `artists`, `languages`, `facets`, `hours`, `songs` (score maps), `summary`, `mode` (familiar / balanced / discover), `events_seen`, `version` (rises with every fold; the update lands only while it is the version read); cascade with the account |
 | `personal_exposure` | account × song | `shown`, `queued`, `played`, `completed`, `skipped` counts, `liked`, `disliked`, the `last_*` times; cascade with the account |
 | `personal_pages` | page the engine built | `kind` (home / playlist / radio), `prompt`, `page` (the whole answer with its song records), `taste_version`, `model_id`, `composed` (the language model shaped it), `built_ms`, `expires_at`; cascade with the account |
-| `personal_colisten` | song × partner song | `weight` (listeners who played both within an hour, last 30 days; top 50 partners per song), rebuilt hourly |
+| `personal_colisten` | song × partner song | `weight` (listeners who played both within an hour, last 30 days, a listener's last 150 plays; top 50 partners per song), rebuilt once a day |
 | `ai_attachments` | file added to a chat | `name`, `mime`, `size`, `kind` (image / pdf / text), `storage_path` (private bucket `ai-attachments`, at `<account>/<conversation or new>/<id>`), `extracted_text` (a text file, or the text the page read out of a PDF), `pages`, `gemini_uri` / `gemini_expires_at` (the Gemini Files API copy of a PDF). The rows go with the account or the chat; the stored files are removed by the Worker first (account deletion, the console's delete, the hourly housekeeping), and files never sent are removed after a day |
 
 The view `directory` merges `listeners` and `accounts` into one row per person (device rows with their account when linked, plus account-only rows).
@@ -215,7 +215,7 @@ The Worker's Cron Trigger (`[triggers] crons` in `wrangler.toml`) fires every 30
 | Job | When | Does |
 | --- | --- | --- |
 | `status-tick` | every run | probes website, catalogue, admin; `uptime_tick` per component |
-| `housekeeping` | once an hour | `room_sweep`, `purge_events(retention.eventsDays)`, `retire_push_devices(180)`, removes VinaX AI chats deleted more than a day ago (not fatal before schema 4 is applied), `personal_refresh_colisten(30, 50)` and `personal_purge(365)` (not fatal before schema 7) |
+| `housekeeping` | once an hour | `room_sweep`, `purge_events(retention.eventsDays)`, `retire_push_devices(180)`, removes VinaX AI chats deleted more than a day ago (not fatal before schema 4 is applied), `personal_purge(365)` and, on the 21:00 UTC run, `personal_refresh_colisten(30, 50)` (not fatal before schema 7) |
 | `personal-embed` | every run | embeds up to 200 songs the personal engine met that have no vector yet, with the configured embedding model; skipped while the engine is off |
 
 `POST /api/cron/run { job }` with `x-cron-secret: $CRON_SECRET` (or the owner token) runs a job now; the Database page has a button for it.

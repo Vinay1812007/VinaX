@@ -179,7 +179,7 @@ The data jobs run inside the Worker. `[triggers] crons` in `backend/worker/wrang
 | Job | When | What it does |
 | --- | --- | --- |
 | `status-tick` | Every run (30 min) | Probes the website, the catalogue and the console from the Worker and records one `uptime_tick` per component. This is the status page's history (`uptime_report`) |
-| `housekeeping` | Once an hour | `room_sweep` (rooms idle 6 h, members unseen 1 day), `purge_events` (older than `retention.eventsDays`, default 180), `retire_push_devices` (no check-in for 180 days), the personal engine's `personal_refresh_colisten` (who plays what together, last 30 days) and `personal_purge` (events older than a year, pages past their expiry) |
+| `housekeeping` | Once an hour | `room_sweep` (rooms idle 6 h, members unseen 1 day), `purge_events` (older than `retention.eventsDays`, default 180), `retire_push_devices` (no check-in for 180 days), the personal engine's `personal_purge` (events older than a year, pages past their expiry) and, on the 21:00 UTC run only, `personal_refresh_colisten` (who plays what together, last 30 days) |
 | `personal-embed` | Every run (30 min) | Embeds up to 200 songs the personal engine met that have no vector yet, with the model `personal-config.embedModel` names; skipped while the engine is off or no provider for that model is configured ([personalisation.md](personalisation.md#jobs)) |
 
 - The console's **Database → Jobs** tab lists each job with its last run, outcome and summary, and flags a job as overdue when its last run is older than twice its interval. "Not run yet" on a fresh database is not a failure.

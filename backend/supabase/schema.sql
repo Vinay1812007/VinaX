@@ -844,7 +844,8 @@ $$;
 -- Rebuild personal_colisten from the last p_days of play events: a listener
 -- (an account, or an anonymous device from `events`) who played two songs
 -- within an hour of each other links them once; the top p_cap partners per
--- song are kept. A listener's last 300 plays bound the pairs.
+-- song are kept. A listener's last 150 plays bound the pairs, and a listener
+-- with fewer than 3 plays in the window adds nothing. Runs once a day.
 create or replace function personal_refresh_colisten(p_days integer default 30, p_cap integer default 50) returns jsonb
 language plpgsql set search_path = public, pg_temp as $$
 declare n bigint; v_since timestamptz := now() - make_interval(days => least(greatest(coalesce(p_days, 30), 1), 365));
@@ -858,7 +859,8 @@ begin
       select 'd:' || listener_id, song_id, at,
              row_number() over (partition by listener_id order by at desc)
       from events where kind = 'play' and at >= v_since and listener_id is not null and song_id is not null
-    ) p where rn <= 300;
+    ) p where rn <= 150;
+  delete from _plays where who in (select who from _plays group by who having count(*) < 3);
   create temp table _pairs on commit drop as
     select a.song_id, b.song_id as other_id, count(distinct a.who)::real as weight
     from _plays a join _plays b
