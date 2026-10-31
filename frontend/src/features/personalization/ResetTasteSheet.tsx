@@ -18,7 +18,7 @@ export function ResetTasteSheet({ onClose, onDone, showDataLink = true }: { onCl
   const [busy, setBusy] = useState(false);
 
   const backup = (): void => {
-    downloadProfileExport();
+    void downloadProfileExport();
     setBackedUp(true);
     toast('Backup file downloaded');
   };

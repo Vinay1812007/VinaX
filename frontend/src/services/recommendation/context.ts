@@ -27,6 +27,7 @@ export function getRecommendationContext(seedSong: Song | null = null, surface: 
     region: resolvedRegion(),
     pinnedLanguages: settings.pinnedLanguages,
     queueLanguages: settings.queueLanguages === 'one' ? 'one' : 'mix',
+    neverRepeat: !!settings.neverRepeat,
     mutedLanguages: settings.mutedLanguages,
     intensity: settings.recommendationIntensity,
     favorites,

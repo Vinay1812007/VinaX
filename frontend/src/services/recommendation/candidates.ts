@@ -23,6 +23,9 @@ const REDISCOVERY_AGE_MS = 14 * 86_400_000;
  */
 export const BROAD_PAGES = 6;
 
+/** 1.4 — pages each widened Never repeat source reads (see `RecommendationContext.widen`). */
+export const WIDEN_PAGES = 3;
+
 /** 7.2.0 — at most this many catalogue requests in flight per gather. */
 export const CANDIDATE_FETCH_CONCURRENCY = 6;
 /**
@@ -202,23 +205,28 @@ async function collaboratorsOf(artistId: string, now: () => number): Promise<Art
  * when it lists them, co-credits otherwise. The requests run one after another
  * inside the task's single concurrency slot and stop once the gather is over.
  */
-async function relatedArtistSongs(seed: Song, limit: number, signal: AbortSignal, salt: number, now: () => number): Promise<Song[]> {
+async function relatedArtistSongs(seed: Song, limit: number, signal: AbortSignal, salt: number, now: () => number, deep = false): Promise<Song[]> {
   const lead = seed.artists?.[0];
   if (!lead?.id) return [];
-  const featured = seed.artists.slice(1).filter((a) => a?.id && a.id !== lead.id);
+  // 1.4 — a widened Never repeat gather skips the artists the usual pass reads
+  // and goes further down the related list, two pages into each catalogue.
+  const featured = deep ? [] : seed.artists.slice(1).filter((a) => a?.id && a.id !== lead.id);
   const collabs = await collaboratorsOf(lead.id, now);
   const seen = new Set<string>();
-  const top = collabs.slice(0, 4);
+  const top = deep ? collabs.slice(2, 10) : collabs.slice(0, 4);
   const start = top.length ? Math.abs(salt) % top.length : 0;
   const picks = [...featured, ...top.slice(start), ...top.slice(0, start)].filter((a) => {
     if (seen.has(a.id)) return false;
     seen.add(a.id);
     return true;
-  }).slice(0, RELATED_ARTISTS);
+  }).slice(0, deep ? RELATED_ARTISTS * 2 : RELATED_ARTISTS);
   const out: Song[] = [];
   for (const artist of picks) {
     if (signal.aborted || out.length >= limit) break;
-    out.push(...((await getArtistTopSongs(artist.id, 0)) ?? []).slice(0, SONGS_PER_RELATED_ARTIST));
+    for (const page of deep ? [0, 1] : [0]) {
+      if (signal.aborted) break;
+      out.push(...((await getArtistTopSongs(artist.id, page)) ?? []).slice(0, deep ? SONGS_PER_RELATED_ARTIST * 2 : SONGS_PER_RELATED_ARTIST));
+    }
   }
   return out.slice(0, limit);
 }
@@ -380,6 +388,17 @@ export async function gatherCandidates(ctx: RecommendationContext, opts: GatherO
     }
     const genre = !ctx.intentQuery && seed.language && seed.language !== 'unknown' && !ctx.mutedLanguages.includes(seed.language) ? genreQuery(seed, seed.language) : null;
     if (genre) add('genre', 'seed', search(genre, 1 + (salt % 2), 12), seed.title);
+    // 1.4 — Never repeat, widened once (WIDEN_PAGES): more pages of the
+    // related-artist and genre sources, the first place unheard songs that
+    // still fit the seed are found.
+    if ((ctx.widen ?? 0) >= 1) {
+      for (const [from] of [[seed], ...(anchor ? [[anchor]] : [])] as Array<[Song]>) {
+        const lead = from.artists?.[0];
+        if (lead?.id) add('related-artist', `${lead.id}:deep`, { key: `ra|${lead.id}|deep|${salt % 3}`, limit: 40, fetch: (n, signal) => relatedArtistSongs(from, n, signal, salt, now, true) }, lead.name);
+      }
+      const deepGenre = genre ?? (seed.language && seed.language !== 'unknown' && !ctx.mutedLanguages.includes(seed.language) ? `${seed.language} ${seed.genre ?? 'songs'}`.trim() : null);
+      if (deepGenre) for (let k = 0; k < WIDEN_PAGES; k += 1) add('genre', `deep:p${3 + k}`, search(deepGenre, 3 + k + (salt % 2), 20), seed.title);
+    }
     // 8.2.0 — earlier automatic picks the listener finished or liked: songs like two of them.
     for (const pick of rotate(provenPicks({ now: now(), limit: 12 }).filter((p) => p.song.id !== seed.id), ctx.salt, 2)) add('proven', pick.song.id, suggest(pick.song.id, 10), pick.song.title);
   }
@@ -454,6 +473,19 @@ export async function gatherCandidates(ctx: RecommendationContext, opts: GatherO
     const heard = new Set(Object.keys(ctx.profile.languages));
     const unheard = LANGUAGES.map((l) => l.id).filter((id) => !heard.has(id) && !ctx.pinnedLanguages.includes(id) && !ctx.mutedLanguages.includes(id));
     for (const lang of rotate(unheard, ctx.salt, 2)) add('explore', lang, search(trendingSeed(lang, ctx.salt), 1 + (salt % 3), 10));
+  }
+
+  // 4b'. 1.4 — Never repeat, widened twice: the explore source in the
+  // listener's OWN languages (the seed's, pinned and most played), on pages
+  // past the ones the trending source reads. Unheard songs the listener can
+  // follow, rather than the strangers Discover mode explores.
+  if ((ctx.widen ?? 0) >= 2) {
+    const own = [...new Set([ctx.seedSong?.language, ...ctx.pinnedLanguages, ...topLanguages(ctx.profile, 3).map((l) => l.id)])]
+      .filter((l): l is string => !!l && l !== 'unknown' && !ctx.mutedLanguages.includes(l))
+      .slice(0, 2);
+    for (const lang of own) {
+      for (let k = 0; k < WIDEN_PAGES; k += 1) add('explore', `${lang}:own:p${k}`, search(trendingSeed(lang, ctx.salt + k + 1), BROAD_PAGES + 1 + k, 20));
+    }
   }
 
   // 4c. v7.0.0 — Familiar mode: known ground is a candidate source of its own.

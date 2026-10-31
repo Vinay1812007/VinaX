@@ -81,6 +81,18 @@ Tune this queue is a row of chips that reshapes what plays next in one tap. Find
 
 Tap a chip and the upcoming songs are retuned. Songs you added stay. The tune stays active until you start a fresh song.
 
+## Never repeat
+
+Turn on **Never repeat** in **Settings → Recommendations**, or tap the **Never repeat** chip on the Queue page. From then on, every song VinaX adds to your queue is one you have never heard, in any version: a remix, a remaster or a live take of a song you know counts as heard.
+
+- Songs you add yourself, and **Play again**, always play.
+- VinaX remembers every song you have played on this device, even with Never repeat off, so turning it on works straight away.
+- It keeps your languages and the usual variety: no artist twice in a row, and no artist taking over the queue.
+- When the usual places run out of new songs, VinaX looks further: artists close to the ones you are hearing, deeper into the same sound, then popular songs in your languages.
+- If there is truly nothing new left, VinaX says "You've heard everything we can find here. Try Discover or another language" and stops, instead of playing something you have heard.
+
+The list of songs you have heard stays on your device. It is in your backup file, and **Reset app state** erases it.
+
 ## Pin a mood
 
 To hold a mood for a while: open Now Playing → **Up next** tab → **Pin a mood** → tap **Romantic**, **Energetic**, **Chill**, **Melancholy** or **Devotional**.

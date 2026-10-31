@@ -3,6 +3,7 @@ import { useLibraryStore } from '@/store/libraryStore';
 import { recordTransition, type TransitionOutcome } from './transitions';
 import { recordAutoOutcome, type AutoOutcome } from './recMemory';
 import { recordExposure } from './exposure';
+import { initHeardSet } from './heardSet';
 
 /**
  * v6.3.0 — feeds transition memory from real playback. When a song B ends,
@@ -61,6 +62,8 @@ const judgedRuns = new Set<string>();
 
 export function initTransitionTracker(): () => void {
   if (stop) return stop;
+  // 1.4 — the lifetime heard-set (Never repeat) learns from the same bus; it starts with the tracker at boot.
+  void initHeardSet().catch(() => undefined);
   const unsubscribe = onPlaybackEvent((e) => {
     // 9.1.0 — a counted play is the one moment a play is a play.
     if (e.kind === 'counted') {

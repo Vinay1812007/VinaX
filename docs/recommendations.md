@@ -33,6 +33,7 @@ Two things hold everywhere: hard rules never relax, and a penalty is never a rul
 | Playback measurement (what was actually heard) | `services/playback/session.ts` | Per playback instance |
 | Recommendation context (everything one pass reads) | `services/recommendation/context.ts` | Built per call |
 | Exposure ledger and song snoozes | `services/recommendation/exposure.ts` | `localStorage` |
+| Lifetime heard-set (Never repeat) | `services/recommendation/heardSet.ts`, `bloom.ts` | IndexedDB `vinax-heard`; no cap, no expiry |
 | The engine's memory of its own picks | `services/recommendation/recMemory.ts` | `localStorage` |
 | Verified-trend signal, read from a snapshot and never waited for | `services/trends/signal.ts`; evidence in `store/evidenceStore.ts` | In memory |
 | Queue ownership (automatic tail vs. hand-queued songs) | `store/playerStore.ts` | In memory; a reload starts clean |
@@ -118,7 +119,7 @@ Passive listening teaches less as one sitting goes on (`updater.ts`). A `PLAY` a
 
 ### 2. Hard filter (`filters.ts`)
 
-`rejectReasonFor` checks, in this order: `invalid` (no id, title or artist list), `junk` (dialogue, background score, jukebox, trailer, promo, ringtone and similar titles), `too-short` (a known duration under 90 s), then the safety rules of `safetyReasonFor` — `explicit` (Kid mode), `blocked`, `muted-language`, `soft-muted`, `snoozed` — then `seed` (the seed or another version of it), `already-queued` (by id or identity), `recently-played`, `skipped-this-session` and `off-language` (a known language outside `allowedLanguages`, see [Queue languages](#queue-languages)). A survivor marked `unplayable` that is not downloaded is rejected as `no-audio`. Survivors that share a canonical identity collapse with reason `duplicate-version`, keeping the original over a remaster over an alternate cut, then the more-played one.
+`rejectReasonFor` checks, in this order: `invalid` (no id, title or artist list), `junk` (dialogue, background score, jukebox, trailer, promo, ringtone and similar titles), `too-short` (a known duration under 90 s), then the safety rules of `safetyReasonFor` — `explicit` (Kid mode), `blocked`, `muted-language`, `soft-muted`, `snoozed` — then `seed` (the seed or another version of it), `already-queued` (by id or identity), `recently-played`, `heard-before` (only in Never repeat, see [Never repeat](#never-repeat)), `skipped-this-session` and `off-language` (a known language outside `allowedLanguages`, see [Queue languages](#queue-languages)). A survivor marked `unplayable` that is not downloaded is rejected as `no-audio`. Survivors that share a canonical identity collapse with reason `duplicate-version`, keeping the original over a remaster over an alternate cut, then the more-played one.
 
 Canonical identity (`identityCore.ts`, `songKey`) is the normalised title plus the primary artist. The Worker uses the same file, and both test suites run the vectors in `shared/identity-vectors.json` (`identityContract.test.ts`). Normalisation is Unicode-safe: NFKC, invisible characters dropped, Latin accents folded, every other combining mark kept so Indic vowel signs survive. It strips version decorations (film credit, remix, remaster, live, a year and so on) and featured credits. `recordingKey` adds the version tag, so a remix stays distinguishable from its work family.
 
@@ -231,7 +232,7 @@ The player cancels a plan when the queue changes.
 
 ### 7. The admission gate (`admission.ts`)
 
-Every automatic change to the queue — a continuation, the adaptive re-plan, a reserve top-up — passes `admitSongs`, which reads the listener's restrictions at that moment, after any await: valid metadata, junk and too-short cuts, explicit songs in Kid mode, hidden songs and artists, muted languages, a soft-muted lead artist, another cut of the playing song, anything already queued, recent plays and songs skipped in this sitting. A Queue Builder plan the listener installs keeps its order and passes only the explicit restrictions.
+Every automatic change to the queue — a continuation, the adaptive re-plan, a reserve top-up — passes `admitSongs`, which reads the listener's restrictions at that moment, after any await: valid metadata, junk and too-short cuts, explicit songs in Kid mode, hidden songs and artists, muted languages, a soft-muted lead artist, another cut of the playing song, anything already queued, recent plays, songs skipped in this sitting and, in Never repeat, any song heard before (`heard-before`). A Queue Builder plan the listener installs keeps its order and passes only the explicit restrictions.
 
 ## The exposure ledger
 
@@ -262,6 +263,31 @@ Every automatic change to the queue — a continuation, the adaptive re-plan, a 
 
 - **Outcomes.** When a playback instance of an automatically queued song ends, `autoOutcomeFor` (`transitionTracker.ts`) judges it once per run: liked, or a natural end with the song completed, is a success; a manual skip before the play counted or inside its first 30 % is a miss; anything else says nothing. Entries are forgotten after 60 days. `provenPicks` returns those with more successes than misses; they feed the `proven` source.
 - **Seed memory.** When the player accepts a continuation, its opening songs are remembered against the seed's identity for 12 hours, as canonical keys. The next plan from the same seed passes them to the scorer as `seedRepeatKeys`, so the same song does not open the same way twice.
+
+## Never repeat
+
+Settings → Recommendations → **Never repeat**, or the **Never repeat** chip on the Queue page (`neverRepeat` in `store/settingsStore.ts`, off by default). While it is on, every song the recommender adds to a queue is one the listener has never heard. Songs the listener queues by hand, a Queue Builder plan they install and an explicit "Play again" are never held back. Turning it on from the chip rebuilds the automatic songs still waiting in Up Next.
+
+**The lifetime heard-set (`heardSet.ts`).** The canonical identity (`songKey`) of every song that produces a `counted` event on the playback bus, whether the mode is on or not, so switching it on later already knows the past.
+
+- It lives in its own IndexedDB database, `vinax-heard`: one row per canonical key, valued with the time it was first heard. There is no row cap and no expiry.
+- New keys are written in one transaction after a 1.5 s pause, and when the page is hidden. Every key is written, even one the filter already answers "heard" for, because that answer may be a false positive.
+- Lookups go through an in-memory Bloom filter (`bloom.ts`) sized for a 1 % false-positive rate: about 9.6 bits and 7 hashes per song, so 50 000 songs cost about 60 KB. A heard song is never missed; about one never-heard song in a hundred is passed over. The filter starts sized for 4 096 songs and is rebuilt from the database at double the size once it holds more.
+- The first load also reads earlier plays into the set, once: the history store's plays that were not skips, and `play` and `complete` rows of the listen-event log.
+- It starts with the transition tracker at boot (`transitionTracker.ts`). Its lookup is registered with the admission gate (`registerHeardCheck` in `admission.ts`), so the first-load gate can ask without loading it. A plan in Never repeat waits for it to load before it filters anything.
+- Without IndexedDB (some private windows) the set lives in memory for the session.
+- The one-file backup carries it (category `heard`, below); the account sync never does. "Erase everything" deletes the database.
+
+**The rule.** `heard-before` is a hard rule in `filters.ts` (from the `heardBefore` option) and in `admission.ts`, keyed by canonical identity, so a remaster, a remix, a live take or another cut of a heard song is out too. The live queue's planner (`services/nextup/`, which the player calls for Up Next) applies the same rule (`heard-before` in `rules.ts`) and drops heard songs from its warm pool. No relaxation step touches it. Every in-stretch rule still holds: one recording family per stretch, the artist cap, no lead artist twice in a row.
+
+**When the pool runs short, the sources widen; the rule never relaxes.** While fewer than three unheard candidates per slot survive the hard filter (`NEVER_REPEAT_POOL`), the plan gathers again with a wider reach (`RecommendationContext.widen`):
+
+| Step | What is added |
+| --- | --- |
+| 1 | More of the `related-artist` source (artists further down the related list, two pages of each; `ra|…|deep`) and three more pages of the `genre` search (`WIDEN_PAGES`) |
+| 2 | The `explore` source in the listener's own languages (the seed's, pinned, most played), on pages past the ones `trending` reads |
+
+The live planner does the same with `planWideLookups` (`services/nextup/sources.ts`): related artists of the anchor songs' artists and deeper genre or mood pages, then popular songs in the listener's languages. The trace and `relaxed` record `widened-1` or `widened-2`. When nothing unheard is left after both steps, the plan says `exhausted` and carries a notice; the player shows "You've heard everything we can find here. Try Discover or another language" with a Discover button, and stops instead of playing something heard.
 
 ## Settings and switches
 
@@ -362,6 +388,7 @@ For a listener, the track menu's "Why this song?" (`explanations.ts`) turns the 
 | Any weight, source, filter, sequencer or validation rule | The unit tests beside the modules (`services/recommendation/*.test.ts`), and the offline evaluation: `node scripts/eval-recs.mjs --no-baseline` from `frontend/` ([evaluation.md](evaluation.md)) |
 | A key in the weight table | `weightEffects.test.ts` (each key moves its own terms and no others) and `weightOverrides.test.ts`; update `REC_WEIGHT_TERMS` in the Worker to match |
 | Anything about repetition (the ledger, seed memory, surface policy) | `repetition.accept.test.ts` and `exposure.test.ts`. The evaluation's metrics cannot see repetition across sessions; see [evaluation.md](evaluation.md). |
+| Never repeat (the heard-set, `heard-before`, widening) | `heardSet.test.ts`, `bloom.test.ts`, `admission.test.ts`, `filters.test.ts`, `services/nextup/rules.test.ts` and `engine.test.ts`, and the 500-song sitting in `repetition.accept.test.ts` (zero repeats by canonical identity) |
 | Canonical identity | `identityContract.test.ts` and the Worker's suite, which read the same `shared/identity-vectors.json` |
 | Queue languages or the next five | `nextFive.test.ts`, `engine.test.ts`, `validation.test.ts`, `sequencerPolicy.test.ts`; the evaluation's `mixed-queue` fixture counts mix violations as hard failures |
 | Styles | `style.test.ts`, `engine.style.test.ts` |

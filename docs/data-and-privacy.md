@@ -15,7 +15,7 @@ This document says what VinaX keeps on a listener's device, what leaves the devi
 
 VinaX needs a Google account: until a listener signs in, every page is the sign-in screen (the Privacy, Terms and Contact pages stay readable). Signing in sends Google's ID token to the Worker, which checks it with Google and stores one row in `accounts`: the Google account ID, email address (and whether Google verified it), name, profile picture address, the linked device (`listener_id`) when the device proves its signed ID, and the time. The device is linked at sign-in or on the app's session check once per load; that check also refreshes the time at most every 10 minutes. The row also holds coarse sign-in facts, written at sign-in and on that same refresh: the edge's geo for the request (`country`, `region`, `city`; the IP address is never stored), `platform` (web, android, ios) and `app_version`. The owner console's Listeners page shows every account with its name, email, profile photo and these facts, whether or not the listener shares usage; plays, searches and favourites reach the server only while usage sharing is on (the default). The Privacy page says so.
 
-**What syncs.** The account also holds one copy of the listener's data in `account_backups`, in the same format as the backup file: settings, library and playlists, smart collections, listening history, taste profile, bookmarks and the Home layout. It is merged into each device the listener signs in on and updated a few seconds after a change; a version number makes two devices merge instead of overwrite each other. **Searches and this device's identity never sync.** The copy is at most 2 MB.
+**What syncs.** The account also holds one copy of the listener's data in `account_backups`, in the same format as the backup file: settings, library and playlists, smart collections, listening history, taste profile, bookmarks and the Home layout. The lifetime heard-set is not part of it. It is merged into each device the listener signs in on and updated a few seconds after a change; a version number makes two devices merge instead of overwrite each other. **Searches and this device's identity never sync.** The copy is at most 2 MB.
 
 **Session and deletion.** The session is kept on the device and sent only to the Worker's account routes: `/api/auth/*`, `/api/account/*`, `/api/personal/*`, `/api/ai/*`, `/api/profile`, `/api/follow` and `/api/shared-playlist`. **Sign out** forgets it on the device (the data stays on the device and in the account). **Delete account** (Settings → Profile, also reached from the top-bar avatar menu) removes the account row and, with it, the synced copy from the server. On the website the sign-in button and its script load from Google; in the Android app the system's Google account sheet is used.
 
@@ -27,6 +27,7 @@ VinaX needs a Google account: until a listener signs in, every page is the sign-
 | `localStorage`, feature keys (`vinax.*`) | Bookmarks, smart collections, search workspace, streak, sidebar groups, Home layout, Home signals (`vinax.home.signals.v1`), recommendation memories (`vinax.recs.outcomes.v1`, `vinax.recs.seedmemo.v1`, `vinax.recs.exposure.v1`, `vinax.recs.snoozed.v1`), dismissed banners | Each feature owns its key next to the registry. |
 | `sessionStorage` | Boot and chunk-reload counters, the restore Undo snapshot (`vinax.backup.undo.v1`), this session's Home order, session intent, and the live Listen Together session (`vinax.together.session.v1`: mode and room code, so a reload rejoins) | Gone when the tab closes. |
 | IndexedDB `tarang-db` | The listen-event log behind taste insights | `services/storage/idb.ts`. |
+| IndexedDB `vinax-heard` | The lifetime heard-set: the canonical key (normalised title and lead artist) of every song that counted as a play, with the time it was first heard. Never repeat reads it | `services/recommendation/heardSet.ts`. No cap and no expiry. It never leaves the device except inside a backup file the listener exports. |
 | Cache storage `vinax-shell-*` | App shell and build assets | Managed by the service worker. |
 | Cache storage `vinax-audio-v1` | Downloaded songs | Not cleared by a service-worker update or by boot recovery. |
 | Android app storage | Downloaded audio files | Android only; paths are in the downloads index. |
@@ -180,6 +181,7 @@ Three deletion paths exist. **The listener** erases their taste model from Setti
 | `homeLayout` | Home layout | Shelf order, hidden shelves and headline |
 | `identity` | Name & username | Display name, username, the welcome-done flag |
 | `extras` | Alarm, lyrics, streak & app preferences | Alarm, lyric offsets, karaoke history, streak, sidebar groups |
+| `heard` | Songs you have heard | The lifetime heard-set, as canonical keys (at most 200 000). The export reads it from IndexedDB; a restore hands it to the heard-set, which adds it on the next load. A restore only adds heard songs, in either mode. It is never part of the account sync |
 
 A backup never contains (`BACKUP_EXCLUSIONS`): downloaded audio or download paths; the install id or the signed id; Listen Together host keys; the usage-sharing choice; the queue, playback position or caches; update reminders and the What's New read state. Backups no longer include AI chats, saved AI prompts or AI reply preferences; an older file's `aiChats` section is ignored with a warning.
 
@@ -216,7 +218,7 @@ This is the only path that carries identity. The payload is a backup plus the in
 | --- | --- |
 | Clear history, Clear favorites | Clears the list and offers Undo |
 | The personalization reset (`clearPersonalization`) | Resets the taste profile, the recommendation memories and the Home signals; favourites stay |
-| Reset app state → Erase everything | Clears the listen-event log, deletes the `vinax-embeddings` database older builds kept, and removes every `localStorage` key that starts with `vinax`, then reloads (`resetAppState`) |
+| Reset app state → Erase everything | Clears the listen-event log, deletes the heard-set database (`vinax-heard`) and the `vinax-embeddings` database older builds kept, and removes every `localStorage` key that starts with `vinax`, then reloads (`resetAppState`) |
 
 `resetAppState` does not itself clear the downloaded-audio cache or `sessionStorage`. Nothing on the server is removed by a local erase: usage rows sent while sharing was on, feedback, a claimed username and push registrations remain until the retention purge or a deletion ([Server-side records](#server-side-records)). **Delete account** is the listener's path to removing the server copy of their account and synced data.
 

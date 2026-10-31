@@ -325,10 +325,23 @@ export interface RecommendationContext {
    * seed's language.
    */
   styleLanguage?: string | null;
+  /**
+   * 1.4 — Never repeat (Settings → Recommendations, or the queue's chip): every
+   * automatic song is one the listener has never heard, by canonical identity
+   * (./heardSet.ts). A hard rule (`heard-before`) that is never relaxed; when
+   * the pool runs short the engine widens its sources instead (`widen`).
+   */
+  neverRepeat?: boolean;
+  /**
+   * 1.4 — how far a Never repeat gather reaches when the usual sources come up
+   * short: 1 adds deeper pages of the related-artist and genre sources, 2 also
+   * adds the explore source in the listener's own languages. Absent = 0.
+   */
+  widen?: 0 | 1 | 2;
 }
 
 /** v7.0.0 — why a candidate never reached the ranked pool (developer score breakdowns). 'soft-muted' (7.2.0): an artist under an active "show fewer like this". */
-export type RejectReason = 'seed' | 'recently-played' | 'already-queued' | 'duplicate-version' | 'muted-language' | 'soft-muted' | 'language-lock' | 'off-language' | 'blocked' | 'explicit' | 'junk' | 'too-short' | 'skipped-this-session' | 'low-score' | 'artist-cap' | 'discovery-share' | 'invalid' | 'no-audio' | 'snoozed';
+export type RejectReason = 'seed' | 'recently-played' | 'already-queued' | 'duplicate-version' | 'muted-language' | 'soft-muted' | 'language-lock' | 'off-language' | 'blocked' | 'explicit' | 'junk' | 'too-short' | 'skipped-this-session' | 'low-score' | 'artist-cap' | 'discovery-share' | 'invalid' | 'no-audio' | 'snoozed' | 'heard-before';
 
 /**
  * 7.2.0 — a soft rule the sequencer or the validator had to give up on

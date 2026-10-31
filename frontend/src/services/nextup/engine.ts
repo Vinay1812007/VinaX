@@ -1,7 +1,9 @@
 import type { Song } from '@/types';
 import type { RecommendationContext, RejectReason as DebugRejectReason } from '@/services/recommendation/types';
-import type { FallbackReason, NextRecommendationOptions, NextSongsPlan } from '@/services/recommendation/engine';
-import { getArtistTopSongs, getSongSuggestions, searchSongs } from '@/services/api/saavn';
+import type { FallbackReason, NextRecommendationOptions, NextSongsPlan, PlanNotice } from '@/services/recommendation/engine';
+import { toastNavigate } from '@/store/toastStore';
+import { getArtist, getArtistTopSongs, getSongSuggestions, searchSongs, searchSongsPage } from '@/services/api/saavn';
+import { hasHeardKey, initHeardSet } from '@/services/recommendation/heardSet';
 import { fetchPersonalRecommendations, personalEnabled } from '@/services/personal/api';
 import { toSong } from '@/services/personal/types';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -37,7 +39,7 @@ import {
   type ScoreContext,
   type Source,
 } from './rules';
-import { planLookups, runLookups, type CatalogueApi, type Fetched } from './sources';
+import { planLookups, planWideLookups, runLookups, type CatalogueApi, type Fetched } from './sources';
 
 /**
  * VinaX V2 — Up Next, rewritten.
@@ -68,6 +70,12 @@ import { planLookups, runLookups, type CatalogueApi, type Fetched } from './sour
  */
 
 export const NEXTUP_VERSION = '2.0.0';
+
+/** 1.4 — Never repeat found nothing unheard (the same words as the 9.x engine's notice). */
+const NEVER_REPEAT_EXHAUSTED: PlanNotice = {
+  text: "You've heard everything we can find here. Try Discover or another language",
+  opts: { key: 'never-repeat-exhausted', action: { label: 'Discover', onClick: () => toastNavigate('/discover') } },
+};
 /** Longest a plan waits for the catalogue when the warm pool cannot serve it. */
 export const NEXTUP_DEADLINE_MS = 4_000;
 /** Below this many usable candidates, the pool refills in the background. */
@@ -110,6 +118,9 @@ const defaultApi: CatalogueApi = {
   // songs carry audio and others do not marks the others unplayable (addToPool).
   personal: async (seedId, limit, signal) => (await fetchPersonalRecommendations({ seed: seedId, limit, signal, mode: useSettingsStore.getState().discoveryMode })).map(toSong),
   search: (q, limit, signal) => searchSongs(q, limit, { signal }),
+  searchPage: (q, page, limit, signal) => searchSongsPage(q, page, limit, { signal }),
+  related: async (id) => ((await getArtist(id))?.similarArtists ?? []).filter((a) => !!a?.id).map((a) => ({ id: a.id, name: a.name })),
+  artistPage: (id, page) => getArtistTopSongs(id, page),
 };
 let api: CatalogueApi = defaultApi;
 
@@ -179,7 +190,7 @@ function addToPool(p: Pool, songs: readonly Song[], source: Source, via: string 
 function prune(p: Pool, filter: FilterContext): void {
   for (const [id, c] of p.items) {
     const why = rejectReason(c.song, filter);
-    if (why === 'skipped' || why === 'blocked' || why === 'no-audio' || why === 'artist-skipped') p.items.delete(id);
+    if (why === 'skipped' || why === 'blocked' || why === 'no-audio' || why === 'artist-skipped' || why === 'heard-before') p.items.delete(id);
   }
 }
 
@@ -199,6 +210,8 @@ interface Env {
   served: Map<string, number>;
   tuneQuery: string | null;
   score: ScoreContext;
+  /** 1.4 — Never repeat: the lifetime heard-set's lookup; absent when the mode is off. */
+  heard?: (key: string) => boolean;
   now: number;
 }
 
@@ -259,6 +272,7 @@ function buildEnv(seed: Song, ctx: RecommendationContext, anchor: Anchor, option
     served: servedMap(now),
     tuneQuery,
     score,
+    ...(ctx.neverRepeat ? { heard: hasHeardKey } : {}),
     now,
   };
 }
@@ -285,6 +299,7 @@ function filterFor(env: Env, queued: { ids: ReadonlySet<string>; keys: ReadonlyS
     blocked: (s) => isSongBlocked(s, library),
     softMuted: (s) => isSoftMuted(s, env.now),
     hideExplicit: kidModeOn(),
+    ...(env.heard ? { heard: env.heard } : {}),
     now: env.now,
     playedCooldownMs: PLAYED_COOLDOWN_MS * f,
     likedCooldownMs: LIKED_COOLDOWN_MS * f,
@@ -365,6 +380,7 @@ const DEBUG_REASON: Record<RejectReason, DebugRejectReason> = {
   'muted-language': 'muted-language',
   'other-language': 'off-language',
   'soft-muted': 'soft-muted',
+  'heard-before': 'heard-before',
 };
 
 /** The developer breakdown (`?debug=recs`): only built when it is switched on. */
@@ -418,6 +434,9 @@ function whyLine(c: Candidate | undefined): string | null {
   if (has('anchor') && c.via) return `Because you chose “${c.via}”`;
   if (has('liked')) return 'From your liked songs';
   if (has('favourite-play')) return 'One you keep coming back to';
+  if (has('related-artist') && c.via) return `New to you, from an artist close to ${c.via}`;
+  if (has('genre')) return 'New to you, in the sound of this session';
+  if (has('explore')) return 'New to you, in your languages';
   return null;
 }
 
@@ -431,6 +450,8 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   const alg = `nextup-${NEXTUP_VERSION}`;
   const limit = Math.max(0, Math.min(40, Math.floor(options.limit ?? 5)));
   const signal = options.signal;
+  // 1.4 — Never repeat reads the lifetime heard-set: wait for it to load (once per app start).
+  if (ctx.neverRepeat) await initHeardSet().catch(() => undefined);
   const anchor = readAnchor(seed, t0, ctx.history?.[0]?.ts ?? 0);
   const env = buildEnv(seed, ctx, anchor, options, t0);
   const language = env.languages[0] ?? null;
@@ -475,6 +496,26 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     if (signal?.aborted) return empty(null);
     result = attempt();
   }
+  // 1.4 — Never repeat: when the session's sources hold no unheard song, reach
+  // further rather than loosen the rule (sources.ts planWideLookups): related
+  // artists and deeper genre pages, then popular songs in the listener's own
+  // languages. Heard songs stay out at every step.
+  const listenerLanguages = [...new Set([...env.languages, ...ctx.pinnedLanguages.map((l) => l.toLowerCase()), ...topLanguages(ctx.profile, 3).map((l) => l.id.toLowerCase())])].filter((l) => l && l !== 'unknown' && !ctx.mutedLanguages.includes(l));
+  let widenedTo = 0;
+  if (env.heard && result.songs.length < limit) {
+    const wideDeadline = Math.min(2_500, Math.max(1_000, options.deadlineMs ?? NEXTUP_DEADLINE_MS));
+    for (const tier of [1, 2] as const) {
+      if (result.songs.length >= limit || signal?.aborted) break;
+      const merge = (f: Fetched): void => {
+        if (pool === p) addToPool(p, f.songs.slice(0, PER_LOOKUP_MAX), f.source, f.via, Date.now());
+      };
+      const found = await runLookups(planWideLookups({ anchor: env.anchor, languages: listenerLanguages, tier, rotation: rotation++, api, signal }), wideDeadline, signal, merge);
+      for (const f of found) merge(f);
+      if (signal?.aborted) return empty(null);
+      result = attempt();
+      widenedTo = tier;
+    }
+  }
   if (result.songs.length < Math.min(limit, 3)) {
     // The liked songs and repeat plays are always there to fall back on (eviction may have dropped them).
     seedPoolLocally(p, env);
@@ -493,6 +534,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     }
   }
   relaxed.unshift(...result.relaxed);
+  if (widenedTo) relaxed.push(`widened-${widenedTo}`);
   // Keep the pool warm for the next stretch without making this one wait.
   if (result.usable - result.songs.length < POOL_LOW_WATER) void refill(p, env, NEXTUP_DEADLINE_MS * 2);
 
@@ -538,7 +580,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     return picked;
   };
   const discoveryIds = new Set(songs.filter((s) => !env.likedLeads.has(leadOf(s)) && !env.score.tasteLeads.has(leadOf(s))).map((s) => s.id));
-  const plan: NextSongsPlan = { songs, picker: 'local', fallback, latencyMs: Date.now() - t0, alg, relaxed, discoveryIds, language, commit, topUp };
+  const plan: NextSongsPlan = { songs, picker: 'local', fallback, latencyMs: Date.now() - t0, alg, relaxed, discoveryIds, language, commit, topUp, ...(env.heard && !songs.length ? { exhausted: true, notice: NEVER_REPEAT_EXHAUSTED } : {}) };
 
   return plan;
 }

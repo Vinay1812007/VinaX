@@ -35,6 +35,7 @@ A backup is one file. It holds these categories:
 | Home layout | Shelf order, hidden shelves and headline |
 | Name & username | Your display name and the username you chose |
 | Alarm, lyrics, streak & app preferences | Wake-up alarm, lyric timing adjustments, karaoke history, listening streak and sidebar groups |
+| Songs you have heard | Every song you have played, so [Never repeat](player-and-queue.md#never-repeat) keeps them out on another device too. Restoring it only adds songs; it never forgets any |
 
 ## What a backup leaves out
 
@@ -97,7 +98,7 @@ Your profile is encrypted on the old device before it is sent. The encrypted cop
 
 - **Clear history** and **Clear favorites** each offer Undo right after.
 - **Clear queue** empties the queue.
-- **Reset app state** erases everything VinaX stores on this device and reloads.
+- **Reset app state** erases everything VinaX stores on this device, including the list of songs you have heard, and reloads.
 
 **Clear cached metadata** is in the **Storage** group of the same section.
 

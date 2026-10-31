@@ -114,3 +114,14 @@ describe('V2 Up Next rules — ordering', () => {
     expect(relaxed.length).toBeGreaterThan(0);
   });
 });
+
+describe('V2 Up Next rules — Never repeat', () => {
+  it('a heard song is never picked, even with every cooldown loosened', () => {
+    const s = song('x', 'A');
+    const heard = (k: string): boolean => k === key(s);
+    expect(rejectReason(s, filter({ heard }))).toBe('heard-before');
+    expect(rejectReason(s, filter({ heard, playedCooldownMs: 0, likedCooldownMs: 0, servedCooldownMs: 0, languages: new Set() }))).toBe('heard-before');
+    expect(rejectReason(song('y', 'A'), filter({ heard }))).toBeNull();
+    expect(rejectReason(s, filter())).toBeNull();
+  });
+});

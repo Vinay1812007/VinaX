@@ -748,6 +748,13 @@ export default function SettingsPage() {
               >
                 <ChoiceCards label="Discovery mode" idPrefix="vx-discovery" value={s.discoveryMode} onChange={s.setDiscoveryMode} options={DISCOVERY_OPTIONS} />
               </Block>
+              <Row
+                label="Never repeat"
+                note="Every song VinaX adds to a queue is one you have never heard, in any version. Songs you queue yourself, and Play again, always play."
+                keywords="never repeat unheard new songs heard before no repeats"
+              >
+                <Toggle on={!!s.neverRepeat} onChange={s.setNeverRepeat} label="Never repeat" />
+              </Row>
               <Block
                 label="Trending vs. your taste"
                 note="How much Home and Up Next lean on what is popular right now."
@@ -1009,7 +1016,7 @@ export default function SettingsPage() {
                 note="A JSON file of your settings, library, history and taste profile. Never downloaded audio, device identity or caches."
                 keywords="download json smart collections saved searches bookmarks home layout name username"
               >
-                <RowButton onClick={() => { downloadProfileExport(); toast('Backup file downloaded'); }}>Export</RowButton>
+                <RowButton onClick={() => { void downloadProfileExport(); toast('Backup file downloaded'); }}>Export</RowButton>
               </Row>
               <AiChatsExportRow />
               <Row label="Restore a backup (quick)" note="Replaces the same categories on this device. A damaged file changes nothing." keywords="import older exports migrated">

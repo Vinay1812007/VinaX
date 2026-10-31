@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.5.0': {
+    title: 'Never repeat: only songs you have not heard play next',
+    changes: [
+      { type: 'new', text: 'Turn on Never repeat in Settings → Recommendations, or tap its chip on the Queue page, and every song VinaX adds is one you have never heard.' },
+      { type: 'new', text: 'A remix, a remaster or a live take of a song you know counts as heard, so it stays out too. Songs you add yourself always play.' },
+      { type: 'improved', text: 'When the usual places run out, VinaX looks further for new songs in your languages, and tells you if there is truly nothing new left.' },
+      { type: 'improved', text: 'The songs you have heard stay on your device and are kept in your backup file.' },
+    ],
+  },
   '1.4.0': {
     title: 'The personal engine: Home, playlists and radio built from your account\'s taste #minor',
     changes: [

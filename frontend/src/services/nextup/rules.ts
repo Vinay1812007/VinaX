@@ -22,7 +22,13 @@ export type Source =
   /** A "Tune this queue" search. */
   | 'tune'
   /** V2 1.4 — the personal engine's ranked list around the anchor (signed in, the setting on). */
-  | 'personal';
+  | 'personal'
+  /** 1.4 — Never repeat, widened: top songs of artists related to an anchor song's artist. */
+  | 'related-artist'
+  /** 1.4 — Never repeat, widened: deeper pages of a search for the anchor's genre or mood. */
+  | 'genre'
+  /** 1.4 — Never repeat, widened twice: popular songs in the session's own languages, past the first pages. */
+  | 'explore';
 
 export const SOURCE_BASE: Readonly<Record<Source, number>> = Object.freeze({
   anchor: 1,
@@ -32,6 +38,9 @@ export const SOURCE_BASE: Readonly<Record<Source, number>> = Object.freeze({
   'favourite-play': 0.6,
   tune: 1.1,
   personal: 1.08,
+  'related-artist': 0.8,
+  genre: 0.7,
+  explore: 0.55,
 });
 
 export interface Candidate {
@@ -146,7 +155,8 @@ export type RejectReason =
   | 'explicit'
   | 'muted-language'
   | 'other-language'
-  | 'soft-muted';
+  | 'soft-muted'
+  | 'heard-before';
 
 export interface FilterContext {
   /** Languages the stretch may use; empty = any. */
@@ -166,6 +176,12 @@ export interface FilterContext {
   blocked(song: Song): boolean;
   softMuted(song: Song): boolean;
   hideExplicit: boolean;
+  /**
+   * 1.4 — Never repeat: has the listener ever heard this canonical song? A
+   * heard song is never picked automatically, and no loosening step touches
+   * this rule. Absent = the mode is off.
+   */
+  heard?: (key: string) => boolean;
   now: number;
   /** Cooldowns, relaxed only when nothing else is left. */
   playedCooldownMs: number;
@@ -184,6 +200,7 @@ export function rejectReason(song: Song, f: FilterContext): RejectReason | null 
   if (!song?.id) return 'no-audio';
   const key = f.keyOf(song);
   if (f.queuedIds.has(song.id) || f.queuedKeys.has(key)) return 'queued';
+  if (f.heard?.(key)) return 'heard-before';
   if (f.skippedIds.has(song.id)) return 'skipped';
   if (f.blocked(song)) return 'blocked';
   if (f.hideExplicit && song.explicit) return 'explicit';

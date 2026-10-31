@@ -49,8 +49,8 @@ export function UpdateDialog() {
   };
 
   const exportData = () => {
-    void import('@/features/settings/actions').then((m) => {
-      m.downloadProfileExport();
+    void import('@/features/settings/actions').then(async (m) => {
+      await m.downloadProfileExport();
       setExported(true);
     }).catch(() => undefined);
   };
