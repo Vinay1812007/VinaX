@@ -86,3 +86,17 @@ describe('levels', () => {
     expect(silentMicNotice('BlackHole 2ch (Virtual)')).toContain('“BlackHole 2ch (Virtual)”');
   });
 });
+
+describe('watchMic', () => {
+  it('a suspended audio context proves nothing: the clip is not called silent', async () => {
+    const { watchMic } = await import('./mic');
+    const analyser = { fftSize: 0, getFloatTimeDomainData: (b: Float32Array) => b.fill(0), disconnect: vi.fn() };
+    const ctx = { state: 'suspended', sampleRate: 48_000, resume: async () => undefined, createMediaStreamSource: () => ({ connect: vi.fn() }), createAnalyser: () => analyser } as unknown as AudioContext;
+    const w = watchMic({} as MediaStream, ctx);
+    for (let i = 0; i < 20; i += 1) w.level();
+    expect(w.heard()).toBe(true);
+    (ctx as { state: string }).state = 'running';
+    for (let i = 0; i < 20; i += 1) w.level();
+    expect(w.heard()).toBe(false); // running, and every sample exactly zero: the wrong mic
+  });
+});

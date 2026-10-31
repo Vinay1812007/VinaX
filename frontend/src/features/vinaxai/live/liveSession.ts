@@ -216,6 +216,7 @@ export class LiveSession {
       const now = Math.max(mic, voice);
       smooth = now > smooth ? now : smooth * 0.8 + now * 0.2;
       this.cb.onLevel(smooth, voice > mic ? 'assistant' : 'user');
+      if (this.inCtx?.state !== 'running') this.listenSince = performance.now();
       if (!this.heard && !this.muted && !this.silentShown && performance.now() - this.listenSince > SILENT_AFTER_MS) {
         this.silentShown = true;
         this.cb.onMic?.({ label: this.micLabel, silent: true });

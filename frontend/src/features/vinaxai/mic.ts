@@ -205,10 +205,12 @@ export interface MicWatch {
 export function watchMic(stream: MediaStream, ctx: AudioContext | null): MicWatch {
   let analyser: AnalyserNode | null = null;
   let own: AudioContext | null = null;
+  let running: AudioContext | null = null;
   try {
     const base = ctx ?? newAudioContext();
     if (base) {
       const { ctx: used, source } = micSource(base, stream);
+      running = used;
       if (used !== base || !ctx) own = used;
       void used.resume().catch(() => undefined);
       analyser = used.createAnalyser();
@@ -221,9 +223,12 @@ export function watchMic(stream: MediaStream, ctx: AudioContext | null): MicWatc
   const buf = new Float32Array(1024);
   let heard = false;
   let smooth = 0;
+  /** Reads taken while the audio actually ran: a suspended context reads zeros, which proves nothing. */
+  let checks = 0;
   return {
     level: () => {
-      if (!analyser) return 0;
+      if (!analyser || running?.state !== 'running') return 0;
+      checks += 1;
       analyser.getFloatTimeDomainData(buf);
       if (!heard && hasSignal(buf)) heard = true;
       const now = loudness(rmsOf(buf));
@@ -231,8 +236,8 @@ export function watchMic(stream: MediaStream, ctx: AudioContext | null): MicWatc
       smooth = now > smooth ? now : smooth * 0.7 + now * 0.3;
       return smooth;
     },
-    // Without an analyser the page cannot tell, so it assumes sound arrived.
-    heard: () => heard || !analyser,
+    // Without enough real reads the page cannot tell, so it assumes sound arrived.
+    heard: () => heard || !analyser || checks < 5,
     stop: () => {
       try { analyser?.disconnect(); } catch { /* gone */ }
       void own?.close().catch(() => undefined);

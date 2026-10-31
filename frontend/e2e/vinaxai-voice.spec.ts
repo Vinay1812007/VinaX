@@ -309,6 +309,14 @@ for (const theme of ['dark', 'light'] as const) {
     let results = await new AxeBuilder({ page }).withTags(tags).analyze();
     expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).slice(0, 3).join(', ')}`)).toEqual([]);
     await page.getByRole('button', { name: 'Cancel dictation' }).click();
+    // VinaX AI settings, with the mic test running.
+    await page.getByRole('button', { name: 'VinaX AI settings' }).click();
+    const settings = page.getByRole('dialog', { name: 'VinaX AI settings' });
+    await settings.getByRole('button', { name: 'Test microphone' }).click();
+    await expect(settings.getByRole('button', { name: 'Stop test' })).toBeVisible();
+    results = await new AxeBuilder({ page }).withTags(tags).analyze();
+    expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).slice(0, 3).join(', ')}`)).toEqual([]);
+    await settings.getByRole('button', { name: 'Close settings' }).click();
     await page.getByRole('button', { name: 'Start Live voice' }).click();
     await expect(page.getByRole('dialog', { name: 'Live voice' }).getByRole('status')).toHaveText('Listening', { timeout: 10_000 });
     results = await new AxeBuilder({ page }).withTags(tags).analyze();
