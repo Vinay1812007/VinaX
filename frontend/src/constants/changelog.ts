@@ -19,10 +19,10 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
   '1.3.10': {
     title: 'VinaX AI can take dictation, read replies aloud and talk with you live',
     changes: [
-      { type: 'improved', text: 'VinaX AI: voice (server).' },
-      { type: 'improved', text: 'Probe the voice models, Live tokens and a Live handshake.' },
-      { type: 'improved', text: 'VinaX AI: voice (page).' },
-      { type: 'improved', text: 'Allow the Gemini Live socket, and the Android mic for the page.' },
+      { type: 'new', text: 'Tap the mic in VinaX AI and speak: your words appear in the message box for you to check before sending.' },
+      { type: 'new', text: 'Press the speaker under any reply to hear it read aloud, while your music keeps playing quietly.' },
+      { type: 'new', text: 'Talk with VinaX AI out loud in Live voice, with captions, and find the conversation saved in your chat afterwards.' },
+      { type: 'improved', text: 'Choose the voices VinaX AI speaks with from Voice settings in the + menu.' },
     ],
   },
   '1.3.9': {
@@ -34,10 +34,10 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
   '1.3.8': {
     title: 'VinaX AI shows code, pages and diagrams in a side panel',
     changes: [
-      { type: 'new', text: 'Rewrite the 1.3.4, 1.3.6 and 1.3.7 What\'s New cards for listeners.' },
-      { type: 'improved', text: 'VinaX AI: artifacts (server).' },
-      { type: 'new', text: 'Add the VinaX AI artifact sandbox site.' },
-      { type: 'improved', text: 'VinaX AI: artifacts (page and docs).' },
+      { type: 'new', text: 'When VinaX AI writes code, a web page, a diagram or a document, it opens in a panel beside the chat.' },
+      { type: 'new', text: 'Preview web pages, small apps, pictures and diagrams right in the panel, kept safely apart from the app.' },
+      { type: 'improved', text: 'Step back to earlier versions of what VinaX AI made, and copy or download any of them.' },
+      { type: 'improved', text: 'On a phone the panel opens full screen and closes back to your chat.' },
     ],
   },
   '1.3.7': {
