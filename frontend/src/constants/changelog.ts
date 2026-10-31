@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.3.12': {
+    title: 'VinaX AI voice works again, with its own settings and every model',
+    changes: [
+      { type: 'improved', text: 'VinaX AI hears you again: dictation and Live voice now use a working microphone, and tell you if yours is silent.' },
+      { type: 'improved', text: 'The mic meter and the Live voice orb move as you speak.' },
+      { type: 'improved', text: 'VinaX AI has its own settings: model, thinking, web search, microphone with a test, voices and the Live voice model.' },
+      { type: 'new', text: 'Every VinaX AI model is now in the model menu, with a search box and a new More models group.' },
+    ],
+  },
   '1.3.11': {
     title: 'A guide to VinaX AI, and clearer notes for the last two updates',
     changes: [
