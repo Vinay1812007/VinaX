@@ -13,21 +13,24 @@ export function useDismiss(open: boolean, close: () => void, inside: Array<RefOb
   useDismissOnBack(open, close);
   useEffect(() => {
     if (!open) return;
+    // Escape closes this popover only when the key was meant for it: focus is
+    // inside it (or nowhere in particular). Another overlay that opened on
+    // top, such as the festival greeting, keeps its own Escape.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        closeRef.current();
-      }
+      if (e.key !== 'Escape') return;
+      const t = e.target as Node | null;
+      const mine = !(t instanceof Element) || t === document.body || t === document.documentElement || insideRef.current.some((r) => r.current?.contains(t));
+      if (mine) closeRef.current();
     };
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node | null;
       if (t && insideRef.current.some((r) => r.current?.contains(t))) return;
       closeRef.current();
     };
-    document.addEventListener('keydown', onKey, true);
+    document.addEventListener('keydown', onKey);
     document.addEventListener('pointerdown', onDown, true);
     return () => {
-      document.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('keydown', onKey);
       document.removeEventListener('pointerdown', onDown, true);
     };
   }, [open]);

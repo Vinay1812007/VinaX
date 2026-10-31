@@ -51,3 +51,14 @@ describe('<ModelPicker />', () => {
     expect(screen.queryByRole('listbox')).toBeNull();
   });
 });
+
+describe('Escape belongs to the overlay that has focus', () => {
+  it('an Escape aimed at another dialog does not close the picker', () => {
+    render(<><ModelPicker models={MODELS} value="auto" onChange={vi.fn()} /><div role="dialog"><button type="button">Other</button></div></>);
+    fireEvent.click(screen.getByRole('button', { name: 'Model: Auto' }));
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Other' }), { key: 'Escape' });
+    expect(screen.getByRole('listbox')).toBeTruthy();
+    fireEvent.keyDown(screen.getAllByRole('option')[0], { key: 'Escape' });
+    expect(screen.queryByRole('listbox')).toBeNull();
+  });
+});
