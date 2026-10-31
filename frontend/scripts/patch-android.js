@@ -154,7 +154,7 @@ if (fs.existsSync(manifestPath)) {
     // plugin's own manifest also declares RECORD_AUDIO — this is belt and
     // braces so a plugin manifest change can never silently drop the mic.
     '<uses-permission android:name="android.permission.RECORD_AUDIO" />',
-    // VinaX AI voice (1.4): dictation and Live voice open the mic from the
+    // VinaX AI voice (phase 6): dictation and Live voice open the mic from the
     // page (getUserMedia). Capacitor's WebView asks for RECORD_AUDIO AND
     // MODIFY_AUDIO_SETTINGS together and refuses the page if either is not
     // declared, so this one is required for the page's mic to work at all.

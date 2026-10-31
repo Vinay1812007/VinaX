@@ -23,7 +23,7 @@
 #   button (src/services/auth/google.ts). The script loads only while a sign-in
 #   button is on screen; removing that feature should remove this host too.
 #   (The 11.1 human check on username claims is gone with the claim itself.)
-# 1.4 (VinaX AI phase 6): wss://generativelanguage.googleapis.com (connect-src)
+# VinaX AI voice (phase 6): wss://generativelanguage.googleapis.com (connect-src)
 #   is Gemini Live voice. The page opens that socket only from the Live voice
 #   view at /vinaxai, with a one-use token from /api/ai/live-token (the key
 #   stays in the Worker). Removing Live voice should remove this host too.
