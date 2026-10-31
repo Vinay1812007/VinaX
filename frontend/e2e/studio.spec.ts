@@ -22,16 +22,18 @@ async function setup(page: Page, theme: string) {
 }
 
 for (const size of [{ width: 1440, height: 1000, theme: 'dark' }, { width: 390, height: 844, theme: 'light' }]) {
-  test(`Home and Radio fit ${size.width}px ${size.theme}, and neither calls an AI route`, async ({ page }) => {
+  test(`Home and Radio fit ${size.width}px ${size.theme}, and call no AI route but the music AI's`, async ({ page }) => {
     await page.setViewportSize(size);
     await setup(page, size.theme);
     const errors: string[] = [];
     const retiredRequests: string[] = [];
     page.on('request', (request) => {
       const url = new URL(request.url());
-      // Home and Radio never call an AI route: none of the removed ones, and
-      // not VinaX AI's /api/ai/* either (that chat lives only at /vinaxai).
-      if (['/api/dj', '/api/home', '/api/curate', '/api/embed', '/api/playlist', '/api/vinaxai', '/api/aimodels', '/api/voices', '/api/tts', '/api/transcribe'].includes(url.pathname) || url.pathname.startsWith('/api/ai/') || url.searchParams.get('key') === 'home-config') retiredRequests.push(url.pathname);
+      // Home and Radio never call a removed AI route, nor VinaX AI's chat routes
+      // (that chat lives only at /vinaxai). 1.4: the music AI routes are the one
+      // exception: the AI Home Builder and Up Next's rerank (docs/ai.md#music-ai).
+      const musicAi = ['/api/ai/home-layout', '/api/ai/rerank'].includes(url.pathname);
+      if (['/api/dj', '/api/home', '/api/curate', '/api/embed', '/api/playlist', '/api/vinaxai', '/api/aimodels', '/api/voices', '/api/tts', '/api/transcribe'].includes(url.pathname) || (url.pathname.startsWith('/api/ai/') && !musicAi) || url.searchParams.get('key') === 'home-config') retiredRequests.push(url.pathname);
     });
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto('/');

@@ -55,6 +55,7 @@ import { usePlayerStore } from '@/store/playerStore';
 import { makeSong } from '@/__fixtures__/songs';
 import { HOME_SIGNALS_KEY, loadHomeSignals } from '@/features/home/homeSignals';
 import { resetSessionHomeOrder } from '@/features/home/homeOrder';
+import { resetHomeDecision } from '@/services/home/homeBuilder';
 import { HOME_DESIGN_KEY } from '@/services/recommendation/homeDesign';
 
 const renderHome = () => {
@@ -81,6 +82,8 @@ beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
   resetSessionHomeOrder();
+  // 1.4 — the AI Home Builder's per-generation decision (tests restart the generation counter).
+  resetHomeDecision();
   searched.length = 0;
   feeds.charts = feeds.featured = feeds.newReleases = feeds.trendingPlaylists = undefined;
   vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 404 })));
