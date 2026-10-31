@@ -4,6 +4,7 @@
  * Gemini key never leaves the Worker.
  *
  *   { thinking?: boolean,        // Extended thinking on: the thinking Live model first
+ *     model?: "<live model id>", // picked in VinaX AI settings: tried before the rest
  *     skip?: ["<live model id>"],// models that just failed to connect (the page asks again)
  *     voice?: "<Gemini voice>", timezone?, locale? }
  *
@@ -17,7 +18,7 @@ import { CORS, accountOf, json } from '../../_lib/authShared';
 import { readJsonCapped } from '../../_lib/body';
 import { voiceFailure, voiceGate } from '../../_lib/ai/voiceGate';
 import {
-  DEFAULT_LIVE_VOICE, LIVE_MODELS, LIVE_THINKING_MODEL, LIVE_VOICES, LIVE_WS_URL, liveSetup, mintLiveToken, noteVoiceFailure, voiceResting,
+  ALL_LIVE_MODELS, DEFAULT_LIVE_VOICE, LIVE_MODELS, LIVE_THINKING_MODEL, LIVE_VOICES, LIVE_WS_URL, liveSetup, mintLiveToken, noteVoiceFailure, voiceResting,
 } from '../../_lib/ai/voice';
 import { firstNameOf, safeLocale, safeTimezone, voicePrompt } from '../../_lib/ai/prompt';
 import { asProviderError } from '../../_lib/ai/errors';
@@ -25,10 +26,15 @@ import type { AiEnv } from '../../_lib/ai/types';
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: { ...CORS, 'access-control-allow-methods': 'POST, OPTIONS' } });
 
-/** The Live models to offer, in order, without the ones the page says failed. */
-export function liveCandidates(thinking: boolean, skip: readonly string[], now = Date.now()): Array<{ id: string; name: string }> {
-  const all = thinking ? [LIVE_THINKING_MODEL, ...LIVE_MODELS] : [...LIVE_MODELS];
-  return all.filter((m) => !skip.includes(m.id) && !voiceResting(m.id, now));
+/**
+ * The Live models to offer, in order, without the ones the page says failed:
+ * the picked one first, then the thinking one when Extended thinking is on,
+ * then Auto's order. Others stay behind as fallbacks.
+ */
+export function liveCandidates(thinking: boolean, skip: readonly string[], now = Date.now(), picked: unknown = null): Array<{ id: string; name: string }> {
+  const first = ALL_LIVE_MODELS.find((m) => m.id === picked);
+  const all = [...(first ? [first] : []), ...(thinking ? [LIVE_THINKING_MODEL] : []), ...LIVE_MODELS];
+  return all.filter((m, i) => all.findIndex((x) => x.id === m.id) === i && !skip.includes(m.id) && !voiceResting(m.id, now));
 }
 
 export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Promise<Response> => {
@@ -40,7 +46,7 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
   const body = read.value && typeof read.value === 'object' ? read.value : {};
   const skip = Array.isArray(body.skip) ? body.skip.filter((s): s is string => typeof s === 'string').slice(0, 10) : [];
   const voice = (LIVE_VOICES as readonly string[]).includes(body.voice as string) ? (body.voice as string) : DEFAULT_LIVE_VOICE;
-  const candidates = liveCandidates(body.thinking === true, skip);
+  const candidates = liveCandidates(body.thinking === true, skip, Date.now(), body.model);
   if (!candidates.length) return voiceFailure([]);
 
   const account = await accountOf(env, gate.sub);

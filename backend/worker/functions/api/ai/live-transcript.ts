@@ -23,7 +23,7 @@ import { db, dbConfigured } from '../../_lib/db';
 import { aiOpenFor, aiSettings } from '../../_lib/ai/config';
 import { fallbackTitle, latestLeaf } from '../../_lib/ai/history';
 import { createConversation, getConversation, isUuid, listMessages, MAX_MESSAGES, updateConversation } from '../../_lib/ai/store';
-import { LIVE_ID_PREFIX, LIVE_MODELS, LIVE_THINKING_MODEL } from '../../_lib/ai/voice';
+import { ALL_LIVE_MODELS, LIVE_ID_PREFIX } from '../../_lib/ai/voice';
 import type { AiEnv } from '../../_lib/ai/types';
 
 export const MAX_TURNS = 200;
@@ -62,7 +62,7 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
   const body = read.value && typeof read.value === 'object' ? read.value : {};
   const turns = cleanTurns(body.turns);
   if (!turns) return json({ error: 'bad_request' }, 400);
-  const live = [LIVE_THINKING_MODEL, ...LIVE_MODELS].find((m) => m.id === body.model);
+  const live = ALL_LIVE_MODELS.find((m) => m.id === body.model);
   if (!live) return json({ error: 'bad_request' }, 400);
   if (body.conversationId != null && !isUuid(body.conversationId)) return json({ error: 'not_found' }, 404);
   if (body.parentMessageId != null && !isUuid(body.parentMessageId)) return json({ error: 'bad_request' }, 400);

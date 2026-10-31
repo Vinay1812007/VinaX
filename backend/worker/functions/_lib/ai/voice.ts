@@ -42,21 +42,29 @@ export const ARABIC_VOICE = 'abdullah';
 export const LIVE_VOICES = ['Kore', 'Puck', 'Charon', 'Aoede', 'Fenrir', 'Leda', 'Orus', 'Zephyr', 'Sulafat', 'Achird'] as const;
 export const DEFAULT_LIVE_VOICE = 'Kore';
 
-/** Live models in order; Extended thinking puts the thinking one first. */
+/**
+ * Live models in Auto's order; Extended thinking puts the thinking one
+ * first, and a model picked in VinaX AI settings goes before them all. The
+ * owner's probe (2026-10-31) connected to each of these. ("-latest" is not
+ * in Google's docs but answered the probe.)
+ */
 export const LIVE_MODELS = [
   { id: 'gemini-3.8-live', name: 'Gemini 3.8 Live' },
   { id: 'gemini-3.1-flash-live-preview', name: 'Gemini 3.1 Flash Live' },
-  // Google documents this dated id; the brief's "-latest" alias is not in the docs.
-  { id: 'gemini-2.5-flash-native-audio-preview-12-2025', name: 'Gemini 2.5 Flash Native Audio' },
+  { id: 'gemini-2.5-flash-native-audio-latest', name: 'Gemini 2.5 Flash Native Audio' },
+  { id: 'gemini-2.5-flash-native-audio-preview-12-2025', name: 'Gemini 2.5 Flash Native Audio (Dec 2025)' },
+  { id: 'gemini-2.5-flash-native-audio-preview-09-2025', name: 'Gemini 2.5 Flash Native Audio (Sep 2025)' },
 ] as const;
 export const LIVE_THINKING_MODEL = { id: 'gemini-3.8-live-extended-thinking', name: 'Gemini 3.8 Live (Extended thinking)' } as const;
+/** Every Live model, as offered in VinaX AI settings. */
+export const ALL_LIVE_MODELS: ReadonlyArray<{ id: string; name: string }> = [...LIVE_MODELS, LIVE_THINKING_MODEL];
 
 /** Live replies are saved with model id `gemini-live:<id>`; their label under the reply. */
 export const LIVE_ID_PREFIX = 'gemini-live:';
 export function liveLabel(modelId: string): { name: string; provider: string } | null {
   if (!modelId.startsWith(LIVE_ID_PREFIX)) return null;
   const id = modelId.slice(LIVE_ID_PREFIX.length);
-  const m = [LIVE_THINKING_MODEL, ...LIVE_MODELS].find((x) => x.id === id);
+  const m = ALL_LIVE_MODELS.find((x) => x.id === id);
   return m ? { name: m.name, provider: 'Google Gemini' } : null;
 }
 

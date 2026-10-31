@@ -3,7 +3,7 @@
  *
  *   → 200 { enabled, configured, search, groups: [...], models: [{ id, name, provider, group,
  *            description, flags: { vision, web, thinking, code }, available, reason? }],
- *            voice: { dictation, readAloud, live, voices: [...], liveVoices: [...] } }
+ *            voice: { dictation, readAloud, live, voices: [...], liveVoices: [...], liveModels: [{ id, name }] } }
  *
  * `voice` says which voice features have a provider key (phase 6) and
  * which voices the page may offer for Read aloud and Live.
@@ -22,7 +22,7 @@ import { aiOpenFor, aiSettings, registryFor, sanitizeAiSettings } from '../../_l
 import { isCooling } from '../../_lib/ai/cooldown';
 import { ladderModels, PICKER_GROUPS } from '../../_lib/ai/models';
 import { searchConfigured } from '../../_lib/ai/search';
-import { LIVE_VOICES, READ_VOICES, voiceAvailability } from '../../_lib/ai/voice';
+import { ALL_LIVE_MODELS, LIVE_VOICES, READ_VOICES, voiceAvailability } from '../../_lib/ai/voice';
 import type { AiEnv } from '../../_lib/ai/types';
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: { ...CORS, 'access-control-allow-methods': 'GET, OPTIONS' } });
@@ -54,6 +54,6 @@ export const onRequestGet = async (ctx: { request: Request; env: AiEnv }): Promi
   // Web search is offered when the owner allows it and something can search: the search API or free grounding.
   const registry = registryFor(settings);
   const canSearch = searchConfigured(env) || ladderModels(registry, 'grounded').some((spec) => providerConfigured(env, spec.provider));
-  const voice = { ...voiceAvailability(env), voices: READ_VOICES, liveVoices: LIVE_VOICES };
+  const voice = { ...voiceAvailability(env), voices: READ_VOICES, liveVoices: LIVE_VOICES, liveModels: ALL_LIVE_MODELS };
   return json({ enabled: aiOpenFor(settings, sub), configured: anyProviderConfigured(env), search: settings.search && canSearch, groups: PICKER_GROUPS, models, voice });
 };
