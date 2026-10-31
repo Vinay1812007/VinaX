@@ -16,6 +16,13 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.3.6': {
+    title: 'VinaX AI searches the web and cites its sources',
+    changes: [
+      { type: 'improved', text: 'VinaX AI: web search with citations (server).' },
+      { type: 'improved', text: 'VinaX AI: web search with citations (page and docs).' },
+    ],
+  },
   '1.3.5': {
     title: 'Vinaxai/phase 2 ux',
     changes: [
