@@ -1,6 +1,6 @@
 # VinaX listener guide
 
-This folder is the guide for people who listen with VinaX. It covers setting up, playing music, steering what plays next, searching, changing the look, festival themes, keeping your library safe, listening with friends, keyboard shortcuts and the Android app. VinaX is free, with no subscription and no sign-up, and nothing here needs a developer to make sense of it; the engineering documents are one level up in the [docs index](../README.md).
+This folder is the guide for people who listen with VinaX. It covers setting up, playing music, steering what plays next, searching, changing the look, festival themes, keeping your library safe, listening with friends, the VinaX AI assistant, keyboard shortcuts and the Android app. VinaX is free, with no subscription and no sign-up, and nothing here needs a developer to make sense of it; the engineering documents are one level up in the [docs index](../README.md).
 
 | Guide | What it answers |
 |---|---|
@@ -14,6 +14,7 @@ This folder is the guide for people who listen with VinaX. It covers setting up,
 | [Flow](flow.md) | The swipeable song feed |
 | [Listen Together](listen-together.md) | Hosting and joining a shared session |
 | [Friends and sharing](friends-and-sharing.md) | 15.0: public profile, following, Blend, shared playlists, room chat, Discover 5, release alerts, weekly goals, your year as a story |
+| [VinaX AI](vinax-ai.md) | Chatting with the assistant: models, web search, files, the side panel, voice, keeping and deleting chats |
 | [Keyboard shortcuts](keyboard-shortcuts.md) | Every key the web app listens for, and the touch gestures |
 | [Android](android.md) | What the Android app adds |
 

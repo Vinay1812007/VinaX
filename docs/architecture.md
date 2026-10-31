@@ -221,6 +221,7 @@ A matched module with no handler for the request method answers `405`.
 | `/api/appconfig`, `/api/experiments`, `/api/announcements`, `/api/site-mode`, `/api/version`, `/api/status`, `/api/apk` | Client configuration from the `settings` table, sanitised by `_lib/clientConfig.ts` and cached at the edge; active `experiments`; the `announcement` setting; site mode and the maintenance window; live status probes plus the 90-day history from `uptime_report`; Android update source |
 | `/api/push/*` | The public VAPID key; subscribe and register write `push_devices` rows (channel `web` or `fcm`); unsubscribe switches one off |
 | `/api/auth/*`, `/api/account/data` | Google sign-in with a signed 30-day session and an `accounts` row (refreshed on the session check); the synced copy in `account_backups` with optimistic versions (`200`, `204`, `409`) |
+| `/api/ai/*` | VinaX AI ([ai.md](ai.md)): the model list (public), the chat stream, conversations, files, export, and voice (transcribe, speak, Live tokens and Live transcripts). Every route but the model list needs a session; provider keys never leave the Worker |
 | `/api/cron/run` | Runs one scheduled job now, with `x-cron-secret` or the owner token |
 | `/api/trends` | Always empty (`sources: []`): the trend pipeline has no store in the 14.0 schema |
 | `/api/admin/*` | The owner console's API, all behind server-side admin auth — see [admin-console.md](admin-console.md) and the contract in [database.md](database.md#admin-api) |

@@ -10,7 +10,7 @@ This is the index of the current documentation. Everything listed here describes
 | [database.md](database.md) | The database: setting it up, every table and function, the Worker's data layer (`_lib/db.ts` and its companions), the rules every route follows, the admin API contract, the public routes that read or write it, the scheduled jobs, what is stored and for how long |
 | [app-styles.md](app-styles.md) | The six 15.0 app styles as a design contract: what each is modelled on, its face, colours, shapes, Home, tab bar, mini player and Now Playing, and the legacy id map |
 | [design-system.md](design-system.md) | The token contract, the six app styles and their selector contract, themes, accents, festival skins, materials, the control scale and hit-area rule, overlays, focus, motion — and how to add an app style |
-| [ai.md](ai.md) | VinaX AI, the chat at `/vinaxai`: providers and secrets, the model registry and Auto, failover and cooldowns, the stream protocol, storage, the owner's switches, the probe script |
+| [ai.md](ai.md) | VinaX AI, the chat at `/vinaxai`: providers and secrets, the model registry and Auto, failover and cooldowns, the stream protocol, web search, files, artifacts and the sandbox, voice, storage, the owner's switches, the console's providers card, the probe script |
 | [recommendations.md](recommendations.md) | How the next song is chosen: the pipeline and its weights, the listening signals and taste profile, session intent, discovery modes, the queue rules, candidate sources, the exposure ledger, Home shelves, the catalogue recommendation routes, the `?debug=recs` breakdown |
 | [trends.md](trends.md) | Charts: `GET /api/trends` answers empty (the trend pipeline has no store in the 14.0 schema), how the app labels its lists, and what the pipeline used to be |
 | [evaluation.md](evaluation.md) | The offline evaluation of next-song selection: fixtures, mocks, metrics, and how to read an A/B result |
@@ -43,6 +43,7 @@ This is the index of the current documentation. Everything listed here describes
 | [user-guide/discovery-modes.md](user-guide/discovery-modes.md) | Familiar, Balanced and Discover |
 | [user-guide/search.md](user-guide/search.md) | Finding music: suggestions as you type, the Top result, trending searches |
 | [user-guide/library-and-backup.md](user-guide/library-and-backup.md) | Favourites, playlists, backup and restore |
+| [user-guide/vinax-ai.md](user-guide/vinax-ai.md) | VinaX AI: asking, models, web search, files, the side panel, voice, your chats |
 | [user-guide/listen-together.md](user-guide/listen-together.md) | Hosting and joining a Listen Together session |
 | [user-guide/keyboard-shortcuts.md](user-guide/keyboard-shortcuts.md) | Every shortcut |
 | [user-guide/android.md](user-guide/android.md) | The Android app |
