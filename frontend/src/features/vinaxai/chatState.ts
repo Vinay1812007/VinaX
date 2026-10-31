@@ -4,7 +4,18 @@
  * and each event of the reply stream. Pure, so it is tested directly
  * (chatState.test.ts); the Zustand store in store.ts only holds it.
  */
-import type { ChatMessage, ServerConversation, ServerMessage, StreamEvent } from './types';
+import type { ChatMessage, Marker, ServerConversation, ServerMessage, StreamEvent } from './types';
+
+/** The text with grounding's markers written in as [n] (they arrive after the text). */
+export function applyMarkers(text: string, markers: Marker[]): string {
+  let out = '';
+  let last = 0;
+  for (const m of [...markers].filter((x) => x.at >= 0 && x.at <= text.length).sort((a, b) => a.at - b.at)) {
+    out += text.slice(last, m.at) + m.ns.map((n) => `[${n}]`).join('');
+    last = m.at;
+  }
+  return out + text.slice(last);
+}
 
 /** Ids for the two messages that exist only here until the stream's meta event names them. */
 export const LOCAL_USER = 'local-user';
@@ -158,6 +169,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           id: m.id, parentId: m.parentId, role: m.role,
           text: m.content.filter((p) => p.type === 'text').map((p) => p.text ?? '').join('\n\n'),
           thinking: m.thinking ?? '', thinkingMs: m.thinkingMs, model: m.model, stopReason: m.stopReason, error: null, createdAt: m.createdAt,
+          sources: m.sources && Array.isArray(m.sources.items) ? m.sources : null,
         };
       }
       const leaf = action.conversation.activeLeafId && messages[action.conversation.activeLeafId] ? action.conversation.activeLeafId : latestLeaf(messages);
@@ -253,10 +265,16 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
             text: m.text + ev.data.delta,
             thinkingMs: m.thinkingMs ?? (state.thinkingStartedAt != null ? action.now - state.thinkingStartedAt : null),
           }));
+        case 'status':
+          return patchReply(state, () => ({ status: ev.data }));
+        case 'sources': {
+          const { markers, ...sources } = ev.data;
+          return patchReply(state, (m) => ({ sources, ...(markers?.length ? { text: applyMarkers(m.text, markers) } : {}) }));
+        }
         case 'error':
           return patchReply(state, () => ({ error: ev.data }));
         case 'done': {
-          const s = patchReply(state, (m) => ({ stopReason: ev.data.stopReason, local: m.local && !m.text.trim() }));
+          const s = patchReply(state, (m) => ({ stopReason: ev.data.stopReason, local: m.local && !m.text.trim(), status: null }));
           return finish(s);
         }
         default:

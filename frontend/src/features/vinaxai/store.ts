@@ -50,12 +50,12 @@ function enqueue(ev: StreamEvent): void {
 /** Which model answers: the composer's choice, or an explicit one (Retry with…). */
 export type ModelChoice = { mode: 'auto' } | { mode: 'model'; model: string };
 
-function requestBase(choice?: ModelChoice): Pick<ChatRequestBody, 'mode' | 'model' | 'extendedThinking' | 'timezone' | 'locale'> {
+function requestBase(choice?: ModelChoice): Pick<ChatRequestBody, 'mode' | 'model' | 'extendedThinking' | 'webSearch' | 'timezone' | 'locale'> {
   let timezone = 'UTC';
   try { timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { /* keep UTC */ }
   const prefs = usePrefs.getState();
   const pick: ModelChoice = choice ?? (prefs.model === 'auto' ? { mode: 'auto' } : { mode: 'model', model: prefs.model });
-  return { ...pick, extendedThinking: prefs.extendedThinking, timezone, locale: typeof navigator !== 'undefined' ? navigator.language : 'en' };
+  return { ...pick, extendedThinking: prefs.extendedThinking, webSearch: prefs.webSearch, timezone, locale: typeof navigator !== 'undefined' ? navigator.language : 'en' };
 }
 
 /** `beforeStart`: nothing was saved, so the page puts the text back in the composer. */

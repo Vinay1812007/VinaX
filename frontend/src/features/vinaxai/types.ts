@@ -17,11 +17,38 @@ export interface PickerModel extends ModelLabel {
 export interface ModelsResponse {
   enabled: boolean;
   configured: boolean;
+  /** Web search is offered (the owner allows it and something can search). */
+  search?: boolean;
   groups: string[];
   models: PickerModel[];
 }
 
 export type StopReason = 'end' | 'length' | 'aborted' | 'error';
+
+export interface Source {
+  n: number;
+  url: string;
+  title: string;
+  site: string;
+  snippet?: string;
+}
+
+/** The web sources of a reply. */
+export interface SourcesInfo {
+  items: Source[];
+  via: 'grounding' | 'search';
+  queries?: string[];
+  /** Google's search-suggestions HTML (grounding); shown in a sandboxed frame, as Google's terms require. */
+  entryPointHtml?: string;
+}
+
+/** Where [n] markers go in a grounded reply (UTF-16 index in its text). */
+export interface Marker {
+  at: number;
+  ns: number[];
+}
+
+export type SearchStatus = { step: 'searching'; query: string } | { step: 'searched'; count: number; sites: string[] };
 
 export interface ReplyError {
   code: string;
@@ -41,6 +68,9 @@ export interface ChatMessage {
   model: ModelLabel | null;
   stopReason: StopReason | null;
   error: ReplyError | null;
+  sources?: SourcesInfo | null;
+  /** While the reply is written: what the web search is doing. */
+  status?: SearchStatus | null;
   createdAt: string;
   /** Only on this device so far (not yet confirmed by the server). */
   local?: boolean;
@@ -56,6 +86,7 @@ export interface ServerMessage {
   thinkingMs: number | null;
   model: ModelLabel | null;
   stopReason: StopReason | null;
+  sources?: SourcesInfo | null;
   createdAt: string;
 }
 
@@ -84,5 +115,7 @@ export type StreamEvent =
   | { event: 'title'; data: { title: string } }
   | { event: 'thinking'; data: { delta: string } }
   | { event: 'text'; data: { delta: string } }
+  | { event: 'status'; data: SearchStatus }
+  | { event: 'sources'; data: SourcesInfo & { markers?: Marker[] } }
   | { event: 'error'; data: ReplyError }
   | { event: 'done'; data: { stopReason: StopReason; usage?: { input: number; output: number } } };

@@ -152,3 +152,26 @@ describe('chatReducer: continue and branches', () => {
     expect(thread(s).map((x) => x.id)).toEqual(['u1', 'a1']);
   });
 });
+
+describe('chatReducer: web search', () => {
+  const src = { n: 1, url: 'https://a.com', title: 'A', site: 'a.com' };
+  it('keeps the search status while writing and clears it when done', () => {
+    let s = run([send(), meta(), ev({ event: 'status', data: { step: 'searching', query: 'q' } })]);
+    expect(s.messages.a1.status).toEqual({ step: 'searching', query: 'q' });
+    s = run([ev({ event: 'text', data: { delta: 'x' } }), ev({ event: 'done', data: { stopReason: 'end' } })], s);
+    expect(s.messages.a1.status).toBeNull();
+  });
+  it('search sources arrive before the text and stay with the reply', () => {
+    const s = run([send(), meta(), ev({ event: 'sources', data: { items: [src], via: 'search' } }), ev({ event: 'text', data: { delta: 'Done [1]' } }), ev({ event: 'done', data: { stopReason: 'end' } })]);
+    expect(s.messages.a1).toMatchObject({ text: 'Done [1]', sources: { items: [src], via: 'search' } });
+  });
+  it('grounding markers are written into the text', () => {
+    const s = run([send(), meta(), ev({ event: 'text', data: { delta: 'India won. Next.' } }), ev({ event: 'sources', data: { items: [src], via: 'grounding', markers: [{ at: 10, ns: [1] }, { at: 16, ns: [1] }] } })]);
+    expect(s.messages.a1.text).toBe('India won.[1] Next.[1]');
+    expect(s.messages.a1.sources).not.toHaveProperty('markers');
+  });
+  it('a loaded reply keeps its sources', () => {
+    const s = run([{ type: 'load', conversation: { id: 'c', title: 't', starred: false, activeLeafId: 'a', createdAt: '', updatedAt: '' }, messages: [{ id: 'a', parentId: null, role: 'assistant', content: [{ type: 'text', text: 'x[1]' }], thinking: null, thinkingMs: null, model: null, stopReason: 'end', sources: { items: [src], via: 'search' }, createdAt: '1' }] }]);
+    expect(s.messages.a.sources?.items).toEqual([src]);
+  });
+});

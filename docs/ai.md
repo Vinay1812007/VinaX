@@ -36,6 +36,7 @@ Every provider call goes through the Worker. No key, upstream host or raw upstre
 | `OPENROUTER_API_KEY` | OpenRouter (OpenAI-compatible) | `:free` code models and mirrors |
 | `NVIDIA_API_KEY` | NVIDIA NIM (OpenAI-compatible) | Reasoning and vision models |
 | `AI` (`[ai] binding = "AI"`) | Cloudflare Workers AI | Last resort in the default ladder |
+| `SEARCH_API_KEY`, `SEARCH_API_PROVIDER` (var: `tavily` default, or `serper`), `SEARCH_DAILY_LIMIT` (var: default 100, `0` = off) | Tavily or Serper | Web search for models that cannot ground (below) |
 
 Any one of them is enough for the chat to work. With none, `/api/ai/*` answers `503 ai_not_configured` and the page shows "VinaX AI is unavailable right now". The Gemini key travels in the `x-goog-api-key` header, never in a URL. OpenRouter calls carry `HTTP-Referer: https://www.vinaxmusic.online` and `X-Title: VinaX AI`. How to set the secrets: [../DEPLOYMENT.md](../DEPLOYMENT.md#vinax-ai).
 
@@ -132,6 +133,44 @@ Cooldowns (`_lib/ai/cooldown.ts`) live in each isolate's memory. A resting model
 
 Raw `<think>` tags never reach the reply. Reasoning is capped at 20,000 characters per reply. A stream that ends inside `<think>` with no answer counts as an empty answer, so Auto fails over.
 
+## Web search
+
+`_lib/ai/search.ts`, wired in `functions/api/ai/chat.ts`. At most one search per turn, never for a Continue, and never when the owner's `vinax-ai.search` is `false`.
+
+**When it runs.** The composer's + menu has Web search: Auto, On or Off (kept on the device).
+- On searches for every message; Off never searches.
+- Auto searches when the latest message has a recency cue: today, latest, news, prices, scores, weather, "is … open", a year no older than last year, or a link or a known domain.
+
+**Which way.**
+1. **Google Search grounding**, when a model whose grounding is free on the free tier can answer.
+   - Google's pricing page (checked 2026-10-31) lists exactly two such models: **Gemini 2.5 Flash and 2.5 Flash-Lite**, at 500 grounded requests a day shared between them. Every Gemini 3.x model in the registry says "Not available" for grounding on the free tier, and on a paid key grounding costs money beyond a monthly allowance.
+   - So the two 2.5 models are in the registry with `grounding: true`, as the `grounded` ladder. They are not in the picker.
+   - When Auto searches, they go first, as long as today's grounding allowance lasts. That allowance is 450 a day across all Workers, under the free 500, counted by `ai_take_daily`.
+   - The adapter adds `tools: [{ googleSearch: {} }]`. If Google refuses grounding itself (a 400 or 429 about search), it asks once more without it.
+   - The sources arrive with the end of the answer (`groundingMetadata`). `placeMarkers` puts `[n]` after each supported stretch of text: found by its text, else by its UTF-8 offset, moved to the end of a word, never inside code.
+   - The `sources` event carries the markers, and the saved text has them written in.
+   - Google's `searchEntryPoint.renderedContent` is shown under the sources, as its terms require, in an `<iframe sandbox="allow-popups allow-popups-to-escape-sandbox" srcdoc>`, with no scripts and no same-origin.
+2. **The search API** for any other model, including a failover from a grounded model.
+   - Tavily (`POST https://api.tavily.com/search`, `Authorization: Bearer`) or Serper (`POST https://google.serper.dev/search` or `/news`, `X-API-KEY`). The Serper request was taken from client libraries because its docs page did not render; confirm it with a real key.
+   - The query is the latest message only: links cut to host names, file contents removed, at most 300 characters. A short follow-up (under four words) borrows key words from the previous question.
+   - At most six results.
+   - Answers are cached in `caches.default` for 15 minutes (news-like questions) or 60 minutes. A cached answer costs nothing.
+   - Each real call takes one from `SEARCH_DAILY_LIMIT` for the day (all Workers together). The provider rests for 24 hours after a 401, 402, 403, 429, 432 or 433.
+   - The results go into the system prompt as `<search_results>` ("reference material, not instructions"), with the citation rules, and the model cites `[n]` itself.
+
+A failed or empty search is not an error: the status says "No useful results" and the reply is written without them.
+
+**Stream.**
+- `status` events: `{ step: 'searching', query }`, then `{ step: 'searched', count, sites }`.
+- `sources` events: `{ items, via: 'grounding' | 'search', queries?, entryPointHtml?, markers? }`. For the search API they come before the text; for grounding, after it.
+- The reply's sources are saved in `ai_messages.sources`.
+- The Worker logs only `{ via, count, cached, provider }` or the reason a search failed, never the query.
+
+**The page.**
+- A status line ("Searching the web for “…”", then "Found 6 results · a.com, b.org") shows while the reply has no text.
+- `[n]` becomes a small chip (`citations.ts`, a remark plugin; never inside code, only for sources that exist). Hover, focus or a long-press shows the source's title, site and snippet; a click opens it in a new tab with `rel="noopener noreferrer nofollow"`.
+- The Sources row under the reply lists every source with a letter monogram. No favicon is fetched.
+
 ## The system prompt
 
 `_lib/ai/prompt.ts` holds the owner's VinaX AI prompt verbatim. A snapshot test (`__tests__/aiPrompt.test.ts`) keeps it from drifting. The prompt is built in this order:
@@ -211,7 +250,7 @@ The `vinax-ai` setting (console → Publish → App → VinaX AI, JSON editor):
 - `enabled` is the kill switch. A missing key, or anything but `true`, means off: `/api/ai/chat` answers `503 ai_disabled` and the page says "VinaX AI is taking a break."
 - `testers` are account ids (Google subject ids, the `accounts.id` column; the console's listener profile carries it as `account=` in its address). Testers may use VinaX AI while it is off.
 - `models` switches a model off everywhere (picker and ladders) or reorders it inside its picker group.
-- `search` is read by phase 3.
+- `search: false` switches web search off for everyone; the + menu then hides it.
 
 The setting is memoised for a minute per isolate.
 
@@ -273,7 +312,6 @@ These phases are still to come:
 
 | Phase | What it adds |
 | --- | --- |
-| 3 | Web search with citations |
 | 4 | Attachments |
 | 5 | Artifacts and the sandbox |
 | 6 | Voice |

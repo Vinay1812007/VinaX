@@ -12,6 +12,7 @@ import { copyText } from './CodeBlock';
 import { siblingsOf } from './chatState';
 import { selectBranch, useChatStore, type ModelChoice } from './store';
 import { moveFocus, useDismiss } from './useDismiss';
+import { SearchStatusLine, SourcesRow } from './Sources';
 import { ChevronDownSmallIcon, ChevronIcon, ContinueIcon, CopyIcon, PencilIcon, RetryIcon } from './icons';
 import type { ChatMessage, PickerModel } from './types';
 
@@ -171,15 +172,17 @@ interface ReplyProps {
 
 export function AssistantMessage({ message, live, models, onRetry, onContinue }: ReplyProps): ReactNode {
   const { text, error, stopReason, model } = message;
-  const waiting = live && !text && !message.thinking && !error;
+  const waiting = live && !text && !message.thinking && !error && !message.status;
   const cutOff = !live && !!text && (stopReason === 'length' || stopReason === 'error');
   return (
     <div className="vx-ai-turn vx-ai-turn-reply" aria-busy={live || undefined}>
       <h2 className="sr-only">VinaX AI said</h2>
+      {live && !text && message.status && <SearchStatusLine status={message.status} />}
       <ThinkingFold message={message} live={live} />
       {waiting && <span className="vx-ai-pending" role="status" aria-label="VinaX AI is writing"><i /><i /><i /></span>}
-      {text && <Markdown text={text} />}
+      {text && <Markdown text={text} sources={message.sources?.items} />}
       {live && text && <span className="vx-ai-cursor" aria-hidden />}
+      {!live && message.sources && <SourcesRow sources={message.sources} />}
       {!live && stopReason === 'length' && !error && <p className="vx-ai-note">The reply was cut short.</p>}
       {!live && stopReason === 'aborted' && <p className="vx-ai-note">Stopped.</p>}
       {error && (

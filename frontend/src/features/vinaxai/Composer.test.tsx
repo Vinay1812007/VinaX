@@ -71,3 +71,22 @@ describe('<Composer /> + menu', () => {
     expect(screen.getAllByText('Extended thinking').length).toBeGreaterThan(0);
   });
 });
+
+describe('<Composer /> web search', () => {
+  it('offers Auto / On / Off when search is available, and shows when it is on', () => {
+    const onChange = vi.fn();
+    const props = { value: '', onChange: vi.fn(), onSend: vi.fn(), onStop: vi.fn(), streaming: false, thinking: false, onThinking: vi.fn() };
+    const { rerender } = render(<Composer {...props} search={{ value: 'auto', onChange }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    const radios = screen.getAllByRole('menuitemradio');
+    expect(radios.map((r) => r.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false']);
+    fireEvent.click(radios[1]);
+    expect(onChange).toHaveBeenCalledWith('on');
+    rerender(<Composer {...props} search={{ value: 'on', onChange }} />);
+    expect(screen.getAllByText('Web search').length).toBeGreaterThan(0);
+    cleanup();
+    render(<Composer {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    expect(screen.queryAllByRole('menuitemradio')).toHaveLength(0);
+  });
+});

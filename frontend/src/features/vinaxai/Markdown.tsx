@@ -9,11 +9,14 @@
  * a reply has a dollar sign (math.ts); prices stay prices (mathText.ts).
  * Citation chips arrive with web search (docs/ai.md).
  */
-import { memo, useEffect, useState, type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import ReactMarkdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CodeBlock } from './CodeBlock';
 import { escapeCurrency } from './mathText';
+import { remarkCitations } from './citations';
+import { CitationChip } from './Sources';
+import type { Source } from './types';
 
 type Plugin = NonNullable<Options['remarkPlugins']>[number];
 type MathPlugins = { remarkMath: Plugin; rehypeKatex: Plugin };
@@ -111,13 +114,25 @@ const components: Components = {
 
 const remarkPlugins = [remarkGfm, remarkHtmlAsText];
 
-export const Markdown = memo(function Markdown({ text }: { text: string }): ReactNode {
+export const Markdown = memo(function Markdown({ text, sources }: { text: string; sources?: Source[] }): ReactNode {
   const math = useMath(text);
-  const remark: Options['remarkPlugins'] = math ? [remarkGfm, math.remarkMath, remarkHtmlAsText] : remarkPlugins;
+  const count = sources?.length ?? 0;
+  const base: Options['remarkPlugins'] = math ? [remarkGfm, math.remarkMath, remarkHtmlAsText] : remarkPlugins;
+  const remark: Options['remarkPlugins'] = count ? [...(base ?? []), [remarkCitations, { count }]] : base;
+  const withCites: Components = useMemo(() => (count
+    ? {
+      ...components,
+      sup: ({ node, children, ...rest }) => {
+        const n = Number((node as { properties?: { dataCite?: unknown } } | undefined)?.properties?.dataCite);
+        const src = n ? sources?.find((x) => x.n === n) : undefined;
+        return src ? <CitationChip source={src} /> : <sup {...rest}>{children}</sup>;
+      },
+    }
+    : components), [count, sources]);
   const rehype: Options['rehypePlugins'] = math ? [[math.rehypeKatex as never, { throwOnError: false, strict: 'ignore', trust: false, maxSize: 20, maxExpand: 200 }]] : undefined;
   return (
     <div className="vx-ai-md">
-      <ReactMarkdown remarkPlugins={remark} rehypePlugins={rehype} components={components} urlTransform={safeUrl}>
+      <ReactMarkdown remarkPlugins={remark} rehypePlugins={rehype} components={withCites} urlTransform={safeUrl}>
         {math ? escapeCurrency(text) : text}
       </ReactMarkdown>
     </div>
