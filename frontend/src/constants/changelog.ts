@@ -19,10 +19,9 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
   '1.3.11': {
     title: 'A guide to VinaX AI, and clearer notes for the last two updates',
     changes: [
-      { type: 'improved', text: 'VinaX AI: the console\'s providers card (server).' },
-      { type: 'improved', text: 'Console: VinaX AI on Health, and a form for its setting on Publish.' },
-      { type: 'new', text: 'Rewrite the 1.3.8 and 1.3.10 What\'s New lines for listeners.' },
-      { type: 'improved', text: 'VinaX AI docs: the listener\'s guide, the console card, and stale AI lines.' },
+      { type: 'new', text: 'A new guide to VinaX AI explains asking, choosing a model, web search, adding files, the side panel, voice and keeping your chats.' },
+      { type: 'improved', text: 'The notes for the last two updates now say plainly what you can do with VinaX AI.' },
+      { type: 'improved', text: 'VinaX AI’s services can now be checked and adjusted more quickly, so problems get fixed sooner.' },
     ],
   },
   '1.3.10': {
