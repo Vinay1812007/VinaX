@@ -41,7 +41,7 @@ The menu beside the send button picks the model.
 The **+** button holds more choices:
 - **Extended thinking** makes VinaX AI think longer before answering hard questions. The reply takes longer.
 - **Web search**: **Auto** searches when you ask about something current, such as news, prices, scores or the weather. **On** searches for every message, and **Off** never searches.
-- **Add photos and files** and **Voice settings**, described below.
+- **Add photos and files**, described below, and **Settings**.
 
 When a reply used the web, small numbered chips in the text link to its sources, and a **Sources** row under the reply lists them. While it searches, you see what it is looking for.
 
@@ -74,7 +74,7 @@ Voice controls appear when the service has voice switched on.
 - **Dictate**: tap the microphone in the message box and speak. Tap **✓** when you finish, or **×** to throw the recording away. Your words appear in the message box for you to check and fix. They are never sent by themselves. Recordings can be up to two minutes.
 - **Read aloud**: tap the speaker under a reply. Code, links and source numbers are skipped, and anything in the side panel is named rather than read. Tap it again to stop.
 - **Live voice**: with nothing typed in the message box, tap the sound-wave button where Send usually is. A full-screen view opens and you can simply talk, with captions of what each of you says. Talking over VinaX AI stops it so you can carry on. The microphone button mutes you, and **End** (or `Esc`) closes it. What you both said is saved into the chat as ordinary messages. A Live voice session lasts about ten minutes; start another to keep talking.
-- **Voice settings** (from **+**) chooses the voice that reads replies, and the voice for Live voice. The Live voice also reads long replies.
+- **Settings** (the gear at the top, **Settings** in the sidebar, or **+** → **Settings**) has VinaX AI's own settings: the model, Extended thinking, web search, your **microphone** (with **Test microphone**, which shows a level bar and says whether it hears you), the voice that reads replies, the Live voice (it also reads long replies), the Live voice model, and **Export all chats**. They are kept on this device.
 
 Your music pauses while the microphone is open and plays on quietly while a reply is read, then comes back as it was. The first time, your browser or phone asks to use the microphone. In the Android app it is the same question voice search asks.
 
@@ -96,6 +96,7 @@ Your music pauses while the microphone is open and plays on quietly while a repl
 | "VinaX AI is unavailable right now" | The service cannot reach any AI provider. Try again later |
 | "Voice is busy right now" | Voice has reached its limit for now. Try again in a minute, or type |
 | "Preview needs the sandbox host" | Previews are not available at the moment. **Code**, **Copy** and **Download** still work |
-| The microphone does not start | Allow the microphone for VinaX in your browser's site settings, or in the phone's app settings |
+| The microphone does not start | Allow the microphone for VinaX in your browser's site settings, or in the phone's app settings. In the Android app, update VinaX if it offers an update |
+| You speak but nothing moves, or "No sound is reaching VinaX AI" | Your computer is sending VinaX AI a silent microphone (often a virtual one such as BlackHole). Open **Settings** → **Microphone**, pick your real mic and press **Test microphone**. In Live voice, tap the microphone's name to switch |
 
 VinaX AI can make mistakes, so check anything important. What you send is passed to an AI provider to write the reply; the [privacy page](https://www.vinaxmusic.online/privacy) says which providers and what is kept.

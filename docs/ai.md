@@ -318,13 +318,13 @@ The Worker saves each reply's artifacts in `ai_messages.artifacts`, also after a
 
 ## Voice
 
-`_lib/ai/voice.ts`, `voiceGate.ts`; the routes `functions/api/ai/transcribe.ts`, `speak.ts`, `live-token.ts` and `live-transcript.ts`; on the page `mic.ts`, `useVoiceDictation.ts`, `speechText.ts`, `speechStream.ts`, `readAloud.ts`, `musicHold.ts`, `VoiceSettings.tsx` and `live/` (`LiveView.tsx`, `liveSession.ts`, `liveProtocol.ts`, `micTap.worklet.js`).
+`_lib/ai/voice.ts`, `voiceGate.ts`; the routes `functions/api/ai/transcribe.ts`, `speak.ts`, `live-token.ts` and `live-transcript.ts`; on the page `mic.ts`, `useVoiceDictation.ts`, `speechText.ts`, `speechStream.ts`, `readAloud.ts`, `musicHold.ts`, `SettingsPanel.tsx` and `live/` (`LiveView.tsx`, `liveSession.ts`, `liveProtocol.ts`, `micTap.worklet.js`).
 
 Provider details were checked against Groq's and Google's docs on 2026-10-31. Where they differ from the brief, the docs won:
 - Orpheus takes at most **200 characters** a request and returns WAV only. Its free allowance is small: about 10 requests a minute, 100 a day and 1,200 tokens a minute.
 - Gemini TTS now names the voice `speechConfig.voiceConfig.voice`. Older models take `prebuiltVoiceConfig.voiceName`, so a 400 on the first shape retries with the second.
 - Ephemeral tokens and the Live socket are **v1beta**, not v1alpha.
-- `gemini-2.5-flash-native-audio-latest` is not in Google's docs. The documented `gemini-2.5-flash-native-audio-preview-12-2025` is used instead.
+- `gemini-2.5-flash-native-audio-latest` is not in Google's docs, but the owner's probe (2026-10-31) connected to it, so it is offered along with the dated `-preview-12-2025` and `-preview-09-2025`.
 - `gemini-3.5-transcribe` exists, but its documented example uses an uploaded file, and some users report empty transcripts. So the clip is uploaded through the Files API, and an empty answer is asked again of `gemini-3.8-flash`.
 
 **Every voice route** first runs the per-address bucket, then needs a session. It then checks the account's `RATE_LIMIT_10` tier, a key for that feature, and the owner's switch (`voiceGate`). Failures answer `voice_busy` (429, every engine out of allowance or resting) or `voice_unavailable` (503), never a provider's words. Each failure rests that voice model the way chat models rest ([Failover and cooldowns](#failover-and-cooldowns)). Logs carry route, provider, model, status and timings, never audio or text.
@@ -362,9 +362,9 @@ The page decodes WAV and 16-bit PCM itself, because a streamed WAV header may sa
 
 The waveform button (where Send is while the composer is empty) opens a full-screen view. Music pauses. Then:
 
-1. The page opens the mic. In the Android app the system prompt is voice search's own: the speech plugin's permission first, then `getUserMedia`. Capacitor's WebView also needs `MODIFY_AUDIO_SETTINGS`, which `scripts/patch-android.js` declares.
+1. The page opens the mic ([The microphone](#the-microphone)). In the Android app the system prompt is voice search's own: the speech plugin's permission first, then `getUserMedia`. Capacitor's WebView also needs `MODIFY_AUDIO_SETTINGS`, which `scripts/patch-android.js` declares.
 2. The page asks the Worker for a token: `{ thinking, skip, voice }` returns `{ token, url, setup, model }`.
-   - The models are tried in order: `gemini-3.8-live`, `gemini-3.1-flash-live-preview`, then `gemini-2.5-flash-native-audio-preview-12-2025`. With Extended thinking on, `gemini-3.8-live-extended-thinking` goes first.
+   - The models are tried in order: `gemini-3.8-live`, `gemini-3.1-flash-live-preview`, `gemini-2.5-flash-native-audio-latest`, `-preview-12-2025`, `-preview-09-2025`. With Extended thinking on, `gemini-3.8-live-extended-thinking` goes first. A Live model picked in Settings (`model` in the body; `voice.liveModels` in `GET /api/ai/models` lists them) goes before all of them, and the rest stay as fallbacks.
    - The token is minted with `POST /v1beta/auth_tokens`: one use, 2 minutes to start, 30 minutes to live.
    - The token is locked to the setup where Google allows it. The guide's `liveConnectConstraints` body is tried first, then the API reference's `bidiGenerateContentSetup`, then an unlocked one-use token, so a change in Google's field names cannot take Live down. The probe reports which body was accepted.
    - The setup carries the short spoken prompt (`VOICE_PROMPT` in `prompt.ts`), the chosen Gemini voice, input and output transcription, and sliding-window compression.
@@ -381,7 +381,22 @@ The waveform button (where Send is while the composer is empty) opens a full-scr
    - The chat then reloads to show them. They sync, export and delete like any other turn.
    - A session that ends because the page itself is closed is not saved.
 
-**Voice settings** (the + menu) chooses the Read aloud voice from Orpheus's English voices, and the Live voice from ten of Gemini's voices. The Live voice also reads long replies. Both are kept on the device (`vinax.vxai.prefs.v1`), and the Worker checks them against its own lists.
+### The microphone
+
+`mic.ts`. Fixed on 2026-10-31 after "nothing happens when I speak": the browser had handed the page a silent virtual device (BlackHole 2ch on the owner's Mac), and the meters used a linear scale that ordinary speech barely moved.
+
+- **Which mic.** The one picked in Settings (`micId`, a `deviceId`), else the browser's. When nothing was picked and the browser's mic is virtual (BlackHole, Soundflower, Loopback, VB-Audio, Voicemeeter, RemotePC, Zoom or Teams drivers, phone-as-webcam apps; `isVirtualMic`), a real one is opened instead: the real system default, then a built-in mic, then any real one (`pickRealMic`). A picked mic that is gone falls back to the browser's. A picked virtual mic is used as it is.
+- **Silence.** A real mic always carries a little noise, so a stream of exact zeros means the wrong device. Dictation's bar says "No sound from your mic" after 1.8 s of it, and a clip with no sound at all is not uploaded: the notice names the mic and offers Microphone settings. Live voice says so after 2.5 s and offers a list of mics; `LiveSession.switchMic` swaps the mic without ending the session.
+- **Meters.** `loudness` maps RMS to 0–1 on a decibel scale (−58 dB to −12 dB), so speech fills half or more. Dictation reads an analyser every 100 ms. Live reads one analyser on the mic and one on the voice every frame.
+- **Audio contexts** are made inside the tap (Safari starts others suspended). Firefox refuses a mic stream at another sample rate than its context (a Bluetooth headset at 16 kHz with speakers at 48 kHz), so `micSource` then makes a context at the mic's rate.
+- **Android app.** An APK installed before 1.3.10 lacks `MODIFY_AUDIO_SETTINGS`, and Capacitor then refuses the page the mic. Dictation then uses the phone's own speech recogniser (`createSttSession`, as voice search does); Live voice asks the listener to allow the mic or update the app.
+
+### Settings
+
+`SettingsPanel.tsx`, a sheet from the right (full screen on a phone), opened from the header's gear, the sidebar's Settings, or Settings in the + menu (which opens at Voice). Everything in it is kept on the device (`vinax.vxai.prefs.v1`):
+- Chat: the model (the same choice as the composer's picker), Extended thinking, Web search when it is offered.
+- Voice: the microphone (Automatic or a device, and a ten-second test with a level bar that names the device and says whether it heard anything), the Read aloud voice from Orpheus's English voices, the Live voice from ten of Gemini's voices (it also reads long replies), and the Live model (Auto or one of `voice.liveModels`). The Worker checks voices and the Live model against its own lists.
+- Your chats: Export all chats (`GET /api/ai/export`), and a link to the app's Settings for everything else.
 
 ## Storage
 
@@ -434,12 +449,12 @@ The probe script ([The probe](#the-probe)) is the fuller check: reasoning, syste
 - Narrower, the sidebar is a slide-over drawer from the header's ☰. It closes on Escape, on Android's back button, or when you pick a chat.
 - The sidebar holds New chat and a search over titles and message text. Below that come Starred, then Recents grouped by Today, Yesterday, Previous 7 days and Older (`sidebarGroups.ts`).
 - Each row has a ⋯ menu: Star, Rename (inline), and Delete (after a confirmation).
-- The sidebar's foot shows the account, Settings, and Back to VinaX.
+- The sidebar's foot shows the account, Settings (VinaX AI's own panel, [Settings](#settings)), and Back to VinaX. The header has a gear for the same panel.
 - A new chat opens on a time-aware greeting, with the composer in the middle and four chips (Write, Learn, Code, Music). The chips fill in a starter and never send.
 - The composer stays above an on-screen keyboard that does not resize the page (`visualViewport`).
 
 **The composer.**
-- The + menu holds Extended thinking, and Voice settings when voice is offered.
+- The + menu holds Extended thinking, and Settings.
 - The mic dictates into the text; with nothing typed, the Live voice button stands where Send goes ([Voice](#voice)). Without voice keys neither shows.
 - The model picker (`ModelPicker.tsx`) lists Auto, then the groups. Each model shows a one-line description and Vision / Web / Thinking / Code badges; models that cannot answer now are greyed with the reason.
 - The choice and Extended thinking are kept on the device (`prefs.ts`, key `vinax.vxai.prefs.v1`). A model the owner switches off falls back to Auto.
