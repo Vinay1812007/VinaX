@@ -3,7 +3,7 @@
  * onboarding) never drags the full changelog history into the first-load
  * bundle. Bumped every release alongside package.json and the changelog.
  */
-export const LATEST_VERSION = '1.3.12';
+export const LATEST_VERSION = '1.4.0';
 
 /**
  * Marketing display name for the release — what listeners see everywhere a
@@ -14,4 +14,4 @@ export const LATEST_VERSION = '1.3.12';
  * version names: Android updates compare build numbers (services/update.ts),
  * which keep rising, and What's New compares a fingerprint of the top card.
  */
-export const DISPLAY_VERSION = 'VinaX V2 1.3';
+export const DISPLAY_VERSION = 'VinaX V2 1.4';

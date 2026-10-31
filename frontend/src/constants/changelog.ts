@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.4.0': {
+    title: 'The personal engine: Home, playlists and radio built from your account\'s taste #minor',
+    changes: [
+      { type: 'improved', text: 'Home opens with shelves made for you — Made for you, Because you liked…, your languages, discoveries, rediscoveries and what listeners like you play — arranged for the moment by VinaX AI, with a reason under each.' },
+      { type: 'improved', text: 'Make me a playlist: describe it in plain words and the engine builds it from your taste and the catalogue; play it or save it.' },
+      { type: 'improved', text: 'Up Next asks your taste model too, so a queue leans toward what you love and away from what you skip.' },
+      { type: 'improved', text: 'One switch in Settings → Region & privacy turns the personal engine off; Erase my taste model removes everything it learned.' },
+    ],
+  },
   '1.3.12': {
     title: 'VinaX AI voice works again, with its own settings and every model',
     changes: [
