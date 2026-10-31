@@ -71,6 +71,15 @@ export const FIRST_EVENT_MS = 12_000;
 export const FIRST_EVENT_SLOW_MS = 25_000;
 export const REPLY_BUDGET_MS = 120_000;
 export const REPLY_BUDGET_SLOW_MS = 240_000;
+
+/**
+ * How long to wait for the first event: longer for the deep ladder and a
+ * picked model, and as long as a picked model's own `firstEventMs` when it
+ * is slow to start.
+ */
+export function firstEventMsFor(slow: boolean, picked: ModelSpec | null): number {
+  return Math.max(slow ? FIRST_EVENT_SLOW_MS : FIRST_EVENT_MS, picked?.firstEventMs ?? 0);
+}
 /** How long the end of a first reply waits for its generated title. */
 export const TITLE_WAIT_MS = 1_500;
 
@@ -379,7 +388,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     try {
       for await (const ev of runChat(env, {
         candidates, picked: mode === 'model', build, signal: abort.signal,
-        firstEventMs: slow ? FIRST_EVENT_SLOW_MS : FIRST_EVENT_MS,
+        firstEventMs: firstEventMsFor(slow, mode === 'model' ? candidates[0] ?? null : null),
         budgetMs: slow ? REPLY_BUDGET_SLOW_MS : REPLY_BUDGET_MS,
       })) {
         if (ev.type === 'model') {

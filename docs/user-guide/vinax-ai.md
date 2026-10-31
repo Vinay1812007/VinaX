@@ -34,6 +34,8 @@ To change a question you asked, hover over it (or tap it on a phone) and choose 
 The menu beside the send button picks the model.
 - **Auto** is the default and the best choice for most questions. It picks a quick model for everyday questions, one that can see for images, one with a long memory for long documents and long chats, and a stronger one for hard problems. If one is busy, Auto moves to another.
 - Every model is also listed by group, with a one-line description and badges for what it can do: see images, search the web, think before answering, and write code. A greyed-out model cannot answer right now, and says why.
+- The list is long, so it has a search box: type part of a name, a provider or what you need (for example "translate" or "code"), then press Enter to pick the first match.
+- **More models** holds specialist models, such as a translator and an Arabic and English model. Models marked "slow to start" can take up to a minute before the first word appears.
 - A model you pick yourself is never swapped for another. If it is busy, the reply offers **Retry**, **Try with Auto** and other models to try.
 
 The **+** button holds more choices:

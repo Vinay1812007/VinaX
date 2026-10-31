@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { _resetCooldowns, AUTH_MS, coolingUntil, GONE_MS, isCooling, noteFailure, QUOTA_DEFAULT_MS, RATE_MAX_MS, restFor, UPSTREAM_MS } from '../functions/_lib/ai/cooldown';
 import { ProviderError } from '../functions/_lib/ai/errors';
-import { applyOverrides, LADDERS, ladderModels, MODELS, modelById } from '../functions/_lib/ai/models';
+import { applyOverrides, LADDERS, ladderModels, MODELS, modelById, PICKER_GROUPS, UTILITY_MODELS } from '../functions/_lib/ai/models';
 import { humanReason, isSmallTalk, pickLadder, runChat, type RouterEvent } from '../functions/_lib/ai/router';
 import type { Adapter, ModelSpec, ProviderEvent, ProviderId } from '../functions/_lib/ai/types';
 
@@ -47,9 +47,31 @@ describe('pickLadder', () => {
     const reg = applyOverrides(MODELS, { 'groq:openai/gpt-oss-120b': { enabled: false }, 'groq:openai/gpt-oss-20b': { order: -1 }, junk: 5 });
     expect(modelById(reg, 'groq:openai/gpt-oss-120b')).toBeNull();
     expect(ladderModels(reg, 'default')[0].id).toBe('gemini:gemini-3.5-flash');
-    expect(reg.filter((m) => m.group === 'fast').map((m) => m.id)).toEqual(['groq:openai/gpt-oss-20b', 'groq:qwen/qwen3.8-27b']);
+    expect(reg.filter((m) => m.group === 'fast').map((m) => m.id).slice(0, 2)).toEqual(['groq:openai/gpt-oss-20b', 'groq:qwen/qwen3.8-27b']);
     expect(reg.findIndex((m) => m.group === 'fast')).toBe(0);
     expect(applyOverrides(MODELS, 'nonsense')).toHaveLength(MODELS.length);
+  });
+
+  it('every chat model is in the picker under its own name; only the web-search models are hidden', () => {
+    const picker = MODELS.filter((m) => m.group);
+    expect(new Set(picker.map((m) => m.name)).size).toBe(picker.length);
+    expect(new Set(MODELS.map((m) => m.id)).size).toBe(MODELS.length);
+    expect(MODELS.filter((m) => !m.group).map((m) => m.id)).toEqual(LADDERS.grounded);
+    for (const m of picker) expect(PICKER_GROUPS, m.id).toContain(m.group);
+  });
+
+  it('slow-to-start models wait longer when picked and are never in an Auto ladder', () => {
+    const slow = MODELS.filter((m) => m.firstEventMs);
+    expect(slow.map((m) => m.upstream).sort()).toEqual(['meta/llama-3.2-90b-vision-instruct', 'meta/muse-glimmer-30b', 'nvidia/nemotron-3.5-bolt-e4b']);
+    for (const ids of Object.values(LADDERS)) for (const m of slow) expect(ids, m.id).not.toContain(m.id);
+  });
+
+  it('utility models (guards, embeddings, parsers, AQA) never reach the picker or a ladder', () => {
+    for (const x of UTILITY_MODELS) {
+      expect(modelById(MODELS, x.id), x.id).toBeNull();
+      for (const ids of Object.values(LADDERS)) expect(ids).not.toContain(x.id);
+    }
+    expect(new Set(UTILITY_MODELS.map((x) => x.kind))).toEqual(new Set(['guard', 'embedding', 'parse', 'aqa']));
   });
 });
 

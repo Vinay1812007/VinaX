@@ -181,6 +181,16 @@
               ['Live voice', voice.live ? ui.pill('Available', 'ok') : ui.pill('Needs a Gemini key', 'warn')],
               ['Voice models resting', arr(voice.resting).length ? h('span', arr(voice.resting).map(function (r) { return h('span', ui.mono(r.model), ' ', untilCell(r.until), h('br')); })) : '—']
             ])) }),
+          arr(d.utility).length ? ui.card({ title: 'Utility models', sub: 'Known to VinaX AI but not chat models (guards, embeddings, document parsers, AQA), so never in the picker or Auto.', pad: false,
+            body: ui.table({
+              rows: arr(d.utility), exportName: 'vinax-ai-utility-models', dense: true,
+              columns: [
+                { key: 'name', label: 'Model', render: function (m) { return h('span', m.name, h('br'), ui.mono(m.id)); } },
+                { key: 'provider', label: 'Provider' },
+                { key: 'kind', label: 'Kind', render: function (m) { return ({ guard: 'Safety guard', embedding: 'Embedding', parse: 'Document parser', aqa: 'Answers from text' })[m.kind] || m.kind; } },
+                { key: 'configured', label: 'Key', render: function (m) { return m.configured ? ui.pill('Set', 'ok') : ui.muted('No key'); } }
+              ]
+            }) }) : null,
           ui.muted('Switch VinaX AI on or off, choose testers and turn models off in Publish → App → VinaX AI. Run npm run ai:probe locally for the full model and voice table.')
         ];
       }, { skeleton: 6 });
