@@ -35,6 +35,7 @@ A backup is one file. It holds these categories:
 | Home layout | Shelf order, hidden shelves and headline |
 | Name & username | Your display name and the username you chose |
 | Alarm, lyrics, streak & app preferences | Wake-up alarm, lyric timing adjustments, karaoke history, listening streak and sidebar groups |
+| Generated songs | AI generated songs you liked or added to a playlist travel inside **Library** with their "AI generated" label. Their audio is not in the file: it stays on the device that saved it |
 | Songs you have heard | Every song you have played, so [Never repeat](player-and-queue.md#never-repeat) keeps them out on another device too. Restoring it only adds songs; it never forgets any |
 
 ## What a backup leaves out

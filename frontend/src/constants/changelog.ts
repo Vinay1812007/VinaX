@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.8.0': {
+    title: 'Generate a new song like the one you love',
+    changes: [
+      { type: 'new', text: 'Where it is switched on, tap “Generate a song like this” in Now Playing for a new, original song in the same mood, energy and language.' },
+      { type: 'new', text: 'Every generated song is labelled “AI generated”, on its card, in Now Playing, on the lock screen and when you share it.' },
+      { type: 'new', text: 'Turn on “Add a generated song to my queues” in Settings → Recommendations for one new song in each stretch.' },
+      { type: 'improved', text: 'Like a generated song or add it to a playlist to keep it on your device; in Kid mode songs are instrumental only.' },
+    ],
+  },
   '1.7.0': {
     title: 'A Home built for you, for right now',
     changes: [

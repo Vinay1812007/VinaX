@@ -35,6 +35,7 @@ import {
 import { DISCOVERY_OPTIONS, QUEUE_LANGUAGE_OPTIONS, intensityWords } from '@/features/settings/recommendationCopy';
 import { PersonalizationPreview } from '@/features/personalization/PersonalizationPreview';
 import { HomeAiSettings } from '@/features/home/HomeAiSettings';
+import { GenerationSettings } from '@/features/settings/GenerationSettings';
 import { SoftMuteList } from '@/features/personalization/SoftMuteList';
 import { ACCENT_OPTIONS } from '@/constants/accents';
 import { TemplatePicker } from '@/features/settings/TemplatePicker';
@@ -765,6 +766,7 @@ export default function SettingsPage() {
               >
                 <Toggle on={s.aiRerank !== false} onChange={s.setAiRerank} label="AI fine-tunes Up Next" />
               </Row>
+              <GenerationSettings />
               <Block
                 label="Trending vs. your taste"
                 note="How much Home and Up Next lean on what is popular right now."

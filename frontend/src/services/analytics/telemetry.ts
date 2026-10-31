@@ -84,6 +84,8 @@ export const META_MAX_BYTES = 1024;
 
 async function send(type: string, song?: Song | null, extra?: Record<string, unknown>, meta?: TelemetryMeta): Promise<void> {
   if (!consented()) return;
+  // 1.4 — a generated song never reaches the usage statistics, so it can never appear in charts or trends.
+  if (song?.id.startsWith('gen-')) return;
   if (meta && JSON.stringify(meta).length > META_MAX_BYTES) return;
   try {
     const res = await fetch(ENDPOINT, {

@@ -65,7 +65,8 @@ import { PersonalBlock } from '@/features/home/blocks/PersonalBlock';
 const PersonalHome = lazy(() => import('@/features/home/personal/PersonalHome').then((m) => ({ default: m.PersonalHome })));
 import { DiscoveryBlock } from '@/features/home/blocks/DiscoveryBlocks';
 import { AlbumsBlock, ArtistsBlock, ChartsBlock, DayPicksBlock, FeedBlock, GenresBlock, LovedBlock, MoodsBlock, QuickBlock, readTaste, SeasonalBlock } from '@/features/home/blocks/CatalogueBlocks';
-import { AiShelfHead, RightNowBlock } from '@/features/home/blocks/AiBlocks';
+import { AiShelfHead, GeneratedBlock, RightNowBlock } from '@/features/home/blocks/AiBlocks';
+import { recentGenerated } from '@/services/ai/songGen';
 import { ShelfSkeleton } from '@/components/Skeletons';
 import { loadHomeAiPrefs } from '@/features/home/homeAiPrefs';
 import { getRecommendationContext } from '@/services/recommendation/context';
@@ -370,8 +371,9 @@ export default function HomePage() {
     ? async () => {
         const ctx = getRecommendationContext(null, 'home');
         const seeds = pickHomeSeeds(ctx);
-        // The personal engine's section is placed by the AI too, while it is on.
-        const allowed: AiBlockType[] = [...base, 'rightnow', ...(personalEnabled() ? (['engine'] as const) : [])];
+        // The personal engine's section is placed by the AI too, while it is on; "Generated for you"
+        // is on offer only once the listener has made songs.
+        const allowed: AiBlockType[] = [...base, 'rightnow', ...(personalEnabled() ? (['engine'] as const) : []), ...(recentGenerated().length ? (['generated'] as const) : [])];
         const request = buildHomeRequest(ctx, { generation, allowed, avoid: aiPrefs.notInterested, seeds });
         const aiLayout = await requestAiHomeLayout(request, { seedKeys: new Set(seeds.map((s) => s.key)) });
         return { layout: aiLayout, seeds: new Map(seeds.map((s) => [s.key, s.song])) };
@@ -379,7 +381,7 @@ export default function HomePage() {
     : null;
   const decision = useHomeDecision(`${generation}|${aiAllowed ? 'ai' : 'own'}|${base.join(',')}`, ask, fallbackOrder);
   const aiMeta = new Map<string, HomeLayoutBlock>(decision?.source === 'ai' ? (decision.blocks as HomeLayoutBlock[]).map((b) => [b.type, b]) : []);
-  const blocks = (decision?.blocks ?? []).map((b) => b.type) as Array<HomeSection | 'rightnow' | 'engine'>;
+  const blocks = (decision?.blocks ?? []).map((b) => b.type) as Array<HomeSection | 'rightnow' | 'generated' | 'engine'>;
   // The personal engine's section sits where the AI put it; otherwise first, as before. While the AI is
   // still being asked it waits too, so it never jumps once the layout lands.
   const engineInLayout = blocks.includes('engine');
@@ -413,7 +415,7 @@ export default function HomePage() {
       if (started && started !== before) attributeSong(started, block);
     }, 0);
   };
-  const renderBlock = (k: HomeSection | 'rightnow' | 'engine', i: number) => {
+  const renderBlock = (k: HomeSection | 'rightnow' | 'generated' | 'engine', i: number) => {
     if (k === 'engine') {
       return (
         <Fragment key={k}>
@@ -424,13 +426,14 @@ export default function HomePage() {
       );
     }
     const meta = aiMeta.get(k);
-    if (k === 'rightnow') {
+    if (k === 'rightnow' || k === 'generated') {
       if (!meta || !decision) return null;
       const seeds = decision.seeds;
+      const own = () => (k === 'rightnow' ? <RightNowBlock block={meta} seeds={seeds} /> : <GeneratedBlock block={meta} />);
       return (
         <Fragment key={k}>
           <span hidden data-home-block={k} />
-          {i < 2 ? <RightNowBlock block={meta} seeds={seeds} /> : <DeferredBlock render={() => <RightNowBlock block={meta} seeds={seeds} />} />}
+          {i < 2 ? own() : <DeferredBlock render={own} />}
           <span hidden data-home-block="" />
         </Fragment>
       );

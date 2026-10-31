@@ -189,6 +189,12 @@ export const NEVER_REPEAT_EXHAUSTED: PlanNotice = {
   opts: { key: 'never-repeat-exhausted', action: { label: 'Discover', onClick: () => toastNavigate('/discover') } },
 };
 
+/** 1.4 — Never repeat's last step: nothing unheard was found, so a new song is being made. */
+export const NEVER_REPEAT_GENERATING: PlanNotice = {
+  text: "You've heard everything we can find here, so VinaX is making you a new song",
+  opts: { key: 'never-repeat-exhausted' },
+};
+
 /** Why a continuation is shorter or later than planned. */
 export type FallbackReason = 'deadline' | 'error';
 
@@ -568,8 +574,10 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     language: lock,
     commit: (accepted) => publishFor(accepted, true),
     topUp,
-    ...(heardBefore && !songs.length ? { exhausted: true, notice: NEVER_REPEAT_EXHAUSTED } : {}),
+    ...(heardBefore && !songs.length ? { exhausted: true, notice: ctx.genInQueue ? NEVER_REPEAT_GENERATING : NEVER_REPEAT_EXHAUSTED } : {}),
   };
+  // 1.4 — the third widening step: generated songs, when the listener allows them.
+  if (plan.exhausted && ctx.genInQueue) void import('@/services/ai/genInQueue').then((m) => m.fillWithGenerated(seed)).catch(() => undefined);
 
   return plan;
 }

@@ -103,6 +103,8 @@ export interface SettingsState {
    * order within 1.5 s, or the on-device order plays. On by default.
    */
   aiRerank: boolean;
+  /** 1.4 — add one AI generated song to each automatic stretch (services/ai/genInQueue.ts). Off by default. */
+  genInQueue: boolean;
   /** v6.5.0 — smart queue: tapping a song starts it and VinaX builds the
    *  continuation on the device, instead of following the tapped list. */
   djTakeover: boolean;
@@ -174,6 +176,7 @@ export interface SettingsState {
   setQueueLanguages(v: QueueLanguages): void;
   setNeverRepeat(v: boolean): void;
   setAiRerank(v: boolean): void;
+  setGenInQueue(v: boolean): void;
   setDjTakeover(v: boolean): void;
   setKidMode(v: boolean): void;
   setPersonalEngine(v: boolean): void;
@@ -245,6 +248,7 @@ const defaults = {
   queueLanguages: 'mix' as QueueLanguages,
   neverRepeat: false,
   aiRerank: true,
+  genInQueue: false,
   djTakeover: true,
   kidMode: false,
   personalEngine: true,
@@ -383,6 +387,7 @@ export const useSettingsStore = create<SettingsState>()(
       setQueueLanguages: (queueLanguages) => set({ queueLanguages: queueLanguages === 'one' ? 'one' : 'mix' }),
       setNeverRepeat: (neverRepeat) => set({ neverRepeat: !!neverRepeat }),
       setAiRerank: (aiRerank) => set({ aiRerank: !!aiRerank }),
+      setGenInQueue: (genInQueue) => set({ genInQueue: !!genInQueue }),
       setDiscoveryMode: (mode) => {
         const discoveryMode = isDiscoveryMode(mode) ? mode : 'balanced';
         set({ discoveryMode, exploreMode: discoveryMode === 'discover' });
