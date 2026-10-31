@@ -5,12 +5,39 @@
  *   - only http(s) and mailto links survive, opening in a new tab with
  *     rel="noopener noreferrer nofollow",
  *   - images are never loaded from arbitrary hosts; they show as links.
- * Maths (KaTeX) and citation chips arrive in later phases (docs/ai.md).
+ * Maths ($inline$, $$display$$) renders with KaTeX, loaded the first time
+ * a reply has a dollar sign (math.ts); prices stay prices (mathText.ts).
+ * Citation chips arrive with web search (docs/ai.md).
  */
-import { memo, type ReactNode } from 'react';
-import ReactMarkdown, { type Components } from 'react-markdown';
+import { memo, useEffect, useState, type ReactNode } from 'react';
+import ReactMarkdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CodeBlock } from './CodeBlock';
+import { escapeCurrency } from './mathText';
+
+type Plugin = NonNullable<Options['remarkPlugins']>[number];
+type MathPlugins = { remarkMath: Plugin; rehypeKatex: Plugin };
+let mathPlugins: MathPlugins | null = null;
+let mathLoading: Promise<MathPlugins | null> | null = null;
+const loadMath = (): Promise<MathPlugins | null> => {
+  mathLoading ??= import('./math')
+    .then((m) => (mathPlugins = { remarkMath: m.remarkMath as Plugin, rehypeKatex: m.rehypeKatex as Plugin }))
+    .catch(() => null);
+  return mathLoading;
+};
+
+/** The maths plugins once a text needs them (null until then, or when they failed to load). */
+function useMath(text: string): MathPlugins | null {
+  const wanted = text.includes('$');
+  const [plugins, setPlugins] = useState<MathPlugins | null>(mathPlugins);
+  useEffect(() => {
+    if (!wanted || plugins) return;
+    let live = true;
+    void loadMath().then((p) => { if (live && p) setPlugins(p); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [wanted, plugins]);
+  return wanted ? plugins : null;
+}
 
 interface MdNode {
   type: string;
@@ -85,10 +112,13 @@ const components: Components = {
 const remarkPlugins = [remarkGfm, remarkHtmlAsText];
 
 export const Markdown = memo(function Markdown({ text }: { text: string }): ReactNode {
+  const math = useMath(text);
+  const remark: Options['remarkPlugins'] = math ? [remarkGfm, math.remarkMath, remarkHtmlAsText] : remarkPlugins;
+  const rehype: Options['rehypePlugins'] = math ? [[math.rehypeKatex as never, { throwOnError: false, strict: 'ignore', trust: false, maxSize: 20, maxExpand: 200 }]] : undefined;
   return (
     <div className="vx-ai-md">
-      <ReactMarkdown remarkPlugins={remarkPlugins} components={components} urlTransform={safeUrl}>
-        {text}
+      <ReactMarkdown remarkPlugins={remark} rehypePlugins={rehype} components={components} urlTransform={safeUrl}>
+        {math ? escapeCurrency(text) : text}
       </ReactMarkdown>
     </div>
   );

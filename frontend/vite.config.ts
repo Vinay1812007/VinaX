@@ -19,13 +19,27 @@ const APP_VERSION = BUILD_NUMBER ? `${pkg.version}+${BUILD_NUMBER}` : pkg.versio
  *  offline hit a failed chunk import (v5.3.1 offline-downloads fix). */
 /** 7.2.0 — every chunk the entry can reach is precached; a chunk nothing
  *  reaches is listed ON DEMAND (fetched and runtime-cached on first use,
- *  never pruned afterwards). The VinaX AI page (its Markdown renderer and
- *  code highlighter) is on demand too: it needs the network anyway, and a
- *  listener who never opens the chat should not download it. */
+ *  never pruned afterwards). The VinaX AI page (its Markdown renderer, code
+ *  highlighter and maths engine) is on demand too, with its stylesheets and
+ *  the maths fonts: it needs the network anyway, and a listener who never
+ *  opens the chat should not download it. */
 export const ON_DEMAND_PAGES = /\/src\/pages\/VinaXAIPage\.tsx$/;
+/** The maths engine's fonts, only ever loaded by its on-demand stylesheet. */
+export const ON_DEMAND_ASSETS = /^assets\/KaTeX_[\w-]+\.(woff2?|ttf)$/;
+
+type BundleItem = {
+  type: 'chunk' | 'asset';
+  fileName: string;
+  name?: string;
+  isEntry?: boolean;
+  facadeModuleId?: string | null;
+  imports?: string[];
+  dynamicImports?: string[];
+  viteMetadata?: { importedCss?: Set<string> };
+};
 
 /** Split the build's assets into what the service worker precaches and what it fetches on demand. */
-export function splitPrecache(bundle: Record<string, { type: 'chunk' | 'asset'; fileName: string; isEntry?: boolean; facadeModuleId?: string | null; imports?: string[]; dynamicImports?: string[] }>): { precache: string[]; onDemand: string[] } {
+export function splitPrecache(bundle: Record<string, BundleItem>): { precache: string[]; onDemand: string[] } {
   const all = Object.keys(bundle).filter((f) => f.startsWith('assets/')).sort();
   const chunks = Object.values(bundle).filter((c) => c.type === 'chunk');
   const byFile = new Map(chunks.map((c) => [c.fileName, c]));
@@ -43,8 +57,18 @@ export function splitPrecache(bundle: Record<string, { type: 'chunk' | 'asset'; 
       if (!ON_DEMAND_PAGES.test(byFile.get(d)?.facadeModuleId ?? '')) stack.push(d);
     }
   }
-  const onDemand = all.filter((f) => bundle[f].type === 'chunk' && !reached.has(f));
-  const skip = new Set(onDemand);
+  const skip = new Set(all.filter((f) => bundle[f].type === 'chunk' && !reached.has(f)));
+  // Stylesheets that only on-demand chunks import are on demand too.
+  const cssOf = (c: BundleItem): string[] => {
+    const listed = c.viteMetadata?.importedCss;
+    if (listed && listed.size) return [...listed];
+    const base = c.fileName.replace(/^assets\//, '').replace(/-[^-]+\.js$/, '');
+    return all.filter((f) => f.endsWith('.css') && f.replace(/^assets\//, '').replace(/-[^-]+\.css$/, '') === base);
+  };
+  const reachedCss = new Set(chunks.filter((c) => reached.has(c.fileName)).flatMap(cssOf));
+  for (const c of chunks) if (skip.has(c.fileName)) for (const css of cssOf(c)) if (!reachedCss.has(css)) skip.add(css);
+  for (const f of all) if (ON_DEMAND_ASSETS.test(f)) skip.add(f);
+  const onDemand = all.filter((f) => skip.has(f));
   return { precache: all.filter((f) => !skip.has(f)).map((f) => `/${f}`), onDemand: onDemand.map((f) => `/${f}`) };
 }
 

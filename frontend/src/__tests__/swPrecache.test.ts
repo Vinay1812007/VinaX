@@ -93,4 +93,23 @@ describe('splitPrecache', () => {
     expect(onDemand.sort()).toEqual(['/assets/VinaXAIPage.js', '/assets/highlight.js']);
     expect(precache).toContain('/assets/shared.js'); // still reached by the app itself
   });
+
+  it('keeps the on-demand page stylesheets and the maths fonts out of the precache', async () => {
+    const splitPrecache = await loadSplit();
+    const chunk = (fileName: string, over: Record<string, unknown> = {}) => ({ type: 'chunk' as const, fileName, imports: [], dynamicImports: [], facadeModuleId: null, isEntry: false, ...over });
+    const asset = (fileName: string) => ({ type: 'asset' as const, fileName });
+    const bundle = {
+      'assets/index-a1.js': chunk('assets/index-a1.js', { isEntry: true, dynamicImports: ['assets/VinaXAIPage-b2.js'], viteMetadata: { importedCss: new Set(['assets/index-a1.css']) } }),
+      'assets/VinaXAIPage-b2.js': chunk('assets/VinaXAIPage-b2.js', { facadeModuleId: '/r/src/pages/VinaXAIPage.tsx', dynamicImports: ['assets/math-c3.js'], viteMetadata: { importedCss: new Set(['assets/VinaXAIPage-b9.css']) } }),
+      'assets/math-c3.js': chunk('assets/math-c3.js'),
+      'assets/index-a1.css': asset('assets/index-a1.css'),
+      'assets/VinaXAIPage-b9.css': asset('assets/VinaXAIPage-b9.css'),
+      'assets/math-c7.css': asset('assets/math-c7.css'),
+      'assets/KaTeX_Main-Regular-d4.woff2': asset('assets/KaTeX_Main-Regular-d4.woff2'),
+      'assets/inter-e5.woff2': asset('assets/inter-e5.woff2'),
+    };
+    const { precache, onDemand } = splitPrecache(bundle);
+    expect(onDemand.sort()).toEqual(['/assets/KaTeX_Main-Regular-d4.woff2', '/assets/VinaXAIPage-b2.js', '/assets/VinaXAIPage-b9.css', '/assets/math-c3.js', '/assets/math-c7.css']);
+    expect(precache.sort()).toEqual(['/assets/index-a1.css', '/assets/index-a1.js', '/assets/inter-e5.woff2']);
+  });
 });
