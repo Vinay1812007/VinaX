@@ -2,7 +2,11 @@
  * VinaX AI — GET /api/ai/models: what the model picker offers.
  *
  *   → 200 { enabled, configured, search, groups: [...], models: [{ id, name, provider, group,
- *            description, flags: { vision, web, thinking, code }, available, reason? }] }
+ *            description, flags: { vision, web, thinking, code }, available, reason? }],
+ *            voice: { dictation, readAloud, live, voices: [...], liveVoices: [...] } }
+ *
+ * `voice` says which voice features have a provider key (phase 6) and
+ * which voices the page may offer for Read aloud and Live.
  *
  * Public (a session, when sent, only decides `enabled` for testers). It
  * never names upstream hosts or keys. `available` is false when the
@@ -18,6 +22,7 @@ import { aiOpenFor, aiSettings, registryFor, sanitizeAiSettings } from '../../_l
 import { isCooling } from '../../_lib/ai/cooldown';
 import { ladderModels, PICKER_GROUPS } from '../../_lib/ai/models';
 import { searchConfigured } from '../../_lib/ai/search';
+import { LIVE_VOICES, READ_VOICES, voiceAvailability } from '../../_lib/ai/voice';
 import type { AiEnv } from '../../_lib/ai/types';
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: { ...CORS, 'access-control-allow-methods': 'GET, OPTIONS' } });
@@ -49,5 +54,6 @@ export const onRequestGet = async (ctx: { request: Request; env: AiEnv }): Promi
   // Web search is offered when the owner allows it and something can search: the search API or free grounding.
   const registry = registryFor(settings);
   const canSearch = searchConfigured(env) || ladderModels(registry, 'grounded').some((spec) => providerConfigured(env, spec.provider));
-  return json({ enabled: aiOpenFor(settings, sub), configured: anyProviderConfigured(env), search: settings.search && canSearch, groups: PICKER_GROUPS, models });
+  const voice = { ...voiceAvailability(env), voices: READ_VOICES, liveVoices: LIVE_VOICES };
+  return json({ enabled: aiOpenFor(settings, sub), configured: anyProviderConfigured(env), search: settings.search && canSearch, groups: PICKER_GROUPS, models, voice });
 };
