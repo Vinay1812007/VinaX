@@ -338,6 +338,12 @@ export interface RecommendationContext {
    * adds the explore source in the listener's own languages. Absent = 0.
    */
   widen?: 0 | 1 | 2;
+  /**
+   * 1.4 — let the music AI reorder the top of a continuation after scoring
+   * (services/ai/musicAi.ts). Validation and the admission gate still run after
+   * it; on a timeout or an error the on-device order plays. Absent = off.
+   */
+  aiRerank?: boolean;
 }
 
 /** v7.0.0 — why a candidate never reached the ranked pool (developer score breakdowns). 'soft-muted' (7.2.0): an artist under an active "show fewer like this". */

@@ -226,7 +226,7 @@ export const UTILITY_MODELS: readonly UtilityModel[] = [
   u('gemini', 'aqa', 'Gemini AQA', 'aqa'),
 ];
 
-export type LadderName = 'vision' | 'long' | 'deep' | 'code' | 'fast' | 'default' | 'title' | 'grounded';
+export type LadderName = 'vision' | 'long' | 'deep' | 'code' | 'fast' | 'default' | 'title' | 'grounded' | 'music';
 
 /** Auto's ladders, best first (docs/ai.md "Auto"). */
 export const LADDERS: Readonly<Record<LadderName, readonly string[]>> = {
@@ -240,6 +240,11 @@ export const LADDERS: Readonly<Record<LadderName, readonly string[]>> = {
     'openrouter:nvidia/nemotron-3.5-lightning:free', 'nvidia:openai/gpt-oss-20b', 'cloudflare:@cf/meta/llama-3.3-70b-instruct-fp8-fast',
   ],
   title: ['groq:qwen/qwen3.8-27b', 'gemini:gemini-3.5-flash-lite'],
+  /**
+   * The music routes' short JSON tasks (POST /api/ai/rerank, /api/ai/home-layout):
+   * the quickest models first, because each answer has a deadline of 1.5–2.5 s.
+   */
+  music: ['groq:openai/gpt-oss-20b', 'groq:qwen/qwen3.8-27b', 'gemini:gemini-3.5-flash-lite', 'cloudflare:@cf/meta/llama-3.1-8b-instruct-fast'],
   /** Put first in Auto's ladder when a reply searches the web: free Google Search grounding. */
   grounded: ['gemini:gemini-2.5-flash', 'gemini:gemini-2.5-flash-lite'],
 };

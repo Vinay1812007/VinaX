@@ -7,6 +7,7 @@ import { hasHeardKey, initHeardSet } from '@/services/recommendation/heardSet';
 import { fetchPersonalRecommendations, personalEnabled } from '@/services/personal/api';
 import { toSong } from '@/services/personal/types';
 import { useSettingsStore } from '@/store/settingsStore';
+import { aiReasonLine, rerankWithAi } from '@/services/ai/musicAi';
 import { songKey } from '@/services/recommendation/songKey';
 import { inferMood, type Mood } from '@/services/recommendation/mood';
 import { exposureLedger, recordExposure } from '@/services/recommendation/exposure';
@@ -479,10 +480,10 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
 
   let fallback: FallbackReason | null = null;
   const relaxed: string[] = [];
-  const attempt = (relax: Relax = {}): { songs: Song[]; relaxed: string[]; usable: number } => {
-    const ranked = rank(p, env, filterFor(env, queued, relax));
-    const picked = pickSequence(ranked.map((c) => c.song), before, limit, songKey);
-    return { ...picked, usable: ranked.length };
+  const attempt = (relax: Relax = {}): { songs: Song[]; relaxed: string[]; usable: number; ranked: Song[] } => {
+    const ranked = rank(p, env, filterFor(env, queued, relax)).map((c) => c.song);
+    const picked = pickSequence(ranked, before, limit, songKey);
+    return { ...picked, usable: ranked.length, ranked };
   };
 
   let result = attempt();
@@ -533,6 +534,25 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
       if (shorter.songs.length > result.songs.length) { result = shorter; relaxed.push('cooldown'); }
     }
   }
+  // 1.4 — the music AI may reorder the top of the ranked pool (services/ai/musicAi.ts),
+  // within 1.5 s; the spacing rule then picks the stretch from its order, and the
+  // player's admission gate still checks every song. Never while the listener is
+  // waiting at the end of the queue, and the on-device stretch stands on any failure.
+  const urgent = options.deadlineMs !== undefined && options.deadlineMs < NEXTUP_DEADLINE_MS;
+  let aiReasons = new Map<string, string>();
+  if (ctx.aiRerank && !urgent && result.ranked.length > 1 && !signal?.aborted) {
+    const ai = await rerankWithAi(result.ranked, (s) => s, ctx, { signal, tune: options.tune ?? null, language }).catch(() => null);
+    if (signal?.aborted) return empty(null);
+    if (ai?.used) {
+      const picked = pickSequence(ai.items, before, limit, songKey);
+      // The AI may change the order, never shorten the stretch.
+      if (picked.songs.length >= result.songs.length) {
+        result = { ...result, ...picked, ranked: ai.items };
+        aiReasons = new Map([...ai.reasons].map(([id, why]) => [id, aiReasonLine(why)]));
+        relaxed.push('ai-rerank');
+      }
+    }
+  }
   relaxed.unshift(...result.relaxed);
   if (widenedTo) relaxed.push(`widened-${widenedTo}`);
   // Keep the pool warm for the next stretch without making this one wait.
@@ -550,7 +570,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
       recordExposure(fresh, 'queued');
       const lines: Array<[string, string]> = [];
       for (const s of fresh) {
-        const why = whyLine(p.items.get(s.id));
+        const why = aiReasons.get(s.id) ?? whyLine(p.items.get(s.id));
         if (why) lines.push([s.id, why]);
       }
       if (lines.length) useReasonStore.getState().setReasons(lines);

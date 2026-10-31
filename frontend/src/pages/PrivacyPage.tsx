@@ -98,6 +98,14 @@ export default function PrivacyPage() {
           VinaX never receives or stores audio.
         </p>
         <p>
+          &ldquo;AI fine-tunes Up Next&rdquo; (on by default, Settings → Recommendations) asks VinaX&rsquo;s AI to put
+          the best of what VinaX picked in a better order. It sends a short summary only: for up to 40 songs their
+          language, mood, energy, genre and lead artist under a made-up label (never a title), and your top languages,
+          artists and moods, how lively your listening is by time of day, your discovery setting and how many songs
+          you skipped in a row. It goes through VinaX&rsquo;s server to the same AI providers as VinaX AI, and nothing
+          is stored. If the AI is slow or away, VinaX&rsquo;s own order plays.
+        </p>
+        <p>
           VinaX AI, the chat assistant at /vinaxai, is the one exception, and only when you use it. What you type in
           it is sent through VinaX&rsquo;s server to an AI provider to write the reply: Groq, Google (Gemini),
           OpenRouter, NVIDIA or Cloudflare Workers AI, depending on the model. When a reply searches the web, the search

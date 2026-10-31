@@ -755,6 +755,13 @@ export default function SettingsPage() {
               >
                 <Toggle on={!!s.neverRepeat} onChange={s.setNeverRepeat} label="Never repeat" />
               </Row>
+              <Row
+                label="AI fine-tunes Up Next"
+                note="VinaX's AI puts its best picks for you in a better order, from a short summary of your taste. Your history never leaves this device. If the AI is slow or away, VinaX's own order plays."
+                keywords="ai rerank order up next personalised smart"
+              >
+                <Toggle on={s.aiRerank !== false} onChange={s.setAiRerank} label="AI fine-tunes Up Next" />
+              </Row>
               <Block
                 label="Trending vs. your taste"
                 note="How much Home and Up Next lean on what is popular right now."

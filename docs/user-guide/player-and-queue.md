@@ -93,6 +93,15 @@ Turn on **Never repeat** in **Settings → Recommendations**, or tap the **Never
 
 The list of songs you have heard stays on your device. It is in your backup file, and **Reset app state** erases it.
 
+## AI fine-tunes Up Next
+
+VinaX's AI puts its best picks for you in a better order for the moment: the time of day, how lively your listening has been, and what you skipped or finished in this sitting. It only reorders songs VinaX already picked for you, so every rule above still holds.
+
+- Open **Why this song?** on a song the AI placed to read "AI pick" and its reason.
+- Your history stays on your device: the AI gets a short summary (your top languages, artists and moods, and each song's language, mood, energy, genre and singer, without titles).
+- If the AI is slow or away, VinaX's own order plays at once.
+- Turn it off in **Settings → Recommendations → AI fine-tunes Up Next**.
+
 ## Pin a mood
 
 To hold a mood for a while: open Now Playing → **Up next** tab → **Pin a mood** → tap **Romantic**, **Energetic**, **Chill**, **Melancholy** or **Devotional**.

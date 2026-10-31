@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.6.0': {
+    title: 'AI fine-tunes what plays next',
+    changes: [
+      { type: 'new', text: 'VinaX’s AI now puts its best picks for you in a better order for the moment, from a short summary of your taste.' },
+      { type: 'new', text: 'Tap "Why this song?" on a song the AI placed to read why it was picked.' },
+      { type: 'improved', text: 'Your history stays on your device, and if the AI is slow or away, VinaX’s own order plays at once.' },
+      { type: 'improved', text: 'Turn it off any time in Settings → Recommendations → AI fine-tunes Up Next.' },
+    ],
+  },
   '1.5.0': {
     title: 'Never repeat: only songs you have not heard play next',
     changes: [

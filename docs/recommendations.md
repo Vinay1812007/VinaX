@@ -14,11 +14,12 @@ A continuation is one call to `planNextSongs(seed, ctx, options)` in `services/r
 | 2 | Hard filtering | `filters.ts` | Applies rules, not preferences. Every rejection has a named reason. Versions of one song collapse onto the best cut. |
 | 3 | Scoring | `scoring.ts`, `weights.ts`, `vectors.ts` | Scores each candidate against the seed, the taste profile, the hour, the weekday, the session window, this sitting's intent, the discovery mode and the exposure ledger. Every term is recorded as a reason, and the reasons sum to the score. |
 | 4 | Ranking | `scoring.ts`, `reranking.ts`, `engine.ts` | Sorts, shuffles within 0.05-wide score bands using the session salt, re-ranks greedily for diversity (artist, genre and language against the last four picks), then applies an active tune's per-song nudge. |
+| 4b | AI rerank (optional) | `services/ai/musicAi.ts` | With "AI fine-tunes Up Next" on, the top 40 go to `POST /api/ai/rerank` as a compact summary; its order comes back within 1.5 s, or the on-device order stands. It can only reorder what is there. See [ai.md](ai.md#music-ai). |
 | 5 | Sequencing | `sequencer.ts` | Orders the top 40 into a stretch: energy arc, mood flow, transition memory, artist and album spacing, era, language policy, familiar first. |
 | 6 | Validation | `validation.ts` | Re-checks the final order against every rule. This is the final policy for the on-device order and a top-up from the reserve. |
 | 7 | Admission | `admission.ts` | The player re-checks every automatic queue change against the listener's state at that moment. |
 
-Two things hold everywhere: hard rules never relax, and a penalty is never a rule (a song that is clearly the best fit still wins). Songs carry the catalogue's own metadata only; nothing outside the device fills in or re-orders them.
+Two things hold everywhere: hard rules never relax, and a penalty is never a rule (a song that is clearly the best fit still wins). The live queue calls the V2 planner in `services/nextup/` (a warm pool ranked by `rules.ts`, a stretch picked under its spacing rule); it reads the same context, the same exposure ledger and the same admission gate, and the 1.4 additions below (Never repeat, the AI rerank) apply to both planners. Songs carry the catalogue's own metadata only; nothing outside the device fills in or re-orders them.
 
 `limit` is clamped to 0–40 and defaults to 8; the player asks for 5. `recommendNextSongs` wraps `planNextSongs` for radio, playlist continuation and tests. `buildRecommendations(ctx)` runs the same sources, filter and scorer without a seed for Home. The engine is loaded when a queue is first extended; it is not in the first-load bundle.
 
@@ -379,7 +380,7 @@ The developer breakdown is on when the URL has `?debug=recs`, when `localStorage
 - **Passed over** — the best ranked songs that were not chosen.
 - **Rejected** — up to 80 candidates with the rule that turned each away and the stage (`filter`, `rank` or `validate`).
 
-For a listener, the track menu's "Why this song?" (`explanations.ts`) turns the top reason into a sentence. A `served` reason there means the exposure ledger or the seed memory held the song back.
+For a listener, the track menu's "Why this song?" (`explanations.ts`) turns the top reason into a sentence. A `served` reason there means the exposure ledger or the seed memory held the song back. A song the AI rerank placed reads "AI pick · " and the AI's own reason.
 
 ## Changing it safely
 
