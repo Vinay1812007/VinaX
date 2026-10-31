@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.3.8': {
+    title: 'VinaX AI shows code, pages and diagrams in a side panel',
+    changes: [
+      { type: 'new', text: 'Rewrite the 1.3.4, 1.3.6 and 1.3.7 What\'s New cards for listeners.' },
+      { type: 'improved', text: 'VinaX AI: artifacts (server).' },
+      { type: 'new', text: 'Add the VinaX AI artifact sandbox site.' },
+      { type: 'improved', text: 'VinaX AI: artifacts (page and docs).' },
+    ],
+  },
   '1.3.7': {
     title: 'VinaX AI reads your images, PDFs and files',
     changes: [
