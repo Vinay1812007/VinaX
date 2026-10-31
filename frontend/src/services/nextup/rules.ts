@@ -20,7 +20,9 @@ export type Source =
   /** A song the listener plays again and again (history). */
   | 'favourite-play'
   /** A "Tune this queue" search. */
-  | 'tune';
+  | 'tune'
+  /** V2 1.4 — the personal engine's ranked list around the anchor (signed in, the setting on). */
+  | 'personal';
 
 export const SOURCE_BASE: Readonly<Record<Source, number>> = Object.freeze({
   anchor: 1,
@@ -29,6 +31,7 @@ export const SOURCE_BASE: Readonly<Record<Source, number>> = Object.freeze({
   liked: 0.85,
   'favourite-play': 0.6,
   tune: 1.1,
+  personal: 1.08,
 });
 
 export interface Candidate {

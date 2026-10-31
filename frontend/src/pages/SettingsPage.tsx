@@ -332,6 +332,53 @@ function AccountRow() {
   );
 }
 
+/**
+ * V2 1.4 — the personal engine: the switch, what it sends, and Erase my taste
+ * model (DELETE /api/personal/taste). Signed-out listeners see the switch
+ * greyed with a line saying it needs the account.
+ */
+function PersonalEngineRow() {
+  const account = useAccount();
+  const on = useSettingsStore((s) => s.personalEngine);
+  const setOn = useSettingsStore((s) => s.setPersonalEngine);
+  const kid = useSettingsStore((s) => s.kidMode);
+  const [erasing, setErasing] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const erase = () => {
+    setErasing(true);
+    void import('@/services/personal/api')
+      .then((m) => m.erasePersonalTaste())
+      .then(() => toast('Your taste model is erased. The engine starts again from what you play next.'))
+      .catch(() => toast('Could not erase just now. Try again in a moment.'))
+      .finally(() => { setErasing(false); setConfirm(false); });
+  };
+  return (
+    <>
+      <Row
+        label="Personal engine"
+        note={account
+          ? `While this is on, what you play, finish, skip, like and save goes to your account's taste model on the server, which builds Home, playlists and radio for you. ${kid ? 'Paused in Kid mode: the kid profile stays on this device.' : 'Switch it off and Home goes back to the on-device engine at once.'}`
+          : 'Sign in to use the personal engine: a taste model kept with your account that builds Home, playlists and radio.'}
+        keywords="personalised recommendations taste model AI home playlist server"
+      >
+        <Toggle on={on} label="Personal engine" disabled={!account} onChange={(v) => { setOn(v); toast(v ? 'The personal engine is on' : 'The personal engine is off. Home uses the on-device engine.'); }} />
+      </Row>
+      {account && (
+        <Row label="Erase my taste model" note="Removes everything the personal engine has learned about this account on the server: the events, the model, the pages it built. Your device's own taste profile stays." keywords="delete privacy data">
+          {confirm ? (
+            <span className="flex items-center gap-2">
+              <RowButton tone="danger-solid" onClick={erase} disabled={erasing}>{erasing ? 'Erasing…' : 'Erase'}</RowButton>
+              <RowButton onClick={() => setConfirm(false)} disabled={erasing}>Keep</RowButton>
+            </span>
+          ) : (
+            <RowButton tone="danger" onClick={() => setConfirm(true)}>Erase</RowButton>
+          )}
+        </Row>
+      )}
+    </>
+  );
+}
+
 /** 5.14.0 — festival skins switch with a live "today / next" line. */
 /** VinaX AI: download every chat (signed in only). The export code ships with the chat, not with Settings. */
 function AiChatsExportRow() {
@@ -880,7 +927,8 @@ export default function SettingsPage() {
             )}
           </Section>
 
-          <Section title="Region & privacy" id="privacy" lede="Anonymous usage sharing is on by default; switch it off here. Session insights stay off unless you turn them on.">
+          <Section title="Region & privacy" id="privacy" lede="The personal engine and anonymous usage sharing are on by default; switch either off here. Session insights stay off unless you turn them on.">
+            <PersonalEngineRow />
             <Row
               label="Share anonymous usage"
               note="Which song is playing, city-level location and the app version, with no account attached, so VinaX can be improved. On by default; switching it off stops it at once."

@@ -278,6 +278,8 @@ export function AppLayout() {
       void import('@/services/push/notifyAsk').then((m) => m.installNotifyAsk()).catch(() => undefined);
       // 13.0 — library, history, taste and settings follow the Google account.
       void import('@/services/account/sync').then((m) => m.installAccountSync()).catch(() => undefined);
+      // V2 1.4 — the personal engine learns from listening while signed in with the setting on.
+      void import('@/services/personal/reporter').then((m) => m.installPersonalReporter()).catch(() => undefined);
       void loadBlocklist();
       initLockScreenLyrics();
       // 13.0.2 — mirror an active sleep timer onto the playback notification.

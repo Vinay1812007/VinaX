@@ -1,7 +1,10 @@
 import type { Song } from '@/types';
 import type { RecommendationContext, RejectReason as DebugRejectReason } from '@/services/recommendation/types';
 import type { FallbackReason, NextRecommendationOptions, NextSongsPlan } from '@/services/recommendation/engine';
-import { getArtistTopSongs, getSongSuggestions, searchSongs } from '@/services/api/saavn';
+import { getArtistTopSongs, getSong, getSongSuggestions, searchSongs } from '@/services/api/saavn';
+import { fetchPersonalRecommendations, personalEnabled } from '@/services/personal/api';
+import { toSong } from '@/services/personal/types';
+import { useSettingsStore } from '@/store/settingsStore';
 import { songKey } from '@/services/recommendation/songKey';
 import { inferMood, type Mood } from '@/services/recommendation/mood';
 import { exposureLedger, recordExposure } from '@/services/recommendation/exposure';
@@ -101,6 +104,15 @@ let refilling: Promise<void> | null = null;
 const defaultApi: CatalogueApi = {
   similar: (id, limit, signal) => getSongSuggestions(id, limit, { signal }),
   artistTop: (id) => getArtistTopSongs(id, 0),
+  personalOn: () => personalEnabled(),
+  // The server answers display records; the first few are resolved to full songs here so the
+  // player can preload them, the rest resolve when they start (the player refetches a song without audio).
+  personal: async (seedId, limit, signal) => {
+    const list = await fetchPersonalRecommendations({ seed: seedId, limit, signal, mode: useSettingsStore.getState().discoveryMode });
+    const songs = list.map(toSong);
+    const resolved = await Promise.all(songs.slice(0, 6).map((s) => getSong(s.id, { signal, priority: 'background' }).catch(() => s)));
+    return [...resolved, ...songs.slice(6)];
+  },
   search: (q, limit, signal) => searchSongs(q, limit, { signal }),
 };
 let api: CatalogueApi = defaultApi;

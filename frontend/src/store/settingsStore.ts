@@ -97,6 +97,13 @@ export interface SettingsState {
   /** Package C2 — Kid mode: hides explicit-flagged songs and switches to a
    *  separate taste profile. Favorites/downloads/settings stay shared. */
   kidMode: boolean;
+  /**
+   * V2 1.4 — the personal engine: while signed in, listening is reported to
+   * the account's taste model on the server, which builds Home, playlists
+   * and radio (docs/personalisation.md). On by default; off stops the
+   * reporting at once and Home goes back to the on-device engine.
+   */
+  personalEngine: boolean;
   allowRegionInference: boolean;
   manualCountry: string | null;
   manualRegionLabel: string | null;
@@ -155,6 +162,7 @@ export interface SettingsState {
   setQueueLanguages(v: QueueLanguages): void;
   setDjTakeover(v: boolean): void;
   setKidMode(v: boolean): void;
+  setPersonalEngine(v: boolean): void;
   setAllowRegionInference(v: boolean): void;
   setManualCountry(c: string | null): void;
   setManualRegionLabel(r: string | null): void;
@@ -223,6 +231,7 @@ const defaults = {
   queueLanguages: 'mix' as QueueLanguages,
   djTakeover: true,
   kidMode: false,
+  personalEngine: true,
   allowRegionInference: true,
   manualCountry: null,
   manualRegionLabel: null,
@@ -362,6 +371,7 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setDjTakeover: (djTakeover) => set({ djTakeover }),
       setKidMode: (kidMode) => set({ kidMode }),
+      setPersonalEngine: (personalEngine) => set({ personalEngine }),
       setAllowRegionInference: (allowRegionInference) => set({ allowRegionInference }),
       setManualCountry: (manualCountry) => set({ manualCountry }),
       setManualRegionLabel: (manualRegionLabel) => set({ manualRegionLabel }),

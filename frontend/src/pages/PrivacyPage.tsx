@@ -28,6 +28,29 @@ export default function PrivacyPage() {
           admin console, to support listeners and keep the service safe. What you play and search is not part of this:
           that is the anonymous usage sharing described below, which you can switch off.
         </p>
+        <H>The personal engine — on while you are signed in, unless you switch it off</H>
+        <p>
+          Signed in, VinaX keeps a <b>taste model</b> for your account on its own server and uses it to build Home,
+          playlists and radio for you. While the switch in Settings &rarr; Region &amp; privacy is on, the app sends,
+          in small batches, what you play, finish, skip, like, un-like, mark as not interested, save to a playlist,
+          queue or play from search &mdash; each with the song&rsquo;s title, artists, album, language, year and
+          artwork link, how many seconds you heard, the hour and weekday on your clock, your time zone name, and which
+          shelf it came from. The server keeps these events for a year, the model they add up to (your artists,
+          languages, moods, hours and songs as scores, and a vector that stands for your taste), what it has shown you,
+          and the pages it built, all tied to your account and to no one else. <strong>Nothing goes to an
+          advertiser.</strong>
+        </p>
+        <p>
+          Two things about it use an AI model. A short embedding of each song&rsquo;s catalogue words (title,
+          artists, album, language, year) is computed with an AI model so that similar songs sit near each other;
+          this is about the song, never about you. And the page Home shows and the playlists you ask for are arranged
+          by one of the AI models VinaX AI also uses, which is given a few plain lines about your taste
+          (&ldquo;listens mostly to Telugu, top artists&hellip;&rdquo;), the hour, the day and your first name, and the
+          candidate songs &mdash; never your event history. Which AI providers can be involved is listed in the AI
+          section below. Switching the engine off stops the reporting at once and Home goes back to the on-device
+          engine; <b>Erase my taste model</b> in the same place removes everything the engine holds about your account,
+          and deleting your account removes it too. Kid mode never reports: the kid profile stays on the device.
+        </p>
         <H>What we receive — anonymous usage, on unless you switch it off</H>
         <p>
           Anonymous usage sharing is on by default: the welcome screen shows it as a ticked box you can untick, and
@@ -64,8 +87,10 @@ export default function PrivacyPage() {
         </p>
         <H>AI</H>
         <p>
-          Your music is never sent to an AI service. What plays next, Radio, Home&rsquo;s shelves and your taste profile
-          are worked out on your device. Voice search and Drive mode&rsquo;s voice commands use your device&rsquo;s own
+          Signed out, or with the personal engine switched off, your music is never sent to an AI service: what plays
+          next, Radio, Home&rsquo;s shelves and your taste profile are worked out on your device. With the personal
+          engine on, the section above says exactly what reaches an AI model (a song&rsquo;s catalogue words for its
+          embedding, and a few lines about your taste for arranging Home and building a playlist). Voice search and Drive mode&rsquo;s voice commands use your device&rsquo;s own
           speech engine — in supporting browsers and in the Android app, speech is recognised on your device — and
           VinaX never receives or stores audio.
         </p>
@@ -95,7 +120,8 @@ export default function PrivacyPage() {
         <H>Trackers and ads — the honest version</H>
         <p>
           VinaX sets no tracking cookies of its own, and runs no third-party analytics unless you opt in to session
-          insights above — and even then, your taste profile, history and favorites never leave your device.
+          insights above — and even then, your taste profile, history and favorites never reach a third party. The
+          personal engine keeps its copy on VinaX&rsquo;s own server, for your account alone.
         </p>
         <p>
           <b>Where ads appear.</b> On the website, one clearly labelled advertisement sits at the end of browsing pages:
