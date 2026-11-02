@@ -34,6 +34,7 @@ import {
 } from '@/features/settings/SettingsControls';
 import { DISCOVERY_OPTIONS, QUEUE_LANGUAGE_OPTIONS, intensityWords } from '@/features/settings/recommendationCopy';
 import { PersonalizationPreview } from '@/features/personalization/PersonalizationPreview';
+import { HomeAiSettings } from '@/features/home/HomeAiSettings';
 import { SoftMuteList } from '@/features/personalization/SoftMuteList';
 import { ACCENT_OPTIONS } from '@/constants/accents';
 import { TemplatePicker } from '@/features/settings/TemplatePicker';
@@ -70,6 +71,7 @@ import {
   SearchIcon,
   ShieldIcon,
   SparkleIcon,
+  HomeIcon,
   SunIcon,
   UsersIcon,
   WaveIcon,
@@ -99,6 +101,7 @@ const SECTIONS: SectionDef[] = [
   { id: 'playback', title: 'Playback', icon: PlayIcon },
   { id: 'sound', title: 'Sound', icon: WaveIcon },
   { id: 'recommendations', title: 'Recommendations', icon: SparkleIcon },
+  { id: 'home', title: 'Home', icon: HomeIcon },
   { id: 'notifications', title: 'Notifications', icon: BellIcon },
   { id: 'alarm', title: 'Wake-up alarm', icon: ClockIcon },
   { id: 'privacy', title: 'Region & privacy', icon: ShieldIcon },
@@ -876,6 +879,10 @@ export default function SettingsPage() {
                 <ResetTasteSheet onClose={() => setResetOpen(false)} showDataLink={false} />
               </Suspense>
             )}
+          </Section>
+
+          <Section title="Home" id="home" lede="How your Home is put together.">
+            <HomeAiSettings />
           </Section>
 
           {showNotifications && (

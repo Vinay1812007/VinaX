@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.7.0': {
+    title: 'A Home built for you, for right now',
+    changes: [
+      { type: 'new', text: 'VinaX’s AI now picks which shelves your Home shows, their order and their names, for the time of day and your mood.' },
+      { type: 'new', text: 'Each shelf it chose says why in one line, and a new “Made for right now” shelf can appear when it fits.' },
+      { type: 'improved', text: 'Tap “Not interested” on a shelf to leave it out next time; bring it back, or turn the AI off, in Settings → Home.' },
+      { type: 'improved', text: 'Home never moves while you are looking at it, and arranges itself on your device whenever the AI is slow or away.' },
+    ],
+  },
   '1.6.0': {
     title: 'AI fine-tunes what plays next',
     changes: [

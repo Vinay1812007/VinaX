@@ -65,6 +65,12 @@ import { PersonalBlock } from '@/features/home/blocks/PersonalBlock';
 const PersonalHome = lazy(() => import('@/features/home/personal/PersonalHome').then((m) => ({ default: m.PersonalHome })));
 import { DiscoveryBlock } from '@/features/home/blocks/DiscoveryBlocks';
 import { AlbumsBlock, ArtistsBlock, ChartsBlock, DayPicksBlock, FeedBlock, GenresBlock, LovedBlock, MoodsBlock, QuickBlock, readTaste, SeasonalBlock } from '@/features/home/blocks/CatalogueBlocks';
+import { AiShelfHead, RightNowBlock } from '@/features/home/blocks/AiBlocks';
+import { ShelfSkeleton } from '@/components/Skeletons';
+import { loadHomeAiPrefs } from '@/features/home/homeAiPrefs';
+import { getRecommendationContext } from '@/services/recommendation/context';
+import { personalEnabled } from '@/services/personal/api';
+import { buildHomeRequest, decideHomeLayout, peekHomeDecision, pickHomeSeeds, requestAiHomeLayout, type AiBlockType, type HomeDecision, type HomeLayoutBlock } from '@/services/home/homeBuilder';
 
 /**
  * Home blocks are self-contained: every catalogue query a block needs lives
@@ -145,6 +151,30 @@ const HOME_BLOCK_KEYS: HomeSection[] = ['quick', 'personal', 'discovery', 'chart
 const PRIMARY_BLOCKS = 4;
 /** Blocks with an inner disclosure claim shelves in their own ledger slot, right after their block. */
 const INNER = { personal: 'personal-more', discovery: 'discovery-more' } as const;
+
+/**
+ * 1.4 — this generation's layout, decided once (services/home/homeBuilder.ts):
+ * the AI's when it answers in time and passes the guard, else the on-device
+ * order. Null only while the AI is being asked (at most 2.5 s); after that the
+ * decision never changes for this generation, whatever arrives later.
+ */
+function useHomeDecision(key: string, ask: Parameters<typeof decideHomeLayout>[1], fallback: () => HomeSection[]): HomeDecision | null {
+  // Without the AI the decision is made at once (decideHomeLayout memoises it synchronously): no waiting frame.
+  if (!ask && !peekHomeDecision(key)) void decideHomeLayout(key, null, fallback);
+  const [settled, setSettled] = useState<{ key: string; decision: HomeDecision } | null>(null);
+  useEffect(() => {
+    if (peekHomeDecision(key)) return;
+    let live = true;
+    void decideHomeLayout(key, ask, fallback).then((decision) => {
+      if (live) setSettled({ key, decision });
+    });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one decision per key, on purpose
+  }, [key]);
+  return peekHomeDecision(key) ?? (settled?.key === key ? settled.decision : null);
+}
 
 function useRememberedOpen(id: string): [boolean, (v: boolean) => void] {
   const key = `vinax.home.open.${id}`;
@@ -323,12 +353,40 @@ export default function HomePage() {
     : HOME_BLOCK_KEYS;
   // Listener order wins; owner-disabled shelves stay disabled (homeLayout.ts).
   const layout = composeHomeLayout(homeDesign, clientCfg?.homeLayout, defaultOrder);
+  // 1.4 — the AI Home Builder (services/home/homeBuilder.ts). It is asked only
+  // when nobody chose an order: a layout the listener saved, or one the owner
+  // published, always wins, and so does a running shelf-order experiment.
+  // "Not interested" shelves and the switch are read once per generation, so a
+  // tap now changes the NEXT Home, never this one.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- frozen per generation, on purpose
+  const aiPrefs = useMemo(() => loadHomeAiPrefs(), [generation]);
+  const aiAllowed = aiPrefs.enabled && !layout.orderChosen && shelfOrder === 'control';
+  const base = aiAllowed ? layout.visible.filter((k) => !aiPrefs.notInterested.includes(k)) : layout.visible;
   // 8.2.0 — when nobody chose an order, Home orders itself once per session (homeOrder.ts): nothing moves while the listener scrolls.
-  const blocks = layout.orderChosen || shelfOrder !== 'control'
-    ? layout.visible
-    : sessionHomeOrder(layout.visible, () => orderHomeBlocks({ base: layout.visible, hour: new Date().getHours(), now: Date.now(), signals: loadHomeSignals(), genreStrength: genreAffinityStrength(readTaste().genres) }));
+  const fallbackOrder = (): HomeSection[] => (layout.orderChosen || shelfOrder !== 'control'
+    ? base
+    : sessionHomeOrder(base, () => orderHomeBlocks({ base, hour: new Date().getHours(), now: Date.now(), signals: loadHomeSignals(), genreStrength: genreAffinityStrength(readTaste().genres) })));
+  const ask = aiAllowed
+    ? async () => {
+        const ctx = getRecommendationContext(null, 'home');
+        const seeds = pickHomeSeeds(ctx);
+        // The personal engine's section is placed by the AI too, while it is on.
+        const allowed: AiBlockType[] = [...base, 'rightnow', ...(personalEnabled() ? (['engine'] as const) : [])];
+        const request = buildHomeRequest(ctx, { generation, allowed, avoid: aiPrefs.notInterested, seeds });
+        const aiLayout = await requestAiHomeLayout(request, { seedKeys: new Set(seeds.map((s) => s.key)) });
+        return { layout: aiLayout, seeds: new Map(seeds.map((s) => [s.key, s.song])) };
+      }
+    : null;
+  const decision = useHomeDecision(`${generation}|${aiAllowed ? 'ai' : 'own'}|${base.join(',')}`, ask, fallbackOrder);
+  const aiMeta = new Map<string, HomeLayoutBlock>(decision?.source === 'ai' ? (decision.blocks as HomeLayoutBlock[]).map((b) => [b.type, b]) : []);
+  const blocks = (decision?.blocks ?? []).map((b) => b.type) as Array<HomeSection | 'rightnow' | 'engine'>;
+  // The personal engine's section sits where the AI put it; otherwise first, as before. While the AI is
+  // still being asked it waits too, so it never jumps once the layout lands.
+  const engineInLayout = blocks.includes('engine');
+  const engineFirst = decision ? !engineInLayout : !aiAllowed;
+  const homeBlocks = blocks.filter((k): k is HomeSection => k in HOME_BLOCKS);
   // Customise Home starts from the order the listener actually sees.
-  const design = layout.orderChosen ? layout.design : { ...layout.design, order: [...blocks, ...layout.design.order.filter((k) => !blocks.includes(k))] };
+  const design = layout.orderChosen ? layout.design : { ...layout.design, order: [...homeBlocks, ...layout.design.order.filter((k) => !homeBlocks.includes(k))] };
   setShelfBlockOrder(blocks.flatMap((b) => (b in INNER ? [b, INNER[b as keyof typeof INNER]] : [b])));
   const primary = blocks.slice(0, PRIMARY_BLOCKS);
   const explore = blocks.slice(PRIMARY_BLOCKS);
@@ -355,10 +413,37 @@ export default function HomePage() {
       if (started && started !== before) attributeSong(started, block);
     }, 0);
   };
-  const renderBlock = (k: HomeSection, i: number) => {
+  const renderBlock = (k: HomeSection | 'rightnow' | 'engine', i: number) => {
+    if (k === 'engine') {
+      return (
+        <Fragment key={k}>
+          <span hidden data-home-block={k} />
+          <Suspense fallback={null}><PersonalHome generation={generation} /></Suspense>
+          <span hidden data-home-block="" />
+        </Fragment>
+      );
+    }
+    const meta = aiMeta.get(k);
+    if (k === 'rightnow') {
+      if (!meta || !decision) return null;
+      const seeds = decision.seeds;
+      return (
+        <Fragment key={k}>
+          <span hidden data-home-block={k} />
+          {i < 2 ? <RightNowBlock block={meta} seeds={seeds} /> : <DeferredBlock render={() => <RightNowBlock block={meta} seeds={seeds} />} />}
+          <span hidden data-home-block="" />
+        </Fragment>
+      );
+    }
     const Block = HOME_BLOCKS[k];
     const Extra = BLOCK_EXTRAS[k];
-    const body = () => (Extra ? <><Block /><Extra /></> : <Block />);
+    // 1.4 — a shelf the AI chose carries its title and one-line "why".
+    const body = () => (
+      <>
+        {meta && <AiShelfHead block={meta} />}
+        {Extra ? <><Block /><Extra /></> : <Block />}
+      </>
+    );
     return (
       <Fragment key={k}>
         {/* Invisible block markers for the usage signal (features/home/homeTaps.ts). */}
@@ -411,9 +496,12 @@ export default function HomePage() {
           <ListeningGuide />
           <FlowEntryCard />
           {/* V2 1.4 — the personal engine's page first (nothing when signed out, switched off or the model is new). */}
-          <Suspense fallback={null}><PersonalHome generation={generation} /></Suspense>
+          {engineFirst && <Suspense fallback={null}><PersonalHome generation={generation} /></Suspense>}
 
-          {primary.map(renderBlock)}
+          {decision ? primary.map(renderBlock) : (
+            // 1.4 — the AI is being asked (at most 2.5 s): placeholders, then one layout for the whole visit.
+            <div aria-busy="true" aria-label="Building your Home"><ShelfSkeleton /><ShelfSkeleton /></div>
+          )}
 
           <section className="vxh-explore" aria-labelledby={`${exploreRegion}-title`}>
             <div className="vxh-explore-head">

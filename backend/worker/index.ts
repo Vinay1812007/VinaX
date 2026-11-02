@@ -74,6 +74,7 @@ import * as m_api_ai_speak from './functions/api/ai/speak';
 import * as m_api_ai_live_token from './functions/api/ai/live-token';
 import * as m_api_ai_live_transcript from './functions/api/ai/live-transcript';
 import * as m_api_ai_rerank from './functions/api/ai/rerank';
+import * as m_api_ai_home_layout from './functions/api/ai/home-layout';
 import * as m_api_ai_conversation_id from './functions/api/ai/conversations/[id]';
 // 15.0 — the social layer: profiles, follows, shared playlists.
 import * as m_api_profile from './functions/api/profile';
@@ -188,6 +189,7 @@ const EXACT: Record<string, Mod> = {
   '/api/personal/playlist': m_api_personal_playlist,
   '/api/personal/taste': m_api_personal_taste,
   '/api/ai/rerank': m_api_ai_rerank,
+  '/api/ai/home-layout': m_api_ai_home_layout,
   '/api/profile': m_api_profile,
   '/api/follow': m_api_follow,
   '/api/shared-playlist': m_api_shared_playlist,

@@ -2,6 +2,7 @@ import { KEYS } from '@/constants/storage-keys';
 import { LATEST_VERSION } from '@/constants/version';
 import { getLocal, setLocal, writeLocalBatch, type StorageFailure } from '@/services/storage/local';
 import { HOME_DESIGN_KEY, validateHomeDesign } from '@/services/recommendation/homeDesign';
+import { HOME_AI_KEY, sanitizeHomeAiPrefs } from '@/features/home/homeAiPrefs';
 import { pruneTrash, type TrashEntry } from '@/features/library/trash';
 import { normalizeTags } from '@/features/library/tags';
 import { USERNAME_RE } from '@/features/identity/username';
@@ -568,13 +569,22 @@ const bookmarksCategory: BackupCategory = {
 const homeLayoutCategory: BackupCategory = {
   id: 'homeLayout',
   label: 'Home layout',
-  description: 'Your shelf order, hidden shelves and headline from Home Studio.',
-  keys: [{ key: HOME_DESIGN_KEY }],
+  description: 'Your shelf order, hidden shelves and headline from Home Studio, and your AI Home choices.',
+  keys: [{ key: HOME_DESIGN_KEY }, { key: HOME_AI_KEY }],
   sanitize: (values) => {
+    const out: CategoryValues = {};
     const v = values[HOME_DESIGN_KEY];
-    if (v === undefined || v === null) return { values: {} };
-    if (!isObj(v)) return { error: 'Home layout is malformed.' };
-    return { values: { [HOME_DESIGN_KEY]: validateHomeDesign(v) } };
+    if (v !== undefined && v !== null) {
+      if (!isObj(v)) return { error: 'Home layout is malformed.' };
+      out[HOME_DESIGN_KEY] = validateHomeDesign(v);
+    }
+    // 1.4 — "Let AI build my Home" and the shelves the listener is not interested in.
+    const ai = values[HOME_AI_KEY];
+    if (ai !== undefined && ai !== null) {
+      if (!isObj(ai)) return { error: 'Home choices are malformed.' };
+      out[HOME_AI_KEY] = sanitizeHomeAiPrefs(ai);
+    }
+    return { values: out };
   },
   summarize: (values) => {
     const v = values[HOME_DESIGN_KEY];
@@ -583,7 +593,11 @@ const homeLayoutCategory: BackupCategory = {
     return `Custom order · ${hidden} hidden shelf${hidden === 1 ? '' : 'ves'}`;
   },
   // A layout is one deliberate arrangement, not a list to union: merging keeps this device's.
-  merge: (current, incoming) => (current[HOME_DESIGN_KEY] !== undefined ? current : incoming),
+  merge: (current, incoming) => ({
+    ...incoming,
+    ...(current[HOME_DESIGN_KEY] !== undefined ? { [HOME_DESIGN_KEY]: current[HOME_DESIGN_KEY] } : {}),
+    ...(current[HOME_AI_KEY] !== undefined ? { [HOME_AI_KEY]: current[HOME_AI_KEY] } : {}),
+  }),
 };
 
 const identityCategory: BackupCategory = {

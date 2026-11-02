@@ -42,6 +42,16 @@ After that, there are three quick ways to start:
 
 Tap the heart to save a song to your favourites. What you like, finish and skip shapes your recommendations, and that stays on this device. See [Discovery modes](discovery-modes.md).
 
+## A Home built for you
+
+VinaX's AI builds your Home each time it is put together: which shelves you see, their order and their names, for the time of day and how you have been listening. Each shelf it chose says why in one line under its title, and it may add a shelf of its own, **Made for right now**. Every song on every shelf still comes from VinaX's own picks and the catalogue, with your hidden songs, muted languages and Kid mode respected.
+
+- Home never rearranges itself while you are looking at it. It is built again when you pull to refresh, press **Refresh Home**, or come back after half an hour.
+- Tap **Not interested** on a shelf to leave it out of your next Home. Bring it back in **Settings → Home**.
+- **Settings → Home → Let AI build my Home** turns it off; Home then arranges itself on your device as before. **Rebuild Home now** builds a fresh Home the next time you open it.
+- An order you set yourself in **Customise Home** always wins, and so does a layout VinaX publishes for everyone.
+- The AI gets a short summary of your taste (top languages, artists and moods, and how lively your listening is by time of day), never your history. If it is slow or away, Home arranges itself on your device.
+
 ## Change the look
 
 Everything about the look is in **Settings → Appearance**:

@@ -106,6 +106,12 @@ export default function PrivacyPage() {
           is stored. If the AI is slow or away, VinaX&rsquo;s own order plays.
         </p>
         <p>
+          &ldquo;Let AI build my Home&rdquo; (on by default, Settings → Home) sends the same short summary, the
+          shelves Home may show and the ones you said you are not interested in, and up to 8 of your own songs as
+          features under made-up labels (never a title), so the AI can pick and name your shelves. Every song on Home
+          still comes from VinaX&rsquo;s own picks.
+        </p>
+        <p>
           VinaX AI, the chat assistant at /vinaxai, is the one exception, and only when you use it. What you type in
           it is sent through VinaX&rsquo;s server to an AI provider to write the reply: Groq, Google (Gemini),
           OpenRouter, NVIDIA or Cloudflare Workers AI, depending on the model. When a reply searches the web, the search

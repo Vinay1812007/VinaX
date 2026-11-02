@@ -1027,3 +1027,12 @@ html.light .vx-home .vxh-free-facts li::before {
 .vx-maker-meta { margin-top: 4px; color: rgb(var(--ink-400)); font-size: 12.5px; }
 .vx-maker-list { list-style: none; margin: 0; padding: 0; }
 .vx-maker-reason { margin: -6px 0 8px 56px; font-size: 12px; color: rgb(var(--ink-400)); }
+
+/* 1.4 — a shelf the AI Home Builder chose: its title, a one-line "why", and
+   "Not interested". Tokens only, so every app style, theme, accent, festival
+   skin and high contrast paint it; nothing here animates. */
+.vx-home .vxh-ai-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 12px; margin: 4px 0 10px; }
+.vx-home .vxh-ai-text { min-width: 0; flex: 1 1 16rem; }
+.vx-home .vxh-ai-title { font-family: var(--vx-font-display); font-size: var(--vx-type-section); font-weight: 750; line-height: 1.2; letter-spacing: -0.03em; color: rgb(var(--ink-100)); }
+.vx-home .vxh-ai-why { margin-top: 2px; font-size: 13.5px; line-height: 1.4; color: rgb(var(--ink-300)); }
+.vx-home .vxh-ai-notint { min-height: 36px; padding: 0 14px; font-size: 13px; }

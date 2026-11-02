@@ -83,7 +83,8 @@ Signed out, or with the personal engine off, nothing about listening is sent to 
 
 | Feature (switch) | Sent to `POST /api/ai/…` | Fields, exactly |
 | --- | --- | --- |
-| AI fine-tunes Up Next (Settings → Recommendations, on by default) | `rerank`, once per continuation | Up to 40 songs as `{ key, language, mood, energy, genre, leadArtist }`, where `key` is a label made up for the request (`c0`…), never a title or catalogue id; the taste summary `{ languages (≤ 4), artists (≤ 8 lead-artist names), moods (≤ 4), energyByHour (4 numbers: night, morning, afternoon, evening), discovery, skipStreak, hour, weekday }`; this sitting's intent `{ mood, tune, language, energySteer, completionStreak }` |
+| Let AI build my Home (Settings → Home, on by default) | `home-layout`, once per Home generation (at most every 30 minutes, or on a refresh) | The Home generation number; the same taste summary and sitting intent; the shelf types Home may show and those the listener marked "Not interested"; up to 8 of the listener's own songs as seeds, each as `{ key, language, mood, genre, leadArtist }` under a made-up key (`s0`…), never a title or catalogue id |
+| AI fine-tunes Up Next (Settings → Recommendations, on by default) | `rerank`, once per continuation | Up to 40 songs as `{ key, language, mood, energy, genre, leadArtist }`, where `key` is a label made up for the request (`c0`…), never a title or catalogue id; the taste summary `{ languages (≤ 4), artists (≤ 8 lead-artist names), moods (≤ 4), energyByHour (4 numbers: night, morning, afternoon, evening), discovery, skipStreak, hour, weekday }`; this sitting's intent `{ mood, tune, language, energySteer, completionStreak }` | Voice search and Drive mode's voice commands use the browser's or the phone's own speech recognition, and the commands are read by simple rules on the device; VinaX never receives or stores audio, only the words that end up in a search.
 
 VinaX AI ([ai.md](ai.md)), the chat at `/vinaxai`, is the one place AI is used, and only when a signed-in listener uses it:
 - What they type goes from the Worker to one of the AI providers to generate the reply. The privacy page names them.
@@ -184,7 +185,7 @@ Three deletion paths exist. **The listener** erases their taste model from Setti
 | `taste` | Taste profile | The taste profile and the Kid-mode profile |
 | `searches` | Saved & recent searches | Search state and the search workspace |
 | `bookmarks` | Song bookmarks | Moments marked inside songs |
-| `homeLayout` | Home layout | Shelf order, hidden shelves and headline |
+| `homeLayout` | Home layout | Shelf order, hidden shelves and headline, and the AI Home choices (`vinax.home.ai.v1`: the switch and the shelves marked "Not interested") |
 | `identity` | Name & username | Display name, username, the welcome-done flag |
 | `extras` | Alarm, lyrics, streak & app preferences | Alarm, lyric offsets, karaoke history, streak, sidebar groups |
 | `heard` | Songs you have heard | The lifetime heard-set, as canonical keys (at most 200 000). The export reads it from IndexedDB; a restore hands it to the heard-set, which adds it on the next load. A restore only adds heard songs, in either mode. It is never part of the account sync |

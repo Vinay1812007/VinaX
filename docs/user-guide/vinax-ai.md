@@ -1,6 +1,6 @@
 # VinaX AI
 
-This page covers VinaX AI, the assistant you can chat with inside VinaX: opening it, asking and steering replies, web search, adding files, the side panel for code, pages and diagrams, talking to it by voice, keeping and deleting your chats, and what to do when it is busy. VinaX AI is optional. Your music, Home, Radio and what plays next never use it.
+This page covers VinaX AI, the assistant you can chat with inside VinaX: opening it, asking and steering replies, web search, adding files, the side panel for code, pages and diagrams, talking to it by voice, keeping and deleting your chats, and what to do when it is busy. VinaX AI is optional, and the chat never sees your listening. The music AI features (an AI-built Home, and the AI's order for Up Next) are separate: see [Getting started](getting-started.md#a-home-built-for-you) and [The player and the queue](player-and-queue.md#ai-fine-tunes-up-next).
 
 ## Open VinaX AI
 
