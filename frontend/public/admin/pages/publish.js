@@ -141,6 +141,29 @@
       return { el: h('div.form', { style: { 'max-width': 'none' } }, ui.notice('A switch that is on (or missing) means the feature works as built. Off turns it off for every listener within a minute.', 'info'), list),
         read: function () { var out = {}; Object.keys(toggles).forEach(function (k) { out[k] = toggles[k].input.checked; }); return out; } };
     },
+    // Music AI (1.4): the kill switch for every music AI route, Up Next's AI
+    // order, the AI-built Home, and song generation (a feature flag, off until
+    // set) with its daily quota per device. docs/ai.md#music-ai.
+    'ai-music': function (value) {
+      var v = obj(value);
+      var g = obj(v.generate);
+      var all = ui.toggle('Music AI on', v.enabled !== false, null, { 'aria-label': 'Music AI on' });
+      var rerank = ui.toggle('AI order for Up Next', v.rerank !== false, null, { 'aria-label': 'AI order for Up Next' });
+      var home = ui.toggle('AI-built Home', v.home !== false, null, { 'aria-label': 'AI-built Home' });
+      var gen = ui.toggle('Song generation', g.enabled === true, null, { 'aria-label': 'Song generation' });
+      var quota = ui.input({ type: 'number', min: '1', max: '50', step: '1', value: String(typeof g.dailyQuota === 'number' ? g.dailyQuota : 5), 'aria-label': 'Songs per device per day', style: { width: '6em' } });
+      return {
+        el: h('div.form', { style: { 'max-width': 'none' } },
+          ui.notice('Music AI on is the kill switch: off stops every music AI feature and the app plays its own picks. Song generation stays off until switched on here, and also needs the generator variables on the Worker. Changes reach every server within a minute.', 'info'),
+          all, rerank, home, gen,
+          ui.field('Songs per device per day', quota, 'Each device may make at most this many songs a day (1–50).')),
+        read: function () {
+          var n = Number(quota.value);
+          if (!isFinite(n) || n < 1 || n > 50) throw new Error('Songs per day must be between 1 and 50.');
+          return { enabled: all.input.checked, rerank: rerank.input.checked, home: home.input.checked, generate: { enabled: gen.input.checked, dailyQuota: Math.round(n) } };
+        }
+      };
+    },
     // VinaX AI: the switch, testers, web search and the per-model switches
     // and picker order. The model list comes from /api/admin/ai; entries for
     // ids it no longer lists are kept as they were.

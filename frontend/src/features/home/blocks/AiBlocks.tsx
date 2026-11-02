@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { recentGenerated } from '@/services/ai/songGen';
 import { ShelfSkeleton } from '@/components/Skeletons';
 import { getSongSuggestions, searchSongs } from '@/services/api';
 import { dedupeByIdentity } from '@/services/recommendation/songIdentity';
@@ -84,4 +86,13 @@ export function RightNowBlock({ block, seeds }: { block: HomeLayoutBlock; seeds:
   });
   if (songs.isLoading) return <ShelfSkeleton />;
   return <SongShelf title={block.title} explanation={block.reason} songs={dedupe(lens(songs.data, 'discovery'))} action={<NotInterested type={block.type} title={block.title} />} />;
+}
+
+/** 1.4 — "Generated for you": the new songs this listener made lately, while they last (or once saved). */
+export function GeneratedBlock({ block }: { block: HomeLayoutBlock }) {
+  const dedupe = useShelfDedupe('generated');
+  const lens = useShelfLens();
+  // Read once per visit: a song finishing while the listener browses joins the next Home.
+  const [songs] = useState(() => recentGenerated());
+  return <SongShelf title={block.title} explanation={block.reason} songs={dedupe(lens(songs, 'resume'))} action={<NotInterested type={block.type} title={block.title} />} />;
 }

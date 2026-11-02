@@ -290,6 +290,17 @@ Settings → Recommendations → **Never repeat**, or the **Never repeat** chip 
 
 The live planner does the same with `planWideLookups` (`services/nextup/sources.ts`): related artists of the anchor songs' artists and deeper genre or mood pages, then popular songs in the listener's languages. The trace and `relaxed` record `widened-1` or `widened-2`. When nothing unheard is left after both steps, the plan says `exhausted` and carries a notice; the player shows "You've heard everything we can find here. Try Discover or another language" with a Discover button, and stops instead of playing something heard.
 
+## Generated songs
+
+A song the music AI made ([ai.md](ai.md#song-generation-apiaigenerate-song)) is a new, original track with an id starting `gen-`. The rules that keep it apart:
+
+- **Its own source tag.** It enters a queue as `generated` (`CandidateSource` in `types.ts`, boost 0.05; `Source` in `services/nextup/rules.ts`, base 0.5), never as the song it was inspired by.
+- **Never a play of the source song.** Its canonical identity is its own title and the artist "AI generated". The taste profile learns nothing from it (`services/personalization/updater.ts` returns early for every event), so it cannot move the source's artist, language or song affinity.
+- **Never in a chart or a trend.** It never reaches the usage statistics (`services/analytics/telemetry.ts` sends no event for it), and the catalogue's charts and trending searches cannot return it.
+- **In the queue.** With Settings → Recommendations → "Add a generated song to my queues" on (`genInQueue`, off by default, shown only where generation is available), `services/ai/genInQueue.ts` makes one song after each automatic stretch enters the queue, in the feel of that stretch's first song, at least 90 s long, and places it third among the automatic songs through `replaceAutoTail` (so the admission gate checks it). One at a time, within the daily quota.
+- **Never repeat's third step.** When a Never repeat plan is exhausted and generated songs are allowed, the plan's notice says a new song is being made, and `fillWithGenerated` makes one and plays it when the queue had stopped.
+- **On Home.** The AI Home Builder may offer **Generated for you** (`generated`) once the listener has made songs; it lists the ones still available (`vinax.generated.v1`).
+
 ## Settings and switches
 
 ### Familiar, Balanced, Discover

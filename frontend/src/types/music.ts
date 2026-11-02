@@ -45,6 +45,12 @@ export interface Song {
   mood?: string | null;
   energy?: number | null;
   tempo?: number | null;
+  /**
+   * 1.4 — a NEW, ORIGINAL song the music AI made (services/ai/songGen.ts). Its id
+   * starts with "gen-", its subtitle reads "AI generated · VinaX AI", and its audio
+   * lives on the Worker until `expiresAt` unless the listener saved it.
+   */
+  generated?: { jobId: string; createdAt: number; expiresAt: number; instrumental: boolean };
 }
 
 export interface Album {

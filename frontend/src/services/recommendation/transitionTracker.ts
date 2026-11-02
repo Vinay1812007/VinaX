@@ -64,6 +64,8 @@ export function initTransitionTracker(): () => void {
   if (stop) return stop;
   // 1.4 — the lifetime heard-set (Never repeat) learns from the same bus; it starts with the tracker at boot.
   void initHeardSet().catch(() => undefined);
+  // 1.4 — generated songs in the queue, and keeping the ones the listener saves (services/ai/genInQueue.ts).
+  void import('@/services/ai/genInQueue').then((m) => m.installGeneratedInQueue()).catch(() => undefined);
   const unsubscribe = onPlaybackEvent((e) => {
     // 9.1.0 — a counted play is the one moment a play is a play.
     if (e.kind === 'counted') {

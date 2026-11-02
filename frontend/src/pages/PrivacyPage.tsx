@@ -112,6 +112,13 @@ export default function PrivacyPage() {
           still comes from VinaX&rsquo;s own picks.
         </p>
         <p>
+          &ldquo;Generate a song like this&rdquo; (where it is switched on) sends only the playing song&rsquo;s feel —
+          its mood, energy, tempo, genre and language, a length — and any words you add, never the song itself, its
+          title, its singers or its words. The new song is made by a music generator through VinaX&rsquo;s server and
+          kept there for a day; your device&rsquo;s random install id is used, hashed, to count your songs for the
+          day. Generated songs are always labelled &ldquo;AI generated&rdquo;.
+        </p>
+        <p>
           VinaX AI, the chat assistant at /vinaxai, is the one exception, and only when you use it. What you type in
           it is sent through VinaX&rsquo;s server to an AI provider to write the reply: Groq, Google (Gemini),
           OpenRouter, NVIDIA or Cloudflare Workers AI, depending on the model. When a reply searches the web, the search

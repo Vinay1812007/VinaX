@@ -161,6 +161,12 @@ export function sanitizeSong(v: unknown): Song | null {
     const val = num(v[opt]);
     if (val !== null) song[opt] = val;
   }
+  // 1.4 — a song the music AI made keeps its label through a backup.
+  if (isObj(v.generated) && id.startsWith('gen-')) {
+    const g = v.generated;
+    const jobId = str(g.jobId, 64);
+    if (jobId) song.generated = { jobId, createdAt: num(g.createdAt) ?? 0, expiresAt: num(g.expiresAt) ?? 0, instrumental: g.instrumental === true };
+  }
   return song;
 }
 

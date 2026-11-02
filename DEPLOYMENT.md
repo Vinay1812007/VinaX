@@ -135,6 +135,17 @@ Embedding uses the `[ai] binding = "AI"` from the VinaX AI setup by default (the
 
 `/vinaxai` is an ordinary app page served by the static host. The old `/VinaXAI` spelling is redirected by the app's router, not by `_redirects` (a rule there could match `/vinaxai` too and loop). AI Playlist and shared-chat links from the old build still 301 to Home from the Worker.
 
+## Music AI and song generation
+
+The AI order for Up Next and the AI-built Home use the VinaX AI keys above; nothing more to set. Their switches are the `ai-music` setting (console: Publish → App → Music AI); `enabled: false` there stops every music AI feature and the app plays its own picks.
+
+Song generation stays off until both of these are true:
+
+1. The Worker has a generator: `npx wrangler secret put MUSIC_GEN_API_KEY --config worker/wrangler.toml`, and `MUSIC_GEN_API_URL` (an `https://` job endpoint) as a secret or a `[vars]` entry; `MUSIC_GEN_MODEL` is optional. The Worker speaks one small job contract (`backend/.env.example` and `backend/worker/functions/_lib/ai/songGen.ts` describe it); put a thin proxy in front of a generator whose API differs.
+2. The owner switches **Song generation** on in the console's Music AI form (`ai-music.generate.enabled`), with the songs-per-device-per-day limit (5 by default).
+
+Finished songs are kept 24 hours in Worker key-value storage: the `GENERATED_AUDIO` binding if one is declared in `wrangler.toml`, otherwise the existing `HANDOFF` namespace under a `gen:` prefix (no new binding is needed to deploy). Each song costs a handful of key-value writes (the job, the audio, two quota counters), which counts against the plan's daily write allowance. Check it after enabling: `GET /api/ai/generate-song` with a session answers `{ available: true, … }`.
+
 ## VinaX AI sandbox
 
 VinaX AI previews artifacts (HTML pages, React components, SVG, Mermaid diagrams) in `sandbox/`. It is a one-page static site that must live on **its own origin**, `https://sandbox.vinaxmusic.online`, so nothing an artifact runs can reach the app, its storage or a session. Until it exists, the panel says "Preview needs the sandbox host" and everything else works. It has no build step, no secrets and nothing to configure. Set it up once:

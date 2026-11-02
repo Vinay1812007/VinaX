@@ -73,6 +73,10 @@ import { planLookups, planWideLookups, runLookups, type CatalogueApi, type Fetch
 export const NEXTUP_VERSION = '2.0.0';
 
 /** 1.4 — Never repeat found nothing unheard (the same words as the 9.x engine's notice). */
+const NEVER_REPEAT_GENERATING: PlanNotice = {
+  text: "You've heard everything we can find here, so VinaX is making you a new song",
+  opts: { key: 'never-repeat-exhausted' },
+};
 const NEVER_REPEAT_EXHAUSTED: PlanNotice = {
   text: "You've heard everything we can find here. Try Discover or another language",
   opts: { key: 'never-repeat-exhausted', action: { label: 'Discover', onClick: () => toastNavigate('/discover') } },
@@ -600,7 +604,9 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     return picked;
   };
   const discoveryIds = new Set(songs.filter((s) => !env.likedLeads.has(leadOf(s)) && !env.score.tasteLeads.has(leadOf(s))).map((s) => s.id));
-  const plan: NextSongsPlan = { songs, picker: 'local', fallback, latencyMs: Date.now() - t0, alg, relaxed, discoveryIds, language, commit, topUp, ...(env.heard && !songs.length ? { exhausted: true, notice: NEVER_REPEAT_EXHAUSTED } : {}) };
+  const plan: NextSongsPlan = { songs, picker: 'local', fallback, latencyMs: Date.now() - t0, alg, relaxed, discoveryIds, language, commit, topUp, ...(env.heard && !songs.length ? { exhausted: true, notice: ctx.genInQueue ? NEVER_REPEAT_GENERATING : NEVER_REPEAT_EXHAUSTED } : {}) };
+  // 1.4 — Never repeat's third widening step: a generated song, when the listener allows them.
+  if (plan.exhausted && ctx.genInQueue) void import('@/services/ai/genInQueue').then((m) => m.fillWithGenerated(seed)).catch(() => undefined);
 
   return plan;
 }

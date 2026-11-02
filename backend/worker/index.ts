@@ -75,6 +75,9 @@ import * as m_api_ai_live_token from './functions/api/ai/live-token';
 import * as m_api_ai_live_transcript from './functions/api/ai/live-transcript';
 import * as m_api_ai_rerank from './functions/api/ai/rerank';
 import * as m_api_ai_home_layout from './functions/api/ai/home-layout';
+import * as m_api_ai_generate_song from './functions/api/ai/generate-song';
+import * as m_api_ai_generate_song_id from './functions/api/ai/generate-song/[id]';
+import * as m_api_ai_generate_song_audio from './functions/api/ai/generate-song/[id]-audio';
 import * as m_api_ai_conversation_id from './functions/api/ai/conversations/[id]';
 // 15.0 — the social layer: profiles, follows, shared playlists.
 import * as m_api_profile from './functions/api/profile';
@@ -190,6 +193,7 @@ const EXACT: Record<string, Mod> = {
   '/api/personal/taste': m_api_personal_taste,
   '/api/ai/rerank': m_api_ai_rerank,
   '/api/ai/home-layout': m_api_ai_home_layout,
+  '/api/ai/generate-song': m_api_ai_generate_song,
   '/api/profile': m_api_profile,
   '/api/follow': m_api_follow,
   '/api/shared-playlist': m_api_shared_playlist,
@@ -225,6 +229,8 @@ const DYNAMIC: Array<{ re: RegExp; mod: Mod; key: string }> = [
   { re: /^\/api\/shared-playlist\/([^/]+)\/?$/, mod: m_api_shared_playlist_id, key: 'id' },
   { re: /^\/api\/ai\/conversations\/([^/]+)\/?$/, mod: m_api_ai_conversation_id, key: 'id' },
   { re: /^\/api\/ai\/attachments\/([^/]+)\/?$/, mod: m_api_ai_attachment_id, key: 'id' },
+  { re: /^\/api\/ai\/generate-song\/([^/]+)\/audio\/?$/, mod: m_api_ai_generate_song_audio, key: 'id' },
+  { re: /^\/api\/ai\/generate-song\/([^/]+)\/?$/, mod: m_api_ai_generate_song_id, key: 'id' },
   { re: /^\/sitemaps\/([^/]+)\/?$/, mod: m_sitemaps_map, key: 'map' },
 ];
 

@@ -21,6 +21,8 @@ export function extractId(param: string | undefined): string | undefined {
 }
 
 export function songPath(song: { id: string; title?: string }): string {
+  // 1.4 — a generated song has no catalogue page: it opens in the player.
+  if (song.id.startsWith('gen-')) return '/now-playing';
   return `/song/${song.title ? `${slugify(song.title)}-` : ''}${song.id}`;
 }
 export function albumPath(a: { id: string; title?: string; name?: string }): string {

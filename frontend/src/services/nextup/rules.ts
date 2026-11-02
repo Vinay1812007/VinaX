@@ -28,7 +28,9 @@ export type Source =
   /** 1.4 — Never repeat, widened: deeper pages of a search for the anchor's genre or mood. */
   | 'genre'
   /** 1.4 — Never repeat, widened twice: popular songs in the session's own languages, past the first pages. */
-  | 'explore';
+  | 'explore'
+  /** 1.4 — a NEW song the music AI made in the session's feel (services/ai/songGen.ts). */
+  | 'generated';
 
 export const SOURCE_BASE: Readonly<Record<Source, number>> = Object.freeze({
   anchor: 1,
@@ -41,6 +43,7 @@ export const SOURCE_BASE: Readonly<Record<Source, number>> = Object.freeze({
   'related-artist': 0.8,
   genre: 0.7,
   explore: 0.55,
+  generated: 0.5,
 });
 
 export interface Candidate {

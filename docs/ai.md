@@ -499,7 +499,7 @@ The music routes share `_lib/ai/music.ts`: the owner's switches, one gate, the `
 
 **The answer (`askJson`, `extractJson`).** The device's summary goes to the model as material inside `<input>`, never as instructions. The first JSON object in the answer is read (code fences, reasoning tags and chatter around it are ignored); anything else is no answer. Every route then checks the object against its own input before it answers.
 
-**The owner's switches.** The `ai-music` setting (console: Publish → App → Music AI):
+**The owner's switches.** The `ai-music` setting (console: Publish → App → Music AI, a form with the four switches and the daily quota):
 
 ```json
 { "enabled": true, "rerank": true, "home": true, "generate": { "enabled": false, "dailyQuota": 5 } }
@@ -524,3 +524,28 @@ The music routes share `_lib/ai/music.ts`: the owner's switches, one gate, the `
 - **What is sent.** `{ generation, taste, intent, allowed, avoid, seeds }`: the Home generation, the same compact summaries as the rerank, the shelf types Home may show now (its visible blocks plus `rightnow`), the types the listener marked "Not interested", and up to 8 seed songs as `{ key, language, mood, genre, leadArtist }` under keys `s0`…. The Worker describes each shelf type to the model in its own words (`HOME_BLOCKS`), so the device never writes the prompt. The body is capped at 8 KB.
 - **What comes back.** `{ layout: { generation, blocks: [{ type, title, reason, query?, mood?, language?, seedIds? }] }, model }`. The Worker keeps allowed, non-avoided types once each; titles of at most 40 characters and reasons of at most 90, without links; for `rightnow`, a search phrase of 2–5 plain words, a mood from its list, a language from the taste summary and seeds from the input; the shortcuts first and the feed last; at least four shelves, or `502 no_answer`.
 - **On the device.** Home waits at most 2.5 s (the model gets 2.1 s). The answer passes `isHomeLayout`, a hand-written type guard, and `acceptHomeLayout` again; any failure means Home's own order, and the decision then holds for the whole generation. The route has its own bucket (6, plus 4 a minute) and the owner's `ai-music.home` switch.
+
+### Song generation: `/api/ai/generate-song`
+
+`functions/api/ai/generate-song.ts`, `generate-song/[id].ts`, `generate-song/[id]-audio.ts`, `_lib/ai/songGen.ts`; on the device `services/ai/songGen.ts`, `genInQueue.ts`, `features/player/GenerateLikeThis.tsx`.
+
+A NEW, ORIGINAL song in the feel of the one playing. The device sends `{ mood, energy, tempo, genre, language, durationSec (30–180), instrumental, promptText?, kid? }`, built from the song's metadata only: its audio, title, artist and lyrics never leave the device and never reach the generator.
+
+| Route | What it does |
+| --- | --- |
+| `GET /api/ai/generate-song` | `{ available, reason?, limit, remaining, ttlHours }`: whether generation is set up and switched on, and this device's songs left today. The app shows the action only when `available` is true |
+| `POST /api/ai/generate-song` | Starts a job: `202 { jobId, status, progress, remaining }`; `400 bad_request`, `422 prompt_names_artist \| prompt_too_long \| prompt_not_allowed`, `429 rate_limited \| quota_exceeded`, `502 gen_failed`, `503 gen_not_configured \| ai_disabled` |
+| `GET /api/ai/generate-song/:jobId` | The job's `{ status, progress, title?, durationSec, instrumental, audioUrl?, expiresAt }`. Each call asks the generator once; when it has finished, the audio is copied into Worker storage. Another account's job, an expired one or a malformed id answers 404 |
+| `GET /api/ai/generate-song/:jobId/audio` | The finished song, with byte ranges, until it expires (24 hours). The job id is a random UUID and works as the key, because an `<audio>` element cannot send a session |
+
+**The generator** is whatever the owner configures with `MUSIC_GEN_API_URL`, `MUSIC_GEN_API_KEY` and the optional `MUSIC_GEN_MODEL` ([DEPLOYMENT.md](../DEPLOYMENT.md#music-ai-and-song-generation)). The Worker POSTs `{ prompt, lyrics, instrumental, duration, model? }` and reads `{ id }` (then polls `GET <URL>/<id>`) or the finished `{ audio_url | audio_base64, mime }`. Without the variables every route answers `gen_not_configured` and the app hides the action.
+
+**Originality rules.**
+- The brief (`buildGenerationRequest`) describes only the feel: genre, mood, energy, tempo, length, language, instrumental or not. It always ends with `ORIGINALITY_RULES`: an entirely new piece; no real artist, singer, band, composer, song or album named, imitated or referenced; no existing melody or lyrics reproduced or paraphrased.
+- Any lyrics are newly written in the requested language; an instrumental has none.
+- The listener's words (`promptText`, at most 200 characters) are refused (`prompt_names_artist`) when they read like a reference: "in the style of", "sounds like", "cover of", "feat.", a quoted title, a link, or a run of capitalised words that are not everyday words. When the music ladder can answer, a model is also asked whether the words name a real artist, band, song, album or film. On the device the words are checked first against the playing song's title and artists and the listener's top artists.
+- Kid mode: instrumental only, gentle moods only, and no free text.
+
+**Limits.** The per-address bucket (3, plus 2 a minute) and the account's `RATE_LIMIT_10` tier; a daily quota per device (`x-vinax-device`, hashed with the day before it is stored as a key; the owner's `ai-music.generate.dailyQuota`, 5 by default) and three devices' worth per account; the owner's feature flag `ai-music.generate.enabled` (off until set) and the kill switch `ai-music.enabled`.
+
+**On the device.** Now Playing offers "Generate a song like this" (lengths 1, 2 or 3 minutes, Instrumental, optional words) with a progress bar while the job runs (the page polls every 2 s). The finished song has an id starting `gen-`, the subtitle "AI generated · VinaX AI" and the artist "AI generated", so cards, Now Playing, the lock screen and share cards all say so; Now Playing adds an "AI generated" badge. It opens in the player, never a catalogue page. Liking it or adding it to a playlist saves it on the device through the ordinary saved-songs path; so does Save. Liked and playlist copies travel in the one-file backup with their label.

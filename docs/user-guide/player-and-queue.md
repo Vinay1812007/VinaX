@@ -102,6 +102,19 @@ VinaX's AI puts its best picks for you in a better order for the moment: the tim
 - If the AI is slow or away, VinaX's own order plays at once.
 - Turn it off in **Settings → Recommendations → AI fine-tunes Up Next**.
 
+## Generate a song like this
+
+Where song making is switched on, Now Playing shows **✦ Generate a song like this** under the player buttons. It makes a new, original song in the feel of the one playing: its mood, energy, tempo, genre and language. It never copies the song, its words or its singers.
+
+1. Press **✦ Generate a song like this**.
+2. Choose **1 min**, **2 min** or **3 min**, tick **Instrumental** if you want no singing, and add a few words if you like ("rain on the window, warm flute"). Describe a feel or a scene: words that name an artist or a song are refused.
+3. Press **Generate**. A bar shows how far along it is; you can keep listening meanwhile.
+4. When it is ready: **Play now**, **Play next**, **Save** or **Make another**.
+
+Every generated song says **AI generated**: on its card, in Now Playing, on the lock screen and on share cards. It is kept for a day; save it, like it or add it to a playlist to keep it on your device. You can make a few a day (5 unless VinaX says otherwise). In Kid mode songs are instrumental and take no words.
+
+**Settings → Recommendations → Add a generated song to my queues** adds one new song to each stretch VinaX lines up, and lets [Never repeat](#never-repeat) make you a new song when there is nothing left you have not heard. Generated songs never count as plays of the song they came from, and never change what VinaX thinks you like.
+
 ## Pin a mood
 
 To hold a mood for a while: open Now Playing → **Up next** tab → **Pin a mood** → tap **Romantic**, **Energetic**, **Chill**, **Melancholy** or **Devotional**.

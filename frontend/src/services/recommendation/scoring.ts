@@ -65,6 +65,8 @@ const SOURCE_BOOST: Record<Candidate['source'], number> = {
   // and the seed's own neighbourhood: real evidence that this song is current,
   // but evidence about the world, not about this listener.
   'verified-trend': 0.12,
+  // 1.4 — a new song the music AI made in the seed's feel: the last resort, below trending.
+  generated: 0.05,
 };
 
 /** How each source's boost is explained (favourite-artist and -album name what they came from). */
@@ -83,6 +85,7 @@ const SOURCE_REASON: Record<Candidate['source'], ReasonKind> = {
   genre: 'genre',
   'verified-trend': 'popular-now',
   style: 'style',
+  generated: 'discovery',
 };
 
 /**
