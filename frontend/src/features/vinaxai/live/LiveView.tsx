@@ -3,6 +3,8 @@
  * loud. Music pauses while it is open. Captions show what each side says;
  * when it closes, the conversation is saved into the chat as ordinary
  * messages (POST /api/ai/live-transcript) and the chat reloads to show it.
+ * With web search on, the sources of the latest reply show under the
+ * captions; the globe button switches search (Live voice reconnects).
  * Loaded on demand, only when someone opens it.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -11,7 +13,9 @@ import { saveLiveTranscript, voiceNotice } from '../api';
 import { cleanMicLabel, listMics, micNotice, silentMicNotice, type MicDevice, type MicProblem } from '../mic';
 import { usePrefs } from '../prefs';
 import { holdMusic } from '../musicHold';
-import { CloseIcon, MicIcon, MicOffIcon } from '../icons';
+import { CloseIcon, GlobeSmallIcon, MicIcon, MicOffIcon } from '../icons';
+import { SourcesRow } from '../Sources';
+import type { SourcesInfo } from '../types';
 import { LiveSession, type LiveEndReason, type LiveState } from './liveSession';
 
 interface Props {
@@ -24,6 +28,10 @@ interface Props {
   model: string;
   /** The mic picked in Settings ('' = automatic). */
   micId: string;
+  /** The owner allows web search in Live voice. */
+  searchAllowed?: boolean;
+  /** Start with web search on. */
+  search?: boolean;
   /** Closed; `savedTo` names the chat the session was saved into, when it was. */
   onClose(savedTo: string | null): void;
 }
@@ -43,7 +51,7 @@ function endMessage(reason: LiveEndReason, error?: string): string | null {
   return error === 'unsupported' ? 'Live voice isn’t supported in this browser.' : voiceNotice(error ?? 'voice_unavailable');
 }
 
-export default function LiveView({ conversationId, parentMessageId, thinking, voice, model, micId, onClose }: Props): ReactNode {
+export default function LiveView({ conversationId, parentMessageId, thinking, voice, model, micId, searchAllowed = false, search: searchAtStart = false, onClose }: Props): ReactNode {
   const [state, setState] = useState<LiveState>('connecting');
   const [captions, setCaptions] = useState({ user: '', assistant: '' });
   const [muted, setMuted] = useState(false);
@@ -53,6 +61,8 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
   const [mic, setMic] = useState<{ label: string; silent: boolean } | null>(null);
   const [mics, setMics] = useState<MicDevice[] | null>(null);
   const [micError, setMicError] = useState<string | null>(null);
+  const [search, setSearch] = useState(searchAtStart);
+  const [web, setWeb] = useState<{ sources: SourcesInfo | null; searching: boolean }>({ sources: null, searching: false });
   const session = useRef<LiveSession | null>(null);
   const orb = useRef<HTMLDivElement>(null);
   const endButton = useRef<HTMLButtonElement>(null);
@@ -86,12 +96,15 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
     const back = document.activeElement as HTMLElement | null;
     endButton.current?.focus();
     const release = holdMusic('pause');
-    const s = new LiveSession({ thinking, voice, model, micId }, {
+    const s = new LiveSession({ thinking, voice, model, micId, search: searchAtStart }, {
       onState: (st) => {
         setState(st);
         if (s.model) setModelName(s.model.name);
+        // The session may have started without search (a model that refused it).
+        if (st === 'listening') setSearch(s.search);
       },
       onCaptions: setCaptions,
+      onWeb: setWeb,
       onMic: (m) => {
         setMic(m);
         if (m.silent) void listMics().then(setMics);
@@ -120,6 +133,13 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
     session.current?.setMuted(m);
   };
 
+  const toggleSearch = () => {
+    const on = !search;
+    setSearch(on);
+    usePrefs.getState().set({ liveSearch: on });
+    void session.current?.setSearch(on);
+  };
+
   const chooseMic = async () => {
     if (!mics) setMics(await listMics());
     else setMics(null);
@@ -134,7 +154,7 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
       setMicError('That microphone couldn’t be opened. Try another one.');
     }
   };
-  const status = ended ? 'Live voice ended' : muted ? 'Muted' : STATUS[state];
+  const status = ended ? 'Live voice ended' : muted ? 'Muted' : web.searching && state !== 'connecting' ? 'Searching the web…' : STATUS[state];
   return (
     <div
       className="vx-ai-live"
@@ -144,7 +164,7 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
       onKeyDown={(e) => {
         if (e.key === 'Escape') { e.stopPropagation(); void close(); }
         if (e.key === 'Tab') {
-          const f = [...e.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), select')];
+          const f = [...e.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), select, a[href], iframe')];
           const i = f.indexOf(document.activeElement as HTMLElement);
           e.preventDefault();
           f[(i + (e.shiftKey ? -1 : 1) + f.length) % f.length]?.focus();
@@ -183,6 +203,7 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
           {captions.user && <p className="vx-ai-live-you"><span className="sr-only">You: </span>{captions.user}</p>}
           {captions.assistant && <p className="vx-ai-live-ai"><span className="sr-only">VinaX AI: </span>{captions.assistant}</p>}
         </div>
+        {web.sources && <div className="vx-ai-live-sources"><SourcesRow sources={web.sources} /></div>}
       </div>
       <div className="vx-ai-live-controls">
         {!ended && (
@@ -190,11 +211,26 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
             {muted ? <MicOffIcon className="w-6 h-6" /> : <MicIcon className="w-6 h-6" />}
           </button>
         )}
+        {!ended && searchAllowed && (
+          <button
+            type="button"
+            className={`vx-ai-live-btn${search ? ' is-on' : ''}`}
+            onClick={toggleSearch}
+            disabled={state === 'connecting'}
+            aria-pressed={search}
+            aria-label="Web search"
+            title={search ? 'Web search is on' : 'Web search is off'}
+          >
+            <GlobeSmallIcon className="w-6 h-6" />
+          </button>
+        )}
         <button ref={endButton} type="button" className="vx-ai-live-btn is-end" onClick={() => void close()} disabled={saving}>
           {saving ? 'Saving…' : ended ? 'Close' : 'End'}
         </button>
       </div>
-      <p className="vx-ai-live-foot">Your voice is sent to Google Gemini to answer. What you both say is saved in this chat.</p>
+      <p className="vx-ai-live-foot">
+        Your voice is sent to Google Gemini to answer{search ? ', and it may search the web with Google for what you ask' : ''}. What you both say is saved in this chat.
+      </p>
     </div>
   );
 }

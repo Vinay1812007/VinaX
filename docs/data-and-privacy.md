@@ -99,7 +99,7 @@ VinaX AI ([ai.md](ai.md)), the chat at `/vinaxai`, is the one place AI is used, 
 - Voice is used only when the listener presses a voice button:
   - **Dictation** sends the recorded clip from the Worker to Groq (Whisper), or to Google (Gemini) when Groq cannot take it, and returns the text to the composer. Neither the clip nor the text is stored until the listener sends the message.
   - **Read aloud** sends the reply's words to Groq (Orpheus) or Google (Gemini) and plays the audio. Nothing is stored.
-  - **Live voice** streams the microphone from the device straight to Google (Gemini Live), with a one-use token the Worker makes. The key stays in the Worker. What both sides say is saved in the chat as ordinary messages when Live voice closes. The audio itself is not stored.
+  - **Live voice** streams the microphone from the device straight to Google (Gemini Live), with a one-use token the Worker makes. The key stays in the Worker. What both sides say is saved in the chat as ordinary messages when Live voice closes, with the links a reply searched. The audio itself is not stored. With "Search the web in Live voice" on (Settings → Voice, or the globe button in Live voice; offered only when the owner's search switch is on), Google's Live model may turn what the listener says into Google searches to answer; that happens inside Google's session, and the Worker never sees the searches. When the listener switches search during a session, the page reconnects and sends the Worker the latest turns of the call (at most 4,000 characters) to put in the new session's instructions; they are not stored or logged.
   - Music pauses while the mic is open.
 - The page keeps nothing about the chat on the device.
 

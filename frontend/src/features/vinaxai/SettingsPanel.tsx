@@ -8,7 +8,7 @@
  *                    reply style (sent with each message, never stored)
  *   Chat    the model new messages use, Extended thinking, Web search
  *   Voice   the microphone (with a test meter), the Read aloud voice, the
- *           Live voice and the Live model
+ *           Live voice, the Live model and web search in Live voice
  *   Chats   export every chat; a link to the rest of VinaX's settings
  *
  * The app's own Settings page stays for everything that is not VinaX AI.
@@ -214,6 +214,22 @@ export function SettingsPanel({ models, groups, voice, search, section, onClose 
                     {liveModels.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                   </select>
                 </Field>
+              )}
+              {voice.live && voice.liveSearch && (
+                <button
+                  type="button"
+                  role="switch"
+                  id="vx-ai-set-livesearch"
+                  aria-checked={prefs.liveSearch}
+                  className="vx-ai-setting-switch"
+                  onClick={() => prefs.set({ liveSearch: !prefs.liveSearch })}
+                >
+                  <span className="vx-ai-menu-text">
+                    <span>Search the web in Live voice</span>
+                    <span className="vx-ai-opt-sub">Looks up news and current facts while you talk</span>
+                  </span>
+                  <span className={`vx-ai-switch${prefs.liveSearch ? ' is-on' : ''}`} aria-hidden />
+                </button>
               )}
             </section>
           )}

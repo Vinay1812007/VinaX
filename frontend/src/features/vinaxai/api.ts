@@ -110,10 +110,12 @@ export interface LiveTokenReply {
   url: string;
   setup: Record<string, unknown> & { model: string };
   model: { id: string; name: string };
+  /** The setup carries the web search tool. */
+  search?: boolean;
   expiresAt: string;
 }
 
-export const liveToken = (opts: { thinking: boolean; skip: string[]; voice?: string; model?: string }): Promise<LiveTokenReply> =>
+export const liveToken = (opts: { thinking: boolean; skip: string[]; voice?: string; model?: string; search?: boolean; recap?: Array<{ role: 'user' | 'assistant'; text: string }> }): Promise<LiveTokenReply> =>
   call('/live-token', { method: 'POST', body: JSON.stringify({ ...opts, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, locale: navigator.language }) });
 
 export const saveLiveTranscript = (body: { conversationId: string | null; parentMessageId?: string; model: string; turns: Array<{ role: 'user' | 'assistant'; text: string }> }): Promise<{ conversationId: string; messageIds: string[] }> =>

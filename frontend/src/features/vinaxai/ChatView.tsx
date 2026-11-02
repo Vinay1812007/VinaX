@@ -494,7 +494,7 @@ export function ChatView(): ReactNode {
       )}
       {liveOpen && (
         <Suspense fallback={<div className="vx-ai-live" role="status" aria-label="Opening Live voice" />}>
-          <LiveView conversationId={conversationId} parentMessageId={leafId} thinking={prefs.extendedThinking} voice={prefs.liveVoice} model={prefs.liveModel} micId={prefs.micId} onClose={closeLive} />
+          <LiveView conversationId={conversationId} parentMessageId={leafId} thinking={prefs.extendedThinking} voice={prefs.liveVoice} model={prefs.liveModel} micId={prefs.micId} searchAllowed={!!voice?.liveSearch} search={!!voice?.liveSearch && prefs.liveSearch} onClose={closeLive} />
         </Suspense>
       )}
     </div>

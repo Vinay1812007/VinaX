@@ -6,14 +6,16 @@
  *   { conversationId: uuid | null,        // null = a new chat
  *     parentMessageId?: uuid,              // default: after the chat's active leaf
  *     model: "<live model id>",
- *     turns: [{ role: "user" | "assistant", text }] }   // in order, at most 200
+ *     turns: [{ role: "user" | "assistant", text,
+ *               sources?: [{ url, title }] }] }   // in order, at most 200; sources: what a reply searched
  *
  *   → 200 { conversationId, messageIds: [...] }  (the last one is the new active leaf)
  *   → 400 bad_request · 401 signed_out · 404 not_found · 409 conversation_full · 413 too_large
  *   → 429 rate_limited · 503 ai_disabled | unavailable
  *
- * Consecutive turns by the same speaker are joined. Nothing is generated
- * here, and the text is not logged.
+ * Consecutive turns by the same speaker are joined. A reply's web sources
+ * (http(s) links only, at most 10) are saved like a typed reply's. Nothing
+ * is generated here, and the text is not logged.
  */
 import { bearer, readSession } from '../../_lib/googleAuth';
 import { CORS, json } from '../../_lib/authShared';
@@ -24,27 +26,62 @@ import { aiOpenFor, aiSettings } from '../../_lib/ai/config';
 import { fallbackTitle, latestLeaf } from '../../_lib/ai/history';
 import { createConversation, getConversation, isUuid, listMessages, MAX_MESSAGES, updateConversation } from '../../_lib/ai/store';
 import { ALL_LIVE_MODELS, LIVE_ID_PREFIX } from '../../_lib/ai/voice';
-import type { AiEnv } from '../../_lib/ai/types';
+import type { AiEnv, Source } from '../../_lib/ai/types';
 
 export const MAX_TURNS = 200;
 export const MAX_TURN_CHARS = 8_000;
+export const MAX_TURN_SOURCES = 10;
+
+type CleanTurn = { role: 'user' | 'assistant'; text: string; sources?: Source[] };
+
+const hostOf = (url: string): string => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+};
+
+/** A reply's sources: http(s) links with a short title, no repeats, numbered from 1. */
+export function cleanSources(raw: unknown, into: Source[] = []): Source[] {
+  const out = [...into];
+  if (!Array.isArray(raw)) return out;
+  for (const r of raw.slice(0, 50)) {
+    if (out.length >= MAX_TURN_SOURCES) break;
+    const url = typeof (r as { url?: unknown })?.url === 'string' ? ((r as { url: string }).url).trim() : '';
+    if (!/^https?:\/\/[^\s]+$/i.test(url) || url.length > 2_000 || out.some((s) => s.url === url)) continue;
+    const t = (r as { title?: unknown }).title;
+    const title = typeof t === 'string' ? t.replace(/\s+/g, ' ').trim().slice(0, 200) : '';
+    // Search grounding links redirect; their title is the site's name.
+    const site = title.replace(/^www\./, '') || hostOf(url);
+    out.push({ n: out.length + 1, url, title: title || site || 'Source', site: site || 'source' });
+  }
+  return out;
+}
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: { ...CORS, 'access-control-allow-methods': 'POST, OPTIONS' } });
 
 /** Clean turns: known roles, trimmed text, same-speaker runs joined. */
-export function cleanTurns(raw: unknown): Array<{ role: 'user' | 'assistant'; text: string }> | null {
+export function cleanTurns(raw: unknown): CleanTurn[] | null {
   if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_TURNS) return null;
-  const out: Array<{ role: 'user' | 'assistant'; text: string }> = [];
+  const out: CleanTurn[] = [];
   for (const t of raw) {
     const role = (t as { role?: unknown })?.role;
     const text = (t as { text?: unknown })?.text;
     if ((role !== 'user' && role !== 'assistant') || typeof text !== 'string') return null;
     const clean = text.replace(/\s+/g, ' ').trim().slice(0, MAX_TURN_CHARS);
     if (!clean) continue;
+    const found = role === 'assistant' ? (t as { sources?: unknown }).sources : undefined;
     const last = out[out.length - 1];
-    if (last && last.role === role) last.text = `${last.text} ${clean}`.slice(0, MAX_TURN_CHARS);
-    else out.push({ role, text: clean });
+    if (last && last.role === role) {
+      last.text = `${last.text} ${clean}`.slice(0, MAX_TURN_CHARS);
+      if (found !== undefined) last.sources = cleanSources(found, last.sources);
+    } else {
+      out.push({ role, text: clean });
+      if (found !== undefined) out[out.length - 1].sources = cleanSources(found);
+    }
   }
+  for (const t of out) if (t.sources && !t.sources.length) delete t.sources;
   return out.length ? out : null;
 }
 
@@ -100,6 +137,7 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
     parent_id: null as string | null,
     role: t.role,
     content: [{ type: 'text', text: t.text }],
+    sources: t.sources ? { items: t.sources, via: 'grounding', queries: [] } : null,
     model_id: t.role === 'assistant' ? `${LIVE_ID_PREFIX}${live.id}` : null,
     provider: t.role === 'assistant' ? 'gemini' : null,
     stop_reason: t.role === 'assistant' ? 'end' : null,
