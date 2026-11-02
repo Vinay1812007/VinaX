@@ -68,6 +68,8 @@ export interface ChatRequestBody {
   artifacts?: boolean;
   timezone?: string;
   locale?: string;
+  /** VinaX AI settings → Personalisation; used for this reply only. */
+  personal?: { name?: string; about?: string; instructions?: string; style?: string };
 }
 
 // ---------- voice (phase 6) ----------

@@ -8,7 +8,7 @@ import { create } from 'zustand';
 import { queryClient } from '@/services/queryClient';
 import { AiError, noticeFor, patchConversation, streamChat, type ChatRequestBody } from './api';
 import { chatReducer, initialChat, leafUnder, parentForNext, type ChatAction, type ChatState } from './chatState';
-import { usePrefs } from './prefs';
+import { personalOf, usePrefs } from './prefs';
 import type { FileRef, StreamEvent } from './types';
 
 interface Store extends ChatState {
@@ -50,12 +50,13 @@ function enqueue(ev: StreamEvent): void {
 /** Which model answers: the composer's choice, or an explicit one (Retry with…). */
 export type ModelChoice = { mode: 'auto' } | { mode: 'model'; model: string };
 
-function requestBase(choice?: ModelChoice): Pick<ChatRequestBody, 'mode' | 'model' | 'extendedThinking' | 'webSearch' | 'artifacts' | 'timezone' | 'locale'> {
+function requestBase(choice?: ModelChoice): Pick<ChatRequestBody, 'mode' | 'model' | 'extendedThinking' | 'webSearch' | 'artifacts' | 'timezone' | 'locale' | 'personal'> {
   let timezone = 'UTC';
   try { timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { /* keep UTC */ }
   const prefs = usePrefs.getState();
   const pick: ModelChoice = choice ?? (prefs.model === 'auto' ? { mode: 'auto' } : { mode: 'model', model: prefs.model });
-  return { ...pick, extendedThinking: prefs.extendedThinking, webSearch: prefs.webSearch, artifacts: true, timezone, locale: typeof navigator !== 'undefined' ? navigator.language : 'en' };
+  const personal = personalOf(prefs);
+  return { ...pick, extendedThinking: prefs.extendedThinking, webSearch: prefs.webSearch, artifacts: prefs.artifacts, timezone, locale: typeof navigator !== 'undefined' ? navigator.language : 'en', ...(personal ? { personal } : {}) };
 }
 
 /** `beforeStart`: nothing was saved, so the page puts the text back in the composer. */

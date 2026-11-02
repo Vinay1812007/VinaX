@@ -90,6 +90,7 @@ Signed out, or with the personal engine off, nothing about listening is sent to 
 VinaX AI ([ai.md](ai.md)), the chat at `/vinaxai`, is the one place AI is used, and only when a signed-in listener uses it:
 - What they type goes from the Worker to one of the AI providers to generate the reply. The privacy page names them.
 - The chat never sees the listening history or anything outside the conversation.
+- Settings → Personalisation (what to call them, what to know about them, how to reply, a reply style) is kept on the device (`vinax.vxai.prefs.v1`) and sent with each message, so the answering provider sees it with the conversation. The Worker uses it for that reply only: it is not stored with the chat and not logged.
 - When a reply searches the web, the search words (the latest message, with links cut to their site names) go either to Google, through Gemini's Search grounding, or to the search provider (Tavily or Serper). A search's results are cached at the edge for up to an hour, keyed by a hash of the query.
 - Conversations are stored with the account (`ai_conversations`, `ai_messages`; [database.md](database.md)), so they follow it to every device.
 - A deleted chat is hidden at once and removed within a day. Deleting the account removes every chat.

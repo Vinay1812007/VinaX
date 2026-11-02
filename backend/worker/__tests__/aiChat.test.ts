@@ -140,6 +140,20 @@ describe('a new conversation', () => {
     expect(sent!.messages[0].content).toContain('(Asia/Kolkata)');
     expect(sent!.messages.at(-1)).toEqual({ role: 'user', content: 'Tell me about raga Yaman' });
   });
+
+  it('adds the listener’s preferences from VinaX AI settings to the system prompt, and saves none of them', async () => {
+    let sent: { messages: Array<{ role: string; content: string }> } | null = null;
+    const fake = seed({}, (url, init) => { sent = JSON.parse(String(init?.body)); return groqOk(url, init); });
+    await readEvents(await post({ ...ask('Tell me about raga Yaman'), personal: { name: 'Ash', about: 'I play the sitar.', instructions: 'Keep it short.', style: 'learning' } }));
+    await settle();
+    const system = sent!.messages[0].content;
+    expect(system).toContain("The user's name is Ash.");
+    expect(system).toContain('<user_preferences>');
+    expect(system).toContain('I play the sitar.');
+    expect(system).toMatch(/Reply style the user picked — Learning/);
+    expect(JSON.stringify(fake.rows('ai_conversations'))).not.toContain('sitar');
+    expect(JSON.stringify(fake.rows('ai_messages'))).not.toContain('sitar');
+  });
 });
 
 describe('an existing conversation', () => {

@@ -17,7 +17,7 @@ export interface ModelFlags {
   /** Native web-search grounding that is free on the current tier (phase 3 turns it on). */
   grounding: boolean;
   reasoning: boolean;
-  /** Capable enough to follow the artifacts contract (phase 5). */
+  /** May follow the artifacts contract: on by default; false for a specialist that cannot (prompt.ts `artifactsOffered` also needs room). */
   artifacts: boolean;
   /** Accepts a system role; false means the system text is put in front of the first user turn. */
   systemRole: boolean;

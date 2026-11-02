@@ -367,8 +367,10 @@
   color: rgb(var(--ink-100));
   font-size: 0.875rem;
 }
-.vx-ai-notice span { flex: 1; }
-.vx-ai-notice button { width: 32px; height: 32px; border-radius: var(--vx-radius-control); font-size: 1.1rem; color: rgb(var(--ink-300)); }
+/* The message takes the room; the action buttons keep their own size and wrap under it on a narrow screen. */
+.vx-ai-notice { flex-wrap: wrap; }
+.vx-ai-notice > span:first-child { flex: 1 1 220px; min-width: 0; }
+.vx-ai-notice > button { flex: none; width: 32px; height: 32px; border-radius: var(--vx-radius-control); font-size: 1.1rem; color: rgb(var(--ink-300)); }
 
 .vx-ai-jump {
   position: absolute;
@@ -513,13 +515,16 @@
 .vx-ai-chip.is-danger { background: var(--vx-danger); color: #1a0508; border-color: transparent; }
 
 /* ------------------------------------------------- composer additions */
-.vx-ai-composer-tools { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* The tools shrink (their labels end in "…") before they can run under the model menu. */
+.vx-ai-composer-tools { display: flex; align-items: center; gap: 6px; flex: 1 1 0; min-width: 0; }
+.vx-ai-composer-tools > * { flex-shrink: 0; }
+.vx-ai-composer-tools > .vx-ai-pill { flex-shrink: 1; }
 .vx-ai-composer-tools .vx-ai-icon-btn { width: 34px; height: 34px; }
 .vx-ai-plus { position: relative; }
 .vx-ai-plus-menu { bottom: calc(100% + 6px); left: 0; min-width: 280px; }
-.vx-ai-pill { font-size: 0.75rem; padding: 3px 8px; border-radius: 999px; background: rgb(var(--ember-500) / 0.14); color: rgb(var(--ember-300)); white-space: nowrap; }
+.vx-ai-pill { font-size: 0.75rem; padding: 3px 8px; border-radius: 999px; background: rgb(var(--ember-500) / 0.14); color: rgb(var(--ember-300)); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .vx-ai-composer-row .vx-ai-send { margin-left: 6px; }
-.vx-ai-picker { position: relative; margin-left: auto; }
+.vx-ai-picker { position: relative; margin-left: auto; flex: none; }
 .vx-ai-picker-btn {
   display: inline-flex; align-items: center; gap: 4px; min-height: 34px; padding: 0 10px;
   border-radius: var(--vx-radius-control); font-size: 0.8125rem; color: rgb(var(--ink-300)); max-width: 180px;
@@ -537,6 +542,12 @@
 .vx-ai-picker-search::placeholder { color: rgb(var(--ink-400)); }
 .vx-ai-picker-search:focus { outline: none; border-bottom-color: rgb(var(--ember-400)); }
 .vx-ai-picker-empty { margin: 10px; font-size: 0.8125rem; color: rgb(var(--ink-400)); }
+@media (max-width: 640px) {
+  /* On a phone the menu opens from the message box's right edge, the full width it can have, never off-screen. */
+  .vx-ai-composer { position: relative; }
+  .vx-ai-picker { position: static; }
+  .vx-ai-picker-list { right: 0; left: auto; width: min(380px, 100%); }
+}
 @media (max-width: 480px) {
   .vx-ai-picker-list { max-height: min(70vh, 520px); }
 }
@@ -630,7 +641,8 @@
 .vx-ai-file-x:hover { background: rgb(var(--ink-700)); color: rgb(var(--ink-100)); }
 .vx-ai-file-thumb { display: block; width: 120px; height: 120px; border-radius: var(--vx-radius-card); overflow: hidden; border: 1px solid var(--glass-border); background: rgb(var(--ink-800)); }
 .vx-ai-file-thumb img { width: 100%; height: 100%; object-fit: cover; }
-.vx-ai-notice-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.vx-ai-notice-actions { display: flex; flex: none; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.vx-ai-notice-actions .vx-ai-chip { white-space: nowrap; }
 .vx-ai.is-dragging .vx-ai-composer { border-color: rgb(var(--ember-500)); box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.35); }
 
 /* ------------------------------------------------------------- artifacts */
@@ -665,6 +677,16 @@
 .vx-ai-runner-frame { flex: 1; width: 100%; border: 0; background: #fff; }
 .vx-ai-runner-missing { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 24px; text-align: center; color: rgb(var(--ink-300)); }
 .vx-ai-runner-missing p { margin: 0; }
+/* A live preview inside a reply: the card above opens the full panel. */
+.vx-ai-artifact-slot { margin: 4px 0 12px; }
+.vx-ai-artifact-slot .vx-ai-artifact-card { margin-bottom: 8px; }
+.vx-ai-inline-preview {
+  display: flex; height: 380px; max-width: 720px; overflow: hidden;
+  border-radius: var(--vx-radius-card); border: 1px solid var(--glass-border); background: rgb(var(--ink-850));
+}
+.vx-ai-inline-preview[data-kind='mermaid'], .vx-ai-inline-preview[data-kind='svg'] { height: 320px; }
+.vx-ai-inline-preview .vx-ai-runner { min-height: 0; }
+@media (max-width: 480px) { .vx-ai-inline-preview { height: 300px; } }
 .vx-ai-runner-error { margin: 0; padding: 8px 14px; font-size: 0.8125rem; background: rgb(var(--ink-850)); color: var(--vx-danger); border-top: 1px solid var(--glass-border); }
 
 /* ------------------------------------------------------- voice (phase 6) */
@@ -691,13 +713,13 @@
 /* VinaX AI settings: a sheet from the right (full screen on a phone). */
 .vx-ai-settings-scrim { place-items: stretch end; padding: 0; }
 .vx-ai-settings {
-  width: min(420px, 100vw); height: 100%; display: flex; flex-direction: column;
+  width: min(420px, 100vw); height: 100%; max-height: 100vh; max-height: 100dvh; display: flex; flex-direction: column;
   background: rgb(var(--ink-850)); border-left: 1px solid var(--glass-border); box-shadow: var(--vx-shadow-overlay);
   padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
 }
 .vx-ai-settings-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 12px 8px 20px; border-bottom: 1px solid var(--glass-border); }
 .vx-ai-settings-head h2 { margin: 0; font-size: 1.1rem; font-family: var(--vx-font-display); }
-.vx-ai-settings-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 8px 20px 24px; }
+.vx-ai-settings-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px 20px 24px; }
 .vx-ai-settings-body section { padding: 14px 0 6px; border-bottom: 1px solid var(--glass-border); }
 .vx-ai-settings-body section:last-child { border-bottom: 0; }
 .vx-ai-settings-body h3 { margin: 0 0 12px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: rgb(var(--ink-400)); }
@@ -722,6 +744,18 @@
   border: 1px solid var(--glass-border); background: rgb(var(--ink-800)); color: rgb(var(--ink-100)); font: inherit;
 }
 .vx-ai-field small { color: rgb(var(--ink-400)); font-size: 0.75rem; }
+.vx-ai-field input, .vx-ai-field textarea {
+  width: 100%; min-height: 40px; padding: 8px 10px; border-radius: var(--vx-radius-control);
+  border: 1px solid var(--glass-border); background: rgb(var(--ink-800)); color: rgb(var(--ink-100));
+  font: inherit; font-size: 1rem; /* 16px: no zoom on focus in iOS Safari */
+}
+.vx-ai-field textarea { resize: vertical; line-height: 1.4; }
+.vx-ai-field input::placeholder, .vx-ai-field textarea::placeholder { color: rgb(var(--ink-400)); }
+.vx-ai-field input:focus-visible, .vx-ai-field textarea:focus-visible, .vx-ai-field select:focus-visible { outline: 2px solid rgb(var(--ember-400)); outline-offset: 1px; }
+.vx-ai-setting-switch:disabled { opacity: 0.5; cursor: default; }
+.vx-ai-settings-nav { display: flex; flex: none; gap: 6px; overflow-x: auto; padding: 8px 20px; border-bottom: 1px solid var(--glass-border); scrollbar-width: none; }
+.vx-ai-settings-nav::-webkit-scrollbar { display: none; }
+.vx-ai-settings-nav .vx-ai-chip { flex: none; white-space: nowrap; }
 
 /* Live voice: full screen over the chat. */
 .vx-ai-live {
