@@ -16,6 +16,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.8.1': {
+    title: 'Make songs with the VinaX AI key',
+    changes: [
+      { type: 'improved', text: 'Song generation now runs on VinaX AI’s own music model, so there is nothing extra to set up before it can be switched on.' },
+      { type: 'improved', text: 'Songs of one to three minutes are made in full, with a 30-second version when a full song can’t be made.' },
+      { type: 'improved', text: 'The progress bar now moves steadily while your song is being made.' },
+    ],
+  },
   '1.8.0': {
     title: 'Generate a new song like the one you love',
     changes: [
