@@ -16,6 +16,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.8.4': {
+    title: 'Web search in Live voice',
+    changes: [
+      { type: 'new', text: 'Live voice can now search the web while you talk: ask about news, tour dates or charts, and VinaX AI says it\'s checking, answers out loud and tells you which site it used.' },
+      { type: 'improved', text: 'The sites it used appear under the captions and stay with the reply in your chat.' },
+      { type: 'improved', text: 'Turn it on or off with the globe button in Live voice, or with Settings → Search the web in Live voice.' },
+    ],
+  },
   '1.8.3': {
     title: 'VinaX AI settings, Claude-style replies and live previews',
     changes: [
