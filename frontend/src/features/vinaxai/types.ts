@@ -23,6 +23,8 @@ export interface ModelsResponse {
   models: PickerModel[];
   /** Voice features that have a provider key, and the voices to offer (phase 6). */
   voice?: VoiceInfo;
+  /** The owner's file limits (counts, MB and pages). */
+  limits?: Partial<Record<'imagesPerMessage' | 'filesPerMessage' | 'filesPerChat' | 'pdfMB' | 'pdfPages' | 'textMB', number>>;
 }
 
 export interface VoiceInfo {

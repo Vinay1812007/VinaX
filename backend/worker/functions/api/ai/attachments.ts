@@ -21,7 +21,7 @@ import { readCapped } from '../../_lib/body';
 import { rateLimitAsync } from '../../_lib/ratelimit';
 import { db, dbConfigured, q } from '../../_lib/db';
 import { aiOpenFor, aiSettings } from '../../_lib/ai/config';
-import { cleanName, kindOf, maxBytes, MAX_EXTRACTED_CHARS, MAX_FILES_PER_CONVERSATION, sniff, type AttachmentKind } from '../../_lib/ai/attachments';
+import { cleanName, kindOf, maxBytesFor, MAX_EXTRACTED_CHARS, sniff, type AttachmentKind } from '../../_lib/ai/attachments';
 import { storagePut, storageRemove } from '../../_lib/ai/storage';
 import { getConversation, isUuid } from '../../_lib/ai/store';
 import type { AiEnv } from '../../_lib/ai/types';
@@ -72,7 +72,9 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
   const sub = await readSession(env, bearer(request));
   if (!sub) return json({ error: 'signed_out' }, 401);
   if (!dbConfigured(env)) return json({ error: 'unavailable' }, 503);
-  if (!aiOpenFor(await aiSettings(env), sub)) return json({ error: 'ai_disabled' }, 503);
+  const settings = await aiSettings(env);
+  if (!aiOpenFor(settings, sub)) return json({ error: 'ai_disabled' }, 503);
+  const { limits } = settings;
 
   const url = new URL(request.url);
   const name = cleanName(url.searchParams.get('name'));
@@ -83,7 +85,8 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
   if (!kind) return json({ error: 'unsupported_type' }, 415);
   const length = Number(request.headers.get('content-length'));
   if (!Number.isFinite(length) || length <= 0) return json({ error: 'length_required' }, 411);
-  if (length > maxBytes(kind)) return json({ error: 'too_large' }, 413);
+  const cap = maxBytesFor(kind, limits);
+  if (length > cap) return json({ error: 'too_large' }, 413);
   if (!request.body) return json({ error: 'bad_request' }, 400);
 
   if (convParam) {
@@ -91,7 +94,7 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
     if (!c.ok) return json({ error: 'unavailable' }, 503);
     if (!c.value) return json({ error: 'not_found' }, 404);
     const have = await db.count(env, 'ai_attachments', q().eq('conversation_id', convParam));
-    if (have.ok && have.value >= MAX_FILES_PER_CONVERSATION) return json({ error: 'too_many_files' }, 409);
+    if (have.ok && have.value >= limits.filesPerChat) return json({ error: 'too_many_files' }, 409);
   }
 
   const id = crypto.randomUUID();
@@ -99,7 +102,7 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
   let extracted: string | null = null;
   let stored: boolean;
   if (kind === 'text') {
-    const bytes = await readCapped(request.body, maxBytes(kind));
+    const bytes = await readCapped(request.body, cap);
     if (!bytes) return json({ error: 'too_large' }, 413);
     if (!sniff(kind, mime, bytes)) return json({ error: 'unsupported_type' }, 415);
     extracted = new TextDecoder('utf-8').decode(bytes).slice(0, MAX_EXTRACTED_CHARS);

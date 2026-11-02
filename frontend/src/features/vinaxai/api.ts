@@ -7,6 +7,7 @@ import { currentAccount } from '@/services/auth/google';
 import { isNativePlatform } from '@/services/native';
 import { SseParser } from './sse';
 import type { ConversationSummary, ModelsResponse, ServerConversation, ServerMessage, SharedChat, ShareSummary, StreamEvent } from './types';
+import { setFileLimits } from './files';
 
 const ORIGIN = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
 export const AI_BASE = `${ORIGIN}/api/ai`;
@@ -32,7 +33,11 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
-export const getModels = (): Promise<ModelsResponse> => call<ModelsResponse>('/models');
+/** Also applies the owner's file limits it carries (files.ts imports this module too; the call happens later, so the cycle is safe). */
+export const getModels = (): Promise<ModelsResponse> => call<ModelsResponse>('/models').then((r) => {
+  setFileLimits(r.limits);
+  return r;
+});
 export const getConversation = (id: string): Promise<{ conversation: ServerConversation; messages: ServerMessage[] }> =>
   call(`/conversations/${encodeURIComponent(id)}`);
 

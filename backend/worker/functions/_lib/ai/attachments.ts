@@ -43,6 +43,9 @@ export function kindOf(mime: string, name: string): AttachmentKind | null {
 }
 
 export const maxBytes = (kind: AttachmentKind): number => (kind === 'image' ? MAX_IMAGE_BYTES : kind === 'pdf' ? MAX_PDF_BYTES : MAX_TEXT_BYTES);
+/** The size cap under the owner's limits (images are shrunk on the device, so theirs stays fixed). */
+export const maxBytesFor = (kind: AttachmentKind, limits: { pdfMB: number; textMB: number }): number =>
+  kind === 'image' ? MAX_IMAGE_BYTES : kind === 'pdf' ? limits.pdfMB * 1024 * 1024 : limits.textMB * 1024 * 1024;
 
 /** Does the file start the way its type says? Text must not be binary. */
 export function sniff(kind: AttachmentKind, mime: string, head: Uint8Array): boolean {

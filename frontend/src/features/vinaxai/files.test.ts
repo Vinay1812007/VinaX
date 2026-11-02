@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { fitWithin, kindOf, refuse, uploadError } from './files';
+import { DEFAULT_FILE_LIMITS, fileLimits, fitWithin, kindOf, refuse, setFileLimits, uploadError } from './files';
 import { usePendingFiles } from './usePendingFiles';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); setFileLimits(null); });
 
 const f = (name: string, type: string, size = 10) => ({ name, type, size });
 const none = { images: 0, files: 0, inConversation: 0 };
@@ -19,12 +19,13 @@ describe('which files', () => {
     expect(kindOf(f('a.svg', 'image/svg+xml'))).toBeNull();
     expect(kindOf(f('a.zip', 'application/zip'))).toBeNull();
   });
-  it('the limits: 5 images and 10 files a message, 20 a chat, PDFs 20 MB, text 1 MB', () => {
-    expect(refuse(f('a.png', 'image/png'), { ...none, images: 5, files: 5 })).toMatch(/5 images/);
-    expect(refuse(f('a.txt', 'text/plain'), { ...none, files: 10 })).toMatch(/10 files/);
-    expect(refuse(f('a.txt', 'text/plain'), { ...none, inConversation: 20 })).toMatch(/20 files/);
-    expect(refuse(f('a.pdf', 'application/pdf', 21 * 1024 * 1024), none)).toMatch(/20 MB/);
-    expect(refuse(f('a.md', 'text/markdown', 2 * 1024 * 1024), none)).toMatch(/1 MB/);
+  it('the default limits: 10 images and 20 files a message, 50 a chat, PDFs 30 MB, text 2 MB', () => {
+    expect(refuse(f('a.png', 'image/png'), { ...none, images: 10, files: 10 })).toMatch(/10 images/);
+    expect(refuse(f('a.txt', 'text/plain'), { ...none, files: 20 })).toMatch(/20 files/);
+    expect(refuse(f('a.txt', 'text/plain'), { ...none, inConversation: 50 })).toMatch(/50 files/);
+    expect(refuse(f('a.pdf', 'application/pdf', 31 * 1024 * 1024), none)).toMatch(/30 MB/);
+    expect(refuse(f('a.pdf', 'application/pdf', 29 * 1024 * 1024), none)).toBeNull();
+    expect(refuse(f('a.md', 'text/markdown', 3 * 1024 * 1024), none)).toMatch(/2 MB/);
     expect(refuse(f('a.exe', 'application/x-msdownload'), none)).toMatch(/can’t be added/);
     expect(refuse(f('a.png', 'image/png', 8 * 1024 * 1024), none)).toBeNull(); // shrunk before upload
   });
@@ -33,8 +34,16 @@ describe('which files', () => {
     expect(fitWithin(1000, 3136)).toEqual({ width: 500, height: 1568 });
     expect(fitWithin(800, 600)).toEqual({ width: 800, height: 600 });
   });
+  it('the owner’s limits from the models route replace the defaults; odd values keep them', () => {
+    setFileLimits({ filesPerChat: 5, pdfMB: 10, textMB: 'x', pdfPages: -1 });
+    expect(fileLimits()).toEqual({ ...DEFAULT_FILE_LIMITS, filesPerChat: 5, pdfMB: 10 });
+    expect(refuse(f('a.txt', 'text/plain'), { ...none, inConversation: 5 })).toMatch(/5 files/);
+    expect(refuse(f('a.pdf', 'application/pdf', 11 * 1024 * 1024), none)).toMatch(/10 MB/);
+    setFileLimits(undefined);
+    expect(fileLimits()).toEqual(DEFAULT_FILE_LIMITS);
+  });
   it('upload failures in words', () => {
-    expect(uploadError('too_many_pages', 'big.pdf')).toBe('big.pdf has more than 100 pages.');
+    expect(uploadError('too_many_pages', 'big.pdf')).toBe('big.pdf has more than 500 pages.');
     expect(uploadError('unsupported_type', 'x.png')).toBe('x.png isn’t a file VinaX AI can read.');
   });
 });

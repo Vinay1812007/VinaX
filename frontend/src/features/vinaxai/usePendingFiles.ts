@@ -5,7 +5,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AiError } from './api';
-import { kindOf, MAX_PDF_PAGES, refuse, removeUpload, sendPdfText, shrinkImage, uploadBlob, uploadError, type FileKind } from './files';
+import { fileLimits, kindOf, refuse, removeUpload, sendPdfText, shrinkImage, uploadBlob, uploadError, type FileKind } from './files';
 import type { FileRef } from './types';
 
 export interface PendingFile {
@@ -39,7 +39,7 @@ export function usePendingFiles(conversationId: string | null, inConversation: n
       } else if (kind === 'pdf') {
         const { readPdf } = await import('./pdf');
         const read = await readPdf(file).catch(() => null);
-        if (read && read.pages > MAX_PDF_PAGES) throw new AiError(413, 'too_many_pages');
+        if (read && read.pages > fileLimits().pdfPages) throw new AiError(413, 'too_many_pages');
         const up = await uploadBlob(file, file.name, 'application/pdf', conversationId);
         if (read) await sendPdfText(up.id, read.text, read.pages).catch(() => undefined);
         ref = { ...up, ...(read ? { pages: read.pages } : {}) };

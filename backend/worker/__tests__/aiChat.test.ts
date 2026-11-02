@@ -141,6 +141,22 @@ describe('a new conversation', () => {
     expect(sent!.messages.at(-1)).toEqual({ role: 'user', content: 'Tell me about raga Yaman' });
   });
 
+  it('adds the owner’s instructions from the vinax-ai setting to the system prompt', async () => {
+    let sent: { messages: Array<{ role: string; content: string }> } | null = null;
+    seed({}, (url, init) => { sent = JSON.parse(String(init?.body)); return groqOk(url, init); }, { enabled: true, instructions: 'Suggest a VinaX playlist when music comes up.' });
+    await readEvents(await post(ask('Tell me about raga Yaman')));
+    await settle();
+    expect(sent!.messages[0].content).toContain('<owner_instructions>\nSuggest a VinaX playlist when music comes up.\n</owner_instructions>');
+  });
+
+  it('keeps to the owner’s files-per-message limit', async () => {
+    seed({}, groqOk, { enabled: true, limits: { filesPerMessage: 1 } });
+    const two = [{ type: 'attachment', id: '11111111-1111-4111-8111-111111111111' }, { type: 'attachment', id: '22222222-2222-4222-8222-222222222222' }, { type: 'text', text: 'hi' }];
+    const res = await post({ ...ask('hi'), content: two });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'bad_attachment' });
+  });
+
   it('adds the listener’s preferences from VinaX AI settings to the system prompt, and saves none of them', async () => {
     let sent: { messages: Array<{ role: string; content: string }> } | null = null;
     const fake = seed({}, (url, init) => { sent = JSON.parse(String(init?.body)); return groqOk(url, init); });

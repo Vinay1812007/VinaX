@@ -16,7 +16,8 @@ import { CORS, json } from '../../../_lib/authShared';
 import { readJsonCapped } from '../../../_lib/body';
 import { rateLimitAsync } from '../../../_lib/ratelimit';
 import { db, dbConfigured, q } from '../../../_lib/db';
-import { ATT_COLS, MAX_EXTRACTED_CHARS, MAX_PDF_PAGES, type AttachmentRow } from '../../../_lib/ai/attachments';
+import { ATT_COLS, MAX_EXTRACTED_CHARS, type AttachmentRow } from '../../../_lib/ai/attachments';
+import { aiSettings } from '../../../_lib/ai/config';
 import { storageGet, storageRemove } from '../../../_lib/ai/storage';
 import { isUuid } from '../../../_lib/ai/store';
 import type { AiEnv } from '../../../_lib/ai/types';
@@ -67,7 +68,7 @@ export const onRequestPatch = async (ctx: Ctx): Promise<Response> => {
   if (!read.ok) return json({ error: read.reason === 'too_large' ? 'too_large' : 'bad_request' }, read.reason === 'too_large' ? 413 : 400);
   const pages = Number(read.value?.pages);
   if (!Number.isInteger(pages) || pages < 1) return json({ error: 'bad_request' }, 400);
-  if (pages > MAX_PDF_PAGES) return json({ error: 'too_many_pages' }, 413);
+  if (pages > (await aiSettings(ctx.env)).limits.pdfPages) return json({ error: 'too_many_pages' }, 413);
   const text = typeof read.value?.text === 'string' ? read.value.text.slice(0, MAX_EXTRACTED_CHARS) : '';
   const r = await db.update(ctx.env, 'ai_attachments', q().eq('id', o.row.id).eq('account_id', o.sub), { extracted_text: text || null, pages });
   return r.ok ? json({ ok: true }) : json({ error: 'unavailable' }, 503);

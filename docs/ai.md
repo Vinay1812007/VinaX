@@ -258,11 +258,11 @@ Every query is filtered by the session's account. Someone else's conversation, a
 
 | Kind | Types | Limit |
 | --- | --- | --- |
-| Image | png, jpg, webp, gif (first frame) | 5 per message. Shrunk on the device to 1568 px on the long edge and sent as WebP (JPEG where the browser cannot make WebP); the server takes at most 5 MB |
-| PDF | pdf | 20 MB and 100 pages |
-| Text | text, markdown, csv, json and common source code | 1 MB |
+| Image | png, jpg, webp, gif (first frame) | 10 per message (owner: `imagesPerMessage`). Shrunk on the device to 1568 px on the long edge and sent as WebP (JPEG where the browser cannot make WebP); the server takes at most 5 MB |
+| PDF | pdf | 30 MB and 500 pages (owner: `pdfMB` up to 50, `pdfPages` up to 1,000; the Storage bucket takes at most 50 MB) |
+| Text | text, markdown, csv, json and common source code | 2 MB (owner: `textMB` up to 5) |
 
-At most 10 files go in a message and 20 in a chat. The page checks these limits, and the server checks them again.
+At most 20 files go in a message and 50 in a chat (owner: `filesPerMessage`, `filesPerChat`). The page checks these limits with the numbers `GET /api/ai/models` returns as `limits` (`setFileLimits` in `files.ts`; the defaults until it answers), and the server checks them again.
 
 **Upload.**
 - Each file is uploaded as soon as it is added, so Send only names it. Removing a chip deletes the upload.
@@ -276,7 +276,7 @@ At most 10 files go in a message and 20 in a chat. The page checks these limits,
 - **Images:** a vision model gets image parts (base64), from the last three questions only; older images become "[image: name]". A model that cannot see gets "[image: name (this model cannot see images)]".
   - If you picked a model that cannot see, the composer says so before sending, offering a vision model or Auto. The server refuses such a message with `400 model_cannot_see_images`.
 - **PDFs:**
-  - Gemini reads the file itself through the **Files API**. The Worker streams the PDF from Storage to Google instead of base64-encoding up to 20 MB, which its CPU budget cannot afford. The file's address is saved on the attachment, and the PDF is uploaded again an hour before Google's 48 hours run out.
+  - Gemini reads the file itself through the **Files API**. The Worker streams the PDF from Storage to Google instead of base64-encoding up to 50 MB, which its CPU budget cannot afford. The file's address is saved on the attachment, and the PDF is uploaded again an hour before Google's 48 hours run out.
   - Every other model gets the device-read text as a `<document name="…">` block, or a note that its text could not be read.
 - **Text files:** `<document>` blocks. Document text is material, and `</document>` inside it is defused.
 - **Auto:** images send the message to the vision ladder, and a PDF to the long ladder.
@@ -442,13 +442,28 @@ Schema version 4 adds `ai_conversations`, `ai_messages` (a tree through `parent_
 The `vinax-ai` setting, edited in the console under **Publish → App → VinaX AI**. The page has a form: on or off, testers, web search, and each model's switch and picker order. Its JSON editor writes the same value:
 
 ```json
-{ "enabled": false, "testers": ["<account id>"], "search": true, "models": { "groq:openai/gpt-oss-20b": { "enabled": false }, "gemini:gemini-3.6-flash": { "order": 0 } } }
+{ "enabled": false, "testers": ["<account id>"], "search": true, "models": { "groq:openai/gpt-oss-20b": { "enabled": false }, "gemini:gemini-3.6-flash": { "order": 0 } },
+  "instructions": "Suggest a VinaX playlist when music comes up.", "limits": { "filesPerChat": 50, "pdfPages": 500, "searchesPerDay": null } }
 ```
 
 - `enabled` is the kill switch. A missing key, or anything but `true`, means off: `/api/ai/chat` answers `503 ai_disabled` and the page says "VinaX AI is taking a break."
 - `testers` are account ids (Google subject ids, the `accounts.id` column; the console's listener profile carries it as `account=` in its address). Testers may use VinaX AI while it is off. At most 50.
 - `models` switches a model off everywhere (picker and ladders) or reorders it inside its picker group: a lower `order` comes first; no `order` keeps the registry's place. The form keeps entries for ids the registry no longer has.
 - `search: false` switches web search off for everyone; the + menu then hides it.
+The console's form for `instructions` and `limits` arrives with the console rebuild; until then they are set in the stored `vinax-ai` value.
+- `instructions` (at most 4,000 characters) are the owner's instructions for every model. The Worker adds them to every reply's system prompt right after VinaX AI's own prompt, inside `<owner_instructions>`, marked as the owner's and as never overriding the rules about what VinaX AI won't help with (`ownerBlock` in `prompt.ts`). Control characters are removed.
+- `limits` are the owner's numbers, each clamped to its range, a missing or bad value meaning the default (`LIMIT_RANGES` in `config.ts`):
+
+| Key | Range | Default | What it limits |
+| --- | --- | --- | --- |
+| `messagesPerMinute` | 1–30 | 20 | Chat messages per network address a minute, with a burst of twice that. Each account also has a fixed 30 a minute (`RATE_LIMIT_30`), so higher would do nothing |
+| `imagesPerMessage` | 1–20 | 10 | Images in one message |
+| `filesPerMessage` | 1–20 | 20 | Files in one message |
+| `filesPerChat` | 1–100 | 50 | Files in one chat |
+| `pdfMB` | 1–50 | 30 | A PDF's size |
+| `pdfPages` | 1–1,000 | 500 | A PDF's pages |
+| `textMB` | 1–5 | 2 | A text or code file's size |
+| `searchesPerDay` | 0–2,000, or none | none | Search API searches a day; none means `SEARCH_DAILY_LIMIT` (else 100), 0 switches the search API off. Free grounding keeps its own 450 a day |
 
 The setting is memoised for a minute per isolate.
 

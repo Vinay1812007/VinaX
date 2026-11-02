@@ -51,11 +51,11 @@ Add files from **+** → **Add photos and files**, by pasting, or by dropping th
 
 | Kind | Up to |
 |---|---|
-| Photos (PNG, JPEG, WebP, GIF) | 5 MB each, 5 per message. Large photos are shrunk on your device before they are sent |
-| PDFs | 20 MB and 100 pages each |
-| Text, Markdown, CSV, JSON and code files | 1 MB each |
+| Photos (PNG, JPEG, WebP, GIF) | 10 per message. Large photos are shrunk on your device before they are sent |
+| PDFs | 30 MB and 500 pages each |
+| Text, Markdown, CSV, JSON and code files | 2 MB each |
 
-A message can carry 10 files, and a chat 20. If the model you picked cannot see images, a note offers one that can, or Auto, before you send.
+A message can carry 20 files, and a chat 50. These are the usual limits; VinaX's owner can change them, and VinaX AI tells you the current one if you go over. If the model you picked cannot see images, a note offers one that can, or Auto, before you send.
 
 ## Make it yours
 

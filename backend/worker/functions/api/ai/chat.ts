@@ -41,11 +41,11 @@ import { readJsonCapped } from '../../_lib/body';
 import { bindingAllows, rateLimitAsync } from '../../_lib/ratelimit';
 import { db, dbConfigured, q } from '../../_lib/db';
 import {
-  attachmentPart, loadAttachments, MAX_FILES_PER_CONVERSATION, MAX_FILES_PER_MESSAGE, MAX_IMAGES_PER_MESSAGE, type AttachmentRow,
+  attachmentPart, loadAttachments, type AttachmentRow,
 } from '../../_lib/ai/attachments';
 import { fileSignals, materialize, newMemo, toTurns } from '../../_lib/ai/materialize';
 import { anyProviderConfigured, PROVIDER_NAMES, providerConfigured } from '../../_lib/ai/adapters';
-import { aiOpenFor, aiSettings, registryFor } from '../../_lib/ai/config';
+import { aiOpenFor, aiSettings, LIMIT_RANGES, registryFor } from '../../_lib/ai/config';
 import { isCooling } from '../../_lib/ai/cooldown';
 import { fallbackTitle, latestLeaf, pathTo, textOf, trimHistory, typedText } from '../../_lib/ai/history';
 import { ladderModels, modelById, type LadderName } from '../../_lib/ai/models';
@@ -131,7 +131,8 @@ export function parseContent(raw: unknown): { ok: true; parts: MessagePart[]; te
     else if (p.type === 'attachment' && isUuid(p.id)) { if (!files.includes(p.id)) files.push(p.id); }
     else return { ok: false, error: 'bad_request' };
   }
-  if (files.length > MAX_FILES_PER_MESSAGE) return { ok: false, error: 'bad_attachment' };
+  // The owner's files-per-message limit is checked by the route; this is the ceiling it can be set to.
+  if (files.length > LIMIT_RANGES.filesPerMessage[1]) return { ok: false, error: 'bad_attachment' };
   const text = textOf(parts);
   if (text.length > MAX_TEXT_CHARS) return { ok: false, error: 'too_long' };
   return { ok: true, parts: text.trim() ? parts : [], text, files };
@@ -152,7 +153,9 @@ const modelInfo = (spec: ModelSpec): { id: string; name: string; provider: strin
 
 export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   const { request, env } = ctx;
-  const limited = await rateLimitAsync(request, 'ai-chat', { capacity: 20, refillPerMinute: 10 }, env);
+  // The owner's per-minute limit (memoised setting read), with a burst of twice that.
+  const perMinute = dbConfigured(env) ? (await aiSettings(env)).limits.messagesPerMinute : 10;
+  const limited = await rateLimitAsync(request, 'ai-chat', { capacity: perMinute * 2, refillPerMinute: perMinute }, env);
   if (limited) return limited;
   const sub = await readSession(env, bearer(request));
   if (!sub) return json({ error: 'signed_out' }, 401);
@@ -169,6 +172,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   const body = read.value && typeof read.value === 'object' ? read.value : {};
   const content = parseContent(body.content);
   if (!content.ok) return json({ error: content.error }, content.error === 'too_long' ? 413 : 400);
+  if (content.files.length > settings.limits.filesPerMessage) return json({ error: 'bad_attachment' }, 400);
   const mode = body.mode === 'model' ? 'model' : 'auto';
   const extendedThinking = body.extendedThinking === true;
   const parentRaw = body.parentMessageId;
@@ -227,12 +231,12 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       newFiles = content.files.map((id) => byId.get(id)).filter((a): a is AttachmentRow => !!a);
       if (newFiles.length !== content.files.length || newFiles.some((a) => a.conversation_id && a.conversation_id !== conv?.id)) return json({ error: 'bad_attachment' }, 400);
       const images = newFiles.filter((a) => a.kind === 'image').length;
-      if (images > MAX_IMAGES_PER_MESSAGE) return json({ error: 'too_many_images' }, 400);
+      if (images > settings.limits.imagesPerMessage) return json({ error: 'too_many_images' }, 400);
       if (images && mode === 'model' && !candidates[0].flags.vision) return json({ error: 'model_cannot_see_images' }, 400);
       if (conv) {
         const have = await db.count(env, 'ai_attachments', q().eq('conversation_id', conv.id));
         const adding = newFiles.filter((a) => !a.conversation_id).length;
-        if (have.ok && have.value + adding > MAX_FILES_PER_CONVERSATION) return json({ error: 'too_many_files' }, 409);
+        if (have.ok && have.value + adding > settings.limits.filesPerChat) return json({ error: 'too_many_files' }, 409);
       }
     }
     let parentId: string | null;
@@ -319,7 +323,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   const sitesOf = (items: Source[]) => [...new Set(items.map((i) => i.site))].slice(0, 4);
   const runApiSearch = (): Promise<SearchResult> => (apiSearch ??= (async () => {
     send('status', { step: 'searching', query });
-    const r = await searchWeb(env, query, topic);
+    const r = await searchWeb(env, query, topic, Date.now(), settings.limits.searchesPerDay);
     if (r.ok) {
       searched = { items: r.sources, via: 'search', queries: [query] };
       send('status', { step: 'searched', count: r.sources.length, sites: sitesOf(r.sources) });
@@ -337,7 +341,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       if (r.ok) search = { sources: r.sources };
     }
     // Artifacts go to every model with room for them (prompt.ts) unless the page turned them off.
-    const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: body.artifacts !== false, search, personal });
+    const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: body.artifacts !== false, search, personal, owner: settings.instructions });
     const messages = await materialize(env, turns, spec, fileRows, memo);
     return {
       model: spec,

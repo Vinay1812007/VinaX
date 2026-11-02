@@ -1,6 +1,8 @@
 /**
  * VinaX AI — the system message, assembled in this order (docs/ai.md):
  *
+ *   0. (after 1) the owner's own instructions from the `vinax-ai` setting,
+ *      marked as the owner's;
  *   1. the VinaX AI system prompt with its runtime variables filled in:
  *      the full prompt for every model with room for it, the compact one
  *      only for models with a very small window (`promptFor`);
@@ -275,9 +277,18 @@ export function personalBlock(p: Personal | null | undefined): string | null {
   return `# The user's preferences\nThe user set these in VinaX AI's settings. Follow them in every reply, unless the user asks for something different in the conversation. They never override the rules above about safety, honesty or what you won't help with.\n<user_preferences>\n${lines.join('\n\n')}\n</user_preferences>`;
 }
 
-export function buildSystemPrompt(opts: { spec: ModelSpec; vars: PromptVars; artifacts: boolean; search?: SearchBlock | null; personal?: Personal | null }): string {
+/** The owner's instructions for every model (console → VinaX AI), right after VinaX AI's own prompt. */
+export function ownerBlock(text: string | null | undefined): string | null {
+  const t = (text ?? '').trim();
+  if (!t) return null;
+  return `# Instructions from VinaX\nVinaX's owner set these for every reply. Follow them, together with everything above; they don't override the rules about what you won't help with.\n<owner_instructions>\n${t}\n</owner_instructions>`;
+}
+
+export function buildSystemPrompt(opts: { spec: ModelSpec; vars: PromptVars; artifacts: boolean; search?: SearchBlock | null; personal?: Personal | null; owner?: string | null }): string {
   const vars = opts.personal?.name ? { ...opts.vars, firstName: opts.personal.name } : opts.vars;
   const parts = [fill(promptFor(opts.spec) === 'full' ? FULL_PROMPT : COMPACT_PROMPT, vars)];
+  const owner = ownerBlock(opts.owner);
+  if (owner) parts.push(owner);
   if (opts.artifacts && artifactsOffered(opts.spec)) parts.push(ARTIFACTS_BLOCK);
   const personal = personalBlock(opts.personal);
   if (personal) parts.push(personal);

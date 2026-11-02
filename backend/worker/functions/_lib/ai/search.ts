@@ -111,9 +111,11 @@ export function toSources(raw: Array<{ url?: unknown; title?: unknown; snippet?:
 
 type Provider = 'tavily' | 'serper';
 export const providerOf = (env: AiEnv): Provider => (String(env.SEARCH_API_PROVIDER ?? '').trim().toLowerCase() === 'serper' ? 'serper' : 'tavily');
-export const searchConfigured = (env: AiEnv): boolean => typeof env.SEARCH_API_KEY === 'string' && env.SEARCH_API_KEY.trim().length > 0 && dailyLimit(env) > 0;
+/** `ownerCap`: the owner's searches-per-day limit (the `vinax-ai` setting); null = the Worker variable. */
+export const searchConfigured = (env: AiEnv, ownerCap: number | null = null): boolean => typeof env.SEARCH_API_KEY === 'string' && env.SEARCH_API_KEY.trim().length > 0 && dailyLimit(env, ownerCap) > 0;
 
-export function dailyLimit(env: AiEnv): number {
+export function dailyLimit(env: AiEnv, ownerCap: number | null = null): number {
+  if (ownerCap != null) return ownerCap;
   const raw = String(env.SEARCH_DAILY_LIMIT ?? '').trim();
   if (!raw) return DEFAULT_DAILY_LIMIT;
   const n = Number(raw);
@@ -177,8 +179,8 @@ export type SearchResult =
   | { ok: false; reason: 'not_configured' | 'resting' | 'daily_limit' | 'failed' | 'empty' };
 
 /** Run the search API once (cache first, then the daily cap, then the provider). Never throws. */
-export async function searchWeb(env: AiEnv, query: string, topic: Topic, now = Date.now()): Promise<SearchResult> {
-  if (!searchConfigured(env) || !query) return { ok: false, reason: 'not_configured' };
+export async function searchWeb(env: AiEnv, query: string, topic: Topic, now = Date.now(), ownerCap: number | null = null): Promise<SearchResult> {
+  if (!searchConfigured(env, ownerCap) || !query) return { ok: false, reason: 'not_configured' };
   const provider = providerOf(env);
   if ((resting.get(provider) ?? 0) > now) return { ok: false, reason: 'resting' };
   const cache = edgeCache();
@@ -190,7 +192,7 @@ export async function searchWeb(env: AiEnv, query: string, topic: Topic, now = D
       if (Array.isArray(sources) && sources.length) return { ok: true, sources, cached: true, provider };
     }
   } catch { /* a cache miss */ }
-  if (!(await takeDaily(env, 'search', dailyLimit(env)))) return { ok: false, reason: 'daily_limit' };
+  if (!(await takeDaily(env, 'search', dailyLimit(env, ownerCap)))) return { ok: false, reason: 'daily_limit' };
   let out: Awaited<ReturnType<typeof callProvider>>;
   try {
     out = await callProvider(env, provider, query, topic);
