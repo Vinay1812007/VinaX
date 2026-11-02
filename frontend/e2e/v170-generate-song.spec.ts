@@ -6,8 +6,8 @@ import { latestNotesFingerprint } from '../src/constants/changelog';
  * 1.4 — "Generate a song like this", from the built bundle with the Worker's
  * generation routes mocked: Now Playing offers it while a song plays, shows
  * progress while the job runs, and the finished song plays labelled "AI
- * generated". What the page sends is the playing song's feel only. Without a
- * generator the action is not there at all.
+ * generated". What the page sends is the playing song's feel only. When song
+ * making is unavailable the action is not there at all.
  */
 interface Song {
   kind: 'song'; id: string; title: string; subtitle: string; artists: { id: string; name: string }[];
@@ -81,7 +81,7 @@ test('Generate a song like this: progress, then a new song labelled "AI generate
   await expect(page.locator('.vx-np-ai-badge')).toHaveText('AI generated');
 });
 
-test('without a generator, Now Playing does not offer it', async ({ page, baseURL }) => {
+test('when song making is unavailable, Now Playing does not offer it', async ({ page, baseURL }) => {
   await seed(page, baseURL!, { available: false });
   await page.goto('/now-playing');
   await expect(page.locator('.vx-np-title')).toContainText('Source Song Title');
