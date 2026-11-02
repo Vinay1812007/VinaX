@@ -102,16 +102,6 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
     const have = await db.count(env, 'ai_attachments', q().eq('conversation_id', convParam));
     if (have.ok && have.value >= limits.filesPerChat) return json({ error: 'too_many_files' }, 409);
   }
-  let projectChars = 0;
-  if (projectParam) {
-    const p = await getProject(env, sub, projectParam);
-    if (!p.ok) return json({ error: 'unavailable' }, 503);
-    if (!p.value) return json({ error: 'not_found' }, 404);
-    const used = await knowledgeUsage(env, sub, projectParam);
-    if (!used.ok) return json({ error: 'unavailable' }, 503);
-    if (used.value.files >= MAX_PROJECT_FILES) return json({ error: 'too_many_files' }, 409);
-    projectChars = used.value.chars;
-  }
 
   const id = crypto.randomUUID();
   const path = projectParam ? `${sub}/project-${projectParam}/${id}` : `${sub}/${convParam ?? 'new'}/${id}`;

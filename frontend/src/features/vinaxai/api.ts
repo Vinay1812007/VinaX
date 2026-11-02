@@ -6,7 +6,7 @@
 import { currentAccount } from '@/services/auth/google';
 import { isNativePlatform } from '@/services/native';
 import { SseParser } from './sse';
-import type { ConversationSummary, GalleryArtifact, GalleryItem, MemoryItem, MemoryPrefs, MemoryState, ModelsResponse, Project, ProjectDetail, ServerConversation, ServerMessage, SharedChat, ShareSummary, StreamEvent } from './types';
+import type { ConversationSummary, ModelsResponse, ServerConversation, ServerMessage, SharedChat, ShareSummary, StreamEvent } from './types';
 import { setFileLimits } from './files';
 
 const ORIGIN = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
