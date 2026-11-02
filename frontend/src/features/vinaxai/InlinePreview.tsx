@@ -9,7 +9,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { RunnerFrame } from './RunnerFrame';
 import type { Artifact } from './artifacts';
 
-export function InlinePreview({ artifact }: { artifact: Artifact }): ReactNode {
+export function InlinePreview({ artifact, onFix }: { artifact: Artifact; onFix?(error: string): void }): ReactNode {
   const box = useRef<HTMLDivElement>(null);
   const [near, setNear] = useState(false);
   useEffect(() => {
@@ -23,7 +23,7 @@ export function InlinePreview({ artifact }: { artifact: Artifact }): ReactNode {
   return (
     <div ref={box} className="vx-ai-inline-preview" data-kind={artifact.type}>
       {/* Its own frame name: the panel's frame is "Preview: <title>". */}
-      {near && <RunnerFrame kind={artifact.type} content={artifact.content} title={`${artifact.title || 'Artifact'} (in the reply)`} />}
+      {near && <RunnerFrame kind={artifact.type} content={artifact.content} title={`${artifact.title || 'Artifact'} (in the reply)`} onFix={onFix} />}
     </div>
   );
 }

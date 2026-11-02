@@ -29,9 +29,11 @@ interface Props {
   versions: Array<{ messageId: string; artifact: Artifact }>;
   live: boolean;
   sheet: boolean;
+  /** A failed preview offers "Fix it" (the chat only; never on a shared page). */
+  onFix?(artifact: Artifact, error: string): void;
 }
 
-export function ArtifactPanel({ versions, live, sheet }: Props): ReactNode {
+export function ArtifactPanel({ versions, live, sheet, onFix }: Props): ReactNode {
   const { open, tab, width, setTab, setVersion, setWidth, close } = usePanel();
   useDismissOnBack(sheet && !!open, close);
   const root = useRef<HTMLElement>(null);
@@ -120,7 +122,7 @@ export function ArtifactPanel({ versions, live, sheet }: Props): ReactNode {
         <div className="vx-ai-artifact-body" role={previewable ? 'tabpanel' : undefined}>
           {showing === 'preview'
             ? runsInSandbox(a.type)
-              ? <RunnerFrame kind={a.type} content={a.content} title={a.title} />
+              ? <RunnerFrame kind={a.type} content={a.content} title={a.title} onFix={onFix && !live ? (error) => onFix(a, error) : undefined} />
               : <div className="vx-ai-artifact-doc"><Markdown text={a.content} /></div>
             : <CodeBlock code={a.content} lang={codeLanguage(a)} />}
         </div>

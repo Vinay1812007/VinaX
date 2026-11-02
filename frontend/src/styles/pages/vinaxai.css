@@ -687,6 +687,16 @@
 .vx-ai-inline-preview[data-kind='mermaid'], .vx-ai-inline-preview[data-kind='svg'] { height: 320px; }
 .vx-ai-inline-preview .vx-ai-runner { min-height: 0; }
 @media (max-width: 480px) { .vx-ai-inline-preview { height: 300px; } }
+/* A failed preview: the frame stays loaded (for the next version) but out of sight; the bar says what went wrong. */
+.vx-ai-runner.has-error .vx-ai-runner-frame { display: none; }
+.vx-ai-inline-preview:has(.vx-ai-runner.has-error) { height: auto; }
+.vx-ai-runner.has-error .vx-ai-runner-error { border-top: 0; }
+.vx-ai-runner-error-row { display: flex; align-items: center; gap: 10px; }
+.vx-ai-runner-error-row p { margin: 0; flex: 1; min-width: 0; }
+.vx-ai-runner-error-row .vx-ai-chip { flex: none; }
+.vx-ai-runner-error details { margin-top: 6px; color: rgb(var(--ink-300)); }
+.vx-ai-runner-error summary { cursor: pointer; }
+.vx-ai-runner-error pre { margin: 6px 0 0; max-height: 120px; overflow: auto; white-space: pre-wrap; font-size: 0.75rem; }
 .vx-ai-runner-error { margin: 0; padding: 8px 14px; font-size: 0.8125rem; background: rgb(var(--ink-850)); color: var(--vx-danger); border-top: 1px solid var(--glass-border); }
 
 /* ------------------------------------------------------- voice (phase 6) */

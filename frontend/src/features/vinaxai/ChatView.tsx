@@ -30,7 +30,7 @@ import { PendingChips } from './FileChips';
 import type { FileRef } from './types';
 import { ArtifactPanel } from './ArtifactPanel';
 import { usePanel } from './artifactStore';
-import { artifactsOf, collectVersions, hasPreview } from './artifacts';
+import { artifactsOf, collectVersions, hasPreview, type Artifact } from './artifacts';
 import { ArrowDownIcon, MenuIcon, NewChatIcon, SettingsIcon, ShareIcon, SidebarIcon, SparkIcon } from './icons';
 import { useVoiceDictation } from './useVoiceDictation';
 import { dismissReadNotice, stopReading, useReadAloud } from './readAloud';
@@ -218,6 +218,13 @@ export function ChatView(): ReactNode {
       tray.restore(files);
     }
   };
+  // "Fix it" on a failed preview: ask for a corrected artifact, with the error the preview gave.
+  const fixArtifact = (a: Artifact, error: string) => {
+    if (useChatStore.getState().streaming) return;
+    stick.current = true;
+    const what = a.type === 'mermaid' ? 'diagram' : a.type === 'svg' ? 'picture' : a.type === 'react' ? 'component' : 'page';
+    void sendMessage(`The ${what} "${a.title || 'artifact'}" didn't work. The preview said:\n\n${error.slice(0, 600)}\n\nPlease fix it and send the complete corrected artifact.`);
+  };
   const edit = (parentId: string | null, files?: FileRef[]) => (text: string) => {
     stick.current = true;
     void sendMessage(text, { parentId, files });
@@ -402,6 +409,7 @@ export function ChatView(): ReactNode {
                     models={pickerModels}
                     versionOf={versionOf}
                     onOpenArtifact={openArtifact}
+                    onFixArtifact={conversationId && !streaming ? fixArtifact : undefined}
                     onRetry={m.parentId && conversationId ? (choice) => void retryReply(m.parentId!, choice) : undefined}
                     onContinue={conversationId && !m.local ? () => void continueReply(m.id) : undefined}
                     canReadAloud={!!voice?.readAloud}
@@ -489,7 +497,7 @@ export function ChatView(): ReactNode {
         <div className={`vx-ai-main${empty ? ' is-empty' : ''}`}>{body}</div>
       </div>
       {panel.open && (
-        <ArtifactPanel versions={versions.get(panel.open.id) ?? []} live={streaming} sheet={!wide} />
+        <ArtifactPanel versions={versions.get(panel.open.id) ?? []} live={streaming} sheet={!wide} onFix={conversationId ? fixArtifact : undefined} />
       )}
       <div className="sr-only" aria-live="polite">{announce}</div>
       {settings && (

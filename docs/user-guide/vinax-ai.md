@@ -65,7 +65,7 @@ The gear at the top of VinaX AI opens its settings.
 
 ## Code, pages, charts and diagrams
 
-When VinaX AI writes something substantial, such as a web page, a small app, a chart, a diagram, a picture, a document or a file of code, it appears as a card in the reply and opens in a panel beside the chat. On a phone the panel is full screen. When a picture explains something better than words, such as numbers to compare or steps in a process, VinaX AI draws a chart or diagram by itself. Pages, charts and diagrams also show as a live preview under the card, right in the reply.
+When VinaX AI writes something substantial, such as a web page, a small app, a chart, a diagram, a picture, a document or a file of code, it appears as a card in the reply and opens in a panel beside the chat. On a phone the panel is full screen. When a picture explains something better than words, such as numbers to compare or steps in a process, VinaX AI draws a chart or diagram by itself. Pages, charts and diagrams also show as a live preview under the card, right in the reply. If one can't be drawn, the preview says so and offers **Fix it**, which asks VinaX AI for a corrected version.
 
 - **Preview** shows web pages, small apps, pictures and diagrams working. They run in a separate, locked-down space, so nothing in them can reach your account or the app.
 - **Code** shows the source.
