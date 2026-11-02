@@ -3,7 +3,7 @@
  *
  *   GET    /api/ai/conversations/<id> → 200 { conversation, messages: [...] }  the whole tree
  *   PATCH  /api/ai/conversations/<id> { title?, starred?, activeLeafId? } → 200 { conversation }
- *   DELETE /api/ai/conversations/<id> → 200 { ok: true }   hidden now, purged a day later
+ *   DELETE /api/ai/conversations/<id> → 200 { ok: true }   hidden now, purged a day later; its shared link goes now
  *   → 400 bad_request · 401 signed_out · 404 not_found (missing, deleted or someone else's) · 503 unavailable
  */
 import { bearer, readSession } from '../../../_lib/googleAuth';
@@ -18,6 +18,7 @@ import {
 } from '../../../_lib/ai/store';
 import type { AiEnv } from '../../../_lib/ai/types';
 import { liveLabel } from '../../../_lib/ai/voice';
+import { removeSharesOf } from '../../../_lib/ai/shares';
 
 interface Ctx { request: Request; env: AiEnv; params?: { id?: string } }
 
@@ -90,5 +91,8 @@ export const onRequestDelete = async (ctx: Ctx): Promise<Response> => {
   if (o instanceof Response) return o;
   const r = await deleteConversation(ctx.env, o.sub, o.conv.id);
   if (!r.ok) return json({ error: 'unavailable' }, 503);
+  // Its shared link goes too. Not fatal: a link to a deleted chat already
+  // reads as not found, and the purge's cascade removes the row a day later.
+  await removeSharesOf(ctx.env, o.sub, o.conv.id);
   return json({ ok: true });
 };

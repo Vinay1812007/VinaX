@@ -812,3 +812,51 @@
   .vx-ai-live-orb, .vx-ai-rec-meter i { transition: none; }
   .vx-ai-live-orb { transform: none; }
 }
+
+/* Sharing: the Share chat dialog, the shared links in settings, and the
+   read-only page a link opens (/vinaxai/share/:id). */
+.vx-ai-icon-btn:disabled { opacity: 0.45; }
+.vx-ai-share { width: min(460px, 100%); }
+.vx-ai-share-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -6px -8px 6px 0; }
+.vx-ai-share-head h2 { margin: 0; }
+.vx-ai-share-points { margin: 0 0 18px; padding-left: 1.1em; display: flex; flex-direction: column; gap: 8px; color: rgb(var(--ink-300)); font-size: 0.9375rem; }
+.vx-ai-share-label { display: block; margin-bottom: 6px; font-size: 0.875rem; font-weight: 600; color: rgb(var(--ink-200)); }
+.vx-ai-share-link {
+  display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 10px;
+  border-radius: var(--vx-radius-control); border: 1px solid var(--glass-border); background: rgb(var(--ink-800)); color: rgb(var(--ink-300));
+}
+.vx-ai-share-link input { flex: 1; min-width: 0; background: transparent; border: 0; color: rgb(var(--ink-100)); font: inherit; font-size: 0.875rem; }
+.vx-ai-dialog p.vx-ai-share-note, .vx-ai-share-note { margin: 10px 0 14px; color: rgb(var(--ink-300)); font-size: 0.875rem; }
+.vx-ai-share-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.vx-ai-share-row:last-child { margin-bottom: 0; }
+.vx-ai-share-stop { color: var(--vx-danger); }
+.vx-ai-dialog p.vx-ai-share-error { margin: 12px 0 0; color: var(--vx-danger); font-size: 0.875rem; }
+.vx-ai-chip:disabled { opacity: 0.6; }
+a.vx-ai-chip { text-decoration: none; }
+
+.vx-ai-links { margin-top: 18px; outline: none; }
+.vx-ai-links h4 { margin: 0 0 6px; font-size: 0.875rem; font-weight: 600; color: rgb(var(--ink-200)); }
+.vx-ai-links-list { list-style: none; margin: 0; padding: 0; }
+.vx-ai-links-list li { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 4px 0; border-bottom: 1px solid var(--glass-border); }
+.vx-ai-links-list li:last-child { border-bottom: 0; }
+.vx-ai-links-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.vx-ai-links-title { font-size: 0.875rem; color: rgb(var(--ink-100)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vx-ai-links-title:hover { text-decoration: underline; }
+.vx-ai-links-tools, .vx-ai-links-ask { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; color: rgb(var(--ink-400)); }
+
+.vx-ai-shared .vx-ai-wordmark { color: inherit; text-decoration: none; }
+.vx-ai-shared .vx-ai-header-end .vx-ai-chip { min-height: 34px; }
+.vx-ai-share-intro { padding: 28px 0 0; }
+.vx-ai-share-kicker { margin: 0 0 6px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: rgb(var(--ember-400)); }
+.vx-ai-share-intro h1 { margin: 0 0 6px; font-family: var(--vx-font-display); font-size: clamp(1.4rem, 3vw, 1.9rem); letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.vx-ai-share-intro .vx-ai-opt-sub { font-size: 0.8125rem; }
+.vx-ai-share-end {
+  margin: 8px 0 calc(32px + var(--safe-bottom, 0px)); padding: 18px; border-radius: var(--vx-radius-card);
+  border: 1px solid var(--glass-border); background: rgb(var(--ink-850));
+}
+.vx-ai-share-end p { margin: 0 0 12px; color: rgb(var(--ink-300)); font-size: 0.875rem; }
+.vx-ai-share-report { display: inline-block; margin-top: 4px; font-size: 0.8125rem; color: rgb(var(--ink-400)); text-decoration: underline; }
+.vx-ai-calm h1 { margin: 0; font-family: var(--vx-font-display); font-weight: 700; letter-spacing: -0.03em; color: rgb(var(--ink-100)); font-size: 1.35rem; }
+@media (max-width: 520px) {
+  .vx-ai-shared .vx-ai-title { display: none; }
+}

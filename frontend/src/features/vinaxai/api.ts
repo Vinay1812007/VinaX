@@ -6,7 +6,7 @@
 import { currentAccount } from '@/services/auth/google';
 import { isNativePlatform } from '@/services/native';
 import { SseParser } from './sse';
-import type { ConversationSummary, ModelsResponse, ServerConversation, ServerMessage, StreamEvent } from './types';
+import type { ConversationSummary, ModelsResponse, ServerConversation, ServerMessage, SharedChat, ShareSummary, StreamEvent } from './types';
 
 const ORIGIN = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
 export const AI_BASE = `${ORIGIN}/api/ai`;
@@ -48,6 +48,38 @@ export const patchConversation = (id: string, patch: { title?: string; starred?:
   call(`/conversations/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) });
 
 export const deleteConversation = (id: string): Promise<{ ok: true }> => call(`/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
+// ---------- shared links ----------
+
+export const listShares = (conversationId?: string): Promise<{ items: ShareSummary[] }> =>
+  call(`/shares${conversationId ? `?conversation=${encodeURIComponent(conversationId)}` : ''}`);
+
+/** Make the chat's link, or take its snapshot again (the link stays the same). */
+export const shareConversation = (conversationId: string): Promise<{ share: ShareSummary }> =>
+  call('/shares', { method: 'POST', body: JSON.stringify({ conversationId }) });
+
+export const stopSharing = (id: string): Promise<{ ok: true }> => call(`/shares/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
+/** A shared chat; works signed out. */
+export const getSharedChat = (id: string): Promise<{ share: SharedChat }> => call(`/shares/${encodeURIComponent(id)}`);
+
+/** A new chat of the reader's own, made from the shared one. */
+export const continueSharedChat = (id: string): Promise<{ conversationId: string }> => call(`/shares/${encodeURIComponent(id)}/continue`, { method: 'POST' });
+
+/** The address a shared chat is read at. */
+export const shareUrl = (id: string): string => `${ORIGIN || window.location.origin}/vinaxai/share/${id}`;
+
+/** What a failed share request means for the listener. */
+export function shareNotice(code: string): string {
+  switch (code) {
+    case 'too_large': return 'This chat is too long to share. Start a new chat and share that instead.';
+    case 'empty': return 'There’s nothing in this chat to share yet.';
+    case 'not_found': return 'This chat isn’t available any more.';
+    case 'rate_limited': return 'That’s a lot of changes at once. Wait a minute, then try again.';
+    case 'signed_out': return 'Your sign-in has expired. Sign in again to share.';
+    default: return 'Something went wrong. Try again.';
+  }
+}
 
 /** Every chat as one JSON file (GET /api/ai/export). */
 export async function fetchExport(): Promise<Blob> {

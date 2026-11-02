@@ -31,10 +31,11 @@ import type { FileRef } from './types';
 import { ArtifactPanel } from './ArtifactPanel';
 import { usePanel } from './artifactStore';
 import { artifactsOf, collectVersions, hasPreview } from './artifacts';
-import { ArrowDownIcon, MenuIcon, NewChatIcon, SettingsIcon, SidebarIcon, SparkIcon } from './icons';
+import { ArrowDownIcon, MenuIcon, NewChatIcon, SettingsIcon, ShareIcon, SidebarIcon, SparkIcon } from './icons';
 import { useVoiceDictation } from './useVoiceDictation';
 import { dismissReadNotice, stopReading, useReadAloud } from './readAloud';
 import { SettingsPanel, type SettingsSection } from './SettingsPanel';
+import { ShareDialog } from './ShareDialog';
 
 /** Live voice loads only when someone opens it. */
 const LiveView = lazy(() => import('./live/LiveView'));
@@ -178,6 +179,10 @@ export function ChatView(): ReactNode {
   const readNotice = useReadAloud((s) => s.notice);
   const [liveOpen, setLiveOpen] = useState(false);
   const [settings, setSettings] = useState<SettingsSection | null>(null);
+  const [sharing, setSharing] = useState(false);
+  // Share is offered for a saved chat with messages.
+  const canShare = !!conversationId && thread.some((m) => !m.local);
+  useEffect(() => { setSharing(false); }, [conversationId]);
   useEffect(() => () => stopReading(), []);
   useEffect(() => { stopReading(); }, [conversationId]);
   const openLive = () => {
@@ -466,6 +471,11 @@ export function ChatView(): ReactNode {
           </div>
           <div className="vx-ai-header-end">
             <NowPlayingPill />
+            {canShare && (
+              <button type="button" className="vx-ai-icon-btn" onClick={() => setSharing(true)} disabled={streaming} aria-label="Share chat" title="Share chat" aria-haspopup="dialog">
+                <ShareIcon className="w-5 h-5" />
+              </button>
+            )}
             <button type="button" className="vx-ai-icon-btn" onClick={() => setSettings('general')} aria-label="VinaX AI settings" title="Settings">
               <SettingsIcon className="w-5 h-5" />
             </button>
@@ -492,6 +502,7 @@ export function ChatView(): ReactNode {
           onClose={() => setSettings(null)}
         />
       )}
+      {sharing && conversationId && <ShareDialog conversationId={conversationId} title={title} onClose={() => setSharing(false)} />}
       {liveOpen && (
         <Suspense fallback={<div className="vx-ai-live" role="status" aria-label="Opening Live voice" />}>
           <LiveView conversationId={conversationId} parentMessageId={leafId} thinking={prefs.extendedThinking} voice={prefs.liveVoice} model={prefs.liveModel} micId={prefs.micId} searchAllowed={!!voice?.liveSearch} search={!!voice?.liveSearch && prefs.liveSearch} onClose={closeLive} />

@@ -102,6 +102,16 @@ VinaX AI ([ai.md](ai.md)), the chat at `/vinaxai`, is the one place AI is used, 
   - **Live voice** streams the microphone from the device straight to Google (Gemini Live), with a one-use token the Worker makes. The key stays in the Worker. What both sides say is saved in the chat as ordinary messages when Live voice closes, with the links a reply searched. The audio itself is not stored. With "Search the web in Live voice" on (Settings → Voice, or the globe button in Live voice; offered only when the owner's search switch is on), Google's Live model may turn what the listener says into Google searches to answer; that happens inside Google's session, and the Worker never sees the searches. When the listener switches search during a session, the page reconnects and sends the Worker the latest turns of the call (at most 4,000 characters) to put in the new session's instructions; they are not stored or logged.
   - Music pauses while the mic is open.
 - The page keeps nothing about the chat on the device.
+- **Shared links** exist only when the listener makes one ([Shared chats](#shared-vinax-ai-chats)).
+
+### Shared VinaX AI chats
+
+Share in a chat's header makes a link (`/vinaxai/share/<id>`) that anyone who has it can open, signed in or not. Nothing is shared until the listener presses **Create link**.
+- **What is stored.** A copy of the chat as it is at that moment (`ai_shares`; [database.md](database.md)): the title, and for each turn of the branch on screen its text (artifacts are part of a reply's text), the web sources it cited, and the time. Files the listener added appear by name and type only; their contents and the stored files are never part of it. VinaX AI's reasoning, the model that answered, token counts and the listener's name, email or picture are not stored with it or shown.
+- **Who can see it.** Anyone with the link. The id is 128 random bits, so a link cannot be guessed, and the page and its API answer tell search engines not to index it. The owner's account id is never sent to readers. A reader who is signed in can **Continue this chat**, which copies the shared turns into a new chat of their own; the original is never changed.
+- **How long.** Until the listener stops sharing, deletes the chat, or deletes the account. Messages sent after the link was made are not added; **Update link** replaces the copy with the chat as it is then, under the same link.
+- **How to delete it.** **Stop sharing** in the chat's Share dialog, or in VinaX AI's settings under Your chats → Shared links, deletes the copy at once. Deleting the chat deletes its link at once too, and deleting the account removes every link. A copy a reader's browser already loaded may stay on their screen, and their browser may keep it for up to a minute.
+- Readers can report a shared chat by email from its page.
 
 Settings → Your data → **Export VinaX AI chats** downloads every chat, with all its versions, as one JSON file (`GET /api/ai/export`). The file is separate from the app's backup: the chats already live with the account, so a backup neither carries nor restores them.
 
@@ -147,6 +157,7 @@ Everything the server keeps about listeners is in one database ([database.md](da
 | `listeners` | One row per device that shared usage or claimed a handle: a server-derived device id (never the install id), display name, handle, platform, app version, edge country/region/city, what is playing now, first and last seen | The owner deletes the person from the console |
 | `accounts` | Signed-in listeners: Google id, email, name, picture, the linked device, coarse sign-in facts, times | **Delete account** in the app, or the owner's delete |
 | `account_backups` | The synced copy (the backup-file JSON), its version and size | With the account |
+| `ai_shares` | A shared VinaX AI chat: the account and chat it came from, the title, and a copy of the turns on screen (text, cited sources, file names; no reasoning or file contents) | **Stop sharing**, deleting the chat (at once), or with the account |
 | `personal_taste` | The account's taste model: scores for artists, languages, moods, decades, hours and songs, a summary, the mode, the vector | With the account, or **Erase my taste model** |
 | `personal_events` | The listener's reported events (kind, time, song id, seconds heard, source, local hour and weekday, time zone) | Purged after a year by housekeeping (`personal_purge`), with the account, or on erase |
 | `personal_exposure` | Per account and song: how often shown, queued, played, completed, skipped; liked, disliked; when | With the account, or on erase |
@@ -162,7 +173,7 @@ Everything the server keeps about listeners is in one database ([database.md](da
 | Generated songs (`GENERATED_AUDIO`, or `HANDOFF` under `gen:`) | Each job (the account id that started it, its status, length, mood, language, title) and the finished audio; per day, a count under a hash of the install id and the day, and one under a hash of the account and the day | The job and the audio after 24 hours; the counts after two days |
 | Rate limiting (isolate memory and bindings) | Counters keyed by route and a hash of the network address, hashed with a server-side pepper (`_lib/ratelimit.ts`) | Short-lived counters; the raw address is not part of the key |
 
-Three deletion paths exist. **The listener** erases their taste model from Settings → Region & privacy, which removes every `personal_*` row of theirs, or deletes their account from Settings → Profile, which removes `accounts`, `account_backups` and every `personal_*` row for them. **The owner** deletes a person from the console's Listeners page, which removes their device row, every usage event, room memberships, the account and its backup, and detaches their feedback; the reason is kept in the audit trail. The owner's **Database → Maintenance** tab can also purge usage events older than a chosen number of days for everyone.
+Three deletion paths exist. **The listener** erases their taste model from Settings → Region & privacy, which removes every `personal_*` row of theirs, or deletes their account from Settings → Profile, which removes `accounts`, `account_backups`, their VinaX AI chats and shared links, and every `personal_*` row for them. **The owner** deletes a person from the console's Listeners page, which removes their device row, every usage event, room memberships, the account and its backup, and detaches their feedback; the reason is kept in the audit trail. The owner's **Database → Maintenance** tab can also purge usage events older than a chosen number of days for everyone.
 
 ## The backup file
 

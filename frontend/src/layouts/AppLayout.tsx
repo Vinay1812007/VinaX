@@ -465,7 +465,7 @@ export function AppLayout() {
       }
       canon.href = url;
     }
-    const noindex = /^\/(search|library|favorites|history|queue|now-playing|stats|settings|taste-profile|offline|collection|cache-info|flow)/.test(pathname);
+    const noindex = /^\/(search|library|favorites|history|queue|now-playing|stats|settings|taste-profile|offline|collection|cache-info|flow|vinaxai\/share)/.test(pathname);
     let robots = document.head.querySelector<HTMLMetaElement>('meta[name="robots"]');
     if (!robots) {
       robots = document.createElement('meta');

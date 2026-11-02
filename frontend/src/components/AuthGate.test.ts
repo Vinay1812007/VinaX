@@ -19,6 +19,13 @@ describe('browsableSignedOut', () => {
     }
   });
 
+  it('a shared VinaX AI chat opens signed out; the chat itself does not', () => {
+    expect(browsableSignedOut('/vinaxai/share/AAAAAAAAAAAAAAAAAAAAAA')).toBe(true);
+    expect(browsableSignedOut('/vinaxai/share/')).toBe(false);
+    expect(browsableSignedOut('/vinaxai')).toBe(false);
+    expect(browsableSignedOut('/vinaxai/c/abc')).toBe(false);
+  });
+
   it('the legal and help pages are public on their own list', () => {
     expect(PUBLIC_PATHS.has('/privacy')).toBe(true);
     expect(browsableSignedOut('/privacy')).toBe(false);

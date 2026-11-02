@@ -110,6 +110,8 @@ const RadioPage = lazy(() => import('@/pages/RadioPage'));
 const FlowPage = lazy(() => import('@/pages/FlowPage'));
 // VinaX AI — the chat assistant (src/features/vinaxai, docs/ai.md).
 const VinaXAIPage = lazy(() => import('@/pages/VinaXAIPage'));
+// A shared VinaX AI chat: read-only, opens signed out.
+const VinaXAISharePage = lazy(() => import('@/pages/VinaXAISharePage'));
 
 export const router = createBrowserRouter([
   // The old spelling of the chat address. Case-sensitive on purpose: the
@@ -138,6 +140,7 @@ export const router = createBrowserRouter([
       { path: 'ai-playlist', element: <Navigate to="/" replace /> },
       { path: 'vinaxai', caseSensitive: true, element: <VinaXAIPage /> },
       { path: 'vinaxai/c/:id', caseSensitive: true, element: <VinaXAIPage /> },
+      { path: 'vinaxai/share/:shareId', caseSensitive: true, element: <VinaXAISharePage /> },
       { path: 'weekly', element: <WeeklyMixPage /> },
       { path: 'mixes', element: <MixesPage /> },
       { path: 'search', element: <SearchPage /> },

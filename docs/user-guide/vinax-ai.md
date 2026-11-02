@@ -81,7 +81,7 @@ Voice controls appear when the service has voice switched on.
 - **Read aloud**: tap the speaker under a reply. Code, links and source numbers are skipped, and anything in the side panel is named rather than read. Tap it again to stop.
 - **Live voice**: with nothing typed in the message box, tap the sound-wave button where Send usually is. A full-screen view opens and you can simply talk, with captions of what each of you says. Talking over VinaX AI stops it so you can carry on. The microphone button mutes you, and **End** (or `Esc`) closes it. What you both said is saved into the chat as ordinary messages. A Live voice session lasts about ten minutes; start another to keep talking.
 - **Web search in Live voice**: when web search is available, Live voice can look things up as you talk (news, tour dates, charts, anything current). It says it's checking, answers out loud and tells you which site it used; the sites appear under the captions and are saved with the reply. The globe button in Live voice turns it on or off (Live voice reconnects for a moment and carries on where you were), and **Settings** → **Search the web in Live voice** sets it for next time.
-- **Settings** (the gear at the top, **Settings** in the sidebar, or **+** → **Settings**) has VinaX AI's own settings: the model, Extended thinking, web search, your **microphone** (with **Test microphone**, which shows a level bar and says whether it hears you), the voice that reads replies, the Live voice (it also reads long replies), the Live voice model, **Search the web in Live voice**, and **Export all chats**. They are kept on this device.
+- **Settings** (the gear at the top, **Settings** in the sidebar, or **+** → **Settings**) has VinaX AI's own settings: the theme, Personalisation, artifacts and live previews, the model, Extended thinking, web search, your **microphone** (with **Test microphone**, which shows a level bar and says whether it hears you), the voice that reads replies, the Live voice (it also reads long replies), the Live voice model, **Search the web in Live voice**, **Export all chats** and your **Shared links**. They are kept on this device, apart from the theme (VinaX's own) and the shared links, which live with your account.
 
 Your music pauses while the microphone is open and plays on quietly while a reply is read, then comes back as it was. The first time, your browser or phone asks to use the microphone. In the Android app it is the same question voice search asks.
 
@@ -93,6 +93,16 @@ Your music pauses while the microphone is open and plays on quietly while a repl
 - Chats are kept with your Google account, so they follow you to every device you sign in on. Each chat has its own address you can bookmark; only you can open it.
 - **Settings** → **Your data** → **Export VinaX AI chats** downloads every chat, with all its versions, as one file.
 - Deleting your account deletes every chat and file with it.
+
+## Share a chat
+
+- Open a chat and press **Share** (the arrow at the top, next to the gear), then **Create link**. Anyone you give the link to can read the chat, even without a VinaX account.
+- The link shows the chat as it is when you make it: your messages and VinaX AI's replies, with any code, pages or diagrams. Files you added show by name only, never their contents. VinaX AI's reasoning and your name aren't shown.
+- Messages you send afterwards aren't added. To show them, open **Share** again and press **Update link**; the link stays the same.
+- **Copy link** puts it on your clipboard; **Share…** (on phones) opens your device's share sheet.
+- **Stop sharing** deletes the copy and the link stops working. Deleting the chat or your account does the same.
+- **Settings** → **Your chats** → **Shared links** lists every chat you've shared, with **Copy** and **Stop sharing** for each.
+- Someone signed in who opens your link can press **Continue this chat** to carry on in a new chat of their own. Your chat isn't changed.
 
 ## When something goes wrong
 

@@ -48,8 +48,9 @@ const LIVE_PUBLIC_PATHS = new Set(['/help', '/download']);
 
 /** 13.9 — pages a visitor may browse signed out; playing and saving ask them to sign in. */
 const BROWSE_PATHS = new Set(['/explore', '/discover', '/charts', '/top-songs', '/trending', '/most-searched', '/search', '/languages', '/moods', '/movies', '/regions', '/videos', '/podcasts']);
-// 15.0 — shared playlist pages (/p/<id>) and profiles (/u/<handle>) open from a link signed out.
-const BROWSE_PREFIXES = ['/search/', '/song/', '/album/', '/artist/', '/playlist/', '/video/', '/lyrics/', '/browse/', '/podcast/', '/p/', '/u/'];
+// 15.0 — shared playlist pages (/p/<id>) and profiles (/u/<handle>) open from a link signed out;
+// so do shared VinaX AI chats (/vinaxai/share/<id>).
+const BROWSE_PREFIXES = ['/search/', '/song/', '/album/', '/artist/', '/playlist/', '/video/', '/lyrics/', '/browse/', '/podcast/', '/p/', '/u/', '/vinaxai/share/'];
 const HUB_PATHS = new Set(HUB_LANGUAGES.flatMap((l) => [`/${l}-songs`, ...MOOD_HUBS.map((m) => `/${l}-${m.slug}-songs`)]));
 
 /** True for a path a signed-out visitor may open in the live app. */
