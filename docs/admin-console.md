@@ -148,6 +148,7 @@ Everything the owner publishes to every app is a row in `settings`: one key, one
 | | `announcement` | What the Android app shows on open: `{ title, body, link?, ts }`. The push sender writes it too |
 | App | `support-faq` | Help center questions and answers: `[{ q, a }]` |
 | | `flags` | Boolean feature switches the app reads: `listenTogether`, … |
+| | `ai-music` | The music AI switches: `{ enabled, rerank, home, generate: { enabled, dailyQuota } }`. `enabled: false` stops every music AI route (the app plays its own picks); `rerank` and `home` are on unless `false`; song generation stays off until `generate.enabled` is `true`. See [ai.md](ai.md#music-ai) |
 | | `min-version` | Older Android builds must update: `{ build }` |
 | Catalog | `search-synonyms` | `{ "typed": "meant" }` pairs applied to searches |
 | | `catalog-sources` | `{ sourceId: false }` disables a catalogue source for everyone |

@@ -9,7 +9,7 @@ This document covers VinaX AI, the chat assistant at `/vinaxai`:
 - how conversations are stored;
 - the owner's switches, the console's providers card, the probe script, and what happens when a provider is down.
 
-VinaX AI is the only AI in VinaX. Recommendations, Radio and Up Next stay on the listener's device ([recommendations.md](recommendations.md)). The listener's guide is [user-guide/vinax-ai.md](user-guide/vinax-ai.md).
+Besides the chat, VinaX has music AI features that share its providers, its failover and its cooldowns: see [Music AI](#music-ai) at the end. Recommendations, Radio and Up Next are still decided on the listener's device ([recommendations.md](recommendations.md)); the music AI only reorders or arranges what the device chose, and the device falls back to its own result on any failure. The listener's guide is [user-guide/vinax-ai.md](user-guide/vinax-ai.md).
 
 ## How a message travels
 
@@ -488,3 +488,31 @@ The probe script ([The probe](#the-probe)) is the fuller check: reasoning, syste
 - An item in the profile menu.
 - A command in the command palette.
 - The phone tab bar keeps its four tabs.
+
+## Music AI
+
+The music routes share `_lib/ai/music.ts`: the owner's switches, one gate, the `music` ladder and a strict JSON reader. Each route answers a short JSON task with a deadline, and the device keeps its own result whenever the answer is late, malformed or missing. The app works with no AI secrets at all: every route then answers `503 ai_not_configured` and the device stops asking for ten minutes.
+
+**The gate (`musicGate`).** In order: the per-address bucket, a session (`Authorization: Bearer`, as for the chat), the account's `RATE_LIMIT_30` tier, a configured provider, the owner's switches, and at least one `music` ladder model with a key. Failures answer `429 rate_limited`, `401 signed_out` or `503 ai_not_configured | ai_disabled`.
+
+**The `music` ladder.** GPT-OSS 20B (Groq) → Qwen 3.8 27B (Groq) → Gemini 3.5 Flash Lite → Llama 3.1 8B (Workers AI): the quickest models, because each answer has a deadline of 1.2–2.5 s. A model that does not start within 60 % of the deadline is replaced by the next, and failures feed the same cooldowns as the chat. Reasoning is off and the temperature is 0.2.
+
+**The answer (`askJson`, `extractJson`).** The device's summary goes to the model as material inside `<input>`, never as instructions. The first JSON object in the answer is read (code fences, reasoning tags and chatter around it are ignored); anything else is no answer. Every route then checks the object against its own input before it answers.
+
+**The owner's switches.** The `ai-music` setting (console: Publish → App → Music AI):
+
+```json
+{ "enabled": true, "rerank": true, "home": true, "generate": { "enabled": false, "dailyQuota": 5 } }
+```
+
+`enabled: false` is the kill switch for every music route. `rerank` and `home` are on unless set `false`. The owner's per-model switches in `vinax-ai` apply to the `music` ladder too.
+
+**Logs.** Each route logs its name, whether it answered, the model and counts, never the summary or the answer.
+
+### Up Next's order: `POST /api/ai/rerank`
+
+`functions/api/ai/rerank.ts`; on the device `services/ai/musicAi.ts` and `tasteSummary.ts`.
+
+- **What is sent.** At most 40 candidates, the top of the on-device order after scoring, each as `{ key, language, mood, energy, genre, leadArtist }`. The key is made up for the request (`c0`, `c1`, …): no title or catalogue id leaves the device. With them go the compact taste summary (`{ languages ≤ 4, artists ≤ 8, moods ≤ 4, energyByHour: [night, morning, afternoon, evening], discovery, skipStreak, hour, weekday }`) and this sitting's intent (`{ mood, tune, language, energySteer, completionStreak }`). The Worker caps the body at 16 KB and re-sanitises every field.
+- **What comes back.** `{ order: [{ key, reason }], model }`: up to 20 keys, best first, each with a reason of at most 80 characters (no links). Keys that were not in the input, and repeats, are dropped by the Worker and again by the device. `502 no_answer` when nothing usable came back.
+- **On the device.** The listener's switch is Settings → Recommendations → "AI fine-tunes Up Next" (`aiRerank`, on by default). The device waits at most 1.5 s, network included (the model gets 1.2 s of it), and never while the listener is waiting at the end of the queue. The AI's keys come first in its order, then the rest of the top in the device's order. Both planners run their stretch rules after it (the live planner's spacing; the 9.x engine's sequencer and validation), and the player's admission gate checks every song. "Why this song?" reads "AI pick · <reason>" for a song the AI placed. A `401`, `403` or `503` pauses the rerank for ten minutes, and a `429` for two.

@@ -97,6 +97,12 @@ export interface SettingsState {
    * queued songs and an explicit "Play again" are never held back.
    */
   neverRepeat: boolean;
+  /**
+   * 1.4 — let the music AI fine-tune the order of Up Next (services/ai/musicAi.ts):
+   * the top of the on-device order, as a compact summary, comes back in a better
+   * order within 1.5 s, or the on-device order plays. On by default.
+   */
+  aiRerank: boolean;
   /** v6.5.0 — smart queue: tapping a song starts it and VinaX builds the
    *  continuation on the device, instead of following the tapped list. */
   djTakeover: boolean;
@@ -167,6 +173,7 @@ export interface SettingsState {
   setDiscoveryMode(v: DiscoveryMode): void;
   setQueueLanguages(v: QueueLanguages): void;
   setNeverRepeat(v: boolean): void;
+  setAiRerank(v: boolean): void;
   setDjTakeover(v: boolean): void;
   setKidMode(v: boolean): void;
   setPersonalEngine(v: boolean): void;
@@ -237,6 +244,7 @@ const defaults = {
   discoveryMode: 'balanced' as DiscoveryMode,
   queueLanguages: 'mix' as QueueLanguages,
   neverRepeat: false,
+  aiRerank: true,
   djTakeover: true,
   kidMode: false,
   personalEngine: true,
@@ -374,6 +382,7 @@ export const useSettingsStore = create<SettingsState>()(
       setExploreMode: (exploreMode) => set({ exploreMode, discoveryMode: exploreMode ? 'discover' : 'balanced' }),
       setQueueLanguages: (queueLanguages) => set({ queueLanguages: queueLanguages === 'one' ? 'one' : 'mix' }),
       setNeverRepeat: (neverRepeat) => set({ neverRepeat: !!neverRepeat }),
+      setAiRerank: (aiRerank) => set({ aiRerank: !!aiRerank }),
       setDiscoveryMode: (mode) => {
         const discoveryMode = isDiscoveryMode(mode) ? mode : 'balanced';
         set({ discoveryMode, exploreMode: discoveryMode === 'discover' });
