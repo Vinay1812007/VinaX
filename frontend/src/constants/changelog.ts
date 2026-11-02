@@ -16,6 +16,13 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.8.9': {
+    title: 'Owner instructions and higher limits for VinaX AI',
+    changes: [
+      { type: 'improved', text: 'VinaX AI takes more at once: 10 images and 20 files in a message, 50 files in a chat, PDFs up to 30 MB and 500 pages, and text files up to 2 MB.' },
+      { type: 'improved', text: 'You can send VinaX AI up to 20 messages a minute.' },
+    ],
+  },
   '1.8.8': {
     title: 'Database version 9 for VinaX AI projects, memory and the artifacts gallery',
     changes: [
