@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.8.3': {
+    title: 'VinaX AI settings, Claude-style replies and live previews',
+    changes: [
+      { type: 'new', text: 'New VinaX AI settings: pick the theme, tell VinaX AI what to call you, what to know about you and how to reply, and choose a reply style (Concise, Explanatory, Formal or Learning).' },
+      { type: 'improved', text: 'Every model now follows the same Claude-style instructions, and draws a chart or diagram when a picture explains it better.' },
+      { type: 'improved', text: 'Pages, charts and diagrams now show as live previews right in the reply.' },
+      { type: 'fixed', text: 'Fixed on phones: the model menu no longer opens off the screen, “Extended thinking” no longer covers the model button, and the image notice’s buttons fit. Settings now has a gear icon instead of one that looked like the theme switch.' },
+    ],
+  },
   '1.8.2': {
     title: 'VinaX AI button on Home',
     changes: [
