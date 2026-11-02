@@ -137,6 +137,14 @@ export default function PrivacyPage() {
           like typed messages. With web search on in Live voice, Google Gemini may use what you ask as Google searches to
           answer; you can switch it off in VinaX AI&rsquo;s Settings or with the globe button in Live voice.
         </p>
+        <p>
+          You can share a VinaX AI chat by link. Nothing is shared until you press Create link. VinaX then keeps a copy
+          of the chat as it is at that moment: its title and the text of each message, with any artifacts and the web
+          sources a reply cited. Files you added show by name only, never their contents, and VinaX AI&rsquo;s reasoning
+          and your name aren&rsquo;t included. Anyone with the link can read the copy, signed in or not, and search
+          engines are asked not to list it. Later messages aren&rsquo;t added unless you update the link. Stop sharing,
+          deleting the chat or deleting your account removes the copy at once.
+        </p>
         <H>Listen Together</H>
         <p>
           Rooms are ephemeral: a room code, first names, and the shared queue exist while the session lives and are

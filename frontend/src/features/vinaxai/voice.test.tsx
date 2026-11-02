@@ -10,6 +10,7 @@ import { MAX_SPEAK_CHARS, speechText } from './speechText';
 import { base64ToBytes, FrameReader, parseWav, pcm16 } from './speechStream';
 import { bytesToBase64, floatTo16, groundingSources, INPUT_MIME, parseServerMessage, Resampler, Transcript, audioMessage } from './live/liveProtocol';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SettingsPanel } from './SettingsPanel';
 import { PREFS_KEY, usePrefs } from './prefs';
 import type { VoiceInfo } from './types';
@@ -208,7 +209,8 @@ describe('Live voice protocol', () => {
 
 describe('web search in Live voice: the setting', () => {
   const VOICE: VoiceInfo = { dictation: true, readAloud: true, live: true, liveSearch: true, voices: ['troy'], liveVoices: ['Kore'] };
-  const panel = (voice: VoiceInfo) => render(<MemoryRouter><SettingsPanel models={[]} groups={[]} voice={voice} search onClose={() => undefined} /></MemoryRouter>);
+  // The panel's Shared links list reads through the app's query client.
+  const panel = (voice: VoiceInfo) => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><SettingsPanel models={[]} groups={[]} voice={voice} search onClose={() => undefined} /></MemoryRouter></QueryClientProvider>);
 
   it('is on by default, switches off, and is kept on this device', () => {
     usePrefs.setState({ liveSearch: true });

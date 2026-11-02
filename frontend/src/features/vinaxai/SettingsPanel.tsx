@@ -9,7 +9,8 @@
  *   Chat    the model new messages use, Extended thinking, Web search
  *   Voice   the microphone (with a test meter), the Read aloud voice, the
  *           Live voice, the Live model and web search in Live voice
- *   Chats   export every chat; a link to the rest of VinaX's settings
+ *   Chats   export every chat; the shared links (open, copy, stop sharing);
+ *           a link to the rest of VinaX's settings
  *
  * The app's own Settings page stays for everything that is not VinaX AI.
  */
@@ -20,6 +21,7 @@ import { toast } from '@/store/toastStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { cleanMicLabel, closeMic, listMics, micLabelOf, MicError, micNotice, newAudioContext, openMic, silentMicNotice, watchMic, type MicDevice } from './mic';
 import { PERSONAL_MAX, usePrefs, type ReplyStyle } from './prefs';
+import { SharedLinks } from './SharedLinks';
 import { CloseIcon, DownloadIcon, MicIcon } from './icons';
 import type { PickerModel, VoiceInfo } from './types';
 import type { WebSearch } from './PlusMenu';
@@ -249,6 +251,7 @@ export function SettingsPanel({ models, groups, voice, search, section, onClose 
               <DownloadIcon className="w-4 h-4" /> Export all chats
             </button>
             <p className="vx-ai-settings-note">A JSON file of every chat, with all its versions. Your chats stay with your account.</p>
+            <SharedLinks onNavigate={onClose} />
             <p className="vx-ai-settings-note">These settings are kept on this device. <Link to="/settings" onClick={onClose}>VinaX settings</Link> has everything else.</p>
           </section>
         </div>

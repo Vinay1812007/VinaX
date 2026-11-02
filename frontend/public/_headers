@@ -78,3 +78,7 @@
   Cache-Control: no-cache
 /admin/festivals.js
   Cache-Control: no-cache
+# Shared VinaX AI chats (/vinaxai/share/<id>) are for people given the link,
+# never for search: the page and its API answer both say noindex.
+/vinaxai/share/*
+  X-Robots-Tag: noindex, nofollow

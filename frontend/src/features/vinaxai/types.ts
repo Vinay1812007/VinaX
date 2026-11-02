@@ -148,3 +148,33 @@ export type StreamEvent =
   | { event: 'sources'; data: SourcesInfo & { markers?: Marker[] } }
   | { event: 'error'; data: ReplyError }
   | { event: 'done'; data: { stopReason: StopReason; usage?: { input: number; output: number } } };
+
+// ---------- shared chats ----------
+
+/** One of the listener's shared links (GET /api/ai/shares). */
+export interface ShareSummary {
+  id: string;
+  conversationId: string;
+  title: string;
+  messageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One turn of a shared chat: its text (artifacts inside), files by name only. */
+export interface SharedMessage {
+  role: 'user' | 'assistant';
+  text: string;
+  files?: Array<{ name: string; kind: FileRef['kind'] }>;
+  sources?: SourcesInfo;
+  createdAt: string;
+}
+
+/** A shared chat as anyone with the link reads it (GET /api/ai/shares/:id). */
+export interface SharedChat {
+  id: string;
+  title: string;
+  messages: SharedMessage[];
+  createdAt: string;
+  updatedAt: string;
+}

@@ -240,7 +240,12 @@ Refusals before the stream: `400 bad_request | unknown_model | bad_attachment | 
 | `GET /api/ai/conversations?cursor=&q=` | The account's chats, newest first, 30 a page. `q` searches titles and message text through `ai_conversation_search` |
 | `GET /api/ai/conversations/:id` | The conversation and its whole message tree, each reply labelled with its model's name and provider |
 | `PATCH /api/ai/conversations/:id` | `{ title?, starred?, activeLeafId? }` |
-| `DELETE /api/ai/conversations/:id` | Hides the chat at once; the hourly housekeeping removes it, with its messages, a day later |
+| `DELETE /api/ai/conversations/:id` | Hides the chat at once and deletes its shared link; the hourly housekeeping removes it, with its messages, a day later |
+| `GET /api/ai/shares[?conversation=<id>]` | The account's shared links, newest first: `{ items: [{ id, conversationId, title, messageCount, createdAt, updatedAt }] }` ([Sharing](#sharing)) |
+| `POST /api/ai/shares` | `{ conversationId }`. Makes the chat's link (201) or, when it has one, takes the snapshot again under the same id (200): `{ share }`. `413 too_large` past 1 MB, `422 empty` for a chat with nothing to show |
+| `GET /api/ai/shares/:id` | Public, no session: `{ share: { id, title, messages, createdAt, updatedAt } }` with `cache-control: public, max-age=60` and `x-robots-tag: noindex, nofollow`. 404 (not cached) when the id is unknown or malformed |
+| `DELETE /api/ai/shares/:id` | The owner stops sharing; the snapshot is deleted. Someone else's link is 404 |
+| `POST /api/ai/shares/:id/continue` | Signed in, while VinaX AI is open to the account: a new chat of the reader's own with the snapshot's turns, `{ conversationId }` |
 | `GET /api/ai/export` | Every chat of the account with every message and branch, as one JSON file to download (`ai_export`; Settings → Your data → Export VinaX AI chats). It is not part of the app's backup file and is never imported: the chats already live with the account |
 
 Every query is filtered by the session's account. Someone else's conversation, a deleted one or a malformed id answers 404. The Worker's router dispatches `PATCH` and `DELETE` to `onRequestPatch` / `onRequestDelete`.
@@ -406,11 +411,29 @@ The waveform button (where Send is while the composer is empty) opens a full-scr
 - Personalisation: what VinaX AI should call you, what it should know about you, how it should reply, and a reply style (Normal, Concise, Explanatory, Formal, Learning). Sent with each message as `personal` (see [The system prompt](#the-system-prompt)); never saved with the chat.
 - Chat: the model (the same choice as the composer's picker), Extended thinking, Web search when it is offered.
 - Voice: the microphone (Automatic or a device, and a ten-second test with a level bar that names the device and says whether it heard anything), the Read aloud voice from Orpheus's English voices, the Live voice from ten of Gemini's voices (it also reads long replies), the Live model (Auto or one of `voice.liveModels`), and **Search the web in Live voice** (`liveSearch`, on by default; shown when `voice.liveSearch`). The Worker checks voices and the Live model against its own lists, and search against the owner's switch.
-- Your chats: Export all chats (`GET /api/ai/export`), and a link to the app's Settings for everything else.
+- Your chats: Export all chats (`GET /api/ai/export`), the Shared links list (`SharedLinks.tsx`: open, copy, stop sharing, from `GET /api/ai/shares`; these live with the account, not the device), and a link to the app's Settings for everything else.
+
+## Sharing
+
+A chat can be shared by link, the way a snapshot is shared: what readers see is the chat as it was when its owner made or last updated the link.
+
+**The snapshot.** `POST /api/ai/shares` takes the conversation's active branch (`active_leaf_id`, or the newest leaf) and keeps, for each turn, the role, the text (artifacts are part of a reply's text, so they come along), the web sources it cited (http(s) only, at most 20, with the search-suggestions HTML when the reply had it) and the time (`_lib/ai/shares.ts`, `snapshotOf`). An attachment becomes `{ name, kind }`: never its id, its bytes or its extracted text. Reasoning, the model and provider, stop reasons and token counts are left out, and so is everything about the account. Empty replies are skipped. A snapshot larger than 1 MB is refused (`413 too_large`). There is one link per chat (`ai_shares.conversation_id` is unique); taking the snapshot again keeps the id.
+
+**The id.** 128 random bits from `crypto.getRandomValues`, base64url, 22 characters (`^[A-Za-z0-9_-]{22}$`, checked by the Worker and by the table). It is the only key to the snapshot.
+
+**Reading.** `GET /api/ai/shares/:id` needs no session and answers `public, max-age=60`, so a link that was stopped goes dark within a minute for anyone who already loaded it. Both that answer and the page (`/vinaxai/share/*` in `public/_headers`, and the page's `robots` meta through AppLayout) say `noindex, nofollow`. The old `/ai/shared/*` addresses still answer 301 to Home (`RETIRED_AI_PATH`); shared chats live under `/vinaxai/share/` instead.
+
+**Ending.** The owner's `DELETE /api/ai/shares/:id`, deleting the chat (the conversation route deletes its link right after hiding the chat, and the purge's cascade catches any left), and deleting the account (`on delete cascade` from `accounts`) all remove the row. A link whose chat is hidden already reads as not found, even before its row goes.
+
+**Continue this chat.** `POST /api/ai/shares/:id/continue` copies the snapshot into a new conversation of the signed-in reader, one message chained under the other, with each file as a `[file: name]` line. The sharer's chat is never touched.
+
+**Rate limits.** List 30 a minute, create, update and delete 10 a minute, read 60 a minute, continue 5 a minute, per network address.
+
+**The page.** `ShareDialog.tsx` opens from Share in the chat header, shown only for a saved chat with messages. It says what a link includes before Create link, then shows the link with Copy link, Share… (where `navigator.share` exists), Update link and Stop sharing (after a confirmation). Focus moves in and stays in, Escape closes, and focus returns to Share. `SharedChatView.tsx` (the lazy page `pages/VinaXAISharePage.tsx`, on demand in the precache like the chat) renders `/vinaxai/share/:shareId` with the chat's own Markdown, code, maths, sources and artifact panel, and no composer. `AuthGate` lets it open signed out, and AppLayout shows it full screen like the chat. Signed in, it offers Continue this chat; signed out, Start your own chat. A Report this chat link opens an email to the owner with the link filled in.
 
 ## Storage
 
-Schema version 4 adds `ai_conversations`, `ai_messages` (a tree through `parent_id`) and `ai_attachments`, all removed with the account through `on delete cascade`. See [database.md](database.md). `ai_conversations.active_leaf_id` is the branch a reload opens.
+Schema version 4 adds `ai_conversations`, `ai_messages` (a tree through `parent_id`) and `ai_attachments`, all removed with the account through `on delete cascade`. Version 8 adds `ai_shares` ([Sharing](#sharing)), removed with its chat or the account the same way. See [database.md](database.md). `ai_conversations.active_leaf_id` is the branch a reload opens.
 
 ## The owner's switches
 

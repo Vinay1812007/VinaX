@@ -5,7 +5,7 @@ VinaX 14.0 brings back a server database, designed from a clean sheet: one schem
 ## Setting it up
 
 1. Create a Supabase project (any region; Mumbai is closest to most listeners).
-2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 7), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
+2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 8), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
 3. Set two Worker secrets from `backend/`:
 
 ```sh
@@ -14,6 +14,10 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml
 ```
 
 4. Open the console's **Database** page: it shows the schema version the paste wrote and every table.
+
+### Moving from version 7
+
+Version 8 adds `ai_shares`, the shared VinaX AI chat links ([ai.md](ai.md#sharing)), with its row-level security. It changes nothing that exists. Paste `schema.sql` once; the Database page then shows version 8. Apply it before deploying the Worker that uses it, or Share answers `503 unavailable` for lack of its table (the chat itself keeps working). The name is new on purpose: the old `shared_chats` table from version 2 is not reused.
 
 ### Moving from version 6
 
@@ -79,6 +83,7 @@ Only the Worker holds the service-role key. Row-level security is enabled and fo
 | `job_runs` | scheduled job run | job, started/finished, ok, summary |
 | `ai_conversations` | VinaX AI chat | `account_id`, `title`, `starred`, `model_pref`, `active_leaf_id` (the branch a reload opens), `deleted_at` (hidden; purged a day later); deleted with the account |
 | `ai_messages` | message in a chat | `parent_id` (a tree: an edit or a retry adds a sibling), `role` (user/assistant), `content` (parts), `thinking`, `thinking_ms`, `sources`, `artifacts`, `model_id`, `provider`, `stop_reason`, `usage`; cascade with the chat |
+| `ai_shares` | shared VinaX AI chat | `id` (22 base64url characters, 128 random bits: the link's key), `account_id`, `conversation_id` (unique: one link per chat), `title`, `messages` (the snapshot: `[{ role, text, files?: [{ name, kind }], sources?, createdAt }]`, no reasoning, no file contents), `message_count`, `bytes` (≤ 1,000,000), `created_at`, `updated_at` (the last snapshot); deleted on Stop sharing, with the chat, or with the account |
 | `ai_daily_usage` | UTC day × kind | VinaX AI's shared daily allowances (`search`, `grounding`): `count` taken so far; rows older than 90 days are removed by the hourly housekeeping |
 | `personal_songs` | catalogue song the personal engine met | title, artist and `artist_id`, `artists`, album, language, year, duration, image, identity `key`, `facets` (mood, genre, vibe, energy, tempo), `verified` (the catalogue confirmed the row; a device-asserted row stays unverified and off every page until then), the `embedding` (1024 dimensions) with `embed_model` and `embedded_at`, community counters (`plays`, `completes`, `skips`, `likes`), first/last seen; no account attached |
 | `personal_events` | event a signed-in listener's device reported | `account_id`, `at`, `kind` (play, complete, skip, like, unlike, dislike, save, queue, search_play, shown, radio_start), `song_id`, `heard_sec`, `duration_sec`, `source`, `context` (hour, dow, tz, shelf, position), `client_id` (unique per account: a retried batch inserts nothing twice); cascade with the account |
@@ -202,6 +207,7 @@ All under `/api/admin/`, gated by `isAdminAsync`. `?days=` is 1..90 (default 7).
 | `GET/PUT/DELETE /api/profile`, `GET /api/profile/<handle>` | `profiles` (+ `follows` for counts and private visibility) |
 | `GET/POST /api/follow` | `follows`, `profiles`, `accounts` (name, picture) |
 | `GET/POST/DELETE /api/shared-playlist`, `GET/POST /api/shared-playlist/<id>` | `shared_playlists`; collaborator writes need the invite token; owner writes `409 { playlist }` on a stale version |
+| `GET/POST /api/ai/shares`, `GET/DELETE /api/ai/shares/<id>`, `POST /api/ai/shares/<id>/continue` | `ai_shares`; the owner lists, makes, updates and deletes; `GET` of one link is public (no session) by its 128-bit id; continue copies the snapshot into a new `ai_conversations` + `ai_messages` chat of the reader |
 | `GET/POST /api/username` | the handle on `listeners`; `409 taken` with suggestions |
 | `GET /api/experiments` | active experiments |
 | `GET /api/announcements` | the `announcement` setting (ignored when retracted) |

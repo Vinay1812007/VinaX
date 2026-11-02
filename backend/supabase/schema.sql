@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 7
+-- VinaX database · schema version 8
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -545,6 +545,31 @@ begin
   return n is not null;
 end
 $$;
+
+-- Version 8: a shared VinaX AI chat. A snapshot of one chat's active branch,
+-- taken when its owner made the link or last updated it: the text of each
+-- turn (artifacts are inside it), files as names only (never their contents),
+-- the web sources; no reasoning. Anyone with the id (128 random bits) can read
+-- it through the Worker. One link per chat; stopping sharing deletes the row,
+-- and so does deleting the chat (the Worker at once, the purge's cascade
+-- too) or the account.
+create table if not exists ai_shares (
+  id               text primary key,
+  account_id       text not null references accounts (id) on delete cascade,
+  conversation_id  uuid not null references ai_conversations (id) on delete cascade,
+  title            text not null,
+  messages         jsonb not null,
+  message_count    integer not null,
+  bytes            integer not null,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now(),
+  constraint ai_shares_id_shape check (id ~ '^[A-Za-z0-9_-]{22}$'),
+  constraint ai_shares_title_len check (char_length(title) between 1 and 120),
+  constraint ai_shares_messages_shape check (jsonb_typeof(messages) = 'array'),
+  constraint ai_shares_size check (bytes between 0 and 1000000)
+);
+create unique index if not exists ai_shares_conversation_key on ai_shares (conversation_id);
+create index if not exists ai_shares_account_idx on ai_shares (account_id, updated_at desc);
 
 -- ------------------------------------------------- 9b. the personal engine --
 
@@ -1582,6 +1607,7 @@ language sql stable set search_path = public, pg_temp as $$
     'job_runs', (select count(*) from job_runs),
     'ai_conversations', (select count(*) from ai_conversations),
     'ai_messages', (select count(*) from ai_messages),
+    'ai_shares', (select count(*) from ai_shares),
     'personal_taste', (select count(*) from personal_taste),
     'personal_pages', (select count(*) from personal_pages),
     'events', (select greatest(reltuples, 0)::bigint from pg_class where oid = 'public.events'::regclass),
@@ -1602,7 +1628,7 @@ begin
     'events', 'feedback',
     'blocked_content', 'rooms', 'room_members', 'push_devices', 'notifications',
     'settings', 'settings_history', 'experiments', 'audit_log', 'uptime_days', 'uptime_latest', 'job_runs',
-    'ai_conversations', 'ai_messages', 'ai_attachments', 'ai_daily_usage',
+    'ai_conversations', 'ai_messages', 'ai_attachments', 'ai_daily_usage', 'ai_shares',
     'personal_songs', 'personal_events', 'personal_taste', 'personal_exposure', 'personal_pages', 'personal_colisten']
   loop
     execute format('alter table public.%I enable row level security', t);
@@ -1642,7 +1668,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 7, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 7, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 8, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 8, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 7 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 8 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;

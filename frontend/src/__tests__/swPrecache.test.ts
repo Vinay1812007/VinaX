@@ -94,6 +94,20 @@ describe('splitPrecache', () => {
     expect(precache).toContain('/assets/shared.js'); // still reached by the app itself
   });
 
+  it('keeps a shared chat\'s page on demand too, with the chat code only it and the chat reach', async () => {
+    const splitPrecache = await loadSplit();
+    const chunk = (fileName: string, over: Record<string, unknown> = {}) => ({ type: 'chunk' as const, fileName, imports: [], dynamicImports: [], facadeModuleId: null, isEntry: false, ...over });
+    const bundle = {
+      'assets/index.js': chunk('assets/index.js', { isEntry: true, dynamicImports: ['assets/VinaXAIPage.js', 'assets/VinaXAISharePage.js'] }),
+      'assets/VinaXAIPage.js': chunk('assets/VinaXAIPage.js', { facadeModuleId: '/r/src/pages/VinaXAIPage.tsx', imports: ['assets/Markdown.js'] }),
+      'assets/VinaXAISharePage.js': chunk('assets/VinaXAISharePage.js', { facadeModuleId: '/r/src/pages/VinaXAISharePage.tsx', imports: ['assets/Markdown.js'] }),
+      'assets/Markdown.js': chunk('assets/Markdown.js'),
+    };
+    const { precache, onDemand } = splitPrecache(bundle);
+    expect(onDemand.sort()).toEqual(['/assets/Markdown.js', '/assets/VinaXAIPage.js', '/assets/VinaXAISharePage.js']);
+    expect(precache).toEqual(['/assets/index.js']);
+  });
+
   it('keeps the on-demand page stylesheets and the maths fonts out of the precache', async () => {
     const splitPrecache = await loadSplit();
     const chunk = (fileName: string, over: Record<string, unknown> = {}) => ({ type: 'chunk' as const, fileName, imports: [], dynamicImports: [], facadeModuleId: null, isEntry: false, ...over });

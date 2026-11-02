@@ -28,7 +28,7 @@ end $$;
 
 drop table if exists
   personal_colisten, personal_pages, personal_exposure, personal_taste, personal_events, personal_songs,
-  ai_daily_usage, ai_attachments, ai_messages, ai_conversations,
+  ai_shares, ai_daily_usage, ai_attachments, ai_messages, ai_conversations,
   job_runs, uptime_latest, uptime_days, audit_log, experiments, settings_history, settings,
   notifications, push_devices, room_members, rooms, blocked_content, feedback, ai_calls, events,
   shared_chats, shared_playlists, follows, profiles,

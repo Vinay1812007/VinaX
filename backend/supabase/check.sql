@@ -63,6 +63,11 @@ insert into ai_messages (id, conversation_id, parent_id, role, content, created_
   ('00000000-0000-4000-8000-00000000c012', '00000000-0000-4000-8000-00000000c001', null, 'user', '[{"type": "text", "text": "Explain a raga simply"}]', now());
 insert into ai_attachments (id, account_id, conversation_id, name, mime, size, kind, storage_path) values
   ('00000000-0000-4000-8000-00000000c020', 'check_a1', '00000000-0000-4000-8000-00000000c001', 'notes.txt', 'text/plain', 12, 'text', 'check_a1/00000000-0000-4000-8000-00000000c001/00000000-0000-4000-8000-00000000c020');
+-- VinaX AI: that chat shared by link, and a second chat shared too
+insert into ai_conversations (id, account_id, title) values ('00000000-0000-4000-8000-00000000c002', 'check_a1', 'Check chat to delete');
+insert into ai_shares (id, account_id, conversation_id, title, messages, message_count, bytes) values
+  ('check_share_0000000001', 'check_a1', '00000000-0000-4000-8000-00000000c001', 'Check chat about ragas', '[{"role": "user", "text": "What is a raga?"}]', 1, 42),
+  ('check_share_0000000002', 'check_a1', '00000000-0000-4000-8000-00000000c002', 'Check chat to delete', '[]', 0, 2);
 -- The personal engine: seven songs, five embedded in a toy space where song n
 -- points along axis n (so s1 and s2 are far apart and the taste vector is a
 -- mix), one account with a taste model, one with nothing yet.
@@ -233,6 +238,26 @@ begin
   exception when check_violation then null;
   end;
 
+  -- VinaX AI shared links: one per chat, an unguessable id shape, gone with the chat
+  begin
+    insert into ai_shares (id, account_id, conversation_id, title, messages, message_count, bytes) values ('check_share_0000000003', 'check_a1', '00000000-0000-4000-8000-00000000c001', 'x', '[]', 0, 2);
+    assert false, 'ai_shares: one link per chat';
+  exception when unique_violation then null;
+  end;
+  begin
+    insert into ai_shares (id, account_id, conversation_id, title, messages, message_count, bytes) values ('short', 'check_a1', '00000000-0000-4000-8000-00000000c002', 'x', '[]', 0, 2);
+    assert false, 'ai_shares.id must be 22 base64url characters';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into ai_shares (id, account_id, conversation_id, title, messages, message_count, bytes) values ('check_share_0000000004', 'check_a1', '00000000-0000-4000-8000-00000000c002', 'x', '{}', 0, 2);
+    assert false, 'ai_shares.messages must be an array';
+  exception when check_violation then null;
+  end;
+  delete from ai_conversations where id = '00000000-0000-4000-8000-00000000c002';
+  select exists (select 1 from ai_shares where id = 'check_share_0000000002') into b;
+  assert not b, 'ai_shares: deleting the chat removes its link';
+
   v := ai_export('check_a1');
   assert v ->> 'format' = 'vinax-ai-chats' and jsonb_array_length(v -> 'conversations') = 1, 'ai_export: one chat';
   assert jsonb_array_length(v -> 'conversations' -> 0 -> 'messages') = 3, 'ai_export: every message, every branch';
@@ -356,6 +381,8 @@ begin
   assert not b, 'delete_listener: VinaX AI messages went with their chat';
   select exists (select 1 from ai_attachments where account_id = 'check_a1') into b;
   assert not b, 'delete_listener: VinaX AI attachments went with the account';
+  select exists (select 1 from ai_shares where account_id = 'check_a1') into b;
+  assert not b, 'delete_listener: VinaX AI shared links went with the account';
   v := delete_listener(null, 'check_a2');
   assert (v ->> 'account')::int = 1 and (v ->> 'listener')::int = 0, 'delete_listener by account';
 
@@ -368,11 +395,12 @@ begin
   assert not has_table_privilege('authenticated', 'public.events', 'select'), 'authenticated cannot read events';
   assert not has_function_privilege('anon', 'public.stats_overview()', 'execute'), 'anon cannot call stats_overview';
   assert not has_table_privilege('anon', 'public.ai_messages', 'select'), 'anon cannot read VinaX AI messages';
+  assert not has_table_privilege('anon', 'public.ai_shares', 'select'), 'anon cannot read VinaX AI shared links directly';
   assert not has_function_privilege('anon', 'public.ai_conversation_search(text, text, timestamptz, integer)', 'execute'), 'anon cannot search VinaX AI chats';
   assert not has_table_privilege('anon', 'public.personal_events', 'select'), 'anon cannot read personal events';
   assert not has_function_privilege('anon', 'public.personal_neighbours(text, text, integer, text[], boolean)', 'execute'), 'anon cannot call the personal engine';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 7, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 8, 'meta.schema.version';
   raise notice 'check.sql: every function answered as expected';
 end $$;
 
