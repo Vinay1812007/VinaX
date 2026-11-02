@@ -16,6 +16,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.8.2': {
+    title: 'VinaX AI button on Home',
+    changes: [
+      { type: 'new', text: 'A new VinaX AI button at the top of Home opens the chat assistant in one tap.' },
+    ],
+  },
   '1.8.1': {
     title: 'Make songs with the VinaX AI key',
     changes: [
