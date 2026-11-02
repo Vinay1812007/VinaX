@@ -94,7 +94,10 @@ test('Publish → VinaX AI: the form writes the switch, testers, web search and 
   await expect(body.getByLabel('GPT-OSS 120B on')).toBeChecked();
   await expect(body.getByLabel('Qwen3 32B on')).not.toBeChecked();
   await body.getByLabel('VinaX AI on for everyone').check({ force: true });
-  await body.getByLabel('Testers').fill('1001\n2002');
+  // Testers are chips: type ids, Enter adds them.
+  await body.getByLabel('Add tester account id').fill('1001 2002');
+  await body.getByLabel('Add tester account id').press('Enter');
+  await expect(body.locator('.tag')).toHaveText(['1001', '2002']);
   await body.getByLabel('Web search').uncheck({ force: true });
   await body.getByLabel('Gemini 3.6 Flash on').uncheck({ force: true });
   await body.getByLabel('GPT-OSS 120B order').fill('-1');

@@ -148,6 +148,28 @@
     },
     plural: function (n, one, many) { return fmt.num(n) + ' ' + (Number(n) === 1 ? one : (many || one + 's')); },
     trunc: function (str, n) { str = str == null ? '' : String(str); return str.length > n ? str.slice(0, n - 1) + '…' : str; },
+    /** "Camel-case_key" → "Camel case key" */
+    label: function (k) { var s = String(k == null ? '' : k).replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[-_]+/g, ' ').toLowerCase(); return s.charAt(0).toUpperCase() + s.slice(1); },
+    /** Any stored value as one plain-language line ("Mode: live · Note: back soon"), never JSON. */
+    summary: function (v, depth) {
+      depth = depth || 0;
+      if (v === null || v === undefined || v === '') return '—';
+      if (typeof v === 'boolean') return v ? 'On' : 'Off';
+      if (typeof v === 'number') return fmt.num(v);
+      if (typeof v === 'string') return v;
+      if (Array.isArray(v)) {
+        if (!v.length) return 'None';
+        if (v.every(function (x) { return x === null || typeof x !== 'object'; })) return v.map(function (x) { return fmt.summary(x, depth + 1); }).join(', ');
+        return fmt.plural(v.length, 'item');
+      }
+      if (typeof v === 'object') {
+        var keys = Object.keys(v);
+        if (!keys.length) return 'Empty';
+        if (depth > 0) return fmt.plural(keys.length, 'field');
+        return keys.map(function (k) { return fmt.label(k) + ': ' + fmt.summary(v[k], depth + 1); }).join(' · ');
+      }
+      return String(v);
+    },
     country: (function () {
       var dn = null;
       try { dn = new Intl.DisplayNames(['en'], { type: 'region' }); } catch (e) {}
@@ -533,6 +555,26 @@
   };
   /** Pretty JSON block */
   ui.json = function (obj) { return h('pre.json', JSON.stringify(obj, null, 2)); };
+  /**
+   * Any stored value as readable fields: a labelled row per field, nested
+   * groups indented, lists as numbered entries or chips. Used wherever the
+   * console shows a value it did not design a view for (audit before/after).
+   */
+  ui.value = function (v, depth) {
+    depth = depth || 0;
+    if (v === null || v === undefined || v === '') return h('span.muted', '—');
+    if (typeof v === 'boolean') return ui.pill(v ? 'On' : 'Off', v ? 'ok' : null);
+    if (typeof v !== 'object') return h('span.val-text', VX.fmt.summary(v));
+    if (depth > 4) return h('span.muted', VX.fmt.summary(v, 1));
+    if (Array.isArray(v)) {
+      if (!v.length) return h('span.muted', 'None');
+      if (v.every(function (x) { return x === null || typeof x !== 'object'; })) return h('div.chips', v.map(function (x) { return ui.pill(VX.fmt.summary(x, 1)); }));
+      return h('ol.val-list', v.map(function (x) { return h('li', ui.value(x, depth + 1)); }));
+    }
+    var keys = Object.keys(v);
+    if (!keys.length) return h('span.muted', 'Empty');
+    return h('dl.kv.val-kv', keys.map(function (k) { return [h('dt', VX.fmt.label(k)), h('dd', ui.value(v[k], depth + 1))]; }));
+  };
   /** Definition list from [[k, v], ...] */
   ui.dl = function (pairs) {
     return h('dl.kv', pairs.filter(Boolean).map(function (p) { return [h('dt', p[0]), h('dd', p[1] == null || p[1] === '' ? '—' : p[1])]; }));

@@ -82,7 +82,7 @@
               { key: 'lastAt', label: 'Last run', render: function (r) { return r.lastAt ? ui.ago(r.lastAt) : h('span.muted', 'Not run yet'); } },
               { key: 'ok', label: 'Result', sortVal: function (r) { return r.ok === true ? 2 : r.ok === false ? 0 : 1; }, render: function (r) { return r.ok === true ? ui.pill('OK', 'ok') : r.ok === false ? ui.pill('Failed', 'bad') : ui.pill('Unknown'); } },
               { key: 'overdue', label: 'Timing', sortVal: function (r) { return r.overdue ? 1 : 0; }, render: function (r) { return r.overdue ? ui.pill('Overdue', 'warn') : r.lastAt ? ui.pill('On time', 'ok') : null; } },
-              { key: 'summary', label: 'Summary', sort: false, render: function (r) { var s = r.summary; return s == null ? null : typeof s === 'object' ? ui.mono(fmt.trunc(JSON.stringify(s), 90)) : fmt.trunc(String(s), 90); } },
+              { key: 'summary', label: 'Summary', sort: false, render: function (r) { var s = r.summary; return s == null ? null : h('span', { title: fmt.summary(s) }, fmt.trunc(fmt.summary(s), 90)); } },
               { key: 'act', label: '', sort: false, render: function (r) { return ui.button('Run now', { kind: 'ghost', small: true, icon: 'play', onClick: function () { return run(r.job); } }); } }
             ],
             rows: jobs, exportName: false, search: false, empty: 'No jobs reported', emptyHint: 'Jobs appear once the Worker with the Cron Trigger is deployed.'
@@ -112,8 +112,8 @@
           ['Summary', r.summary || '—'],
           ['Request id', r.requestId ? ui.mono(r.requestId) : '—']
         ]),
-        r.before !== undefined && r.before !== null ? [h('h3.subhead', { style: { 'margin-top': '14px' } }, 'Before'), ui.json(r.before)] : null,
-        r.after !== undefined && r.after !== null ? [h('h3.subhead', { style: { 'margin-top': '14px' } }, 'After'), ui.json(r.after)] : null);
+        r.before !== undefined && r.before !== null ? [h('h3.subhead', { style: { 'margin-top': '14px' } }, 'Before'), ui.value(r.before)] : null,
+        r.after !== undefined && r.after !== null ? [h('h3.subhead', { style: { 'margin-top': '14px' } }, 'After'), ui.value(r.after)] : null);
     }
     function load() {
       var params = { limit: 200 };
@@ -152,7 +152,7 @@
       function post(bodyReq, label) {
         return VX.api.post('/api/admin/database', bodyReq, { timeout: 60000 }).then(function (res) {
           var r = obj(res.data);
-          VX.mount(out, ui.notice(res.ok ? label + ': ' + (r.deleted != null ? fmt.plural(r.deleted, 'row') + ' removed' : r.result != null ? (typeof r.result === 'object' ? JSON.stringify(r.result) : String(r.result)) : 'done') : res.message, res.ok ? 'ok' : 'bad'));
+          VX.mount(out, ui.notice(res.ok ? label + ': ' + (r.deleted != null ? fmt.plural(r.deleted, 'row') + ' removed' : r.result != null ? fmt.summary(r.result) : 'done') : res.message, res.ok ? 'ok' : 'bad'));
         });
       }
       return [
