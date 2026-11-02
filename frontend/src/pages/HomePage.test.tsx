@@ -66,6 +66,7 @@ const renderHome = () => {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/radio" element={<p>Radio page</p>} />
+          <Route path="/vinaxai" element={<p>VinaX AI page</p>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -176,6 +177,20 @@ describe('HomePage 8.2', () => {
     await screen.findByRole('group', { name: 'Shortcuts' });
     await openExplore();
     expect(markers()).toEqual(chosen);
+  });
+});
+
+describe('HomePage — the top bar', () => {
+  it('opens VinaX AI from its button next to the theme and notifications', async () => {
+    const slot = document.createElement('div');
+    slot.id = 'vx-topbar-actions';
+    document.body.appendChild(slot);
+    onTestFinished(() => slot.remove());
+    renderHome();
+    const buttons = within(slot).getAllByRole('button').map((b) => b.getAttribute('aria-label'));
+    expect(buttons.slice(0, 3)).toEqual(['VinaX AI', 'Toggle theme', 'Notifications']);
+    fireEvent.click(within(slot).getByRole('button', { name: 'VinaX AI' }));
+    expect(await screen.findByText('VinaX AI page')).toBeTruthy();
   });
 });
 
