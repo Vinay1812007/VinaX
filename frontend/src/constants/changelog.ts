@@ -16,6 +16,13 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.8.6': {
+    title: 'Draw diagrams with brackets in labels; Fix it for failed previews',
+    changes: [
+      { type: 'fixed', text: 'Diagrams with brackets or slashes in their labels, like “User interaction (text/voice)”, now draw instead of showing an error.' },
+      { type: 'fixed', text: 'If a page, chart or diagram can’t be shown, the preview says so in one line and offers Fix it, which asks VinaX AI for a corrected version.' },
+    ],
+  },
   '1.8.5': {
     title: 'Share VinaX AI chats by link',
     changes: [
