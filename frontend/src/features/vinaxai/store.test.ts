@@ -5,7 +5,7 @@ import { usePrefs } from './prefs';
 
 beforeEach(() => {
   resetChat();
-  usePrefs.setState({ model: 'auto', extendedThinking: false, webSearch: 'auto' });
+  usePrefs.setState({ model: 'auto', extendedThinking: false, webSearch: 'auto', artifacts: true, personalName: '', personalAbout: '', personalInstructions: '', style: 'normal' });
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -39,6 +39,20 @@ describe('the chat controller', () => {
     expect(s.messages.a1).toMatchObject({ text: 'Hello', stopReason: 'end' });
     expect(calls[0].url).toBe('/api/ai/chat');
     expect(JSON.parse(String(calls[0].init.body))).toMatchObject({ conversationId: null, mode: 'auto', content: [{ type: 'text', text: 'Hi' }] });
+  });
+
+  it('sends the Personalisation settings and the Artifacts switch with each message, and nothing when they are unset', async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    const ok = sse([['meta', { conversationId: 'c1', userMessageId: 'u1', assistantMessageId: 'a1', model: { id: 'm', name: 'M', provider: 'P' } }], ['done', { stopReason: 'end' }]]);
+    vi.stubGlobal('fetch', vi.fn(async (_u: string, init: RequestInit) => { bodies.push(JSON.parse(String(init.body))); return new Response(ok, { status: 200 }); }));
+    await sendMessage('Hi');
+    expect(bodies[0].personal).toBeUndefined();
+    expect(bodies[0].artifacts).toBe(true);
+    resetChat();
+    usePrefs.setState({ personalName: ' Ash ', personalAbout: 'I play the sitar.', personalInstructions: '', style: 'concise', artifacts: false });
+    await sendMessage('Hi again');
+    expect(bodies[1].personal).toEqual({ name: 'Ash', about: 'I play the sitar.', style: 'concise' });
+    expect(bodies[1].artifacts).toBe(false);
   });
 
   it('a refused request hands the text back and leaves a notice', async () => {

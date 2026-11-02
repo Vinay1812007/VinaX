@@ -1,8 +1,11 @@
 /**
  * VinaX AI — its own settings, in a panel that slides over the chat (the
  * sidebar's Settings, the header's gear, or Settings in the + menu). All of
- * it is kept on this device (prefs.ts):
+ * it is kept on this device (prefs.ts), except the theme, which is the app's:
  *
+ *   General          the app's theme, artifacts, live previews in replies
+ *   Personalisation  what VinaX AI calls you, about you, how to reply, a
+ *                    reply style (sent with each message, never stored)
  *   Chat    the model new messages use, Extended thinking, Web search
  *   Voice   the microphone (with a test meter), the Read aloud voice, the
  *           Live voice and the Live model
@@ -14,13 +17,29 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import { toast } from '@/store/toastStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { cleanMicLabel, closeMic, listMics, micLabelOf, MicError, micNotice, newAudioContext, openMic, silentMicNotice, watchMic, type MicDevice } from './mic';
-import { usePrefs } from './prefs';
+import { PERSONAL_MAX, usePrefs, type ReplyStyle } from './prefs';
 import { CloseIcon, DownloadIcon, MicIcon } from './icons';
 import type { PickerModel, VoiceInfo } from './types';
 import type { WebSearch } from './PlusMenu';
 
-export type SettingsSection = 'chat' | 'voice' | 'chats';
+export type SettingsSection = 'general' | 'personal' | 'chat' | 'voice' | 'chats';
+
+const THEMES: Array<{ value: 'dark' | 'amoled' | 'light' | 'system' | 'auto'; label: string }> = [
+  { value: 'system', label: 'System: follow this device' },
+  { value: 'dark', label: 'Dark' },
+  { value: 'amoled', label: 'Black' },
+  { value: 'light', label: 'Light' },
+  { value: 'auto', label: 'Auto: light by day, dark at night' },
+];
+const STYLES: Array<{ value: ReplyStyle; label: string }> = [
+  { value: 'normal', label: 'Normal: VinaX AI’s usual replies' },
+  { value: 'concise', label: 'Concise: shorter, to the point' },
+  { value: 'explanatory', label: 'Explanatory: teaches the why, with examples' },
+  { value: 'formal', label: 'Formal: clear and professional' },
+  { value: 'learning', label: 'Learning: guides you to work it out' },
+];
 
 const GROUP_LABEL: Record<string, string> = {
   fast: 'Fast', balanced: 'Balanced', smart: 'Smart', vision: 'Vision', code: 'Code', cloudflare: 'Cloudflare', more: 'More models',
@@ -45,6 +64,8 @@ interface Props {
 
 export function SettingsPanel({ models, groups, voice, search, section, onClose }: Props): ReactNode {
   const prefs = usePrefs();
+  const theme = useSettingsStore((s) => s.theme);
+  const setTheme = useSettingsStore((s) => s.setTheme);
   const box = useRef<HTMLDivElement>(null);
   useDismissOnBack(true, onClose);
   useEffect(() => {
@@ -77,7 +98,7 @@ export function SettingsPanel({ models, groups, voice, search, section, onClose 
         onKeyDown={(e) => {
           if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
           if (e.key === 'Tab') {
-            const f = [...(box.current?.querySelectorAll<HTMLElement>('select:not([disabled]), button:not([disabled]), a[href], input:not([disabled])') ?? [])];
+            const f = [...(box.current?.querySelectorAll<HTMLElement>('select:not([disabled]), button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled])') ?? [])];
             const i = f.indexOf(document.activeElement as HTMLElement);
             e.preventDefault();
             f[(i + (e.shiftKey ? -1 : 1) + f.length) % f.length]?.focus();
@@ -90,7 +111,42 @@ export function SettingsPanel({ models, groups, voice, search, section, onClose 
             <CloseIcon className="w-5 h-5" />
           </button>
         </header>
+        <nav className="vx-ai-settings-nav" aria-label="Settings sections">
+          {([['general', 'General'], ['personal', 'Personalisation'], ['chat', 'Chat'], ...(hasVoice ? [['voice', 'Voice']] : []), ['chats', 'Your chats']] as Array<[SettingsSection, string]>).map(([id, label]) => (
+            <button key={id} type="button" className="vx-ai-chip" onClick={() => box.current?.querySelector<HTMLElement>(`#vx-ai-set-${id}`)?.scrollIntoView({ block: 'start' })}>{label}</button>
+          ))}
+        </nav>
         <div className="vx-ai-settings-body">
+          <section id="vx-ai-set-general" aria-labelledby="vx-ai-set-general-h">
+            <h3 id="vx-ai-set-general-h">General</h3>
+            <Field id="theme" label="Appearance" hint="The same theme as the rest of VinaX.">
+              <select id="vx-ai-set-theme" aria-describedby="vx-ai-set-theme-hint" value={theme} onChange={(e) => setTheme(e.target.value as typeof theme)}>
+                {THEMES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </Field>
+            <Switch on={prefs.artifacts} label="Artifacts" sub="Whole files, pages, charts and diagrams open in their own panel" onToggle={() => prefs.set({ artifacts: !prefs.artifacts })} />
+            <Switch on={prefs.inlinePreviews && prefs.artifacts} disabled={!prefs.artifacts} label="Live previews in replies" sub="Shows pages, charts and diagrams right in the chat" onToggle={() => prefs.set({ inlinePreviews: !prefs.inlinePreviews })} />
+          </section>
+
+          <section id="vx-ai-set-personal" aria-labelledby="vx-ai-set-personal-h">
+            <h3 id="vx-ai-set-personal-h">Personalisation</h3>
+            <Field id="pname" label="What should VinaX AI call you?">
+              <input id="vx-ai-set-pname" type="text" autoComplete="nickname" maxLength={PERSONAL_MAX.name} value={prefs.personalName} placeholder="Your first name" onChange={(e) => prefs.set({ personalName: e.target.value })} />
+            </Field>
+            <Field id="pabout" label="What should VinaX AI know about you?" hint="Your work, interests, what you’re learning. Used in every chat.">
+              <textarea id="vx-ai-set-pabout" aria-describedby="vx-ai-set-pabout-hint" rows={3} maxLength={PERSONAL_MAX.about} value={prefs.personalAbout} placeholder="I’m a music student who loves Carnatic and lo-fi…" onChange={(e) => prefs.set({ personalAbout: e.target.value })} />
+            </Field>
+            <Field id="pinstr" label="How should VinaX AI reply?" hint="Tone, length, format, language. It still won’t break its safety rules.">
+              <textarea id="vx-ai-set-pinstr" aria-describedby="vx-ai-set-pinstr-hint" rows={3} maxLength={PERSONAL_MAX.instructions} value={prefs.personalInstructions} placeholder="Be brief. Use tables for comparisons. Reply in Telugu when I write in Telugu…" onChange={(e) => prefs.set({ personalInstructions: e.target.value })} />
+            </Field>
+            <Field id="style" label="Reply style">
+              <select id="vx-ai-set-style" value={prefs.style} onChange={(e) => prefs.set({ style: e.target.value as ReplyStyle })}>
+                {STYLES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </Field>
+            <p className="vx-ai-settings-note">Kept on this device and sent with each message so the reply can use it. It isn’t saved with your chats.</p>
+          </section>
+
           <section id="vx-ai-set-chat" aria-labelledby="vx-ai-set-chat-h">
             <h3 id="vx-ai-set-chat-h">Chat</h3>
             <Field id="model" label="Model" hint="The same choice as the model menu under the message box.">
@@ -182,6 +238,19 @@ export function SettingsPanel({ models, groups, voice, search, section, onClose 
         </div>
       </div>
     </div>
+  );
+}
+
+/** An on/off setting. */
+function Switch({ on, label, sub, disabled, onToggle }: { on: boolean; label: string; sub: string; disabled?: boolean; onToggle(): void }): ReactNode {
+  return (
+    <button type="button" role="switch" aria-checked={on} disabled={disabled} className="vx-ai-setting-switch" onClick={onToggle}>
+      <span className="vx-ai-menu-text">
+        <span>{label}</span>
+        <span className="vx-ai-opt-sub">{sub}</span>
+      </span>
+      <span className={`vx-ai-switch${on ? ' is-on' : ''}`} aria-hidden />
+    </button>
   );
 }
 

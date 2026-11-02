@@ -12,7 +12,8 @@
  */
 import type { ModelFlags, ModelGroup, ModelSpec, ProviderId } from './types';
 
-const FLAGS: ModelFlags = { vision: false, pdf: false, grounding: false, reasoning: false, artifacts: false, systemRole: true, thinkFormat: 'none' };
+// Artifacts are on for every model with room for them (prompt.ts `artifactsOffered`); a specialist turns them off.
+const FLAGS: ModelFlags = { vision: false, pdf: false, grounding: false, reasoning: false, artifacts: true, systemRole: true, thinkFormat: 'none' };
 
 function m(
   provider: ProviderId,
@@ -56,7 +57,7 @@ const gemini = (upstream: string, name: string, group: ModelGroup | null, tier: 
     params: geminiThink,
     highParams: geminiThinkHigh,
     ...rest,
-    flags: { vision: true, pdf: true, reasoning: true, artifacts: tier === 'full', thinkFormat: 'parts', grounding: grounding === true, ...flags },
+    flags: { vision: true, pdf: true, reasoning: true, artifacts: true, thinkFormat: 'parts', grounding: grounding === true, ...flags },
   });
 };
 
@@ -161,10 +162,10 @@ export const MODELS: readonly ModelSpec[] = [
     tier: 'fast', description: 'Arabic and English', maxContextChars: 8_000, maxOutput: 1_024,
   }),
   m('nvidia', 'nvidia/riva-translate-4b-instruct-v2', 'Riva Translate 4B', 'more', {
-    tier: 'fast', description: 'Translates text between languages', maxContextChars: 20_000, maxOutput: 4_096,
+    tier: 'fast', description: 'Translates text between languages', maxContextChars: 20_000, maxOutput: 4_096, flags: { artifacts: false },
   }),
   m('nvidia', 'nvidia/ising-calibration-1.5-31b', 'Ising Calibration 1.5 31B', 'more', {
-    description: 'Specialist NVIDIA model', maxContextChars: NVIDIA_CTX,
+    description: 'Specialist NVIDIA model', maxContextChars: NVIDIA_CTX, flags: { artifacts: false },
   }),
   gemini('gemini-robotics-er-2-preview', 'Gemini Robotics ER 2 Preview', 'more', 'full', 'Spatial reasoning over images', { flags: { pdf: false, artifacts: false } }),
   m('nvidia', 'meta/muse-glimmer-30b', 'Muse Glimmer 30B', 'more', {

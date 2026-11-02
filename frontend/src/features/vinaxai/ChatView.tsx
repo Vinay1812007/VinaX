@@ -442,7 +442,7 @@ export function ChatView(): ReactNode {
             {...(wide ? {} : { role: 'dialog', 'aria-modal': true, 'aria-label': 'Chats' })}
             onKeyDown={trapTab}
           >
-            <Sidebar drawer={!wide} onNavigate={() => setDrawer(false)} onSettings={() => { setDrawer(false); setSettings('chat'); }} onNewChat={newChat} onCollapse={wide ? () => prefs.set({ sidebarCollapsed: true }) : () => setDrawer(false)} />
+            <Sidebar drawer={!wide} onNavigate={() => setDrawer(false)} onSettings={() => { setDrawer(false); setSettings('general'); }} onNewChat={newChat} onCollapse={wide ? () => prefs.set({ sidebarCollapsed: true }) : () => setDrawer(false)} />
           </div>
         </>
       )}
@@ -466,7 +466,7 @@ export function ChatView(): ReactNode {
           </div>
           <div className="vx-ai-header-end">
             <NowPlayingPill />
-            <button type="button" className="vx-ai-icon-btn" onClick={() => setSettings('chat')} aria-label="VinaX AI settings" title="Settings">
+            <button type="button" className="vx-ai-icon-btn" onClick={() => setSettings('general')} aria-label="VinaX AI settings" title="Settings">
               <SettingsIcon className="w-5 h-5" />
             </button>
             {!(wide && sideOpen) && (

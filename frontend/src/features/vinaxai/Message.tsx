@@ -15,7 +15,9 @@ import { moveFocus, useDismiss } from './useDismiss';
 import { SearchStatusLine, SourcesRow } from './Sources';
 import { MessageFiles } from './FileChips';
 import { ArtifactCard } from './ArtifactPanel';
-import { parseArtifacts, type Artifact } from './artifacts';
+import { parseArtifacts, runsInSandbox, type Artifact } from './artifacts';
+import { InlinePreview } from './InlinePreview';
+import { usePrefs } from './prefs';
 import { ChevronDownSmallIcon, ChevronIcon, ContinueIcon, CopyIcon, PencilIcon, RetryIcon, SpeakerIcon, StopIcon } from './icons';
 import { readAloud, stopReading, useReadAloud } from './readAloud';
 import type { ChatMessage, PickerModel } from './types';
@@ -202,6 +204,7 @@ export function AssistantMessage({ message, live, models, onRetry, onContinue, v
   const { text, error, stopReason, model } = message;
   const waiting = live && !text && !message.thinking && !error && !message.status;
   const cutOff = !live && !!text && (stopReason === 'length' || stopReason === 'error');
+  const previews = usePrefs((p) => p.inlinePreviews && p.artifacts);
   return (
     <div className="vx-ai-turn vx-ai-turn-reply" aria-busy={live || undefined}>
       <h2 className="sr-only">VinaX AI said</h2>
@@ -211,7 +214,12 @@ export function AssistantMessage({ message, live, models, onRetry, onContinue, v
       {text && (text.includes('<artifact')
         ? parseArtifacts(text).map((seg, i) => (seg.kind === 'text'
           ? <Markdown key={i} text={seg.text} sources={message.sources?.items} />
-          : <ArtifactCard key={i} artifact={seg.artifact} live={live} version={versionOf?.(seg.artifact.id, message.id) ?? 1} onOpen={() => onOpenArtifact?.(seg.artifact, message.id)} />))
+          : (
+            <div key={i} className="vx-ai-artifact-slot">
+              <ArtifactCard artifact={seg.artifact} live={live} version={versionOf?.(seg.artifact.id, message.id) ?? 1} onOpen={() => onOpenArtifact?.(seg.artifact, message.id)} />
+              {previews && !live && !seg.artifact.incomplete && runsInSandbox(seg.artifact.type) && <InlinePreview artifact={seg.artifact} />}
+            </div>
+          )))
         : <Markdown text={text} sources={message.sources?.items} />)}
       {live && text && <span className="vx-ai-cursor" aria-hidden />}
       {!live && message.sources && <SourcesRow sources={message.sources} />}

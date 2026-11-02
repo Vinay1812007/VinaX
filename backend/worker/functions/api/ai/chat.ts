@@ -10,7 +10,8 @@
  *                                          // empty + parentMessageId of a user message = retry
  *     continueFrom?: uuid,                 // an assistant message that was cut off: write on from where it stopped
  *     mode: "auto" | "model", model?: "<registry id>",
- *     extendedThinking?, webSearch?, artifacts? (default true), timezone?, locale? }
+ *     extendedThinking?, webSearch?, artifacts? (default true), timezone?, locale?,
+ *     personal?: { name?, about?, instructions?, style? } }   // VinaX AI settings → Personalisation; used for this reply only, never stored
  *
  *   → 200 text/event-stream, named events, one JSON object per data line:
  *       meta     { conversationId, userMessageId, assistantMessageId, model: { id, name, provider }, continued? }
@@ -49,7 +50,7 @@ import { isCooling } from '../../_lib/ai/cooldown';
 import { fallbackTitle, latestLeaf, pathTo, textOf, trimHistory, typedText } from '../../_lib/ai/history';
 import { ladderModels, modelById, type LadderName } from '../../_lib/ai/models';
 import { generateTitle } from '../../_lib/ai/title';
-import { buildSystemPrompt, firstNameOf, safeLocale, safeTimezone, type SearchBlock } from '../../_lib/ai/prompt';
+import { buildSystemPrompt, firstNameOf, safeLocale, safeTimezone, sanitizePersonal, type SearchBlock } from '../../_lib/ai/prompt';
 import {
   applyMarkers, buildQuery, GROUNDING_DAILY_LIMIT, placeMarkers, searchMode, searchWeb, takeDaily, topicOf, wantsSearch,
   type Marker, type SearchResult,
@@ -100,6 +101,7 @@ interface ChatBody {
   extendedThinking?: unknown;
   timezone?: unknown;
   locale?: unknown;
+  personal?: unknown;
 }
 
 interface Ctx {
@@ -308,6 +310,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     locale: safeLocale(body.locale),
     firstName: firstNameOf(account.ok ? account.value?.name : null),
   };
+  const personal = sanitizePersonal(body.personal);
   const slow = ladder === 'deep' || mode === 'model';
   // The search API runs once, and only if a model that cannot search itself answers.
   let apiSearch: Promise<SearchResult> | null = null;
@@ -333,8 +336,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       const r = await runApiSearch();
       if (r.ok) search = { sources: r.sources };
     }
-    // Artifacts are offered to capable models (flag `artifacts`) unless the page turned them off.
-    const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: body.artifacts !== false, search });
+    // Artifacts go to every model with room for them (prompt.ts) unless the page turned them off.
+    const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: body.artifacts !== false, search, personal });
     const messages = await materialize(env, turns, spec, fileRows, memo);
     return {
       model: spec,

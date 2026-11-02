@@ -46,7 +46,7 @@ Any one of them is enough for the chat to work. With none, `/api/ai/*` answers `
 `backend/worker/functions/_lib/ai/models.ts` is the only place that names a model id. Each entry has:
 - a registry id, `<provider>:<upstream id>`;
 - a display name and a picker group (`fast`, `balanced`, `smart`, `vision`, `code`, `more`, `cloudflare`, or none for the web-search-only models);
-- a tier (`fast` models get the compact prompt);
+- a tier (`fast` models sit early in Auto's quick ladder; the prompt follows the window, see [The system prompt](#the-system-prompt));
 - flags: `vision`, `pdf`, `grounding`, `reasoning`, `artifacts`, `systemRole`, `thinkFormat`;
 - `maxContextChars`, `maxOutput`;
 - extra request fields in `params`, plus `highParams` for Extended thinking;
@@ -183,11 +183,12 @@ A failed or empty search is not an error: the status says "No useful results" an
 ## The system prompt
 
 `_lib/ai/prompt.ts` holds the owner's VinaX AI prompt verbatim. A snapshot test (`__tests__/aiPrompt.test.ts`) keeps it from drifting. The prompt is built in this order:
-1. The full prompt, or the compact one for `fast`-tier models, with the listener's local time and time zone, first name, language setting, and the answering model and provider filled in.
-2. The artifacts contract, only for models flagged `artifacts` and unless the page sends `artifacts: false`.
-3. `<search_results>` and the citation rules, only when search ran (phase 3).
+1. The full prompt for every model whose window holds at least 24,000 characters (`promptFor`), fast ones included, so every model gets the same character, formatting, honesty and safety rules; the compact one only for the few small specialists below that (ALLaM 2 7B, Riva Translate 4B). The listener's local time and time zone, first name (or the name they set in Personalisation), language setting, and the answering model and provider are filled in.
+2. The artifacts contract and the visualisation guide (`ARTIFACTS_BLOCK`), for every model with the full prompt and at least 4,096 output tokens (`artifactsOffered`), unless the registry flags it `artifacts: false` (Riva Translate, Ising Calibration, Gemini Robotics ER) or the page sends `artifacts: false` (Settings → General → Artifacts off).
+3. The listener's preferences (`personalBlock`), when the request carries `personal: { name?, about?, instructions?, style? }` from Settings → Personalisation: inside `<user_preferences>`, after the rules, marked as the user's own words that never override safety, honesty or the refusals. `sanitizePersonal` drops control characters and caps the name at 40 characters and the other two at 1,500. Styles: `concise`, `explanatory`, `formal`, `learning` (`normal` adds nothing). None of it is stored or logged.
+4. `<search_results>` and the citation rules, only when search ran (phase 3).
 
-Nothing else is added: no taste profile and no listening history. Models flagged `systemRole: false` get the system text in front of the first user turn.
+Nothing else is added: no taste profile and no listening history. The history sent to the model is trimmed to the model's window minus the system text, so a longer prompt shortens what a small-window model remembers rather than overflowing it. Models flagged `systemRole: false` get the system text in front of the first user turn.
 
 ## The chat endpoint and stream
 
@@ -281,7 +282,7 @@ At most 10 files go in a message and 20 in a chat. The page checks these limits,
 
 ## Artifacts
 
-Substantial, self-contained output goes in an artifact: a page, a component, a diagram, an SVG, a document or a file of code. Models flagged `artifacts` are told the contract in the system prompt (`ARTIFACTS_BLOCK` in `prompt.ts`): `<artifact id="…" type="code|html|svg|mermaid|markdown|react" title="…" language="…">…</artifact>`, with the complete content again under the same id to update one.
+Substantial, self-contained output goes in an artifact: a page, a component, a diagram, an SVG, a document or a file of code. Every model with room for it is told the contract in the system prompt (`ARTIFACTS_BLOCK` in `prompt.ts`, see [The system prompt](#the-system-prompt)), together with a visualisation guide: a chart (React with recharts, or HTML with a charting library) for numbers and trends, a Mermaid diagram for processes and timelines, an SVG for illustrations, an HTML page or React component for something to try. The contract: `<artifact id="…" type="code|html|svg|mermaid|markdown|react" title="…" language="…">…</artifact>`, with the complete content again under the same id to update one.
 
 **Parsing.** `artifacts.ts` has the same parser on both sides: the Worker's in `_lib/ai/`, the page's in `features/vinaxai/`. It is tolerant:
 - attributes in any order, with either quotes;
@@ -298,6 +299,7 @@ The Worker saves each reply's artifacts in `ai_messages.artifacts`, also after a
 - Versions are the artifact's id across the thread's replies, oldest first, with "v2 of 3" and ‹ › to step between them.
 - The panel has Preview / Code, Copy, Download (a name and type from the title and kind) and Close.
 - On a wide screen the panel sits beside the chat and resizes from 40% to 60% (drag the edge, or arrow keys on it; kept on the device). Narrower, it is a full-screen sheet.
+- **Live previews in replies** (`InlinePreview.tsx`): a finished html, svg, mermaid or react artifact also shows under its card as a live preview, 380 px high (300 px on a phone), in the same sandbox runner as the panel. The runner mounts only when the reply scrolls within 300 px of the screen. Settings → General → Live previews in replies turns it off (it is off whenever Artifacts is off). The preview's frame is titled "Preview: <title> (in the reply)" so it is never confused with the panel's.
 - Code has no Preview. Markdown previews in the chat's own renderer (no raw HTML). HTML, SVG, Mermaid and React preview in the sandbox runner.
 
 **The sandbox runner** (`sandbox/index.html`, its own site at `https://sandbox.vinaxmusic.online/`; setup in [../DEPLOYMENT.md](../DEPLOYMENT.md#vinax-ai-sandbox)).
@@ -395,7 +397,9 @@ The waveform button (where Send is while the composer is empty) opens a full-scr
 
 ### Settings
 
-`SettingsPanel.tsx`, a sheet from the right (full screen on a phone), opened from the header's gear, the sidebar's Settings, or Settings in the + menu (which opens at Voice). Everything in it is kept on the device (`vinax.vxai.prefs.v1`):
+`SettingsPanel.tsx`, a sheet from the right (full screen on a phone), opened from the header's gear (a cog; it opens at General), the sidebar's Settings, or Settings in the + menu (which opens at Voice). A row of section buttons at the top jumps to each part. Everything in it is kept on the device (`vinax.vxai.prefs.v1`), except Appearance, which is the app's own theme:
+- General: Appearance (System, Dark, Black, Light, Auto: the same setting as VinaX's Settings), Artifacts on or off (sent as `artifacts`), Live previews in replies.
+- Personalisation: what VinaX AI should call you, what it should know about you, how it should reply, and a reply style (Normal, Concise, Explanatory, Formal, Learning). Sent with each message as `personal` (see [The system prompt](#the-system-prompt)); never saved with the chat.
 - Chat: the model (the same choice as the composer's picker), Extended thinking, Web search when it is offered.
 - Voice: the microphone (Automatic or a device, and a ten-second test with a level bar that names the device and says whether it heard anything), the Read aloud voice from Orpheus's English voices, the Live voice from ten of Gemini's voices (it also reads long replies), and the Live model (Auto or one of `voice.liveModels`). The Worker checks voices and the Live model against its own lists.
 - Your chats: Export all chats (`GET /api/ai/export`), and a link to the app's Settings for everything else.

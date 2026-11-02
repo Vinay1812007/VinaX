@@ -57,9 +57,15 @@ Add files from **+** → **Add photos and files**, by pasting, or by dropping th
 
 A message can carry 10 files, and a chat 20. If the model you picked cannot see images, a note offers one that can, or Auto, before you send.
 
-## Code, pages and diagrams in the side panel
+## Make it yours
 
-When VinaX AI writes something substantial, such as a web page, a small app, a diagram, a picture, a document or a file of code, it appears as a card in the reply and opens in a panel beside the chat. On a phone the panel is full screen.
+The gear at the top of VinaX AI opens its settings.
+- **General**: the theme (the same as the rest of VinaX), whether VinaX AI makes artifacts (below), and whether pages, charts and diagrams show as live previews right in the reply.
+- **Personalisation**: what VinaX AI should call you, what it should know about you (your work, interests, what you're learning), how it should reply (tone, length, format, language), and a reply style: Normal, Concise, Explanatory, Formal or Learning (it guides you to work things out). These stay on your device and go with each message; they are not saved with your chats.
+
+## Code, pages, charts and diagrams
+
+When VinaX AI writes something substantial, such as a web page, a small app, a chart, a diagram, a picture, a document or a file of code, it appears as a card in the reply and opens in a panel beside the chat. On a phone the panel is full screen. When a picture explains something better than words, such as numbers to compare or steps in a process, VinaX AI draws a chart or diagram by itself. Pages, charts and diagrams also show as a live preview under the card, right in the reply.
 
 - **Preview** shows web pages, small apps, pictures and diagrams working. They run in a separate, locked-down space, so nothing in them can reach your account or the app.
 - **Code** shows the source.

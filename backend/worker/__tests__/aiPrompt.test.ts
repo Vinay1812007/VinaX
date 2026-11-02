@@ -1,26 +1,67 @@
 /**
  * VinaX AI — the system message: the owner's prompt verbatim (snapshots),
- * the compact prompt for the fast tier, the artifacts and search blocks,
- * and the runtime variables.
+ * the compact prompt for very small windows, artifacts for every model with
+ * room, the listener's preferences, the search blocks and the runtime variables.
  */
 import { describe, expect, it } from 'vitest';
 import { MODELS, modelById } from '../functions/_lib/ai/models';
-import { ARTIFACTS_BLOCK, buildSystemPrompt, CITATION_RULES, firstNameOf, formatNow, safeLocale, safeTimezone, type PromptVars } from '../functions/_lib/ai/prompt';
+import { ARTIFACTS_BLOCK, artifactsOffered, buildSystemPrompt, CITATION_RULES, COMPACT_PROMPT, FULL_PROMPT, firstNameOf, formatNow, promptFor, safeLocale, safeTimezone, sanitizePersonal, type PromptVars } from '../functions/_lib/ai/prompt';
 import { wireMessages } from '../functions/_lib/ai/wire';
 
 const vars: PromptVars = { now: new Date(Date.UTC(2026, 9, 30, 13, 5)), timezone: 'Asia/Kolkata', locale: 'en-IN', firstName: 'Asha', modelName: 'GPT-OSS 120B', providerName: 'Groq' };
 const full = modelById(MODELS, 'groq:openai/gpt-oss-120b')!;
 const fast = modelById(MODELS, 'groq:qwen/qwen3.8-27b')!;
+const tiny = modelById(MODELS, 'groq:allam-2-7b')!;
 
 describe('buildSystemPrompt', () => {
   it('full prompt', () => {
     expect(buildSystemPrompt({ spec: full, vars, artifacts: false })).toMatchSnapshot();
   });
 
-  it('compact prompt for the fast tier', () => {
-    const p = buildSystemPrompt({ spec: fast, vars: { ...vars, modelName: 'Qwen 3.8 27B' }, artifacts: true });
+  it('compact prompt only for a very small window, without artifacts', () => {
+    const p = buildSystemPrompt({ spec: tiny, vars: { ...vars, modelName: 'ALLaM 2 7B' }, artifacts: true });
     expect(p).toMatchSnapshot();
-    expect(p).not.toContain('# Artifacts'); // fast models are not flagged for artifacts
+    expect(p).not.toContain('# Artifacts');
+  });
+
+  it('every model with room gets the full prompt and artifacts, fast ones included; specialists never get artifacts', () => {
+    const p = buildSystemPrompt({ spec: fast, vars: { ...vars, modelName: 'Qwen 3.8 27B' }, artifacts: true });
+    expect(p.startsWith(FULL_PROMPT.slice(0, 40))).toBe(true);
+    expect(p).toContain(ARTIFACTS_BLOCK);
+    for (const m of MODELS) {
+      if (m.maxContextChars >= 24_000) expect(promptFor(m), m.id).toBe('full');
+      else expect(promptFor(m), m.id).toBe('compact');
+    }
+    const chatModels = MODELS.filter((m) => m.group && m.group !== 'more' && m.maxOutput >= 4_096);
+    expect(chatModels.filter((m) => !artifactsOffered(m)).map((m) => m.id)).toEqual([]);
+    expect(artifactsOffered(modelById(MODELS, 'nvidia:nvidia/riva-translate-4b-instruct-v2')!)).toBe(false);
+    expect(COMPACT_PROMPT.length).toBeLessThan(1_000);
+  });
+
+  it('artifacts come with the visualisation guide', () => {
+    expect(ARTIFACTS_BLOCK).toContain('# Visualisations');
+    expect(ARTIFACTS_BLOCK).toMatch(/mermaid diagram/);
+  });
+
+  it('adds the listener’s preferences after the rules, marked as theirs, and uses their chosen name', () => {
+    const personal = sanitizePersonal({ name: 'Ash', about: 'I teach maths in Pune.', instructions: 'Use metric units.\u0007', style: 'concise' });
+    expect(personal).toEqual({ name: 'Ash', about: 'I teach maths in Pune.', instructions: 'Use metric units.', style: 'concise' });
+    const p = buildSystemPrompt({ spec: full, vars, artifacts: false, personal });
+    expect(p).toContain("The user's name is Ash.");
+    expect(p).toContain('<user_preferences>');
+    expect(p).toContain('I teach maths in Pune.');
+    expect(p).toMatch(/Reply style the user picked — Concise/);
+    expect(p).toMatch(/never override the rules above about safety/);
+    expect(p.indexOf('# Things you won')).toBeLessThan(p.indexOf('<user_preferences>'));
+  });
+
+  it('cleans and caps the preferences, and ignores junk', () => {
+    expect(sanitizePersonal(null)).toBeNull();
+    expect(sanitizePersonal({ style: 'normal' })).toBeNull();
+    expect(sanitizePersonal({ style: 'pirate', about: '  ' })).toBeNull();
+    expect(sanitizePersonal({ name: '<{{x}}>' })?.name ?? null).toBe('x');
+    expect(sanitizePersonal({ about: 'a'.repeat(5_000) })!.about!.length).toBe(1_500);
+    expect(buildSystemPrompt({ spec: full, vars, artifacts: false, personal: null })).not.toContain('<user_preferences>');
   });
 
   it('artifacts block on and off', () => {
