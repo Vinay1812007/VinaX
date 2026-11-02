@@ -180,3 +180,25 @@ export interface SharedChat {
   createdAt: string;
   updatedAt: string;
 }
+
+/** One card of the artifacts gallery: an artifact's newest version in one chat (no content). */
+export interface GalleryItem {
+  conversationId: string;
+  conversationTitle: string | null;
+  artifactId: string;
+  messageId: string;
+  kind: 'code' | 'html' | 'svg' | 'mermaid' | 'markdown' | 'react';
+  title: string;
+  language: string | null;
+  incomplete: boolean;
+  versions: number;
+  createdAt: string;
+}
+
+/** One artifact of the gallery with every version in its chat, oldest first. */
+export interface GalleryArtifact {
+  conversationId: string;
+  conversationTitle: string | null;
+  artifactId: string;
+  versions: Array<{ messageId: string; createdAt: string; type: GalleryItem['kind']; title: string; language: string | null; content: string; incomplete: boolean }>;
+}

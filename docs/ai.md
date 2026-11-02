@@ -5,7 +5,7 @@ This document covers VinaX AI, the chat assistant at `/vinaxai`:
 - the providers and their secrets;
 - the model registry and Auto's ladders, and failover and cooldowns;
 - the stream protocol;
-- web search, files, artifacts and the sandbox, and voice;
+- web search, files, artifacts, the sandbox and the artifacts gallery, and voice;
 - how conversations are stored;
 - the owner's switches, the console's providers card, the probe script, and what happens when a provider is down.
 
@@ -246,6 +246,8 @@ Refusals before the stream: `400 bad_request | unknown_model | bad_attachment | 
 | `GET /api/ai/shares/:id` | Public, no session: `{ share: { id, title, messages, createdAt, updatedAt } }` with `cache-control: public, max-age=60` and `x-robots-tag: noindex, nofollow`. 404 (not cached) when the id is unknown or malformed |
 | `DELETE /api/ai/shares/:id` | The owner stops sharing; the snapshot is deleted. Someone else's link is 404 |
 | `POST /api/ai/shares/:id/continue` | Signed in, while VinaX AI is open to the account: a new chat of the reader's own with the snapshot's turns, `{ conversationId }` |
+| `GET /api/ai/artifacts?kind=&q=&cursor=` | The artifacts gallery: one item per artifact per chat (its newest version), newest first, 30 a page, metadata only: `{ items: [{ conversationId, conversationTitle, artifactId, messageId, kind, title, language, incomplete, versions, createdAt }], nextCursor }` through `ai_artifact_list` ([Artifacts gallery](#artifacts-gallery)). `kind` is one artifact type, `q` searches titles; anything else is `400 bad_request` |
+| `GET /api/ai/artifacts/:conversationId/:artifactId` | One artifact with every version's content, oldest first, from every branch of its chat: `{ artifact: { conversationId, conversationTitle, artifactId, versions: [{ messageId, createdAt, type, title, language, content, incomplete }] } }`. 404 for someone else's or a deleted chat, or no such artifact |
 | `GET /api/ai/export` | Every chat of the account with every message and branch, as one JSON file to download (`ai_export`; Settings → Your data → Export VinaX AI chats). It is not part of the app's backup file and is never imported: the chats already live with the account |
 
 Every query is filtered by the session's account. Someone else's conversation, a deleted one or a malformed id answers 404. The Worker's router dispatches `PATCH` and `DELETE` to `onRequestPatch` / `onRequestDelete`.
@@ -326,6 +328,16 @@ The Worker saves each reply's artifacts in `ai_messages.artifacts`, also after a
   - React: compiled by Babel standalone 7.26.10 and mounted with React 18.3.1 (cdnjs). It is given React hooks, Recharts 2.15.3 (cdnjs), Tailwind's in-browser build 4.3.3 and lucide 1.57.0 icons. A small shim gives `lucide-react`'s names to lucide's icon data, because cdnjs has no lucide-react, Tailwind browser or lucide build. Any other import fails with a clear message.
 - **When the site is not there.** If the runner does not say it is ready within 8 seconds, Preview says "Preview needs the sandbox host". Code, Copy and Download still work.
 - **Another host.** Build with `VITE_AI_SANDBOX_ORIGIN`, add it to `frame-src` in `frontend/public/_headers`, and keep the runner's `ALLOWED` origins and `frame-ancestors` in step.
+
+### Artifacts gallery
+
+`/vinaxai/artifacts` (`ArtifactsGallery.tsx`, the lazy page `pages/VinaXAIArtifactsPage.tsx`) lists every artifact the account's chats made, newest first, like a library of everything VinaX AI built. It opens from **Artifacts** in the sidebar (under New chat) and from Settings → Your chats → **Your artifacts**. AppLayout shows it full screen like the chat.
+
+**What a card is.** One card per artifact id per chat: the newest version, with its title, its kind (HTML page, React component, Diagram, SVG, Document, or Code with its language), how many versions the chat holds, the chat's title and the day. Kind chips (All, Pages, Components, Diagrams, Images, Documents, Code) and a title search narrow the list; more cards load as the list scrolls near its end (IntersectionObserver), and Load more does the same from the keyboard. Cards show a kind icon, not a live preview, so the page never starts a sandbox runner per card.
+
+**Opening one.** A card opens the same artifacts panel as the chat (a full-screen sheet below 1024 px), loaded from `GET /api/ai/artifacts/:conversationId/:artifactId`: Preview / Code in the same sandbox runner, ‹ › through the versions, Copy, Download, and **Open chat**. Open chat goes to `/vinaxai/c/<id>?m=<reply>&a=<artifact>`; the chat switches to that reply's branch when it is not the one on screen (and remembers it, as the ‹ › switcher does), scrolls to the reply, opens the artifact on that version, and drops the query from the address. Closing the panel puts focus back on its card.
+
+**Data.** Nothing new is stored: the gallery reads `ai_messages.artifacts`, which every reply already saves. `ai_artifact_list(account, kind, query, before, before_key, limit)` (schema.sql) unpacks those arrays for the account's chats that are not deleted, keeps the newest version of each id per chat with a count of versions, filters by type and title (LIKE wildcards escaped) and pages by (time, `<conversation id>/<artifact id>`), never returning content. Versions in the gallery count every branch of the chat, so "v1 of 3" there can differ from the chat's own panel, which counts the branch on screen. A deleted chat's artifacts leave the gallery at once and go with the chat. Shared-chat pages are not affected.
 
 ## Voice
 
@@ -413,7 +425,7 @@ The waveform button (where Send is while the composer is empty) opens a full-scr
 - Personalisation: what VinaX AI should call you, what it should know about you, how it should reply, and a reply style (Normal, Concise, Explanatory, Formal, Learning). Sent with each message as `personal` (see [The system prompt](#the-system-prompt)); never saved with the chat.
 - Chat: the model (the same choice as the composer's picker), Extended thinking, Web search when it is offered.
 - Voice: the microphone (Automatic or a device, and a ten-second test with a level bar that names the device and says whether it heard anything), the Read aloud voice from Orpheus's English voices, the Live voice from ten of Gemini's voices (it also reads long replies), the Live model (Auto or one of `voice.liveModels`), and **Search the web in Live voice** (`liveSearch`, on by default; shown when `voice.liveSearch`). The Worker checks voices and the Live model against its own lists, and search against the owner's switch.
-- Your chats: Export all chats (`GET /api/ai/export`), the Shared links list (`SharedLinks.tsx`: open, copy, stop sharing, from `GET /api/ai/shares`; these live with the account, not the device), and a link to the app's Settings for everything else.
+- Your chats: Export all chats (`GET /api/ai/export`), Your artifacts (the [artifacts gallery](#artifacts-gallery)), the Shared links list (`SharedLinks.tsx`: open, copy, stop sharing, from `GET /api/ai/shares`; these live with the account, not the device), and a link to the app's Settings for everything else.
 
 ## Sharing
 
@@ -497,7 +509,7 @@ The probe script ([The probe](#the-probe)) is the fuller check: reasoning, syste
 **Layout.**
 - At 1024 px and wider, the conversation sidebar is a 260 px column (`Sidebar.tsx`). It can be collapsed; the choice is kept on the device.
 - Narrower, the sidebar is a slide-over drawer from the header's ☰. It closes on Escape, on Android's back button, or when you pick a chat.
-- The sidebar holds New chat and a search over titles and message text. Below that come Starred, then Recents grouped by Today, Yesterday, Previous 7 days and Older (`sidebarGroups.ts`).
+- The sidebar holds New chat, Artifacts (the [artifacts gallery](#artifacts-gallery)) and a search over titles and message text. Below that come Starred, then Recents grouped by Today, Yesterday, Previous 7 days and Older (`sidebarGroups.ts`).
 - Each row has a ⋯ menu: Star, Rename (inline), and Delete (after a confirmation).
 - The sidebar's foot shows the account, Settings (VinaX AI's own panel, [Settings](#settings)), and Back to VinaX. The header has a gear for the same panel.
 - A new chat opens on a time-aware greeting, with the composer in the middle and four chips (Write, Learn, Code, Music). The chips fill in a starter and never send.

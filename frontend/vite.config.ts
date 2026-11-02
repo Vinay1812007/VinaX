@@ -22,8 +22,8 @@ const APP_VERSION = BUILD_NUMBER ? `${pkg.version}+${BUILD_NUMBER}` : pkg.versio
  *  never pruned afterwards). The VinaX AI page (its Markdown renderer, code
  *  highlighter and maths engine) is on demand too, with its stylesheets and
  *  the maths fonts: it needs the network anyway, and a listener who never
- *  opens the chat should not download it. So is a shared chat's page. */
-export const ON_DEMAND_PAGES = /\/src\/pages\/VinaXAI(Share)?Page\.tsx$/;
+ *  opens the chat should not download it. So are a shared chat's page and the artifacts gallery. */
+export const ON_DEMAND_PAGES = /\/src\/pages\/VinaXAI(Share|Artifacts)?Page\.tsx$/;
 /** The maths engine's fonts (loaded by its on-demand stylesheet), the PDF reader's worker (loaded when a PDF is added) and Live voice's mic tap (loaded when Live voice opens). */
 export const ON_DEMAND_ASSETS = /^assets\/(KaTeX_[\w-]+\.(woff2?|ttf)|pdf\.worker[\w.-]*\.m?js|micTap\.worklet[\w.-]*\.js)$/;
 

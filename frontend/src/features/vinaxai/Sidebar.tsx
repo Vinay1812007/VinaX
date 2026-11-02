@@ -1,5 +1,5 @@
 /**
- * VinaX AI — the conversation sidebar: New chat, search, Starred, then
+ * VinaX AI — the conversation sidebar: New chat, Artifacts, search, Starred, then
  * Recents by day, each with a ⋯ menu (Star, Rename, Delete), and the
  * account with links to Settings and back to VinaX. On a wide screen it is
  * a column that can be collapsed; below 1024px it is a slide-over drawer.
@@ -14,7 +14,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { groupConversations } from './sidebarGroups';
 import { resetChat, useChatStore } from './store';
 import { moveFocus, useDismiss } from './useDismiss';
-import { ArrowLeftIcon, CloseIcon, DotsIcon, NewChatIcon, PencilIcon, SearchSmallIcon, SidebarIcon, StarIcon, TrashIcon } from './icons';
+import { ArrowLeftIcon, ArtifactsIcon, CloseIcon, DotsIcon, NewChatIcon, PencilIcon, SearchSmallIcon, SidebarIcon, StarIcon, TrashIcon } from './icons';
 import type { ConversationSummary } from './types';
 
 export const LIST_KEY = ['vinaxai', 'conversations'] as const;
@@ -169,6 +169,10 @@ export function Sidebar({ onNavigate, onNewChat, onCollapse, drawer, onSettings 
         <NewChatIcon className="w-5 h-5" />
         <span>New chat</span>
       </button>
+      <NavLink to="/vinaxai/artifacts" end className={({ isActive }) => `vx-ai-side-new vx-ai-side-nav${isActive ? ' is-active' : ''}`} onClick={onNavigate}>
+        <ArtifactsIcon className="w-5 h-5" />
+        <span>Artifacts</span>
+      </NavLink>
       <div className="vx-ai-side-search">
         <SearchSmallIcon className="w-4 h-4" />
         <input type="search" aria-label="Search chats" placeholder="Search chats" value={search} onChange={(e) => setSearch(e.target.value)} />

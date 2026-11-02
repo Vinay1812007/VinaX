@@ -10,7 +10,7 @@
  * See docs/ai.md.
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAccount } from '@/components/useAccount';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -23,7 +23,7 @@ import { AssistantMessage, UserMessage } from './Message';
 import { NowPlayingPill } from './NowPlayingPill';
 import { usePrefs } from './prefs';
 import { Sidebar } from './Sidebar';
-import { continueReply, resetChat, retryReply, sendMessage, stopReply, useChatStore } from './store';
+import { continueReply, resetChat, retryReply, selectBranch, sendMessage, stopReply, useChatStore } from './store';
 import { useDismiss } from './useDismiss';
 import { usePendingFiles } from './usePendingFiles';
 import { PendingChips } from './FileChips';
@@ -257,6 +257,23 @@ export function ChatView(): ReactNode {
     const el = scroller.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [messages, leafId]);
+
+  // Opened from the artifacts gallery (?m=<reply>&a=<artifact>): show that
+  // reply's branch, scroll to it and open its artifact, once.
+  const [params, setParams] = useSearchParams();
+  const jumpTo = params.get('m');
+  const jumpArtifact = params.get('a');
+  useEffect(() => {
+    if (!jumpTo || !id || conversationId !== id || streaming) return;
+    if (!messages[jumpTo]) { setParams({}, { replace: true }); return; }
+    if (!thread.some((m) => m.id === jumpTo)) { selectBranch(jumpTo); return; }
+    setParams({}, { replace: true });
+    stick.current = false;
+    const v = jumpArtifact ? versions.get(jumpArtifact) : undefined;
+    const at = v?.findIndex((x) => x.messageId === jumpTo) ?? -1;
+    if (v && at >= 0) usePanel.getState().show(jumpArtifact!, at, { tab: hasPreview(v[at].artifact.type) ? 'preview' : 'code' });
+    requestAnimationFrame(() => [...(scroller.current?.querySelectorAll<HTMLElement>('[data-message-id]') ?? [])].find((el) => el.dataset.messageId === jumpTo)?.scrollIntoView({ block: 'start' }));
+  }, [jumpTo, jumpArtifact, id, conversationId, streaming, messages, thread, versions, setParams]);
 
   // Announce a finished reply (only then) to screen readers.
   const [announce, setAnnounce] = useState('');

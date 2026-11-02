@@ -73,6 +73,16 @@ When VinaX AI writes something substantial, such as a web page, a small app, a c
 - When VinaX AI updates something it made, the panel shows **v2 of 2**. Use **‹ ›** to step between versions.
 - On a computer, drag the panel's edge to make it wider or narrower. **Close** returns to the chat.
 
+### Everything VinaX AI made, in one place
+
+**Artifacts** in the sidebar (just under **New chat**), or **Settings** → **Your chats** → **Your artifacts**, opens a page with every page, app, chart, diagram, picture, document and piece of code your chats made, newest first.
+
+- Each card shows its name, what kind it is (with the programming language for code), how many versions there are, and the chat and day it came from.
+- The buttons along the top (**Pages**, **Components**, **Diagrams**, **Images**, **Documents**, **Code**) show one kind at a time, and the search box finds things by name. Scroll down for older ones.
+- Tap a card to open it in the same panel as in a chat, with **Preview**, **Code**, **Copy**, **Download** and **‹ ›** for its versions.
+- **Open chat** takes you to the reply that made the version you're looking at, with it open beside the chat.
+- Nothing extra is saved for this page: it shows what's already in your chats. Delete a chat and its artifacts leave this page too.
+
 ## Talk to VinaX AI by voice
 
 Voice controls appear when the service has voice switched on.
@@ -81,7 +91,7 @@ Voice controls appear when the service has voice switched on.
 - **Read aloud**: tap the speaker under a reply. Code, links and source numbers are skipped, and anything in the side panel is named rather than read. Tap it again to stop.
 - **Live voice**: with nothing typed in the message box, tap the sound-wave button where Send usually is. A full-screen view opens and you can simply talk, with captions of what each of you says. Talking over VinaX AI stops it so you can carry on. The microphone button mutes you, and **End** (or `Esc`) closes it. What you both said is saved into the chat as ordinary messages. A Live voice session lasts about ten minutes; start another to keep talking.
 - **Web search in Live voice**: when web search is available, Live voice can look things up as you talk (news, tour dates, charts, anything current). It says it's checking, answers out loud and tells you which site it used; the sites appear under the captions and are saved with the reply. The globe button in Live voice turns it on or off (Live voice reconnects for a moment and carries on where you were), and **Settings** → **Search the web in Live voice** sets it for next time.
-- **Settings** (the gear at the top, **Settings** in the sidebar, or **+** → **Settings**) has VinaX AI's own settings: the theme, Personalisation, artifacts and live previews, the model, Extended thinking, web search, your **microphone** (with **Test microphone**, which shows a level bar and says whether it hears you), the voice that reads replies, the Live voice (it also reads long replies), the Live voice model, **Search the web in Live voice**, **Export all chats** and your **Shared links**. They are kept on this device, apart from the theme (VinaX's own) and the shared links, which live with your account.
+- **Settings** (the gear at the top, **Settings** in the sidebar, or **+** → **Settings**) has VinaX AI's own settings: the theme, Personalisation, artifacts and live previews, the model, Extended thinking, web search, your **microphone** (with **Test microphone**, which shows a level bar and says whether it hears you), the voice that reads replies, the Live voice (it also reads long replies), the Live voice model, **Search the web in Live voice**, **Export all chats**, **Your artifacts** and your **Shared links**. They are kept on this device, apart from the theme (VinaX's own) and the shared links, which live with your account.
 
 Your music pauses while the microphone is open and plays on quietly while a reply is read, then comes back as it was. The first time, your browser or phone asks to use the microphone. In the Android app it is the same question voice search asks.
 

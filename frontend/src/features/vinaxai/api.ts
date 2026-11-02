@@ -6,7 +6,7 @@
 import { currentAccount } from '@/services/auth/google';
 import { isNativePlatform } from '@/services/native';
 import { SseParser } from './sse';
-import type { ConversationSummary, ModelsResponse, ServerConversation, ServerMessage, SharedChat, ShareSummary, StreamEvent } from './types';
+import type { ConversationSummary, GalleryArtifact, GalleryItem, ModelsResponse, ServerConversation, ServerMessage, SharedChat, ShareSummary, StreamEvent } from './types';
 import { setFileLimits } from './files';
 
 const ORIGIN = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
@@ -53,6 +53,21 @@ export const patchConversation = (id: string, patch: { title?: string; starred?:
   call(`/conversations/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) });
 
 export const deleteConversation = (id: string): Promise<{ ok: true }> => call(`/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
+// ---------- artifacts gallery ----------
+
+export const listArtifacts = (opts: { kind?: GalleryItem['kind'] | null; q?: string; cursor?: string | null } = {}): Promise<{ items: GalleryItem[]; nextCursor: string | null }> => {
+  const p = new URLSearchParams();
+  if (opts.kind) p.set('kind', opts.kind);
+  if (opts.q) p.set('q', opts.q);
+  if (opts.cursor) p.set('cursor', opts.cursor);
+  const qs = p.toString();
+  return call(`/artifacts${qs ? `?${qs}` : ''}`);
+};
+
+/** One artifact with every version's content. */
+export const getArtifact = (conversationId: string, artifactId: string): Promise<{ artifact: GalleryArtifact }> =>
+  call(`/artifacts/${encodeURIComponent(conversationId)}/${encodeURIComponent(artifactId)}`);
 
 // ---------- shared links ----------
 
