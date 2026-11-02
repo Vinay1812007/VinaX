@@ -16,6 +16,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.8.8': {
+    title: 'Database version 9 for VinaX AI projects, memory and the artifacts gallery',
+    changes: [
+      { type: 'improved', text: 'Behind the scenes: VinaX\'s database is ready for VinaX AI projects, memory and the artifacts gallery, coming in the next updates.' },
+    ],
+  },
   '1.8.7': {
     title: 'VinaX AI memory across chats, with incognito chats',
     changes: [
