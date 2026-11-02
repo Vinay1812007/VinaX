@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.8.5': {
+    title: 'Share VinaX AI chats by link',
+    changes: [
+      { type: 'improved', text: 'Share any VinaX AI chat with a link: press Share at the top of a chat, then Create link.' },
+      { type: 'improved', text: 'Anyone with the link can read the chat, even without an account: your messages and the replies, with code, pages and diagrams. Files show by name only.' },
+      { type: 'new', text: 'Update the link to add newer messages, or stop sharing at any time; Settings → Your chats lists every link you\'ve shared.' },
+      { type: 'improved', text: 'Opened a shared chat? Press Continue this chat to carry on in a chat of your own.' },
+    ],
+  },
   '1.8.4': {
     title: 'Web search in Live voice',
     changes: [
