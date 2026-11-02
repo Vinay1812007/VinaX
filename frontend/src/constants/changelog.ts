@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.8.7': {
+    title: 'VinaX AI memory across chats, with incognito chats',
+    changes: [
+      { type: 'improved', text: 'VinaX AI now remembers lasting things you tell it across chats, like what you\'re learning or the language you like replies in, so you don\'t have to repeat yourself.' },
+      { type: 'improved', text: 'Say "remember that…" or "forget that…" in a chat. It never keeps passwords, numbers, contact details, health details or anything about other people.' },
+      { type: 'new', text: 'See, delete or add memories in VinaX AI Settings → Memory, press Forget everything, or switch memory or learning off.' },
+      { type: 'new', text: 'Start an incognito chat with the new button at the top of a new chat: it won\'t use or add to your memory.' },
+    ],
+  },
   '1.8.6': {
     title: 'Draw diagrams with brackets in labels; Fix it for failed previews',
     changes: [
