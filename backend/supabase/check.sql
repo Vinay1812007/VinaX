@@ -68,6 +68,22 @@ insert into ai_conversations (id, account_id, title) values ('00000000-0000-4000
 insert into ai_shares (id, account_id, conversation_id, title, messages, message_count, bytes) values
   ('check_share_0000000001', 'check_a1', '00000000-0000-4000-8000-00000000c001', 'Check chat about ragas', '[{"role": "user", "text": "What is a raga?"}]', 1, 42),
   ('check_share_0000000002', 'check_a1', '00000000-0000-4000-8000-00000000c002', 'Check chat to delete', '[]', 0, 2);
+-- VinaX AI projects: one project holding the first chat and a knowledge file,
+-- and a second project (with a chat and a file) to delete
+insert into ai_projects (id, account_id, name, description, instructions) values
+  ('00000000-0000-4000-8000-00000000c030', 'check_a1', 'Check project', 'Ragas', 'Answer in short sentences.'),
+  ('00000000-0000-4000-8000-00000000c031', 'check_a1', 'Check project to delete', null, null);
+update ai_conversations set project_id = '00000000-0000-4000-8000-00000000c030' where id = '00000000-0000-4000-8000-00000000c001';
+insert into ai_conversations (id, account_id, title, project_id) values ('00000000-0000-4000-8000-00000000c003', 'check_a1', 'Check chat in a project', '00000000-0000-4000-8000-00000000c031');
+insert into ai_attachments (id, account_id, project_id, name, mime, size, kind, storage_path, extracted_text) values
+  ('00000000-0000-4000-8000-00000000c032', 'check_a1', '00000000-0000-4000-8000-00000000c030', 'syllabus.md', 'text/markdown', 9, 'text', 'check_a1/project-c030/c032', 'Yaman, Bhairav'),
+  ('00000000-0000-4000-8000-00000000c033', 'check_a1', '00000000-0000-4000-8000-00000000c031', 'old.txt', 'text/plain', 3, 'text', 'check_a1/project-c031/c033', 'old');
+-- VinaX AI memory: a note learned from the second chat, one the listener added, their switches
+insert into ai_memories (id, account_id, text, origin, conversation_id) values
+  ('00000000-0000-4000-8000-00000000c030', 'check_a1', 'Is learning Carnatic vocals', 'chat', '00000000-0000-4000-8000-00000000c002'),
+  ('00000000-0000-4000-8000-00000000c031', 'check_a1', 'Prefers answers in Telugu', 'user', null);
+insert into ai_memory_prefs (account_id, learn) values ('check_a1', false);
+update ai_conversations set incognito = true where id = '00000000-0000-4000-8000-00000000c002';
 -- The personal engine: seven songs, five embedded in a toy space where song n
 -- points along axis n (so s1 and s2 are far apart and the taste vector is a
 -- mix), one account with a taste model, one with nothing yet.
@@ -258,8 +274,52 @@ begin
   select exists (select 1 from ai_shares where id = 'check_share_0000000002') into b;
   assert not b, 'ai_shares: deleting the chat removes its link';
 
+  -- VinaX AI projects: limits on the text, and what deleting a project does
+  begin
+    insert into ai_projects (id, account_id, name) values ('00000000-0000-4000-8000-00000000c034', 'check_a1', '');
+    assert false, 'ai_projects.name must not be empty';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into ai_projects (id, account_id, name, instructions) values ('00000000-0000-4000-8000-00000000c034', 'check_a1', 'x', repeat('x', 8001));
+    assert false, 'ai_projects.instructions are at most 8,000 characters';
+  exception when check_violation then null;
+  end;
+  delete from ai_projects where id = '00000000-0000-4000-8000-00000000c031';
+  select project_id is null into b from ai_conversations where id = '00000000-0000-4000-8000-00000000c003';
+  assert b, 'ai_projects: deleting a project keeps its chats as ordinary chats';
+  select exists (select 1 from ai_attachments where id = '00000000-0000-4000-8000-00000000c033') into b;
+  assert not b, 'ai_projects: deleting a project removes its knowledge files';
+  delete from ai_conversations where id = '00000000-0000-4000-8000-00000000c003';
+  -- VinaX AI memory: a note outlives the chat it came from; shapes are checked
+  select conversation_id is null into b from ai_memories where id = '00000000-0000-4000-8000-00000000c030';
+  assert b, 'ai_memories: deleting the chat keeps its notes, without the link';
+  select count(*) into n from ai_memories where account_id = 'check_a1';
+  assert n = 2, 'ai_memories: both notes kept';
+  begin
+    insert into ai_memories (id, account_id, text) values ('00000000-0000-4000-8000-00000000c032', 'check_a1', '');
+    assert false, 'ai_memories.text must not be empty';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into ai_memories (id, account_id, text) values ('00000000-0000-4000-8000-00000000c032', 'check_a1', repeat('x', 201));
+    assert false, 'ai_memories.text is at most 200 characters';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into ai_memories (id, account_id, text, origin) values ('00000000-0000-4000-8000-00000000c032', 'check_a1', 'x', 'model');
+    assert false, 'ai_memories.origin is chat or user';
+  exception when check_violation then null;
+  end;
+  select use_memory and not learn into b from ai_memory_prefs where account_id = 'check_a1';
+  assert b, 'ai_memory_prefs: use defaults to on, learn as set';
+  select incognito into b from ai_conversations where id = '00000000-0000-4000-8000-00000000c001';
+  assert not b, 'ai_conversations.incognito defaults to false';
+
   v := ai_export('check_a1');
   assert v ->> 'format' = 'vinax-ai-chats' and jsonb_array_length(v -> 'conversations') = 1, 'ai_export: one chat';
+  assert jsonb_array_length(v -> 'projects') = 1 and v #>> '{projects,0,files,0,name}' = 'syllabus.md'
+    and v #>> '{conversations,0,projectId}' = '00000000-0000-4000-8000-00000000c030', 'ai_export: the project, its files by name and the chat in it';
   assert jsonb_array_length(v -> 'conversations' -> 0 -> 'messages') = 3, 'ai_export: every message, every branch';
   assert jsonb_array_length(ai_export('check_a2') -> 'conversations') = 0, 'ai_export: another account gets nothing';
   begin
@@ -267,6 +327,43 @@ begin
     assert false, 'ai_messages.role refuses system';
   exception when check_violation then null;
   end;
+
+  -- VinaX AI artifacts gallery: newest version per id per chat, deleted and other accounts' chats left out
+  insert into ai_conversations (id, account_id, title, deleted_at) values
+    ('00000000-0000-4000-8000-00000000c003', 'check_a1', 'Check chat with artifacts', null),
+    ('00000000-0000-4000-8000-00000000c004', 'check_a1', 'Check deleted chat', now()),
+    ('00000000-0000-4000-8000-00000000c005', 'check_a2', 'Check other account', null);
+  insert into ai_messages (id, conversation_id, role, content, artifacts, created_at) values
+    ('00000000-0000-4000-8000-00000000c030', '00000000-0000-4000-8000-00000000c003', 'assistant', '[]',
+     '[{"id": "page", "type": "html", "title": "Page v1", "language": null, "content": "<h1>1</h1>", "incomplete": false}]', now() - interval '3 minutes'),
+    ('00000000-0000-4000-8000-00000000c031', '00000000-0000-4000-8000-00000000c003', 'assistant', '[]',
+     '[{"id": "page", "type": "html", "title": "Page 100%", "language": null, "content": "<h1>2</h1>", "incomplete": false},
+       {"id": "sort", "type": "code", "title": "Sort", "language": "python", "content": "x", "incomplete": false}]', now() - interval '2 minutes'),
+    ('00000000-0000-4000-8000-00000000c032', '00000000-0000-4000-8000-00000000c004', 'assistant', '[]',
+     '[{"id": "gone", "type": "svg", "title": "Gone", "content": "<svg/>"}]', now()),
+    ('00000000-0000-4000-8000-00000000c033', '00000000-0000-4000-8000-00000000c005', 'assistant', '[]',
+     '[{"id": "theirs", "type": "svg", "title": "Theirs", "content": "<svg/>"}]', now());
+  select count(*) into n from ai_artifact_list('check_a1');
+  assert n = 2, 'ai_artifact_list: one row per artifact, deleted chats left out';
+  select count(*) into n from ai_artifact_list('check_a1') where artifact_id = 'page' and title = 'Page 100%' and versions = 2
+    and message_id = '00000000-0000-4000-8000-00000000c031';
+  assert n = 1, 'ai_artifact_list: the newest version, with the version count';
+  select count(*) into n from ai_artifact_list('check_a2');
+  assert n = 1, 'ai_artifact_list: another account sees only its own';
+  select count(*) into n from ai_artifact_list('check_a1', 'code');
+  assert n = 1, 'ai_artifact_list: by kind';
+  select count(*) into n from ai_artifact_list('check_a1', null, '100%');
+  assert n = 1, 'ai_artifact_list: by title';
+  select count(*) into n from ai_artifact_list('check_a1', null, 'v1');
+  assert n = 0, 'ai_artifact_list: an older title does not match';
+  select count(*) into n from ai_artifact_list('check_a1', null, '%');
+  assert n = 1, 'ai_artifact_list: % is literal, not a wildcard';
+  select count(*) into n from ai_artifact_list('check_a1', null, null, null, null, 1);
+  assert n = 1, 'ai_artifact_list: the page size holds';
+  select count(*) into n from ai_artifact_list('check_a1', null, null,
+    (select created_at from ai_artifact_list('check_a1') order by created_at desc, key desc limit 1),
+    (select key from ai_artifact_list('check_a1') order by created_at desc, key desc limit 1), 30);
+  assert n = 1, 'ai_artifact_list: the next page starts after the cursor';
 
   -- the personal engine
   v := personal_record_events('check_a1', '[
@@ -383,6 +480,12 @@ begin
   assert not b, 'delete_listener: VinaX AI attachments went with the account';
   select exists (select 1 from ai_shares where account_id = 'check_a1') into b;
   assert not b, 'delete_listener: VinaX AI shared links went with the account';
+  select exists (select 1 from ai_projects where account_id = 'check_a1') into b;
+  assert not b, 'delete_listener: VinaX AI projects went with the account';
+  select exists (select 1 from ai_memories where account_id = 'check_a1') into b;
+  assert not b, 'delete_listener: VinaX AI memory went with the account';
+  select exists (select 1 from ai_memory_prefs where account_id = 'check_a1') into b;
+  assert not b, 'delete_listener: VinaX AI memory switches went with the account';
   v := delete_listener(null, 'check_a2');
   assert (v ->> 'account')::int = 1 and (v ->> 'listener')::int = 0, 'delete_listener by account';
 
@@ -396,11 +499,13 @@ begin
   assert not has_function_privilege('anon', 'public.stats_overview()', 'execute'), 'anon cannot call stats_overview';
   assert not has_table_privilege('anon', 'public.ai_messages', 'select'), 'anon cannot read VinaX AI messages';
   assert not has_table_privilege('anon', 'public.ai_shares', 'select'), 'anon cannot read VinaX AI shared links directly';
+  assert not has_table_privilege('anon', 'public.ai_projects', 'select'), 'anon cannot read VinaX AI projects';
+  assert not has_table_privilege('anon', 'public.ai_memories', 'select'), 'anon cannot read VinaX AI memory';
   assert not has_function_privilege('anon', 'public.ai_conversation_search(text, text, timestamptz, integer)', 'execute'), 'anon cannot search VinaX AI chats';
   assert not has_table_privilege('anon', 'public.personal_events', 'select'), 'anon cannot read personal events';
   assert not has_function_privilege('anon', 'public.personal_neighbours(text, text, integer, text[], boolean)', 'execute'), 'anon cannot call the personal engine';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 8, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 9, 'meta.schema.version';
   raise notice 'check.sql: every function answered as expected';
 end $$;
 
