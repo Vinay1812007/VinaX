@@ -18,7 +18,7 @@
 --   3. usage events               4. feedback and blocked content
 --   5. Listen Together rooms      6. push devices and notifications
 --   7. settings and experiments   8. audit log, uptime, job runs
---  8b. console admins, error status (version 8)
+--  8b. console admins, error status (version 9)
 --   9. VinaX AI conversations    9b. the personal engine
 --  10. views
 --  11. functions (stats_*, room_*, housekeeping)
@@ -391,7 +391,7 @@ create table if not exists job_runs (
 );
 create index if not exists job_runs_job_idx on job_runs (job, started_at desc);
 
--- ------------------------------------------- 8b. the console (version 8) --
+-- ------------------------------------------- 8b. the console (version 9) --
 
 -- Who may open the owner console. Admins sign in with Google; only an email
 -- on this list gets in. owner: everything (database upkeep, admins);
@@ -1333,7 +1333,7 @@ create or replace view directory as
 create or replace function _days(p int) returns int
 language sql immutable as $$ select least(greatest(coalesce(p, 7), 1), 365) $$;
 
--- Version 8 — the console counts PEOPLE signed in with Google, never
+-- Version 9 — the console counts PEOPLE signed in with Google, never
 -- anonymous devices. A device counts when it belongs to an account (its
 -- account_id, or the account's latest device). Anonymous rows stay in the
 -- database; they are only left out of these answers. App errors are the
@@ -1781,7 +1781,7 @@ begin
 end;
 $$;
 
--- Version 8 — the console's Users page: signed-in people only, filtered and
+-- Version 9 — the console's Users page: signed-in people only, filtered and
 -- sorted on the server, one page at a time, with the counts the page shows.
 -- p_sort: last_active | joined | plays | name.
 create or replace function admin_users(

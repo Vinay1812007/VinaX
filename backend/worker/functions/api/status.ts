@@ -129,13 +129,17 @@ export const onRequestGet = async (context: { request: Request; env?: DbEnv }): 
   });
   const allUp = components.every((c) => c.status === 'up');
   const anyDown = components.some((c) => c.status === 'down');
-  const note = clip(asObject(noteValue)?.text, 500);
+  // v8 — the note has a switch and a level: ok ("All good"), minor, major (null for a note saved before v8).
+  const noteObj = asObject(noteValue);
+  const note = noteObj?.enabled === false ? null : clip(noteObj?.text, 500);
+  const noteLevel = note && (noteObj?.level === 'ok' || noteObj?.level === 'minor' || noteObj?.level === 'major') ? noteObj.level : null;
   return json(
     {
       generatedAt: new Date().toISOString(),
       windowDays: WINDOW_DAYS,
       overall: allUp ? 'operational' : anyDown ? 'outage' : 'unknown',
       note,
+      noteLevel,
       components,
     },
     200,

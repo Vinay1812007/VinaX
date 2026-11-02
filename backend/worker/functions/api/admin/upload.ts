@@ -1,5 +1,5 @@
 /**
- * Version 8 — POST /api/admin/upload { data: "data:image/jpeg;base64,…", purpose: "banner" | "notification" | "other" }
+ * Console rebuild — POST /api/admin/upload { data: "data:image/jpeg;base64,…", purpose: "banner" | "notification" | "other" }
  *   → { ok, url, path }
  *
  * A picture the console cropped and resized in the browser, stored in the
@@ -31,7 +31,7 @@ export const onRequestPost = adminPost(async ({ env, body, audit }) => {
   const path = `${purpose}/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${TYPES[m[1]]}`;
   const base = `${String(env.SUPABASE_URL).trim().replace(/\/+$/, '')}/storage/v1/object`;
   const key = String(env.SUPABASE_SERVICE_ROLE_KEY).trim();
-  let ok = false;
+  let ok: boolean;
   try {
     const res = await fetch(`${base}/${MEDIA_BUCKET}/${path}`, {
       method: 'POST',

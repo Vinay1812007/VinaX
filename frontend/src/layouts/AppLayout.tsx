@@ -1,7 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { STORAGE_PREFIX } from '@/constants/storage-keys';
 import { toast } from '@/store/toastStore';
-import { setDisabledSources } from '@/constants/endpoints';
+import { setDisabledSources, setSourceOrder } from '@/constants/endpoints';
 import { setSearchSynonyms } from '@/services/search/synonyms';
 import { useClientConfig } from '@/features/home/useAppConfig';
 import { Outlet, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
@@ -22,6 +21,7 @@ import { DiagBanner } from '@/components/DiagBanner';
 import { OfflineBanner } from '@/components/OfflineBanner';
 const OnboardingSheet = lazy(() => import('@/components/OnboardingSheet').then(m => ({ default: m.OnboardingSheet })));
 import { AnnouncementBridge } from '@/components/AnnouncementBridge';
+import { AnnouncementPopup, BroadcastBar, VersionNotice } from '@/components/OwnerMessages';
 import { applyUsageSharingDefault, initTelemetry } from '@/services/analytics/telemetry';
 import { initSessionInsights } from '@/services/analytics/sessionInsights';
 import { applyGlassLevel, applyThemeClasses, resolveTheme } from '@/utils/theme';
@@ -52,7 +52,7 @@ import { ErrorBoundary, PlayerErrorBoundary } from '@/components/ErrorBoundary';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { usePlayerStore } from '@/store/playerStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { getLocal, runMigrations, setLocal } from '@/services/storage/local';
+import { runMigrations } from '@/services/storage/local';
 import { resolveRegion } from '@/services/location/inference';
 import { readBrowserSignals } from '@/services/location/browserSignals';
 import { defaultLanguagesForCountry } from '@/constants/regions';
@@ -90,23 +90,11 @@ function useClientConfigEffects(): void {
     if (!cfg) return;
     setSearchSynonyms(cfg.synonyms);
     setDisabledSources(cfg.disabledSources);
-    const b = cfg.broadcast;
-    if (b && getLocal<string>(BROADCAST_SEEN_KEY, '') !== b.id) {
-      setLocal(BROADCAST_SEEN_KEY, b.id);
-      // 11.7.2 — the owner's message used to flash as a 4-second toast and then
-      // yank the listener to its link a second later, which read as a glitch
-      // and was easy to miss. It now stays up for 15 s and the link is the
-      // listener's choice ("Open").
-      const link = b.link;
-      toast(b.text, {
-        key: 'broadcast',
-        duration: 15_000,
-        ...(link && link !== location.pathname ? { action: { label: 'Open', onClick: () => navigate(link) } } : {}),
-      });
-    }
+    setSourceOrder(cfg.sourceOrder);
+    // Console rebuild — the owner's broadcast is the message bar at the top of the
+    // page (components/OwnerMessages.tsx), no longer a one-off toast.
   }, [cfg, navigate]);
 }
-const BROADCAST_SEEN_KEY = `${STORAGE_PREFIX}.broadcast-seen`;
 
 import { recsDebugEnabled } from '@/store/recsDebugStore';
 import { useTogether } from '@/services/together/session';
@@ -517,6 +505,8 @@ export function AppLayout() {
           {!isChat && <MobileBackBar />}
           <DiagBanner />
           <OfflineBanner />
+          {!isFullScreenPlayer && <BroadcastBar />}
+          {!isFullScreenPlayer && <VersionNotice />}
           <ErrorBoundary resetKey={pathname}>
             <Suspense fallback={<PageSkeleton />}>
               {/* Search keeps one mount across /search → /search/:q so
@@ -541,6 +531,7 @@ export function AppLayout() {
       </PlayerErrorBoundary>
       <Suspense fallback={null}><OnboardingSheet /></Suspense>
       <AnnouncementBridge />
+      <AnnouncementPopup />
       {/* 15.0 — Android: keeps this week's Weekly Mix downloaded on Wi-Fi when the setting is on. */}
       {/* 15.0 — background bridges, lazy so they stay out of the first-load bundle. */}
       <Suspense fallback={null}><Bridges15 /></Suspense>

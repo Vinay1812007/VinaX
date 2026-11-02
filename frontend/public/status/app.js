@@ -27,15 +27,30 @@
   }
 
   var note = document.getElementById('note');
-  function renderNote(n) {
+  // v8 — the owner picks a level for the note: ok (All good), minor, major.
+  var NOTE_TONE = {
+    ok: ['All good', 'rgb(70 180 120 / 0.14)', 'rgb(70 180 120 / 0.45)'],
+    minor: ['Minor issue', 'rgb(230 162 60 / 0.14)', 'rgb(230 162 60 / 0.45)'],
+    major: ['Major outage', 'rgb(230 80 70 / 0.16)', 'rgb(230 80 70 / 0.5)']
+  };
+  function renderNote(n, level) {
     var text = typeof n === 'string' ? n : n && typeof n.text === 'string' ? n.text : '';
     if (!text.trim()) { note.style.display = 'none'; note.textContent = ''; return; }
-    note.textContent = text.trim();
+    var tone = NOTE_TONE[level] || NOTE_TONE.minor;
+    note.textContent = '';
+    if (NOTE_TONE[level]) {
+      var tag = document.createElement('strong');
+      tag.textContent = tone[0] + ' — ';
+      note.appendChild(tag);
+    }
+    note.appendChild(document.createTextNode(text.trim()));
+    note.style.background = tone[1];
+    note.style.borderColor = tone[2];
     note.style.display = 'block';
   }
   function render(data) {
     err.style.display = 'none';
-    renderNote(data.note);
+    renderNote(data.note, data.noteLevel);
     document.getElementById('window').textContent = String(data.windowDays || 90);
     banner.className = data.overall === 'operational' ? 'ok' : data.overall === 'outage' ? 'bad' : '';
     banner.textContent =

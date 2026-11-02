@@ -50,9 +50,20 @@ let disabled = new Set<string>();
 export function setDisabledSources(ids: string[] | undefined | null): void {
   disabled = new Set(Array.isArray(ids) ? ids : []);
 }
+/** v8 — the owner's priority order (App Settings → Music Sources); unknown ids are ignored. */
+let order: string[] = [];
+export function setSourceOrder(ids: string[] | undefined | null): void {
+  order = Array.isArray(ids) ? ids.filter((x) => typeof x === 'string') : [];
+}
+const rankOf = (id: string): number => {
+  const i = order.indexOf(id);
+  return i < 0 ? order.length : i;
+};
 export function activeBases(): ApiBase[] {
   const on = API_BASES.filter((b) => !disabled.has(b.id));
-  return on.length ? on : API_BASES;
+  const list = on.length ? on : API_BASES;
+  // Stable sort: bases the owner did not rank keep their built-in order.
+  return order.length ? list.map((b, i) => ({ b, i })).sort((x, y) => rankOf(x.b.id) - rankOf(y.b.id) || x.i - y.i).map((x) => x.b) : list;
 }
 
 export const REQUEST_TIMEOUT_MS = 8000;

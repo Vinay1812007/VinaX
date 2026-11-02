@@ -1,4 +1,4 @@
-import { isBlockedSong } from '@/services/content/blocklist';
+import { isBlockedAlbum, isBlockedSong } from '@/services/content/blocklist';
 import type {
   Album,
   AlbumRef,
@@ -162,6 +162,7 @@ export function normalizeAlbum(raw: any): Album | null {
   const id = str(raw.id, raw.albumid);
   const title = decodeHtml(str(raw.name, raw.title));
   if (!id || !title) return null;
+  if (isBlockedAlbum(id)) return null; // console rebuild: blocked from the owner console
   const songsRaw = raw.songs ?? raw.list ?? raw.more_info?.songs;
   return {
     kind: 'album',

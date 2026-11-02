@@ -236,7 +236,7 @@ function useOtherDialogOpen(watch: boolean): boolean {
 }
 
 export function FestiveSplash() {
-  const { festival, theme, preview } = useFestivalNow();
+  const { festival, theme, preview, color } = useFestivalNow();
   const navigate = useNavigate();
   // Once per festival per year (a preview always shows, and is never recorded).
   const seenKey = festival ? `${festival.id}-${new Date().getFullYear()}` : '';
@@ -268,6 +268,21 @@ export function FestiveSplash() {
       for (const c of Array.from(root.classList)) if (c.startsWith('fest-')) root.classList.remove(c);
     };
   }, [theme]);
+
+  // Console rebuild — the owner's own colour for a forced festival: the accent ramp
+  // (--ember-400/500/600, "r g b") follows it while the skin is on.
+  useEffect(() => {
+    const st = document.documentElement.style;
+    const props = ['--ember-400', '--ember-500', '--ember-600'];
+    if (!theme || !color) { props.forEach((p) => st.removeProperty(p)); return; }
+    const n = parseInt(color.slice(1), 16);
+    const rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    const mix = (k: number) => rgb.map((c) => Math.round(k >= 0 ? c + (255 - c) * k : c * (1 + k))).join(' ');
+    st.setProperty('--ember-400', mix(0.2));
+    st.setProperty('--ember-500', mix(0));
+    st.setProperty('--ember-600', mix(-0.2));
+    return () => props.forEach((p) => st.removeProperty(p));
+  }, [theme, color]);
 
   const visible = !!festival && openFor === festival.id && (preview || !busy);
   const close = useCallback(() => {

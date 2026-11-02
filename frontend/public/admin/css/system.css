@@ -1,1 +1,56 @@
 /* VinaX console — page styles (system). Uses the tokens in console.css. */
+
+/* App Health → App Errors */
+.status-sel { min-width: 150px; height: 34px; font-weight: 600; }
+.status-sel.st-new { color: var(--info); }
+.status-sel.st-investigating { color: var(--warn); }
+.status-sel.st-fixed { color: var(--ok); }
+.status-sel.st-ignored { color: var(--text-3); }
+.err-what .cell-main { font-weight: 600; }
+details.tech summary { cursor: pointer; color: var(--text-2); font-size: 12.5px; white-space: nowrap; }
+details.tech[open] { min-width: 260px; }
+details.tech .kv { margin-top: 6px; font-size: 12.5px; }
+.tech-msg { word-break: break-word; }
+.tech-list { margin: 0; padding-left: 16px; }
+
+/* App Health → other tabs */
+.release-notes { white-space: pre-wrap; max-height: 240px; overflow: auto; font-size: 13px; color: var(--text-2); }
+.key-status > li { align-items: flex-start; }
+.key-state { min-width: 74px; }
+.tech-name { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
+details.dev-help { margin-top: 8px; }
+details.dev-help summary { cursor: pointer; color: var(--text-2); font-size: 13px; }
+details.dev-help .json { margin-top: 8px; }
+
+/* Database */
+.approx { display: inline-flex; align-items: center; justify-content: flex-end; }
+.job-list { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); margin-top: 16px; }
+.job-switch { display: inline-flex; align-items: center; gap: 8px; }
+.job-body { display: grid; gap: 12px; }
+.job-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); align-items: start; }
+.job-problem { color: var(--bad); }
+.dd > .pill { justify-self: start; }
+.date-filter .input { width: 160px; }
+
+/* Google Search */
+.bot-groups { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.bot-group { border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px; background: var(--surface-2); min-width: 0; }
+.bot-group-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.bot-group-head h4 { font-size: 14px; }
+.bot-list { list-style: none; margin: 0; padding: 0; }
+.bot-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); }
+.bot-row:first-child { border-top: 0; }
+.bot-text { display: grid; gap: 1px; min-width: 0; }
+.bot-text .pill { justify-self: start; margin-top: 2px; }
+.bot-row .seg { flex: none; }
+.issue-list { margin: 0; padding-left: 16px; display: grid; gap: 2px; }
+.issue-list.fix { color: var(--text-2); }
+.one-check { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 12px; align-items: end; }
+@media (max-width: 560px) { .one-check { grid-template-columns: minmax(0, 1fr); } }
+
+/* Admins & Roles */
+.admin-cell { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.role-sel { min-width: 130px; height: 34px; }
+.role-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.role-list li { display: flex; align-items: center; gap: 10px; }
+.role-list .pill { min-width: 64px; justify-content: center; text-align: center; }

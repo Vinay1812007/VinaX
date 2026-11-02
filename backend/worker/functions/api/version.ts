@@ -6,6 +6,7 @@
 import { fetchAsset, githubConfigured, latestRelease, type GithubEnv } from '../_lib/github';
 import type { DbEnv } from '../_lib/db';
 import { setting } from '../_lib/settings';
+import { publicVersionPolicy } from '../_lib/clientConfig';
 
 type Env = GithubEnv & DbEnv;
 
@@ -68,5 +69,8 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   // update; null (unset or unreadable) lets every build keep running.
   const mv = await setting<{ build?: unknown }>(env, 'min-version');
   const minBuild = mv && Number.isInteger(mv.build) && (mv.build as number) > 0 ? (mv.build as number) : null;
-  return json({ build, version, apkUrl: `${origin}/api/apk`, sha256, minBuild }, 200, 'public, max-age=60');
+  // Console rebuild — the console's Android rule: the oldest version name allowed
+  // and whether the update is suggested or forced.
+  const android = publicVersionPolicy(mv && typeof mv === 'object' ? (mv as Record<string, unknown>) : null)?.android ?? null;
+  return json({ build, version, apkUrl: `${origin}/api/apk`, sha256, minBuild, ...(android ? { minVersion: android.minVersion, updateMode: android.mode } : {}) }, 200, 'public, max-age=60');
 };

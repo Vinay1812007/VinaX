@@ -1,4 +1,4 @@
-/* VinaX console — the App Settings framework (version 8 rebuild).
+/* VinaX console — the App Settings framework (console rebuild).
  *
  * Every App Settings page is a list of sections; each section edits ONE
  * stored setting (a row in `settings`, written by POST /api/admin/settings).
@@ -26,6 +26,7 @@
  *       describe(value | null) → 'plain words',// used by the history list
  *       render(model, set, api) → node,        // build the form once; call set(model) after each edit
  *       preview(model) → node,                 // optional, redrawn on every set()
+ *       confirmSave(model, stored) → { title, body, typed: true, danger } | null, // optional stronger Save confirm
  *       wide: true                             // optional, full-width card
  *     }]
  *   });
@@ -106,7 +107,9 @@
     function save() {
       var problem = def.validate ? def.validate(clone(model)) : null;
       if (problem) { errHost.textContent = problem; VX.toast(problem, 'bad'); return; }
-      return VX.confirm({ title: 'Save & apply?', body: 'Users will see this change within 1 minute. Continue?', confirmLabel: 'Save & apply' }).then(function (ok) {
+      // A section may ask for a stronger confirmation (e.g. type CONFIRM) for risky values.
+      var extra = def.confirmSave ? def.confirmSave(clone(model), clone(stored)) : null;
+      return VX.confirm(Object.assign({ title: 'Save & apply?', body: 'Users will see this change within 1 minute. Continue?', confirmLabel: 'Save & apply' }, extra || {})).then(function (ok) {
         if (ok) return post(value(), 'Saved ✓');
       });
     }

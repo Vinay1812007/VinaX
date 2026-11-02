@@ -8,7 +8,8 @@
  *     instructions: "…",          // the owner's instructions for every model (≤ 4,000 chars)
  *     limits: { messagesPerMinute, imagesPerMessage, filesPerMessage, filesPerChat,
  *               pdfMB, pdfPages, textMB, searchesPerDay },   // see LIMIT_RANGES
- *     models: { "<model id>": { enabled, order } } }
+ *     models: { "<model id>": { enabled, order } },
+ *     dailyLimit: 25 }            // messages per person per day (UTC); missing = no limit
  *
  * Values are sanitised here, so a bad value can never break the chat.
  */
@@ -22,6 +23,8 @@ export interface AiSettings {
   testers: string[];
   search: boolean;
   models: Record<string, unknown>;
+  /** Messages one person may send a day; null = unlimited. */
+  dailyLimit: number | null;
   /** The owner's instructions, added to every reply's system prompt ('' = none). */
   instructions: string;
   limits: AiLimits;
@@ -82,7 +85,8 @@ export function sanitizeAiSettings(raw: unknown): AiSettings {
   const v = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const testers = Array.isArray(v.testers) ? v.testers.filter((t): t is string => typeof t === 'string' && t.length > 0 && t.length < 100).slice(0, 50) : [];
   const models = v.models && typeof v.models === 'object' && !Array.isArray(v.models) ? (v.models as Record<string, unknown>) : {};
-  return { enabled: v.enabled === true, testers, search: v.search !== false, models, instructions: cleanInstructions(v.instructions), limits: sanitizeLimits(v.limits) };
+  const lim = typeof v.dailyLimit === 'number' && Number.isFinite(v.dailyLimit) && v.dailyLimit >= 1 ? Math.min(10_000, Math.floor(v.dailyLimit)) : null;
+  return { enabled: v.enabled === true, testers, search: v.search !== false, models, instructions: cleanInstructions(v.instructions), limits: sanitizeLimits(v.limits), dailyLimit: lim };
 }
 
 export async function aiSettings(env: DbEnv): Promise<AiSettings> {

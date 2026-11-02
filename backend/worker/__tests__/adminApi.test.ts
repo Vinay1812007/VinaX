@@ -127,78 +127,7 @@ describe('every admin GET', () => {
   });
 });
 
-describe('overview', () => {
-  it('answers the tiles, the timeline, platforms and attention items', async () => {
-    const kpis = { activeNow: 3, listeners: 120, newListeners24h: 4, accounts: 30, newAccounts7d: 2, plays24h: 400, plays7d: 2600, errors24h: 25, dau: 40, wau: 90, mau: 110, feedbackNew: 2, pushDevices: 0, roomsActive: 1 };
-    stub((c) => {
-      const p = path(c);
-      if (p === 'rpc/stats_overview') return json(kpis);
-      if (p === 'rpc/stats_timeline') { expect(c.body).toEqual({ p_days: 14 }); return json([{ day: '2026-10-24', plays: 10, listeners: 3, newListeners: 1, errors: 0, searches: 2 }]); }
-      if (p === 'rpc/stats_platforms') return json({ platforms: [{ platform: 'android', listeners: 80, accounts: 20 }], versions: [] });
-      if (p === 'meta') return json([{ key: 'schema', value: { version: 1, appliedAt: '2026-10-24T10:00:00Z' } }]);
-      return undefined;
-    });
-    const { res, body } = await run(overview.onRequestGet as Handler, '/api/admin/overview');
-    expect(res.status).toBe(200);
-    expect(body?.configured).toBe(true);
-    expect(body?.schema).toEqual({ version: 1, appliedAt: '2026-10-24T10:00:00Z' });
-    expect(body?.kpis).toEqual(kpis);
-    expect(body?.timeline).toHaveLength(1);
-    expect(body?.platforms).toEqual([{ platform: 'android', listeners: 80, accounts: 20 }]);
-    const attention = body?.attention as Array<{ level: string; page?: string; tab?: string }>;
-    expect(attention.map((a) => `${a.level}:${a.page ?? ''}${a.tab ? '/' + a.tab : ''}`)).toEqual(['bad:health/errors', 'warn:feedback', 'warn:notify/audience', 'info:live/rooms']);
-  });
-
-  it('asks for schema.sql when the meta row is missing', async () => {
-    stub((c) => (path(c).startsWith('rpc/') ? json(path(c) === 'rpc/stats_platforms' ? { platforms: [], versions: [] } : path(c) === 'rpc/stats_timeline' ? [] : {}) : undefined));
-    const { body } = await run(overview.onRequestGet as Handler, '/api/admin/overview');
-    expect(body?.schema).toBeNull();
-    expect((body?.attention as Array<{ text: string }>)[0].text).toContain('schema.sql');
-  });
-});
-
-describe('listeners', () => {
-  it('lists the directory with camel-cased rows, the total and the platform counts', async () => {
-    stub((c) => {
-      const p = path(c);
-      if (p === 'directory' && c.prefer.includes('count=exact')) return json([], 200, { 'content-range': '0-0/57' });
-      if (p === 'directory') {
-        expect(c.url.searchParams.get('or')).toBe('(name.ilike."*vin*",handle.ilike."*vin*",email.ilike."*vin*")');
-        expect(c.url.searchParams.get('platform')).toBe('eq.android');
-        expect(c.url.searchParams.get('order')).toBe('last_seen.desc');
-        expect(c.url.searchParams.get('limit')).toBe('25');
-        return json([{ listener_id: 'd_1', account_id: null, name: 'Vinay', handle: 'vin', email: null, picture: null, platform: 'android', app_version: '14.0', country: 'IN', region: 'TS', city: 'Hyderabad', now_playing: null, is_playing: false, first_seen: 'a', last_seen: 'b' }]);
-      }
-      if (p === 'rpc/stats_platforms') return json({ platforms: [{ platform: 'android', listeners: 50, accounts: 7 }, { platform: 'web', listeners: 5, accounts: 2 }], versions: [] });
-      return undefined;
-    });
-    const { res, body } = await run(listeners.onRequestGet as Handler, '/api/admin/listeners?q=vin&platform=android&limit=25');
-    expect(res.status).toBe(200);
-    expect(body?.total).toBe(57);
-    expect(body?.rows).toEqual([{ listenerId: 'd_1', accountId: null, name: 'Vinay', handle: 'vin', email: null, picture: null, platform: 'android', appVersion: '14.0', country: 'IN', region: 'TS', city: 'Hyderabad', nowPlaying: null, isPlaying: false, firstSeen: 'a', lastSeen: 'b' }]);
-    expect(body?.counts).toEqual({ listeners: 55, accounts: 9, byPlatform: { android: { listeners: 50, accounts: 7 }, web: { listeners: 5, accounts: 2 } } });
-  });
-
-  it('answers one profile, 404 for nobody, and refuses a malformed id', async () => {
-    stub((c) => (path(c) === 'rpc/listener_profile' ? json(c.body && (c.body as { p_listener: string }).p_listener === 'd_0123456789abcdef' ? { listener: { id: 'd_0123456789abcdef' }, account: null, stats: {}, events: [] } : { listener: null, account: null }) : undefined));
-    const found = await run(listeners.onRequestGet as Handler, '/api/admin/listeners?id=d_0123456789abcdef');
-    expect(found.res.status).toBe(200);
-    expect((found.body?.profile as { listener: { id: string } }).listener.id).toBe('d_0123456789abcdef');
-    expect((await run(listeners.onRequestGet as Handler, '/api/admin/listeners?id=d_ffffffffffffffff')).res.status).toBe(404);
-    expect((await run(listeners.onRequestGet as Handler, '/api/admin/listeners?id=DROP%20TABLE')).res.status).toBe(400);
-  });
-
-  it('delete runs delete_listener and leaves an audit row', async () => {
-    stub((c) => (path(c) === 'rpc/delete_listener' ? json({ listener: 1, account: 0, events: 40, memberships: 0, feedbackDetached: 1 }) : undefined));
-    const { res, body } = await run(listeners.onRequestPost as Handler, '/api/admin/listeners', { body: { action: 'delete', id: 'd_0123456789abcdef', reason: 'asked by the listener' } });
-    expect(res.status).toBe(200);
-    expect(body?.deleted).toEqual({ listener: 1, account: 0, events: 40, memberships: 0, feedbackDetached: 1 });
-    const audit = calls.find((c) => path(c) === 'audit_log');
-    expect(audit?.method).toBe('POST');
-    expect((audit?.body as { action: string; summary: string }).action).toBe('listener-delete');
-    expect((audit?.body as { summary: string }).summary).toContain('asked by the listener');
-  });
-});
+// overview, live and listeners (Users): see consolePeople.test.ts.
 
 describe('analytics', () => {
   it('maps each view to its function and refuses an unknown view', async () => {
@@ -232,7 +161,7 @@ describe('feedback', () => {
     });
     const list = await run(feedback.onRequestGet as Handler, '/api/admin/feedback');
     expect(list.res.status).toBe(200);
-    expect(list.body?.counts).toEqual({ new: 2, read: 1, resolved: 9 });
+    expect(list.body?.counts).toEqual({ new: 2, read: 1, resolved: 9, all: 12 });
     expect(list.body?.total).toBe(2);
     expect((list.body?.rows as Array<Record<string, unknown>>)[0]).toMatchObject({ id: 7, kind: 'bug', appVersion: null, resolvedAt: null });
     const upd = await run(feedback.onRequestPost as Handler, '/api/admin/feedback', { body: { action: 'status', id: 7, status: 'resolved', note: 'fixed in 14.0' } });
@@ -314,93 +243,7 @@ describe('content and experiments', () => {
   });
 });
 
-describe('push', () => {
-  it('GET answers both channels, the geo buckets and the rules', async () => {
-    stub((c) => {
-      if (path(c) !== 'push_devices') return undefined;
-      if (c.prefer.includes('count=exact')) return json([], 200, { 'content-range': `0-0/${c.url.searchParams.get('channel') === 'eq.web' ? 12 : 30}` });
-      return json([{ country: 'IN', region: 'Telangana', city: 'Hyderabad', lang: 'te-IN' }, { country: 'IN', region: 'Telangana', city: 'Warangal', lang: 'te' }, { country: null, region: null, city: null, lang: null }]);
-    });
-    const { res, body } = await run(push.onRequestGet as Handler, '/api/admin/push');
-    expect(res.status).toBe(200);
-    expect(body?.web).toEqual({ configured: true, active: 12 });
-    expect(body?.fcm).toEqual({ configured: false, active: 30 });
-    const geo = body?.geo as { countries: Array<{ key: string; count: number }>; regions: unknown[]; cities: unknown[] };
-    expect(geo.countries).toEqual([{ key: 'IN', count: 2 }, { key: 'Unknown', count: 1 }]);
-    expect(geo.cities).toHaveLength(3);
-    expect(body?.langs).toEqual([{ lang: 'te', count: 2 }, { lang: 'unknown', count: 1 }]);
-    expect(body?.rules).toBeNull();
-  });
-
-  it('refuses a blank body and an external link; a dry run counts and sends nothing', async () => {
-    stub((c) => (path(c) === 'push_devices' && c.method === 'GET' ? json([{ id: 1, channel: 'web', target: 'https://fcm.googleapis.com/x', p256dh: 'a', auth: 'b' }, { id: 2, channel: 'fcm', target: 'tok', p256dh: null, auth: null }]) : undefined));
-    expect((await run(push.onRequestPost as Handler, '/api/admin/push', { body: { title: 'Hi', body: '   ' } })).body?.error).toBe('body_required');
-    expect((await run(push.onRequestPost as Handler, '/api/admin/push', { body: { body: 'Hi', link: 'https://evil.example/x' } })).body?.error).toBe('bad_link');
-    expect((await run(push.onRequestPost as Handler, '/api/admin/push', { body: { body: 'Hi', link: '//evil.example' } })).body?.error).toBe('bad_link');
-    expect((await run(push.onRequestPost as Handler, '/api/admin/push', { body: { body: 'Hi', link: 'https://www.vinaxmusic.online.evil.example/' } })).body?.error).toBe('bad_link');
-    calls = [];
-    const dry = await run(push.onRequestPost as Handler, '/api/admin/push', { body: { body: 'New Telugu hits', link: '/charts', filter: { country: 'in', city: 'Hyderabad' }, dryRun: true } });
-    expect(dry.res.status).toBe(200);
-    expect(dry.body).toEqual({ dryRun: true, web: 1, fcm: 1, audience: 'IN / Hyderabad' });
-    const sel = calls.find((c) => path(c) === 'push_devices');
-    expect(sel?.url.searchParams.get('country')).toBe('eq.IN');
-    expect(sel?.url.searchParams.get('city')).toBe('eq.Hyderabad');
-    expect(sel?.url.searchParams.get('active')).toBe('eq.true');
-    expect(calls.filter((c) => c.method !== 'GET')).toEqual([]);
-  });
-
-  it('a real send writes the notification first, fans out, records the receipt and publishes the announcement for everyone', async () => {
-    stub((c) => {
-      if (c.url.host !== 'db.test') return new Response(null, { status: 410 }); // the push service: subscription gone
-      if (path(c) === 'push_devices' && c.method === 'GET') return json([{ id: 1, channel: 'web', target: 'https://updates.push.services.mozilla.com/x', p256dh: 'BPp0iv4yqK6YX3W1Gfv6zU9jLx3z4z7bqfm4kN6a9Yxk2Rr7e4zZl4w3oT5Qw0a8bYbpQm3o3r5m9lWw2d6H5xM', auth: 'c3VwZXItc2VjcmV0' }]);
-      if (path(c) === 'notifications' && c.method === 'POST') return json([{ id: 9 }], 201);
-      return undefined;
-    });
-    const { res, body } = await run(push.onRequestPost as Handler, '/api/admin/push', { body: { title: 'VinaX', body: 'Hello everyone', link: '/', dedupeKey: 'k1' } });
-    expect(res.status).toBe(200);
-    expect(body?.ok).toBe(true);
-    expect(body?.id).toBe(9);
-    expect(body?.audience).toBe('everyone');
-    expect((body?.web as { total: number; gone: number }).total).toBe(1);
-    // The test VAPID keys are not real keys, so the web send fails before it leaves — recorded, never thrown.
-    expect((body?.web as { sent: number; failed: Record<string, number> }).sent).toBe(0);
-    expect(Object.values((body?.web as { failed: Record<string, number> }).failed).reduce((a, b) => a + b, 0)).toBe(1);
-    const order = calls.filter((c) => c.url.host === 'db.test' && c.method !== 'GET').map((c) => `${c.method} ${path(c)}`);
-    expect(order[0]).toBe('POST notifications');
-    expect((calls.find((c) => path(c) === 'notifications' && c.method === 'POST')?.body as { dedupe_key: string }).dedupe_key).toBe('k1');
-    expect(order).toContain('PATCH push_devices'); // last_pushed_at stamped
-    expect(order).toContain('PATCH notifications'); // the receipt
-    const ann = calls.find((c) => path(c) === 'settings' && c.method === 'POST')?.body as { key: string; value: { title: string; ts: number } };
-    expect(ann.key).toBe('announcement');
-    expect(ann.value.title).toBe('VinaX');
-    expect(typeof ann.value.ts).toBe('number');
-    expect(calls.some((c) => path(c) === 'audit_log')).toBe(true);
-  });
-
-  it('a repeated dedupe key is a 409 and nothing is sent', async () => {
-    stub((c) => {
-      if (path(c) === 'push_devices' && c.method === 'GET') return json([]);
-      if (path(c) === 'notifications' && c.method === 'POST') return json({ code: '23505', message: 'duplicate' }, 409);
-      return undefined;
-    });
-    const { res, body } = await run(push.onRequestPost as Handler, '/api/admin/push', { body: { body: 'Again', dedupeKey: 'k1' } });
-    expect(res.status).toBe(409);
-    expect(body?.error).toBe('duplicate');
-  });
-
-  it('retracting a notification clears the matching announcement', async () => {
-    stub((c) => {
-      if (path(c) === 'notifications' && c.method === 'PATCH') return json([{ id: 9, at: 't', kind: 'announcement', title: 'VinaX', body: 'Hello', link: '/', audience: { label: 'everyone', ts: 123 }, web_total: 1, web_sent: 1, web_gone: 0, fcm_total: 0, fcm_sent: 0, failures: null, dedupe_key: null, sent_by: 'owner', retracted_at: 'now' }]);
-      if (path(c) === 'settings' && c.method === 'GET') return json([{ key: 'announcement', value: { title: 'VinaX', body: 'Hello', link: '/', ts: 123 }, updated_at: 't', updated_by: 'push' }]);
-      if (path(c) === 'settings' && c.method === 'DELETE') return json([{ key: 'announcement' }]);
-      return undefined;
-    });
-    const { res, body } = await run(notifications.onRequestPost as Handler, '/api/admin/notifications', { body: { action: 'retract', id: 9 } });
-    expect(res.status).toBe(200);
-    expect(body).toEqual({ ok: true, id: 9, announcementCleared: true });
-    expect(calls.find((c) => path(c) === 'notifications' && c.method === 'PATCH')?.url.searchParams.get('retracted_at')).toBe('is.null');
-  });
-});
+// The push sender and notification history: see consoleEngage.test.ts (console rebuild).
 
 describe('database and jobs', () => {
   it('reports the schema, tables, counts and jobs with overdue flags', async () => {
@@ -420,7 +263,8 @@ describe('database and jobs', () => {
     expect(body?.schema).toEqual({ version: 1, appliedAt: 'x' });
     expect(body?.tables).toHaveLength(2);
     expect(body?.counts).toEqual({ listeners: 40, events: 1200 });
-    expect(body?.retention).toEqual({ eventsDays: 90 });
+    expect(body?.retention).toEqual({ eventsDays: 90, errorsDays: null, feedbackDays: null, notificationsDays: null });
+    expect((body?.tables as Array<{ name: string; label: string; keptFor: string; approximate: boolean }>).find((t) => t.name === 'events')).toMatchObject({ label: 'Play history and activity', keptFor: '90 days', approximate: true });
     expect((body?.missing as string[])).toContain('accounts');
     const jobs = body?.jobs as Array<{ job: string; overdue: boolean; ok: boolean | null; neverRan: boolean }>;
     expect(jobs.find((j) => j.job === 'status-tick')).toMatchObject({ overdue: false, ok: true, neverRan: false });

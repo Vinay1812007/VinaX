@@ -84,7 +84,7 @@
 
   /* --------------------------------------------------------------- format */
 
-  /* Version 8 — every date and time is shown in one time zone, India by
+  /* Console rebuild — every date and time is shown in one time zone, India by
      default; the profile menu can change it (stored per browser). */
   var TZ_KEY = 'vinax_admin_tz';
   VX.TIMEZONES = [

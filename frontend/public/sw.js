@@ -275,23 +275,31 @@ self.addEventListener('push', (event) => {
     // new notification silently REPLACE the one before it (no sound, no
     // banner), so a second send looked like it never arrived.
     tag: data.tag || 'vinax-' + Date.now(),
-    data: { url: data.url || '/' },
+    data: { url: data.url || '/', id: typeof data.id === 'number' ? data.id : null },
   };
+  // Console rebuild — the console can attach a picture (https only).
+  if (typeof data.image === 'string' && /^https:\/\//.test(data.image)) options.image = data.image;
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const url = (event.notification.data && event.notification.data.url) || '/';
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
-      for (const client of list) {
-        if ('focus' in client) {
-          if ('navigate' in client) client.navigate(url);
-          return client.focus();
-        }
+  const id = event.notification.data && event.notification.data.id;
+  // Console rebuild — count the tap for the console's open rate (the id only).
+  const counted = typeof id === 'number' && id > 0
+    ? fetch('/api/push/opened', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: id }), keepalive: true }).catch(() => undefined)
+    : Promise.resolve();
+  // The tap is counted alongside opening the app, never before it: opening a
+  // window must not wait on the network.
+  const open = self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    for (const client of list) {
+      if ('focus' in client) {
+        if ('navigate' in client) client.navigate(url);
+        return client.focus();
       }
-      return self.clients.openWindow(url);
-    }),
-  );
+    }
+    return self.clients.openWindow(url);
+  });
+  event.waitUntil(Promise.all([open, counted]));
 });

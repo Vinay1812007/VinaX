@@ -1,78 +1,170 @@
 /**
- * GET  /api/admin/listeners?q=&platform=&days=&limit=&offset=  → the directory
- * GET  /api/admin/listeners?id=<listener> | ?account=<sub>      → one profile
- * POST /api/admin/listeners { action: 'delete', id?, account?, reason }
+ * Console rebuild — the console's Users page. Signed-in (Google) people only:
+ * anonymous devices never leave this route.
  *
- * The directory view merges devices and accounts into one row per person.
+ * GET  /api/admin/listeners?q=&platform=&active=&joined=&joinedFrom=&joinedTo=
+ *        &country=&region=&city=&version=&language=&sort=&limit=&offset=&ids=
+ *        → { configured, total, limit, offset, rows, counts }
+ *        rows: [{ id (Google account id), name, email, picture, platform, appVersion,
+ *                 country, region, city, nowPlaying, isPlaying, joined, lastSeen,
+ *                 devices, plays, language, blocked }]
+ *        counts: { users, new7d, activeToday, byPlatform: { android, web, ios } }
+ *        sort: last_active (default) | joined | plays | name
+ * GET  /api/admin/listeners?filters=1 → { configured, places, versions, languages }
+ * GET  /api/admin/listeners?account=<id> → { configured, profile }   (user_profile)
+ * POST /api/admin/listeners
+ *        { action: 'block', account, reason? }       the person cannot sign in again
+ *        { action: 'unblock', account }
+ *        { action: 'signout_device', account, device } that device's session stops working
+ *        { action: 'delete', account, reason }       owner only: everything about the person
  */
 import { removeAccountFiles } from '../../_lib/ai/attachments';
 import { adminJson, badRequest, dbFailure } from '../../_lib/admin';
-import { adminGet, adminPost, camel, paging } from '../../_lib/adminRoute';
-import { db, like, q, since, DAY_MS, firstFailure, type Query } from '../../_lib/db';
-import { clip, intIn, platformOf, PLATFORMS } from '../../_lib/edge';
+import { adminGet, adminPost, paging } from '../../_lib/adminRoute';
+import { db, q } from '../../_lib/db';
+import { clip, intIn, PLATFORMS } from '../../_lib/edge';
 
 const ID_RE = /^[a-z]_[a-f0-9]{16,64}$/;
 const SUB_RE = /^\d{1,40}$/;
+const SORTS = ['last_active', 'joined', 'plays', 'name'] as const;
 
-function filters(url: URL): Query {
-  const query = q();
-  const text = clip(url.searchParams.get('q'), 80);
-  if (text) {
-    const pat = `*${like(text)}*`;
-    query.or(`name.ilike.${pat}`, `handle.ilike.${pat}`, `email.ilike.${pat}`);
-  }
-  const platform = url.searchParams.get('platform');
-  if (platform && (PLATFORMS as readonly string[]).includes(platform)) query.eq('platform', platformOf(platform));
-  const days = intIn(url.searchParams.get('days'), 1, 365);
-  if (days) query.gte('last_seen', since(days * DAY_MS));
-  return query;
+interface UserRow {
+  id: string; name: string | null; email: string | null; picture: string | null; platform: string; app_version: string | null;
+  country: string | null; region: string | null; city: string | null; now_playing: unknown; is_playing: boolean;
+  joined: string; last_seen: string; devices: number; plays: number; language: string | null; blocked_at: string | null;
+}
+interface UsersAnswer { total: number; rows: UserRow[]; counts: Record<string, unknown> }
+
+const shape = (r: UserRow) => ({
+  id: r.id, name: r.name, email: r.email, picture: r.picture, platform: r.platform, appVersion: r.app_version,
+  country: r.country, region: r.region, city: r.city, nowPlaying: r.now_playing ?? null, isPlaying: !!r.is_playing,
+  joined: r.joined, lastSeen: r.last_seen, devices: Number(r.devices) || 0, plays: Number(r.plays) || 0,
+  language: r.language, blocked: !!r.blocked_at,
+});
+
+const dayIso = (v: string | null): string | null => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)) ? new Date(`${v}T00:00:00+05:30`).toISOString() : null);
+
+/** The admin_users arguments from the query string (only valid values pass). */
+export function userArgs(url: URL): Record<string, unknown> {
+  const p = url.searchParams;
+  const { limit, offset } = paging(url, 50, 200);
+  const platform = p.get('platform');
+  const sort = p.get('sort');
+  const rawCountry = p.get('country');
+  const country = rawCountry && /^[A-Za-z]{2}$/.test(rawCountry) ? rawCountry.toUpperCase() : null;
+  const to = dayIso(p.get('joinedTo'));
+  const ids = (p.get('ids') ?? '').split(',').map((s) => s.trim()).filter((s) => SUB_RE.test(s)).slice(0, 200);
+  return {
+    p_q: clip(p.get('q'), 80) ?? null,
+    p_platform: platform && (PLATFORMS as readonly string[]).includes(platform) ? platform : null,
+    p_active_days: intIn(p.get('active'), 1, 365) ?? null,
+    p_joined_days: intIn(p.get('joined'), 1, 365) ?? null,
+    p_joined_from: dayIso(p.get('joinedFrom')),
+    // "to" is inclusive in the console: the day after, at midnight India time.
+    p_joined_to: to ? new Date(Date.parse(to) + 86_400_000).toISOString() : null,
+    p_country: country,
+    p_region: clip(p.get('region'), 80) ?? null,
+    p_city: clip(p.get('city'), 80) ?? null,
+    p_version: clip(p.get('version'), 40) ?? null,
+    p_language: clip(p.get('language'), 24)?.toLowerCase() ?? null,
+    p_ids: ids.length ? ids : null,
+    p_sort: sort && (SORTS as readonly string[]).includes(sort) ? sort : 'last_active',
+    p_limit: limit,
+    p_offset: offset,
+  };
 }
 
 export const onRequestGet = adminGet(async ({ env, url }) => {
-  const id = clip(url.searchParams.get('id'), 80);
-  const account = clip(url.searchParams.get('account'), 40);
-  if (id || account) {
-    if ((id && !ID_RE.test(id)) || (account && !SUB_RE.test(account))) return badRequest('bad_id');
-    const r = await db.rpc<Record<string, unknown> | null>(env, 'listener_profile', { p_listener: id, p_account: account });
+  if (url.searchParams.get('filters') === '1') {
+    const r = await db.rpc<{ places?: unknown[]; versions?: unknown[]; languages?: unknown[] }>(env, 'admin_user_filters');
     if (!r.ok) return dbFailure(r);
-    const profile = r.value && typeof r.value === 'object' ? r.value : null;
-    if (!profile || (!profile.listener && !profile.account)) return adminJson({ configured: true, error: 'not_found' }, 404);
-    return adminJson({ configured: true, profile });
+    const v = r.value ?? {};
+    return adminJson({ configured: true, places: v.places ?? [], versions: v.versions ?? [], languages: v.languages ?? [] });
   }
-
-  const { limit, offset } = paging(url, 50, 200);
-  const [rows, total, platforms] = await Promise.all([
-    db.select<Record<string, unknown>>(env, 'directory', filters(url).select('*').order('last_seen', 'desc').limit(limit).offset(offset)),
-    db.count(env, 'directory', filters(url).select('listener_id')),
-    db.rpc<{ platforms: Array<{ platform: string; listeners: number; accounts: number }> }>(env, 'stats_platforms'),
-  ]);
-  const failed = firstFailure(rows, total, platforms);
-  if (failed) return dbFailure(failed);
-  if (!rows.ok || !total.ok || !platforms.ok) return adminJson({ configured: true, error: 'db_unavailable' }, 502);
-  const byPlatform: Record<string, { listeners: number; accounts: number }> = {};
-  let listeners = 0;
-  let accounts = 0;
-  for (const p of platforms.value?.platforms ?? []) {
-    byPlatform[p.platform] = { listeners: Number(p.listeners) || 0, accounts: Number(p.accounts) || 0 };
-    listeners += Number(p.listeners) || 0;
-    accounts += Number(p.accounts) || 0;
+  const account = url.searchParams.get('account');
+  if (account !== null) {
+    if (!SUB_RE.test(account)) return badRequest('bad_id');
+    const r = await db.rpc<Record<string, unknown> | null>(env, 'user_profile', { p_account: account });
+    if (!r.ok) return dbFailure(r);
+    if (!r.value || typeof r.value !== 'object') return adminJson({ configured: true, error: 'not_found' }, 404);
+    return adminJson({ configured: true, profile: r.value });
   }
-  return adminJson({ configured: true, total: total.value, limit, offset, rows: rows.rows.map(camel), counts: { listeners, accounts, byPlatform } });
+  const args = userArgs(url);
+  const r = await db.rpc<UsersAnswer>(env, 'admin_users', args);
+  if (!r.ok) return dbFailure(r);
+  const v = r.value ?? { total: 0, rows: [], counts: {} };
+  return adminJson({
+    configured: true,
+    total: Number(v.total) || 0,
+    limit: args.p_limit,
+    offset: args.p_offset,
+    rows: (Array.isArray(v.rows) ? v.rows : []).map(shape),
+    counts: v.counts ?? {},
+  });
 });
 
+/** Every device row that belongs to an account (its own link, or the account's latest device). */
+async function devicesOf(env: Parameters<typeof db.select>[0], account: string): Promise<string[] | null> {
+  const [linked, acct] = await Promise.all([
+    db.select<{ id: string }>(env, 'listeners', q().eq('account_id', account).select('id').limit(100)),
+    db.one<{ listener_id: string | null }>(env, 'accounts', q().eq('id', account).select('listener_id')),
+  ]);
+  if (!linked.ok || !acct.ok) return null;
+  const ids = new Set(linked.rows.map((r) => r.id));
+  if (acct.value?.listener_id) ids.add(acct.value.listener_id);
+  return [...ids];
+}
+
 export const onRequestPost = adminPost(async ({ env, body, audit }) => {
-  if (body.action !== 'delete') return badRequest('unknown_action');
-  const id = clip(body.id, 80);
-  const account = clip(body.account, 40);
-  if (!id && !account) return badRequest();
-  if ((id && !ID_RE.test(id)) || (account && !SUB_RE.test(account))) return badRequest('bad_id');
-  const reason = clip(body.reason, 200) ?? 'no reason given';
-  // VinaX AI files live in Storage, not in a row that cascades: remove them first.
-  const accounts = account ? [account] : (await db.select<{ id: string }>(env, 'accounts', q().eq('listener_id', id).select('id'))).rows.map((a) => a.id);
-  for (const a of accounts) await removeAccountFiles(env, a);
-  const r = await db.rpc<Record<string, number>>(env, 'delete_listener', { p_listener: id, p_account: account });
-  if (!r.ok) return dbFailure(r);
-  const deleted = r.value ?? {};
-  await audit({ action: 'listener-delete', summary: `deleted ${id ? `listener ${id}` : `account ${account}`} — ${reason}`, target: id ?? account ?? undefined, after: deleted });
-  return adminJson({ ok: true, deleted });
+  const account = typeof body.account === 'string' ? body.account : '';
+  if (!SUB_RE.test(account)) return badRequest('bad_id');
+  const who = await db.one<{ id: string; email: string | null; name: string | null; listener_id: string | null; blocked_at: string | null }>(env, 'accounts', q().eq('id', account).select('id,email,name,listener_id,blocked_at'));
+  if (!who.ok) return dbFailure(who);
+  if (!who.value) return adminJson({ error: 'not_found' }, 404);
+  const label = who.value.email ?? who.value.name ?? `account ${account}`;
+
+  if (body.action === 'block' || body.action === 'unblock') {
+    const blocked_at = body.action === 'block' ? new Date().toISOString() : null;
+    const r = await db.update(env, 'accounts', q().eq('id', account), { blocked_at }, { returning: true });
+    if (!r.ok) return dbFailure(r);
+    const reason = clip(body.reason, 200);
+    await audit({ action: body.action === 'block' ? 'user-block' : 'user-unblock', summary: `${body.action === 'block' ? 'blocked' : 'unblocked'} ${label}${reason ? ` — ${reason}` : ''}`, target: account, before: { blocked: !!who.value.blocked_at }, after: { blocked: !!blocked_at } });
+    return adminJson({ ok: true, blocked: !!blocked_at });
+  }
+
+  if (body.action === 'signout_device') {
+    const device = typeof body.device === 'string' ? body.device : '';
+    if (!ID_RE.test(device)) return badRequest('bad_device');
+    const mine = await devicesOf(env, account);
+    if (!mine) return adminJson({ configured: true, error: 'db_unavailable' }, 502);
+    if (!mine.includes(device)) return adminJson({ error: 'not_found' }, 404);
+    const now = new Date().toISOString();
+    const r = await db.update(env, 'listeners', q().eq('id', device), { signed_out_at: now, account_id: null });
+    if (!r.ok) return dbFailure(r);
+    if (who.value.listener_id === device) {
+      const a = await db.update(env, 'accounts', q().eq('id', account).eq('listener_id', device), { listener_id: null });
+      if (!a.ok) return dbFailure(a);
+    }
+    await audit({ action: 'user-signout-device', summary: `signed ${label} out of one device`, target: account });
+    return adminJson({ ok: true, signedOutAt: now });
+  }
+
+  if (body.action === 'delete') {
+    const reason = clip(body.reason, 200) ?? 'no reason given';
+    const devices = await devicesOf(env, account);
+    if (!devices) return adminJson({ configured: true, error: 'db_unavailable' }, 502);
+    // VinaX AI files live in Storage, not in a row that cascades: remove them first.
+    await removeAccountFiles(env, account);
+    const totals: Record<string, number> = {};
+    const add = (v: Record<string, number> | null) => { for (const [k, n] of Object.entries(v ?? {})) totals[k] = (totals[k] ?? 0) + (Number(n) || 0); };
+    for (const device of devices.length ? devices : [null]) {
+      const r = await db.rpc<Record<string, number>>(env, 'delete_listener', { p_listener: device, p_account: account });
+      if (!r.ok) return dbFailure(r);
+      add(r.value);
+    }
+    await audit({ action: 'user-delete', summary: `deleted every record of ${label} — ${reason}`, target: account, after: totals });
+    return adminJson({ ok: true, deleted: totals });
+  }
+
+  return badRequest('unknown_action');
 }, { role: (b) => (b.action === 'delete' ? 'owner' : 'editor') });

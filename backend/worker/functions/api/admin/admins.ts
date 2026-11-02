@@ -1,5 +1,5 @@
 /**
- * Version 8 — Admins & Roles.
+ * Console rebuild — Admins & Roles.
  *
  * GET  /api/admin/admins → { configured, rows, me, bootstrap }
  * POST /api/admin/admins (owner only)

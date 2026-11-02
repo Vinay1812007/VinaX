@@ -16,7 +16,13 @@
  *  3. A rotated VAPID key made `pushManager.subscribe` throw for every
  *     existing subscriber. A subscription for another key is now replaced.
  * Every failure is reported to Technical Monitoring instead of vanishing.
+ *
+ * Console rebuild — the subscription is sent with the signed-in listener's session
+ * so the server links the device to the Google account (the console only
+ * notifies signed-in people). A confirmation remembers which account it was
+ * for: signing in or out re-sends at once (`relinkPush`).
  */
+import { pushAuthHeaders, sessionTag } from '@/services/push/session';
 
 export function pushSupported(): boolean {
   return (
@@ -35,12 +41,14 @@ export const PUSH_RESYNC_MS = 24 * 3_600_000;
 interface Confirmation {
   endpoint: string;
   at: number;
+  /** Which account (session tag) the server linked; '' = signed out. */
+  account?: string;
 }
 
 function readConfirmation(): Confirmation | null {
   try {
     const raw = JSON.parse(localStorage.getItem(PUSH_CONFIRM_KEY) ?? 'null') as Partial<Confirmation> | null;
-    return raw && typeof raw.endpoint === 'string' && typeof raw.at === 'number' ? { endpoint: raw.endpoint, at: raw.at } : null;
+    return raw && typeof raw.endpoint === 'string' && typeof raw.at === 'number' ? { endpoint: raw.endpoint, at: raw.at, account: typeof raw.account === 'string' ? raw.account : undefined } : null;
   } catch {
     return null;
   }
@@ -127,14 +135,14 @@ async function saveOnServer(sub: PushSubscription, lang?: string, at = Date.now(
     try {
       const res = await fetch('/api/push/subscribe', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', ...pushAuthHeaders() },
         // tzOffset (minutes east of UTC) powers the server's quiet-hours gate,
         // so nobody is pushed at 3am local. Coarse and non-identifying.
         body: JSON.stringify({ endpoint: data.endpoint, keys: data.keys, lang, tzOffset: -new Date().getTimezoneOffset() }),
       });
       const saved = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
       if (saved?.ok) {
-        writeConfirmation({ endpoint: sub.endpoint, at });
+        writeConfirmation({ endpoint: sub.endpoint, at, account: sessionTag() });
         return true;
       }
       // A refusal (bad endpoint) will not change on a retry.
@@ -200,7 +208,10 @@ export async function syncPush(now = Date.now()): Promise<'skipped' | 'ok' | 'er
     if (!reg) return 'skipped';
     const current = await reg.pushManager.getSubscription().catch(() => null);
     const confirmed = readConfirmation();
-    if (current && confirmed?.endpoint === current.endpoint && now - confirmed.at < PUSH_RESYNC_MS) return 'skipped';
+    // A confirmation for another account (or one saved before accounts were
+    // linked) re-sends at once, so a sign-in links this device right away.
+    const sameAccount = confirmed?.account !== undefined && confirmed.account === sessionTag();
+    if (current && confirmed?.endpoint === current.endpoint && sameAccount && now - confirmed.at < PUSH_RESYNC_MS) return 'skipped';
     const key = await vapidKey();
     if (!key) return 'error';
     const sub = await ensureSubscription(reg, key);
@@ -211,6 +222,11 @@ export async function syncPush(now = Date.now()): Promise<'skipped' | 'ok' | 'er
     report(`sync failed: ${String(e).slice(0, 160)}`);
     return 'error';
   }
+}
+
+/** Console rebuild — signed in or out: re-send the subscription with the new session (no-op without permission). */
+export function relinkPush(): Promise<'skipped' | 'ok' | 'error'> {
+  return syncPush();
 }
 
 export async function disablePush(): Promise<void> {

@@ -15,6 +15,7 @@
  */
 import { isNativePlatform } from '@/services/native';
 import { withNotificationPermission } from '@/services/native/permissions';
+import { pushAuthHeaders } from '@/services/push/session';
 
 const BASE = 'https://www.vinaxmusic.online';
 /** How long `register()` may take to produce a token before that is reported. */
@@ -23,6 +24,8 @@ let wired = false;
 let tokenSeen = false;
 /** True once this launch's token reached the server; resume re-registers until it does. */
 let uploaded = false;
+/** The token this launch received, so a sign-in can re-send it with the session (console rebuild). */
+let lastToken = '';
 
 /**
  * 13.7.3 — the Android channel every VinaX push uses. The server names it in
@@ -56,7 +59,8 @@ export async function uploadFcmToken(
     try {
       const res = await fetchImpl(`${BASE}/api/push/fcm-register`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        // Console rebuild — the session links this device to the signed-in Google account.
+        headers: { 'content-type': 'application/json', ...pushAuthHeaders() },
         // 13.7.3 — lang too: without it every Android device fell outside the
         // console's language filter and the language-grouped song pick.
         body: JSON.stringify({ token, platform: 'android', lang: navigator.language || undefined, tzOffset: -new Date().getTimezoneOffset() }),
@@ -99,6 +103,7 @@ async function wire(PushNotifications: PushPlugin): Promise<void> {
   // Device registered with FCM -> persist the token so the server can push.
   await PushNotifications.addListener('registration', (t) => {
     tokenSeen = true;
+    lastToken = t.value;
     void uploadFcmToken(t.value).then((ok) => {
       if (ok) uploaded = true;
     });
@@ -110,9 +115,26 @@ async function wire(PushNotifications: PushPlugin): Promise<void> {
   // Tap on a delivered notification -> deep-link into the app.
   // Protocol-relative "//host/x" is refused: it would leave the app's origin.
   await PushNotifications.addListener('pushNotificationActionPerformed', (e) => {
-    const link = (e.notification.data as { link?: string } | undefined)?.link;
+    const data = e.notification.data as { link?: string; id?: string } | undefined;
+    reportOpened(data?.id);
+    const link = data?.link;
     if (typeof link === 'string' && /^\/(?!\/)/.test(link)) navigateTo(link);
   });
+}
+
+/** Console rebuild — count a tap on a console notification (its id only, nothing about the listener). */
+export function reportOpened(id: unknown, fetchImpl: typeof fetch = fetch): void {
+  const n = typeof id === 'string' && /^\d{1,15}$/.test(id) ? Number(id) : typeof id === 'number' ? id : NaN;
+  if (!Number.isInteger(n) || n <= 0) return;
+  void fetchImpl(`${BASE}/api/push/opened`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: n }) }).catch(() => undefined);
+}
+
+/** Console rebuild — signed in or out: send this launch's token again so the server links (or unlinks) the account. */
+export async function relinkNativePush(): Promise<boolean> {
+  if (!isNativePlatform() || !lastToken) return false;
+  const ok = await uploadFcmToken(lastToken);
+  if (ok) uploaded = true;
+  return ok;
 }
 
 async function registerToken(PushNotifications: PushPlugin): Promise<void> {

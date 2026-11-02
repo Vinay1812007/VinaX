@@ -139,6 +139,11 @@ export async function issueSession(env: AuthEnv, sub: string, now = Date.now()):
 
 /** The Google account id a session belongs to, or null (forged, expired, malformed). */
 export async function readSession(env: AuthEnv, token: unknown, now = Date.now()): Promise<string | null> {
+  return (await readSessionClaims(env, token, now))?.sub ?? null;
+}
+
+/** Console rebuild — the session's account id and when it was issued (seconds), or null. */
+export async function readSessionClaims(env: AuthEnv, token: unknown, now = Date.now()): Promise<{ sub: string; iat: number } | null> {
   try {
     const secret = sessionSecret(env);
     if (!secret || typeof token !== 'string' || token.length > 600) return null;
@@ -149,9 +154,9 @@ export async function readSession(env: AuthEnv, token: unknown, now = Date.now()
     let diff = 0;
     for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ m[2].charCodeAt(i);
     if (diff !== 0) return null;
-    const p = JSON.parse(b64urlToText(m[1])) as { sub?: unknown; exp?: unknown };
+    const p = JSON.parse(b64urlToText(m[1])) as { sub?: unknown; exp?: unknown; iat?: unknown };
     if (typeof p.sub !== 'string' || typeof p.exp !== 'number' || p.exp < Math.floor(now / 1000)) return null;
-    return p.sub;
+    return { sub: p.sub, iat: typeof p.iat === 'number' ? p.iat : 0 };
   } catch {
     return null;
   }

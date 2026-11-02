@@ -1,4 +1,4 @@
-/* VinaX console — shell (version 8 rebuild).
+/* VinaX console — shell (console rebuild).
  *
  * Owns Google sign-in (with the owner recovery password), the grouped
  * sidebar with the App Settings sub-menu, the hash router (#/page/tab, with

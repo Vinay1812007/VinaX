@@ -159,7 +159,7 @@ begin
   assert (v -> 'top' -> 0 ->> 'status') = 'new' and length(v -> 'top' -> 0 ->> 'fingerprint') = 32, 'stats_errors: grouped with a status';
   assert _error_shape('Download of "Song 12" timed out after 30s') = 'Download of … timed out after #', '_error_shape';
 
-  -- version 8: the console counts signed-in people only
+  -- version 9: the console counts signed-in people only
   select count(*) into n from signed_devices();
   assert n = 1, 'signed_devices: only check_l1 belongs to an account';
   v := admin_users();

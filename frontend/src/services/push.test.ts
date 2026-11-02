@@ -32,6 +32,7 @@ let current: FakeSub | null;
 let subscribeCalls: number;
 let saved: string[];
 let subscribeStatus: number;
+let authHeaders: Array<string | undefined>;
 
 beforeEach(() => {
   localStorage.clear();
@@ -40,6 +41,7 @@ beforeEach(() => {
   subscribeCalls = 0;
   saved = [];
   subscribeStatus = 200;
+  authHeaders = [];
   const pushManager = {
     getSubscription: vi.fn(async () => current),
     subscribe: vi.fn(async (opts: { applicationServerKey: Uint8Array }) => {
@@ -57,6 +59,7 @@ beforeEach(() => {
     if (url === '/api/push/vapid') return new Response(JSON.stringify({ key: KEY }), { status: 200 });
     if (url === '/api/push/subscribe') {
       saved.push(JSON.parse(String(init?.body)).endpoint);
+      authHeaders.push((init?.headers as Record<string, string> | undefined)?.authorization);
       return new Response(JSON.stringify(subscribeStatus === 200 ? { ok: true } : { ok: false }), { status: subscribeStatus });
     }
     return new Response('{}', { status: 404 });
@@ -114,5 +117,38 @@ describe('11.7.1 web push', () => {
     expect(localStorage.getItem(PUSH_CONFIRM_KEY)).toBeNull();
     await vi.runAllTimersAsync();
     expect(reportError).toHaveBeenCalledWith('push-web', expect.stringContaining('subscribe 500'));
+  });
+});
+
+describe('version 8 — the device is linked to the signed-in account', () => {
+  const signIn = (session: string) => localStorage.setItem('vinax.account.v1', JSON.stringify({ session, user: { name: 'A', email: 'a@x', picture: null, username: null } }));
+
+  it('sends the session with the subscription', async () => {
+    signIn('vx1.payload.sig-one');
+    current = fakeSub('https://fcm.googleapis.com/fcm/send/old', KEY);
+    expect(await syncPush()).toBe('ok');
+    expect(authHeaders).toEqual(['Bearer vx1.payload.sig-one']);
+  });
+
+  it('signing in (or out) re-sends at once instead of waiting a day', async () => {
+    current = fakeSub('https://fcm.googleapis.com/fcm/send/old', KEY);
+    const t0 = Date.now();
+    await syncPush(t0);
+    expect(authHeaders).toEqual([undefined]);
+    expect(await syncPush(t0 + 1_000)).toBe('skipped');
+    signIn('vx1.payload.sig-two');
+    expect(await syncPush(t0 + 2_000)).toBe('ok');
+    expect(authHeaders[1]).toBe('Bearer vx1.payload.sig-two');
+    expect(await syncPush(t0 + 3_000)).toBe('skipped');
+    localStorage.removeItem('vinax.account.v1');
+    expect(await syncPush(t0 + 4_000)).toBe('ok');
+    expect(authHeaders[2]).toBeUndefined();
+  });
+
+  it('a confirmation saved before accounts were linked re-sends once', async () => {
+    current = fakeSub('https://fcm.googleapis.com/fcm/send/old', KEY);
+    localStorage.setItem(PUSH_CONFIRM_KEY, JSON.stringify({ endpoint: current.endpoint, at: Date.now() }));
+    expect(await syncPush()).toBe('ok');
+    expect(await syncPush()).toBe('skipped');
   });
 });

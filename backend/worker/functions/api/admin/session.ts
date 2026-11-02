@@ -1,5 +1,5 @@
 /**
- * Version 8 — console sign-in.
+ * Console rebuild — console sign-in.
  *
  * GET  /api/admin/session            → { googleClientId, googleReady, passwordAllowed, me, schema, schemaWanted, databaseConfigured }
  *        Public facts the sign-in screen needs; with a valid token also `me`
@@ -19,7 +19,7 @@ import { bindingAllows, clientKey } from '../../_lib/ratelimit';
 type Env = AdminAuthEnv & Record<string, unknown>;
 
 /** The schema.sql version this Worker is written against. */
-export const SCHEMA_WANTED = 8;
+export const SCHEMA_WANTED = 9;
 
 export const onRequestGet = async (ctx: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = ctx;

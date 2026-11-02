@@ -30,6 +30,8 @@ export interface AccountRow {
   city: string | null;
   created_at: string;
   last_seen: string;
+  /** Console rebuild: set when the owner blocked this person in the console. */
+  blocked_at?: string | null;
 }
 
 /** The account row for a Google subject: null when none, a failure when the read broke. */

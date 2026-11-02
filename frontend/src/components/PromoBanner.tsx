@@ -15,6 +15,9 @@ import { XIcon } from './Icons';
 const DISMISSED_KEY = 'vinax.dismissed-banners.v1';
 
 function linkPath(b: PromoBannerData): string | null {
+  // Console rebuild — "Charts" and a fixed list of app pages (checked by the server).
+  if (b.linkType === 'charts') return '/charts';
+  if (b.linkType === 'page') return b.linkId && /^\/[a-z-]+$/.test(b.linkId) ? b.linkId : null;
   if (!b.linkType || !b.linkId) return null;
   if (b.linkType === 'song') return `/song/${encodeURIComponent(b.linkId)}`;
   if (b.linkType === 'album') return `/album/${encodeURIComponent(b.linkId)}`;

@@ -1,4 +1,5 @@
 import { isNativePlatform } from '@/services/native';
+import { compareVersions } from '@/services/appRules';
 
 export interface UpdateInfo {
   latest: string;        // latest version name (cosmetic, e.g. "1.1")
@@ -63,6 +64,9 @@ export async function checkForUpdate(opts: { manual?: boolean } = {}): Promise<U
       apkUrl?: string;
       sha256?: string;
       minBuild?: number | null;
+      /** Console rebuild — the owner's Android rule (App Updates in the console). */
+      minVersion?: string;
+      updateMode?: 'suggest' | 'force';
     };
 
     const latestBuild = Number(data.build) || 0;
@@ -75,7 +79,8 @@ export async function checkForUpdate(opts: { manual?: boolean } = {}): Promise<U
 
     // "Update later" (v5.8.2): the automatic launch/resume check respects the
     // snooze; a manual "Check for updates" tap always shows what's there.
-    const mandatory = typeof data.minBuild === 'number' && data.minBuild > 0 && installedBuild < data.minBuild;
+    const forcedByVersion = data.updateMode === 'force' && typeof data.minVersion === 'string' && compareVersions(installedName, data.minVersion) < 0;
+    const mandatory = (typeof data.minBuild === 'number' && data.minBuild > 0 && installedBuild < data.minBuild) || forcedByVersion;
     if (!mandatory && !opts.manual && isUpdateSnoozed(latestBuild)) return null;
 
     return {

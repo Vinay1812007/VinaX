@@ -1,17 +1,23 @@
 /**
- * GET  /api/admin/analytics?view=music|geo|engagement|retention|funnel|skips|errors&days=
+ * GET  /api/admin/analytics?view=music|rising|geo|engagement|retention|funnel|skips|errors&days=
  *        → { configured, days, view, data }
- * POST /api/admin/analytics { action: 'clear_errors' }
+ * POST /api/admin/analytics { action: 'clear_errors' }   (owner only)
  *
- * Each view is one stats_* function's answer; engagement also carries the
- * daily timeline and the platform split.
+ * Song Stats. Since schema 9 every view counts signed-in users only (plays,
+ * people), except `funnel` (aggregate sign-up journey) and `errors`.
+ *   music / rising → { songs [{ id, title, artist, image, plays, listeners, prev_plays }], artists, languages, rising }
+ *   geo            → { countries, regions, cities }
+ *   engagement     → { byKind, byPlatform, hourly, perUser, segments, total, timeline, platforms, versions }
+ *   retention      → [{ week, size, d1, d7, d30 }]
+ *   funnel         → [{ id, label, listeners }] (4 steps)
+ *   skips          → [{ id, title, artist, image, plays, skips, rate }]
  */
 import { adminJson, badRequest, dbFailure } from '../../_lib/admin';
 import { adminGet, adminPost } from '../../_lib/adminRoute';
 import { db, q } from '../../_lib/db';
 import { daysParam } from '../../_lib/edge';
 
-const VIEWS = ['music', 'geo', 'engagement', 'retention', 'funnel', 'skips', 'errors'] as const;
+const VIEWS = ['music', 'rising', 'geo', 'engagement', 'retention', 'funnel', 'skips', 'errors'] as const;
 type View = (typeof VIEWS)[number];
 
 export const onRequestGet = adminGet(async ({ env, url }) => {
@@ -32,7 +38,8 @@ export const onRequestGet = adminGet(async ({ env, url }) => {
   }
 
   const call: Record<Exclude<View, 'engagement'>, [string, Record<string, unknown>]> = {
-    music: ['stats_music', { p_days: days, p_limit: 50 }],
+    music: ['stats_music', { p_days: days, p_limit: 100 }],
+    rising: ['stats_music', { p_days: days, p_limit: 100 }],
     geo: ['stats_geo', { p_days: days }],
     retention: ['stats_retention', { p_weeks: Math.min(26, Math.max(8, Math.ceil(days / 7))) }],
     funnel: ['stats_funnel', { p_days: days }],
@@ -42,7 +49,7 @@ export const onRequestGet = adminGet(async ({ env, url }) => {
   const [fn, args] = call[view];
   const r = await db.rpc<unknown>(env, fn, args);
   if (!r.ok) return dbFailure(r);
-  return adminJson({ configured: true, days, view, data: r.value ?? (view === 'music' || view === 'geo' || view === 'errors' ? {} : []) });
+  return adminJson({ configured: true, days, view, data: r.value ?? (view === 'music' || view === 'rising' || view === 'geo' || view === 'errors' ? {} : []) });
 });
 
 export const onRequestPost = adminPost(async ({ env, body, audit }) => {

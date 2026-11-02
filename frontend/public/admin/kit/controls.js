@@ -1,4 +1,4 @@
-/* VinaX console — shared controls (version 8 rebuild).
+/* VinaX console — shared controls (console rebuild).
  *
  * Loaded right after core.js. Everything a page needs so the admin never
  * types a technical value: info tooltips, stat cards, "⋯" menus, radios,

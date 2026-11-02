@@ -499,7 +499,7 @@ fieldset.auto-group legend { padding: 0 6px; font-size: 12.5px; font-weight: 650
 .val-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* =====================================================================
-   Version 8 rebuild — shell, controls and the App Settings framework.
+   Console rebuild — shell, controls and the App Settings framework.
    ===================================================================== */
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
@@ -560,8 +560,13 @@ fieldset.auto-group legend { padding: 0 6px; font-size: 12.5px; font-weight: 650
 /* Info tooltips */
 .info-btn { position: relative; display: inline-grid; place-items: center; width: 18px; height: 18px; margin-left: 6px; padding: 0; border: 1px solid var(--border-strong); border-radius: 99px; background: var(--surface-2); color: var(--text-2); font: 700 11px/1 var(--font-ui); font-style: italic; cursor: help; vertical-align: middle; flex: none; }
 .info-btn:hover, .info-btn:focus-visible, .info-btn.open { color: var(--text); border-color: var(--accent); }
-.info-btn .tip { position: absolute; z-index: 70; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); width: max-content; max-width: 260px; padding: 8px 10px; border-radius: var(--r-md); background: var(--text); color: var(--bg); font: 500 12.5px/1.45 var(--font-ui); font-style: normal; text-align: left; white-space: normal; box-shadow: var(--shadow-float); opacity: 0; visibility: hidden; transition: opacity .12s; pointer-events: none; }
-.info-btn:hover .tip, .info-btn:focus-visible .tip, .info-btn.open .tip { opacity: 1; visibility: visible; }
+.info-btn .tip { position: absolute; z-index: 70; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); width: max-content; max-width: 260px; padding: 8px 10px; border-radius: var(--r-md); background: var(--text); color: var(--bg); font: 500 12.5px/1.45 var(--font-ui); font-style: normal; text-align: left; white-space: normal; box-shadow: var(--shadow-float); display: none; pointer-events: none; }
+/* display (not visibility) so a hidden tip never widens the page. */
+.info-btn:hover .tip, .info-btn:focus-visible .tip, .info-btn.open .tip { display: block; }
+.stat-info .info-btn .tip { left: auto; right: -8px; transform: none; }
+.dd.inline .dd-label { white-space: nowrap; }
+.tabs { overflow-x: auto; scrollbar-width: thin; }
+.tabs .tab { white-space: nowrap; flex: none; }
 
 /* Stat cards */
 .stats { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
@@ -715,7 +720,7 @@ fieldset.auto-group legend { padding: 0 6px; font-size: 12.5px; font-weight: 650
 .preview-col { display: grid; gap: 8px; position: sticky; top: 76px; }
 .preview-label { text-align: center; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
 fieldset.ro { border: 0; margin: 0; padding: 0; min-width: 0; }
-.save-bar { position: static; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.save-bar { position: static; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 16px 0 0; padding: 14px 0 0; border-top: 1px solid var(--border); background: none; backdrop-filter: none; border-radius: 0; }
 .section-meta { margin-top: 8px; }
 .history-panel { margin-top: 10px; }
 .history-panel summary { cursor: pointer; display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); font-weight: 600; font-size: 13px; list-style: none; }
@@ -735,3 +740,7 @@ fieldset.ro { border: 0; margin: 0; padding: 0; min-width: 0; }
 
 /* Viewers: controls read-only */
 body.role-viewer .needs-edit { display: none !important; }
+/* The row "⋯" menu stays in view when a wide table scrolls sideways. */
+.tbl td.menu-col, .tbl th.menu-col { position: sticky; right: 0; background: var(--surface); z-index: 1; box-shadow: -8px 0 8px -8px rgb(0 0 0 / .35); }
+.tbl tbody tr:hover td.menu-col { background: var(--surface-2); }
+.tbl tr.selected td.menu-col { background: var(--surface); }

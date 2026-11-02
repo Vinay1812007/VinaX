@@ -21,7 +21,7 @@ export interface AuditContext {
   env: DbEnv;
   request?: Request;
   waitUntil?: (p: Promise<unknown>) => void;
-  /** Who did it (version 8: the admin's email; "owner" for the recovery password and jobs). */
+  /** Who did it (console rebuild: the admin's email; "owner" for the recovery password and jobs). */
   actor?: string;
 }
 

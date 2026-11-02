@@ -263,6 +263,7 @@ export function noticeFor(code: string): string {
     case 'ai_not_configured': return 'VinaX AI is unavailable right now.';
     case 'signed_out': return 'Your sign-in has expired. Sign in again to keep chatting.';
     case 'rate_limited': return 'That’s a lot of messages at once. Wait a minute, then try again.';
+    case 'daily_limit': return 'You’ve reached today’s message limit for VinaX AI. Come back tomorrow.';
     case 'too_large':
     case 'too_long': return 'That message is too long to send.';
     case 'conversation_full': return 'This chat is full. Start a new chat to keep going.';

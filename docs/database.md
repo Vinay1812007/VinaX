@@ -5,7 +5,7 @@ VinaX 14.0 brings back a server database, designed from a clean sheet: one schem
 ## Setting it up
 
 1. Create a Supabase project (any region; Mumbai is closest to most listeners).
-2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 9), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
+2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 10), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
 3. Set two Worker secrets from `backend/`:
 
 ```sh
@@ -14,6 +14,16 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml
 ```
 
 4. Open the console's **Database** page: it shows the schema version the paste wrote and every table.
+
+### Moving from version 9
+
+Version 10 comes with the rebuilt owner console ([admin-console.md](admin-console.md)). Paste `schema.sql` once (or let the Schema workflow apply it); nothing is deleted and the Database page then shows version 10. Apply it before or together with the Worker that uses it: until then the console shows an owner a "database update needed" banner, and the pages that call the new functions say so instead of loading.
+
+- **The console counts signed-in people only.** `signed_devices()` lists every device that belongs to a Google account; `stats_overview`, `stats_timeline`, `stats_music`, `stats_geo`, `stats_platforms`, `stats_engagement`, `stats_retention` and `stats_skips` now count only those (people, not devices), and days follow India's calendar (`_ist_today()`). Anonymous `listeners` rows and their events stay in the database; they are only left out of these answers. App errors still count every report. `stats_funnel` is the sign-up journey (opened the app, played, signed in, came back) and returns aggregate numbers only.
+- **New tables:** `admins` (who may open the console: email, role owner / editor / viewer, invited by, last sign-in) and `error_status` (the owner's status for one group of app errors).
+- **New columns:** `push_devices.account_id` (the signed-in account on that device), `notifications.status` / `scheduled_for` / `image` / `opened` / `created_by` (drafts, scheduled sends, taps), `blocked_content.blocked_by` and the `album` kind, `experiments.description` / `status` / `audience` / `started_at` / `ended_at` / `winner`, `accounts.blocked_at`, `listeners.signed_out_at`.
+- **New functions:** `admin_users` (the Users page: filters, sort, paging and counts on the server), `admin_user_filters`, `user_profile` (one person across all their devices), `purge_kind` (Data & Privacy retention per kind of data), `notification_opened`, `_error_shape` (groups similar error messages).
+- **Storage:** a public bucket `console-media` for pictures uploaded in the console (banners, notification images). Supabase only.
 
 ### Moving from version 8
 

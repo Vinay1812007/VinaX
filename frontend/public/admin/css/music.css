@@ -1,1 +1,56 @@
-/* VinaX console — page styles (music). Uses the tokens in console.css. */
+/* VinaX console — page styles (music: Feedback, Song Stats, Music Library). Uses the tokens in console.css. */
+
+/* Shared */
+.toolbar.filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 4px 0 14px; }
+.song-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.song-cell .pill { flex: none; }
+.gain { color: var(--ok); font-weight: 700; }
+.skip-rate { display: inline-flex; align-items: center; gap: 8px; min-width: 130px; justify-content: flex-end; }
+.skip-rate .meter { width: 70px; }
+
+/* Retention grid */
+.cohort-grid td.cohort { position: relative; font-weight: 600; background: color-mix(in srgb, var(--accent) calc(var(--p, 0) * 60%), transparent); }
+.cohort-grid th, .cohort-grid td { white-space: nowrap; }
+
+/* Sign-up journey */
+.funnel { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.funnel-step { display: grid; gap: 6px; }
+.funnel-top { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.funnel-track { height: 14px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.funnel-fill { height: 100%; border-radius: 99px; background: var(--accent); }
+
+/* Music Library */
+.lib-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 14px; }
+.lib-bar .grow { flex: 1 1 260px; min-width: 0; }
+.lib-bar .search-box { width: 100%; }
+.lib-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.lib-card { display: flex; align-items: center; gap: 12px; padding: 10px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); min-width: 0; }
+.lib-art-wrap { position: relative; flex: none; }
+.lib-art { width: 64px; height: 64px; border-radius: var(--r-md); object-fit: cover; display: block; background: var(--surface-2); }
+.lib-art.round { border-radius: 99px; }
+.lib-art.blank { display: grid; place-items: center; color: var(--text-3); }
+.lib-text { flex: 1; min-width: 0; }
+.lib-text .cell-main, .lib-text .cell-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-btn { position: absolute; right: -6px; bottom: -6px; width: 30px; height: 30px; border-radius: 99px; background: var(--accent); color: var(--on-accent); border: 2px solid var(--surface); }
+.preview-btn:hover { background: var(--accent-hover); }
+.preview-btn.playing { background: var(--ok); }
+.preview-btn .ic { width: 14px; height: 14px; }
+
+/* Feedback */
+.fb-tabs { margin-bottom: 12px; }
+.fb-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.fb-card { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--r-lg); background: var(--surface); }
+.fb-card.status-read { border-left-color: var(--info); }
+.fb-card.status-resolved { border-left-color: var(--ok); }
+.fb-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.fb-head time { color: var(--text-3); font-size: 12.5px; white-space: nowrap; }
+.fb-message { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14.5px; }
+.fb-note { white-space: pre-wrap; border-left: 2px solid var(--border-strong); padding-left: 10px; }
+.fb-shot img { max-width: 220px; max-height: 220px; border-radius: var(--r-md); border: 1px solid var(--border); }
+.fb-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fb-foot .ic { width: 14px; height: 14px; vertical-align: -2px; }
+@media (max-width: 560px) {
+  .fb-head .grow { display: none; }
+  .lib-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.lib-bar .search-box, .lib-bar .search-box .input { width: 100%; }

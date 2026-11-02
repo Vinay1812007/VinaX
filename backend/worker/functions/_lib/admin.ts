@@ -105,7 +105,7 @@ export async function isAdminAsync(request: Request, env: AdminAuthEnv): Promise
 }
 
 /**
- * Version 8 — who is calling: a Google-signed-in admin (an `adm1.` console
+ * Console rebuild — who is calling: a Google-signed-in admin (an `adm1.` console
  * session, role from the `admins` table) or the owner recovery password.
  * Null when neither checks out.
  */

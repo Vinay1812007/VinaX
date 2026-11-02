@@ -19,7 +19,7 @@ export interface AdminCtx<E = AdminDbEnv> {
   env: E;
   url: URL;
   waitUntil: ((p: Promise<unknown>) => void) | undefined;
-  /** Who is calling (version 8): email, role, how they signed in. */
+  /** Who is calling (console rebuild): email, role, how they signed in. */
   me: AdminPrincipal;
   /** Record what this action changed (best effort, outlives the response). */
   audit: (entry: AuditEntry) => Promise<void>;

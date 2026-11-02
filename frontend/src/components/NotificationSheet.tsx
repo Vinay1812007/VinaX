@@ -63,7 +63,8 @@ export function NotificationSheet({ open, onClose }: { open: boolean; onClose: (
     const base = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
     void fetch(`${base}/api/announcements?t=${Date.now()}`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { announcements?: Announcement[] } | null) => setAnns(d?.announcements ?? []))
+      // The server answers ONE announcement ({ announcement }); older code read a list that never existed.
+      .then((d: { announcement?: Announcement | null; announcements?: Announcement[] } | null) => setAnns(d?.announcement ? [d.announcement] : d?.announcements ?? []))
       .catch(() => setAnns([]));
     void import('@/constants/changelog').then((m) => {
       const rows = [...Object.entries(m.CHANGELOG_V2), ...Object.entries(m.CHANGELOG_CLASSIC ?? {})]

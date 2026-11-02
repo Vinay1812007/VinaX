@@ -9,15 +9,28 @@
  *     one path the owner asks about: status, title, description, canonical,
  *     H1, JSON-LD types, indexable text, social image, and what is wrong.
  *
+ * Console rebuild — ?view=bots answers the crawler list (Allow / Block per bot,
+ * the owner's choices from the `robots` setting, and whether the live file
+ * matches); POST { action: 'publish_robots' } asks the website host to rebuild
+ * so robots.txt picks the choices up (PAGES_DEPLOY_HOOK). See _lib/robots.ts.
+ *
  * Since V2 1.0 these pages and maps are static files on the static host, so
  * crawlers reading them spend nothing from the Worker's daily quota; this
  * route spends about twenty sub-requests, only when the owner opens the tab,
  * and is rate-limited.
  */
-import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { adminJson, badRequest, isAdminAsync, requireRole, unauthorized, type AdminAuthEnv } from '../../_lib/admin';
+import { audit } from '../../_lib/audit';
+import { readJsonCapped } from '../../_lib/body';
+import { dbConfigured, type DbEnv } from '../../_lib/db';
 import { rateLimitAsync } from '../../_lib/ratelimit';
+import { BOT_GROUPS, BOTS, botChoices, readRobotsBlocked } from '../../_lib/robots';
+import { setting } from '../../_lib/settings';
 
-type Env = AdminEnv;
+type Env = AdminAuthEnv & DbEnv & {
+  /** Cloudflare Pages deploy hook URL: POSTing it rebuilds the website (robots.txt comes from the build). */
+  PAGES_DEPLOY_HOOK?: string;
+};
 
 const json = (o: unknown, status = 200): Response =>
   new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -144,10 +157,25 @@ export function readRobots(text: string): { sitemaps: string[]; blockedAgents: s
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
   if (!(await isAdminAsync(request, env))) return unauthorized();
-  const limited = await rateLimitAsync(request, 'admin-seo', { capacity: 4, refillPerMinute: 4 }, env);
-  if (limited) return limited;
   const url = new URL(request.url);
   const origin = url.origin.replace('://admin.', '://www.');
+
+  // The bots list: cheap (one read of the live robots.txt), not rate-limited with the audit.
+  if (url.searchParams.get('view') === 'bots') {
+    const [raw, live] = await Promise.all([dbConfigured(env) ? setting(env, 'robots') : Promise.resolve(null), get(`${origin}/robots.txt`, 5000)]);
+    const choices = botChoices(raw);
+    const liveBlocked = live.status === 200 ? new Set(readRobotsBlocked(live.text)) : null;
+    return json({
+      groups: BOT_GROUPS,
+      bots: BOTS.map((b) => ({ id: b.id, name: b.name, about: b.about, group: b.group, allowByDefault: b.allowByDefault, allowed: choices[b.id], live: liveBlocked ? !liveBlocked.has(b.id) : null })),
+      saved: !!raw,
+      publishReady: !!env.PAGES_DEPLOY_HOOK,
+      liveStatus: live.status,
+    });
+  }
+
+  const limited = await rateLimitAsync(request, 'admin-seo', { capacity: 4, refillPerMinute: 4 }, env);
+  if (limited) return limited;
 
   // One page on request.
   const one = url.searchParams.get('path');
@@ -194,4 +222,26 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     pages,
     issues: pages.reduce((n, p) => n + p.issues.length, 0) + (robots.status !== 200 ? 1 : 0) + (indexRes.status !== 200 ? 1 : 0) + (robots.disallowAll ? 1 : 0),
   });
+};
+
+/** POST { action: 'publish_robots' } — rebuild the website so robots.txt follows the saved choices (editor). */
+export const onRequestPost = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
+  const { request, env } = context;
+  const auth = await requireRole(request, env, 'editor');
+  if (!auth.ok) return auth.response;
+  const read = await readJsonCapped<{ action?: unknown } | null>(request, 2048);
+  if (!read.ok || !read.value || read.value.action !== 'publish_robots') return badRequest('unknown_action');
+  const hook = env.PAGES_DEPLOY_HOOK?.trim();
+  if (!hook || !/^https:\/\//.test(hook)) return adminJson({ ok: false, error: 'publish_not_configured' }, 400);
+  let ok: boolean;
+  try {
+    const r = await fetch(hook, { method: 'POST', signal: AbortSignal.timeout(10_000) });
+    await r.body?.cancel().catch(() => undefined);
+    ok = r.ok;
+  } catch {
+    ok = false;
+  }
+  if (!ok) return adminJson({ ok: false, error: 'publish_failed' }, 502);
+  if (dbConfigured(env)) await audit({ env, request, waitUntil: context.waitUntil, actor: auth.me.email }, { action: 'robots-publish', summary: 'rebuilt the website so robots.txt uses the saved bot choices' });
+  return adminJson({ ok: true });
 };

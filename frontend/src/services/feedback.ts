@@ -1,6 +1,7 @@
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal } from '@/services/storage/local';
 import { isNativePlatform, platformName } from '@/services/native';
+import { isReadOnly } from '@/services/siteMode';
 
 /** Submit user feedback / a bug report. NOT consent-gated — the user is
  *  explicitly sending this. Coarse geo is added server-side; no raw IP. */
@@ -9,6 +10,8 @@ const ENDPOINT = isNativePlatform()
   : '/api/feedback';
 
 export async function sendFeedback(type: string, message: string): Promise<boolean> {
+  // v8 — read-only mode: the server would refuse it (callers show READ_ONLY_MESSAGE).
+  if (isReadOnly()) return false;
   try {
     const res = await fetch(ENDPOINT, {
       method: 'POST',

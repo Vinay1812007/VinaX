@@ -1,5 +1,5 @@
 /**
- * Version 8 — who is using the console, and what they may do.
+ * Console rebuild — who is using the console, and what they may do.
  *
  * Two ways in:
  *   1. Google sign-in (the normal way). POST /api/admin/session with a Google
