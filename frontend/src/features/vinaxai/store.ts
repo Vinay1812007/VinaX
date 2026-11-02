@@ -50,13 +50,14 @@ function enqueue(ev: StreamEvent): void {
 /** Which model answers: the composer's choice, or an explicit one (Retry with…). */
 export type ModelChoice = { mode: 'auto' } | { mode: 'model'; model: string };
 
-function requestBase(choice?: ModelChoice): Pick<ChatRequestBody, 'mode' | 'model' | 'extendedThinking' | 'webSearch' | 'artifacts' | 'timezone' | 'locale' | 'personal'> {
+function requestBase(choice?: ModelChoice): Pick<ChatRequestBody, 'mode' | 'model' | 'extendedThinking' | 'webSearch' | 'artifacts' | 'timezone' | 'locale' | 'personal' | 'incognito'> {
   let timezone = 'UTC';
   try { timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { /* keep UTC */ }
   const prefs = usePrefs.getState();
   const pick: ModelChoice = choice ?? (prefs.model === 'auto' ? { mode: 'auto' } : { mode: 'model', model: prefs.model });
   const personal = personalOf(prefs);
-  return { ...pick, extendedThinking: prefs.extendedThinking, webSearch: prefs.webSearch, artifacts: prefs.artifacts, timezone, locale: typeof navigator !== 'undefined' ? navigator.language : 'en', ...(personal ? { personal } : {}) };
+  const incognito = useChatStore.getState().incognito;
+  return { ...pick, extendedThinking: prefs.extendedThinking, webSearch: prefs.webSearch, artifacts: prefs.artifacts, timezone, locale: typeof navigator !== 'undefined' ? navigator.language : 'en', ...(personal ? { personal } : {}), ...(incognito ? { incognito: true } : {}) };
 }
 
 /** `beforeStart`: nothing was saved, so the page puts the text back in the composer. */
@@ -113,15 +114,18 @@ async function run(body: ChatRequestBody): Promise<RunOutcome> {
  * the edited message's parent (null for the first message), which makes the
  * new message its sibling.
  */
-export function sendMessage(text: string, opts: { parentId?: string | null; files?: FileRef[] } = {}): Promise<RunOutcome> {
+export function sendMessage(text: string, opts: { parentId?: string | null; files?: FileRef[]; projectId?: string | null } = {}): Promise<RunOutcome> {
   const s = useChatStore.getState();
   const files = opts.files ?? [];
   if (s.streaming || (!text.trim() && !files.length)) return Promise.resolve({ ok: true });
   const parent = opts.parentId !== undefined ? opts.parentId : parentForNext(s);
-  dispatch({ type: 'send', text, parentId: parent, now: new Date().toISOString(), files });
+  dispatch({ type: 'send', text, parentId: parent, now: new Date().toISOString(), files, projectId: opts.projectId });
+  // A new chat starts in the project it was sent from.
+  const projectId = s.conversationId ? null : opts.projectId ?? null;
   return run({
     ...requestBase(),
     conversationId: s.conversationId,
+    ...(projectId ? { projectId } : {}),
     ...(s.conversationId ? { parentMessageId: parent ?? 'root' } : {}),
     content: [...files.map((f) => ({ type: 'attachment' as const, id: f.id })), ...(text.trim() ? [{ type: 'text' as const, text }] : [])],
   });
@@ -155,6 +159,11 @@ export function selectBranch(messageId: string): void {
 /** Stop the reply being written (the server keeps what was written so far). */
 export function stopReply(): void {
   inflight?.abort();
+}
+
+/** Start the new chat incognito (or not); only before its first message. */
+export function setIncognito(on: boolean): void {
+  dispatch({ type: 'incognito', on });
 }
 
 export function resetChat(): void {

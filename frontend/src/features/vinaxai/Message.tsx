@@ -208,7 +208,7 @@ export function AssistantMessage({ message, live, models, onRetry, onContinue, v
   const cutOff = !live && !!text && (stopReason === 'length' || stopReason === 'error');
   const previews = usePrefs((p) => p.inlinePreviews && p.artifacts);
   return (
-    <div className="vx-ai-turn vx-ai-turn-reply" aria-busy={live || undefined}>
+    <div className="vx-ai-turn vx-ai-turn-reply" data-message-id={message.id} aria-busy={live || undefined}>
       <h2 className="sr-only">VinaX AI said</h2>
       {live && !text && message.status && <SearchStatusLine status={message.status} />}
       <ThinkingFold message={message} live={live} />

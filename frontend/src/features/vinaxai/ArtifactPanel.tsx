@@ -31,9 +31,13 @@ interface Props {
   sheet: boolean;
   /** A failed preview offers "Fix it" (the chat only; never on a shared page). */
   onFix?(artifact: Artifact, error: string): void;
+  /** The gallery: the chat it came from, under the kind. */
+  from?: string | null;
+  /** The gallery: open the chat at the reply that made the shown version. */
+  onOpenChat?(messageId: string): void;
 }
 
-export function ArtifactPanel({ versions, live, sheet, onFix }: Props): ReactNode {
+export function ArtifactPanel({ versions, live, sheet, onFix, from, onOpenChat }: Props): ReactNode {
   const { open, tab, width, setTab, setVersion, setWidth, close } = usePanel();
   useDismissOnBack(sheet && !!open, close);
   const root = useRef<HTMLElement>(null);
@@ -88,7 +92,7 @@ export function ArtifactPanel({ versions, live, sheet, onFix }: Props): ReactNod
         <header className="vx-ai-artifact-head">
           <div className="vx-ai-artifact-title">
             <h2>{a.title}</h2>
-            <span className="vx-ai-opt-sub">{TYPE_LABEL[a.type]}{writing ? ' · writing…' : a.incomplete ? ' · incomplete' : ''}</span>
+            <span className="vx-ai-opt-sub">{TYPE_LABEL[a.type]}{writing ? ' · writing…' : a.incomplete ? ' · incomplete' : ''}{from ? ` · ${from}` : ''}</span>
           </div>
           {versions.length > 1 && (
             <div className="vx-ai-branch" role="group" aria-label="Versions">
@@ -107,6 +111,11 @@ export function ArtifactPanel({ versions, live, sheet, onFix }: Props): ReactNod
                 <button type="button" role="tab" aria-selected={showing === 'preview'} disabled={writing} onClick={() => setTab('preview')}>Preview</button>
                 <button type="button" role="tab" aria-selected={showing === 'code'} onClick={() => setTab('code')}>Code</button>
               </div>
+            )}
+            {onOpenChat && (
+              <button type="button" className="vx-ai-chip vx-ai-artifact-chat" onClick={() => onOpenChat(versions[index].messageId)}>
+                Open chat
+              </button>
             )}
             <button type="button" className="vx-ai-act" onClick={() => void copyText(a.content, 'Artifact copied')} aria-label="Copy artifact" title="Copy">
               <CopyIcon className="w-4 h-4" />

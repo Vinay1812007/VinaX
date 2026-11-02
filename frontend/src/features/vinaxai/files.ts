@@ -113,10 +113,11 @@ const authHeaders = (): Record<string, string> => {
   return a ? { authorization: `Bearer ${a.session}` } : {};
 };
 
-/** Send a (prepared) file to POST /api/ai/attachments. */
-export async function uploadBlob(blob: Blob, name: string, mime: string, conversationId: string | null, signal?: AbortSignal): Promise<UploadedFile> {
+/** Send a (prepared) file to POST /api/ai/attachments: into a chat, or (`projectId`) into a project's knowledge. */
+export async function uploadBlob(blob: Blob, name: string, mime: string, conversationId: string | null, signal?: AbortSignal, projectId?: string): Promise<UploadedFile> {
   const qs = new URLSearchParams({ name });
   if (conversationId) qs.set('conversationId', conversationId);
+  if (projectId) qs.set('projectId', projectId);
   let res: Response;
   try {
     res = await fetch(`${AI_BASE}/attachments?${qs}`, { method: 'POST', headers: { ...authHeaders(), 'content-type': mime }, body: blob, signal });

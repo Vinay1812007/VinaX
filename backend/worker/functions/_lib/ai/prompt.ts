@@ -9,13 +9,20 @@
  *   2. the artifacts contract and the visualisation guide, for every model
  *      that can write a whole file (`artifactsOffered`), when the reply may
  *      use artifacts;
- *   3. the listener's own preferences from VinaX AI's settings (what to call
+ *   3. the listener's memory (memory.ts): notes from earlier chats, marked
+ *      as background that may be out of date, never instructions; only for
+ *      models that get the full prompt, and never in an incognito chat;
+ *   3b. for a chat in a project: the project's name, its instructions (marked
+ *      as the listener's) and its knowledge files as reference material,
+ *      cut to fit the model's window (`projectBlock`);
+ *   4. the listener's own preferences from VinaX AI's settings (what to call
  *      them, about them, how to reply, a reply style), marked as theirs;
- *   4. <search_results> and the citation rules, only when search ran.
+ *   5. <search_results> and the citation rules, only when search ran.
  *
  * Nothing else: no taste profile and no listening history. The prompt text
  * is the owner's, verbatim; a snapshot test keeps it from drifting.
  */
+import { documentBlock } from './attachments';
 import type { ModelSpec, Source } from './types';
 
 export const FULL_PROMPT = `You are VinaX AI, the AI assistant built into VinaX, a free music app. You help with anything people bring you: questions, writing, analysis, coding, maths, studying, planning, advice, creative work and everyday problems, as well as music.
@@ -290,8 +297,14 @@ export function buildSystemPrompt(opts: { spec: ModelSpec; vars: PromptVars; art
   const owner = ownerBlock(opts.owner);
   if (owner) parts.push(owner);
   if (opts.artifacts && artifactsOffered(opts.spec)) parts.push(ARTIFACTS_BLOCK);
+  if (opts.memory && promptFor(opts.spec) === 'full') parts.push(opts.memory);
+  const tail: string[] = [];
   const personal = personalBlock(opts.personal);
-  if (personal) parts.push(personal);
-  if (opts.search && opts.search.sources.length) parts.push(searchResultsBlock(opts.search), CITATION_RULES);
-  return parts.join('\n\n');
+  if (personal) tail.push(personal);
+  if (opts.search && opts.search.sources.length) tail.push(searchResultsBlock(opts.search), CITATION_RULES);
+  if (opts.project) {
+    const used = [...parts, ...tail].join('\n\n').length;
+    parts.push(projectBlock(opts.project, Math.floor(opts.spec.maxContextChars * KNOWLEDGE_SHARE) - used));
+  }
+  return [...parts, ...tail].join('\n\n');
 }

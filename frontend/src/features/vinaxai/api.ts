@@ -49,10 +49,54 @@ export const listConversations = (opts: { q?: string; cursor?: string | null } =
   return call(`/conversations${qs ? `?${qs}` : ''}`);
 };
 
-export const patchConversation = (id: string, patch: { title?: string; starred?: boolean; activeLeafId?: string }): Promise<{ conversation: ConversationSummary }> =>
+export const patchConversation = (id: string, patch: { title?: string; starred?: boolean; activeLeafId?: string; projectId?: string | null }): Promise<{ conversation: ConversationSummary }> =>
   call(`/conversations/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) });
 
 export const deleteConversation = (id: string): Promise<{ ok: true }> => call(`/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
+// ---------- artifacts gallery ----------
+
+export const listArtifacts = (opts: { kind?: GalleryItem['kind'] | null; q?: string; cursor?: string | null } = {}): Promise<{ items: GalleryItem[]; nextCursor: string | null }> => {
+  const p = new URLSearchParams();
+  if (opts.kind) p.set('kind', opts.kind);
+  if (opts.q) p.set('q', opts.q);
+  if (opts.cursor) p.set('cursor', opts.cursor);
+  const qs = p.toString();
+  return call(`/artifacts${qs ? `?${qs}` : ''}`);
+};
+
+/** One artifact with every version's content. */
+export const getArtifact = (conversationId: string, artifactId: string): Promise<{ artifact: GalleryArtifact }> =>
+  call(`/artifacts/${encodeURIComponent(conversationId)}/${encodeURIComponent(artifactId)}`);
+
+// ---------- projects ----------
+
+export const PROJECTS_KEY = ['vinaxai', 'projects'] as const;
+export const PROJECT_LIMITS = { name: 60, description: 300, instructions: 8_000, files: 20, chars: 200_000 } as const;
+
+export const listProjects = (): Promise<{ items: Project[] }> => call('/projects');
+export const createProject = (p: { name: string; description?: string | null; instructions?: string | null }): Promise<{ project: Project }> =>
+  call('/projects', { method: 'POST', body: JSON.stringify(p) });
+export const getProject = (id: string): Promise<ProjectDetail> => call(`/projects/${encodeURIComponent(id)}`);
+export const patchProject = (id: string, patch: { name?: string; description?: string | null; instructions?: string | null; starred?: boolean }): Promise<{ project: Project }> =>
+  call(`/projects/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) });
+/** `chats`: keep them as ordinary chats, or delete them with the project. */
+export const deleteProject = (id: string, chats: 'keep' | 'delete'): Promise<{ ok: true; chats: number }> =>
+  call(`/projects/${encodeURIComponent(id)}?chats=${chats}`, { method: 'DELETE' });
+
+/** What a failed project request means for the listener. */
+export function projectNotice(code: string): string {
+  switch (code) {
+    case 'too_many_projects': return 'You have 100 projects, the most there can be. Delete one to make another.';
+    case 'too_many_files': return `A project can hold ${PROJECT_LIMITS.files} files. Remove one to add another.`;
+    case 'knowledge_full': return 'That would put the project over its 200,000-character limit for file text. Remove a file or add a shorter one.';
+    case 'not_found': return 'This project isn’t available any more.';
+    case 'rate_limited': return 'That’s a lot of changes at once. Wait a minute, then try again.';
+    case 'signed_out': return 'Your sign-in has expired. Sign in again to keep going.';
+    case 'bad_request': return 'That couldn’t be saved. Check the name and the lengths, then try again.';
+    default: return 'Something went wrong. Try again.';
+  }
+}
 
 // ---------- shared links ----------
 
@@ -86,6 +130,41 @@ export function shareNotice(code: string): string {
   }
 }
 
+// ---------- memory ----------
+
+/** The listener's memory; a partial answer reads as on and empty. */
+export async function getMemory(): Promise<MemoryState> {
+  const r = await call<Partial<MemoryState>>('/memories');
+  return {
+    enabled: r.enabled !== false,
+    prefs: { use: r.prefs?.use !== false, learn: r.prefs?.learn !== false },
+    items: Array.isArray(r.items) ? r.items : [],
+    max: typeof r.max === 'number' ? r.max : 50,
+  };
+}
+
+export const addMemory = (text: string): Promise<{ item: MemoryItem }> => call('/memories', { method: 'POST', body: JSON.stringify({ text }) });
+
+export const deleteMemory = (id: string): Promise<{ ok: true }> => call(`/memories/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
+/** Forget everything. */
+export const forgetAllMemory = (): Promise<{ ok: true; removed: number }> => call('/memories', { method: 'DELETE' });
+
+export const setMemoryPrefs = (patch: Partial<MemoryPrefs>): Promise<{ prefs: MemoryPrefs }> => call('/memories/prefs', { method: 'PUT', body: JSON.stringify(patch) });
+
+/** What a failed memory request means for the listener. */
+export function memoryNotice(code: string): string {
+  switch (code) {
+    case 'sensitive': return 'That looks like a password, a number or contact details. Memory doesn’t keep those.';
+    case 'full': return 'Memory is full. Delete a memory to add another.';
+    case 'memory_off': return 'Memory is switched off for VinaX AI right now.';
+    case 'rate_limited': return 'That’s a lot of changes at once. Wait a minute, then try again.';
+    case 'signed_out': return 'Your sign-in has expired. Sign in again to change your memory.';
+    case 'not_found': return 'That memory is already gone.';
+    default: return 'Something went wrong. Try again.';
+  }
+}
+
 /** Every chat as one JSON file (GET /api/ai/export). */
 export async function fetchExport(): Promise<Blob> {
   const res = await fetch(`${AI_BASE}/export`, { headers: headers() });
@@ -107,6 +186,10 @@ export interface ChatRequestBody {
   locale?: string;
   /** VinaX AI settings → Personalisation; used for this reply only. */
   personal?: { name?: string; about?: string; instructions?: string; style?: string };
+  /** A new chat starts in this project. */
+  projectId?: string;
+  /** An incognito chat: no memory is read or written. */
+  incognito?: boolean;
 }
 
 // ---------- voice (phase 6) ----------

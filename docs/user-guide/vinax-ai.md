@@ -62,6 +62,18 @@ A message can carry 20 files, and a chat 50. These are the usual limits; VinaX's
 The gear at the top of VinaX AI opens its settings.
 - **General**: the theme (the same as the rest of VinaX), whether VinaX AI makes artifacts (below), and whether pages, charts and diagrams show as live previews right in the reply.
 - **Personalisation**: what VinaX AI should call you, what it should know about you (your work, interests, what you're learning), how it should reply (tone, length, format, language), and a reply style: Normal, Concise, Explanatory, Formal or Learning (it guides you to work things out). These stay on your device and go with each message; they are not saved with your chats.
+- **Memory**: what VinaX AI remembers about you across chats (see below).
+
+## Memory
+
+VinaX AI can remember lasting things you tell it, such as what you're learning, the work you do or the language you like replies in, so you don't have to say them again in every chat. It uses them only when they help, and you can see and change all of it.
+
+- As you chat, VinaX AI saves short notes now and then, like "Is learning Carnatic vocals". Say "remember that…" to save something straight away, or "forget that…" to remove it.
+- It never keeps passwords, codes, card or account numbers, email addresses, phone numbers, health details or things about other people.
+- **Settings** → **Memory** lists every note, marked **Learned from a chat** or **Added by you**. Delete any of them, add your own with **Add a memory**, or press **Forget everything** to clear the list.
+- **Use memory** off: VinaX AI neither uses nor saves notes. **Learn from my chats** off: it uses the notes you have but doesn't save new ones.
+- **Incognito chat**: on a new chat, press the hat-and-glasses button at the top before you send anything. That chat won't use your memory or add to it, and says **Incognito** at the top. It's still saved in your chats like any other.
+- Memory is kept with your account, so it follows you to every device. Shared links never include it. Deleting a chat keeps any notes learned from it; deleting your account deletes them all. Memory is on when you start; switch it off any time.
 
 ## Code, pages, charts and diagrams
 
@@ -73,6 +85,16 @@ When VinaX AI writes something substantial, such as a web page, a small app, a c
 - When VinaX AI updates something it made, the panel shows **v2 of 2**. Use **‹ ›** to step between versions.
 - On a computer, drag the panel's edge to make it wider or narrower. **Close** returns to the chat.
 
+### Everything VinaX AI made, in one place
+
+**Artifacts** in the sidebar (just under **New chat**), or **Settings** → **Your chats** → **Your artifacts**, opens a page with every page, app, chart, diagram, picture, document and piece of code your chats made, newest first.
+
+- Each card shows its name, what kind it is (with the programming language for code), how many versions there are, and the chat and day it came from.
+- The buttons along the top (**Pages**, **Components**, **Diagrams**, **Images**, **Documents**, **Code**) show one kind at a time, and the search box finds things by name. Scroll down for older ones.
+- Tap a card to open it in the same panel as in a chat, with **Preview**, **Code**, **Copy**, **Download** and **‹ ›** for its versions.
+- **Open chat** takes you to the reply that made the version you're looking at, with it open beside the chat.
+- Nothing extra is saved for this page: it shows what's already in your chats. Delete a chat and its artifacts leave this page too.
+
 ## Talk to VinaX AI by voice
 
 Voice controls appear when the service has voice switched on.
@@ -81,7 +103,7 @@ Voice controls appear when the service has voice switched on.
 - **Read aloud**: tap the speaker under a reply. Code, links and source numbers are skipped, and anything in the side panel is named rather than read. Tap it again to stop.
 - **Live voice**: with nothing typed in the message box, tap the sound-wave button where Send usually is. A full-screen view opens and you can simply talk, with captions of what each of you says. Talking over VinaX AI stops it so you can carry on. The microphone button mutes you, and **End** (or `Esc`) closes it. What you both said is saved into the chat as ordinary messages. A Live voice session lasts about ten minutes; start another to keep talking.
 - **Web search in Live voice**: when web search is available, Live voice can look things up as you talk (news, tour dates, charts, anything current). It says it's checking, answers out loud and tells you which site it used; the sites appear under the captions and are saved with the reply. The globe button in Live voice turns it on or off (Live voice reconnects for a moment and carries on where you were), and **Settings** → **Search the web in Live voice** sets it for next time.
-- **Settings** (the gear at the top, **Settings** in the sidebar, or **+** → **Settings**) has VinaX AI's own settings: the theme, Personalisation, artifacts and live previews, the model, Extended thinking, web search, your **microphone** (with **Test microphone**, which shows a level bar and says whether it hears you), the voice that reads replies, the Live voice (it also reads long replies), the Live voice model, **Search the web in Live voice**, **Export all chats** and your **Shared links**. They are kept on this device, apart from the theme (VinaX's own) and the shared links, which live with your account.
+- **Settings** (the gear at the top, **Settings** in the sidebar, or **+** → **Settings**) has VinaX AI's own settings: the theme, Personalisation, artifacts and live previews, the model, Extended thinking, web search, your **microphone** (with **Test microphone**, which shows a level bar and says whether it hears you), the voice that reads replies, the Live voice (it also reads long replies), the Live voice model, **Search the web in Live voice**, your **Memory**, **Export all chats**, **Your artifacts** and your **Shared links**. They are kept on this device, apart from the theme (VinaX's own), memory and the shared links, which live with your account.
 
 Your music pauses while the microphone is open and plays on quietly while a reply is read, then comes back as it was. The first time, your browser or phone asks to use the microphone. In the Android app it is the same question voice search asks.
 
@@ -89,10 +111,23 @@ Your music pauses while the microphone is open and plays on quietly while a repl
 
 - The sidebar lists your chats: **Starred** first, then by day. On a phone, open it with **☰**.
 - Search finds chats by their title and by what was said in them.
-- Each chat's **⋯** menu can **Star**, **Rename** or **Delete** it. A deleted chat disappears at once and is removed for good within a day.
+- Each chat's **⋯** menu can **Star**, **Rename**, **Move to project…** or **Delete** it. A deleted chat disappears at once and is removed for good within a day.
 - Chats are kept with your Google account, so they follow you to every device you sign in on. Each chat has its own address you can bookmark; only you can open it.
-- **Settings** → **Your data** → **Export VinaX AI chats** downloads every chat, with all its versions, as one file.
-- Deleting your account deletes every chat and file with it.
+- **Settings** → **Your data** → **Export VinaX AI chats** downloads every chat, with all its versions, and your projects, as one file.
+- Deleting your account deletes every chat, project and file with it.
+
+## Projects
+
+A project keeps related chats together, with instructions and files that every chat in it uses: a course you're studying, a band you're writing for, a trip you're planning.
+
+- Press **Projects** in the sidebar (on a phone, open it with **☰**), then **New project**. Give it a name and, if you like, a short description.
+- **Instructions**: press **Add** and tell VinaX AI how to work in this project, such as a role, a tone, a format or what to focus on. Every chat in the project follows them, unless you ask for something different in the chat. Up to 8,000 characters.
+- **Files**: press **Add files** to give the project text, code, PDFs or images. Every chat in the project can read them. A project holds up to 20 files and 200,000 characters of text. The bin button removes one.
+- **Start a chat in the project** with the message box on the project's page. The chat opens with the project's name at the top; tap it to go back to the project.
+- **Move a chat** into a project, or out of one, from its **⋯** menu → **Move to project…**.
+- The project's page lists its chats. The star, pencil and bin at the top star, rename or delete the project.
+- **Delete project** deletes its instructions and files. Its chats stay as ordinary chats, unless you choose **Delete them too**.
+- A shared link to a chat in a project never shows the project's instructions or files.
 
 ## Share a chat
 

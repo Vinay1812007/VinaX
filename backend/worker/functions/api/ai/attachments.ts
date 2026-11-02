@@ -1,6 +1,8 @@
 /**
  * VinaX AI — POST /api/ai/attachments?name=<file name>&conversationId=<uuid>
- * adds a file to a chat (before or in a conversation).
+ * adds a file to a chat (before or in a conversation). With &projectId=<uuid>
+ * instead, it adds a knowledge file to a project (at most 20 files and
+ * 200,000 characters of text per project).
  *
  *   body: the file's bytes, sent as they are (not multipart), with its
  *   Content-Type and Content-Length. The Worker checks the type, the size
@@ -9,7 +11,8 @@
  *   their text is kept for the model).
  *
  *   → 200 { id, name, mime, size, kind }
- *   → 400 bad_request · 401 signed_out · 404 not_found (conversation) · 409 too_many_files
+ *   → 400 bad_request · 401 signed_out · 404 not_found (conversation or project) · 409 too_many_files
+ *   → 409 knowledge_full (the project's text limit)
  *   → 411 length_required · 413 too_large · 415 unsupported_type
  *   → 429 rate_limited · 503 ai_disabled | unavailable
  *
@@ -24,6 +27,7 @@ import { aiOpenFor, aiSettings } from '../../_lib/ai/config';
 import { cleanName, kindOf, maxBytesFor, MAX_EXTRACTED_CHARS, sniff, type AttachmentKind } from '../../_lib/ai/attachments';
 import { storagePut, storageRemove } from '../../_lib/ai/storage';
 import { getConversation, isUuid } from '../../_lib/ai/store';
+import { getProject, knowledgeUsage, MAX_PROJECT_CHARS, MAX_PROJECT_FILES } from '../../_lib/ai/projects';
 import type { AiEnv } from '../../_lib/ai/types';
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: { ...CORS, 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': `${CORS['access-control-allow-headers']}, content-length` } });
@@ -80,6 +84,8 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
   const name = cleanName(url.searchParams.get('name'));
   const convParam = url.searchParams.get('conversationId');
   if (convParam && !isUuid(convParam)) return json({ error: 'bad_request' }, 400);
+  const projectParam = url.searchParams.get('projectId');
+  if (projectParam && (!isUuid(projectParam) || convParam)) return json({ error: 'bad_request' }, 400);
   const mime = (request.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
   const kind = kindOf(mime, name);
   if (!kind) return json({ error: 'unsupported_type' }, 415);
@@ -98,7 +104,7 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
   }
 
   const id = crypto.randomUUID();
-  const path = `${sub}/${convParam ?? 'new'}/${id}`;
+  const path = projectParam ? `${sub}/project-${projectParam}/${id}` : `${sub}/${convParam ?? 'new'}/${id}`;
   let extracted: string | null = null;
   let stored: boolean;
   if (kind === 'text') {
@@ -106,6 +112,7 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
     if (!bytes) return json({ error: 'too_large' }, 413);
     if (!sniff(kind, mime, bytes)) return json({ error: 'unsupported_type' }, 415);
     extracted = new TextDecoder('utf-8').decode(bytes).slice(0, MAX_EXTRACTED_CHARS);
+    if (projectParam && projectChars + extracted.length > MAX_PROJECT_CHARS) return json({ error: 'knowledge_full' }, 409);
     // Stored as plain text whatever the code type: the bucket only takes known types.
     stored = await storagePut(env, path, new Uint8Array(bytes), 'text/plain; charset=utf-8', bytes.length);
   } else {
@@ -116,7 +123,7 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
   if (!stored) return json({ error: 'unavailable' }, 503);
 
   const size = kind === 'text' && extracted != null ? new TextEncoder().encode(extracted).length : length;
-  const row = { id, account_id: sub, conversation_id: convParam, name, mime: kind === 'text' ? mime || 'text/plain' : mime, size, kind, storage_path: path, extracted_text: extracted };
+  const row = { id, account_id: sub, conversation_id: convParam, ...(projectParam ? { project_id: projectParam } : {}), name, mime: kind === 'text' ? mime || 'text/plain' : mime, size, kind, storage_path: path, extracted_text: extracted };
   const saved = await db.insert(env, 'ai_attachments', row);
   if (!saved.ok) {
     await storageRemove(env, [path]);

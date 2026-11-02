@@ -19,6 +19,15 @@ describe('VinaX AI routes', () => {
     expect(leaf('/vinaxai')?.path).toBe('vinaxai');
     expect(leaf('/vinaxai/c/abc')?.path).toBe('vinaxai/c/:id');
   });
+  it('/vinaxai/artifacts is the artifacts gallery', () => {
+    expect(leaf('/vinaxai/artifacts')?.path).toBe('vinaxai/artifacts');
+  });
+
+  it('/vinaxai/projects and /vinaxai/project/:projectId are the chat page too', () => {
+    expect(leaf('/vinaxai/projects')?.path).toBe('vinaxai/projects');
+    expect(leaf('/vinaxai/project/abc')?.path).toBe('vinaxai/project/:projectId');
+    expect(leaf('/vinaxai/project/abc')?.element).toEqual(leaf('/vinaxai')?.element);
+  });
   it('/VinaXAI is a redirect to /vinaxai, and only that exact spelling', () => {
     const r = leaf('/VinaXAI');
     expect(r?.path).toBe('/VinaXAI');

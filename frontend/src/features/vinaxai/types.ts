@@ -127,6 +127,8 @@ export interface ConversationSummary {
   title: string | null;
   starred: boolean;
   activeLeafId: string | null;
+  /** The project the chat is in, or null. */
+  projectId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -136,8 +138,33 @@ export interface ServerConversation {
   title: string | null;
   starred: boolean;
   activeLeafId: string | null;
+  projectId?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Never reads or adds to memory. */
+  incognito?: boolean;
+}
+
+/** One note in VinaX AI's memory (GET /api/ai/memories). */
+export interface MemoryItem {
+  id: string;
+  text: string;
+  /** 'chat': learned from a chat; 'user': added in settings. */
+  origin: 'chat' | 'user';
+  createdAt: string;
+}
+
+export interface MemoryPrefs {
+  use: boolean;
+  learn: boolean;
+}
+
+export interface MemoryState {
+  /** False while the owner has memory off (notes can still be seen and deleted). */
+  enabled: boolean;
+  prefs: MemoryPrefs;
+  items: MemoryItem[];
+  max: number;
 }
 
 /** The named events of the chat stream. */
@@ -179,4 +206,63 @@ export interface SharedChat {
   messages: SharedMessage[];
   createdAt: string;
   updatedAt: string;
+}
+
+/** One card of the artifacts gallery: an artifact's newest version in one chat (no content). */
+export interface GalleryItem {
+  conversationId: string;
+  conversationTitle: string | null;
+  artifactId: string;
+  messageId: string;
+  kind: 'code' | 'html' | 'svg' | 'mermaid' | 'markdown' | 'react';
+  title: string;
+  language: string | null;
+  incomplete: boolean;
+  versions: number;
+  createdAt: string;
+}
+
+/** One artifact of the gallery with every version in its chat, oldest first. */
+export interface GalleryArtifact {
+  conversationId: string;
+  conversationTitle: string | null;
+  artifactId: string;
+  versions: Array<{ messageId: string; createdAt: string; type: GalleryItem['kind']; title: string; language: string | null; content: string; incomplete: boolean }>;
+}
+
+// ---------- projects ----------
+
+/** One of the listener's projects (GET /api/ai/projects). */
+export interface Project {
+  id: string;
+  name: string;
+  description: string | null;
+  /** What every chat in the project follows. */
+  instructions: string | null;
+  starred: boolean;
+  chatCount?: number;
+  fileCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A file in a project's knowledge (never its text). */
+export interface KnowledgeFile {
+  id: string;
+  name: string;
+  mime: string;
+  kind: FileRef['kind'];
+  size: number;
+  pages?: number;
+  /** Characters of text it adds to the project. */
+  chars: number;
+  createdAt: string;
+}
+
+/** GET /api/ai/projects/:id */
+export interface ProjectDetail {
+  project: Project;
+  files: KnowledgeFile[];
+  chats: ConversationSummary[];
+  limits: { files: number; chars: number; usedChars: number };
 }
