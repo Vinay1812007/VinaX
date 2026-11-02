@@ -12,7 +12,8 @@
  *     mode: "auto" | "model", model?: "<registry id>",
  *     extendedThinking?, webSearch?, artifacts? (default true), timezone?, locale?,
  *     personal?: { name?, about?, instructions?, style? },    // VinaX AI settings → Personalisation; used for this reply only, never stored
- *     projectId?: uuid }                   // a new conversation starts in this project (its instructions and files join every reply)
+ *     projectId?: uuid,                   // a new conversation starts in this project (its instructions and files join every reply)
+ *     incognito?: true }                   // a chat that never reads or writes memory; kept on a new chat (memory.ts)
  *
  *   → 200 text/event-stream, named events, one JSON object per data line:
  *       meta     { conversationId, userMessageId, assistantMessageId, model: { id, name, provider }, continued? }
@@ -60,6 +61,7 @@ import { humanReason, pickLadder, runChat, type RunOptions } from '../../_lib/ai
 import { sseFrame } from '../../_lib/ai/sse';
 import { artifactsOf } from '../../_lib/ai/artifacts';
 import { getProject, knowledgeFor, loadProjectContext, longKnowledge, withKnowledge } from '../../_lib/ai/projects';
+import { learnCandidates, learnFromChat, markIncognito, memoryBlock, memoryFor, shouldLearn } from '../../_lib/ai/memory';
 import {
   createConversation, getConversation, insertMessage, isUuid, listMessages, MAX_MESSAGES, updateConversation, updateMessage,
   type ConversationRow, type MessageRow,
@@ -105,6 +107,7 @@ interface ChatBody {
   locale?: unknown;
   personal?: unknown;
   projectId?: unknown;
+  incognito?: unknown;
 }
 
 interface Ctx {
@@ -209,6 +212,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   }
 
   let userMsg: MessageRow;
+  /** A new message (not a retry or a Continue). */
+  let fresh = false;
   /** The cut-off reply being continued, if this is a Continue. */
   let continuing: MessageRow | null = null;
   if (isUuid(continueFrom)) {
@@ -266,6 +271,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       if (!made.ok) return made.code === '23503' ? json({ error: 'signed_out' }, 401) : json({ error: 'unavailable' }, 503);
       if (!made.rows[0]) return json({ error: 'unavailable' }, 503);
       conv = made.rows[0];
+      if (body.incognito === true) await markIncognito(env, sub, conv.id);
     }
     const unlinked = newFiles.filter((a) => !a.conversation_id).map((a) => a.id);
     if (unlinked.length) {
@@ -277,6 +283,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     const saved = await insertMessage(env, row);
     if (!saved.ok) return json({ error: 'unavailable' }, 503);
     userMsg = { thinking: null, thinking_ms: null, sources: null, artifacts: null, model_id: null, provider: null, stop_reason: null, usage: null, ...row };
+    fresh = true;
     rows = [...rows, userMsg];
   }
   const isNew = rows.length === 1;
@@ -321,7 +328,10 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     }
   }
 
-  const account = await accountOf(env, sub);
+  const [account, memory] = await Promise.all([accountOf(env, sub), memoryFor(env, sub, conversation.id, body.incognito === true)]);
+  const memoryText = memoryBlock(memory, latestText);
+  // Learning runs after a new message (not a retry or a Continue) on its turn.
+  const learnNow = memory.learn && fresh && shouldLearn(pathRows.filter((r) => r.role === 'user').length, latestText);
   const vars = {
     now: new Date(),
     timezone: safeTimezone(body.timezone),
@@ -356,7 +366,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     }
     // Artifacts go to every model with room for them (prompt.ts) unless the page turned them off.
     const knowledge = project ? await knowledgeFor(env, spec, project, memo) : null;
-    const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: body.artifacts !== false, search, personal, owner: settings.instructions, project: knowledge?.prompt ?? null });
+    const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: body.artifacts !== false, search, personal, owner: settings.instructions, project: knowledge?.prompt ?? null, memory: memoryText });
     const messages = withKnowledge(await materialize(env, turns, spec, fileRows, memo), knowledge);
     return {
       model: spec,
@@ -495,6 +505,11 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     });
     if (titleJob) await titleJob;
     console.log(JSON.stringify({ route: 'ai-chat', continued: !!continuing, search: searchLog, model: model.id, provider: model.provider, ladder, ms: Date.now() - started, status: stop, input: usage?.input ?? null, output: usage?.output ?? null }));
+    // Memory: learn from this turn once the reply is saved (this whole job runs under waitUntil).
+    if (learnNow && savedReply && (stop === 'end' || stop === 'length')) {
+      const path = [...pathRows.map((r) => ({ role: r.role, text: typedText(r.content) })), { role: 'assistant' as const, text: finalText }];
+      await learnFromChat(env, { accountId: sub, conversationId: conversation.id, candidates: learnCandidates(registry), items: memory.items, path });
+    }
   };
 
   const job = pump().catch(() => undefined);

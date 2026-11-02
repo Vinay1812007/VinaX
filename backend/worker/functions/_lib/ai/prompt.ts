@@ -9,7 +9,10 @@
  *   2. the artifacts contract and the visualisation guide, for every model
  *      that can write a whole file (`artifactsOffered`), when the reply may
  *      use artifacts;
- *   3. for a chat in a project: the project's name, its instructions (marked
+ *   3. the listener's memory (memory.ts): notes from earlier chats, marked
+ *      as background that may be out of date, never instructions; only for
+ *      models that get the full prompt, and never in an incognito chat;
+ *   3b. for a chat in a project: the project's name, its instructions (marked
  *      as the listener's) and its knowledge files as reference material,
  *      cut to fit the model's window (`projectBlock`);
  *   4. the listener's own preferences from VinaX AI's settings (what to call
@@ -341,12 +344,13 @@ export function projectBlock(p: ProjectPrompt, room: number): string {
   return out.join('\n\n');
 }
 
-export function buildSystemPrompt(opts: { spec: ModelSpec; vars: PromptVars; artifacts: boolean; search?: SearchBlock | null; personal?: Personal | null; owner?: string | null; project?: ProjectPrompt | null }): string {
+export function buildSystemPrompt(opts: { spec: ModelSpec; vars: PromptVars; artifacts: boolean; search?: SearchBlock | null; personal?: Personal | null; owner?: string | null; project?: ProjectPrompt | null; memory?: string | null }): string {
   const vars = opts.personal?.name ? { ...opts.vars, firstName: opts.personal.name } : opts.vars;
   const parts = [fill(promptFor(opts.spec) === 'full' ? FULL_PROMPT : COMPACT_PROMPT, vars)];
   const owner = ownerBlock(opts.owner);
   if (owner) parts.push(owner);
   if (opts.artifacts && artifactsOffered(opts.spec)) parts.push(ARTIFACTS_BLOCK);
+  if (opts.memory && promptFor(opts.spec) === 'full') parts.push(opts.memory);
   const tail: string[] = [];
   const personal = personalBlock(opts.personal);
   if (personal) tail.push(personal);

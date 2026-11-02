@@ -39,6 +39,8 @@ export interface ChatState {
   finished: number;
   /** While a cut-off reply is being continued: what it looked like before, to restore if the request is refused. */
   resume: { id: string; text: string; stopReason: ChatMessage['stopReason']; error: ChatMessage['error'] } | null;
+  /** An incognito chat: it never reads or adds to VinaX AI's memory (chosen before the first message). */
+  incognito: boolean;
 }
 
 export type ChatAction =
@@ -52,10 +54,11 @@ export type ChatAction =
   | { type: 'stopped' }
   | { type: 'fail'; code: string; message: string }
   | { type: 'dismiss' }
-  | { type: 'project'; projectId: string | null };
+  | { type: 'project'; projectId: string | null }
+  | { type: 'incognito'; on: boolean };
 
 export const initialChat = (): ChatState => ({
-  conversationId: null, title: null, projectId: null, messages: {}, leafId: null, streaming: false, replyId: null, thinkingStartedAt: null, notice: null, finished: 0, resume: null,
+  conversationId: null, title: null, projectId: null, messages: {}, leafId: null, streaming: false, replyId: null, thinkingStartedAt: null, notice: null, finished: 0, resume: null, incognito: false,
 });
 
 const blank = (id: string, parentId: string | null, role: 'user' | 'assistant', text: string, now: string): ChatMessage => ({
@@ -167,6 +170,10 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 
     case 'project':
       return { ...state, projectId: action.projectId };
+    case 'incognito':
+      // Only a chat that has not started yet can change.
+      if (state.conversationId || state.streaming || Object.keys(state.messages).length) return state;
+      return { ...state, incognito: action.on };
 
     case 'load': {
       const messages: Record<string, ChatMessage> = {};
@@ -182,7 +189,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         };
       }
       const leaf = action.conversation.activeLeafId && messages[action.conversation.activeLeafId] ? action.conversation.activeLeafId : latestLeaf(messages);
-      return { ...initialChat(), conversationId: action.conversation.id, title: action.conversation.title, projectId: action.conversation.projectId ?? null, messages, leafId: leaf, finished: state.finished };
+      return { ...initialChat(), conversationId: action.conversation.id, title: action.conversation.title, projectId: action.conversation.projectId ?? null, messages, leafId: leaf, finished: state.finished, incognito: action.conversation.incognito === true };
     }
 
     case 'send': {

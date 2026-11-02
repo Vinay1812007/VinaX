@@ -153,6 +153,16 @@ export default function PrivacyPage() {
           messages, aren&rsquo;t logged and are never part of a shared link. Removing a file, deleting the project or
           deleting your account deletes them at once; when you delete a project you choose whether its chats stay as
           ordinary chats or are deleted too.
+          VinaX AI&rsquo;s memory keeps up to 50 short notes about you with your account, such as what you&rsquo;re
+          learning or the language you like replies in, so new chats can use them. It&rsquo;s on unless you switch it
+          off. With &ldquo;Learn from my chats&rdquo; on, after every third message of a chat, or when you ask it to
+          remember or forget something, VinaX sends your current notes and that chat&rsquo;s latest messages (your last
+          three, with the replies between them, shortened and without code) to one of the AI providers above, which
+          suggests notes to add or remove. Passwords, codes, card or account numbers, email addresses, phone numbers,
+          health details and things about other people are never kept. The notes go to the AI provider with each new
+          reply, never into shared links, and only you can see them, in VinaX AI&rsquo;s Settings → Memory. Delete any
+          note there, press Forget everything, switch memory or learning off, or start an incognito chat, which
+          neither uses nor adds to memory. Deleting your account deletes your notes.
         </p>
         <H>Listen Together</H>
         <p>

@@ -141,6 +141,30 @@ export interface ServerConversation {
   projectId?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Never reads or adds to memory. */
+  incognito?: boolean;
+}
+
+/** One note in VinaX AI's memory (GET /api/ai/memories). */
+export interface MemoryItem {
+  id: string;
+  text: string;
+  /** 'chat': learned from a chat; 'user': added in settings. */
+  origin: 'chat' | 'user';
+  createdAt: string;
+}
+
+export interface MemoryPrefs {
+  use: boolean;
+  learn: boolean;
+}
+
+export interface MemoryState {
+  /** False while the owner has memory off (notes can still be seen and deleted). */
+  enabled: boolean;
+  prefs: MemoryPrefs;
+  items: MemoryItem[];
+  max: number;
 }
 
 /** The named events of the chat stream. */

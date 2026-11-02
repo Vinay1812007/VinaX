@@ -5,7 +5,8 @@
  *   narrow:          [ header ☰ · thread · composer ]  + the sidebar as a drawer
  *
  * A new chat opens on a greeting with the composer in the middle and four
- * suggestion chips that fill in a starter (they never send). Signed-out
+ * suggestion chips that fill in a starter (they never send); the header's
+ * Incognito button makes the new chat one that never uses memory. Signed-out
  * visitors never get here: the app's sign-in gate answers first.
  * /vinaxai/projects and /vinaxai/project/:projectId show the projects in the
  * same frame (Projects.tsx, lazy); a project's page uses this composer to
@@ -25,7 +26,7 @@ import { AssistantMessage, UserMessage } from './Message';
 import { NowPlayingPill } from './NowPlayingPill';
 import { usePrefs } from './prefs';
 import { Sidebar } from './Sidebar';
-import { continueReply, resetChat, retryReply, selectBranch, sendMessage, stopReply, useChatStore } from './store';
+import { continueReply, resetChat, retryReply, selectBranch, sendMessage, setIncognito, stopReply, useChatStore } from './store';
 import { useDismiss } from './useDismiss';
 import { usePendingFiles } from './usePendingFiles';
 import { PendingChips } from './FileChips';
@@ -33,7 +34,7 @@ import type { FileRef } from './types';
 import { ArtifactPanel } from './ArtifactPanel';
 import { usePanel } from './artifactStore';
 import { artifactsOf, collectVersions, hasPreview, type Artifact } from './artifacts';
-import { ArrowDownIcon, FolderIcon, MenuIcon, NewChatIcon, SettingsIcon, ShareIcon, SidebarIcon, SparkIcon } from './icons';
+import { ArrowDownIcon, FolderIcon, IncognitoIcon, MenuIcon, NewChatIcon, SettingsIcon, ShareIcon, SidebarIcon, SparkIcon } from './icons';
 import { useVoiceDictation } from './useVoiceDictation';
 import { dismissReadNotice, stopReading, useReadAloud } from './readAloud';
 import { SettingsPanel, type SettingsSection } from './SettingsPanel';
@@ -113,6 +114,7 @@ export function ChatView(): ReactNode {
   const replyId = useChatStore((s) => s.replyId);
   const notice = useChatStore((s) => s.notice);
   const finished = useChatStore((s) => s.finished);
+  const incognito = useChatStore((s) => s.incognito);
   const dispatch = useChatStore((s) => s.dispatch);
   const thread = useMemo(() => pathTo(messages, leafId), [messages, leafId]);
   const versions = useMemo(() => collectVersions(thread), [thread]);
@@ -412,8 +414,9 @@ export function ChatView(): ReactNode {
       <div className="vx-ai-scroll">
         <div className="vx-ai-column vx-ai-welcome">
           <div className="vx-ai-empty">
-            <SparkIcon className="w-8 h-8" />
-            <h2>{greeting(new Date().getHours(), firstName)}</h2>
+            {incognito ? <IncognitoIcon className="w-8 h-8" /> : <SparkIcon className="w-8 h-8" />}
+            <h2>{incognito ? 'Incognito chat' : greeting(new Date().getHours(), firstName)}</h2>
+            {incognito && <p className="vx-ai-incognito-note">VinaX AI won’t use or add to its memory of you in this chat. The chat is still saved in your chats.</p>}
           </div>
           {noticeEl}
           {voiceNoticeEl}
@@ -521,12 +524,25 @@ export function ChatView(): ReactNode {
               </Link>
             )}
             {view !== 'chat' ? <span className="vx-ai-title">Projects</span> : title && <span className="vx-ai-title" title={title}>{title}</span>}
+            {incognito && !empty && <span className="vx-ai-incognito-badge"><IncognitoIcon className="w-4 h-4" /> Incognito</span>}
           </div>
           <div className="vx-ai-header-end">
             <NowPlayingPill />
             {canShare && (
               <button type="button" className="vx-ai-icon-btn" onClick={() => setSharing(true)} disabled={streaming} aria-label="Share chat" title="Share chat" aria-haspopup="dialog">
                 <ShareIcon className="w-5 h-5" />
+              </button>
+            )}
+            {empty && !conversationId && !needLoad && (
+              <button
+                type="button"
+                className={`vx-ai-icon-btn${incognito ? ' is-on' : ''}`}
+                onClick={() => setIncognito(!incognito)}
+                aria-pressed={incognito}
+                aria-label="Incognito chat"
+                title={incognito ? 'Incognito: this chat won’t use memory' : 'Start an incognito chat (no memory)'}
+              >
+                <IncognitoIcon className="w-5 h-5" />
               </button>
             )}
             <button type="button" className="vx-ai-icon-btn" onClick={() => setSettings('general')} aria-label="VinaX AI settings" title="Settings">

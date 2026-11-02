@@ -6,7 +6,7 @@
 import { currentAccount } from '@/services/auth/google';
 import { isNativePlatform } from '@/services/native';
 import { SseParser } from './sse';
-import type { ConversationSummary, GalleryArtifact, GalleryItem, ModelsResponse, Project, ProjectDetail, ServerConversation, ServerMessage, SharedChat, ShareSummary, StreamEvent } from './types';
+import type { ConversationSummary, GalleryArtifact, GalleryItem, MemoryItem, MemoryPrefs, MemoryState, ModelsResponse, Project, ProjectDetail, ServerConversation, ServerMessage, SharedChat, ShareSummary, StreamEvent } from './types';
 import { setFileLimits } from './files';
 
 const ORIGIN = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
@@ -130,6 +130,41 @@ export function shareNotice(code: string): string {
   }
 }
 
+// ---------- memory ----------
+
+/** The listener's memory; a partial answer reads as on and empty. */
+export async function getMemory(): Promise<MemoryState> {
+  const r = await call<Partial<MemoryState>>('/memories');
+  return {
+    enabled: r.enabled !== false,
+    prefs: { use: r.prefs?.use !== false, learn: r.prefs?.learn !== false },
+    items: Array.isArray(r.items) ? r.items : [],
+    max: typeof r.max === 'number' ? r.max : 50,
+  };
+}
+
+export const addMemory = (text: string): Promise<{ item: MemoryItem }> => call('/memories', { method: 'POST', body: JSON.stringify({ text }) });
+
+export const deleteMemory = (id: string): Promise<{ ok: true }> => call(`/memories/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
+/** Forget everything. */
+export const forgetAllMemory = (): Promise<{ ok: true; removed: number }> => call('/memories', { method: 'DELETE' });
+
+export const setMemoryPrefs = (patch: Partial<MemoryPrefs>): Promise<{ prefs: MemoryPrefs }> => call('/memories/prefs', { method: 'PUT', body: JSON.stringify(patch) });
+
+/** What a failed memory request means for the listener. */
+export function memoryNotice(code: string): string {
+  switch (code) {
+    case 'sensitive': return 'That looks like a password, a number or contact details. Memory doesn’t keep those.';
+    case 'full': return 'Memory is full. Delete a memory to add another.';
+    case 'memory_off': return 'Memory is switched off for VinaX AI right now.';
+    case 'rate_limited': return 'That’s a lot of changes at once. Wait a minute, then try again.';
+    case 'signed_out': return 'Your sign-in has expired. Sign in again to change your memory.';
+    case 'not_found': return 'That memory is already gone.';
+    default: return 'Something went wrong. Try again.';
+  }
+}
+
 /** Every chat as one JSON file (GET /api/ai/export). */
 export async function fetchExport(): Promise<Blob> {
   const res = await fetch(`${AI_BASE}/export`, { headers: headers() });
@@ -153,6 +188,8 @@ export interface ChatRequestBody {
   personal?: { name?: string; about?: string; instructions?: string; style?: string };
   /** A new chat starts in this project. */
   projectId?: string;
+  /** An incognito chat: no memory is read or written. */
+  incognito?: boolean;
 }
 
 // ---------- voice (phase 6) ----------

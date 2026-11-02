@@ -6,6 +6,8 @@
  *   General          the app's theme, artifacts, live previews in replies
  *   Personalisation  what VinaX AI calls you, about you, how to reply, a
  *                    reply style (sent with each message, never stored)
+ *   Memory  what VinaX AI remembers across chats, kept with the account:
+ *           Use memory, Learn from my chats, each note, add, forget all
  *   Chat    the model new messages use, Extended thinking, Web search
  *   Voice   the microphone (with a test meter), the Read aloud voice, the
  *           Live voice, the Live model and web search in Live voice
@@ -22,11 +24,12 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { cleanMicLabel, closeMic, listMics, micLabelOf, MicError, micNotice, newAudioContext, openMic, silentMicNotice, watchMic, type MicDevice } from './mic';
 import { PERSONAL_MAX, usePrefs, type ReplyStyle } from './prefs';
 import { SharedLinks } from './SharedLinks';
+import { MemorySettings } from './MemorySettings';
 import { ArtifactsIcon, CloseIcon, DownloadIcon, MicIcon } from './icons';
 import type { PickerModel, VoiceInfo } from './types';
 import type { WebSearch } from './PlusMenu';
 
-export type SettingsSection = 'general' | 'personal' | 'chat' | 'voice' | 'chats';
+export type SettingsSection = 'general' | 'personal' | 'memory' | 'chat' | 'voice' | 'chats';
 
 const THEMES: Array<{ value: 'dark' | 'amoled' | 'light' | 'system' | 'auto'; label: string }> = [
   { value: 'system', label: 'System: follow this device' },
@@ -114,7 +117,7 @@ export function SettingsPanel({ models, groups, voice, search, section, onClose 
           </button>
         </header>
         <nav className="vx-ai-settings-nav" aria-label="Settings sections">
-          {([['general', 'General'], ['personal', 'Personalisation'], ['chat', 'Chat'], ...(hasVoice ? [['voice', 'Voice']] : []), ['chats', 'Your chats']] as Array<[SettingsSection, string]>).map(([id, label]) => (
+          {([['general', 'General'], ['personal', 'Personalisation'], ['memory', 'Memory'], ['chat', 'Chat'], ...(hasVoice ? [['voice', 'Voice']] : []), ['chats', 'Your chats']] as Array<[SettingsSection, string]>).map(([id, label]) => (
             <button key={id} type="button" className="vx-ai-chip" onClick={() => box.current?.querySelector<HTMLElement>(`#vx-ai-set-${id}`)?.scrollIntoView({ block: 'start' })}>{label}</button>
           ))}
         </nav>
@@ -147,6 +150,11 @@ export function SettingsPanel({ models, groups, voice, search, section, onClose 
               </select>
             </Field>
             <p className="vx-ai-settings-note">Kept on this device and sent with each message so the reply can use it. It isn’t saved with your chats.</p>
+          </section>
+
+          <section id="vx-ai-set-memory" aria-labelledby="vx-ai-set-memory-h">
+            <h3 id="vx-ai-set-memory-h">Memory</h3>
+            <MemorySettings />
           </section>
 
           <section id="vx-ai-set-chat" aria-labelledby="vx-ai-set-chat-h">

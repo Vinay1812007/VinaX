@@ -854,6 +854,26 @@ a.vx-ai-chip { text-decoration: none; }
 .vx-ai-links-title:hover { text-decoration: underline; }
 .vx-ai-links-tools, .vx-ai-links-ask { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; color: rgb(var(--ink-400)); }
 
+/* Memory (settings) and incognito chats. */
+.vx-ai-mem { outline: none; }
+.vx-ai-mem h4 { margin: 4px 0 6px; font-size: 0.875rem; font-weight: 600; color: rgb(var(--ink-200)); }
+.vx-ai-mem-list { list-style: none; margin: 0 0 14px; padding: 0; }
+.vx-ai-mem-list li { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 6px 0; border-bottom: 1px solid var(--glass-border); }
+.vx-ai-mem-list li:last-child { border-bottom: 0; }
+.vx-ai-mem-list .vx-ai-act { flex-shrink: 0; color: rgb(var(--ink-400)); }
+.vx-ai-mem-text { font-size: 0.875rem; color: rgb(var(--ink-100)); overflow-wrap: anywhere; }
+.vx-ai-mem-row { display: flex; gap: 8px; align-items: center; }
+.vx-ai-mem-row input { flex: 1; min-width: 0; }
+.vx-ai-mem-row .vx-ai-chip { flex: none; min-height: 40px; }
+.vx-ai-mem-ask { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.vx-ai-mem-retry { color: rgb(var(--ember-400)); text-decoration: underline; font: inherit; }
+.vx-ai-incognito-note { margin: 0; max-width: 420px; font-size: 0.875rem; color: rgb(var(--ink-300)); }
+.vx-ai-incognito-badge {
+  display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; align-self: center;
+  padding: 2px 8px; border-radius: var(--radius-pill, 999px); border: 1px solid var(--glass-border);
+  font-size: 0.75rem; color: rgb(var(--ink-200));
+}
+
 .vx-ai-shared .vx-ai-wordmark { color: inherit; text-decoration: none; }
 .vx-ai-shared .vx-ai-header-end .vx-ai-chip { min-height: 34px; }
 .vx-ai-share-intro { padding: 28px 0 0; }

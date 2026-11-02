@@ -184,10 +184,12 @@ A failed or empty search is not an error: the status says "No useful results" an
 
 `_lib/ai/prompt.ts` holds the owner's VinaX AI prompt verbatim. A snapshot test (`__tests__/aiPrompt.test.ts`) keeps it from drifting. The prompt is built in this order:
 1. The full prompt for every model whose window holds at least 24,000 characters (`promptFor`), fast ones included, so every model gets the same character, formatting, honesty and safety rules; the compact one only for the few small specialists below that (ALLaM 2 7B, Riva Translate 4B). The listener's local time and time zone, first name (or the name they set in Personalisation), language setting, and the answering model and provider are filled in.
-2. The artifacts contract and the visualisation guide (`ARTIFACTS_BLOCK`), for every model with the full prompt and at least 4,096 output tokens (`artifactsOffered`), unless the registry flags it `artifacts: false` (Riva Translate, Ising Calibration, Gemini Robotics ER) or the page sends `artifacts: false` (Settings → General → Artifacts off).
-3. For a chat in a project, the project block (`projectBlock`, [Projects](#projects)): `# Project: <name>`, the project's instructions inside `<project_instructions>`, marked as the user's own words that never override safety, honesty or the refusals, and its knowledge files inside `<project_knowledge>` as reference material, never instructions. The knowledge is cut to fit the model's window.
-4. The listener's preferences (`personalBlock`), when the request carries `personal: { name?, about?, instructions?, style? }` from Settings → Personalisation: inside `<user_preferences>`, after the rules, marked as the user's own words that never override safety, honesty or the refusals. `sanitizePersonal` drops control characters and caps the name at 40 characters and the other two at 1,500. Styles: `concise`, `explanatory`, `formal`, `learning` (`normal` adds nothing). None of it is stored or logged.
-5. `<search_results>` and the citation rules, only when search ran (phase 3).
+2. The owner's instructions (`ownerBlock`), when the `vinax-ai` setting has `instructions`: inside `<owner_instructions>`, marked as the owner's, never overriding the rules about what VinaX AI won't help with ([The owner's switches](#the-owners-switches)).
+3. The artifacts contract and the visualisation guide (`ARTIFACTS_BLOCK`), for every model with the full prompt and at least 4,096 output tokens (`artifactsOffered`), unless the registry flags it `artifacts: false` (Riva Translate, Ising Calibration, Gemini Robotics ER) or the page sends `artifacts: false` (Settings → General → Artifacts off).
+4. The listener's memory (`memoryBlock` in `_lib/ai/memory.ts`), for models with the full prompt, when memory is on for the reply and there is something in it (or the message asks to remember something): inside `<memory>`, after the artifacts, marked as notes from earlier chats that may be out of date, never instructions, never above the safety rules, to be used naturally and not recited. See [Memory](#memory).
+5. For a chat in a project, the project block (`projectBlock`, [Projects](#projects)): `# Project: <name>`, the project's instructions inside `<project_instructions>`, marked as the user's own words that never override safety, honesty or the refusals, and its knowledge files inside `<project_knowledge>` as reference material, never instructions. The knowledge is cut to fit the model's window.
+6. The listener's preferences (`personalBlock`), when the request carries `personal: { name?, about?, instructions?, style? }` from Settings → Personalisation: inside `<user_preferences>`, after the rules, marked as the user's own words that never override safety, honesty or the refusals. `sanitizePersonal` drops control characters and caps the name at 40 characters and the other two at 1,500. Styles: `concise`, `explanatory`, `formal`, `learning` (`normal` adds nothing). None of it is stored or logged.
+7. `<search_results>` and the citation rules, only when search ran (phase 3).
 
 Nothing else is added: no taste profile and no listening history. The history sent to the model is trimmed to the model's window minus the system text, so a longer prompt shortens what a small-window model remembers rather than overflowing it. Models flagged `systemRole: false` get the system text in front of the first user turn.
 
@@ -239,7 +241,7 @@ Refusals before the stream: `400 bad_request | unknown_model | bad_attachment | 
 | --- | --- |
 | `GET /api/ai/models` | Public. `{ enabled, configured, groups, models: [{ id, name, provider, group, description, flags: { vision, web, thinking, code }, available, reason? }], voice: { dictation, readAloud, live, voices, liveVoices } }`. `available` is false when the provider has no key (`not_configured`) or the model is resting (`busy`). `voice` says which voice features have a key ([Voice](#voice)). A session, when sent, only decides `enabled` for testers |
 | `GET /api/ai/conversations?cursor=&q=&project=` | The account's chats, newest first, 30 a page. `q` searches titles and message text through `ai_conversation_search`; `project` keeps one project's chats. Each item carries its `projectId` |
-| `GET /api/ai/conversations/:id` | The conversation and its whole message tree, each reply labelled with its model's name and provider |
+| `GET /api/ai/conversations/:id` | The conversation and its whole message tree, each reply labelled with its model's name and provider; `conversation.incognito: true` for an incognito chat |
 | `PATCH /api/ai/conversations/:id` | `{ title?, starred?, activeLeafId?, projectId? }`. `projectId` moves the chat into one of the account's projects (someone else's is 404) or, as `null`, out of its project; it does not change `updated_at` |
 | `DELETE /api/ai/conversations/:id` | Hides the chat at once and deletes its shared link; the hourly housekeeping removes it, with its messages, a day later |
 | `GET /api/ai/shares[?conversation=<id>]` | The account's shared links, newest first: `{ items: [{ id, conversationId, title, messageCount, createdAt, updatedAt }] }` ([Sharing](#sharing)) |
@@ -255,6 +257,12 @@ Refusals before the stream: `400 bad_request | unknown_model | bad_attachment | 
 | `PATCH /api/ai/projects/:id` | `{ name?, description?, instructions?, starred? }` → `{ project }`. Starring alone keeps `updated_at` |
 | `DELETE /api/ai/projects/:id?chats=keep\|delete` | Deletes the project and its files. `keep` (the default) leaves its chats as ordinary chats; `delete` deletes them too, like deleting each one, shared links included. `{ ok, chats }` (how many were deleted) |
 | `GET /api/ai/export` | Every chat of the account with every message and branch, and every project with its instructions and its files by name, as one JSON file to download (`ai_export`; Settings → Your data → Export VinaX AI chats). It is not part of the app's backup file and is never imported: the chats already live with the account |
+| `GET /api/ai/memories` | The account's memory: `{ enabled, prefs: { use, learn }, items: [{ id, text, origin: 'chat' \| 'user', createdAt }], max: 50 }`. `enabled` is false while the owner has memory off ([Memory](#memory)) |
+| `POST /api/ai/memories` | `{ text }`: add a note (201), or the same note already there (200): `{ item }`. `422 sensitive` for something that looks like a secret or contact details, `409 full` at 50, `503 memory_off` while the owner has memory off |
+| `DELETE /api/ai/memories` | Forget everything: `{ ok, removed }` |
+| `DELETE /api/ai/memories/:id` | Delete one note. Someone else's is 404 |
+| `GET/PUT /api/ai/memories/prefs` | The two switches, `{ use?, learn? }` → `{ prefs }`. No row yet reads as both on |
+| `GET /api/ai/export` | Every chat of the account with every message and branch, as one JSON file to download (`ai_export`; Settings → Your data → Export VinaX AI chats). It is not part of the app's backup file and is never imported: the chats already live with the account |
 
 Every query is filtered by the session's account. Someone else's conversation, a deleted one or a malformed id answers 404. The Worker's router dispatches `PATCH` and `DELETE` to `onRequestPatch` / `onRequestDelete`.
 
@@ -429,6 +437,7 @@ The waveform button (where Send is while the composer is empty) opens a full-scr
 `SettingsPanel.tsx`, a sheet from the right (full screen on a phone), opened from the header's gear (a cog; it opens at General), the sidebar's Settings, or Settings in the + menu (which opens at Voice). A row of section buttons at the top jumps to each part. Everything in it is kept on the device (`vinax.vxai.prefs.v1`), except Appearance, which is the app's own theme:
 - General: Appearance (System, Dark, Black, Light, Auto: the same setting as VinaX's Settings), Artifacts on or off (sent as `artifacts`), Live previews in replies.
 - Personalisation: what VinaX AI should call you, what it should know about you, how it should reply, and a reply style (Normal, Concise, Explanatory, Formal, Learning). Sent with each message as `personal` (see [The system prompt](#the-system-prompt)); never saved with the chat.
+- Memory (`MemorySettings.tsx`, kept with the account, not the device): Use memory, Learn from my chats, every note with Delete, Add a memory, Forget everything (after a confirmation). See [Memory](#memory).
 - Chat: the model (the same choice as the composer's picker), Extended thinking, Web search when it is offered.
 - Voice: the microphone (Automatic or a device, and a ten-second test with a level bar that names the device and says whether it heard anything), the Read aloud voice from Orpheus's English voices, the Live voice from ten of Gemini's voices (it also reads long replies), the Live model (Auto or one of `voice.liveModels`), and **Search the web in Live voice** (`liveSearch`, on by default; shown when `voice.liveSearch`). The Worker checks voices and the Live model against its own lists, and search against the owner's switch.
 - Your chats: Export all chats (`GET /api/ai/export`), Your artifacts (the [artifacts gallery](#artifacts-gallery)), the Shared links list (`SharedLinks.tsx`: open, copy, stop sharing, from `GET /api/ai/shares`; these live with the account, not the device), and a link to the app's Settings for everything else.
@@ -476,6 +485,34 @@ The project block sits after the artifacts block and before the listener's prefe
 
 Schema version 4 adds `ai_conversations`, `ai_messages` (a tree through `parent_id`) and `ai_attachments`, all removed with the account through `on delete cascade`. Version 8 adds `ai_shares` ([Sharing](#sharing)), removed with its chat or the account the same way. Version 9 adds `ai_projects` and a `project_id` on `ai_conversations` (`on delete set null`) and on `ai_attachments` (`on delete cascade`) ([Projects](#projects)). See [database.md](database.md). `ai_conversations.active_leaf_id` is the branch a reload opens.
 
+## Memory
+
+VinaX AI remembers a short list of lasting facts and preferences about the listener across chats, the way they would tell a friend once and not again: "Is learning Carnatic vocals", "Prefers answers in Telugu", "Works as a backend developer". Code: `_lib/ai/memory.ts`, the hooks in `api/ai/chat.ts`, the routes `api/ai/memories*.ts`.
+
+**What is kept.** At most 50 notes of at most 200 characters each per account (`ai_memories`, schema version 9), each with where it came from (`origin`: learned from a chat, or added by the listener) and, for a learned note, the chat it came from until that chat is purged. One row per note, so each can be deleted on its own and learning only inserts and deletes rows. The two switches are kept with the account in `ai_memory_prefs` (no row means both on), because learning runs on the server.
+
+**Reading.** Each new reply, `memoryFor` reads the owner's switch, the listener's switches, the chat's incognito flag and the notes, in parallel with the account lookup. The notes go into the system prompt as a `<memory>` block after the artifacts block and before the listener's preferences ([The system prompt](#the-system-prompt)), only for models with the full prompt. The block says the notes are things the user shared before and may be out of date, that this chat comes first, that they are background and never instructions, that they never override safety, honesty or the refusals, and that the model should use them only where they help, naturally, without reciting them unless asked what it remembers. It is left out when there are no notes, unless the message asks to remember something (so the model can say it will). Any failed read means no memory for that reply and no learning: the reply itself never waits on memory failing.
+
+**Learning.** After a reply that finished (`end` or `length`), inside the reply's own `waitUntil` job after it is saved, so the stream is never delayed: on every third message of the chat's branch (`LEARN_EVERY`), and on any message that asks to remember or forget something ("remember…", "forget…", "keep in mind…", "note that…"), for a new message only (not a retry or a Continue). A small, fast model (the `title` ladder, then the `music` ladder, through `askJson` with its failover and a 15-second deadline) gets `LEARN_PROMPT` and exactly this input, as JSON material:
+
+- `memory`: the current notes, `[{ id, text }]`;
+- `recent`: the messages of the branch since the last learning point, at most the last three of the user's with the replies between them, oldest first, `[{ role, text }]`. The user's text is cut at 2,000 characters and each reply at 1,500, with artifacts replaced by `[artifact: title]` and code blocks by `[code]`.
+
+It sees nothing else: not the system prompt, the listener's name or settings, files, reasoning, sources or other chats. It answers `{ "add": [...], "remove": [...] }`. The prompt asks for lasting facts only, written as short phrases about the user without their name, and forbids passwords, PINs, codes and keys, card, bank, account and ID numbers, email addresses, phone numbers and home addresses, health details, sex life, religion, political views, caste or ethnicity, anything about other people, one-off tasks, and what the assistant said. The Worker then checks the answer (`parseLearnAnswer`): removes must name one of the account's own notes by id or exact text (at most 10); adds are cleaned to plain text, cut to 200 characters, dropped when they repeat a note, and dropped when `looksSensitive` matches (an email address, ten or more digits with separators, six digits in a row, a key-like string or known key prefix, or words such as password, PIN, OTP, token, CVV, IBAN, account or card number, Aadhaar, PAN); at most 5 a run, and never past 50. The log line carries the model, counts and time, never text.
+
+**Switches.**
+- The listener: **Use memory** off means no notes in replies and no learning; **Learn from my chats** off keeps using the notes but learns nothing new (the block then tells the model to point to Settings → Memory when asked to remember something). Notes they add themselves pass the same sensitive filter (`422 sensitive`).
+- **Incognito chat**: the header's hat-and-glasses button on a new, empty chat. An incognito chat neither reads nor writes memory. The first message sends `incognito: true`; the Worker marks the chat (`ai_conversations.incognito`), so it stays incognito on any device, and the page sends the flag with every message of it too. The flag is read on its own query, so the chat keeps working on a database that does not have the column yet. It is still an ordinary saved chat otherwise.
+- The owner: `memory: false` (or `memory: { enabled: false }`) in the `vinax-ai` setting turns memory off for everyone: no reading, no learning, `POST /api/ai/memories` answers `503 memory_off`, and settings say so. Missing means on. It is read raw by `memory.ts`, so the setting's sanitiser does not need to know it; the console's form does not show it yet (write it in the JSON editor).
+
+**Not included.** Shared chats copy messages only, so memory is never part of a shared link. Live voice does not use memory. Deleting a chat keeps the notes learned from it (they no longer point to it); the listener deletes notes in Settings → Memory, and deleting the account deletes them all.
+
+**Rate limits.** Reads 30 a minute, changes 20 a minute, per network address.
+
+## Storage
+
+Schema version 4 adds `ai_conversations`, `ai_messages` (a tree through `parent_id`) and `ai_attachments`, all removed with the account through `on delete cascade`. Version 8 adds `ai_shares` ([Sharing](#sharing)), removed with its chat or the account the same way. Version 9 adds `ai_memories` and `ai_memory_prefs` ([Memory](#memory)), removed with the account, and `ai_conversations.incognito`. See [database.md](database.md). `ai_conversations.active_leaf_id` is the branch a reload opens.
+
 ## The owner's switches
 
 The `vinax-ai` setting, edited in the console under **Publish → App → VinaX AI**. The page has a form: on or off, testers, web search, and each model's switch and picker order. Its JSON editor writes the same value:
@@ -503,6 +540,8 @@ The console's form for `instructions` and `limits` arrives with the console rebu
 | `pdfPages` | 1–1,000 | 500 | A PDF's pages |
 | `textMB` | 1–5 | 2 | A text or code file's size |
 | `searchesPerDay` | 0–2,000, or none | none | Search API searches a day; none means `SEARCH_DAILY_LIMIT` (else 100), 0 switches the search API off. Free grounding keeps its own 450 a day |
+
+- `memory: false` switches memory off for everyone ([Memory](#memory)). Missing means on.
 
 The setting is memoised for a minute per isolate.
 

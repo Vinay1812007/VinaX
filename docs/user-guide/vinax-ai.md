@@ -62,6 +62,18 @@ A message can carry 20 files, and a chat 50. These are the usual limits; VinaX's
 The gear at the top of VinaX AI opens its settings.
 - **General**: the theme (the same as the rest of VinaX), whether VinaX AI makes artifacts (below), and whether pages, charts and diagrams show as live previews right in the reply.
 - **Personalisation**: what VinaX AI should call you, what it should know about you (your work, interests, what you're learning), how it should reply (tone, length, format, language), and a reply style: Normal, Concise, Explanatory, Formal or Learning (it guides you to work things out). These stay on your device and go with each message; they are not saved with your chats.
+- **Memory**: what VinaX AI remembers about you across chats (see below).
+
+## Memory
+
+VinaX AI can remember lasting things you tell it, such as what you're learning, the work you do or the language you like replies in, so you don't have to say them again in every chat. It uses them only when they help, and you can see and change all of it.
+
+- As you chat, VinaX AI saves short notes now and then, like "Is learning Carnatic vocals". Say "remember that…" to save something straight away, or "forget that…" to remove it.
+- It never keeps passwords, codes, card or account numbers, email addresses, phone numbers, health details or things about other people.
+- **Settings** → **Memory** lists every note, marked **Learned from a chat** or **Added by you**. Delete any of them, add your own with **Add a memory**, or press **Forget everything** to clear the list.
+- **Use memory** off: VinaX AI neither uses nor saves notes. **Learn from my chats** off: it uses the notes you have but doesn't save new ones.
+- **Incognito chat**: on a new chat, press the hat-and-glasses button at the top before you send anything. That chat won't use your memory or add to it, and says **Incognito** at the top. It's still saved in your chats like any other.
+- Memory is kept with your account, so it follows you to every device. Shared links never include it. Deleting a chat keeps any notes learned from it; deleting your account deletes them all. Memory is on when you start; switch it off any time.
 
 ## Code, pages, charts and diagrams
 
@@ -91,7 +103,7 @@ Voice controls appear when the service has voice switched on.
 - **Read aloud**: tap the speaker under a reply. Code, links and source numbers are skipped, and anything in the side panel is named rather than read. Tap it again to stop.
 - **Live voice**: with nothing typed in the message box, tap the sound-wave button where Send usually is. A full-screen view opens and you can simply talk, with captions of what each of you says. Talking over VinaX AI stops it so you can carry on. The microphone button mutes you, and **End** (or `Esc`) closes it. What you both said is saved into the chat as ordinary messages. A Live voice session lasts about ten minutes; start another to keep talking.
 - **Web search in Live voice**: when web search is available, Live voice can look things up as you talk (news, tour dates, charts, anything current). It says it's checking, answers out loud and tells you which site it used; the sites appear under the captions and are saved with the reply. The globe button in Live voice turns it on or off (Live voice reconnects for a moment and carries on where you were), and **Settings** → **Search the web in Live voice** sets it for next time.
-- **Settings** (the gear at the top, **Settings** in the sidebar, or **+** → **Settings**) has VinaX AI's own settings: the theme, Personalisation, artifacts and live previews, the model, Extended thinking, web search, your **microphone** (with **Test microphone**, which shows a level bar and says whether it hears you), the voice that reads replies, the Live voice (it also reads long replies), the Live voice model, **Search the web in Live voice**, **Export all chats**, **Your artifacts** and your **Shared links**. They are kept on this device, apart from the theme (VinaX's own) and the shared links, which live with your account.
+- **Settings** (the gear at the top, **Settings** in the sidebar, or **+** → **Settings**) has VinaX AI's own settings: the theme, Personalisation, artifacts and live previews, the model, Extended thinking, web search, your **microphone** (with **Test microphone**, which shows a level bar and says whether it hears you), the voice that reads replies, the Live voice (it also reads long replies), the Live voice model, **Search the web in Live voice**, your **Memory**, **Export all chats**, **Your artifacts** and your **Shared links**. They are kept on this device, apart from the theme (VinaX's own), memory and the shared links, which live with your account.
 
 Your music pauses while the microphone is open and plays on quietly while a reply is read, then comes back as it was. The first time, your browser or phone asks to use the microphone. In the Android app it is the same question voice search asks.
 
