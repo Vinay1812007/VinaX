@@ -69,9 +69,11 @@
       var limits = {};
       LIMITS.forEach(function (l) { limits[l.key] = typeof lim[l.key] === 'number' ? lim[l.key] : l.def; });
       var extra = {};
-      Object.keys(v).forEach(function (k) { if (['enabled', 'testers', 'search', 'models', 'dailyLimit', 'instructions', 'limits'].indexOf(k) < 0) extra[k] = v[k]; });
+      Object.keys(v).forEach(function (k) { if (['enabled', 'testers', 'search', 'memory', 'models', 'dailyLimit', 'instructions', 'limits'].indexOf(k) < 0) extra[k] = v[k]; });
       return {
         enabled: v.enabled === true, testers: arr(v.testers).slice(0, 50), search: v.search !== false, models: obj(v.models),
+        // Memory is on unless the owner turned it off (false, or { enabled: false }).
+        memory: !(v.memory === false || (v.memory && typeof v.memory === 'object' && v.memory.enabled === false)),
         dailyLimit: typeof v.dailyLimit === 'number' ? String(v.dailyLimit) : '',
         instructions: typeof v.instructions === 'string' ? v.instructions : '',
         limits: limits, searchesPerDay: lim.searchesPerDay == null ? '' : String(lim.searchesPerDay),
@@ -83,6 +85,7 @@
       o.enabled = m.enabled;
       o.testers = m.testers.slice();
       o.search = m.search;
+      if (!m.memory) o.memory = false;
       if (Object.keys(m.models).length) o.models = st.clone(m.models);
       if (m.dailyLimit) o.dailyLimit = Number(m.dailyLimit);
       if (m.instructions.trim()) o.instructions = m.instructions.trim().slice(0, 4000);
@@ -98,6 +101,7 @@
       v = obj(v);
       var parts = [v.enabled ? 'Open to everyone signed in' : 'Closed' + (arr(v.testers).length ? ' except ' + fmt.plural(arr(v.testers).length, 'tester') : '')];
       if (v.search === false) parts.push('web search off');
+      if (v.memory === false || obj(v.memory).enabled === false) parts.push('memory off');
       if (typeof v.dailyLimit === 'number') parts.push(v.dailyLimit + ' messages a day each');
       var off = Object.keys(obj(v.models)).filter(function (k) { return obj(v.models[k]).enabled === false; }).length;
       if (off) parts.push(fmt.plural(off, 'model') + ' off');
@@ -158,6 +162,7 @@
         ui.switchRow('Open to all signed-in users', 'Off keeps VinaX AI closed to everyone except the testers below.', m.enabled, function (on) { m.enabled = on; set(m); }),
         h('div', ui.heading('Testers', 'People who can use VinaX AI while it is closed to everyone else. Up to 50.'), testersHost),
         ui.switchRow('Allow web search', 'Lets VinaX AI look things up on the web for fresh answers.', m.search, function (on) { m.search = on; set(m); }),
+        ui.switchRow('Memory across chats', 'Lets VinaX AI remember what people tell it from one chat to the next. Off forgets between chats for everyone.', m.memory, function (on) { m.memory = on; set(m); }),
         h('div', ui.heading('AI models', 'Which AI services answer, in the order they are tried.'), modelsHost),
         h('div', ui.heading('Limits', 'How much each person can use. Missing values use the built-in amount.'),
           h('div.form-row', ui.dropdown('Daily message limit per user', LIMIT_CHOICES, m.dailyLimit, function (v) { m.dailyLimit = v; set(m); }),

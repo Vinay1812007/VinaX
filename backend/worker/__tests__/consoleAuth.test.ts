@@ -51,7 +51,7 @@ function stub(): void {
       if (method === 'DELETE') { const out = adminsTable.filter((r) => r.email === emailEq); adminsTable = adminsTable.filter((r) => r.email !== emailEq); return json(out); }
     }
     if (table === 'audit_log') return json([], 201);
-    if (table === 'meta') return json([{ value: { version: 8 } }]);
+    if (table === 'meta') return json([{ value: { version: 9 } }]);
     if (table === 'settings') return json([]);
     return json([]);
   }));

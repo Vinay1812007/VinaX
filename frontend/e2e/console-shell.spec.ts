@@ -17,7 +17,8 @@ test.describe('console shell', () => {
     await page.goto('/admin/');
     await expect(page.locator('#login')).toBeVisible();
     await expect(page.locator('#gsiBtn')).toContainText('Google sign-in is not set up');
-    await page.locator('#pwBox summary').click();
+    // Without Google sign-in set up, the recovery password box opens by itself.
+    await expect(page.locator('#pwBox')).toHaveAttribute('open', '');
     await page.fill('#token', 'wrong');
     await page.click('#enter');
     await expect(page.locator('#loginErr')).toContainText('not right');
@@ -68,7 +69,7 @@ test.describe('console shell', () => {
       ['#/notify/push', /#\/notifications\/setup$/],
       ['#/analytics/errors', /#\/health\/errors$/],
       ['#/analytics', /#\/song-stats$/],
-      ['#/catalog', /#\/library$/],
+      ['#/catalog', /#\/library(\/search)?$/],
       ['#/experiments', /#\/ab-tests$/],
       ['#/seo', /#\/google-search$/],
     ];
@@ -91,11 +92,12 @@ test.describe('console shell', () => {
     await signedIn(page);
     await page.goto('/admin/#/dashboard');
     await page.keyboard.press('Control+k');
-    await expect(page.locator('.palette')).toBeVisible();
-    await page.keyboard.type('quiet');
+    await expect(page.locator('.palette input')).toBeFocused();
+    await page.keyboard.type('notification rules');
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/#\/app-settings\/notification-rules/);
     await page.keyboard.press('Control+k');
+    await expect(page.locator('.palette input')).toBeFocused();
     await page.keyboard.type('google search');
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/#\/google-search/);

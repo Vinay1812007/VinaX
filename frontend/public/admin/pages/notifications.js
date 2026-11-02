@@ -458,6 +458,8 @@
   function renderSetup(host, ctx) {
     return ui.load(host, function () {
       return Promise.all([VX.api.get('/api/admin/push'), VX.api.get('/api/admin/envcheck'), VX.api.get('/api/admin/fcmcheck', null, { timeout: 30000 })]).then(function (r) {
+        // Without the main answer nothing can be checked: say so (with Try again) instead of showing ✗ marks.
+        if (!r[0].ok) return r[0];
         return { ok: true, data: { push: r[0], env: r[1], fcm: r[2] } };
       });
     }, function (all) {

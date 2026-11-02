@@ -182,7 +182,7 @@ select.input { padding-right: 28px; }
 .search-box .ic { position: absolute; left: 10px; color: var(--text-3); width: 16px; height: 16px; pointer-events: none; }
 .search-box .input { padding-left: 32px; min-height: 32px; }
 
-.switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.switch { position: relative; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
 .switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .switch .track { position: relative; width: 34px; height: 20px; border-radius: 99px; background: var(--surface-3); border: 1px solid var(--border-strong); transition: background .15s; flex: none; }
 .switch .track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--text-2); transition: transform .15s var(--ease), background .15s; }
@@ -272,7 +272,7 @@ html.light .seg button[aria-checked="true"] { background: #fff; }
 .card-body.flush .tbl-bar { padding: 0 16px; }
 .card-body.flush .tbl-pager { padding: 0 16px 12px; }
 .tbl-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.tbl-scroll { overflow-x: auto; min-width: 0; }
+.tbl-scroll { position: relative; overflow-x: auto; min-width: 0; }
 .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .tbl th { text-align: left; font-size: 12px; font-weight: 700; color: var(--text-3); padding: 8px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; position: sticky; top: 0; background: var(--surface); }
 .tbl td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
