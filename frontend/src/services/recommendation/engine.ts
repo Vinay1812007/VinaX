@@ -25,6 +25,7 @@ import { useDownloadsStore } from '@/store/downloadsStore';
 import { lastSeedContinuation, rememberSeedContinuation } from './recMemory';
 import { exposureLedger, recordExposure, snoozedKeySet } from './exposure';
 import { decideRecVariant, EXP_REC_NEXT_SONGS } from '@/features/experiments/recExperiment';
+import { toastNavigate, type ToastOptions } from '@/store/toastStore';
 
 /**
  * 13.1 — the arms of the next-song experiment (`rec-next-songs`, created in
@@ -176,6 +177,18 @@ export function algorithmVersion(): string {
   return `${PIPELINE_VERSION}/${activeWeightsVersion()}`;
 }
 
+/** 1.4 — a message the player shows as-is when a plan leaves the queue empty. */
+export interface PlanNotice {
+  text: string;
+  opts?: ToastOptions;
+}
+
+/** 1.4 — Never repeat found nothing unheard: say so, and point somewhere new. Both engines use it. */
+export const NEVER_REPEAT_EXHAUSTED: PlanNotice = {
+  text: "You've heard everything we can find here. Try Discover or another language",
+  opts: { key: 'never-repeat-exhausted', action: { label: 'Discover', onClick: () => toastNavigate('/discover') } },
+};
+
 /** Why a continuation is shorter or later than planned. */
 export type FallbackReason = 'deadline' | 'error';
 
@@ -191,6 +204,14 @@ export interface NextSongsPlan {
   discoveryIds: ReadonlySet<string>;
   /** The language the stretch is locked to (null = none known). */
   language: string | null;
+  /**
+   * 1.4 — Never repeat found nothing the listener has not heard, even after
+   * widening every source it may widen. The player says so and stops rather
+   * than relaxing the rule.
+   */
+  exhausted?: boolean;
+  /** 1.4 — what the player says when this plan leaves the queue empty (with a link to act on). */
+  notice?: PlanNotice;
   /**
    * Publish this plan's side effects — "why this song" lines and the
    * surfaced-song memory — for the songs the player actually accepted into a
@@ -210,6 +231,8 @@ export { NEXT_DEADLINE_MS, NEXT_URGENT_DEADLINE_MS };
 const RANK_RESERVE_MS = 700;
 /** Songs kept in the validated reserve behind a continuation. */
 const RESERVE_SIZE = 12;
+/** 1.4 — Never repeat widens its sources while fewer than this many unheard candidates per slot survive the hard filter. */
+export const NEVER_REPEAT_POOL = 3;
 /** 9.0.0 — a sitting artist pull at or below this (two skips, a "Not interested") holds the artist back in validation. */
 export const SITTING_AVOID_PULL = -0.6;
 /** 8.3.1 — a sitting ends after this much silence (as in services/personalization/sessionIntent). */
@@ -340,7 +363,11 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   ]);
   if (signal?.aborted) return emptyPlan(null);
   if (gathered.late) fallback = 'deadline';
-  const candidates = gathered.value;
+  const candidates = [...gathered.value];
+
+  // 1.4 — Never repeat reads the lifetime heard-set; the plan waits for it to load (once per app start).
+  const heardBefore = ctx.neverRepeat ? await import('./heardSet').then(async (m) => { await m.initHeardSet(); return m.hasHeardKey; }).catch(() => undefined) : undefined;
+  if (signal?.aborted) return emptyPlan(null);
 
   // 2 — hard filtering.
   const rules: HardFilterOptions = {
@@ -359,8 +386,30 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     snoozedKeys: snoozedKeySet(),
     ...(allowedLanguages ? { allowedLanguages } : {}),
     downloaded: (id) => !!useDownloadsStore.getState().items[id],
+    ...(heardBefore ? { heardBefore } : {}),
   };
-  const filtered = hardFilter(candidates, rules);
+  let filtered = hardFilter(candidates, rules);
+  // 1.4 — Never repeat: a pool short of unheard songs is WIDENED, never
+  // relaxed. First more pages of the related-artist and genre sources, then the
+  // explore source in the listener's own languages. `heard-before` holds
+  // throughout; generated songs are a later step of their own.
+  let widenedTo = 0;
+  for (const tier of [1, 2] as const) {
+    if (!heardBefore || filtered.admitted.length >= limit * NEVER_REPEAT_POOL || signal?.aborted) break;
+    const budget = left() - RANK_RESERVE_MS;
+    if (budget < 400) break;
+    const more = await within(
+      generateNextCandidates(seed, { ...nextCtx, widen: tier }, { signal, softDeadlineMs: Math.min(1_500, budget / 2), hardDeadlineMs: budget, minPool: limit * NEVER_REPEAT_POOL }).catch(() => [] as Candidate[]),
+      budget + 250,
+      [] as Candidate[],
+      signal,
+    );
+    if (signal?.aborted) return emptyPlan(null);
+    if (more.late) fallback = 'deadline';
+    candidates.push(...more.value);
+    filtered = hardFilter(candidates, rules);
+    widenedTo = tier;
+  }
   const rejected: RejectedCandidate[] = [...filtered.rejected];
 
   // 3–8 — scoring, diversity, session adjustment, exploration tuning, ranking.
@@ -455,7 +504,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   // fallback reason, not only the stage counts.
   const sourceCounts: Record<string, number> = {};
   for (const c of candidates) sourceCounts[c.source] = (sourceCounts[c.source] ?? 0) + 1;
-  const trace: DebugTrace = { mode, shape, lock, languagePolicy, discoveryShare, intent: intent ? { skipStreak: intent.skipStreak, completionStreak: intent.completionStreak, discoveryAppetite: intent.discoveryAppetite, energySteer: intent.energySteer } : null, stages: { candidates: candidates.length, admitted: filtered.admitted.length, ranked: ranked.length, sequenced: arc.songs.length, validated: songs.length }, relaxed: [...new Set([...(arc.relaxed ?? []), ...local.relaxed])], repairs: local.repairs, latencyMs: Date.now() - t0, fallback, sources: sourceCounts };
+  const trace: DebugTrace = { mode, shape, lock, languagePolicy, discoveryShare, intent: intent ? { skipStreak: intent.skipStreak, completionStreak: intent.completionStreak, discoveryAppetite: intent.discoveryAppetite, energySteer: intent.energySteer } : null, stages: { candidates: candidates.length, admitted: filtered.admitted.length, ranked: ranked.length, sequenced: arc.songs.length, validated: songs.length }, relaxed: [...new Set([...(arc.relaxed ?? []), ...local.relaxed, ...(widenedTo ? [`widened-${widenedTo}`] : [])])], repairs: local.repairs, latencyMs: Date.now() - t0, fallback, sources: sourceCounts };
   publishDebug(ranked, songs, 'local', { trace, rejected: [...rejected, ...local.rejected] });
 
   const shipped = new Set(songs.map((s) => s.id));
@@ -497,6 +546,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     language: lock,
     commit: (accepted) => publishFor(accepted, true),
     topUp,
+    ...(heardBefore && !songs.length ? { exhausted: true, notice: NEVER_REPEAT_EXHAUSTED } : {}),
   };
 
   return plan;

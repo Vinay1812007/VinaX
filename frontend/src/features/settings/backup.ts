@@ -56,7 +56,9 @@ export type BackupCategoryId =
   | 'bookmarks'
   | 'homeLayout'
   | 'identity'
-  | 'extras';
+  | 'extras'
+  /** 1.4 — the lifetime heard-set (Never repeat). Lives in its own database; the file carries it, the account sync never does. */
+  | 'heard';
 
 /** One storage key inside a category. `raw` keys hold a bare string, not JSON. */
 interface KeySpec {
@@ -613,7 +615,9 @@ const identityCategory: BackupCategory = {
   },
 };
 
-const LIST_CAPS = { karaoke: 12, prefs: 50 } as const;
+const LIST_CAPS = { karaoke: 12, prefs: 50, heard: 200_000 } as const;
+/** 1.4 — where a restore leaves the heard songs for the heard-set to add (the same key as `HEARD_IMPORT_KEY` in services/recommendation/heardSet.ts). */
+export const HEARD_IMPORT_KEY = 'vinax.recs.heard.import.v1';
 
 const extrasCategory: BackupCategory = {
   id: 'extras',
@@ -705,6 +709,40 @@ const extrasCategory: BackupCategory = {
   },
 };
 
+/**
+ * 1.4 — every song the listener has heard, as canonical keys
+ * (services/recommendation/heardSet.ts). The set lives in IndexedDB, so the
+ * export adds it from there (`withHeardSet` in ./actions.ts); a restore writes
+ * the file's keys to `HEARD_IMPORT_KEY` and the heard-set adds them on its next
+ * load. A restore only ever ADDS heard songs: forgetting what someone heard
+ * would let Never repeat play it again.
+ */
+const heardCategory: BackupCategory = {
+  id: 'heard',
+  label: 'Songs you have heard',
+  description: 'Every song you have played, so Never repeat keeps them out',
+  keys: [{ key: HEARD_IMPORT_KEY }],
+  sanitize: (values, ctx) => {
+    const v = values[HEARD_IMPORT_KEY];
+    if (v === undefined) return { values: {} };
+    if (!isObj(v) || !Array.isArray(v.keys)) return { error: 'The heard songs list is malformed.' };
+    const keys = [...new Set(v.keys.filter((k): k is string => typeof k === 'string' && k.length > 0 && k.length <= 400))];
+    return { values: { [HEARD_IMPORT_KEY]: { v: 1, keys: capped(keys, LIST_CAPS.heard, 'Heard songs', ctx) } } };
+  },
+  summarize: (values) => {
+    const v = values[HEARD_IMPORT_KEY];
+    const n = isObj(v) && Array.isArray(v.keys) ? v.keys.length : 0;
+    return n ? `${n.toLocaleString()} ${n === 1 ? 'song' : 'songs'}` : 'Nothing saved';
+  },
+  merge: (current, incoming) => {
+    const keysOf = (x: CategoryValues): string[] => {
+      const v = x[HEARD_IMPORT_KEY];
+      return isObj(v) && Array.isArray(v.keys) ? (v.keys as string[]) : [];
+    };
+    return { [HEARD_IMPORT_KEY]: { v: 1, keys: [...new Set([...keysOf(current), ...keysOf(incoming)])].slice(0, LIST_CAPS.heard) } };
+  },
+};
+
 export const BACKUP_CATEGORIES: readonly BackupCategory[] = [
   settingsCategory,
   libraryCategory,
@@ -716,6 +754,7 @@ export const BACKUP_CATEGORIES: readonly BackupCategory[] = [
   homeLayoutCategory,
   identityCategory,
   extrasCategory,
+  heardCategory,
 ];
 
 export const categoryById = (id: string): BackupCategory | undefined => BACKUP_CATEGORIES.find((c) => c.id === id);

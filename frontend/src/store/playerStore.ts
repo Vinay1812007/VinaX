@@ -251,6 +251,8 @@ export const usePlayerStore = create<PlayerState>()(
       /** 7.2.0 — the latest accepted plan. Its validated reserve tops up a queue about to run
        *  dry, and — for a queue in the same language — is the last-good fallback. */
       let lastPlan: NextSongsPlan | null = null;
+      /** 1.4 — what the latest plan wants said if the queue runs dry (Never repeat found nothing unheard). */
+      let planNotice: NextSongsPlan['notice'] = undefined;
       let batchSeq = 0;
       const autoMetaById = new Map<string, AutoEntryMeta>();
       /** Ids the recommender appended. Persisted with the queue (7.2.0) so a
@@ -447,6 +449,7 @@ export const usePlayerStore = create<PlayerState>()(
             // The gate reads the state as it is NOW, after the await: a song hidden
             // or a Kid mode switched on meanwhile never gets in.
             if (version !== queueVersion || !canExtend() || abort.signal.aborted) return false;
+            planNotice = plan.notice;
             return acceptPlan(plan) > 0;
           } catch {
             return false;
@@ -1270,7 +1273,8 @@ export const usePlayerStore = create<PlayerState>()(
                     return;
                   }
                   // V2 — never a silent stop: say why, so the listener can act.
-                  toast('Up next ran out of songs for this session — pick something or start a radio');
+                  // 1.4 — or the plan's own words (Never repeat stops rather than play something heard).
+                  toast(planNotice?.text ?? 'Up next ran out of songs for this session — pick something or start a radio', planNotice?.opts);
                 });
               } else {
                 set({ isPlaying: false });

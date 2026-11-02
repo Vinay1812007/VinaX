@@ -91,6 +91,12 @@ export interface SettingsState {
    * the stretch and two switches never land back to back.
    */
   queueLanguages: QueueLanguages;
+  /**
+   * 1.4 — Never repeat: every AUTOMATIC song is one the listener has never
+   * heard (the lifetime heard-set, services/recommendation/heardSet.ts). Hand-
+   * queued songs and an explicit "Play again" are never held back.
+   */
+  neverRepeat: boolean;
   /** v6.5.0 — smart queue: tapping a song starts it and VinaX builds the
    *  continuation on the device, instead of following the tapped list. */
   djTakeover: boolean;
@@ -160,6 +166,7 @@ export interface SettingsState {
   setExploreMode(v: boolean): void;
   setDiscoveryMode(v: DiscoveryMode): void;
   setQueueLanguages(v: QueueLanguages): void;
+  setNeverRepeat(v: boolean): void;
   setDjTakeover(v: boolean): void;
   setKidMode(v: boolean): void;
   setPersonalEngine(v: boolean): void;
@@ -229,6 +236,7 @@ const defaults = {
   exploreMode: false,
   discoveryMode: 'balanced' as DiscoveryMode,
   queueLanguages: 'mix' as QueueLanguages,
+  neverRepeat: false,
   djTakeover: true,
   kidMode: false,
   personalEngine: true,
@@ -365,6 +373,7 @@ export const useSettingsStore = create<SettingsState>()(
         set({ recommendationIntensity: Math.min(1, Math.max(0, v)) }),
       setExploreMode: (exploreMode) => set({ exploreMode, discoveryMode: exploreMode ? 'discover' : 'balanced' }),
       setQueueLanguages: (queueLanguages) => set({ queueLanguages: queueLanguages === 'one' ? 'one' : 'mix' }),
+      setNeverRepeat: (neverRepeat) => set({ neverRepeat: !!neverRepeat }),
       setDiscoveryMode: (mode) => {
         const discoveryMode = isDiscoveryMode(mode) ? mode : 'balanced';
         set({ discoveryMode, exploreMode: discoveryMode === 'discover' });

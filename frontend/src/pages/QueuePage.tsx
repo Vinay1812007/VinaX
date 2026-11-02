@@ -14,6 +14,7 @@ import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { toast } from '@/store/toastStore';
 import { TuneChips } from '@/features/queue/TuneChips';
 import { SmartQueue } from '@/features/queue/SmartQueue';
+import { NeverRepeatChip } from '@/features/queue/NeverRepeatChip';
 import { OriginBadge } from '@/features/queue/OriginBadge';
 import { originOf, type QueueOrigin } from '@/features/queue/origin';
 import { TrackMenu, type TrackMenuItem } from '@/components/TrackMenu';
@@ -634,6 +635,13 @@ export default function QueuePage() {
             </span>
             <TuneChips compact />
           </section>
+          {/* 1.4 — Never repeat: every automatic song is one you have not heard. */}
+          <div className="vx-queue-toolrow">
+            <span className="vx-queue-toolrow-label" aria-hidden>
+              Repeats
+            </span>
+            <NeverRepeatChip />
+          </div>
           {/* D5 — sort the upcoming stretch; the playing song never moves. */}
           {upNext.length >= 3 && (
             <div className="vx-queue-toolrow">

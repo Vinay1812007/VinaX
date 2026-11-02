@@ -29,11 +29,11 @@ import { closeTopOverlay } from '@/hooks/useDismissOnBack';
 import { recallScroll, rememberScroll, restoreWhenTall } from '@/features/nav/scrollMemory';
 import { shouldRescueTouch, shouldRescueWheel } from '@/features/nav/wheelRescue';
 import { loadBlocklist } from '@/services/content/blocklist';
-import { initLockScreenLyrics } from '@/services/media-session/lockscreenLyrics';
 import { initDownloads } from '@/services/downloads';
 import { initSpatialNav } from '@/services/tv/spatialNav';
 import { initAlarm } from '@/services/alarm';
-import { ShortcutsModal } from '@/components/ShortcutsModal';
+// On demand: it only listens for "?" until opened, and nothing else in the first load needs it.
+const ShortcutsModal = lazy(() => import('@/components/ShortcutsModal').then((m) => ({ default: m.ShortcutsModal })));
 // Android-app only, so loaded on demand: never part of a browser's first load.
 const UpdateDialog = lazy(() => import('@/components/UpdateDialog').then((m) => ({ default: m.UpdateDialog })));
 // Boot overlays (festival splash, What's-New sheet) render at most once per
@@ -281,7 +281,8 @@ export function AppLayout() {
       // V2 1.4 — the personal engine learns from listening while signed in with the setting on.
       void import('@/services/personal/reporter').then((m) => m.installPersonalReporter()).catch(() => undefined);
       void loadBlocklist();
-      initLockScreenLyrics();
+      // 1.4 — on demand: it brings the lyrics client, which nothing else in the first load needs.
+      void import('@/services/media-session/lockscreenLyrics').then((m) => m.initLockScreenLyrics()).catch(() => undefined);
       // 13.0.2 — mirror an active sleep timer onto the playback notification.
       if (isNativePlatform()) void import('@/services/media-session/sleepNotification').then((m) => m.initSleepNotification()).catch(() => undefined);
       initSpatialNav();
@@ -549,7 +550,11 @@ export function AppLayout() {
           <CommandPalette onClose={() => setPaletteOpen(false)} />
         </Suspense>
       )}
-      {!isNativePlatform() && <ShortcutsModal />}
+      {!isNativePlatform() && (
+        <Suspense fallback={null}>
+          <ShortcutsModal />
+        </Suspense>
+      )}
       {isNativePlatform() && (
         <Suspense fallback={null}>
           <UpdateDialog />

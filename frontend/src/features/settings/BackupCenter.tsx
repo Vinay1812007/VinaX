@@ -144,7 +144,7 @@ export function BackupCenter({ onClose }: { onClose(): void }) {
             ))}
           </ul>
           <div className="mt-3 flex flex-wrap gap-2 items-center">
-            <button onClick={() => { downloadProfileExport(); setMeta(backupMeta()); toast('Backup file downloaded'); }} className="px-4 py-2 rounded-full btn-primary text-sm min-h-[44px]">Export a backup now</button>
+            <button onClick={() => { void downloadProfileExport().then(() => setMeta(backupMeta())); toast('Backup file downloaded'); }} className="px-4 py-2 rounded-full btn-primary text-sm min-h-[44px]">Export a backup now</button>
             {meta.lastImportAt && <span className="text-[12px] text-ink-400">Last restore: {when(meta.lastImportAt)} ({meta.lastImportMode})</span>}
           </div>
         </section>
@@ -223,7 +223,7 @@ export function BackupCenter({ onClose }: { onClose(): void }) {
               </fieldset>
 
               <div className="flex flex-wrap gap-2 justify-end items-center">
-                <button onClick={() => { downloadProfileExport(); setMeta(backupMeta()); toast('Safety copy downloaded'); }} className="btn-secondary px-4 py-2 text-sm min-h-[44px] mr-auto">Download a safety copy first</button>
+                <button onClick={() => { void downloadProfileExport().then(() => setMeta(backupMeta())); toast('Safety copy downloaded'); }} className="btn-secondary px-4 py-2 text-sm min-h-[44px] mr-auto">Download a safety copy first</button>
                 <button onClick={() => setParsed(null)} className="btn-secondary px-4 py-2 text-sm min-h-[44px]">Cancel</button>
                 <button onClick={restore} disabled={!chosen.size || applying} className="btn-primary px-4 py-2 text-sm min-h-[44px] disabled:opacity-50">
                   {applying ? 'Restoring…' : `${mode === 'merge' ? 'Merge' : 'Replace'} ${chosen.size} categor${chosen.size === 1 ? 'y' : 'ies'}`}

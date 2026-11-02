@@ -46,9 +46,11 @@ const CATALOGUE: Song[] = ARTISTS.flatMap((artist, a) =>
  * to do. Suggestions answer from the song's neighbourhood.
  */
 const PAGE = 20;
+/** The catalogue the mocked client answers from (the Never repeat session swaps in a bigger one). */
+let ACTIVE: Song[] = CATALOGUE;
 function page(n: number, limit: number): Song[] {
   const start = (Math.max(1, n) - 1) * PAGE;
-  return CATALOGUE.slice(start, start + PAGE).slice(0, limit);
+  return ACTIVE.slice(start, start + PAGE).slice(0, limit);
 }
 
 vi.mock('@/services/api', () => ({
@@ -59,18 +61,18 @@ vi.mock('@/services/api', () => ({
   // contiguous slice of this fixture would be five songs by one artist, which
   // would make the artist-diversity assertions test the fixture, not the engine.
   getSongSuggestions: async (id: string, limit: number) => {
-    const at = CATALOGUE.findIndex((s) => s.id === id);
+    const at = ACTIVE.findIndex((s) => s.id === id);
     const from = at < 0 ? 0 : at + 1;
     const out: Song[] = [];
-    for (let step = 0; out.length < limit && step < CATALOGUE.length; step += 1) {
-      out.push(CATALOGUE[(from + step * 7) % CATALOGUE.length]);
+    for (let step = 0; out.length < limit && step < ACTIVE.length; step += 1) {
+      out.push(ACTIVE[(from + step * 7) % ACTIVE.length]);
     }
     return [...new Map(out.map((x) => [x.id, x])).values()].slice(0, limit);
   },
   getAlbum: async () => null,
   getArtist: async () => null,
   getArtistTopSongs: async () => [],
-  getSong: async (id: string) => CATALOGUE.find((s) => s.id === id) ?? null,
+  getSong: async (id: string) => ACTIVE.find((s) => s.id === id) ?? null,
 }));
 vi.mock('@/services/queryClient', () => ({ queryClient: { getQueryData: () => undefined } }));
 
@@ -82,6 +84,7 @@ import { songKey } from './songKey';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { resetTrendSignal } from '@/services/trends/signal';
+import { initHeardSet, memoryBackend, recordHeard, resetHeardSetForTests } from './heardSet';
 
 const BATCH = 20;
 const lead = (s: Song): string => s.artists[0]?.name ?? '';
@@ -112,6 +115,8 @@ beforeEach(() => {
   resetTrendSignal();
   useSettingsStore.setState({ kidMode: false, mutedLanguages: [] });
   useLibraryStore.setState({ hiddenSongIds: [], hiddenArtists: [], favorites: [] });
+  ACTIVE = CATALOGUE;
+  resetHeardSetForTests();
 });
 
 describe('9.1 acceptance — a 120-track fixture (24 artists, all playable, all in-language)', () => {
@@ -267,5 +272,70 @@ describe('9.1 acceptance — a 120-track fixture (24 artists, all playable, all 
     const out = await generate(seed, 2);
     expect(out.length).toBeGreaterThan(0);
     expect(out.every((s) => lead(s) === 'Artist A')).toBe(true);
+  });
+});
+
+/**
+ * 1.4 — Never repeat, over a long sitting. 100 artists with 8 songs each, and
+ * another cut (a remix, a remaster, a live take) of 200 of those songs under
+ * its own catalogue id, so "another version of something heard" really is in
+ * the pool. The simulated listener lets every automatic song play: each one
+ * produces a PLAY (it joins the heard-set and the history) and the next stretch
+ * follows it, five songs at a time, as the player asks.
+ */
+describe('1.4 acceptance — Never repeat over a 500-song sitting', () => {
+  const ORIGINALS: Song[] = Array.from({ length: 100 }, (_, a) =>
+    Array.from({ length: 8 }, (_, n) =>
+      makeSong(`o${a * 8 + n}`, { title: `Song ${a * 8 + n}`, artist: `Singer ${a}`, language: LANGUAGE, audio: [{ quality: '160kbps', url: `https://audio.test/o${a * 8 + n}.mp4` }] }),
+    ),
+  ).flat();
+  const CUTS = ['(DJ Remix)', '(Remastered 2024)', '- Live', '(Lofi Flip)'];
+  const VERSIONS: Song[] = ORIGINALS.slice(0, 200).map((o, i) =>
+    makeSong(`v${i}`, { title: `${o.title} ${CUTS[i % CUTS.length]}`, artist: o.artists[0].name, language: LANGUAGE, audio: [{ quality: '160kbps', url: `https://audio.test/v${i}.mp4` }] }),
+  );
+  // Versions are interleaved with the originals, so every search page and suggestion list meets both.
+  const BIG: Song[] = ORIGINALS.flatMap((o, i) => (i < VERSIONS.length ? [o, VERSIONS[i]] : [o]));
+
+  it('plays 500 automatic songs with zero repeats by canonical identity', async () => {
+    ACTIVE = BIG;
+    await initHeardSet({ backend: memoryBackend(), backfill: null, listen: false });
+    const seed = BIG[0];
+    recordHeard(seed);
+    const played: Song[] = [seed];
+    const history = [makePlay(seed, 1)];
+    let last = seed;
+    let plans = 0;
+    while (played.length < 501 && plans < 200) {
+      plans += 1;
+      const plan = await planNextSongs(last, context({ salt: plans, neverRepeat: true, history: [...history].reverse(), discoveryMode: 'balanced' }), { limit: 5, deadlineMs: 8_000, excludeIds: played.map((s) => s.id).slice(-12), excludeKeys: played.map(songKey).slice(-12) });
+      expect(plan.exhausted, `plan ${plans} ran dry after ${played.length - 1} songs`).toBeFalsy();
+      plan.commit(plan.songs);
+      for (const song of plan.songs) {
+        if (played.length >= 501) break;
+        recordHeard(song);
+        played.push(song);
+        history.push(makePlay(song, played.length));
+        last = song;
+      }
+    }
+    const automatic = played.slice(1);
+    expect(automatic).toHaveLength(500);
+    const keys = played.map(songKey);
+    expect(new Set(keys).size).toBe(keys.length);
+    // Another cut of a heard song never shipped: no original and its version both played.
+    const ids = new Set(played.map((s) => s.id));
+    const both = VERSIONS.filter((v, i) => ids.has(v.id) && ids.has(ORIGINALS[i].id));
+    expect(both).toEqual([]);
+    // ...and the pool really offered versions: some were played instead of their original.
+    expect(VERSIONS.some((v) => ids.has(v.id)) || ORIGINALS.slice(0, 200).some((o) => ids.has(o.id))).toBe(true);
+  }, 120_000);
+
+  it('stops, saying so, instead of repeating once everything reachable is heard', async () => {
+    ACTIVE = BIG.slice(0, 30);
+    await initHeardSet({ backend: memoryBackend(), backfill: null, listen: false });
+    for (const s of ACTIVE) recordHeard(s);
+    const plan = await planNextSongs(ACTIVE[0], context({ salt: 1, neverRepeat: true }), { limit: 5, deadlineMs: 8_000 });
+    expect(plan.songs).toEqual([]);
+    expect(plan.exhausted).toBe(true);
   });
 });

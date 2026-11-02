@@ -10,6 +10,7 @@ import { addAnchorSeed, anchorLanguages, avoidArtist, evenSample, readAnchor, re
 import { notePlayed, planNextSongs, poolSize, resetNextUp, setCatalogueApi, POOL_CAP } from './engine';
 import { resetServed } from './memory';
 import type { CatalogueApi } from './sources';
+import { songKey } from '@/services/recommendation/songKey';
 
 const song = (id: string, artist: string, extra: Partial<Song> = {}): Song => ({
   kind: 'song', id, title: `Title ${id}`, subtitle: artist, artists: [{ id: `a-${artist}`, name: artist }], album: null,
@@ -199,5 +200,68 @@ describe('V2 Up Next — planning', () => {
     setCatalogueApi(fakeCatalogue({ seed2: [mute('d1', 'D1'), mute('d2', 'D2')] }).api);
     startAnchor([song('seed2', 'Seed2')], Date.now() + 5);
     expect((await plan(song('seed2', 'Seed2'))).songs.map((s) => s.id).sort()).toEqual(['d1', 'd2']);
+  });
+});
+
+describe('V2 Up Next — Never repeat', () => {
+  const heardSet = () => import('@/services/recommendation/heardSet');
+
+  beforeEach(async () => {
+    const m = await heardSet();
+    m.resetHeardSetForTests();
+    await m.initHeardSet({ backend: m.memoryBackend(), backfill: null, listen: false });
+    useSettingsStore.setState({ neverRepeat: true });
+  });
+  afterEach(async () => {
+    (await heardSet()).resetHeardSetForTests();
+    useSettingsStore.setState({ neverRepeat: false });
+  });
+
+  it('picks only songs the listener has never heard, any version of them', async () => {
+    const seed = song('seed', 'S');
+    const heard = [song('h1', 'A'), song('h2', 'B'), song('h3', 'C')];
+    const remix = song('h1r', 'A', { title: 'Title h1 (DJ Remix)' });
+    const fresh = Array.from({ length: 8 }, (_, i) => song(`n${i}`, `N${i}`));
+    (await heardSet()).recordHeardKeys(heard.map(songKey));
+    setCatalogueApi(fakeCatalogue({ seed: [...heard, remix, ...fresh] }).api);
+    startAnchor([seed]);
+    const p = await plan(seed);
+    expect(p.songs).toHaveLength(5);
+    expect(p.songs.map((s) => s.id).every((id) => id.startsWith('n'))).toBe(true);
+    expect(p.exhausted).toBeUndefined();
+  });
+
+  it('widens to related artists and deeper searches instead of relaxing the rule', async () => {
+    const seed = song('seed', 'S', { artists: [{ id: 'a-S', name: 'S' }] });
+    const heard = Array.from({ length: 6 }, (_, i) => song(`h${i}`, `H${i}`));
+    (await heardSet()).recordHeardKeys(heard.map(songKey));
+    const wide = Array.from({ length: 6 }, (_, i) => song(`w${i}`, `W${i}`));
+    const asked: string[] = [];
+    const api: CatalogueApi = {
+      similar: async () => heard,
+      artistTop: async () => [],
+      related: async (id) => { asked.push(`related:${id}`); return [{ id: 'a-R', name: 'R' }]; },
+      artistPage: async (id, page) => { asked.push(`page:${id}:${page}`); return page === 0 ? wide.slice(0, 3) : wide.slice(3); },
+      searchPage: async (_q, page) => { asked.push(`search:${page}`); return []; },
+    };
+    setCatalogueApi(api);
+    startAnchor([seed]);
+    const p = await plan(seed);
+    expect(asked).toContain('related:a-S');
+    expect(p.songs.length).toBeGreaterThan(0);
+    expect(p.songs.every((s) => s.id.startsWith('w'))).toBe(true);
+    expect(p.relaxed).toContain('widened-1');
+  });
+
+  it('says it is exhausted, and plays nothing heard, when nothing unheard is left', async () => {
+    const seed = song('seed', 'S');
+    const heard = Array.from({ length: 6 }, (_, i) => song(`h${i}`, `H${i}`));
+    (await heardSet()).recordHeardKeys(heard.map(songKey));
+    useLibraryStore.setState({ favorites: heard });
+    setCatalogueApi({ similar: async () => heard, artistTop: async () => heard, searchPage: async () => heard, related: async () => [] });
+    startAnchor([seed]);
+    const p = await plan(seed);
+    expect(p.songs).toEqual([]);
+    expect(p.exhausted).toBe(true);
   });
 });

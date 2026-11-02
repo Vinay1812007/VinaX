@@ -654,3 +654,36 @@ describe('readBackupFile', () => {
     expect(await readBackupFile({ size: 2, text } as unknown as File)).toEqual({ ok: true, text: '{}' });
   });
 });
+
+describe('the heard songs (Never repeat)', () => {
+  const HEARD = 'vinax.recs.heard.import.v1';
+  const fileWith = (keys: unknown) =>
+    JSON.stringify({ format: BACKUP_FORMAT, schemaVersion: BACKUP_SCHEMA_VERSION, app: 'vinax', appVersion: 'x', exportedAt: new Date().toISOString(), categories: { heard: { [HEARD]: { v: 1, keys } } } });
+
+  beforeEach(() => localStorage.clear());
+
+  it('restores the file’s heard songs for the heard-set to add on its next load', () => {
+    const parsed = parseBackup(fileWith(['monica|anirudh', 'hukum|anirudh', 'monica|anirudh', 7]));
+    if (!parsed.ok) throw new Error(parsed.error);
+    const report = parsed.categories.find((c) => c.id === 'heard')!;
+    expect(report.summary).toBe('2 songs');
+    expect(applyBackup(parsed, { mode: 'replace' }).ok).toBe(true);
+    expect(JSON.parse(localStorage.getItem(HEARD)!)).toEqual({ v: 1, keys: ['monica|anirudh', 'hukum|anirudh'] });
+  });
+
+  it('a merge only ever adds heard songs', () => {
+    localStorage.setItem(HEARD, JSON.stringify({ v: 1, keys: ['already|here'] }));
+    const parsed = parseBackup(fileWith(['monica|anirudh']));
+    if (!parsed.ok) throw new Error(parsed.error);
+    applyBackup(parsed, { mode: 'merge' });
+    expect(JSON.parse(localStorage.getItem(HEARD)!).keys.sort()).toEqual(['already|here', 'monica|anirudh']);
+  });
+
+  it('refuses a malformed list and never syncs it to the account', async () => {
+    const parsed = parseBackup(fileWith('not a list'));
+    if (!parsed.ok) throw new Error(parsed.error);
+    expect(parsed.rejected.map((r) => r.id)).toContain('heard');
+    const { SYNC_CATEGORIES } = await import('@/services/account/sync');
+    expect(SYNC_CATEGORIES).not.toContain('heard');
+  });
+});

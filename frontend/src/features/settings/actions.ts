@@ -1,5 +1,5 @@
 import { clearAllVinaxStorage, freezeLocalWrites } from '@/services/storage/local';
-import { MAX_BACKUP_BYTES, applyTransferPayload, createBackup, createTransferPayload, parseBackup, recordBackupEvent, restoreWithUndo, serializeBackup, type BackupCategoryId } from './backup';
+import { MAX_BACKUP_BYTES, applyTransferPayload, createBackup, createTransferPayload, parseBackup, recordBackupEvent, restoreWithUndo, serializeBackup, type BackupCategoryId, type BackupFile, HEARD_IMPORT_KEY } from './backup';
 import { clearEvents } from '@/services/storage/idb';
 import { resetProfile } from '@/services/personalization/storage';
 import { invalidateRecommendationCache } from '@/services/recommendation/engine';
@@ -113,6 +113,8 @@ export async function clearPersonalization(): Promise<void> {
 
 export async function resetAppState(): Promise<void> {
   await clearEvents();
+  // 1.4 — the lifetime heard-set lives in its own database.
+  await import('@/services/recommendation/heardSet').then((m) => m.eraseHeardSet()).catch(() => undefined);
   // The song vectors older builds kept in their own IndexedDB database.
   try {
     window.indexedDB?.deleteDatabase('vinax-embeddings');
@@ -128,12 +130,28 @@ export async function resetAppState(): Promise<void> {
  * (features/settings/backup.ts). Credentials, device identity, caches and
  * download paths are never included — see BACKUP_EXCLUSIONS.
  */
-export function exportProfileJson(): string {
-  return serializeBackup(createBackup());
+export async function exportProfileJson(): Promise<string> {
+  return serializeBackup(await withHeardSet(createBackup()));
 }
 
-export function downloadProfileExport(): void {
-  const file = createBackup();
+/**
+ * 1.4 — add the lifetime heard-set to a backup file. It lives in IndexedDB,
+ * which the synchronous snapshot cannot read; only the file carries it (the
+ * account sync never does: it stays on the device).
+ */
+export async function withHeardSet(file: BackupFile): Promise<BackupFile> {
+  try {
+    const { exportHeardKeys } = await import('@/services/recommendation/heardSet');
+    const keys = await exportHeardKeys();
+    if (keys.length) return { ...file, categories: { ...file.categories, heard: { [HEARD_IMPORT_KEY]: { v: 1, keys } } } };
+  } catch {
+    /* a file without the heard songs is still a good backup */
+  }
+  return file;
+}
+
+export async function downloadProfileExport(): Promise<void> {
+  const file = await withHeardSet(createBackup());
   const json = serializeBackup(file);
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);

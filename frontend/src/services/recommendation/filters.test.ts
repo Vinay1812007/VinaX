@@ -111,3 +111,30 @@ describe('8.2.0 — songs the catalogue cannot stream', () => {
     expect(out.rejected[0].reason).toBe('blocked');
   });
 });
+
+describe('heard-before (Never repeat)', () => {
+  it('rejects every version of a heard song, keyed by canonical identity', async () => {
+    const { canonicalKey } = await import('./identityCore');
+    const heard = new Set([canonicalKey('Monica', 'Anirudh')]);
+    const rules = { heardBefore: (k: string) => heard.has(k) };
+    for (const title of ['Monica', 'Monica (Remastered 2021)', 'Monica (DJ Remix)', 'Monica - Live', 'Monica (Lofi Flip)', 'Monica - From "Coolie"', 'Monica (feat. Someone)']) {
+      expect(rejectReasonFor(makeSong(title, { title, artist: 'Anirudh' }), rules), title).toBe('heard-before');
+    }
+    // Another song, and the same title by another lead artist, are not heard.
+    expect(rejectReasonFor(makeSong('other', { title: 'Hukum', artist: 'Anirudh' }), rules)).toBeNull();
+    expect(rejectReasonFor(makeSong('cover', { title: 'Monica', artist: 'Someone Else' }), rules)).toBeNull();
+  });
+
+  it('applies only while the mode is on, and after the safety rules', () => {
+    const song = makeSong('x', { title: 'Heard', artist: 'A', explicit: true });
+    expect(rejectReasonFor(song, {})).toBeNull();
+    expect(rejectReasonFor(song, { heardBefore: () => true })).toBe('heard-before');
+    expect(rejectReasonFor(song, { heardBefore: () => true, hideExplicit: true })).toBe('explicit');
+  });
+
+  it('keeps heard songs out of the admitted pool with a named reason', () => {
+    const out = hardFilter([cand(makeSong('a', { title: 'Old', artist: 'A' })), cand(makeSong('b', { title: 'New', artist: 'B' }))], { heardBefore: (k) => k.startsWith('old|') });
+    expect(out.admitted.map((c) => c.song.id)).toEqual(['b']);
+    expect(out.rejected).toEqual([expect.objectContaining({ reason: 'heard-before', stage: 'filter' })]);
+  });
+});

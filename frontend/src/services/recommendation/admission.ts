@@ -23,6 +23,10 @@ import { getSessionIntent } from '@/services/personalization/sessionIntent';
  * (by id or canonical identity), recent plays (by identity), and songs
  * skipped in this sitting. Survivors are de-duplicated by identity.
  *
+ * 1.4 — with Never repeat on, any song the listener has heard before, by
+ * canonical identity (`heard-before`, ./heardSet.ts). Plans the listener
+ * installs and songs they queue by hand never pass through this rule.
+ *
  * `mode: 'plan'` is for lists the listener installs on purpose (Queue
  * Builder): only the explicit restrictions apply — invalid entries, explicit
  * under Kid mode, hidden, muted languages.
@@ -42,6 +46,19 @@ export interface AdmissionResult {
   admitted: Song[];
   rejected: Array<{ song: Song; reason: AdmissionReason }>;
 }
+
+/**
+ * 1.4 — the lifetime heard-set's lookup ("has this listener heard this
+ * canonical song?"). The heard-set (./heardSet.ts) is a lazy chunk with its own
+ * database and registers the lookup here once loaded, so this first-load gate
+ * can ask without pulling it in. Until then it is undefined: a plan in Never
+ * repeat mode waits for the heard-set itself before it picks anything.
+ */
+let heardLookup: ((key: string) => boolean) | undefined;
+export function registerHeardCheck(fn: ((key: string) => boolean) | undefined): void {
+  heardLookup = fn;
+}
+export const heardCheck = (): ((key: string) => boolean) | undefined => heardLookup;
 
 const EXPLICIT_RULES: ReadonlySet<AdmissionReason> = new Set<AdmissionReason>(['invalid', 'explicit', 'blocked', 'muted-language']);
 
@@ -70,6 +87,8 @@ export function admitSongs(songs: Song[], o: AdmissionOptions): AdmissionResult 
     mutedLanguages: settings.mutedLanguages,
     blocked: (song: Song) => isSongBlocked(song, library),
     hideExplicit: settings.kidMode,
+    // A plan the listener installs drops this rule with the other non-explicit ones (EXPLICIT_RULES).
+    heardBefore: settings.neverRepeat ? heardLookup : undefined,
   };
   const admitted: Song[] = [];
   const rejected: AdmissionResult['rejected'] = [];

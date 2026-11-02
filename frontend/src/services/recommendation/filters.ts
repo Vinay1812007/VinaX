@@ -65,6 +65,13 @@ export interface HardFilterOptions extends SafetyRules {
    * rejected as 'no-audio' unless it is. Absent = nothing is downloaded.
    */
   downloaded?: (id: string) => boolean;
+  /**
+   * 1.4 — Never repeat: has the listener ever heard this canonical song
+   * (./heardSet.ts)? A heard song is rejected as 'heard-before'. Keyed by the
+   * canonical key, so remasters, remixes and other cuts of a heard song are out
+   * too. Absent = the mode is off.
+   */
+  heardBefore?: (key: string) => boolean;
 }
 
 export interface HardFilterResult {
@@ -91,6 +98,7 @@ export function rejectReasonFor(song: Song, o: HardFilterOptions): RejectReason 
   if (o.seed && (song.id === o.seed.id || key === songKey(o.seed))) return 'seed';
   if (o.queuedIds?.has(song.id) || o.queuedKeys?.has(key)) return 'already-queued';
   if (o.recentIds?.has(song.id) || o.recentKeys?.has(key)) return 'recently-played';
+  if (o.heardBefore?.(key)) return 'heard-before';
   if (o.sessionSkippedIds?.has(song.id)) return 'skipped-this-session';
   // 8.1.0 — the mix policy admits the listener's languages, never a stranger's.
   if (o.allowedLanguages && song.language && song.language !== 'unknown' && !o.allowedLanguages.has(song.language)) return 'off-language';
