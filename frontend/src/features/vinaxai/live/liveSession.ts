@@ -6,7 +6,12 @@
  * transcript is kept for the chat.
  *
  * When a model will not start (the socket closes before setupComplete), the
- * next Live model is asked for, at most three times.
+ * next Live model is asked for, at most three times. With web search on, a
+ * model that will not start is first tried once without search.
+ *
+ * Web search is part of the setup, so switching it during a session
+ * reconnects: same mic, same transcript, and the new session is told what
+ * was said so far.
  *
  * The orb follows the real audio: an analyser on the mic and one on the
  * voice, read every frame, on a loudness scale (mic.ts). When the mic gives
@@ -17,6 +22,7 @@ import { liveToken, type LiveTokenReply } from '../api';
 import { closeMic, hasSignal, loudness, micLabelOf, micSource, newAudioContext, openMic, rmsOf } from '../mic';
 import { base64ToBytes, pcm16 } from '../speechStream';
 import { audioMessage, floatTo16, OUTPUT_RATE, parseServerMessage, Resampler, streamEndMessage, Transcript, type LiveEvent } from './liveProtocol';
+import type { SourcesInfo } from '../types';
 import tapUrl from './micTap.worklet.js?url';
 
 export type LiveState = 'connecting' | 'listening' | 'speaking' | 'ended';
@@ -27,6 +33,8 @@ export interface LiveCallbacks {
   onState(state: LiveState): void;
   onCaptions(now: { user: string; assistant: string }): void;
   onLevel(level: number, who: 'user' | 'assistant'): void;
+  /** The latest reply's web sources, and whether a search is running. */
+  onWeb?(web: { sources: SourcesInfo | null; searching: boolean }): void;
   /** The mic in use, and whether it has given only silence so far (a muted or virtual device). */
   onMic?(mic: { label: string; silent: boolean }): void;
   /** Fires once. `error` is a code for voiceNotice / micNotice when it failed. */
@@ -61,8 +69,14 @@ export class LiveSession {
   private ready = false;
   private ended = false;
   private state: LiveState = 'connecting';
+  /** Web search as the listener wants it, and whether this session has it. */
+  private wantSearch: boolean;
+  search = false;
+  private reconnecting = false;
 
-  constructor(private readonly opts: { thinking: boolean; voice: string; model?: string; micId?: string }, private readonly cb: LiveCallbacks) {}
+  constructor(private readonly opts: { thinking: boolean; voice: string; model?: string; micId?: string; search?: boolean }, private readonly cb: LiveCallbacks) {
+    this.wantSearch = opts.search === true;
+  }
 
   /** The mic in use now. */
   get micLabel(): string {
@@ -86,27 +100,62 @@ export class LiveSession {
       return;
     }
     if (this.ended) { closeMic(this.stream); return; }
-    const skip: string[] = [];
-    for (let attempt = 0; attempt < MAX_ATTEMPTS && !this.ended; attempt += 1) {
-      let token: LiveTokenReply;
-      try {
-        token = await liveToken({ thinking: this.opts.thinking, skip, voice: this.opts.voice, ...(this.opts.model && this.opts.model !== 'auto' ? { model: this.opts.model } : {}) });
-      } catch (e) {
-        this.finish('failed', (e as { code?: string }).code ?? 'voice_unavailable');
-        return;
-      }
-      if (this.ended) return;
-      this.model = token.model;
-      if (await this.connect(token)) break;
-      skip.push(token.model.id);
-      if (attempt === MAX_ATTEMPTS - 1) this.finish('failed', 'voice_unavailable');
-    }
-    if (this.ended || !this.ready) return;
+    if (!(await this.open())) return;
     try {
       await this.startMic();
     } catch {
       this.finish('mic', 'unsupported');
     }
+  }
+
+  /** Get a token and connect, trying other models; false when it ended instead. */
+  private async open(recap?: Array<{ role: 'user' | 'assistant'; text: string }>): Promise<boolean> {
+    const skip: string[] = [];
+    let search = this.wantSearch;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS && !this.ended; attempt += 1) {
+      let token: LiveTokenReply;
+      try {
+        token = await liveToken({
+          thinking: this.opts.thinking, skip, voice: this.opts.voice, search,
+          ...(this.opts.model && this.opts.model !== 'auto' ? { model: this.opts.model } : {}),
+          ...(recap?.length ? { recap } : {}),
+        });
+      } catch (e) {
+        this.finish('failed', (e as { code?: string }).code ?? 'voice_unavailable');
+        return false;
+      }
+      if (this.ended) return false;
+      this.model = token.model;
+      this.search = token.search === true;
+      if (await this.connect(token)) return true;
+      // A model may refuse the search tool: try it once without search first.
+      if (this.search) { search = false; continue; }
+      skip.push(token.model.id);
+      search = this.wantSearch;
+    }
+    if (!this.ended) this.finish('failed', 'voice_unavailable');
+    return false;
+  }
+
+  /**
+   * Switch web search during a session: the setup can't change, so this
+   * reconnects, keeping the mic and the transcript.
+   */
+  async setSearch(on: boolean): Promise<void> {
+    this.wantSearch = on;
+    if (this.ended || this.reconnecting || !this.ready || this.search === on) return;
+    this.reconnecting = true;
+    this.ready = false;
+    this.silence();
+    this.transcript.complete();
+    const old = this.ws;
+    this.ws = null;
+    try { old?.close(1000); } catch { /* closed */ }
+    this.setState('connecting');
+    const recap = this.transcript.turns().map((t) => ({ role: t.role, text: t.text.slice(-500) })).slice(-20);
+    const ok = await this.open(recap);
+    this.reconnecting = false;
+    if (ok && !this.ended) this.setState('listening');
   }
 
   /** Open the socket and send the setup; true once Gemini says it is ready. */
@@ -149,7 +198,7 @@ export class LiveSession {
     this.tap = new AudioWorkletNode(inCtx, 'vinax-mic-tap');
     const resampler = new Resampler(inCtx.sampleRate);
     this.tap.port.onmessage = (e: MessageEvent<Float32Array>) => {
-      if (this.ended || this.muted || this.ws?.readyState !== WebSocket.OPEN) return;
+      if (this.ended || this.muted || !this.ready || this.ws?.readyState !== WebSocket.OPEN) return;
       this.ws.send(audioMessage(floatTo16(resampler.push(e.data))));
     };
     this.micMeter = inCtx.createAnalyser();
@@ -229,13 +278,20 @@ export class LiveSession {
   private handle(ev: LiveEvent): void {
     switch (ev.type) {
       case 'audio': this.play(ev.data); break;
-      case 'heard': this.transcript.heard(ev.text); this.cb.onCaptions(this.transcript.now()); break;
-      case 'said': this.transcript.said(ev.text); this.cb.onCaptions(this.transcript.now()); break;
+      case 'heard': this.transcript.heard(ev.text); this.showCaptions(); break;
+      case 'said': this.transcript.said(ev.text); this.showCaptions(); break;
       case 'interrupted': this.silence(); break;
-      case 'turnComplete': this.transcript.complete(); break;
+      case 'turnComplete': this.transcript.complete(); this.cb.onWeb?.(this.transcript.web()); break;
+      case 'searching': this.transcript.searching(); this.cb.onWeb?.(this.transcript.web()); break;
+      case 'sources': this.transcript.found(ev); this.cb.onWeb?.(this.transcript.web()); break;
       case 'goAway': this.finish('time'); break;
       default: break;
     }
+  }
+
+  private showCaptions(): void {
+    this.cb.onCaptions(this.transcript.now());
+    this.cb.onWeb?.(this.transcript.web());
   }
 
   private play(b64: string): void {

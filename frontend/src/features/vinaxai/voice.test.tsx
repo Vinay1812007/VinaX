@@ -8,7 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MAX_SPEAK_CHARS, speechText } from './speechText';
 import { base64ToBytes, FrameReader, parseWav, pcm16 } from './speechStream';
-import { bytesToBase64, floatTo16, INPUT_MIME, parseServerMessage, Resampler, Transcript, audioMessage } from './live/liveProtocol';
+import { bytesToBase64, floatTo16, groundingSources, INPUT_MIME, parseServerMessage, Resampler, Transcript, audioMessage } from './live/liveProtocol';
+import { MemoryRouter } from 'react-router-dom';
+import { SettingsPanel } from './SettingsPanel';
+import { PREFS_KEY, usePrefs } from './prefs';
+import type { VoiceInfo } from './types';
 import { Composer } from './Composer';
 import type { Dictation } from './useVoiceDictation';
 
@@ -157,6 +161,83 @@ describe('Live voice protocol', () => {
       { role: 'assistant', text: 'A raga is a melody.' },
       { role: 'user', text: 'Thanks' },
     ]);
+  });
+
+  it('reads web search from the server messages: searching, then the sources and the suggestions', () => {
+    expect(parseServerMessage(JSON.stringify({ serverContent: { modelTurn: { parts: [{ executableCode: { language: 'PYTHON', code: "print(google_search.search(queries=['tour dates']))" } }] } } })))
+      .toEqual([{ type: 'searching' }]);
+    const g = {
+      webSearchQueries: ['tour dates 2026'],
+      groundingChunks: [{ web: { uri: 'https://redirect.example/1', title: 'news.example' } }, { web: { uri: 'https://redirect.example/1', title: 'news.example' } }, { web: { uri: 'javascript:alert(1)', title: 'bad' } }, { retrievedContext: {} }, { web: { uri: 'https://redirect.example/2', title: 'www.band.example' } }],
+      searchEntryPoint: { renderedContent: '<div>chips</div>' },
+    };
+    expect(parseServerMessage(JSON.stringify({ serverContent: { groundingMetadata: g, turnComplete: true } }))).toEqual([
+      { type: 'sources', items: [{ url: 'https://redirect.example/1', title: 'news.example' }, { url: 'https://redirect.example/2', title: 'www.band.example' }], queries: ['tour dates 2026'], entryPointHtml: '<div>chips</div>' },
+      { type: 'turnComplete' },
+    ]);
+    expect(groundingSources({ groundingChunks: [] })).toBeNull();
+    expect(groundingSources(null)).toBeNull();
+    expect(groundingSources({ groundingChunks: Array.from({ length: 15 }, (_, i) => ({ web: { uri: `https://r.example/${i}`, title: 's' } })) })!.items).toHaveLength(10);
+  });
+
+  it('keeps each reply’s sources: shown while it is said and after, saved with the reply, cleared by the next question', () => {
+    const t = new Transcript();
+    t.heard('Who won?');
+    t.searching();
+    expect(t.web()).toEqual({ sources: null, searching: true });
+    t.said('Checking. They won.');
+    t.found({ type: 'sources', items: [{ url: 'https://r.example/a', title: 'www.scores.example' }, { url: 'https://r.example/b', title: '' }], queries: ['who won'] });
+    t.found({ type: 'sources', items: [{ url: 'https://r.example/a', title: 'www.scores.example' }], queries: ['who won'], entryPointHtml: '<i>x</i>' });
+    const web = t.web();
+    expect(web.searching).toBe(false);
+    expect(web.sources).toEqual({
+      via: 'grounding', queries: ['who won'], entryPointHtml: '<i>x</i>',
+      items: [{ n: 1, url: 'https://r.example/a', title: 'www.scores.example', site: 'scores.example' }, { n: 2, url: 'https://r.example/b', title: 'r.example', site: 'r.example' }],
+    });
+    t.complete();
+    expect(t.web().sources?.items).toHaveLength(2);
+    t.heard('Thanks');
+    expect(t.web()).toEqual({ sources: null, searching: false });
+    expect(t.turns()).toEqual([
+      { role: 'user', text: 'Who won?' },
+      { role: 'assistant', text: 'Checking. They won.', sources: [{ url: 'https://r.example/a', title: 'www.scores.example' }, { url: 'https://r.example/b', title: 'r.example' }] },
+      { role: 'user', text: 'Thanks' },
+    ]);
+  });
+});
+
+describe('web search in Live voice: the setting', () => {
+  const VOICE: VoiceInfo = { dictation: true, readAloud: true, live: true, liveSearch: true, voices: ['troy'], liveVoices: ['Kore'] };
+  const panel = (voice: VoiceInfo) => render(<MemoryRouter><SettingsPanel models={[]} groups={[]} voice={voice} search onClose={() => undefined} /></MemoryRouter>);
+
+  it('is on by default, switches off, and is kept on this device', () => {
+    usePrefs.setState({ liveSearch: true });
+    panel(VOICE);
+    const sw = screen.getByRole('switch', { name: /Search the web in Live voice/ });
+    expect(sw.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(sw);
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+    expect(usePrefs.getState().liveSearch).toBe(false);
+    expect(JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}').liveSearch).toBe(false);
+    usePrefs.getState().set({ liveSearch: true });
+  });
+
+  it('is not offered when the owner has web search off or Live voice is unavailable', () => {
+    panel({ ...VOICE, liveSearch: false });
+    expect(screen.queryByRole('switch', { name: /Search the web in Live voice/ })).toBeNull();
+    cleanup();
+    panel({ ...VOICE, live: false });
+    expect(screen.queryByRole('switch', { name: /Search the web in Live voice/ })).toBeNull();
+  });
+
+  it('a saved preference is read back; anything but false means on', async () => {
+    vi.resetModules();
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ liveSearch: false }));
+    expect((await import('./prefs')).usePrefs.getState().liveSearch).toBe(false);
+    vi.resetModules();
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ liveSearch: 'nope' }));
+    expect((await import('./prefs')).usePrefs.getState().liveSearch).toBe(true);
+    localStorage.removeItem(PREFS_KEY);
   });
 });
 

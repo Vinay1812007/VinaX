@@ -6,21 +6,25 @@
  *   { thinking?: boolean,        // Extended thinking on: the thinking Live model first
  *     model?: "<live model id>", // picked in VinaX AI settings: tried before the rest
  *     skip?: ["<live model id>"],// models that just failed to connect (the page asks again)
+ *     search?: boolean,          // web search in Live voice (only when the owner allows search)
+ *     recap?: [{ role, text }],  // what was said before a reconnect (the latest 20 turns are kept)
  *     voice?: "<Gemini voice>", timezone?, locale? }
  *
- *   → 200 { token, url, setup, model: { id, name }, expiresAt }
+ *   → 200 { token, url, setup, model: { id, name }, search, expiresAt }
  *         `setup` is the first message the page sends on the socket; the
- *         token is locked to it where Google allows that.
+ *         token is locked to it where Google allows that. `search` says
+ *         whether the setup carries the search tool.
  *   → 401 signed_out · 429 rate_limited | voice_busy
  *   → 503 ai_not_configured | ai_disabled | unavailable | voice_unavailable
  */
 import { CORS, accountOf, json } from '../../_lib/authShared';
 import { readJsonCapped } from '../../_lib/body';
 import { voiceFailure, voiceGate } from '../../_lib/ai/voiceGate';
+import { aiSettings } from '../../_lib/ai/config';
 import {
   ALL_LIVE_MODELS, DEFAULT_LIVE_VOICE, LIVE_MODELS, LIVE_THINKING_MODEL, LIVE_VOICES, LIVE_WS_URL, liveSetup, mintLiveToken, noteVoiceFailure, voiceResting,
 } from '../../_lib/ai/voice';
-import { firstNameOf, safeLocale, safeTimezone, voicePrompt } from '../../_lib/ai/prompt';
+import { firstNameOf, safeLocale, safeTimezone, voicePrompt, voiceRecapBlock } from '../../_lib/ai/prompt';
 import { asProviderError } from '../../_lib/ai/errors';
 import type { AiEnv } from '../../_lib/ai/types';
 
@@ -41,30 +45,34 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
   const { request, env } = ctx;
   const gate = await voiceGate(request, env, 'ai-live-token', 'live');
   if (!gate.ok) return gate.res;
-  const read = await readJsonCapped<Record<string, unknown> | null>(request, 8 * 1024);
+  const read = await readJsonCapped<Record<string, unknown> | null>(request, 32 * 1024);
   if (!read.ok) return json({ error: 'bad_request' }, 400);
   const body = read.value && typeof read.value === 'object' ? read.value : {};
   const skip = Array.isArray(body.skip) ? body.skip.filter((s): s is string => typeof s === 'string').slice(0, 10) : [];
   const voice = (LIVE_VOICES as readonly string[]).includes(body.voice as string) ? (body.voice as string) : DEFAULT_LIVE_VOICE;
   const candidates = liveCandidates(body.thinking === true, skip, Date.now(), body.model);
   if (!candidates.length) return voiceFailure([]);
+  // The owner's search switch covers Live voice too.
+  const search = body.search === true && (await aiSettings(env)).search;
+  const recap = voiceRecapBlock(body.recap);
 
   const account = await accountOf(env, gate.sub);
   const kinds: string[] = [];
   for (const model of candidates) {
-    const prompt = voicePrompt({
+    const spoken = voicePrompt({
       now: new Date(),
       timezone: safeTimezone(body.timezone),
       locale: safeLocale(body.locale),
       firstName: firstNameOf(account.ok ? account.value?.name : null),
       modelName: model.name,
       providerName: 'Google',
-    });
-    const setup = liveSetup(model.id, voice, prompt);
+    }, search);
+    const prompt = recap ? `${spoken}\n\n${recap}` : spoken;
+    const setup = liveSetup(model.id, voice, prompt, search);
     try {
       const t = await mintLiveToken(env, setup);
-      console.log(JSON.stringify({ route: 'ai-live-token', provider: 'gemini', model: model.id, shape: t.shape, ok: true }));
-      return json({ token: t.token, url: LIVE_WS_URL, setup, model, expiresAt: t.expiresAt });
+      console.log(JSON.stringify({ route: 'ai-live-token', provider: 'gemini', model: model.id, shape: t.shape, search, ok: true }));
+      return json({ token: t.token, url: LIVE_WS_URL, setup, model, search, expiresAt: t.expiresAt });
     } catch (e) {
       const err = asProviderError(e);
       kinds.push(err.kind);

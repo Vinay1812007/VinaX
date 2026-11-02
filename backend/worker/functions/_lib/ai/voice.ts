@@ -393,9 +393,11 @@ export interface LiveSetup {
   inputAudioTranscription: Record<string, never>;
   outputAudioTranscription: Record<string, never>;
   contextWindowCompression: { slidingWindow: Record<string, never> };
+  /** Web search: the model's own search tool (Live API `tools`, checked 2026-11-02). */
+  tools?: Array<{ googleSearch: Record<string, never> }>;
 }
 
-export function liveSetup(model: string, voice: string, prompt: string): LiveSetup {
+export function liveSetup(model: string, voice: string, prompt: string, search = false): LiveSetup {
   return {
     model: `models/${model}`,
     generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } },
@@ -403,6 +405,7 @@ export function liveSetup(model: string, voice: string, prompt: string): LiveSet
     inputAudioTranscription: {},
     outputAudioTranscription: {},
     contextWindowCompression: { slidingWindow: {} },
+    ...(search ? { tools: [{ googleSearch: {} }] } : {}),
   };
 }
 
@@ -426,6 +429,8 @@ export function tokenBodies(setup: LiveSetup, now = Date.now()): Array<{ shape: 
     inputAudioTranscription: {},
     outputAudioTranscription: {},
     contextWindowCompression: setup.contextWindowCompression,
+    // The token is locked to the search tool too, so the page can't add it.
+    ...(setup.tools ? { tools: setup.tools } : {}),
   };
   return [
     { shape: 'constraints', body: { ...times, liveConnectConstraints: { model: setup.model, config } } },

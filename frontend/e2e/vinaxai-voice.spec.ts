@@ -75,8 +75,10 @@ async function setup(page: Page, opts: { voice?: typeof VOICE | null; csp?: bool
     }
     if (url.pathname === '/api/ai/live-token') {
       server.tokens += 1;
-      server.tokenBodies.push(r.postDataJSON() as Record<string, unknown>);
-      return route.fulfill({ json: { token: 'auth_tokens/test', url: LIVE_URL, setup: { model: 'models/gemini-3.8-live', generationConfig: { responseModalities: ['AUDIO'] } }, model: { id: 'gemini-3.8-live', name: 'Gemini 3.8 Live' }, expiresAt: '2099-01-01T00:00:00Z' } });
+      const asked = r.postDataJSON() as Record<string, unknown>;
+      server.tokenBodies.push(asked);
+      const search = asked.search === true;
+      return route.fulfill({ json: { token: 'auth_tokens/test', url: LIVE_URL, setup: { model: 'models/gemini-3.8-live', generationConfig: { responseModalities: ['AUDIO'] }, ...(search ? { tools: [{ googleSearch: {} }] } : {}) }, model: { id: 'gemini-3.8-live', name: 'Gemini 3.8 Live' }, search, expiresAt: '2099-01-01T00:00:00Z' } });
     }
     if (url.pathname === '/api/ai/live-transcript') {
       server.saved.push(r.postDataJSON() as Record<string, unknown>);
@@ -223,6 +225,85 @@ test('Live voice: talks over Gemini Live’s protocol, shows captions, and saves
   expect(blocked.filter((b) => /micTap|generativelanguage|script-src|connect-src/i.test(b))).toEqual([]);
 });
 
+test('Live voice web search: the setting goes with the token, sources show and are saved, and the switch reconnects', async ({ page }) => {
+  const server = await setup(page, { voice: { ...VOICE, liveSearch: true } as typeof VOICE });
+  const setups: Array<Record<string, unknown>> = [];
+  await page.routeWebSocket(/generativelanguage\.googleapis\.com/, (ws) => {
+    let answered = false;
+    ws.onMessage((raw) => {
+      const msg = JSON.parse(String(raw)) as Record<string, unknown>;
+      if (msg.setup) { setups.push(msg.setup as Record<string, unknown>); ws.send(JSON.stringify({ setupComplete: {} })); return; }
+      if (setups.length === 1 && !answered && (msg.realtimeInput as { audio?: unknown } | undefined)?.audio) {
+        answered = true;
+        ws.send(JSON.stringify({ serverContent: { inputTranscription: { text: 'Who is touring this year?' } } }));
+        ws.send(JSON.stringify({ serverContent: { modelTurn: { parts: [{ executableCode: { language: 'PYTHON', code: "print(google_search.search(queries=['tours this year']))" } }] }, outputTranscription: { text: 'Let me check. ' } } }));
+        ws.send(JSON.stringify({ serverContent: { outputTranscription: { text: 'The band’s site lists twelve dates.' }, groundingMetadata: { webSearchQueries: ['tours this year'], groundingChunks: [{ web: { uri: 'https://redirect.example/one', title: 'band.example' } }, { web: { uri: 'https://redirect.example/two', title: 'news.example' } }] } } }));
+        ws.send(JSON.stringify({ serverContent: { turnComplete: true } }));
+      }
+    });
+  });
+  await page.goto('/vinaxai');
+  // On by default in Settings; switched off there, the token is asked without it.
+  await page.getByRole('button', { name: 'VinaX AI settings' }).click();
+  const settings = page.getByRole('dialog', { name: 'VinaX AI settings' });
+  const sw = settings.getByRole('switch', { name: /Search the web in Live voice/ });
+  await expect(sw).toHaveAttribute('aria-checked', 'true');
+  await sw.click();
+  await expect(sw).toHaveAttribute('aria-checked', 'false');
+  await sw.click();
+  await settings.getByRole('button', { name: 'Close settings' }).click();
+
+  await page.getByRole('button', { name: 'Start Live voice' }).click();
+  const live = page.getByRole('dialog', { name: 'Live voice' });
+  await expect(live.getByText('The band’s site lists twelve dates.', { exact: false })).toBeVisible({ timeout: 10_000 });
+  expect(server.tokenBodies[0]).toMatchObject({ search: true });
+  expect(setups[0].tools).toEqual([{ googleSearch: {} }]);
+  const sources = live.getByRole('region', { name: 'Sources' });
+  await expect(sources.getByRole('link')).toHaveCount(2);
+  await expect(sources.getByRole('link').first()).toHaveAttribute('href', 'https://redirect.example/one');
+  await expect(live.getByText(/may search the web with Google/)).toBeVisible();
+  const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
+  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).slice(0, 3).join(', ')}`)).toEqual([]);
+
+  // The globe switches search off: Live reconnects without it and with what was said.
+  const globe = live.getByRole('button', { name: 'Web search' });
+  await expect(globe).toHaveAttribute('aria-pressed', 'true');
+  await globe.click();
+  await expect(globe).toHaveAttribute('aria-pressed', 'false');
+  await expect.poll(() => setups.length).toBe(2);
+  await expect(live.getByRole('status')).toHaveText('Listening', { timeout: 10_000 });
+  expect(setups[1].tools).toBeUndefined();
+  expect(server.tokenBodies[1]).toMatchObject({ search: false, recap: [{ role: 'user', text: 'Who is touring this year?' }, { role: 'assistant', text: 'Let me check. The band’s site lists twelve dates.' }] });
+  await expect(live.getByText(/may search the web/)).toHaveCount(0);
+
+  await live.getByRole('button', { name: 'End' }).click();
+  await expect(live).toHaveCount(0);
+  expect(server.saved[0]).toEqual({ conversationId: null, model: 'gemini-3.8-live', turns: [
+    { role: 'user', text: 'Who is touring this year?' },
+    { role: 'assistant', text: 'Let me check. The band’s site lists twelve dates.', sources: [{ url: 'https://redirect.example/one', title: 'band.example' }, { url: 'https://redirect.example/two', title: 'news.example' }] },
+  ] });
+  // The choice is remembered for next time.
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('vinax.vxai.prefs.v1') ?? '{}').liveSearch)).toBe(false);
+});
+
+test('Live voice without the owner’s search switch offers no web search', async ({ page }) => {
+  const server = await setup(page, { voice: { ...VOICE, liveSearch: false } as typeof VOICE });
+  await page.routeWebSocket(/generativelanguage\.googleapis\.com/, (ws) => {
+    ws.onMessage((raw) => { if (JSON.parse(String(raw)).setup) ws.send(JSON.stringify({ setupComplete: {} })); });
+  });
+  await page.goto('/vinaxai');
+  await page.getByRole('button', { name: 'VinaX AI settings' }).click();
+  const settings = page.getByRole('dialog', { name: 'VinaX AI settings' });
+  await expect(settings.getByLabel('Live voice model')).toBeVisible();
+  await expect(settings.getByRole('switch', { name: /Search the web in Live voice/ })).toHaveCount(0);
+  await settings.getByRole('button', { name: 'Close settings' }).click();
+  await page.getByRole('button', { name: 'Start Live voice' }).click();
+  const live = page.getByRole('dialog', { name: 'Live voice' });
+  await expect(live.getByRole('status')).toHaveText('Listening', { timeout: 10_000 });
+  await expect(live.getByRole('button', { name: 'Web search' })).toHaveCount(0);
+  expect(server.tokenBodies[0]).toMatchObject({ search: false });
+});
+
 test('Live voice in an open chat continues it after its last reply, and the chat shows the new turns', async ({ page }) => {
   const server = await setup(page);
   const A = 'c1111111-1111-4111-8111-111111111111';
@@ -294,7 +375,7 @@ test('without voice keys there is no mic and no Live button', async ({ page }) =
 
 for (const theme of ['dark', 'light'] as const) {
   test(`the voice controls and the Live view have no WCAG A/AA violations (${theme})`, async ({ page }) => {
-    await setup(page);
+    await setup(page, { voice: { ...VOICE, liveSearch: true } as typeof VOICE }); // with the web search button
     await page.addInitScript((t) => {
       localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: t, pinnedLanguages: ['telugu'] }, version: 5 }));
     }, theme);

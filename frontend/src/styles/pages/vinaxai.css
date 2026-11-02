@@ -793,6 +793,9 @@
 .vx-ai-live-captions p { margin: 0; font-size: 1.0625rem; line-height: 1.5; }
 .vx-ai-live-you { color: rgb(var(--ink-400)); }
 .vx-ai-live-ai { color: rgb(var(--ink-100)); }
+.vx-ai-live-sources { width: 100%; max-width: 560px; text-align: left; }
+.vx-ai-live-sources .vx-ai-sources { margin-top: 0; }
+.vx-ai-live-sources .vx-ai-sources ol { max-height: 84px; overflow-y: auto; }
 .vx-ai-live-controls { display: flex; justify-content: center; align-items: center; gap: 16px; padding: 12px 0; }
 .vx-ai-live-btn {
   display: inline-grid; place-items: center; min-width: 64px; height: 64px; padding: 0 22px;

@@ -3,10 +3,12 @@
  *
  *   → 200 { enabled, configured, search, groups: [...], models: [{ id, name, provider, group,
  *            description, flags: { vision, web, thinking, code }, available, reason? }],
- *            voice: { dictation, readAloud, live, voices: [...], liveVoices: [...], liveModels: [{ id, name }] } }
+ *            voice: { dictation, readAloud, live, liveSearch, voices: [...], liveVoices: [...], liveModels: [{ id, name }] } }
  *
  * `voice` says which voice features have a provider key (phase 6) and
- * which voices the page may offer for Read aloud and Live.
+ * which voices the page may offer for Read aloud and Live. `liveSearch`:
+ * Live voice may search the web (the owner's search switch; Live searches
+ * with its own model, so it needs no search API key).
  *
  * Public (a session, when sent, only decides `enabled` for testers). It
  * never names upstream hosts or keys. `available` is false when the
@@ -54,6 +56,7 @@ export const onRequestGet = async (ctx: { request: Request; env: AiEnv }): Promi
   // Web search is offered when the owner allows it and something can search: the search API or free grounding.
   const registry = registryFor(settings);
   const canSearch = searchConfigured(env) || ladderModels(registry, 'grounded').some((spec) => providerConfigured(env, spec.provider));
-  const voice = { ...voiceAvailability(env), voices: READ_VOICES, liveVoices: LIVE_VOICES, liveModels: ALL_LIVE_MODELS };
+  const avail = voiceAvailability(env);
+  const voice = { ...avail, liveSearch: avail.live && settings.search, voices: READ_VOICES, liveVoices: LIVE_VOICES, liveModels: ALL_LIVE_MODELS };
   return json({ enabled: aiOpenFor(settings, sub), configured: anyProviderConfigured(env), search: settings.search && canSearch, groups: PICKER_GROUPS, models, voice });
 };

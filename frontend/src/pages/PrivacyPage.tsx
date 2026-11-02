@@ -9,7 +9,7 @@ export default function PrivacyPage() {
   usePageTitle('Privacy');
   return (
     <div className="vx-sec">
-      <PageHeader title="Privacy" subtitle="Last updated October 2026" />
+      <PageHeader title="Privacy" subtitle="Last updated November 2026" />
       <div className="vx-doc">
         <H>Your account and what syncs</H>
         <p>
@@ -134,7 +134,8 @@ export default function PrivacyPage() {
           Google Gemini) to turn it into text, which lands in the message box for you to check; Read aloud sends a
           reply&rsquo;s words to Groq or Google Gemini to speak them. Neither recording nor speech is stored. Live voice
           sends your microphone straight to Google Gemini while it is open, and what you both say is saved in that chat
-          like typed messages.
+          like typed messages. With web search on in Live voice, Google Gemini may use what you ask as Google searches to
+          answer; you can switch it off in VinaX AI&rsquo;s Settings or with the globe button in Live voice.
         </p>
         <H>Listen Together</H>
         <p>

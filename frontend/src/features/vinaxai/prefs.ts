@@ -2,8 +2,9 @@
  * VinaX AI — this device's chat preferences: the model picked in the
  * composer ('auto' or a registry id), Extended thinking, whether the
  * desktop sidebar is collapsed, the voices for Read aloud and Live, the
- * Live model, the microphone, and the Personalisation and Features choices
- * in VinaX AI's settings (sent with each message, never stored on the server).
+ * Live model, web search in Live voice, the microphone, and the Personalisation
+ * and Features choices in VinaX AI's settings (sent with each message, never
+ * stored on the server).
  * Kept in localStorage under a key the boot migration does not sweep (it
  * clears the old `vinax.ai…` keys).
  */
@@ -34,6 +35,8 @@ export interface ChatPrefs {
   personalAbout: string;
   personalInstructions: string;
   style: ReplyStyle;
+  /** Live voice may search the web (when the owner allows it). */
+  liveSearch: boolean;
 }
 
 export type ReplyStyle = 'normal' | 'concise' | 'explanatory' | 'formal' | 'learning';
@@ -42,7 +45,7 @@ export const PERSONAL_MAX = Object.freeze({ name: 40, about: 1_500, instructions
 
 const DEFAULTS: ChatPrefs = {
   model: 'auto', webSearch: 'auto', extendedThinking: false, sidebarCollapsed: false, voice: 'troy', liveVoice: 'Kore', liveModel: 'auto', micId: '',
-  artifacts: true, inlinePreviews: true, personalName: '', personalAbout: '', personalInstructions: '', style: 'normal',
+  artifacts: true, inlinePreviews: true, personalName: '', personalAbout: '', personalInstructions: '', style: 'normal', liveSearch: true,
 };
 const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.slice(0, max) : '');
 const VOICE_ID = /^[A-Za-z]{2,20}$/;
@@ -67,6 +70,7 @@ function load(): ChatPrefs {
       personalAbout: text(raw.personalAbout, PERSONAL_MAX.about),
       personalInstructions: text(raw.personalInstructions, PERSONAL_MAX.instructions),
       style: REPLY_STYLES.includes(raw.style as ReplyStyle) ? (raw.style as ReplyStyle) : 'normal',
+      liveSearch: raw.liveSearch !== false,
     };
   } catch {
     return DEFAULTS;
