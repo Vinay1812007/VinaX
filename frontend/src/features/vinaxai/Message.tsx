@@ -176,6 +176,8 @@ interface ReplyProps {
   /** Which version of each artifact this reply holds (1 = first), and how to open one. */
   versionOf?(id: string, messageId: string): number;
   onOpenArtifact?(artifact: Artifact, messageId: string): void;
+  /** A failed live preview's "Fix it". */
+  onFixArtifact?(artifact: Artifact, error: string): void;
   onRetry?(choice?: ModelChoice): void;
   onContinue?(): void;
   /** Read aloud is offered. */
@@ -200,7 +202,7 @@ function ReadAloudButton({ id, text }: { id: string; text: string }): ReactNode 
   );
 }
 
-export function AssistantMessage({ message, live, models, onRetry, onContinue, versionOf, onOpenArtifact, canReadAloud }: ReplyProps): ReactNode {
+export function AssistantMessage({ message, live, models, onRetry, onContinue, versionOf, onOpenArtifact, onFixArtifact, canReadAloud }: ReplyProps): ReactNode {
   const { text, error, stopReason, model } = message;
   const waiting = live && !text && !message.thinking && !error && !message.status;
   const cutOff = !live && !!text && (stopReason === 'length' || stopReason === 'error');
@@ -217,7 +219,7 @@ export function AssistantMessage({ message, live, models, onRetry, onContinue, v
           : (
             <div key={i} className="vx-ai-artifact-slot">
               <ArtifactCard artifact={seg.artifact} live={live} version={versionOf?.(seg.artifact.id, message.id) ?? 1} onOpen={() => onOpenArtifact?.(seg.artifact, message.id)} />
-              {previews && !live && !seg.artifact.incomplete && runsInSandbox(seg.artifact.type) && <InlinePreview artifact={seg.artifact} />}
+              {previews && !live && !seg.artifact.incomplete && runsInSandbox(seg.artifact.type) && <InlinePreview artifact={seg.artifact} onFix={onFixArtifact ? (error) => onFixArtifact(seg.artifact, error) : undefined} />}
             </div>
           )))
         : <Markdown text={text} sources={message.sources?.items} />)}

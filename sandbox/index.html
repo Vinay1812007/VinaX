@@ -75,7 +75,8 @@
     clear();
     var box = document.createElement('div');
     box.className = 'error';
-    box.textContent = String(err && err.message || err).slice(0, 2000);
+    // The page around the frame shows the details; here, just the first line.
+    box.textContent = String(err && err.message || err).split('\n')[0].slice(0, 300);
     root.appendChild(box);
     post({ type: 'error', message: String(err && err.message || err).slice(0, 500) });
   }
@@ -104,10 +105,97 @@
     root.appendChild(wrap);
   }
 
+  /* quoteLabels:start */
+  /**
+   * Models often write flowchart labels with brackets, slashes or other
+   * punctuation in them, such as A[User input (text/voice)], which the diagram
+   * language refuses unless the label is in quotes. This puts such labels (and
+   * edge labels like -->|a (b)|) in quotes; everything else is left as it is.
+   * It is only used when the diagram as written does not parse.
+   */
+  function quoteLabels(src) {
+    var lines = String(src).split('\n');
+    var head = lines.find(function (l) { return l.trim() && !/^\s*%%/.test(l); }) || '';
+    if (!/^\s*(flowchart|graph)\b/i.test(head)) return src;
+    var OPEN = [['(((', ')))'], ['((', '))'], ['([', '])'], ['[[', ']]'], ['[(', ')]'], ['{{', '}}'], ['[/', '/]'], ['[\\', '\\]'], ['[', ']'], ['(', ')'], ['{', '}']];
+    var AFTER = /^\s*(?:$|[-=.~<]{2,}|-\.|&|:::|;|%%)/;
+    var SAFE = /^[\w\s.,!?'&+*@%-]*$/;
+    var esc = function (t) { return t.replace(/"/g, '#quot;'); };
+    var quote = function (label) {
+      var t = label.trim();
+      if (!t || (t.charAt(0) === '"' && t.charAt(t.length - 1) === '"') || SAFE.test(t)) return label;
+      return '"' + esc(t) + '"';
+    };
+    return lines.map(function (line) {
+      if (/^\s*(%%|style\b|classDef\b|class\b|click\b|linkStyle\b|subgraph\b|end\b|direction\b|flowchart\b|graph\b)/i.test(line)) return line;
+      var out = '';
+      var i = 0;
+      while (i < line.length) {
+        var id = /^[A-Za-z0-9_][\w-]*/.exec(line.slice(i));
+        var prev = i > 0 ? line.charAt(i - 1) : ' ';
+        if (id && !/[\w-]/.test(prev)) {
+          var j = i + id[0].length;
+          var shape = OPEN.find(function (o) { return line.substr(j, o[0].length) === o[0]; });
+          if (shape) {
+            var from = j + shape[0].length;
+            var close = -1;
+            var k = line.indexOf(shape[1], from);
+            while (k !== -1) {
+              close = k;
+              if (AFTER.test(line.slice(k + shape[1].length))) break;
+              k = line.indexOf(shape[1], k + 1);
+            }
+            if (close !== -1) {
+              out += id[0] + shape[0] + quote(line.slice(from, close)) + shape[1];
+              i = close + shape[1].length;
+              continue;
+            }
+          }
+          out += id[0];
+          i = j;
+          continue;
+        }
+        if (line.charAt(i) === '|') {
+          var end = line.indexOf('|', i + 1);
+          if (end !== -1) {
+            out += '|' + quote(line.slice(i + 1, end)) + '|';
+            i = end + 1;
+            continue;
+          }
+        }
+        out += line.charAt(i);
+        i += 1;
+      }
+      return out;
+    }).join('\n');
+  }
+  /* quoteLabels:end */
+
   async function renderMermaid(content, theme) {
     await load(LIBS.mermaid);
-    window.mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: theme === 'dark' ? 'dark' : 'default' });
-    var out = await window.mermaid.render('vx-diagram-' + Date.now(), content);
+    // No error picture in the page: a failure comes back as a message instead.
+    window.mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', suppressErrorRendering: true, theme: theme === 'dark' ? 'dark' : 'default' });
+    var code = content;
+    try {
+      await window.mermaid.parse(code);
+    } catch (first) {
+      var fixed = quoteLabels(code);
+      var ok = false;
+      if (fixed !== code) {
+        try { await window.mermaid.parse(fixed); ok = true; } catch (e) { ok = false; }
+      }
+      if (!ok) throw new Error('This diagram has a mistake, so it can’t be drawn.\n\n' + String(first && first.message || first));
+      code = fixed;
+    }
+    var id = 'vx-diagram-' + Date.now();
+    var out;
+    try {
+      out = await window.mermaid.render(id, code);
+    } finally {
+      // The library leaves a scratch element behind when a render fails.
+      var junk = document.getElementById('d' + id);
+      if (junk) junk.remove();
+    }
     var wrap = document.createElement('div');
     wrap.className = 'center';
     wrap.innerHTML = out.svg;

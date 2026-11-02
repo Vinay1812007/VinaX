@@ -15,7 +15,8 @@ export const READY_MS = 8_000;
 
 const theme = (): 'dark' | 'light' => (document.documentElement.classList.contains('light') ? 'light' : 'dark');
 
-export function RunnerFrame({ kind, content, title }: { kind: ArtifactType; content: string; title: string }): ReactNode {
+/** `onFix`: offered with a failed preview, it asks VinaX AI for a corrected version. */
+export function RunnerFrame({ kind, content, title, onFix }: { kind: ArtifactType; content: string; title: string; onFix?(error: string): void }): ReactNode {
   const frame = useRef<HTMLIFrameElement>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'missing'>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +43,7 @@ export function RunnerFrame({ kind, content, title }: { kind: ArtifactType; cont
   }, [state, kind, content]);
 
   return (
-    <div className="vx-ai-runner">
+    <div className={`vx-ai-runner${error ? ' has-error' : ''}`}>
       {state === 'missing' ? (
         <div className="vx-ai-runner-missing" role="status">
           <p>Preview needs the sandbox host.</p>
@@ -59,7 +60,20 @@ export function RunnerFrame({ kind, content, title }: { kind: ArtifactType; cont
           allow=""
         />
       )}
-      {error && <p className="vx-ai-runner-error" role="alert">{error}</p>}
+      {error && (
+        <div className="vx-ai-runner-error" role="alert">
+          <div className="vx-ai-runner-error-row">
+            <p>{error.split('\n')[0]}</p>
+            {onFix && <button type="button" className="vx-ai-chip is-primary" onClick={() => onFix(error)}>Fix it</button>}
+          </div>
+          {error.includes('\n') && (
+            <details>
+              <summary>Details</summary>
+              <pre>{error.slice(error.indexOf('\n') + 1).trim()}</pre>
+            </details>
+          )}
+        </div>
+      )}
     </div>
   );
 }

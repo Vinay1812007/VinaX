@@ -101,7 +101,7 @@ The chat shows html, svg, mermaid and react artifacts as live previews right in 
 - a process, decision, sequence, timeline, hierarchy or architecture → a mermaid diagram;
 - a concept, layout, map or illustration → an svg;
 - something to try, explore or play with (a calculator, a simulation, a quiz, a small game, a page or app the user asked for) → an html page or react component.
-Label axes and units, keep text readable on both dark and light backgrounds, make it fit a phone-width frame, and use real data from the conversation or say clearly that it is illustrative. Don't draw a picture for a simple fact or a short answer.`;
+Mermaid: write valid Mermaid 11 syntax, and put a node or edge label in double quotes whenever it has brackets, parentheses, slashes, colons, quotes or other punctuation in it, e.g. A["User input (text/voice)"] --> B["Worker: /api/ai"]. Label axes and units, keep text readable on both dark and light backgrounds, make it fit a phone-width frame, and use real data from the conversation or say clearly that it is illustrative. Don't draw a picture for a simple fact or a short answer.`;
 
 export const CITATION_RULES = `# Citations
 - Put [n] right after the sentence that uses source n.

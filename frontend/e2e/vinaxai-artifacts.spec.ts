@@ -161,3 +161,23 @@ for (const theme of ['dark', 'light'] as const) {
     expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).slice(0, 3).join(', ')}`)).toEqual([]);
   });
 }
+
+test('a preview that fails offers Fix it, which asks VinaX AI for a corrected version with the error', async ({ page }) => {
+  const posted: Array<Record<string, unknown>> = [];
+  page.on('request', (r) => { if (r.url().endsWith('/api/ai/chat')) posted.push(r.postDataJSON() as Record<string, unknown>); });
+  await setup(page, [
+    'A flow: <artifact id="flow" type="mermaid" title="Request flow">flowchart TD\n  A[User (voice)] --> B[Reply]</artifact>',
+    'Fixed: <artifact id="flow" type="mermaid" title="Request flow">flowchart TD\n  A["User (voice)"] --> B[Reply]</artifact>',
+  ]);
+  await page.goto('/vinaxai');
+  await ask(page, 'Draw the flow');
+  // The diagram library cannot load here (the test blocks every CDN), so the preview fails.
+  const inline = page.locator('.vx-ai-inline-preview');
+  await expect(inline.getByRole('alert')).toContainText('Could not load mermaid', { timeout: 15_000 });
+  await inline.getByRole('button', { name: 'Fix it' }).click();
+  await expect.poll(() => posted.length).toBe(2);
+  const text = (posted[1].content as Array<{ text: string }>)[0].text;
+  expect(text).toMatch(/^The diagram "Request flow" didn't work\. The preview said:/);
+  expect(text).toContain('Could not load mermaid');
+  expect(text).toMatch(/send the complete corrected artifact\.$/);
+});
