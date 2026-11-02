@@ -141,7 +141,7 @@ The AI order for Up Next and the AI-built Home use the VinaX AI keys above; noth
 
 Song generation stays off until both of these are true:
 
-1. The Worker has a generator: `npx wrangler secret put MUSIC_GEN_API_KEY --config worker/wrangler.toml`, and `MUSIC_GEN_API_URL` (an `https://` job endpoint) as a secret or a `[vars]` entry; `MUSIC_GEN_MODEL` is optional. The Worker speaks one small job contract (`backend/.env.example` and `backend/worker/functions/_lib/ai/songGen.ts` describe it); put a thin proxy in front of a generator whose API differs.
+1. The Worker has the VinaX AI Gemini key (`GEMINI_API_KEY`, [VinaX AI](#vinax-ai)). Songs are made by its music models (`lyria-3.5` for 1–3 minutes, falling back to the 30-second `lyria-3-clip-preview`); nothing else is set. The full-song model is billed per song and has no free tier, so on a free key every song comes out as a 30-second clip.
 2. The owner switches **Song generation** on in the console's Music AI form (`ai-music.generate.enabled`), with the songs-per-device-per-day limit (5 by default).
 
 Finished songs are kept 24 hours in Worker key-value storage: the `GENERATED_AUDIO` binding if one is declared in `wrangler.toml`, otherwise the existing `HANDOFF` namespace under a `gen:` prefix (no new binding is needed to deploy). Each song costs a handful of key-value writes (the job, the audio, two quota counters), which counts against the plan's daily write allowance. Check it after enabling: `GET /api/ai/generate-song` with a session answers `{ available: true, … }`.

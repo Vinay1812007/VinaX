@@ -1,7 +1,7 @@
 /**
  * VinaX music AI — song generation: a NEW, ORIGINAL song in the feel of the
- * one playing (see _lib/ai/songGen.ts for the generator contract and the
- * originality rules).
+ * one playing, made by the music models on the VinaX AI key (see
+ * _lib/ai/songGen.ts for the models and the originality rules).
  *
  *   GET  /api/ai/generate-song            → { available, reason?, limit, remaining, ttlHours }
  *   POST /api/ai/generate-song            { mood, energy, tempo, genre, language, durationSec (30–180),
@@ -11,7 +11,7 @@
  *     → 429 rate_limited | quota_exceeded · 502 gen_failed · 503 gen_not_configured | ai_disabled
  *
  * Built from the playing song's METADATA only: no audio, title, artist or
- * lyrics is ever sent here, and none reaches the generator. A device makes at
+ * lyrics is ever sent here, and none reaches the music model. A device makes at
  * most the owner's daily quota (5 by default; header `x-vinax-device`), an
  * account at most three devices' worth, and the owner's `ai-music.generate`
  * switch must be on. Kid mode forces an instrumental and safe words.
@@ -83,15 +83,15 @@ export const onRequestPost = async ({ request, env }: Ctx): Promise<Response> =>
     status: started.status === 'done' ? 'running' : started.status,
     ...(started.providerId ? { providerId: started.providerId } : {}),
     createdAt: Date.now(),
-    durationSec: input.durationSec,
+    durationSec: started.durationSec ?? input.durationSec,
     instrumental: input.instrumental,
     language: input.language,
     mood: input.mood,
     ...(started.title ? { title: started.title.slice(0, 60) } : {}),
   };
   if (started.status === 'done') {
-    // A generator that answers with the song at once: keep it now.
-    const audio = await fetchFinishedAudio(started);
+    // The song came back in the one call: keep it now.
+    const audio = await fetchFinishedAudio(env, started);
     if (!audio) return json({ error: 'gen_failed' }, 502);
     await storageOf(env)!.put(audioKey(jobId), audio.bytes, { expirationTtl: GENERATED_TTL_SEC, metadata: { mime: audio.mime } });
     job.status = 'done';

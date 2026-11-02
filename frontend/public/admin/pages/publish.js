@@ -154,7 +154,7 @@
       var quota = ui.input({ type: 'number', min: '1', max: '50', step: '1', value: String(typeof g.dailyQuota === 'number' ? g.dailyQuota : 5), 'aria-label': 'Songs per device per day', style: { width: '6em' } });
       return {
         el: h('div.form', { style: { 'max-width': 'none' } },
-          ui.notice('Music AI on is the kill switch: off stops every music AI feature and the app plays its own picks. Song generation stays off until switched on here, and also needs the generator variables on the Worker. Changes reach every server within a minute.', 'info'),
+          ui.notice('Music AI on is the kill switch: off stops every music AI feature and the app plays its own picks. Song generation stays off until switched on here, and also needs the Worker’s Gemini key (GEMINI_API_KEY), the same one VinaX AI uses. Changes reach every server within a minute.', 'info'),
           all, rerank, home, gen,
           ui.field('Songs per device per day', quota, 'Each device may make at most this many songs a day (1–50).')),
         read: function () {

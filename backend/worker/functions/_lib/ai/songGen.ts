@@ -2,27 +2,19 @@
  * VinaX music AI — new, ORIGINAL songs, inspired by the feel of the song that
  * is playing: its mood, energy, tempo, genre and language, and nothing else.
  * The source audio, its title, its artist and its lyrics never reach the
- * generator (the device does not even send them here).
+ * music model (the device does not even send them here).
  *
- * The generator is whatever service the owner configures, through three
- * Worker variables only (backend/.env.example):
+ * The songs are made by the music models on the VinaX AI key the Worker
+ * already has (`GEMINI_API_KEY`); there is nothing else to set. Without that
+ * key every generation route answers `503 gen_not_configured` and the app
+ * hides "Generate a song like this".
  *
- *   MUSIC_GEN_API_URL    the generator's job endpoint
- *   MUSIC_GEN_API_KEY    its key (a secret; sent as `Authorization: Bearer`)
- *   MUSIC_GEN_MODEL      optional model name passed through
- *
- * With either of the first two missing, every generation route answers
- * `503 gen_not_configured` and the app hides "Generate a song like this".
- *
- * The contract VinaX speaks (adapt a provider to it with a thin proxy if its
- * own API differs):
- *
- *   POST {URL}        { prompt, lyrics, instrumental, duration, model? }
- *     → { id }                                  a job to poll, or
- *     → { audio_url } | { audio_base64, mime }  the finished song at once
- *   GET  {URL}/{id}
- *     → { status: queued | running | succeeded | failed, progress?: 0..1,
- *         audio_url? | audio_base64?, mime?, title? }
+ * A 30-second song uses the clip model; a longer one the full-song model,
+ * falling back to a clip when the full model refuses (an account without
+ * access to it, a quota). Each job starts in the background and is polled
+ * from GET /api/ai/generate-song/:id; where background jobs are not offered,
+ * the Worker waits for the song in the one call, and asks the model not to
+ * keep the request.
  *
  * Finished audio is copied into Worker-bound storage (the `GENERATED_AUDIO`
  * key-value binding, or the device-transfer one under a `gen:` prefix) with a
@@ -39,9 +31,6 @@ export interface KvLike {
 }
 
 export interface GenEnv extends AiEnv {
-  MUSIC_GEN_API_URL?: string;
-  MUSIC_GEN_API_KEY?: string;
-  MUSIC_GEN_MODEL?: string;
   GENERATED_AUDIO?: KvLike;
   HANDOFF?: KvLike;
 }
@@ -53,12 +42,23 @@ export const MAX_DURATION_SEC = 180;
 export const MAX_PROMPT_TEXT = 200;
 /** The largest finished file copied into storage (a three-minute song is about 3 MB). */
 export const MAX_AUDIO_BYTES = 15 * 1024 * 1024;
+/** Starting or polling a background job. */
 const PROVIDER_TIMEOUT_MS = 20_000;
+/** Waiting for a whole song in one call, where background jobs are not offered. */
+const SYNC_TIMEOUT_MS = 150_000;
+
+const MUSIC_API = 'https://generativelanguage.googleapis.com/v1beta';
+const API_REVISION = '2026-05-20';
+/** The music models: the clip model always makes 30 seconds; the full one follows the length asked for. */
+export const GEN_MODELS = Object.freeze({ clip: 'lyria-3-clip-preview', full: 'lyria-3.5' });
+export const CLIP_SEC = 30;
+
+const musicKey = (env: GenEnv): string | null => env.GEMINI_API_KEY?.trim() || null;
 
 export const storageOf = (env: GenEnv): KvLike | null => env.GENERATED_AUDIO ?? env.HANDOFF ?? null;
 
 export function genConfigured(env: GenEnv): boolean {
-  return !!env.MUSIC_GEN_API_URL?.trim() && /^https:\/\//.test(env.MUSIC_GEN_API_URL.trim()) && !!env.MUSIC_GEN_API_KEY?.trim() && !!storageOf(env);
+  return !!musicKey(env) && !!storageOf(env);
 }
 
 export const GEN_MOODS = ['romantic', 'energetic', 'chill', 'melancholy', 'devotional', 'happy', 'calm', 'party', 'focus', 'neutral'] as const;
@@ -146,20 +146,25 @@ const energyWord = (e: number): string => (e >= 0.7 ? 'high-energy' : e >= 0.4 ?
 /** The originality rules every request carries, whatever the listener typed. */
 export const ORIGINALITY_RULES = 'Compose an entirely new, original piece. Do not imitate, reference or name any real artist, singer, band, composer, song or album, and do not reproduce or paraphrase any existing melody or lyrics.';
 
-/** The generator's prompt and lyrics brief: built from the feel alone, with the originality rules. */
-export function buildGenerationRequest(input: GenInput, model?: string): { prompt: string; lyrics: string; instrumental: boolean; duration: number; model?: string } {
+/** The model for a length: a clip for 30 seconds, the full-song model for anything longer. */
+export const modelFor = (durationSec: number): string => (durationSec <= CLIP_SEC ? GEN_MODELS.clip : GEN_MODELS.full);
+
+const lengthWords = (sec: number): string => (sec % 60 === 0 ? `${sec / 60}-minute` : `${sec}-second`);
+
+/** The music model's brief: built from the feel alone, with the originality rules. */
+export function buildGenerationRequest(input: GenInput): { model: string; prompt: string } {
   const parts = [
-    `An original ${input.genre ?? 'contemporary'} ${input.instrumental ? 'instrumental piece' : 'song'}`,
+    `Create an original ${lengthWords(input.durationSec)} ${input.genre ?? 'contemporary'} ${input.instrumental ? 'instrumental piece' : 'song'}`,
     input.language && !input.instrumental ? `sung in ${input.language}` : null,
     input.mood !== 'neutral' ? `with a ${input.mood} mood` : null,
     `${energyWord(input.energy)}, around ${input.tempo} BPM`,
-    `about ${Math.round(input.durationSec)} seconds long`,
   ].filter(Boolean);
   const listener = input.promptText ? ` The listener asked for: ${input.promptText}.` : '';
   const kid = input.kid ? ' Family-friendly and gentle, suitable for children.' : '';
-  const prompt = `${parts.join(', ')}.${listener}${kid} ${ORIGINALITY_RULES}`;
-  const lyrics = input.instrumental ? '' : `Write brand-new lyrics in ${input.language ?? 'the song\'s language'} that fit a ${input.mood} mood. Every line must be newly written; never quote or adapt existing lyrics.`;
-  return { prompt, lyrics, instrumental: input.instrumental, duration: input.durationSec, ...(model ? { model } : {}) };
+  const voice = input.instrumental
+    ? ' Instrumental only, no vocals.'
+    : ` Write brand-new lyrics in ${input.language ?? 'the song\'s language'} that fit a ${input.mood} mood. Every line must be newly written; never quote or adapt existing lyrics.`;
+  return { model: modelFor(input.durationSec), prompt: `${parts.join(', ')}.${listener}${kid}${voice} ${ORIGINALITY_RULES}` };
 }
 
 /**
@@ -185,87 +190,157 @@ export async function namesRealWork(env: AiEnv, text: string): Promise<boolean> 
 export interface ProviderJob {
   status: 'queued' | 'running' | 'done' | 'failed';
   progress: number;
-  /** The provider's job id, when it works asynchronously. */
+  /** The model's job id, when it works in the background. */
   providerId?: string;
   audioUrl?: string;
   audioBase64?: string;
   mime?: string;
   title?: string;
+  /** The length the song will have (a clip is always 30 seconds). */
+  durationSec?: number;
 }
 
+const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
 
-/** Read a provider answer in the contract's shape, tolerating the usual spellings. */
-export function readProviderAnswer(raw: unknown): ProviderJob | null {
-  const v = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
+/** A title the model wrote into its song structure, if it wrote one. */
+function titleIn(texts: string[]): string | undefined {
+  for (const t of texts) {
+    try {
+      const title = str(obj(JSON.parse(t))?.title);
+      if (title) return title;
+    } catch {
+      const m = /^\s*(?:#+\s*)?title\s*[:-]\s*(.+)$/im.exec(t);
+      if (m) return m[1].trim().replace(/^["“]|["”]$/g, '');
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Read a music interaction: its id, its state, and, once it has finished, the
+ * audio block (base64 data or a URI) and any title in the song structure. A
+ * finished interaction with no audio (a refused prompt) counts as failed.
+ */
+export function readInteraction(raw: unknown): ProviderJob | null {
+  const v = obj(raw);
   if (!v) return null;
-  const data = v.data && typeof v.data === 'object' && !Array.isArray(v.data) ? (v.data as Record<string, unknown>) : v;
-  const output = Array.isArray(data.output) ? data.output[0] : data.output;
-  const audioUrl = str(data.audio_url) ?? str(data.audioUrl) ?? str(output) ?? str(data.url);
-  const audioBase64 = str(data.audio_base64) ?? str(data.audioBase64);
-  const providerId = str(data.id) ?? str(data.job_id) ?? str(data.task_id) ?? str(v.id) ?? str(v.job_id);
-  const rawStatus = String(data.status ?? v.status ?? '').toLowerCase();
-  const failed = /fail|error|cancel/.test(rawStatus);
-  const done = !failed && (!!audioUrl || !!audioBase64 || /succe|complete|done|finish/.test(rawStatus));
-  // Something must say what this is: a status, a job id or the audio itself.
-  if (!rawStatus && !providerId && !audioUrl && !audioBase64) return null;
-  const progress = typeof data.progress === 'number' && Number.isFinite(data.progress) ? Math.max(0, Math.min(1, data.progress > 1 ? data.progress / 100 : data.progress)) : done ? 1 : 0;
+  const steps: unknown[] = Array.isArray(v.steps) ? v.steps : Array.isArray(v.outputs) ? [{ type: 'model_output', content: v.outputs }] : [];
+  const content = steps.flatMap((step) => {
+    const s = obj(step);
+    return s && (s.type === 'model_output' || s.type == null) && Array.isArray(s.content) ? (s.content as unknown[]).map(obj).filter((c): c is Record<string, unknown> => !!c) : [];
+  });
+  const audio = [...content].reverse().find((c) => c.type === 'audio' && (str(c.data) || str(c.uri))) ?? obj(v.output_audio);
+  const texts = content.filter((c) => c.type === 'text').map((c) => str(c.text)).filter((t): t is string => !!t);
+  const providerId = str(v.id);
+  const rawStatus = String(v.status ?? '').toLowerCase();
+  const data = str(audio?.data);
+  const uri = str(audio?.uri);
+  if (!rawStatus && !providerId && !data && !uri) return null;
+  const failed = /fail|cancel|expire|incomplete|requires_action/.test(rawStatus) || (/complete/.test(rawStatus) && !data && !uri);
+  const done = !failed && (!!data || !!uri);
+  const mime = str(audio?.mime_type) ?? str(audio?.mimeType);
+  const title = titleIn(texts);
   return {
-    status: failed ? 'failed' : done ? 'done' : /run|process|progress|generat|start/.test(rawStatus) ? 'running' : 'queued',
-    progress,
+    status: failed ? 'failed' : done ? 'done' : /progress|run|start/.test(rawStatus) ? 'running' : 'queued',
+    progress: done ? 1 : 0,
     ...(providerId ? { providerId } : {}),
-    ...(audioUrl && /^https:\/\//.test(audioUrl) ? { audioUrl } : {}),
-    ...(audioBase64 ? { audioBase64 } : {}),
-    ...(str(data.mime) ? { mime: str(data.mime) } : {}),
-    ...(str(data.title) ? { title: str(data.title) } : {}),
+    ...(uri && /^https:\/\//.test(uri) ? { audioUrl: uri } : {}),
+    ...(data ? { audioBase64: data } : {}),
+    ...(mime ? { mime } : {}),
+    ...(title ? { title } : {}),
   };
 }
 
-async function providerFetch(env: GenEnv, url: string, init: RequestInit = {}): Promise<unknown> {
+async function musicFetch(env: GenEnv, path: string, init: { method?: string; body?: unknown }, timeoutMs: number): Promise<{ status: number; body: unknown } | null> {
   const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), PROVIDER_TIMEOUT_MS);
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { ...init, signal: ac.signal, headers: { authorization: `Bearer ${env.MUSIC_GEN_API_KEY}`, 'content-type': 'application/json', accept: 'application/json', ...(init.headers as Record<string, string> | undefined) } });
-    if (!res.ok) throw new Error(`generator ${res.status}`);
-    return await res.json();
+    const res = await fetch(`${MUSIC_API}${path}`, {
+      method: init.method ?? 'GET',
+      signal: ac.signal,
+      headers: { 'x-goog-api-key': musicKey(env) ?? '', 'api-revision': API_REVISION, accept: 'application/json', ...(init.body ? { 'content-type': 'application/json' } : {}) },
+      ...(init.body ? { body: JSON.stringify(init.body) } : {}),
+    });
+    return { status: res.status, body: res.ok ? await res.json() : null };
+  } catch {
+    return null;
   } finally {
     clearTimeout(timer);
   }
 }
 
+/**
+ * Start a song. The full-song model first (for anything over 30 seconds),
+ * then the clip model; each as a background job, or in one call where the
+ * model does not take background jobs.
+ */
 export async function startProviderJob(env: GenEnv, input: GenInput): Promise<ProviderJob | null> {
-  const body = buildGenerationRequest(input, env.MUSIC_GEN_MODEL?.trim() || undefined);
-  const answer = await providerFetch(env, env.MUSIC_GEN_API_URL!.trim(), { method: 'POST', body: JSON.stringify(body) }).catch(() => null);
-  return readProviderAnswer(answer);
+  if (!musicKey(env)) return null;
+  const brief = buildGenerationRequest(input);
+  const models = brief.model === GEN_MODELS.clip ? [GEN_MODELS.clip] : [GEN_MODELS.full, GEN_MODELS.clip];
+  for (const model of models) {
+    let res = await musicFetch(env, '/interactions', { method: 'POST', body: { model, input: brief.prompt, background: true } }, PROVIDER_TIMEOUT_MS);
+    // No background jobs for this model: wait for the song, and ask the model not to keep the request.
+    if (res?.status === 400) res = await musicFetch(env, '/interactions', { method: 'POST', body: { model, input: brief.prompt, store: false } }, SYNC_TIMEOUT_MS);
+    const job = res?.body ? readInteraction(res.body) : null;
+    if (job && job.status !== 'failed') return { ...job, durationSec: model === GEN_MODELS.clip ? CLIP_SEC : input.durationSec };
+  }
+  return null;
 }
 
 export async function pollProviderJob(env: GenEnv, providerId: string): Promise<ProviderJob | null> {
-  const base = env.MUSIC_GEN_API_URL!.trim().replace(/\/+$/, '');
-  return readProviderAnswer(await providerFetch(env, `${base}/${encodeURIComponent(providerId)}`).catch(() => null));
+  if (!musicKey(env)) return null;
+  const res = await musicFetch(env, `/interactions/${encodeURIComponent(providerId)}`, {}, PROVIDER_TIMEOUT_MS);
+  return res?.body ? readInteraction(res.body) : null;
+}
+
+/** The type to serve: the model's own when it is audio (`audio/mp3` spelled the usual way), else MP3. */
+const audioMime = (...types: Array<string | undefined>): string => {
+  const t = types.map((x) => x?.split(';')[0].trim().toLowerCase()).find((x) => !!x && /^audio\//.test(x));
+  return !t || t === 'audio/mp3' ? 'audio/mpeg' : t;
+};
+
+function decodeBase64(b64: string): Uint8Array {
+  const from = (Uint8Array as unknown as { fromBase64?: (s: string) => Uint8Array }).fromBase64;
+  if (from) return from(b64);
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+  return bytes;
 }
 
 /** Copy finished audio into storage; the bytes and their type, or null when it cannot be fetched or is not audio. */
-export async function fetchFinishedAudio(job: ProviderJob): Promise<{ bytes: ArrayBuffer; mime: string } | null> {
+export async function fetchFinishedAudio(env: GenEnv, job: ProviderJob): Promise<{ bytes: ArrayBuffer; mime: string } | null> {
   if (job.audioBase64) {
+    if (job.audioBase64.length * 0.75 > MAX_AUDIO_BYTES) return null;
     try {
-      const bin = atob(job.audioBase64);
-      if (bin.length > MAX_AUDIO_BYTES) return null;
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
-      return { bytes: bytes.buffer, mime: job.mime && /^audio\//.test(job.mime) ? job.mime : 'audio/mpeg' };
+      const bytes = decodeBase64(job.audioBase64);
+      if (bytes.byteLength < 1_024) return null;
+      return { bytes: bytes.slice().buffer, mime: audioMime(job.mime) };
     } catch {
       return null;
     }
   }
   if (!job.audioUrl) return null;
-  const res = await fetch(job.audioUrl).catch(() => null);
+  // A file the music API holds needs the key; any other address is fetched as it is.
+  const own = job.audioUrl.startsWith(`${MUSIC_API.replace(/\/v1beta$/, '')}/`);
+  const res = await fetch(job.audioUrl, own ? { headers: { 'x-goog-api-key': musicKey(env) ?? '' } } : undefined).catch(() => null);
   if (!res?.ok) return null;
   const declared = Number(res.headers.get('content-length') || 0);
   if (declared > MAX_AUDIO_BYTES) return null;
-  const type = (res.headers.get('content-type') ?? '').split(';')[0].trim();
   const bytes = await res.arrayBuffer();
   if (bytes.byteLength > MAX_AUDIO_BYTES || bytes.byteLength < 1_024) return null;
-  return { bytes, mime: /^audio\//.test(type) ? type : job.mime && /^audio\//.test(job.mime) ? job.mime : 'audio/mpeg' };
+  return { bytes, mime: audioMime(res.headers.get('content-type') ?? undefined, job.mime) };
+}
+
+/**
+ * How far a job probably is, from its age: the music API reports no progress,
+ * so the bar fills towards 90% over the time a song usually takes.
+ */
+export function estimatedProgress(createdAt: number, durationSec: number, now = Date.now()): number {
+  const expectMs = durationSec <= CLIP_SEC ? 25_000 : 60_000;
+  return Math.round(Math.min(0.9, Math.max(0.05, (now - createdAt) / expectMs)) * 100) / 100;
 }
 
 // ------------------------------------------------------------- storage --

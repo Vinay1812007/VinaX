@@ -114,7 +114,7 @@ export default function PrivacyPage() {
         <p>
           &ldquo;Generate a song like this&rdquo; (where it is switched on) sends only the playing song&rsquo;s feel —
           its mood, energy, tempo, genre and language, a length — and any words you add, never the song itself, its
-          title, its singers or its words. The new song is made by a music generator through VinaX&rsquo;s server and
+          title, its singers or its words. The new song is made by Google&rsquo;s music model (Gemini) through VinaX&rsquo;s server and
           kept there for a day; your device&rsquo;s random install id is used, hashed, to count your songs for the
           day. Generated songs are always labelled &ldquo;AI generated&rdquo;.
         </p>
