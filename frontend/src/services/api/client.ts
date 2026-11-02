@@ -203,12 +203,13 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
       resolve();
       return;
     }
+    // globalThis, not window: a backoff can outlive a test's DOM, and it must not throw then.
     const done = () => {
-      window.clearTimeout(timer);
+      globalThis.clearTimeout(timer);
       signal?.removeEventListener('abort', done);
       resolve();
     };
-    const timer = window.setTimeout(done, ms);
+    const timer = globalThis.setTimeout(done, ms);
     signal?.addEventListener('abort', done, { once: true });
   });
 }
