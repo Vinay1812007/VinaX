@@ -38,6 +38,7 @@ export const WaveIcon = ({ className }: P) => (<svg {...base(className)}><path d
 export const SpeakerIcon = ({ className }: P) => (<svg {...base(className)}><path d="M4.5 9.5h3l4.5-4v13l-4.5-4h-3zM15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" /></svg>);
 export const CheckIcon = ({ className }: P) => (<svg {...base(className)}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>);
 export const ShareIcon = ({ className }: P) => (<svg {...base(className)}><path d="M12 15V4.5M7.5 9 12 4.5 16.5 9M5.5 13v4.5a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V13" /></svg>);
+export const FolderIcon = ({ className }: P) => (<svg {...base(className)}><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg>);
 export const LinkIcon = ({ className }: P) => (<svg {...base(className)}><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></svg>);
 // The artifacts gallery and its kinds.
 export const ArtifactsIcon = ({ className }: P) => (<svg {...base(className)}><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></svg>);

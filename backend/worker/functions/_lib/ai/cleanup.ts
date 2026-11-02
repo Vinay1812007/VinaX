@@ -2,7 +2,8 @@
  * VinaX AI — hourly housekeeping for chats and their files:
  *   - chats deleted more than a day ago are removed, with their messages,
  *     their attachment rows and their stored files;
- *   - files added but never sent (no conversation) for a day are removed.
+ *   - files added but never sent (no conversation) for a day are removed;
+ *     a project's knowledge files (no conversation either) are kept.
  * At most 200 of each per run, so a backlog clears over a few hours without
  * using up the run's requests. Never throws.
  */
@@ -21,7 +22,7 @@ export async function purgeAiChats(env: DbEnv, now = Date.now()): Promise<{ chat
     const gone = await db.remove(env, 'ai_conversations', q().in('id', ids));
     chats = gone.ok ? ids.length : `failed: ${gone.error}`;
   }
-  const loose = await db.select<{ id: string; storage_path: string }>(env, 'ai_attachments', q().is('conversation_id', 'null').lt('created_at', since(DAY_MS, now)).select('id,storage_path').limit(200));
+  const loose = await db.select<{ id: string; storage_path: string }>(env, 'ai_attachments', q().is('conversation_id', 'null').is('project_id', 'null').lt('created_at', since(DAY_MS, now)).select('id,storage_path').limit(200));
   if (!loose.ok) files = `failed: ${loose.error}`;
   else if (loose.rows.length) {
     await storageRemove(env, loose.rows.map((r) => r.storage_path));

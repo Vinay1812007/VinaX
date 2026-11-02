@@ -113,15 +113,18 @@ async function run(body: ChatRequestBody): Promise<RunOutcome> {
  * the edited message's parent (null for the first message), which makes the
  * new message its sibling.
  */
-export function sendMessage(text: string, opts: { parentId?: string | null; files?: FileRef[] } = {}): Promise<RunOutcome> {
+export function sendMessage(text: string, opts: { parentId?: string | null; files?: FileRef[]; projectId?: string | null } = {}): Promise<RunOutcome> {
   const s = useChatStore.getState();
   const files = opts.files ?? [];
   if (s.streaming || (!text.trim() && !files.length)) return Promise.resolve({ ok: true });
   const parent = opts.parentId !== undefined ? opts.parentId : parentForNext(s);
-  dispatch({ type: 'send', text, parentId: parent, now: new Date().toISOString(), files });
+  dispatch({ type: 'send', text, parentId: parent, now: new Date().toISOString(), files, projectId: opts.projectId });
+  // A new chat starts in the project it was sent from.
+  const projectId = s.conversationId ? null : opts.projectId ?? null;
   return run({
     ...requestBase(),
     conversationId: s.conversationId,
+    ...(projectId ? { projectId } : {}),
     ...(s.conversationId ? { parentMessageId: parent ?? 'root' } : {}),
     content: [...files.map((f) => ({ type: 'attachment' as const, id: f.id })), ...(text.trim() ? [{ type: 'text' as const, text }] : [])],
   });

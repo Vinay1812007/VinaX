@@ -24,6 +24,8 @@ export const LOCAL_REPLY = 'local-reply';
 export interface ChatState {
   conversationId: string | null;
   title: string | null;
+  /** The project the chat is in (or a new chat starts in). */
+  projectId: string | null;
   messages: Record<string, ChatMessage>;
   /** The branch on screen ends here. */
   leafId: string | null;
@@ -42,17 +44,18 @@ export interface ChatState {
 export type ChatAction =
   | { type: 'reset' }
   | { type: 'load'; conversation: ServerConversation; messages: ServerMessage[] }
-  | { type: 'send'; text: string; parentId: string | null; now: string; files?: FileRef[] }
+  | { type: 'send'; text: string; parentId: string | null; now: string; files?: FileRef[]; projectId?: string | null }
   | { type: 'retry'; userId: string; now: string }
   | { type: 'continue'; messageId: string }
   | { type: 'select-leaf'; leafId: string }
   | { type: 'stream'; ev: StreamEvent; now: number }
   | { type: 'stopped' }
   | { type: 'fail'; code: string; message: string }
-  | { type: 'dismiss' };
+  | { type: 'dismiss' }
+  | { type: 'project'; projectId: string | null };
 
 export const initialChat = (): ChatState => ({
-  conversationId: null, title: null, messages: {}, leafId: null, streaming: false, replyId: null, thinkingStartedAt: null, notice: null, finished: 0, resume: null,
+  conversationId: null, title: null, projectId: null, messages: {}, leafId: null, streaming: false, replyId: null, thinkingStartedAt: null, notice: null, finished: 0, resume: null,
 });
 
 const blank = (id: string, parentId: string | null, role: 'user' | 'assistant', text: string, now: string): ChatMessage => ({
@@ -162,6 +165,9 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'dismiss':
       return { ...state, notice: null };
 
+    case 'project':
+      return { ...state, projectId: action.projectId };
+
     case 'load': {
       const messages: Record<string, ChatMessage> = {};
       for (const m of action.messages) {
@@ -176,7 +182,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         };
       }
       const leaf = action.conversation.activeLeafId && messages[action.conversation.activeLeafId] ? action.conversation.activeLeafId : latestLeaf(messages);
-      return { ...initialChat(), conversationId: action.conversation.id, title: action.conversation.title, messages, leafId: leaf, finished: state.finished };
+      return { ...initialChat(), conversationId: action.conversation.id, title: action.conversation.title, projectId: action.conversation.projectId ?? null, messages, leafId: leaf, finished: state.finished };
     }
 
     case 'send': {
@@ -184,7 +190,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       const base = dropFailedLocals(state.messages);
       const user = { ...blank(LOCAL_USER, action.parentId, 'user', action.text, action.now), ...(action.files?.length ? { files: action.files } : {}) };
       const reply = blank(LOCAL_REPLY, LOCAL_USER, 'assistant', '', action.now);
-      return { ...state, notice: null, messages: { ...base, [LOCAL_USER]: user, [LOCAL_REPLY]: reply }, leafId: LOCAL_REPLY, replyId: LOCAL_REPLY, streaming: true, thinkingStartedAt: null };
+      const projectId = state.conversationId ? state.projectId : action.projectId ?? null;
+      return { ...state, notice: null, projectId, messages: { ...base, [LOCAL_USER]: user, [LOCAL_REPLY]: reply }, leafId: LOCAL_REPLY, replyId: LOCAL_REPLY, streaming: true, thinkingStartedAt: null };
     }
 
     case 'retry': {

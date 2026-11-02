@@ -143,6 +143,8 @@ export const router = createBrowserRouter([
       { path: 'vinaxai', caseSensitive: true, element: <VinaXAIPage /> },
       { path: 'vinaxai/c/:id', caseSensitive: true, element: <VinaXAIPage /> },
       { path: 'vinaxai/artifacts', caseSensitive: true, element: <VinaXAIArtifactsPage /> },
+      { path: 'vinaxai/projects', caseSensitive: true, element: <VinaXAIPage /> },
+      { path: 'vinaxai/project/:projectId', caseSensitive: true, element: <VinaXAIPage /> },
       { path: 'vinaxai/share/:shareId', caseSensitive: true, element: <VinaXAISharePage /> },
       { path: 'weekly', element: <WeeklyMixPage /> },
       { path: 'mixes', element: <MixesPage /> },

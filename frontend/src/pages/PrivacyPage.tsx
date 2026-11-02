@@ -145,6 +145,15 @@ export default function PrivacyPage() {
           engines are asked not to list it. Later messages aren&rsquo;t added unless you update the link. Stop sharing,
           deleting the chat or deleting your account removes the copy at once.
         </p>
+        <p>
+          You can group VinaX AI chats into projects. A project is kept with your account: its name, description,
+          instructions and the files you add to it (stored privately, like files added to a chat, with the text read
+          out of them; up to 20 files and 200,000 characters of text). With every message in a chat in the project,
+          its name, instructions and files are sent to the AI provider that answers. They aren&rsquo;t copied into your
+          messages, aren&rsquo;t logged and are never part of a shared link. Removing a file, deleting the project or
+          deleting your account deletes them at once; when you delete a project you choose whether its chats stay as
+          ordinary chats or are deleted too.
+        </p>
         <H>Listen Together</H>
         <p>
           Rooms are ephemeral: a room code, first names, and the shared queue exist while the session lives and are

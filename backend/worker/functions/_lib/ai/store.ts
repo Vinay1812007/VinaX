@@ -1,8 +1,9 @@
 /**
  * VinaX AI — conversation storage in Supabase (schema version 4:
- * ai_conversations, ai_messages, ai_attachments). The Worker is the only
- * client. Every conversation read is filtered by the session's account, and
- * messages are only touched after their conversation passed that check.
+ * ai_conversations, ai_messages, ai_attachments; version 9 adds project_id).
+ * The Worker is the only client. Every conversation read is filtered by the
+ * session's account, and messages are only touched after their conversation
+ * passed that check.
  */
 import { db, q, type DbEnv, type Rows, type Value } from '../db';
 import type { MessagePart } from './types';
@@ -14,6 +15,8 @@ export interface ConversationRow {
   starred: boolean;
   model_pref: string | null;
   active_leaf_id: string | null;
+  /** The project the chat belongs to (schema version 9), or null. */
+  project_id?: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -36,7 +39,7 @@ export interface MessageRow {
   created_at: string;
 }
 
-const CONV_COLS = 'id,account_id,title,starred,model_pref,active_leaf_id,created_at,updated_at,deleted_at';
+const CONV_COLS = 'id,account_id,title,starred,model_pref,active_leaf_id,project_id,created_at,updated_at,deleted_at';
 const MSG_COLS = 'id,conversation_id,parent_id,role,content,thinking,thinking_ms,sources,artifacts,model_id,provider,stop_reason,usage,created_at';
 
 /** Messages one conversation may hold; past this the chat asks for a new one. */
@@ -50,12 +53,12 @@ export function getConversation(env: DbEnv, accountId: string, id: string): Prom
   return db.one<ConversationRow>(env, 'ai_conversations', q().eq('id', id).eq('account_id', accountId).is('deleted_at', 'null').select(CONV_COLS));
 }
 
-export async function createConversation(env: DbEnv, row: { id: string; account_id: string; title: string; model_pref: string | null }): Promise<Rows<ConversationRow>> {
+export async function createConversation(env: DbEnv, row: { id: string; account_id: string; title: string; model_pref: string | null; project_id?: string | null }): Promise<Rows<ConversationRow>> {
   const now = new Date().toISOString();
   return db.insert<ConversationRow>(env, 'ai_conversations', { ...row, starred: false, created_at: now, updated_at: now }, { returning: true });
 }
 
-export function updateConversation(env: DbEnv, accountId: string, id: string, patch: Partial<Pick<ConversationRow, 'title' | 'starred' | 'active_leaf_id' | 'model_pref' | 'updated_at' | 'deleted_at'>>): Promise<Rows<ConversationRow>> {
+export function updateConversation(env: DbEnv, accountId: string, id: string, patch: Partial<Pick<ConversationRow, 'title' | 'starred' | 'active_leaf_id' | 'model_pref' | 'project_id' | 'updated_at' | 'deleted_at'>>): Promise<Rows<ConversationRow>> {
   return db.update<ConversationRow>(env, 'ai_conversations', q().eq('id', id).eq('account_id', accountId).is('deleted_at', 'null').select(CONV_COLS), patch, { returning: true });
 }
 
@@ -82,6 +85,8 @@ export interface ListOptions {
   before?: string | null;
   /** Search text: titles and message text. */
   query?: string | null;
+  /** Only the chats of this project. */
+  projectId?: string | null;
   limit?: number;
 }
 
@@ -92,10 +97,12 @@ export async function listConversations(env: DbEnv, accountId: string, o: ListOp
   if (text) {
     // The function escapes the LIKE wildcards itself.
     const r = await db.rpc<ConversationRow[]>(env, 'ai_conversation_search', { p_account: accountId, p_query: text, p_before: o.before ?? null, p_limit: limit });
-    return r.ok ? { ok: true, rows: Array.isArray(r.value) ? r.value : [] } : { ...r, rows: [] };
+    const rows = r.ok && Array.isArray(r.value) ? r.value : [];
+    return r.ok ? { ok: true, rows: o.projectId ? rows.filter((c) => c.project_id === o.projectId) : rows } : { ...r, rows: [] };
   }
   const query = q().eq('account_id', accountId).is('deleted_at', 'null').select(CONV_COLS).order('updated_at', 'desc').limit(limit);
   if (o.before) query.lt('updated_at', o.before);
+  if (o.projectId) query.eq('project_id', o.projectId);
   return db.select<ConversationRow>(env, 'ai_conversations', query);
 }
 
@@ -106,7 +113,7 @@ export function deleteConversation(env: DbEnv, accountId: string, id: string): P
 
 /** What the page is sent for one conversation (no account id). */
 export function publicConversation(c: ConversationRow): Record<string, unknown> {
-  return { id: c.id, title: c.title, starred: c.starred, modelPref: c.model_pref, activeLeafId: c.active_leaf_id, createdAt: c.created_at, updatedAt: c.updated_at };
+  return { id: c.id, title: c.title, starred: c.starred, modelPref: c.model_pref, activeLeafId: c.active_leaf_id, projectId: c.project_id ?? null, createdAt: c.created_at, updatedAt: c.updated_at };
 }
 
 /** `label` names the model that answered (registry name and provider), when it is still known. */

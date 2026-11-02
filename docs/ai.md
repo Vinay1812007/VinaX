@@ -185,8 +185,9 @@ A failed or empty search is not an error: the status says "No useful results" an
 `_lib/ai/prompt.ts` holds the owner's VinaX AI prompt verbatim. A snapshot test (`__tests__/aiPrompt.test.ts`) keeps it from drifting. The prompt is built in this order:
 1. The full prompt for every model whose window holds at least 24,000 characters (`promptFor`), fast ones included, so every model gets the same character, formatting, honesty and safety rules; the compact one only for the few small specialists below that (ALLaM 2 7B, Riva Translate 4B). The listener's local time and time zone, first name (or the name they set in Personalisation), language setting, and the answering model and provider are filled in.
 2. The artifacts contract and the visualisation guide (`ARTIFACTS_BLOCK`), for every model with the full prompt and at least 4,096 output tokens (`artifactsOffered`), unless the registry flags it `artifacts: false` (Riva Translate, Ising Calibration, Gemini Robotics ER) or the page sends `artifacts: false` (Settings → General → Artifacts off).
-3. The listener's preferences (`personalBlock`), when the request carries `personal: { name?, about?, instructions?, style? }` from Settings → Personalisation: inside `<user_preferences>`, after the rules, marked as the user's own words that never override safety, honesty or the refusals. `sanitizePersonal` drops control characters and caps the name at 40 characters and the other two at 1,500. Styles: `concise`, `explanatory`, `formal`, `learning` (`normal` adds nothing). None of it is stored or logged.
-4. `<search_results>` and the citation rules, only when search ran (phase 3).
+3. For a chat in a project, the project block (`projectBlock`, [Projects](#projects)): `# Project: <name>`, the project's instructions inside `<project_instructions>`, marked as the user's own words that never override safety, honesty or the refusals, and its knowledge files inside `<project_knowledge>` as reference material, never instructions. The knowledge is cut to fit the model's window.
+4. The listener's preferences (`personalBlock`), when the request carries `personal: { name?, about?, instructions?, style? }` from Settings → Personalisation: inside `<user_preferences>`, after the rules, marked as the user's own words that never override safety, honesty or the refusals. `sanitizePersonal` drops control characters and caps the name at 40 characters and the other two at 1,500. Styles: `concise`, `explanatory`, `formal`, `learning` (`normal` adds nothing). None of it is stored or logged.
+5. `<search_results>` and the citation rules, only when search ran (phase 3).
 
 Nothing else is added: no taste profile and no listening history. The history sent to the model is trimmed to the model's window minus the system text, so a longer prompt shortens what a small-window model remembers rather than overflowing it. Models flagged `systemRole: false` get the system text in front of the first user turn.
 
@@ -237,9 +238,9 @@ Refusals before the stream: `400 bad_request | unknown_model | bad_attachment | 
 | Route | What it does |
 | --- | --- |
 | `GET /api/ai/models` | Public. `{ enabled, configured, groups, models: [{ id, name, provider, group, description, flags: { vision, web, thinking, code }, available, reason? }], voice: { dictation, readAloud, live, voices, liveVoices } }`. `available` is false when the provider has no key (`not_configured`) or the model is resting (`busy`). `voice` says which voice features have a key ([Voice](#voice)). A session, when sent, only decides `enabled` for testers |
-| `GET /api/ai/conversations?cursor=&q=` | The account's chats, newest first, 30 a page. `q` searches titles and message text through `ai_conversation_search` |
+| `GET /api/ai/conversations?cursor=&q=&project=` | The account's chats, newest first, 30 a page. `q` searches titles and message text through `ai_conversation_search`; `project` keeps one project's chats. Each item carries its `projectId` |
 | `GET /api/ai/conversations/:id` | The conversation and its whole message tree, each reply labelled with its model's name and provider |
-| `PATCH /api/ai/conversations/:id` | `{ title?, starred?, activeLeafId? }` |
+| `PATCH /api/ai/conversations/:id` | `{ title?, starred?, activeLeafId?, projectId? }`. `projectId` moves the chat into one of the account's projects (someone else's is 404) or, as `null`, out of its project; it does not change `updated_at` |
 | `DELETE /api/ai/conversations/:id` | Hides the chat at once and deletes its shared link; the hourly housekeeping removes it, with its messages, a day later |
 | `GET /api/ai/shares[?conversation=<id>]` | The account's shared links, newest first: `{ items: [{ id, conversationId, title, messageCount, createdAt, updatedAt }] }` ([Sharing](#sharing)) |
 | `POST /api/ai/shares` | `{ conversationId }`. Makes the chat's link (201) or, when it has one, takes the snapshot again under the same id (200): `{ share }`. `413 too_large` past 1 MB, `422 empty` for a chat with nothing to show |
@@ -248,7 +249,12 @@ Refusals before the stream: `400 bad_request | unknown_model | bad_attachment | 
 | `POST /api/ai/shares/:id/continue` | Signed in, while VinaX AI is open to the account: a new chat of the reader's own with the snapshot's turns, `{ conversationId }` |
 | `GET /api/ai/artifacts?kind=&q=&cursor=` | The artifacts gallery: one item per artifact per chat (its newest version), newest first, 30 a page, metadata only: `{ items: [{ conversationId, conversationTitle, artifactId, messageId, kind, title, language, incomplete, versions, createdAt }], nextCursor }` through `ai_artifact_list` ([Artifacts gallery](#artifacts-gallery)). `kind` is one artifact type, `q` searches titles; anything else is `400 bad_request` |
 | `GET /api/ai/artifacts/:conversationId/:artifactId` | One artifact with every version's content, oldest first, from every branch of its chat: `{ artifact: { conversationId, conversationTitle, artifactId, versions: [{ messageId, createdAt, type, title, language, content, incomplete }] } }`. 404 for someone else's or a deleted chat, or no such artifact |
-| `GET /api/ai/export` | Every chat of the account with every message and branch, as one JSON file to download (`ai_export`; Settings → Your data → Export VinaX AI chats). It is not part of the app's backup file and is never imported: the chats already live with the account |
+| `GET /api/ai/projects` | The account's projects, newest first: `{ items: [{ id, name, description, instructions, starred, chatCount, fileCount, createdAt, updatedAt }] }` ([Projects](#projects)) |
+| `POST /api/ai/projects` | `{ name, description?, instructions? }` → 201 `{ project }`. `400 bad_request` past the limits, `409 too_many_projects` past 100 |
+| `GET /api/ai/projects/:id` | `{ project, files: [{ id, name, mime, kind, size, pages?, chars, createdAt }], chats: [conversation], limits: { files, chars, usedChars } }`: the newest 100 chats, never a file's text |
+| `PATCH /api/ai/projects/:id` | `{ name?, description?, instructions?, starred? }` → `{ project }`. Starring alone keeps `updated_at` |
+| `DELETE /api/ai/projects/:id?chats=keep\|delete` | Deletes the project and its files. `keep` (the default) leaves its chats as ordinary chats; `delete` deletes them too, like deleting each one, shared links included. `{ ok, chats }` (how many were deleted) |
+| `GET /api/ai/export` | Every chat of the account with every message and branch, and every project with its instructions and its files by name, as one JSON file to download (`ai_export`; Settings → Your data → Export VinaX AI chats). It is not part of the app's backup file and is never imported: the chats already live with the account |
 
 Every query is filtered by the session's account. Someone else's conversation, a deleted one or a malformed id answers 404. The Worker's router dispatches `PATCH` and `DELETE` to `onRequestPatch` / `onRequestDelete`.
 
@@ -264,7 +270,7 @@ Every query is filtered by the session's account. Someone else's conversation, a
 | PDF | pdf | 30 MB and 500 pages (owner: `pdfMB` up to 50, `pdfPages` up to 1,000; the Storage bucket takes at most 50 MB) |
 | Text | text, markdown, csv, json and common source code | 2 MB (owner: `textMB` up to 5) |
 
-At most 20 files go in a message and 50 in a chat (owner: `filesPerMessage`, `filesPerChat`). The page checks these limits with the numbers `GET /api/ai/models` returns as `limits` (`setFileLimits` in `files.ts`; the defaults until it answers), and the server checks them again.
+At most 20 files go in a message and 50 in a chat (owner: `filesPerMessage`, `filesPerChat`). The page checks these limits with the numbers `GET /api/ai/models` returns as `limits` (`setFileLimits` in `files.ts`; the defaults until it answers), and the server checks them again. A project's files (its knowledge) go through the same route with `&projectId=…` instead of a chat ([Projects](#projects)).
 
 **Upload.**
 - Each file is uploaded as soon as it is added, so Send only names it. Removing a chip deletes the upload.
@@ -285,7 +291,7 @@ At most 20 files go in a message and 50 in a chat (owner: `filesPerMessage`, `fi
 
 **Deleting.** The files go along with the account, the chat, or the message that never got sent:
 - Deleting the account (yours, or the console's delete) removes the account's stored files before the rows cascade.
-- The hourly housekeeping removes a deleted chat's files with the chat, and removes files never sent after a day.
+- The hourly housekeeping removes a deleted chat's files with the chat, and removes files never sent after a day. A project's files have no chat either, so the housekeeping leaves them alone (`project_id` is set); they go when they are removed, with their project, or with the account.
 
 ## Artifacts
 
@@ -445,9 +451,30 @@ A chat can be shared by link, the way a snapshot is shared: what readers see is 
 
 **The page.** `ShareDialog.tsx` opens from Share in the chat header, shown only for a saved chat with messages. It says what a link includes before Create link, then shows the link with Copy link, Share… (where `navigator.share` exists), Update link and Stop sharing (after a confirmation). Focus moves in and stays in, Escape closes, and focus returns to Share. `SharedChatView.tsx` (the lazy page `pages/VinaXAISharePage.tsx`, on demand in the precache like the chat) renders `/vinaxai/share/:shareId` with the chat's own Markdown, code, maths, sources and artifact panel, and no composer. `AuthGate` lets it open signed out, and AppLayout shows it full screen like the chat. Signed in, it offers Continue this chat; signed out, Start your own chat. A Report this chat link opens an email to the owner with the link filled in.
 
+## Projects
+
+A project is a named workspace: a name (at most 60 characters), an optional description (300), **instructions** (8,000) that every chat in the project follows, and **files** (the project's knowledge) that every chat in it can read. `_lib/ai/projects.ts`; the routes `api/ai/projects.ts` and `projects/[id].ts`; on the page `Projects.tsx` and `projectDialogs.tsx`.
+
+**Files.** A project's file is an ordinary `ai_attachments` row with `project_id` set and no conversation, so it is uploaded, checked, stored and served like a chat's file: `POST /api/ai/attachments?name=…&projectId=…` (a project and a chat at once is `400`), a PDF's text with `PATCH /api/ai/attachments/:id`, removal with `DELETE /api/ai/attachments/:id`. They are stored at `<account>/project-<project id>/<id>`. A project holds at most 20 files and 200,000 characters of text across them (text files and PDFs' text; images count only as files). The Worker answers `409 too_many_files` or `409 knowledge_full`; for a PDF whose text arrives later, the page then removes the upload and says why. A project's file can never be sent as a message attachment (`loadAttachments` leaves them out, so the chat answers `400 bad_attachment`).
+
+**Chats.** `POST /api/ai/chat` takes `projectId` for a new conversation: the project must be the account's (`404 not_found` otherwise, and nothing is saved), and the chat is created in it. On an existing chat `projectId` is ignored; a chat moves with `PATCH /api/ai/conversations/:id { projectId }`.
+
+**What the model gets.** For any chat whose `project_id` is set, the Worker loads the project and its files once per reply (`loadProjectContext`) and, for each model it tries (`knowledgeFor`), treats the files the way `materialize.ts` treats a chat's files:
+- text files, and PDFs for a model that cannot read PDFs, become `<document name="…">` blocks inside `<project_knowledge>` in the system prompt;
+- a PDF goes to Gemini as a Files API file, and up to 5 images go to a vision model as image parts, both with the latest question (`withKnowledge`), and the project block names them;
+- other images are named, with "(this model cannot see images)" where that is why.
+
+The project block sits after the artifacts block and before the listener's preferences. With it, the system prompt may take up to half the model's window (`KNOWLEDGE_SHARE`); files that do not fit are cut, then left out by name, oldest first kept. The rest of the window stays the thread's, which is trimmed to the window minus the system text as always. Auto sends a chat whose project has a PDF or more than 12,000 characters of text to its long-document ladder (`longKnowledge`), and counts the knowledge in the thread's size. Project instructions and files are never stored in a message, never logged, and never part of a shared link: a share's snapshot is built from the messages alone. Live voice does not use a project's instructions or files yet; its turns are saved into the chat as usual.
+
+**Deleting.** Deleting a project always deletes its instructions and files (the Worker removes the stored bytes first; the rows go by `on delete cascade`). Its chats stay as ordinary chats by default (`on delete set null`), the less destructive choice; the dialog offers **Delete them too**, which hides them and deletes their shared links at once, and the hourly housekeeping removes them a day later like any deleted chat. Deleting the account deletes every project.
+
+**Rate limits.** 30 a minute for the list and for reading one, 30 a minute for creating, editing and deleting, per network address; uploads share the attachments route's 20 a minute.
+
+**The page.** The sidebar has **Projects** under New chat. `/vinaxai/projects` lists the projects as cards, starred first, with New project (a dialog: name and description). `/vinaxai/project/:projectId` shows the name and description with Star, Edit and Delete; a composer that starts a chat in the project (the page sends `projectId` with the first message, then opens the chat); the project's chats; the instructions with Add/Edit; and the files with Add files, a usage line and Remove. A chat in a project shows the project's name in the header, linking back. A chat's ⋯ menu in the sidebar has **Move to project…**, a dialog listing the projects and No project. Delete project asks whether to keep its chats (the default) or delete them too. Both pages render inside the chat page, so the sidebar, the phone drawer and the header work as in a chat; their code is a lazy chunk that loads with the first project page.
+
 ## Storage
 
-Schema version 4 adds `ai_conversations`, `ai_messages` (a tree through `parent_id`) and `ai_attachments`, all removed with the account through `on delete cascade`. Version 8 adds `ai_shares` ([Sharing](#sharing)), removed with its chat or the account the same way. See [database.md](database.md). `ai_conversations.active_leaf_id` is the branch a reload opens.
+Schema version 4 adds `ai_conversations`, `ai_messages` (a tree through `parent_id`) and `ai_attachments`, all removed with the account through `on delete cascade`. Version 8 adds `ai_shares` ([Sharing](#sharing)), removed with its chat or the account the same way. Version 9 adds `ai_projects` and a `project_id` on `ai_conversations` (`on delete set null`) and on `ai_attachments` (`on delete cascade`) ([Projects](#projects)). See [database.md](database.md). `ai_conversations.active_leaf_id` is the branch a reload opens.
 
 ## The owner's switches
 
@@ -509,8 +536,8 @@ The probe script ([The probe](#the-probe)) is the fuller check: reasoning, syste
 **Layout.**
 - At 1024 px and wider, the conversation sidebar is a 260 px column (`Sidebar.tsx`). It can be collapsed; the choice is kept on the device.
 - Narrower, the sidebar is a slide-over drawer from the header's ☰. It closes on Escape, on Android's back button, or when you pick a chat.
-- The sidebar holds New chat, Artifacts (the [artifacts gallery](#artifacts-gallery)) and a search over titles and message text. Below that come Starred, then Recents grouped by Today, Yesterday, Previous 7 days and Older (`sidebarGroups.ts`).
-- Each row has a ⋯ menu: Star, Rename (inline), and Delete (after a confirmation).
+- The sidebar holds New chat, Projects ([Projects](#projects)), Artifacts (the [artifacts gallery](#artifacts-gallery)) and a search over titles and message text. Below that come Starred, then Recents grouped by Today, Yesterday, Previous 7 days and Older (`sidebarGroups.ts`).
+- Each row has a ⋯ menu: Star, Rename (inline), Move to project…, and Delete (after a confirmation).
 - The sidebar's foot shows the account, Settings (VinaX AI's own panel, [Settings](#settings)), and Back to VinaX. The header has a gear for the same panel.
 - A new chat opens on a time-aware greeting, with the composer in the middle and four chips (Write, Learn, Code, Music). The chips fill in a starter and never send.
 - The composer stays above an on-screen keyboard that does not resize the page (`visualViewport`).

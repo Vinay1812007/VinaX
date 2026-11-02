@@ -90,10 +90,13 @@ export interface AttachmentRow {
 
 export const ATT_COLS = 'id,account_id,conversation_id,name,mime,size,kind,storage_path,extracted_text,pages,gemini_uri,gemini_expires_at,created_at';
 
-/** The account's attachments with these ids (others are silently not there). */
+/**
+ * The account's chat attachments with these ids (others are silently not
+ * there). A project's knowledge files are left out: they never join a message.
+ */
 export function loadAttachments(env: DbEnv, accountId: string, ids: string[]): Promise<Rows<AttachmentRow>> {
   if (!ids.length) return Promise.resolve({ ok: true, rows: [] });
-  return db.select<AttachmentRow>(env, 'ai_attachments', q().eq('account_id', accountId).in('id', ids).select(ATT_COLS));
+  return db.select<AttachmentRow>(env, 'ai_attachments', q().eq('account_id', accountId).in('id', ids).is('project_id', 'null').select(ATT_COLS));
 }
 
 /** What a message's content keeps about a file, so the page can show it without another query. */

@@ -99,10 +99,23 @@ Your music pauses while the microphone is open and plays on quietly while a repl
 
 - The sidebar lists your chats: **Starred** first, then by day. On a phone, open it with **☰**.
 - Search finds chats by their title and by what was said in them.
-- Each chat's **⋯** menu can **Star**, **Rename** or **Delete** it. A deleted chat disappears at once and is removed for good within a day.
+- Each chat's **⋯** menu can **Star**, **Rename**, **Move to project…** or **Delete** it. A deleted chat disappears at once and is removed for good within a day.
 - Chats are kept with your Google account, so they follow you to every device you sign in on. Each chat has its own address you can bookmark; only you can open it.
-- **Settings** → **Your data** → **Export VinaX AI chats** downloads every chat, with all its versions, as one file.
-- Deleting your account deletes every chat and file with it.
+- **Settings** → **Your data** → **Export VinaX AI chats** downloads every chat, with all its versions, and your projects, as one file.
+- Deleting your account deletes every chat, project and file with it.
+
+## Projects
+
+A project keeps related chats together, with instructions and files that every chat in it uses: a course you're studying, a band you're writing for, a trip you're planning.
+
+- Press **Projects** in the sidebar (on a phone, open it with **☰**), then **New project**. Give it a name and, if you like, a short description.
+- **Instructions**: press **Add** and tell VinaX AI how to work in this project, such as a role, a tone, a format or what to focus on. Every chat in the project follows them, unless you ask for something different in the chat. Up to 8,000 characters.
+- **Files**: press **Add files** to give the project text, code, PDFs or images. Every chat in the project can read them. A project holds up to 20 files and 200,000 characters of text. The bin button removes one.
+- **Start a chat in the project** with the message box on the project's page. The chat opens with the project's name at the top; tap it to go back to the project.
+- **Move a chat** into a project, or out of one, from its **⋯** menu → **Move to project…**.
+- The project's page lists its chats. The star, pencil and bin at the top star, rename or delete the project.
+- **Delete project** deletes its instructions and files. Its chats stay as ordinary chats, unless you choose **Delete them too**.
+- A shared link to a chat in a project never shows the project's instructions or files.
 
 ## Share a chat
 

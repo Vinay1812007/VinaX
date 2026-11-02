@@ -2,7 +2,8 @@
  * VinaX AI — one conversation of the signed-in listener.
  *
  *   GET    /api/ai/conversations/<id> → 200 { conversation, messages: [...] }  the whole tree
- *   PATCH  /api/ai/conversations/<id> { title?, starred?, activeLeafId? } → 200 { conversation }
+ *   PATCH  /api/ai/conversations/<id> { title?, starred?, activeLeafId?, projectId? } → 200 { conversation }
+ *          projectId: a project of the account (move the chat into it) or null (out of its project)
  *   DELETE /api/ai/conversations/<id> → 200 { ok: true }   hidden now, purged a day later; its shared link goes now
  *   → 400 bad_request · 401 signed_out · 404 not_found (missing, deleted or someone else's) · 503 unavailable
  */
@@ -19,6 +20,7 @@ import {
 import type { AiEnv } from '../../../_lib/ai/types';
 import { liveLabel } from '../../../_lib/ai/voice';
 import { removeSharesOf } from '../../../_lib/ai/shares';
+import { getProject } from '../../../_lib/ai/projects';
 
 interface Ctx { request: Request; env: AiEnv; params?: { id?: string } }
 
@@ -77,8 +79,18 @@ export const onRequestPatch = async (ctx: Ctx): Promise<Response> => {
     if (!m.rows.some((r) => r.id === b.activeLeafId)) return json({ error: 'not_found' }, 404);
     patch.active_leaf_id = b.activeLeafId;
   }
+  if ('projectId' in b) {
+    if (b.projectId === null) patch.project_id = null;
+    else if (!isUuid(b.projectId)) return json({ error: 'bad_request' }, 400);
+    else {
+      const p = await getProject(ctx.env, o.sub, b.projectId);
+      if (!p.ok) return json({ error: 'unavailable' }, 503);
+      if (!p.value) return json({ error: 'not_found' }, 404);
+      patch.project_id = p.value.id;
+    }
+  }
   if (!Object.keys(patch).length) return json({ error: 'bad_request' }, 400);
-  // Starring or switching branches is not a new message: updated_at stays.
+  // Starring, switching branches or moving to a project is not a new message: updated_at stays.
   if (patch.title) patch.updated_at = new Date().toISOString();
   const r = await updateConversation(ctx.env, o.sub, o.conv.id, patch);
   if (!r.ok) return json({ error: 'unavailable' }, 503);

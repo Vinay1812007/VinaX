@@ -7,16 +7,18 @@
  * A new chat opens on a greeting with the composer in the middle and four
  * suggestion chips that fill in a starter (they never send). Signed-out
  * visitors never get here: the app's sign-in gate answers first.
- * See docs/ai.md.
+ * /vinaxai/projects and /vinaxai/project/:projectId show the projects in the
+ * same frame (Projects.tsx, lazy); a project's page uses this composer to
+ * start a chat in the project. See docs/ai.md.
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAccount } from '@/components/useAccount';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { haptic } from '@/services/native';
-import { AiError, getConversation, getModels } from './api';
+import { AiError, getConversation, getModels, listProjects, PROJECTS_KEY } from './api';
 import { pathTo } from './chatState';
 import { Composer, type ComposerHandle } from './Composer';
 import { AssistantMessage, UserMessage } from './Message';
@@ -31,7 +33,7 @@ import type { FileRef } from './types';
 import { ArtifactPanel } from './ArtifactPanel';
 import { usePanel } from './artifactStore';
 import { artifactsOf, collectVersions, hasPreview, type Artifact } from './artifacts';
-import { ArrowDownIcon, MenuIcon, NewChatIcon, SettingsIcon, ShareIcon, SidebarIcon, SparkIcon } from './icons';
+import { ArrowDownIcon, FolderIcon, MenuIcon, NewChatIcon, SettingsIcon, ShareIcon, SidebarIcon, SparkIcon } from './icons';
 import { useVoiceDictation } from './useVoiceDictation';
 import { dismissReadNotice, stopReading, useReadAloud } from './readAloud';
 import { SettingsPanel, type SettingsSection } from './SettingsPanel';
@@ -39,6 +41,8 @@ import { ShareDialog } from './ShareDialog';
 
 /** Live voice loads only when someone opens it. */
 const LiveView = lazy(() => import('./live/LiveView'));
+/** Projects load only when a project page opens. */
+const ProjectsArea = lazy(() => import('./Projects'));
 
 /** Markdown made readable aloud: code blocks named, not read; markup characters dropped. */
 export function plainText(md: string): string {
@@ -90,7 +94,10 @@ function useKeyboardInset(el: React.RefObject<HTMLDivElement | null>): void {
 }
 
 export function ChatView(): ReactNode {
-  const { id } = useParams();
+  const { id, projectId: projectPage } = useParams();
+  const { pathname } = useLocation();
+  // Which page: a chat, the projects list or one project.
+  const view: 'chat' | 'projects' | 'project' = projectPage ? 'project' : pathname.startsWith('/vinaxai/projects') ? 'projects' : 'chat';
   const navigate = useNavigate();
   const account = useAccount();
   const firstName = account?.user.name?.trim().split(/\s+/)[0] ?? null;
@@ -99,6 +106,7 @@ export function ChatView(): ReactNode {
 
   const conversationId = useChatStore((s) => s.conversationId);
   const title = useChatStore((s) => s.title);
+  const chatProject = useChatStore((s) => s.projectId);
   const messages = useChatStore((s) => s.messages);
   const leafId = useChatStore((s) => s.leafId);
   const streaming = useChatStore((s) => s.streaming);
@@ -135,7 +143,10 @@ export function ChatView(): ReactNode {
   // Another chat closes the panel.
   useEffect(() => { usePanel.getState().close(); }, [conversationId]);
 
-  usePageTitle(title ?? 'VinaX AI');
+  usePageTitle(view === 'chat' ? title ?? 'VinaX AI' : 'Projects');
+  // The project a chat is in, named in the header with a link back to it.
+  const projects = useQuery({ queryKey: PROJECTS_KEY, queryFn: listProjects, staleTime: 60_000, enabled: view === 'chat' && !!chatProject });
+  const inProject = view === 'chat' && chatProject ? projects.data?.items.find((p) => p.id === chatProject) ?? null : null;
 
   const models = useQuery({ queryKey: ['vinaxai', 'models', account?.session ?? ''], queryFn: getModels, staleTime: 60_000, retry: 1 });
   const pickerModels = useMemo(() => models.data?.models ?? [], [models.data]);
@@ -161,10 +172,12 @@ export function ChatView(): ReactNode {
     if (!id && cur.conversationId) resetChat();
   }, [id]);
 
-  // A new conversation gets its own address once the server names it.
+  // A new conversation gets its own address once the server names it (read
+  // fresh: leaving a chat for the projects pages has just reset it).
   useEffect(() => {
-    if (conversationId && !id) navigate(`/vinaxai/c/${conversationId}`, { replace: true });
-  }, [conversationId, id, navigate]);
+    const current = useChatStore.getState().conversationId;
+    if (current && !id && current === conversationId) navigate(`/vinaxai/c/${current}`, { replace: view === 'chat' });
+  }, [conversationId, id, navigate, view]);
 
   const [draft, setDraft] = useState('');
   const composer = useRef<ComposerHandle>(null);
@@ -212,7 +225,7 @@ export function ChatView(): ReactNode {
     setDraft('');
     haptic('light');
     stick.current = true;
-    const out = await sendMessage(text, { files });
+    const out = await sendMessage(text, { files, ...(view === 'project' && projectPage ? { projectId: projectPage } : {}) });
     if (!out.ok && out.beforeStart) {
       setDraft((d) => d || text);
       tray.restore(files);
@@ -339,7 +352,7 @@ export function ChatView(): ReactNode {
       hasFiles={tray.files.some((f) => f.status === 'ready')}
       sendBlocked={tray.busy || cannotSee}
       dictation={voice?.dictation ? dictation : undefined}
-      onLive={voice?.live ? openLive : undefined}
+      onLive={voice?.live && view === 'chat' ? openLive : undefined}
       onSettings={() => setSettings(voice && (voice.dictation || voice.readAloud || voice.live) ? 'voice' : 'chat')}
     />
   );
@@ -383,7 +396,16 @@ export function ChatView(): ReactNode {
   if (models.isPending) body = <div className="vx-ai-loading" aria-busy="true" />;
   else if (models.isError || !models.data?.configured) body = <Calm title="VinaX AI is unavailable right now" body="Please try again in a little while." action={<button type="button" className="vx-ai-chip" onClick={() => void models.refetch()}>Try again</button>} />;
   else if (!models.data.enabled) body = <Calm title="VinaX AI is taking a break" body="It will be back soon. Your music keeps playing in the meantime." />;
-  else if (needLoad && conv.isError) body = <Calm title="This chat isn’t available" body="It may have been deleted, or it belongs to another account." action={<button type="button" className="vx-ai-chip" onClick={newChat}>New chat</button>} />;
+  else if (view !== 'chat') {
+    body = (
+      <Suspense fallback={<div className="vx-ai-loading" aria-busy="true" />}>
+        <ProjectsArea
+          projectId={view === 'project' ? projectPage ?? null : null}
+          composer={<>{noticeEl}{voiceNoticeEl}{fileNotice}{visionChip}{composerEl}</>}
+        />
+      </Suspense>
+    );
+  } else if (needLoad && conv.isError) body = <Calm title="This chat isn’t available" body="It may have been deleted, or it belongs to another account." action={<button type="button" className="vx-ai-chip" onClick={newChat}>New chat</button>} />;
   else if (needLoad) body = <div className="vx-ai-loading" aria-busy="true" />;
   else if (empty) {
     body = (
@@ -492,7 +514,13 @@ export function ChatView(): ReactNode {
           )}
           <div className="vx-ai-brand">
             <h1 className={`vx-ai-wordmark${wide && sideOpen ? ' sr-only' : ''}`}>VinaX AI</h1>
-            {title && <span className="vx-ai-title" title={title}>{title}</span>}
+            {inProject && (
+              <Link to={`/vinaxai/project/${inProject.id}`} className="vx-ai-proj-chip" title={`Project: ${inProject.name}`}>
+                <FolderIcon className="w-3.5 h-3.5" />
+                <span><span className="sr-only">Project: </span>{inProject.name}</span>
+              </Link>
+            )}
+            {view !== 'chat' ? <span className="vx-ai-title">Projects</span> : title && <span className="vx-ai-title" title={title}>{title}</span>}
           </div>
           <div className="vx-ai-header-end">
             <NowPlayingPill />
@@ -511,7 +539,7 @@ export function ChatView(): ReactNode {
             )}
           </div>
         </header>
-        <div className={`vx-ai-main${empty ? ' is-empty' : ''}`}>{body}</div>
+        <div className={`vx-ai-main${empty && view === 'chat' ? ' is-empty' : ''}`}>{body}</div>
       </div>
       {panel.open && (
         <ArtifactPanel versions={versions.get(panel.open.id) ?? []} live={streaming} sheet={!wide} onFix={conversationId ? fixArtifact : undefined} />
