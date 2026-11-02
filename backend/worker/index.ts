@@ -42,6 +42,9 @@ import * as m_api_admin_push from './functions/api/admin/push';
 import * as m_api_admin_notifications from './functions/api/admin/notifications';
 import * as m_api_admin_audit from './functions/api/admin/audit';
 import * as m_api_admin_database from './functions/api/admin/database';
+import * as m_api_admin_session from './functions/api/admin/session';
+import * as m_api_admin_admins from './functions/api/admin/admins';
+import * as m_api_admin_upload from './functions/api/admin/upload';
 import * as m_api_cron_run from './functions/api/cron/run';
 import { runScheduled } from './functions/_lib/jobs';
 // 7.2.0 — recommendation quality and tuning.
@@ -173,6 +176,9 @@ const EXACT: Record<string, Mod> = {
   '/api/admin/notifications': m_api_admin_notifications,
   '/api/admin/audit': m_api_admin_audit,
   '/api/admin/database': m_api_admin_database,
+  '/api/admin/session': m_api_admin_session,
+  '/api/admin/admins': m_api_admin_admins,
+  '/api/admin/upload': m_api_admin_upload,
   '/api/cron/run': m_api_cron_run,
   '/api/announcements': m_api_announcements,
   '/api/apk': m_api_apk,

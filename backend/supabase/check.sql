@@ -121,14 +121,15 @@ begin
   end;
 
   v := stats_overview();
-  assert (v ->> 'listeners')::int >= 3, 'stats_overview.listeners';
+  assert (v ->> 'listeners')::int = (select count(*) from accounts), 'stats_overview.listeners: signed-in people only';
+  assert (v ->> 'users')::int >= 2 and (v ->> 'dau')::int >= 1, 'stats_overview.users';
   assert (v ->> 'accounts')::int >= 2, 'stats_overview.accounts';
   assert (v ->> 'plays7d')::int > 0, 'stats_overview.plays7d';
   assert (v ->> 'feedbackNew')::int >= 2, 'stats_overview.feedbackNew';
 
   v := stats_timeline(14);
   assert jsonb_array_length(v) = 14, 'stats_timeline: 14 days';
-  assert (v -> 13 ->> 'day') = to_char(current_date, 'YYYY-MM-DD'), 'stats_timeline: ends today';
+  assert (v -> 13 ->> 'day') = to_char(_ist_today(), 'YYYY-MM-DD'), 'stats_timeline: ends today in India';
 
   v := stats_music(7, 25);
   assert jsonb_array_length(v -> 'songs') > 0 and jsonb_array_length(v -> 'artists') > 0 and jsonb_array_length(v -> 'languages') > 0, 'stats_music';
@@ -137,7 +138,8 @@ begin
   assert jsonb_array_length(v -> 'countries') > 0 and jsonb_array_length(v -> 'cities') > 0, 'stats_geo';
 
   v := stats_platforms();
-  assert jsonb_array_length(v -> 'platforms') >= 2, 'stats_platforms: web and android';
+  assert jsonb_array_length(v -> 'platforms') >= 1, 'stats_platforms';
+  assert (select sum((e ->> 'users')::int) from jsonb_array_elements(v -> 'platforms') e) = (select count(*) from directory where account_id is not null), 'stats_platforms counts signed-in people only';
 
   v := stats_engagement(7);
   assert jsonb_array_length(v -> 'hourly' -> 'cells') = 7 and jsonb_array_length(v -> 'hourly' -> 'cells' -> 0) = 24, 'stats_engagement: 7×24 grid';
@@ -147,13 +149,56 @@ begin
   assert jsonb_typeof(v) = 'array', 'stats_retention';
 
   v := stats_funnel(7);
-  assert jsonb_array_length(v) = 7 and (v -> 0 ->> 'listeners')::int > 0, 'stats_funnel';
+  assert jsonb_array_length(v) = 4 and (v -> 0 ->> 'listeners')::int > 0 and (v -> 2 ->> 'listeners')::int >= 1, 'stats_funnel';
 
   v := stats_skips(7, 1);
   assert jsonb_array_length(v) > 0 and (v -> 0 ->> 'rate')::int between 0 and 100, 'stats_skips';
 
   v := stats_errors(7, 50);
   assert (v ->> 'total')::int > 0 and jsonb_array_length(v -> 'top') > 0, 'stats_errors';
+  assert (v -> 'top' -> 0 ->> 'status') = 'new' and length(v -> 'top' -> 0 ->> 'fingerprint') = 32, 'stats_errors: grouped with a status';
+  assert _error_shape('Download of "Song 12" timed out after 30s') = 'Download of … timed out after #', '_error_shape';
+
+  -- version 8: the console counts signed-in people only
+  select count(*) into n from signed_devices();
+  assert n = 1, 'signed_devices: only check_l1 belongs to an account';
+  v := admin_users();
+  assert (v ->> 'total')::int = 2 and jsonb_array_length(v -> 'rows') = 2, 'admin_users: both accounts, no anonymous device';
+  assert (v -> 'counts' ->> 'users')::int = 2, 'admin_users.counts';
+  v := admin_users(p_q => 'check-a@');
+  assert (v ->> 'total')::int = 1 and (v -> 'rows' -> 0 ->> 'id') = 'check_a1' and (v -> 'rows' -> 0 ->> 'plays')::int > 0, 'admin_users: search by email';
+  v := admin_users(p_sort => 'plays', p_limit => 1);
+  assert (v -> 'rows' -> 0 ->> 'id') = 'check_a1' and jsonb_array_length(v -> 'rows') = 1, 'admin_users: most plays first, paged';
+  v := admin_users(p_offset => 1);
+  assert jsonb_array_length(v -> 'rows') = 1, 'admin_users: offset';
+  v := admin_user_filters();
+  assert jsonb_typeof(v -> 'places') = 'array' and jsonb_array_length(v -> 'languages') >= 1, 'admin_user_filters';
+  v := user_profile('check_a1');
+  assert jsonb_array_length(v -> 'devices') = 1 and (v -> 'stats' ->> 'plays')::int > 0 and jsonb_array_length(v -> 'history') > 0, 'user_profile';
+  assert jsonb_array_length(v -> 'feedback') = 1 and jsonb_array_length(v -> 'topArtists') > 0, 'user_profile: feedback and artists';
+  assert user_profile('check_nobody') is null, 'user_profile: unknown account';
+  n := purge_kind('errors', 180);
+  assert n = 0, 'purge_kind keeps recent errors';
+  begin
+    perform purge_kind('everything', 1);
+    raise exception 'purge_kind accepted an unknown kind';
+  exception when invalid_parameter_value then null;
+  end;
+  update notifications set status = 'sent' where dedupe_key = 'check_1';
+  perform notification_opened((select id from notifications where dedupe_key = 'check_1'));
+  assert (select opened from notifications where dedupe_key = 'check_1') = 1, 'notification_opened';
+  insert into admins (email, role) values ('check-admin@example.com', 'editor');
+  begin
+    insert into admins (email, role) values ('check-boss@example.com', 'god');
+    raise exception 'admins_role_shape accepted an unknown role';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into admins (email) values ('Not-Lower@Example.com');
+    raise exception 'admins_email_shape accepted a mixed-case email';
+  exception when check_violation then null;
+  end;
+  insert into blocked_content (kind, value, label, blocked_by) values ('album', 'check_al1', 'Check Album', 'check-admin@example.com');
 
   v := listener_profile('check_l1', null);
   assert (v -> 'listener' ->> 'id') = 'check_l1' and (v -> 'account' ->> 'id') = 'check_a1', 'listener_profile by listener';
@@ -184,7 +229,7 @@ begin
 
   assert jsonb_array_length(table_stats()) >= 19, 'table_stats lists every table';
   v := table_counts();
-  assert (v ->> 'listeners')::int >= 3 and (v ->> 'rooms')::int >= 1, 'table_counts';
+  assert (v ->> 'listeners')::int >= 3 and (v ->> 'rooms')::int >= 1 and (v ->> 'admins') is not null, 'table_counts';
 
   select count(*) into n from directory where account_id in ('check_a1', 'check_a2');
   assert n = 2, 'directory: one row per person';
@@ -201,7 +246,7 @@ begin
   assert b, 'directory: newest device facts, earliest first-seen';
   v := stats_platforms();
   select (e ->> 'listeners')::int into n from jsonb_array_elements(v -> 'platforms') e where e ->> 'platform' = 'android';
-  assert n >= 2, 'stats_platforms counts devices, not directory rows';
+  assert n = 1, 'stats_platforms counts the person once, on their newest device';
   v := listener_profile('check_l4', null);
   assert v -> 'account' ->> 'id' = 'check_a1', 'listener_profile: a second device opens its account';
   delete from listeners where id = 'check_l4';

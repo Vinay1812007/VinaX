@@ -98,4 +98,4 @@ export const onRequestPost = adminPost(async ({ env, body, audit }) => {
     return adminJson({ ok: true, result });
   }
   return badRequest('unknown_action');
-});
+}, { role: 'owner' });

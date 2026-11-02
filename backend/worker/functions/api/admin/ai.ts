@@ -20,7 +20,7 @@
  * what the instance that answers has seen. Never returns a key, an
  * upstream host or a provider's own words.
  */
-import { adminJson, badRequest, isAdminAsync, unauthorized, type AdminAuthEnv } from '../../_lib/admin';
+import { adminJson, badRequest, isAdminAsync, requireRole, unauthorized, type AdminAuthEnv } from '../../_lib/admin';
 import { readJsonCapped } from '../../_lib/body';
 import { db, dbConfigured, q } from '../../_lib/db';
 import { PROVIDER_NAMES, PROVIDERS, providerConfigured } from '../../_lib/ai/adapters';
@@ -124,7 +124,9 @@ export async function probeModel(env: AiEnv, id: string): Promise<{ model: strin
 
 export const onRequestPost = async (ctx: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = ctx;
-  if (!(await isAdminAsync(request, env))) return unauthorized();
+  // Probing spends provider quota: editors and owners only.
+  const auth = await requireRole(request, env, 'editor');
+  if (!auth.ok) return auth.response;
   const read = await readJsonCapped<{ model?: unknown } | null>(request, 4 * 1024);
   if (!read.ok) return badRequest();
   const id = read.value && typeof read.value === 'object' ? read.value.model : null;

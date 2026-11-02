@@ -2,6 +2,7 @@
 import { bindingAllows, clientKey } from './ratelimit';
 import { safeEqual } from './safe-compare';
 import { dbErrorCode, type DbFail } from './db';
+import { looksLikeAdminSession, PASSWORD_PRINCIPAL, principalFromSession, roleAllows, type AdminPrincipal, type AdminRole, type AdminSessionEnv } from './adminAuth';
 
 export interface AdminEnv {
   ADMIN_LOGIN_PASSWORD?: string;
@@ -35,7 +36,7 @@ const authFails = new Map<string, number[]>();
 /** Sources the location-wide failure counter has locked, until the stored time. */
 const lockedUntil = new Map<string, number>();
 
-export interface AdminAuthEnv extends AdminEnv {
+export interface AdminAuthEnv extends AdminEnv, AdminSessionEnv {
   /** Workers Rate Limiting binding counting wrong admin tokens (optional). */
   ADMIN_AUTH_FAILS?: unknown;
   TELEMETRY_PEPPER?: string;
@@ -100,9 +101,36 @@ export function isAdmin(request: Request, env: AdminEnv): boolean {
  * budget; without the binding this is exactly `isAdmin`.
  */
 export async function isAdminAsync(request: Request, env: AdminAuthEnv): Promise<boolean> {
-  if (!env.ADMIN_LOGIN_PASSWORD) return false;
+  return (await adminPrincipal(request, env)) !== null;
+}
+
+/**
+ * Version 8 — who is calling: a Google-signed-in admin (an `adm1.` console
+ * session, role from the `admins` table) or the owner recovery password.
+ * Null when neither checks out.
+ */
+export async function adminPrincipal(request: Request, env: AdminAuthEnv): Promise<AdminPrincipal | null> {
   const token = presentedToken(request);
-  if (!token) return false;
+  if (!token) return null;
+  if (looksLikeAdminSession(token)) return principalFromSession(env, token);
+  return (await passwordAsync(request, env, token)) ? PASSWORD_PRINCIPAL : null;
+}
+
+/** 403 for a signed-in admin whose role is too low for this action. */
+export function forbidden(need: AdminRole): Response {
+  return adminJson({ error: 'forbidden', need }, 403);
+}
+
+/** The principal when it may do `need`, else the 401/403 answer. */
+export async function requireRole(request: Request, env: AdminAuthEnv, need: AdminRole): Promise<{ ok: true; me: AdminPrincipal } | { ok: false; response: Response }> {
+  const me = await adminPrincipal(request, env);
+  if (!me) return { ok: false, response: unauthorized() };
+  if (!roleAllows(me.role, need)) return { ok: false, response: forbidden(need) };
+  return { ok: true, me };
+}
+
+async function passwordAsync(request: Request, env: AdminAuthEnv, token: string): Promise<boolean> {
+  if (!env.ADMIN_LOGIN_PASSWORD) return false;
   const verdict = checkLocally(request, env, token);
   if (verdict.failed) {
     const allowed = await bindingAllows(env, 'ADMIN_AUTH_FAILS', `admin-auth|${clientKey(request, env)}`);
@@ -136,8 +164,14 @@ export function notConfigured(extra: Record<string, unknown> = {}): Response {
   return adminJson({ configured: false, ...extra });
 }
 
+/** PostgREST / Postgres codes for "that does not exist (yet)". */
+const SCHEMA_BEHIND = new Set(['PGRST202', 'PGRST204', 'PGRST200', '42883', '42703', '42P01']);
+
 /** A failed database call → 502 with the reason (never a silent zero). */
 export function dbFailure(fail: DbFail, extra: Record<string, unknown> = {}): Response {
+  // A function, table or column the Worker expects is missing: the database
+  // still runs an older schema.sql (the console says "run the database update").
+  if (fail.code && SCHEMA_BEHIND.has(fail.code)) return adminJson({ configured: true, error: 'db_update_needed', code: fail.code, upstreamStatus: fail.status, ...extra }, 502);
   return adminJson({ configured: true, error: dbErrorCode(fail.error), code: fail.code, upstreamStatus: fail.status, ...extra }, fail.error === 'not_configured' ? 503 : 502);
 }
 

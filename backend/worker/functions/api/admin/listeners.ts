@@ -75,4 +75,4 @@ export const onRequestPost = adminPost(async ({ env, body, audit }) => {
   const deleted = r.value ?? {};
   await audit({ action: 'listener-delete', summary: `deleted ${id ? `listener ${id}` : `account ${account}`} — ${reason}`, target: id ?? account ?? undefined, after: deleted });
   return adminJson({ ok: true, deleted });
-});
+}, { role: (b) => (b.action === 'delete' ? 'owner' : 'editor') });

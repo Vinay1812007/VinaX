@@ -82,3 +82,7 @@
 # never for search: the page and its API answer both say noindex.
 /vinaxai/share/*
   X-Robots-Tag: noindex, nofollow
+/admin/kit/*
+  Cache-Control: no-cache
+/admin/css/*
+  Cache-Control: no-cache

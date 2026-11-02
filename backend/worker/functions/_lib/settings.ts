@@ -43,6 +43,9 @@ export const SETTING_KEYS: readonly SettingSpec[] = [
   { key: 'search-synonyms', group: 'Catalog', title: 'Search synonyms', note: '{ "typed": "meant" } pairs applied to searches.', shape: 'object' },
   { key: 'catalog-sources', group: 'Catalog', title: 'Catalog sources', note: '{ sourceId: false } disables a catalogue source for everyone.', shape: 'object' },
   { key: 'language-order', group: 'Catalog', title: 'Language order', note: 'Languages in the order Home offers them: ["telugu", "hindi", …].', shape: 'array' },
+  { key: 'robots', group: 'Operations', title: 'Bots allowed to read the site', note: 'Which crawlers robots.txt allows: { bots: { "<bot name>": false } } — false blocks that bot; anything not listed keeps the built-in rule.', shape: 'object' },
+  { key: 'jobs', group: 'Operations', title: 'Scheduled jobs', note: 'Switch a background job off or slow it down: { "<job>": { enabled, every } }.', shape: 'object' },
+  { key: 'push-audiences', group: 'Operations', title: 'Saved notification audiences', note: 'Audiences the owner saved on Send Notification: [{ id, name, filter, activity }]. Console only.', shape: 'array' },
 ] as const;
 
 export const SETTING_KEY_SET: ReadonlySet<string> = new Set(SETTING_KEYS.map((s) => s.key));

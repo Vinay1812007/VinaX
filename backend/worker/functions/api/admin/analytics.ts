@@ -51,4 +51,4 @@ export const onRequestPost = adminPost(async ({ env, body, audit }) => {
   if (!r.ok) return dbFailure(r);
   await audit({ action: 'errors-clear', summary: `cleared ${r.rows.length} app error${r.rows.length === 1 ? '' : 's'}` });
   return adminJson({ ok: true, deleted: r.rows.length });
-});
+}, { role: (b) => (b.action === 'clear_errors' ? 'owner' : 'editor') });
