@@ -24,7 +24,9 @@ async function seed(page: Page, baseURL: string, neverRepeat = true): Promise<{ 
   const heard = pool.slice(0, 4);
   // Another cut of a heard song, under its own catalogue id.
   const remix = { ...mk(baseURL, 99, `${heard[0].title} (DJ Remix)`), id: 'remix-of-heard', artists: heard[0].artists, subtitle: heard[0].subtitle };
-  const answer = [...pool, remix];
+  // With the mode off (the control), the catalogue offers mostly heard songs, so the first stretch
+  // must bring some back whatever order this page's session picks; with it on, every song is on offer.
+  const answer = neverRepeat ? [...pool, remix] : [...heard, remix, pool[4], pool[5]];
   const now = Date.now();
   // Played days ago, and followed by 24 other plays, so neither the recent-play rule (the last
   // 20 plays) nor the three-day cooldown keeps them out: only Never repeat does.
@@ -89,7 +91,6 @@ test('control: with Never repeat off, the same catalogue does bring heard songs 
   await expect(rows.first()).toBeVisible();
   await rows.first().click();
   await expect.poll(() => queueIds(page).then((q) => q.length), { timeout: 20_000 }).toBeGreaterThan(3);
-  // Grow the queue past one batch so the heard songs (the catalogue's first answers) have room to appear.
   await expect.poll(async () => {
     const automatic = (await queueIds(page)).slice(1);
     return [...heard.map((s) => s.id), remix.id].some((id) => automatic.includes(id));
