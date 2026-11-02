@@ -3,7 +3,8 @@
  *
  *   → 200 { enabled, configured, search, groups: [...], models: [{ id, name, provider, group,
  *            description, flags: { vision, web, thinking, code }, available, reason? }],
- *            voice: { dictation, readAloud, live, liveSearch, voices: [...], liveVoices: [...], liveModels: [{ id, name }] } }
+ *            voice: { dictation, readAloud, live, liveSearch, voices: [...], liveVoices: [...], liveModels: [{ id, name }] },
+ *            limits: { imagesPerMessage, filesPerMessage, filesPerChat, pdfMB, pdfPages, textMB } }
  *
  * `voice` says which voice features have a provider key (phase 6) and
  * which voices the page may offer for Read aloud and Live. `liveSearch`:
@@ -55,8 +56,11 @@ export const onRequestGet = async (ctx: { request: Request; env: AiEnv }): Promi
     });
   // Web search is offered when the owner allows it and something can search: the search API or free grounding.
   const registry = registryFor(settings);
-  const canSearch = searchConfigured(env) || ladderModels(registry, 'grounded').some((spec) => providerConfigured(env, spec.provider));
+  const canSearch = searchConfigured(env, settings.limits.searchesPerDay) || ladderModels(registry, 'grounded').some((spec) => providerConfigured(env, spec.provider));
   const avail = voiceAvailability(env);
   const voice = { ...avail, liveSearch: avail.live && settings.search, voices: READ_VOICES, liveVoices: LIVE_VOICES, liveModels: ALL_LIVE_MODELS };
-  return json({ enabled: aiOpenFor(settings, sub), configured: anyProviderConfigured(env), search: settings.search && canSearch, groups: PICKER_GROUPS, models, voice });
+  // The owner's file limits, so the page checks files against the same numbers (searchesPerDay and the rate stay server-side).
+  const { imagesPerMessage, filesPerMessage, filesPerChat, pdfMB, pdfPages, textMB } = settings.limits;
+  const limits = { imagesPerMessage, filesPerMessage, filesPerChat, pdfMB, pdfPages, textMB };
+  return json({ enabled: aiOpenFor(settings, sub), configured: anyProviderConfigured(env), search: settings.search && canSearch, groups: PICKER_GROUPS, models, voice, limits });
 };

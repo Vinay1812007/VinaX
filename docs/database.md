@@ -5,7 +5,7 @@ VinaX 14.0 brings back a server database, designed from a clean sheet: one schem
 ## Setting it up
 
 1. Create a Supabase project (any region; Mumbai is closest to most listeners).
-2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 8), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
+2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 9), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
 3. Set two Worker secrets from `backend/`:
 
 ```sh
@@ -14,6 +14,12 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml
 ```
 
 4. Open the console's **Database** page: it shows the schema version the paste wrote and every table.
+
+### Moving from version 8
+
+Version 9 adds VinaX AI projects ([ai.md](ai.md#projects)): the table `ai_projects` with its row-level security, a nullable `project_id` on `ai_conversations` (`on delete set null`: deleting a project keeps its chats unless the Worker deletes them first) and on `ai_attachments` (`on delete cascade`: a project's knowledge files go with it), and `ai_export` now also lists the projects. It deletes nothing and changes no existing row. Paste `schema.sql` once; the Database page then shows version 9. Apply it before deploying the Worker that uses it: until then every chat read answers `503 unavailable`, because the Worker asks for the new `project_id` column.
+
+It also adds VinaX AI's memory ([ai.md](ai.md#memory)): the tables `ai_memories` (one row per note) and `ai_memory_prefs` (the listener's two switches), with their row-level security, and the column `ai_conversations.incognito` (default false). It changes nothing that exists. A Worker deployed before it keeps chatting: memory reads fail closed (no memory, no learning) and the incognito flag is read on its own query, but Settings → Memory answers `503 unavailable` until the schema is applied. It also adds the function `ai_artifact_list` (VinaX AI's artifacts gallery; it reads what replies already saved) and raises the `ai-attachments` bucket's file size limit from 20 MB to 50 MB, so the owner can allow larger PDFs. Paste `schema.sql` once; the Database page then shows version 9.
 
 ### Moving from version 7
 
@@ -81,9 +87,12 @@ Only the Worker holds the service-role key. Row-level security is enabled and fo
 | `audit_log` | owner action | actor, action, target, summary, redacted before/after, request id |
 | `uptime_days` / `uptime_latest` | status probe | per component: daily up/total tallies and the latest probe |
 | `job_runs` | scheduled job run | job, started/finished, ok, summary |
-| `ai_conversations` | VinaX AI chat | `account_id`, `title`, `starred`, `model_pref`, `active_leaf_id` (the branch a reload opens), `deleted_at` (hidden; purged a day later); deleted with the account |
+| `ai_conversations` | VinaX AI chat | `account_id`, `title`, `starred`, `model_pref`, `active_leaf_id` (the branch a reload opens), `project_id` (the project it is in, or null; set null when the project goes), `incognito` (never reads or writes memory), `deleted_at` (hidden; purged a day later); deleted with the account |
+| `ai_projects` | VinaX AI project | `account_id`, `name` (1–60 characters), `description` (≤ 300), `instructions` (≤ 8,000: every chat in the project follows them), `starred`, `created_at`, `updated_at`; its knowledge files are `ai_attachments` rows with its `project_id`; deleted by its owner or with the account |
 | `ai_messages` | message in a chat | `parent_id` (a tree: an edit or a retry adds a sibling), `role` (user/assistant), `content` (parts), `thinking`, `thinking_ms`, `sources`, `artifacts`, `model_id`, `provider`, `stop_reason`, `usage`; cascade with the chat |
 | `ai_shares` | shared VinaX AI chat | `id` (22 base64url characters, 128 random bits: the link's key), `account_id`, `conversation_id` (unique: one link per chat), `title`, `messages` (the snapshot: `[{ role, text, files?: [{ name, kind }], sources?, createdAt }]`, no reasoning, no file contents), `message_count`, `bytes` (≤ 1,000,000), `created_at`, `updated_at` (the last snapshot); deleted on Stop sharing, with the chat, or with the account |
+| `ai_memories` | a note in VinaX AI's memory | `id`, `account_id`, `text` (1–200 characters; the Worker keeps at most 50 per account), `origin` (`chat` learned, `user` added), `conversation_id` (the chat it was learned from; `on delete set null`, so the note outlives the chat), `created_at`, `updated_at`; deleted on Delete or Forget everything, or with the account |
+| `ai_memory_prefs` | an account's memory switches | `account_id` (primary key), `use_memory`, `learn` (both default true; no row means both on), `updated_at`; deleted with the account |
 | `ai_daily_usage` | UTC day × kind | VinaX AI's shared daily allowances (`search`, `grounding`): `count` taken so far; rows older than 90 days are removed by the hourly housekeeping |
 | `personal_songs` | catalogue song the personal engine met | title, artist and `artist_id`, `artists`, album, language, year, duration, image, identity `key`, `facets` (mood, genre, vibe, energy, tempo), `verified` (the catalogue confirmed the row; a device-asserted row stays unverified and off every page until then), the `embedding` (1024 dimensions) with `embed_model` and `embedded_at`, community counters (`plays`, `completes`, `skips`, `likes`), first/last seen; no account attached |
 | `personal_events` | event a signed-in listener's device reported | `account_id`, `at`, `kind` (play, complete, skip, like, unlike, dislike, save, queue, search_play, shown, radio_start), `song_id`, `heard_sec`, `duration_sec`, `source`, `context` (hour, dow, tz, shelf, position), `client_id` (unique per account: a retried batch inserts nothing twice); cascade with the account |
@@ -91,7 +100,7 @@ Only the Worker holds the service-role key. Row-level security is enabled and fo
 | `personal_exposure` | account × song | `shown`, `queued`, `played`, `completed`, `skipped` counts (a play resets the skips), `liked`, `disliked`, the `last_*` times (including `last_disliked`); cascade with the account |
 | `personal_pages` | page the engine built | `kind` (home / playlist / radio), `prompt`, `page` (the whole answer with its song records), `taste_version`, `events_seen` (staleness), `model_id`, `composed` (the language model shaped it), `built_ms`, `expires_at`; cascade with the account |
 | `personal_colisten` | song × partner song | `weight` (listeners who played both within an hour, last 30 days, a listener's last 150 plays; top 50 partners per song), rebuilt once a day |
-| `ai_attachments` | file added to a chat | `name`, `mime`, `size`, `kind` (image / pdf / text), `storage_path` (private bucket `ai-attachments`, at `<account>/<conversation or new>/<id>`), `extracted_text` (a text file, or the text the page read out of a PDF), `pages`, `gemini_uri` / `gemini_expires_at` (the Gemini Files API copy of a PDF). The rows go with the account or the chat; the stored files are removed by the Worker first (account deletion, the console's delete, the hourly housekeeping), and files never sent are removed after a day |
+| `ai_attachments` | file added to a chat | `name`, `mime`, `size`, `kind` (image / pdf / text), `project_id` (a project's knowledge file: no conversation, cascade with the project), `storage_path` (private bucket `ai-attachments`, at `<account>/<conversation or new>/<id>`, or `<account>/project-<project>/<id>`), `extracted_text` (a text file, or the text the page read out of a PDF), `pages`, `gemini_uri` / `gemini_expires_at` (the Gemini Files API copy of a PDF). The rows go with the account or the chat; the stored files are removed by the Worker first (account deletion, the console's delete, the hourly housekeeping), and files never sent are removed after a day (a project's files are not "never sent": they stay until removed) |
 
 The view `directory` merges `listeners` and `accounts` into one row per person (device rows with their account when linked, plus account-only rows).
 
@@ -122,6 +131,7 @@ All `security invoker`, executable by the service role only. Each answers JSON s
 | `ai_take_daily(kind, limit)` | takes one from today's allowance of `kind`: true when taken, false once `limit` is used (or when it is 0); atomic, so every isolate shares one count |
 | `ai_export(account)` | every VinaX AI chat of one account with all its messages (every branch), newest first, as the file `GET /api/ai/export` downloads; deleted chats left out |
 | `ai_conversation_search(account, query, before, limit)` | one account's VinaX AI chats whose title or message text contains `query` (wildcards escaped), newest first |
+| `ai_artifact_list(account, kind, query, before, before_key, limit)` | the VinaX AI artifacts gallery: one row per artifact id per chat of one account (its newest version and how many versions there are), deleted chats left out, by type and title (wildcards escaped), newest first, paged by time and key; metadata only, never the content |
 | `personal_record_events(account, events)` | inserts the new events of a batch (a repeated `client_id` is skipped), updates the exposure rows and the community counters; answers `{ inserted: [client ids] }` |
 | `personal_touch_songs(rows, verified)` | inserts songs the engine met; a known row only gains what it lacked unless the facts are verified (from the catalogue), which replace a device's version and verify the row; answers how many were new |
 | `personal_unverified(limit)` / `personal_exposure_for(account, songs)` | the device-asserted rows awaiting confirmation / one account's exposure for a set of songs |
@@ -207,6 +217,8 @@ All under `/api/admin/`, gated by `isAdminAsync`. `?days=` is 1..90 (default 7).
 | `GET/PUT/DELETE /api/profile`, `GET /api/profile/<handle>` | `profiles` (+ `follows` for counts and private visibility) |
 | `GET/POST /api/follow` | `follows`, `profiles`, `accounts` (name, picture) |
 | `GET/POST/DELETE /api/shared-playlist`, `GET/POST /api/shared-playlist/<id>` | `shared_playlists`; collaborator writes need the invite token; owner writes `409 { playlist }` on a stale version |
+| `GET/POST /api/ai/projects`, `GET/PATCH/DELETE /api/ai/projects/<id>` | `ai_projects`, with its chats (`ai_conversations.project_id`) and files (`ai_attachments.project_id`); owner only; delete removes the files and keeps the chats (or, with `?chats=delete`, hides them) |
+| `GET/POST/DELETE /api/ai/memories`, `DELETE /api/ai/memories/<id>`, `GET/PUT /api/ai/memories/prefs` | `ai_memories`, `ai_memory_prefs`; the account's own rows only. `POST /api/ai/chat` reads both (and `ai_conversations.incognito`) for each reply and inserts or deletes notes after it |
 | `GET/POST /api/ai/shares`, `GET/DELETE /api/ai/shares/<id>`, `POST /api/ai/shares/<id>/continue` | `ai_shares`; the owner lists, makes, updates and deletes; `GET` of one link is public (no session) by its 128-bit id; continue copies the snapshot into a new `ai_conversations` + `ai_messages` chat of the reader |
 | `GET/POST /api/username` | the handle on `listeners`; `409 taken` with suggestions |
 | `GET /api/experiments` | active experiments |

@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 8
+-- VinaX database · schema version 9
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -465,7 +465,7 @@ do $$
 begin
   if exists (select 1 from information_schema.tables where table_schema = 'storage' and table_name = 'buckets') then
     insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-      values ('ai-attachments', 'ai-attachments', false, 20971520,
+      values ('ai-attachments', 'ai-attachments', false, 52428800,
               array['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'application/pdf', 'text/plain'])
       on conflict (id) do update set public = false, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
   end if;
@@ -494,27 +494,44 @@ language sql stable set search_path = public, pg_temp as $$
   limit greatest(1, least(coalesce(p_limit, 30), 100));
 $$;
 
--- One account's chats with every message (all branches), newest chat first:
--- the file GET /api/ai/export hands the listener. Deleted chats are left out.
-create or replace function ai_export(p_account text)
-returns jsonb
+-- The artifacts gallery (GET /api/ai/artifacts): one row per artifact id per
+-- chat, from the newest reply that has it, with how many versions the chat
+-- holds. Metadata only, never the content. Deleted chats are left out.
+-- p_kind is an artifact type or null; p_query matches titles (the LIKE
+-- wildcards in it are escaped here). Paging is by (created_at, key), newest
+-- first, where key is '<conversation id>/<artifact id>'.
+create or replace function ai_artifact_list(p_account text, p_kind text default null, p_query text default null,
+                                            p_before timestamptz default null, p_before_key text default null, p_limit integer default 30)
+returns table (conversation_id uuid, conversation_title text, artifact_id text, message_id uuid, kind text, title text,
+               language text, incomplete boolean, versions integer, created_at timestamptz, key text)
 language sql stable set search_path = public, pg_temp as $$
-  select jsonb_build_object(
-    'format', 'vinax-ai-chats',
-    'version', 1,
-    'exportedAt', now(),
-    'conversations', coalesce((
-      select jsonb_agg(jsonb_build_object(
-        'id', c.id, 'title', c.title, 'starred', c.starred,
-        'createdAt', c.created_at, 'updatedAt', c.updated_at, 'activeLeafId', c.active_leaf_id,
-        'messages', coalesce((
-          select jsonb_agg(jsonb_build_object(
-            'id', m.id, 'parentId', m.parent_id, 'role', m.role, 'content', m.content, 'thinking', m.thinking,
-            'model', m.model_id, 'stopReason', m.stop_reason, 'createdAt', m.created_at) order by m.created_at)
-          from ai_messages m where m.conversation_id = c.id), '[]'::jsonb)
-      ) order by c.updated_at desc)
-      from ai_conversations c
-      where c.account_id = p_account and c.deleted_at is null), '[]'::jsonb));
+  with pat as (
+    select '%' || replace(replace(replace(coalesce(p_query, ''), '\', '\\'), '%', '\%'), '_', '\_') || '%' as p
+  ),
+  found as (
+    select m.conversation_id as cid, c.title as ctitle, m.id as mid, m.created_at as at, e.value as a, e.ord
+    from ai_conversations c
+    join ai_messages m on m.conversation_id = c.id
+    cross join lateral jsonb_array_elements(case when jsonb_typeof(m.artifacts) = 'array' then m.artifacts else '[]'::jsonb end) with ordinality e(value, ord)
+    where c.account_id = p_account and c.deleted_at is null and m.artifacts is not null
+  ),
+  latest as (
+    select distinct on (f.cid, f.a ->> 'id')
+      f.cid, f.ctitle, f.a ->> 'id' as aid, f.mid, f.a ->> 'type' as akind, f.a ->> 'title' as atitle, f.a ->> 'language' as alang,
+      coalesce((f.a ->> 'incomplete')::boolean, false) as aincomplete,
+      (count(*) over (partition by f.cid, f.a ->> 'id'))::integer as n, f.at,
+      f.cid::text || '/' || (f.a ->> 'id') as k
+    from found f
+    where coalesce(f.a ->> 'id', '') <> ''
+    order by f.cid, f.a ->> 'id', f.at desc, f.ord desc
+  )
+  select l.cid, l.ctitle, l.aid, l.mid, l.akind, l.atitle, l.alang, l.aincomplete, l.n, l.at, l.k
+  from latest l, pat
+  where (p_kind is null or l.akind = p_kind)
+    and (coalesce(p_query, '') = '' or l.atitle ilike pat.p)
+    and (p_before is null or (l.at, l.k) < (p_before, coalesce(p_before_key, '')))
+  order by l.at desc, l.k desc
+  limit greatest(1, least(coalesce(p_limit, 30), 100));
 $$;
 
 -- Global daily allowances for VinaX AI's paid or capped calls: 'search' (the
@@ -570,6 +587,99 @@ create table if not exists ai_shares (
 );
 create unique index if not exists ai_shares_conversation_key on ai_shares (conversation_id);
 create index if not exists ai_shares_account_idx on ai_shares (account_id, updated_at desc);
+
+-- Version 9: VinaX AI projects. A named workspace with instructions every chat
+-- in it follows and files (project knowledge) every chat in it can read. A
+-- knowledge file is an ai_attachments row with project_id set and no
+-- conversation. Deleting a project removes its files (the Worker removes the
+-- stored bytes first); its chats either go with it (the Worker hides them, the
+-- hourly purge removes them) or stay as ordinary chats (project_id set null).
+-- Deleting the account removes every project.
+create table if not exists ai_projects (
+  id            uuid primary key,
+  account_id    text not null references accounts (id) on delete cascade,
+  name          text not null,
+  description   text,
+  instructions  text,
+  starred       boolean not null default false,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now(),
+  constraint ai_projects_name_len check (char_length(name) between 1 and 60),
+  constraint ai_projects_description_len check (description is null or char_length(description) <= 300),
+  constraint ai_projects_instructions_len check (instructions is null or char_length(instructions) <= 8000)
+);
+create index if not exists ai_projects_account_idx on ai_projects (account_id, updated_at desc);
+alter table ai_conversations add column if not exists project_id uuid references ai_projects (id) on delete set null;
+create index if not exists ai_conversations_project_idx on ai_conversations (project_id, updated_at desc) where project_id is not null;
+alter table ai_attachments add column if not exists project_id uuid references ai_projects (id) on delete cascade;
+create index if not exists ai_attachments_project_idx on ai_attachments (project_id, created_at) where project_id is not null;
+
+-- One account's chats with every message (all branches), newest chat first,
+-- and its projects (instructions, and knowledge files by name): the file
+-- GET /api/ai/export hands the listener. Deleted chats are left out. Defined
+-- after ai_projects, which it reads.
+create or replace function ai_export(p_account text)
+returns jsonb
+language sql stable set search_path = public, pg_temp as $$
+  select jsonb_build_object(
+    'format', 'vinax-ai-chats',
+    'version', 1,
+    'exportedAt', now(),
+    'conversations', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', c.id, 'title', c.title, 'starred', c.starred, 'projectId', c.project_id,
+        'createdAt', c.created_at, 'updatedAt', c.updated_at, 'activeLeafId', c.active_leaf_id,
+        'messages', coalesce((
+          select jsonb_agg(jsonb_build_object(
+            'id', m.id, 'parentId', m.parent_id, 'role', m.role, 'content', m.content, 'thinking', m.thinking,
+            'model', m.model_id, 'stopReason', m.stop_reason, 'createdAt', m.created_at) order by m.created_at)
+          from ai_messages m where m.conversation_id = c.id), '[]'::jsonb)
+      ) order by c.updated_at desc)
+      from ai_conversations c
+      where c.account_id = p_account and c.deleted_at is null), '[]'::jsonb),
+    'projects', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', p.id, 'name', p.name, 'description', p.description, 'instructions', p.instructions, 'starred', p.starred,
+        'createdAt', p.created_at, 'updatedAt', p.updated_at,
+        'files', coalesce((
+          select jsonb_agg(jsonb_build_object('name', a.name, 'kind', a.kind, 'size', a.size) order by a.created_at)
+          from ai_attachments a where a.project_id = p.id), '[]'::jsonb)
+      ) order by p.updated_at desc)
+      from ai_projects p
+      where p.account_id = p_account), '[]'::jsonb));
+$$;
+
+-- Version 9: VinaX AI memory. Short notes about the listener (at most 50 of
+-- at most 200 characters, enforced by the Worker), learned from their chats
+-- or added by them in VinaX AI's settings, and put into the system prompt of
+-- each new reply. One row per note, so each can be deleted on its own and
+-- learning only inserts and deletes rows (no read-modify-write of a list).
+-- A note keeps the chat it came from until that chat is purged. The
+-- listener's two switches live in ai_memory_prefs (no row = both on); an
+-- incognito chat never reads or writes memory. Everything goes with the
+-- account.
+create table if not exists ai_memories (
+  id               uuid primary key,
+  account_id       text not null references accounts (id) on delete cascade,
+  text             text not null,
+  origin           text not null default 'chat',
+  conversation_id  uuid references ai_conversations (id) on delete set null,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now(),
+  constraint ai_memories_text_len check (char_length(text) between 1 and 200),
+  constraint ai_memories_origin check (origin in ('chat', 'user'))
+);
+create index if not exists ai_memories_account_idx on ai_memories (account_id, created_at);
+create index if not exists ai_memories_conversation_idx on ai_memories (conversation_id) where conversation_id is not null;
+
+create table if not exists ai_memory_prefs (
+  account_id  text primary key references accounts (id) on delete cascade,
+  use_memory  boolean not null default true,
+  learn       boolean not null default true,
+  updated_at  timestamptz not null default now()
+);
+
+alter table ai_conversations add column if not exists incognito boolean not null default false;
 
 -- ------------------------------------------------- 9b. the personal engine --
 
@@ -1608,6 +1718,8 @@ language sql stable set search_path = public, pg_temp as $$
     'ai_conversations', (select count(*) from ai_conversations),
     'ai_messages', (select count(*) from ai_messages),
     'ai_shares', (select count(*) from ai_shares),
+    'ai_projects', (select count(*) from ai_projects),
+    'ai_memories', (select count(*) from ai_memories),
     'personal_taste', (select count(*) from personal_taste),
     'personal_pages', (select count(*) from personal_pages),
     'events', (select greatest(reltuples, 0)::bigint from pg_class where oid = 'public.events'::regclass),
@@ -1628,7 +1740,7 @@ begin
     'events', 'feedback',
     'blocked_content', 'rooms', 'room_members', 'push_devices', 'notifications',
     'settings', 'settings_history', 'experiments', 'audit_log', 'uptime_days', 'uptime_latest', 'job_runs',
-    'ai_conversations', 'ai_messages', 'ai_attachments', 'ai_daily_usage', 'ai_shares',
+    'ai_conversations', 'ai_messages', 'ai_attachments', 'ai_daily_usage', 'ai_shares', 'ai_projects', 'ai_memories', 'ai_memory_prefs',
     'personal_songs', 'personal_events', 'personal_taste', 'personal_exposure', 'personal_pages', 'personal_colisten']
   loop
     execute format('alter table public.%I enable row level security', t);
@@ -1650,7 +1762,7 @@ begin
                         'stats_engagement', 'stats_retention', 'stats_funnel', 'stats_skips', 'stats_errors',
                         'listener_profile', 'delete_listener', 'room_request', 'room_sweep',
                         'purge_events', 'retire_push_devices', 'uptime_tick', 'uptime_report', 'table_stats', 'table_counts',
-                        'ai_conversation_search', 'ai_export', 'ai_take_daily',
+                        'ai_conversation_search', 'ai_artifact_list', 'ai_export', 'ai_take_daily',
                         'personal_record_events', 'personal_recompute_vector', 'personal_neighbours', 'personal_similar_songs',
                         'personal_colisten_for', 'personal_refresh_colisten', 'personal_trending', 'personal_embed_backlog', 'personal_set_embeddings', 'personal_mark_shown',
                         'personal_touch_songs', 'personal_unverified', 'personal_exposure_for',
@@ -1668,7 +1780,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 8, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 8, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 9, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 9, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 8 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 9 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;

@@ -3,26 +3,42 @@
  * (the server checks them again), shrinking images on the device, reading a
  * PDF's text, and the upload itself.
  *
- *   images  png, jpg, webp, gif (first frame): at most 5 per message, shrunk
- *           to a long edge of 1568 px and sent as WebP (JPEG where WebP
- *           cannot be made)
- *   PDFs    up to 20 MB and 100 pages; their text is read here for models
- *           that cannot read PDFs
- *   text    text, markdown, csv, json and source code up to 1 MB
- *   20 files per conversation
+ *   images  png, jpg, webp, gif (first frame): shrunk to a long edge of
+ *           1568 px and sent as WebP (JPEG where WebP cannot be made)
+ *   PDFs    their text is read here for models that cannot read PDFs
+ *   text    text, markdown, csv, json and source code
+ *
+ * The counts and sizes are the owner's (GET /api/ai/models → `limits`,
+ * applied with setFileLimits); until that answers, the Worker's defaults.
  */
 import { AI_BASE, AiError } from './api';
 import { currentAccount } from '@/services/auth/google';
 
 export type FileKind = 'image' | 'pdf' | 'text';
 
-export const MAX_IMAGES_PER_MESSAGE = 5;
-export const MAX_FILES_PER_MESSAGE = 10;
-export const MAX_FILES_PER_CONVERSATION = 20;
-export const MAX_PDF_BYTES = 20 * 1024 * 1024;
-export const MAX_PDF_PAGES = 100;
-export const MAX_TEXT_BYTES = 1024 * 1024;
+export interface FileLimits {
+  imagesPerMessage: number;
+  filesPerMessage: number;
+  filesPerChat: number;
+  pdfMB: number;
+  pdfPages: number;
+  textMB: number;
+}
+/** The Worker's defaults (functions/_lib/ai/config.ts). */
+export const DEFAULT_FILE_LIMITS: FileLimits = Object.freeze({ imagesPerMessage: 10, filesPerMessage: 20, filesPerChat: 50, pdfMB: 30, pdfPages: 500, textMB: 2 });
+let limits: FileLimits = DEFAULT_FILE_LIMITS;
+export const fileLimits = (): FileLimits => limits;
+/** The owner's limits from GET /api/ai/models; anything missing or odd keeps the default. */
+export function setFileLimits(raw: Partial<Record<keyof FileLimits, unknown>> | null | undefined): void {
+  const next = { ...DEFAULT_FILE_LIMITS };
+  for (const k of Object.keys(next) as Array<keyof FileLimits>) {
+    const n = Number(raw?.[k]);
+    if (Number.isInteger(n) && n > 0 && n <= 1_000) next[k] = n;
+  }
+  limits = next;
+}
 export const MAX_IMAGE_SOURCE_BYTES = 40 * 1024 * 1024;
+const MB = 1024 * 1024;
 export const IMAGE_EDGE = 1568;
 
 const CODE_EXT = ['txt', 'md', 'markdown', 'csv', 'tsv', 'json', 'jsonc', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'log', 'xml', 'html', 'htm', 'css', 'scss', 'js', 'jsx', 'mjs', 'cjs', 'ts', 'tsx', 'py', 'rb', 'go', 'rs', 'java', 'kt', 'kts', 'swift', 'c', 'h', 'cc', 'cpp', 'hpp', 'cs', 'php', 'sh', 'bash', 'zsh', 'ps1', 'sql', 'r', 'dart', 'lua', 'pl', 'scala', 'vue', 'svelte', 'gradle'];
@@ -44,12 +60,13 @@ export function kindOf(file: { name: string; type: string }): FileKind | null {
 export function refuse(file: { name: string; type: string; size: number }, counts: { images: number; files: number; inConversation: number }): string | null {
   const kind = kindOf(file);
   if (!kind) return `${file.name}: this type of file can’t be added. Images, PDFs and text or code files can.`;
-  if (counts.files >= MAX_FILES_PER_MESSAGE) return `At most ${MAX_FILES_PER_MESSAGE} files per message.`;
-  if (counts.inConversation + counts.files >= MAX_FILES_PER_CONVERSATION) return `A chat can hold ${MAX_FILES_PER_CONVERSATION} files. Start a new chat to add more.`;
-  if (kind === 'image' && counts.images >= MAX_IMAGES_PER_MESSAGE) return `At most ${MAX_IMAGES_PER_MESSAGE} images per message.`;
+  const l = limits;
+  if (counts.files >= l.filesPerMessage) return `At most ${l.filesPerMessage} files per message.`;
+  if (counts.inConversation + counts.files >= l.filesPerChat) return `A chat can hold ${l.filesPerChat} files. Start a new chat to add more.`;
+  if (kind === 'image' && counts.images >= l.imagesPerMessage) return `At most ${l.imagesPerMessage} images per message.`;
   if (kind === 'image' && file.size > MAX_IMAGE_SOURCE_BYTES) return `${file.name} is too large.`;
-  if (kind === 'pdf' && file.size > MAX_PDF_BYTES) return `${file.name} is over 20 MB.`;
-  if (kind === 'text' && file.size > MAX_TEXT_BYTES) return `${file.name} is over 1 MB.`;
+  if (kind === 'pdf' && file.size > l.pdfMB * MB) return `${file.name} is over ${l.pdfMB} MB.`;
+  if (kind === 'text' && file.size > l.textMB * MB) return `${file.name} is over ${l.textMB} MB.`;
   return null;
 }
 
@@ -96,10 +113,11 @@ const authHeaders = (): Record<string, string> => {
   return a ? { authorization: `Bearer ${a.session}` } : {};
 };
 
-/** Send a (prepared) file to POST /api/ai/attachments. */
-export async function uploadBlob(blob: Blob, name: string, mime: string, conversationId: string | null, signal?: AbortSignal): Promise<UploadedFile> {
+/** Send a (prepared) file to POST /api/ai/attachments: into a chat, or (`projectId`) into a project's knowledge. */
+export async function uploadBlob(blob: Blob, name: string, mime: string, conversationId: string | null, signal?: AbortSignal, projectId?: string): Promise<UploadedFile> {
   const qs = new URLSearchParams({ name });
   if (conversationId) qs.set('conversationId', conversationId);
+  if (projectId) qs.set('projectId', projectId);
   let res: Response;
   try {
     res = await fetch(`${AI_BASE}/attachments?${qs}`, { method: 'POST', headers: { ...authHeaders(), 'content-type': mime }, body: blob, signal });
@@ -142,8 +160,8 @@ export function uploadError(code: string, name: string): string {
   switch (code) {
     case 'too_large': return `${name} is too large.`;
     case 'unsupported_type': return `${name} isn’t a file VinaX AI can read.`;
-    case 'too_many_files': return `A chat can hold ${MAX_FILES_PER_CONVERSATION} files. Start a new chat to add more.`;
-    case 'too_many_pages': return `${name} has more than ${MAX_PDF_PAGES} pages.`;
+    case 'too_many_files': return `A chat can hold ${limits.filesPerChat} files. Start a new chat to add more.`;
+    case 'too_many_pages': return `${name} has more than ${limits.pdfPages} pages.`;
     case 'network': return `${name} couldn’t be sent. Check your connection.`;
     default: return `${name} couldn’t be added. Try again.`;
   }

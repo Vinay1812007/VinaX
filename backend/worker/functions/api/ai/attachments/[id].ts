@@ -4,7 +4,9 @@
  *   GET    /api/ai/attachments/<id>   → the file (the page shows images and offers downloads)
  *   PATCH  /api/ai/attachments/<id>   { text, pages }  a PDF's text, read on the device, for models
  *                                     that cannot read PDFs → 200 { ok } · 413 too_many_pages
- *   DELETE /api/ai/attachments/<id>   a file not sent yet (the × on a chip) → 200 { ok } · 409 in_use
+ *                                     · 409 knowledge_full (a project file past its project's text limit)
+ *   DELETE /api/ai/attachments/<id>   a file not sent yet (the × on a chip), or a project's knowledge
+ *                                     file → 200 { ok } · 409 in_use
  *   → 401 signed_out · 404 not_found (missing or someone else's) · 503 unavailable
  *
  * A file is served with its own type, nosniff and a sandboxing CSP, as an
@@ -16,16 +18,20 @@ import { CORS, json } from '../../../_lib/authShared';
 import { readJsonCapped } from '../../../_lib/body';
 import { rateLimitAsync } from '../../../_lib/ratelimit';
 import { db, dbConfigured, q } from '../../../_lib/db';
-import { ATT_COLS, MAX_EXTRACTED_CHARS, MAX_PDF_PAGES, type AttachmentRow } from '../../../_lib/ai/attachments';
+import { ATT_COLS, MAX_EXTRACTED_CHARS, type AttachmentRow } from '../../../_lib/ai/attachments';
+import { aiSettings } from '../../../_lib/ai/config';
 import { storageGet, storageRemove } from '../../../_lib/ai/storage';
 import { isUuid } from '../../../_lib/ai/store';
+import { knowledgeUsage, MAX_PROJECT_CHARS } from '../../../_lib/ai/projects';
 import type { AiEnv } from '../../../_lib/ai/types';
 
 interface Ctx { request: Request; env: AiEnv; params?: { id?: string } }
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: { ...CORS, 'access-control-allow-methods': 'GET, PATCH, DELETE, OPTIONS' } });
 
-async function owned(ctx: Ctx, route: string, capacity = 60): Promise<{ sub: string; row: AttachmentRow } | Response> {
+type OwnedRow = AttachmentRow & { project_id: string | null };
+
+async function owned(ctx: Ctx, route: string, capacity = 60): Promise<{ sub: string; row: OwnedRow } | Response> {
   const limited = await rateLimitAsync(ctx.request, route, { capacity, refillPerMinute: capacity }, ctx.env);
   if (limited) return limited;
   const sub = await readSession(ctx.env, bearer(ctx.request));
@@ -33,7 +39,7 @@ async function owned(ctx: Ctx, route: string, capacity = 60): Promise<{ sub: str
   if (!dbConfigured(ctx.env)) return json({ error: 'unavailable' }, 503);
   const id = ctx.params?.id;
   if (!isUuid(id)) return json({ error: 'not_found' }, 404);
-  const r = await db.one<AttachmentRow>(ctx.env, 'ai_attachments', q().eq('id', id).eq('account_id', sub).select(ATT_COLS));
+  const r = await db.one<OwnedRow>(ctx.env, 'ai_attachments', q().eq('id', id).eq('account_id', sub).select(`${ATT_COLS},project_id`));
   if (!r.ok) return json({ error: 'unavailable' }, 503);
   if (!r.value) return json({ error: 'not_found' }, 404);
   return { sub, row: r.value };
@@ -67,8 +73,13 @@ export const onRequestPatch = async (ctx: Ctx): Promise<Response> => {
   if (!read.ok) return json({ error: read.reason === 'too_large' ? 'too_large' : 'bad_request' }, read.reason === 'too_large' ? 413 : 400);
   const pages = Number(read.value?.pages);
   if (!Number.isInteger(pages) || pages < 1) return json({ error: 'bad_request' }, 400);
-  if (pages > MAX_PDF_PAGES) return json({ error: 'too_many_pages' }, 413);
+  if (pages > (await aiSettings(ctx.env)).limits.pdfPages) return json({ error: 'too_many_pages' }, 413);
   const text = typeof read.value?.text === 'string' ? read.value.text.slice(0, MAX_EXTRACTED_CHARS) : '';
+  if (o.row.project_id && text) {
+    const used = await knowledgeUsage(ctx.env, o.sub, o.row.project_id, o.row.id);
+    if (!used.ok) return json({ error: 'unavailable' }, 503);
+    if (used.value.chars + text.length > MAX_PROJECT_CHARS) return json({ error: 'knowledge_full' }, 409);
+  }
   const r = await db.update(ctx.env, 'ai_attachments', q().eq('id', o.row.id).eq('account_id', o.sub), { extracted_text: text || null, pages });
   return r.ok ? json({ ok: true }) : json({ error: 'unavailable' }, 503);
 };

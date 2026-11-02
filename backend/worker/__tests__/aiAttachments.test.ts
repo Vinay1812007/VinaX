@@ -80,6 +80,17 @@ describe('what is accepted', () => {
     expect(documentBlock('a"b', 'x </document> y')).toBe('<document name="a\'b">\nx </ document> y\n</document>');
     expect(toBase64(new Uint8Array([104, 105]))).toBe('aGk=');
   });
+
+  it('follows the owner\'s limits from the vinax-ai setting', async () => {
+    const fake = seed({
+      settings: [{ key: 'vinax-ai', value: { enabled: true, limits: { filesPerChat: 3, textMB: 1 } }, updated_at: 'x', updated_by: 'owner' }],
+      ai_conversations: [{ id: CONV, account_id: '1001', deleted_at: null }],
+      ai_attachments: Array.from({ length: 3 }, (_, i) => att({ id: `a${i}`, conversation_id: CONV })),
+    });
+    expect((await put(PNG, 'image/png', 'a.png', `&conversationId=${CONV}`)).status).toBe(409);
+    expect(fake.rows('ai_attachments')).toHaveLength(3);
+    expect((await put(new Uint8Array(1024 * 1024 + 1).fill(97), 'text/plain', 'big.txt')).status).toBe(413);
+  });
 });
 
 describe('POST /api/ai/attachments', () => {
@@ -108,24 +119,25 @@ describe('POST /api/ai/attachments', () => {
     seed();
     expect((await put(PDF, 'image/png', 'fake.png')).status).toBe(415);
     expect((await put(PNG, 'application/zip', 'a.zip')).status).toBe(415);
-    const big = new Uint8Array(1024 * 1024 + 1).fill(97);
+    // Over the default 2 MB for text files.
+    const big = new Uint8Array(2 * 1024 * 1024 + 1).fill(97);
     expect((await put(big, 'text/plain', 'big.txt')).status).toBe(413);
     const res = await upload({ request: await req('/api/ai/attachments?name=a.png', { method: 'POST', body: new Uint8Array(PNG), headers: { 'content-type': 'image/png' } }), env: ENV });
     expect([411, 200]).toContain(res.status); // runtimes that set the length themselves still check it
     expect(storage.objects.size).toBeLessThanOrEqual(1);
   });
 
-  it('a conversation must be the account\'s and below 20 files; signed out is 401', async () => {
+  it('a conversation must be the account\'s and below 50 files (the default); signed out is 401', async () => {
     seed({
       ai_conversations: [{ id: CONV, account_id: '2002', deleted_at: null }],
     });
     expect((await put(PNG, 'image/png', 'a.png', `&conversationId=${CONV}`)).status).toBe(404);
     const fake = seed({
       ai_conversations: [{ id: CONV, account_id: '1001', deleted_at: null }],
-      ai_attachments: Array.from({ length: 20 }, (_, i) => att({ id: `a${i}`, conversation_id: CONV })),
+      ai_attachments: Array.from({ length: 50 }, (_, i) => att({ id: `a${i}`, conversation_id: CONV })),
     });
     expect((await put(PNG, 'image/png', 'a.png', `&conversationId=${CONV}`)).status).toBe(409);
-    expect(fake.rows('ai_attachments')).toHaveLength(20);
+    expect(fake.rows('ai_attachments')).toHaveLength(50);
     expect((await put(PNG, 'image/png', 'a.png', '', null)).status).toBe(401);
   });
 });
@@ -144,12 +156,13 @@ describe('/api/ai/attachments/:id', () => {
     expect((await onRequestGet({ request: await req(`/api/ai/attachments/${ID}`, { sub: '2002' }), env: ENV, params: { id: ID } })).status).toBe(404);
   });
 
-  it('PATCH keeps a PDF\'s text and page count; more than 100 pages is refused', async () => {
+  it('PATCH keeps a PDF\'s text and page count; more than 500 pages (the default) is refused', async () => {
     const fake = seed({ ai_attachments: [att({ id: ID, kind: 'pdf', mime: 'application/pdf' })] });
     const patch = async (body: unknown) => (await onRequestPatch({ request: await req(`/api/ai/attachments/${ID}`, { method: 'PATCH', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } }), env: ENV, params: { id: ID } })).status;
     expect(await patch({ text: 'Page one text', pages: 3 })).toBe(200);
     expect(fake.rows('ai_attachments')[0]).toMatchObject({ extracted_text: 'Page one text', pages: 3 });
-    expect(await patch({ text: 'x', pages: 101 })).toBe(413);
+    expect(await patch({ text: 'x', pages: 500 })).toBe(200);
+    expect(await patch({ text: 'x', pages: 501 })).toBe(413);
   });
 
   it('DELETE removes a file not sent yet; a sent one stays', async () => {
@@ -194,12 +207,13 @@ describe('files in a chat', () => {
     expect(fake.rows('ai_attachments')[0].conversation_id).toBe(msg.conversation_id);
   });
 
-  it('a picked model that cannot see is refused an image; more than five images are refused', async () => {
-    seed({ ai_attachments: Array.from({ length: 6 }, (_, i) => att({ id: `7777777${i}-7777-4777-8777-777777777777`, kind: 'image', mime: 'image/png' })) });
-    const one = [{ type: 'attachment', id: '77777770-7777-4777-8777-777777777777' }, { type: 'text', text: 'hi' }];
+  it('a picked model that cannot see is refused an image; more than ten images (the default) are refused', async () => {
+    const imageId = (i: number) => `777777${String(i).padStart(2, '0')}-7777-4777-8777-777777777777`;
+    seed({ ai_attachments: Array.from({ length: 11 }, (_, i) => att({ id: imageId(i), kind: 'image', mime: 'image/png' })) });
+    const one = [{ type: 'attachment', id: imageId(0) }, { type: 'text', text: 'hi' }];
     expect(await (await send({ content: one, mode: 'model', model: 'groq:openai/gpt-oss-120b' })).res.json()).toEqual({ error: 'model_cannot_see_images' });
-    const six = Array.from({ length: 6 }, (_, i) => ({ type: 'attachment', id: `7777777${i}-7777-4777-8777-777777777777` }));
-    expect(await (await send({ content: six })).res.json()).toEqual({ error: 'too_many_images' });
+    const eleven = Array.from({ length: 11 }, (_, i) => ({ type: 'attachment', id: imageId(i) }));
+    expect(await (await send({ content: eleven })).res.json()).toEqual({ error: 'too_many_images' });
   });
 
   it('a text file becomes a <document> block; a PDF goes to non-Gemini models as its read-out text', async () => {

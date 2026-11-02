@@ -5,25 +5,28 @@
  *   narrow:          [ header ☰ · thread · composer ]  + the sidebar as a drawer
  *
  * A new chat opens on a greeting with the composer in the middle and four
- * suggestion chips that fill in a starter (they never send). Signed-out
+ * suggestion chips that fill in a starter (they never send); the header's
+ * Incognito button makes the new chat one that never uses memory. Signed-out
  * visitors never get here: the app's sign-in gate answers first.
- * See docs/ai.md.
+ * /vinaxai/projects and /vinaxai/project/:projectId show the projects in the
+ * same frame (Projects.tsx, lazy); a project's page uses this composer to
+ * start a chat in the project. See docs/ai.md.
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAccount } from '@/components/useAccount';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { haptic } from '@/services/native';
-import { AiError, getConversation, getModels } from './api';
+import { AiError, getConversation, getModels, listProjects, PROJECTS_KEY } from './api';
 import { pathTo } from './chatState';
 import { Composer, type ComposerHandle } from './Composer';
 import { AssistantMessage, UserMessage } from './Message';
 import { NowPlayingPill } from './NowPlayingPill';
 import { usePrefs } from './prefs';
 import { Sidebar } from './Sidebar';
-import { continueReply, resetChat, retryReply, sendMessage, stopReply, useChatStore } from './store';
+import { continueReply, resetChat, retryReply, selectBranch, sendMessage, setIncognito, stopReply, useChatStore } from './store';
 import { useDismiss } from './useDismiss';
 import { usePendingFiles } from './usePendingFiles';
 import { PendingChips } from './FileChips';
@@ -31,7 +34,7 @@ import type { FileRef } from './types';
 import { ArtifactPanel } from './ArtifactPanel';
 import { usePanel } from './artifactStore';
 import { artifactsOf, collectVersions, hasPreview, type Artifact } from './artifacts';
-import { ArrowDownIcon, MenuIcon, NewChatIcon, SettingsIcon, ShareIcon, SidebarIcon, SparkIcon } from './icons';
+import { ArrowDownIcon, FolderIcon, IncognitoIcon, MenuIcon, NewChatIcon, SettingsIcon, ShareIcon, SidebarIcon, SparkIcon } from './icons';
 import { useVoiceDictation } from './useVoiceDictation';
 import { dismissReadNotice, stopReading, useReadAloud } from './readAloud';
 import { SettingsPanel, type SettingsSection } from './SettingsPanel';
@@ -39,6 +42,8 @@ import { ShareDialog } from './ShareDialog';
 
 /** Live voice loads only when someone opens it. */
 const LiveView = lazy(() => import('./live/LiveView'));
+/** Projects load only when a project page opens. */
+const ProjectsArea = lazy(() => import('./Projects'));
 
 /** Markdown made readable aloud: code blocks named, not read; markup characters dropped. */
 export function plainText(md: string): string {
@@ -90,7 +95,10 @@ function useKeyboardInset(el: React.RefObject<HTMLDivElement | null>): void {
 }
 
 export function ChatView(): ReactNode {
-  const { id } = useParams();
+  const { id, projectId: projectPage } = useParams();
+  const { pathname } = useLocation();
+  // Which page: a chat, the projects list or one project.
+  const view: 'chat' | 'projects' | 'project' = projectPage ? 'project' : pathname.startsWith('/vinaxai/projects') ? 'projects' : 'chat';
   const navigate = useNavigate();
   const account = useAccount();
   const firstName = account?.user.name?.trim().split(/\s+/)[0] ?? null;
@@ -99,12 +107,14 @@ export function ChatView(): ReactNode {
 
   const conversationId = useChatStore((s) => s.conversationId);
   const title = useChatStore((s) => s.title);
+  const chatProject = useChatStore((s) => s.projectId);
   const messages = useChatStore((s) => s.messages);
   const leafId = useChatStore((s) => s.leafId);
   const streaming = useChatStore((s) => s.streaming);
   const replyId = useChatStore((s) => s.replyId);
   const notice = useChatStore((s) => s.notice);
   const finished = useChatStore((s) => s.finished);
+  const incognito = useChatStore((s) => s.incognito);
   const dispatch = useChatStore((s) => s.dispatch);
   const thread = useMemo(() => pathTo(messages, leafId), [messages, leafId]);
   const versions = useMemo(() => collectVersions(thread), [thread]);
@@ -135,7 +145,10 @@ export function ChatView(): ReactNode {
   // Another chat closes the panel.
   useEffect(() => { usePanel.getState().close(); }, [conversationId]);
 
-  usePageTitle(title ?? 'VinaX AI');
+  usePageTitle(view === 'chat' ? title ?? 'VinaX AI' : 'Projects');
+  // The project a chat is in, named in the header with a link back to it.
+  const projects = useQuery({ queryKey: PROJECTS_KEY, queryFn: listProjects, staleTime: 60_000, enabled: view === 'chat' && !!chatProject });
+  const inProject = view === 'chat' && chatProject ? projects.data?.items.find((p) => p.id === chatProject) ?? null : null;
 
   const models = useQuery({ queryKey: ['vinaxai', 'models', account?.session ?? ''], queryFn: getModels, staleTime: 60_000, retry: 1 });
   const pickerModels = useMemo(() => models.data?.models ?? [], [models.data]);
@@ -161,10 +174,12 @@ export function ChatView(): ReactNode {
     if (!id && cur.conversationId) resetChat();
   }, [id]);
 
-  // A new conversation gets its own address once the server names it.
+  // A new conversation gets its own address once the server names it (read
+  // fresh: leaving a chat for the projects pages has just reset it).
   useEffect(() => {
-    if (conversationId && !id) navigate(`/vinaxai/c/${conversationId}`, { replace: true });
-  }, [conversationId, id, navigate]);
+    const current = useChatStore.getState().conversationId;
+    if (current && !id && current === conversationId) navigate(`/vinaxai/c/${current}`, { replace: view === 'chat' });
+  }, [conversationId, id, navigate, view]);
 
   const [draft, setDraft] = useState('');
   const composer = useRef<ComposerHandle>(null);
@@ -212,7 +227,7 @@ export function ChatView(): ReactNode {
     setDraft('');
     haptic('light');
     stick.current = true;
-    const out = await sendMessage(text, { files });
+    const out = await sendMessage(text, { files, ...(view === 'project' && projectPage ? { projectId: projectPage } : {}) });
     if (!out.ok && out.beforeStart) {
       setDraft((d) => d || text);
       tray.restore(files);
@@ -257,6 +272,23 @@ export function ChatView(): ReactNode {
     const el = scroller.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [messages, leafId]);
+
+  // Opened from the artifacts gallery (?m=<reply>&a=<artifact>): show that
+  // reply's branch, scroll to it and open its artifact, once.
+  const [params, setParams] = useSearchParams();
+  const jumpTo = params.get('m');
+  const jumpArtifact = params.get('a');
+  useEffect(() => {
+    if (!jumpTo || !id || conversationId !== id || streaming) return;
+    if (!messages[jumpTo]) { setParams({}, { replace: true }); return; }
+    if (!thread.some((m) => m.id === jumpTo)) { selectBranch(jumpTo); return; }
+    setParams({}, { replace: true });
+    stick.current = false;
+    const v = jumpArtifact ? versions.get(jumpArtifact) : undefined;
+    const at = v?.findIndex((x) => x.messageId === jumpTo) ?? -1;
+    if (v && at >= 0) usePanel.getState().show(jumpArtifact!, at, { tab: hasPreview(v[at].artifact.type) ? 'preview' : 'code' });
+    requestAnimationFrame(() => [...(scroller.current?.querySelectorAll<HTMLElement>('[data-message-id]') ?? [])].find((el) => el.dataset.messageId === jumpTo)?.scrollIntoView({ block: 'start' }));
+  }, [jumpTo, jumpArtifact, id, conversationId, streaming, messages, thread, versions, setParams]);
 
   // Announce a finished reply (only then) to screen readers.
   const [announce, setAnnounce] = useState('');
@@ -322,7 +354,7 @@ export function ChatView(): ReactNode {
       hasFiles={tray.files.some((f) => f.status === 'ready')}
       sendBlocked={tray.busy || cannotSee}
       dictation={voice?.dictation ? dictation : undefined}
-      onLive={voice?.live ? openLive : undefined}
+      onLive={voice?.live && view === 'chat' ? openLive : undefined}
       onSettings={() => setSettings(voice && (voice.dictation || voice.readAloud || voice.live) ? 'voice' : 'chat')}
     />
   );
@@ -366,15 +398,25 @@ export function ChatView(): ReactNode {
   if (models.isPending) body = <div className="vx-ai-loading" aria-busy="true" />;
   else if (models.isError || !models.data?.configured) body = <Calm title="VinaX AI is unavailable right now" body="Please try again in a little while." action={<button type="button" className="vx-ai-chip" onClick={() => void models.refetch()}>Try again</button>} />;
   else if (!models.data.enabled) body = <Calm title="VinaX AI is taking a break" body="It will be back soon. Your music keeps playing in the meantime." />;
-  else if (needLoad && conv.isError) body = <Calm title="This chat isn’t available" body="It may have been deleted, or it belongs to another account." action={<button type="button" className="vx-ai-chip" onClick={newChat}>New chat</button>} />;
+  else if (view !== 'chat') {
+    body = (
+      <Suspense fallback={<div className="vx-ai-loading" aria-busy="true" />}>
+        <ProjectsArea
+          projectId={view === 'project' ? projectPage ?? null : null}
+          composer={<>{noticeEl}{voiceNoticeEl}{fileNotice}{visionChip}{composerEl}</>}
+        />
+      </Suspense>
+    );
+  } else if (needLoad && conv.isError) body = <Calm title="This chat isn’t available" body="It may have been deleted, or it belongs to another account." action={<button type="button" className="vx-ai-chip" onClick={newChat}>New chat</button>} />;
   else if (needLoad) body = <div className="vx-ai-loading" aria-busy="true" />;
   else if (empty) {
     body = (
       <div className="vx-ai-scroll">
         <div className="vx-ai-column vx-ai-welcome">
           <div className="vx-ai-empty">
-            <SparkIcon className="w-8 h-8" />
-            <h2>{greeting(new Date().getHours(), firstName)}</h2>
+            {incognito ? <IncognitoIcon className="w-8 h-8" /> : <SparkIcon className="w-8 h-8" />}
+            <h2>{incognito ? 'Incognito chat' : greeting(new Date().getHours(), firstName)}</h2>
+            {incognito && <p className="vx-ai-incognito-note">VinaX AI won’t use or add to its memory of you in this chat. The chat is still saved in your chats.</p>}
           </div>
           {noticeEl}
           {voiceNoticeEl}
@@ -475,13 +517,32 @@ export function ChatView(): ReactNode {
           )}
           <div className="vx-ai-brand">
             <h1 className={`vx-ai-wordmark${wide && sideOpen ? ' sr-only' : ''}`}>VinaX AI</h1>
-            {title && <span className="vx-ai-title" title={title}>{title}</span>}
+            {inProject && (
+              <Link to={`/vinaxai/project/${inProject.id}`} className="vx-ai-proj-chip" title={`Project: ${inProject.name}`}>
+                <FolderIcon className="w-3.5 h-3.5" />
+                <span><span className="sr-only">Project: </span>{inProject.name}</span>
+              </Link>
+            )}
+            {view !== 'chat' ? <span className="vx-ai-title">Projects</span> : title && <span className="vx-ai-title" title={title}>{title}</span>}
+            {incognito && !empty && <span className="vx-ai-incognito-badge"><IncognitoIcon className="w-4 h-4" /> Incognito</span>}
           </div>
           <div className="vx-ai-header-end">
             <NowPlayingPill />
             {canShare && (
               <button type="button" className="vx-ai-icon-btn" onClick={() => setSharing(true)} disabled={streaming} aria-label="Share chat" title="Share chat" aria-haspopup="dialog">
                 <ShareIcon className="w-5 h-5" />
+              </button>
+            )}
+            {empty && !conversationId && !needLoad && (
+              <button
+                type="button"
+                className={`vx-ai-icon-btn${incognito ? ' is-on' : ''}`}
+                onClick={() => setIncognito(!incognito)}
+                aria-pressed={incognito}
+                aria-label="Incognito chat"
+                title={incognito ? 'Incognito: this chat won’t use memory' : 'Start an incognito chat (no memory)'}
+              >
+                <IncognitoIcon className="w-5 h-5" />
               </button>
             )}
             <button type="button" className="vx-ai-icon-btn" onClick={() => setSettings('general')} aria-label="VinaX AI settings" title="Settings">
@@ -494,7 +555,7 @@ export function ChatView(): ReactNode {
             )}
           </div>
         </header>
-        <div className={`vx-ai-main${empty ? ' is-empty' : ''}`}>{body}</div>
+        <div className={`vx-ai-main${empty && view === 'chat' ? ' is-empty' : ''}`}>{body}</div>
       </div>
       {panel.open && (
         <ArtifactPanel versions={versions.get(panel.open.id) ?? []} live={streaming} sheet={!wide} onFix={conversationId ? fixArtifact : undefined} />

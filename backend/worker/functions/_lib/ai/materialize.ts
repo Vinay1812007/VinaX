@@ -68,7 +68,7 @@ export interface Memo {
 }
 export const newMemo = (): Memo => ({ images: new Map(), gemini: new Map() });
 
-function imageData(env: AiEnv, row: AttachmentRow, memo: Memo) {
+export function imageData(env: AiEnv, row: AttachmentRow, memo: Memo) {
   let p = memo.images.get(row.id);
   if (!p) {
     p = (async () => {
@@ -82,7 +82,7 @@ function imageData(env: AiEnv, row: AttachmentRow, memo: Memo) {
   return p;
 }
 
-function geminiUri(env: AiEnv, row: AttachmentRow, memo: Memo) {
+export function geminiUri(env: AiEnv, row: AttachmentRow, memo: Memo) {
   let p = memo.gemini.get(row.id);
   if (!p) {
     p = ensureGeminiFile(env, row).catch(() => null);

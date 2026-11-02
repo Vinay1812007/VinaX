@@ -1,16 +1,17 @@
 /**
- * VinaX AI — GET /api/ai/conversations?cursor=&q=: the signed-in listener's
- * conversations, newest first.
+ * VinaX AI — GET /api/ai/conversations?cursor=&q=&project=: the signed-in
+ * listener's conversations, newest first.
  *
- *   → 200 { items: [{ id, title, starred, modelPref, activeLeafId, createdAt, updatedAt }], nextCursor }
- *     `cursor` is the previous page's nextCursor; `q` searches titles and message text.
- *   → 401 signed_out · 503 unavailable
+ *   → 200 { items: [{ id, title, starred, modelPref, activeLeafId, projectId, createdAt, updatedAt }], nextCursor }
+ *     `cursor` is the previous page's nextCursor; `q` searches titles and message text;
+ *     `project` keeps only the chats of that project (uuid).
+ *   → 400 bad_request (project) · 401 signed_out · 503 unavailable
  */
 import { bearer, readSession } from '../../_lib/googleAuth';
 import { CORS, json } from '../../_lib/authShared';
 import { rateLimitAsync } from '../../_lib/ratelimit';
 import { dbConfigured } from '../../_lib/db';
-import { listConversations, publicConversation } from '../../_lib/ai/store';
+import { isUuid, listConversations, publicConversation } from '../../_lib/ai/store';
 import type { AiEnv } from '../../_lib/ai/types';
 
 export const PAGE_SIZE = 30;
@@ -27,7 +28,9 @@ export const onRequestGet = async (ctx: { request: Request; env: AiEnv }): Promi
   const url = new URL(request.url);
   const cursor = url.searchParams.get('cursor');
   const before = cursor && !Number.isNaN(Date.parse(cursor)) ? new Date(cursor).toISOString() : null;
-  const r = await listConversations(env, sub, { before, query: url.searchParams.get('q'), limit: PAGE_SIZE });
+  const project = url.searchParams.get('project');
+  if (project && !isUuid(project)) return json({ error: 'bad_request' }, 400);
+  const r = await listConversations(env, sub, { before, query: url.searchParams.get('q'), projectId: project, limit: PAGE_SIZE });
   if (!r.ok) return json({ error: 'unavailable' }, 503);
   const items = r.rows.map(publicConversation);
   const last = r.rows[r.rows.length - 1];

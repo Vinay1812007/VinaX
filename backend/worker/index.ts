@@ -80,8 +80,15 @@ import * as m_api_ai_generate_song_id from './functions/api/ai/generate-song/[id
 import * as m_api_ai_generate_song_audio from './functions/api/ai/generate-song/[id]-audio';
 import * as m_api_ai_conversation_id from './functions/api/ai/conversations/[id]';
 import * as m_api_ai_shares from './functions/api/ai/shares';
+import * as m_api_ai_artifacts from './functions/api/ai/artifacts';
+import * as m_api_ai_artifact_id from './functions/api/ai/artifacts/[id]';
 import * as m_api_ai_share_id from './functions/api/ai/shares/[id]';
 import * as m_api_ai_share_continue from './functions/api/ai/shares/[id]-continue';
+import * as m_api_ai_projects from './functions/api/ai/projects';
+import * as m_api_ai_project_id from './functions/api/ai/projects/[id]';
+import * as m_api_ai_memories from './functions/api/ai/memories';
+import * as m_api_ai_memory_prefs from './functions/api/ai/memories/prefs';
+import * as m_api_ai_memory_id from './functions/api/ai/memories/[id]';
 // 15.0 — the social layer: profiles, follows, shared playlists.
 import * as m_api_profile from './functions/api/profile';
 import * as m_api_profile_handle from './functions/api/profile/[handle]';
@@ -198,6 +205,10 @@ const EXACT: Record<string, Mod> = {
   '/api/ai/home-layout': m_api_ai_home_layout,
   '/api/ai/generate-song': m_api_ai_generate_song,
   '/api/ai/shares': m_api_ai_shares,
+  '/api/ai/artifacts': m_api_ai_artifacts,
+  '/api/ai/projects': m_api_ai_projects,
+  '/api/ai/memories': m_api_ai_memories,
+  '/api/ai/memories/prefs': m_api_ai_memory_prefs,
   '/api/profile': m_api_profile,
   '/api/follow': m_api_follow,
   '/api/shared-playlist': m_api_shared_playlist,
@@ -237,6 +248,10 @@ const DYNAMIC: Array<{ re: RegExp; mod: Mod; key: string }> = [
   { re: /^\/api\/ai\/generate-song\/([^/]+)\/?$/, mod: m_api_ai_generate_song_id, key: 'id' },
   { re: /^\/api\/ai\/shares\/([^/]+)\/continue\/?$/, mod: m_api_ai_share_continue, key: 'id' },
   { re: /^\/api\/ai\/shares\/([^/]+)\/?$/, mod: m_api_ai_share_id, key: 'id' },
+  // Both ids as one key: "<conversation id>/<artifact id>".
+  { re: /^\/api\/ai\/artifacts\/([^/]+\/[^/]+)\/?$/, mod: m_api_ai_artifact_id, key: 'id' },
+  { re: /^\/api\/ai\/projects\/([^/]+)\/?$/, mod: m_api_ai_project_id, key: 'id' },
+  { re: /^\/api\/ai\/memories\/([^/]+)\/?$/, mod: m_api_ai_memory_id, key: 'id' },
   { re: /^\/sitemaps\/([^/]+)\/?$/, mod: m_sitemaps_map, key: 'map' },
 ];
 

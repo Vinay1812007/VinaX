@@ -2,7 +2,9 @@
  * VinaX AI — one conversation of the signed-in listener.
  *
  *   GET    /api/ai/conversations/<id> → 200 { conversation, messages: [...] }  the whole tree
- *   PATCH  /api/ai/conversations/<id> { title?, starred?, activeLeafId? } → 200 { conversation }
+ *          (conversation.incognito: true for a chat that never uses memory)
+ *   PATCH  /api/ai/conversations/<id> { title?, starred?, activeLeafId?, projectId? } → 200 { conversation }
+ *          projectId: a project of the account (move the chat into it) or null (out of its project)
  *   DELETE /api/ai/conversations/<id> → 200 { ok: true }   hidden now, purged a day later; its shared link goes now
  *   → 400 bad_request · 401 signed_out · 404 not_found (missing, deleted or someone else's) · 503 unavailable
  */
@@ -10,7 +12,6 @@ import { bearer, readSession } from '../../../_lib/googleAuth';
 import { CORS, json } from '../../../_lib/authShared';
 import { readJsonCapped } from '../../../_lib/body';
 import { rateLimitAsync } from '../../../_lib/ratelimit';
-import { dbConfigured } from '../../../_lib/db';
 import { PROVIDER_NAMES } from '../../../_lib/ai/adapters';
 import { MODELS, modelById } from '../../../_lib/ai/models';
 import {
@@ -19,6 +20,8 @@ import {
 import type { AiEnv } from '../../../_lib/ai/types';
 import { liveLabel } from '../../../_lib/ai/voice';
 import { removeSharesOf } from '../../../_lib/ai/shares';
+import { getProject } from '../../../_lib/ai/projects';
+import { db, dbConfigured, q } from '../../../_lib/db';
 
 interface Ctx { request: Request; env: AiEnv; params?: { id?: string } }
 
@@ -49,9 +52,14 @@ const label = (modelId: string): { name: string; provider: string } | null => {
 export const onRequestGet = async (ctx: Ctx): Promise<Response> => {
   const o = await owned(ctx, 'ai-conversation');
   if (o instanceof Response) return o;
-  const m = await listMessages(ctx.env, o.conv.id);
+  // The incognito flag is read on its own, so a database without it still opens chats.
+  const [m, inc] = await Promise.all([
+    listMessages(ctx.env, o.conv.id),
+    db.one<{ incognito: boolean | null }>(ctx.env, 'ai_conversations', q().eq('id', o.conv.id).select('incognito')),
+  ]);
   if (!m.ok) return json({ error: 'unavailable' }, 503);
-  return json({ conversation: publicConversation(o.conv), messages: m.rows.map((r) => publicMessage(r, label)) });
+  const incognito = inc.ok && inc.value?.incognito === true;
+  return json({ conversation: { ...publicConversation(o.conv), ...(incognito ? { incognito: true } : {}) }, messages: m.rows.map((r) => publicMessage(r, label)) });
 };
 
 export const onRequestPatch = async (ctx: Ctx): Promise<Response> => {
@@ -77,8 +85,18 @@ export const onRequestPatch = async (ctx: Ctx): Promise<Response> => {
     if (!m.rows.some((r) => r.id === b.activeLeafId)) return json({ error: 'not_found' }, 404);
     patch.active_leaf_id = b.activeLeafId;
   }
+  if ('projectId' in b) {
+    if (b.projectId === null) patch.project_id = null;
+    else if (!isUuid(b.projectId)) return json({ error: 'bad_request' }, 400);
+    else {
+      const p = await getProject(ctx.env, o.sub, b.projectId);
+      if (!p.ok) return json({ error: 'unavailable' }, 503);
+      if (!p.value) return json({ error: 'not_found' }, 404);
+      patch.project_id = p.value.id;
+    }
+  }
   if (!Object.keys(patch).length) return json({ error: 'bad_request' }, 400);
-  // Starring or switching branches is not a new message: updated_at stays.
+  // Starring, switching branches or moving to a project is not a new message: updated_at stays.
   if (patch.title) patch.updated_at = new Date().toISOString();
   const r = await updateConversation(ctx.env, o.sub, o.conv.id, patch);
   if (!r.ok) return json({ error: 'unavailable' }, 503);

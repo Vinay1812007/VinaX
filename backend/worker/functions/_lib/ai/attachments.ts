@@ -43,6 +43,9 @@ export function kindOf(mime: string, name: string): AttachmentKind | null {
 }
 
 export const maxBytes = (kind: AttachmentKind): number => (kind === 'image' ? MAX_IMAGE_BYTES : kind === 'pdf' ? MAX_PDF_BYTES : MAX_TEXT_BYTES);
+/** The size cap under the owner's limits (images are shrunk on the device, so theirs stays fixed). */
+export const maxBytesFor = (kind: AttachmentKind, limits: { pdfMB: number; textMB: number }): number =>
+  kind === 'image' ? MAX_IMAGE_BYTES : kind === 'pdf' ? limits.pdfMB * 1024 * 1024 : limits.textMB * 1024 * 1024;
 
 /** Does the file start the way its type says? Text must not be binary. */
 export function sniff(kind: AttachmentKind, mime: string, head: Uint8Array): boolean {
@@ -87,10 +90,13 @@ export interface AttachmentRow {
 
 export const ATT_COLS = 'id,account_id,conversation_id,name,mime,size,kind,storage_path,extracted_text,pages,gemini_uri,gemini_expires_at,created_at';
 
-/** The account's attachments with these ids (others are silently not there). */
+/**
+ * The account's chat attachments with these ids (others are silently not
+ * there). A project's knowledge files are left out: they never join a message.
+ */
 export function loadAttachments(env: DbEnv, accountId: string, ids: string[]): Promise<Rows<AttachmentRow>> {
   if (!ids.length) return Promise.resolve({ ok: true, rows: [] });
-  return db.select<AttachmentRow>(env, 'ai_attachments', q().eq('account_id', accountId).in('id', ids).select(ATT_COLS));
+  return db.select<AttachmentRow>(env, 'ai_attachments', q().eq('account_id', accountId).in('id', ids).is('project_id', 'null').select(ATT_COLS));
 }
 
 /** What a message's content keeps about a file, so the page can show it without another query. */

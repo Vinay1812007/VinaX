@@ -11,7 +11,9 @@
  *     continueFrom?: uuid,                 // an assistant message that was cut off: write on from where it stopped
  *     mode: "auto" | "model", model?: "<registry id>",
  *     extendedThinking?, webSearch?, artifacts? (default true), timezone?, locale?,
- *     personal?: { name?, about?, instructions?, style? } }   // VinaX AI settings → Personalisation; used for this reply only, never stored
+ *     personal?: { name?, about?, instructions?, style? },    // VinaX AI settings → Personalisation; used for this reply only, never stored
+ *     projectId?: uuid,                   // a new conversation starts in this project (its instructions and files join every reply)
+ *     incognito?: true }                   // a chat that never reads or writes memory; kept on a new chat (memory.ts)
  *
  *   → 200 text/event-stream, named events, one JSON object per data line:
  *       meta     { conversationId, userMessageId, assistantMessageId, model: { id, name, provider }, continued? }
@@ -41,11 +43,11 @@ import { readJsonCapped } from '../../_lib/body';
 import { bindingAllows, rateLimitAsync } from '../../_lib/ratelimit';
 import { db, dbConfigured, q } from '../../_lib/db';
 import {
-  attachmentPart, loadAttachments, MAX_FILES_PER_CONVERSATION, MAX_FILES_PER_MESSAGE, MAX_IMAGES_PER_MESSAGE, type AttachmentRow,
+  attachmentPart, loadAttachments, type AttachmentRow,
 } from '../../_lib/ai/attachments';
 import { fileSignals, materialize, newMemo, toTurns } from '../../_lib/ai/materialize';
 import { anyProviderConfigured, PROVIDER_NAMES, providerConfigured } from '../../_lib/ai/adapters';
-import { aiOpenFor, aiSettings, registryFor } from '../../_lib/ai/config';
+import { aiOpenFor, aiSettings, LIMIT_RANGES, registryFor } from '../../_lib/ai/config';
 import { isCooling } from '../../_lib/ai/cooldown';
 import { fallbackTitle, latestLeaf, pathTo, textOf, trimHistory, typedText } from '../../_lib/ai/history';
 import { ladderModels, modelById, type LadderName } from '../../_lib/ai/models';
@@ -58,6 +60,8 @@ import {
 import { humanReason, pickLadder, runChat, type RunOptions } from '../../_lib/ai/router';
 import { sseFrame } from '../../_lib/ai/sse';
 import { artifactsOf } from '../../_lib/ai/artifacts';
+import { getProject, knowledgeFor, loadProjectContext, longKnowledge, withKnowledge } from '../../_lib/ai/projects';
+import { learnCandidates, learnFromChat, markIncognito, memoryBlock, memoryFor, shouldLearn } from '../../_lib/ai/memory';
 import {
   createConversation, getConversation, insertMessage, isUuid, listMessages, MAX_MESSAGES, updateConversation, updateMessage,
   type ConversationRow, type MessageRow,
@@ -102,6 +106,8 @@ interface ChatBody {
   timezone?: unknown;
   locale?: unknown;
   personal?: unknown;
+  projectId?: unknown;
+  incognito?: unknown;
 }
 
 interface Ctx {
@@ -131,7 +137,8 @@ export function parseContent(raw: unknown): { ok: true; parts: MessagePart[]; te
     else if (p.type === 'attachment' && isUuid(p.id)) { if (!files.includes(p.id)) files.push(p.id); }
     else return { ok: false, error: 'bad_request' };
   }
-  if (files.length > MAX_FILES_PER_MESSAGE) return { ok: false, error: 'bad_attachment' };
+  // The owner's files-per-message limit is checked by the route; this is the ceiling it can be set to.
+  if (files.length > LIMIT_RANGES.filesPerMessage[1]) return { ok: false, error: 'bad_attachment' };
   const text = textOf(parts);
   if (text.length > MAX_TEXT_CHARS) return { ok: false, error: 'too_long' };
   return { ok: true, parts: text.trim() ? parts : [], text, files };
@@ -152,7 +159,9 @@ const modelInfo = (spec: ModelSpec): { id: string; name: string; provider: strin
 
 export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   const { request, env } = ctx;
-  const limited = await rateLimitAsync(request, 'ai-chat', { capacity: 20, refillPerMinute: 10 }, env);
+  // The owner's per-minute limit (memoised setting read), with a burst of twice that.
+  const perMinute = dbConfigured(env) ? (await aiSettings(env)).limits.messagesPerMinute : 10;
+  const limited = await rateLimitAsync(request, 'ai-chat', { capacity: perMinute * 2, refillPerMinute: perMinute }, env);
   if (limited) return limited;
   const sub = await readSession(env, bearer(request));
   if (!sub) return json({ error: 'signed_out' }, 401);
@@ -169,6 +178,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   const body = read.value && typeof read.value === 'object' ? read.value : {};
   const content = parseContent(body.content);
   if (!content.ok) return json({ error: content.error }, content.error === 'too_long' ? 413 : 400);
+  if (content.files.length > settings.limits.filesPerMessage) return json({ error: 'bad_attachment' }, 400);
   const mode = body.mode === 'model' ? 'model' : 'auto';
   const extendedThinking = body.extendedThinking === true;
   const parentRaw = body.parentMessageId;
@@ -176,6 +186,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   if (parentRaw != null && parentRaw !== 'root' && !isUuid(parentRaw)) return json({ error: 'bad_request' }, 400);
   const continueFrom = body.continueFrom;
   if (continueFrom != null && !isUuid(continueFrom)) return json({ error: 'bad_request' }, 400);
+  if (body.projectId != null && !isUuid(body.projectId)) return json({ error: 'bad_request' }, 400);
 
   // Which models may answer.
   const registry = registryFor(settings).filter((spec) => providerConfigured(env, spec.provider));
@@ -201,6 +212,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   }
 
   let userMsg: MessageRow;
+  /** A new message (not a retry or a Continue). */
+  let fresh = false;
   /** The cut-off reply being continued, if this is a Continue. */
   let continuing: MessageRow | null = null;
   if (isUuid(continueFrom)) {
@@ -227,12 +240,12 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       newFiles = content.files.map((id) => byId.get(id)).filter((a): a is AttachmentRow => !!a);
       if (newFiles.length !== content.files.length || newFiles.some((a) => a.conversation_id && a.conversation_id !== conv?.id)) return json({ error: 'bad_attachment' }, 400);
       const images = newFiles.filter((a) => a.kind === 'image').length;
-      if (images > MAX_IMAGES_PER_MESSAGE) return json({ error: 'too_many_images' }, 400);
+      if (images > settings.limits.imagesPerMessage) return json({ error: 'too_many_images' }, 400);
       if (images && mode === 'model' && !candidates[0].flags.vision) return json({ error: 'model_cannot_see_images' }, 400);
       if (conv) {
         const have = await db.count(env, 'ai_attachments', q().eq('conversation_id', conv.id));
         const adding = newFiles.filter((a) => !a.conversation_id).length;
-        if (have.ok && have.value + adding > MAX_FILES_PER_CONVERSATION) return json({ error: 'too_many_files' }, 409);
+        if (have.ok && have.value + adding > settings.limits.filesPerChat) return json({ error: 'too_many_files' }, 409);
       }
     }
     let parentId: string | null;
@@ -245,11 +258,20 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       parentId = active ?? latestLeaf(rows)?.id ?? null;
     }
     if (!conv) {
-      const made = await createConversation(env, { id: crypto.randomUUID(), account_id: sub, title: fallbackTitle(content.text || newFiles.map((a) => a.name).join(', ')), model_pref: mode === 'model' ? candidates[0].id : 'auto' });
+      // A new chat started in a project: the project must be the account's own.
+      let projectId: string | null = null;
+      if (isUuid(body.projectId)) {
+        const p = await getProject(env, sub, body.projectId);
+        if (!p.ok) return json({ error: 'unavailable' }, 503);
+        if (!p.value) return json({ error: 'not_found' }, 404);
+        projectId = p.value.id;
+      }
+      const made = await createConversation(env, { id: crypto.randomUUID(), account_id: sub, title: fallbackTitle(content.text || newFiles.map((a) => a.name).join(', ')), model_pref: mode === 'model' ? candidates[0].id : 'auto', project_id: projectId });
       // 23503: the account row is gone (deleted elsewhere), so the session no longer stands.
       if (!made.ok) return made.code === '23503' ? json({ error: 'signed_out' }, 401) : json({ error: 'unavailable' }, 503);
       if (!made.rows[0]) return json({ error: 'unavailable' }, 503);
       conv = made.rows[0];
+      if (body.incognito === true) await markIncognito(env, sub, conv.id);
     }
     const unlinked = newFiles.filter((a) => !a.conversation_id).map((a) => a.id);
     if (unlinked.length) {
@@ -261,6 +283,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     const saved = await insertMessage(env, row);
     if (!saved.ok) return json({ error: 'unavailable' }, 503);
     userMsg = { thinking: null, thinking_ms: null, sources: null, artifacts: null, model_id: null, provider: null, stop_reason: null, usage: null, ...row };
+    fresh = true;
     rows = [...rows, userMsg];
   }
   const isNew = rows.length === 1;
@@ -275,11 +298,13 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     if (r.ok) for (const a of r.rows) fileRows.set(a.id, a);
   }
   const signals = fileSignals(turns, fileRows);
-  const threadSize = turns.reduce((n, t) => n + t.text.length + t.files.reduce((m, id) => m + (fileRows.get(id)?.extracted_text?.length ?? 0), 0), 0);
+  // The chat's project (its instructions and knowledge), when it has one.
+  const project = await loadProjectContext(env, sub, conversation.project_id);
+  const threadSize = (project?.chars ?? 0) + turns.reduce((n, t) => n + t.text.length + t.files.reduce((m, id) => m + (fileRows.get(id)?.extracted_text?.length ?? 0), 0), 0);
   const latestText = typedText(userMsg.content);
 
   if (mode === 'auto') {
-    ladder = pickLadder({ text: latestText, threadChars: threadSize, hasImages: signals.hasImages, hasPdf: signals.hasPdf, extendedThinking });
+    ladder = pickLadder({ text: latestText, threadChars: threadSize, hasImages: signals.hasImages, hasPdf: signals.hasPdf || longKnowledge(project), extendedThinking });
     candidates = ladderModels(registry, ladder);
     if (!candidates.length) candidates = ladderModels(registry, 'default');
     if (!candidates.length) candidates = registry.filter((spec) => spec.group !== null);
@@ -303,7 +328,10 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     }
   }
 
-  const account = await accountOf(env, sub);
+  const [account, memory] = await Promise.all([accountOf(env, sub), memoryFor(env, sub, conversation.id, body.incognito === true)]);
+  const memoryText = memoryBlock(memory, latestText);
+  // Learning runs after a new message (not a retry or a Continue) on its turn.
+  const learnNow = memory.learn && fresh && shouldLearn(pathRows.filter((r) => r.role === 'user').length, latestText);
   const vars = {
     now: new Date(),
     timezone: safeTimezone(body.timezone),
@@ -319,7 +347,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   const sitesOf = (items: Source[]) => [...new Set(items.map((i) => i.site))].slice(0, 4);
   const runApiSearch = (): Promise<SearchResult> => (apiSearch ??= (async () => {
     send('status', { step: 'searching', query });
-    const r = await searchWeb(env, query, topic);
+    const r = await searchWeb(env, query, topic, Date.now(), settings.limits.searchesPerDay);
     if (r.ok) {
       searched = { items: r.sources, via: 'search', queries: [query] };
       send('status', { step: 'searched', count: r.sources.length, sites: sitesOf(r.sources) });
@@ -337,8 +365,9 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       if (r.ok) search = { sources: r.sources };
     }
     // Artifacts go to every model with room for them (prompt.ts) unless the page turned them off.
-    const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: body.artifacts !== false, search, personal });
-    const messages = await materialize(env, turns, spec, fileRows, memo);
+    const knowledge = project ? await knowledgeFor(env, spec, project, memo) : null;
+    const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: body.artifacts !== false, search, personal, owner: settings.instructions, project: knowledge?.prompt ?? null, memory: memoryText });
+    const messages = withKnowledge(await materialize(env, turns, spec, fileRows, memo), knowledge);
     return {
       model: spec,
       system,
@@ -476,6 +505,11 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     });
     if (titleJob) await titleJob;
     console.log(JSON.stringify({ route: 'ai-chat', continued: !!continuing, search: searchLog, model: model.id, provider: model.provider, ladder, ms: Date.now() - started, status: stop, input: usage?.input ?? null, output: usage?.output ?? null }));
+    // Memory: learn from this turn once the reply is saved (this whole job runs under waitUntil).
+    if (learnNow && savedReply && (stop === 'end' || stop === 'length')) {
+      const path = [...pathRows.map((r) => ({ role: r.role, text: typedText(r.content) })), { role: 'assistant' as const, text: finalText }];
+      await learnFromChat(env, { accountId: sub, conversationId: conversation.id, candidates: learnCandidates(registry), items: memory.items, path });
+    }
   };
 
   const job = pump().catch(() => undefined);

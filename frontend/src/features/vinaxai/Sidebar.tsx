@@ -1,11 +1,12 @@
 /**
- * VinaX AI — the conversation sidebar: New chat, search, Starred, then
- * Recents by day, each with a ⋯ menu (Star, Rename, Delete), and the
+ * VinaX AI — the conversation sidebar: New chat, Projects, Artifacts, search,
+ * Starred, then Recents by day, each with a ⋯ menu (Star, Rename, Move to
+ * project, Delete), and the
  * account with links to Settings and back to VinaX. On a wide screen it is
  * a column that can be collapsed; below 1024px it is a slide-over drawer.
  */
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useAccount } from '@/components/useAccount';
 import { toast } from '@/store/toastStore';
@@ -14,12 +15,15 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { groupConversations } from './sidebarGroups';
 import { resetChat, useChatStore } from './store';
 import { moveFocus, useDismiss } from './useDismiss';
-import { ArrowLeftIcon, CloseIcon, DotsIcon, NewChatIcon, PencilIcon, SearchSmallIcon, SidebarIcon, StarIcon, TrashIcon } from './icons';
+import { ArrowLeftIcon, ArtifactsIcon, CloseIcon, DotsIcon, FolderIcon, NewChatIcon, PencilIcon, SearchSmallIcon, SidebarIcon, StarIcon, TrashIcon } from './icons';
 import type { ConversationSummary } from './types';
 
 export const LIST_KEY = ['vinaxai', 'conversations'] as const;
 
-function RowMenu({ c, onRename, onDelete, onStar }: { c: ConversationSummary; onRename(): void; onDelete(): void; onStar(): void }): ReactNode {
+/** Move to project… opens a dialog that loads with the projects code. */
+const MoveToProjectDialog = lazy(() => import('./projectDialogs').then((m) => ({ default: m.MoveToProjectDialog })));
+
+function RowMenu({ c, onRename, onDelete, onStar, onMove }: { c: ConversationSummary; onRename(): void; onDelete(): void; onStar(): void; onMove(): void }): ReactNode {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -63,6 +67,7 @@ function RowMenu({ c, onRename, onDelete, onStar }: { c: ConversationSummary; on
         >
           {item(c.starred ? 'Unstar' : 'Star', <StarIcon className="w-4 h-4" filled={c.starred} />, onStar)}
           {item('Rename', <PencilIcon className="w-4 h-4" />, onRename)}
+          {item('Move to project…', <FolderIcon className="w-4 h-4" />, onMove)}
           {item('Delete', <TrashIcon className="w-4 h-4" />, onDelete, true)}
         </div>
       )}
@@ -70,7 +75,7 @@ function RowMenu({ c, onRename, onDelete, onStar }: { c: ConversationSummary; on
   );
 }
 
-function Row({ c, onNavigate, onDeleteAsk }: { c: ConversationSummary; onNavigate(): void; onDeleteAsk(c: ConversationSummary): void }): ReactNode {
+function Row({ c, onNavigate, onDeleteAsk, onMoveAsk }: { c: ConversationSummary; onNavigate(): void; onDeleteAsk(c: ConversationSummary): void; onMoveAsk(c: ConversationSummary): void }): ReactNode {
   const qc = useQueryClient();
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(c.title ?? '');
@@ -99,7 +104,7 @@ function Row({ c, onNavigate, onDeleteAsk }: { c: ConversationSummary; onNavigat
             {c.starred && <StarIcon className="w-3.5 h-3.5 vx-ai-row-star" filled />}
             <span>{c.title ?? 'New chat'}</span>
           </NavLink>
-          <RowMenu c={c} onStar={star} onRename={() => { setName(c.title ?? ''); setRenaming(true); }} onDelete={() => onDeleteAsk(c)} />
+          <RowMenu c={c} onStar={star} onRename={() => { setName(c.title ?? ''); setRenaming(true); }} onDelete={() => onDeleteAsk(c)} onMove={() => onMoveAsk(c)} />
         </>
       )}
     </li>
@@ -138,6 +143,8 @@ export function Sidebar({ onNavigate, onNewChat, onCollapse, drawer, onSettings 
   const items = useMemo(() => list.data?.pages.flatMap((p) => (Array.isArray(p?.items) ? p.items : [])) ?? [], [list.data]);
   const groups = useMemo(() => groupConversations(items), [items]);
   const [toDelete, setToDelete] = useState<ConversationSummary | null>(null);
+  const [toMove, setToMove] = useState<ConversationSummary | null>(null);
+  const onProjects = useLocation().pathname.startsWith('/vinaxai/project');
 
   const remove = async (c: ConversationSummary) => {
     setToDelete(null);
@@ -169,6 +176,14 @@ export function Sidebar({ onNavigate, onNewChat, onCollapse, drawer, onSettings 
         <NewChatIcon className="w-5 h-5" />
         <span>New chat</span>
       </button>
+      <Link to="/vinaxai/projects" className={`vx-ai-side-new vx-ai-side-projects${onProjects ? ' is-active' : ''}`} aria-current={onProjects ? 'page' : undefined} onClick={onNavigate}>
+        <FolderIcon className="w-5 h-5" />
+        <span>Projects</span>
+      </Link>
+      <NavLink to="/vinaxai/artifacts" end className={({ isActive }) => `vx-ai-side-new vx-ai-side-nav${isActive ? ' is-active' : ''}`} onClick={onNavigate}>
+        <ArtifactsIcon className="w-5 h-5" />
+        <span>Artifacts</span>
+      </NavLink>
       <div className="vx-ai-side-search">
         <SearchSmallIcon className="w-4 h-4" />
         <input type="search" aria-label="Search chats" placeholder="Search chats" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -181,13 +196,13 @@ export function Sidebar({ onNavigate, onNewChat, onCollapse, drawer, onSettings 
           ? items.length > 0 && (
             <section aria-label="Search results">
               <h3 className="vx-ai-side-h">Results</h3>
-              <ul>{items.map((c) => <Row key={c.id} c={c} onNavigate={onNavigate} onDeleteAsk={setToDelete} />)}</ul>
+              <ul>{items.map((c) => <Row key={c.id} c={c} onNavigate={onNavigate} onDeleteAsk={setToDelete} onMoveAsk={setToMove} />)}</ul>
             </section>
           )
           : groups.map((g) => (
             <section key={g.label} aria-label={g.label === 'Starred' ? 'Starred' : `Recents: ${g.label}`}>
               <h3 className="vx-ai-side-h">{g.label}</h3>
-              <ul>{g.items.map((c) => <Row key={c.id} c={c} onNavigate={onNavigate} onDeleteAsk={setToDelete} />)}</ul>
+              <ul>{g.items.map((c) => <Row key={c.id} c={c} onNavigate={onNavigate} onDeleteAsk={setToDelete} onMoveAsk={setToMove} />)}</ul>
             </section>
           ))}
         {list.hasNextPage && (
@@ -208,6 +223,11 @@ export function Sidebar({ onNavigate, onNewChat, onCollapse, drawer, onSettings 
           </Link>
         </div>
       </div>
+      {toMove && (
+        <Suspense fallback={null}>
+          <MoveToProjectDialog chat={toMove} onClose={() => setToMove(null)} />
+        </Suspense>
+      )}
       {toDelete && (
         <ConfirmDialog
           title="Delete this chat?"

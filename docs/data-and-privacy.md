@@ -89,7 +89,7 @@ Signed out, or with the personal engine off, nothing about listening is sent to 
 
 VinaX AI ([ai.md](ai.md)), the chat at `/vinaxai`, is the one place AI is used, and only when a signed-in listener uses it:
 - What they type goes from the Worker to one of the AI providers to generate the reply. The privacy page names them.
-- The chat never sees the listening history or anything outside the conversation.
+- The chat never sees the listening history or anything outside the conversation, apart from the listener's memory notes while memory is on ([VinaX AI memory](#vinax-ai-memory)).
 - Settings → Personalisation (what to call them, what to know about them, how to reply, a reply style) is kept on the device (`vinax.vxai.prefs.v1`) and sent with each message, so the answering provider sees it with the conversation. The Worker uses it for that reply only: it is not stored with the chat and not logged.
 - When a reply searches the web, the search words (the latest message, with links cut to their site names) go either to Google, through Gemini's Search grounding, or to the search provider (Tavily or Serper). A search's results are cached at the edge for up to an hour, keyed by a hash of the query.
 - Conversations are stored with the account (`ai_conversations`, `ai_messages`; [database.md](database.md)), so they follow it to every device.
@@ -103,6 +103,17 @@ VinaX AI ([ai.md](ai.md)), the chat at `/vinaxai`, is the one place AI is used, 
   - Music pauses while the mic is open.
 - The page keeps nothing about the chat on the device.
 - **Shared links** exist only when the listener makes one ([Shared chats](#shared-vinax-ai-chats)).
+- **Projects** exist only when the listener makes one ([VinaX AI projects](#vinax-ai-projects)).
+
+### VinaX AI memory
+
+VinaX AI keeps a short list of notes about the listener across chats, such as "Is learning Carnatic vocals" or "Prefers answers in Telugu", so they don't have to repeat themselves. It is on by default and the listener controls it in VinaX AI's settings → **Memory**.
+- **What is stored.** At most 50 notes of at most 200 characters each (`ai_memories`; [database.md](database.md)): the text, whether VinaX AI learned it from a chat or the listener added it, the chat a learned note came from (until that chat is deleted), and when. Also the listener's two switches, Use memory and Learn from my chats (`ai_memory_prefs`), and whether a chat is incognito (`ai_conversations.incognito`).
+- **How notes are learned.** With both switches on, after every third message of a chat, and whenever a message asks VinaX AI to remember or forget something, the Worker sends a small AI model (one of the AI providers the privacy page names) the current notes and the latest messages of that chat: at most the listener's last three messages (each cut at 2,000 characters) and the replies between them (each cut at 1,500 characters, with code and artifacts left out). Nothing else: not the listener's name, settings, files or other chats. The model answers with notes to add or remove. It is told never to keep passwords, codes or keys; card, bank, account or ID numbers; email addresses, phone numbers or addresses; health details; sex life, religion, politics, caste or ethnicity; or anything about other people. The Worker also refuses anything that looks like an email address, a phone, card or account number, a code or a key, whatever the model or the listener sends.
+- **How notes are used.** The notes go to the AI provider that writes each new reply, with the conversation, marked as background that may be out of date. They are never part of a shared link, and Live voice doesn't use them.
+- **Who can see them.** The listener, in Settings → Memory. Only the Worker reads them; the owner's console shows only how many notes exist in total. The Worker logs counts, never the text.
+- **Turning it off.** **Use memory** off stops using and learning notes; **Learn from my chats** off keeps using the notes but learns nothing new. An **incognito chat** (the hat-and-glasses button at the top of a new chat) neither uses nor adds to memory; it is still saved like any chat. The owner can also turn memory off for everyone.
+- **How long, and how to delete it.** Until the listener deletes it. Delete removes one note, **Forget everything** removes them all at once, and deleting the account removes the notes and the switches. Deleting a chat does not delete the notes learned from it; delete those in Settings → Memory.
 
 ### Shared VinaX AI chats
 
@@ -113,7 +124,15 @@ Share in a chat's header makes a link (`/vinaxai/share/<id>`) that anyone who ha
 - **How to delete it.** **Stop sharing** in the chat's Share dialog, or in VinaX AI's settings under Your chats → Shared links, deletes the copy at once. Deleting the chat deletes its link at once too, and deleting the account removes every link. A copy a reader's browser already loaded may stay on their screen, and their browser may keep it for up to a minute.
 - Readers can report a shared chat by email from its page.
 
-Settings → Your data → **Export VinaX AI chats** downloads every chat, with all its versions, as one JSON file (`GET /api/ai/export`). The file is separate from the app's backup: the chats already live with the account, so a backup neither carries nor restores them.
+### VinaX AI projects
+
+A project groups chats under a name, with instructions and files every chat in it uses. Nothing is made until the listener presses **New project**.
+- **What is stored.** With the account (`ai_projects`; [database.md](database.md)): the project's name, its description, its instructions (up to 8,000 characters), whether it is starred, and when it was made and changed. Its files are stored like files added to a chat, in the same private Storage bucket that only the Worker can read, with the text read out of a text file or a PDF (at most 20 files and 200,000 characters of text per project). Each chat records which project it is in.
+- **Where it goes.** With every message in a chat in the project, the Worker sends the project's name, instructions and files to the AI provider that answers, as part of that request, the same way a chat's own files are sent (a PDF may go to Google's file service for up to 48 hours, as with a chat's PDFs). They are not copied into the chat's messages, not logged, and never part of a shared link: a link shows the chat's messages only.
+- **How long.** Until the listener removes a file, deletes the project, or deletes the account.
+- **How to delete it.** Remove a file with its bin button on the project's page. **Delete project** deletes the project, its instructions and its files at once; its chats stay as ordinary chats unless **Delete them too** is picked, which deletes them like any deleted chat (hidden at once, removed within a day, shared links gone at once). Deleting the account removes every project and file.
+
+Settings → Your data → **Export VinaX AI chats** downloads every chat, with all its versions, and every project with its instructions and its files' names, as one JSON file (`GET /api/ai/export`). The file is separate from the app's backup: the chats already live with the account, so a backup neither carries nor restores them.
 
 On first launch after the AI features were removed, the app erases what they left on the device (`services/storage/earlyMigrations.ts`): the AI chats (`vinax_ai_chats_v1`), every `vinax.ai.*`, `vinax.aiplaylist.*` and `vinax.ai<Name>` key, the AI shelf and metadata caches, the old DJ's already-surfaced list, the embedding model name, and the `vinax-embeddings` IndexedDB database.
 
@@ -157,7 +176,10 @@ Everything the server keeps about listeners is in one database ([database.md](da
 | `listeners` | One row per device that shared usage or claimed a handle: a server-derived device id (never the install id), display name, handle, platform, app version, edge country/region/city, what is playing now, first and last seen | The owner deletes the person from the console |
 | `accounts` | Signed-in listeners: Google id, email, name, picture, the linked device, coarse sign-in facts, times | **Delete account** in the app, or the owner's delete |
 | `account_backups` | The synced copy (the backup-file JSON), its version and size | With the account |
+| `ai_projects` | A VinaX AI project: the account, name, description, instructions, starred, times. Its files are `ai_attachments` rows (and stored files) marked with the project | **Delete project** (its files at once; its chats kept or deleted, as chosen), or with the account |
 | `ai_shares` | A shared VinaX AI chat: the account and chat it came from, the title, and a copy of the turns on screen (text, cited sources, file names; no reasoning or file contents) | **Stop sharing**, deleting the chat (at once), or with the account |
+| `ai_memories` | VinaX AI's memory notes: the account, the note (≤ 200 characters, at most 50), learned or added, the chat it came from (cleared when that chat is deleted), times | **Delete** or **Forget everything** in VinaX AI's settings → Memory, or with the account |
+| `ai_memory_prefs` | The account's memory switches: Use memory, Learn from my chats | With the account |
 | `personal_taste` | The account's taste model: scores for artists, languages, moods, decades, hours and songs, a summary, the mode, the vector | With the account, or **Erase my taste model** |
 | `personal_events` | The listener's reported events (kind, time, song id, seconds heard, source, local hour and weekday, time zone) | Purged after a year by housekeeping (`personal_purge`), with the account, or on erase |
 | `personal_exposure` | Per account and song: how often shown, queued, played, completed, skipped; liked, disliked; when | With the account, or on erase |
@@ -173,7 +195,7 @@ Everything the server keeps about listeners is in one database ([database.md](da
 | Generated songs (`GENERATED_AUDIO`, or `HANDOFF` under `gen:`) | Each job (the account id that started it, its status, length, mood, language, title) and the finished audio; per day, a count under a hash of the install id and the day, and one under a hash of the account and the day | The job and the audio after 24 hours; the counts after two days |
 | Rate limiting (isolate memory and bindings) | Counters keyed by route and a hash of the network address, hashed with a server-side pepper (`_lib/ratelimit.ts`) | Short-lived counters; the raw address is not part of the key |
 
-Three deletion paths exist. **The listener** erases their taste model from Settings → Region & privacy, which removes every `personal_*` row of theirs, or deletes their account from Settings → Profile, which removes `accounts`, `account_backups`, their VinaX AI chats and shared links, and every `personal_*` row for them. **The owner** deletes a person from the console's Listeners page, which removes their device row, every usage event, room memberships, the account and its backup, and detaches their feedback; the reason is kept in the audit trail. The owner's **Database → Maintenance** tab can also purge usage events older than a chosen number of days for everyone.
+Three deletion paths exist. **The listener** erases their taste model from Settings → Region & privacy, which removes every `personal_*` row of theirs, or deletes their account from Settings → Profile, which removes `accounts`, `account_backups`, their VinaX AI chats, projects, shared links and memory, and every `personal_*` row for them. **The owner** deletes a person from the console's Listeners page, which removes their device row, every usage event, room memberships, the account and its backup, and detaches their feedback; the reason is kept in the audit trail. The owner's **Database → Maintenance** tab can also purge usage events older than a chosen number of days for everyone.
 
 ## The backup file
 
