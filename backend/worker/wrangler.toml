@@ -89,6 +89,10 @@ GOOGLE_CLIENT_ID = "152181244509-biv1p3bge1endo5pd8qpc1ormhb4a75l.apps.googleuse
 # VinaX AI — which web search API backs the SEARCH_API_KEY secret:
 # "tavily" (the default) or "serper". See docs/ai.md.
 SEARCH_API_PROVIDER = "tavily"
+# Cloudflare Turnstile — the public site key of the sign-in security check
+# (app and console). Not a secret. The check runs only while the
+# TURNSTILE_SECRET_KEY secret is set too; see docs/operations.md.
+TURNSTILE_SITE_KEY = "0x4AAAAAAFxurV4s1_LIX_00"
 
 # Secrets (set with `npx wrangler secret put <NAME> --config worker/wrangler.toml`
 # or the Workers dashboard, never in this file) — every name documented in
