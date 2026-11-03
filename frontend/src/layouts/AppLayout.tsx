@@ -20,8 +20,12 @@ import { useUiStore } from '@/store/uiStore';
 import { DiagBanner } from '@/components/DiagBanner';
 import { OfflineBanner } from '@/components/OfflineBanner';
 const OnboardingSheet = lazy(() => import('@/components/OnboardingSheet').then(m => ({ default: m.OnboardingSheet })));
-import { AnnouncementBridge } from '@/components/AnnouncementBridge';
-import { AnnouncementPopup, BroadcastBar, VersionNotice } from '@/components/OwnerMessages';
+// The owner's messages (top bar, version notice, popup) and the announcement bridge load after first paint:
+// they show nothing until the owner's settings answer, and keep the first-load bundle in budget.
+const AnnouncementBridge = lazy(() => import('@/components/AnnouncementBridge').then((m) => ({ default: m.AnnouncementBridge })));
+const AnnouncementPopup = lazy(() => import('@/components/OwnerMessages').then((m) => ({ default: m.AnnouncementPopup })));
+const BroadcastBar = lazy(() => import('@/components/OwnerMessages').then((m) => ({ default: m.BroadcastBar })));
+const VersionNotice = lazy(() => import('@/components/OwnerMessages').then((m) => ({ default: m.VersionNotice })));
 import { applyUsageSharingDefault, initTelemetry } from '@/services/analytics/telemetry';
 import { initSessionInsights } from '@/services/analytics/sessionInsights';
 import { applyGlassLevel, applyThemeClasses, resolveTheme } from '@/utils/theme';
@@ -505,8 +509,8 @@ export function AppLayout() {
           {!isChat && <MobileBackBar />}
           <DiagBanner />
           <OfflineBanner />
-          {!isFullScreenPlayer && <BroadcastBar />}
-          {!isFullScreenPlayer && <VersionNotice />}
+          {!isFullScreenPlayer && <Suspense fallback={null}><BroadcastBar /></Suspense>}
+          {!isFullScreenPlayer && <Suspense fallback={null}><VersionNotice /></Suspense>}
           <ErrorBoundary resetKey={pathname}>
             <Suspense fallback={<PageSkeleton />}>
               {/* Search keeps one mount across /search → /search/:q so
@@ -530,8 +534,7 @@ export function AppLayout() {
       {inSession && <Suspense fallback={null}><TogetherController /></Suspense>}
       </PlayerErrorBoundary>
       <Suspense fallback={null}><OnboardingSheet /></Suspense>
-      <AnnouncementBridge />
-      <AnnouncementPopup />
+      <Suspense fallback={null}><AnnouncementBridge /><AnnouncementPopup /></Suspense>
       {/* 15.0 — Android: keeps this week's Weekly Mix downloaded on Wi-Fi when the setting is on. */}
       {/* 15.0 — background bridges, lazy so they stay out of the first-load bundle. */}
       <Suspense fallback={null}><Bridges15 /></Suspense>
