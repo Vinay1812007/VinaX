@@ -381,7 +381,7 @@ The Worker saves each reply's artifacts in `ai_messages.artifacts`, also after a
 
 ## Voice
 
-`_lib/ai/voice.ts`, `voiceGate.ts`; the routes `functions/api/ai/transcribe.ts`, `speak.ts`, `live-token.ts` and `live-transcript.ts`; on the page `mic.ts`, `useVoiceDictation.ts`, `speechText.ts`, `speechStream.ts`, `readAloud.ts`, `musicHold.ts`, `SettingsPanel.tsx` and `live/` (`LiveView.tsx`, `liveSession.ts`, `liveProtocol.ts`, `micTap.worklet.js`).
+`_lib/ai/voice.ts`, `voiceGate.ts`; the routes `functions/api/ai/transcribe.ts`, `speak.ts`, `live-token.ts` and `live-transcript.ts`; on the page `mic.ts`, `useVoiceDictation.ts`, `speechText.ts`, `speechStream.ts`, `readAloud.ts`, `musicHold.ts`, `SettingsPanel.tsx` and `live/` (`LiveView.tsx`, `liveSession.ts`, `liveProtocol.ts`, `micTap.worklet.js`, `audioRoute.ts`); in the Android app also `native-android/AudioRoutePlugin.java`.
 
 Provider details were checked against Groq's and Google's docs on 2026-10-31. Where they differ from the brief, the docs won:
 - Orpheus takes at most **200 characters** a request and returns WAV only. Its free allowance is small: about 10 requests a minute, 100 a day and 1,200 tokens a minute.
@@ -425,7 +425,7 @@ The page decodes WAV and 16-bit PCM itself, because a streamed WAV header may sa
 
 The waveform button (where Send is while the composer is empty) opens a full-screen view. Music pauses. Then:
 
-1. The page opens the mic ([The microphone](#the-microphone)). In the Android app the system prompt is voice search's own: the speech plugin's permission first, then `getUserMedia`. Capacitor's WebView also needs `MODIFY_AUDIO_SETTINGS`, which `scripts/patch-android.js` declares.
+1. The page opens the mic ([The microphone](#the-microphone)). In the Android app the system prompt is voice search's own: the speech plugin's permission first, then `getUserMedia`. Capacitor's WebView also needs `MODIFY_AUDIO_SETTINGS`, which `scripts/patch-android.js` declares. Where the voice plays in the app is in [Live voice in the Android app](#live-voice-in-the-android-app).
 2. The page asks the Worker for a token: `{ thinking, skip, voice, search, recap? }` returns `{ token, url, setup, model, search }`.
    - The models are tried in order: `gemini-3.8-live`, `gemini-3.1-flash-live-preview`, `gemini-2.5-flash-native-audio-latest`, `-preview-12-2025`, `-preview-09-2025`. With Extended thinking on, `gemini-3.8-live-extended-thinking` goes first. A Live model picked in Settings (`model` in the body; `voice.liveModels` in `GET /api/ai/models` lists them) goes before all of them, and the rest stay as fallbacks.
    - The token is minted with `POST /v1beta/auth_tokens`: one use, 2 minutes to start, 30 minutes to live.
@@ -436,11 +436,15 @@ The waveform button (where Send is while the composer is empty) opens a full-scr
    - If the socket closes before `setupComplete`, the page asks for a token for the next model, at most three times. With search on, the same model is first asked for once without search, in case it refuses the tool; the next model is asked with search again. The globe button shows what the session ended up with.
 4. Mic audio goes through an AudioWorklet (`micTap.worklet.js`), a same-origin file, because the CSP has no `blob:` or `data:` scripts. The build never inlines it (`assetsInlineLimit` in `vite.config.ts`).
    - The page resamples to 16 kHz and sends 16-bit PCM as `realtimeInput.audio` (`audio/pcm;rate=16000`).
-   - Gemini's 24 kHz PCM plays as it arrives. Talking over it stops it (`interrupted`).
+   - Gemini's 24 kHz PCM plays as it arrives (40 ms ahead on the web, 120 ms in the app). Talking over it stops it (`interrupted`).
+   - Where the echo canceller may miss the voice (the Android app, unless the voice is on the earpiece or a headset; any mic whose settings say `echoCancellation: false`), `EchoGuard` (`liveProtocol.ts`) sends a mic batch as silence while the voice plays and for 250 ms after, unless its RMS reaches 0.025 (about −32 dBFS: the listener talking over it). A batch that gets through holds the gate open for 600 ms, so words are not chopped. Silence is sent, not nothing, so the stream keeps its timing. Without it, the voice came back through the mic and Gemini cut its own reply off.
    - Captions come from the transcriptions. Mute sends `audioStreamEnd`.
    - While the model searches it may send `executableCode` parts (the status says "Searching the web…"); the sources it used come as `serverContent.groundingMetadata` (`groundingChunks[].web.{uri,title}`, `webSearchQueries`, `searchEntryPoint.renderedContent`). `liveProtocol.ts` keeps http(s) links only, at most ten a reply, and the view shows them under the captions with the chat's Sources row (`Sources.tsx`), with Google's search suggestions in the same sandboxed frame as the chat when they come.
    - The globe button in the controls switches search during a session. The setup cannot change mid-session, so the page reconnects: same mic, same transcript, and the token request carries `recap`, the latest 20 turns (at most 500 characters each, 4,000 in all), which the Worker adds to the prompt as `<earlier_in_this_call>`, marked as context, not instructions.
 5. Gemini ends a session after about ten minutes (`goAway`), and the page says so. Session resumption is not used yet.
+   - A socket that closes any other way after `setupComplete` (a phone between networks, the app in the background) reconnects the way the globe button does: a fresh token, same mic, the transcript as `recap`. At most twice a session; the third drop ends it with "The connection dropped".
+   - The setup has 12 seconds to complete on the web and 20 in the app (mobile data), before the next model is tried.
+   - When the page comes back to the front, a suspended audio context is resumed (Android suspends it in the background or during a phone call), and the silent-mic clock starts again.
 6. When the view closes, what was said is saved with `POST /api/ai/live-transcript` (`{ conversationId, parentMessageId?, model, turns: [{ role, text, sources? }] }`).
    - A reply's `sources` (`[{ url, title }]`, http(s) only, at most ten) are saved in its `sources` column as `{ items, via: "grounding", queries: [] }`, so the saved chat shows the same Sources row. Google's search-suggestions HTML is not saved: it is page-supplied HTML.
    - The turns become ordinary messages, each hanging on the one before, after the chat's active leaf. A new chat is started when there was none.
@@ -456,7 +460,29 @@ The waveform button (where Send is while the composer is empty) opens a full-scr
 - **Silence.** A real mic always carries a little noise, so a stream of exact zeros means the wrong device. Dictation's bar says "No sound from your mic" after 1.8 s of it, and a clip with no sound at all is not uploaded: the notice names the mic and offers Microphone settings. Live voice says so after 2.5 s and offers a list of mics; `LiveSession.switchMic` swaps the mic without ending the session.
 - **Meters.** `loudness` maps RMS to 0–1 on a decibel scale (−58 dB to −12 dB), so speech fills half or more. Dictation reads an analyser every 100 ms. Live reads one analyser on the mic and one on the voice every frame.
 - **Audio contexts** are made inside the tap (Safari starts others suspended). Firefox refuses a mic stream at another sample rate than its context (a Bluetooth headset at 16 kHz with speakers at 48 kHz), so `micSource` then makes a context at the mic's rate.
-- **Android app.** An APK installed before 1.3.10 lacks `MODIFY_AUDIO_SETTINGS`, and Capacitor then refuses the page the mic. Dictation then uses the phone's own speech recogniser (`createSttSession`, as voice search does); Live voice asks the listener to allow the mic or update the app.
+- **Android app.** An APK installed before 1.3.10 lacks `MODIFY_AUDIO_SETTINGS`, and Capacitor then refuses the page the mic. Dictation then uses the phone's own speech recogniser (`createSttSession`, as voice search does); Live voice asks the listener to allow the mic or update the app. In the app, Live waits 6 seconds of pure silence (not 2.5) before saying no sound arrives: a phone's mic can give exact zeros while call audio starts, and its noise suppressor can gate a quiet room to zero.
+
+### Live voice in the Android app
+
+Fixed on 2026-11-03 after "Live voice isn't working properly" in the app (the web was fine): the voice was very quiet or not heard, VinaX AI heard itself and cut itself off, and sessions dropped.
+
+What the web view does (Chromium's `audio_manager_android.cc`, `AudioManagerAndroid.java` and `CommunicationDeviceSelectorPostS.java`, read on 2026-11-03):
+- When the page opens a mic with echo cancellation and the phone has a platform echo canceller, Chromium switches the app to `MODE_IN_COMMUNICATION`, like a VoIP call. Audio contexts made from then on play as call audio (`AAUDIO_USAGE_VOICE_COMMUNICATION`), which is what the phone's echo canceller listens to. The mode goes back to normal when the last mic closes.
+- On Android 12 and later Chromium never picks an output device for the call, so Android uses its call default: the **earpiece**. Someone holding the phone in front of them hears almost nothing. `setSinkId` does nothing in the web view, so the page cannot move it.
+- An audio context made *before* the mic opened (the web's order, so Safari lets it start) was made while the mode was still normal, so from the source it plays as media: outside what the echo canceller listens to, so the voice can come back through the mic. (Some phones also send media to the earpiece in call mode; this was not checked on a device.)
+- Capacitor grants the page's mic (`BridgeWebChromeClient.onPermissionRequest` asks for `RECORD_AUDIO` with `MODIFY_AUDIO_SETTINGS`) and turns off the web view's user-gesture rule for audio (`setMediaPlaybackRequiresUserGesture(false)`), so audio contexts may start without a tap.
+
+The fix keeps call mode (so the echo canceller works) and moves the call audio to the loudspeaker:
+- **`AudioRoutePlugin.java`**, registered as `VinaxAudioRoute` in `MainActivity` by `scripts/patch-android.js` (app-local plugins are not discovered). `start({ speaker })` sets `MODE_IN_COMMUNICATION`, then on Android 12+ (API 31) `setCommunicationDevice` with the `TYPE_BUILTIN_SPEAKER` (or `TYPE_BUILTIN_EARPIECE`) device from `getAvailableCommunicationDevices()`, and on older versions `setSpeakerphoneOn`. A connected wired, USB or Bluetooth headset is left to Android. `setSpeaker({ on })` switches during the call, `getRoute()` reads it, and `stop()` calls `clearCommunicationDevice()` (or restores the speakerphone setting), sets `MODE_NORMAL` if call mode is still on, and gives the volume keys back. While a session is on, the volume keys change the call volume (`setVolumeControlStream(STREAM_VOICE_CALL)`). Android keeps a communication device for as long as the process lives, so the plugin also clears it when the bridge is destroyed. Each call answers `{ route: 'speaker' | 'earpiece' | 'headset' | 'other' }`. API names checked against developer.android.com's `AudioManager` and `AudioDeviceInfo` reference on 2026-11-03 (`setSpeakerphoneOn` is deprecated in API 34, still present).
+- **`live/audioRoute.ts`** wraps it (`registerPlugin` from `@capacitor/core`). `audioRouteAvailable()` is true only in the app with the plugin; on the web and in an older APK every call is a no-op that never throws.
+- **`LiveSession`**: with the plugin, the mic opens first, then the route starts (the loudspeaker unless the listener last chose the earpiece), and only then is the voice's audio context made, so it plays as call audio that the echo canceller hears and the route moves. The route stops after the mic closes.
+- **The button.** Live voice shows a loudspeaker toggle (`aria-pressed`, the Live controls' own button style) only when the plugin answered. The choice is kept on the device as `liveSpeaker` in the prefs (on by default). An app built before the plugin shows no button; the line under the controls says to update the app to switch between the loudspeaker and the earpiece.
+
+What reaches which app:
+- Over the air (the app loads the live site): the echo guard, the reconnect, the longer setup and silent-mic waits, the resume on return, the larger playback lead, and the update line in an older app.
+- Needs the new APK: the loudspeaker route and its button (the plugin is native code).
+
+Not verified on a phone (no device was available): the routing itself, the echo guard's threshold on real phones, whether an older Android (below 12) routes the web view's call audio with `setSpeakerphoneOn`, and how phone makers' audio stacks treat `setCommunicationDevice` from a web view app. Android blocks the mic for apps in the background (no microphone foreground service here), so Live hears nothing while the app is not on screen. Gemini's server-side voice detection could also be made less eager (`realtimeInputConfig.automaticActivityDetection.startOfSpeechSensitivity`) in the setup; that is not done.
 
 ### Settings
 

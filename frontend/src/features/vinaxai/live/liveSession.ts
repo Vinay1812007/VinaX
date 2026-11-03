@@ -19,11 +19,23 @@
  * voice, read every frame, on a loudness scale (mic.ts). When the mic gives
  * pure silence for a few seconds, the view says so and offers other mics;
  * `switchMic` swaps the mic without ending the session.
+ *
+ * In the Android app (docs/ai.md, "Live voice in the Android app"): opening
+ * the mic puts the WebView in call mode, so the voice plays as call audio
+ * (the phone's echo canceller then hears it) and Android sends it to the
+ * earpiece. An APK with the VinaxAudioRoute plugin moves it to the
+ * loudspeaker (`setSpeaker` switches back); the voice's audio context is made
+ * after the mic there, so it is call audio from the start. Everywhere the
+ * echo canceller may miss the voice, `EchoGuard` keeps it out of what is sent.
+ * A dropped connection reconnects (twice at most) with what was said so far,
+ * and the audio is resumed when the app comes back to the front.
  */
 import { liveToken, type LiveTokenReply } from '../api';
 import { closeMic, hasSignal, loudness, micLabelOf, micSource, newAudioContext, openMic, rmsOf } from '../mic';
 import { base64ToBytes, pcm16 } from '../speechStream';
-import { audioMessage, floatTo16, OUTPUT_RATE, parseServerMessage, Resampler, streamEndMessage, Transcript, type LiveEvent } from './liveProtocol';
+import { isNativePlatform } from '@/services/native';
+import { audioMessage, EchoGuard, floatTo16, OUTPUT_RATE, parseServerMessage, Resampler, streamEndMessage, Transcript, type LiveEvent } from './liveProtocol';
+import { audioRouteAvailable, setSpeaker, startAudioRoute, stopAudioRoute, type AudioRoute } from './audioRoute';
 import type { SourcesInfo } from '../types';
 import tapUrl from './micTap.worklet.js?url';
 
@@ -39,14 +51,25 @@ export interface LiveCallbacks {
   onWeb?(web: { sources: SourcesInfo | null; searching: boolean }): void;
   /** The mic in use, and whether it has given only silence so far (a muted or virtual device). */
   onMic?(mic: { label: string; silent: boolean }): void;
+  /** Where the voice plays in the Android app (null: the app cannot switch it). */
+  onRoute?(route: AudioRoute | null): void;
   /** Fires once. `error` is a code for voiceNotice / micNotice when it failed. */
   onEnd(reason: LiveEndReason, error?: string): void;
 }
 
-const SETUP_TIMEOUT_MS = 12_000;
+/** Phones on mobile data take longer to open the socket and set up. */
+const setupTimeoutMs = (): number => (isNativePlatform() ? 20_000 : 12_000);
 const MAX_ATTEMPTS = 3;
-/** Pure silence from the mic for this long, while listening, means it is the wrong mic. */
-const SILENT_AFTER_MS = 2_500;
+/** Reconnects after the connection drops mid-session. */
+const MAX_RECONNECTS = 2;
+/**
+ * Pure silence from the mic for this long, while listening, means it is the
+ * wrong mic. Longer in the app: a phone's mic can give exact zeros while the
+ * call audio starts up, and its noise suppressor can gate a quiet room to zero.
+ */
+const silentAfterMs = (): number => (isNativePlatform() ? 6_000 : 2_500);
+/** The voice counts as playing for this long after its last sample (the room's echo). */
+const ECHO_TAIL_S = 0.25;
 
 export class LiveSession {
   readonly transcript = new Transcript();
@@ -75,8 +98,17 @@ export class LiveSession {
   private wantSearch: boolean;
   search = false;
   private reconnecting = false;
+  private drops = 0;
+  private droppedWhileReconnecting = false;
+  /** Android app: where the voice plays, and whether the route plugin was started. */
+  route: AudioRoute | null = null;
+  private routed = false;
+  /** The mic says its echo cancellation is off. */
+  private echoOff = false;
+  private readonly guard = new EchoGuard();
+  private readonly native = isNativePlatform();
 
-  constructor(private readonly opts: { thinking: boolean; voice: string; model?: string; micId?: string; search?: boolean }, private readonly cb: LiveCallbacks) {
+  constructor(private readonly opts: { thinking: boolean; voice: string; model?: string; micId?: string; search?: boolean; speaker?: boolean }, private readonly cb: LiveCallbacks) {
     this.wantSearch = opts.search === true;
   }
 
@@ -87,14 +119,15 @@ export class LiveSession {
 
   /** Start (call inside the tap: the audio context and the mic need it). */
   async start(): Promise<void> {
-    this.ctx = typeof WebSocket === 'undefined' ? null : newAudioContext();
-    if (!this.ctx) { this.finish('failed', 'unsupported'); return; }
-    this.out = this.ctx.createGain();
-    this.out.connect(this.ctx.destination);
-    this.outMeter = this.ctx.createAnalyser();
-    this.outMeter.fftSize = 1024;
-    this.out.connect(this.outMeter);
+    const AC = typeof window === 'undefined' ? undefined : window.AudioContext ?? (window as unknown as { webkitAudioContext?: unknown }).webkitAudioContext;
+    if (typeof WebSocket === 'undefined' || !AC) { this.finish('failed', 'unsupported'); return; }
+    this.routed = audioRouteAvailable();
+    // On the web the voice's context is made now, inside the tap (Safari
+    // starts later ones suspended). With the route plugin it is made after
+    // the mic opens (below).
+    if (!this.routed && !this.makeOutput()) { this.finish('failed', 'unsupported'); return; }
     this.setState('connecting');
+    document.addEventListener('visibilitychange', this.onVisibility);
     try {
       this.stream = await openMic(this.opts.micId ?? '');
     } catch (e) {
@@ -102,6 +135,16 @@ export class LiveSession {
       return;
     }
     if (this.ended) { closeMic(this.stream); return; }
+    if (this.routed) {
+      // The WebView is in call mode now: put the voice on the loudspeaker
+      // (or the earpiece the listener chose), then make the voice's context,
+      // so its output is call audio that the echo canceller hears and the
+      // route moves. (The app's WebView needs no tap to start audio.)
+      this.route = await startAudioRoute(this.opts.speaker !== false);
+      if (this.ended) return;
+      this.cb.onRoute?.(this.route);
+      if (!this.makeOutput()) { this.finish('failed', 'unsupported'); return; }
+    }
     if (!(await this.open())) return;
     try {
       await this.startMic();
@@ -110,8 +153,37 @@ export class LiveSession {
     }
   }
 
+  /** The voice's audio context, its volume and its meter; false when there is none. */
+  private makeOutput(): boolean {
+    const ctx = newAudioContext();
+    if (!ctx) return false;
+    this.ctx = ctx;
+    this.out = ctx.createGain();
+    this.out.connect(ctx.destination);
+    this.outMeter = ctx.createAnalyser();
+    this.outMeter.fftSize = 1024;
+    this.out.connect(this.outMeter);
+    ctx.onstatechange = () => this.keepRunning(ctx);
+    return true;
+  }
+
+  /** Android suspends the audio when the app leaves the screen or a call comes in: start it again once it can. */
+  private keepRunning(ctx: AudioContext | null): void {
+    if (this.ended || !ctx || ctx.state !== 'suspended' || document.visibilityState === 'hidden') return;
+    void ctx.resume().catch(() => undefined);
+  }
+
+  private readonly onVisibility = (): void => {
+    if (this.ended || document.visibilityState !== 'visible') return;
+    this.keepRunning(this.ctx);
+    if (this.inCtx !== this.ctx) this.keepRunning(this.inCtx);
+    // The mic was cut off while the app was in the background (Android
+    // allows it only on screen): that silence proves nothing about the mic.
+    this.listenSince = performance.now();
+  };
+
   /** Get a token and connect, trying other models; false when it ended instead. */
-  private async open(recap?: Array<{ role: 'user' | 'assistant'; text: string }>): Promise<boolean> {
+  private async open(recap?: Array<{ role: 'user' | 'assistant'; text: string }>, fail: 'failed' | 'dropped' = 'failed'): Promise<boolean> {
     const skip: string[] = [];
     let search = this.wantSearch;
     for (let attempt = 0; attempt < MAX_ATTEMPTS && !this.ended; attempt += 1) {
@@ -123,7 +195,7 @@ export class LiveSession {
           ...(recap?.length ? { recap } : {}),
         });
       } catch (e) {
-        this.finish('failed', (e as { code?: string }).code ?? 'voice_unavailable');
+        this.finish(fail, (e as { code?: string }).code ?? 'voice_unavailable');
         return false;
       }
       if (this.ended) return false;
@@ -134,7 +206,7 @@ export class LiveSession {
       // The last try goes without search, in case search is what fails.
       if (attempt === MAX_ATTEMPTS - 2) search = false;
     }
-    if (!this.ended) this.finish('failed', 'voice_unavailable');
+    if (!this.ended) this.finish(fail, 'voice_unavailable');
     return false;
   }
 
@@ -145,6 +217,11 @@ export class LiveSession {
   async setSearch(on: boolean): Promise<void> {
     this.wantSearch = on;
     if (this.ended || this.reconnecting || !this.ready || this.search === on) return;
+    await this.reconnect('failed');
+  }
+
+  /** A new socket (a fresh token), same mic, same transcript; the new session is told what was said. */
+  private async reconnect(fail: 'failed' | 'dropped'): Promise<void> {
     this.reconnecting = true;
     this.ready = false;
     this.silence();
@@ -154,9 +231,27 @@ export class LiveSession {
     try { old?.close(1000); } catch { /* closed */ }
     this.setState('connecting');
     const recap = this.transcript.turns().map((t) => ({ role: t.role, text: t.text.slice(-500) })).slice(-20);
-    const ok = await this.open(recap);
+    const ok = await this.open(recap, fail);
     this.reconnecting = false;
     if (ok && !this.ended) this.setState('listening');
+    if (this.droppedWhileReconnecting) {
+      this.droppedWhileReconnecting = false;
+      // (this.open() replaced the socket; TypeScript still thinks it is the null set above.)
+      const now = this.ws as WebSocket | null;
+      if (!this.ended && now?.readyState !== WebSocket.OPEN) void this.recover();
+    }
+  }
+
+  /**
+   * The socket closed mid-session (a phone between networks, the app in the
+   * background): reconnect, at most MAX_RECONNECTS times a session.
+   */
+  private async recover(): Promise<void> {
+    if (this.ended) return;
+    if (this.reconnecting) { this.droppedWhileReconnecting = true; return; }
+    if (this.drops >= MAX_RECONNECTS) { this.finish('dropped'); return; }
+    this.drops += 1;
+    await this.reconnect('dropped');
   }
 
   /** Open the socket and send the setup; true once Gemini says it is ready. */
@@ -172,7 +267,7 @@ export class LiveSession {
       const ws = new WebSocket(`${token.url}?access_token=${encodeURIComponent(token.token)}`);
       ws.binaryType = 'arraybuffer';
       this.ws = ws;
-      const timer = window.setTimeout(() => { settle(false); try { ws.close(); } catch { /* closed */ } }, SETUP_TIMEOUT_MS);
+      const timer = window.setTimeout(() => { settle(false); try { ws.close(); } catch { /* closed */ } }, setupTimeoutMs());
       ws.onopen = () => ws.send(JSON.stringify({ setup: token.setup }));
       ws.onmessage = (e) => {
         const raw = typeof e.data === 'string' ? e.data : new TextDecoder().decode(e.data as ArrayBuffer);
@@ -183,7 +278,7 @@ export class LiveSession {
       };
       ws.onclose = () => {
         if (!settled) { settle(false); return; }
-        if (this.ws === ws) this.finish('dropped');
+        if (this.ws === ws) void this.recover();
       };
       ws.onerror = () => { /* onclose follows */ };
     });
@@ -197,10 +292,12 @@ export class LiveSession {
     if (this.ended) return;
     this.source = source;
     this.tap = new AudioWorkletNode(inCtx, 'vinax-mic-tap');
+    inCtx.onstatechange = () => this.keepRunning(inCtx);
     const resampler = new Resampler(inCtx.sampleRate);
     this.tap.port.onmessage = (e: MessageEvent<Float32Array>) => {
       if (this.ended || this.muted || !this.ready || this.ws?.readyState !== WebSocket.OPEN) return;
-      this.ws.send(audioMessage(floatTo16(resampler.push(e.data))));
+      const pcm = resampler.push(e.data);
+      this.ws.send(audioMessage(floatTo16(this.echoGuarded() ? this.guard.filter(pcm, this.voicePlaying(), performance.now()) : pcm)));
     };
     this.micMeter = inCtx.createAnalyser();
     this.micMeter.fftSize = 1024;
@@ -214,7 +311,31 @@ export class LiveSession {
     this.meterLoop();
   }
 
+  /**
+   * Whether the voice may come back through the mic: in the app, unless it
+   * plays on the earpiece or a headset; anywhere the mic has no echo
+   * cancellation.
+   */
+  private echoGuarded(): boolean {
+    return this.echoOff || (this.native && this.route !== 'earpiece' && this.route !== 'headset');
+  }
+
+  /** The voice is playing, or has just stopped (its echo is still in the room). */
+  private voicePlaying(): boolean {
+    return !!this.ctx && (this.playing.size > 0 || (this.nextAt > 0 && this.ctx.currentTime < this.nextAt + ECHO_TAIL_S));
+  }
+
+  /** Android app: the voice on the loudspeaker (`on`) or the earpiece. The route actually in use comes back. */
+  async setSpeaker(on: boolean): Promise<AudioRoute | null> {
+    if (this.ended || !this.routed) return this.route;
+    const r = await setSpeaker(on);
+    if (r && !this.ended) this.route = r;
+    this.cb.onRoute?.(this.route);
+    return this.route;
+  }
+
   private plugMic(source: MediaStreamAudioSourceNode): void {
+    this.echoOff = this.stream?.getAudioTracks()[0]?.getSettings?.().echoCancellation === false;
     source.connect(this.tap!);
     source.connect(this.micMeter!);
     this.heard = false;
@@ -267,7 +388,7 @@ export class LiveSession {
       smooth = now > smooth ? now : smooth * 0.8 + now * 0.2;
       this.cb.onLevel(smooth, voice > mic ? 'assistant' : 'user');
       if (this.inCtx?.state !== 'running') this.listenSince = performance.now();
-      if (!this.heard && !this.muted && !this.silentShown && performance.now() - this.listenSince > SILENT_AFTER_MS) {
+      if (!this.heard && !this.muted && !this.silentShown && performance.now() - this.listenSince > silentAfterMs()) {
         this.silentShown = true;
         this.cb.onMic?.({ label: this.micLabel, silent: true });
       }
@@ -305,7 +426,8 @@ export class LiveSession {
     const src = ctx.createBufferSource();
     src.buffer = buf;
     src.connect(this.out);
-    this.nextAt = Math.max(this.nextAt, ctx.currentTime + 0.04);
+    // A phone's audio runs later and its page stutters more: start a reply with a little more in hand.
+    this.nextAt = Math.max(this.nextAt, ctx.currentTime + (this.native ? 0.12 : 0.04));
     src.start(this.nextAt);
     this.nextAt += buf.duration;
     this.playing.add(src);
@@ -353,6 +475,9 @@ export class LiveSession {
     try { this.source?.disconnect(); } catch { /* gone */ }
     closeMic(this.stream);
     this.stream = null;
+    // After the mic is closed (the WebView has left call mode by then).
+    if (this.routed) void stopAudioRoute();
+    if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.onVisibility);
     const ws = this.ws;
     this.ws = null;
     try { ws?.close(1000); } catch { /* closed */ }

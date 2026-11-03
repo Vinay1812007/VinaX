@@ -54,6 +54,39 @@ export class Resampler {
   }
 }
 
+/**
+ * Keeps VinaX AI's own voice out of what is sent while it speaks, where the
+ * phone's echo canceller may not catch it (the Android app's loudspeaker, or
+ * a mic that reports echo cancellation off). Without it the voice comes back
+ * through the mic, Gemini hears it as the listener talking over it, and the
+ * reply cuts itself off ("interrupted").
+ *
+ * While the voice plays (and a short tail after), a batch goes as silence
+ * unless the mic is loud enough to be the listener talking over it (close
+ * speech is far louder at the mic than the echo the canceller leaves). Once
+ * a batch gets through, the next ones do too for a moment, so a word is not
+ * chopped. Silence is sent, not nothing, so the stream keeps its timing.
+ */
+export class EchoGuard {
+  private openUntil = 0;
+
+  /**
+   * @param bargeIn RMS a batch needs to get through while the voice plays (≈ −32 dBFS).
+   * @param holdMs how long the gate stays open after a loud batch.
+   */
+  constructor(private readonly bargeIn = 0.025, private readonly holdMs = 600) {}
+
+  /** The batch to send: `samples` as they are, or silence of the same length. */
+  filter(samples: Float32Array, voicePlaying: boolean, nowMs: number): Float32Array {
+    if (!voicePlaying) return samples;
+    let sum = 0;
+    for (const s of samples) sum += s * s;
+    const rms = samples.length ? Math.sqrt(sum / samples.length) : 0;
+    if (rms >= this.bargeIn) this.openUntil = nowMs + this.holdMs;
+    return nowMs < this.openUntil ? samples : new Float32Array(samples.length);
+  }
+}
+
 /** Floats (−1…1) to little-endian 16-bit PCM bytes. */
 export function floatTo16(samples: Float32Array): Uint8Array {
   const out = new Uint8Array(samples.length * 2);

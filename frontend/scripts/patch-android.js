@@ -59,10 +59,12 @@ if (fs.existsSync(gservicesSrc)) {
   console.log('[fcm] Copied google-services.json into app/');
 }
 
-// 1b. Register the native plugin with Capacitor. App-bundled (local) plugins
+// 1b. Register the native plugins with Capacitor. App-bundled (local) plugins
 // are NOT auto-discovered, so without this MainActivity registration
 // Capacitor.isPluginAvailable('VinaxMedia') is false and the playback
-// notification / lockscreen bridge never connects.
+// notification / lockscreen bridge never connects. The same goes for
+// 'VinaxAudioRoute' (AudioRoutePlugin.java: Live voice's loudspeaker /
+// earpiece switch); the page hides that button when it is missing.
 if (fs.existsSync(javaRoot)) {
   const mainActivity = `package ${PKG};
 
@@ -74,6 +76,8 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(VinaxMediaPlugin.class);
+        // VinaX AI Live voice: loudspeaker / earpiece (native-android/AudioRoutePlugin.java).
+        registerPlugin(AudioRoutePlugin.class);
         super.onCreate(savedInstanceState);
         maybeOpenPlayer(getIntent());
     }
@@ -136,7 +140,7 @@ public class MainActivity extends BridgeActivity {
 }
 `;
   fs.writeFileSync(path.join(javaRoot, 'MainActivity.java'), mainActivity);
-  console.log('[native] Wrote MainActivity.java registering VinaxMediaPlugin');
+  console.log('[native] Wrote MainActivity.java registering VinaxMediaPlugin and AudioRoutePlugin');
 } else {
   console.error('[native] java root missing — cannot register plugin');
 }
