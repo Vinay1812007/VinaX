@@ -1139,6 +1139,9 @@ html.light .vx-lyric-active { text-shadow: none; }
   user-select: text;
 }
 .deter img { -webkit-user-drag: none; }
+/* VinaX AI: replies, code and links can be selected and copied (utils/nativeMenuZone.ts). */
+.deter .vx-ai { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+.deter .vx-ai img { -webkit-user-drag: auto; }
 
 /* ============================================================================
    Device + capability layers.

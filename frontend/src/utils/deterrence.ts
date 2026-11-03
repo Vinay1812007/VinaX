@@ -4,6 +4,8 @@
  * shortcuts, right-click, drag, text selection). Inputs stay fully usable so
  * search/forms and keyboard navigation are never impaired.
  */
+import { isNativeMenuZone } from './nativeMenuZone';
+
 export function installDeterrence(): void {
   if (import.meta.env.DEV) return;
   document.documentElement.classList.add('deter');
@@ -11,11 +13,13 @@ export function installDeterrence(): void {
   const isEditable = (el: HTMLElement | null): boolean =>
     !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
 
+  // VinaX AI pages keep the browser's menu and dragging (isNativeMenuZone); the
+  // `.vx-ai` styles there also turn text selection back on.
   document.addEventListener('contextmenu', (e) => {
-    if (!isEditable(e.target as HTMLElement)) e.preventDefault();
+    if (!isEditable(e.target as HTMLElement) && !isNativeMenuZone()) e.preventDefault();
   });
   document.addEventListener('dragstart', (e) => {
-    if (!isEditable(e.target as HTMLElement)) e.preventDefault();
+    if (!isEditable(e.target as HTMLElement) && !isNativeMenuZone()) e.preventDefault();
   });
   document.addEventListener('keydown', (e) => {
     if (isEditable(e.target as HTMLElement)) return;

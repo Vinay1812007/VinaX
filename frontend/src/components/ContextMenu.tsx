@@ -11,6 +11,7 @@ import { toast } from '@/store/toastStore';
 import { recallCtxSong } from '@/utils/ctxSongs';
 import { cn } from '@/utils/cn';
 import { bestImage } from '@/utils/images';
+import { isNativeMenuZone } from '@/utils/nativeMenuZone';
 import { toggleLike } from './FavButton';
 import {
   ChevronRightIcon,
@@ -55,7 +56,8 @@ function absoluteUrl(path: string): string {
  * (`data-song-id`) it offers play/queue/favorite/copy-link; anywhere else it
  * offers app navigation and utilities. Esc / click-outside dismiss;
  * Shift+right-click is the escape hatch to the browser's native menu, and
- * text fields always keep the native menu.
+ * text fields always keep the native menu. VinaX AI pages always keep it too
+ * (isNativeMenuZone).
  */
 export function ContextMenu() {
   const [menu, setMenu] = useState<MenuState | null>(null);
@@ -68,6 +70,7 @@ export function ContextMenu() {
     const onCtx = (e: MouseEvent) => {
       if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
       if (e.shiftKey) return; // power-user escape hatch → native menu
+      if (isNativeMenuZone()) return; // VinaX AI: the browser's own menu, for copying replies, links and code
       const t = e.target as HTMLElement | null;
       if (!t) return;
       if (t.closest('input, textarea, select, [contenteditable="true"]')) return;
