@@ -127,8 +127,10 @@ test('13.5.0: signed out, a published page shows its own text with a sign-in car
     await expect(page.locator('#vx-public-content a[href="/charts/"]').first()).toBeAttached();
   }
   await page.waitForTimeout(500);
-  // Only the maintenance switch is asked; no catalogue, config or account calls.
-  expect(api.filter((p) => p !== '/api/site-mode')).toEqual([]);
+  // Only the maintenance switch and the sign-in card's security-check key
+  // (GET /api/auth/google, Cloudflare Turnstile) are asked; no catalogue,
+  // config or account calls.
+  expect(api.filter((p) => p !== '/api/site-mode' && p !== '/api/auth/google')).toEqual([]);
 });
 
 test('13.5.0: the sign-in page links to the published pages', async ({ page }) => {

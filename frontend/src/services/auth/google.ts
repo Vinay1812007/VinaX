@@ -67,6 +67,10 @@ export type SignInResult = 'ok' | 'cancelled' | 'refused' | 'offline' | 'unavail
 type HumanCheck = () => Promise<string | null | undefined>;
 const turnstileCheck: HumanCheck = () => import('./turnstile').then((m) => m.turnstileToken(ORIGIN, 'app-signin')).catch(() => null);
 
+/** Show Cloudflare's security check under a sign-in button; false when it is off. */
+export const mountSignInCheck = (el: HTMLElement): Promise<(() => void) | false> =>
+  import('./turnstile').then((m) => m.mountTurnstile(el, ORIGIN, 'app-signin')).catch(() => false as const);
+
 /** Trade a Google ID token for a VinaX session. */
 export async function exchangeGoogleToken(credential: string, fetchImpl: typeof fetch = fetch, check: HumanCheck = turnstileCheck): Promise<SignInResult> {
   try {

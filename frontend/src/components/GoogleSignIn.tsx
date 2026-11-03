@@ -9,7 +9,7 @@
  * and logo — sign-in buttons must follow the provider's own branding.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { currentAccount, renderGoogleButton, signInNative, signOut, type Account, type SignInResult } from '@/services/auth/google';
+import { currentAccount, mountSignInCheck, renderGoogleButton, signInNative, signOut, type Account, type SignInResult } from '@/services/auth/google';
 import { isNativePlatform } from '@/services/native';
 import { toast } from '@/store/toastStore';
 import '@/styles/signin.css';
@@ -57,6 +57,31 @@ export function GoogleSignIn({ onSignedIn, theme = 'dark' }: { onSignedIn?: (a: 
     if (r === 'ok' && a) onSignedInRef.current?.(a);
   };
 
+  // Cloudflare's security check, under the button (only when the owner turned it on).
+  const checkRef = useRef<HTMLDivElement>(null);
+  const [checkShown, setCheckShown] = useState(false);
+  useEffect(() => {
+    const el = checkRef.current;
+    if (account || !el) return;
+    let alive = true;
+    let remove: (() => void) | null = null;
+    void mountSignInCheck(el).then((r) => {
+      if (!r) return;
+      if (!alive) {
+        r();
+        return;
+      }
+      remove = r;
+      setCheckShown(true);
+    });
+    return () => {
+      alive = false;
+      remove?.();
+      setCheckShown(false);
+    };
+  }, [account]);
+  const check = <div ref={checkRef} className={`vx-turnstile-slot${checkShown ? ' is-on' : ''}`} />;
+
   // Web: Google's own button, drawn into the slot by Google's script.
   useEffect(() => {
     const slot = slotRef.current;
@@ -97,18 +122,21 @@ export function GoogleSignIn({ onSignedIn, theme = 'dark' }: { onSignedIn?: (a: 
 
   if (native) {
     return (
-      <button
-        type="button"
-        className="vx-google-btn"
-        disabled={busy}
-        onClick={() => {
-          setBusy(true);
-          void signInNative().then(settle);
-        }}
-      >
-        <GoogleG />
-        <span>{busy ? 'Signing in…' : 'Sign in with Google'}</span>
-      </button>
+      <div className="vx-google-slot is-native">
+        <button
+          type="button"
+          className="vx-google-btn"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            void signInNative().then(settle);
+          }}
+        >
+          <GoogleG />
+          <span>{busy ? 'Signing in…' : 'Sign in with Google'}</span>
+        </button>
+        {check}
+      </div>
     );
   }
 
@@ -123,6 +151,7 @@ export function GoogleSignIn({ onSignedIn, theme = 'dark' }: { onSignedIn?: (a: 
           </button>
         </div>
       )}
+      {check}
     </div>
   );
 }
