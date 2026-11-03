@@ -16,6 +16,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.9.7': {
+    title: 'Live voice in the Android app: loudspeaker button, no self-interrupting, reconnects',
+    changes: [
+      { type: 'improved', text: 'Live voice in the Android app now plays on the loudspeaker, with a button to switch to the earpiece like a phone call (update the app to get it).' },
+      { type: 'fixed', text: 'VinaX AI no longer hears its own voice and cuts itself off while you talk on the loudspeaker.' },
+      { type: 'improved', text: 'A dropped connection now reconnects by itself and keeps what you said, instead of ending the conversation.' },
+    ],
+  },
   '1.9.6': {
     title: 'VinaX AI: frosted glass, loading shapes and smoother motion',
     changes: [
