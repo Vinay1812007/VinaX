@@ -20,7 +20,7 @@ import { InlinePreview } from './InlinePreview';
 import { usePrefs } from './prefs';
 import { ChevronDownSmallIcon, ChevronIcon, ContinueIcon, CopyIcon, PencilIcon, RetryIcon, SpeakerIcon, StopIcon } from './icons';
 import { readAloud, stopReading, useReadAloud } from './readAloud';
-import type { ChatMessage, PickerModel } from './types';
+import { isFoundModel, type ChatMessage, type PickerModel } from './types';
 
 export const thoughtLabel = (ms: number | null): string => (ms == null ? 'Thought process' : `Thought for ${Math.max(1, Math.round(ms / 1000))}s`);
 
@@ -162,7 +162,7 @@ function RetryMenu({ models, onRetry }: { models: PickerModel[]; onRetry(choice?
           }}
         >
           {item('auto', 'Retry with Auto', { mode: 'auto' })}
-          {models.filter((m) => m.available).map((m) => item(m.id, `Retry with ${m.name}`, { mode: 'model', model: m.id }))}
+          {models.filter((m) => m.available && !isFoundModel(m)).map((m) => item(m.id, `Retry with ${m.name}`, { mode: 'model', model: m.id }))}
         </div>
       )}
     </span>

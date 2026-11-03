@@ -1,0 +1,18 @@
+{
+  "object": "list",
+  "data": [
+    { "id": "openai/gpt-oss-120b", "object": "model", "created": 1754408224, "owned_by": "OpenAI", "active": true, "context_window": 131072, "public_apps": null, "max_completion_tokens": 65536 },
+    { "id": "meta-llama/llama-4-scout-17b-16e-instruct", "object": "model", "created": 1743874824, "owned_by": "Meta", "active": true, "context_window": 131072, "public_apps": null, "max_completion_tokens": 8192 },
+    { "id": "llama-3.1-8b-instant", "object": "model", "created": 1693721698, "owned_by": "Meta", "active": true, "context_window": 131072, "public_apps": null },
+    { "id": "gemma2-9b-it", "object": "model", "created": 1693721698, "owned_by": "Google", "active": true, "context_window": 8192, "public_apps": null },
+    { "id": "moonshotai/kimi-k2-instruct-0905", "object": "model", "created": 1757046093, "owned_by": "Moonshot AI", "active": true, "context_window": 262144, "public_apps": null, "max_completion_tokens": 16384 },
+    { "id": "old-model-retired", "object": "model", "created": 1693721698, "owned_by": "Groq", "active": false, "context_window": 8192, "public_apps": null },
+    { "id": "whisper-large-v3", "object": "model", "created": 1693721698, "owned_by": "OpenAI", "active": true, "context_window": 448, "public_apps": null },
+    { "id": "whisper-large-v3-turbo", "object": "model", "created": 1728413088, "owned_by": "OpenAI", "active": true, "context_window": 448, "public_apps": null },
+    { "id": "canopylabs/orpheus-v1-english", "object": "model", "created": 1760000000, "owned_by": "Canopy Labs", "active": true, "context_window": 4000, "public_apps": null },
+    { "id": "playai-tts", "object": "model", "created": 1740682874, "owned_by": "PlayAI", "active": true, "context_window": 8192, "public_apps": null },
+    { "id": "meta-llama/llama-guard-4-12b", "object": "model", "created": 1746743847, "owned_by": "Meta", "active": true, "context_window": 131072, "public_apps": null },
+    { "id": "meta-llama/llama-prompt-guard-2-86m", "object": "model", "created": 1748632165, "owned_by": "Meta", "active": true, "context_window": 512, "public_apps": null },
+    { "id": "openai/gpt-oss-safeguard-20b", "object": "model", "created": 1761000000, "owned_by": "OpenAI", "active": true, "context_window": 131072, "public_apps": null }
+  ]
+}

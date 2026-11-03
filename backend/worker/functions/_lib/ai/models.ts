@@ -250,7 +250,11 @@ export const LADDERS: Readonly<Record<LadderName, readonly string[]>> = {
   grounded: ['gemini:gemini-2.5-flash', 'gemini:gemini-2.5-flash-lite'],
 };
 
-export const PICKER_GROUPS: readonly ModelGroup[] = ['fast', 'balanced', 'smart', 'vision', 'code', 'more', 'cloudflare'];
+/** The curated groups, then one group per provider for the free models found in its list (discovery.ts). */
+export const PICKER_GROUPS: readonly ModelGroup[] = [
+  'fast', 'balanced', 'smart', 'vision', 'code', 'more', 'cloudflare',
+  'more-groq', 'more-gemini', 'more-openrouter', 'more-nvidia', 'more-cloudflare',
+];
 
 export interface ModelOverride {
   enabled?: boolean;

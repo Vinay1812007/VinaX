@@ -281,6 +281,21 @@
   function reason(kind) { return REST_REASON[kind] || (kind ? fmt.label(kind) : '—'); }
   function until(iso) { return iso ? h('span', { title: fmt.full(iso) }, 'until ' + fmt.time(iso)) : null; }
 
+  /** The free models found in each AI company's own list (refreshed every 6 hours; docs/ai.md "Found models"). */
+  function discoveryCard(disc, providers) {
+    var on = disc.enabled;
+    var byId = {};
+    arr(disc.providers).forEach(function (p) { byId[p.provider] = p; });
+    var rows = providers.filter(function (p) { return p.configured; }).map(function (p) {
+      var st = byId[p.id];
+      var off = on === false || (on && typeof on === 'object' && on[p.id] === false);
+      var status = off ? ui.muted('Switched off') : !st ? ui.muted('Not checked yet') : st.ok ? ui.pill(fmt.plural(st.count, 'model') + ' ✓', 'ok') : ui.pill('List failed' + (st.count ? ' · showing ' + fmt.num(st.count) + ' from before' : ''), 'warn');
+      return [p.name, h('span', status, st && st.fetchedAt ? ui.muted(' · checked ' + fmt.ago(st.fetchedAt)) : null)];
+    });
+    return ui.card({ title: 'Free models found automatically', sub: 'Each AI company’s own list is read every 6 hours; its free chat models join the model menu under “More from …”. Switch one off below in Features & AI, or all of them with "discover": false.',
+      body: rows.length ? ui.dl(rows) : h('p.muted', 'No AI company has a key yet.') });
+  }
+
   function renderAi(host, ctx) {
     return ui.load(host, function () { return VX.api.get('/api/admin/ai', null, { fresh: true }); }, function (d) {
       var st = obj(d.settings), providers = arr(d.providers), models = arr(d.models);
@@ -336,7 +351,7 @@
             rows: models, exportName: 'vinax-ai-models', search: models.length > 12 ? 'Search models…' : false, rowId: function (m) { return m.id; },
             columns: [
               { key: 'name', label: 'Model', always: true, render: function (m) { return h('div', h('div.cell-main', m.name), h('div.cell-sub', m.provider)); } },
-              { key: 'group', label: 'In the model menu', render: function (m) { return m.group ? 'Yes' : ui.muted('Only for automatic choice'); } },
+              { key: 'group', label: 'In the model menu', render: function (m) { return m.discovered ? h('span', 'Yes', ui.muted(' · found automatically')) : m.group ? 'Yes' : ui.muted('Only for automatic choice'); } },
               { key: 'ownerEnabled', label: 'Switched on', render: function (m) { return m.ownerEnabled ? ui.pill('On', 'ok') : ui.pill('Off'); } },
               { key: 'restingUntil', label: 'Ready?', render: function (m) {
                 if (!m.configured) return ui.muted('No key');
@@ -350,6 +365,7 @@
               } }
             ]
           }) }),
+        discoveryCard(obj(d.discovery), providers),
         ui.card({ title: 'Voice', body: ui.dl([
           ['Talk instead of typing', voice.dictation ? ui.pill('Available ✓', 'ok') : ui.pill('Needs a Groq or Gemini key', 'warn')],
           ['Read answers aloud', voice.readAloud ? ui.pill('Available ✓', 'ok') : ui.pill('Needs a Groq or Gemini key', 'warn')],

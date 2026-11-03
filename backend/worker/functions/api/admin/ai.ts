@@ -8,7 +8,11 @@
  *         search: { api: { configured, provider, dailyLimit, usedToday }, grounding: { configured, dailyLimit, usedToday } },
  *         voice: { dictation, readAloud, live, resting: [{ model, until }] },
  *         utility: [{ id, name, provider, kind: guard|embedding|parse|aqa, configured }],
+ *         discovery: { enabled: true | false | { "<provider>": false },
+ *                      providers: [{ provider, ok, count, fetchedAt, error }] },
  *         checkedAt }
+ *     `models` holds the curated registry, then the free models found in the
+ *     providers' lists (`discovered: true`, _lib/ai/discovery.ts).
  *   POST /api/admin/ai { model: "<registry id>" }
  *     → { model, ok, ms, firstTokenMs, kind?, status? }
  *     One tiny request ("Reply with OK") to that model. A failure rests it
@@ -24,13 +28,14 @@ import { adminJson, badRequest, isAdminAsync, requireRole, unauthorized, type Ad
 import { readJsonCapped } from '../../_lib/body';
 import { db, dbConfigured, q } from '../../_lib/db';
 import { PROVIDER_NAMES, PROVIDERS, providerConfigured } from '../../_lib/ai/adapters';
-import { aiSettings, registryFor, sanitizeAiSettings } from '../../_lib/ai/config';
+import { aiSettings, pickerRegistryFor, sanitizeAiSettings } from '../../_lib/ai/config';
+import { discoveredModels, discoverySnapshot } from '../../_lib/ai/discovery';
 import { clearRest, coolingUntil, cooldownSnapshot } from '../../_lib/ai/cooldown';
 import { MODELS, UTILITY_MODELS, ladderModels, modelById } from '../../_lib/ai/models';
 import { runChat } from '../../_lib/ai/router';
 import { dailyLimit, GROUNDING_DAILY_LIMIT, providerOf, searchConfigured } from '../../_lib/ai/search';
 import { voiceAvailability, voiceRestSnapshot } from '../../_lib/ai/voice';
-import type { AiEnv, ProviderId } from '../../_lib/ai/types';
+import type { AiEnv, ModelSpec, ProviderId } from '../../_lib/ai/types';
 
 type Env = AiEnv & AdminAuthEnv;
 
@@ -43,12 +48,13 @@ async function usedToday(env: Env): Promise<Record<string, number> | null> {
   return Object.fromEntries(r.rows.map((row) => [row.kind, Number(row.count) || 0]));
 }
 
-export const onRequestGet = async (ctx: { request: Request; env: Env }): Promise<Response> => {
+export const onRequestGet = async (ctx: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = ctx;
   if (!(await isAdminAsync(request, env))) return unauthorized();
   const now = Date.now();
   const settings = dbConfigured(env) ? await aiSettings(env) : sanitizeAiSettings(null);
-  const registry = registryFor(settings);
+  const found = settings.discover === false ? [] : await discoveredModels(env, settings.discover, { waitUntil: ctx.waitUntil });
+  const registry = await pickerRegistryFor(env, settings, { waitUntil: ctx.waitUntil });
   const snap = cooldownSnapshot(now);
   const restOf = (key: string) => snap.rests.find((r) => r.key === key) ?? null;
   const providers = PROVIDERS.map((id: ProviderId) => ({
@@ -59,7 +65,7 @@ export const onRequestGet = async (ctx: { request: Request; env: Env }): Promise
     lastError: snap.lastErrors[id] ?? null,
   }));
   const overrides = settings.models as Record<string, { enabled?: unknown; order?: unknown }>;
-  const models = MODELS.map((spec) => {
+  const models = [...MODELS, ...found].map((spec) => {
     const until = coolingUntil(spec, now);
     const own = restOf(`${spec.provider}|${spec.upstream}`) ?? restOf(`${spec.provider}|*`);
     const o = overrides[spec.id];
@@ -73,6 +79,7 @@ export const onRequestGet = async (ctx: { request: Request; env: Env }): Promise
       configured: providerConfigured(env, spec.provider),
       restingUntil: until > now ? new Date(until).toISOString() : null,
       restKind: until > now ? own?.kind ?? null : null,
+      ...(spec.discovered ? { discovered: true } : {}),
     };
   });
   const used = await usedToday(env);
@@ -86,13 +93,14 @@ export const onRequestGet = async (ctx: { request: Request; env: Env }): Promise
     },
     voice: { ...voiceAvailability(env), resting: voiceRestSnapshot(now) },
     utility: UTILITY_MODELS.map((x) => ({ id: x.id, name: x.name, provider: PROVIDER_NAMES[x.provider], kind: x.kind, configured: providerConfigured(env, x.provider) })),
+    discovery: { enabled: settings.discover, providers: discoverySnapshot() },
     checkedAt: new Date(now).toISOString(),
   });
 };
 
 /** One tiny request to one model: time to its first event and to its first word. */
-export async function probeModel(env: AiEnv, id: string): Promise<{ model: string; ok: boolean; ms: number; firstTokenMs: number | null; kind?: string; status?: number | null }> {
-  const spec = modelById(MODELS, id)!;
+export async function probeModel(env: AiEnv, spec: ModelSpec): Promise<{ model: string; ok: boolean; ms: number; firstTokenMs: number | null; kind?: string; status?: number | null }> {
+  const id = spec.id;
   const t0 = Date.now();
   const ac = new AbortController();
   let firstTokenMs: number | null = null;
@@ -130,10 +138,15 @@ export const onRequestPost = async (ctx: { request: Request; env: Env }): Promis
   const read = await readJsonCapped<{ model?: unknown } | null>(request, 4 * 1024);
   if (!read.ok) return badRequest();
   const id = read.value && typeof read.value === 'object' ? read.value.model : null;
-  const spec = modelById(MODELS, id);
+  // A curated model, or one found in its provider's current list (switched off or not: the owner may test it).
+  let spec = modelById(MODELS, id);
+  if (!spec && typeof id === 'string') {
+    const settings = dbConfigured(env) ? await aiSettings(env) : sanitizeAiSettings(null);
+    spec = settings.discover === false ? null : modelById(await discoveredModels(env, settings.discover), id);
+  }
   if (!spec) return badRequest('unknown_model');
   if (!providerConfigured(env, spec.provider)) return adminJson({ model: spec.id, ok: false, ms: 0, firstTokenMs: null, kind: 'not_configured', status: null });
-  const r = await probeModel(env, spec.id);
+  const r = await probeModel(env, spec);
   console.log(JSON.stringify({ route: 'admin-ai-probe', model: spec.id, provider: spec.provider, ok: r.ok, ms: r.ms, kind: r.kind ?? null }));
   return adminJson(r);
 };

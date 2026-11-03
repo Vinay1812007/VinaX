@@ -15,13 +15,18 @@
  * never names upstream hosts or keys. `available` is false when the
  * provider's key is not set ('not_configured') or the model is resting
  * after a failure ('busy').
+ *
+ * The curated models come first, then the free models found in each
+ * provider's own list (`more-<provider>` groups, _lib/ai/discovery.ts),
+ * unless the owner set `discover: false`. A provider's list that fails
+ * leaves the curated picker as it is.
  */
 import { bearer, readSession } from '../../_lib/googleAuth';
 import { CORS, json } from '../../_lib/authShared';
 import { rateLimitAsync } from '../../_lib/ratelimit';
 import { dbConfigured } from '../../_lib/db';
 import { anyProviderConfigured, PROVIDER_NAMES, providerConfigured } from '../../_lib/ai/adapters';
-import { aiOpenFor, aiSettings, registryFor, sanitizeAiSettings } from '../../_lib/ai/config';
+import { aiOpenFor, aiSettings, pickerRegistryFor, registryFor, sanitizeAiSettings } from '../../_lib/ai/config';
 import { isCooling } from '../../_lib/ai/cooldown';
 import { ladderModels, PICKER_GROUPS } from '../../_lib/ai/models';
 import { searchConfigured } from '../../_lib/ai/search';
@@ -30,7 +35,7 @@ import type { AiEnv } from '../../_lib/ai/types';
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: { ...CORS, 'access-control-allow-methods': 'GET, OPTIONS' } });
 
-export const onRequestGet = async (ctx: { request: Request; env: AiEnv }): Promise<Response> => {
+export const onRequestGet = async (ctx: { request: Request; env: AiEnv; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = ctx;
   const limited = await rateLimitAsync(request, 'ai-models', { capacity: 30, refillPerMinute: 30 }, env);
   if (limited) return limited;
@@ -38,7 +43,8 @@ export const onRequestGet = async (ctx: { request: Request; env: AiEnv }): Promi
   const token = bearer(request);
   const sub = token ? await readSession(env, token) : null;
   const now = Date.now();
-  const models = registryFor(settings)
+  const picker = await pickerRegistryFor(env, settings, { waitUntil: ctx.waitUntil });
+  const models = picker
     .filter((spec) => spec.group !== null)
     .map((spec) => {
       const configured = providerConfigured(env, spec.provider);

@@ -52,7 +52,7 @@ Any one of them is enough for the chat to work. With none, `/api/ai/*` answers `
 - extra request fields in `params`, plus `highParams` for Extended thinking;
 - `firstEventMs` for a model that is slow to start (below).
 
-Every chat model the owner's providers offer is in the picker (2026-10-31, from the owner's latency run). A model reached through a second service says so in its name, so no two picker entries share a name. In group order:
+The curated picker below was chosen from the owner's latency run (2026-10-31); every other free chat model the providers list joins it on its own ([Found models](#found-models)). A model reached through a second service says so in its name, so no two picker entries share a name. The curated groups, in order:
 
 | Group | Models |
 | --- | --- |
@@ -70,7 +70,33 @@ Not in the picker:
 
 **Slow to start.** Llama 3.2 90B Vision, Muse Glimmer 30B and Nemotron 3.5 Bolt took 30–45 seconds to start in the owner's run. They carry `firstEventMs: 60000`: picked, or probed from the console, they get a minute for their first event instead of 25 seconds. They are never in an Auto ladder. The picker's description says "slow to start".
 
-With 35 models the picker has a search box (name, provider or description). Enter picks the first match.
+With 35 models the picker has a search box (name, provider, description or group). Enter picks the first match.
+
+### Found models
+
+Besides the curated registry, the picker lists every other free chat model the providers offer, found in each provider's own model list (`_lib/ai/discovery.ts`). New free models therefore show up on their own, within six hours of a provider listing them, with no deploy. They come after the curated groups, one group per provider: More from Groq, More from Gemini, More from OpenRouter, More from NVIDIA, More from Cloudflare (`more-<provider>`).
+
+Where each list comes from (endpoints and shapes checked 2026-11-03 against each provider's API reference; built without live keys, so the first real run should be watched in the console card below):
+
+| Provider | List | Kept |
+| --- | --- | --- |
+| Groq | `GET https://api.groq.com/openai/v1/models` | every `active` model (all are free on a free key), with its `context_window` and `max_completion_tokens` |
+| OpenRouter | `GET https://openrouter.ai/api/v1/models` (text output only, its default) | free ones: the id ends in `:free`, or `pricing.prompt` and `pricing.completion` are both `"0"`; output text only; not the `openrouter/*` routers. A model listed both ways appears once, as `:free`. Window from `top_provider.context_length`, images when `architecture.input_modalities` has `image`, reasoning when `supported_parameters` has `reasoning` |
+| Gemini | `GET https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000` (up to three pages) | models whose `supportedGenerationMethods` has `generateContent`, with `inputTokenLimit`, `outputTokenLimit` and `thinking`. Gemma takes no system instruction or thinking config there, so it gets `systemRole: false` and no thinking |
+| NVIDIA | `GET https://integrate.api.nvidia.com/v1/models` | by name only (the list gives no kind or window): 32,000 characters of history assumed |
+| Workers AI | the binding's own search, `env.AI.models({ task: "Text Generation" })` | text generation models not past their `planned_deprecation_date`, with their `context_window` |
+
+Every list is also filtered by id: no speech (Whisper, TTS, Orpheus, PlayAI, Live, native audio, transcription), embeddings, rerankers, retrievers, guards and safety models, reward models, parsers and OCR, image or video makers, AQA, computer use or deep research. Ids must match a strict character set. Anything the curated registry, `UTILITY_MODELS`, the ladders or the voice-only models already name is left out, so a curated model never appears twice and the two grounding-only Gemini 2.5 models stay out of the picker. Dictation's Gemini 3.8 Flash is a full chat model, so it may appear. A name that another entry already uses gets its service in brackets ("Llama 3.3 70B (NVIDIA)"). At most 300 a provider.
+
+Each found model becomes a registry entry (`toSpec`): the description is the maker and window ("Meta · 131K context"); about three characters a token, the answer's room taken off first (at most 8,192 output tokens, and at most a quarter of the window), capped like the curated models of that provider (Groq 30,000 characters, Gemini 600,000, OpenRouter and NVIDIA 100,000, Workers AI 60,000). So the prompt follows the window as for every model: the full prompt and artifacts when there is room ([The system prompt](#the-system-prompt)), the compact prompt for a small window such as an 8K model. They are `discovered: true`, use the same adapters as their provider's curated models, rest and fail like any picked model, and are never in an Auto ladder, the music ladder or the Retry menu.
+
+**Caching.** Each list is kept six hours in the Worker instance's memory and in the edge cache (`caches.default`, key `https://vinax-ai-discovery.internal/v1/<provider>`), so other instances nearby reuse the filtered list without asking the provider. No binding was added. A list older than six hours answers at once while it is read again in the background (`waitUntil`). A provider this instance has never heard from gets three seconds (each list request five); past that the request goes on without it and the next one has it. Lists are only read when someone opens the picker, the console card or picks a found model, and only for providers with a key.
+
+**Failure.** A list that fails, times out or comes back empty keeps the last good list and is asked again in 15 minutes; with no good list yet, that provider adds nothing. Discovery never rests a model and never changes the curated registry, so the picker always has at least the curated models.
+
+**Safety.** The chat accepts a picked id only when it is curated or in that provider's current found list and not switched off (`foundModelFor` in `config.ts`); anything else is `400 unknown_model` before any upstream call. The ids sent upstream are the ones the provider listed.
+
+**Gemini's free tier.** Google's list does not say which models are free. A found Gemini model with no free allowance answers 429 with a quota message, rests six hours ([Failover and cooldowns](#failover-and-cooldowns)) and shows as busy; the owner can switch it off.
 
 The Workers AI ids were taken from Cloudflare's public model list, because the build could not see the owner's account. They are marked `unconfirmed` until the probe confirms them.
 
@@ -239,7 +265,7 @@ Refusals before the stream: `400 bad_request | unknown_model | bad_attachment | 
 
 | Route | What it does |
 | --- | --- |
-| `GET /api/ai/models` | Public. `{ enabled, configured, groups, models: [{ id, name, provider, group, description, flags: { vision, web, thinking, code }, available, reason? }], voice: { dictation, readAloud, live, voices, liveVoices } }`. `available` is false when the provider has no key (`not_configured`) or the model is resting (`busy`). `voice` says which voice features have a key ([Voice](#voice)). A session, when sent, only decides `enabled` for testers |
+| `GET /api/ai/models` | Public. `{ enabled, configured, groups, models: [{ id, name, provider, group, description, flags: { vision, web, thinking, code }, available, reason? }], voice: { dictation, readAloud, live, voices, liveVoices } }`. `models` holds the curated models, then the [found models](#found-models) (`more-<provider>` groups). `available` is false when the provider has no key (`not_configured`) or the model is resting (`busy`). `voice` says which voice features have a key ([Voice](#voice)). A session, when sent, only decides `enabled` for testers |
 | `GET /api/ai/conversations?cursor=&q=&project=` | The account's chats, newest first, 30 a page. `q` searches titles and message text through `ai_conversation_search`; `project` keeps one project's chats. Each item carries its `projectId` |
 | `GET /api/ai/conversations/:id` | The conversation and its whole message tree, each reply labelled with its model's name and provider; `conversation.incognito: true` for an incognito chat |
 | `PATCH /api/ai/conversations/:id` | `{ title?, starred?, activeLeafId?, projectId? }`. `projectId` moves the chat into one of the account's projects (someone else's is 404) or, as `null`, out of its project; it does not change `updated_at` |
@@ -526,6 +552,7 @@ The `vinax-ai` setting, edited in the console under **Publish → App → VinaX 
 - `testers` are account ids (Google subject ids, the `accounts.id` column; the console's listener profile carries it as `account=` in its address). Testers may use VinaX AI while it is off. At most 50.
 - `models` switches a model off everywhere (picker and ladders) or reorders it inside its picker group: a lower `order` comes first; no `order` keeps the registry's place. The form keeps entries for ids the registry no longer has.
 - `search: false` switches web search off for everyone; the + menu then hides it.
+- `discover: false` takes every [found model](#found-models) out of the picker; `discover: { "openrouter": false }` takes out one provider's. Missing means on. A found model is switched off or reordered under `models` by its id like any other.
 The console's form for `instructions` and `limits` arrives with the console rebuild; until then they are set in the stored `vinax-ai` value.
 - `instructions` (at most 4,000 characters) are the owner's instructions for every model. The Worker adds them to every reply's system prompt right after VinaX AI's own prompt, inside `<owner_instructions>`, marked as the owner's and as never overriding the rules about what VinaX AI won't help with (`ownerBlock` in `prompt.ts`). Control characters are removed.
 - `limits` are the owner's numbers, each clamped to its range, a missing or bad value meaning the default (`LIMIT_RANGES` in `config.ts`):
@@ -555,7 +582,8 @@ The setting key is `vinax-ai`, not the brief's dotted `ai.enabled` / `ai.models.
 - every registry model: its picker group (or Auto only), the owner's switch, and whether it is ready, resting (why, and until when) or without a key;
 - today's free grounded searches and search API calls against their daily limits (`ai_daily_usage`);
 - which voice features have a key, and which voice models are resting;
-- the utility models (guards, embeddings, parsers, AQA) with their provider and whether its key is set, read-only.
+- the utility models (guards, embeddings, parsers, AQA) with their provider and whether its key is set, read-only;
+- the [found models](#found-models) after the curated ones in the models table (`discovered: true`, "found automatically"), with a card that says, per provider with a key, how many free models its list gave and when, or that the list failed (and how many from before are still shown). Found models can be tested and switched like the curated ones.
 
 Rests and last errors live in each Worker instance's memory, so the card shows what the instance that answered has seen since it started. Another instance may know different things.
 
@@ -584,7 +612,7 @@ The probe script ([The probe](#the-probe)) is the fuller check: reasoning, syste
 **The composer.**
 - The + menu holds Extended thinking, and Settings.
 - The mic dictates into the text; with nothing typed, the Live voice button stands where Send goes ([Voice](#voice)). Without voice keys neither shows.
-- The model picker (`ModelPicker.tsx`) lists Auto, then the groups. Each model shows a one-line description and Vision / Web / Thinking / Code badges; models that cannot answer now are greyed with the reason.
+- The model picker (`ModelPicker.tsx`) lists Auto, then the groups, then the found models under "More from …". Each model shows a one-line description and Vision / Web / Thinking / Code badges; models that cannot answer now are greyed with the reason.
 - The choice and Extended thinking are kept on the device (`prefs.ts`, key `vinax.vxai.prefs.v1`). A model the owner switches off falls back to Auto.
 
 **Messages.**
