@@ -16,6 +16,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.9.8': {
+    title: 'Remove all ads and Google AdSense',
+    changes: [
+      { type: 'fixed', text: 'No more ads: song, artist, album, language and mood pages no longer show an advertisement.' },
+      { type: 'fixed', text: 'The website no longer loads any Google advertising script or sets advertising cookies.' },
+      { type: 'improved', text: 'Privacy, Terms, Help and the sign-in screen now say there are no ads anywhere.' },
+    ],
+  },
   '1.9.7': {
     title: 'Live voice in the Android app: loudspeaker button, no self-interrupting, reconnects',
     changes: [
