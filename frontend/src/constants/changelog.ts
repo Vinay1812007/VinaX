@@ -16,6 +16,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.8.10': {
+    title: 'Restore Projects and memory code lost when #210 merged',
+    changes: [
+      { type: 'fixed', text: 'Fixes VinaX AI\'s Projects and memory after the last update, which had left part of them out.' },
+    ],
+  },
   '1.8.9': {
     title: 'Owner instructions and higher limits for VinaX AI',
     changes: [
