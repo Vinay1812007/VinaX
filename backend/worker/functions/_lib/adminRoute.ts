@@ -6,7 +6,8 @@
  *   export const onRequestGet = adminGet(async ({ env, url }) => { … return adminJson(x); });
  *   export const onRequestPost = adminPost(async ({ env, body, audit }) => { … });
  */
-import { adminJson, isAdminAsync, unauthorized, type AdminAuthEnv } from './admin';
+import { adminJson, adminPrincipal, forbidden, unauthorized, type AdminAuthEnv } from './admin';
+import { roleAllows, type AdminPrincipal, type AdminRole } from './adminAuth';
 import { audit as writeAudit, type AuditEntry } from './audit';
 import { readJsonCapped } from './body';
 import { dbConfigured, type DbEnv } from './db';
@@ -18,6 +19,8 @@ export interface AdminCtx<E = AdminDbEnv> {
   env: E;
   url: URL;
   waitUntil: ((p: Promise<unknown>) => void) | undefined;
+  /** Who is calling (console rebuild): email, role, how they signed in. */
+  me: AdminPrincipal;
   /** Record what this action changed (best effort, outlives the response). */
   audit: (entry: AuditEntry) => Promise<void>;
 }
@@ -28,36 +31,47 @@ export interface AdminPostCtx<E = AdminDbEnv> extends AdminCtx<E> {
 
 interface RawCtx { request: Request; env: AdminDbEnv; waitUntil?: (p: Promise<unknown>) => void }
 
-function frame(raw: RawCtx): AdminCtx {
+function frame(raw: RawCtx, me: AdminPrincipal): AdminCtx {
   const ctx: AdminCtx = {
     request: raw.request,
     env: raw.env,
     url: new URL(raw.request.url),
     waitUntil: raw.waitUntil,
-    audit: (entry) => writeAudit({ env: raw.env, request: raw.request, waitUntil: raw.waitUntil }, entry),
+    me,
+    audit: (entry) => writeAudit({ env: raw.env, request: raw.request, waitUntil: raw.waitUntil, actor: me.email }, entry),
   };
   return ctx;
 }
 
-/** GET: owner check → `{ configured: false }` without a database → the handler. */
+/** GET: any admin (viewer and up) → `{ configured: false }` without a database → the handler. */
 export function adminGet(handler: (ctx: AdminCtx) => Promise<Response>, opts: { withoutDb?: boolean } = {}) {
   return async (raw: RawCtx): Promise<Response> => {
-    if (!(await isAdminAsync(raw.request, raw.env))) return unauthorized();
+    const me = await adminPrincipal(raw.request, raw.env);
+    if (!me) return unauthorized();
     if (!opts.withoutDb && !dbConfigured(raw.env)) return adminJson({ configured: false });
-    return handler(frame(raw));
+    return handler(frame(raw, me));
   };
 }
 
-/** POST: owner check → `503 db_not_configured` → capped JSON object body → the handler. */
-export function adminPost(handler: (ctx: AdminPostCtx) => Promise<Response>, opts: { cap?: number } = {}) {
+/**
+ * POST: an admin whose role allows it (editor by default; `role` may be a
+ * function of the body, e.g. owner for one destructive action) →
+ * `503 db_not_configured` → capped JSON object body → the handler.
+ */
+export function adminPost(handler: (ctx: AdminPostCtx) => Promise<Response>, opts: { cap?: number; role?: AdminRole | ((body: Record<string, unknown>) => AdminRole) } = {}) {
   return async (raw: RawCtx): Promise<Response> => {
-    if (!(await isAdminAsync(raw.request, raw.env))) return unauthorized();
+    const me = await adminPrincipal(raw.request, raw.env);
+    if (!me) return unauthorized();
+    // Viewers change nothing: refuse before reading the body.
+    if (!roleAllows(me.role, 'editor')) return forbidden('editor');
     if (!dbConfigured(raw.env)) return adminJson({ error: 'db_not_configured' }, 503);
     const read = await readJsonCapped<unknown>(raw.request, opts.cap ?? 64_000);
     if (!read.ok) return adminJson({ error: read.reason === 'too_large' ? 'too_large' : 'bad_request' }, read.reason === 'too_large' ? 413 : 400);
     const body = read.value && typeof read.value === 'object' && !Array.isArray(read.value) ? (read.value as Record<string, unknown>) : null;
     if (!body) return adminJson({ error: 'bad_request' }, 400);
-    return handler({ ...frame(raw), body });
+    const need = typeof opts.role === 'function' ? opts.role(body) : opts.role ?? 'editor';
+    if (!roleAllows(me.role, need)) return forbidden(need);
+    return handler({ ...frame(raw, me), body });
   };
 }
 

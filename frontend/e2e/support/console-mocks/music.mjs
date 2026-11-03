@@ -1,0 +1,96 @@
+// Console mocks — Feedback, Song Stats, Music Library (the preview server and e2e).
+const now = Date.now();
+const ago = (min) => new Date(now - min * 60000).toISOString();
+const IMG = 'https://c.saavncdn.com/806/RRR-Telugu-2021-20220318101503-150x150.jpg';
+const day = (i) => new Date(now - i * 86400000).toISOString().slice(0, 10);
+
+const songs = [
+  ['s1', 'Naatu Naatu', 'Rahul Sipligunj, Kaala Bhairava', 412, 96, 300],
+  ['s2', 'Srivalli', 'Sid Sriram', 388, 88, 410],
+  ['s3', 'Kesariya', 'Arijit Singh', 301, 70, 120],
+  ['s4', 'Butta Bomma', 'Armaan Malik', 254, 61, 260],
+  ['s5', 'Arabic Kuthu', 'Anirudh Ravichander', 199, 44, 20],
+  ['s6', 'Samajavaragamana', 'Sid Sriram', 150, 39, 140],
+].map(([id, title, artist, plays, listeners, prev]) => ({ id, title, artist, image: IMG, plays, listeners, prev_plays: prev }));
+
+const music = {
+  songs,
+  artists: [['Sid Sriram', 538, 101], ['Arijit Singh', 301, 70], ['Anirudh Ravichander', 260, 58], ['Armaan Malik', 254, 61], ['Rahul Sipligunj', 212, 49]].map(([artist, plays, listeners]) => ({ artist, plays, listeners })),
+  languages: [['telugu', 980, 140], ['hindi', 420, 90], ['tamil', 260, 55], ['english', 80, 20], ['unknown', 12, 5]].map(([language, plays, listeners]) => ({ language, plays, listeners })),
+  rising: songs.filter((s) => s.plays > s.prev_plays).map((s) => ({ id: s.id, title: s.title, artist: s.artist, image: s.image, plays: s.plays, prev_plays: s.prev_plays })),
+};
+
+const feedbackRows = [
+  { id: 41, at: ago(12), kind: 'bug', message: 'Songs stop playing when the screen turns off on my Redmi phone.', status: 'new', note: null, platform: 'android', appVersion: '1.8.3', country: 'IN', city: 'Hyderabad', name: 'Ravi', user: { id: '1001', name: 'Ravi Kumar', email: 'ravi@example.com', picture: null }, canReply: true },
+  { id: 40, at: ago(95), kind: 'idea', message: 'Please add a sleep timer for 15 minutes.', status: 'new', note: null, platform: 'web', appVersion: '1.8.2', country: 'IN', city: 'Chennai', name: 'Priya', user: { id: '1002', name: 'Priya S', email: 'priya@example.com', picture: null }, canReply: false },
+  { id: 39, at: ago(60 * 26), kind: 'content', message: 'The song "Srivalli" plays the wrong audio.', status: 'read', note: null, platform: 'android', appVersion: '1.8.1', country: 'IN', city: 'Vijayawada', name: null, user: null, canReply: false },
+  { id: 38, at: ago(60 * 80), kind: 'other', message: 'Love the app! Thank you.', status: 'resolved', note: 'Replied by notification', platform: 'web', appVersion: '1.8.0', country: 'US', city: 'Dallas', name: 'Sam', user: { id: '1003', name: 'Sam', email: 'sam@example.com', picture: null }, canReply: true },
+];
+
+export default {
+  'GET /api/admin/feedback': (url) => {
+    const status = url.searchParams.get('status') || 'new';
+    const kind = url.searchParams.get('kind');
+    const platform = url.searchParams.get('platform');
+    let rows = feedbackRows.filter((r) => (!kind || r.kind === kind) && (!platform || r.platform === platform));
+    const counts = { new: rows.filter((r) => r.status === 'new').length, read: rows.filter((r) => r.status === 'read').length, resolved: rows.filter((r) => r.status === 'resolved').length };
+    counts.all = counts.new + counts.read + counts.resolved;
+    if (status !== 'all') rows = rows.filter((r) => r.status === status);
+    return { configured: true, total: rows.length, limit: 50, offset: 0, counts, rows };
+  },
+  'POST /api/admin/feedback': (url, b) => (b.action === 'reply' ? { ok: true, sent: 1, devices: 1 } : { ok: true, row: feedbackRows.find((r) => r.id === b.id) || null, deleted: 1 }),
+
+  'GET /api/admin/analytics': (url) => {
+    const view = url.searchParams.get('view');
+    const days = Number(url.searchParams.get('days') || 7);
+    const base = { configured: true, days, view };
+    if (view === 'music' || view === 'rising') return { ...base, data: music };
+    if (view === 'geo') return { ...base, data: {
+      countries: [{ country: 'IN', listeners: 140, plays: 1620 }, { country: 'US', listeners: 12, plays: 90 }, { country: 'AE', listeners: 6, plays: 44 }],
+      regions: [{ country: 'IN', region: 'Telangana', listeners: 70, plays: 820 }, { country: 'IN', region: 'Andhra Pradesh', listeners: 41, plays: 460 }, { country: 'IN', region: 'Tamil Nadu', listeners: 20, plays: 240 }, { country: 'US', region: 'Texas', listeners: 7, plays: 50 }],
+      cities: [{ country: 'IN', region: 'Telangana', city: 'Hyderabad', listeners: 61, plays: 700 }, { country: 'IN', region: 'Andhra Pradesh', city: 'Vijayawada', listeners: 22, plays: 260 }, { country: 'IN', region: 'Tamil Nadu', city: 'Chennai', listeners: 18, plays: 220 }, { country: 'US', region: 'Texas', city: 'Dallas', listeners: 7, plays: 50 }],
+    } };
+    if (view === 'engagement') {
+      const cells = Array.from({ length: 7 }, (_, d) => Array.from({ length: 24 }, (_, h) => Math.max(0, Math.round(30 * Math.sin((h - 6) / 24 * Math.PI) + (d === 0 || d === 6 ? 8 : 0)))));
+      return { ...base, data: {
+        byKind: [{ kind: 'play', n: 1700, listeners: 150 }, { kind: 'search', n: 600, listeners: 120 }],
+        byPlatform: [{ platform: 'android', n: 1500, listeners: 110 }, { platform: 'web', n: 800, listeners: 50 }],
+        hourly: { cells, peak: { day: 5, hour: 21, n: 30 } },
+        perUser: { people: 158, playsPerPerson: 10.8, daysPerPerson: 3.1, buckets: { light: 90, regular: 55, heavy: 13 } },
+        segments: { new7d: 19, returning7d: 80, inactive30d: 30, dormant: 12, power: 21 },
+        total: 2300,
+        timeline: Array.from({ length: days }, (_, i) => ({ day: day(days - 1 - i), plays: 180 + i * 7, listeners: 30 + (i % 5) * 3, newListeners: 2 + (i % 3), errors: 3, searches: 60, heartbeats: 0 })),
+        platforms: [{ platform: 'android', users: 110 }, { platform: 'web', users: 48 }],
+        versions: [],
+      } };
+    }
+    if (view === 'retention') return { ...base, data: Array.from({ length: 8 }, (_, i) => ({ week: day(7 * (i + 1)), size: 30 - i * 2, d1: 14 - i, d7: 9 - Math.min(i, 8), d30: i > 3 ? 0 : 6 - i })) };
+    if (view === 'funnel') return { ...base, data: [{ id: 'open', label: 'Opened the app', listeners: 410 }, { id: 'play', label: 'Played a song', listeners: 352 }, { id: 'signin', label: 'Signed in with Google', listeners: 158 }, { id: 'return', label: 'Came back another day', listeners: 97 }] };
+    if (view === 'skips') return { ...base, data: songs.map((s, i) => ({ id: s.id, title: s.title, artist: s.artist, image: s.image, plays: s.plays, skips: Math.round(s.plays * (0.6 - i * 0.08)), rate: Math.round((0.6 - i * 0.08) * 100) })) };
+    return { ...base, data: {} };
+  },
+
+  'GET /api/admin/content': () => ({
+    configured: true,
+    reasons: ['Copyright', 'Wrong audio', 'Offensive', 'Other'],
+    blocked: [
+      { id: 7, kind: 'song', value: 's9', label: 'Fake Remix 2024', reason: 'Copyright', blockedBy: 'owner@example.com', createdAt: ago(60 * 30) },
+      { id: 6, kind: 'album', value: 'al3', label: 'Unofficial Hits Vol 2', reason: 'Wrong audio', blockedBy: 'editor@example.com', createdAt: ago(60 * 24 * 4) },
+      { id: 5, kind: 'keyword', value: 'nightcore', label: null, reason: 'Other', blockedBy: 'owner', createdAt: ago(60 * 24 * 20) },
+    ],
+    suggestions: songs,
+  }),
+  'POST /api/admin/content': (url, b) => ({ ok: true, row: { id: 99, kind: b.kind, value: b.value, label: b.label, reason: b.reason || null, blockedBy: 'owner@example.com', createdAt: new Date().toISOString() } }),
+
+  'GET /api/admin/catalog-search': (url) => {
+    const type = url.searchParams.get('type') || 'songs';
+    const q = url.searchParams.get('q') || '';
+    const items = [1, 2, 3, 4].map((i) => ({
+      id: `${type.slice(0, 2)}${i}`, title: `${q || 'Song'} ${type === 'songs' ? '' : type.slice(0, -1) + ' '}${i}`.replace(/\s+/g, ' ').trim(), name: `${q} ${i}`,
+      subtitle: type === 'artists' ? 'Artist' : 'Sid Sriram', image: IMG, type: type.slice(0, -1), language: 'telugu', year: '2024', duration: 214,
+      album: type === 'songs' ? { id: 'al' + i, name: 'Album ' + i } : null, preview: null,
+    }));
+    return { items, type, source: 'mock', error: null };
+  },
+  'GET /api/blocklist': () => ({ ids: ['s9'], albums: ['al3'], artists: [], keywords: ['nightcore'] }),
+};

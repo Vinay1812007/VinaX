@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 9
+-- VinaX database · schema version 10
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -18,6 +18,7 @@
 --   3. usage events               4. feedback and blocked content
 --   5. Listen Together rooms      6. push devices and notifications
 --   7. settings and experiments   8. audit log, uptime, job runs
+--  8b. console admins, error status (version 10)
 --   9. VinaX AI conversations    9b. the personal engine
 --  10. views
 --  11. functions (stats_*, room_*, housekeeping)
@@ -228,12 +229,12 @@ create index if not exists feedback_status_at_idx on feedback (status, at desc);
 
 create table if not exists blocked_content (
   id          bigint generated always as identity primary key,
-  kind        text not null,                             -- song | artist | keyword
+  kind        text not null,                             -- song | album | artist | keyword
   value       text not null,                             -- song id, artist name, keyword
   label       text,                                      -- what the owner sees (a song title)
   reason      text,
   created_at  timestamptz not null default now(),
-  constraint blocked_content_kind_shape check (kind in ('song', 'artist', 'keyword'))
+  constraint blocked_content_kind_shape check (kind in ('song', 'album', 'artist', 'keyword'))
 );
 create unique index if not exists blocked_content_key on blocked_content (kind, lower(value));
 
@@ -389,6 +390,83 @@ create table if not exists job_runs (
   summary      jsonb
 );
 create index if not exists job_runs_job_idx on job_runs (job, started_at desc);
+
+-- ------------------------------------------- 8b. the console (version 10) --
+
+-- Who may open the owner console. Admins sign in with Google; only an email
+-- on this list gets in. owner: everything (database upkeep, admins);
+-- editor: App Settings, notifications, feedback, blocking, A/B tests;
+-- viewer: reads everything, changes nothing. The Worker checks the role on
+-- every write. The owner password (ADMIN_LOGIN_PASSWORD) stays as an owner
+-- recovery key so a fresh console can invite its first admin.
+create table if not exists admins (
+  email         text primary key,
+  name          text,
+  picture       text,
+  role          text not null default 'viewer',
+  invited_by    text,
+  created_at    timestamptz not null default now(),
+  last_sign_in  timestamptz,
+  constraint admins_role_shape check (role in ('owner', 'editor', 'viewer')),
+  constraint admins_email_shape check (email = lower(email) and email ~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$')
+);
+comment on table admins is 'Console admins (Google email → role). Only these emails can sign in to the console.';
+
+-- What the owner decided about one kind of app error (grouped by a
+-- fingerprint of its kind and normalised message): new | investigating | fixed | ignored.
+create table if not exists error_status (
+  fingerprint  text primary key,
+  status       text not null default 'new',
+  note         text,
+  updated_at   timestamptz not null default now(),
+  updated_by   text,
+  constraint error_status_shape check (status in ('new', 'investigating', 'fixed', 'ignored'))
+);
+
+-- A device that can receive pushes belongs to the Google account signed in
+-- on it (set when the device registers with a session). The console only
+-- sends to signed-in people.
+alter table push_devices add column if not exists account_id text references accounts (id) on delete set null;
+create index if not exists push_devices_account_idx on push_devices (account_id) where account_id is not null;
+
+-- Notifications can be drafts or scheduled for later; a scheduled one is
+-- sent by the cron job when its time comes. `opened` counts taps.
+alter table notifications add column if not exists status text not null default 'sent';         -- draft | scheduled | sending | sent | cancelled
+alter table notifications add column if not exists scheduled_for timestamptz;
+alter table notifications add column if not exists image text;
+alter table notifications add column if not exists opened integer not null default 0;
+alter table notifications add column if not exists created_by text;
+create index if not exists notifications_due_idx on notifications (scheduled_for) where status = 'scheduled';
+
+-- Who blocked a song, album, artist or keyword.
+alter table blocked_content add column if not exists blocked_by text;
+alter table blocked_content drop constraint if exists blocked_content_kind_shape;
+alter table blocked_content add constraint blocked_content_kind_shape check (kind in ('song', 'album', 'artist', 'keyword'));
+
+-- A/B tests: a description, a lifecycle, who is included, and the winner.
+alter table experiments add column if not exists description text;
+alter table experiments add column if not exists status text not null default 'draft';           -- draft | running | paused | finished
+alter table experiments add column if not exists audience jsonb not null default '{}'::jsonb;    -- { platform, minVersion, percent }
+alter table experiments add column if not exists started_at timestamptz;
+alter table experiments add column if not exists ended_at timestamptz;
+alter table experiments add column if not exists winner text;
+
+-- The owner can block a signed-in user (they cannot sign in again) and sign
+-- one device out (its session stops working on that device).
+alter table accounts add column if not exists blocked_at timestamptz;
+alter table listeners add column if not exists signed_out_at timestamptz;
+
+-- The public Storage bucket for pictures the owner uploads in the console
+-- (banners, notification images). Public on purpose: the app shows them.
+-- Supabase only; a plain Postgres has no storage schema.
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_schema = 'storage' and table_name = 'buckets') then
+    insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+      values ('console-media', 'console-media', true, 2097152, array['image/png', 'image/jpeg', 'image/webp'])
+      on conflict (id) do update set public = true, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+  end if;
+end $$;
 
 -- --------------------------------------------- 9. VinaX AI conversations --
 
@@ -1255,144 +1333,210 @@ create or replace view directory as
 create or replace function _days(p int) returns int
 language sql immutable as $$ select least(greatest(coalesce(p, 7), 1), 365) $$;
 
--- Overview tiles.
+-- Version 10 — the console counts PEOPLE signed in with Google, never
+-- anonymous devices. A device counts when it belongs to an account (its
+-- account_id, or the account's latest device). Anonymous rows stay in the
+-- database; they are only left out of these answers. App errors are the
+-- exception: every report counts, because a bug is a bug.
+create or replace function signed_devices() returns table (listener_id text, account_id text)
+language sql stable set search_path = public, pg_temp as $$
+  select l.id, coalesce(l.account_id, (select a.id from accounts a where a.listener_id = l.id order by a.last_seen desc limit 1))
+  from listeners l
+  where l.account_id is not null or exists (select 1 from accounts a where a.listener_id = l.id);
+$$;
+
+-- The calendar day in India, where the console's days start.
+create or replace function _ist_today() returns date
+language sql stable as $$ select (now() at time zone 'Asia/Kolkata')::date $$;
+
+-- Dashboard tiles. Old key names (listeners, newListeners24h) are kept and
+-- now mean signed-in users too.
 create or replace function stats_overview() returns jsonb
 language sql stable set search_path = public, pg_temp as $$
+  with s as (select * from signed_devices()),
+  ev as (
+    select e.kind, e.at, s.account_id
+    from events e join s on s.listener_id = e.listener_id
+    where e.at > now() - interval '60 days'
+  ),
+  live as (
+    select s.account_id, bool_or(l.is_playing) as playing
+    from listeners l join s on s.listener_id = l.id
+    where l.last_seen > now() - interval '90 seconds'
+    group by 1
+  ),
+  today as (select (_ist_today()::timestamp at time zone 'Asia/Kolkata') as t0)
   select jsonb_build_object(
-    'activeNow',       (select count(*) from listeners where last_seen > now() - interval '90 seconds'),
-    'listeners',       (select count(*) from listeners),
-    'newListeners24h', (select count(*) from listeners where first_seen > now() - interval '24 hours'),
-    'accounts',        (select count(*) from accounts),
-    'newAccounts7d',   (select count(*) from accounts where created_at > now() - interval '7 days'),
-    'plays24h',        (select count(*) from events where kind = 'play' and at > now() - interval '24 hours'),
-    'plays7d',         (select count(*) from events where kind = 'play' and at > now() - interval '7 days'),
-    'errors24h',       (select count(*) from events where kind = 'error' and at > now() - interval '24 hours'),
-    'dau',             (select count(distinct listener_id) from events where at > now() - interval '24 hours'),
-    'wau',             (select count(distinct listener_id) from events where at > now() - interval '7 days'),
-    'mau',             (select count(distinct listener_id) from events where at > now() - interval '30 days'),
-    'feedbackNew',     (select count(*) from feedback where status = 'new'),
-    'pushDevices',     (select count(*) from push_devices where active),
-    'roomsActive',     (select count(*) from rooms where updated_at > now() - interval '15 minutes')
+    'activeNow',         (select count(*) from live),
+    'playingNow',        (select count(*) from live where playing),
+    'users',             (select count(*) from accounts),
+    'listeners',         (select count(*) from accounts),
+    'accounts',          (select count(*) from accounts),
+    'newListeners24h',   (select count(*) from accounts where created_at > now() - interval '24 hours'),
+    'newAccounts7d',     (select count(*) from accounts where created_at > now() - interval '7 days'),
+    'newAccountsPrev7d', (select count(*) from accounts where created_at <= now() - interval '7 days' and created_at > now() - interval '14 days'),
+    'playsToday',        (select count(*) from ev, today where kind = 'play' and at >= today.t0),
+    'playsYesterday',    (select count(*) from ev, today where kind = 'play' and at >= today.t0 - interval '1 day' and at < today.t0),
+    'plays24h',          (select count(*) from ev where kind = 'play' and at > now() - interval '24 hours'),
+    'plays7d',           (select count(*) from ev where kind = 'play' and at > now() - interval '7 days'),
+    'playsPrev7d',       (select count(*) from ev where kind = 'play' and at <= now() - interval '7 days' and at > now() - interval '14 days'),
+    'errors24h',         (select count(*) from events where kind = 'error' and at > now() - interval '24 hours'),
+    'errorsPrev24h',     (select count(*) from events where kind = 'error' and at <= now() - interval '24 hours' and at > now() - interval '48 hours'),
+    'dau',               (select count(distinct account_id) from ev where at > now() - interval '24 hours'),
+    'dauPrev',           (select count(distinct account_id) from ev where at <= now() - interval '24 hours' and at > now() - interval '48 hours'),
+    'wau',               (select count(distinct account_id) from ev where at > now() - interval '7 days'),
+    'wauPrev',           (select count(distinct account_id) from ev where at <= now() - interval '7 days' and at > now() - interval '14 days'),
+    'mau',               (select count(distinct account_id) from ev where at > now() - interval '30 days'),
+    'mauPrev',           (select count(distinct account_id) from ev where at <= now() - interval '30 days' and at > now() - interval '60 days'),
+    'feedbackNew',       (select count(*) from feedback where status = 'new'),
+    'pushDevices',       (select count(*) from push_devices where active and account_id is not null),
+    'pushPeople',        (select count(distinct account_id) from push_devices where active and account_id is not null),
+    'roomsActive',       (select count(*) from rooms where updated_at > now() - interval '15 minutes')
   );
 $$;
 
--- Daily series with every day present (zero-filled).
+-- Daily series in India's calendar, every day present (zero-filled).
+-- plays, searches and listeners (distinct people) come from signed-in users;
+-- errors count every report; newListeners = Google accounts created that day.
 create or replace function stats_timeline(p_days int default 14) returns jsonb
 language sql stable set search_path = public, pg_temp as $$
-  with days as (
-    select generate_series((current_date - (_days(p_days) - 1))::date, current_date, '1 day')::date as day
+  with bounds as (select _ist_today() - (_days(p_days) - 1) as d0),
+  days as (
+    select generate_series((select d0 from bounds), _ist_today(), '1 day')::date as day
   ),
+  s as (select * from signed_devices()),
   ev as (
-    select at::date as day,
-           count(*) filter (where kind = 'play')   as plays,
-           count(*) filter (where kind = 'error')  as errors,
-           count(*) filter (where kind = 'search') as searches,
-           count(distinct listener_id)             as listeners
+    select (e.at at time zone 'Asia/Kolkata')::date as day,
+           count(*) filter (where e.kind = 'play')   as plays,
+           count(*) filter (where e.kind = 'search') as searches,
+           count(*) filter (where e.kind = 'heartbeat') as heartbeats,
+           count(distinct s.account_id)              as listeners
+    from events e join s on s.listener_id = e.listener_id
+    where e.at >= ((select d0 from bounds)::timestamp at time zone 'Asia/Kolkata')
+    group by 1
+  ),
+  err as (
+    select (at at time zone 'Asia/Kolkata')::date as day, count(*) as errors
     from events
-    where at >= (current_date - (_days(p_days) - 1))::timestamptz
+    where kind = 'error' and at >= ((select d0 from bounds)::timestamp at time zone 'Asia/Kolkata')
     group by 1
   ),
   fresh as (
-    select first_seen::date as day, count(*) as new_listeners
-    from listeners
-    where first_seen >= (current_date - (_days(p_days) - 1))::timestamptz
+    select (created_at at time zone 'Asia/Kolkata')::date as day, count(*) as new_users
+    from accounts
+    where created_at >= ((select d0 from bounds)::timestamp at time zone 'Asia/Kolkata')
     group by 1
   )
   select coalesce(jsonb_agg(jsonb_build_object(
       'day', to_char(d.day, 'YYYY-MM-DD'),
       'plays', coalesce(ev.plays, 0),
       'listeners', coalesce(ev.listeners, 0),
-      'newListeners', coalesce(fresh.new_listeners, 0),
-      'errors', coalesce(ev.errors, 0),
-      'searches', coalesce(ev.searches, 0)
+      'newListeners', coalesce(fresh.new_users, 0),
+      'errors', coalesce(err.errors, 0),
+      'searches', coalesce(ev.searches, 0),
+      'heartbeats', coalesce(ev.heartbeats, 0)
     ) order by d.day), '[]'::jsonb)
   from days d
   left join ev on ev.day = d.day
+  left join err on err.day = d.day
   left join fresh on fresh.day = d.day;
 $$;
 
--- Top songs, artists and languages, plus what is rising against the previous window.
+-- Top songs, artists and languages played by signed-in users, plus what is
+-- rising against the previous window. `listeners` = distinct people.
 create or replace function stats_music(p_days int default 7, p_limit int default 25) returns jsonb
 language sql stable set search_path = public, pg_temp as $$
-  with ev as (
-    select song_id, song_title, song_artist, song_image, language, listener_id, at
-    from events
-    where kind = 'play' and at > now() - make_interval(days => _days(p_days))
+  with s as (select * from signed_devices()),
+  ev as (
+    select e.song_id, e.song_title, e.song_artist, e.song_image, e.language, s.account_id, e.at
+    from events e join s on s.listener_id = e.listener_id
+    where e.kind = 'play' and e.at > now() - make_interval(days => _days(p_days))
   ),
   prev as (
-    select song_title, song_artist, count(*) as plays
-    from events
-    where kind = 'play'
-      and at <= now() - make_interval(days => _days(p_days))
-      and at >  now() - make_interval(days => _days(p_days) * 2)
+    select e.song_title, e.song_artist, count(*) as plays
+    from events e join s on s.listener_id = e.listener_id
+    where e.kind = 'play'
+      and e.at <= now() - make_interval(days => _days(p_days))
+      and e.at >  now() - make_interval(days => _days(p_days) * 2)
     group by 1, 2
   ),
   songs as (
     select song_id, song_title, song_artist, max(song_image) as image,
-           count(*) as plays, count(distinct listener_id) as listeners
+           count(*) as plays, count(distinct account_id) as listeners
     from ev where song_title is not null
     group by 1, 2, 3
   )
   select jsonb_build_object(
     'songs', coalesce((select jsonb_agg(t) from (
-        select song_id as id, song_title as title, song_artist as artist, image, plays, listeners
-        from songs order by plays desc, listeners desc limit least(p_limit, 200)) t), '[]'::jsonb),
+        select s2.song_id as id, s2.song_title as title, s2.song_artist as artist, s2.image, s2.plays, s2.listeners,
+               coalesce(p.plays, 0) as prev_plays
+        from songs s2 left join prev p using (song_title, song_artist)
+        order by s2.plays desc, s2.listeners desc limit least(p_limit, 200)) t), '[]'::jsonb),
     'artists', coalesce((select jsonb_agg(t) from (
-        select song_artist as artist, count(*) as plays, count(distinct listener_id) as listeners
+        select song_artist as artist, count(*) as plays, count(distinct account_id) as listeners
         from ev where song_artist is not null group by 1 order by plays desc limit least(p_limit, 200)) t), '[]'::jsonb),
     'languages', coalesce((select jsonb_agg(t) from (
-        select coalesce(nullif(language, ''), 'unknown') as language, count(*) as plays, count(distinct listener_id) as listeners
+        select coalesce(nullif(language, ''), 'unknown') as language, count(*) as plays, count(distinct account_id) as listeners
         from ev group by 1 order by plays desc limit 40) t), '[]'::jsonb),
     'rising', coalesce((select jsonb_agg(t) from (
-        select s.song_title as title, s.song_artist as artist, s.image, s.plays, coalesce(p.plays, 0) as prev_plays
-        from songs s left join prev p using (song_title, song_artist)
-        order by (s.plays - coalesce(p.plays, 0)) desc, s.plays desc limit 15) t), '[]'::jsonb)
+        select s2.song_id as id, s2.song_title as title, s2.song_artist as artist, s2.image, s2.plays, coalesce(p.plays, 0) as prev_plays
+        from songs s2 left join prev p using (song_title, song_artist)
+        where s2.plays > coalesce(p.plays, 0)
+        order by (s2.plays - coalesce(p.plays, 0)) desc, s2.plays desc limit 25) t), '[]'::jsonb)
   );
 $$;
 
--- Where listeners are (edge geo, never IPs).
+-- Where signed-in users are (edge geo, never IPs): countries, states, cities.
 create or replace function stats_geo(p_days int default 7) returns jsonb
 language sql stable set search_path = public, pg_temp as $$
-  with ev as (
-    select country, region, city, listener_id, kind
-    from events where at > now() - make_interval(days => _days(p_days))
+  with s as (select * from signed_devices()),
+  ev as (
+    select e.country, e.region, e.city, s.account_id, e.kind
+    from events e join s on s.listener_id = e.listener_id
+    where e.at > now() - make_interval(days => _days(p_days))
   )
   select jsonb_build_object(
     'countries', coalesce((select jsonb_agg(t) from (
-        select coalesce(country, 'XX') as country, count(distinct listener_id) as listeners,
+        select coalesce(country, 'XX') as country, count(distinct account_id) as listeners,
                count(*) filter (where kind = 'play') as plays
-        from ev group by 1 order by listeners desc limit 60) t), '[]'::jsonb),
+        from ev group by 1 order by listeners desc, plays desc limit 60) t), '[]'::jsonb),
+    'regions', coalesce((select jsonb_agg(t) from (
+        select coalesce(country, 'XX') as country, coalesce(region, 'Unknown') as region,
+               count(distinct account_id) as listeners, count(*) filter (where kind = 'play') as plays
+        from ev group by 1, 2 order by listeners desc, plays desc limit 100) t), '[]'::jsonb),
     'cities', coalesce((select jsonb_agg(t) from (
         select coalesce(country, 'XX') as country, region, coalesce(city, 'Unknown') as city,
-               count(distinct listener_id) as listeners, count(*) filter (where kind = 'play') as plays
-        from ev group by 1, 2, 3 order by listeners desc limit 150) t), '[]'::jsonb)
+               count(distinct account_id) as listeners, count(*) filter (where kind = 'play') as plays
+        from ev group by 1, 2, 3 order by listeners desc, plays desc limit 150) t), '[]'::jsonb)
   );
 $$;
 
--- Platforms and app versions of everyone in the directory.
+-- Platforms and app versions of signed-in users (one row per person in the
+-- directory). `listeners` and `accounts` are kept as aliases of `users`.
 create or replace function stats_platforms() returns jsonb
 language sql stable set search_path = public, pg_temp as $$
+  with p as (
+    select coalesce(nullif(platform, ''), 'web') as platform, app_version from directory where account_id is not null
+  )
   select jsonb_build_object(
     'platforms', coalesce((select jsonb_agg(t) from (
-        -- Devices sharing usage, and accounts, per platform (the directory is one row per PERSON).
-        select p.platform,
-               (select count(*) from listeners l where coalesce(nullif(l.platform, ''), 'web') = p.platform) as listeners,
-               (select count(*) from accounts a where coalesce(nullif(a.platform, ''), 'web') = p.platform) as accounts
-        from (select coalesce(nullif(platform, ''), 'web') as platform from listeners
-              union select coalesce(nullif(platform, ''), 'web') from accounts) p
-        order by 2 desc) t), '[]'::jsonb),
+        select platform, count(*) as users, count(*) as listeners, count(*) as accounts
+        from p group by 1 order by 2 desc) t), '[]'::jsonb),
     'versions', coalesce((select jsonb_agg(t) from (
-        select coalesce(nullif(platform, ''), 'web') as platform, coalesce(app_version, 'unknown') as "appVersion", count(*) as listeners
-        from directory group by 1, 2 order by listeners desc limit 40) t), '[]'::jsonb)
+        select platform, coalesce(app_version, 'unknown') as "appVersion", count(*) as users, count(*) as listeners
+        from p group by 1, 2 order by users desc limit 60) t), '[]'::jsonb)
   );
 $$;
 
--- Engagement: hour-of-week heat map (IST), event mix, segments.
+-- Engagement of signed-in users: hour-of-week heat map (IST), event mix,
+-- platforms, per-day plays per person, and segments of accounts.
 create or replace function stats_engagement(p_days int default 7) returns jsonb
 language sql stable set search_path = public, pg_temp as $$
-  with ev as (
-    select kind, platform, listener_id, at from events
-    where at > now() - make_interval(days => _days(p_days))
+  with s as (select * from signed_devices()),
+  ev as (
+    select e.kind, e.platform, s.account_id, e.at
+    from events e join s on s.listener_id = e.listener_id
+    where e.at > now() - make_interval(days => _days(p_days))
   ),
   hm as (
     select extract(dow  from (at at time zone 'Asia/Kolkata'))::int as d,
@@ -1404,43 +1548,58 @@ language sql stable set search_path = public, pg_temp as $$
     select gd.d, gh.h, coalesce(hm.n, 0) as n
     from generate_series(0, 6) gd(d) cross join generate_series(0, 23) gh(h)
     left join hm on hm.d = gd.d and hm.h = gh.h
+  ),
+  per as (
+    select account_id, count(*) filter (where kind = 'play') as plays,
+           count(distinct (at at time zone 'Asia/Kolkata')::date) as days
+    from ev group by 1
   )
   select jsonb_build_object(
     'byKind', coalesce((select jsonb_agg(t) from (
-        select kind, count(*) as n, count(distinct listener_id) as listeners from ev group by 1 order by n desc) t), '[]'::jsonb),
+        select kind, count(*) as n, count(distinct account_id) as listeners from ev group by 1 order by n desc) t), '[]'::jsonb),
     'byPlatform', coalesce((select jsonb_agg(t) from (
-        select coalesce(nullif(platform, ''), 'web') as platform, count(*) as n, count(distinct listener_id) as listeners
+        select coalesce(nullif(platform, ''), 'web') as platform, count(*) as n, count(distinct account_id) as listeners
         from ev group by 1 order by n desc) t), '[]'::jsonb),
     'hourly', jsonb_build_object(
         'cells', (select jsonb_agg(cells order by d) from (select d, jsonb_agg(n order by h) as cells from grid group by d) r),
         'peak', (select jsonb_build_object('day', d, 'hour', h, 'n', n) from hm where n > 0 order by n desc, d, h limit 1)),
+    'perUser', jsonb_build_object(
+        'people', (select count(*) from per),
+        'playsPerPerson', (select round(avg(plays)::numeric, 1) from per),
+        'daysPerPerson', (select round(avg(days)::numeric, 1) from per),
+        'buckets', jsonb_build_object(
+          'light', (select count(*) from per where plays between 1 and 9),
+          'regular', (select count(*) from per where plays between 10 and 49),
+          'heavy', (select count(*) from per where plays >= 50))),
     'segments', jsonb_build_object(
-        'new7d',       (select count(*) from listeners where first_seen > now() - interval '7 days'),
-        'returning7d', (select count(*) from listeners where last_seen > now() - interval '7 days' and first_seen <= now() - interval '7 days'),
-        'inactive30d', (select count(*) from listeners where last_seen <= now() - interval '7 days' and last_seen > now() - interval '30 days'),
-        'dormant',     (select count(*) from listeners where last_seen <= now() - interval '30 days'),
-        'power',       (select count(*) from (select listener_id from events where kind = 'play' and at > now() - interval '30 days' group by 1 having count(*) >= 20) p)),
+        'new7d',       (select count(*) from accounts where created_at > now() - interval '7 days'),
+        'returning7d', (select count(*) from accounts where last_seen > now() - interval '7 days' and created_at <= now() - interval '7 days'),
+        'inactive30d', (select count(*) from accounts where last_seen <= now() - interval '7 days' and last_seen > now() - interval '30 days'),
+        'dormant',     (select count(*) from accounts where last_seen <= now() - interval '30 days'),
+        'power',       (select count(*) from (
+                          select s.account_id from events e join s on s.listener_id = e.listener_id
+                          where e.kind = 'play' and e.at > now() - interval '30 days' group by 1 having count(*) >= 20) p)),
     'total', (select count(*) from ev)
   );
 $$;
 
--- Weekly cohorts: of the listeners first seen that week, how many came back.
+-- Weekly cohorts of signed-in users: of the people whose first activity was
+-- that week, how many came back after a day, a week and a month.
 create or replace function stats_retention(p_weeks int default 8) returns jsonb
 language sql stable set search_path = public, pg_temp as $$
-  with firsts as (
-    select listener_id, min(at) as first_at from events
-    where listener_id is not null group by 1
-  ),
+  with s as (select * from signed_devices()),
+  ev as (select s.account_id, e.at from events e join s on s.listener_id = e.listener_id),
+  firsts as (select account_id, min(at) as first_at from ev group by 1),
   cohorts as (
-    select listener_id, first_at, date_trunc('week', first_at)::date as week
+    select account_id, first_at, date_trunc('week', first_at)::date as week
     from firsts where first_at >= now() - make_interval(weeks => least(greatest(coalesce(p_weeks, 8), 1), 26))
   ),
   back as (
-    select c.week, c.listener_id,
+    select c.week, c.account_id,
            bool_or(e.at >= c.first_at + interval '1 day'  and e.at < c.first_at + interval '2 days')  as d1,
            bool_or(e.at >= c.first_at + interval '2 days' and e.at < c.first_at + interval '8 days')  as d7,
            bool_or(e.at >= c.first_at + interval '8 days' and e.at < c.first_at + interval '31 days') as d30
-    from cohorts c join events e on e.listener_id = c.listener_id
+    from cohorts c join ev e on e.account_id = c.account_id
     group by 1, 2
   )
   select coalesce(jsonb_agg(jsonb_build_object(
@@ -1453,36 +1612,40 @@ language sql stable set search_path = public, pg_temp as $$
   ) r;
 $$;
 
--- Onboarding funnel: distinct listeners who reached each step.
+-- The sign-up journey: of everyone who opened the app in the window, how
+-- many played a song, signed in with Google, and came back on another day
+-- after signing in. Aggregate numbers only; no device is listed anywhere.
 create or replace function stats_funnel(p_days int default 7) returns jsonb
 language sql stable set search_path = public, pg_temp as $$
   with ev as (
-    select kind, listener_id from events
+    select listener_id, kind, (at at time zone 'Asia/Kolkata')::date as day from events
     where at > now() - make_interval(days => _days(p_days)) and listener_id is not null
-      and kind in ('open', 'register', 'play', 'heartbeat', 'complete', 'favorite', 'search', 'share')
   ),
-  steps(ord, id, label, kinds) as (values
-    (1, 'open',     'Opened the app',  array['open', 'play', 'heartbeat', 'search', 'register']),
-    (2, 'register', 'Chose a name',    array['register']),
-    (3, 'play',     'Played a song',   array['play', 'heartbeat', 'complete']),
-    (4, 'complete', 'Finished a song', array['complete']),
-    (5, 'favorite', 'Liked a song',    array['favorite']),
-    (6, 'search',   'Searched',        array['search']),
-    (7, 'share',    'Shared',          array['share']))
-  select coalesce(jsonb_agg(jsonb_build_object(
-      'id', s.id, 'label', s.label,
-      'listeners', (select count(distinct e.listener_id) from ev e where e.kind = any (s.kinds))
-    ) order by s.ord), '[]'::jsonb)
-  from steps s;
+  s as (select * from signed_devices()),
+  opened as (select distinct listener_id from ev),
+  played as (select distinct listener_id from ev where kind in ('play', 'heartbeat', 'complete')),
+  signed as (select o.listener_id, s.account_id from opened o join s on s.listener_id = o.listener_id),
+  back as (
+    select distinct sg.account_id from signed sg join ev e on e.listener_id = sg.listener_id
+    group by sg.account_id having count(distinct e.day) >= 2
+  )
+  select jsonb_build_array(
+    jsonb_build_object('id', 'open',   'label', 'Opened the app', 'listeners', (select count(*) from opened)),
+    jsonb_build_object('id', 'play',   'label', 'Played a song',  'listeners', (select count(*) from played)),
+    jsonb_build_object('id', 'signin', 'label', 'Signed in with Google', 'listeners', (select count(distinct account_id) from signed)),
+    jsonb_build_object('id', 'return', 'label', 'Came back another day', 'listeners', (select count(*) from back))
+  );
 $$;
 
--- Songs listeners bail on: skip rate among songs with at least p_min plays.
+-- Songs signed-in users skip: skip rate among songs with at least p_min plays.
 create or replace function stats_skips(p_days int default 7, p_min int default 5) returns jsonb
 language sql stable set search_path = public, pg_temp as $$
-  with ev as (
-    select kind, song_id, song_title, song_artist, song_image, at from events
-    where kind in ('play', 'skip') and at > now() - make_interval(days => _days(p_days))
-      and song_id is not null and song_id <> ''
+  with s as (select * from signed_devices()),
+  ev as (
+    select e.kind, e.song_id, e.song_title, e.song_artist, e.song_image, e.at
+    from events e join s on s.listener_id = e.listener_id
+    where e.kind in ('play', 'skip') and e.at > now() - make_interval(days => _days(p_days))
+      and e.song_id is not null and e.song_id <> ''
   ),
   agg as (
     select song_id,
@@ -1502,26 +1665,53 @@ language sql stable set search_path = public, pg_temp as $$
   from (select * from agg where plays >= greatest(coalesce(p_min, 1), 1) and skips > 0 order by (skips::numeric / plays) desc, skips desc limit 50) r;
 $$;
 
--- App errors reported by listeners.
+-- An error message with the song names, ids and numbers taken out, so the
+-- same problem on 14 songs is one row.
+create or replace function _error_shape(p_message text) returns text
+language sql immutable as $$
+  select left(btrim(regexp_replace(regexp_replace(regexp_replace(coalesce(p_message, ''),
+    '"[^"]*"|“[^”]*”|''[^'']*''', '…', 'g'),
+    '[[:alnum:]_.:/-]*[0-9][[:alnum:]_.:/-]*', '#', 'g'),
+    '[[:space:]]+', ' ', 'g')), 300)
+$$;
+
+-- App errors (every report counts). Similar messages are one group with its
+-- fingerprint (md5 of kind + shape), how many people hit it, and the owner's
+-- status for it from error_status.
 create or replace function stats_errors(p_days int default 7, p_limit int default 50) returns jsonb
 language sql stable set search_path = public, pg_temp as $$
-  with ev as (
-    select at, error_kind, message, platform, app_version from events
-    where kind = 'error' and at > now() - make_interval(days => _days(p_days))
+  with s as (select * from signed_devices()),
+  ev as (
+    select e.at, coalesce(nullif(e.error_kind, ''), 'error') as error_kind, coalesce(e.message, '') as message,
+           _error_shape(e.message) as shape, e.platform, e.app_version, s.account_id
+    from events e left join s on s.listener_id = e.listener_id
+    where e.kind = 'error' and e.at > now() - make_interval(days => _days(p_days))
   ),
   days as (
-    select generate_series((current_date - (_days(p_days) - 1))::date, current_date, '1 day')::date as day
+    select generate_series(_ist_today() - (_days(p_days) - 1), _ist_today(), '1 day')::date as day
+  ),
+  grp as (
+    select md5(error_kind || '|' || shape) as fingerprint, error_kind, shape,
+           count(*) as hits, count(distinct account_id) as users, count(distinct message) as variants,
+           max(at) as last_seen, min(at) as first_seen,
+           (array_agg(message order by at desc))[1] as message,
+           (array_agg(distinct message))[1:3] as samples,
+           array_agg(distinct coalesce(platform, 'web')) as platforms,
+           array_agg(distinct app_version) filter (where app_version is not null) as versions
+    from ev group by 1, 2, 3
   )
   select jsonb_build_object(
     'total', (select count(*) from ev),
+    'groups', (select count(*) from grp),
+    'users', (select count(distinct account_id) from ev),
     'byDay', coalesce((select jsonb_agg(jsonb_build_object('day', to_char(d.day, 'YYYY-MM-DD'), 'hits', coalesce(x.n, 0)) order by d.day)
-        from days d left join (select at::date as day, count(*) as n from ev group by 1) x on x.day = d.day), '[]'::jsonb),
+        from days d left join (select (at at time zone 'Asia/Kolkata')::date as day, count(*) as n from ev group by 1) x on x.day = d.day), '[]'::jsonb),
     'top', coalesce((select jsonb_agg(t) from (
-        select coalesce(nullif(error_kind, ''), 'error') as "errorKind", coalesce(message, '') as message,
-               count(*) as hits, max(at) as "lastSeen",
-               array_agg(distinct coalesce(platform, 'web')) as platforms,
-               array_agg(distinct app_version) filter (where app_version is not null) as versions
-        from ev group by 1, 2 order by hits desc limit least(coalesce(p_limit, 50), 200)) t), '[]'::jsonb)
+        select g.fingerprint, g.error_kind as "errorKind", g.message, g.shape, g.samples, g.variants,
+               g.hits, g.users, g.last_seen as "lastSeen", g.first_seen as "firstSeen", g.platforms, g.versions,
+               coalesce(st.status, 'new') as status, st.note
+        from grp g left join error_status st on st.fingerprint = g.fingerprint
+        order by g.hits desc limit least(coalesce(p_limit, 50), 300)) t), '[]'::jsonb)
   );
 $$;
 
@@ -1589,6 +1779,181 @@ begin
   return jsonb_build_object('listener', n_listener, 'account', n_account, 'events', n_events,
                             'memberships', n_members, 'feedbackDetached', n_feedback);
 end;
+$$;
+
+-- Version 10 — the console's Users page: signed-in people only, filtered and
+-- sorted on the server, one page at a time, with the counts the page shows.
+-- p_sort: last_active | joined | plays | name.
+create or replace function admin_users(
+  p_q text default null, p_platform text default null, p_active_days int default null,
+  p_joined_days int default null, p_joined_from timestamptz default null, p_joined_to timestamptz default null,
+  p_country text default null, p_region text default null, p_city text default null,
+  p_version text default null, p_language text default null, p_ids text[] default null,
+  p_sort text default 'last_active', p_limit int default 50, p_offset int default 0) returns jsonb
+language sql stable set search_path = public, pg_temp as $$
+  with s as (select * from signed_devices()),
+  plays as (
+    select s.account_id, count(*) as plays
+    from events e join s on s.listener_id = e.listener_id
+    where e.kind = 'play' group by 1
+  ),
+  lang as (
+    select distinct on (account_id) account_id, language from (
+      select s.account_id, coalesce(nullif(e.language, ''), 'unknown') as language, count(*) as n
+      from events e join s on s.listener_id = e.listener_id
+      where e.kind = 'play' and e.at > now() - interval '90 days' group by 1, 2) x
+    order by account_id, n desc, language
+  ),
+  f as (
+    select d.account_id as id, a.name, a.email, a.picture,
+           coalesce(nullif(d.platform, ''), 'web') as platform, d.app_version, d.country, d.region, d.city,
+           d.now_playing, d.is_playing, a.created_at as joined, d.last_seen, d.devices,
+           coalesce(p.plays, 0) as plays, lg.language, a.blocked_at
+    from directory d
+    join accounts a on a.id = d.account_id
+    left join plays p on p.account_id = d.account_id
+    left join lang lg on lg.account_id = d.account_id
+    where d.account_id is not null
+      and (p_ids is null or d.account_id = any (p_ids))
+      and (coalesce(p_q, '') = '' or strpos(lower(coalesce(a.name, '')), lower(p_q)) > 0 or strpos(lower(coalesce(a.email, '')), lower(p_q)) > 0)
+      and (p_platform is null or coalesce(nullif(d.platform, ''), 'web') = p_platform)
+      and (p_active_days is null or d.last_seen > now() - make_interval(days => p_active_days))
+      and (p_joined_days is null or a.created_at > now() - make_interval(days => p_joined_days))
+      and (p_joined_from is null or a.created_at >= p_joined_from)
+      and (p_joined_to is null or a.created_at < p_joined_to)
+      and (p_country is null or d.country = p_country)
+      and (p_region is null or d.region = p_region)
+      and (p_city is null or d.city = p_city)
+      and (p_version is null or d.app_version = p_version)
+      and (p_language is null or lg.language = p_language)
+  ),
+  ranked as (
+    select f.*, row_number() over (order by
+      case when p_sort = 'joined' then f.joined end desc nulls last,
+      case when p_sort = 'plays' then f.plays end desc nulls last,
+      case when p_sort = 'name' then lower(coalesce(f.name, f.email, '')) end asc nulls last,
+      f.last_seen desc, f.id) as rn
+    from f
+  ),
+  everyone as (select coalesce(nullif(platform, ''), 'web') as platform, last_seen from directory where account_id is not null)
+  select jsonb_build_object(
+    'total', (select count(*) from f),
+    'rows', coalesce((select jsonb_agg(to_jsonb(r) - 'rn' order by r.rn) from (
+        select * from ranked where rn > greatest(coalesce(p_offset, 0), 0)
+        order by rn limit least(greatest(coalesce(p_limit, 50), 1), 200)) r), '[]'::jsonb),
+    'counts', jsonb_build_object(
+      'users', (select count(*) from accounts),
+      'new7d', (select count(*) from accounts where created_at > now() - interval '7 days'),
+      'activeToday', (select count(*) from everyone where last_seen >= (_ist_today()::timestamp at time zone 'Asia/Kolkata')),
+      'byPlatform', jsonb_build_object(
+        'android', (select count(*) from everyone where platform = 'android'),
+        'web', (select count(*) from everyone where platform = 'web'),
+        'ios', (select count(*) from everyone where platform = 'ios')))
+  );
+$$;
+
+-- The choices the Users filters offer: places, app versions and languages
+-- that signed-in users actually have.
+create or replace function admin_user_filters() returns jsonb
+language sql stable set search_path = public, pg_temp as $$
+  with d as (select * from directory where account_id is not null),
+  s as (select * from signed_devices())
+  select jsonb_build_object(
+    'places', coalesce((select jsonb_agg(t) from (
+        select country, region, city, count(*) as users from d
+        where country is not null group by 1, 2, 3 order by users desc limit 500) t), '[]'::jsonb),
+    'versions', coalesce((select jsonb_agg(t) from (
+        select coalesce(nullif(platform, ''), 'web') as platform, app_version as version, count(*) as users
+        from d where app_version is not null group by 1, 2 order by 1, users desc) t), '[]'::jsonb),
+    'languages', coalesce((select jsonb_agg(t) from (
+        select coalesce(nullif(e.language, ''), 'unknown') as language, count(distinct s.account_id) as users
+        from events e join s on s.listener_id = e.listener_id
+        where e.kind = 'play' and e.at > now() - interval '90 days' group by 1 order by users desc limit 40) t), '[]'::jsonb)
+  );
+$$;
+
+-- One signed-in person in full, across every device they use: the account,
+-- each device (platform, version, place, last seen), counts, top songs,
+-- artists and languages, listening history, feedback they sent and recent
+-- activity. Device ids are returned only so a device can be signed out.
+create or replace function user_profile(p_account text) returns jsonb
+language sql stable set search_path = public, pg_temp as $$
+  with a as (select * from accounts where id = p_account),
+  d as (
+    select l.* from listeners l
+    where l.account_id = p_account or l.id = (select listener_id from a)
+  ),
+  ev as (select e.* from events e where e.listener_id in (select id from d))
+  select case when not exists (select 1 from a) then null else jsonb_build_object(
+    'account', (select jsonb_build_object('id', id, 'email', email, 'name', name, 'picture', picture,
+                  'platform', platform, 'appVersion', app_version, 'country', country, 'region', region, 'city', city,
+                  'createdAt', created_at, 'lastSeen', last_seen, 'blockedAt', blocked_at) from a),
+    'devices', coalesce((select jsonb_agg(jsonb_build_object(
+                  'id', d.id, 'platform', coalesce(nullif(d.platform, ''), 'web'), 'appVersion', d.app_version,
+                  'country', d.country, 'region', d.region, 'city', d.city,
+                  'firstSeen', d.first_seen, 'lastSeen', d.last_seen, 'signedOutAt', d.signed_out_at,
+                  'nowPlaying', d.now_playing, 'isPlaying', d.is_playing) order by d.last_seen desc) from d), '[]'::jsonb),
+    'backup', (select jsonb_build_object('version', version, 'bytes', bytes, 'updatedAt', updated_at)
+               from account_backups where account_id = p_account),
+    'stats', jsonb_build_object(
+      'plays',         (select count(*) from ev where kind = 'play'),
+      'plays30d',      (select count(*) from ev where kind = 'play' and at > now() - interval '30 days'),
+      'activeDays30d', (select count(distinct (at at time zone 'Asia/Kolkata')::date) from ev where at > now() - interval '30 days'),
+      'favorites',     (select count(*) from ev where kind = 'favorite'),
+      'searches',      (select count(*) from ev where kind = 'search'),
+      'errors',        (select count(*) from ev where kind = 'error'),
+      'firstEvent',    (select min(at) from ev),
+      'lastEvent',     (select max(at) from ev)),
+    'topSongs', coalesce((select jsonb_agg(t) from (
+        select song_title as title, song_artist as artist, max(song_image) as image, count(*) as plays
+        from ev where kind = 'play' and song_title is not null
+        group by 1, 2 order by plays desc limit 12) t), '[]'::jsonb),
+    'topArtists', coalesce((select jsonb_agg(t) from (
+        select song_artist as artist, count(*) as plays
+        from ev where kind = 'play' and song_artist is not null
+        group by 1 order by plays desc limit 10) t), '[]'::jsonb),
+    'languages', coalesce((select jsonb_agg(t) from (
+        select coalesce(nullif(language, ''), 'unknown') as language, count(*) as plays
+        from ev where kind = 'play' group by 1 order by plays desc limit 10) t), '[]'::jsonb),
+    'history', coalesce((select jsonb_agg(t) from (
+        select at, song_id as "songId", song_title as title, song_artist as artist, song_image as image, language, platform
+        from ev where kind = 'play' order by at desc limit 200) t), '[]'::jsonb),
+    'feedback', coalesce((select jsonb_agg(t) from (
+        select id, at, kind, message, status, platform, app_version as "appVersion"
+        from feedback where listener_id in (select id from d) order by at desc limit 50) t), '[]'::jsonb),
+    'activity', coalesce((select jsonb_agg(t) from (
+        select at, kind, song_title as title, song_artist as artist, error_kind as "errorKind", message, platform, app_version as "appVersion", city
+        from ev order by at desc limit 200) t), '[]'::jsonb)
+  ) end;
+$$;
+
+-- Data & Privacy: delete one kind of data older than p_keep_days.
+--   plays: usage events (everything but errors) · errors: app error reports
+--   feedback: feedback messages · notifications: sent / cancelled notifications
+create or replace function purge_kind(p_kind text, p_keep_days int) returns bigint
+language plpgsql set search_path = public, pg_temp as $$
+declare n bigint := 0; v_cut timestamptz := now() - make_interval(days => greatest(coalesce(p_keep_days, 180), 7));
+begin
+  if p_kind = 'plays' then
+    delete from events where kind <> 'error' and at < v_cut; get diagnostics n = row_count;
+  elsif p_kind = 'errors' then
+    delete from events where kind = 'error' and at < v_cut; get diagnostics n = row_count;
+  elsif p_kind = 'feedback' then
+    delete from feedback where at < v_cut; get diagnostics n = row_count;
+  elsif p_kind = 'notifications' then
+    delete from notifications where at < v_cut and status in ('sent', 'cancelled'); get diagnostics n = row_count;
+  else
+    raise exception 'purge_kind: unknown kind %', p_kind using errcode = '22023';
+  end if;
+  return n;
+end;
+$$;
+
+-- One tap on a notification (counted from the app; ids are not secret, so
+-- the count is a guide, not an audit).
+create or replace function notification_opened(p_id bigint) returns void
+language sql set search_path = public, pg_temp as $$
+  update notifications set opened = opened + 1 where id = p_id and status = 'sent';
 $$;
 
 -- Listen Together: a guest's song request, appended atomically (no lost
@@ -1714,6 +2079,8 @@ language sql stable set search_path = public, pg_temp as $$
     'settings', (select count(*) from settings),
     'experiments', (select count(*) from experiments),
     'audit_log', (select count(*) from audit_log),
+    'admins', (select count(*) from admins),
+    'error_status', (select count(*) from error_status),
     'job_runs', (select count(*) from job_runs),
     'ai_conversations', (select count(*) from ai_conversations),
     'ai_messages', (select count(*) from ai_messages),
@@ -1740,6 +2107,7 @@ begin
     'events', 'feedback',
     'blocked_content', 'rooms', 'room_members', 'push_devices', 'notifications',
     'settings', 'settings_history', 'experiments', 'audit_log', 'uptime_days', 'uptime_latest', 'job_runs',
+    'admins', 'error_status',
     'ai_conversations', 'ai_messages', 'ai_attachments', 'ai_daily_usage', 'ai_shares', 'ai_projects', 'ai_memories', 'ai_memory_prefs',
     'personal_songs', 'personal_events', 'personal_taste', 'personal_exposure', 'personal_pages', 'personal_colisten']
   loop
@@ -1758,7 +2126,7 @@ begin
     select p.oid::regprocedure as sig
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
-      and p.proname in ('_days', 'stats_overview', 'stats_timeline', 'stats_music', 'stats_geo', 'stats_platforms',
+      and p.proname in ('_days', 'signed_devices', '_ist_today', '_error_shape', 'admin_users', 'admin_user_filters', 'user_profile', 'purge_kind', 'notification_opened', 'stats_overview', 'stats_timeline', 'stats_music', 'stats_geo', 'stats_platforms',
                         'stats_engagement', 'stats_retention', 'stats_funnel', 'stats_skips', 'stats_errors',
                         'listener_profile', 'delete_listener', 'room_request', 'room_sweep',
                         'purge_events', 'retire_push_devices', 'uptime_tick', 'uptime_report', 'table_stats', 'table_counts',
@@ -1780,7 +2148,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 9, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 9, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 10, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 10, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 9 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 10 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;

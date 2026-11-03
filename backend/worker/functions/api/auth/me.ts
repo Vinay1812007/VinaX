@@ -3,6 +3,9 @@
  *   → 200 { user }               the account as the database has it
  *   → 200 { ok: true }           no database on this Worker: the session alone stands
  *   → 401 { error: 'signed_out' } bad session, or the account row is gone (deleted)
+ *   → 401 { error: 'signed_out', reason: 'blocked' }      the owner blocked this person
+ *   → 401 { error: 'signed_out', reason: 'device_signed_out' } the owner signed THIS
+ *        device out (listeners.signed_out_at is after the session was issued)
  *   → 503 { error: 'unavailable' } the database did not answer
  * POST /api/auth/me { delete: true } → 200 { ok: true } — removes the account
  *   row and, with it, the synced backup. Usage events are anonymous and stay.
@@ -13,7 +16,7 @@
  * in the console. Best effort, after the answer.
  */
 import { removeAccountFiles } from '../../_lib/ai/attachments';
-import { bearer, readSession, type AuthEnv } from '../../_lib/googleAuth';
+import { bearer, readSession, readSessionClaims, type AuthEnv } from '../../_lib/googleAuth';
 import { readJsonCapped } from '../../_lib/body';
 import { rateLimitAsync } from '../../_lib/ratelimit';
 import { db, dbConfigured, q, type DbEnv } from '../../_lib/db';
@@ -42,17 +45,32 @@ export async function touchAccount(request: Request, env: Env, row: AccountRow):
   return r.ok;
 }
 
+/**
+ * Console rebuild — did the owner sign this device out after the session was
+ * issued? Only a PROVED device id counts (a forged header proves nothing).
+ */
+export async function deviceSignedOut(request: Request, env: Env, iat: number): Promise<boolean> {
+  const proved = await verifiedIdentity(env, request.headers.get(DEVICE_HEADER));
+  if (!proved) return false;
+  const d = await db.one<{ signed_out_at: string | null }>(env, 'listeners', q().eq('id', proved).select('signed_out_at'));
+  const at = d.ok && d.value?.signed_out_at ? Date.parse(d.value.signed_out_at) : NaN;
+  return Number.isFinite(at) && at >= iat * 1000;
+}
+
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: CORS });
 
 export const onRequestGet = async (ctx: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = ctx;
-  const sub = await readSession(env, bearer(request));
-  if (!sub) return json({ error: 'signed_out' }, 401);
+  const claims = await readSessionClaims(env, bearer(request));
+  if (!claims) return json({ error: 'signed_out' }, 401);
+  const sub = claims.sub;
   if (!dbConfigured(env)) return json({ ok: true });
   const r = await accountOf(env, sub);
   if (!r.ok) return json({ error: 'unavailable' }, 503);
   if (!r.value) return json({ error: 'signed_out' }, 401);
   const row = r.value;
+  if (row.blocked_at) return json({ error: 'signed_out', reason: 'blocked' }, 401);
+  if (await deviceSignedOut(request, env, claims.iat)) return json({ error: 'signed_out', reason: 'device_signed_out' }, 401);
   const touch = touchAccount(request, env, row).catch(() => false);
   if (ctx.waitUntil) ctx.waitUntil(touch);
   else await touch;

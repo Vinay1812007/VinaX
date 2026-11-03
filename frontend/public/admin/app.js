@@ -1,49 +1,88 @@
-/* VinaX owner console — shell (13.8 rebuild).
+/* VinaX console — shell (console rebuild).
  *
- * Owns sign-in, the sidebar, the hash router (#/page/tab), the top bar
- * (refresh, auto-refresh, theme, sign out) and the Ctrl+K quick jump.
- * Pages register themselves with VX.page() in /admin/pages/*.js; this file
- * only mounts them. See docs/admin-console.md.
+ * Owns Google sign-in (with the owner recovery password), the grouped
+ * sidebar with the App Settings sub-menu, the hash router (#/page/tab, with
+ * redirects from the old addresses and a "Page not found" screen), the top
+ * bar (breadcrumb, global search, date range, auto-refresh, theme, profile)
+ * and the unsaved-changes guard. Pages register with VX.page() in
+ * /admin/pages/*.js; this file only mounts them. See docs/admin-console.md.
  */
 (function () {
   'use strict';
-  var VX = window.VX, h = VX.h, $ = function (id) { return document.getElementById(id); };
+  var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt, $ = function (id) { return document.getElementById(id); };
 
-  var GROUPS = ['System', 'Audience', 'Intelligence', 'Content'];
+  var GROUPS = ['Home', 'People', 'Music', 'Engage', 'App Settings', 'System'];
   var THEME_KEY = 'vinax_admin_theme';
   var AUTO_KEY = 'vinax_admin_auto';
-  var AUTO_MS = 30000;
+  var AUTO_MS_KEY = 'vinax_admin_auto_ms';
+  var RANGE_KEY = 'vinax_admin_range';
+  var RAIL_KEY = 'vinax_admin_sidebar';
 
-  var pages = VX.pages();
+  /** Old addresses → new ones. Tabs map where the page was split or renamed. */
+  var REDIRECTS = {
+    '': 'dashboard', overview: 'dashboard', listeners: 'users', audience: 'users',
+    publish: 'app-settings/home-screen', settings: 'app-settings/home-screen', 'app-settings': 'app-settings/home-screen',
+    notify: 'notifications', push: 'notifications', analytics: 'song-stats', catalog: 'library',
+    experiments: 'ab-tests', seo: 'google-search', admin: 'admins', roles: 'admins'
+  };
+  var TAB_REDIRECTS = {
+    'analytics/errors': ['health', 'errors'],
+    'publish/home': ['app-settings/home-screen'], 'publish/app': ['app-settings/features'],
+    'publish/catalog': ['app-settings/search'], 'publish/operations': ['app-settings/maintenance'],
+    'notify/send': ['notifications', 'compose'], 'notify/audience': ['notifications', 'compose'], 'notify/push': ['notifications', 'setup']
+  };
+
+  var pages = VX.pages().slice().sort(function (a, b) {
+    var g = GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group);
+    return g || (a.order || 50) - (b.order || 50);
+  });
   var byId = {};
   pages.forEach(function (p) { byId[p.id] = p; });
 
-  var current = null; // { page, tab, disposers: [], timers: [] }
+  var current = null; // { page, tab, params, timers, disposers, leave }
+  var lastHash = location.hash;
 
   /* ------------------------------------------------------------ theme */
-  function applyTheme(t) {
-    document.documentElement.classList.toggle('light', t === 'light');
+  var mql = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
+  function themePref() { try { var t = localStorage.getItem(THEME_KEY); return t === 'light' || t === 'dark' ? t : 'system'; } catch (e) { return 'system'; } }
+  function applyTheme() {
+    var pref = themePref();
+    var light = pref === 'light' || (pref === 'system' && !!(mql && mql.matches));
+    document.documentElement.classList.toggle('light', light);
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', t === 'light' ? '#f6f6f3' : '#0e0f13');
+    if (meta) meta.setAttribute('content', light ? '#f6f6f3' : '#0e0f13');
   }
-  $('themeBtn').addEventListener('click', function () {
-    var next = document.documentElement.classList.contains('light') ? 'dark' : 'light';
-    try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
-    applyTheme(next);
-    // Charts read colours from CSS variables; re-render so they follow.
-    rerender();
+  if (mql && mql.addEventListener) mql.addEventListener('change', function () { if (themePref() === 'system') { applyTheme(); rerender(); } });
+  var themeSel = $('themeSel');
+  themeSel.value = themePref();
+  themeSel.addEventListener('change', function () {
+    try { if (themeSel.value === 'system') localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY, themeSel.value); } catch (e) {}
+    applyTheme();
+    rerender(); // charts read colours from CSS variables
   });
 
   /* ------------------------------------------------------------- nav */
+  var openSub = {};
   function buildNav() {
     var nav = VX.clear($('nav'));
     GROUPS.forEach(function (g) {
       var list = pages.filter(function (p) { return p.group === g; });
       if (!list.length) return;
+      if (g === 'App Settings') {
+        var expanded = openSub[g] !== false;
+        var btn = h('button.nav-group-toggle', { type: 'button', 'aria-expanded': String(expanded), onclick: function () { openSub[g] = !expanded; buildNav(); if (current) markNav(current.page.id); } },
+          VX.icon('settings'), h('span', 'App Settings'), VX.icon('chevron'));
+        nav.appendChild(h('div.nav-group.sub' + (expanded ? '.open' : ''),
+          h('div.nav-group-label', g), btn,
+          h('ul', { hidden: !expanded }, list.map(function (p) {
+            return h('li', h('a.nav-link.nav-sub', { href: '#/' + p.id, dataset: { page: p.id }, title: p.title }, VX.icon(p.icon || 'settings'), h('span', p.title)));
+          }))));
+        return;
+      }
       nav.appendChild(h('div.nav-group',
         h('div.nav-group-label', g),
         h('ul', list.map(function (p) {
-          return h('li', h('a.nav-link', { href: '#/' + p.id, dataset: { page: p.id } }, VX.icon(p.icon || 'grid'), h('span', p.title)));
+          return h('li', h('a.nav-link', { href: '#/' + p.id, dataset: { page: p.id }, title: p.title }, VX.icon(p.icon || 'grid'), h('span', p.title)));
         }))));
     });
   }
@@ -52,7 +91,6 @@
       if (a.dataset.page === id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
     });
   }
-
   function openNav(open) {
     document.body.classList.toggle('nav-open', open);
     $('scrimNav').hidden = !open;
@@ -62,19 +100,36 @@
   $('menuBtn').addEventListener('click', function () { openNav(!document.body.classList.contains('nav-open')); });
   $('sbClose').addEventListener('click', function () { openNav(false); $('menuBtn').focus(); });
   $('scrimNav').addEventListener('click', function () { openNav(false); });
+  $('railBtn').addEventListener('click', function () {
+    var rail = !document.documentElement.classList.contains('sb-rail');
+    document.documentElement.classList.toggle('sb-rail', rail);
+    $('railBtn').setAttribute('aria-pressed', String(rail));
+    $('railBtn').setAttribute('aria-label', rail ? 'Expand the menu' : 'Collapse the menu');
+    try { localStorage.setItem(RAIL_KEY, rail ? 'rail' : 'full'); } catch (e) {}
+  });
 
   /* ----------------------------------------------------------- router */
   function parseHash() {
     var parts = (location.hash || '').replace(/^#\/?/, '').split('?');
-    var segs = parts[0].split('/').filter(Boolean);
+    var path = decodeURIComponent(parts[0] || '').replace(/\/+$/, '');
     var params = {};
     new URLSearchParams(parts[1] || '').forEach(function (v, k) { params[k] = v; });
-    return { page: segs[0] || 'overview', tab: segs[1] || null, params: params };
+    return { path: path, params: params };
+  }
+  /** Longest registered page id that prefixes the path; the next segment is the tab. */
+  function resolve(path) {
+    var segs = path.split('/').filter(Boolean);
+    for (var n = segs.length; n > 0; n--) {
+      var id = segs.slice(0, n).join('/');
+      if (byId[id]) return { page: byId[id], tab: segs[n] || null, extra: segs.slice(n + 1) };
+    }
+    return null;
   }
   function setHash(page, tab, params, replace) {
     var q = new URLSearchParams();
     Object.keys(params || {}).forEach(function (k) { if (params[k] != null && params[k] !== '') q.set(k, params[k]); });
     var next = '#/' + page + (tab ? '/' + tab : '') + (q.toString() ? '?' + q.toString() : '');
+    lastHash = next;
     if (next === location.hash) return;
     if (replace) history.replaceState(null, '', next); else history.pushState(null, '', next);
   }
@@ -86,55 +141,164 @@
     current.timers = []; current.disposers = [];
   }
 
-  function stampUpdated() { $('updated').textContent = 'Updated ' + new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+  function stampUpdated() { $('updated').textContent = 'Last updated ' + fmt.time(new Date().toISOString()) + ' ' + VX.tzShort(); }
+
+  function crumbs(page, tab) {
+    var host = VX.clear($('crumbs'));
+    host.appendChild(h('span.muted', page.group));
+    host.appendChild(h('span.muted.sep', { 'aria-hidden': 'true' }, '›'));
+    host.appendChild(h(tab ? 'span' : 'h1#pageTitle', page.title));
+    if (tab && page.tabs && page.tabs.length > 1) {
+      host.appendChild(h('span.muted.sep', { 'aria-hidden': 'true' }, '›'));
+      host.appendChild(h('h1#pageTitle', tab.label));
+    }
+  }
+
+  function notFound() {
+    dispose();
+    current = null;
+    markNav(null);
+    VX.mount($('crumbs'), h('h1#pageTitle', 'Page not found'));
+    $('pageDesc').textContent = '';
+    VX.clear($('pageTabs'));
+    $('rangeHost').hidden = true;
+    document.title = 'Page not found · VinaX Console';
+    VX.mount($('pageBody'), ui.notFound(function () { setHash('dashboard', null, {}); route(); }));
+  }
 
   function route() {
     var r = parseHash();
-    var page = byId[r.page] || byId.overview || pages[0];
+    if (Object.prototype.hasOwnProperty.call(REDIRECTS, r.path)) {
+      setHash(REDIRECTS[r.path], null, r.params, true); return route();
+    }
+    var two = r.path.split('/').slice(0, 2).join('/');
+    if (TAB_REDIRECTS[two]) { setHash(TAB_REDIRECTS[two][0], TAB_REDIRECTS[two][1] || null, r.params, true); return route(); }
+    var first = r.path.split('/')[0];
+    if (!resolve(r.path) && REDIRECTS[first]) {
+      setHash(REDIRECTS[first], r.path.split('/')[1] || null, r.params, true); return route();
+    }
+    var hit = resolve(r.path);
+    if (!hit) return notFound();
+    var page = hit.page;
     var tabs = page.tabs || null;
-    var tab = tabs ? (tabs.filter(function (t) { return t.id === r.tab; })[0] || tabs[0]) : null;
+    var tab = tabs ? (tabs.filter(function (t) { return t.id === hit.tab; })[0] || tabs[0]) : null;
     dispose();
-    current = { page: page, tab: tab, params: r.params, timers: [], disposers: [] };
+    current = { page: page, tab: tab, params: r.params, timers: [], disposers: [], leave: null };
+    lastHash = location.hash;
     markNav(page.id);
-    $('pageTitle').textContent = page.title;
-    $('crumbGroup').textContent = page.group;
+    crumbs(page, tab);
     $('pageDesc').textContent = (tab && tab.desc) || page.desc || '';
     document.title = page.title + ' · VinaX Console';
     var tabHost = VX.clear($('pageTabs'));
     if (tabs && tabs.length > 1) {
-      tabHost.appendChild(VX.ui.tabs(tabs.map(function (t) { return { id: t.id, label: t.label }; }), tab.id, function (id) {
-        setHash(page.id, id, {});
-        route();
+      tabHost.appendChild(VX.ui.tabs(tabs.map(function (t) { return { id: t.id, label: t.label, badge: t.badge }; }), tab.id, function (id) {
+        go(page.id, id, {});
       }).el);
     }
+    drawRange(page);
     renderBody();
     openNav(false);
+    var main = $('main'); if (main && main.scrollTo) main.scrollTo(0, 0);
+  }
+
+  /** Navigate, asking first when the current page has unsaved changes. */
+  function go(page, tab, params) {
+    leaveOk().then(function (ok) { if (ok) { setHash(page, tab, params || {}); route(); } });
+  }
+  function leaveOk() {
+    var msg = current && current.leave ? current.leave() : null;
+    if (!msg) return Promise.resolve(true);
+    return VX.confirm({ title: 'Leave without saving?', body: msg, confirmLabel: 'Leave without saving', danger: true });
+  }
+  function onNav() {
+    if (location.hash === lastHash) return;
+    var target = location.hash;
+    var msg = current && current.leave ? current.leave() : null;
+    if (!msg) { route(); return; }
+    history.replaceState(null, '', lastHash); // stay until the admin decides
+    VX.confirm({ title: 'Leave without saving?', body: msg, confirmLabel: 'Leave without saving', danger: true }).then(function (ok) {
+      if (ok) { current.leave = null; history.pushState(null, '', target); route(); }
+    });
+  }
+  window.addEventListener('popstate', onNav);
+  window.addEventListener('hashchange', onNav);
+  window.addEventListener('beforeunload', function (e) {
+    if (current && current.leave && current.leave()) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  /* ------------------------------------------------------- date range */
+  function rangeFrom(params) {
+    var key = params.range;
+    if (!key) { try { key = localStorage.getItem(RANGE_KEY) || '7'; } catch (e) { key = '7'; } }
+    if (key === 'custom' && params.from && params.to) {
+      var a = new Date(params.from + 'T00:00:00Z'), b = new Date(params.to + 'T00:00:00Z');
+      var days = Math.max(1, Math.min(90, Math.round((b - a) / 86400000) + 1));
+      return { key: 'custom', days: days, from: params.from, to: params.to, label: fmt.day(params.from) + ' – ' + fmt.day(params.to) };
+    }
+    var r = VX.RANGES.filter(function (x) { return x.value === key && x.days; })[0] || VX.RANGES[1];
+    return { key: r.value, days: r.days, from: null, to: null, label: r.label };
+  }
+  function drawRange(page) {
+    var host = $('rangeHost');
+    host.hidden = !page.range;
+    if (!page.range) return;
+    var cur = rangeFrom(current.params);
+    var sel = ui.select(VX.RANGES.map(function (r) { return { value: r.value, label: r.value === 'custom' && cur.key === 'custom' ? cur.label : r.label }; }), cur.key, { 'aria-label': 'Date range' });
+    sel.addEventListener('change', function () {
+      if (sel.value !== 'custom') {
+        try { localStorage.setItem(RANGE_KEY, sel.value); } catch (e) {}
+        var p = Object.assign({}, current.params, { range: sel.value }); delete p.from; delete p.to;
+        setHash(current.page.id, current.tab ? current.tab.id : null, p, true);
+        current.params = p; drawRange(current.page); renderBody();
+        return;
+      }
+      var v = { start: cur.from || VX.time.toDate(new Date(Date.now() - 6 * 86400000).toISOString()), end: cur.to || VX.time.today() };
+      VX.modal({
+        title: 'Custom date range',
+        body: [h('p.muted', 'Pick up to 90 days.'), ui.dateRange(v, function (x) { v = x; }, { startLabel: 'From', endLabel: 'To', startHint: ' ', endHint: ' ' })],
+        onClose: function () { drawRange(current.page); },
+        actions: [
+          { label: 'Cancel', kind: 'ghost' },
+          { label: 'Apply', kind: 'primary', onClick: function (close) {
+            if (!v.start || !v.end || v.end < v.start) { VX.toast('Choose a start date before the end date.', 'bad'); return; }
+            var p = Object.assign({}, current.params, { range: 'custom', from: v.start, to: v.end });
+            setHash(current.page.id, current.tab ? current.tab.id : null, p, true);
+            current.params = p; close(); renderBody();
+          } }
+        ]
+      });
+    });
+    VX.mount(host, sel);
   }
 
   function makeCtx() {
     var cur = current;
     return {
+      page: cur.page.id,
       tab: cur.tab ? cur.tab.id : null,
       params: cur.params,
+      range: rangeFrom(cur.params),
       setParam: function (k, v) {
         if (cur !== current) return;
-        cur.params[k] = v;
+        if (v == null || v === '') delete cur.params[k]; else cur.params[k] = v;
         setHash(cur.page.id, cur.tab ? cur.tab.id : null, cur.params, true);
       },
       refresh: function () { if (cur === current) renderBody(); },
       every: function (ms, fn) { if (cur !== current) return; cur.timers.push(setInterval(function () { if (!document.hidden) fn(); }, ms)); },
       onDispose: function (fn) { cur.disposers.push(fn); },
-      go: function (page, tab, params) { if (cur !== current) return; setHash(page, tab, params || {}); route(); }
+      onLeave: function (fn) { cur.leave = fn; },
+      go: function (page, tab, params) { if (cur !== current) return; go(page, tab, params); },
+      stamp: stampUpdated
     };
   }
 
   function renderBody() {
     if (!current) return;
     dispose();
+    current.leave = null;
     VX.api.clearMemo();
-    // 13.8.1 — every render gets its own container. A slow request from a
-    // page or tab the owner already left now lands in a detached element
-    // instead of drawing over the page that is showing.
+    // Every render gets its own container: a slow answer for a page the admin
+    // already left lands in a detached element.
     var body = h('div.page-body');
     VX.mount($('pageBody'), body);
     var fn = current.tab ? current.tab.render : current.page.render;
@@ -143,131 +307,247 @@
       if (out && typeof out.then === 'function') out.then(stampUpdated, stampUpdated); else stampUpdated();
     } catch (e) {
       console.error(e);
-      VX.mount(body, VX.ui.error('This page failed to start: ' + (e && e.message)));
+      VX.mount(body, VX.ui.error('This page failed to start: ' + (e && e.message), function () { renderBody(); }));
     }
   }
-  function rerender() { if (current) renderBody(); }
-
-  window.addEventListener('popstate', route);
-  window.addEventListener('hashchange', route);
+  function rerender() { if (current) renderBody(); else if (!$('app').hidden) route(); }
 
   /* ---------------------------------------------------- refresh / auto */
   $('refreshBtn').addEventListener('click', function () { rerender(); });
   var autoTimer = null;
+  function autoMs() { var v = 30000; try { v = Number(localStorage.getItem(AUTO_MS_KEY)) || 30000; } catch (e) {} return [15000, 30000, 60000, 300000].indexOf(v) >= 0 ? v : 30000; }
   function setAuto(on) {
     clearInterval(autoTimer);
     autoTimer = on ? setInterval(function () {
-      // Never refresh under an open dialog or while the owner is typing.
-      if (document.hidden || document.querySelector('.scrim, #drawer')) return;
+      // Never refresh under an open dialog, menu or while the admin is typing.
+      if (document.hidden || document.querySelector('.scrim, #drawer, .menu.open')) return;
       var a = document.activeElement;
       if (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && $('pageBody').contains(a)) return;
       if (current && current.page.noAuto) return;
       rerender();
-    }, AUTO_MS) : null;
+    }, autoMs()) : null;
+    $('autoMs').disabled = !on;
   }
   $('autoRefresh').addEventListener('change', function (e) {
     try { localStorage.setItem(AUTO_KEY, e.target.checked ? '1' : '0'); } catch (x) {}
     setAuto(e.target.checked);
   });
+  $('autoMs').value = String(autoMs());
+  $('autoMs').addEventListener('change', function (e) {
+    try { localStorage.setItem(AUTO_MS_KEY, e.target.value); } catch (x) {}
+    setAuto($('autoRefresh').checked);
+  });
 
-  /* ----------------------------------------------------- quick jump */
+  /* ---------------------------------------------------- global search */
   function openPalette() {
     var items = [];
     pages.forEach(function (p) {
-      items.push({ label: p.title, sub: p.group, page: p.id });
-      (p.tabs || []).forEach(function (t) { items.push({ label: t.label, sub: p.title, page: p.id, tab: t.id }); });
+      items.push({ label: p.title, sub: p.group, page: p.id, kind: 'Pages', words: (p.keywords || '') + ' ' + (p.desc || '') });
+      (p.tabs || []).forEach(function (t) { if (p.tabs.length > 1) items.push({ label: t.label, sub: p.title, page: p.id, tab: t.id, kind: 'Pages' }); });
+      (p.sections || []).forEach(function (s) { items.push({ label: s.title, sub: 'App Settings › ' + p.title, page: p.id, params: { section: s.key }, kind: 'Settings' }); });
     });
     var list = h('ul.palette-list', { role: 'listbox', id: 'paletteList' });
-    var input = VX.ui.input({ placeholder: 'Jump to a page or tab…', 'aria-label': 'Jump to', role: 'combobox', 'aria-controls': 'paletteList', 'aria-expanded': 'true' });
-    var sel = 0, shown = items;
+    var input = VX.ui.input({ placeholder: 'Search pages, users, songs and settings…', 'aria-label': 'Search the console', role: 'combobox', 'aria-controls': 'paletteList', 'aria-expanded': 'true' });
+    var sel = 0, shown = items.slice(0, 30), remote = [], seq = 0, timer = null;
     var m;
-    function go(it) { m.close(); setHash(it.page, it.tab || null, {}); route(); }
+    function pick(it) { m.close(); go(it.page, it.tab || null, it.params || {}); }
     function draw() {
       VX.clear(list);
-      shown.slice(0, 40).forEach(function (it, i) {
-        var li = h('li', { role: 'option', 'aria-selected': String(i === sel), onclick: function () { go(it); } }, h('span', it.label), h('span.muted.small', it.sub));
+      var all = shown.concat(remote);
+      var lastKind = null;
+      all.slice(0, 50).forEach(function (it, i) {
+        if (it.kind !== lastKind) { list.appendChild(h('li.palette-group', { role: 'presentation' }, it.kind)); lastKind = it.kind; }
+        var li = h('li', { role: 'option', 'aria-selected': String(i === sel), onclick: function () { pick(it); } },
+          it.img !== undefined ? ui.media(it.img, it.label, it.sub, it.round) : [h('span', it.label), h('span.muted.small', it.sub)]);
         list.appendChild(li);
       });
-      var on = list.children[sel]; if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest' });
+      if (!all.length) list.appendChild(h('li.palette-group', 'No matches'));
+      var on = VX.$$('li[role="option"]', list)[sel]; if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest' });
     }
     input.addEventListener('input', function () {
       var q = input.value.trim().toLowerCase();
-      shown = !q ? items : items.filter(function (it) { return (it.label + ' ' + it.sub).toLowerCase().indexOf(q) >= 0; });
-      sel = 0; draw();
+      shown = !q ? items.slice(0, 30) : items.filter(function (it) { return (it.label + ' ' + it.sub + ' ' + (it.words || '')).toLowerCase().indexOf(q) >= 0; });
+      remote = []; sel = 0; draw();
+      clearTimeout(timer);
+      if (q.length < 2) return;
+      timer = setTimeout(function () {
+        var my = ++seq;
+        Promise.all([
+          VX.findUsers(q).catch(function () { return []; }),
+          VX.findMusic(q, 'songs').catch(function () { return []; })
+        ]).then(function (res) {
+          if (my !== seq) return;
+          remote = res[0].slice(0, 5).map(function (u) { return { kind: 'Users', label: u.name || u.email || 'User', sub: u.name ? u.email : '', img: u.picture, round: true, page: 'users', params: { user: u.id } }; })
+            .concat(res[1].slice(0, 5).map(function (s) { return { kind: 'Songs', label: s.title, sub: s.sub || '', img: s.image, page: 'library', params: { q: s.title } }; }));
+          draw();
+        });
+      }, 300);
     });
     input.addEventListener('keydown', function (e) {
-      if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel + 1, Math.min(shown.length, 40) - 1); draw(); }
+      var n = Math.min(shown.length + remote.length, 50);
+      if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel + 1, n - 1); draw(); }
       else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel - 1, 0); draw(); }
-      else if (e.key === 'Enter' && shown[sel]) { e.preventDefault(); go(shown[sel]); }
+      else if (e.key === 'Enter') { var it = shown.concat(remote)[sel]; if (it) { e.preventDefault(); pick(it); } }
     });
-    m = VX.modal({ title: 'Jump to', body: [input, list] });
+    m = VX.modal({ title: 'Search', body: [input, list] });
     m.el.classList.add('palette');
     draw();
   }
   $('paletteBtn').addEventListener('click', openPalette);
+  $('searchBtn').addEventListener('click', openPalette);
   document.addEventListener('keydown', function (e) {
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); if (!document.querySelector('.palette')) openPalette(); return; }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); if (!document.querySelector('.palette') && !$('app').hidden) openPalette(); return; }
     var t = e.target;
     if (t && (/INPUT|TEXTAREA|SELECT/.test(t.tagName) || t.isContentEditable)) return;
     if (document.querySelector('.scrim, #drawer')) return;
     if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'r' || e.key === 'R') && !$('app').hidden) { e.preventDefault(); rerender(); }
   });
 
+  /* ---------------------------------------------------------- profile */
+  var ROLE_TEXT = { owner: 'Owner', editor: 'Editor', viewer: 'Viewer' };
+  function drawProfile() {
+    var me = VX.me || {};
+    var btn = $('profileBtn');
+    VX.mount(btn, ui.media(me.picture, null, null, true).firstChild);
+    if (!me.picture) VX.mount(btn, h('span.avatar', String(me.name || me.email || 'A').charAt(0).toUpperCase()));
+    btn.setAttribute('aria-label', 'Profile: ' + (me.email || 'admin'));
+    document.body.classList.toggle('role-viewer', me.role === 'viewer');
+  }
+  $('profileBtn').addEventListener('click', function (e) {
+    e.stopPropagation();
+    var pop = $('profilePop');
+    if (!pop.hidden) { pop.hidden = true; return; }
+    var me = VX.me || {};
+    var tz = ui.select(VX.TIMEZONES, VX.tz(), { 'aria-label': 'Time zone' });
+    tz.addEventListener('change', function () { VX.setTz(tz.value); stampUpdated(); rerender(); VX.toast('Times now shown in ' + VX.tzShort() + ' ✓', 'ok'); });
+    VX.mount(pop,
+      h('div.profile-head', ui.media(me.picture, me.name || me.email, me.name ? me.email : null, true)),
+      h('p', 'Role: ', ui.pill(ROLE_TEXT[me.role] || 'Viewer', me.role === 'owner' ? 'accent' : me.role === 'editor' ? 'ok' : null)),
+      me.via === 'password' ? h('p.muted.small', 'Signed in with the owner recovery password.') : null,
+      h('label.dd', h('span.dd-label', 'Change timezone'), tz),
+      ui.button('Sign out', { kind: 'ghost', icon: 'logout', onClick: signOut }));
+    pop.hidden = false;
+  });
+  document.addEventListener('click', function (e) { var pop = $('profilePop'); if (!pop.hidden && !pop.contains(e.target) && e.target !== $('profileBtn')) pop.hidden = true; });
+
   /* ----------------------------------------------------------- auth */
+  var gsiLoaded = false;
   function showLogin(msg) {
     dispose();
+    current = null;
     $('app').hidden = true;
     $('login').hidden = false;
     $('loginErr').textContent = msg || '';
     $('token').value = '';
-    setTimeout(function () { $('token').focus(); }, 30);
+    VX.api.get('/api/admin/session', null, { fresh: true, noAuthRedirect: true }).then(function (res) {
+      var d = res.data || {};
+      $('pwBox').hidden = !d.passwordAllowed;
+      if (!d.googleReady || !d.googleClientId) {
+        VX.mount($('gsiBtn'), h('p.muted.small', 'Google sign-in is not set up on the server yet. Use the owner recovery password below.'));
+        if (d.passwordAllowed) $('pwBox').open = true;
+        return;
+      }
+      loadGsi(d.googleClientId);
+    });
   }
-  VX.auth.onExpired(function () { showLogin('Your session ended — sign in again.'); });
-
-  function showApp() {
-    $('login').hidden = true;
-    $('app').hidden = false;
-    if (!location.hash) setHash('overview', null, {}, true);
-    route();
+  function loadGsi(clientId) {
+    var start = function () {
+      try {
+        window.google.accounts.id.initialize({ client_id: clientId, callback: onGoogle, ux_mode: 'popup', auto_select: false });
+        VX.clear($('gsiBtn'));
+        window.google.accounts.id.renderButton($('gsiBtn'), { theme: document.documentElement.classList.contains('light') ? 'outline' : 'filled_black', size: 'large', text: 'signin_with', shape: 'pill', width: 280 });
+      } catch (e) {
+        VX.mount($('gsiBtn'), h('p.login-err', 'Google sign-in could not start. Reload the page to try again.'));
+      }
+    };
+    if (window.google && window.google.accounts && window.google.accounts.id) { start(); return; }
+    if (gsiLoaded) return;
+    gsiLoaded = true;
+    VX.mount($('gsiBtn'), h('p.muted.small', 'Loading Google sign-in…'));
+    var s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.async = true;
+    s.onload = start;
+    s.onerror = function () { gsiLoaded = false; VX.mount($('gsiBtn'), h('p.login-err', 'Could not reach Google. Check the connection and reload.')); };
+    document.head.appendChild(s);
   }
-
+  function onGoogle(resp) {
+    $('loginErr').textContent = 'Checking your account…';
+    VX.api.post('/api/admin/session', { credential: resp && resp.credential }, { noAuthRedirect: true }).then(function (res) {
+      var d = res.data || {};
+      if (res.ok && d.token) { VX.auth.set(d.token); VX.me = d.me || null; $('loginErr').textContent = ''; boot(); return; }
+      var msg = {
+        not_an_admin: 'This Google account (' + (d.email || 'unknown') + ') is not on the admin list. Ask an Owner to invite you on Admins & Roles.',
+        email_not_verified: 'Google has not verified this email address yet.',
+        invalid_token: 'Google sign-in did not go through. Try again.',
+        rate_limited: 'Too many attempts — wait a minute and try again.',
+        google_not_configured: 'Google sign-in is not set up on the server yet.'
+      }[res.error] || (res.status === 0 ? 'Could not reach the server.' : 'Sign-in failed — ' + (res.message || 'try again') + '.');
+      $('loginErr').textContent = msg;
+    });
+  }
   $('loginForm').addEventListener('submit', function (e) {
     e.preventDefault();
     var t = $('token').value.trim();
-    if (!t) { $('loginErr').textContent = 'Enter the owner password.'; return; }
+    if (!t) { $('loginErr').textContent = 'Enter the owner recovery password.'; return; }
     var btn = $('enter');
     btn.disabled = true; btn.setAttribute('aria-busy', 'true');
     $('loginErr').textContent = '';
     VX.auth.set(t);
-    // Cheapest owner-only endpoint: proves the password without loading data.
-    VX.api.get('/api/admin/envcheck', null, { fresh: true, noAuthRedirect: true }).then(function (res) {
+    VX.api.get('/api/admin/session', null, { fresh: true, noAuthRedirect: true }).then(function (res) {
       btn.disabled = false; btn.removeAttribute('aria-busy');
-      if (res.status === 401 || res.status === 403) { VX.auth.clear(); $('loginErr').textContent = 'That password is not right.'; $('token').select(); return; }
-      if (res.status === 429) { VX.auth.clear(); $('loginErr').textContent = 'Too many attempts — wait 15 minutes and try again.'; return; }
-      if (res.status === 503 && res.error === 'admin_not_configured') { VX.auth.clear(); $('loginErr').textContent = 'The server has no owner password set (ADMIN_LOGIN_PASSWORD).'; return; }
       if (res.status === 0) { VX.auth.clear(); $('loginErr').textContent = 'Could not reach the server.'; return; }
-      showApp();
+      if (!res.data || !res.data.me) { VX.auth.clear(); $('loginErr').textContent = 'That password is not right (or too many tries — wait 15 minutes).'; $('token').select(); return; }
+      boot(res);
     });
   });
-
-  $('logoutBtn').addEventListener('click', function () {
+  function signOut() {
     VX.auth.clear();
+    VX.me = null;
     VX.api.clearMemo();
+    $('profilePop').hidden = true;
+    try { if (window.google && window.google.accounts) window.google.accounts.id.disableAutoSelect(); } catch (e) {}
     showLogin('Signed out.');
-  });
+  }
+  VX.auth.onExpired(function () { showLogin('You were signed out. Sign in again.'); });
+
+  /** Signed in: learn who we are, then open the console. */
+  function boot(pre) {
+    var p = pre ? Promise.resolve(pre) : VX.api.get('/api/admin/session', null, { fresh: true, noAuthRedirect: true });
+    p.then(function (res) {
+      var d = (res && res.data) || {};
+      if (!d.me) { VX.auth.clear(); showLogin(res && res.status === 0 ? 'Could not reach the server.' : ''); return; }
+      VX.me = d.me;
+      drawProfile();
+      var banner = $('dbBanner');
+      banner.hidden = true;
+      if (d.databaseConfigured && d.schemaWanted && (d.schema == null || d.schema < d.schemaWanted) && VX.can('owner')) {
+        VX.mount(banner, ui.notice(h('span', h('strong', 'One-time database update needed. '),
+          'Until it runs, some numbers can still include people who never signed in, and some pages may not load. ',
+          ui.button('How to update', { kind: 'ghost', small: true, onClick: function () { go('database', 'maintenance'); } })), 'warn'));
+        banner.hidden = false;
+      }
+      $('login').hidden = true;
+      $('app').hidden = false;
+      if (!location.hash) setHash('dashboard', null, {}, true);
+      route();
+    });
+  }
 
   /* ----------------------------------------------------------- boot */
   buildNav();
+  applyTheme();
+  try { if (localStorage.getItem(RAIL_KEY) === 'rail') { document.documentElement.classList.add('sb-rail'); $('railBtn').setAttribute('aria-pressed', 'true'); } } catch (e) {}
   var host = location.hostname;
   var envChip = $('envChip');
-  if (/^(localhost|127\.|0\.0\.0\.0)/.test(host)) { envChip.textContent = 'Local'; envChip.classList.add('local'); }
-  else if (/pages\.dev$/.test(host)) { envChip.textContent = 'Preview'; envChip.classList.add('preview'); }
+  if (/(^|\.)vinaxmusic\.online$/.test(host)) { envChip.textContent = 'Live site'; envChip.classList.add('live'); }
+  else { envChip.textContent = 'Test site'; envChip.classList.add('test'); }
   VX.api.get('/api/version', null, { noAuthRedirect: true }).then(function (res) {
     var d = res.data || {};
     var v = d.version || d.latest || d.versionName;
-    if (v) $('buildChip').textContent = 'App ' + v;
+    if (v) $('buildChip').textContent = 'App version ' + v;
   });
-  try { if (localStorage.getItem(AUTO_KEY) === '1') { $('autoRefresh').checked = true; setAuto(true); } } catch (e) {}
+  try { if (localStorage.getItem(AUTO_KEY) === '1') { $('autoRefresh').checked = true; setAuto(true); } else setAuto(false); } catch (e) { setAuto(false); }
 
-  if (VX.auth.token()) showApp(); else showLogin('');
+  if (VX.auth.token()) boot(); else showLogin('');
 })();

@@ -148,6 +148,9 @@ export interface FcmMessage {
   title: string;
   body: string;
   link?: string;
+  /** Console rebuild: a picture for the notification (https only) and the notifications row id (tap counting). */
+  image?: string | null;
+  id?: number | null;
 }
 
 /**
@@ -206,8 +209,8 @@ export async function sendFcm(env: FcmEnv, tokens: string[], msg: FcmMessage): P
         body: JSON.stringify({
           message: {
             token,
-            notification: { title: msg.title.slice(0, 120), body: (msg.body || '').slice(0, 240) },
-            data: { link: msg.link || '/' },
+            notification: { title: msg.title.slice(0, 120), body: (msg.body || '').slice(0, 240), ...(msg.image && /^https:\/\//.test(msg.image) ? { image: msg.image } : {}) },
+            data: { link: msg.link || '/', ...(msg.id ? { id: String(msg.id) } : {}) },
             android: {
               priority: 'high',
               notification: { channel_id: FCM_CHANNEL_ID, icon: FCM_SMALL_ICON, color: FCM_ACCENT, default_sound: true },

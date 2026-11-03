@@ -69,12 +69,14 @@ routes = [
   # stays in the code for local runs and the tests.
 ]
 
-# 14.0 — the scheduled jobs (worker/functions/_lib/jobs.ts): every 30 minutes
-# the status tick probes the public components; once an hour housekeeping
-# sweeps idle rooms, purges old usage events and retires silent push devices.
+# 14.0 — the scheduled jobs (worker/functions/_lib/jobs.ts). Console rebuild:
+# the trigger fires every 5 minutes and jobs.ts runs each job only when it is
+# due by its own schedule (the console's `jobs` setting; defaults: status tick
+# every 30 minutes, housekeeping hourly, scheduled notifications every 5), so
+# a scheduled notification goes out within 5 minutes of its time.
 # Nothing runs without the database secrets.
 [triggers]
-crons = ["*/30 * * * *"]
+crons = ["*/5 * * * *"]
 
 [vars]
 # Host of the Pages deployment serving the static frontend.

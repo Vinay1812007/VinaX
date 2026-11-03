@@ -4,20 +4,25 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
-    <!-- Strict CSP for the owner console: no inline scripts, no third-party
-         script hosts, so an injection slip cannot execute. Every console
-         script builds DOM through VX.h (text nodes), never innerHTML.
-         style-src keeps 'unsafe-inline' for style="" attributes on chart
-         bars and swatches. connect-src adds the geocoder used by the map. -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' blob:; connect-src 'self'" />
+    <!-- Strict default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: https:; media-src 'self' blob: https:; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/ for the owner console: no inline scripts. The only outside
+         script is Google's sign-in button (accounts.google.com/gsi). Every
+         console script builds DOM through VX.h (text nodes), never innerHTML.
+         style-src keeps 'unsafe-inline' for style="" on chart bars. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: https:; media-src 'self' blob: https:; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/" />
     <meta name="theme-color" content="#0e0f13" />
     <title>VinaX · Console</title>
     <link rel="icon" href="/favicon.ico?v=14" />
     <script src="/admin/theme-boot.js"></script>
     <link rel="stylesheet" href="/admin/console.css" />
+    <link rel="stylesheet" href="/admin/css/people.css" />
+    <link rel="stylesheet" href="/admin/css/music.css" />
+    <link rel="stylesheet" href="/admin/css/engage.css" />
+    <link rel="stylesheet" href="/admin/css/system.css" />
+    <link rel="stylesheet" href="/admin/css/settings-a.css" />
+    <link rel="stylesheet" href="/admin/css/settings-b.css" />
   </head>
   <body>
-    <svg class="sprite" width="0" height="0" aria-hidden="true" focusable="false">
+<svg class="sprite" width="0" height="0" aria-hidden="true" focusable="false">
       <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
       <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
       <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></symbol>
@@ -59,34 +64,52 @@
       <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="14" r="4"/><path d="M11 11l8.5-8.5M16 6l2.5 2.5M14 8l2 2"/></symbol>
       <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></symbol>
       <symbol id="i-command" viewBox="0 0 24 24"><path d="M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3z"/></symbol>
+      <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c.8-3.9 3.7-6 7.5-6s6.7 2.1 7.5 6"/></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 5 6v5.5c0 4.4 3 7.9 7 9 4-1.1 7-4.6 7-9V6z"/><path d="M9 12l2 2 4-4"/></symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="14.5" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></symbol>
+      <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 17.5h2"/></symbol>
+      <symbol id="i-image" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M20 16l-5-5-8 8"/></symbol>
+      <symbol id="i-flask" viewBox="0 0 24 24"><path d="M9.5 3.5h5M10.5 3.5v6L5 19a1.3 1.3 0 0 0 1.1 2h11.8A1.3 1.3 0 0 0 19 19l-5.5-9.5v-6"/><path d="M7.5 15h9"/></symbol>
+      <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.5 6.5a4 4 0 0 0 5 5L12 19a2.1 2.1 0 0 1-3-3z"/><path d="M14.5 6.5 17 4l3 3-2.5 2.5"/></symbol>
+      <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.5a2.5 2.5 0 0 1 4.8 1c0 1.7-2.4 2-2.4 3.5M12 17v.01"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></symbol>
+      <symbol id="i-rail" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M9 4v16M15 10l-2 2 2 2"/></symbol>
     </svg>
 
     <!-- Sign-in -->
     <main id="login" class="login" hidden>
-      <form id="loginForm" class="login-card" autocomplete="off">
+      <div class="login-card">
         <div class="brand-mark" aria-hidden="true">V</div>
         <h1>VinaX Console</h1>
-        <p class="muted">Owner sign-in. The password is checked by the server on every request and is kept only in this tab.</p>
-        <label class="field-label" for="token">Owner password</label>
-        <input id="token" class="input" type="password" autocomplete="current-password" required />
-        <p id="loginErr" class="login-err" role="alert"></p>
-        <button id="enter" class="btn primary block" type="submit"><span>Sign in</span></button>
-      </form>
+        <p class="muted">Sign in with the Google account an Owner added to the admin list.</p>
+        <div id="gsiBtn" class="gsi-btn"></div>
+        <p id="loginErr" class="login-err" role="alert" aria-live="polite"></p>
+        <details id="pwBox" class="pw-box" hidden>
+          <summary>Owner recovery password</summary>
+          <form id="loginForm" autocomplete="off">
+            <p class="muted small">Only for the owner when Google sign-in is not available. It is kept in this tab only.</p>
+            <label class="field-label" for="token">Recovery password</label>
+            <input id="token" class="input" type="password" autocomplete="current-password" />
+            <button id="enter" class="btn ghost block" type="submit"><span>Sign in with password</span></button>
+          </form>
+        </details>
+      </div>
     </main>
 
     <!-- Console -->
     <div id="app" class="app" hidden>
       <a class="skip" href="#main">Skip to content</a>
-      <aside id="sidebar" class="sidebar" aria-label="Console navigation">
+      <aside id="sidebar" class="sidebar" aria-label="Console menu">
         <div class="sb-brand">
           <div class="brand-mark sm" aria-hidden="true">V</div>
-          <div class="sb-brand-text"><strong>VinaX</strong><span>Console</span></div>
+          <div class="sb-brand-text"><strong>VinaX</strong><span>Admin console</span></div>
+          <button id="railBtn" class="icon-btn sb-rail-btn" type="button" aria-label="Collapse the menu" aria-pressed="false" title="Collapse or expand the menu"><svg class="ic" aria-hidden="true"><use href="#i-rail"/></svg></button>
           <button id="sbClose" class="icon-btn sb-close" type="button" aria-label="Close menu"><svg class="ic" aria-hidden="true"><use href="#i-close"/></svg></button>
         </div>
-        <button id="paletteBtn" class="sb-search" type="button"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg><span>Jump to…</span><kbd>Ctrl K</kbd></button>
+        <button id="paletteBtn" class="sb-search" type="button"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg><span>Search…</span><kbd>Ctrl K</kbd></button>
         <nav id="nav" class="nav"></nav>
         <div class="sb-foot">
-          <span id="envChip" class="env-chip">Production</span>
+          <span id="envChip" class="env-chip">Live site</span>
           <span id="buildChip" class="muted small"></span>
         </div>
       </aside>
@@ -95,17 +118,30 @@
       <div class="main-col">
         <header class="topbar">
           <button id="menuBtn" class="icon-btn menu-btn" type="button" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></button>
-          <div class="crumbs"><span id="crumbGroup" class="muted"></span><span class="muted sep" aria-hidden="true">/</span><h1 id="pageTitle">Overview</h1></div>
+          <nav id="crumbs" class="crumbs" aria-label="You are here"><h1 id="pageTitle">Dashboard</h1></nav>
           <span class="grow"></span>
-          <span id="updated" class="muted small" aria-live="polite"></span>
-          <label class="switch compact" title="Refresh this page every 30 seconds">
-            <input id="autoRefresh" type="checkbox" role="switch" /><span class="track" aria-hidden="true"></span><span class="switch-label">Auto</span>
-          </label>
-          <button id="refreshBtn" class="icon-btn" type="button" aria-label="Refresh" title="Refresh (R)"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button>
-          <button id="themeBtn" class="icon-btn" type="button" aria-label="Switch theme" title="Switch theme"><svg class="ic" aria-hidden="true"><use href="#i-theme"/></svg></button>
-          <button id="logoutBtn" class="icon-btn" type="button" aria-label="Sign out" title="Sign out"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg></button>
+          <button id="searchBtn" class="icon-btn" type="button" aria-label="Search (Ctrl K)" title="Search (Ctrl K)"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg></button>
+          <span id="rangeHost" class="range-host" hidden></span>
+          <div class="auto-box">
+            <label class="switch compact" title="Refresh this page by itself">
+              <input id="autoRefresh" type="checkbox" role="switch" /><span class="track" aria-hidden="true"></span><span class="switch-label">Auto-refresh</span>
+            </label>
+            <select id="autoMs" class="input compact" aria-label="Auto-refresh every">
+              <option value="15000">15 s</option><option value="30000">30 s</option><option value="60000">1 min</option><option value="300000">5 min</option>
+            </select>
+          </div>
+          <span id="updated" class="muted small updated" aria-live="polite"></span>
+          <button id="refreshBtn" class="icon-btn" type="button" aria-label="Refresh now" title="Refresh now (R)"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+          <select id="themeSel" class="input compact theme-sel" aria-label="Theme">
+            <option value="light">Light</option><option value="dark">Dark</option><option value="system">Match my device</option>
+          </select>
+          <div class="profile">
+            <button id="profileBtn" class="profile-btn" type="button" aria-label="Profile" aria-haspopup="dialog"><span class="avatar">A</span></button>
+            <div id="profilePop" class="profile-pop" role="dialog" aria-label="Your profile" hidden></div>
+          </div>
         </header>
         <main id="main" class="page" tabindex="-1">
+          <div id="dbBanner" class="db-banner" hidden></div>
           <p id="pageDesc" class="page-desc muted"></p>
           <div id="pageTabs"></div>
           <div id="pageBody" class="page-body"></div>
@@ -116,19 +152,29 @@
     <div id="toasts" class="toasts" aria-live="polite"></div>
 
     <script src="/admin/core.js"></script>
+    <script src="/admin/kit/controls.js"></script>
+    <script src="/admin/kit/settings.js"></script>
     <script src="/admin/festivals.js"></script>
-    <script src="/admin/pages/overview.js"></script>
+    <script src="/admin/pages/dashboard.js"></script>
     <script src="/admin/pages/live.js"></script>
-    <script src="/admin/pages/listeners.js"></script>
-    <script src="/admin/pages/analytics.js"></script>
+    <script src="/admin/pages/users.js"></script>
     <script src="/admin/pages/feedback.js"></script>
-    <script src="/admin/pages/experiments.js"></script>
-    <script src="/admin/pages/catalog.js"></script>
-    <script src="/admin/pages/publish.js"></script>
-    <script src="/admin/pages/notify.js"></script>
-    <script src="/admin/pages/seo.js"></script>
-    <script src="/admin/pages/database.js"></script>
+    <script src="/admin/pages/song-stats.js"></script>
+    <script src="/admin/pages/library.js"></script>
+    <script src="/admin/pages/notifications.js"></script>
+    <script src="/admin/pages/ab-tests.js"></script>
+    <script src="/admin/pages/settings-home.js"></script>
+    <script src="/admin/pages/settings-features.js"></script>
+    <script src="/admin/pages/settings-updates.js"></script>
+    <script src="/admin/pages/settings-maintenance.js"></script>
+    <script src="/admin/pages/settings-notification-rules.js"></script>
+    <script src="/admin/pages/settings-search.js"></script>
+    <script src="/admin/pages/settings-help.js"></script>
+    <script src="/admin/pages/settings-privacy.js"></script>
     <script src="/admin/pages/health.js"></script>
+    <script src="/admin/pages/database.js"></script>
+    <script src="/admin/pages/google-search.js"></script>
+    <script src="/admin/pages/admins.js"></script>
     <script src="/admin/app.js"></script>
   </body>
 </html>

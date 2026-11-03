@@ -7,6 +7,7 @@
  *        a registered listener signing in on a new browser was greeted, and
  *        set up, as a new one).
  *   → 401 { error: 'invalid_token' }      the Google token did not verify
+ *   → 403 { error: 'blocked' }            the owner blocked this person in the console
  *   → 503 { error: 'not_configured' }     no GOOGLE_CLIENT_ID or no signing secret
  *
  * Signing in is optional; listening never needs it. The Google ID token is
@@ -46,6 +47,11 @@ export const onRequestPost = async (ctx: { request: Request; env: Env }): Promis
   const body = read.value;
   const profile = await verifyGoogleIdToken(env, body.credential);
   if (!profile) return json({ error: 'invalid_token' }, 401);
+  if (dbConfigured(env)) {
+    // Console rebuild — a person the owner blocked cannot sign in again.
+    const blocked = await db.one<{ blocked_at: string | null }>(env, 'accounts', q().eq('id', profile.sub).select('blocked_at'));
+    if (blocked.ok && blocked.value?.blocked_at) return json({ error: 'blocked' }, 403);
+  }
   const session = await issueSession(env, profile.sub);
   if (!session) return json({ error: 'not_configured' }, 503);
 
@@ -90,7 +96,11 @@ export const onRequestPost = async (ctx: { request: Request; env: Env }): Promis
     const written = await db.upsert(env, 'accounts', row, 'id');
     stored = written.ok;
     if (!written.ok) console.warn(`[auth] account not stored (${written.error}${written.status ? ` ${written.status}` : ''}${written.code ? ` ${written.code}` : ''})`);
-    else if (thisDevice) await linkDevice(env, thisDevice, profile.sub);
+    else if (thisDevice) {
+      await linkDevice(env, thisDevice, profile.sub);
+      // Signing in again on a device the owner signed out makes it count again.
+      await db.update(env, 'listeners', q().eq('id', thisDevice).not('signed_out_at', 'is', 'null'), { signed_out_at: null });
+    }
     username = await handleOf(env, listenerId);
   }
   return json({ session, stored, returning, hasData, user: publicUser(profile, username), ...(issued ? { signed_device_id_next: issued } : {}) });

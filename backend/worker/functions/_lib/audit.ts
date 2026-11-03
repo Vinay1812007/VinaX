@@ -21,6 +21,8 @@ export interface AuditContext {
   env: DbEnv;
   request?: Request;
   waitUntil?: (p: Promise<unknown>) => void;
+  /** Who did it (console rebuild: the admin's email; "owner" for the recovery password and jobs). */
+  actor?: string;
 }
 
 export const REDACTED = '[redacted]';
@@ -108,7 +110,7 @@ export interface AuditRow {
 /** The exact row written (exported for tests). */
 export async function buildAuditRow(ctx: AuditContext, entry: AuditEntry): Promise<AuditRow> {
   return {
-    actor: 'owner',
+    actor: (ctx.actor ?? 'owner').slice(0, 254),
     action: cleanAction(entry.action),
     target: entry.target ? redactString(entry.target).slice(0, 160) : null,
     summary: redactString(entry.summary.replace(/\s+/g, ' ').trim()).slice(0, 400),

@@ -12,7 +12,9 @@ const json = (o: unknown, status = 200): Response =>
   new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
 export const ENV_ITEMS: Array<{ name: string; group: string; required: boolean; note: string }> = [
-  { name: 'ADMIN_LOGIN_PASSWORD', group: 'Admin', required: true, note: 'console login' },
+  { name: 'ADMIN_OWNER_EMAILS', group: 'Admin', required: false, note: 'Google emails that are always Owners of this console (the first admins)' },
+  { name: 'ADMIN_LOGIN_PASSWORD', group: 'Admin', required: false, note: 'owner recovery password for the console (Google sign-in is the normal way in)' },
+  { name: 'PAGES_DEPLOY_HOOK', group: 'Admin', required: false, note: 'lets Google Search → Bots publish robots.txt right away (a website rebuild)' },
   { name: 'DEVICE_ID_SECRET', group: 'Data', required: true, note: 'signed device ids for telemetry' },
   { name: 'TELEMETRY_PEPPER', group: 'Data', required: false, note: 'device id hashing (falls back to DEVICE_ID_SECRET)' },
   { name: 'GOOGLE_CLIENT_ID', group: 'Data', required: false, note: 'optional Google sign-in (plain var; sign-in is off without it)' },
@@ -43,6 +45,40 @@ export const ENV_ITEMS: Array<{ name: string; group: string; required: boolean; 
   { name: 'SEARCH_DAILY_LIMIT', group: 'VinaX AI', required: false, note: 'plain var: search API calls per day for everyone (default 100, 0 = off)' },
 ];
 
+/** What each key is for, in words anyone understands (the console shows these; the technical name is small text). */
+export const PLAIN: Record<string, string> = {
+  ADMIN_OWNER_EMAILS: 'First owners of this console',
+  ADMIN_LOGIN_PASSWORD: 'Owner recovery password',
+  PAGES_DEPLOY_HOOK: 'Website rebuild link',
+  DEVICE_ID_SECRET: 'Device signing key',
+  TELEMETRY_PEPPER: 'Privacy salt for device ids',
+  GOOGLE_CLIENT_ID: 'Google sign-in',
+  AUTH_SECRET: 'Sign-in session key',
+  TURNSTILE_SECRET_KEY: 'Human check (old app versions)',
+  CATALOG_UPSTREAMS: 'Extra music sources',
+  CATALOG_DIRECT_URL: 'Backup music source address',
+  SUPABASE_URL: 'Database address',
+  SUPABASE_SERVICE_ROLE_KEY: 'Database key',
+  CRON_SECRET: 'Run-a-job-by-hand key',
+  VAPID_PUBLIC_KEY: 'Browser notifications (public part)',
+  VAPID_PRIVATE_KEY: 'Browser notifications (private part)',
+  VAPID_SUBJECT: 'Browser notifications contact',
+  FCM_SERVICE_ACCOUNT: 'Android notifications',
+  GITHUB_TOKEN: 'App releases access',
+  GITHUB_REPO: 'App releases location',
+  ASSETS_HOST: 'Website files location',
+  HANDOFF: 'Device hand-off storage',
+  NOTIFY_MIN_GAP_HOURS: 'Old notification limit',
+  GROQ_API_KEY: 'AI provider: Groq',
+  GEMINI_API_KEY: 'AI provider: Google Gemini',
+  OPENROUTER_API_KEY: 'AI provider: OpenRouter',
+  NVIDIA_API_KEY: 'AI provider: NVIDIA',
+  AI: 'AI provider: Cloudflare',
+  SEARCH_API_KEY: 'AI web search',
+  SEARCH_API_PROVIDER: 'AI web search provider',
+  SEARCH_DAILY_LIMIT: 'AI web searches per day',
+};
+
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
   if (!(await isAdminAsync(request, env))) return unauthorized();
@@ -50,6 +86,6 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     const v = env[name];
     return v !== undefined && v !== null && !(typeof v === 'string' && v.trim() === '');
   };
-  const items = ENV_ITEMS.map((i) => ({ ...i, set: isSet(i.name) }));
+  const items = ENV_ITEMS.map((i) => ({ ...i, label: PLAIN[i.name] ?? i.name, set: isSet(i.name) }));
   return json({ items, missingRequired: items.filter((i) => i.required && !i.set).map((i) => i.name), checkedAt: new Date().toISOString() });
 };

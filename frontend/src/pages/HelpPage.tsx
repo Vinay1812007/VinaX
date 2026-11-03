@@ -6,6 +6,7 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { Chip } from '@/components/Chip';
 import { toast } from '@/store/toastStore';
 import { sendFeedback } from '@/services/feedback';
+import { isReadOnly, READ_ONLY_MESSAGE } from '@/services/siteMode';
 import { useUiStore } from '@/store/uiStore';
 import { useTutorialStore } from '@/store/tutorialStore';
 import { useClientConfig } from '@/features/home/useAppConfig';
@@ -57,7 +58,15 @@ export default function HelpPage() {
   const q = query.trim();
 
   const guides = useMemo(() => GUIDES.filter((g) => match(q, g.group, g.title, ...g.steps)), [q]);
-  const faq = useMemo(() => [...(clientCfg?.faq ?? []), ...FAQ].filter((f) => match(q, f.q, f.a)), [q, clientCfg]);
+  // The owner's questions first, grouped by their category (App Settings → Help Center), then the built-in ones.
+  const faq = useMemo(() => {
+    const own = clientCfg?.faq ?? [];
+    const cats: string[] = [];
+    for (const f of own) if (!cats.includes(f.category ?? '')) cats.push(f.category ?? '');
+    const grouped = cats.flatMap((c) => own.filter((f) => (f.category ?? '') === c));
+    const all: Array<{ q: string; a: string; category?: string }> = [...grouped, ...FAQ];
+    return all.filter((f) => match(q, f.q, f.a, f.category ?? ''));
+  }, [q, clientCfg]);
   const shortcuts = useMemo(() => SHORTCUTS.filter(([k, v]) => match(q, k, v)), [q]);
   const groups = useMemo(() => Array.from(new Set(guides.map((g) => g.group))), [guides]);
   const latest = CHANGELOG_V2[LATEST_VERSION];
@@ -79,7 +88,7 @@ export default function HelpPage() {
       setMessage('');
       toast('Thanks. Your feedback was sent.');
     } else {
-      toast('Could not send — check your connection and try again.');
+      toast(isReadOnly() ? READ_ONLY_MESSAGE : 'Could not send — check your connection and try again.');
     }
   };
 
@@ -195,7 +204,10 @@ export default function HelpPage() {
             {faq.map((f) => (
               <details key={f.q} open={!!q}>
                 <summary className="vx-row">
-                  <span className="vx-row-main vx-row-label">{f.q}</span>
+                  <span className="vx-row-main">
+                    {f.category ? <span className="vx-row-hint block">{f.category}</span> : null}
+                    <span className="vx-row-label">{f.q}</span>
+                  </span>
                   <ChevronDownIcon className="vx-row-toggle" />
                 </summary>
                 <p className="vx-disclose-body">{f.a}</p>

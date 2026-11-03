@@ -33,7 +33,7 @@
  * sent from here at all: the `exp` map rides the consent-gated
  * recommendation events (services/analytics/recTelemetry.ts).
  */
-import { pickVariant } from './useExperiment';
+import { pickVariant, inAudience, type ExperimentAudience } from './useExperiment';
 import { installId } from '@/services/identity/installId';
 import { isNativePlatform } from '@/services/native';
 import { activeWeightOverride } from '@/services/recommendation/weights';
@@ -52,6 +52,8 @@ interface Variant {
 export interface RecExperimentConfig {
   key: string;
   variants: Variant[];
+  /** Console rebuild — who the test includes (platform, minimum version, percent). */
+  audience?: ExperimentAudience | null;
 }
 
 const ENDPOINT = isNativePlatform() ? 'https://www.vinaxmusic.online/api/experiments' : '/api/experiments';
@@ -78,7 +80,7 @@ export function setRecExperimentConfig(experiments: RecExperimentConfig[], devic
   const next = new Map<string, string>();
   for (const exp of experiments) {
     if (!REC_EXPERIMENT_KEYS.includes(exp.key) || !Array.isArray(exp.variants)) continue;
-    const variant = pickVariant(deviceId, exp.key, exp.variants);
+    const variant = inAudience(deviceId, exp.key, exp.audience) ? pickVariant(deviceId, exp.key, exp.variants) : null;
     const name = variant ? cleanName(variant) : '';
     if (name) next.set(exp.key, name);
   }

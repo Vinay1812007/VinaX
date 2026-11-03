@@ -12,8 +12,11 @@
  *  - every page and tab survives EMPTY ANSWERS (every endpoint answering an
  *    empty object) and a SERVER FAILURE (every endpoint failing) without
  *    throwing and without printing undefined / NaN / [object Object].
- *  - 14.0 — the database is back: twelve pages, the console lands on
- *    Overview, and every page talks to the server only through /api/admin.
+ *  - 14.0 — the database is back: every page talks to the server only
+ *    through /api/admin.
+ *  - Console rebuild — twenty pages in six groups (eight App Settings
+ *    pages), the shared controls in kit/, the console lands on the
+ *    Dashboard, old addresses redirect, and the spec's plain words.
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -24,7 +27,8 @@ const read = (rel: string): string => readFileSync(join(ADMIN, rel), 'utf8');
 const indexHtml = read('index.html');
 const pageFiles = readdirSync(join(ADMIN, 'pages')).filter((f) => f.endsWith('.js')).sort();
 const HOSTILE = '<img src=x onerror="window.__pwned=1">';
-const GROUPS = ['System', 'Audience', 'Intelligence', 'Content'];
+const GROUPS = ['Home', 'People', 'Music', 'Engage', 'App Settings', 'System'];
+const KIT = ['kit/controls.js', 'kit/settings.js'];
 
 interface Tab { id: string; label: string; render: (host: HTMLElement, ctx: unknown) => unknown }
 interface PageDef { id: string; title: string; group: string; icon?: string; render?: Tab['render']; tabs?: Tab[] }
@@ -50,7 +54,10 @@ beforeAll(() => {
     new Function('window', 'document', `${src}\n//# sourceURL=${name}`)(window, document);
   };
   run(read('core.js'), 'core.js');
+  for (const f of KIT) run(read(f), f);
+  run(read('festivals.js'), 'festivals.js');
   for (const f of pageFiles) run(read(`pages/${f}`), f);
+  (w.VX as { me: unknown }).me = { email: 'owner@example.com', role: 'owner', via: 'google' };
   VX = w.VX as VXType;
 });
 
@@ -63,14 +70,17 @@ describe('index.html', () => {
     const core = scripts.indexOf('/admin/core.js');
     const app = scripts.indexOf('/admin/app.js');
     expect(core).toBeGreaterThanOrEqual(0);
+    // The shared controls load right after core, before any page.
+    expect(scripts.slice(core + 1, core + 3)).toEqual(KIT.map((k) => `/admin/${k}`));
     expect(app).toBe(scripts.length - 1);
     for (const s of scripts.filter((x) => x.startsWith('/admin/pages/'))) {
       expect(scripts.indexOf(s)).toBeGreaterThan(core);
     }
   });
 
-  it('keeps the strict CSP: no inline script, scripts only from self', () => {
-    expect(indexHtml).toContain("script-src 'self'");
+  it('keeps the strict CSP: no inline script, scripts only from self and Google sign-in', () => {
+    expect(indexHtml).toContain("script-src 'self' https://accounts.google.com/gsi/client;");
+    expect(indexHtml).toMatch(/connect-src 'self' https:\/\/accounts\.google\.com\/gsi\/;/);
     expect(indexHtml).not.toMatch(/<script>(?!<\/script>)/);
     expect(indexHtml).not.toMatch(/\son[a-z]+="/);
   });
@@ -82,7 +92,11 @@ describe('page registry', () => {
     expect(pages.length).toBe(pageFiles.length);
     const ids = pages.map((p) => p.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.sort()).toEqual(['analytics', 'catalog', 'database', 'experiments', 'feedback', 'health', 'listeners', 'live', 'notify', 'overview', 'publish', 'seo']);
+    expect(ids.sort()).toEqual([
+      'ab-tests', 'admins',
+      'app-settings/features', 'app-settings/help-center', 'app-settings/home-screen', 'app-settings/maintenance',
+      'app-settings/notification-rules', 'app-settings/privacy', 'app-settings/search', 'app-settings/updates',
+      'dashboard', 'database', 'feedback', 'google-search', 'health', 'library', 'live', 'notifications', 'song-stats', 'users']);
     for (const p of pages) {
       expect(p.title, p.id).toBeTruthy();
       expect(GROUPS, p.id).toContain(p.group);
@@ -101,25 +115,49 @@ describe('page registry', () => {
     }
   });
 
-  it('the shell lands on Overview; Health keeps its errors and secrets tabs', () => {
-    expect(read('app.js')).toContain("segs[0] || 'overview'");
-    expect(read('app.js')).toContain("setHash('overview'");
-    const health = VX.pages().find((p) => p.id === 'health');
-    expect(health?.tabs?.map((t) => t.id)).toEqual(['errors', 'edge', 'sources', 'ai', 'personal', 'releases', 'env']);
+  it('the shell lands on the Dashboard and sends old addresses to the new pages', () => {
+    const app = read('app.js');
+    expect(app).toContain("'': 'dashboard', overview: 'dashboard', listeners: 'users'");
+    for (const pair of ["publish: 'app-settings/home-screen'", "notify: 'notifications'", "analytics: 'song-stats'", "catalog: 'library'", "experiments: 'ab-tests'", "seo: 'google-search'"]) expect(app).toContain(pair);
+    expect(app).toContain("setHash('dashboard'");
+    expect(app).toContain('ui.notFound(');
+    // Redirect targets and the tabs other pages link to exist.
+    const ids = new Set(VX.pages().map((p) => p.id));
+    const block = /var REDIRECTS = \{([\s\S]*?)\};/.exec(app)?.[1] ?? '';
+    const targets = [...block.matchAll(/:\s*'([^']+)'/g)].map((m) => m[1]);
+    expect(targets.length).toBeGreaterThan(8);
+    for (const t of targets) expect(ids.has(t), t).toBe(true);
+    const tabs = (id: string) => VX.pages().find((p) => p.id === id)?.tabs?.map((t) => t.id) ?? [];
+    expect(tabs('health')).toEqual(['errors', 'checks', 'sources', 'ai', 'recommendations', 'versions', 'keys']);
+    expect(tabs('database')).toEqual(['tables', 'jobs', 'changes', 'maintenance']);
+    expect(tabs('notifications')).toEqual(['compose', 'history', 'audiences', 'setup']);
+    expect(tabs('live')).toEqual(['now', 'activity', 'rooms']);
+  });
+
+  it('App Settings pages are listed under one group, in the spec order', () => {
+    const titles = VX.pages().filter((p) => p.group === 'App Settings').sort((a, b) => ((a as { order?: number }).order ?? 0) - ((b as { order?: number }).order ?? 0)).map((p) => p.title);
+    expect(titles).toEqual(['Home Screen', 'Features & AI', 'App Updates', 'Maintenance', 'Notification Rules', 'Search & Music Sources', 'Help Center', 'Data & Privacy']);
+  });
+
+  it('uses the plain words from the spec: no Publish, App default, Device only or usage sharing', () => {
+    for (const f of ['index.html', 'app.js', ...KIT, ...pageFiles.map((x) => `pages/${x}`)]) {
+      const src = read(f).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      expect(src, f).not.toMatch(/['"`>][^'"`<]*\b(Publish|App default|Device only|devices sharing usage|usage sharing)\b/);
+    }
   });
 
   it('the console talks to the database only through the Worker (/api/admin), never to Supabase', () => {
-    for (const f of ['index.html', 'core.js', 'app.js', ...pageFiles.map((x) => `pages/${x}`)]) {
+    for (const f of ['index.html', 'core.js', 'app.js', ...KIT, ...pageFiles.map((x) => `pages/${x}`)]) {
       expect(read(f), f).not.toMatch(/supabase\.co|supabase-js|service_role|SUPABASE_SERVICE_ROLE_KEY=/);
     }
     const apiPaths = new Set<string>();
-    for (const f of pageFiles) for (const m of read(`pages/${f}`).matchAll(/VX\.api\.(?:get|post)\('([^']+)'/g)) apiPaths.add(m[1]);
-    for (const p of apiPaths) expect(p, p).toMatch(/^\/api\/admin\//);
+    for (const f of [...KIT, ...pageFiles.map((x) => `pages/${x}`)]) for (const m of read(f).matchAll(/VX\.api\.(?:get|post)\('([^']+)'/g)) apiPaths.add(m[1]);
+    for (const p of apiPaths) expect(p, p).toMatch(/^\/api\/(admin\/|version$)/);
   });
 });
 
 describe('no markup from strings', () => {
-  const files = ['core.js', 'app.js', ...pageFiles.map((f) => `pages/${f}`)];
+  const files = ['core.js', 'app.js', ...KIT, ...pageFiles.map((f) => `pages/${f}`)];
   it.each(files)('%s never assigns HTML strings', (f) => {
     const src = read(f).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
     expect(src).not.toMatch(/\.innerHTML\s*[+]?=/);
@@ -141,6 +179,10 @@ describe('no markup from strings', () => {
 function makeCtx(params: Record<string, string> = {}) {
   return {
     tab: null,
+    page: 'test',
+    range: { key: '7', days: 7, from: null, to: null, label: 'Last 7 days' },
+    onLeave: () => {},
+    stamp: () => {},
     params,
     setParam: (k: string, v: string) => { params[k] = v; },
     refresh: () => {},
@@ -189,7 +231,7 @@ describe('empty and failing answers', () => {
     expect(failures).toEqual([]);
     const tabs = VX.pages().reduce((n, p) => n + (p.tabs ? p.tabs.length : 1), 0);
     expect(results.length).toBe(tabs);
-    expect(tabs).toBe(34);
+    expect(tabs).toBeGreaterThanOrEqual(40);
   });
 
   it('every page and tab shows an error state, not a crash, when the server fails', async () => {

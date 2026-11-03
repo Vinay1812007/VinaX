@@ -7,6 +7,26 @@ import { isNativePlatform } from '@/services/native';
  *  notifications, and routes taps to the linked page. Renders nothing. */
 export function AnnouncementBridge(): null {
   const navigate = useNavigate();
+  // Console rebuild — signing in or out re-registers this device's notifications
+  // with the new session, so the owner's console reaches signed-in people at once.
+  useEffect(() => {
+    let off: (() => void) | null = null;
+    let gone = false;
+    void import('@/services/auth/google')
+      .then(({ onAccountChange }) => {
+        const stop = onAccountChange(() => {
+          if (isNativePlatform()) void import('@/services/push/nativePush').then((m) => m.relinkNativePush()).catch(() => undefined);
+          else void import('@/services/push').then((m) => m.relinkPush()).catch(() => undefined);
+        });
+        if (gone) stop();
+        else off = stop;
+      })
+      .catch(() => undefined);
+    return () => {
+      gone = true;
+      if (off) off();
+    };
+  }, []);
   useEffect(() => {
     if (!isNativePlatform()) {
       // 11.7.1 — the web half: a browser whose listener already allowed

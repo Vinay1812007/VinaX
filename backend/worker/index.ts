@@ -12,6 +12,8 @@
  * followed, so /index.html normalization on Pages still yields the shell).
  */
 
+import { readOnlyRefusal } from './functions/_lib/readOnly';
+import type { DbEnv as DbEnvLike } from './functions/_lib/db';
 import { onRequest as hostMiddleware } from './functions/_middleware';
 // Every functions/api/**.ts handler needs BOTH an import here and an EXACT
 // entry below — worker/__tests__/routerCoverage.test.ts enforces it (an
@@ -42,6 +44,9 @@ import * as m_api_admin_push from './functions/api/admin/push';
 import * as m_api_admin_notifications from './functions/api/admin/notifications';
 import * as m_api_admin_audit from './functions/api/admin/audit';
 import * as m_api_admin_database from './functions/api/admin/database';
+import * as m_api_admin_session from './functions/api/admin/session';
+import * as m_api_admin_admins from './functions/api/admin/admins';
+import * as m_api_admin_upload from './functions/api/admin/upload';
 import * as m_api_cron_run from './functions/api/cron/run';
 import { runScheduled } from './functions/_lib/jobs';
 // 7.2.0 — recommendation quality and tuning.
@@ -96,6 +101,7 @@ import * as m_api_follow from './functions/api/follow';
 import * as m_api_shared_playlist from './functions/api/shared-playlist';
 import * as m_api_shared_playlist_id from './functions/api/shared-playlist/[id]';
 import * as m_api_push_fcm_register from './functions/api/push/fcm-register';
+import * as m_api_push_opened from './functions/api/push/opened';
 import * as m_api_push_subscribe from './functions/api/push/subscribe';
 import * as m_api_push_unsubscribe from './functions/api/push/unsubscribe';
 import * as m_api_push_vapid from './functions/api/push/vapid';
@@ -105,6 +111,8 @@ import * as m_api_trending_searches from './functions/api/trending-searches';
 import * as m_api_trends from './functions/api/trends';
 import * as m_api_username from './functions/api/username';
 import * as m_api_version from './functions/api/version';
+import * as m_api_robots from './functions/api/robots';
+import * as m_api_admin_errors from './functions/api/admin/errors';
 import * as m_apk from './functions/apk';
 import * as m_artist_id from './functions/artist/[id]';
 import * as m_img from './functions/img';
@@ -173,6 +181,9 @@ const EXACT: Record<string, Mod> = {
   '/api/admin/notifications': m_api_admin_notifications,
   '/api/admin/audit': m_api_admin_audit,
   '/api/admin/database': m_api_admin_database,
+  '/api/admin/session': m_api_admin_session,
+  '/api/admin/admins': m_api_admin_admins,
+  '/api/admin/upload': m_api_admin_upload,
   '/api/cron/run': m_api_cron_run,
   '/api/announcements': m_api_announcements,
   '/api/apk': m_api_apk,
@@ -213,6 +224,7 @@ const EXACT: Record<string, Mod> = {
   '/api/follow': m_api_follow,
   '/api/shared-playlist': m_api_shared_playlist,
   '/api/push/fcm-register': m_api_push_fcm_register,
+  '/api/push/opened': m_api_push_opened,
   '/api/push/subscribe': m_api_push_subscribe,
   '/api/push/unsubscribe': m_api_push_unsubscribe,
   '/api/push/vapid': m_api_push_vapid,
@@ -223,6 +235,8 @@ const EXACT: Record<string, Mod> = {
   '/api/trends': m_api_trends,
   '/api/username': m_api_username,
   '/api/version': m_api_version,
+  '/api/robots': m_api_robots,
+  '/api/admin/errors': m_api_admin_errors,
   '/apk': m_apk,
   '/img': m_img,
   '/sitemap-albums.xml': m_sitemap_albums_xml,
@@ -344,6 +358,10 @@ const route = async (request: Request, env: Env, ctx: ExecCtx): Promise<Response
 
   const handler = pickHandler(mod, request.method);
   if (!handler) return new Response('Method Not Allowed', { status: 405 });
+
+  // v8 — read-only mode refuses writes that save people's changes (_lib/readOnly.ts).
+  const readOnly = await readOnlyRefusal(path, request.method, env as DbEnvLike);
+  if (readOnly) return readOnly;
 
   // 11.0 — the edge-rendered catalogue pages sit behind a guard: a browser
   // impostor, or a network reading pages faster than people do, gets the

@@ -19,6 +19,8 @@ export interface FestivalNow {
   /** The festival whose skin applies (also the day before its window). */
   theme: Festival | null;
   preview: boolean;
+  /** Console rebuild — the owner's own accent colour for a forced festival ("#rrggbb"), when set. */
+  color?: string;
 }
 
 /** One answer for the splash, the backdrop and the Home strip. */
@@ -30,6 +32,7 @@ export function useFestivalNow(): FestivalNow {
     const previewed = previewId ? FESTIVALS.find((f) => f.id === previewId) ?? null : null;
     if (previewed) return { festival: previewed, theme: previewed, preview: true };
     const override = skinsOn ? serverOverride : { mode: 'off' as const };
-    return { festival: resolveFestival(override), theme: resolveFestivalTheme(override), preview: false };
+    const color = skinsOn && serverOverride?.mode === 'force' && typeof serverOverride.color === 'string' && /^#[0-9a-f]{6}$/i.test(serverOverride.color) ? serverOverride.color : undefined;
+    return { festival: resolveFestival(override), theme: resolveFestivalTheme(override), preview: false, ...(color ? { color } : {}) };
   }, [previewId, skinsOn, serverOverride]);
 }

@@ -1,102 +1,153 @@
-/* VinaX console — Feedback page.
- * GET /api/admin/feedback?status=…: the inbox with counts; POST actions
- * status (read / resolved with a note), delete, delete_resolved. */
+/* Feedback — messages people send from Settings → Feedback in the app.
+ * Tabs with counts (New · Read · Resolved · All), filters (type, platform,
+ * date), a card per message with a status dropdown and a "⋯" menu (reply by
+ * notification, copy, delete). Route: GET/POST /api/admin/feedback. */
 (function () {
   'use strict';
   var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt, arr = VX.arr, obj = VX.obj, num = VX.num;
-  var LIMIT = 50;
 
-  VX.page({
-    id: 'feedback', title: 'Feedback', group: 'Audience', icon: 'message',
-    desc: 'Bug reports, ideas and other messages listeners sent from the app.',
-    render: render
-  });
+  var STATUS = [{ value: 'new', label: 'New' }, { value: 'read', label: 'Read' }, { value: 'resolved', label: 'Resolved' }];
+  var TABS = STATUS.concat([{ value: 'all', label: 'All' }]);
+  var KINDS = [{ value: '', label: 'All types' }, { value: 'bug', label: 'Bug' }, { value: 'idea', label: 'Idea' }, { value: 'content', label: 'Song problem' }, { value: 'other', label: 'Other' }];
+  var KIND_TONE = { bug: 'bad', idea: 'info', content: 'warn', other: null };
+  var PLATFORMS = [{ value: '', label: 'All platforms' }, { value: 'android', label: 'Android' }, { value: 'web', label: 'Web' }, { value: 'ios', label: 'iOS' }];
+  var WHEN = [{ value: '', label: 'Any time' }, { value: '1', label: 'Today' }, { value: '7', label: 'Last 7 days' }, { value: '30', label: 'Last 30 days' }, { value: '90', label: 'Last 90 days' }];
+  var LIMIT = 25;
 
-  var KIND_TONE = { bug: 'bad', idea: 'info', content: 'warn' };
+  var EMPTY = {
+    new: ['No new feedback.', 'Messages users send from Settings → Feedback appear here.'],
+    read: ['Nothing read and waiting.', 'Messages you mark as Read appear here until you resolve them.'],
+    resolved: ['Nothing resolved yet.', 'Mark a message Resolved when it is dealt with.'],
+    all: ['No feedback yet.', 'Messages users send from Settings → Feedback appear here.']
+  };
+
+  function kindName(k) { var f = KINDS.filter(function (x) { return x.value === k; })[0]; return f && f.value ? f.label : 'Other'; }
+
+  function reply(r, done) {
+    var title = 'Thanks for your feedback', text = '';
+    var count = h('span.muted.small', '0 / 300');
+    var ta = ui.textarea({ rows: 4, maxlength: 300, placeholder: 'e.g. Thanks! The fix is in the next update.' });
+    ta.addEventListener('input', function () { text = ta.value.trim(); count.textContent = ta.value.length + ' / 300'; });
+    var ti = ui.input({ maxlength: 120, value: title });
+    ti.addEventListener('input', function () { title = ti.value.trim(); });
+    var who = r.user ? (r.user.name || r.user.email) : 'this person';
+    VX.modal({
+      title: 'Reply by notification',
+      body: [
+        h('p.muted', 'A notification goes to ' + who + '’s phones and browsers. It opens the app when tapped.'),
+        ui.field('Title', ti),
+        ui.field('Message', ta, count)
+      ],
+      actions: [
+        { label: 'Cancel', kind: 'ghost' },
+        { label: 'Send reply', kind: 'primary', onClick: function (close) {
+          if (!text) { ta.classList.add('invalid'); ta.focus(); return; }
+          return VX.api.post('/api/admin/feedback', { action: 'reply', id: r.id, title: title || 'Thanks for your feedback', message: text }).then(function (res) {
+            if (!res.ok) {
+              var why = res.data && res.data.message ? res.data.message : res.error === 'push_not_configured' ? 'Notifications are not set up yet — see Send Notification → Setup check.' : res.message;
+              VX.toast('Not sent — ' + why, 'bad'); return;
+            }
+            close();
+            var d = res.data || {};
+            VX.toast(num(d.sent) ? 'Reply sent ✓' : 'Reply could not reach their devices', num(d.sent) ? 'ok' : 'bad');
+            done();
+          });
+        } }
+      ]
+    });
+  }
+
+  function card(r, ctx, reload) {
+    var canEdit = VX.can('edit');
+    var status = ui.dropdown('Status', STATUS, r.status || 'new', function (v) {
+      VX.api.post('/api/admin/feedback', { action: 'status', id: r.id, status: v }).then(function (res) {
+        if (!res.ok) { VX.toast('Something went wrong — ' + res.message, 'bad'); return; }
+        VX.toast(v === 'resolved' ? 'Marked resolved ✓' : v === 'read' ? 'Marked read ✓' : 'Marked new ✓', 'ok');
+        reload();
+      });
+    }, { inline: true, disabled: !canEdit });
+    var person = r.user
+      ? ui.media(r.user.picture, r.user.name || r.user.email || 'User', r.user.name ? r.user.email : null, true)
+      : ui.media(null, r.name || 'Not signed in', r.name ? 'Not signed in' : null, true);
+    var device = [r.platform ? VX.platformName(r.platform) : null, r.appVersion ? 'version ' + r.appVersion : null, r.city || (r.country ? fmt.country(r.country) : null)].filter(Boolean).join(' · ');
+    var menu = ui.menu([
+      { label: 'Reply by notification', icon: 'send', disabled: !canEdit || !r.canReply,
+        title: !r.user ? 'They were not signed in, so there is nobody to reply to.' : !r.canReply ? 'They have not turned on notifications.' : null,
+        onClick: function () { reply(r, reload); } },
+      { label: 'Copy message', icon: 'copy', onClick: function () { VX.copy(r.message || '', 'Message copied'); } },
+      r.user && r.user.email ? { label: 'Copy email', icon: 'copy', onClick: function () { VX.copy(r.user.email, 'Email copied'); } } : null,
+      r.user ? { label: 'View profile', icon: 'user', onClick: function () { ctx.go('users', null, { user: r.user.id }); } } : null,
+      '-',
+      { label: 'Delete', icon: 'trash', danger: true, disabled: !canEdit, onClick: function () {
+        VX.confirm({ title: 'Delete this message?', body: 'It is removed for good. This cannot be undone.', confirmLabel: 'Delete', danger: true }).then(function (ok) {
+          if (!ok) return;
+          VX.api.post('/api/admin/feedback', { action: 'delete', id: r.id }).then(function (res) {
+            if (!res.ok) { VX.toast('Something went wrong — ' + res.message, 'bad'); return; }
+            VX.toast('Deleted ✓', 'ok'); reload();
+          });
+        });
+      } }
+    ].filter(Boolean), { label: 'Actions for this message' });
+    return h('li.fb-card.status-' + (r.status || 'new'),
+      h('div.fb-head', person, h('span.grow'), ui.pill(kindName(r.kind), KIND_TONE[r.kind] || null), ui.ago(r.at), menu),
+      h('p.fb-message', r.message || ''),
+      r.screenshot && /^https:\/\//.test(r.screenshot) ? h('a.fb-shot', { href: r.screenshot, target: '_blank', rel: 'noopener' }, h('img', { src: r.screenshot, alt: 'Screenshot they attached', loading: 'lazy', referrerpolicy: 'no-referrer' })) : null,
+      r.note ? h('p.fb-note.muted.small', r.note) : null,
+      h('div.fb-foot', device ? h('span.muted.small', VX.icon('phone'), ' ', device) : h('span'), h('span.grow'), status));
+  }
 
   function render(host, ctx) {
-    var state = { status: ctx.params.status || 'new', offset: num(ctx.params.offset) || 0 };
-    var segHost = h('div');
-    var body = h('div');
-    host.appendChild(h('div.toolbar', segHost));
-    host.appendChild(body);
+    var p = ctx.params;
+    var state = { status: TABS.some(function (t) { return t.value === p.status; }) ? p.status : 'new', kind: p.kind || '', platform: p.platform || '', days: p.days || '', offset: 0 };
+    var tabsHost = h('div.fb-tabs');
+    var listHost = h('div');
+    var bar = h('div.toolbar.filters',
+      ui.dropdown('Type', KINDS, state.kind, function (v) { state.kind = v; state.offset = 0; ctx.setParam('kind', v); load(); }, { inline: true }),
+      ui.dropdown('Platform', PLATFORMS, state.platform, function (v) { state.platform = v; state.offset = 0; ctx.setParam('platform', v); load(); }, { inline: true }),
+      ui.dropdown('When', WHEN, state.days, function (v) { state.days = v; state.offset = 0; ctx.setParam('days', v); load(); }, { inline: true }));
 
-    function seg(counts) {
-      var c = obj(counts);
-      var lbl = function (s, t) { return c[s] != null ? t + ' (' + fmt.num(c[s]) + ')' : t; };
-      VX.mount(segHost, ui.segmented([
-        { value: 'new', label: lbl('new', 'New') }, { value: 'read', label: lbl('read', 'Read') }, { value: 'resolved', label: lbl('resolved', 'Resolved') }, { value: 'all', label: 'All' }
-      ], state.status, function (v) { state.status = v; state.offset = 0; ctx.setParam('status', v); ctx.setParam('offset', ''); load(); }, 'Status'));
+    function drawTabs(counts) {
+      VX.mount(tabsHost, ui.tabs(TABS.map(function (t) { return { id: t.value, label: t.label, badge: counts ? fmt.num(num(counts[t.value])) : null }; }), state.status, function (id) {
+        state.status = id; state.offset = 0; ctx.setParam('status', id === 'new' ? '' : id); load();
+      }).el);
     }
-    seg(null);
-
-    function act(bodyReq, done) {
-      return VX.api.post('/api/admin/feedback', bodyReq).then(function (res) {
-        VX.toast(res.ok ? (done || 'Done') : res.message, res.ok ? 'ok' : 'bad');
-        if (res.ok) return load();
-      });
-    }
-    function resolve(r) {
-      var note = ui.textarea({ rows: 3, maxlength: 500, placeholder: 'What was done (optional, kept with the message)' });
-      VX.modal({
-        title: 'Resolve this message',
-        body: [h('p.muted', fmt.trunc(r.message || '', 200)), ui.field('Note', note)],
-        actions: [
-          { label: 'Cancel', kind: 'ghost', onClick: function (close) { close(); } },
-          { label: 'Mark resolved', kind: 'primary', onClick: function (close) { close(); return act({ action: 'status', id: r.id, status: 'resolved', note: note.value.trim() || undefined }, 'Resolved'); } }
-        ]
-      });
-    }
-    function remove(r) {
-      return VX.confirm({ title: 'Delete this message?', body: 'It is removed from the database for good.', danger: true, confirmLabel: 'Delete' }).then(function (yes) { if (yes) return act({ action: 'delete', id: r.id }, 'Deleted'); });
-    }
-    function deleteResolved(n) {
-      return VX.confirm({ title: 'Delete every resolved message?', body: fmt.plural(n, 'resolved message') + ' will be removed for good.', danger: true, typed: 'DELETE', confirmLabel: 'Delete all resolved' }).then(function (yes) { if (yes) return act({ action: 'delete_resolved' }, 'Resolved messages deleted'); });
-    }
-
     function load() {
-      return ui.load(body, function () { return VX.api.get('/api/admin/feedback', { status: state.status, limit: LIMIT, offset: state.offset }, { fresh: true }); }, function (d) {
+      return ui.load(listHost, function () {
+        return VX.api.get('/api/admin/feedback', { status: state.status, kind: state.kind, platform: state.platform, days: state.days, limit: LIMIT, offset: state.offset });
+      }, function (d) {
         var gate = ui.gate(d, ctx);
         if (gate) return gate;
-        var counts = obj(d.counts);
-        seg(counts);
+        drawTabs(obj(d.counts));
         var rows = arr(d.rows);
-        var total = num(d.total);
+        if (!rows.length) {
+          var e = EMPTY[state.status] || EMPTY.all;
+          var filtered = state.kind || state.platform || state.days;
+          return ui.emptyState(filtered ? 'No messages match these filters.' : e[0], filtered ? 'Try “All types”, “All platforms” or “Any time”.' : e[1]);
+        }
         return [
-          ui.kpis([
-            { label: 'New', value: fmt.num(counts.new), tone: num(counts.new) ? 'warn' : null },
-            { label: 'Read', value: fmt.num(counts.read) },
-            { label: 'Resolved', value: fmt.num(counts.resolved) }
-          ]),
-          ui.card({
-            title: state.status === 'all' ? 'Every message' : state.status.charAt(0).toUpperCase() + state.status.slice(1) + ' messages', sub: fmt.plural(total, 'message'), pad: false,
-            actions: num(counts.resolved) ? [ui.button('Delete resolved', { kind: 'ghost', small: true, icon: 'trash', onClick: function () { return deleteResolved(counts.resolved); } })] : null,
-            body: [
-              ui.table({
-                columns: [
-                  { key: 'at', label: 'When', nowrap: true, render: function (r) { return ui.ago(r.at); } },
-                  { key: 'kind', label: 'Kind', render: function (r) { return ui.pill(r.kind || 'other', KIND_TONE[r.kind] || null); } },
-                  { key: 'message', label: 'Message', sort: false, render: function (r) {
-                    return h('div', h('div', { style: { 'white-space': 'pre-wrap', 'max-width': '52ch' } }, r.message || ''), r.note ? h('div.cell-sub', 'Note: ' + r.note) : null);
-                  } },
-                  { key: 'name', label: 'From', render: function (r) { return h('div', h('div.cell-main', r.name || 'Anonymous'), h('div.cell-sub', [r.platform, r.appVersion, [r.city, fmt.country(r.country)].filter(function (x) { return x && x !== '—'; }).join(', ')].filter(Boolean).join(' · '))); } },
-                  { key: 'status', label: 'Status', render: function (r) { return ui.pill(r.status || 'new', r.status === 'resolved' ? 'ok' : r.status === 'read' ? 'info' : 'warn'); } },
-                  { key: 'act', label: '', sort: false, render: function (r) {
-                    return h('div.actions',
-                      r.status === 'new' ? ui.button('Mark read', { kind: 'ghost', small: true, onClick: function () { return act({ action: 'status', id: r.id, status: 'read' }, 'Marked read'); } }) : null,
-                      r.status !== 'resolved' ? ui.button('Resolve', { kind: 'ghost', small: true, icon: 'check', onClick: function () { resolve(r); } }) : null,
-                      ui.button('', { kind: 'ghost', small: true, icon: 'trash', ariaLabel: 'Delete message', onClick: function () { return remove(r); } }));
-                  } }
-                ],
-                rows: rows, exportName: 'vinax-feedback-' + state.status, search: rows.length > 8, pageSize: LIMIT, sortKey: 'at', sortDir: 'desc',
-                empty: state.status === 'new' ? 'No new feedback' : 'Nothing here', emptyHint: 'Messages listeners send from Settings → Feedback land here.'
-              }),
-              total > LIMIT ? ui.pager(state.offset, LIMIT, total, function (o) { state.offset = o; ctx.setParam('offset', o || ''); load(); }) : null
-            ]
-          })
+          state.status === 'resolved' && VX.can('edit') ? h('div.toolbar', h('span.grow'), ui.button('Delete all resolved', { kind: 'ghost', small: true, icon: 'trash', onClick: function () {
+            return VX.confirm({ title: 'Delete every resolved message?', body: fmt.plural(num(obj(d.counts).resolved), 'message') + ' will be removed for good.', typed: true, danger: true, confirmLabel: 'Delete all' }).then(function (ok) {
+              if (!ok) return;
+              return VX.api.post('/api/admin/feedback', { action: 'delete_resolved' }).then(function (res) {
+                if (!res.ok) { VX.toast('Something went wrong — ' + res.message, 'bad'); return; }
+                VX.toast('Deleted ' + fmt.plural(num(res.data && res.data.deleted), 'message') + ' ✓', 'ok'); load();
+              });
+            });
+          } })) : null,
+          h('ul.fb-list', rows.map(function (r) { return card(r, ctx, load); })),
+          num(d.total) > LIMIT ? ui.pager(state.offset, LIMIT, num(d.total), function (o) { state.offset = o; load(); }) : null
         ];
-      }, { skeleton: 6 });
+      }, { skeleton: 4 });
     }
+    drawTabs(null);
+    VX.mount(host, ui.readOnlyNote(), tabsHost, bar, listHost);
     return load();
   }
+
+  VX.page({
+    id: 'feedback', title: 'Feedback', group: 'People', icon: 'message', order: 2,
+    desc: 'Messages people send from Settings → Feedback in the app.',
+    keywords: 'bug idea report inbox messages',
+    render: render
+  });
 })();

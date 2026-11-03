@@ -179,6 +179,13 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   const content = parseContent(body.content);
   if (!content.ok) return json({ error: content.error }, content.error === 'too_long' ? 413 : 400);
   if (content.files.length > settings.limits.filesPerMessage) return json({ error: 'bad_attachment' }, 400);
+  // The owner's daily message limit per person (vinax-ai.dailyLimit). The
+  // shared ai_take_daily counter refuses once the day's count is reached;
+  // an unreadable counter lets the message through rather than lock people out.
+  if (settings.dailyLimit) {
+    const took = await db.rpc<boolean>(env, 'ai_take_daily', { p_kind: `msg:${sub}`, p_limit: settings.dailyLimit });
+    if (took.ok && took.value !== true) return json({ error: 'daily_limit', limit: settings.dailyLimit }, 429);
+  }
   const mode = body.mode === 'model' ? 'model' : 'auto';
   const extendedThinking = body.extendedThinking === true;
   const parentRaw = body.parentMessageId;

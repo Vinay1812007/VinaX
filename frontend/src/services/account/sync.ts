@@ -17,6 +17,7 @@
  *
  * Signed out, nothing runs. A failure leaves the device as it is and tries again later.
  */
+import { isReadOnly } from '@/services/siteMode';
 import { applyBackup, createBackup, parseBackup, type BackupCategoryId } from '@/features/settings/backup';
 import { currentAccount, onAccountChange } from '@/services/auth/google';
 import { isNativePlatform } from '@/services/native';
@@ -169,6 +170,8 @@ async function round(fetchImpl: typeof fetch): Promise<void> {
     } else if (got.status !== 204) {
       return setStatus('error');
     }
+    // v8 — read-only mode: take the account's copy in, but save nothing.
+    if (isReadOnly()) return setStatus('synced');
     // Push: this device's data, merged, unless it is what was pushed last.
     for (let attempt = 0; attempt < 3; attempt++) {
       const snap = snapshot();

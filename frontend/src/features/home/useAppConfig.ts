@@ -12,7 +12,7 @@ export interface PromoBannerData {
   id?: string;
   title: string;
   subtitle?: string;
-  linkType?: 'song' | 'album' | 'playlist' | 'artist';
+  linkType?: 'song' | 'album' | 'playlist' | 'artist' | 'charts' | 'page';
   linkId?: string;
   img?: string;
 }
@@ -37,6 +37,8 @@ export function useBanners() {
 export interface FestivalOverrideConfig {
   mode?: 'auto' | 'off' | 'force';
   id?: string;
+  /** Console rebuild: the owner's own accent colour for a forced festival ("#rrggbb"). */
+  color?: string;
 }
 
 /**
@@ -96,16 +98,28 @@ export function useFeatureFlags(): FeatureFlags {
 /** v5.15.0 — everything the admin console publishes for the app, in one read. */
 export interface ClientConfig {
   homeLayout?: unknown;
-  greeting: { text: string } | null;
-  broadcast: { id: string; text: string; link?: string } | null;
+  greeting: Greeting | null;
+  broadcast: Broadcast | null;
   synonyms: Record<string, string>;
   disabledSources: string[];
+  /** v8 — the owner's source priority (first = tried first). */
+  sourceOrder: string[];
   languageOrder: string[];
+  /** v8 — languages the owner took off Home. */
+  hiddenLanguages: string[];
   aiStarters: string[];
   aiQuick: Array<{ icon: string; label: string; prompt: string; mode?: string }>;
-  faq: Array<{ q: string; a: string }>;
+  faq: Array<{ q: string; a: string; category?: string }>;
   minBuild: number | null;
+  /** Console rebuild: the oldest version allowed per platform (suggest or force the update). */
+  versionPolicy?: VersionPolicy;
 }
+
+export interface Greeting { text: string; parts?: Partial<Record<'morning' | 'afternoon' | 'evening' | 'night', string>>; withName?: boolean }
+export type BroadcastStyle = 'info' | 'success' | 'warning' | 'urgent';
+export interface Broadcast { id: string; text: string; link?: string; style?: BroadcastStyle; dismissible?: boolean }
+export interface VersionRule { minVersion: string; mode: 'suggest' | 'force' }
+export interface VersionPolicy { android?: VersionRule; web?: VersionRule; ios?: VersionRule; message?: string }
 
 /**
  * 7.2.0 — the owner's recommendation weight overrides ride the same bundle
@@ -158,11 +172,14 @@ export function useClientConfig(): ClientConfig | null {
         broadcast: j.broadcast ?? null,
         synonyms: j.synonyms && typeof j.synonyms === 'object' ? j.synonyms : {},
         disabledSources: Array.isArray(j.disabledSources) ? j.disabledSources : [],
+        sourceOrder: Array.isArray(j.sourceOrder) ? j.sourceOrder : [],
         languageOrder: Array.isArray(j.languageOrder) ? j.languageOrder : [],
+        hiddenLanguages: Array.isArray(j.hiddenLanguages) ? j.hiddenLanguages : [],
         aiStarters: Array.isArray(j.aiStarters) ? j.aiStarters : [],
         aiQuick: Array.isArray(j.aiQuick) ? j.aiQuick : [],
         faq: Array.isArray(j.faq) ? j.faq : [],
         minBuild: typeof j.minBuild === 'number' ? j.minBuild : null,
+        ...(j.versionPolicy && typeof j.versionPolicy === 'object' ? { versionPolicy: j.versionPolicy } : {}),
       };
     },
   });

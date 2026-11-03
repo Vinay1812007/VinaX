@@ -1,5 +1,6 @@
 /**
  * POST /api/push/subscribe { endpoint, keys: { p256dh, auth }, lang?, tzOffset? }
+ *   (Authorization: Bearer vx1… when the listener is signed in with Google)
  *   → 200 { ok: true }
  *   → 400 bad_request | endpoint_rejected
  *   → 503 not_configured          no database on this Worker
@@ -8,8 +9,13 @@
  * with the language, the device's UTC offset (quiet hours) and the edge's
  * coarse geo so the owner can send to a city. Re-subscribing refreshes the
  * row and switches it back on.
+ *
+ * Console rebuild — a request that carries the listener's VinaX session links the
+ * device to that Google account (`account_id`); without one the link is
+ * cleared (signed out). The console only sends to linked devices.
  */
 import { db, dbConfigured, type DbEnv } from '../../_lib/db';
+import { bearer, readSession, type AuthEnv } from '../../_lib/googleAuth';
 import { asObject, clip, edgeGeo, intIn, jsonResponse } from '../../_lib/edge';
 import { rateLimit } from '../../_lib/ratelimit';
 
@@ -42,7 +48,13 @@ export function isAllowedPushEndpoint(raw: string): boolean {
 /** Device UTC offset in minutes east, inside the real range, else null. */
 export const cleanTzOffset = (v: unknown): number | null => intIn(v, -840, 840);
 
-export const onRequestPost = async (context: { request: Request; env: DbEnv }): Promise<Response> => {
+/** The Google account the request's session belongs to, or null (no session, forged, expired). */
+export async function accountOfRequest(request: Request, env: AuthEnv): Promise<string | null> {
+  const token = bearer(request);
+  return token ? readSession(env, token) : null;
+}
+
+export const onRequestPost = async (context: { request: Request; env: DbEnv & AuthEnv }): Promise<Response> => {
   const { request, env } = context;
   const limited = rateLimit(request, 'push-subscribe', { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
@@ -55,7 +67,8 @@ export const onRequestPost = async (context: { request: Request; env: DbEnv }): 
   if (!isAllowedPushEndpoint(endpoint)) return jsonResponse({ error: 'endpoint_rejected' }, 400);
   if (!dbConfigured(env)) return jsonResponse({ error: 'not_configured' }, 503);
   const geo = edgeGeo(request);
-  const r = await db.upsert(env, 'push_devices', {
+  const accountId = await accountOfRequest(request, env);
+  const row = {
     channel: 'web',
     target: endpoint,
     p256dh,
@@ -66,8 +79,17 @@ export const onRequestPost = async (context: { request: Request; env: DbEnv }): 
     region: geo.region,
     city: geo.city,
     tz_offset: cleanTzOffset(body?.tzOffset),
+    account_id: accountId,
     active: true,
     updated_at: new Date().toISOString(),
-  }, 'target');
-  return r.ok ? jsonResponse({ ok: true }) : jsonResponse({ error: 'unavailable' }, 503);
+  };
+  let r = await db.upsert(env, 'push_devices', row, 'target');
+  // Never lose the device: a session for an account that no longer exists, or
+  // a database still on schema 7 (no account_id column), saves it unlinked.
+  if (!r.ok) {
+    const { account_id: _linked, ...unlinked } = row;
+    void _linked;
+    r = await db.upsert(env, 'push_devices', unlinked, 'target');
+  }
+  return r.ok ? jsonResponse({ ok: true, linked: !!accountId }) : jsonResponse({ error: 'unavailable' }, 503);
 };

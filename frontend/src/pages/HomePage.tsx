@@ -1,4 +1,5 @@
 import { Fragment, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { greetingLine } from '@/services/appRules';
 import { FriendsListening } from '@/features/social/FriendsListening';
 import { FestivalBannerSlot } from '@/features/home/FestivalBannerSlot';
 import { Link, useNavigate } from 'react-router-dom';
@@ -346,8 +347,10 @@ export default function HomePage() {
   // The language chips: pinned first, then the hub languages in the owner's order (Admin → Language Order).
   const clientCfg = useClientConfig();
   const langOrder = clientCfg?.languageOrder ?? [];
+  // v8 — languages the owner hid leave the rail (a listener's own pinned language stays).
+  const hiddenLangs = clientCfg?.hiddenLanguages ?? [];
   const rank = (l: string) => { const i = langOrder.indexOf(l); return i < 0 ? 999 : i; };
-  const railLangs = [...pinned, ...(HUB_LANGUAGES as readonly string[]).filter((l) => !pinned.includes(l)).sort((a, b) => rank(a) - rank(b))].slice(0, 10);
+  const railLangs = [...pinned, ...(HUB_LANGUAGES as readonly string[]).filter((l) => !pinned.includes(l) && !hiddenLangs.includes(l)).sort((a, b) => rank(a) - rank(b))].slice(0, 10);
 
   const defaultOrder = shelfOrder === 'discovery-first'
     ? HOME_BLOCK_KEYS.map((k) => (k === 'personal' ? 'discovery' : k === 'discovery' ? 'personal' : k))
@@ -458,6 +461,9 @@ export default function HomePage() {
   };
   const feedInExplore = explore.includes('feed');
 
+  // Console rebuild — the owner's greeting for this part of the day (optionally with the first name).
+  const ownerGreeting = greetingLine(clientCfg?.greeting, userName);
+
   return (
     <PullToRefresh onRefresh={handleRefresh}>
       <HomeSignalsProvider generation={generation}>
@@ -472,7 +478,7 @@ export default function HomePage() {
           <NotificationSheet open={notifOpen} onClose={() => setNotifOpen(false)} />
 
           {firstVisit ? (
-            clientCfg?.greeting?.text && <p className="vxh-greet-note">{clientCfg.greeting.text}</p>
+            ownerGreeting && <p className="vxh-greet-note">{ownerGreeting}</p>
           ) : (
             <header className="vxh-greet">
               <h1>{hello.title}</h1>
@@ -480,7 +486,7 @@ export default function HomePage() {
                 {hello.subtitle}
                 {streakDays > 1 && <span className="vxh-streak">{streakDays}-day streak</span>}
               </p>
-              {clientCfg?.greeting?.text && <p className="vxh-greet-note">{clientCfg.greeting.text}</p>}
+              {ownerGreeting && <p className="vxh-greet-note">{ownerGreeting}</p>}
             </header>
           )}
 

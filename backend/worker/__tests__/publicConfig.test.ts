@@ -86,12 +86,12 @@ describe('/api/site-mode and /api/announcements', () => {
 describe('/api/blocklist and /api/experiments', () => {
   it('blocked content is grouped by kind; active experiments carry sanitised variants', async () => {
     fakeDb({
-      blocked_content: [{ id: 1, kind: 'song', value: 's1' }, { id: 2, kind: 'artist', value: 'Bad Band' }, { id: 3, kind: 'keyword', value: 'remix' }, { id: 4, kind: 'other', value: 'x' }],
+      blocked_content: [{ id: 1, kind: 'song', value: 's1' }, { id: 2, kind: 'artist', value: 'Bad Band' }, { id: 3, kind: 'keyword', value: 'remix' }, { id: 4, kind: 'other', value: 'x' }, { id: 5, kind: 'album', value: 'al9' }],
       experiments: [{ key: 'home-v2', variants: [{ name: 'a', pct: 50 }, { name: 'b', pct: 50 }], active: true }, { key: 'off', variants: [{ name: 'a', pct: 100 }], active: false }, { key: 'empty', variants: [], active: true }],
     });
-    expect(await (await blocklist.onRequestGet({ env: ENV })).json()).toEqual({ ids: ['s1'], artists: ['Bad Band'], keywords: ['remix'] });
-    expect(await (await experiments.onRequestGet({ env: ENV })).json()).toEqual({ experiments: [{ key: 'home-v2', variants: [{ name: 'a', pct: 50 }, { name: 'b', pct: 50 }] }] });
-    expect(await (await blocklist.onRequestGet({ env: {} })).json()).toEqual({ ids: [], artists: [], keywords: [] });
+    expect(await (await blocklist.onRequestGet({ env: ENV })).json()).toEqual({ ids: ['s1'], albums: ['al9'], artists: ['Bad Band'], keywords: ['remix'] });
+    expect(await (await experiments.onRequestGet({ env: ENV })).json()).toEqual({ experiments: [{ key: 'home-v2', variants: [{ name: 'a', pct: 50 }, { name: 'b', pct: 50 }], audience: { platform: 'all', minVersion: null, percent: 100 } }] });
+    expect(await (await blocklist.onRequestGet({ env: {} })).json()).toEqual({ ids: [], albums: [], artists: [], keywords: [] });
     expect(await (await experiments.onRequestGet({ env: {} })).json()).toEqual({ experiments: [] });
   });
 });
@@ -114,7 +114,7 @@ describe('push registrations', () => {
   it('a browser subscription becomes a web push_devices row; unknown hosts are refused', async () => {
     const fake = fakeDb();
     const good = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: 'p'.repeat(20), auth: 'a'.repeat(10) }, lang: 'te-IN', tzOffset: 330 };
-    expect(await (await subscribe.onRequestPost({ request: req('/api/push/subscribe', { method: 'POST', body: JSON.stringify(good) }), env: ENV })).json()).toEqual({ ok: true });
+    expect(await (await subscribe.onRequestPost({ request: req('/api/push/subscribe', { method: 'POST', body: JSON.stringify(good) }), env: ENV })).json()).toEqual({ ok: true, linked: false }); // no session: saved, not linked to an account
     expect(fake.rows('push_devices')[0]).toMatchObject({ channel: 'web', target: good.endpoint, p256dh: good.keys.p256dh, auth: good.keys.auth, lang: 'te-in', country: 'IN', tz_offset: 330, active: true });
     const bad = await subscribe.onRequestPost({ request: req('/api/push/subscribe', { method: 'POST', body: JSON.stringify({ ...good, endpoint: 'https://evil.example/hook' }) }), env: ENV });
     expect(bad.status).toBe(400);
@@ -126,7 +126,7 @@ describe('push registrations', () => {
   it('an Android token becomes an fcm row; unsubscribe is same-origin and switches a row off', async () => {
     const fake = fakeDb();
     const token = 't'.repeat(40);
-    expect(await (await fcm.onRequestPost({ request: req('/api/push/fcm-register', { method: 'POST', body: JSON.stringify({ token, platform: 'android', lang: 'hi', tzOffset: 9999 }) }), env: ENV })).json()).toEqual({ ok: true });
+    expect(await (await fcm.onRequestPost({ request: req('/api/push/fcm-register', { method: 'POST', body: JSON.stringify({ token, platform: 'android', lang: 'hi', tzOffset: 9999 }) }), env: ENV })).json()).toEqual({ ok: true, linked: false }); // no session: saved, not linked to an account
     expect(fake.rows('push_devices')[0]).toMatchObject({ channel: 'fcm', target: token, platform: 'android', lang: 'hi', tz_offset: null, active: true });
     expect((await fcm.onRequestPost({ request: req('/api/push/fcm-register', { method: 'POST', body: JSON.stringify({ token: 'short' }) }), env: ENV })).status).toBe(400);
     expect((await fcm.onRequestOptions()).status).toBe(204);

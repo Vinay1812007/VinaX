@@ -1,124 +1,143 @@
-/* VinaX console — Live page.
- * GET /api/admin/live: who is listening right now (polled every 15 s), the
- * latest activity, and the Listen Together rooms (end one, or all). */
+/* VinaX console — Live Now.
+ * GET /api/admin/live (refreshes on its own, every 15 s by default):
+ * signed-in people listening now with their song, the newest activity, and
+ * the Listen Together rooms. Ending rooms needs the Editor role. */
 (function () {
   'use strict';
-  var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt, arr = VX.arr, obj = VX.obj;
+  var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt, arr = VX.arr, obj = VX.obj, num = VX.num;
+  var MS_KEY = 'vinax_admin_live_ms';
+  var INTERVALS = [{ value: '15000', label: 'Every 15 s' }, { value: '30000', label: 'Every 30 s' }, { value: '60000', label: 'Every minute' }, { value: '0', label: 'Do not refresh' }];
+
+  var KIND = {
+    play: 'Played a song', heartbeat: 'Listening', complete: 'Finished a song', skip: 'Skipped a song', pause: 'Paused',
+    favorite: 'Liked a song', search: 'Searched', share: 'Shared a song', open: 'Opened the app', register: 'Chose a name',
+    error: 'Hit a problem', 'lyric-miss': 'Lyrics not found', rec_served: 'Got suggestions', rec_outcome: 'Used a suggestion'
+  };
+  VX.kindText = function (k) { return KIND[k] || fmt.label(k || 'activity'); };
 
   VX.page({
-    id: 'live', title: 'Live', group: 'System', icon: 'live',
-    desc: 'What is happening right now: who is listening, the latest activity, and the rooms.',
+    id: 'live', title: 'Live Now', group: 'Home', icon: 'live', order: 2, noAuto: true,
+    desc: 'Who is listening right now and what they are playing. Signed-in users only.',
+    keywords: 'realtime now playing rooms listen together activity',
     tabs: [
-      { id: 'now', label: 'Now listening', desc: 'Listeners active in the last few minutes, refreshed every 15 seconds.', render: renderNow },
-      { id: 'activity', label: 'Activity', desc: 'The newest usage events as they arrive.', render: renderActivity },
-      { id: 'rooms', label: 'Listen Together', desc: 'Rooms that are open now. Ending a room disconnects its guests.', render: renderRooms }
+      { id: 'now', label: 'Listening now', render: function (host, ctx) { return frame(host, ctx, now); } },
+      { id: 'activity', label: 'Recent activity', render: function (host, ctx) { return frame(host, ctx, activity); } },
+      { id: 'rooms', label: 'Listen Together rooms', render: function (host, ctx) { return frame(host, ctx, rooms); } }
     ]
   });
 
-  function songCell(s) {
-    s = obj(s);
-    return s.title ? ui.media(s.image, s.title, s.artist) : h('span.muted', 'Nothing playing');
-  }
-  function who(r) { return r.name || r.handle || (r.id ? fmt.trunc(r.id, 14) : 'Listener'); }
+  function intervalMs() { var v = '15000'; try { v = localStorage.getItem(MS_KEY) || '15000'; } catch (e) {} return INTERVALS.some(function (i) { return i.value === v; }) ? v : '15000'; }
 
-  function renderNow(host, ctx) {
+  /** Cards + refresh dropdown, then the tab's own panel; polls quietly. */
+  function frame(host, ctx, panel) {
+    var top = h('div');
     var body = h('div');
-    host.appendChild(body);
-    function load(quiet) {
-      return ui.load(body, function () { return VX.api.get('/api/admin/live', null, { fresh: true }); }, function (d) {
-        var gate = ui.gate(d, ctx);
-        if (gate) return gate;
-        var rows = arr(d.listening);
-        var playing = rows.filter(function (r) { return r.isPlaying; }).length;
-        return [
-          ui.kpis([
-            { label: 'Active now', value: fmt.num(rows.length), tone: rows.length ? 'ok' : null },
-            { label: 'Playing', value: fmt.num(playing) },
-            { label: 'Rooms open', value: fmt.num(arr(d.rooms).length) },
-            { label: 'Server time', value: d.now ? fmt.time(d.now) : '—' }
-          ]),
-          ui.card({ title: 'Listening now', pad: false, body: ui.table({
-            columns: [
-              { key: 'name', label: 'Listener', sortVal: who, render: function (r) { return ui.media(null, who(r), r.handle ? '@' + r.handle : null, true); } },
-              { key: 'song', label: 'Playing', sort: false, render: function (r) { return songCell(r.song); } },
-              { key: 'isPlaying', label: 'State', sortVal: function (r) { return r.isPlaying ? 1 : 0; }, render: function (r) { return r.isPlaying ? ui.pill('Playing', 'ok') : ui.pill('Paused'); } },
-              { key: 'platform', label: 'Platform' },
-              { key: 'country', label: 'Place', render: function (r) { return [r.city, fmt.country(r.country)].filter(Boolean).join(', ') || null; } },
-              { key: 'lastSeen', label: 'Seen', render: function (r) { return ui.ago(r.lastSeen); } }
-            ],
-            rows: rows, exportName: 'vinax-live', search: rows.length > 8, pageSize: 50,
-            empty: 'Nobody is listening right now', emptyHint: 'Listeners with usage sharing on (the default since 14.0.3) appear here within a minute of pressing play; the ones who switched it off never do.',
-            onRow: function (r) { if (r.id) ctx.go('listeners', null, { id: r.id }); }
-          }) })
-        ];
-      }, { quiet: quiet, skeleton: 4 });
-    }
-    ctx.every(15000, function () { load(true); });
-    return load(false);
-  }
-
-  function renderActivity(host, ctx) {
-    return ui.load(host, function () { return VX.api.get('/api/admin/live', null, { fresh: true }); }, function (d) {
-      var gate = ui.gate(d, ctx);
-      if (gate) return gate;
-      var feed = arr(d.feed);
-      if (!feed.length) return ui.empty('No activity yet', 'Events arrive once listeners with usage sharing on start using the app.');
-      return ui.card({ title: 'Latest events', sub: fmt.plural(feed.length, 'event'), body: h('ul.list.feed', feed.map(function (e) {
-        var l = obj(e.listener), s = obj(e.song);
-        return h('li',
-          h('span.feed-time', e.at ? fmt.time(e.at) : '—'),
-          h('span.feed-kind', ui.pill(e.kind || 'event', e.kind === 'error' ? 'bad' : e.kind === 'play' ? 'ok' : null)),
-          h('div.grow',
-            h('div.cell-main', s.title ? s.title + (s.artist ? ' · ' + s.artist : '') : e.message ? fmt.trunc(e.message, 120) : (e.kind || '')),
-            h('div.cell-sub', [l.name || (l.id ? fmt.trunc(l.id, 12) : null), e.platform, fmt.country(e.country) !== '—' ? fmt.country(e.country) : null].filter(Boolean).join(' · '))));
-      })) });
-    }, { skeleton: 6 });
-  }
-
-  function renderRooms(host, ctx) {
-    var body = h('div');
-    host.appendChild(body);
+    var bar = h('div.toolbar.live-bar',
+      h('span.live-dot', ui.dot('live'), h('span', 'Live')),
+      h('span.grow'),
+      ui.dropdown('Refresh', INTERVALS, intervalMs(), function (v) { try { localStorage.setItem(MS_KEY, v); } catch (e) {} ctx.refresh(); }, { inline: true }));
+    VX.mount(host, bar, top, body);
+    var first = true;
     function load() {
       return ui.load(body, function () { return VX.api.get('/api/admin/live', null, { fresh: true }); }, function (d) {
         var gate = ui.gate(d, ctx);
-        if (gate) return gate;
-        var rooms = arr(d.rooms);
-        function endRoom(r) {
-          return VX.confirm({ title: 'End room ' + r.code + '?', body: 'Everyone in the room is disconnected and the host has to start a new one.', confirmLabel: 'End room', danger: true }).then(function (yes) {
-            if (!yes) return;
-            return VX.api.post('/api/admin/live', { action: 'end_room', code: r.code }).then(function (res) {
-              VX.toast(res.ok ? 'Room ended' : res.message, res.ok ? 'ok' : 'bad');
-              return load();
-            });
-          });
-        }
-        function endAll() {
-          return VX.confirm({ title: 'End every room?', body: fmt.plural(rooms.length, 'room') + ' will close and every guest is disconnected.', confirmLabel: 'End all', danger: true, typed: 'END' }).then(function (yes) {
-            if (!yes) return;
-            return VX.api.post('/api/admin/live', { action: 'end_all_rooms' }).then(function (res) {
-              VX.toast(res.ok ? fmt.plural(obj(res.data).ended, 'room') + ' ended' : res.message, res.ok ? 'ok' : 'bad');
-              return load();
-            });
-          });
-        }
-        return ui.card({ title: 'Open rooms', sub: fmt.plural(rooms.length, 'room'), pad: false,
-          actions: rooms.length ? [ui.button('End all rooms', { kind: 'danger', small: true, icon: 'trash', onClick: endAll })] : null,
-          body: ui.table({
-            columns: [
-              { key: 'code', label: 'Code', render: function (r) { return ui.mono(r.code); } },
-              { key: 'hostName', label: 'Host' },
-              { key: 'members', label: 'Members', align: 'right', render: function (r) { return fmt.num(r.members); } },
-              { key: 'song', label: 'Playing', sort: false, render: function (r) { return songCell(r.song); } },
-              { key: 'playing', label: 'State', render: function (r) { return r.playing ? ui.pill('Playing', 'ok') : ui.pill('Paused'); } },
-              { key: 'createdAt', label: 'Started', render: function (r) { return ui.ago(r.createdAt); } },
-              { key: 'updatedAt', label: 'Updated', render: function (r) { return ui.ago(r.updatedAt); } },
-              { key: 'act', label: '', sort: false, render: function (r) { return ui.button('End', { kind: 'ghost', small: true, icon: 'close', ariaLabel: 'End room ' + r.code, onClick: function () { return endRoom(r); } }); } }
-            ],
-            rows: rooms, exportName: false, search: false,
-            empty: 'No rooms open', emptyHint: 'Rooms appear while a host has Listen Together running.'
-          }) });
-      }, { skeleton: 4 });
+        if (gate) { VX.clear(top); return gate; }
+        var c = obj(d.counts);
+        var cards = ui.stats([
+          { label: 'Active now', value: fmt.num(c.activeNow), tone: num(c.activeNow) ? 'ok' : null, info: 'Signed-in people with the app open in the last 5 minutes.', onClick: function () { ctx.go('live', 'now'); } },
+          { label: 'Playing now', value: fmt.num(c.playingNow), info: 'Of those, how many have a song playing at this moment.', onClick: function () { ctx.go('live', 'now'); } },
+          { label: 'Rooms open', value: fmt.num(c.roomsOpen), info: 'Listen Together rooms with activity in the last 15 minutes.', onClick: function () { ctx.go('live', 'rooms'); } },
+          { label: 'Server time', value: fmt.time(d.now), sub: VX.tzShort(), info: 'The time on the server when these numbers were read, in your time zone.' }
+        ]);
+        first = false;
+        VX.mount(top, cards);
+        ctx.stamp();
+        return panel(d, ctx);
+      }, { quiet: !first, skeleton: 6 });
     }
+    var ms = Number(intervalMs());
+    if (ms) ctx.every(ms, load);
     return load();
+  }
+
+  function userMenu(u, ctx) {
+    return [
+      { label: 'View profile', icon: 'user', onClick: function () { ctx.go('users', null, { user: u.id }); } },
+      { label: 'Send notification', icon: 'send', hidden: !VX.can('edit'), onClick: function () { ctx.go('notifications', 'compose', { users: u.id }); } },
+      { label: 'Copy email', icon: 'copy', hidden: !u.email, onClick: function () { VX.copy(u.email, 'Email copied'); } }
+    ];
+  }
+  function person(u) { u = obj(u); return ui.media(u.picture, u.name || u.email || 'Someone', u.name ? u.email : null, true); }
+  function songCell(s) { s = obj(s); return s.title ? ui.media(s.image, s.title, s.artist) : h('span.muted', 'Nothing playing'); }
+  function place(r) { return [r.city, fmt.country(r.country)].filter(function (x) { return x && x !== '—'; }).join(', ') || null; }
+
+  function now(d, ctx) {
+    var rows = arr(d.listening);
+    return ui.card({ title: 'Listening now', sub: fmt.plural(rows.length, 'person', 'people') + ' in the last 5 minutes', pad: false, body: ui.dataTable({
+      rowId: function (r) { return r.key; },
+      columns: [
+        { key: 'user', label: 'User', always: true, sortVal: function (r) { return obj(r.user).name || obj(r.user).email; }, render: function (r) { return person(r.user); } },
+        { key: 'song', label: 'Song & artist', sortVal: function (r) { return obj(r.song).title; }, render: function (r) { return songCell(r.song); } },
+        { key: 'isPlaying', label: 'Status', sortVal: function (r) { return r.isPlaying ? 1 : 0; }, render: function (r) { return r.song ? ui.pill(r.isPlaying ? 'Playing' : 'Paused', r.isPlaying ? 'ok' : null) : ui.pill('Browsing'); } },
+        { key: 'platform', label: 'Platform', sortVal: function (r) { return r.platform; }, render: function (r) { return VX.platformName(r.platform); } },
+        { key: 'city', label: 'City', sortVal: place, render: place },
+        { key: 'lastSeen', label: 'Last seen', render: function (r) { return ui.ago(r.lastSeen); } }
+      ],
+      rows: rows, exportName: 'vinax-listening-now', search: 'Search people or songs…', sortKey: 'lastSeen',
+      rowMenu: function (r) { return userMenu(obj(r.user), ctx); },
+      onRow: function (r) { ctx.go('users', null, { user: obj(r.user).id }); },
+      empty: { title: 'Nobody is listening right now', hint: 'Signed-in people show up here the moment they open the app.', action: { label: 'See all users', icon: 'users', onClick: function () { ctx.go('users'); } } }
+    }) });
+  }
+
+  function activity(d, ctx) {
+    var rows = arr(d.feed);
+    return ui.card({ title: 'Recent activity', sub: 'The newest things signed-in people did in the app', pad: false, body: ui.dataTable({
+      columns: [
+        { key: 'at', label: 'When', nowrap: true, render: function (r) { return ui.ago(r.at); } },
+        { key: 'user', label: 'User', sortVal: function (r) { return obj(r.user).name; }, render: function (r) { return person(r.user); } },
+        { key: 'kind', label: 'What they did', sortVal: function (r) { return VX.kindText(r.kind); }, render: function (r) { return ui.pill(VX.kindText(r.kind), r.kind === 'error' ? 'bad' : r.kind === 'favorite' ? 'accent' : null); } },
+        { key: 'song', label: 'Song or detail', sortVal: function (r) { return obj(r.song).title || r.message; }, render: function (r) { return r.song ? songCell(r.song) : r.message ? h('span', fmt.trunc(r.message, 80)) : null; } },
+        { key: 'platform', label: 'Platform', render: function (r) { return VX.platformName(r.platform); } },
+        { key: 'city', label: 'City' }
+      ],
+      rows: rows, exportName: 'vinax-recent-activity', search: 'Search activity…', sortKey: 'at',
+      rowMenu: function (r) { return userMenu(obj(r.user), ctx); },
+      empty: { title: 'No activity yet', hint: 'What signed-in people do in the app appears here as it happens.' }
+    }) });
+  }
+
+  function rooms(d, ctx) {
+    var rows = arr(d.rooms);
+    var canEdit = VX.can('edit');
+    function end(code) {
+      return VX.confirm({ title: 'End room ' + code + '?', body: 'Everyone in this room stops listening together. Their music keeps playing on their own phones.', danger: true, confirmLabel: 'End room' }).then(function (ok) {
+        if (!ok) return;
+        return VX.api.post('/api/admin/live', { action: 'end_room', code: code }).then(function (res) { VX.toast(res.ok ? 'Room ended ✓' : 'Something went wrong — ' + res.message, res.ok ? 'ok' : 'bad'); if (res.ok) ctx.refresh(); });
+      });
+    }
+    function endAll() {
+      return VX.confirm({ title: 'End every room?', body: 'All ' + fmt.plural(rows.length, 'room') + ' close at once. Type CONFIRM to go ahead.', typed: true, danger: true, confirmLabel: 'End all rooms' }).then(function (ok) {
+        if (!ok) return;
+        return VX.api.post('/api/admin/live', { action: 'end_all_rooms' }).then(function (res) { VX.toast(res.ok ? 'Ended ' + fmt.plural(obj(res.data).ended, 'room') + ' ✓' : 'Something went wrong — ' + res.message, res.ok ? 'ok' : 'bad'); if (res.ok) ctx.refresh(); });
+      });
+    }
+    return ui.card({ title: 'Listen Together rooms', sub: 'Rooms with activity in the last 6 hours', pad: false,
+      actions: rows.length && canEdit ? [ui.button('End all rooms', { kind: 'ghost', small: true, icon: 'close', onClick: endAll })] : null,
+      body: ui.dataTable({
+        rowId: function (r) { return r.code; },
+        columns: [
+          { key: 'code', label: 'Room', render: function (r) { return h('strong', r.code); } },
+          { key: 'hostName', label: 'Started by' },
+          { key: 'members', label: 'People in it', align: 'right', render: function (r) { return fmt.num(r.members); } },
+          { key: 'song', label: 'Playing', sortVal: function (r) { return obj(r.song).title; }, render: function (r) { return songCell(r.song); } },
+          { key: 'playing', label: 'Status', render: function (r) { return ui.pill(r.playing ? 'Playing' : 'Paused', r.playing ? 'ok' : null); } },
+          { key: 'createdAt', label: 'Opened', render: function (r) { return ui.ago(r.createdAt); } },
+          { key: 'updatedAt', label: 'Last activity', render: function (r) { return ui.ago(r.updatedAt); } }
+        ],
+        rows: rows, exportName: 'vinax-rooms', search: false, sortKey: 'updatedAt',
+        rowMenu: function (r) { return [{ label: 'End this room', icon: 'close', danger: true, disabled: !canEdit, title: canEdit ? null : 'Editors and owners only', onClick: function () { end(r.code); } }]; },
+        empty: { title: 'No rooms are open', hint: 'When friends start Listen Together in the app, their room shows up here.' }
+      }) });
   }
 })();

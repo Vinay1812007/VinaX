@@ -29,7 +29,7 @@ describe('client config bundle', () => {
   });
   it('returns a safe empty bundle for garbage', () => {
     const cfg = publicClientConfig({ greeting: 'nope', 'support-faq': 'nope', 'min-version': { build: -1 } });
-    expect(cfg).toEqual({ greeting: null, broadcast: null, synonyms: {}, disabledSources: [], languageOrder: [], faq: [], minBuild: null });
+    expect(cfg).toEqual({ greeting: null, broadcast: null, synonyms: {}, disabledSources: [], sourceOrder: [], languageOrder: [], hiddenLanguages: [], faq: [], minBuild: null });
   });
   it('maintenance window', () => {
     const now = new Date('2026-09-08T10:00:00Z');

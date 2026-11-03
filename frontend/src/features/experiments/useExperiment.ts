@@ -19,15 +19,22 @@
 import { useEffect, useState } from 'react';
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal, setLocal } from '@/services/storage/local';
-import { isNativePlatform } from '@/services/native';
+import { isNativePlatform, platformName } from '@/services/native';
 
 interface Variant {
   name: string;
   pct: number;
 }
+/** Console rebuild — who a test includes (set on the owner console's A/B Tests page). */
+export interface ExperimentAudience {
+  platform?: 'all' | 'android' | 'web' | 'ios';
+  minVersion?: string | null;
+  percent?: number;
+}
 interface Experiment {
   key: string;
   variants: Variant[];
+  audience?: ExperimentAudience | null;
 }
 
 const ENDPOINT = isNativePlatform() ? 'https://www.vinaxmusic.online/api/experiments' : '/api/experiments';
@@ -51,6 +58,55 @@ export function pickVariant(deviceId: string, key: string, variants: Variant[]):
     if (b < acc) return v.name;
   }
   return null;
+}
+
+// --- who is included (mirror of inAudience in functions/_lib/experiments.ts) --
+function compareVersions(a: string, b: string): number {
+  const x = a.split('.').map((n) => Number(n) || 0);
+  const y = b.split('.').map((n) => Number(n) || 0);
+  for (let i = 0; i < Math.max(x.length, y.length); i += 1) {
+    const d = (x[i] ?? 0) - (y[i] ?? 0);
+    if (d) return d > 0 ? 1 : -1;
+  }
+  return 0;
+}
+
+/** This device's platform and app version, as the console's targeting reads them. */
+export function deviceFacts(): { platform: string; version: string } {
+  let platform = 'web';
+  try {
+    platform = platformName() || 'web';
+  } catch {
+    /* web */
+  }
+  return { platform, version: typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '' };
+}
+
+/**
+ * Is the device in the test's audience? Platform must match (unless 'all'),
+ * the app must be at least `minVersion`, and a second hash over
+ * "deviceId:key:in" must fall under `percent` — so raising the percent adds
+ * people without moving anyone already in. No audience = everyone.
+ */
+export function inAudience(
+  deviceId: string,
+  key: string,
+  audience: ExperimentAudience | null | undefined,
+  device: { platform?: string | null; version?: string | null } = deviceFacts(),
+): boolean {
+  if (!audience) return true;
+  const platform = audience.platform === 'android' || audience.platform === 'web' || audience.platform === 'ios' ? audience.platform : 'all';
+  if (platform !== 'all' && device.platform !== platform) return false;
+  const min = typeof audience.minVersion === 'string' && /^\d{1,4}(\.\d{1,4}){0,3}$/.test(audience.minVersion) ? audience.minVersion : null;
+  if (min && (!device.version || compareVersions(device.version, min) < 0)) return false;
+  const pct = Number.isFinite(Number(audience.percent)) ? Math.max(0, Math.min(100, Math.round(Number(audience.percent)))) : 100;
+  if (pct >= 100) return true;
+  return fnv1a(`${deviceId}:${key}:in`) % 100 < pct;
+}
+
+/** The device's variant, with the audience applied first (null = not in the test). */
+export function variantFor(deviceId: string, exp: Experiment): string | null {
+  return inAudience(deviceId, exp.key, exp.audience) ? pickVariant(deviceId, exp.key, exp.variants) : null;
 }
 
 // --- config, fetched once per session ---------------------------------------
@@ -87,7 +143,7 @@ export function useExperiment(key: string): string {
     void loadConfig().then((map) => {
       if (!alive) return;
       const exp = map.get(key);
-      const v = exp ? pickVariant(deviceId(), key, exp.variants) : null;
+      const v = exp ? variantFor(deviceId(), exp) : null;
       if (v) setVariant(v);
     });
     return () => {

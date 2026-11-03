@@ -84,6 +84,23 @@
 
   /* --------------------------------------------------------------- format */
 
+  /* Console rebuild — every date and time is shown in one time zone, India by
+     default; the profile menu can change it (stored per browser). */
+  var TZ_KEY = 'vinax_admin_tz';
+  VX.TIMEZONES = [
+    { value: 'Asia/Kolkata', label: 'India (IST)', short: 'IST' },
+    { value: 'UTC', label: 'UTC', short: 'UTC' },
+    { value: 'Asia/Dubai', label: 'Dubai (GST)', short: 'GST' },
+    { value: 'Asia/Singapore', label: 'Singapore (SGT)', short: 'SGT' },
+    { value: 'Europe/London', label: 'London', short: 'UK' },
+    { value: 'America/New_York', label: 'New York', short: 'ET' },
+    { value: 'America/Los_Angeles', label: 'Los Angeles', short: 'PT' }
+  ];
+  VX.tz = function () { var t = null; try { t = localStorage.getItem(TZ_KEY); } catch (e) {} return VX.TIMEZONES.some(function (z) { return z.value === t; }) ? t : 'Asia/Kolkata'; };
+  VX.setTz = function (t) { try { localStorage.setItem(TZ_KEY, t); } catch (e) {} };
+  VX.tzShort = function () { var z = VX.TIMEZONES.filter(function (x) { return x.value === VX.tz(); })[0]; return z ? z.short : 'IST'; };
+  function tzOpt(o) { o = o || {}; o.timeZone = VX.tz(); return o; }
+
   var nf = new Intl.NumberFormat('en-IN');
   var cf = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
   var fmt = (VX.fmt = {
@@ -117,15 +134,22 @@
       if (!iso) return '—';
       var d = new Date(iso);
       if (isNaN(d)) return String(iso);
-      return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
+      return d.toLocaleDateString('en-IN', tzOpt({ day: 'numeric', month: 'short', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' }));
     },
     dateTime: function (iso) {
       if (!iso) return '—';
       var d = new Date(iso);
       if (isNaN(d)) return String(iso);
-      return d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      return d.toLocaleString('en-IN', tzOpt({ day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }));
     },
-    time: function (iso) { if (!iso) return '—'; var d = new Date(iso); return isNaN(d) ? String(iso) : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }); },
+    /** "2 Nov 2026, 17:05 IST" — the exact stamp shown on hover. */
+    full: function (iso) {
+      if (!iso) return '—';
+      var d = new Date(iso);
+      if (isNaN(d)) return String(iso);
+      return d.toLocaleString('en-IN', tzOpt({ day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })) + ' ' + VX.tzShort();
+    },
+    time: function (iso) { if (!iso) return '—'; var d = new Date(iso); return isNaN(d) ? String(iso) : d.toLocaleTimeString('en-IN', tzOpt({ hour: '2-digit', minute: '2-digit', hour12: false })); },
     ago: function (iso) {
       if (!iso) return '—';
       var t = typeof iso === 'number' ? iso : new Date(iso).getTime();
@@ -201,8 +225,17 @@
   }
 
   var ERROR_TEXT = {
-    not_configured: 'This feature needs a server secret that is not set.',
-    unauthorized: 'Signed out — enter the owner password again.',
+    not_configured: 'This feature needs a server setting that is not set up yet.',
+    unauthorized: 'You were signed out. Sign in again.',
+    forbidden: 'Your role can look but not change this. Ask an owner for Editor access.',
+    db_update_needed: 'The database needs a one-time update before this works. An owner can run it from Database → Maintenance.',
+    db_unavailable: 'The database did not answer. Try again in a minute.',
+    db_not_found: 'The database is set up but empty. An owner needs to run the setup file.',
+    db_unauthorized: 'The server could not open the database (wrong key).',
+    db_not_configured: 'The database is not connected yet.',
+    not_found: 'That item no longer exists.',
+    duplicate: 'This was already sent.',
+    too_large: 'That is too big. Try a smaller picture or shorter text.',
     rate_limited: 'Too many requests — wait a moment and retry.',
     timeout: 'The server took too long to answer.',
     network: 'Network error — check the connection.'
@@ -341,6 +374,7 @@
 
   /** Confirm → Promise<boolean>. Set `typed` to require typing a word. */
   VX.confirm = function (o) {
+    if (o.typed === true) o = Object.assign({}, o, { typed: 'CONFIRM' });
     return new Promise(function (resolve) {
       var done = false;
       var input = o.typed ? VX.ui.input({ placeholder: o.typed, 'aria-label': 'Type ' + o.typed + ' to confirm' }) : null;
@@ -958,5 +992,5 @@
   };
 
   /** Time cell: relative text with the full stamp as a tooltip. */
-  ui.ago = function (iso) { return iso ? h('span', { title: fmt.dateTime(iso) }, fmt.ago(iso)) : h('span.muted', '—'); };
+  ui.ago = function (iso) { return iso ? h('time', { title: fmt.full(iso), datetime: String(iso) }, fmt.ago(iso)) : h('span.muted', '—'); };
 })();
