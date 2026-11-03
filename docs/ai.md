@@ -278,7 +278,7 @@ Every query is filtered by the session's account. Someone else's conversation, a
 | PDF | pdf | 30 MB and 500 pages (owner: `pdfMB` up to 50, `pdfPages` up to 1,000; the Storage bucket takes at most 50 MB) |
 | Text | text, markdown, csv, json and common source code | 2 MB (owner: `textMB` up to 5) |
 
-At most 20 files go in a message and 50 in a chat (owner: `filesPerMessage`, `filesPerChat`). The page checks these limits with the numbers `GET /api/ai/models` returns as `limits` (`setFileLimits` in `files.ts`; the defaults until it answers), and the server checks them again.
+At most 20 files go in a message and 50 in a chat (owner: `filesPerMessage`, `filesPerChat`). The page checks these limits with the numbers `GET /api/ai/models` returns as `limits` (`setFileLimits` in `files.ts`; the defaults until it answers), and the server checks them again. A project's files (its knowledge) go through the same route with `&projectId=…` instead of a chat ([Projects](#projects)).
 
 **Upload.**
 - Each file is uploaded as soon as it is added, so Send only names it. Removing a chip deletes the upload.
@@ -540,6 +540,8 @@ The console's form for `instructions` and `limits` arrives with the console rebu
 | `pdfPages` | 1–1,000 | 500 | A PDF's pages |
 | `textMB` | 1–5 | 2 | A text or code file's size |
 | `searchesPerDay` | 0–2,000, or none | none | Search API searches a day; none means `SEARCH_DAILY_LIMIT` (else 100), 0 switches the search API off. Free grounding keeps its own 450 a day |
+
+- `memory: false` switches memory off for everyone ([Memory](#memory)). Missing means on.
 
 The setting is memoised for a minute per isolate.
 

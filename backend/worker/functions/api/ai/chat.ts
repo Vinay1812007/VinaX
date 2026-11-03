@@ -365,8 +365,9 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       if (r.ok) search = { sources: r.sources };
     }
     // Artifacts go to every model with room for them (prompt.ts) unless the page turned them off.
-    const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: body.artifacts !== false, search, personal, owner: settings.instructions });
-    const messages = await materialize(env, turns, spec, fileRows, memo);
+    const knowledge = project ? await knowledgeFor(env, spec, project, memo) : null;
+    const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: body.artifacts !== false, search, personal, owner: settings.instructions, project: knowledge?.prompt ?? null, memory: memoryText });
+    const messages = withKnowledge(await materialize(env, turns, spec, fileRows, memo), knowledge);
     return {
       model: spec,
       system,
