@@ -16,6 +16,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.9.5': {
+    title: 'Every free AI model in VinaX AI\'s menu',
+    changes: [
+      { type: 'improved', text: 'VinaX AI\'s model menu now lists every free AI model from Groq, Gemini, OpenRouter, NVIDIA and Cloudflare, under "More from …".' },
+      { type: 'new', text: 'New free models appear on their own within a few hours of a service releasing them, without an app update.' },
+      { type: 'improved', text: 'Use the search box at the top of the menu to find one; Auto still picks a model for you by default.' },
+    ],
+  },
   '1.9.4': {
     title: 'Show the sign-in security check under the Google button',
     changes: [
