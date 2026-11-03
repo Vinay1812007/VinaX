@@ -17,7 +17,10 @@ import { audienceDevices, audienceOf, fanOut, kindAllowed, publishAnnouncement, 
 interface DueRow { id: number; title: string; body: string; link: string; image: string | null; audience: Record<string, unknown> | null }
 
 /** At most this many scheduled notifications go out per run (each fans out to up to 5000 devices). */
-const PER_RUN = 3;
+/** One notification per run: a large audience alone can use most of a Worker run's outgoing requests. */
+const PER_RUN = 1;
+/** A notification still "sending" this long after its run started died with that run. */
+const STUCK_MS = 15 * 60_000;
 
 export interface ScheduledRunSummary {
   due: number;
@@ -31,6 +34,9 @@ export async function runScheduledNotifications(env: PushEnv & DbEnv, now = Date
   const summary: ScheduledRunSummary = { due: 0, sent: 0, waiting: null, failed: 0 };
   if (!dbConfigured(env)) return summary;
   try {
+    // A run that died mid-send leaves its row "sending" forever: mark it failed
+    // (shown in History) instead of sending it again and risking doubles.
+    await db.update(env, 'notifications', q().eq('status', 'sending').lt('scheduled_for', new Date(now - STUCK_MS).toISOString()), { status: 'failed' });
     const due = await db.select<DueRow>(env, 'notifications', q().eq('status', 'scheduled').lte('scheduled_for', new Date(now).toISOString()).select('id,title,body,link,image,audience').order('scheduled_for', 'asc').limit(PER_RUN));
     if (!due.ok || !due.rows.length) return summary;
     summary.due = due.rows.length;

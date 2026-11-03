@@ -301,7 +301,7 @@
 
   var STATUS = {
     sent: ['Sent', 'ok'], scheduled: ['Scheduled', 'info'], draft: ['Draft', null], cancelled: ['Cancelled', null],
-    sending: ['Sending', 'warn'], retracted: ['Retracted', 'bad']
+    sending: ['Sending', 'warn'], retracted: ['Retracted', 'bad'], failed: ['Did not finish sending', 'bad']
   };
   function statusPill(s) { var x = STATUS[s] || [fmt.label(s || 'sent'), null]; return ui.pill(x[0], x[1]); }
 
@@ -363,7 +363,7 @@
               VX.confirm({ title: 'Retract this notification?', body: 'Phones that already showed it keep it, but Android phones that have not opened the app yet will not show it, and it is marked retracted here.', confirmLabel: 'Retract', danger: true }).then(function (ok) { if (ok) act({ action: 'retract', id: r.id }, 'Retracted ✓'); });
             } },
             '-',
-            { label: 'Delete', icon: 'trash', danger: true, hidden: !canEdit || (r.status !== 'draft' && r.status !== 'cancelled'), onClick: function () {
+            { label: 'Delete', icon: 'trash', danger: true, hidden: !canEdit || (r.status !== 'draft' && r.status !== 'cancelled' && r.status !== 'failed'), onClick: function () {
               VX.confirm({ title: 'Delete this ' + (r.status === 'draft' ? 'draft' : 'notification') + '?', body: 'This cannot be undone.', confirmLabel: 'Delete', danger: true }).then(function (ok) { if (ok) act({ action: 'delete', id: r.id }, 'Deleted ✓'); });
             } }
           ];

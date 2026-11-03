@@ -94,14 +94,14 @@ export function audienceOf(rawFilter: unknown, rawActivity: unknown, rawUsers?: 
 }
 
 /** The PostgREST query for an audience: active devices that belong to a Google account. */
-export function audienceQuery(a: Audience) {
+export function audienceQuery(a: Audience, users: string[] | undefined = a.filter.users) {
   const query = q().eq('active', 'true').not('account_id', 'is', 'null');
   if (a.filter.country) query.eq('country', a.filter.country);
   if (a.filter.region) query.eq('region', a.filter.region);
   if (a.filter.city) query.eq('city', a.filter.city);
   if (a.filter.lang) query.ilike('lang', `${a.filter.lang}*`);
   if (a.filter.channel) query.eq('channel', a.filter.channel);
-  if (a.filter.users && a.filter.users.length <= 150) query.in('account_id', a.filter.users);
+  if (users) query.in('account_id', users);
   return query;
 }
 
@@ -121,11 +121,19 @@ async function accountsForActivity(env: DbEnv, activity: PushActivity, now: numb
 
 /** Every signed-in device the audience reaches (up to 5000), activity and chosen users applied. */
 export async function audienceDevices(env: DbEnv, a: Audience, now = Date.now()): Promise<Rows<DeviceRow>> {
-  const [devices, active] = await Promise.all([
-    db.select<DeviceRow>(env, 'push_devices', audienceQuery(a).select('id,channel,target,p256dh,auth,account_id,last_pushed_at').limit(5000)),
+  const COLS = 'id,channel,target,p256dh,auth,account_id,last_pushed_at';
+  // Chosen people are asked for in groups of 150 (an address-length limit),
+  // so a long list is never cut by the 5000-device cap of one read.
+  const groups: Array<string[] | undefined> = [];
+  if (a.filter.users) for (let i = 0; i < a.filter.users.length; i += 150) groups.push(a.filter.users.slice(i, i + 150));
+  else groups.push(undefined);
+  const [reads, active] = await Promise.all([
+    Promise.all(groups.map((g) => db.select<DeviceRow>(env, 'push_devices', audienceQuery(a, g).select(COLS).limit(5000)))),
     accountsForActivity(env, a.activity, now),
   ]);
-  if (!devices.ok) return devices;
+  const bad = reads.find((r) => !r.ok);
+  if (bad) return bad;
+  const devices = { ok: true as const, rows: reads.flatMap((r) => r.rows) };
   if (active === 'failed') return { ok: false, error: 'unavailable', status: null, code: null, detail: 'accounts', rows: [] };
   const users = a.filter.users ? new Set(a.filter.users) : null;
   const rows = devices.rows.filter((d) => !!d.account_id && (!users || users.has(d.account_id)) && (!active || active.has(d.account_id)));

@@ -10,6 +10,9 @@ import { adminGet, adminPost } from '../../_lib/adminRoute';
 import { db, q } from '../../_lib/db';
 import { isSettingKey, readSettings, resetSettingsMemo, SETTING_KEYS, writeSetting } from '../../_lib/settings';
 
+/** Setting keys only an Owner may change: data deletion periods and background jobs. */
+export const OWNER_KEYS: ReadonlySet<string> = new Set(['retention', 'jobs']);
+
 export const onRequestGet = adminGet(async ({ env, url }) => {
   resetSettingsMemo();
   const rows = await readSettings(env);
@@ -42,4 +45,8 @@ export const onRequestPost = adminPost(async ({ env, body, audit }) => {
   if (!w.ok) return adminJson({ error: w.error, upstreamStatus: w.status }, w.error === 'too_large' ? 413 : w.error === 'unknown_key' ? 400 : 502);
   await audit({ action: 'settings', summary: value === null ? `cleared ${key}` : `published ${key}`, target: key, before, after: value });
   return adminJson({ ok: true, key, value: w.row?.value ?? null, updatedAt: w.row?.updated_at ?? null });
-}, { cap: 80_000 });
+}, {
+  cap: 80_000,
+  // These keys delete data or switch background work off: owners only.
+  role: (b) => (OWNER_KEYS.has(String(b.key)) ? 'owner' : 'editor'),
+});

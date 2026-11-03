@@ -151,13 +151,13 @@ describe('POST /api/admin/push', () => {
       if (path(c) === 'notifications' && c.method === 'POST') return json([{ id: 9 }], 201);
       return undefined;
     });
-    const { res, body } = await run(push.onRequestPost, '/api/admin/push', { body: { title: 'VinaX', body: 'Hello everyone', link: '/', image: 'https://cdn.example/x.jpg', dedupeKey: 'k1' } });
+    const { res, body } = await run(push.onRequestPost, '/api/admin/push', { body: { title: 'VinaX', body: 'Hello everyone', link: '/', image: 'https://abc.supabase.co/storage/v1/object/public/console-media/notification/2026-11-02/x.jpg', dedupeKey: 'k1' } });
     expect(res.status).toBe(200);
     expect(body).toMatchObject({ ok: true, id: 9, status: 'sent', audience: 'Everyone', people: 1 });
     const order = calls.filter((c) => isDb(c) && c.method !== 'GET').map((c) => `${c.method} ${path(c)}`);
     expect(order[0]).toBe('POST notifications');
     const made = calls.find((c) => path(c) === 'notifications' && c.method === 'POST')?.body as Record<string, unknown>;
-    expect(made).toMatchObject({ dedupe_key: 'k1', status: 'sending', image: 'https://cdn.example/x.jpg', sent_by: 'owner' });
+    expect(made).toMatchObject({ dedupe_key: 'k1', status: 'sending', image: 'https://abc.supabase.co/storage/v1/object/public/console-media/notification/2026-11-02/x.jpg', sent_by: 'owner' });
     const receipt = calls.find((c) => path(c) === 'notifications' && c.method === 'PATCH')?.body as Record<string, unknown>;
     expect(receipt.status).toBe('sent');
     expect(typeof receipt.at).toBe('string');
@@ -263,7 +263,7 @@ describe('notification history', () => {
     expect(body?.counts).toEqual({ sent: 7, scheduled: 1, draft: 1 });
   });
 
-  it('cancels only scheduled ones and deletes only drafts or cancelled ones', async () => {
+  it('cancels only scheduled ones and deletes only drafts, cancelled and failed ones', async () => {
     stub((c) => {
       if (path(c) === 'notifications' && c.method === 'PATCH') return json([{ ...ROW, status: 'cancelled' }]);
       if (path(c) === 'notifications' && c.method === 'DELETE') return json([]);
@@ -274,7 +274,7 @@ describe('notification history', () => {
     expect(calls.find((c) => c.method === 'PATCH')?.url.searchParams.get('status')).toBe('eq.scheduled');
     const del = await run(notifications.onRequestPost, '/api/admin/notifications', { body: { action: 'delete', id: 3 } });
     expect(del.res.status).toBe(404);
-    expect(calls.find((c) => c.method === 'DELETE')?.url.searchParams.get('status')).toBe('in.("draft","cancelled")');
+    expect(calls.find((c) => c.method === 'DELETE')?.url.searchParams.get('status')).toBe('in.("draft","cancelled","failed")');
   });
 
   it('retracting clears the matching announcement', async () => {
@@ -304,7 +304,10 @@ describe('scheduled sends', () => {
     expect(get?.url.searchParams.get('status')).toBe('eq.scheduled');
     expect(get?.url.searchParams.get('scheduled_for')).toBe('lte.2026-11-02T06:00:00.000Z');
     expect(calls.find((c) => path(c) === 'push_devices')?.url.searchParams.get('lang')).toBe('ilike.te*');
-    const patches = calls.filter((c) => path(c) === 'notifications' && c.method === 'PATCH').map((c) => (c.body as { status: string }).status);
+    // First a sweep marks sends that died mid-way as failed; then this row is claimed and sent.
+    const sweep = calls.find((c) => path(c) === 'notifications' && c.method === 'PATCH' && (c.body as { status: string }).status === 'failed');
+    expect(sweep?.url.searchParams.get('status')).toBe('eq.sending');
+    const patches = calls.filter((c) => path(c) === 'notifications' && c.method === 'PATCH' && c !== sweep).map((c) => (c.body as { status: string }).status);
     expect(patches).toEqual(['sending', 'sent']);
   });
 
@@ -323,7 +326,8 @@ describe('scheduled sends', () => {
     });
     const r = await runScheduledNotifications({ ...DB } as never, Date.UTC(2026, 10, 2, 18));
     expect(r.waiting).toBe('quiet_hours');
-    expect(calls.some((c) => c.method === 'PATCH')).toBe(false);
+    // Nothing is claimed or sent; only the stuck-send sweep writes.
+    expect(calls.filter((c) => c.method === 'PATCH').map((c) => (c.body as { status: string }).status)).toEqual(['failed']);
   });
 
   it('does nothing without a database', async () => {
@@ -423,5 +427,16 @@ describe('A/B tests', () => {
     const pub = (await res.json()) as { experiments: Array<{ key: string; audience: { percent: number } }> };
     expect(pub.experiments.map((e) => e.key)).toEqual(['a']);
     expect(pub.experiments[0].audience.percent).toBe(30);
+  });
+});
+
+describe('notification pictures', () => {
+  it('only pictures from the console-media bucket or the site are kept', async () => {
+    const { cleanImage } = await import('../functions/api/admin/push');
+    expect(cleanImage('https://abc.supabase.co/storage/v1/object/public/console-media/notification/2026-11-02/x.jpg')).toBe('https://abc.supabase.co/storage/v1/object/public/console-media/notification/2026-11-02/x.jpg');
+    expect(cleanImage('https://www.vinaxmusic.online/icons/icon-192.png')).toBe('https://www.vinaxmusic.online/icons/icon-192.png');
+    expect(cleanImage('https://cdn.example/x.jpg')).toBeNull();
+    expect(cleanImage('https://abc.supabase.co/storage/v1/object/public/other/x.jpg')).toBeNull();
+    expect(cleanImage('http://www.vinaxmusic.online/x.png')).toBeNull();
   });
 });

@@ -66,9 +66,9 @@ export const onRequestPost = adminPost(async ({ env, body, audit }) => {
   }
 
   if (body.action === 'delete') {
-    const r = await db.remove<Row>(env, 'notifications', q().eq('id', id).in('status', ['draft', 'cancelled']), { returning: true });
+    const r = await db.remove<Row>(env, 'notifications', q().eq('id', id).in('status', ['draft', 'cancelled', 'failed']), { returning: true });
     if (!r.ok) return dbFailure(r);
-    if (!r.rows.length) return adminJson({ error: 'not_found', message: 'Only drafts and cancelled notifications can be deleted.' }, 404);
+    if (!r.rows.length) return adminJson({ error: 'not_found', message: 'Only drafts, cancelled notifications and ones that did not finish sending can be deleted.' }, 404);
     await audit({ action: 'push-delete', summary: `deleted ${r.rows[0].status ?? 'draft'} "${r.rows[0].title.slice(0, 60)}"`, target: String(id) });
     return adminJson({ ok: true, deleted: 1 });
   }

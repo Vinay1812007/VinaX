@@ -24,7 +24,7 @@
   var label = function (n) { return n >= FOREVER ? 'forever' : n + ' days'; };
 
   var retention = {
-    key: 'retention', title: 'How long data is kept',
+    key: 'retention', title: 'How long data is kept', role: 'owner',
     desc: 'Deleted data cannot be brought back.',
     fromValue: function (v) {
       var r = VX.obj(v);

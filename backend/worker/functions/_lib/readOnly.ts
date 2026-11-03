@@ -28,7 +28,8 @@ export async function isReadOnly(env: DbEnv): Promise<boolean> {
 export async function readOnlyRefusal(path: string, method: string, env: DbEnv): Promise<Response | null> {
   if (!WRITE.has(method.toUpperCase())) return null;
   const p = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
-  if (!(READ_ONLY_PATHS as readonly string[]).includes(p)) return null;
+  // A listed path and everything under it (e.g. /api/shared-playlist/<id>).
+  if (!(READ_ONLY_PATHS as readonly string[]).some((x) => p === x || p.startsWith(`${x}/`))) return null;
   if (!(await isReadOnly(env))) return null;
   return new Response(JSON.stringify({ error: 'read_only', message: 'VinaX is in read-only mode right now. You can keep listening; changes are not saved until it ends.' }), {
     status: 503,

@@ -18,6 +18,7 @@
  *        { action: 'signout_device', account, device } that device's session stops working
  *        { action: 'delete', account, reason }       owner only: everything about the person
  */
+import { forgetBlocked } from '../../_lib/googleAuth';
 import { removeAccountFiles } from '../../_lib/ai/attachments';
 import { adminJson, badRequest, dbFailure } from '../../_lib/admin';
 import { adminGet, adminPost, paging } from '../../_lib/adminRoute';
@@ -127,6 +128,10 @@ export const onRequestPost = adminPost(async ({ env, body, audit }) => {
     const blocked_at = body.action === 'block' ? new Date().toISOString() : null;
     const r = await db.update(env, 'accounts', q().eq('id', account), { blocked_at }, { returning: true });
     if (!r.ok) return dbFailure(r);
+    forgetBlocked(account);
+    // A blocked person gets no more notifications: their phones leave the
+    // audience (they link again by themselves after an unblock and sign-in).
+    if (blocked_at) await db.update(env, 'push_devices', q().eq('account_id', account), { account_id: null });
     const reason = clip(body.reason, 200);
     await audit({ action: body.action === 'block' ? 'user-block' : 'user-unblock', summary: `${body.action === 'block' ? 'blocked' : 'unblocked'} ${label}${reason ? ` — ${reason}` : ''}`, target: account, before: { blocked: !!who.value.blocked_at }, after: { blocked: !!blocked_at } });
     return adminJson({ ok: true, blocked: !!blocked_at });

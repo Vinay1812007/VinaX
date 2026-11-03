@@ -27,7 +27,8 @@
  *       render(model, set, api) → node,        // build the form once; call set(model) after each edit
  *       preview(model) → node,                 // optional, redrawn on every set()
  *       confirmSave(model, stored) → { title, body, typed: true, danger } | null, // optional stronger Save confirm
- *       wide: true                             // optional, full-width card
+ *       wide: true,                            // optional, full-width card
+ *       role: 'owner'                          // optional: only Owners may change it (the server agrees)
  *     }]
  *   });
  * api = { readOnly, rerender(), ctx, stored, values (every stored setting) }.
@@ -45,7 +46,8 @@
   function section(def, all, ctx, registerDirty) {
     var stored = all.values[def.key] === undefined ? null : all.values[def.key];
     var updated = all.updated[def.key] || null;
-    var readOnly = !VX.can('edit');
+    // A section with role 'owner' (data deletion, background jobs) is read-only for editors too.
+    var readOnly = !VX.can(def.role === 'owner' ? 'owner' : 'edit');
     var model = clone(def.fromValue(clone(stored)));
     var chipHost = h('span.chip-host');
     var errHost = h('p.form-error', { role: 'alert' });
@@ -185,7 +187,8 @@
           // Deep link: #/app-settings/x?section=key scrolls to that setting.
           var want = ctx.params && ctx.params.section;
           if (want) setTimeout(function () { var el = document.getElementById('setting-' + want); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'start' }); }, 50);
-          return [ui.readOnlyNote(), jump, h('div.settings-stack', cards)];
+          var ownerOnly = (page.sections || []).some(function (s) { return s.role === 'owner'; });
+          return [ui.readOnlyNote(ownerOnly && VX.can('edit') ? 'owner' : 'edit'), jump, h('div.settings-stack', cards)];
         });
       }
     });

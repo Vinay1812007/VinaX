@@ -11,6 +11,8 @@
  * account row (see api/auth/google.ts).
  */
 
+import { db, dbConfigured, q, type DbEnv } from './db';
+
 export interface AuthEnv {
   /** Plain var: the web OAuth client id(s), comma-separated. Public. */
   GOOGLE_CLIENT_ID?: string;
@@ -139,7 +141,40 @@ export async function issueSession(env: AuthEnv, sub: string, now = Date.now()):
 
 /** The Google account id a session belongs to, or null (forged, expired, malformed). */
 export async function readSession(env: AuthEnv, token: unknown, now = Date.now()): Promise<string | null> {
-  return (await readSessionClaims(env, token, now))?.sub ?? null;
+  const sub = (await readSessionClaims(env, token, now))?.sub ?? null;
+  if (sub && (await isBlocked(env, sub, now))) return null;
+  return sub;
+}
+
+/**
+ * Console rebuild — a person the owner blocked loses every signed-in route at
+ * once, not only sign-in: each session check asks whether the account is
+ * blocked (memoised a minute per account and isolate). A database that does
+ * not answer lets the session through, so an outage never signs everyone out.
+ */
+const BLOCK_MEMO_MS = 60_000;
+const blockMemo = new Map<string, { at: number; blocked: boolean }>();
+/** Forget what this isolate knows (after the console blocks or unblocks someone; tests). */
+export function forgetBlocked(sub?: string): void {
+  if (sub) blockMemo.delete(sub);
+  else blockMemo.clear();
+}
+async function isBlocked(env: AuthEnv, sub: string, now: number): Promise<boolean> {
+  const dbEnv = env as AuthEnv & DbEnv;
+  if (!dbConfigured(dbEnv)) return false;
+  const hit = blockMemo.get(sub);
+  if (hit && now - hit.at < BLOCK_MEMO_MS) return hit.blocked;
+  try {
+    const r = await db.one<{ blocked_at: string | null }>(dbEnv, 'accounts', q().eq('id', sub).select('blocked_at'));
+    // A failed read (an outage, or a database without the column yet) counts
+    // as "not blocked" and is remembered too, so it costs one read a minute.
+    const blocked = r.ok ? !!r.value?.blocked_at : false;
+    if (blockMemo.size > 5_000) blockMemo.clear();
+    blockMemo.set(sub, { at: now, blocked });
+    return blocked;
+  } catch {
+    return false;
+  }
 }
 
 /** Console rebuild — the session's account id and when it was issued (seconds), or null. */

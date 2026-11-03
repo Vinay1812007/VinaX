@@ -155,13 +155,17 @@ export const onRequestPost = adminPost(async ({ env, body, audit, me }) => {
     const devs = await devicesOf(env, [person.id]);
     if (!devs.ok) return adminJson({ error: 'db_unavailable' }, 502);
     if (!devs.rows.length) return adminJson({ error: 'no_device', message: 'This person has not turned on notifications on any phone or browser.' }, 409);
-    const msg = { title, body: text, link: '/' };
+    // The same reply to the same message twice (a double-click) is refused.
+    const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${title}\n${text}`)))].slice(0, 6).map((b) => b.toString(16).padStart(2, '0')).join('');
     const made = await db.insert<{ id: number }>(env, 'notifications', {
-      kind: 'announcement', title, body: text, link: '/', status: 'sent', created_by: me.email, sent_by: me.email,
+      kind: 'announcement', title, body: text, link: '/', status: 'sent', created_by: me.email, sent_by: me.email, dedupe_key: `fb-reply:${id}:${digest}`,
       audience: { label: `reply to feedback #${id}`, account: person.id, feedback: id },
       web_total: devs.rows.filter((d) => d.channel === 'web').length, fcm_total: devs.rows.filter((d) => d.channel === 'fcm').length,
     }, { returning: true });
+    if (!made.ok && made.error === 'conflict') return adminJson({ error: 'duplicate', message: 'This reply was already sent.' }, 409);
     if (!made.ok) return dbFailure(made);
+    // The row id travels with the push so a tap is counted on History.
+    const msg = { title, body: text, link: '/', id: made.rows[0]?.id };
     const report = await fanOut(e, devs.rows, msg);
     if (made.rows[0]?.id != null) await recordReceipt(env, made.rows[0].id, report);
     const sent = report.web.sent + report.fcm.sent;

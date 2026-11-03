@@ -52,7 +52,11 @@ export function cleanImage(v: unknown): string | null {
   if (!s) return null;
   try {
     const u = new URL(s);
-    return u.protocol === 'https:' && !u.username && !u.password ? u.toString() : null;
+    if (u.protocol !== 'https:' || u.username || u.password) return null;
+    // Only pictures the console uploaded (the public console-media bucket) or
+    // the site's own: any other host would learn every recipient's address.
+    const ours = u.origin === SITE_ORIGIN || (/\.supabase\.co$/.test(u.hostname) && u.pathname.startsWith('/storage/v1/object/public/console-media/'));
+    return ours ? u.toString() : null;
   } catch {
     return null;
   }

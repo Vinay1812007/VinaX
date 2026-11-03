@@ -100,7 +100,7 @@ async function statusTick(env: DbEnv, now: number): Promise<Record<string, unkno
   return out;
 }
 
-/** The daily step runs on the housekeeping run after 21:00 UTC (the quiet early hours in India). */
+/** The daily step prefers the clean-up run from 21:00 UTC (the quiet early hours in India). */
 export const COLISTEN_HOUR_UTC = 21;
 
 /** How long each kind of data is kept, from the `retention` setting. 0 / missing = forever, except usage (default 180). */
@@ -110,9 +110,26 @@ export function retentionOf(raw: unknown): { eventsDays: number; errorsDays: num
   return { eventsDays: days(r.eventsDays) ?? 180, errorsDays: days(r.errorsDays), feedbackDays: days(r.feedbackDays), notificationsDays: days(r.notificationsDays) };
 }
 
+/** Hours between two "played together" rebuilds; a missed evening is caught up after this many. */
+const COLISTEN_EVERY_H = 20;
+const COLISTEN_CATCH_UP_H = 30;
+
+/**
+ * Is the daily "played together" rebuild due? It runs on the first clean-up
+ * from 21:00 UTC once the last rebuild (a `colisten` row in job_runs) is 20
+ * hours old, or on any clean-up once it is 30 hours old, so a clean-up set to
+ * run every 3, 6, 12 or 24 hours never skips it for long.
+ */
+export function colistenDue(lastIso: string | null, now: number): boolean {
+  const age = lastIso ? (now - Date.parse(lastIso)) / 3_600_000 : Infinity;
+  if (!Number.isFinite(age)) return true;
+  return (new Date(now).getUTCHours() >= COLISTEN_HOUR_UTC && age >= COLISTEN_EVERY_H) || age >= COLISTEN_CATCH_UP_H;
+}
+
 async function housekeeping(env: DbEnv, now = Date.now()): Promise<Record<string, unknown>> {
   const keep = retentionOf(await setting(env, 'retention'));
-  const daily = new Date(now).getUTCHours() === COLISTEN_HOUR_UTC;
+  const lastColisten = await db.select<{ started_at: string }>(env, 'job_runs', q().eq('job', 'colisten').select('started_at').order('started_at', 'desc').limit(1));
+  const daily = lastColisten.ok && colistenDue(lastColisten.rows[0]?.started_at ?? null, now);
   // With a separate period for error reports, usage and errors are purged
   // apart; otherwise one purge keeps the old behaviour (errors with usage).
   const usage = keep.errorsDays
@@ -145,7 +162,14 @@ async function housekeeping(env: DbEnv, now = Date.now()): Promise<Record<string
   out.aiChatsPurged = chats.chats;
   out.aiFilesPurged = chats.files;
   // Not fatal: before schema v7 is applied the personal tables do not exist yet.
-  if (colisten) out.colistenPairs = colisten.ok ? colisten.value?.pairs : `failed: ${colisten.error}`;
+  if (colisten) {
+    out.colistenPairs = colisten.ok ? colisten.value?.pairs : `failed: ${colisten.error}`;
+    // Remember the rebuild (its own job_runs row) so the next one waits a day.
+    if (colisten.ok) await db.insert(env, 'job_runs', { job: 'colisten', started_at: new Date(now).toISOString(), finished_at: new Date().toISOString(), ok: true, summary: { pairs: colisten.value?.pairs ?? null } });
+  }
+  // The job log keeps 30 days (the scheduled-notifications check alone adds 288 rows a day).
+  const pruned = await db.remove(env, 'job_runs', q().lt('started_at', since(30 * DAY_MS)));
+  out.jobRunsPruned = pruned.ok ? 'done' : `failed: ${pruned.error}`;
   out.personalPurged = personalPurged.ok ? personalPurged.value : `failed: ${personalPurged.error}`;
   if (!rooms.ok || !purged.ok || !retired.ok) throw new Error('housekeeping: a step failed');
   return out;
@@ -194,14 +218,19 @@ export async function runScheduled(env: DbEnv, scheduledTime: number): Promise<J
     return [];
   }
   // The owner's on/off and frequency choices, and when each job last started.
-  const [cfgRaw, runs] = await Promise.all([
+  // Each job's own last start (one small read per job, so a frequent job
+  // never pushes a rare one out of view). A job whose read fails is not run:
+  // better a skipped tick than running everything every 5 minutes.
+  const [cfgRaw, ...lastRuns] = await Promise.all([
     setting(env, 'jobs'),
-    db.select<{ job: string; started_at: string }>(env, 'job_runs', q().select('job,started_at').order('started_at', 'desc').limit(200)),
+    ...JOBS.map((j) => db.select<{ started_at: string }>(env, 'job_runs', q().eq('job', j.id).select('started_at').order('started_at', 'desc').limit(1))),
   ]);
   const cfg = jobSettings(cfgRaw);
-  const last = new Map<string, string>();
-  if (runs.ok) for (const r of runs.rows) if (!last.has(r.job)) last.set(r.job, r.started_at);
   const out: JobResult[] = [];
-  for (const j of JOBS) if (isDue(cfg[j.id], last.get(j.id) ?? null, scheduledTime)) out.push(await runJob(env, j.id, Date.now()));
+  for (const [i, j] of JOBS.entries()) {
+    const r = lastRuns[i] as Awaited<ReturnType<typeof db.select<{ started_at: string }>>>;
+    if (!r.ok) continue;
+    if (isDue(cfg[j.id], r.rows[0]?.started_at ?? null, scheduledTime)) out.push(await runJob(env, j.id, Date.now()));
+  }
   return out;
 }
