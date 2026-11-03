@@ -14,10 +14,11 @@ import { readJsonCapped } from '../../../_lib/body';
 import { rateLimitAsync } from '../../../_lib/ratelimit';
 import { PROVIDER_NAMES } from '../../../_lib/ai/adapters';
 import { MODELS, modelById } from '../../../_lib/ai/models';
+import { DISCOVERY_PROVIDERS, knownDiscovered, prettyName } from '../../../_lib/ai/discovery';
 import {
   deleteConversation, getConversation, isUuid, listMessages, publicConversation, publicMessage, updateConversation, type ConversationRow,
 } from '../../../_lib/ai/store';
-import type { AiEnv } from '../../../_lib/ai/types';
+import type { AiEnv, ProviderId } from '../../../_lib/ai/types';
 import { liveLabel } from '../../../_lib/ai/voice';
 import { removeSharesOf } from '../../../_lib/ai/shares';
 import { getProject } from '../../../_lib/ai/projects';
@@ -45,8 +46,11 @@ async function owned(ctx: Ctx, route: string): Promise<{ sub: string; conv: Conv
 const label = (modelId: string): { name: string; provider: string } | null => {
   const live = liveLabel(modelId);
   if (live) return live;
-  const spec = modelById(MODELS, modelId);
-  return spec ? { name: spec.name, provider: PROVIDER_NAMES[spec.provider] } : null;
+  // A free model found in its provider's list: its name when this instance knows the list, else one made from the id.
+  const spec = modelById(MODELS, modelId) ?? knownDiscovered(modelId);
+  if (spec) return { name: spec.name, provider: PROVIDER_NAMES[spec.provider] };
+  const p = modelId.slice(0, modelId.indexOf(':')) as ProviderId;
+  return DISCOVERY_PROVIDERS.includes(p) ? { name: prettyName(modelId.slice(p.length + 1)), provider: PROVIDER_NAMES[p] } : null;
 };
 
 export const onRequestGet = async (ctx: Ctx): Promise<Response> => {

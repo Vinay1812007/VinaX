@@ -36,6 +36,7 @@ The menu beside the send button picks the model.
 - Every model is also listed by group, with a one-line description and badges for what it can do: see images, search the web, think before answering, and write code. A greyed-out model cannot answer right now, and says why.
 - The list is long, so it has a search box: type part of a name, a provider or what you need (for example "translate" or "code"), then press Enter to pick the first match.
 - **More models** holds specialist models, such as a translator and an Arabic and English model. Models marked "slow to start" can take up to a minute before the first word appears.
+- **More from Groq**, **More from Gemini**, **More from OpenRouter**, **More from NVIDIA** and **More from Cloudflare** list every other free chat model those services offer. VinaX finds them on its own, so new free models appear here within a few hours of being released. They are less tested than the groups above: if one gives an odd answer or stays busy, pick another or go back to Auto. Use the search box at the top of the menu to find one by name.
 - A model you pick yourself is never swapped for another. If it is busy, the reply offers **Retry**, **Try with Auto** and other models to try.
 
 The **+** button holds more choices:

@@ -47,7 +47,7 @@ import {
 } from '../../_lib/ai/attachments';
 import { fileSignals, materialize, newMemo, toTurns } from '../../_lib/ai/materialize';
 import { anyProviderConfigured, PROVIDER_NAMES, providerConfigured } from '../../_lib/ai/adapters';
-import { aiOpenFor, aiSettings, LIMIT_RANGES, registryFor } from '../../_lib/ai/config';
+import { aiOpenFor, aiSettings, foundModelFor, LIMIT_RANGES, registryFor } from '../../_lib/ai/config';
 import { isCooling } from '../../_lib/ai/cooldown';
 import { fallbackTitle, latestLeaf, pathTo, textOf, trimHistory, typedText } from '../../_lib/ai/history';
 import { ladderModels, modelById, type LadderName } from '../../_lib/ai/models';
@@ -200,8 +200,9 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   let candidates: ModelSpec[];
   let ladder: LadderName | null = null;
   if (mode === 'model') {
-    const spec = modelById(registry, body.model);
-    if (!spec || spec.group === null) return json({ error: 'unknown_model' }, 400);
+    // A curated model, or a free one found in its provider's current list (never an arbitrary id).
+    const spec = modelById(registry, body.model) ?? (await foundModelFor(env, settings, body.model, { waitUntil: ctx.waitUntil }));
+    if (!spec || spec.group === null || !providerConfigured(env, spec.provider)) return json({ error: 'unknown_model' }, 400);
     candidates = [spec];
   } else candidates = [];
 

@@ -1,0 +1,17 @@
+{
+  "object": "list",
+  "data": [
+    { "id": "nvidia/nemotron-3.5-lightning-30b-a3b", "object": "model", "created": 735790403, "owned_by": "nvidia" },
+    { "id": "meta/llama-3.3-70b-instruct", "object": "model", "created": 735790403, "owned_by": "meta" },
+    { "id": "deepseek-ai/deepseek-r1", "object": "model", "created": 735790403, "owned_by": "deepseek-ai" },
+    { "id": "mistralai/mistral-small-24b-instruct", "object": "model", "created": 735790403, "owned_by": "mistralai" },
+    { "id": "nvidia/nv-embedqa-e5-v5", "object": "model", "created": 735790403, "owned_by": "nvidia" },
+    { "id": "nvidia/llama-3.2-nv-rerankqa-1b-v2", "object": "model", "created": 735790403, "owned_by": "nvidia" },
+    { "id": "nvidia/llama-3.1-nemoguard-8b-content-safety", "object": "model", "created": 735790403, "owned_by": "nvidia" },
+    { "id": "nvidia/nemoretriever-parse", "object": "model", "created": 735790403, "owned_by": "nvidia" },
+    { "id": "nvidia/nemotron-parse", "object": "model", "created": 735790403, "owned_by": "nvidia" },
+    { "id": "nvidia/llama-3.1-nemotron-70b-reward", "object": "model", "created": 735790403, "owned_by": "nvidia" },
+    { "id": "google/deplot", "object": "model", "created": 735790403, "owned_by": "google" },
+    { "id": "baai/bge-m3", "object": "model", "created": 735790403, "owned_by": "baai" }
+  ]
+}

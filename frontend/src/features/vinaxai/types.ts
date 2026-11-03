@@ -7,12 +7,17 @@ export interface ModelLabel {
 }
 
 export interface PickerModel extends ModelLabel {
-  group: 'fast' | 'balanced' | 'smart' | 'vision' | 'code' | 'more' | 'cloudflare';
+  /** The curated groups, then `more-<provider>`: free models found in that provider's own list. */
+  group: 'fast' | 'balanced' | 'smart' | 'vision' | 'code' | 'more' | 'cloudflare'
+    | 'more-groq' | 'more-gemini' | 'more-openrouter' | 'more-nvidia' | 'more-cloudflare';
   description: string;
   flags: { vision: boolean; web: boolean; thinking: boolean; code: boolean };
   available: boolean;
   reason?: 'not_configured' | 'busy';
 }
+
+/** A free model found in its provider's list (not curated): kept out of short menus such as Retry. */
+export const isFoundModel = (m: Pick<PickerModel, 'group'>): boolean => typeof m.group === 'string' && m.group.startsWith('more-');
 
 export interface ModelsResponse {
   enabled: boolean;

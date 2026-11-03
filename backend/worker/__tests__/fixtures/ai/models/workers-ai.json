@@ -1,0 +1,9 @@
+[
+  { "id": "1a7b9ea1-0000-4000-8000-000000000001", "source": 1, "name": "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "description": "Llama 3.3 70B quantized to fp8.", "task": { "id": "c329a1f9", "name": "Text Generation", "description": "" }, "tags": [], "properties": [{ "property_id": "context_window", "value": "24000" }] },
+  { "id": "1a7b9ea1-0000-4000-8000-000000000002", "source": 1, "name": "@cf/qwen/qwen3-30b-a3b-fp8", "description": "Qwen3 30B A3B.", "task": { "id": "c329a1f9", "name": "Text Generation", "description": "" }, "tags": [], "properties": [{ "property_id": "context_window", "value": "32000" }] },
+  { "id": "1a7b9ea1-0000-4000-8000-000000000003", "source": 1, "name": "@cf/openai/gpt-oss-120b", "description": "GPT-OSS 120B.", "task": { "id": "c329a1f9", "name": "Text Generation", "description": "" }, "tags": [], "properties": [{ "property_id": "context_window", "value": "128000" }] },
+  { "id": "1a7b9ea1-0000-4000-8000-000000000004", "source": 1, "name": "@cf/meta/llama-guard-3-8b", "description": "Safety classifier.", "task": { "id": "c329a1f9", "name": "Text Generation", "description": "" }, "tags": [], "properties": [] },
+  { "id": "1a7b9ea1-0000-4000-8000-000000000005", "source": 1, "name": "@hf/thebloke/old-chat-7b-awq", "description": "Old.", "task": { "id": "c329a1f9", "name": "Text Generation", "description": "" }, "tags": [], "properties": [{ "property_id": "planned_deprecation_date", "value": "2025-10-01" }] },
+  { "id": "1a7b9ea1-0000-4000-8000-000000000006", "source": 1, "name": "@cf/baai/bge-m3", "description": "Embeddings.", "task": { "id": "0137cdcf", "name": "Text Embeddings", "description": "" }, "tags": [], "properties": [] },
+  { "id": "1a7b9ea1-0000-4000-8000-000000000007", "source": 1, "name": "@cf/openai/whisper", "description": "Speech recognition.", "task": { "id": "dfce1c48", "name": "Automatic Speech Recognition", "description": "" }, "tags": [], "properties": [] }
+]

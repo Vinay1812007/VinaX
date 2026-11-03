@@ -24,8 +24,13 @@ export interface ModelFlags {
   thinkFormat: ThinkFormat;
 }
 
-/** Picker groups; null = never shown (web search only). `more` holds niche and slow-to-start models. */
-export type ModelGroup = 'fast' | 'balanced' | 'smart' | 'vision' | 'code' | 'more' | 'cloudflare';
+/**
+ * Picker groups; null = never shown (web search only). `more` holds niche and
+ * slow-to-start models; `more-<provider>` holds the free models found in that
+ * provider's own list (discovery.ts).
+ */
+export type ModelGroup = 'fast' | 'balanced' | 'smart' | 'vision' | 'code' | 'more' | 'cloudflare'
+  | 'more-groq' | 'more-gemini' | 'more-openrouter' | 'more-nvidia' | 'more-cloudflare';
 
 export interface ModelSpec {
   /** Registry id, unique across providers: `<provider>:<upstream id>`. */
@@ -55,6 +60,8 @@ export interface ModelSpec {
    * them). Never in an Auto ladder: Auto moves on long before this.
    */
   firstEventMs?: number;
+  /** Found in the provider's model list (discovery.ts), not curated: never in a ladder. */
+  discovered?: true;
 }
 
 export interface MessagePart {
@@ -116,6 +123,8 @@ export type ProviderEvent =
 /** The Workers AI binding, as much of it as VinaX uses. */
 export interface WorkersAiBinding {
   run(model: string, input: Record<string, unknown>): Promise<unknown>;
+  /** The binding's model search (@cloudflare/workers-types `Ai.models`). */
+  models?(params?: { task?: string; per_page?: number; page?: number; search?: string; author?: string; hide_experimental?: boolean }): Promise<unknown[]>;
 }
 
 export interface AiKeysEnv {

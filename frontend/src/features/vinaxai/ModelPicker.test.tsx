@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ModelPicker } from './ModelPicker';
-import type { PickerModel } from './types';
+import { isFoundModel, type PickerModel } from './types';
 
 afterEach(cleanup);
 
@@ -107,5 +107,28 @@ describe('Escape belongs to the overlay that has focus', () => {
     expect(screen.getByRole('listbox')).toBeTruthy();
     fireEvent.keyDown(screen.getAllByRole('option')[0], { key: 'Escape' });
     expect(screen.queryByRole('listbox')).toBeNull();
+  });
+});
+
+describe('free models found in the providers’ lists', () => {
+  const FOUND = [
+    ...MODELS,
+    ...Array.from({ length: 10 }, (_, i) => m(`openrouter:x${i}/m:free`, `Found ${i}`, 'more-openrouter', { provider: 'OpenRouter', description: 'Meta · 131K context' })),
+    m('groq:gemma2-9b-it', 'Gemma2 9B', 'more-groq', { description: 'Google · 8K context' }),
+  ];
+
+  it('come after the curated groups under “More from …”, and the search finds them by group', () => {
+    render(<ModelPicker models={FOUND} value="auto" onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Model: Auto' }));
+    const heads = screen.getAllByRole('group').map((g) => document.getElementById(g.getAttribute('aria-labelledby')!)?.textContent);
+    expect(heads).toEqual(['Balanced', 'Fast', 'Vision', 'More from OpenRouter', 'More from Groq']);
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'more from groq' } });
+    expect(screen.getAllByRole('option').map((o) => o.querySelector('.vx-ai-opt-name')?.textContent)).toEqual(['Gemma2 9B']);
+  });
+
+  it('isFoundModel tells them from the curated ones', () => {
+    expect(isFoundModel({ group: 'more-nvidia' })).toBe(true);
+    expect(isFoundModel({ group: 'more' })).toBe(false);
+    expect(isFoundModel({ group: 'cloudflare' })).toBe(false);
   });
 });
