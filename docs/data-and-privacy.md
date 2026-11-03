@@ -8,7 +8,7 @@ This document says what VinaX keeps on a listener's device, what leaves the devi
 - **The personal engine, on while signed in, off with one switch.** Since V2 1.4 a signed-in listener's plays, completes, skips, likes and saves are also reported to a taste model kept with the account on the server, which builds Home, playlists and radio ([personalisation.md](personalisation.md)). Settings → Region & privacy has the switch and **Erase my taste model**; Kid mode never reports. The section [The personal engine](#the-personal-engine) lists every field.
 - **Features that need the network send what they need.** Browsing sends search words and ids to the catalogue source. Signed out, or with the personal engine off, the listening history and the taste profile stay on the device; the heard-set never leaves it. The music AI features send only the compact summaries listed under [AI](#ai), and what a signed-in listener types into VinaX AI goes to its providers. Listen Together, usernames, feedback, notifications and device transfer each send the fields listed below.
 - **Usage statistics are on by default, off with one switch.** Since 14.0.3 the box on the welcome sheet is ticked and says so; Settings → Region & privacy has the switch. While it is off, no usage events are sent. Devices that onboarded earlier, with the old unticked box, were switched to the default once and told, with the switch one tap away. **Session insights (third-party, masked replays) are opt-in**, their own switch in Settings, off by default.
-- **The web app shows advertising on some browsing pages.** Those pages load a third-party advertising script, and that is not controlled by the usage-sharing choice. See [Advertising](#advertising).
+- **There is no advertising.** No page loads an advertising script, on the web or in the Android app. See [Advertising](#advertising).
 - **The server keeps what its features need, in one database, and nothing more.** The tables are listed under [Server-side records](#server-side-records): no IP addresses, no precise location. Usage events are kept for a bounded time and then purged. Rate limiting keys on a hashed network address, not the address itself.
 
 ## Your Google account
@@ -154,7 +154,7 @@ A `play` is sent only when the play counts: at least 5 seconds heard, or 70 % of
 | Where is it stored? | `vinax.analytics-consent` on the device; absent means on. `vinax.usage-sharing-default-on.v1` marks the one-time switch of pre-14.0.3 devices. Session insights: `vinax.session-insights-consent.v1`, absent means off. |
 | What does it turn on? | Usage events only. Session insights have their own switch. Nothing else. |
 | How is it enforced? | `consented()` is read on every send. Each event carries an `x-vinax-consent` header and the Worker ignores events without it. `sessionInsightsConsented()` gates the third-party tag. |
-| What still happens when it is off? | Every functional request in the tables above, and advertising on the web. |
+| What still happens when it is off? | Every functional request in the tables above. |
 | Where can it be changed? | **Settings → Region & Privacy → Share anonymous usage** (off at once) and **→ Session insights** (off after the next reload). |
 | Do backups carry it? | No. A restore never writes it. |
 | Does device transfer carry it? | Yes. |
@@ -163,9 +163,7 @@ Rows already sent while sharing was on stay on the server after it is turned off
 
 ## Advertising
 
-On the web, the song, artist, album, language-hub and mood-hub pages end with one advertising slot (`frontend/src/components/AdSlot.tsx`). The first time such a page is opened, the browser loads a script from a third-party advertising network, which then makes its own requests and may set its own cookies. The slot is not rendered — and no advertising script loads — in the Android app or in Kid mode, and it does not appear in the player or the queue.
-
-Advertising is not gated on the usage-sharing choice. VinaX passes the advertising network no listening data: nothing from history, favourites or the taste profile is handed to it. Asking for consent to advertising cookies in regions that require it is done by the advertising network's own prompt, not by code in this repository.
+VinaX shows no advertising. No page, on the web or in the Android app, loads an advertising script, and the site's Content-Security-Policy (`frontend/public/_headers`) allows no advertising hosts. The Google AdSense slot, its ownership tag and `/ads.txt` were removed.
 
 ## Server-side records
 
@@ -271,4 +269,4 @@ The frontend holds no secrets. `VITE_*` variables are visible to every visitor a
 
 ## Changing what is collected
 
-`services/analytics/telemetry.ts`, `services/analytics/recTelemetry.ts` and `services/analytics/sessionInsights.ts` gate on the same choice; `services/personal/reporter.ts` gates on the personal engine's switch. Any change to what they send, or to where advertising appears, must be reflected in `frontend/src/pages/PrivacyPage.tsx` and in this document in the same change.
+`services/analytics/telemetry.ts`, `services/analytics/recTelemetry.ts` and `services/analytics/sessionInsights.ts` gate on the same choice; `services/personal/reporter.ts` gates on the personal engine's switch. Any change to what they send, or adding advertising, must be reflected in `frontend/src/pages/PrivacyPage.tsx` and in this document in the same change.

@@ -170,32 +170,16 @@ export default function PrivacyPage() {
           cleaned up afterwards. To count who is in a room, your device sends a random device ID that VinaX stores on
           this device; it is not linked to your name or account.
         </p>
-        <H>Trackers and ads — the honest version</H>
+        <H>Ads and trackers — the honest version</H>
         <p>
           VinaX sets no tracking cookies of its own, and runs no third-party analytics unless you opt in to session
           insights above — and even then, your taste profile, history and favorites never reach a third party. The
           personal engine keeps its copy on VinaX&rsquo;s own server, for your account alone.
         </p>
         <p>
-          <b>Where ads appear.</b> On the website, one clearly labelled advertisement sits at the end of browsing pages:
-          song, artist, album, language and mood pages. There are never ads in the player, the queue, your
-          library, the Android app or Kid mode, and the ad code is not loaded on those screens at all.
-        </p>
-        <p>
-          <b>Who serves them.</b> Those ads are served by Google. Third-party vendors, including Google, use cookies to
-          serve ads based on your prior visits to this website or other websites. Google&rsquo;s use of advertising
-          cookies enables it and its partners to serve ads to you based on your visits to this site and/or other sites
-          on the internet. You can opt out of personalised advertising in{' '}
-          <a href="https://adssettings.google.com" target="_blank" rel="noreferrer">
-            Ads Settings
-          </a>
-          , or opt out of third-party vendors&rsquo; cookies for personalised advertising at{' '}
-          <a href="https://www.aboutads.info/choices" target="_blank" rel="noreferrer">
-            aboutads.info
-          </a>
-          . Visitors in regions that require consent are asked before any advertising cookie is set. Nothing VinaX
-          stores about your listening — history, favorites, taste profile — is ever shared with an
-          advertiser.
+          <b>No ads.</b> VinaX shows no advertising anywhere: not on the website, not in the Android app and not in
+          Kid mode. No advertising code is loaded and no advertising cookie is set. Nothing VinaX stores about your
+          listening — history, favorites, taste profile — is ever shared with an advertiser.
         </p>
         <H>Your controls</H>
         <p>

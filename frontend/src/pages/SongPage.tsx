@@ -16,7 +16,6 @@ import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { formatDuration, formatCount } from '@/utils/format';
 import { languageLabel } from '@/constants/languages';
 import { shareLink } from '@/utils/share';
-import { AdSlot } from '@/components/AdSlot';
 
 
 export default function SongPage() {
@@ -104,7 +103,6 @@ export default function SongPage() {
         </div>
         {suggestions.isError && <p className="text-sm text-ink-400">Similar tracks aren’t available right now.</p>}
       </section>
-      <AdSlot className="vx-esection" />
     </div>
   );
 }

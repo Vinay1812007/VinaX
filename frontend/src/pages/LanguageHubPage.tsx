@@ -28,7 +28,6 @@ import { NATIVE_NAMES } from '@/features/discover/scripts';
 import { languageTone } from '@/features/discover/tones';
 import { shuffledSongs } from '@/features/search/workspace';
 import '@/styles/pages/browse.css';
-import { AdSlot } from '@/components/AdSlot';
 
 
 function HubSection({ heading, explanation, songs, loading, error, retry }: { heading: string; explanation?: string; songs: Song[] | undefined; loading: boolean; error: boolean; retry: () => void }) {
@@ -200,7 +199,6 @@ export default function LanguageHubPage({ language }: { language: string }) {
       </section>
 
       <LanguageGuide language={language} label={label} />
-      <AdSlot />
 
       <section className="vx-section">
         <SectionHeader title={`More ${label} songs`} />

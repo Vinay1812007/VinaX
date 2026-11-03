@@ -19,7 +19,6 @@ import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { SaveButton } from '@/components/SaveButton';
 import { shareLink } from '@/utils/share';
 import { languageLabel } from '@/constants/languages';
-import { AdSlot } from '@/components/AdSlot';
 
 export default function AlbumPage() {
   const { id: rawId } = useParams();
@@ -105,7 +104,6 @@ export default function AlbumPage() {
           </Shelf>
         </div>
       )}
-      <AdSlot className="vx-esection" />
     </div>
   );
 }
