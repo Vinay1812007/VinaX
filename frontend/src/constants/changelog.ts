@@ -16,6 +16,13 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.9.1': {
+    title: 'VinaX AI keeps the browser\'s right-click menu and text selection',
+    changes: [
+      { type: 'improved', text: 'In VinaX AI, right-click now opens your browser\'s usual menu, so you can copy, paste, open links and search with ease.' },
+      { type: 'improved', text: 'You can select and copy any part of a reply, including code and links.' },
+    ],
+  },
   '1.9.0': {
     title: 'A greeting for every part of the day, a top message bar and in-app announcements',
     changes: [
