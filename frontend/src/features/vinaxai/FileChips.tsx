@@ -55,7 +55,7 @@ export function PendingChips({ files, onRemove }: { files: PendingFile[]; onRemo
   return (
     <ul className="vx-ai-files is-tray" aria-label="Files to send">
       {files.map((f) => (
-        <li key={f.key} className={f.status === 'error' ? 'is-error' : undefined}>
+        <li key={f.key} className={f.status === 'error' ? 'is-error' : f.status === 'preparing' ? 'is-preparing' : undefined}>
           <span className="vx-ai-file">
             {f.preview ? <img src={f.preview} alt="" className="vx-ai-file-mini" /> : <FileIcon className="w-5 h-5" />}
             <span className="vx-ai-file-text">

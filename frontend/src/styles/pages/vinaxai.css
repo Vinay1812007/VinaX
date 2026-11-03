@@ -1008,3 +1008,340 @@ div.vx-ai-gallery-note p { margin: 0; }
 .vx-ai-move-opt .vx-ai-move-check { color: rgb(var(--ember-400)); }
 .vx-ai-dialog p.vx-ai-share-note a { color: rgb(var(--ember-400)); text-decoration: underline; }
 @media (max-width: 520px) { .vx-ai-proj-chip { max-width: 46vw; } }
+
+/* =============================================================================
+   Glass and motion (VinaX AI only). Frosted surfaces built from the app's
+   material tokens (--vx-mat-*, index.css), so the Settings → Glass effect and
+   Blur dials, both themes and the six app styles apply; Harbour, Onyx,
+   AMOLED and high contrast keep their opaque, unblurred look.
+
+   Two kinds of surface:
+   - leaves (menus, the model list, tooltips, dialogs, the settings sheet, the
+     jump button) carry backdrop-filter themselves;
+   - containers (the composer, the sidebar) carry it on a ::before layer, so
+     they are never a containing block for a fixed dialog inside them (the
+     sidebar's delete dialog) and never a backdrop root for a menu that opens
+     out of them (the model list still frosts the chat behind it).
+   Each surface reads --vx-ai-fill (translucent) and keeps --vx-ai-solid
+   beside it; the fallbacks at the end swap one for the other.
+   Motion animates transform and opacity only, and lives inside
+   prefers-reduced-motion: no-preference, so nothing here moves otherwise.
+   ========================================================================== */
+:root {
+  --vx-ai-ease: var(--ease-calm, cubic-bezier(0.32, 0.72, 0, 1));
+  --vx-ai-lift: 0 1px 2px rgb(0 0 0 / 0.22), 0 18px 44px -14px rgb(0 0 0 / 0.62);
+  --vx-ai-lift-sm: 0 10px 30px -16px rgb(0 0 0 / 0.6);
+  --vx-ai-hover: rgb(var(--ink-100) / 0.07);
+  --vx-ai-press: rgb(var(--ink-100) / 0.11);
+  --vx-ai-skel: rgb(var(--ink-100) / 0.07);
+  --vx-ai-skel-hi: rgb(255 255 255 / 0.07);
+  --vx-ai-glow-a: 0.16;
+  --vx-ai-glow-b: 0.09;
+}
+html.light {
+  --vx-ai-lift: 0 1px 2px rgb(48 22 34 / 0.06), 0 18px 44px -18px rgb(48 22 34 / 0.24);
+  --vx-ai-lift-sm: 0 10px 28px -16px rgb(48 22 34 / 0.22);
+  --vx-ai-skel-hi: rgb(255 255 255 / 0.75);
+  --vx-ai-glow-a: 0.07;
+  --vx-ai-glow-b: 0.05;
+}
+
+/* The canvas: a soft ambient light from the active accent, so the glass has
+   colour to frost. Static on purpose: a moving backdrop would make every
+   blurred surface re-render each frame. */
+.vx-ai {
+  isolation: isolate;
+  background:
+    radial-gradient(70% 55% at 12% -8%, rgb(var(--ember-500) / var(--vx-ai-glow-a)), transparent 70%),
+    radial-gradient(55% 45% at 100% 8%, rgb(var(--tide-500) / var(--vx-ai-glow-b)), transparent 72%),
+    radial-gradient(60% 38% at 50% 108%, rgb(var(--ember-500) / var(--vx-ai-glow-a)), transparent 75%),
+    rgb(var(--ink-900));
+}
+html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) .vx-ai { background: rgb(var(--ink-900)); }
+.vx-ai-dock { background: transparent; }
+
+/* ------------------------------------------------------------ leaf glass */
+.vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-settings, .vx-ai-jump {
+  --vx-ai-fill: var(--vx-mat-thick);
+  --vx-ai-solid: rgb(var(--ink-850));
+  background: var(--vx-ai-fill);
+  -webkit-backdrop-filter: blur(var(--vx-mat-thick-blur)) saturate(var(--vx-mat-sat));
+  backdrop-filter: blur(var(--vx-mat-thick-blur)) saturate(var(--vx-mat-sat));
+  box-shadow: inset 0 1px 0 var(--vx-mat-specular), inset 0 0 0 1px var(--vx-mat-hairline), var(--vx-ai-lift);
+}
+.vx-ai-settings { box-shadow: inset 1px 0 0 var(--vx-mat-specular), var(--vx-ai-lift); }
+/* The settings sheet is tall, dense and redraws often (the mic meter): it
+   takes the thick fill over the scrim's blur and no blur of its own. */
+.vx-ai-settings { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.vx-ai-picker-search { background: var(--vx-ai-fill); }
+/* Rows inside glass take a see-through hover, so the frost still shows. */
+.vx-ai-menu-item:hover, .vx-ai-menu-item:focus, .vx-ai-opt:hover, .vx-ai-opt:focus,
+.vx-ai-move-opt:hover, .vx-ai-move-opt:focus-visible { background: var(--vx-ai-hover); }
+.vx-ai-opt[aria-selected='true']:hover, .vx-ai-opt[aria-selected='true']:focus { background: rgb(var(--ember-500) / 0.2); }
+
+/* ------------------------------------------------------- container glass */
+.vx-ai-composer {
+  --vx-ai-fill: var(--vx-mat-regular);
+  --vx-ai-blur: var(--vx-mat-regular-blur);
+  --vx-ai-solid: rgb(var(--ink-850));
+  position: relative;
+  z-index: 3; /* its menus stay over the jump button */
+  background: transparent;
+  box-shadow: var(--vx-ai-lift-sm);
+}
+.vx-ai-side {
+  --vx-ai-fill: var(--vx-mat-thin);
+  --vx-ai-blur: var(--vx-mat-thin-blur);
+  --vx-ai-solid: rgb(var(--ink-950));
+  position: relative;
+  background: transparent;
+}
+/* The column is no stacking context (a delete dialog inside it must rise over
+   the whole page): its frost sits under its content by paint order instead. */
+.vx-ai-side:not(.is-drawer)::before { z-index: auto; }
+.vx-ai-side > * { position: relative; }
+/* The drawer lies over the chat: a denser frost keeps its text clear. */
+.vx-ai-side.is-drawer { --vx-ai-fill: var(--vx-mat-thick); --vx-ai-blur: var(--vx-mat-thick-blur); --vx-ai-solid: rgb(var(--ink-850)); position: absolute; z-index: 30; }
+.vx-ai-composer::before, .vx-ai-side::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--vx-ai-fill);
+  -webkit-backdrop-filter: blur(var(--vx-ai-blur)) saturate(var(--vx-mat-sat));
+  backdrop-filter: blur(var(--vx-ai-blur)) saturate(var(--vx-mat-sat));
+  box-shadow: inset 0 1px 0 var(--vx-mat-specular);
+}
+.vx-ai-composer:focus-within { border-color: rgb(var(--ember-500) / 0.55); box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.18), var(--vx-ai-lift-sm); }
+.vx-ai.is-dragging .vx-ai-composer { border-color: rgb(var(--ember-500)); box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.35), var(--vx-ai-lift-sm); }
+.vx-ai-side-search { background: rgb(var(--ink-100) / 0.05); }
+.vx-ai-row:hover, .vx-ai-row:focus-within { background: var(--vx-ai-hover); }
+.vx-ai-row-link.is-active { background: var(--vx-ai-press); }
+
+/* Quieter glass: chrome that sits on the canvas, not over content. */
+.vx-ai-np { background: rgb(var(--ink-100) / 0.06); box-shadow: inset 0 1px 0 var(--vx-mat-specular); }
+.vx-ai-bubble { box-shadow: inset 0 1px 0 var(--vx-mat-specular); }
+.vx-ai-artifact-head { background: rgb(var(--ink-100) / 0.03); }
+.vx-ai-tabs { background: rgb(var(--ink-100) / 0.05); }
+
+/* Dialog scrims: the dim (and, on larger screens, a light blur) is a ::before
+   layer, so it can fade in on its own while the dialog settles. */
+.vx-ai-scrim { background: transparent; }
+.vx-ai-scrim::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 0.5);
+  pointer-events: none;
+}
+html.light .vx-ai-scrim::before { background: rgb(48 22 34 / 0.3); }
+.vx-ai-scrim > * { position: relative; }
+@media (min-width: 641px) {
+  .vx-ai-scrim:not(.vx-ai-drawer-scrim)::before {
+    -webkit-backdrop-filter: blur(6px) saturate(120%);
+    backdrop-filter: blur(6px) saturate(120%);
+  }
+}
+
+/* Live voice: an opaque canvas lit around the orb. No full-screen blur: the
+   orb and captions redraw every frame, and a blurred layer under them would
+   be recomposited each time. */
+.vx-ai-live { isolation: isolate; }
+.vx-ai-live::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(42% 36% at 50% 42%, rgb(var(--ember-500) / calc(var(--vx-ai-glow-a) * 1.4)), transparent 70%),
+    radial-gradient(40% 30% at 50% 100%, rgb(var(--tide-500) / var(--vx-ai-glow-b)), transparent 75%);
+}
+.vx-ai-live-orb { position: relative; }
+/* A ring of light just outside the orb while the line is open. */
+.vx-ai-live-orb::before {
+  content: '';
+  position: absolute;
+  inset: -16px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, rgb(var(--ember-400) / 0), rgb(var(--ember-400) / 0.7), rgb(var(--tide-500) / 0.55), rgb(var(--ember-400) / 0));
+  -webkit-mask: radial-gradient(closest-side, transparent 86%, #000 89%, #000 95%, transparent 100%);
+  mask: radial-gradient(closest-side, transparent 86%, #000 89%, #000 95%, transparent 100%);
+  opacity: 0;
+}
+.vx-ai-live-orb:is(.is-listening, .is-speaking)::before { opacity: 0.85; }
+.vx-ai-live-btn { background: rgb(var(--ink-100) / 0.08); box-shadow: inset 0 1px 0 var(--vx-mat-specular), var(--vx-ai-lift-sm); }
+.vx-ai-live-btn.is-on { background: rgb(var(--ink-100)); }
+.vx-ai-live-btn.is-end { background: var(--vx-danger); }
+
+/* ------------------------------------------------------------- skeletons */
+.vx-ai-loading { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+.vx-ai-loading.is-welcome { justify-content: center; }
+.vx-ai-skel {
+  position: relative;
+  display: block;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--vx-ai-skel);
+}
+.vx-ai-skel-thread { display: flex; flex-direction: column; gap: 22px; padding: 28px 0; }
+.vx-ai-skel.is-bubble { align-self: flex-end; height: 42px; border-radius: var(--vx-radius-panel); }
+.vx-ai-skel-lines { display: flex; flex-direction: column; gap: 11px; }
+.vx-ai-skel-welcome { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 24px 0; }
+.vx-ai-skel.is-orb { width: 32px; height: 32px; border-radius: 50%; }
+.vx-ai-skel.is-title { height: 28px; border-radius: var(--vx-radius-control); }
+.vx-ai-skel.is-composer { width: 100%; height: 100px; border-radius: var(--vx-radius-panel); }
+.vx-ai-skel-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.vx-ai-skel-chips .vx-ai-skel { height: 36px; }
+.vx-ai-skel-cards { display: flex; flex-direction: column; gap: 18px; padding: 20px 0; }
+.vx-ai-skel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 12px; }
+.vx-ai-skel.is-card { height: 112px; border-radius: var(--vx-radius-card); }
+.vx-ai-side-skel { display: flex; flex-direction: column; gap: 14px; padding: 16px 10px; }
+.vx-ai-side-skel .is-head { width: 64px; height: 9px; margin-bottom: 2px; }
+/* A file being prepared: its thumbnail dims and (with motion) a thin bar runs along the chip's foot. */
+.vx-ai-files li.is-preparing .vx-ai-file { overflow: hidden; }
+.vx-ai-files li.is-preparing .vx-ai-file-mini { opacity: 0.6; }
+.vx-ai-pending { align-items: center; gap: 6px; padding: 10px 0; }
+.vx-ai-pending i { width: 8px; height: 8px; background: linear-gradient(135deg, rgb(var(--ember-400)), rgb(var(--ember-500))); }
+.vx-ai-cursor {
+  width: 10px;
+  height: 10px;
+  background: radial-gradient(circle at 35% 35%, rgb(var(--ember-300)), rgb(var(--ember-500)) 70%);
+  box-shadow: 0 0 10px rgb(var(--ember-500) / 0.55);
+}
+.vx-ai-send:not(:disabled):not(.is-stop) { box-shadow: 0 6px 16px -8px rgb(var(--ember-500) / 0.8); }
+
+/* ------------------------------------------------------------ motion */
+@media (prefers-reduced-motion: no-preference) {
+  /* Loading: the shapes fade in after a beat (a fast load never flashes),
+     then a soft light sweeps across them. */
+  .vx-ai-loading > .vx-ai-column, .vx-ai-side-skel { animation: vx-ai-fade 260ms ease 120ms backwards; }
+  .vx-ai-skel::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, var(--vx-ai-skel-hi) 50%, transparent);
+    transform: translateX(-100%);
+    animation: vx-ai-sweep 1.5s var(--vx-ai-ease) infinite;
+  }
+  .vx-ai-files li.is-preparing .vx-ai-file::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 40%;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, transparent, rgb(var(--ember-500)), transparent);
+    animation: vx-ai-indeterminate 1.2s var(--vx-ai-ease) infinite;
+    pointer-events: none;
+  }
+
+  /* Writing: the dots ride a wave; the cursor breathes. */
+  .vx-ai-pending i { animation: vx-ai-wave 1.2s var(--vx-ai-ease) infinite; }
+  .vx-ai-pending i:nth-child(2) { animation-delay: 0.14s; }
+  .vx-ai-pending i:nth-child(3) { animation-delay: 0.28s; }
+  .vx-ai-cursor { animation: vx-ai-breathe-dot 1.4s ease-in-out infinite; }
+
+  /* New turns rise in (only the newest two, so opening a long chat stays calm). */
+  .vx-ai-thread > .vx-ai-turn:nth-last-child(-n + 2) { animation: vx-ai-rise 380ms var(--vx-ai-ease) backwards; }
+  .vx-ai-thread > .vx-ai-turn-reply:last-child { animation-delay: 60ms; }
+  .vx-ai-welcome .vx-ai-empty { animation: vx-ai-rise 480ms var(--vx-ai-ease) backwards; }
+  .vx-ai-welcome .vx-ai-starters { animation: vx-ai-rise 480ms var(--vx-ai-ease) 90ms backwards; }
+  .vx-ai-welcome .vx-ai-footer { animation: vx-ai-fade 480ms ease 180ms backwards; }
+  .vx-ai-error, .vx-ai-notice, .vx-ai-artifact-card, .vx-ai-sources, .vx-ai-think-body { animation: vx-ai-rise 260ms var(--vx-ai-ease) backwards; }
+  .vx-ai-actions { animation: vx-ai-fade 240ms ease backwards; }
+
+  /* Menus, dialogs, sheets and panels open with a short settle. */
+  .vx-ai-pop { --vx-ai-dy: -6px; transform-origin: top right; animation: vx-ai-pop-in 180ms var(--vx-ai-ease) backwards; }
+  .vx-ai-plus-menu, .vx-ai-retry-menu { --vx-ai-dy: 6px; transform-origin: bottom left; }
+  .vx-ai-picker-list { --vx-ai-dy: 6px; transform-origin: bottom right; }
+  .vx-ai-cite-tip { animation: vx-ai-fade 140ms ease backwards; }
+  .vx-ai-scrim::before { animation: vx-ai-fade 200ms ease backwards; }
+  .vx-ai-dialog { animation: vx-ai-dialog-in 240ms var(--vx-ai-ease) backwards; }
+  .vx-ai-settings { animation: vx-ai-sheet-in 300ms var(--vx-ai-ease) backwards; }
+  .vx-ai-artifact { animation: vx-ai-panel-in 280ms var(--vx-ai-ease) backwards; }
+  .vx-ai-artifact.is-sheet { animation-name: vx-ai-sheet-up; }
+  .vx-ai-live { animation: vx-ai-fade 260ms ease backwards; }
+  .vx-ai-live-stage { animation: vx-ai-dialog-in 360ms var(--vx-ai-ease) 60ms backwards; }
+  .vx-ai-live-orb::before { transition: opacity 300ms ease; }
+  .vx-ai-live-orb:is(.is-listening, .is-speaking)::before { animation: vx-ai-spin 6s linear infinite; }
+  .vx-ai-live-orb.is-speaking::before { animation-duration: 2.4s; }
+  .vx-ai-jump { animation: vx-ai-jump-in 220ms var(--vx-ai-ease) backwards; }
+
+  /* Press and hover. */
+  :is(.vx-ai-icon-btn, .vx-ai-act, .vx-ai-send, .vx-ai-chip, .vx-ai-picker-btn, .vx-ai-side-new, .vx-ai-np-toggle,
+    .vx-ai-code-copy, .vx-ai-live-btn, .vx-ai-back, .vx-ai-new, .vx-ai-row-more, .vx-ai-cite, .vx-ai-tabs button, .vx-ai-jump) {
+    transition: transform 180ms var(--vx-ai-ease), background-color 140ms ease, color 140ms ease, opacity 140ms ease;
+  }
+  :is(.vx-ai-icon-btn, .vx-ai-act, .vx-ai-send, .vx-ai-np-toggle, .vx-ai-code-copy, .vx-ai-back, .vx-ai-new, .vx-ai-row-more):active:not(:disabled) { transform: scale(0.92); }
+  :is(.vx-ai-chip, .vx-ai-picker-btn, .vx-ai-side-new, .vx-ai-live-btn, .vx-ai-tabs button):active:not(:disabled) { transform: scale(0.97); }
+  .vx-ai-jump:active { transform: translateX(-50%) scale(0.92); }
+  .vx-ai-composer { transition: border-color var(--vx-motion-fast) ease, box-shadow var(--vx-motion-normal) var(--vx-ai-ease); }
+  .vx-ai-artifact-card, .vx-ai-gallery-card, .vx-ai-proj-card { transition: transform 220ms var(--vx-ai-ease), background-color 140ms ease; }
+  .vx-ai-think-chev { transition: transform var(--vx-motion-normal) var(--vx-ai-ease); }
+  @media (hover: hover) and (pointer: fine) {
+    .vx-ai-send:not(:disabled):hover { transform: translateY(-1px); }
+    .vx-ai-starters .vx-ai-chip:hover, .vx-ai-artifact-card:hover, .vx-ai-gallery-card:hover, .vx-ai-proj-card:hover { transform: translateY(-2px); }
+  }
+}
+@media (prefers-reduced-motion: no-preference) and (max-width: 640px) {
+  .vx-ai-settings { animation-name: vx-ai-sheet-rise; }
+}
+@keyframes vx-ai-fade { from { opacity: 0; } }
+@keyframes vx-ai-sweep { to { transform: translateX(100%); } }
+@keyframes vx-ai-indeterminate { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@keyframes vx-ai-wave {
+  0%, 64%, 100% { opacity: 0.4; transform: translateY(0) scale(0.82); }
+  32% { opacity: 1; transform: translateY(-5px) scale(1); }
+}
+@keyframes vx-ai-breathe-dot { 50% { opacity: 0.6; transform: scale(0.7); } }
+@keyframes vx-ai-rise { from { opacity: 0; transform: translateY(8px); } }
+@keyframes vx-ai-pop-in { from { opacity: 0; transform: translateY(var(--vx-ai-dy, -6px)) scale(0.97); } }
+@keyframes vx-ai-dialog-in { from { opacity: 0; transform: translateY(10px) scale(0.98); } }
+@keyframes vx-ai-sheet-in { from { opacity: 0; transform: translateX(28px); } }
+@keyframes vx-ai-sheet-rise { from { opacity: 0; transform: translateY(18px); } }
+@keyframes vx-ai-panel-in { from { opacity: 0; transform: translateX(18px); } }
+@keyframes vx-ai-sheet-up { from { opacity: 0; transform: translateY(24px); } }
+@keyframes vx-ai-jump-in { from { opacity: 0; transform: translateX(-50%) translateY(8px); } }
+@media (prefers-reduced-motion: reduce) {
+  .vx-ai-pending i { opacity: 0.85; }
+}
+
+/* ------------------------------------------------------ phones (≤640px) */
+/* Full-screen layers stay unblurred on a phone: the settings sheet is opaque
+   (the dialog scrims' blur is already larger screens only). */
+@media (max-width: 640px) {
+  .vx-ai-settings { --vx-ai-fill: var(--vx-ai-solid); }
+}
+
+/* ------------------------------------------- fallbacks: solid, unblurred */
+/* Flat app styles (Harbour, Onyx), AMOLED and high contrast: their material
+   tokens are already opaque; drop the blur and use the solid fills. */
+html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) :is(.vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-settings, .vx-ai-jump, .vx-ai-composer, .vx-ai-side) { --vx-ai-fill: var(--vx-ai-solid); }
+html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) :is(.vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-jump),
+html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) .vx-ai-composer::before,
+html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) .vx-ai-side::before,
+html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) .vx-ai-scrim::before {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+/* No backdrop-filter (older Android WebViews): solid surfaces. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-settings, .vx-ai-jump, .vx-ai-composer, .vx-ai-side, .vx-ai-side.is-drawer { --vx-ai-fill: var(--vx-ai-solid); }
+}
+/* The listener asked for less transparency: solid surfaces, no blur. */
+@media (prefers-reduced-transparency: reduce) {
+  .vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-settings, .vx-ai-jump, .vx-ai-composer, .vx-ai-side, .vx-ai-side.is-drawer { --vx-ai-fill: var(--vx-ai-solid); }
+  .vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-jump,
+  .vx-ai-composer::before, .vx-ai-side::before, .vx-ai-scrim:not(.vx-ai-drawer-scrim)::before {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .vx-ai-np, .vx-ai-side-search, .vx-ai-tabs, .vx-ai-live-btn { background: rgb(var(--ink-800)); }
+  .vx-ai-live-btn.is-on { background: rgb(var(--ink-100)); }
+  .vx-ai-live-btn.is-end { background: var(--vx-danger); }
+}

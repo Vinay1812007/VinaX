@@ -609,6 +609,16 @@ The probe script ([The probe](#the-probe)) is the fuller check: reasoning, syste
 - A new chat opens on a time-aware greeting, with the composer in the middle and four chips (Write, Learn, Code, Music). The chips fill in a starter and never send.
 - The composer stays above an on-screen keyboard that does not resize the page (`visualViewport`).
 
+**Look and motion.** (`styles/pages/vinaxai.css`, "Glass and motion"; VinaX AI only.)
+- The page sits on a soft, static glow from the accent colour. The composer, sidebar, menus, model list, tooltips and dialogs are frosted glass made from the app's material tokens (`--vx-mat-*`), so Settings → Glass effect and Blur, both themes and the six app styles apply.
+- The settings sheet takes the dense glass fill over the dialog scrim's blur, with no blur of its own: it redraws often (the mic meter). Live voice is an opaque canvas lit around the orb.
+- Harbour, Onyx, AMOLED and high contrast stay opaque and unblurred. So do browsers without `backdrop-filter` and listeners who ask for reduced transparency.
+- On a phone (≤ 640 px) the settings sheet is opaque and the dialog scrims are not blurred.
+- The composer and sidebar carry their frost on a `::before` layer. That way they never become the containing block for a fixed dialog inside them, and never cut off the blur of a menu that opens out of them.
+- While something loads, a shimmering outline of it shows (`Skeleton.tsx`): a chat, a new chat's greeting, project cards, or the chat list. A file being added shows a thin running bar.
+- Replies are written behind three wave dots, then a breathing cursor. The newest two turns rise in, menus and dialogs settle in, and buttons give a little on press.
+- Motion only animates transform and opacity, and none of it runs under reduced motion.
+
 **The composer.**
 - The + menu holds Extended thinking, and Settings.
 - The mic dictates into the text; with nothing typed, the Live voice button stands where Send goes ([Voice](#voice)). Without voice keys neither shows.
