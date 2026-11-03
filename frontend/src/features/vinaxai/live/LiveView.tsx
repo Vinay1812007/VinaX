@@ -13,7 +13,9 @@ import { saveLiveTranscript, voiceNotice } from '../api';
 import { cleanMicLabel, listMics, micNotice, silentMicNotice, type MicDevice, type MicProblem } from '../mic';
 import { usePrefs } from '../prefs';
 import { holdMusic } from '../musicHold';
-import { CloseIcon, GlobeSmallIcon, MicIcon, MicOffIcon } from '../icons';
+import { CloseIcon, GlobeSmallIcon, MicIcon, MicOffIcon, SpeakerIcon } from '../icons';
+import { isNativePlatform } from '@/services/native';
+import { audioRouteAvailable, type AudioRoute } from './audioRoute';
 import { SourcesRow } from '../Sources';
 import type { SourcesInfo } from '../types';
 import { LiveSession, type LiveEndReason, type LiveState } from './liveSession';
@@ -63,6 +65,11 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
   const [micError, setMicError] = useState<string | null>(null);
   const [search, setSearch] = useState(searchAtStart);
   const [web, setWeb] = useState<{ sources: SourcesInfo | null; searching: boolean }>({ sources: null, searching: false });
+  /** Android app with the route plugin: where the voice plays. Null hides the speaker button. */
+  const [route, setRoute] = useState<AudioRoute | null>(null);
+  const [routeBusy, setRouteBusy] = useState(false);
+  /** An Android app built before the route plugin: it cannot switch, so say how to get the button. */
+  const [oldApp] = useState(() => isNativePlatform() && !audioRouteAvailable());
   const session = useRef<LiveSession | null>(null);
   const orb = useRef<HTMLDivElement>(null);
   const endButton = useRef<HTMLButtonElement>(null);
@@ -96,7 +103,7 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
     const back = document.activeElement as HTMLElement | null;
     endButton.current?.focus();
     const release = holdMusic('pause');
-    const s = new LiveSession({ thinking, voice, model, micId, search: searchAtStart }, {
+    const s = new LiveSession({ thinking, voice, model, micId, search: searchAtStart, speaker: usePrefs.getState().liveSpeaker }, {
       onState: (st) => {
         setState(st);
         if (s.model) setModelName(s.model.name);
@@ -109,6 +116,7 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
         setMic(m);
         if (m.silent) void listMics().then(setMics);
       },
+      onRoute: setRoute,
       onLevel: (level) => {
         orb.current?.style.setProperty('--vx-live-level', String(level));
       },
@@ -138,6 +146,18 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
     setSearch(on);
     usePrefs.getState().set({ liveSearch: on });
     void session.current?.setSearch(on);
+  };
+
+  const toggleSpeaker = async () => {
+    const on = route !== 'speaker';
+    setRouteBusy(true);
+    try {
+      const now = await session.current?.setSpeaker(on);
+      // Remembered only when the switch took (a headset keeps its own route until switched).
+      if (now === 'speaker' || now === 'earpiece') usePrefs.getState().set({ liveSpeaker: now === 'speaker' });
+    } finally {
+      setRouteBusy(false);
+    }
   };
 
   const chooseMic = async () => {
@@ -224,12 +244,26 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
             <GlobeSmallIcon className="w-6 h-6" />
           </button>
         )}
+        {!ended && route && (
+          <button
+            type="button"
+            className={`vx-ai-live-btn${route === 'speaker' ? ' is-on' : ''}`}
+            onClick={() => void toggleSpeaker()}
+            disabled={routeBusy}
+            aria-pressed={route === 'speaker'}
+            aria-label="Loudspeaker"
+            title={route === 'speaker' ? 'Playing on the loudspeaker' : route === 'earpiece' ? 'Playing on the earpiece' : 'Playing on your headset'}
+          >
+            <SpeakerIcon className="w-6 h-6" />
+          </button>
+        )}
         <button ref={endButton} type="button" className="vx-ai-live-btn is-end" onClick={() => void close()} disabled={saving}>
           {saving ? 'Saving…' : ended ? 'Close' : 'End'}
         </button>
       </div>
       <p className="vx-ai-live-foot">
         Your voice is sent to Google Gemini to answer{search ? ', and it may search the web with Google for what you ask' : ''}. What you both say is saved in this chat.
+        {oldApp && ' Update the VinaX app to switch between the loudspeaker and the earpiece.'}
       </p>
     </div>
   );

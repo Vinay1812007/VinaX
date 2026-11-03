@@ -68,7 +68,7 @@ The script is idempotent and runs after every sync.
 1. Copies every `.java` file from `frontend/native-android/` into the app's package folder, replacing the `__PKG__` placeholder with `app.Vinax.music`.
 2. Copies `native-android/res/**` (widget layouts, vector icons, shape drawables, provider info, and `values/vinax_widgets.xml` with the widget and notification strings and colours) into the app's resources. Every file is prefixed `vinax_`, so nothing collides with the generated project's own resources.
 3. Copies `native-android/google-services.json` into `android/app/` when the file exists. The wrapper library applies the push build plugin by itself when it finds the file.
-4. Writes `MainActivity.java`. It registers `VinaxMediaPlugin` (app-local plugins are not discovered automatically), relays a notification tap that asks for the full-screen player, and calls the web view's `onResume()` and `resumeTimers()` in both `onPause` and `onStop`, so the notification, lock-screen and widget controls act while the app is in the background.
+4. Writes `MainActivity.java`. It registers `VinaxMediaPlugin` and `AudioRoutePlugin` (app-local plugins are not discovered automatically), relays a notification tap that asks for the full-screen player, and calls the web view's `onResume()` and `resumeTimers()` in both `onPause` and `onStop`, so the notification, lock-screen and widget controls act while the app is in the background.
 5. Patches `AndroidManifest.xml`: adds the foreground-service, media-playback foreground-service, wake-lock, notification and microphone permissions; adds `REQUEST_INSTALL_PACKAGES` unless the environment variable `VINAX_PLAY_STORE_BUILD` is `1`; declares the car-app metadata, the media-button receiver, `VinaxMediaService` (exported, type `mediaPlayback`, with the media-browser intent filter) and both widget receivers. Earlier copies are removed first. If the script cannot find `</application>` it exits with an error instead of writing a manifest without the media service.
 6. Patches `app/build.gradle`: adds the `androidx.media` dependency and signs debug builds with the committed debug keystore.
 7. Copies the launcher icons, the launcher background colour and `xml/automotive_app_desc.xml` from `frontend/android-res/`.
@@ -99,6 +99,7 @@ Native code is limited to what a web view cannot do: the media notification and 
 | `VinaxMediaPlugin.java` | The bridge plugin, registered as `VinaxMedia` |
 | `VinaxPlayerWidget.java` | The Now Playing widget |
 | `VinaxQuickPlayWidget.java` | The static "Play my mix" widget |
+| `AudioRoutePlugin.java` | VinaX AI Live voice's loudspeaker / earpiece switch, registered as `VinaxAudioRoute`; see [ai.md](ai.md#live-voice-in-the-android-app) |
 
 Audio is played by the web player's `<audio>` element inside the web view. The service does not decode audio; it mirrors state and sends commands back. The web side is `frontend/src/services/media-session/index.ts`:
 
@@ -195,6 +196,8 @@ Downloaded files are not part of the backup file; see [data-and-privacy.md](data
 ### Voice
 
 Voice search and Drive mode's voice commands use the system speech recogniser through the `@capacitor-community/speech-recognition` plugin (`frontend/src/features/voice/stt.ts`). The web view exposes a speech-recognition constructor with no service behind it, and starting it closes the renderer, so in the app that constructor is never created. The microphone permission is declared by the patch script as well as by the plugin.
+
+VinaX AI's Live voice opens the mic from the page instead, and plays its voice through Web Audio. How that behaves in the web view (call mode, the earpiece, the echo canceller) and what `AudioRoutePlugin` does about it is in [ai.md](ai.md#live-voice-in-the-android-app).
 
 ### Push
 
