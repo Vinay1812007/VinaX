@@ -126,10 +126,10 @@ const FEATURES: PanelItem[] = [
 /** Right of the card: what it costs and what happens to your data. */
 const FACTS: PanelItem[] = [
   { icon: 'rupee', title: '₹0, always', text: 'No subscription, no premium tier, no in-app purchases. Nothing asks for a card.' },
-  { icon: 'noads', title: 'No ads where you listen', text: 'None here, in the player, the queue, your library, the Android app or Kid mode. The website shows one labelled ad at the end of song, artist, album, language and mood pages.' },
+  { icon: 'noads', title: 'No ads', text: 'None anywhere: not on the website, not in the player or your library, not in the Android app.' },
   { icon: 'lock', title: 'Nothing sold', text: 'Your listening history, favourites and taste profile are never shared with advertisers.' },
   { icon: 'sync', title: 'Your library on every device', text: 'Playlists, history, taste and settings follow your account. Sign in on a new phone and it is all there.' },
-  { icon: 'child', title: 'Kid mode', text: 'Hides songs the catalogue marks explicit, keeps a separate taste profile and shows no ads.' },
+  { icon: 'child', title: 'Kid mode', text: 'Hides songs the catalogue marks explicit and keeps a separate taste profile.' },
 ];
 
 /** 13.5.0 — published pages a visitor can read without an account. */
@@ -187,7 +187,7 @@ const FAQ: { q: string; a: ReactNode }[] = [
   },
   {
     q: 'Is it safe for children?',
-    a: 'Turn on Kid mode in Settings. It hides songs the catalogue marks explicit, keeps a separate taste profile and shows no ads.',
+    a: 'Turn on Kid mode in Settings. It hides songs the catalogue marks explicit and keeps a separate taste profile.',
   },
   {
     q: 'Something isn’t working?',

@@ -19,9 +19,8 @@ export default function TermsPage() {
         </p>
         <H>Free means free</H>
         <p>
-          There are no subscriptions, no premium tiers and no in-app purchases — and no plans for any. The website
-          is supported by one labelled advertisement at the end of browsing pages (never in the player, the queue,
-          the Android app or Kid mode; see <Link to="/privacy">Privacy</Link>). If you ever see VinaX asking for
+          There are no subscriptions, no premium tiers and no in-app purchases — and no plans for any. There are
+          no ads either, on the website or in the app. If you ever see VinaX asking for
           money, it isn&rsquo;t VinaX.
         </p>
         <H>Your account</H>

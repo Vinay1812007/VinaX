@@ -28,8 +28,8 @@ export function HomeAbout() {
             <span>Sign in with Google once; your library follows you to every device.</span>
           </li>
           <li>
-            <strong>One labelled ad, on the website only</strong>
-            <span>At the end of song, artist, album, language and mood pages. Never in the player, the queue, your library, the Android app or Kid mode.</span>
+            <strong>No ads</strong>
+            <span>None on the website, in the player, in your library or in the Android app.</span>
           </li>
           <li>
             <strong>Your taste stays yours</strong>

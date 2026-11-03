@@ -18,7 +18,6 @@ import { HubCover } from '@/features/discover/HubCover';
 import { HUB_TONE, HubMoodTiles } from '@/features/discover/HubMoodTiles';
 import { shuffledSongs } from '@/features/search/workspace';
 import '@/styles/pages/browse.css';
-import { AdSlot } from '@/components/AdSlot';
 
 /**
  * Mood × language landing page (/telugu-romantic-songs …): a real, playable
@@ -124,7 +123,6 @@ export default function MoodHubPage({ language, mood }: { language: string; mood
           ))}
         </div>
       </section>
-      <AdSlot />
     </div>
   );
 }

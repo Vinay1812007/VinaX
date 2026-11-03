@@ -20,7 +20,7 @@ VinaX is a free music app with no sign-up. It plays from a public catalogue, lea
 - **Android app.** The same app with background playback, notification and lock-screen controls, home-screen widgets, offline downloads, push notifications and in-app updates.
 - **Device-first data.** Library, history, settings and the taste profile stay on the device. A service worker keeps the app shell and downloaded songs available offline. Anonymous usage statistics (which song is playing, city-level location, no account) are shared by default and can be switched off in Settings; third-party session insights are off unless turned on.
 
-The website shows one labelled advertisement at the end of song, artist, album, language and mood pages, and nowhere else; none in the Android app or in Kid mode. Music depends on the catalogue.
+There are no ads, on the website or in the Android app. Music depends on the catalogue.
 
 ## Architecture
 
