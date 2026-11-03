@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.9.0': {
+    title: 'A greeting for every part of the day, a top message bar and in-app announcements',
+    changes: [
+      { type: 'improved', text: 'Home greets you for the time of day, and by your first name when that is switched on.' },
+      { type: 'improved', text: 'News from VinaX now shows in a bar at the top of the app that you can close.' },
+      { type: 'improved', text: 'Announcements can open as a pop-up inside the app, on the web as well as on Android.' },
+      { type: 'fixed', text: 'The notification inbox no longer stays empty: it shows the latest announcement.' },
+    ],
+  },
   '1.8.10': {
     title: 'Restore Projects and memory code lost when #210 merged',
     changes: [
