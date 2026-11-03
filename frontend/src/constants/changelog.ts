@@ -16,6 +16,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.9.4': {
+    title: 'Show the sign-in security check under the Google button',
+    changes: [
+      { type: 'improved', text: 'The Cloudflare security check now shows under the Sign in with Google button, so you can see it pass before you sign in.' },
+    ],
+  },
   '1.9.3': {
     title: 'A Cloudflare security check on sign-in',
     changes: [
