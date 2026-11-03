@@ -16,6 +16,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.9.2': {
+    title: 'VinaX AI voice answers any question and searches the web',
+    changes: [
+      { type: 'improved', text: 'VinaX AI\'s voice now answers any question you ask, not just music: news, sport, science, studying, advice and more.' },
+      { type: 'improved', text: 'Voice looks things up on the web for anything current, like today\'s weather, scores or prices, and tells you where it found the answer.' },
+      { type: 'fixed', text: 'VinaX AI no longer says it can only help with the music app.' },
+    ],
+  },
   '1.9.1': {
     title: 'VinaX AI keeps the browser\'s right-click menu and text selection',
     changes: [
