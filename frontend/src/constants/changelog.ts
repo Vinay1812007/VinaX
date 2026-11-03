@@ -16,6 +16,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.9.6': {
+    title: 'VinaX AI: frosted glass, loading shapes and smoother motion',
+    changes: [
+      { type: 'improved', text: 'VinaX AI now has a frosted-glass look: the message box, chat list, menus and dialogs float over a soft glow in your accent colour, in light and dark and in every app style.' },
+      { type: 'improved', text: 'While a chat or your chat list loads you see its outline gently shimmer instead of an empty screen, and replies start with a softly bouncing "writing" indicator.' },
+      { type: 'new', text: 'Menus, dialogs and new messages ease in smoothly, and nothing moves or turns see-through if your device asks for reduced motion or reduced transparency.' },
+    ],
+  },
   '1.9.5': {
     title: 'Every free AI model in VinaX AI\'s menu',
     changes: [
