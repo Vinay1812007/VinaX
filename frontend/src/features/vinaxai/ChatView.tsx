@@ -38,6 +38,7 @@ import { ArrowDownIcon, FolderIcon, IncognitoIcon, MenuIcon, NewChatIcon, Settin
 import { useVoiceDictation } from './useVoiceDictation';
 import { dismissReadNotice, stopReading, useReadAloud } from './readAloud';
 import { SettingsPanel, type SettingsSection } from './SettingsPanel';
+import { PaneSkeleton } from './Skeleton';
 import { ShareDialog } from './ShareDialog';
 
 /** Live voice loads only when someone opens it. */
@@ -395,12 +396,12 @@ export function ChatView(): ReactNode {
 
   let body: ReactNode;
   const empty = thread.length === 0;
-  if (models.isPending) body = <div className="vx-ai-loading" aria-busy="true" />;
+  if (models.isPending) body = <PaneSkeleton kind={view !== 'chat' ? 'cards' : needLoad || !empty ? 'chat' : 'welcome'} />;
   else if (models.isError || !models.data?.configured) body = <Calm title="VinaX AI is unavailable right now" body="Please try again in a little while." action={<button type="button" className="vx-ai-chip" onClick={() => void models.refetch()}>Try again</button>} />;
   else if (!models.data.enabled) body = <Calm title="VinaX AI is taking a break" body="It will be back soon. Your music keeps playing in the meantime." />;
   else if (view !== 'chat') {
     body = (
-      <Suspense fallback={<div className="vx-ai-loading" aria-busy="true" />}>
+      <Suspense fallback={<PaneSkeleton kind="cards" />}>
         <ProjectsArea
           projectId={view === 'project' ? projectPage ?? null : null}
           composer={<>{noticeEl}{voiceNoticeEl}{fileNotice}{visionChip}{composerEl}</>}
@@ -408,7 +409,7 @@ export function ChatView(): ReactNode {
       </Suspense>
     );
   } else if (needLoad && conv.isError) body = <Calm title="This chat isn’t available" body="It may have been deleted, or it belongs to another account." action={<button type="button" className="vx-ai-chip" onClick={newChat}>New chat</button>} />;
-  else if (needLoad) body = <div className="vx-ai-loading" aria-busy="true" />;
+  else if (needLoad) body = <PaneSkeleton kind="chat" label="Loading the chat" />;
   else if (empty) {
     body = (
       <div className="vx-ai-scroll">

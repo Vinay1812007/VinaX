@@ -16,6 +16,7 @@ import { AiError, createProject, deleteProject, getProject, listProjects, patchP
 import { ACCEPT, fileLimits, kindOf, MAX_IMAGE_SOURCE_BYTES, removeUpload, sendPdfText, shrinkImage, uploadBlob } from './files';
 import { ArrowLeftIcon, FileIcon, FolderIcon, PaperclipIcon, PencilIcon, PlusSmallIcon, StarIcon, TrashIcon } from './icons';
 import { DeleteProjectDialog, ProjectFormDialog } from './projectDialogs';
+import { PaneSkeleton } from './Skeleton';
 import { useChatStore } from './store';
 import type { KnowledgeFile, Project, ProjectDetail } from './types';
 
@@ -281,7 +282,7 @@ export function ProjectPage({ id, composer }: { id: string; composer: ReactNode 
       <ArrowLeftIcon className="w-4 h-4" /> All projects
     </Link>
   );
-  if (detail.isPending) return <div className="vx-ai-loading" aria-busy="true" />;
+  if (detail.isPending) return <PaneSkeleton kind="cards" label="Loading the project" />;
   if (detail.isError || !detail.data) {
     return <Calm title="This project isn’t available" body="It may have been deleted, or it belongs to another account." action={back} />;
   }

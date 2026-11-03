@@ -19,6 +19,7 @@ import { collectVersions, hasPreview, parseArtifacts, type Artifact } from './ar
 import { copyText } from './CodeBlock';
 import { Markdown } from './Markdown';
 import { SourcesRow } from './Sources';
+import { PaneSkeleton } from './Skeleton';
 import { shareDate, ShareActions } from './ShareDialog';
 import { CopyIcon, FileIcon, SparkIcon } from './icons';
 import { resetChat } from './store';
@@ -129,7 +130,7 @@ export function SharedChatView(): ReactNode {
   );
 
   let body: ReactNode;
-  if (q.isPending) body = <div className="vx-ai-loading" aria-busy="true" aria-label="Loading the shared chat" />;
+  if (q.isPending) body = <PaneSkeleton kind="chat" label="Loading the shared chat" />;
   else if (!share) {
     const gone = q.error instanceof AiError && q.error.status === 404;
     body = (

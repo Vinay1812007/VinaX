@@ -13,6 +13,7 @@ import { toast } from '@/store/toastStore';
 import { deleteConversation, listConversations, patchConversation } from './api';
 import { ConfirmDialog } from './ConfirmDialog';
 import { groupConversations } from './sidebarGroups';
+import { ListSkeleton } from './Skeleton';
 import { resetChat, useChatStore } from './store';
 import { moveFocus, useDismiss } from './useDismiss';
 import { ArrowLeftIcon, ArtifactsIcon, CloseIcon, DotsIcon, FolderIcon, NewChatIcon, PencilIcon, SearchSmallIcon, SidebarIcon, StarIcon, TrashIcon } from './icons';
@@ -189,7 +190,7 @@ export function Sidebar({ onNavigate, onNewChat, onCollapse, drawer, onSettings 
         <input type="search" aria-label="Search chats" placeholder="Search chats" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
       <nav className="vx-ai-side-list" aria-label="Chats">
-        {list.isPending && <p className="vx-ai-side-note">Loading chats…</p>}
+        {list.isPending && <ListSkeleton label="Loading chats…" />}
         {list.isError && <p className="vx-ai-side-note">Couldn’t load your chats.</p>}
         {list.isSuccess && !items.length && <p className="vx-ai-side-note">{q ? 'No chats match that.' : 'Your chats will appear here.'}</p>}
         {q
