@@ -323,6 +323,37 @@ export function discoveredSpecs(states: Partial<Record<ProviderId, ProviderState
   return out;
 }
 
+/**
+ * OpenRouter's list is ~800 KB (451 models, checked 2026-11-03) and parsing
+ * all of it takes ~6 ms of CPU, more than half of the free Worker plan's
+ * 10 ms. Each model in it starts with `{"id":"`, so this finds them with a
+ * string search and parses only the ones that may be free (an id ending in
+ * `:free`, or a zero price) — a dozen or so. If the list ever stops looking
+ * like that, the whole list is parsed as before.
+ */
+export function openRouterFreeEntries(text: string): unknown {
+  const MARK = '{"id":"';
+  const starts: number[] = [];
+  for (let i = text.indexOf(MARK); i >= 0; i = text.indexOf(MARK, i + MARK.length)) starts.push(i);
+  if (!starts.length) {
+    try { return JSON.parse(text); } catch { return null; }
+  }
+  const data: unknown[] = [];
+  for (let k = 0; k < starts.length; k++) {
+    const a = starts[k];
+    const seg = text.slice(a, k + 1 < starts.length ? starts[k + 1] : text.length);
+    const id = seg.slice(MARK.length, seg.indexOf('"', MARK.length));
+    const zeroPriced = /"prompt":"0(?:\.0+)?"/.test(seg) && /"completion":"0(?:\.0+)?"/.test(seg);
+    if (!id.endsWith(':free') && !zeroPriced) continue;
+    // The entry ends at its closing brace: `},` before the next one, `}]}` for the last.
+    let end = seg.lastIndexOf('}');
+    for (let tries = 0; end > 0 && tries < 4; tries++) {
+      try { data.push(JSON.parse(seg.slice(0, end + 1))); break; } catch { end = seg.lastIndexOf('}', end - 1); }
+    }
+  }
+  return { data };
+}
+
 // ---------------------------------------------------------------- fetching
 
 type Fetcher = (env: AiEnv, signal: AbortSignal) => Promise<FoundModel[]>;
@@ -337,9 +368,14 @@ const bearer = (key: string | undefined): Record<string, string> => ({ authoriza
 
 export const FETCHERS: Readonly<Record<ProviderId, Fetcher>> = {
   groq: async (env, signal) => parseGroq(await getJson('https://api.groq.com/openai/v1/models', bearer(env.GROQ_API_KEY), signal)),
-  openrouter: async (env, signal) => parseOpenRouter(await getJson('https://openrouter.ai/api/v1/models', {
-    ...bearer(env.OPENROUTER_API_KEY), 'HTTP-Referer': 'https://www.vinaxmusic.online', 'X-Title': 'VinaX AI',
-  }, signal)),
+  openrouter: async (env, signal) => {
+    const res = await fetch('https://openrouter.ai/api/v1/models', {
+      headers: { accept: 'application/json', ...bearer(env.OPENROUTER_API_KEY), 'HTTP-Referer': 'https://www.vinaxmusic.online', 'X-Title': 'VinaX AI' },
+      signal,
+    });
+    if (!res.ok) throw new Error(`http_${res.status}`);
+    return parseOpenRouter(openRouterFreeEntries(await res.text()));
+  },
   nvidia: async (env, signal) => parseNvidia(await getJson('https://integrate.api.nvidia.com/v1/models', bearer(env.NVIDIA_API_KEY), signal)),
   gemini: async (env, signal) => {
     const pages: unknown[] = [];

@@ -9,7 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   _resetDiscovery, DISCOVERY_RETRY_MS, DISCOVERY_TTL_MS, discoveredSpecs, discoveryAllowed, discoveryStates, isChatId,
-  parseGemini, parseGroq, parseNvidia, parseOpenRouter, parseWorkersAi, prettyName, toSpec, type FoundModel, type ProviderState,
+  openRouterFreeEntries, parseGemini, parseGroq, parseNvidia, parseOpenRouter, parseWorkersAi, prettyName, toSpec, type FoundModel, type ProviderState,
 } from '../functions/_lib/ai/discovery';
 import { pickerRegistryFor, sanitizeAiSettings } from '../functions/_lib/ai/config';
 import { MODELS } from '../functions/_lib/ai/models';
@@ -363,3 +363,26 @@ describe('the console', () => {
     expect((await adminPost({ request: adminReq({ model: 'groq:made-up' }), env: ENV as never })).status).toBe(400);
   });
 });
+
+describe("OpenRouter's big list, read cheaply", () => {
+  it('finds the same free models from the raw text as a full parse, without parsing every entry', () => {
+    const full = list('openrouter.json');
+    const text = JSON.stringify(full);
+    expect(parseOpenRouter(openRouterFreeEntries(text))).toEqual(parseOpenRouter(full));
+    const parsed = (openRouterFreeEntries(text) as { data: Array<{ id: string }> }).data;
+    expect(parsed.length).toBeLessThan((full as { data: unknown[] }).data.length);
+  });
+
+  it('keeps the last entry, zero-priced entries, and falls back to a full parse for an unexpected layout', () => {
+    const text = JSON.stringify({ data: [
+      { id: 'a/paid', pricing: { prompt: '0.000001', completion: '0.000002' } },
+      { id: 'b/zero', pricing: { prompt: '0', completion: '0' }, architecture: { output_modalities: ['text'] } },
+      { id: 'c/last:free', pricing: { prompt: '0', completion: '0' } },
+    ] });
+    expect((openRouterFreeEntries(text) as { data: Array<{ id: string }> }).data.map((m) => m.id)).toEqual(['b/zero', 'c/last:free']);
+    const pretty = JSON.stringify({ data: [{ id: 'x/y:free' }] }, null, 2);
+    expect((openRouterFreeEntries(pretty) as { data: Array<{ id: string }> }).data.map((m) => m.id)).toEqual(['x/y:free']);
+    expect(openRouterFreeEntries('not json')).toBeNull();
+  });
+});
+
