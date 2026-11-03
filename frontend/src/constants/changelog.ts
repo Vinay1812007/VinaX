@@ -16,6 +16,13 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.9.3': {
+    title: 'A Cloudflare security check on sign-in',
+    changes: [
+      { type: 'improved', text: 'Signing in to VinaX now runs a quick Cloudflare security check that keeps bots out. Most people won\'t see it.' },
+      { type: 'improved', text: 'The admin console\'s sign-in, including the owner recovery password, has the same check.' },
+    ],
+  },
   '1.9.2': {
     title: 'VinaX AI voice answers any question and searches the web',
     changes: [
