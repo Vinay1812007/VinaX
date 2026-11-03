@@ -3,7 +3,7 @@
  *        → { configured, days, view, data }
  * POST /api/admin/analytics { action: 'clear_errors' }   (owner only)
  *
- * Song Stats. Since schema 9 every view counts signed-in users only (plays,
+ * Song Stats. Since schema 10 every view counts signed-in users only (plays,
  * people), except `funnel` (aggregate sign-up journey) and `errors`.
  *   music / rising → { songs [{ id, title, artist, image, plays, listeners, prev_plays }], artists, languages, rising }
  *   geo            → { countries, regions, cities }

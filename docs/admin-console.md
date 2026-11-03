@@ -1,6 +1,6 @@
 # Owner console
 
-The owner console is served at `/admin/` (https://admin.vinaxmusic.online/admin/). The console rebuild (schema version 9) reorganised it for someone who has never seen the code: twenty pages in six groups, plain English everywhere, and no setting that needs JSON, an id, a version string or a raw address typed by hand. Every control is a dropdown, toggle, slider, date or time picker, search picker, drag-to-reorder list, checkbox, radio button, chip or "⋯" menu.
+The owner console is served at `/admin/` (https://admin.vinaxmusic.online/admin/). The console rebuild (schema version 10) reorganised it for someone who has never seen the code: twenty pages in six groups, plain English everywhere, and no setting that needs JSON, an id, a version string or a raw address typed by hand. Every control is a dropdown, toggle, slider, date or time picker, search picker, drag-to-reorder list, checkbox, radio button, chip or "⋯" menu.
 
 It counts **people signed in with Google** only. Anonymous devices (`listeners` rows without an account) stay in the database but never leave the API: the `stats_*` functions, the Users list, Live Now, the notification audience and the AI tester picker all filter on the server ([database.md](database.md#moving-from-version-8)). App errors are the one exception: every report counts.
 
@@ -115,7 +115,7 @@ The answer is `{ configured, schema, days, kpis, timeline, platforms, versions, 
 - `timeline` comes from `stats_timeline(days)`, using India's calendar days.
 - `platforms` comes from `stats_platforms` and counts `users` per platform.
 - `attention` is a list of `{ id, level: bad|warn|info, text, action, page, tab?, params? }` built by `attentionFor()` in `overview.ts`. It covers:
-  - the database not being set up, or being behind schema version 9;
+  - the database not being set up, or being behind schema version 10;
   - errors in the last 24 hours, marked bad above 20 or when they more than double;
   - new feedback;
   - no phones registered for notifications;
@@ -355,7 +355,7 @@ Admins sign in with Google. Only an email on the **Admins & Roles** list (the `a
 1. **Authorise the console's address on the Google sign-in client.** Google Cloud Console → APIs & Services → Credentials → the OAuth web client whose id is `GOOGLE_CLIENT_ID` in `backend/worker/wrangler.toml` → *Authorised JavaScript origins* → add `https://admin.vinaxmusic.online` (and any preview origin you use). Without it, Google's button shows "The given origin is not allowed".
 2. **Name the first owners.** Set the Worker secret `ADMIN_OWNER_EMAILS` to a comma-separated list of Google emails (`npx wrangler secret put ADMIN_OWNER_EMAILS --config worker/wrangler.toml`). These emails are always Owners, even with no `admins` row; their first sign-in writes the row. Invite everyone else from Admins & Roles.
 3. **The recovery password.** `ADMIN_LOGIN_PASSWORD` still works as an Owner ("Owner (recovery password)" in the Change log), behind *Owner recovery password* on the sign-in screen. Keep it for emergencies (Google down, origin not authorised yet) or delete the secret to allow Google sign-in only.
-4. **Run the database update** (schema version 9, below) — the `admins` table must exist for anyone but bootstrap owners and the password.
+4. **Run the database update** (schema version 10, below) — the `admins` table must exist for anyone but bootstrap owners and the password.
 
 | Piece | Where |
 | --- | --- |

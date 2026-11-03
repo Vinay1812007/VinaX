@@ -1,7 +1,7 @@
-// Shell mocks: signed in as an owner, database on schema 9.
+// Shell mocks: signed in as an owner, database on schema 10.
 export default {
   'GET /api/admin/session': (url, b, req) => ({
-    googleClientId: '1-abc.apps.googleusercontent.com', googleReady: true, passwordAllowed: true, databaseConfigured: true, schema: 9, schemaWanted: 9,
+    googleClientId: '1-abc.apps.googleusercontent.com', googleReady: true, passwordAllowed: true, databaseConfigured: true, schema: 10, schemaWanted: 10,
     me: (req.headers['x-admin-token'] || '') ? { email: 'owner@example.com', name: 'Asha Rao', picture: null, role: 'owner', via: 'google' } : null,
   }),
   'POST /api/admin/session': () => ({ token: 'adm1.mock.mock', me: { email: 'owner@example.com', name: 'Asha Rao', picture: null, role: 'owner', via: 'google' } }),

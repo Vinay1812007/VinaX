@@ -68,7 +68,7 @@ export default {
     ],
   }),
   'GET /api/admin/database': () => ({
-    configured: true, reachable: true, schema: { version: 9, appliedAt: ago(60 * 5) }, schemaWanted: 9, expected: 33, missing: [], totalBytes: 48_000_000,
+    configured: true, reachable: true, schema: { version: 10, appliedAt: ago(60 * 5) }, schemaWanted: 10, expected: 33, missing: [], totalBytes: 48_000_000,
     retention: { eventsDays: 180, errorsDays: 30, feedbackDays: null, notificationsDays: null },
     tables: [
       { name: 'events', label: 'Play history and activity', about: 'Plays, skips, searches, likes and app error reports.', rows: 182340, bytes: 31_000_000, approximate: true, keptFor: '180 days (error reports 30 days)' },

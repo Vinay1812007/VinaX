@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 9
+-- VinaX database · schema version 10
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -18,7 +18,7 @@
 --   3. usage events               4. feedback and blocked content
 --   5. Listen Together rooms      6. push devices and notifications
 --   7. settings and experiments   8. audit log, uptime, job runs
---  8b. console admins, error status (version 9)
+--  8b. console admins, error status (version 10)
 --   9. VinaX AI conversations    9b. the personal engine
 --  10. views
 --  11. functions (stats_*, room_*, housekeeping)
@@ -391,7 +391,7 @@ create table if not exists job_runs (
 );
 create index if not exists job_runs_job_idx on job_runs (job, started_at desc);
 
--- ------------------------------------------- 8b. the console (version 9) --
+-- ------------------------------------------- 8b. the console (version 10) --
 
 -- Who may open the owner console. Admins sign in with Google; only an email
 -- on this list gets in. owner: everything (database upkeep, admins);
@@ -1333,7 +1333,7 @@ create or replace view directory as
 create or replace function _days(p int) returns int
 language sql immutable as $$ select least(greatest(coalesce(p, 7), 1), 365) $$;
 
--- Version 9 — the console counts PEOPLE signed in with Google, never
+-- Version 10 — the console counts PEOPLE signed in with Google, never
 -- anonymous devices. A device counts when it belongs to an account (its
 -- account_id, or the account's latest device). Anonymous rows stay in the
 -- database; they are only left out of these answers. App errors are the
@@ -1781,7 +1781,7 @@ begin
 end;
 $$;
 
--- Version 9 — the console's Users page: signed-in people only, filtered and
+-- Version 10 — the console's Users page: signed-in people only, filtered and
 -- sorted on the server, one page at a time, with the counts the page shows.
 -- p_sort: last_active | joined | plays | name.
 create or replace function admin_users(
@@ -2148,7 +2148,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 9, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 9, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 10, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 10, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 9 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 10 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;

@@ -54,7 +54,7 @@ export default {
   'GET /api/admin/overview': (url) => {
     const days = Math.min(90, Math.max(1, Number(url.searchParams.get('days')) || 14));
     return {
-      configured: true, schema: { version: 9, appliedAt: ago(4000) }, days,
+      configured: true, schema: { version: 10, appliedAt: ago(4000) }, days,
       kpis: { activeNow: 4, playingNow: 3, users: 15, listeners: 15, accounts: 15, newListeners24h: 1, newAccounts7d: 3, newAccountsPrev7d: 2, playsToday: 148, playsYesterday: 131, plays24h: 160, plays7d: 980, playsPrev7d: 870, errors24h: 35, errorsPrev24h: 22, dau: 9, dauPrev: 8, wau: 13, wauPrev: 12, mau: 15, mauPrev: 11, feedbackNew: 2, pushDevices: 0, pushPeople: 0, roomsActive: 1 },
       timeline: timeline(days),
       platforms: [{ platform: 'android', users: 9, listeners: 9, accounts: 9 }, { platform: 'web', users: 5, listeners: 5, accounts: 5 }, { platform: 'ios', users: 1, listeners: 1, accounts: 1 }],

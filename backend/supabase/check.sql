@@ -159,7 +159,7 @@ begin
   assert (v -> 'top' -> 0 ->> 'status') = 'new' and length(v -> 'top' -> 0 ->> 'fingerprint') = 32, 'stats_errors: grouped with a status';
   assert _error_shape('Download of "Song 12" timed out after 30s') = 'Download of … timed out after #', '_error_shape';
 
-  -- version 9: the console counts signed-in people only
+  -- version 10: the console counts signed-in people only
   select count(*) into n from signed_devices();
   assert n = 1, 'signed_devices: only check_l1 belongs to an account';
   v := admin_users();
@@ -550,7 +550,7 @@ begin
   assert not has_table_privilege('anon', 'public.personal_events', 'select'), 'anon cannot read personal events';
   assert not has_function_privilege('anon', 'public.personal_neighbours(text, text, integer, text[], boolean)', 'execute'), 'anon cannot call the personal engine';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 9, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 10, 'meta.schema.version';
   raise notice 'check.sql: every function answered as expected';
 end $$;
 
