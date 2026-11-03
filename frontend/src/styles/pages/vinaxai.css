@@ -1070,6 +1070,9 @@ html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) .vx-ai 
   box-shadow: inset 0 1px 0 var(--vx-mat-specular), inset 0 0 0 1px var(--vx-mat-hairline), var(--vx-ai-lift);
 }
 .vx-ai-settings { box-shadow: inset 1px 0 0 var(--vx-mat-specular), var(--vx-ai-lift); }
+/* The settings sheet is tall, dense and redraws often (the mic meter): it
+   takes the thick fill over the scrim's blur and no blur of its own. */
+.vx-ai-settings { -webkit-backdrop-filter: none; backdrop-filter: none; }
 .vx-ai-picker-search { background: var(--vx-ai-fill); }
 /* Rows inside glass take a see-through hover, so the frost still shows. */
 .vx-ai-menu-item:hover, .vx-ai-menu-item:focus, .vx-ai-opt:hover, .vx-ai-opt:focus,
@@ -1142,14 +1145,10 @@ html.light .vx-ai-scrim::before { background: rgb(48 22 34 / 0.3); }
   }
 }
 
-/* Live voice: a frosted veil over the chat on larger screens; on a phone an
-   opaque canvas (no full-screen blur to composite), lit around the orb. */
-.vx-ai-live {
-  isolation: isolate;
-  background: rgb(var(--ink-900) / 0.8);
-  -webkit-backdrop-filter: blur(28px) saturate(140%);
-  backdrop-filter: blur(28px) saturate(140%);
-}
+/* Live voice: an opaque canvas lit around the orb. No full-screen blur: the
+   orb and captions redraw every frame, and a blurred layer under them would
+   be recomposited each time. */
+.vx-ai-live { isolation: isolate; }
 .vx-ai-live::before {
   content: '';
   position: absolute;
@@ -1313,39 +1312,35 @@ html.light .vx-ai-scrim::before { background: rgb(48 22 34 / 0.3); }
 }
 
 /* ------------------------------------------------------ phones (≤640px) */
-/* Full-screen layers stay unblurred on a phone: the settings sheet is
-   opaque, and so is the Live canvas (with its own light). */
+/* Full-screen layers stay unblurred on a phone: the settings sheet is opaque
+   (the dialog scrims' blur is already larger screens only). */
 @media (max-width: 640px) {
-  .vx-ai-settings { --vx-ai-fill: var(--vx-ai-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
-  .vx-ai-live { background: rgb(var(--ink-900)); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .vx-ai-settings { --vx-ai-fill: var(--vx-ai-solid); }
 }
 
 /* ------------------------------------------- fallbacks: solid, unblurred */
 /* Flat app styles (Harbour, Onyx), AMOLED and high contrast: their material
    tokens are already opaque; drop the blur and use the solid fills. */
 html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) :is(.vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-settings, .vx-ai-jump, .vx-ai-composer, .vx-ai-side) { --vx-ai-fill: var(--vx-ai-solid); }
-html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) :is(.vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-settings, .vx-ai-jump, .vx-ai-live),
+html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) :is(.vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-jump),
 html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) .vx-ai-composer::before,
 html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) .vx-ai-side::before,
 html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) .vx-ai-scrim::before {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
-html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) .vx-ai-live { background: rgb(var(--ink-900)); }
 /* No backdrop-filter (older Android WebViews): solid surfaces. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-settings, .vx-ai-jump, .vx-ai-composer, .vx-ai-side, .vx-ai-side.is-drawer { --vx-ai-fill: var(--vx-ai-solid); }
-  .vx-ai-live { background: rgb(var(--ink-900)); }
 }
 /* The listener asked for less transparency: solid surfaces, no blur. */
 @media (prefers-reduced-transparency: reduce) {
   .vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-settings, .vx-ai-jump, .vx-ai-composer, .vx-ai-side, .vx-ai-side.is-drawer { --vx-ai-fill: var(--vx-ai-solid); }
-  .vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-settings, .vx-ai-jump, .vx-ai-live,
+  .vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-jump,
   .vx-ai-composer::before, .vx-ai-side::before, .vx-ai-scrim:not(.vx-ai-drawer-scrim)::before {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
-  .vx-ai-live { background: rgb(var(--ink-900)); }
   .vx-ai-np, .vx-ai-side-search, .vx-ai-tabs, .vx-ai-live-btn { background: rgb(var(--ink-800)); }
   .vx-ai-live-btn.is-on { background: rgb(var(--ink-100)); }
   .vx-ai-live-btn.is-end { background: var(--vx-danger); }
