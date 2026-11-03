@@ -1,5 +1,7 @@
 /**
- * POST /api/auth/google { credential, signed_device_id?, deviceId?, platform?, appVersion? }
+ * GET  /api/auth/google → { turnstileSiteKey }   null when the human check is off
+ *
+ * POST /api/auth/google { credential, turnstile?, signed_device_id?, deviceId?, platform?, appVersion? }
  *   → 200 { session, stored, returning, hasData, user: { name, email, picture, username }, signed_device_id_next? }
  *        `returning`: this Google account signed in before (its row existed);
  *        `hasData`: it has a synced copy in account_backups. The app skips the
@@ -8,6 +10,7 @@
  *        set up, as a new one).
  *   → 401 { error: 'invalid_token' }      the Google token did not verify
  *   → 403 { error: 'blocked' }            the owner blocked this person in the console
+ *   → 403 { error: 'human_check' }        Turnstile is on and `turnstile` is missing or did not pass
  *   → 503 { error: 'not_configured' }     no GOOGLE_CLIENT_ID or no signing secret
  *
  * Signing in is optional; listening never needs it. The Google ID token is
@@ -31,11 +34,13 @@ import { rateLimitAsync } from '../../_lib/ratelimit';
 import { db, dbConfigured, q, type DbEnv } from '../../_lib/db';
 import { DEVICE_HEADER, resolveIdentity, verifiedIdentity, type IdentityEnv } from '../../_lib/identity';
 import { accountFacts, accountOf, CORS, handleOf, json, linkDevice, publicUser } from '../../_lib/authShared';
+import { turnstileSiteKey, verifyTurnstile, type TurnstileEnv } from '../../_lib/turnstile';
 
-type Env = AuthEnv & DbEnv & IdentityEnv;
+type Env = AuthEnv & DbEnv & IdentityEnv & TurnstileEnv;
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: CORS });
-export const onRequestGet = async (): Promise<Response> => json({ error: 'method_not_allowed' }, 405);
+/** What the sign-in screen needs before it shows the Google button. */
+export const onRequestGet = async (ctx: { env: Env }): Promise<Response> => json({ turnstileSiteKey: turnstileSiteKey(ctx.env) });
 
 export const onRequestPost = async (ctx: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = ctx;
@@ -45,6 +50,10 @@ export const onRequestPost = async (ctx: { request: Request; env: Env }): Promis
   const read = await readJsonCapped<Record<string, unknown> | null>(request, 16_000);
   if (!read.ok || !read.value || typeof read.value !== 'object') return json({ error: 'bad_request' }, 400);
   const body = read.value;
+  // Cloudflare Turnstile (when the owner has set its keys). If Siteverify
+  // can't be reached the Google token below is still the proof of who this is.
+  const human = await verifyTurnstile(env, body.turnstile, request, 'app-signin');
+  if (human === 'missing' || human === 'failed') return json({ error: 'human_check' }, 403);
   const profile = await verifyGoogleIdToken(env, body.credential);
   if (!profile) return json({ error: 'invalid_token' }, 401);
   if (dbConfigured(env)) {

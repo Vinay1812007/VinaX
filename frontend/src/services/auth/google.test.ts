@@ -54,6 +54,28 @@ describe('Google sign-in', () => {
     expect(getLocal(KEYS.onboarded, false)).toBe(false);
   });
 
+  it('Turnstile: sends the check\'s token, and names a check that failed (before or at the server)', async () => {
+    const f = ok({ session: 'vx1.p.s', user: USER });
+    expect(await exchangeGoogleToken('t', f, async () => 'ts-token')).toBe('ok');
+    expect(JSON.parse(String((f.mock.calls[0] as unknown as [string, RequestInit])[1].body)).turnstile).toBe('ts-token');
+    signOut();
+    // The check could not run or did not pass: the Google token is never sent.
+    const never = ok({ session: 'vx1.p.s', user: USER });
+    expect(await exchangeGoogleToken('t', never, async () => null)).toBe('check_failed');
+    expect(never).not.toHaveBeenCalled();
+    // The server refused the check.
+    expect(await exchangeGoogleToken('t', ok({ error: 'human_check' }, 403), async () => 'ts-token')).toBe('check_failed');
+    // Another 403 (a blocked account) is not a failed check.
+    expect(await exchangeGoogleToken('t', ok({ error: 'blocked' }, 403), async () => undefined)).toBe('unavailable');
+    // Turnstile off: no `turnstile` field at all.
+    const off = ok({ session: 'vx1.p.s', user: USER });
+    await exchangeGoogleToken('t', off, async () => undefined);
+    expect(JSON.parse(String((off.mock.calls[0] as unknown as [string, RequestInit])[1].body))).not.toHaveProperty('turnstile');
+    expect(currentAccount()).not.toBeNull();
+    signOut();
+    expect(signInMessage('check_failed')).toMatch(/security check/);
+  });
+
   it('names a refused token and an unavailable service; keeps nothing', async () => {
     expect(await exchangeGoogleToken('bad', ok({ error: 'invalid_token' }, 401))).toBe('refused');
     expect(await exchangeGoogleToken('x', ok({ error: 'not_configured' }, 503))).toBe('unavailable');

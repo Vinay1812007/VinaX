@@ -2,9 +2,10 @@
 import { bindingAllows, clientKey } from './ratelimit';
 import { safeEqual } from './safe-compare';
 import { dbErrorCode, type DbFail } from './db';
+import { turnstileOn, type TurnstileEnv } from './turnstile';
 import { looksLikeAdminSession, PASSWORD_PRINCIPAL, principalFromSession, roleAllows, type AdminPrincipal, type AdminRole, type AdminSessionEnv } from './adminAuth';
 
-export interface AdminEnv {
+export interface AdminEnv extends TurnstileEnv {
   ADMIN_LOGIN_PASSWORD?: string;
 }
 
@@ -89,7 +90,7 @@ function checkLocally(request: Request, env: AdminEnv, token: string): { ok: boo
 }
 
 export function isAdmin(request: Request, env: AdminEnv): boolean {
-  if (!env.ADMIN_LOGIN_PASSWORD) return false;
+  if (!env.ADMIN_LOGIN_PASSWORD || turnstileOn(env)) return false;
   const token = presentedToken(request);
   if (!token) return false;
   return checkLocally(request, env, token).ok;
@@ -113,7 +114,18 @@ export async function adminPrincipal(request: Request, env: AdminAuthEnv): Promi
   const token = presentedToken(request);
   if (!token) return null;
   if (looksLikeAdminSession(token)) return principalFromSession(env, token);
+  // With Turnstile on, the password itself is no longer a key: it is traded
+  // for a session at POST /api/admin/session, after the human check.
+  if (turnstileOn(env)) return null;
   return (await passwordAsync(request, env, token)) ? PASSWORD_PRINCIPAL : null;
+}
+
+/**
+ * The recovery password sent to the sign-in route: right or wrong, with the
+ * same lockout as a password sent as a key.
+ */
+export async function ownerPasswordMatches(request: Request, env: AdminAuthEnv, password: string): Promise<boolean> {
+  return !!password && passwordAsync(request, env, password);
 }
 
 /** 403 for a signed-in admin whose role is too low for this action. */

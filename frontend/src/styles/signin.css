@@ -155,3 +155,14 @@ html.light .vx-google-btn { background: #fff; color: #1f1f1f; }
 .vx-signin-prompt-fine a { color: rgb(var(--ink-200)); text-decoration: underline; text-underline-offset: 2px; }
 .vx-signin-explore { display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; min-height: 40px; padding: 0 14px; border-radius: 9999px; font-size: 14px; font-weight: 700; color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.08); }
 .vx-signin-explore:hover { background: rgb(var(--ink-100) / 0.14); }
+
+/* Cloudflare Turnstile: the security check that runs with a sign-in. Empty
+   (and so invisible) unless Cloudflare asks for a click. */
+.vx-turnstile {
+  position: fixed;
+  left: 50%;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 2147483000;
+}
+.vx-turnstile:empty { display: none; }

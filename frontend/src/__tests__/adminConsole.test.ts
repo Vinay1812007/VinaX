@@ -78,8 +78,9 @@ describe('index.html', () => {
     }
   });
 
-  it('keeps the strict CSP: no inline script, scripts only from self and Google sign-in', () => {
-    expect(indexHtml).toContain("script-src 'self' https://accounts.google.com/gsi/client;");
+  it('keeps the strict CSP: no inline script, scripts only from self, Google sign-in and Cloudflare Turnstile', () => {
+    expect(indexHtml).toContain("script-src 'self' https://accounts.google.com/gsi/client https://challenges.cloudflare.com;");
+    expect(indexHtml).toContain('frame-src https://accounts.google.com/gsi/ https://challenges.cloudflare.com"');
     expect(indexHtml).toMatch(/connect-src 'self' https:\/\/accounts\.google\.com\/gsi\/;/);
     expect(indexHtml).not.toMatch(/<script>(?!<\/script>)/);
     expect(indexHtml).not.toMatch(/\son[a-z]+="/);

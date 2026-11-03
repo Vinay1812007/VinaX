@@ -10,7 +10,11 @@
  *      (memoised a minute), so a demotion or removal applies within a minute.
  *   2. The owner password (ADMIN_LOGIN_PASSWORD) — the recovery key. It acts
  *      as an owner named "owner", so a fresh console can invite its first
- *      admin. Removing the secret turns it off.
+ *      admin. Removing the secret turns it off. With Cloudflare Turnstile on
+ *      (./turnstile.ts) the password is only taken by POST /api/admin/session
+ *      with a passed human check, which answers a password session: an
+ *      `adm1` token whose payload holds a tag of the password (`pw`) instead
+ *      of an email, so changing the password ends those sessions.
  *
  * Roles: viewer < editor < owner. GETs need any role; writes need editor
  * unless the route asks for owner (database upkeep, admins, deleting a
@@ -79,8 +83,8 @@ export async function issueAdminSession(env: AuthEnv, email: string, now = Date.
   return `adm1.${payload}.${await sign(secret, payload)}`;
 }
 
-/** The email a console session belongs to, or null (forged, expired, malformed). */
-export async function readAdminSession(env: AuthEnv, token: string, now = Date.now()): Promise<string | null> {
+/** A signed, unexpired session's payload, or null. */
+async function readSessionPayload(env: AuthEnv, token: string, now: number): Promise<{ email?: unknown; pw?: unknown } | null> {
   try {
     const secret = secretOf(env);
     const m = /^adm1\.([A-Za-z0-9_-]{10,600})\.([A-Za-z0-9_-]{20,100})$/.exec(token);
@@ -90,13 +94,33 @@ export async function readAdminSession(env: AuthEnv, token: string, now = Date.n
     let diff = 0;
     for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ m[2].charCodeAt(i);
     if (diff !== 0) return null;
-    const p = JSON.parse(fromB64url(m[1])) as { email?: unknown; exp?: unknown };
-    const email = normEmail(p.email);
-    if (!email || typeof p.exp !== 'number' || p.exp < Math.floor(now / 1000)) return null;
-    return email;
+    const p = JSON.parse(fromB64url(m[1])) as { email?: unknown; pw?: unknown; exp?: unknown };
+    if (typeof p.exp !== 'number' || p.exp < Math.floor(now / 1000)) return null;
+    return p;
   } catch {
     return null;
   }
+}
+
+/** The email a console session belongs to, or null (forged, expired, malformed, or a password session). */
+export async function readAdminSession(env: AuthEnv, token: string, now = Date.now()): Promise<string | null> {
+  const p = await readSessionPayload(env, token, now);
+  return p ? normEmail(p.email) : null;
+}
+
+/** A short tag of the owner password: a session made with it ends when the password changes. */
+async function passwordTag(password: string): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(`admin-password:${password}`)));
+  return b64url(digest.slice(0, 12));
+}
+
+/** A console session for the owner recovery password (after it and the human check passed). */
+export async function issuePasswordSession(env: AuthEnv, password: string, now = Date.now()): Promise<string | null> {
+  const secret = secretOf(env);
+  if (!secret) return null;
+  const iat = Math.floor(now / 1000);
+  const payload = b64url(enc.encode(JSON.stringify({ pw: await passwordTag(password), iat, exp: iat + ADMIN_SESSION_TTL_S })));
+  return `adm1.${payload}.${await sign(secret, payload)}`;
 }
 
 export const looksLikeAdminSession = (token: string): boolean => token.startsWith('adm1.');
@@ -129,8 +153,14 @@ export async function adminRowOf(env: AdminSessionEnv, email: string, now = Date
 }
 
 /** A Google session token → the principal, or null. */
-export async function principalFromSession(env: AdminSessionEnv, token: string, now = Date.now()): Promise<AdminPrincipal | null> {
-  const email = await readAdminSession(env, token, now);
+export async function principalFromSession(env: AdminSessionEnv & { ADMIN_LOGIN_PASSWORD?: string }, token: string, now = Date.now()): Promise<AdminPrincipal | null> {
+  const p = await readSessionPayload(env, token, now);
+  if (!p) return null;
+  if (typeof p.pw === 'string') {
+    const password = env.ADMIN_LOGIN_PASSWORD;
+    return password && p.pw === (await passwordTag(password)) ? PASSWORD_PRINCIPAL : null;
+  }
+  const email = normEmail(p.email);
   if (!email) return null;
   const row = await adminRowOf(env, email, now);
   if (!row) return null;
