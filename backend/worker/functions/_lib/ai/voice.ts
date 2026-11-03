@@ -56,6 +56,18 @@ export const LIVE_MODELS = [
   { id: 'gemini-2.5-flash-native-audio-preview-09-2025', name: 'Gemini 2.5 Flash Native Audio (Sep 2025)' },
 ] as const;
 export const LIVE_THINKING_MODEL = { id: 'gemini-3.8-live-extended-thinking', name: 'Gemini 3.8 Live (Extended thinking)' } as const;
+/**
+ * The Live models that can search the web on VinaX's Gemini key. A live test
+ * on 2026-11-03 found Gemini 3.8 Live and 3.1 Flash Live close the socket
+ * with "You exceeded your current quota" as soon as the search tool is in
+ * the setup (search is not in their free allowance), while 2.5 Flash Native
+ * Audio searched and named its sources. With search on, these go first.
+ */
+export const LIVE_SEARCH_MODELS: readonly string[] = [
+  'gemini-2.5-flash-native-audio-latest',
+  'gemini-2.5-flash-native-audio-preview-12-2025',
+  'gemini-2.5-flash-native-audio-preview-09-2025',
+];
 /** Every Live model, as offered in VinaX AI settings. */
 export const ALL_LIVE_MODELS: ReadonlyArray<{ id: string; name: string }> = [...LIVE_MODELS, LIVE_THINKING_MODEL];
 
