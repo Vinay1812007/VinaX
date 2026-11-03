@@ -356,6 +356,9 @@ describe('POST /api/ai/live-token', () => {
     expect(new Set(picked).size).toBe(picked.length);
     // An unknown pick is ignored.
     expect(liveCandidates(false, [], Date.now(), 'gpt-5')[0].id).toBe('gemini-3.8-live');
+    // Web search on: the models that can search on VinaX's key go first, after a picked one.
+    expect(liveCandidates(false, [], Date.now(), null, true).map((m) => m.id).slice(0, 4)).toEqual(['gemini-2.5-flash-native-audio-latest', 'gemini-2.5-flash-native-audio-preview-12-2025', 'gemini-2.5-flash-native-audio-preview-09-2025', 'gemini-3.8-live']);
+    expect(liveCandidates(false, [], Date.now(), 'gemini-3.8-live', true).map((m) => m.id).slice(0, 2)).toEqual(['gemini-3.8-live', 'gemini-2.5-flash-native-audio-latest']);
   });
 
   it('needs a Gemini key, and a refused key is a calm 503', async () => {
@@ -390,8 +393,9 @@ describe('POST /api/ai/live-token', () => {
     upstream = (url) => (url.endsWith('/v1beta/auth_tokens') ? json({ name: 'tok' }) : new Response('', { status: 500 }));
     const body = await (await ask({ search: true })).json();
     expect(body.search).toBe(true);
+    expect(body.model.id).toBe('gemini-2.5-flash-native-audio-latest');
     expect(body.setup.tools).toEqual([{ googleSearch: {} }]);
-    expect(body.setup.systemInstruction.parts[0].text).toContain('You can search the web');
+    expect(body.setup.systemInstruction.parts[0].text).toContain('You have Google Search');
     expect(body.setup.systemInstruction.parts[0].text).not.toContain('search the web or see');
     expect(JSON.parse(String(seen[0].init!.body)).liveConnectConstraints.config.tools).toEqual([{ googleSearch: {} }]);
   });
@@ -403,7 +407,7 @@ describe('POST /api/ai/live-token', () => {
     const text = body.setup.systemInstruction.parts[0].text as string;
     expect(text).toContain('<earlier_in_this_call>');
     expect(text).toContain('User: Who is touring?\nYou: Let me check.');
-    expect(text.indexOf('You can search the web')).toBeLessThan(text.indexOf('<earlier_in_this_call>'));
+    expect(text.indexOf('You have Google Search')).toBeLessThan(text.indexOf('<earlier_in_this_call>'));
     const plain = await (await ask({})).json();
     expect(plain.setup.systemInstruction.parts[0].text).not.toContain('earlier_in_this_call');
   });
@@ -525,11 +529,20 @@ describe('the voice prompt and the model list', () => {
     expect(VOICE_PROMPT).toContain('No Markdown');
   });
 
+  it('the Live prompt answers anything, not only music', () => {
+    for (const p of [VOICE_PROMPT, VOICE_SEARCH_PROMPT]) {
+      expect(p).toContain('You help with anything people ask');
+      expect(p).toContain('Never say you can only help with music or the app');
+      expect(p).not.toContain('the assistant in the VinaX music app');
+    }
+  });
+
   it('with web search on, the Live prompt says it can look things up and name the site', () => {
     const vars = { now: new Date('2026-10-31T10:00:00Z'), timezone: 'UTC', locale: 'en', firstName: null, modelName: 'Gemini 3.8 Live', providerName: 'Google' };
     const p = voicePrompt(vars, true);
     expect(VOICE_SEARCH_PROMPT).not.toBe(VOICE_PROMPT);
-    expect(p).toContain('You can search the web');
+    expect(p).toContain('You have Google Search, and you should use it');
+    expect(p).toContain("Never say you can't look things up");
     expect(p).toContain("Say briefly that you're checking");
     expect(p).toContain('by its site name');
     expect(p).toContain("can't play, pause or change the music or see the user's screen");

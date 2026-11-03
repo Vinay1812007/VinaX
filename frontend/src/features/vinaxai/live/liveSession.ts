@@ -6,8 +6,10 @@
  * transcript is kept for the chat.
  *
  * When a model will not start (the socket closes before setupComplete), the
- * next Live model is asked for, at most three times. With web search on, a
- * model that will not start is first tried once without search.
+ * next Live model is asked for, at most three times. With web search on,
+ * the next model keeps search (some Live models refuse the search tool on
+ * VinaX's key); only the last try goes without it, so search is never
+ * dropped while a model that can search is left.
  *
  * Web search is part of the setup, so switching it during a session
  * reconnects: same mic, same transcript, and the new session is told what
@@ -128,10 +130,9 @@ export class LiveSession {
       this.model = token.model;
       this.search = token.search === true;
       if (await this.connect(token)) return true;
-      // A model may refuse the search tool: try it once without search first.
-      if (this.search) { search = false; continue; }
       skip.push(token.model.id);
-      search = this.wantSearch;
+      // The last try goes without search, in case search is what fails.
+      if (attempt === MAX_ATTEMPTS - 2) search = false;
     }
     if (!this.ended) this.finish('failed', 'voice_unavailable');
     return false;

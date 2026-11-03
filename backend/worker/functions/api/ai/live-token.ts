@@ -22,7 +22,7 @@ import { readJsonCapped } from '../../_lib/body';
 import { voiceFailure, voiceGate } from '../../_lib/ai/voiceGate';
 import { aiSettings } from '../../_lib/ai/config';
 import {
-  ALL_LIVE_MODELS, DEFAULT_LIVE_VOICE, LIVE_MODELS, LIVE_THINKING_MODEL, LIVE_VOICES, LIVE_WS_URL, liveSetup, mintLiveToken, noteVoiceFailure, voiceResting,
+  ALL_LIVE_MODELS, DEFAULT_LIVE_VOICE, LIVE_MODELS, LIVE_SEARCH_MODELS, LIVE_THINKING_MODEL, LIVE_VOICES, LIVE_WS_URL, liveSetup, mintLiveToken, noteVoiceFailure, voiceResting,
 } from '../../_lib/ai/voice';
 import { firstNameOf, safeLocale, safeTimezone, voicePrompt, voiceRecapBlock } from '../../_lib/ai/prompt';
 import { asProviderError } from '../../_lib/ai/errors';
@@ -32,12 +32,14 @@ export const onRequestOptions = async (): Promise<Response> => new Response(null
 
 /**
  * The Live models to offer, in order, without the ones the page says failed:
- * the picked one first, then the thinking one when Extended thinking is on,
- * then Auto's order. Others stay behind as fallbacks.
+ * the picked one first, then (with web search on) the models that can
+ * search, then the thinking one when Extended thinking is on, then Auto's
+ * order. Others stay behind as fallbacks.
  */
-export function liveCandidates(thinking: boolean, skip: readonly string[], now = Date.now(), picked: unknown = null): Array<{ id: string; name: string }> {
+export function liveCandidates(thinking: boolean, skip: readonly string[], now = Date.now(), picked: unknown = null, search = false): Array<{ id: string; name: string }> {
   const first = ALL_LIVE_MODELS.find((m) => m.id === picked);
-  const all = [...(first ? [first] : []), ...(thinking ? [LIVE_THINKING_MODEL] : []), ...LIVE_MODELS];
+  const searchers = search ? LIVE_MODELS.filter((m) => LIVE_SEARCH_MODELS.includes(m.id)) : [];
+  const all = [...(first ? [first] : []), ...searchers, ...(thinking ? [LIVE_THINKING_MODEL] : []), ...LIVE_MODELS];
   return all.filter((m, i) => all.findIndex((x) => x.id === m.id) === i && !skip.includes(m.id) && !voiceResting(m.id, now));
 }
 
@@ -50,10 +52,10 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
   const body = read.value && typeof read.value === 'object' ? read.value : {};
   const skip = Array.isArray(body.skip) ? body.skip.filter((s): s is string => typeof s === 'string').slice(0, 10) : [];
   const voice = (LIVE_VOICES as readonly string[]).includes(body.voice as string) ? (body.voice as string) : DEFAULT_LIVE_VOICE;
-  const candidates = liveCandidates(body.thinking === true, skip, Date.now(), body.model);
-  if (!candidates.length) return voiceFailure([]);
   // The owner's search switch covers Live voice too.
   const search = body.search === true && (await aiSettings(env)).search;
+  const candidates = liveCandidates(body.thinking === true, skip, Date.now(), body.model, search);
+  if (!candidates.length) return voiceFailure([]);
   const recap = voiceRecapBlock(body.recap);
 
   const account = await accountOf(env, gate.sub);
