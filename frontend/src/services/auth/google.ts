@@ -60,20 +60,31 @@ function setAccount(a: Account | null): void {
   for (const cb of listeners) cb(a);
 }
 
-export type SignInResult = 'ok' | 'cancelled' | 'refused' | 'offline' | 'unavailable';
+/** `check_failed`: Cloudflare's security check (Turnstile) didn't finish or didn't pass. */
+export type SignInResult = 'ok' | 'cancelled' | 'refused' | 'offline' | 'unavailable' | 'check_failed';
+
+/** The security check's token for one sign-in: undefined when none is needed, null when it failed. */
+type HumanCheck = () => Promise<string | null | undefined>;
+const turnstileCheck: HumanCheck = () => import('./turnstile').then((m) => m.turnstileToken(ORIGIN, 'app-signin')).catch(() => null);
 
 /** Trade a Google ID token for a VinaX session. */
-export async function exchangeGoogleToken(credential: string, fetchImpl: typeof fetch = fetch): Promise<SignInResult> {
+export async function exchangeGoogleToken(credential: string, fetchImpl: typeof fetch = fetch, check: HumanCheck = turnstileCheck): Promise<SignInResult> {
   try {
+    const turnstile = await check();
+    if (turnstile === null) return 'check_failed';
     const res = await fetchImpl(`${ORIGIN}/api/auth/google`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       // V2 1.0.1 — the install id too: a browser that signs in before it has
       // ever reported usage has no signed id yet, and without it the console
       // listed the person twice (the account, and a "Device only" row).
-      body: JSON.stringify({ credential, signed_device_id: getLocal<string>(KEYS.signedDeviceId, '') || undefined, deviceId: installId(), ...(isNativePlatform() ? (await readInstalledVersion(), clientFacts()) : clientFacts()) }),
+      body: JSON.stringify({ credential, ...(turnstile ? { turnstile } : {}), signed_device_id: getLocal<string>(KEYS.signedDeviceId, '') || undefined, deviceId: installId(), ...(isNativePlatform() ? (await readInstalledVersion(), clientFacts()) : clientFacts()) }),
     });
     if (res.status === 401) return 'refused';
+    if (res.status === 403) {
+      const e = (await res.json().catch(() => null)) as { error?: unknown } | null;
+      if (e?.error === 'human_check') return 'check_failed';
+    }
     if (!res.ok) return 'unavailable';
     const j = (await res.json()) as { session?: unknown; user?: AccountUser; returning?: unknown; hasData?: unknown; signed_device_id_next?: unknown };
     if (typeof j.session !== 'string' || !j.user) return 'unavailable';

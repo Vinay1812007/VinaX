@@ -31,6 +31,7 @@ export function signInMessage(r: SignInResult): string | null {
   if (r === 'ok' || r === 'cancelled') return null;
   if (r === 'offline') return 'You’re offline — connect and try signing in again.';
   if (r === 'refused') return 'Google sign-in was not accepted. Try again.';
+  if (r === 'check_failed') return 'The security check didn’t finish. Try signing in again.';
   return 'Sign-in is not available right now. Try again in a moment.';
 }
 

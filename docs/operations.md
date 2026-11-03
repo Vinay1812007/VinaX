@@ -130,7 +130,19 @@ The value is typed at the prompt, never pasted into a file or a chat. `npx wrang
 
 Non-secret settings are in `[vars]` in `wrangler.toml`: `ASSETS_HOST` (the static site's host, used for fall-through and for the shell of edge-rendered pages) and `GITHUB_REPO`. The `HANDOFF` key-value binding holds device-transfer ciphertext.
 
-`TURNSTILE_SECRET_KEY` is read by nothing and can be deleted. So are the old AI build's names that VinaX AI does not use: the older `VINAX_…_API_KEY` key names, `NVIDIA_BASE_URL`, `VINAX_MAESTRO_MODEL` and `SERPER_API_KEY` (`npx wrangler secret delete <NAME> --config worker/wrangler.toml`), and the `SERPER_DAILY_LIMIT` and `RESEARCH_DAILY_LIMIT` vars. Keep `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY` and `NVIDIA_API_KEY`: VinaX AI reads them. The `CRON_SECRET` Actions secret is read by no workflow and can be deleted too.
+The old AI build's names that VinaX AI does not use are read by nothing and can be deleted: the older `VINAX_…_API_KEY` key names, `NVIDIA_BASE_URL`, `VINAX_MAESTRO_MODEL` and `SERPER_API_KEY` (`npx wrangler secret delete <NAME> --config worker/wrangler.toml`), and the `SERPER_DAILY_LIMIT` and `RESEARCH_DAILY_LIMIT` vars. Keep `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY` and `NVIDIA_API_KEY`: VinaX AI reads them. The `CRON_SECRET` Actions secret is read by no workflow and can be deleted too.
+
+### Cloudflare Turnstile (sign-in security check)
+
+Every sign-in can carry a Cloudflare Turnstile check: Google sign-in in the app (web and Android, which loads the same site) and in the console, and the console's owner recovery password. It is off until the Worker has both keys:
+
+1. Cloudflare dashboard → Turnstile → Add widget. Hostnames: `vinaxmusic.online` (this covers `www.` and `admin.`). Mode: Managed. Copy the site key and the secret key.
+2. Site key: add `TURNSTILE_SITE_KEY = "<site key>"` under `[vars]` in `backend/worker/wrangler.toml` (it is public), or set it as a plain variable on the Worker in the dashboard.
+3. Secret key: `npx wrangler secret put TURNSTILE_SECRET_KEY --config worker/wrangler.toml`, or Workers → vinax → Settings → Variables and secrets → add it as a Secret. An old `TURNSTILE_SECRET_KEY` from the retired username check may still be set: replace it with the new widget's secret.
+
+Then `GET /api/auth/google` and `GET /api/admin/session` name the site key and the pages run the check. In the app it runs when someone signs in and is invisible unless Cloudflare wants a click; in the console the widget sits under the Google button. The Worker checks each token with Siteverify (`_lib/turnstile.ts`): success, the action (`app-signin` or `console-signin`) and a `vinaxmusic.online` hostname. If Siteverify cannot be reached, Google sign-in still goes ahead (the Google token proves who it is) and the recovery password is refused.
+
+With Turnstile on, the recovery password is no longer a key by itself: the console trades it once, with a passed check, at `POST /api/admin/session { password, turnstile }` for a 12-hour session, and changing the password ends those sessions. Removing either key turns the check off again.
 
 ## The database
 

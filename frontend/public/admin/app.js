@@ -442,6 +442,7 @@
     VX.api.get('/api/admin/session', null, { fresh: true, noAuthRedirect: true }).then(function (res) {
       var d = res.data || {};
       $('pwBox').hidden = !d.passwordAllowed;
+      setupTurnstile(d.turnstileSiteKey || null);
       if (!d.googleReady || !d.googleClientId) {
         VX.mount($('gsiBtn'), h('p.muted.small', 'Google sign-in is not set up on the server yet. Use the owner recovery password below.'));
         if (d.passwordAllowed) $('pwBox').open = true;
@@ -471,9 +472,65 @@
     s.onerror = function () { gsiLoaded = false; VX.mount($('gsiBtn'), h('p.login-err', 'Could not reach Google. Check the connection and reload.')); };
     document.head.appendChild(s);
   }
+  /* Cloudflare Turnstile: the security check under the sign-in buttons (only
+     when the server names a site key). Each pass is good for one sign-in. */
+  var ts = { key: null, id: null, token: null, loading: false };
+  function setupTurnstile(siteKey) {
+    ts.key = siteKey;
+    var box = $('tsBox');
+    if (!siteKey) { if (box) box.style.display = 'none'; return; }
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'tsBox';
+      box.className = 'ts-box';
+      box.style.cssText = 'display:flex;justify-content:center;min-height:65px;margin:12px 0 4px';
+      $('gsiBtn').insertAdjacentElement('afterend', box);
+    }
+    box.style.display = 'flex';
+    var start = function () {
+      ts.token = null;
+      if (ts.id != null) { try { window.turnstile.reset(ts.id); } catch (e) {} return; }
+      try {
+        ts.id = window.turnstile.render(box, {
+          sitekey: siteKey,
+          action: 'console-signin',
+          theme: document.documentElement.classList.contains('light') ? 'light' : 'dark',
+          'refresh-expired': 'auto',
+          callback: function (t) { ts.token = t; },
+          'expired-callback': function () { ts.token = null; },
+          'error-callback': function () { ts.token = null; }
+        });
+      } catch (e) {
+        VX.mount(box, h('p.login-err', 'The security check could not start. Reload the page to try again.'));
+      }
+    };
+    if (window.turnstile) { start(); return; }
+    if (ts.loading) return;
+    ts.loading = true;
+    var s = document.createElement('script');
+    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    s.async = true;
+    s.onload = function () { ts.loading = false; start(); };
+    s.onerror = function () { ts.loading = false; s.remove(); VX.mount(box, h('p.login-err', 'Could not reach the security check. Check the connection and reload.')); };
+    document.head.appendChild(s);
+  }
+  /** The check's token for one sign-in: { ok, token }. Not ok while the check has not passed yet. */
+  function takeTurnstile() {
+    if (!ts.key) return { ok: true, token: undefined };
+    if (!ts.token) return { ok: false };
+    var t = ts.token;
+    ts.token = null;
+    try { window.turnstile.reset(ts.id); } catch (e) {}
+    return { ok: true, token: t };
+  }
+  var CHECK_WAIT = 'Wait for the security check under the button to finish, then try again.';
+  var CHECK_FAILED = 'The security check did not pass. Let it run again, then sign in.';
+
   function onGoogle(resp) {
+    var check = takeTurnstile();
+    if (!check.ok) { $('loginErr').textContent = CHECK_WAIT; return; }
     $('loginErr').textContent = 'Checking your account…';
-    VX.api.post('/api/admin/session', { credential: resp && resp.credential }, { noAuthRedirect: true }).then(function (res) {
+    VX.api.post('/api/admin/session', { credential: resp && resp.credential, turnstile: check.token }, { noAuthRedirect: true }).then(function (res) {
       var d = res.data || {};
       if (res.ok && d.token) { VX.auth.set(d.token); VX.me = d.me || null; $('loginErr').textContent = ''; boot(); return; }
       var msg = {
@@ -481,6 +538,7 @@
         email_not_verified: 'Google has not verified this email address yet.',
         invalid_token: 'Google sign-in did not go through. Try again.',
         rate_limited: 'Too many attempts — wait a minute and try again.',
+        human_check: CHECK_FAILED,
         google_not_configured: 'Google sign-in is not set up on the server yet.'
       }[res.error] || (res.status === 0 ? 'Could not reach the server.' : 'Sign-in failed — ' + (res.message || 'try again') + '.');
       $('loginErr').textContent = msg;
@@ -491,6 +549,7 @@
     var t = $('token').value.trim();
     if (!t) { $('loginErr').textContent = 'Enter the owner recovery password.'; return; }
     var btn = $('enter');
+    if (ts.key) { passwordSignIn(t, btn); return; }
     btn.disabled = true; btn.setAttribute('aria-busy', 'true');
     $('loginErr').textContent = '';
     VX.auth.set(t);
@@ -501,6 +560,25 @@
       boot(res);
     });
   });
+  /* With Turnstile on, the password is traded for a session once, after the check. */
+  function passwordSignIn(password, btn) {
+    var check = takeTurnstile();
+    if (!check.ok) { $('loginErr').textContent = CHECK_WAIT; return; }
+    btn.disabled = true; btn.setAttribute('aria-busy', 'true');
+    $('loginErr').textContent = '';
+    VX.api.post('/api/admin/session', { password: password, turnstile: check.token }, { noAuthRedirect: true }).then(function (res) {
+      btn.disabled = false; btn.removeAttribute('aria-busy');
+      var d = res.data || {};
+      if (res.ok && d.token) { VX.auth.set(d.token); VX.me = d.me || null; $('token').value = ''; boot(); return; }
+      $('loginErr').textContent = {
+        wrong_password: 'That password is not right (or too many tries — wait 15 minutes).',
+        human_check: CHECK_FAILED,
+        human_check_unavailable: 'The security check could not be reached, so the password cannot be used right now. Try again in a minute.',
+        password_off: 'The recovery password is turned off on the server.'
+      }[res.error] || (res.status === 0 ? 'Could not reach the server.' : 'Sign-in failed — ' + (res.message || 'try again') + '.');
+      if (res.error === 'wrong_password') $('token').select();
+    });
+  }
   function signOut() {
     VX.auth.clear();
     VX.me = null;
