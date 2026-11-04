@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.10.0': {
+    title: 'AI DJ, AI Playlist and lyrics tools',
+    changes: [
+      { type: 'improved', text: 'AI DJ: Up Next now builds around the song playing, with songs VinaX\'s AI suggests and VinaX finds in its catalogue; its own picks fill in when the AI is slow or away.' },
+      { type: 'improved', text: 'Tune this queue chips now steer the AI DJ too, so "more chill" or "classics" reshape what plays next.' },
+      { type: 'improved', text: 'AI Playlist: describe a vibe in your own words in Library or Queue, then play the playlist or save it.' },
+      { type: 'new', text: 'Lyrics: new English translation and Meaning, and Romanized now works for lyrics that had no English-letters version.' },
+    ],
+  },
   '1.9.10': {
     title: 'Ask for app permissions at start-up',
     changes: [
