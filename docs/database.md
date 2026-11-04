@@ -5,7 +5,7 @@ VinaX 14.0 brings back a server database, designed from a clean sheet: one schem
 ## Setting it up
 
 1. Create a Supabase project (any region; Mumbai is closest to most listeners).
-2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 10), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
+2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 11), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
 3. Set two Worker secrets from `backend/`:
 
 ```sh
@@ -14,6 +14,13 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml
 ```
 
 4. Open the console's **Database** page: it shows the schema version the paste wrote and every table.
+
+### Moving from version 10
+
+Version 11 adds two functions for the console's **Trending** and **Search Insights** pages ([admin-console.md](admin-console.md)); it changes no table and deletes nothing. Paste `schema.sql` once (or let the Schema workflow apply it); the Database page then shows version 11. Until then those two pages say the database needs its one-time update (`502 db_update_needed`) and every other page keeps working.
+
+- `stats_trending(days, limit)` compares the songs, artists and languages signed-in users played in the window with the window of the same length just before it: plays, people, rank now and rank before (null = a new entry) and, for songs, one count per India calendar day.
+- `stats_searches(days, limit)` reads search events (their `message` is `'<song results>|<query>'`, as the app's search writes it) and answers the totals, the most searched words, the searches that found nothing, what is searched more than before, and a daily series. Rows without that shape are left out.
 
 ### Moving from version 9
 
@@ -130,6 +137,8 @@ All `security invoker`, executable by the service role only. Each answers JSON s
 | `stats_funnel(days)` | `[{ id, label, listeners }]` |
 | `stats_skips(days, min)` | `[{ id, title, artist, image, plays, skips, rate }]` |
 | `stats_errors(days, limit)` | `{ total, byDay, top: [{ errorKind, message, hits, lastSeen, platforms, versions }] }` |
+| `stats_trending(days, limit)` | version 11, Trending: `{ days, totals: { plays, prev_plays, listeners, prev_listeners, songs, new_songs }, songs: [{ id, title, artist, image, plays, prev_plays, listeners, rank, prev_rank, daily: [n per day] }], artists: [{ artist, plays, prev_plays, listeners, rank, prev_rank }], languages: [{ language, plays, prev_plays, listeners }] }`. The window starts at midnight India time `days - 1` days ago (1..90, limit 1..100); the one before is as long. `prev_rank` null = not played before |
+| `stats_searches(days, limit)` | version 11, Search Insights: `{ days, totals: { searches, people, zero, queries, prev_searches, prev_people, prev_zero }, top: [{ query, searches, people, zero, prev_searches, last_at }], zero: [{ query, searches, people, found, last_at }], rising: [{ query, searches, prev_searches, people }], daily: [{ day, searches, zero }] }` from search events `'<results>\|<query>'` (malformed rows left out; `zero` = found no song; limit 1..200) |
 | `listener_profile(listener, account)` | `{ listener, account, backup, stats, topSongs, languages, events }` |
 | `delete_listener(listener, account)` | removes the person everywhere; answers the counts |
 | `room_request(code, song, by)` | atomic guest request append (false = no such room) |
@@ -211,6 +220,7 @@ All under `/api/admin/`, gated by `isAdminAsync`. `?days=` is 1..90 (default 7).
 | `push` | `{ configured, web: { configured, active }, fcm: { configured, active }, geo: { countries, regions, cities }, langs, rules }` | send `{ title, body, link, filter: { country?, region?, city?, lang?, channel? }, activity?, dryRun?, dedupeKey? }` → dry run `{ dryRun: true, web, fcm, audience }`; send `{ ok, id, web: { total, sent, gone, failed }, fcm: { total, sent, failed }, audience }`; `409 duplicate` |
 | `notifications` | `?limit=` → `{ configured, rows }` | `retract { id }` |
 | `audit` | `?limit=&action=` → `{ configured, rows }` | — |
+| `trends` | `?view=trending&days=` → `{ configured, days, view, data }` (`stats_trending`); `?view=search&days=` → the same with `stats_searches`, plus `pins` and `synonyms`; `?view=pins` → `{ configured, pins, synonyms }` (settings only). An older database answers `502 db_update_needed` | editor: `pin { query, song: { id, title, artist, image } }`, `unpin { query }` (setting `search-pins`, at most 100), `synonym { typed, meant }` (adds to `search-synonyms`, at most 200) → `{ ok, key, value }`; `400 bad_query`, `bad_song`, `bad_synonym`, `too_many` |
 | `database` | `{ configured, reachable, schema, tables: [{ name, rows, bytes }], counts, jobs: [{ job, schedule, lastAt, ok, summary, overdue }], retention: { eventsDays }, missing: [] }` | `purge_events { days }`, `sweep_rooms`, `retire_push { days }`, `run_job { job }` |
 | `envcheck` | unchanged shape; now lists `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (required) and `CRON_SECRET` (optional) | — |
 
@@ -240,13 +250,15 @@ All under `/api/admin/`, gated by `isAdminAsync`. `?days=` is 1..90 (default 7).
 
 ## Scheduled jobs
 
-The Worker's Cron Trigger (`[triggers] crons` in `wrangler.toml`) fires every 30 minutes; `_lib/jobs.ts` decides what runs and records every run in `job_runs`:
+The Worker's Cron Trigger (`[triggers] crons` in `wrangler.toml`) fires every 5 minutes; `_lib/jobs.ts` decides what is due (each job's own `every`, from the `jobs` setting) and records every run in `job_runs`:
 
-| Job | When | Does |
+| Job | Default | Does |
 | --- | --- | --- |
-| `status-tick` | every run | probes website, catalogue, admin; `uptime_tick` per component |
-| `housekeeping` | once an hour | `room_sweep`, `purge_events(retention.eventsDays)`, `retire_push_devices(180)`, removes VinaX AI chats deleted more than a day ago (not fatal before schema 4 is applied), `personal_purge(365)` and, on the 21:00 UTC run, `personal_refresh_colisten(30, 50)` (not fatal before schema 7) |
-| `personal-embed` | every run | confirms up to 25 device-asserted songs with the catalogue, then embeds up to 200 verified songs that have no vector in the configured model yet; skipped while the engine is off |
+| `status-tick` | every 30 min | probes website, catalogue, admin; `uptime_tick` per component |
+| `housekeeping` | hourly | `room_sweep`, `purge_events(retention.eventsDays)` (or `purge_kind` per kind), `retire_push_devices(180)`, removes VinaX AI chats deleted more than a day ago (not fatal before schema 4 is applied), `personal_purge(365)` and, on the first run from 21:00 UTC, `personal_refresh_colisten(30, 50)` (not fatal before schema 7); prunes `job_runs` older than 30 days |
+| `personal-embed` | every 30 min | confirms up to 25 device-asserted songs with the catalogue, then embeds up to 200 verified songs that have no vector in the configured model yet; skipped while the engine is off |
+| `alerts` | every 5 min | Smart Alerts (`_lib/alerts.ts`): counts `events` (errors, plays) and new `feedback`, probes the site, and for each firing rule writes one `notifications` row (`kind = 'system'`, `dedupe_key = 'alert:<rule>:<cooldown>:<bucket>'`) and pushes it to the chosen admins' phones; see admin-console.md → Smart Alerts |
+| `scheduled-notifications` | every 5 min | sends `notifications` rows whose `scheduled_for` has come (`_lib/scheduledPush.ts`) |
 
 `POST /api/cron/run { job }` with `x-cron-secret: $CRON_SECRET` (or the owner token) runs a job now; the Database page has a button for it.
 

@@ -10,7 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { issueAdminSession, resetAdminMemo } from '../functions/_lib/adminAuth';
 import { forgetBlocked, issueSession, readSession } from '../functions/_lib/googleAuth';
-import { colistenDue, runScheduled } from '../functions/_lib/jobs';
+import { colistenDue, JOBS, runScheduled } from '../functions/_lib/jobs';
 import { readOnlyRefusal } from '../functions/_lib/readOnly';
 import { resetSettingsMemo } from '../functions/_lib/settings';
 import * as cronRun from '../functions/api/cron/run';
@@ -126,7 +126,8 @@ describe('scheduler', () => {
     const out = await runScheduled(DB, T);
     expect(out).toEqual([]);
     const reads = calls.filter((c) => c.url.pathname.endsWith('/job_runs') && c.method === 'GET');
-    expect(reads.length).toBe(4);
+    expect(reads.length).toBe(JOBS.length); // one per job (five with Smart Alerts)
+    expect(JOBS.length).toBe(5);
     for (const r of reads) {
       expect(r.url.searchParams.get('job')).toMatch(/^eq\./);
       expect(r.url.searchParams.get('limit')).toBe('1');

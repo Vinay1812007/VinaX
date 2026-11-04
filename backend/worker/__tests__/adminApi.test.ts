@@ -28,6 +28,7 @@ import * as push from '../functions/api/admin/push';
 import * as notifications from '../functions/api/admin/notifications';
 import * as auditRoute from '../functions/api/admin/audit';
 import * as database from '../functions/api/admin/database';
+import * as trends from '../functions/api/admin/trends';
 import * as cronRun from '../functions/api/cron/run';
 import { resetSettingsMemo } from '../functions/_lib/settings';
 import { _resetRateLimitsForTests } from '../functions/_lib/ratelimit';
@@ -88,6 +89,7 @@ const GETS: Array<[string, Handler, string]> = [
   ['notifications', notifications.onRequestGet as Handler, '/api/admin/notifications'],
   ['audit', auditRoute.onRequestGet as Handler, '/api/admin/audit'],
   ['database', database.onRequestGet as Handler, '/api/admin/database'],
+  ['trends', trends.onRequestGet as Handler, '/api/admin/trends?view=trending'],
 ];
 
 describe('every admin GET', () => {
@@ -172,6 +174,103 @@ describe('feedback', () => {
     expect((patch?.body as { resolved_at: string }).resolved_at).toBeTruthy();
     expect(calls.some((c) => path(c) === 'audit_log')).toBe(true);
     expect((await run(feedback.onRequestPost as Handler, '/api/admin/feedback', { body: { action: 'status', id: 7, status: 'weird' } })).res.status).toBe(400);
+  });
+});
+
+describe('trends (Trending, Search Insights)', () => {
+  const PIN = { id: 'abc123', title: 'Kesariya', artist: 'Arijit Singh', image: 'https://c.saavncdn.com/x.jpg' };
+  const settingsRows = (pins: unknown, synonyms: unknown = { bday: 'birthday' }) => json([
+    ...(pins ? [{ key: 'search-pins', value: pins, updated_at: 't', updated_by: 'owner' }] : []),
+    { key: 'search-synonyms', value: synonyms, updated_at: 't', updated_by: 'owner' },
+  ]);
+
+  it('maps each view to its function with the days and refuses an unknown view', async () => {
+    stub((c) => {
+      if (path(c) === 'rpc/stats_trending') return json({ songs: [{ id: 's1', rank: 1, prev_rank: null, daily: [1, 2] }] });
+      if (path(c) === 'rpc/stats_searches') return json({ totals: { searches: 3, zero: 1 } });
+      if (path(c) === 'settings' && c.method === 'GET') return settingsRows({ ' Kesariya  ': PIN, x: PIN, bad: { title: 'no id' } });
+      return undefined;
+    });
+    const tr = await run(trends.onRequestGet as Handler, '/api/admin/trends?view=trending&days=30');
+    expect(tr.res.status).toBe(200);
+    expect(tr.body).toEqual({ configured: true, days: 30, view: 'trending', data: { songs: [{ id: 's1', rank: 1, prev_rank: null, daily: [1, 2] }] } });
+    expect(calls.find((c) => path(c) === 'rpc/stats_trending')?.body).toEqual({ p_days: 30, p_limit: 50 });
+
+    calls = [];
+    const se = await run(trends.onRequestGet as Handler, '/api/admin/trends?view=search&days=500');
+    expect(se.res.status).toBe(200);
+    expect(se.body?.days).toBe(7);
+    expect(se.body?.data).toEqual({ totals: { searches: 3, zero: 1 } });
+    expect(se.body?.pins).toEqual({ kesariya: PIN });
+    expect(se.body?.synonyms).toEqual({ bday: 'birthday' });
+    expect(calls.find((c) => path(c) === 'rpc/stats_searches')?.body).toEqual({ p_days: 7, p_limit: 50 });
+
+    calls = [];
+    const pins = await run(trends.onRequestGet as Handler, '/api/admin/trends?view=pins');
+    expect(pins.body).toEqual({ configured: true, view: 'pins', pins: { kesariya: PIN }, synonyms: { bday: 'birthday' } });
+    expect(calls.some((c) => path(c).startsWith('rpc/'))).toBe(false);
+
+    expect((await run(trends.onRequestGet as Handler, '/api/admin/trends?view=nope')).res.status).toBe(400);
+    expect((await run(trends.onRequestGet as Handler, '/api/admin/trends')).body?.error).toBe('unknown_view');
+  });
+
+  it('says the database needs its update when the function is missing (schema older than 11)', async () => {
+    stub((c) => (path(c).startsWith('rpc/') ? json({ code: 'PGRST202', message: 'Could not find the function public.stats_searches' }, 404) : undefined));
+    for (const view of ['trending', 'search']) {
+      const { res, body } = await run(trends.onRequestGet as Handler, `/api/admin/trends?view=${view}`);
+      expect(res.status, view).toBe(502);
+      expect(body?.error, view).toBe('db_update_needed');
+    }
+  });
+
+  it('pins a song for the normalised words, keeps the other pins and audits the change', async () => {
+    stub((c) => {
+      if (path(c) === 'settings' && c.method === 'GET') return settingsRows({ srivalli: { id: 'zz9', title: 'Srivalli' } });
+      if (path(c) === 'settings' && c.method === 'POST') return json([{ key: 'search-pins', value: (c.body as { value: unknown }).value, updated_at: 't2', updated_by: 'x' }], 201);
+      return undefined;
+    });
+    const { res, body } = await run(trends.onRequestPost as Handler, '/api/admin/trends', { body: { action: 'pin', query: '  KESARIYA   Remix ', song: { ...PIN, image: 'http://insecure.example/x.jpg', extra: 1 } } });
+    expect(res.status).toBe(200);
+    const want = { srivalli: { id: 'zz9', title: 'Srivalli' }, 'kesariya remix': { id: 'abc123', title: 'Kesariya', artist: 'Arijit Singh' } };
+    expect(body).toEqual({ ok: true, key: 'search-pins', value: want });
+    const upsert = calls.find((c) => path(c) === 'settings' && c.method === 'POST')?.body as { key: string; value: unknown };
+    expect(upsert.key).toBe('search-pins');
+    expect(upsert.value).toEqual(want);
+    const audit = calls.find((c) => path(c) === 'audit_log')?.body as { action: string; target: string; summary: string };
+    expect(audit).toMatchObject({ action: 'settings', target: 'search-pins' });
+    expect(audit.summary).toContain('kesariya remix');
+  });
+
+  it('refuses a bad pin, more than 100 pins, and clears the setting when the last pin goes', async () => {
+    const many: Record<string, unknown> = {};
+    for (let i = 0; i < 100; i++) many[`song ${i}`] = { id: `id${i}`, title: `Song ${i}` };
+    stub((c) => (path(c) === 'settings' && c.method === 'GET' ? settingsRows(many) : undefined));
+    const post = (b: unknown) => run(trends.onRequestPost as Handler, '/api/admin/trends', { body: b });
+    expect((await post({ action: 'pin', query: 'x', song: PIN })).body?.error).toBe('bad_query');
+    expect((await post({ action: 'pin', query: 'kesariya', song: { title: 'no id' } })).body?.error).toBe('bad_song');
+    expect((await post({ action: 'pin', query: 'kesariya', song: { id: 'has spaces', title: 'T' } })).body?.error).toBe('bad_song');
+    expect((await post({ action: 'pin', query: 'kesariya', song: PIN })).body?.error).toBe('too_many');
+    expect((await post({ action: 'pin', query: 'song 5', song: PIN })).res.status).toBe(200);
+    expect((await post({ action: 'drop' })).body?.error).toBe('unknown_action');
+
+    stub((c) => (path(c) === 'settings' && c.method === 'GET' ? settingsRows({ kesariya: PIN }) : undefined));
+    const gone = await post({ action: 'unpin', query: 'Kesariya' });
+    expect(gone.body).toEqual({ ok: true, key: 'search-pins', value: {} });
+    expect(calls.find((c) => path(c) === 'settings' && c.method === 'DELETE')?.url.searchParams.get('key')).toBe('eq.search-pins');
+    calls = [];
+    const none = await post({ action: 'unpin', query: 'never pinned' });
+    expect(none.body?.unchanged).toBe(true);
+    expect(calls.some((c) => path(c) === 'settings' && c.method !== 'GET')).toBe(false);
+  });
+
+  it('adds a synonym to the stored ones and refuses the same word twice', async () => {
+    stub((c) => (path(c) === 'settings' && c.method === 'GET' ? settingsRows(null, { bday: 'birthday' }) : undefined));
+    const post = (b: unknown) => run(trends.onRequestPost as Handler, '/api/admin/trends', { body: b });
+    const ok = await post({ action: 'synonym', typed: ' ARR ', meant: 'A. R. Rahman' });
+    expect(ok.body).toEqual({ ok: true, key: 'search-synonyms', value: { bday: 'birthday', arr: 'A. R. Rahman' } });
+    expect((calls.find((c) => path(c) === 'settings' && c.method === 'POST')?.body as { value: unknown }).value).toEqual({ bday: 'birthday', arr: 'A. R. Rahman' });
+    expect((await post({ action: 'synonym', typed: 'Same', meant: 'same' })).body?.error).toBe('bad_synonym');
+    expect((await post({ action: 'synonym', typed: 'x', meant: '' })).body?.error).toBe('bad_synonym');
   });
 });
 

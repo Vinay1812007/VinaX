@@ -11,6 +11,8 @@
  *                                           day ago · the personal engine: old events and pages purged,
  *                                           and once a day (the 21:00 UTC run) co-listening rebuilt
  *   personal-embed           every 30 min   confirm device-asserted songs, then embed the backlog
+ *   alerts                   every run      Smart Alerts: errors rising, site down, no plays, new
+ *                                           feedback → one push to the admins' phones (_lib/alerts.ts)
  *   scheduled-notifications  every run      send notifications whose scheduled time has come
  *
  * Console rebuild — the owner can switch a job off or change how often it runs from
@@ -27,8 +29,9 @@ import { personalConfig } from './personal/config';
 import { runEmbedBacklog, runVerifyBacklog, type EmbedEnv } from './personal/embed';
 import { COMPONENTS, probeAll } from '../api/status';
 import { runScheduledNotifications } from './scheduledPush';
+import { runAlerts } from './alerts';
 
-export type JobId = 'status-tick' | 'housekeeping' | 'personal-embed' | 'scheduled-notifications';
+export type JobId = 'status-tick' | 'housekeeping' | 'personal-embed' | 'alerts' | 'scheduled-notifications';
 
 export interface JobSpec {
   id: JobId;
@@ -45,6 +48,8 @@ export const JOBS: readonly JobSpec[] = [
   { id: 'status-tick', label: 'Status check', about: 'Checks that the website, the app and the music sources answer, and records it for the public status page.', every: 30, choices: [30, 60, 180, 360] },
   { id: 'housekeeping', label: 'Clean-up', about: 'Closes empty Listen Together rooms, removes data older than the Data & Privacy periods, and forgets phones that stopped receiving notifications.', every: 60, choices: [60, 180, 360, 720, 1440] },
   { id: 'personal-embed', label: 'Recommendation learning', about: 'Teaches the recommendation engine about newly played songs so “For you” picks get better.', every: 30, choices: [30, 60, 180, 360, 1440] },
+  // Before the scheduled sends: a large scheduled audience must not spend the run's requests first.
+  { id: 'alerts', label: 'Smart Alerts', about: 'Looks for problems (app errors rising, the site not answering, no songs played, new feedback) and alerts admins on their phones.', every: 5, choices: [5, 10, 15, 30] },
   { id: 'scheduled-notifications', label: 'Scheduled notifications', about: 'Sends notifications whose scheduled time has come.', every: 5, choices: [5, 15, 30, 60] },
 ] as const;
 
@@ -167,7 +172,7 @@ async function housekeeping(env: DbEnv, now = Date.now()): Promise<Record<string
     // Remember the rebuild (its own job_runs row) so the next one waits a day.
     if (colisten.ok) await db.insert(env, 'job_runs', { job: 'colisten', started_at: new Date(now).toISOString(), finished_at: new Date().toISOString(), ok: true, summary: { pairs: colisten.value?.pairs ?? null } });
   }
-  // The job log keeps 30 days (the scheduled-notifications check alone adds 288 rows a day).
+  // The job log keeps 30 days (the two 5-minute jobs, scheduled notifications and Smart Alerts, add 288 rows a day each).
   const pruned = await db.remove(env, 'job_runs', q().lt('started_at', since(30 * DAY_MS)));
   out.jobRunsPruned = pruned.ok ? 'done' : `failed: ${pruned.error}`;
   out.personalPurged = personalPurged.ok ? personalPurged.value : `failed: ${personalPurged.error}`;
@@ -183,6 +188,13 @@ async function personalEmbed(env: DbEnv): Promise<Record<string, unknown>> {
   return { model: config.embedModel, verified: v.verified, dropped: v.dropped, embedded: r.embedded, backlog: r.backlog };
 }
 
+/** Smart Alerts; a run that could not judge (history or admins unreadable) is a failed run. */
+async function alertsJob(env: DbEnv, now: number): Promise<Record<string, unknown>> {
+  const r = await runAlerts(env as never, now);
+  if (r.error) throw new Error(`alerts: ${r.error}`);
+  return { ...r };
+}
+
 /** Run one job now, recording the run. Never throws. */
 export async function runJob(env: DbEnv, job: JobId, now = Date.now()): Promise<JobResult> {
   const startedAt = new Date(now).toISOString();
@@ -195,6 +207,7 @@ export async function runJob(env: DbEnv, job: JobId, now = Date.now()): Promise<
       job === 'status-tick' ? await statusTick(env, now)
         : job === 'personal-embed' ? await personalEmbed(env)
           : job === 'scheduled-notifications' ? { ...(await runScheduledNotifications(env as never, now)) }
+            : job === 'alerts' ? await alertsJob(env, now)
             : await housekeeping(env, now);
   } catch (e) {
     ok = false;

@@ -8,7 +8,7 @@ It counts **people signed in with Google** only. Anonymous devices (`listeners` 
 | --- | --- |
 | Home | Dashboard (`#/dashboard`), Live Now (`#/live`) |
 | People | Users (`#/users`), Feedback (`#/feedback`) |
-| Music | Song Stats (`#/song-stats`), Music Library (`#/library`) |
+| Music | Song Stats (`#/song-stats`), Music Library (`#/library`), Trending (`#/trending`), Search Insights (`#/search-insights`) |
 | Engage | Send Notification (`#/notifications`), A/B Tests (`#/ab-tests`) |
 | App Settings | Home Screen, Features & AI, App Updates, Maintenance, Notification Rules, Search & Music Sources, Help Center, Data & Privacy (`#/app-settings/<page>`) |
 | System | App Health (`#/health`), Database (`#/database`), Google Search (`#/google-search`), Admins & Roles (`#/admins`) |
@@ -31,11 +31,13 @@ The console is standalone static files in `frontend/public/admin/`, copied into 
 | --- | --- |
 | `index.html` | Content security policy, icon sprite, sign-in screen, sidebar, top bar, one `<script>` per file and one stylesheet per area |
 | `theme-boot.js` | Pre-paint: the stored theme (Light, Dark, Match my device) and the collapsed sidebar |
-| `console.css` | Tokens (dark default, `html.light`), layout, shared components; `css/<area>.css` hold page styles (people, music, engage, system, settings-a, settings-b) |
+| `console.css` | Base tokens (dark default, `html.light`), layout, shared components; `css/<area>.css` hold page styles (people, music, engage, system, settings-a, settings-b) |
+| `css/glass.css` | The glass theme, loaded last: aqua→blue accent, frosted panels (60–80% opaque, blur) over slow colour glows (`.aurora` in `index.html`; still when the device asks for reduced motion). Only tokens and surface treatments; sticky table cells use `--surface-solid` so rows never show through. Without `backdrop-filter` panels fall back to solid |
 | `core.js` | The framework, global `VX`: DOM builder, API client, formatting (Indian numbers, one time zone, India by default), base components, charts, page registry |
 | `kit/controls.js` | The shared controls (below). Loaded right after `core.js` |
 | `kit/settings.js` | The App Settings framework (below) |
 | `festivals.js` | Generated festival calendar for the Festival Theme editor |
+| `geo.js` | World map: a 360×141 land dot grid (1°, Natural Earth 110m via world-atlas 2.0.2) and ISO country centre points; `VX.worldMap(points, { compact })` draws it. Nothing is fetched |
 | `pages/*.js` | One file per page; each calls `VX.page({...})` or `VX.settingsPage({...})` |
 | `app.js` | The shell. Loaded last |
 
@@ -89,6 +91,8 @@ Every change leaves a row in `audit_log` through `_lib/audit.ts` with the admin'
 - Top bar: breadcrumb, global search (**Ctrl K** / ⌘K: pages, tabs, settings, users and songs), the date range (Today, Last 7 / 30 / 90 days, Custom) on pages that declare `range: true` (`ctx.range`), auto-refresh with an interval (15 s, 30 s, 1 min, 5 min), "Last updated 17:00 IST" and refresh, the theme (Light, Dark, Match my device), and the profile menu (email, role, time zone, sign out).
 - Routes are `#/<page id>/<tab>?<params>`; page ids may contain a slash (`app-settings/home-screen`). `ctx.onLeave(fn)` guards unsaved changes: leaving asks first.
 - Owners see a "One-time database update needed" banner while `meta.schema` is older than the Worker's `SCHEMA_WANTED`.
+- Keyboard shortcuts (press **?** for the list; off while typing in a box): **/** search, **R** refresh, **T** light/dark, **[** collapse the menu, and **G** then a letter to open a page (D Dashboard, L Live Now, U Users, F Feedback, S Song Stats, M Music Library, T Trending, I Search Insights, N Send Notification, H App Health, A Smart Alerts, B Database).
+- **Quick actions** in Ctrl K: listed first while the box is empty and after pages once you type: send a notification, customise the dashboard, switch theme, auto-refresh on/off, refresh, keyboard shortcuts, maintenance, app errors, collapse the menu, copy a link to this page, sign out. Editing actions are hidden from viewers.
 
 ## The App Settings framework (`kit/settings.js`)
 
@@ -134,11 +138,14 @@ The page is laid out as follows:
   - New feedback → Feedback, New
   - Phones ready for notifications → Send Notification, Setup check
   - Listen Together rooms live → Live, Rooms
+- **Where people are listening.** The Live Now world map (below), from its own `GET /api/admin/live`.
 - **Four charts.** Each card has a **See details** button that opens the related page with the same range:
   - plays and active users per day (line)
   - users by platform (donut)
   - new users per day (bars)
   - searches and errors per day (line)
+
+**Customise** (top right, or `#/dashboard?customise=1`, or the Ctrl K quick action) lets each admin arrange the dashboard: drag a card or use its arrows to move it, pick a size (Small, Wide, Full width, where the card allows it), Hide it, or add it back from **Hidden cards**; **Reset to default** restores the built-in layout. The layout is `{ order, hidden, size }` in this browser's storage under `vinax_admin_dash.<admin email>`; cards it does not know are ignored and new cards join at their default place.
 
 ### Home · Live Now (`#/live/now|activity|rooms`)
 
@@ -150,6 +157,8 @@ The page makes one call, `GET /api/admin/live`. The answer is `{ configured, now
 - **`rooms`.** Rooms with activity in the last 6 hours: `{ code, hostName, members, song, playing, updatedAt, createdAt }`.
 
 The page has three tabs: **Listening now**, **Recent activity** and **Listen Together rooms**.
+
+- **Listening now** starts with **Where people are listening**: a dot-matrix world map (`geo.js`) with a glowing marker per city, sized by the number of people, green with a pulse where a song is playing. The server only knows country and city names, so a marker sits at the country's centre with a steady nudge per city (the card says places are approximate). When everyone is in one part of the world the map starts zoomed there; **Whole world** / **Zoom to listeners** switches. Beside it: the top 8 places.
 
 - Above the tabs are four cards: Active now, Playing now, Rooms open and Server time.
 - A **Refresh** dropdown polls every 15 s (the default), 30 s or 1 min, or not at all. The choice is stored per browser.
@@ -254,6 +263,30 @@ The page also defines `VX.music` (shared with Music Library): `url(kind, id)`, `
 
 `GET /api/blocklist` now also returns `albums`. The app hides a blocked album (`normalizeAlbum` answers null, so it drops out of search, artist pages and album pages) and every song whose `album.id` is blocked (`isBlockedSong`).
 
+### Music · Trending (`pages/trending.js`, schema 11)
+
+Follows the top-bar date range. Compares the window (from midnight India time, `days − 1` days ago, to now) with the window of the same length just before it, signed-in users only. Stat cards: Plays and People listening (with the change), Songs climbing (in the chart and more plays than before), New entries (songs nobody played before). **Rising songs** (most extra plays) and **The chart** (the 15 most played): place, move since before (▲3, ▼2, =, NEW), picture and names, a sparkline of plays per day, plays now and before; choosing a song opens Music Library searching for its title. **Top artists** (table with move and % change, ⋯ Find in Music Library) and **Languages** (bars with the change).
+
+`GET /api/admin/trends?view=trending&days=` → `{ days, view, data }`, `data` = `stats_trending(days, 50)`: `{ totals: { plays, prev_plays, listeners, prev_listeners, songs, new_songs }, songs: [{ id, title, artist, image, plays, prev_plays, listeners, rank, prev_rank, daily }], artists: [{ artist, plays, prev_plays, listeners, rank, prev_rank }], languages }`. On a database older than schema 11 the route answers `502 db_update_needed` and the page shows a "One-time database update needed" card (Owners get a button to Database › Maintenance) instead of an error.
+
+### Music · Search Insights (`pages/search-insights.js`, schema 11)
+
+What signed-in users search for (the app records each settled search as `'<song results>|<words>'`), following the date range. Tabs:
+
+- **Overview** — Searches, People searching (with the change), Found nothing (% of searches that showed no songs), Different searches; a chart of searches and searches that found nothing per day; **Top searches** (table; a chip shows an existing pin or synonym; ⋯ Search the catalogue, Copy, Add a synonym…, Pin a song…) and **Searched more than before**.
+- **Found nothing** — the searches that showed no songs (how often, how many people, last time, "found songs N other times") with **Fix** buttons: **Add a synonym…** (a small dialog: when people type → also search for; adds to `search-synonyms`) and **Pin a song…** (the words and a song picker over the catalogue, `VX.findMusic`; saves to `search-pins`).
+- **Pins & synonyms** — every pinned search (words → song) with Change… and Remove (asks first), and the synonyms read-only with **Open App Settings** (Search & Music Sources edits them).
+
+Viewers see everything but no Fix, Change or Remove buttons (the buttons are not built, and carry `needs-edit`); the server refuses their POST anyway.
+
+| Route | Shape |
+| --- | --- |
+| `GET /api/admin/trends?view=search&days=` | `{ days, view, data, pins, synonyms }`, `data` = `stats_searches(days, 50)`: `{ totals: { searches, people, zero, queries, prev_searches, prev_people, prev_zero }, top: [{ query, searches, people, zero, prev_searches, last_at }], zero: [{ query, searches, people, found, last_at }], rising, daily: [{ day, searches, zero }] }` |
+| `GET /api/admin/trends?view=pins` | `{ pins: { words: { id, title, artist, image } }, synonyms: { typed: meant } }` (settings only, no function) |
+| `POST /api/admin/trends { action: 'pin', query, song: { id, title, artist?, image? } }` · `{ action: 'unpin', query }` · `{ action: 'synonym', typed, meant }` | editor; words are lower-cased with single spaces (2–80 characters); at most 100 pins and 200 synonyms (`400 too_many`); `400 bad_query` / `bad_song` / `bad_synonym`; → `{ ok, key, value }`; audited as `settings` on `search-pins` / `search-synonyms` |
+
+**How a pin reaches the app:** the `search-pins` setting rides the public client bundle as `searchPins` (`publicSearchPins` in `_lib/clientConfig.ts`: clean words, a catalogue id and title, https pictures only, at most 100; absent when there are none). The Search page (a lazy route, nothing in the app shell) reads the bundle once while searching (edge- and browser-cached a minute), and when the normalised words match a pin exactly (`services/search/pins.ts`) it loads that song by id and puts it first in the results, as the Top result and at the top of the Songs tab, without showing it twice.
+
 ### Engage · Send Notification (`#/notifications`)
 
 Tabs: **Compose** (`compose`) · **History** (`history`) · **Saved audiences** (`audiences`) · **Setup check** (`setup`). Old `#/notify/*` addresses redirect here.
@@ -334,7 +367,7 @@ Read-only mode refuses POST/PUT/PATCH/DELETE on `/api/feedback`, `/api/account/d
 
 | Section | Controls | Stored value | Who reads it |
 | --- | --- | --- | --- |
-| Search Synonyms (`search-synonyms`) | Two word boxes ("When people type" ↔ "Also search for"), Add, a delete button per pair | `{ "typed": "meant" }` | client bundle `synonyms` → app search |
+| Search Synonyms (`search-synonyms`) | Two word boxes ("When people type" ↔ "Also search for"), Add, a delete button per pair (Search Insights › Found nothing can add one too) | `{ "typed": "meant" }` | client bundle `synonyms` → app search |
 | Music Sources (`catalog-sources`) | Drag to set priority, On/Off per source (at least one stays on) | `{ "<source>": false, _order: ["<source>", …] }` (`_order` only when reordered) | client bundle `disabledSources`, `sourceOrder` → `constants/endpoints.ts` `activeBases()` |
 | Language Order (`language-order`) | Drag to reorder the 12 Home languages, Shown/Hidden per language, phone preview | `{ order: [...], hidden: [...] }` (the old plain list is still read) | client bundle `languageOrder`, `hiddenLanguages` → Home's language rail |
 
@@ -363,7 +396,7 @@ Admins sign in with Google. Only an email on the **Admins & Roles** list (the `a
 | `GET /api/admin/session` | Never 401: `{ googleClientId, googleReady, passwordAllowed, me, schema, schemaWanted, databaseConfigured }` |
 | `POST /api/admin/session { credential }` | Google ID token → `{ token, me, expiresIn }`; `403 not_an_admin` / `email_not_verified`, `401 invalid_token`, `503 google_not_configured` |
 | Roles | viewer < editor < owner. `adminGet` allows any admin; `adminPost` needs editor unless the route asks for owner (`{ role: 'owner' }` or a function of the body). Viewers get `403 { error: 'forbidden', need }` |
-| Owner-only writes | Database (all actions), Admins & Roles, clearing app errors, deleting a user's data |
+| Owner-only writes | Database (all actions), Admins & Roles, clearing app errors, deleting a user's data, the `retention`, `jobs` and `alert-rules` settings, Smart Alerts → Check now |
 | `GET/POST /api/admin/admins` | List (any admin); `invite { email, role }`, `role { email, role }`, `remove { email }` (owner). `409 last_owner` when the last Owner would be demoted or removed; `409 already_admin` |
 | Audit | Every row names the admin (`actor` = email) |
 
@@ -381,6 +414,34 @@ Admins sign in with Google. Only an email on the **Admins & Roles** list (the `a
 
 "What happened" is worked out in the page (`VX.health.explain`) from the kind and message: downloads, playback, app crashes, notifications, other — each with a plain sentence. The page uses the top bar's date range.
 
+### Smart Alerts (`#/alerts`, `pages/alerts.js`)
+
+The server looks for trouble every 5 minutes (the `alerts` job) and sends **one** short push per problem to the admins' own phones. Rules live in the owner-only `alert-rules` setting, cleaned by `alertRulesOf` (unset = the defaults below):
+
+```
+{ enabled: true, who: 'owners' | 'editors' | 'all', cooldownMinutes: 60 (15·30·60·120·240·720·1440),
+  quiet: { enabled: false, start: '23:00', end: '07:00' },           // India time
+  rules: { errorsSpike: { on: true, minErrors: 10, factor: 2 },      // errors in the last hour ≥ minErrors and > factor × the hour before
+           siteDown:    { on: true },                                // website / music search not answering, confirmed by a fresh second probe
+           noPlays:     { on: true, minutes: 60, onlyIfUsualPlays: true },  // no play in `minutes`; with onlyIfUsualPlays only when the same window yesterday had ≥ 3 plays
+           newFeedback: { on: true, minCount: 1 } } }                // ≥ minCount unread feedback since the last feedback alert (at most a day)
+```
+
+- **Who**: `admins` rows (plus `ADMIN_OWNER_EMAILS`) whose role `who` includes; each admin's phones are the active `push_devices` of the VinaX account with the **same Google email** (`devicesOfEmail`). An admin gets alerts only after signing in to the VinaX app on the phone with that Google account and allowing notifications. The recovery password ("owner") has no phone.
+- **Repeats**: a rule that alerted less than `cooldownMinutes` ago is held; each alert is a `notifications` row (`kind 'system'`, `sent_by 'schedule'`, `dedupe_key 'alert:<rule>:<cooldown>:<bucket>'`) written before the push, so two overlapping runs send it once. The receipt lands on the row. Alert rows also appear in Send Notification → History.
+- **Quiet hours** hold every rule except `siteDown`; a held rule is not recorded, so it alerts when quiet hours end if the problem is still there.
+- Alerts do **not** count toward the listener frequency cap (`fanOut(…, { countTowardCap: false })`). Every alert is in the change log (`alert-send`, actor `schedule` or the admin who pressed Check now).
+- Tapping an alert opens the console page for it (`/admin/#/health/errors`, `/health/checks`, `/live/now`, `/feedback`) in a browser; the Android app opens itself and does not route `/admin/` links.
+
+| Route | |
+| --- | --- |
+| `GET /api/admin/alerts` | `{ rules, saved, updatedAt, recipients: [{ email, name, role, gets, phones }], me: { email, via, phones }, push: { web, fcm }, recent: [{ id, at, rule, title, body, devices, sent, failed }] (last 30), job: { enabled, every, lastAt, finishedAt, ok, summary, nextAt }, signals: { errorsLastHour, errorsHourBefore, playsLastHour, newFeedback (unread), probes: { website, api, catalog } } }` |
+| `POST { action: 'test' }` (editor) | a test alert to your own phones only, no history row; `400 no_own_account` for the recovery password, `no_own_devices`, `push_not_configured` |
+| `POST { action: 'check' }` (owner) | runs the check now → `{ ok, result: { on, checked, firing, sent: [{ rule, devices, delivered }], held: [{ rule, reason: cooldown \| quiet_hours \| duplicate \| failed }], recipients, devices } }` |
+| Rules | `POST /api/admin/settings { key: 'alert-rules', value }` (owner; settings history and the change log keep every version) |
+
+The page: status cards (on/off, last and next check, phones linked), "Right now" signals, **Try it** (Send me a test alert, Check now), **Who gets alerts** (each admin, role, phone linked or not, and how to link one), **Alert rules** (Owners edit; everyone else sees them read-only) and **Recent alerts**.
+
 ### Database (`#/database/<tab>`)
 
 - **Tables** (`tables`): `GET /api/admin/database` now gives each table a friendly `label`, `about`, exact or `approximate` row count (an ⓘ explains "Approximate"), size, and `keptFor` from the `retention` setting; plus `totalBytes`, `schemaWanted` and `expected`.
@@ -395,6 +456,7 @@ Admins sign in with Google. Only an email on the **Admins & Roles** list (the `a
 | `status-tick` | every 30 min | status page checks |
 | `housekeeping` | hourly | rooms, retention purges, push devices, AI chats, personal engine purge, nightly co-listening (21:00 UTC run) |
 | `personal-embed` | every 30 min | recommendation learning |
+| `alerts` | every 5 min (each cron run) | Smart Alerts, `runAlerts` from `_lib/alerts.ts` (runs before the scheduled sends so a big scheduled audience never spends the run's requests first) |
 | `scheduled-notifications` | every 5 min (each cron run) | `runScheduledNotifications` from `_lib/scheduledPush.ts` |
 
 The `jobs` setting `{ "<job>": { enabled, every } }` switches a job off or slows it; `every` must be one of the job's `choices`. A job is due when it is on and its last run started at least `every − 2` minutes ago (read from `job_runs`), so the cron's own interval only sets the finest grain. A job is "running late" after `max(2 × every + 15, 45)` minutes.
@@ -423,6 +485,7 @@ Table: admin (photo, name, "You", "Always Owner" for `ADMIN_OWNER_EMAILS`), emai
 
 - `backend/worker/__tests__/consoleAuth.test.ts` — sessions (issue, read, expiry, forgery, other secret), principals (Google role from `admins`, recovery password = owner, removed admin refused, bootstrap owners, unreadable table refused), role gating (viewer 403, editor allowed, owner-only actions, database owner-only, audit actor), `POST/GET /api/admin/session`, Admins & Roles (owner-only, invite/role/remove, duplicates, last owner).
 - `backend/worker/__tests__/consoleSystem.test.ts` — App Errors (grouped answer, status upsert with who, clear owner-only, `db_update_needed`), Change log filters and dropdown choices, jobs (settings, due rule, retention, cron skips switched-off jobs, per-kind purges, `job_setting`), bots (built-in rules match the committed robots.txt, owner choices, `/api/robots`, the bots view, publish via the deploy hook), API keys (plain labels, no values).
+- `backend/worker/__tests__/consoleAlerts.test.ts` — Smart Alerts: the `alert-rules` defaults and cleaning (owner-only), which rules fire, the job (one alert per problem to the chosen admins, receipt row, no listener-cap side effect, cooldown, quiet hours except site down, duplicate key, switched off, broken database), `GET/POST /api/admin/alerts` (recipients and phones, recent alerts, test to own phone only, Check now owner-only).
 - `frontend/src/__tests__/robotsFromApi.test.ts` — the build step only publishes a real robots file.
 - Mocks for the preview server and e2e: `frontend/e2e/support/console-mocks/system.mjs`.
 
@@ -432,6 +495,7 @@ Table: admin (photo, name, "You", "Always Owner" for `ADMIN_OWNER_EMAILS`), emai
 - `frontend/src/__tests__/adminConsole.test.ts` loads the real `core.js`, the kit and every page into a DOM: `index.html` loads every file in order under the strict CSP, every page registers a unique id in one of the six groups with an existing icon, App Settings pages come in the spec's order, old addresses redirect to existing pages, the spec's plain words (no "Publish", "App default", "Device only"), no markup from strings, and **every page and tab renders from empty answers and from failing ones** without printing `undefined`, `NaN` or `[object Object]`.
 - `frontend/e2e/console-shell.spec.ts`: sign-in, the six groups and the sub-menu, redirects and Page not found, Ctrl+K, date range / theme / auto-refresh, the phone menu, the database update banner.
 - `frontend/e2e/console-pages.spec.ts`: every page and tab with data, with empty answers and with a failing server (no errors, an ⓘ on every stat card, no banned words, no `d_` ids), no sideways scrolling at phone width, viewers cannot save, saving asks first and posts, Users opens a profile. Both specs use `e2e/support/consoleMocks.ts` and the per-area mock files in `e2e/support/console-mocks/` (the same files drive a local preview server).
+- `frontend/src/__tests__/consoleTrends.test.ts`: Trending and Search Insights from the e2e mock answers (rank moves, NEW, sparklines, the database-update card, pin and synonym dialogs posting the right body, viewers without edit buttons); `frontend/src/services/search/pins.test.ts`: exact-words matching and pinned-first without duplicates; `backend/worker/__tests__/adminApi.test.ts` › trends: views, `db_update_needed`, pin/unpin/synonym limits and audit.
 - `backend/worker/__tests__/console*.test.ts`: one file per area (Auth, People, Music, Engage, SettingsA, SettingsB, System) against a mocked database, including role checks; `backend/supabase/check.sql` asserts every new SQL function.
 
 ## Limits

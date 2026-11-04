@@ -54,3 +54,34 @@ details.dev-help .json { margin-top: 8px; }
 .role-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .role-list li { display: flex; align-items: center; gap: 10px; }
 .role-list .pill { min-width: 64px; justify-content: center; text-align: center; }
+
+/* Smart Alerts */
+.alerts-grid { margin: 16px 0; }
+.alerts-actions { margin-top: 12px; }
+.alert-people { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.alert-people li { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid var(--border); min-width: 0; }
+.alert-people li:first-child { border-top: 0; }
+.alert-people li.dim .media { opacity: .6; }
+.alert-people .media { min-width: 0; }
+.alert-people .cell-sub { word-break: break-all; }
+.alert-person-tail { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.alerts-help { display: flex; gap: 6px; align-items: flex-start; margin-top: 10px; }
+.alerts-help .ic { flex: none; width: 16px; height: 16px; margin-top: 1px; }
+.alert-rules { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
+.alert-rule-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; }
+.alert-rule { border: 1px solid var(--border); border-radius: var(--r-md); padding: 4px 12px; background: var(--surface-2); min-width: 0; }
+.alert-rule-opts { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 0 0 12px; }
+.alert-rule-opts .dd { min-width: 0; }
+.alert-rule-opts .check.single { flex: 1 1 260px; }
+.alert-quiet-times { margin-top: 8px; max-width: 420px; }
+.alert-list { list-style: none; margin: 0; padding: 0; }
+.alert-list li { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); min-width: 0; }
+.alert-list li:first-child { border-top: 0; }
+.alert-dot { padding-top: 6px; flex: none; }
+.alert-main { display: grid; gap: 3px; min-width: 0; }
+.alert-main p { margin: 0; word-break: break-word; }
+.alert-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.alert-miss { color: var(--warn); }
+@media (max-width: 560px) { .alert-rule-opts .dd select { max-width: 100%; } }
+/* Smart Alerts on a phone: the "Who gets alerts" choices stack. */
+@media (max-width: 640px) { .radios.row { grid-auto-flow: row; } }

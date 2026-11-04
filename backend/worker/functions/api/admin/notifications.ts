@@ -39,11 +39,12 @@ export const shape = (r: Row) => {
 export const onRequestGet = adminGet(async ({ env, url }) => {
   const { limit } = paging(url, 50, 200);
   const status = url.searchParams.get('status') ?? 'all';
-  const query = q().select('*').order('at', 'desc').limit(limit);
+  // Smart Alerts rows (kind 'system') went to admins, not listeners: they live on the Smart Alerts page.
+  const query = q().select('*').neq('kind', 'system').order('at', 'desc').limit(limit);
   if ((STATUSES as readonly string[]).includes(status)) query.eq('status', status);
   const [r, nSent, nSched, nDraft] = await Promise.all([
     db.select<Row>(env, 'notifications', query),
-    db.count(env, 'notifications', q().eq('status', 'sent')),
+    db.count(env, 'notifications', q().eq('status', 'sent').neq('kind', 'system')),
     db.count(env, 'notifications', q().eq('status', 'scheduled')),
     db.count(env, 'notifications', q().eq('status', 'draft')),
   ]);

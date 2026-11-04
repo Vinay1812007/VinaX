@@ -10,8 +10,8 @@ import { adminGet, adminPost } from '../../_lib/adminRoute';
 import { db, q } from '../../_lib/db';
 import { isSettingKey, readSettings, resetSettingsMemo, SETTING_KEYS, writeSetting } from '../../_lib/settings';
 
-/** Setting keys only an Owner may change: data deletion periods and background jobs. */
-export const OWNER_KEYS: ReadonlySet<string> = new Set(['retention', 'jobs']);
+/** Setting keys only an Owner may change: data deletion periods, background jobs and Smart Alerts. */
+export const OWNER_KEYS: ReadonlySet<string> = new Set(['retention', 'jobs', 'alert-rules']);
 
 export const onRequestGet = adminGet(async ({ env, url }) => {
   resetSettingsMemo();

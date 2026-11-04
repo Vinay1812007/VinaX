@@ -118,8 +118,18 @@ async function wire(PushNotifications: PushPlugin): Promise<void> {
     const data = e.notification.data as { link?: string; id?: string } | undefined;
     reportOpened(data?.id);
     const link = data?.link;
-    if (typeof link === 'string' && /^\/(?!\/)/.test(link)) navigateTo(link);
+    if (typeof link === 'string') openPushLink(link);
   });
+}
+
+/** Where a tapped notification's link goes. Owner-console links (Smart
+ *  Alerts) open the live console in the browser: the app has no /admin
+ *  screen. Other same-site paths open inside the app; anything else
+ *  (including protocol-relative "//host/x") is refused. */
+export function openPushLink(link: string, navigate: (to: string) => void = navigateTo, open: (url: string) => void = (u) => { window.open(u, '_blank', 'noopener,noreferrer'); }): void {
+  if (!/^\/(?!\/)/.test(link)) return;
+  if (/^\/admin(\/|$|#|\?)/.test(link)) { open(`https://www.vinaxmusic.online${link}`); return; }
+  navigate(link);
 }
 
 /** Console rebuild — count a tap on a console notification (its id only, nothing about the listener). */

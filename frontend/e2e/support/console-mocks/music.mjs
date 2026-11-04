@@ -1,4 +1,4 @@
-// Console mocks — Feedback, Song Stats, Music Library (the preview server and e2e).
+// Console mocks — Feedback, Song Stats, Music Library, Trending, Search Insights (the preview server and e2e).
 const now = Date.now();
 const ago = (min) => new Date(now - min * 60000).toISOString();
 const IMG = 'https://c.saavncdn.com/806/RRR-Telugu-2021-20220318101503-150x150.jpg';
@@ -19,6 +19,32 @@ const music = {
   languages: [['telugu', 980, 140], ['hindi', 420, 90], ['tamil', 260, 55], ['english', 80, 20], ['unknown', 12, 5]].map(([language, plays, listeners]) => ({ language, plays, listeners })),
   rising: songs.filter((s) => s.plays > s.prev_plays).map((s) => ({ id: s.id, title: s.title, artist: s.artist, image: s.image, plays: s.plays, prev_plays: s.prev_plays })),
 };
+
+// Schema 11 — Trending and Search Insights (GET/POST /api/admin/trends).
+const series = (days, base, step) => Array.from({ length: days }, (_, i) => Math.max(0, Math.round(base + step * i + ((i * 7) % 5))));
+const trending = (days) => {
+  // Ranks agree with the plays: s6 was not played before (NEW), the others moved.
+  const list = songs.map((s, i) => ({ ...s, prev_plays: i === 5 ? 0 : s.prev_plays, rank: i + 1, prev_rank: [2, 1, 4, 3, 5, null][i], daily: series(Math.min(days, 90), 20 + i * 3, i % 2 ? -1 : 2) }));
+  return {
+    days,
+    totals: { plays: 1704, prev_plays: 1250, listeners: 158, prev_listeners: 140, songs: 230, new_songs: 41 },
+    songs: list,
+    artists: music.artists.map((a, i) => ({ ...a, prev_plays: [400, 320, 120, 254, 0][i], rank: i + 1, prev_rank: [1, 2, 4, 3, null][i] })),
+    languages: music.languages.map((l, i) => ({ ...l, prev_plays: [800, 450, 180, 80, 0][i] })),
+  };
+};
+const searchPins = { 'naatu song': { id: 's1', title: 'Naatu Naatu', artist: 'Rahul Sipligunj, Kaala Bhairava', image: IMG } };
+const searchSynonyms = { arr: 'A. R. Rahman', dsp: 'Devi Sri Prasad' };
+const searches = (days) => ({
+  days,
+  totals: { searches: 642, people: 121, zero: 58, queries: 310, prev_searches: 590, prev_people: 112, prev_zero: 71 },
+  top: [['srivalli', 44, 30, 0, 38], ['arijit singh', 39, 28, 0, 41], ['naatu song', 21, 15, 9, 10], ['kesariya remix', 18, 14, 18, 4], ['telugu hits 2026', 15, 12, 3, 0]]
+    .map(([query, n, people, zero, prev]) => ({ query, searches: n, people, zero, prev_searches: prev, last_at: ago(30) })),
+  zero: [['kesariya remix', 18, 14, 0, 40], ['naatu song', 9, 8, 12, 300], ['pushpa 3 songs', 7, 6, 0, 90], ['bday song telugu', 5, 5, 1, 900]]
+    .map(([query, n, people, found, min]) => ({ query, searches: n, people, found, last_at: ago(min) })),
+  rising: [['telugu hits 2026', 15, 0, 12], ['kesariya remix', 18, 4, 14], ['naatu song', 21, 10, 15]].map(([query, n, prev, people]) => ({ query, searches: n, prev_searches: prev, people })),
+  daily: Array.from({ length: Math.min(days, 90) }, (_, i) => ({ day: day(Math.min(days, 90) - 1 - i), searches: 80 + (i % 4) * 9, zero: 6 + (i % 3) })),
+});
 
 const feedbackRows = [
   { id: 41, at: ago(12), kind: 'bug', message: 'Songs stop playing when the screen turns off on my Redmi phone.', status: 'new', note: null, platform: 'android', appVersion: '1.8.3', country: 'IN', city: 'Hyderabad', name: 'Ravi', user: { id: '1001', name: 'Ravi Kumar', email: 'ravi@example.com', picture: null }, canReply: true },
@@ -91,6 +117,20 @@ export default {
       album: type === 'songs' ? { id: 'al' + i, name: 'Album ' + i } : null, preview: null,
     }));
     return { items, type, source: 'mock', error: null };
+  },
+  'GET /api/admin/trends': (url) => {
+    const view = url.searchParams.get('view');
+    const days = Number(url.searchParams.get('days') || 7);
+    if (view === 'trending') return { configured: true, days, view, data: trending(days) };
+    if (view === 'search') return { configured: true, days, view, data: searches(days), pins: searchPins, synonyms: searchSynonyms };
+    if (view === 'pins') return { configured: true, view, pins: searchPins, synonyms: searchSynonyms };
+    return { __status: 400, error: 'unknown_view' };
+  },
+  'POST /api/admin/trends': (url, b) => {
+    if (b.action === 'synonym') return { ok: true, key: 'search-synonyms', value: { ...searchSynonyms, [b.typed]: b.meant } };
+    if (b.action === 'pin') return { ok: true, key: 'search-pins', value: { ...searchPins, [b.query]: b.song } };
+    if (b.action === 'unpin') { const v = { ...searchPins }; delete v[b.query]; return { ok: true, key: 'search-pins', value: v }; }
+    return { __status: 400, error: 'unknown_action' };
   },
   'GET /api/blocklist': () => ({ ids: ['s9'], albums: ['al3'], artists: [], keywords: ['nightcore'] }),
 };

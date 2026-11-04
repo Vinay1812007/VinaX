@@ -13,6 +13,7 @@ vi.mock('../functions/api/status', () => ({
   probeAll: async () => new Map([['website', { ok: true, latency: 10 }]]),
 }));
 vi.mock('../functions/_lib/scheduledPush', () => ({ runScheduledNotifications: vi.fn(async () => ({ sent: 2 })) }));
+vi.mock('../functions/_lib/alerts', () => ({ runAlerts: vi.fn(async () => ({ on: true, checked: ['siteDown'], firing: [], sent: [], held: [], recipients: 1, devices: 1 })) }));
 
 import * as errors from '../functions/api/admin/errors';
 import * as auditRoute from '../functions/api/admin/audit';
@@ -130,6 +131,8 @@ describe('scheduled jobs', () => {
     expect(cfg.housekeeping).toEqual({ enabled: false, every: 360 });
     expect(cfg['status-tick']).toEqual({ enabled: true, every: 30 });
     expect(cfg['scheduled-notifications']).toEqual({ enabled: true, every: 5 });
+    expect(jobSettings({ alerts: { every: 15 } }).alerts).toEqual({ enabled: true, every: 15 });
+    expect(jobSettings({ alerts: { every: 7 } }).alerts).toEqual({ enabled: true, every: 5 });
   });
 
   it('a job is due when on and its last run is old enough', () => {
@@ -153,8 +156,10 @@ describe('scheduled jobs', () => {
       return undefined;
     });
     const out = await runScheduled(ENV, Date.now());
-    expect(out.map((r) => r.job)).toEqual(['scheduled-notifications']);
-    expect(out[0].summary).toEqual({ sent: 2 });
+    // Smart Alerts and the scheduled sends both run every 5 minutes; alerts first.
+    expect(out.map((r) => r.job)).toEqual(['alerts', 'scheduled-notifications']);
+    expect(out[0].summary).toMatchObject({ on: true, firing: [] });
+    expect(out[1].summary).toEqual({ sent: 2 });
   });
 
   it('housekeeping purges usage and each kind with its own period', async () => {

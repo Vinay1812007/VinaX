@@ -263,6 +263,21 @@ describe('notification history', () => {
     expect(body?.counts).toEqual({ sent: 7, scheduled: 1, draft: 1 });
   });
 
+  it('leaves Smart Alerts (kind system) out of the list and the sent count', async () => {
+    const seen: URL[] = [];
+    stub((c) => {
+      if (path(c) !== 'notifications') return undefined;
+      seen.push(c.url);
+      if (c.prefer.includes('count=exact')) return json([], 200, { 'content-range': '0-0/1' });
+      return json([ROW]);
+    });
+    await run(notifications.onRequestGet, '/api/admin/notifications');
+    const list = seen.find((u) => !u.searchParams.has('status'));
+    const sent = seen.find((u) => u.searchParams.get('status') === 'eq.sent');
+    expect(list?.searchParams.get('kind')).toBe('neq.system');
+    expect(sent?.searchParams.get('kind')).toBe('neq.system');
+  });
+
   it('cancels only scheduled ones and deletes only drafts, cancelled and failed ones', async () => {
     stub((c) => {
       if (path(c) === 'notifications' && c.method === 'PATCH') return json([{ ...ROW, status: 'cancelled' }]);

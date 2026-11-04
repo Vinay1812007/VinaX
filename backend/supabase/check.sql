@@ -41,6 +41,16 @@ select now() - (g || ' hours')::interval,
        case when g % 10 = 2 then 'TypeError' end, case when g % 10 = 2 then 'boom' end, '{"a": 1}'::jsonb
 from generate_series(0, 400) g;
 
+-- version 11: searches as the app writes them ('<song results>|<query>'),
+-- two malformed ones, and one from a device without an account
+insert into events (at, listener_id, kind, message) values
+  (now() - interval '1 hour',  'check_l1', 'search', '0|check nothing here'),
+  (now() - interval '2 hours', 'check_l1', 'search', '0|Check  Nothing Here '),
+  (now() - interval '3 hours', 'check_l1', 'search', '12|check song'),
+  (now() - interval '4 hours', 'check_l1', 'search', 'x|check broken'),
+  (now() - interval '5 hours', 'check_l1', 'search', 'no bar at all'),
+  (now() - interval '6 hours', 'check_l2', 'search', '0|check anonymous');
+
 insert into feedback (listener_id, name, kind, message) values ('check_l1', 'Asha', 'bug', 'x'), (null, null, 'idea', 'y');
 insert into blocked_content (kind, value, label) values ('song', 'check_s1', 'Check Song 1');
 insert into rooms (code, host_token, host_name, current, queue) values ('CHECK1', 'tok', 'Asha', '{"id": "check_s1"}', '[{"song": {"id": "check_s2"}}]');
@@ -158,6 +168,23 @@ begin
   assert (v ->> 'total')::int > 0 and jsonb_array_length(v -> 'top') > 0, 'stats_errors';
   assert (v -> 'top' -> 0 ->> 'status') = 'new' and length(v -> 'top' -> 0 ->> 'fingerprint') = 32, 'stats_errors: grouped with a status';
   assert _error_shape('Download of "Song 12" timed out after 30s') = 'Download of … timed out after #', '_error_shape';
+
+  -- version 11: Trending and Search Insights
+  v := stats_trending(7, 10);
+  assert jsonb_array_length(v -> 'songs') between 1 and 10, 'stats_trending.songs';
+  assert (v -> 'songs' -> 0 ->> 'rank')::int = 1 and jsonb_array_length(v -> 'songs' -> 0 -> 'daily') = 7, 'stats_trending: ranked, one count per day';
+  assert (select sum(x::int) from jsonb_array_elements_text(v -> 'songs' -> 0 -> 'daily') x) = (v -> 'songs' -> 0 ->> 'plays')::int, 'stats_trending: the days add up to the plays';
+  assert (v -> 'totals' ->> 'plays')::int > 0 and jsonb_array_length(v -> 'artists') > 0 and jsonb_array_length(v -> 'languages') > 0, 'stats_trending: totals, artists, languages';
+  assert (v -> 'totals' ->> 'plays')::int = (select count(*) from events e join signed_devices() s using (listener_id) where e.kind = 'play' and e.at >= ((_ist_today() - 6)::timestamp at time zone 'Asia/Kolkata')), 'stats_trending counts signed-in plays in the window';
+  v := stats_trending(500, 0);
+  assert (v ->> 'days')::int = 90 and jsonb_array_length(v -> 'songs') = 1, 'stats_trending caps days and limit';
+  v := stats_searches(7, 50);
+  assert (v -> 'totals' ->> 'searches')::int = 3 and (v -> 'totals' ->> 'zero')::int = 2 and (v -> 'totals' ->> 'people')::int = 1, 'stats_searches.totals: signed-in, well-formed searches only';
+  assert (v -> 'zero' -> 0 ->> 'query') = 'check nothing here' and (v -> 'zero' -> 0 ->> 'searches')::int = 2 and jsonb_array_length(v -> 'zero') = 1, 'stats_searches.zero: one query, spacing and case folded';
+  assert (v -> 'top' -> 0 ->> 'query') = 'check nothing here' and jsonb_array_length(v -> 'top') = 2, 'stats_searches.top';
+  assert jsonb_array_length(v -> 'daily') = 7 and (select sum((d ->> 'searches')::int) from jsonb_array_elements(v -> 'daily') d) = 3, 'stats_searches.daily';
+  v := stats_searches(0, 1);
+  assert (v ->> 'days')::int = 1 and jsonb_array_length(v -> 'top') <= 1 and jsonb_array_length(v -> 'daily') = 1, 'stats_searches caps days and limit';
 
   -- version 10: the console counts signed-in people only
   select count(*) into n from signed_devices();
@@ -550,7 +577,7 @@ begin
   assert not has_table_privilege('anon', 'public.personal_events', 'select'), 'anon cannot read personal events';
   assert not has_function_privilege('anon', 'public.personal_neighbours(text, text, integer, text[], boolean)', 'execute'), 'anon cannot call the personal engine';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 10, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 11, 'meta.schema.version';
   raise notice 'check.sql: every function answered as expected';
 end $$;
 

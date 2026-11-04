@@ -744,3 +744,41 @@ body.role-viewer .needs-edit { display: none !important; }
 .tbl td.menu-col, .tbl th.menu-col { position: sticky; right: 0; background: var(--surface); z-index: 1; box-shadow: -8px 0 8px -8px rgb(0 0 0 / .35); }
 .tbl tbody tr:hover td.menu-col { background: var(--surface-2); }
 .tbl tr.selected td.menu-col { background: var(--surface); }
+
+/* ------------------------------------------------------ world map (geo.js) */
+.wm { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 18px; align-items: start; }
+.wm.compact { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 860px) { .wm { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) { .wm { --wm-k: .6; } }
+/* Same shape as the dot grid (360 × 141), so % positions line up with the land. */
+.wm-map { position: relative; aspect-ratio: 360 / 141; border-radius: var(--r-md); overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 40%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 70%); }
+.wm-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.wm-land { fill: none; stroke: var(--text-2); stroke-opacity: .3; stroke-width: 2.6px; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+html.light .wm-land { stroke: var(--text-2); stroke-opacity: .38; }
+.wm-layer { position: absolute; inset: 0; }
+.wm-pt { --sz: calc(var(--s, 12px) * var(--wm-k, 1)); position: absolute; width: var(--sz); height: var(--sz); margin: calc(var(--sz) / -2) 0 0 calc(var(--sz) / -2); border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 50%, #fff), var(--accent) 60%);
+  box-shadow: 0 0 0 calc(var(--sz) * .45) color-mix(in srgb, var(--accent) 16%, transparent), 0 0 calc(var(--sz) * .9) 2px var(--accent); }
+.wm-pt.playing { background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--ok) 50%, #fff), var(--ok) 60%);
+  box-shadow: 0 0 0 calc(var(--sz) * .45) color-mix(in srgb, var(--ok) 16%, transparent), 0 0 calc(var(--sz) * .9) 2px var(--ok); }
+.wm-pt.playing::after { content: ''; position: absolute; inset: -2px; border-radius: 50%; border: 2px solid var(--ok); animation: wm-ping 2.4s var(--ease) infinite; }
+@keyframes wm-ping { from { transform: scale(1); opacity: .8; } to { transform: scale(2.8); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .wm-pt.playing::after { animation: none; opacity: .4; } }
+.wm-zoom { position: absolute; right: 10px; bottom: 10px; background: var(--pop); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+.wm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.wm-list li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 13px; }
+.wm-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wm-swatch { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.wm-swatch.playing { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.wm-side { display: grid; gap: 10px; align-content: start; }
+
+/* ------------------------------------------------- keyboard shortcuts (?) */
+.shortcuts { width: min(720px, 100%); }
+.shortcut-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+@media (max-width: 600px) { .shortcut-cols { grid-template-columns: minmax(0, 1fr); } }
+.shortcut-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.shortcut-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.shortcut-list li:last-child { border-bottom: 0; }
+.keys { display: inline-flex; gap: 4px; flex: none; }
+kbd { display: inline-grid; place-items: center; min-width: 24px; height: 22px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface-2); box-shadow: inset 0 -1px 0 var(--border-strong); font: 600 11.5px var(--font-mono); color: var(--text-2); }

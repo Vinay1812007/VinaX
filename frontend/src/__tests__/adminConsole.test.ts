@@ -94,10 +94,10 @@ describe('page registry', () => {
     const ids = pages.map((p) => p.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids.sort()).toEqual([
-      'ab-tests', 'admins',
+      'ab-tests', 'admins', 'alerts',
       'app-settings/features', 'app-settings/help-center', 'app-settings/home-screen', 'app-settings/maintenance',
       'app-settings/notification-rules', 'app-settings/privacy', 'app-settings/search', 'app-settings/updates',
-      'dashboard', 'database', 'feedback', 'google-search', 'health', 'library', 'live', 'notifications', 'song-stats', 'users']);
+      'dashboard', 'database', 'feedback', 'google-search', 'health', 'library', 'live', 'notifications', 'search-insights', 'song-stats', 'trending', 'users']);
     for (const p of pages) {
       expect(p.title, p.id).toBeTruthy();
       expect(GROUPS, p.id).toContain(p.group);
