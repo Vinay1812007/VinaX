@@ -159,6 +159,7 @@ interface NativeSttPlugin {
   }): Promise<{ matches?: string[] } | void>;
   stop(): Promise<void>;
   requestPermissions(): Promise<{ speechRecognition?: string }>;
+  checkPermissions(): Promise<{ speechRecognition?: string }>;
   addListener(
     eventName: 'partialResults',
     fn: (data: { matches?: string[] }) => void,
@@ -326,6 +327,21 @@ export async function nativeMicPermission(): Promise<boolean> {
     return (p?.speechRecognition ?? '') === 'granted';
   } catch {
     return false;
+  }
+}
+
+/**
+ * The Android app's microphone permission, without asking: 'granted',
+ * 'denied', 'prompt' (never answered) or 'unsupported' (not the app, or the
+ * speech plugin is not compiled in).
+ */
+export async function nativeMicState(): Promise<'granted' | 'denied' | 'prompt' | 'unsupported'> {
+  if (!isNative() || !Capacitor.isPluginAvailable('SpeechRecognition')) return 'unsupported';
+  try {
+    const p = (await NativeStt.checkPermissions())?.speechRecognition ?? '';
+    return p === 'granted' ? 'granted' : p === 'denied' ? 'denied' : 'prompt';
+  } catch {
+    return 'unsupported';
   }
 }
 

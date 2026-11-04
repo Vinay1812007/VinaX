@@ -11,7 +11,8 @@ import { readBrowserSignals } from '@/services/location/browserSignals';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useUiStore } from '@/store/uiStore';
 import { useTutorialStore } from '@/store/tutorialStore';
-import { ensureNotificationPermission, isNativePlatform } from '@/services/native';
+import { isNativePlatform } from '@/services/native';
+import { openPermissionsSheet } from '@/services/permissions/open';
 import { searchSongs } from '@/services/api';
 import { trendingSeed } from '@/constants/seeds';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
@@ -286,8 +287,9 @@ export function OnboardingSheet() {
     setLocal(KEYS.onboarded, true);
     setFirstRun(false);
     closeTour();
-    // Ask for the notification permission lock-screen lyrics + media controls need.
-    if (isNativePlatform()) void ensureNotificationPermission();
+    // Then "Allow access": notifications (lock-screen controls, the daily pick) and the microphone.
+    // It waits for a guided tour ("Take a tour") to end.
+    if (firstRun) openPermissionsSheet('welcome');
   };
 
   /** vinay mac → vinay_mac_k4x — editable suggestion, never empty. */
@@ -305,7 +307,7 @@ export function OnboardingSheet() {
   const required = firstRun && (stage === 'you' || stage === 'langs');
   // Escape closes the sheet only once the required steps are behind: leaving
   // earlier would skip the name and the usage-sharing choice.
-  escapeRef.current = required ? () => undefined : finish;
+  escapeRef.current = required ? () => undefined : () => finish();
   const goNext = () => (pos < seq.length - 1 ? setStage(seq[pos + 1]) : finish());
   const goBack = () => pos > 0 && setStage(seq[pos - 1]);
 
@@ -390,7 +392,7 @@ export function OnboardingSheet() {
               {seq.map((id, i) => <span key={id} className={cn(i < pos && 'is-done', i === pos && 'is-on')} />)}
             </div>
             {!required && !last && (
-              <button type="button" onClick={stage === 'look' || stage === 'songs' ? goNext : finish} className="vx-welcome-skip">
+              <button type="button" onClick={stage === 'look' || stage === 'songs' ? goNext : () => finish()} className="vx-welcome-skip">
                 {stage === 'look' || stage === 'songs' ? 'Skip' : 'Skip the rest'}
               </button>
             )}

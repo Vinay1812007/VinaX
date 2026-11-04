@@ -48,6 +48,7 @@ import { KEYS } from '@/constants/storage-keys';
 import { getLocal, setLocal } from '@/services/storage/local';
 import { DISPLAY_VERSION } from '@/constants/version';
 import { ensureNotificationPermission, getNotificationPermission, isNativePlatform } from '@/services/native';
+import { openPermissionsSheet } from '@/services/permissions/open';
 import { pushSupported, isPushSubscribed, enablePush, disablePush } from '@/services/push';
 import { appAlertsEnabled, setAppAlertsEnabled } from '@/services/announcements';
 import { useAlarmStore } from '@/store/alarmStore';
@@ -952,6 +953,9 @@ export default function SettingsPage() {
 
           <Section title="Region & privacy" id="privacy" lede="The personal engine and anonymous usage sharing are on by default; switch either off here. Session insights stay off unless you turn them on.">
             <PersonalEngineRow />
+            <Row label="App permissions" note="Notifications and the microphone: see what VinaX can use, and allow what it needs." keywords="permission allow microphone mic notifications access">
+              <button type="button" onClick={() => openPermissionsSheet('settings')} className="vx-tap vx-set-btn">Review</button>
+            </Row>
             <Row
               label="Share anonymous usage"
               note="Which song is playing, city-level location and the app version, with no account attached, so VinaX can be improved. On by default; switching it off stops it at once."
