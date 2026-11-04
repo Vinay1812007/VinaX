@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.9.10': {
+    title: 'Ask for app permissions at start-up',
+    changes: [
+      { type: 'improved', text: 'VinaX now asks for notifications and the microphone when it starts, and says why each one helps.' },
+      { type: 'improved', text: 'Allow both with one tap, or one at a time; "Not now" waits three days before asking again.' },
+      { type: 'improved', text: 'In the Android app, the bare notification pop-up at launch is gone; Android\'s own dialog now follows your tap.' },
+      { type: 'improved', text: 'Settings → Region & privacy → App permissions lets you review them any time.' },
+    ],
+  },
   '1.9.9': {
     title: 'Sign-in security check now works in the Android app',
     changes: [
