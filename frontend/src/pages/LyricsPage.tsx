@@ -14,7 +14,37 @@ import { useCurrentSong, usePlayerStore } from '@/store/playerStore';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { MicIcon, PlayIcon } from '@/components/Icons';
 import { cn } from '@/utils/cn';
+import { useQuery } from '@tanstack/react-query';
+import { Sheet, SheetHeader } from '@/components/Sheet';
+import { aiLyricLines, aiLyricsMeaning, mostlyNonLatin, type LyricsLineMode } from '@/services/ai/lyricsAi';
+import type { Song } from '@/types';
 import '@/styles/pages/player.css';
+
+/** The song's meaning and mood, explained by the music AI (asked when the sheet opens). */
+function MeaningSheet({ song, lines, onClose }: { song: Song; lines: string[]; onClose(): void }) {
+  const q = useQuery({
+    queryKey: ['ai-lyrics-meaning', song.id, lines.length],
+    queryFn: ({ signal }) => aiLyricsMeaning(lines, song, { signal }),
+    staleTime: Infinity,
+    retry: false,
+  });
+  return (
+    <Sheet onClose={onClose} labelledBy="lyrics-meaning-title" size="md">
+      <SheetHeader id="lyrics-meaning-title" title="What this song means" subtitle={`${song.title} · explained by AI`} onClose={onClose} className="mb-3" />
+      {q.isLoading ? (
+        <p className="text-[14px] text-ink-300" role="status">Reading the lyrics…</p>
+      ) : q.data ? (
+        <>
+          <p className="text-[15px] leading-relaxed text-ink-100">{q.data.meaning}</p>
+          {q.data.mood && <p className="mt-3 text-[13px] text-ink-300">Mood: <span className="font-semibold text-ink-100">{q.data.mood}</span></p>}
+          <p className="mt-4 text-[11.5px] text-ink-500">AI can get things wrong. Only the song’s lyrics were sent.</p>
+        </>
+      ) : (
+        <p className="text-[14px] text-ink-300" role="status">Couldn’t explain this song right now. Try again later.</p>
+      )}
+    </Sheet>
+  );
+}
 
 export default function LyricsPage() {
   const { id: rawId } = useParams();
@@ -44,13 +74,32 @@ export default function LyricsPage() {
     ? lyrics.data.synced.map((l) => l.text).filter((t) => !!t && t.trim().length > 0)
     : (lyrics.data?.plain ?? '').split('\n').map((t) => t.trim()).filter(Boolean);
   // 1.3 — "Romanized" is the lyrics-script setting: the catalogue sends the
-  // lines in English letters.
+  // lines in English letters; when it has no such copy, the music AI
+  // romanizes them. "English" is an AI translation. Both keep one line per
+  // line, so synced timings still apply.
   const script = useSettingsStore((s) => s.lyricsScript);
   const setScript = useSettingsStore((s) => s.setLyricsScript);
-  const lmode: 'original' | 'romanize' = script === 'latin' ? 'romanize' : 'original';
-  const setMode = (m: 'original' | 'romanize') => setScript(m === 'romanize' ? 'latin' : 'original');
-  const displaySynced = lyrics.data?.synced ?? null;
-  const displayPlain = lyrics.data?.plain ?? null;
+  const [english, setEnglish] = useState(false);
+  const [meaningOpen, setMeaningOpen] = useState(false);
+  type LMode = 'original' | 'romanize' | 'english';
+  const lmode: LMode = english ? 'english' : script === 'latin' ? 'romanize' : 'original';
+  const setMode = (m: LMode) => {
+    setEnglish(m === 'english');
+    if (m !== 'english') setScript(m === 'romanize' ? 'latin' : 'original');
+  };
+  const sourceLines = lyrics.data?.synced ? lyrics.data.synced.map((l) => l.text) : lyrics.data?.plain ? lyrics.data.plain.split('\n') : [];
+  const aiMode: LyricsLineMode | null = lmode === 'english' ? 'translate' : lmode === 'romanize' && mostlyNonLatin(sourceLines) ? 'romanize' : null;
+  const ai = useQuery({
+    queryKey: ['ai-lyrics', aiMode, song?.id, sourceLines.length, sourceLines.find((l) => l.trim()) ?? ''],
+    enabled: !!aiMode && !!song && sourceLines.length > 0,
+    queryFn: ({ signal }) => aiLyricLines(aiMode!, sourceLines, song!, { signal }),
+    staleTime: Infinity,
+    retry: false,
+  });
+  const aiLines = aiMode && ai.data ? ai.data : null;
+  const displaySynced = aiLines && lyrics.data?.synced ? lyrics.data.synced.map((l, i) => ({ ...l, text: aiLines[i] ?? l.text })) : lyrics.data?.synced ?? null;
+  const displayPlain = aiLines && !lyrics.data?.synced ? aiLines.join('\n') : lyrics.data?.plain ?? null;
+  const aiStatus = !aiMode ? null : ai.isFetching ? (aiMode === 'translate' ? 'Translating with AI…' : 'Romanizing with AI…') : aiLines ? (aiMode === 'translate' ? 'English translation by AI' : 'Romanized by AI') : ai.isFetched ? `Couldn’t ${aiMode === 'translate' ? 'translate' : 'romanize'} right now, so the original is shown.` : null;
 
   const sizeLabel = { sm: 'Small text', md: 'Medium text', lg: 'Large text', xl: 'Extra large text' } as const;
 
@@ -92,7 +141,7 @@ export default function LyricsPage() {
         <div className="vx-lyrics-toolbar">
           <div className="vx-lyrics-toolbar-group">
             <div className="vx-np-tabs" role="group" aria-label="Lyrics language">
-              {([['original', 'Original'], ['romanize', 'Romanized']] as const).map(([m, label]) => (
+              {([['original', 'Original'], ['romanize', 'Romanized'], ['english', 'English']] as const).map(([m, label]) => (
                 <button key={m} type="button" onClick={() => setMode(m)} aria-pressed={lmode === m} className="vx-seg">
                   {label}
                 </button>
@@ -113,6 +162,9 @@ export default function LyricsPage() {
                   Karaoke
                 </Link>
               )}
+              <button type="button" onClick={() => setMeaningOpen(true)} className="vx-np-pill">
+                Meaning
+              </button>
               <button type="button" onClick={() => setShareOpen(true)} className="vx-np-pill">
                 Share lyrics
               </button>
@@ -121,6 +173,7 @@ export default function LyricsPage() {
         </div>
       )}
 
+      {aiStatus && <p className="vx-lyrics-foot !mt-0 !mb-2" role="status" aria-live="polite">{aiStatus}</p>}
       {lyrics.data?.synced && song && (
         <div className="vx-lyrics-sync" role="group" aria-label="Lyrics sync offset">
           <span className="vx-lyrics-sync-label">Sync</span>
@@ -151,6 +204,7 @@ export default function LyricsPage() {
         </>
       ) : null}
 
+      {meaningOpen && song && <MeaningSheet song={song} lines={sourceLines} onClose={() => setMeaningOpen(false)} />}
       {shareOpen && song && (
         <LyricShareSheet lines={shareLines} song={song} onClose={() => setShareOpen(false)} />
       )}

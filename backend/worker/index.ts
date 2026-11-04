@@ -80,6 +80,9 @@ import * as m_api_ai_live_token from './functions/api/ai/live-token';
 import * as m_api_ai_live_transcript from './functions/api/ai/live-transcript';
 import * as m_api_ai_rerank from './functions/api/ai/rerank';
 import * as m_api_ai_home_layout from './functions/api/ai/home-layout';
+import * as m_api_ai_dj from './functions/api/ai/dj';
+import * as m_api_ai_playlist from './functions/api/ai/playlist';
+import * as m_api_ai_lyrics from './functions/api/ai/lyrics';
 import * as m_api_ai_generate_song from './functions/api/ai/generate-song';
 import * as m_api_ai_generate_song_id from './functions/api/ai/generate-song/[id]';
 import * as m_api_ai_generate_song_audio from './functions/api/ai/generate-song/[id]-audio';
@@ -214,6 +217,9 @@ const EXACT: Record<string, Mod> = {
   '/api/personal/taste': m_api_personal_taste,
   '/api/ai/rerank': m_api_ai_rerank,
   '/api/ai/home-layout': m_api_ai_home_layout,
+  '/api/ai/dj': m_api_ai_dj,
+  '/api/ai/playlist': m_api_ai_playlist,
+  '/api/ai/lyrics': m_api_ai_lyrics,
   '/api/ai/generate-song': m_api_ai_generate_song,
   '/api/ai/shares': m_api_ai_shares,
   '/api/ai/artifacts': m_api_ai_artifacts,

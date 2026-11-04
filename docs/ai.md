@@ -9,7 +9,7 @@ This document covers VinaX AI, the chat assistant at `/vinaxai`:
 - how conversations are stored;
 - the owner's switches, the console's providers card, the probe script, and what happens when a provider is down.
 
-Besides the chat, VinaX has music AI features that share its providers, its failover and its cooldowns: see [Music AI](#music-ai) at the end. Recommendations, Radio and Up Next are still decided on the listener's device ([recommendations.md](recommendations.md)); the music AI only reorders or arranges what the device chose, and the device falls back to its own result on any failure. The listener's guide is [user-guide/vinax-ai.md](user-guide/vinax-ai.md).
+Besides the chat, VinaX has music AI features that share its providers, its failover and its cooldowns: see [Music AI](#music-ai) at the end. Recommendations, Radio and Up Next are still decided on the listener's device ([recommendations.md](recommendations.md)); the music AI reorders or arranges what the device chose, and (since November 2026) the AI DJ and AI Playlist may suggest songs by title and artist, which the device resolves in its own catalogue; the device falls back to its own result on any failure. The listener's guide is [user-guide/vinax-ai.md](user-guide/vinax-ai.md).
 
 ## How a message travels
 
@@ -689,13 +689,19 @@ The music routes share `_lib/ai/music.ts`: the owner's switches, one gate, the `
 
 **The answer (`askJson`, `extractJson`).** The device's summary goes to the model as material inside `<input>`, never as instructions. The first JSON object in the answer is read (code fences, reasoning tags and chatter around it are ignored); anything else is no answer. Every route then checks the object against its own input before it answers.
 
-**The owner's switches.** The `ai-music` setting (console: Publish → App → Music AI, a form with the four switches and the daily quota):
+**The owner's switches.** The `ai-music` setting (console: Publish → App → Music AI, a form with the switches and the daily quota):
 
 ```json
-{ "enabled": true, "rerank": true, "home": true, "generate": { "enabled": false, "dailyQuota": 5 } }
+{ "enabled": true, "rerank": true, "home": true, "dj": true, "playlist": true, "lyrics": true, "generate": { "enabled": false, "dailyQuota": 5 } }
 ```
 
-`enabled: false` is the kill switch for every music route. `rerank` and `home` are on unless set `false`. The owner's per-model switches in `vinax-ai` apply to the `music` ladder too.
+`enabled: false` is the kill switch for every music route. `rerank`, `home`, `dj`, `playlist` and `lyrics` are on unless set `false`.
+
+**Songs the AI names (`/api/ai/dj`, `/api/ai/playlist`).** The model answers `{ songs: [{ title, artist, reason }] }`; `validatePicks` keeps clean pairs, drops links and duplicates (`songRefKey`: lower case, no brackets, no punctuation) and anything matching the playing song or a recent play. The device (`services/ai/suggest.ts`) searches the catalogue for each pair and keeps a result only when the title matches (75 % of its words) and the artist is among the song's artists. The AI DJ (`services/ai/dj.ts`) asks once per playing song and tune chip every 10 minutes (a minute after an empty answer); its songs join Up Next's warm pool as the source `ai-dj` (base score 1.12), so the queue's rules still pick. AI Playlist (`services/ai/aiPlaylist.ts`) drops muted languages and songs played in the last 7 days, and falls back to a catalogue search with fewer than 5 real songs. Deadlines: DJ 5 s at the Worker (7 s on the device, a late answer still reaches the pool); playlist 9 s (12 s).
+
+**Lyrics tools (`/api/ai/lyrics`).** `romanize` and `translate` answer `{ lines }` with exactly as many lines as were sent, blank where the input was blank; any other count is `502`, so the device can map lines onto synced timings by index. `explain` answers `{ meaning, mood }`. Only the lyrics, title, artist and language are sent. Romanize is asked only when the catalogue had no English-letters copy (most letters still non-Latin). Deadline 20 s (25 s on the device).
+
+**Home titles.** `/api/ai/home-layout` also takes `recentTitles` (≤ 20, the shelf titles the device remembers showing, `vinax.home-ai.titles.v1`); the prompt asks for fresh titles. The owner's per-model switches in `vinax-ai` apply to the `music` ladder too.
 
 **Logs.** Each route logs its name, whether it answered, the model and counts, never the summary or the answer.
 

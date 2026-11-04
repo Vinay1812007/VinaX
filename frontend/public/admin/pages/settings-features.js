@@ -229,23 +229,26 @@
 
   var musicSection = {
     key: 'ai-music', title: 'Music AI',
-    desc: 'AI help with what plays next, the Home layout and making new songs. When it is off, the app uses its own picks.',
+    desc: 'AI help with what plays next, the AI DJ, AI playlists, lyrics tools, the Home layout and making new songs. When it is off, the app uses its own picks.',
     fromValue: function (v) {
       v = obj(v); var g = obj(v.generate);
-      return { enabled: v.enabled !== false, rerank: v.rerank !== false, home: v.home !== false, generate: g.enabled === true, quota: typeof g.dailyQuota === 'number' ? Math.min(50, Math.max(1, Math.round(g.dailyQuota))) : 5 };
+      return { enabled: v.enabled !== false, rerank: v.rerank !== false, home: v.home !== false, dj: v.dj !== false, playlist: v.playlist !== false, lyrics: v.lyrics !== false, generate: g.enabled === true, quota: typeof g.dailyQuota === 'number' ? Math.min(50, Math.max(1, Math.round(g.dailyQuota))) : 5 };
     },
     toValue: function (m) {
       var o = {};
       if (!m.enabled) o.enabled = false;
       if (!m.rerank) o.rerank = false;
       if (!m.home) o.home = false;
+      if (!m.dj) o.dj = false;
+      if (!m.playlist) o.playlist = false;
+      if (!m.lyrics) o.lyrics = false;
       if (m.generate || m.quota !== 5) o.generate = { enabled: m.generate, dailyQuota: m.quota };
       return Object.keys(o).length ? o : null;
     },
     describe: function (v) {
       v = obj(v);
       if (v.enabled === false) return 'Music AI off';
-      var on = [v.rerank !== false ? 'Up Next order' : null, v.home !== false ? 'Home layout' : null, obj(v.generate).enabled ? 'song making (' + (obj(v.generate).dailyQuota || 5) + ' a day)' : null].filter(Boolean);
+      var on = [v.rerank !== false ? 'Up Next order' : null, v.dj !== false ? 'AI DJ' : null, v.playlist !== false ? 'AI playlists' : null, v.lyrics !== false ? 'lyrics tools' : null, v.home !== false ? 'Home layout' : null, obj(v.generate).enabled ? 'song making (' + (obj(v.generate).dailyQuota || 5) + ' a day)' : null].filter(Boolean);
       return on.length ? 'On: ' + on.join(', ') : 'Every part off';
     },
     render: function (m, set) {
@@ -253,6 +256,9 @@
       function draw() {
         VX.mount(sub, h('div' + (m.enabled ? '' : '.dim-group'),
           ui.switchRow('Order Up Next with AI', 'Puts the next songs in a smarter order.', m.rerank, function (on) { m.rerank = on; set(m); }, { disabled: !m.enabled }),
+          ui.switchRow('AI DJ', 'Suggests songs to follow the one playing; the app finds them in its catalogue.', m.dj, function (on) { m.dj = on; set(m); }, { disabled: !m.enabled }),
+          ui.switchRow('AI playlists', 'Makes a playlist from a vibe people describe in their own words.', m.playlist, function (on) { m.playlist = on; set(m); }, { disabled: !m.enabled }),
+          ui.switchRow('Lyrics tools', 'Romanizes, translates and explains lyrics.', m.lyrics, function (on) { m.lyrics = on; set(m); }, { disabled: !m.enabled }),
           ui.switchRow('Arrange Home with AI', 'Lets AI choose the order of Home sections.', m.home, function (on) { m.home = on; set(m); }, { disabled: !m.enabled }),
           ui.switchRow('Let people make songs', 'Makes a new song like one they love.', m.generate, function (on) { m.generate = on; set(m); draw(); }, { disabled: !m.enabled }),
           m.generate ? ui.slider({ label: 'Songs each person can make a day', min: 1, max: 50, value: m.quota, disabled: !m.enabled, format: function (v) { return fmt.plural(v, 'song') + (v === 5 ? ' (built-in)' : ''); }, onChange: function (v) { m.quota = v; set(m); } }) : null));

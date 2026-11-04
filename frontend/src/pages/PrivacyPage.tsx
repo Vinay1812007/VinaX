@@ -108,8 +108,26 @@ export default function PrivacyPage() {
         <p>
           &ldquo;Let AI build my Home&rdquo; (on by default, Settings → Home) sends the same short summary, the
           shelves Home may show and the ones you said you are not interested in, and up to 8 of your own songs as
-          features under made-up labels (never a title), so the AI can pick and name your shelves. Every song on Home
-          still comes from VinaX&rsquo;s own picks.
+          features under made-up labels (never a title), so the AI can pick and name your shelves. It also sends the
+          last 20 shelf titles it gave you, kept on your device, so it does not repeat them. Every song on Home still
+          comes from VinaX&rsquo;s own picks.
+        </p>
+        <p>
+          The &ldquo;AI DJ&rdquo; (on by default, Settings → Recommendations) builds Up Next around the song playing
+          now. It sends that song&rsquo;s title, artist, language, mood and energy, the titles and artists of your last
+          10 songs, the same short taste summary, and the &ldquo;Tune this queue&rdquo; choice you tapped. The AI
+          suggests songs by name, and VinaX searches its own catalogue for each one and keeps only real, playable
+          matches. If the AI is slow or away, VinaX&rsquo;s own picks fill the queue.
+        </p>
+        <p>
+          &ldquo;AI Playlist&rdquo; (Library and Queue) sends the words you type, the titles and artists of your last
+          10 songs and the short taste summary when you press Make playlist. The suggested songs are found in the
+          catalogue, and songs in a language you muted or played in the last week are left out. Without the AI, the
+          playlist comes from a catalogue search for your words.
+        </p>
+        <p>
+          The lyrics tools on the Lyrics page (Romanized, English, Meaning) send only the song&rsquo;s lyrics, title,
+          artist and language, never anything about you.
         </p>
         <p>
           &ldquo;Generate a song like this&rdquo; (where it is switched on) sends only the playing song&rsquo;s feel —

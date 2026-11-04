@@ -761,8 +761,15 @@ export default function SettingsPage() {
                 <Toggle on={!!s.neverRepeat} onChange={s.setNeverRepeat} label="Never repeat" />
               </Row>
               <Row
+                label="AI DJ"
+                note="Builds Up Next around the song playing now. VinaX sends a short summary of your taste, mood, languages and your last 10 songs; the AI suggests songs and VinaX finds them in its catalogue. If the AI is slow or away, VinaX's own picks fill the queue."
+                keywords="ai dj suggestions up next personalised smart queue"
+              >
+                <Toggle on={s.aiDjPicks !== false} onChange={s.setAiDjPicks} label="AI DJ" />
+              </Row>
+              <Row
                 label="AI fine-tunes Up Next"
-                note="VinaX's AI puts its best picks for you in a better order, from a short summary of your taste. Your history never leaves this device. If the AI is slow or away, VinaX's own order plays."
+                note="VinaX's AI puts its best picks for you in a better order, from a short summary of your taste. If the AI is slow or away, VinaX's own order plays."
                 keywords="ai rerank order up next personalised smart"
               >
                 <Toggle on={s.aiRerank !== false} onChange={s.setAiRerank} label="AI fine-tunes Up Next" />

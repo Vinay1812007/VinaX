@@ -31,8 +31,8 @@ for (const size of [{ width: 1440, height: 1000, theme: 'dark' }, { width: 390, 
       const url = new URL(request.url());
       // Home and Radio never call a removed AI route, nor VinaX AI's chat routes
       // (that chat lives only at /vinaxai). 1.4: the music AI routes are the one
-      // exception: the AI Home Builder and Up Next's rerank (docs/ai.md#music-ai).
-      const musicAi = ['/api/ai/home-layout', '/api/ai/rerank'].includes(url.pathname);
+      // exception: the AI Home Builder, Up Next's rerank and the AI DJ (docs/ai.md#music-ai).
+      const musicAi = ['/api/ai/home-layout', '/api/ai/rerank', '/api/ai/dj'].includes(url.pathname);
       if (['/api/dj', '/api/home', '/api/curate', '/api/embed', '/api/playlist', '/api/vinaxai', '/api/aimodels', '/api/voices', '/api/tts', '/api/transcribe'].includes(url.pathname) || (url.pathname.startsWith('/api/ai/') && !musicAi) || url.searchParams.get('key') === 'home-config') retiredRequests.push(url.pathname);
     });
     page.on('pageerror', (e) => errors.push(e.message));

@@ -103,6 +103,8 @@ export interface SettingsState {
    * order within 1.5 s, or the on-device order plays. On by default.
    */
   aiRerank: boolean;
+  /** The AI DJ suggests songs for Up Next (not `aiDj`: that name belongs to a retired setting the migration removes) from a taste summary and recent plays (services/ai/dj.ts). On by default. */
+  aiDjPicks: boolean;
   /** 1.4 — add one AI generated song to each automatic stretch (services/ai/genInQueue.ts). Off by default. */
   genInQueue: boolean;
   /** v6.5.0 — smart queue: tapping a song starts it and VinaX builds the
@@ -176,6 +178,7 @@ export interface SettingsState {
   setQueueLanguages(v: QueueLanguages): void;
   setNeverRepeat(v: boolean): void;
   setAiRerank(v: boolean): void;
+  setAiDjPicks(v: boolean): void;
   setGenInQueue(v: boolean): void;
   setDjTakeover(v: boolean): void;
   setKidMode(v: boolean): void;
@@ -248,6 +251,7 @@ const defaults = {
   queueLanguages: 'mix' as QueueLanguages,
   neverRepeat: false,
   aiRerank: true,
+  aiDjPicks: true,
   genInQueue: false,
   djTakeover: true,
   kidMode: false,
@@ -387,6 +391,7 @@ export const useSettingsStore = create<SettingsState>()(
       setQueueLanguages: (queueLanguages) => set({ queueLanguages: queueLanguages === 'one' ? 'one' : 'mix' }),
       setNeverRepeat: (neverRepeat) => set({ neverRepeat: !!neverRepeat }),
       setAiRerank: (aiRerank) => set({ aiRerank: !!aiRerank }),
+      setAiDjPicks: (aiDjPicks) => set({ aiDjPicks: !!aiDjPicks }),
       setGenInQueue: (genInQueue) => set({ genInQueue: !!genInQueue }),
       setDiscoveryMode: (mode) => {
         const discoveryMode = isDiscoveryMode(mode) ? mode : 'balanced';
