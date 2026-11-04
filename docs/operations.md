@@ -142,6 +142,8 @@ Every sign-in can carry a Cloudflare Turnstile check: Google sign-in in the app 
 
 Then `GET /api/auth/google` and `GET /api/admin/session` name the site key and the pages run the check. In the app it runs when someone signs in and is invisible unless Cloudflare wants a click; in the console the widget sits under the Google button. The Worker checks each token with Siteverify (`_lib/turnstile.ts`): success, the action (`app-signin` or `console-signin`) and a `vinaxmusic.online` hostname. If Siteverify cannot be reached, Google sign-in still goes ahead (the Google token proves who it is) and the recovery password is refused.
 
+In the Android app the check needs two WebView settings that Android leaves off and Capacitor does not change: third-party cookies, and iframes that may navigate in place (Capacitor otherwise sends every iframe navigation to an outside app). `scripts/patch-android.js` writes both into `MainActivity` (`allowSignInCheck`), so an APK built before that fix fails the check every time and needs updating. When a check fails, the Worker logs `turnstile failed` with Cloudflare's error codes, the action and the hostname, and the page reports Turnstile's client error code to telemetry as `turnstile`.
+
 With Turnstile on, the recovery password is no longer a key by itself: the console trades it once, with a passed check, at `POST /api/admin/session { password, turnstile }` for a 12-hour session, and changing the password ends those sessions. Removing either key turns the check off again.
 
 ## The database

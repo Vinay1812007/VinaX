@@ -54,12 +54,14 @@ export async function verifyTurnstile(env: TurnstileEnv, token: unknown, request
   try {
     const res = await fetchImpl(SITEVERIFY, { method: 'POST', body: form, signal: AbortSignal.timeout(8_000) });
     if (!res.ok) return 'unavailable';
-    const j = (await res.json().catch(() => null)) as { success?: unknown; action?: unknown; hostname?: unknown } | null;
+    const j = (await res.json().catch(() => null)) as { success?: unknown; action?: unknown; hostname?: unknown; 'error-codes'?: unknown } | null;
     if (!j) return 'unavailable';
-    if (j.success !== true) return 'failed';
-    if (j.action !== action) return 'failed';
-    if (typeof j.hostname !== 'string' || !OUR_HOST.test(j.hostname)) return 'failed';
-    return 'ok';
+    const ok = j.success === true && j.action === action && typeof j.hostname === 'string' && OUR_HOST.test(j.hostname);
+    if (!ok) {
+      // Why it failed (Cloudflare's error codes, the action and host it saw), for the Worker's logs. No token or IP.
+      console.warn('turnstile failed', JSON.stringify({ want: action, success: j.success === true, action: j.action ?? null, hostname: j.hostname ?? null, codes: j['error-codes'] ?? null }));
+    }
+    return ok ? 'ok' : 'failed';
   } catch {
     return 'unavailable';
   }

@@ -13,6 +13,13 @@
 const SCRIPT = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 /** Give up after this long (a challenge the listener left open). */
 const TIMEOUT_MS = 90_000;
+/**
+ * Cloudflare refuses a token older than five minutes. Phones freeze a page in
+ * the background (Google's sign-in opens its own tab on Android), so the
+ * widget's own refresh can be late: a token kept longer than this is thrown
+ * away and the widget runs again instead.
+ */
+const TOKEN_MAX_AGE_MS = 4 * 60_000;
 
 interface TurnstileApi {
   render(el: HTMLElement, o: Record<string, unknown>): string | undefined;
@@ -22,6 +29,11 @@ interface TurnstileApi {
 
 let keyLoad: Promise<string | null> | null = null;
 let scriptLoad: Promise<TurnstileApi | null> | null = null;
+
+/** Turnstile's error code, sent to telemetry so a failing device says why. */
+function reportCheckError(code: unknown): void {
+  void import('@/services/analytics/telemetry').then((m) => m.reportError('turnstile', `code ${String(code ?? '?')}`)).catch(() => undefined);
+}
 
 /** The site key, asked once per page. Null: no check (off, or the server can't say). */
 export function turnstileSiteKey(origin: string, fetchImpl: typeof fetch = fetch): Promise<string | null> {
@@ -61,6 +73,8 @@ interface Mounted {
   api: TurnstileApi;
   id: string;
   token: string | null;
+  /** When `token` arrived (Date.now()). */
+  tokenAt: number;
   failed: boolean;
   waiters: Array<(token: string | null) => void>;
 }
@@ -69,6 +83,7 @@ let mounted: Mounted | null = null;
 
 function settle(m: Mounted, token: string | null): void {
   m.token = token;
+  m.tokenAt = Date.now();
   m.failed = token === null;
   const waiting = m.waiters.splice(0);
   for (const w of waiting) w(token);
@@ -85,7 +100,7 @@ export async function mountTurnstile(el: HTMLElement, origin: string, action: 'a
   if (!siteKey || !el.isConnected) return false;
   const api = await loadScript();
   if (!api || !el.isConnected) return false;
-  const m: Mounted = { api, id: '', token: null, failed: false, waiters: [] };
+  const m: Mounted = { api, id: '', token: null, tokenAt: 0, failed: false, waiters: [] };
   try {
     const id = api.render(el, {
       sitekey: siteKey,
@@ -94,7 +109,7 @@ export async function mountTurnstile(el: HTMLElement, origin: string, action: 'a
       'refresh-expired': 'auto',
       callback: (token: string) => settle(m, token),
       'expired-callback': () => { m.token = null; },
-      'error-callback': () => { settle(m, null); return true; },
+      'error-callback': (code?: unknown) => { reportCheckError(code); settle(m, null); return true; },
     });
     if (!id) return false;
     m.id = id;
@@ -118,10 +133,11 @@ function takeMounted(m: Mounted): Promise<string | null> {
     }
     return token;
   };
-  if (m.token) return Promise.resolve(take(m.token));
-  if (m.failed) {
-    // It failed earlier: run it again and wait for the new answer.
+  if (m.token && Date.now() - m.tokenAt < TOKEN_MAX_AGE_MS) return Promise.resolve(take(m.token));
+  if (m.failed || m.token) {
+    // It failed earlier, or its token is too old: run it again and wait for the new answer.
     m.failed = false;
+    m.token = null;
     try { m.api.reset(m.id); } catch { /* gone */ }
   }
   return new Promise((resolve) => {
@@ -172,7 +188,7 @@ export async function turnstileToken(origin: string, action: 'app-signin'): Prom
         appearance: 'interaction-only',
         theme: document.documentElement.classList.contains('light') ? 'light' : 'dark',
         callback: (token: string) => finish(token),
-        'error-callback': () => { finish(null); return true; },
+        'error-callback': (code?: unknown) => { reportCheckError(code); finish(null); return true; },
         'expired-callback': () => finish(null),
         'timeout-callback': () => finish(null),
       });
