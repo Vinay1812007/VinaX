@@ -86,8 +86,10 @@ html.light {
 }
 
 /* ------------------------------------------------------------ background */
-body { background: linear-gradient(180deg, var(--bg-2), var(--bg) 60%) fixed; background-color: var(--bg); }
-.aurora { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+body { background: var(--bg); }
+/* The gradient sits on the fixed glow layer, not on body (a fixed body
+   background repaints the whole page on every scroll). */
+.aurora { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; background: linear-gradient(180deg, var(--bg-2), var(--bg) 60%); }
 .aurora span { position: absolute; width: 62vmax; height: 62vmax; border-radius: 50%; filter: blur(70px); will-change: transform; }
 .aurora span:nth-child(1) { background: radial-gradient(circle, var(--glow-a), transparent 65%); left: -18vmax; top: -22vmax; animation: drift-a 46s ease-in-out infinite alternate; }
 .aurora span:nth-child(2) { background: radial-gradient(circle, var(--glow-b), transparent 65%); right: -20vmax; top: 8vmax; animation: drift-b 58s ease-in-out infinite alternate; }
@@ -99,9 +101,11 @@ body { background: linear-gradient(180deg, var(--bg-2), var(--bg) 60%) fixed; ba
 .login, .app { position: relative; z-index: 1; }
 
 /* -------------------------------------------------------- glass surfaces */
+/* Cards are tinted, not blurred: only the (already blurred) glows sit behind
+   them, and a blur on every card makes scrolling heavy and can flicker in
+   Safari. Real blur is kept for things that float over content. */
 .card, .kpi, .lib-card, .fb-card, .item-card {
   background: var(--surface);
-  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
   border-color: var(--border);
   box-shadow: var(--shadow-card);
 }
@@ -132,14 +136,26 @@ html.light .scrim, html.light .drawer-scrim, html.light .scrim-nav { background:
     -webkit-backdrop-filter: var(--glass-blur-strong); backdrop-filter: var(--glass-blur-strong);
     box-shadow: var(--shadow-card);
   }
-  .topbar { top: var(--gap); margin: var(--gap) var(--gap) 0; border-radius: 18px; border: 1px solid var(--border); }
+  .topbar { top: var(--gap); margin: 0 var(--gap); border-radius: 18px; border: 1px solid var(--border); }
+  /* The floating bar leaves a strip above and beside it. This layer sticks
+     there and softens whatever scrolls underneath, so page content never
+     shows through around the bar. It takes the bar's top margin in the flow. */
+  .main-col::before {
+    content: ''; position: sticky; top: 0; z-index: 19; display: block; flex: none;
+    height: calc(var(--gap) + 78px); margin-bottom: -78px; pointer-events: none;
+    background: linear-gradient(180deg, var(--bg) 0, color-mix(in srgb, var(--bg) 80%, transparent) 55%, transparent);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    -webkit-mask-image: linear-gradient(180deg, #000 70%, transparent); mask-image: linear-gradient(180deg, #000 70%, transparent);
+  }
   .page { padding-left: calc(var(--gap) + 12px); padding-right: calc(var(--gap) + 12px); }
 }
 @media (max-width: 960px) {
   .sidebar { background: var(--pop); -webkit-backdrop-filter: var(--glass-blur-strong); backdrop-filter: var(--glass-blur-strong); border-right: 1px solid var(--border-strong); }
+  /* Phones: the bar spans the screen edge to edge, so it is nearly solid. */
+  .topbar { background: color-mix(in srgb, var(--surface-solid) 95%, transparent) !important; box-shadow: 0 6px 18px rgb(0 0 0 / .18); }
 }
 .topbar {
-  background: color-mix(in srgb, var(--surface-solid) 66%, transparent);
+  background: color-mix(in srgb, var(--surface-solid) 90%, transparent);
   -webkit-backdrop-filter: var(--glass-blur-strong); backdrop-filter: var(--glass-blur-strong);
   border-bottom-color: var(--border);
   box-shadow: var(--shadow-card);
