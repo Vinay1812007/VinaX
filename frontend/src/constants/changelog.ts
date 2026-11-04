@@ -16,6 +16,13 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.10.2': {
+    title: 'Home scrolls smoothly: no more blank shelves or a disappearing sidebar',
+    changes: [
+      { type: 'fixed', text: 'Scrolling Home no longer leaves shelves or the sidebar blank for a moment.' },
+      { type: 'fixed', text: 'Home no longer jumps while you scroll up and down.' },
+    ],
+  },
   '1.10.1': {
     title: 'Search shows the song you meant first; new glass owner console',
     changes: [
