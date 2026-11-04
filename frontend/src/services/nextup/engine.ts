@@ -11,7 +11,8 @@ import { aiReasonLine, rerankWithAi } from '@/services/ai/musicAi';
 import { songKey } from '@/services/recommendation/songKey';
 import { inferMood, type Mood } from '@/services/recommendation/mood';
 import { exposureLedger, recordExposure } from '@/services/recommendation/exposure';
-import { tuneScoreAdjust, tuneSearchQuery } from '@/services/recommendation/tune';
+import { tuneScoreAdjust, tuneSearchQuery, type TuneIntent } from '@/services/recommendation/tune';
+import { aiDjSongs, djReason } from '@/services/ai/dj';
 import { isSoftMuted } from '@/services/recommendation/admission';
 import { getSessionIntent } from '@/services/personalization/sessionIntent';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
@@ -126,6 +127,7 @@ const defaultApi: CatalogueApi = {
   searchPage: (q, page, limit, signal) => searchSongsPage(q, page, limit, { signal }),
   related: async (id) => ((await getArtist(id))?.similarArtists ?? []).filter((a) => !!a?.id).map((a) => ({ id: a.id, name: a.name })),
   artistPage: (id, page) => getArtistTopSongs(id, page),
+  aiDj: (seed, ctx, o) => aiDjSongs(seed, ctx, o),
 };
 let api: CatalogueApi = defaultApi;
 
@@ -214,6 +216,8 @@ interface Env {
   played: Map<string, number>;
   served: Map<string, number>;
   tuneQuery: string | null;
+  /** The "Tune this queue" chip, for the AI DJ. */
+  tune: TuneIntent | null;
   score: ScoreContext;
   /** 1.4 — Never repeat: the lifetime heard-set's lookup; absent when the mode is off. */
   heard?: (key: string) => boolean;
@@ -276,6 +280,7 @@ function buildEnv(seed: Song, ctx: RecommendationContext, anchor: Anchor, option
     played: playedMap(ctx.history ?? [], songKey, now),
     served: servedMap(now),
     tuneQuery,
+    tune,
     score,
     ...(ctx.neverRepeat ? { heard: hasHeardKey } : {}),
     now,
@@ -357,7 +362,9 @@ function refill(p: Pool, env: Env, deadlineMs: number, signal?: AbortSignal, fre
     const s = [...(env.ctx.favorites ?? []), ...env.anchor.seeds.map((x) => x.song)].find((x) => leadOf(x) === lead && x.artists?.[0]?.id);
     if (s) pulled.push({ id: s.artists[0].id, name: s.artists[0].name });
   }
-  const lookups = planLookups({ anchor: env.anchor, favorites: env.ctx.favorites ?? [], pulledArtists: pulled, rotation: rotation++, tuneQuery: env.tuneQuery, api, signal });
+  const dj = env.ctx.aiDj && api.aiDj ? api.aiDj : null;
+  const aiDj = dj ? () => dj(env.seed, env.ctx, { tune: env.tune, language: env.languages[0] ?? null }) : undefined;
+  const lookups = planLookups({ anchor: env.anchor, favorites: env.ctx.favorites ?? [], pulledArtists: pulled, rotation: rotation++, tuneQuery: env.tuneQuery, api, signal, aiDj });
   if (env.tuneQuery) p.asked.add(env.tuneQuery);
   // One lookup adds at most this many: a single huge answer can never push out what the other lookups (a new like) just brought.
   const merge = (f: Fetched): void => {
@@ -433,6 +440,7 @@ function publishDebug(p: Pool, env: Env, filter: FilterContext, songs: Song[], r
 function whyLine(c: Candidate | undefined): string | null {
   if (!c) return null;
   const has = (s: Source): boolean => c.sources.has(s);
+  if (has('ai-dj')) return djReason(c.song.id) ?? 'Picked by the AI DJ for this moment';
   if (has('tune')) return 'Fits how you tuned this queue';
   if (has('liked-similar') && c.via) return `Like “${c.via}”, from your liked songs`;
   if (has('liked-artist') && c.via) return `${c.via} — an artist you like`;

@@ -1,15 +1,18 @@
 /**
- * VinaX music AI — what the three music routes share (POST /api/ai/rerank,
- * POST /api/ai/home-layout and the song generator): the owner's switches,
+ * VinaX music AI — what the music routes share (POST /api/ai/rerank,
+ * /api/ai/home-layout, /api/ai/dj, /api/ai/playlist, /api/ai/lyrics and the
+ * song generator): the owner's switches,
  * the gate every request passes, the `music` ladder with its failover, a
  * strict reader for the JSON a model answers with, and the sanitisers for
  * the compact summaries a device sends.
  *
- * What a device sends is always a SUMMARY built on the device (docs/data-and-
- * privacy.md lists it field by field): never the history, the heard-set or a
- * song title. Every model answer is checked against the input before it goes
- * back, so a model cannot invent a song or a key. The app works the same
- * without any of this: each route has an on-device fallback.
+ * What a device sends is a SUMMARY built on the device (docs/data-and-
+ * privacy.md lists it field by field). Since 2026-11-04 the AI DJ and AI
+ * Playlist may also send a short list of recently played titles and artists,
+ * and the AI may SUGGEST songs by title and artist: the device then looks
+ * each one up in its own catalogue and keeps only real, playable matches.
+ * Every model answer is checked here before it goes back. The app works the
+ * same without any of this: each route has an on-device fallback.
  */
 import { CORS, json } from '../authShared';
 import { bearer, readSession } from '../googleAuth';
@@ -30,6 +33,12 @@ export interface MusicAiSettings {
   rerank: boolean;
   /** Home's AI layout. Missing = on. */
   home: boolean;
+  /** The AI DJ's song suggestions for Up Next. Missing = on. */
+  dj: boolean;
+  /** AI Playlist from a described vibe. Missing = on. */
+  playlist: boolean;
+  /** Lyrics tools: romanize, translate, explain. Missing = on. */
+  lyrics: boolean;
   /** Song generation: off until the owner turns it on (a feature flag), with its own daily quota per device. */
   generate: { enabled: boolean; dailyQuota: number };
 }
@@ -44,6 +53,9 @@ export function sanitizeMusicSettings(raw: unknown): MusicAiSettings {
     enabled: v.enabled !== false,
     rerank: v.rerank !== false,
     home: v.home !== false,
+    dj: v.dj !== false,
+    playlist: v.playlist !== false,
+    lyrics: v.lyrics !== false,
     generate: { enabled: g.enabled === true, dailyQuota: Math.max(1, Math.min(50, quota)) },
   };
 }
@@ -58,7 +70,7 @@ export async function musicCandidates(env: AiEnv): Promise<ModelSpec[]> {
   return ladderModels(registry, 'music').filter((spec) => providerConfigured(env, spec.provider));
 }
 
-export type MusicFeature = 'rerank' | 'home';
+export type MusicFeature = 'rerank' | 'home' | 'dj' | 'playlist' | 'lyrics';
 
 const tooMany = (): Response =>
   new Response(JSON.stringify({ error: 'rate_limited', retryAfter: 60 }), { status: 429, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'retry-after': '60', ...CORS } });
@@ -242,4 +254,65 @@ export function cleanReason(v: unknown, max = 90): string | null {
   const t = cleanText(v, 200);
   if (!t || /https?:|www\./i.test(t)) return null;
   return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
+}
+
+// ------------------------------------------------------- song suggestions --
+
+/** A song named by title and artist: what the AI DJ and AI Playlist suggest, and the recent plays a device may send. */
+export interface SongRef {
+  title: string;
+  artist: string;
+}
+
+export interface SongPick extends SongRef {
+  reason: string | null;
+}
+
+/** The same song however it is written: lower case, no brackets ("(From …)"), no punctuation. */
+export function songRefKey(title: string, artist: string): string {
+  const norm = (t: string): string => t.toLowerCase().replace(/[([{][^)\]}]*[)\]}]/g, ' ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  return `${norm(title)}|${norm(artist).split(' ').slice(0, 2).join(' ')}`;
+}
+
+/** Up to `max` clean title/artist pairs, duplicates dropped. */
+export function sanitizeSongRefs(raw: unknown, max: number): SongRef[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SongRef[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (out.length >= max) break;
+    const v = item && typeof item === 'object' ? (item as Record<string, unknown>) : null;
+    const title = v ? cleanText(v.title, 80) : null;
+    const artist = v ? cleanText(v.artist, 60) : null;
+    if (!title || !artist) continue;
+    const k = songRefKey(title, artist);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ title, artist });
+  }
+  return out;
+}
+
+/**
+ * The songs a model suggested, checked: a title and an artist each, no links,
+ * no duplicates, nothing in `exclude` (the seed, the recent plays), at most `max`.
+ * Null when nothing usable came back.
+ */
+export function validatePicks(value: unknown, o: { max: number; exclude?: ReadonlySet<string> }): SongPick[] | null {
+  const raw = value && typeof value === 'object' ? (value as Record<string, unknown>).songs : null;
+  if (!Array.isArray(raw)) return null;
+  const out: SongPick[] = [];
+  const seen = new Set<string>(o.exclude ?? []);
+  for (const item of raw) {
+    if (out.length >= o.max) break;
+    const v = item && typeof item === 'object' ? (item as Record<string, unknown>) : null;
+    const title = v ? cleanText(v.title, 80) : null;
+    const artist = v ? cleanText(v.artist, 60) : null;
+    if (!v || !title || !artist || /https?:|www\./i.test(`${title} ${artist}`)) continue;
+    const k = songRefKey(title, artist);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ title, artist, reason: cleanReason(v.reason, 80) });
+  }
+  return out.length ? out : null;
 }

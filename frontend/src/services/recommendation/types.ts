@@ -347,6 +347,11 @@ export interface RecommendationContext {
    */
   aiRerank?: boolean;
   /**
+   * The AI DJ may suggest songs for Up Next (services/ai/dj.ts), sending a
+   * taste summary and recent plays. Absent = off.
+   */
+  aiDj?: boolean;
+  /**
    * 1.4 — generated songs are allowed (Settings → "Add a generated song to my
    * queues"): Never repeat's last step makes a new song instead of stopping.
    */

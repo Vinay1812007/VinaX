@@ -30,7 +30,9 @@ export type Source =
   /** 1.4 — Never repeat, widened twice: popular songs in the session's own languages, past the first pages. */
   | 'explore'
   /** 1.4 — a NEW song the music AI made in the session's feel (services/ai/songGen.ts). */
-  | 'generated';
+  | 'generated'
+  /** A song the AI DJ suggested for the playing song, found in the catalogue (services/ai/dj.ts). */
+  | 'ai-dj';
 
 export const SOURCE_BASE: Readonly<Record<Source, number>> = Object.freeze({
   anchor: 1,
@@ -44,6 +46,7 @@ export const SOURCE_BASE: Readonly<Record<Source, number>> = Object.freeze({
   genre: 0.7,
   explore: 0.55,
   generated: 0.5,
+  'ai-dj': 1.12,
 });
 
 export interface Candidate {

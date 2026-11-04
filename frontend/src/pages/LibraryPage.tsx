@@ -32,6 +32,8 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { TopBarActions } from '@/components/TopBar';
 import '@/styles/pages/library.css';
 
+// AI Playlist: fetched the first time it opens.
+const AiPlaylistSheet = lazy(() => import('@/features/playlists/AiPlaylistSheet'));
 const SmartCollectionSheet = lazy(() => import('@/features/library/SmartCollectionSheet').then((m) => ({ default: m.SmartCollectionSheet })));
 // The Backup Center is the same sheet Settings opens; it loads only when asked for.
 const BackupCenter = lazy(() => import('@/features/settings/BackupCenter').then((m) => ({ default: m.BackupCenter })));
@@ -89,6 +91,7 @@ export default function LibraryPage() {
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [aiPlaylist, setAiPlaylist] = useState(false);
   const [smartOpen, setSmartOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
 
@@ -242,6 +245,10 @@ export default function LibraryPage() {
               <button type="button" onClick={() => setImporting(true)} data-tour="import-text" className="vx-quiet-btn">
                 Import from text
               </button>
+              <button type="button" onClick={() => setAiPlaylist(true)} className="vx-quiet-btn inline-flex items-center gap-1.5">
+                <SparkleIcon className="w-4 h-4" />
+                AI Playlist
+              </button>
               <button
                 type="button"
                 onClick={() => setCreating((v) => !v)}
@@ -263,12 +270,16 @@ export default function LibraryPage() {
               <ImportTextIcon className="w-[22px] h-[22px]" />
             </IconButton>
           </span>
+          <IconButton label="AI Playlist" onClick={() => setAiPlaylist(true)}>
+            <SparkleIcon className="w-[22px] h-[22px]" />
+          </IconButton>
           <IconButton label="Create playlist" onClick={() => setCreating((v) => !v)} aria-expanded={createOpen} aria-controls="library-create">
             <PlusIcon className="w-6 h-6" />
           </IconButton>
         </TopBarActions>
       )}
       {importing && <ImportPlaylistSheet onClose={() => setImporting(false)} />}
+      {aiPlaylist && <Suspense fallback={null}><AiPlaylistSheet onClose={() => setAiPlaylist(false)} /></Suspense>}
 
       {createOpen && (
         <div id="library-create" className="vx-lp-create-row">

@@ -108,8 +108,21 @@ describe('home layout checks', () => {
     expect(cleanQuery('late night drive')).toBe('late night drive');
   });
 
+  it('passes the shelf titles Home showed lately, clipped and de-duplicated, so the AI avoids them', async () => {
+    const { prompts } = answers(JSON.stringify({ blocks: ['quick', 'personal', 'loved', 'feed'].map((type) => ({ type, title: `A ${type}`, reason: 'Because' })) }));
+    const recentTitles = ['Rainy evening melodies', 'Rainy evening melodies', 'x'.repeat(80), ...Array.from({ length: 30 }, (_, i) => `Title ${i}`)];
+    expect((await call({ ...BODY, recentTitles })).status).toBe(200);
+    const sent = JSON.parse(prompts[0]) as { messages: Array<{ content: string }> };
+    const input = JSON.stringify(sent);
+    expect(input).toContain('Rainy evening melodies');
+    expect(input).toContain('recentTitles');
+    expect(sanitizeHomeInput({ ...BODY, recentTitles })!.recentTitles).toHaveLength(20);
+    expect(sanitizeHomeInput({ ...BODY, recentTitles })!.recentTitles[1]).toHaveLength(40);
+    expect(sanitizeHomeInput(BODY)!.recentTitles).toEqual([]);
+  });
+
   it('drops a "right now" shelf with nothing to feed it', () => {
-    const input = { generation: 1, allowed: ALLOWED, avoid: [], seeds: [], languages: ['telugu'] };
+    const input = { generation: 1, allowed: ALLOWED, avoid: [], seeds: [], recentTitles: [], languages: ['telugu'] };
     const four = ['quick', 'personal', 'loved', 'feed'].map((type) => ({ type, title: 'T', reason: 'R' }));
     expect(validateHomeLayout({ blocks: [...four, { type: 'rightnow', title: 'X', reason: 'Y', language: 'tamil' }] }, input)!.map((b) => b.type)).toEqual(['quick', 'personal', 'loved', 'feed']);
   });

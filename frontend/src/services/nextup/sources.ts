@@ -1,5 +1,7 @@
 import type { Song } from '@/types';
 import type { Anchor } from './anchor';
+import type { RecommendationContext } from '@/services/recommendation/types';
+import type { TuneIntent } from '@/services/recommendation/tune';
 import { languageOf, leadOf, type Source } from './rules';
 import { trendingSeed } from '@/constants/seeds';
 import { buildSongProfile } from '@/services/recommendation/profiles';
@@ -27,7 +29,12 @@ export interface CatalogueApi {
   related?(artistId: string): Promise<Array<{ id: string; name: string }>>;
   /** 1.4 — one page of an artist's songs, most popular first (page 0 = `artistTop`). */
   artistPage?(artistId: string, page: number): Promise<Song[]>;
+  /** The AI DJ's suggestions for the playing song, resolved to catalogue songs (services/ai/dj.ts). */
+  aiDj?(seed: Song, ctx: RecommendationContext, o: { tune: TuneIntent | null; language: string | null }): Promise<Song[]>;
 }
+
+/** The AI DJ's songs for this refill (services/ai/dj.ts); absent when it is off. */
+export type AiDjLookup = () => Promise<Song[]>;
 
 export interface Fetched {
   songs: Song[];
@@ -50,6 +57,7 @@ export interface SourcePlanInput {
   tuneQuery?: string | null;
   api: CatalogueApi;
   signal?: AbortSignal;
+  aiDj?: AiDjLookup;
 }
 
 const inLanguages = (song: Song, languages: readonly string[]): boolean => {
@@ -111,6 +119,8 @@ export function planLookups(i: SourcePlanInput): Lookup[] {
     const personal = api.personal;
     out.unshift({ label: 'Personal engine', source: 'personal', run: () => personal(seed.id, 20, signal) });
   }
+  // The AI DJ: one ask per playing song and tune (it reuses its answer); a late answer still lands in the pool.
+  if (i.aiDj) out.push({ label: 'AI DJ', source: 'ai-dj', run: i.aiDj });
   return out;
 }
 

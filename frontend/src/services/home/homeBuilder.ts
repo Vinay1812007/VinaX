@@ -54,6 +54,33 @@ export const MIN_AI_BLOCKS = 4;
 export const MAX_AI_BLOCKS = 14;
 export const MAX_SEEDS = 8;
 
+/**
+ * Shelf titles the AI gave Home lately, newest first, so the next layout uses
+ * fresh words (sent as `recentTitles`). Kept on this device only.
+ */
+export const RECENT_TITLES_KEY = 'vinax.home-ai.titles.v1';
+export const MAX_RECENT_TITLES = 20;
+
+export function recentHomeTitles(): string[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(RECENT_TITLES_KEY) ?? '[]') as unknown;
+    return Array.isArray(raw) ? raw.filter((t): t is string => typeof t === 'string' && !!t.trim()).slice(0, MAX_RECENT_TITLES) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function rememberHomeTitles(titles: readonly string[]): void {
+  const fresh = titles.map((t) => t.trim()).filter(Boolean);
+  if (!fresh.length) return;
+  const merged = [...new Set([...fresh, ...recentHomeTitles()])].slice(0, MAX_RECENT_TITLES);
+  try {
+    localStorage.setItem(RECENT_TITLES_KEY, JSON.stringify(merged));
+  } catch {
+    /* storage is optional */
+  }
+}
+
 const isStr = (v: unknown, max: number): v is string => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
 
 /**
@@ -152,6 +179,7 @@ export interface HomeRequestBody {
   allowed: AiBlockType[];
   avoid: AiBlockType[];
   seeds: Array<{ key: string; language: string | null; mood: string | null; genre: string | null; leadArtist: string | null }>;
+  recentTitles: string[];
 }
 
 export function buildHomeRequest(ctx: RecommendationContext, o: { generation: number; allowed: readonly AiBlockType[]; avoid: readonly AiBlockType[]; seeds: readonly HomeSeed[] }): HomeRequestBody {
@@ -165,6 +193,7 @@ export function buildHomeRequest(ctx: RecommendationContext, o: { generation: nu
       const mood = inferMood(song);
       return { key, language: song.language && song.language !== 'unknown' ? song.language : null, mood: mood !== 'neutral' ? mood : null, genre: song.genre?.trim().toLowerCase() || null, leadArtist: song.artists?.[0]?.name ?? null };
     }),
+    recentTitles: recentHomeTitles(),
   };
 }
 
@@ -172,7 +201,9 @@ export function buildHomeRequest(ctx: RecommendationContext, o: { generation: nu
 export async function requestAiHomeLayout(body: HomeRequestBody, o: { seedKeys: ReadonlySet<string>; fetcher?: typeof fetch; deadlineMs?: number; signal?: AbortSignal }): Promise<HomeLayout | null> {
   const answer = await postMusicAi<{ layout?: unknown }>('home-layout', body, { deadlineMs: o.deadlineMs ?? HOME_AI_DEADLINE_MS, fetcher: o.fetcher, signal: o.signal });
   if (!answer || !isHomeLayout(answer.layout)) return null;
-  return acceptHomeLayout(answer.layout, { generation: body.generation, allowed: body.allowed, seedKeys: o.seedKeys, avoid: body.avoid });
+  const layout = acceptHomeLayout(answer.layout, { generation: body.generation, allowed: body.allowed, seedKeys: o.seedKeys, avoid: body.avoid });
+  if (layout) rememberHomeTitles(layout.blocks.map((b) => b.title));
+  return layout;
 }
 
 /* ---- once per generation ---- */

@@ -122,7 +122,8 @@ describe('music AI helpers', () => {
   });
 
   it('reads the owner’s switches: rerank and home on, generation off, unless set', () => {
-    expect(sanitizeMusicSettings(undefined)).toEqual({ enabled: true, rerank: true, home: true, generate: { enabled: false, dailyQuota: 5 } });
-    expect(sanitizeMusicSettings({ enabled: false, generate: { enabled: true, dailyQuota: 900 } })).toEqual({ enabled: false, rerank: true, home: true, generate: { enabled: true, dailyQuota: 50 } });
+    expect(sanitizeMusicSettings(undefined)).toEqual({ enabled: true, rerank: true, home: true, dj: true, playlist: true, lyrics: true, generate: { enabled: false, dailyQuota: 5 } });
+    expect(sanitizeMusicSettings({ enabled: false, generate: { enabled: true, dailyQuota: 900 } })).toEqual({ enabled: false, rerank: true, home: true, dj: true, playlist: true, lyrics: true, generate: { enabled: true, dailyQuota: 50 } });
+    expect(sanitizeMusicSettings({ dj: false, lyrics: false })).toMatchObject({ dj: false, playlist: true, lyrics: false });
   });
 });

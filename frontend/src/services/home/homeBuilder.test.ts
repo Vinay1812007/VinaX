@@ -91,7 +91,7 @@ describe('the request and its answer', () => {
     expect(body.allowed).not.toContain('charts');
     expect(text).not.toContain('Private');
     expect(text).not.toContain('"fav"');
-    expect(Object.keys(body).sort()).toEqual(['allowed', 'avoid', 'generation', 'intent', 'seeds', 'taste']);
+    expect(Object.keys(body).sort()).toEqual(['allowed', 'avoid', 'generation', 'intent', 'recentTitles', 'seeds', 'taste']);
   });
 
   it('guards and accepts the answer, and gives up at the deadline', async () => {
