@@ -16,6 +16,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.10.1': {
+    title: 'Search shows the song you meant first; new glass owner console',
+    changes: [
+      { type: 'improved', text: 'Search can put the song most people are looking for first, when the team has pinned it for that search.' },
+    ],
+  },
   '1.10.0': {
     title: 'AI DJ, AI Playlist and lyrics tools',
     changes: [
