@@ -56,7 +56,7 @@ beforeEach(async () => {
 });
 
 describe('withNotificationPermission', () => {
-  it('shows one dialog when the playback notification, announcements and push all ask at start-up', async () => {
+  it('shows one dialog when the playback notification asks twice and push registers at the same time', async () => {
     const native = await import('@/services/native');
     const { registerNativePush } = await import('./nativePush');
     await Promise.all([
@@ -68,6 +68,14 @@ describe('withNotificationPermission', () => {
     expect(os.dialogs).toBe(1);
     // Push read the answer and registered, instead of losing the race.
     expect(push.register).toHaveBeenCalledTimes(1);
+  });
+
+  it('push registration at app open never shows a dialog itself (the "Allow access" sheet asks)', async () => {
+    const { registerNativePush } = await import('./nativePush');
+    await registerNativePush(() => undefined);
+    await flush();
+    expect(os.dialogs).toBe(0);
+    expect(push.register).not.toHaveBeenCalled();
   });
 
   it('after a "no", automatic callers do not ask again this launch, but a tap does', async () => {
@@ -86,6 +94,7 @@ describe('withNotificationPermission', () => {
 
 describe('registerNativePush', () => {
   it('creates the VinaX channel and uploads the token with the device language', async () => {
+    os.state = 'granted';
     const { registerNativePush, PUSH_CHANNEL } = await import('./nativePush');
     await registerNativePush(() => undefined);
     await flush();
@@ -117,7 +126,7 @@ describe('refreshNativePush (resume)', () => {
     await refreshNativePush();
     await flush();
     expect(push.register).toHaveBeenCalledTimes(1);
-    expect(os.dialogs).toBe(1);
+    expect(os.dialogs).toBe(0);
   });
 
   it('does nothing once the token is on the server', async () => {

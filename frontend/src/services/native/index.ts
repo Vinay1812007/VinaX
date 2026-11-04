@@ -44,15 +44,6 @@ export async function getNotificationPermission(): Promise<'granted' | 'denied' 
   }
 }
 
-let launchAsked = false;
-
-/** Ask once on app open; playback start re-checks (see playerStore). */
-export async function requestNotificationPermissionOnce(): Promise<void> {
-  if (launchAsked) return;
-  launchAsked = true;
-  await ensureNotificationPermission();
-}
-
 /**
  * Called when playback starts: if notifications are denied, the media
  * controls notification cannot appear — tell the user once how to fix it.

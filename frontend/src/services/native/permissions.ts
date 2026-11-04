@@ -49,10 +49,17 @@ export async function ensureNotificationPermission(force = false): Promise<'gran
     const { LocalNotifications } = await import('@capacitor/local-notifications');
     return await withNotificationPermission(async (ask) => {
       let status = await LocalNotifications.checkPermissions();
+      let asked = false;
       if (status.display !== 'granted') {
-        status = (await ask(() => LocalNotifications.requestPermissions())) ?? status;
+        status = (await ask(() => {
+          asked = true;
+          return LocalNotifications.requestPermissions();
+        })) ?? status;
       }
-      return status.display === 'granted' ? 'granted' : 'denied';
+      const granted = status.display === 'granted';
+      // Same Android permission as push: a yes here lets push register now, not at the next resume.
+      if (granted && asked) void import('@/services/push/nativePush').then((m) => m.refreshNativePush()).catch(() => undefined);
+      return granted ? 'granted' : 'denied';
     }, force);
   } catch {
     return 'unsupported';

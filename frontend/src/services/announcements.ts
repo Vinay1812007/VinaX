@@ -2,11 +2,10 @@
  *  the app checks on open/resume and shows a local notification instead.
  *  Anonymous by design: a plain GET for the latest broadcast, nothing sent. */
 import { KEYS } from '@/constants/storage-keys';
-import { ensureNotificationPermission, isNativePlatform } from '@/services/native';
+import { ensureNotificationPermission, getNotificationPermission, isNativePlatform } from '@/services/native';
 
 const SEEN_KEY = 'vinax.announce-seen.v1';
 const OPT_KEY = 'vinax.app-alerts.v1';
-const ASKED_KEY = 'vinax.notif-asked.v1';
 const BASE = 'https://www.vinaxmusic.online';
 
 export function appAlertsEnabled(): boolean {
@@ -71,12 +70,8 @@ export async function checkAnnouncements(navigate: (to: string) => void): Promis
         if (typeof link === 'string' && /^\/[^/]/.test(link)) navigate(link);
       });
     }
-    // First run after onboarding: this is the app's notification-permission ask.
-    if (!localStorage.getItem(ASKED_KEY)) {
-      localStorage.setItem(ASKED_KEY, '1');
-      const perm = await ensureNotificationPermission();
-      if (perm !== 'granted') return;
-    }
+    // Never asks: the "Allow access" sheet asks at start-up, after saying why.
+    if ((await getNotificationPermission()) !== 'granted') return;
     const res = await fetch(`${BASE}/api/announcements`);
     if (!res.ok) return;
     const data = (await res.json()) as { announcement?: Announcement | null };

@@ -20,6 +20,8 @@ import { useUiStore } from '@/store/uiStore';
 import { DiagBanner } from '@/components/DiagBanner';
 import { OfflineBanner } from '@/components/OfflineBanner';
 const OnboardingSheet = lazy(() => import('@/components/OnboardingSheet').then(m => ({ default: m.OnboardingSheet })));
+// "Allow access": asks for notifications and the microphone at start-up while either is unanswered.
+const PermissionsSheet = lazy(() => import('@/components/PermissionsSheet'));
 import { AnnouncementBridge } from '@/components/AnnouncementBridge';
 // The owner's top message bar, update notice and pop-up announcement: a lazy
 // chunk, not first-load bytes (the bundle budget has no slack).
@@ -60,7 +62,7 @@ import { runMigrations } from '@/services/storage/local';
 import { resolveRegion } from '@/services/location/inference';
 import { readBrowserSignals } from '@/services/location/browserSignals';
 import { defaultLanguagesForCountry } from '@/constants/regions';
-import { isNativePlatform, requestNotificationPermissionOnce } from '@/services/native';
+import { isNativePlatform } from '@/services/native';
 import { installDeterrence } from '@/utils/deterrence';
 
 // Lazy: the palette costs nothing until the first ⌘/Ctrl+K.
@@ -281,8 +283,8 @@ export function AppLayout() {
       initAlarm();
       initAudioOutputWatcher();
       useCastStore.getState().init();
-      // Android 13+: media notification needs notification permission.
-      void requestNotificationPermissionOnce();
+      // Android 13+: the media notification needs the notification permission.
+      // The "Allow access" sheet asks for it at start-up, after saying why.
       // Update gate (native only; no-op on web) + foreground re-check.
       void checkForUpdate().then((info) => useUpdateStore.getState().setInfo(info));
       void import('@capacitor/app').then(({ App }) => {
@@ -533,6 +535,7 @@ export function AppLayout() {
       {inSession && <Suspense fallback={null}><TogetherController /></Suspense>}
       </PlayerErrorBoundary>
       <Suspense fallback={null}><OnboardingSheet /></Suspense>
+      <Suspense fallback={null}><PermissionsSheet /></Suspense>
       <AnnouncementBridge />
       <Suspense fallback={null}><AnnouncementPopup /></Suspense>
       {/* 15.0 — Android: keeps this week's Weekly Mix downloaded on Wi-Fi when the setting is on. */}

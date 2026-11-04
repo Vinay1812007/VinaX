@@ -185,7 +185,10 @@ export async function enableNativePush(): Promise<'ok' | 'denied' | 'unsupported
   }
 }
 
-/** App open: wire the listeners, ask once if Android has never asked, and register when allowed. */
+/**
+ * App open: wire the listeners and register when allowed. Never asks: the
+ * "Allow access" sheet asks at start-up, after saying why.
+ */
 export async function registerNativePush(navigate: (to: string) => void): Promise<void> {
   if (!isNativePlatform()) return;
   navigateTo = navigate;
@@ -193,16 +196,9 @@ export async function registerNativePush(navigate: (to: string) => void): Promis
   if (!PushNotifications) return;
   try {
     await wire(PushNotifications);
-    // Queued with the other start-up asks, so only one dialog shows and this
-    // reads its answer instead of being refused for asking at the same time.
-    const granted = await withNotificationPermission(async (ask) => {
-      let perm = await PushNotifications.checkPermissions();
-      if (perm.receive === 'prompt' || perm.receive === 'prompt-with-rationale') {
-        perm = (await ask(() => PushNotifications.requestPermissions())) ?? (await PushNotifications.checkPermissions());
-      }
-      return perm.receive === 'granted';
-    });
-    if (!granted) return; // the listener said no; Settings → Notifications can ask again
+    // Queued behind a dialog that is already up, so this reads its answer.
+    const granted = await withNotificationPermission(async () => (await PushNotifications.checkPermissions()).receive === 'granted');
+    if (!granted) return; // not allowed yet: the "Allow access" sheet or Settings → Notifications asks
     await registerToken(PushNotifications);
   } catch (e) {
     report(`register failed: ${String(e).slice(0, 160)}`);
