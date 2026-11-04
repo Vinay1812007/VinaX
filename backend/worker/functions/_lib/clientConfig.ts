@@ -14,7 +14,7 @@ import type { ExperimentVariant } from './experiments';
 
 export const CLIENT_KEYS = [
   'home-layout',
-  'greeting', 'broadcast', 'search-synonyms', 'catalog-sources', 'language-order',
+  'greeting', 'broadcast', 'search-synonyms', 'search-pins', 'catalog-sources', 'language-order',
   'support-faq', 'min-version', 'maintenance-window',
 ] as const;
 
@@ -125,6 +125,8 @@ export interface ClientConfig {
   /** Console rebuild: style (info | success | warning | urgent) and whether listeners may close it. */
   broadcast: { id: string; text: string; link?: string; style?: BroadcastStyle; dismissible?: boolean } | null;
   synonyms: Record<string, string>;
+  /** Version 11 — a song shown first for exact search words (Search Insights); present only when one is set. */
+  searchPins?: Record<string, SearchPin>;
   disabledSources: string[];
   /** v8 — the owner's source priority (first = tried first); empty keeps the app's order. */
   sourceOrder: string[];
@@ -205,9 +207,11 @@ export function publicClientConfig(raw: Record<string, unknown>, now = new Date(
       const from = k.trim().toLowerCase().slice(0, 60);
       const to = str(v, 80);
       if (from && to && from !== to.toLowerCase()) synonyms[from] = to;
-      if (Object.keys(synonyms).length >= 200) break;
+      if (Object.keys(synonyms).length >= SEARCH_SYNONYMS_MAX) break;
     }
   }
+
+  const searchPins = publicSearchPins(raw['search-pins']);
 
   const cs = obj(raw['catalog-sources']);
   const disabledSources = cs ? Object.entries(cs).filter(([k, v]) => v === false && SLUG.test(k)).map(([k]) => k).slice(0, 20) : [];
@@ -239,7 +243,52 @@ export function publicClientConfig(raw: Record<string, unknown>, now = new Date(
   const cleanKeys = (v: unknown) => Array.isArray(v) ? [...new Set(v.filter((k): k is string => typeof k === 'string' && keys.includes(k)))] : [];
   const homeLayout = home ? { title: str(home.title, 60), description: str(home.description, 160), order: cleanKeys(home.order), hidden: cleanKeys(home.hidden).slice(0, 12) } : undefined;
   const recConfig = publicRecConfig(raw[REC_CONFIG_KEY]);
-  return { greeting, broadcast, synonyms, disabledSources, sourceOrder, languageOrder, hiddenLanguages, faq, minBuild, ...(versionPolicy ? { versionPolicy } : {}), ...(maintenance ? { maintenance } : {}), ...(homeLayout ? { homeLayout } : {}), ...(recConfig ? { recConfig } : {}) };
+  return { greeting, broadcast, synonyms, ...(Object.keys(searchPins).length ? { searchPins } : {}), disabledSources, sourceOrder, languageOrder, hiddenLanguages, faq, minBuild, ...(versionPolicy ? { versionPolicy } : {}), ...(maintenance ? { maintenance } : {}), ...(homeLayout ? { homeLayout } : {}), ...(recConfig ? { recConfig } : {}) };
+}
+
+// ------------------------------------------------- version 11 — search pins
+
+export interface SearchPin { id: string; title: string; artist?: string; image?: string }
+/** At most this many pinned searches, and this many synonyms (the console's limits too). */
+export const SEARCH_PINS_MAX = 100;
+export const SEARCH_SYNONYMS_MAX = 200;
+const SONG_ID = /^[A-Za-z0-9_.:-]{1,80}$/;
+
+/**
+ * Search words as the app compares them: NFKC, lower case, trimmed, single
+ * spaces, at most 80 characters (what the app records for a search). '' when
+ * fewer than two characters remain.
+ */
+export function searchQueryKey(v: unknown): string {
+  if (typeof v !== 'string') return '';
+  const q = v.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 80).trim();
+  return q.length >= 2 && q !== '__proto__' ? q : '';
+}
+
+/** One pinned song: a catalogue id and a title, artist and an https picture when given. */
+export function cleanSearchPin(v: unknown): SearchPin | null {
+  const o = obj(v);
+  if (!o) return null;
+  const id = str(o.id, 80);
+  const title = str(o.title, 160);
+  if (!SONG_ID.test(id) || !title) return null;
+  const artist = str(o.artist, 160);
+  const image = str(o.image, 500);
+  return { id, title, ...(artist ? { artist } : {}), ...(/^https:\/\//.test(image) ? { image } : {}) };
+}
+
+/** `search-pins` { "<words>": { id, title, artist?, image? } } → clean keys and songs, at most SEARCH_PINS_MAX. */
+export function publicSearchPins(v: unknown): Record<string, SearchPin> {
+  const o = obj(v);
+  const out: Record<string, SearchPin> = {};
+  if (!o) return out;
+  for (const [k, raw] of Object.entries(o)) {
+    if (Object.keys(out).length >= SEARCH_PINS_MAX) break;
+    const key = searchQueryKey(k);
+    const pin = cleanSearchPin(raw);
+    if (key && pin && !Object.prototype.hasOwnProperty.call(out, key)) out[key] = pin;
+  }
+  return out;
 }
 
 /** A clean list of slugs, de-duplicated and capped. */

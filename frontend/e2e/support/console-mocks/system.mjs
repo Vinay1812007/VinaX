@@ -1,4 +1,4 @@
-// Mocks for the System pages: App Health, Database, Google Search, Admins & Roles.
+// Mocks for the System pages: App Health, Smart Alerts, Database, Google Search, Admins & Roles.
 const ago = (min) => new Date(Date.now() - min * 60000).toISOString();
 const days = (n) => Array.from({ length: n }, (_, i) => {
   const d = new Date(Date.now() - (n - 1 - i) * 86400000);
@@ -68,7 +68,7 @@ export default {
     ],
   }),
   'GET /api/admin/database': () => ({
-    configured: true, reachable: true, schema: { version: 10, appliedAt: ago(60 * 5) }, schemaWanted: 10, expected: 33, missing: [], totalBytes: 48_000_000,
+    configured: true, reachable: true, schema: { version: 11, appliedAt: ago(60 * 5) }, schemaWanted: 11, expected: 33, missing: [], totalBytes: 48_000_000,
     retention: { eventsDays: 180, errorsDays: 30, feedbackDays: null, notificationsDays: null },
     tables: [
       { name: 'events', label: 'Play history and activity', about: 'Plays, skips, searches, likes and app error reports.', rows: 182340, bytes: 31_000_000, approximate: true, keptFor: '180 days (error reports 30 days)' },
@@ -81,6 +81,7 @@ export default {
       { job: 'status-tick', label: 'Status check', about: 'Checks that the website, the app and the music sources answer.', enabled: true, every: 30, defaultEvery: 30, choices: [30, 60, 180, 360], lastAt: ago(8), ok: true, overdue: false, neverRan: false },
       { job: 'housekeeping', label: 'Clean-up', about: 'Removes old data and closes empty rooms.', enabled: true, every: 60, defaultEvery: 60, choices: [60, 180, 360, 720, 1440], lastAt: ago(250), ok: false, summary: { error: 'housekeeping: a step failed' }, overdue: true, neverRan: false },
       { job: 'personal-embed', label: 'Recommendation learning', about: 'Teaches the engine about new songs.', enabled: false, every: 30, defaultEvery: 30, choices: [30, 60, 180, 360, 1440], lastAt: null, ok: null, overdue: false, neverRan: true },
+      { job: 'alerts', label: 'Smart Alerts', about: 'Looks for problems and alerts admins on their phones.', enabled: true, every: 5, defaultEvery: 5, choices: [5, 10, 15, 30], lastAt: ago(2), ok: true, summary: { on: true, firing: [] }, overdue: false, neverRan: false },
       { job: 'scheduled-notifications', label: 'Scheduled notifications', about: 'Sends notifications whose time has come.', enabled: true, every: 5, defaultEvery: 5, choices: [5, 15, 30, 60], lastAt: ago(3), ok: true, overdue: false, neverRan: false },
     ],
     jobsReadable: true, checkedAt: new Date().toISOString(),
@@ -114,6 +115,32 @@ export default {
     };
   },
   'POST /api/admin/seo': () => ({ ok: false, error: 'publish_not_configured' }),
+  'GET /api/admin/alerts': () => ({
+    configured: true, saved: true, updatedAt: ago(60 * 24),
+    rules: {
+      enabled: true, who: 'editors', quiet: { enabled: true, start: '23:00', end: '07:00' }, cooldownMinutes: 60,
+      rules: { errorsSpike: { on: true, minErrors: 10, factor: 2 }, siteDown: { on: true }, noPlays: { on: true, minutes: 60, onlyIfUsualPlays: true }, newFeedback: { on: false, minCount: 1 } },
+    },
+    recipients: [
+      { email: 'owner@example.com', name: 'Asha Rao', role: 'owner', gets: true, phones: 1 },
+      { email: 'ravi@example.com', name: 'Ravi Kumar', role: 'editor', gets: true, phones: 0 },
+      { email: 'meena@example.com', name: null, role: 'viewer', gets: false, phones: null },
+    ],
+    me: { email: 'owner@example.com', via: 'google', phones: 1 },
+    push: { web: true, fcm: true },
+    recent: [
+      { id: 41, at: ago(35), rule: 'errorsSpike', title: 'App errors are rising', body: '42 errors in the last hour (9 the hour before). Tap to see what is going wrong.', devices: 2, sent: 2, failed: 0 },
+      { id: 40, at: ago(60 * 26), rule: 'siteDown', title: 'VinaX may be down', body: 'Music search is not answering. Tap to see the server checks.', devices: 2, sent: 1, failed: 1 },
+      { id: 39, at: ago(60 * 50), rule: 'noPlays', title: 'No songs played', body: 'Nobody played a song in the last 1 hour (31 at this time yesterday). Playback may be broken.', devices: 0, sent: 0, failed: 0 },
+    ],
+    job: { enabled: true, every: 5, lastAt: ago(2), finishedAt: ago(2), ok: true, summary: { on: true, firing: [] }, nextAt: new Date(Date.now() + 3 * 60000).toISOString() },
+    signals: { errorsLastHour: 14, errorsHourBefore: 11, playsLastHour: 236, newFeedback: 3, probes: { website: true, api: true, catalog: true } },
+  }),
+  'POST /api/admin/alerts': (url, b) => (b.action === 'test'
+    ? { ok: true, devices: 1, sent: 1 }
+    : b.action === 'check'
+      ? { ok: true, result: { on: true, checked: ['errorsSpike', 'siteDown', 'noPlays'], firing: ['errorsSpike'], sent: [], held: [{ rule: 'errorsSpike', reason: 'cooldown' }], recipients: 2, devices: 1 } }
+      : { __status: 400, error: 'unknown_action' }),
   'GET /api/admin/admins': () => ({ configured: true, rows: admins, bootstrap: ['owner@example.com'], me: { email: 'owner@example.com', role: 'owner', via: 'google' } }),
   'POST /api/admin/admins': (url, b) => {
     if (b.action === 'invite') { if (admins.some((a) => a.email === b.email)) return { __status: 409, error: 'already_admin' }; admins = admins.concat([{ email: b.email, name: null, picture: null, role: b.role, invitedBy: 'owner@example.com', createdAt: new Date().toISOString(), lastSignIn: null }]); return { ok: true }; }

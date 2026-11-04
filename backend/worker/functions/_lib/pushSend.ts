@@ -248,8 +248,12 @@ export interface SendReport {
  * Send `msg` to `devices`. Dead devices are switched off. Never throws.
  * FCM goes first: every browser push is its own outgoing request and a large
  * web audience could otherwise spend the request budget before Android.
+ *
+ * Each device's `last_pushed_at` is bumped, so the send counts toward the
+ * listener frequency cap (`underCap`). `countTowardCap: false` skips that for
+ * pushes that are not for listeners (Smart Alerts to admins' phones).
  */
-export async function fanOut(env: PushEnv, devices: DeviceRow[], msg: PushMessage): Promise<SendReport> {
+export async function fanOut(env: PushEnv, devices: DeviceRow[], msg: PushMessage, opts: { countTowardCap?: boolean } = {}): Promise<SendReport> {
   const web = devices.filter((d) => d.channel === 'web' && d.p256dh && d.auth);
   const fcm = devices.filter((d) => d.channel === 'fcm');
   const report: SendReport = {
@@ -284,7 +288,7 @@ export async function fanOut(env: PushEnv, devices: DeviceRow[], msg: PushMessag
     report.web.failed.not_configured = web.length;
   }
 
-  if (devices.length) {
+  if (devices.length && opts.countTowardCap !== false) {
     const now = new Date().toISOString();
     const targets = devices.map((d) => d.target);
     for (let i = 0; i < targets.length; i += 200) await db.update(env, 'push_devices', q().in('target', targets.slice(i, i + 200)), { last_pushed_at: now });

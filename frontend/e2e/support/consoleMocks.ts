@@ -63,7 +63,7 @@ export async function mockConsole(page: Page, o: ConsoleMockOptions = {}): Promi
     if (url.pathname === '/api/admin/session' && method === 'GET') {
       return send({
         googleClientId: null, googleReady: false, passwordAllowed: true, databaseConfigured: true,
-        schema: o.schema ?? 10, schemaWanted: 10,
+        schema: o.schema ?? 11, schemaWanted: 11,
         me: signedIn ? { email: `${role}@example.com`, name: `Test ${role}`, picture: null, role: token === password ? 'owner' : role, via: token === password ? 'password' : 'google' } : null,
       });
     }

@@ -73,7 +73,8 @@
 
   function now(d, ctx) {
     var rows = arr(d.listening);
-    return ui.card({ title: 'Listening now', sub: fmt.plural(rows.length, 'person', 'people') + ' in the last 5 minutes', pad: false, body: ui.dataTable({
+    var points = rows.map(function (r) { return { country: r.country, city: r.city, count: 1, playing: r.isPlaying && r.song ? 1 : 0 }; });
+    return [mapCard(points), ui.card({ title: 'Listening now', sub: fmt.plural(rows.length, 'person', 'people') + ' in the last 5 minutes', pad: false, body: ui.dataTable({
       rowId: function (r) { return r.key; },
       columns: [
         { key: 'user', label: 'User', always: true, sortVal: function (r) { return obj(r.user).name || obj(r.user).email; }, render: function (r) { return person(r.user); } },
@@ -87,8 +88,18 @@
       rowMenu: function (r) { return userMenu(obj(r.user), ctx); },
       onRow: function (r) { ctx.go('users', null, { user: obj(r.user).id }); },
       empty: { title: 'Nobody is listening right now', hint: 'Signed-in people show up here the moment they open the app.', action: { label: 'See all users', icon: 'users', onClick: function () { ctx.go('users'); } } }
-    }) });
+    }) })];
   }
+
+  /** "Where people are listening": glowing dots on a world map (geo.js). */
+  function mapCard(points) {
+    var places = {};
+    points.forEach(function (p) { if (p.country) places[p.country] = 1; });
+    var n = Object.keys(places).length;
+    return ui.card({ title: 'Where people are listening', sub: n ? fmt.plural(n, 'country', 'countries') + ' right now · green means a song is playing' : 'Nobody is listening right now',
+      body: VX.worldMap(points) });
+  }
+  VX.liveMapCard = mapCard;
 
   function activity(d, ctx) {
     var rows = arr(d.feed);

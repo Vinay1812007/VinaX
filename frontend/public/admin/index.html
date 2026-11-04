@@ -10,7 +10,7 @@
          console script builds DOM through VX.h (text nodes), never innerHTML.
          style-src keeps 'unsafe-inline' for style="" on chart bars. -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: https:; media-src 'self' blob: https:; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/ https://challenges.cloudflare.com" />
-    <meta name="theme-color" content="#0e0f13" />
+    <meta name="theme-color" content="#070b14" />
     <title>VinaX · Console</title>
     <link rel="icon" href="/favicon.ico?v=14" />
     <script src="/admin/theme-boot.js"></script>
@@ -21,6 +21,7 @@
     <link rel="stylesheet" href="/admin/css/system.css" />
     <link rel="stylesheet" href="/admin/css/settings-a.css" />
     <link rel="stylesheet" href="/admin/css/settings-b.css" />
+    <link rel="stylesheet" href="/admin/css/glass.css" />
   </head>
   <body>
 <svg class="sprite" width="0" height="0" aria-hidden="true" focusable="false">
@@ -76,6 +77,8 @@
       <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></symbol>
       <symbol id="i-rail" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M9 4v16M15 10l-2 2 2 2"/></symbol>
     </svg>
+
+    <div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
 
     <!-- Sign-in -->
     <main id="login" class="login" hidden>
@@ -156,12 +159,15 @@
     <script src="/admin/kit/controls.js"></script>
     <script src="/admin/kit/settings.js"></script>
     <script src="/admin/festivals.js"></script>
+    <script src="/admin/geo.js"></script>
     <script src="/admin/pages/dashboard.js"></script>
     <script src="/admin/pages/live.js"></script>
     <script src="/admin/pages/users.js"></script>
     <script src="/admin/pages/feedback.js"></script>
     <script src="/admin/pages/song-stats.js"></script>
     <script src="/admin/pages/library.js"></script>
+    <script src="/admin/pages/trending.js"></script>
+    <script src="/admin/pages/search-insights.js"></script>
     <script src="/admin/pages/notifications.js"></script>
     <script src="/admin/pages/ab-tests.js"></script>
     <script src="/admin/pages/settings-home.js"></script>
@@ -173,6 +179,7 @@
     <script src="/admin/pages/settings-help.js"></script>
     <script src="/admin/pages/settings-privacy.js"></script>
     <script src="/admin/pages/health.js"></script>
+    <script src="/admin/pages/alerts.js"></script>
     <script src="/admin/pages/database.js"></script>
     <script src="/admin/pages/google-search.js"></script>
     <script src="/admin/pages/admins.js"></script>

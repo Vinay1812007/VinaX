@@ -1,9 +1,27 @@
 /* VinaX console — page styles (people): Dashboard, Live Now, Users. Uses the tokens in console.css. */
 
 /* Dashboard */
-.dash-head { margin: 22px 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); }
-.page-body > .card:first-child { margin-bottom: 4px; }
-.dash-charts { margin-top: 22px; }
+.dash-head { margin: 6px 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); }
+.dash { display: grid; gap: 12px; }
+.dash-bar { justify-content: flex-end; min-height: 32px; }
+.dash-tip { margin: 0; }
+.dash-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 16px; align-items: start; }
+.dash-w { position: relative; min-width: 0; display: grid; gap: 8px; }
+.dash-w > .card { height: 100%; }
+.dash-w.size-normal { grid-column: span 1; }
+.dash-w.size-wide { grid-column: span 2; }
+.dash-w.size-full { grid-column: 1 / -1; }
+@media (max-width: 1100px) { .dash-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dash-w.size-wide { grid-column: 1 / -1; } }
+@media (max-width: 760px) { .dash-grid { grid-template-columns: minmax(0, 1fr); } .dash-w.size-normal, .dash-w.size-wide { grid-column: 1 / -1; } }
+/* Customise mode: a control bar on each card, the card itself can't be clicked. */
+.dash-grid.editing .dash-w { padding: 8px; border-radius: calc(var(--r-lg) + 6px); border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 5%, transparent); cursor: grab; }
+.dash-grid.editing .dash-w.dragging { opacity: .45; }
+.dash-grid.editing .dash-w.drop-before { box-shadow: -4px 0 0 var(--accent), 0 0 0 1px var(--accent); }
+.dash-ctl { position: relative; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 4px 4px 8px; border-radius: var(--r-md); background: var(--pop); border: 1px solid var(--border-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); cursor: default; }
+.dash-grip { color: var(--text-3); letter-spacing: -2px; cursor: grab; user-select: none; }
+.dash-ctl-title { font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-shield { position: absolute; inset: 56px 8px 8px; z-index: 1; border-radius: var(--r-lg); }
+@media (max-width: 560px) { .dash-ctl .seg { order: 5; } }
 .chart-card .card-actions .btn { white-space: nowrap; }
 
 /* Live Now */

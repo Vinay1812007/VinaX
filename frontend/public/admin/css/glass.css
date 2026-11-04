@@ -1,0 +1,211 @@
+/* VinaX owner console — glass theme (loaded last, after every other sheet).
+
+   Frosted panels over slow colour glows, for dark (default) and `html.light`.
+   Only tokens and surface treatments live here: layout and components keep
+   their rules in console.css and the page sheets, so this file can be read
+   on its own as "what makes the console look like glass".
+
+   Readability first: panels are 60–80% opaque, text tokens meet WCAG AA on
+   the panel colour even with a bright glow behind it, and anything sticky
+   (table headers, the row menu column) sits on a near-solid colour so rows
+   scrolling underneath never show through. */
+
+:root {
+  --bg: #070b14;
+  --bg-2: #0b1222;
+  /* Panels. `--surface` is the card colour; `--surface-solid` is for sticky
+     cells and anything that must hide what scrolls beneath it. */
+  --surface: rgb(18 25 41 / 0.62);
+  --surface-solid: #111a2c;
+  --surface-2: rgb(255 255 255 / 0.05);
+  --surface-3: rgb(255 255 255 / 0.1);
+  --border: rgb(255 255 255 / 0.09);
+  --border-strong: rgb(255 255 255 / 0.17);
+  --text: #eaf0f8;
+  --text-2: #b6c0cf;
+  --text-3: #8e99ab;
+
+  --accent: #2fd0e6;
+  --accent-2: #4f8dff;
+  --accent-hover: #6adff0;
+  --accent-soft: rgb(47 208 230 / 0.14);
+  --accent-grad: linear-gradient(135deg, #2dd4bf 0%, #22b8e8 45%, #4f7dff 100%);
+  --on-accent: #03141c;
+
+  --info: #7aa7ff; --info-soft: rgb(122 167 255 / 0.14);
+
+  --c1: #2fd0e6; --c2: #7c9cff; --c3: #4cc38a; --c4: #c38ef0; --c5: #f06a8f; --c6: #f2a33a;
+
+  --glass-blur: blur(18px) saturate(150%);
+  --glass-blur-strong: blur(28px) saturate(160%);
+  --glass-rim: inset 0 1px 0 rgb(255 255 255 / 0.07);
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.25), var(--glass-rim);
+  --shadow-card: 0 8px 30px rgb(0 0 0 / 0.28), var(--glass-rim);
+  --shadow-float: 0 18px 60px rgb(0 0 0 / 0.55), var(--glass-rim);
+  --pop: rgb(17 24 40 / 0.86);
+
+  --glow-a: rgb(45 212 191 / 0.30);
+  --glow-b: rgb(59 130 246 / 0.30);
+  --glow-c: rgb(139 92 246 / 0.24);
+
+  --r-sm: 8px; --r-md: 12px; --r-lg: 18px;
+  --focus: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+html.light {
+  --bg: #eaf0f7;
+  --bg-2: #f4f7fb;
+  --surface: rgb(255 255 255 / 0.62);
+  --surface-solid: #f7f9fc;
+  --surface-2: rgb(16 34 64 / 0.045);
+  --surface-3: rgb(16 34 64 / 0.085);
+  --border: rgb(16 34 64 / 0.1);
+  --border-strong: rgb(16 34 64 / 0.18);
+  --text: #0e1828;
+  --text-2: #36445a;
+  --text-3: #556278;
+
+  --accent: #0369a1;
+  --accent-2: #2563eb;
+  --accent-hover: #075985;
+  --accent-soft: rgb(3 105 161 / 0.1);
+  --accent-grad: linear-gradient(135deg, #0d9488 0%, #0284c7 45%, #2563eb 100%);
+  --on-accent: #ffffff;
+
+  --info: #1d4ed8; --info-soft: rgb(29 78 216 / 0.09);
+  --c1: #0e7490; --c2: #4f46e5; --c3: #1d8a57; --c4: #8a4cc4; --c5: #c43a6a; --c6: #b45309;
+
+  --glass-rim: inset 0 1px 0 rgb(255 255 255 / 0.7);
+  --shadow: 0 1px 2px rgb(16 34 64 / 0.06), var(--glass-rim);
+  --shadow-card: 0 8px 30px rgb(16 34 64 / 0.08), var(--glass-rim);
+  --shadow-float: 0 18px 60px rgb(16 34 64 / 0.18), var(--glass-rim);
+  --pop: rgb(255 255 255 / 0.88);
+
+  --glow-a: rgb(45 212 191 / 0.30);
+  --glow-b: rgb(59 130 246 / 0.24);
+  --glow-c: rgb(167 139 250 / 0.24);
+}
+
+/* ------------------------------------------------------------ background */
+body { background: linear-gradient(180deg, var(--bg-2), var(--bg) 60%) fixed; background-color: var(--bg); }
+.aurora { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.aurora span { position: absolute; width: 62vmax; height: 62vmax; border-radius: 50%; filter: blur(70px); will-change: transform; }
+.aurora span:nth-child(1) { background: radial-gradient(circle, var(--glow-a), transparent 65%); left: -18vmax; top: -22vmax; animation: drift-a 46s ease-in-out infinite alternate; }
+.aurora span:nth-child(2) { background: radial-gradient(circle, var(--glow-b), transparent 65%); right: -20vmax; top: 8vmax; animation: drift-b 58s ease-in-out infinite alternate; }
+.aurora span:nth-child(3) { background: radial-gradient(circle, var(--glow-c), transparent 65%); left: 18vmax; bottom: -30vmax; animation: drift-c 52s ease-in-out infinite alternate; }
+@keyframes drift-a { to { transform: translate(14vmax, 10vmax) scale(1.08); } }
+@keyframes drift-b { to { transform: translate(-12vmax, 12vmax) scale(.94); } }
+@keyframes drift-c { to { transform: translate(10vmax, -12vmax) scale(1.1); } }
+@media (prefers-reduced-motion: reduce) { .aurora span { animation: none !important; } }
+.login, .app { position: relative; z-index: 1; }
+
+/* -------------------------------------------------------- glass surfaces */
+.card, .kpi, .lib-card, .fb-card, .item-card {
+  background: var(--surface);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  border-color: var(--border);
+  box-shadow: var(--shadow-card);
+}
+.modal, .drawer, .menu-pop, .picker-list, .profile-pop, .login-card {
+  background: var(--pop);
+  -webkit-backdrop-filter: var(--glass-blur-strong); backdrop-filter: var(--glass-blur-strong);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-float);
+}
+.scrim, .drawer-scrim, .scrim-nav { background: rgb(4 8 16 / 0.42); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+html.light .scrim, html.light .drawer-scrim, html.light .scrim-nav { background: rgb(16 34 64 / 0.22); }
+
+/* Sticky cells sit on a near-solid colour so rows never show through. */
+.tbl th { background: var(--surface-solid); }
+.tbl td.menu-col, .tbl th.menu-col, .tbl tr.selected td.menu-col { background: var(--surface-solid); }
+.tbl tbody tr:hover td.menu-col { background: color-mix(in srgb, var(--surface-solid) 92%, var(--text)); }
+.tbl tbody tr:hover { background: var(--surface-2); }
+.card-body.flush .tbl th:first-child { border-top-left-radius: 0; }
+
+/* ------------------------------------------------------------ app shell */
+.app { --gap: 12px; }
+@media (min-width: 961px) {
+  .sidebar {
+    top: var(--gap); height: calc(100vh - 2 * var(--gap)); min-height: 0;
+    margin: var(--gap) 0 var(--gap) var(--gap);
+    border: 1px solid var(--border); border-radius: 22px;
+    background: var(--surface);
+    -webkit-backdrop-filter: var(--glass-blur-strong); backdrop-filter: var(--glass-blur-strong);
+    box-shadow: var(--shadow-card);
+  }
+  .topbar { top: var(--gap); margin: var(--gap) var(--gap) 0; border-radius: 18px; border: 1px solid var(--border); }
+  .page { padding-left: calc(var(--gap) + 12px); padding-right: calc(var(--gap) + 12px); }
+}
+@media (max-width: 960px) {
+  .sidebar { background: var(--pop); -webkit-backdrop-filter: var(--glass-blur-strong); backdrop-filter: var(--glass-blur-strong); border-right: 1px solid var(--border-strong); }
+}
+.topbar {
+  background: color-mix(in srgb, var(--surface-solid) 66%, transparent);
+  -webkit-backdrop-filter: var(--glass-blur-strong); backdrop-filter: var(--glass-blur-strong);
+  border-bottom-color: var(--border);
+  box-shadow: var(--shadow-card);
+}
+.sb-foot { border-top-color: var(--border); }
+.brand-mark { background: var(--accent-grad); color: #03141c; box-shadow: 0 6px 20px rgb(34 184 232 / 0.35), inset 0 1px 0 rgb(255 255 255 / .35); }
+html.light .brand-mark { color: #fff; }
+.sb-search { background: var(--surface-2); border-color: var(--border); }
+.sb-search:hover { background: var(--surface-3); }
+
+.nav-link { position: relative; transition: background .15s, color .15s; }
+.nav-link:hover, .nav-group-toggle:hover { background: var(--surface-3); }
+.nav-link[aria-current="page"] {
+  background: linear-gradient(90deg, var(--accent-soft), color-mix(in srgb, var(--accent-2) 10%, transparent));
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.nav-link[aria-current="page"]::before {
+  content: ''; position: absolute; left: -2px; top: 8px; bottom: 8px; width: 3px; border-radius: 99px;
+  background: var(--accent-grad); box-shadow: 0 0 12px var(--accent);
+}
+html.sb-rail .nav-link[aria-current="page"]::before { display: none; }
+
+/* --------------------------------------------------------------- controls */
+.btn { border-color: var(--border-strong); background: var(--surface-2); transition: background .15s, border-color .15s, box-shadow .15s, transform .1s; }
+.btn:hover:not(:disabled) { background: var(--surface-3); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn.primary { background: var(--accent-grad); border-color: transparent; color: var(--on-accent); box-shadow: 0 6px 18px rgb(34 160 232 / 0.28), inset 0 1px 0 rgb(255 255 255 / .25); }
+.btn.primary:hover:not(:disabled) { background: var(--accent-grad); border-color: transparent; filter: brightness(1.08); }
+html.light .btn.primary { box-shadow: 0 6px 18px rgb(2 132 199 / 0.22), inset 0 1px 0 rgb(255 255 255 / .25); }
+.icon-btn:hover { background: var(--surface-3); }
+.input { background: var(--surface-2); border-color: var(--border-strong); }
+html.light .input { background: rgb(255 255 255 / 0.7); }
+select.input option { background: var(--surface-solid); color: var(--text); }
+.input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.switch input:checked + .track { background: var(--accent-grad); border-color: transparent; }
+.seg { background: var(--surface-2); }
+.seg button[aria-checked="true"], html.light .seg button[aria-checked="true"] { background: var(--surface-solid); box-shadow: var(--shadow); }
+.tab[aria-selected="true"] { border-bottom-color: var(--accent); }
+.tabs { border-bottom-color: var(--border); }
+.pill.accent { color: var(--accent); }
+.hb-fill, .meter-fill { background: var(--accent-grad); }
+.spark-fill { opacity: .16; }
+.chart .area { opacity: .18; }
+
+/* ------------------------------------------------------------ cards, KPIs */
+.kpi { transition: transform .18s var(--ease), border-color .18s, box-shadow .18s; }
+.kpi.clickable:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); box-shadow: var(--shadow-card), 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent); }
+.kpi::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(160deg, rgb(255 255 255 / 0.06), transparent 40%); }
+html.light .kpi::after { background: linear-gradient(160deg, rgb(255 255 255 / 0.5), transparent 45%); }
+.card-head h3 { letter-spacing: -0.005em; }
+.attention-item, .history > li, .editor-row, .preview-box, .fest-preview, .radios.cards .radio, .sort-row, .chip, .item-head { background: var(--surface-2); }
+.json, code.mono { background: var(--surface-2); }
+
+/* ------------------------------------------------------------- feedback */
+.toast { background: var(--pop); color: var(--text); border: 1px solid var(--border-strong); -webkit-backdrop-filter: var(--glass-blur-strong); backdrop-filter: var(--glass-blur-strong); }
+.toast.ok { background: color-mix(in srgb, var(--ok) 88%, transparent); color: #04150c; border-color: transparent; }
+.toast.bad { background: color-mix(in srgb, var(--bad) 90%, transparent); color: #fff; border-color: transparent; }
+.info-btn .tip { background: var(--pop); color: var(--text); border: 1px solid var(--border-strong); -webkit-backdrop-filter: var(--glass-blur-strong); backdrop-filter: var(--glass-blur-strong); }
+.sk-line { background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2)); background-size: 200% 100%; }
+
+/* --------------------------------------------------------------- sign-in */
+.login { background: transparent; }
+.login-card { border-radius: 24px; padding: 32px; }
+
+/* Browsers without backdrop-filter get opaque panels instead of see-through ones. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .card, .kpi, .sidebar, .topbar, .modal, .drawer, .menu-pop, .picker-list, .profile-pop, .login-card, .toast { background: var(--surface-solid); }
+}

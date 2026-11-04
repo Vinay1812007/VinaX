@@ -4,7 +4,7 @@ const reportError = vi.fn();
 vi.mock('@/services/analytics/telemetry', () => ({ reportError: (...a: unknown[]) => reportError(...a) }));
 vi.mock('@/services/native', () => ({ isNativePlatform: () => true }));
 
-import { uploadFcmToken } from './nativePush';
+import { openPushLink, uploadFcmToken } from './nativePush';
 
 const noPause = async () => undefined;
 const flush = () => new Promise((r) => setTimeout(r, 0));
@@ -33,5 +33,18 @@ describe('11.7.1 uploadFcmToken', () => {
     const fetchImpl = vi.fn(async () => new Response('{"error":"bad_request"}', { status: 400 }));
     expect(await uploadFcmToken('short', fetchImpl as unknown as typeof fetch, noPause)).toBe(false);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('tapped notification links', () => {
+  it('opens app paths inside the app and console links in the browser', () => {
+    const navigate = vi.fn();
+    const open = vi.fn();
+    openPushLink('/album/1', navigate, open);
+    openPushLink('/admin/#/health/errors', navigate, open);
+    openPushLink('//evil.example/x', navigate, open);
+    openPushLink('https://evil.example/x', navigate, open);
+    expect(navigate.mock.calls).toEqual([['/album/1']]);
+    expect(open.mock.calls).toEqual([['https://www.vinaxmusic.online/admin/#/health/errors']]);
   });
 });

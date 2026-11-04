@@ -3,8 +3,9 @@
  * Owns Google sign-in (with the owner recovery password), the grouped
  * sidebar with the App Settings sub-menu, the hash router (#/page/tab, with
  * redirects from the old addresses and a "Page not found" screen), the top
- * bar (breadcrumb, global search, date range, auto-refresh, theme, profile)
- * and the unsaved-changes guard. Pages register with VX.page() in
+ * bar (breadcrumb, global search, date range, auto-refresh, theme, profile),
+ * keyboard shortcuts (press ?) with quick actions in Ctrl K, and the
+ * unsaved-changes guard. Pages register with VX.page() in
  * /admin/pages/*.js; this file only mounts them. See docs/admin-console.md.
  */
 (function () {
@@ -50,16 +51,12 @@
     var light = pref === 'light' || (pref === 'system' && !!(mql && mql.matches));
     document.documentElement.classList.toggle('light', light);
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', light ? '#f6f6f3' : '#0e0f13');
+    if (meta) meta.setAttribute('content', light ? '#eaf0f7' : '#070b14');
   }
   if (mql && mql.addEventListener) mql.addEventListener('change', function () { if (themePref() === 'system') { applyTheme(); rerender(); } });
   var themeSel = $('themeSel');
   themeSel.value = themePref();
-  themeSel.addEventListener('change', function () {
-    try { if (themeSel.value === 'system') localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY, themeSel.value); } catch (e) {}
-    applyTheme();
-    rerender(); // charts read colours from CSS variables
-  });
+  themeSel.addEventListener('change', function () { setThemePref(themeSel.value); }); // re-render: charts read colours from CSS variables
 
   /* ------------------------------------------------------------- nav */
   var openSub = {};
@@ -346,11 +343,12 @@
       (p.tabs || []).forEach(function (t) { if (p.tabs.length > 1) items.push({ label: t.label, sub: p.title, page: p.id, tab: t.id, kind: 'Pages' }); });
       (p.sections || []).forEach(function (s) { items.push({ label: s.title, sub: 'App Settings › ' + p.title, page: p.id, params: { section: s.key }, kind: 'Settings' }); });
     });
+    var actions = quickActions().map(function (a) { return { label: a.label, sub: a.keys ? 'Shortcut: ' + a.keys : 'Quick action', kind: 'Quick actions', run: a.run, words: a.words || '' }; });
     var list = h('ul.palette-list', { role: 'listbox', id: 'paletteList' });
     var input = VX.ui.input({ placeholder: 'Search pages, users, songs and settings…', 'aria-label': 'Search the console', role: 'combobox', 'aria-controls': 'paletteList', 'aria-expanded': 'true' });
-    var sel = 0, shown = items.slice(0, 30), remote = [], seq = 0, timer = null;
+    var sel = 0, shown = actions.slice(0, 6).concat(items.slice(0, 24)), remote = [], seq = 0, timer = null;
     var m;
-    function pick(it) { m.close(); go(it.page, it.tab || null, it.params || {}); }
+    function pick(it) { m.close(); if (it.run) it.run(); else go(it.page, it.tab || null, it.params || {}); }
     function draw() {
       VX.clear(list);
       var all = shown.concat(remote);
@@ -366,7 +364,8 @@
     }
     input.addEventListener('input', function () {
       var q = input.value.trim().toLowerCase();
-      shown = !q ? items.slice(0, 30) : items.filter(function (it) { return (it.label + ' ' + it.sub + ' ' + (it.words || '')).toLowerCase().indexOf(q) >= 0; });
+      var match = function (it) { return (it.label + ' ' + it.sub + ' ' + (it.words || '')).toLowerCase().indexOf(q) >= 0; };
+      shown = !q ? actions.slice(0, 6).concat(items.slice(0, 24)) : items.filter(match).concat(actions.filter(match));
       remote = []; sel = 0; draw();
       clearTimeout(timer);
       if (q.length < 2) return;
@@ -395,12 +394,80 @@
   }
   $('paletteBtn').addEventListener('click', openPalette);
   $('searchBtn').addEventListener('click', openPalette);
+
+  /* ------------------------------------------- shortcuts, quick actions */
+  /** "g" then a letter opens a page. Only pages that exist are listed. */
+  var GO_KEYS = [
+    ['d', 'dashboard'], ['l', 'live'], ['u', 'users'], ['f', 'feedback'], ['s', 'song-stats'], ['m', 'library'],
+    ['t', 'trending'], ['i', 'search-insights'], ['n', 'notifications'], ['h', 'health'], ['a', 'alerts'], ['b', 'database']
+  ];
+  function setThemePref(v) {
+    try { if (v === 'system') localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY, v); } catch (e) {}
+    themeSel.value = v;
+    applyTheme();
+    rerender();
+  }
+  function toggleTheme() { setThemePref(document.documentElement.classList.contains('light') ? 'dark' : 'light'); }
+  function toggleAuto() { var cb = $('autoRefresh'); cb.checked = !cb.checked; cb.dispatchEvent(new Event('change')); VX.toast(cb.checked ? 'Auto-refresh on ✓' : 'Auto-refresh off', 'ok'); }
+  function quickActions() {
+    var light = document.documentElement.classList.contains('light');
+    var list = [
+      { label: 'Send a notification', words: 'push message compose', run: function () { go('notifications', 'compose', {}); }, edit: true },
+      { label: 'Customise the dashboard', words: 'layout cards move hide', run: function () { go('dashboard', null, { customise: '1' }); } },
+      { label: light ? 'Switch to dark theme' : 'Switch to light theme', keys: 'T', words: 'theme dark light mode', run: toggleTheme },
+      { label: $('autoRefresh').checked ? 'Turn auto-refresh off' : 'Turn auto-refresh on', words: 'auto refresh', run: toggleAuto },
+      { label: 'Refresh this page', keys: 'R', words: 'reload', run: function () { rerender(); } },
+      { label: 'Keyboard shortcuts', keys: '?', words: 'keys help hotkeys', run: openShortcuts },
+      { label: 'Put the app in maintenance', words: 'maintenance downtime offline', run: function () { go('app-settings/maintenance', null, {}); }, edit: true },
+      { label: 'See app errors', words: 'errors crashes problems', run: function () { go('health', 'errors', {}); } },
+      { label: 'Collapse or expand the menu', keys: '[', words: 'sidebar rail menu', run: function () { $('railBtn').click(); } },
+      { label: 'Copy a link to this page', words: 'share url address', run: function () { VX.copy(location.href, 'Link copied'); } },
+      { label: 'Sign out', words: 'log out logout', run: signOut }
+    ];
+    return list.filter(function (a) { return !a.edit || VX.can('edit'); }).filter(function (a) {
+      return a.label !== 'Customise the dashboard' || !!byId.dashboard;
+    });
+  }
+  function openShortcuts() {
+    if (document.querySelector('.shortcuts')) return;
+    var row = function (keys, text) { return h('li', h('span', text), h('span.keys', keys.map(function (k) { return h('kbd', k); }))); };
+    var nav = GO_KEYS.filter(function (g) { return byId[g[1]]; }).map(function (g) { return row(['G', g[0].toUpperCase()], byId[g[1]].title); });
+    var m = VX.modal({ title: 'Keyboard shortcuts', body: [
+      h('div.shortcut-cols',
+        h('section', h('h4.subhead', 'Anywhere'), h('ul.shortcut-list',
+          row(['Ctrl', 'K'], 'Search and quick actions'),
+          row(['/'], 'Search'),
+          row(['R'], 'Refresh this page'),
+          row(['T'], 'Switch light or dark theme'),
+          row(['['], 'Collapse or expand the menu'),
+          row(['?'], 'Show this list'),
+          row(['Esc'], 'Close a window or menu'))),
+        h('section', h('h4.subhead', 'Go to a page'), h('ul.shortcut-list', nav))),
+      h('p.muted.small', 'Shortcuts are off while you are typing in a box.')
+    ] });
+    m.el.classList.add('shortcuts');
+  }
+  var goPending = 0;
   document.addEventListener('keydown', function (e) {
     if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); if (!document.querySelector('.palette') && !$('app').hidden) openPalette(); return; }
     var t = e.target;
     if (t && (/INPUT|TEXTAREA|SELECT/.test(t.tagName) || t.isContentEditable)) return;
     if (document.querySelector('.scrim, #drawer')) return;
-    if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'r' || e.key === 'R') && !$('app').hidden) { e.preventDefault(); rerender(); }
+    if (e.ctrlKey || e.metaKey || e.altKey || $('app').hidden) return;
+    var key = e.key;
+    if (goPending && Date.now() - goPending < 1200) {
+      goPending = 0;
+      var hit = GO_KEYS.filter(function (g) { return g[0] === key.toLowerCase() && byId[g[1]]; })[0];
+      if (hit) { e.preventDefault(); go(hit[1], null, {}); }
+      return;
+    }
+    goPending = 0;
+    if (key === 'r' || key === 'R') { e.preventDefault(); rerender(); }
+    else if (key === 'g' || key === 'G') { goPending = Date.now(); }
+    else if (key === '?') { e.preventDefault(); openShortcuts(); }
+    else if (key === '/') { e.preventDefault(); openPalette(); }
+    else if (key === 't' || key === 'T') { e.preventDefault(); toggleTheme(); }
+    else if (key === '[') { e.preventDefault(); $('railBtn').click(); }
   });
 
   /* ---------------------------------------------------------- profile */

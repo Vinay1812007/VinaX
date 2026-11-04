@@ -41,10 +41,12 @@ export const SETTING_KEYS: readonly SettingSpec[] = [
   { key: 'retention', group: 'Operations', title: 'Data retention', note: 'How long each kind of data is kept before it is deleted automatically: play history, error reports, feedback, notification logs.', shape: 'object' },
   { key: 'push', group: 'Operations', title: 'Push rules', note: 'Notification limits: at most one per few hours per person, quiet hours, and which kinds of notification may be sent.', shape: 'object' },
   { key: 'search-synonyms', group: 'Catalog', title: 'Search synonyms', note: 'Words people type that should search for something else (bday → birthday).', shape: 'object' },
+  { key: 'search-pins', group: 'Catalog', title: 'Pinned search results', note: 'A song shown first when people search for exactly these words: { "<words>": { id, title, artist, image } } (at most 100). Set from Search Insights.', shape: 'object' },
   { key: 'catalog-sources', group: 'Catalog', title: 'Catalog sources', note: 'Which music sources the app uses, and in which order it tries them.', shape: 'object' },
   { key: 'language-order', group: 'Catalog', title: 'Language order', note: 'The order of languages on Home, and which languages are hidden.', shape: 'array' },
   { key: 'robots', group: 'Operations', title: 'Bots allowed to read the site', note: 'Which crawlers robots.txt allows: { bots: { "<bot name>": false } } — false blocks that bot; anything not listed keeps the built-in rule.', shape: 'object' },
   { key: 'jobs', group: 'Operations', title: 'Scheduled jobs', note: 'Switch a background job off or slow it down: { "<job>": { enabled, every } }.', shape: 'object' },
+  { key: 'alert-rules', group: 'Operations', title: 'Smart Alerts', note: 'Alerts to admins\' phones when something goes wrong: { enabled, who: owners | editors | all, quiet: { enabled, start, end }, cooldownMinutes, rules: { errorsSpike: { on, minErrors, factor }, siteDown: { on }, noPlays: { on, minutes, onlyIfUsualPlays }, newFeedback: { on, minCount } } }.', shape: 'object' },
   { key: 'push-audiences', group: 'Operations', title: 'Saved notification audiences', note: 'Audiences the owner saved on Send Notification: [{ id, name, filter, activity }]. Console only.', shape: 'array' },
 ] as const;
 

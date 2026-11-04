@@ -31,6 +31,27 @@ describe('client config bundle', () => {
     const cfg = publicClientConfig({ greeting: 'nope', 'support-faq': 'nope', 'min-version': { build: -1 } });
     expect(cfg).toEqual({ greeting: null, broadcast: null, synonyms: {}, disabledSources: [], sourceOrder: [], languageOrder: [], hiddenLanguages: [], faq: [], minBuild: null });
   });
+  it('version 11 — ships pinned searches with clean words and songs, only when there are any', () => {
+    const cfg = publicClientConfig({
+      'search-pins': {
+        '  Kesariya   REMIX ': { id: 'abc123', title: ' Kesariya ', artist: 'Arijit Singh', image: 'https://c.saavncdn.com/x.jpg', junk: 1 },
+        insecure: { id: 'def456', title: 'T', image: 'http://x/y.jpg' },
+        x: { id: 'ok1', title: 'Too short' },
+        __proto__x: { id: 'ok2', title: 'Fine' },
+        'no id': { title: 'Nope' },
+        'bad id': { id: 'has spaces', title: 'Nope' },
+      },
+    });
+    expect(cfg.searchPins).toEqual({
+      'kesariya remix': { id: 'abc123', title: 'Kesariya', artist: 'Arijit Singh', image: 'https://c.saavncdn.com/x.jpg' },
+      insecure: { id: 'def456', title: 'T' },
+      __proto__x: { id: 'ok2', title: 'Fine' },
+    });
+    const many: Record<string, unknown> = {};
+    for (let i = 0; i < 130; i++) many[`song ${i}`] = { id: `id${i}`, title: `Song ${i}` };
+    expect(Object.keys(publicClientConfig({ 'search-pins': many }).searchPins ?? {})).toHaveLength(100);
+    expect('searchPins' in publicClientConfig({ 'search-pins': { x: 1 } })).toBe(false);
+  });
   it('maintenance window', () => {
     const now = new Date('2026-09-08T10:00:00Z');
     expect(maintenanceActive({ start: '2026-09-08T09:00:00Z', end: '2026-09-08T11:00:00Z', note: 'DB upgrade' }, now)).toEqual({ note: 'DB upgrade' });

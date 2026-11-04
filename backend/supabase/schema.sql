@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 10
+-- VinaX database · schema version 11
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -21,7 +21,8 @@
 --  8b. console admins, error status (version 10)
 --   9. VinaX AI conversations    9b. the personal engine
 --  10. views
---  11. functions (stats_*, room_*, housekeeping)
+--  11. functions (stats_*, room_*, housekeeping; Trending and Search
+--      Insights: version 11)
 --  12. security
 -- =============================================================================
 
@@ -1715,6 +1716,179 @@ language sql stable set search_path = public, pg_temp as $$
   );
 $$;
 
+-- Version 11 — Trending (console): songs, artists and languages played by
+-- signed-in users in this window against the window of the same length just
+-- before it. The window starts at midnight India time `p_days - 1` days ago
+-- (1..90) and runs to now; the one before it is exactly as long and ends where
+-- it starts. Ranks are positions by plays (1 = most played) in each window;
+-- prev_rank is null when a song had no plays before (a new entry). `daily`
+-- has one count per India calendar day of the window, oldest first.
+create or replace function stats_trending(p_days int default 7, p_limit int default 50) returns jsonb
+language sql stable set search_path = public, pg_temp as $$
+  with b as (
+    select least(greatest(coalesce(p_days, 7), 1), 90) as days,
+           least(greatest(coalesce(p_limit, 50), 1), 100) as lim,
+           ((_ist_today() - (least(greatest(coalesce(p_days, 7), 1), 90) - 1))::timestamp at time zone 'Asia/Kolkata') as t0
+  ),
+  w as (select days, lim, t0, t0 - (now() - t0) as tp from b),
+  days as (
+    select generate_series(_ist_today() - ((select days from w) - 1), _ist_today(), '1 day')::date as day
+  ),
+  s as (select * from signed_devices()),
+  ev as (
+    select coalesce(nullif(e.song_id, ''), lower(e.song_title) || '|' || lower(coalesce(e.song_artist, ''))) as key,
+           e.song_id, e.song_title, e.song_artist, e.song_image, e.language, s.account_id, e.at,
+           e.at >= (select t0 from w) as cur
+    from events e join s on s.listener_id = e.listener_id
+    where e.kind = 'play' and e.at >= (select tp from w)
+  ),
+  songs as (
+    select key,
+           (array_agg(song_id order by at desc) filter (where song_id is not null and song_id <> ''))[1] as id,
+           (array_agg(song_title order by at desc))[1] as title,
+           (array_agg(song_artist order by at desc) filter (where song_artist is not null and song_artist <> ''))[1] as artist,
+           (array_agg(song_image order by at desc) filter (where song_image is not null and song_image <> ''))[1] as image,
+           count(*) filter (where cur) as plays,
+           count(*) filter (where not cur) as prev_plays,
+           count(distinct account_id) filter (where cur) as listeners
+    from ev where song_title is not null and song_title <> ''
+    group by 1
+  ),
+  song_rank as (
+    select key, row_number() over (order by plays desc, listeners desc, key) as rank from songs where plays > 0
+  ),
+  song_prev as (
+    select key, row_number() over (order by prev_plays desc, key) as prev_rank from songs where prev_plays > 0
+  ),
+  top as (
+    select s2.*, r.rank, p.prev_rank
+    from songs s2 join song_rank r using (key) left join song_prev p using (key)
+    where r.rank <= (select lim from w)
+  ),
+  per_day as (
+    select key, (at at time zone 'Asia/Kolkata')::date as day, count(*) as n
+    from ev where cur and key in (select key from top)
+    group by 1, 2
+  ),
+  artists as (
+    select song_artist as artist,
+           count(*) filter (where cur) as plays,
+           count(*) filter (where not cur) as prev_plays,
+           count(distinct account_id) filter (where cur) as listeners
+    from ev where song_artist is not null and song_artist <> ''
+    group by 1
+  ),
+  artist_rank as (
+    select artist, row_number() over (order by plays desc, listeners desc, artist) as rank from artists where plays > 0
+  ),
+  artist_prev as (
+    select artist, row_number() over (order by prev_plays desc, artist) as prev_rank from artists where prev_plays > 0
+  ),
+  langs as (
+    select coalesce(nullif(language, ''), 'unknown') as language,
+           count(*) filter (where cur) as plays,
+           count(*) filter (where not cur) as prev_plays,
+           count(distinct account_id) filter (where cur) as listeners
+    from ev group by 1
+  )
+  select jsonb_build_object(
+    'days', (select days from w),
+    'totals', jsonb_build_object(
+      'plays',          (select count(*) from ev where cur),
+      'prev_plays',     (select count(*) from ev where not cur),
+      'listeners',      (select count(distinct account_id) from ev where cur),
+      'prev_listeners', (select count(distinct account_id) from ev where not cur),
+      'songs',          (select count(*) from songs where plays > 0),
+      'new_songs',      (select count(*) from songs where plays > 0 and prev_plays = 0)),
+    'songs', coalesce((select jsonb_agg(jsonb_build_object(
+        'id', t.id, 'title', t.title, 'artist', t.artist, 'image', t.image,
+        'plays', t.plays, 'prev_plays', t.prev_plays, 'listeners', t.listeners,
+        'rank', t.rank, 'prev_rank', t.prev_rank,
+        'daily', (select jsonb_agg(coalesce(pd.n, 0) order by d.day) from days d left join per_day pd on pd.key = t.key and pd.day = d.day)
+      ) order by t.rank) from top t), '[]'::jsonb),
+    'artists', coalesce((select jsonb_agg(jsonb_build_object(
+        'artist', a.artist, 'plays', a.plays, 'prev_plays', a.prev_plays, 'listeners', a.listeners,
+        'rank', r.rank, 'prev_rank', p.prev_rank) order by r.rank)
+      from artists a join artist_rank r using (artist) left join artist_prev p using (artist)
+      where r.rank <= (select lim from w)), '[]'::jsonb),
+    'languages', coalesce((select jsonb_agg(jsonb_build_object(
+        'language', l.language, 'plays', l.plays, 'prev_plays', l.prev_plays, 'listeners', l.listeners) order by l.plays desc, l.language)
+      from langs l where l.plays > 0 or l.prev_plays > 0), '[]'::jsonb)
+  );
+$$;
+
+-- Version 11 — Search Insights (console): what signed-in users search for.
+-- A search event's message is '<song results>|<query>' (the app writes the
+-- query lower-cased and trimmed, 2–80 characters); 0 results means the search
+-- found nothing. Rows that do not have that shape are left out. Same windows
+-- as stats_trending; `daily` covers the window, every day present.
+create or replace function stats_searches(p_days int default 7, p_limit int default 50) returns jsonb
+language sql stable set search_path = public, pg_temp as $$
+  with b as (
+    select least(greatest(coalesce(p_days, 7), 1), 90) as days,
+           least(greatest(coalesce(p_limit, 50), 1), 200) as lim,
+           ((_ist_today() - (least(greatest(coalesce(p_days, 7), 1), 90) - 1))::timestamp at time zone 'Asia/Kolkata') as t0
+  ),
+  w as (select days, lim, t0, t0 - (now() - t0) as tp from b),
+  days as (
+    select generate_series(_ist_today() - ((select days from w) - 1), _ist_today(), '1 day')::date as day
+  ),
+  s as (select * from signed_devices()),
+  raw as (
+    select e.at, s.account_id, e.at >= (select t0 from w) as cur,
+           split_part(e.message, '|', 1) as n_text,
+           regexp_replace(lower(btrim(substr(e.message, strpos(e.message, '|') + 1))), '\s+', ' ', 'g') as query
+    from events e join s on s.listener_id = e.listener_id
+    where e.kind = 'search' and e.at >= (select tp from w) and strpos(e.message, '|') > 1
+  ),
+  ev as (
+    select at, account_id, cur, query,
+           case when n_text ~ '^[0-9]{1,6}$' then n_text::int end as results
+    from raw
+    where length(query) between 2 and 80
+  ),
+  ok as (select * from ev where results is not null),
+  q as (
+    select query,
+           count(*) filter (where cur) as searches,
+           count(*) filter (where not cur) as prev_searches,
+           count(distinct account_id) filter (where cur) as people,
+           count(*) filter (where cur and results = 0) as zero,
+           count(distinct account_id) filter (where cur and results = 0) as zero_people,
+           max(at) filter (where cur and results = 0) as last_zero_at,
+           max(at) filter (where cur) as last_at
+    from ok group by 1
+  )
+  select jsonb_build_object(
+    'days', (select days from w),
+    'totals', jsonb_build_object(
+      'searches',      (select count(*) from ok where cur),
+      'people',        (select count(distinct account_id) from ok where cur),
+      'zero',          (select count(*) from ok where cur and results = 0),
+      'queries',       (select count(*) from q where searches > 0),
+      'prev_searches', (select count(*) from ok where not cur),
+      'prev_people',   (select count(distinct account_id) from ok where not cur),
+      'prev_zero',     (select count(*) from ok where not cur and results = 0)),
+    'top', coalesce((select jsonb_agg(t) from (
+        select query, searches, people, zero, prev_searches, last_at
+        from q where searches > 0
+        order by searches desc, people desc, query limit (select lim from w)) t), '[]'::jsonb),
+    'zero', coalesce((select jsonb_agg(t) from (
+        select query, zero as searches, zero_people as people, searches - zero as found, last_zero_at as last_at
+        from q where zero > 0
+        order by zero desc, zero_people desc, last_zero_at desc, query limit (select lim from w)) t), '[]'::jsonb),
+    'rising', coalesce((select jsonb_agg(t) from (
+        select query, searches, prev_searches, people
+        from q where searches >= 2 and searches > prev_searches
+        order by (searches - prev_searches) desc, searches desc, query limit 25) t), '[]'::jsonb),
+    'daily', coalesce((select jsonb_agg(jsonb_build_object(
+        'day', to_char(d.day, 'YYYY-MM-DD'), 'searches', coalesce(x.searches, 0), 'zero', coalesce(x.zero, 0)) order by d.day)
+      from days d left join (
+        select (at at time zone 'Asia/Kolkata')::date as day, count(*) as searches, count(*) filter (where results = 0) as zero
+        from ok where cur group by 1) x on x.day = d.day), '[]'::jsonb)
+  );
+$$;
+
 -- One listener in full: the row, the account, the backup facts, counts, tastes, recent events.
 create or replace function listener_profile(p_listener text default null, p_account text default null) returns jsonb
 language sql stable set search_path = public, pg_temp as $$
@@ -2127,7 +2301,7 @@ begin
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
       and p.proname in ('_days', 'signed_devices', '_ist_today', '_error_shape', 'admin_users', 'admin_user_filters', 'user_profile', 'purge_kind', 'notification_opened', 'stats_overview', 'stats_timeline', 'stats_music', 'stats_geo', 'stats_platforms',
-                        'stats_engagement', 'stats_retention', 'stats_funnel', 'stats_skips', 'stats_errors',
+                        'stats_engagement', 'stats_retention', 'stats_funnel', 'stats_skips', 'stats_errors', 'stats_trending', 'stats_searches',
                         'listener_profile', 'delete_listener', 'room_request', 'room_sweep',
                         'purge_events', 'retire_push_devices', 'uptime_tick', 'uptime_report', 'table_stats', 'table_counts',
                         'ai_conversation_search', 'ai_artifact_list', 'ai_export', 'ai_take_daily',
@@ -2148,7 +2322,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 10, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 10, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 11, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 11, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 10 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 11 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;

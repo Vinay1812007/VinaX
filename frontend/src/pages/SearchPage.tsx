@@ -47,6 +47,8 @@ import { topArtists } from '@/services/personalization/profile';
 import { recordSearchPlay } from '@/services/personalization/updater';
 import { fetchWithTimeout } from '@/services/api/client';
 import { getTopSearches } from '@/services/api/catalog';
+import { getSong } from '@/services/api/saavn';
+import { pinFor, withPinnedFirst, type SearchPins } from '@/services/search/pins';
 import type { Song } from '@/types';
 import { playAlbum, playArtist, playPlaylist } from '@/features/player/playEntity';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
@@ -83,6 +85,8 @@ import '@/styles/pages/browse.css';
 
 // 8.2.0 — natural-language matches load only for queries that read like a description.
 
+// The app on a phone has no same-origin API (as in useAppConfig).
+const PIN_BASE = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
 const TABS = ['All', 'Songs', 'Albums', 'Artists', 'Playlists'] as const;
 type Tab = (typeof TABS)[number];
 
@@ -361,14 +365,39 @@ export default function SearchPage() {
     () => (groupedSongs ? flattenSongPages([groupedSongs, firstSongPage ?? []], { sameRecording: true }) : undefined),
     [groupedSongs, firstSongPage],
   );
+  // Schema 11 — a song the owner pinned for these exact words (console →
+  // Search Insights) leads the results. Its own read of the client bundle,
+  // which the edge and the browser cache for a minute, so the app shell is
+  // unchanged; the song itself is fetched by id only when a pin matches.
+  const searchPins = useQuery({
+    queryKey: ['search-pins'],
+    enabled: active && !lyricsMode,
+    staleTime: 5 * 60_000,
+    retry: 0,
+    queryFn: async (): Promise<SearchPins> => {
+      const r = await fetchWithTimeout(`${PIN_BASE}/api/appconfig?key=client`, 8000);
+      if (!r.ok) return {};
+      const j = (await r.json()) as { searchPins?: unknown };
+      return j.searchPins && typeof j.searchPins === 'object' ? (j.searchPins as SearchPins) : {};
+    },
+  }).data;
+  const pin = useMemo(() => (active && !lyricsMode ? pinFor(searchPins, q) : null), [active, lyricsMode, searchPins, q]);
+  const pinnedSong = useQuery({
+    queryKey: ['search-pin-song', pin?.id ?? ''],
+    enabled: !!pin,
+    staleTime: 10 * 60_000,
+    retry: 1,
+    queryFn: () => getSong(pin!.id),
+  }).data;
+  const pinSong = pin ? (pinnedSong ?? null) : null;
   // v5.19.0 — then the literal-match tiers (exact title → starts-with → all
   // words) with a nudge for pinned languages, on top of the taste pass.
   const rankedAllSongs = useMemo(
     () =>
       allSongs
-        ? rerankSongs(rankSongs(allSongs, { query: q, searchMode: true }), q, pinnedLangs)
+        ? withPinnedFirst(rerankSongs(rankSongs(allSongs, { query: q, searchMode: true }), q, pinnedLangs), pinSong)
         : [],
-    [allSongs, q, pinnedLangs],
+    [allSongs, q, pinnedLangs, pinSong],
   );
   // v5.19.0 — a settled full search seeds the quick-results cache, so
   // re-typing (or returning to) this query previews instantly, no request.
@@ -390,13 +419,14 @@ export default function SearchPage() {
   // result; the songs list then starts from the first song instead of the second.
   const topArtist = useMemo(
     () => {
-      if (allPlaceholder || !all.data) return undefined;
+      // A pinned song is the top result for its words.
+      if (allPlaceholder || !all.data || pinSong) return undefined;
       // 13.7 — the catalogue's own best match wins over a namesake whose name
       // happens to equal the words ("arijit" → Arijit Singh, not "Arijit").
       const best = all.data.topArtistId ? all.data.artists.find((a) => a.id === all.data!.topArtistId) : undefined;
       return best ?? all.data.artists.find((a) => normalizeQuery(a.name) === q);
     },
-    [all.data, allPlaceholder, q],
+    [all.data, allPlaceholder, q, pinSong],
   );
   const leadFrom = topArtist ? 0 : 1;
   const leadSongs = rankedAllSongs.slice(leadFrom, leadFrom + 5);
@@ -407,7 +437,10 @@ export default function SearchPage() {
     [all.data?.playlists, pinnedLangs],
   );
   const songPages = infiniteSongs.data?.pages;
-  const allSongList = useMemo(() => flattenSongPages(songPages, { sameRecording: true }), [songPages]);
+  const allSongList = useMemo(
+    () => (songPages ? withPinnedFirst(flattenSongPages(songPages, { sameRecording: true }), pinSong) : []),
+    [songPages, pinSong],
+  );
   const availableLangs = useMemo(
     () => [...new Set(allSongList.map((s) => s.language).filter((l): l is string => !!l && l !== 'unknown'))],
     [allSongList],
