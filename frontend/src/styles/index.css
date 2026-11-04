@@ -1117,9 +1117,13 @@ html.light .vx-lyric-active { text-shadow: none; }
 /* ============================================================================
    Perf niceties.
    ========================================================================= */
+/* Off-screen shelves are skipped until they scroll near. `auto` makes the
+   browser remember each shelf's real height once drawn, so scrolling back
+   and forth does not keep swapping real heights for the guess (that jumped
+   the page). 300px is about a shelf of cards (291–305px measured). */
 .cv-auto {
   content-visibility: auto;
-  contain-intrinsic-size: 0 320px;
+  contain-intrinsic-size: auto 0px auto 300px;
 }
 .animate-aurora-a,
 .animate-aurora-b,
