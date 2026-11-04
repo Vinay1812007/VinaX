@@ -70,7 +70,12 @@ if (fs.existsSync(javaRoot)) {
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.webkit.CookieManager;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebView;
+import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.BridgeWebViewClient;
 
 public class MainActivity extends BridgeActivity {
     @Override
@@ -79,7 +84,41 @@ public class MainActivity extends BridgeActivity {
         // VinaX AI Live voice: loudspeaker / earpiece (native-android/AudioRoutePlugin.java).
         registerPlugin(AudioRoutePlugin.class);
         super.onCreate(savedInstanceState);
+        allowSignInCheck();
         maybeOpenPlayer(getIntent());
+    }
+
+    /**
+     * Cloudflare's sign-in security check (Turnstile) runs in an iframe from
+     * challenges.cloudflare.com, which Android's WebView treats as a third
+     * party. Two WebView defaults made it fail every time in the app:
+     *  - third-party cookies are off (Capacitor never turns them on), so the
+     *    check's own cookies were dropped;
+     *  - Capacitor hands every navigation Android asks about, iframe ones
+     *    included, to launchIntent, which sends any host other than ours (and
+     *    about:blank / about:srcdoc, which the check uses) to an outside app
+     *    and blocks it in the page.
+     * So: accept third-party cookies, and let iframes navigate in place. Only
+     * the top-level page still goes through Capacitor's usual rule. (Not
+     * server.allowNavigation: that would also give Cloudflare's frames the
+     * native bridge.)
+     */
+    private void allowSignInCheck() {
+        try {
+            final Bridge bridge = getBridge();
+            if (bridge == null || bridge.getWebView() == null) return;
+            CookieManager cookies = CookieManager.getInstance();
+            cookies.setAcceptCookie(true);
+            cookies.setAcceptThirdPartyCookies(bridge.getWebView(), true);
+            bridge.setWebViewClient(new BridgeWebViewClient(bridge) {
+                @Override
+                public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                    if (!request.isForMainFrame()) return false;
+                    return super.shouldOverrideUrlLoading(view, request);
+                }
+            });
+        } catch (Exception ignored) {
+        }
     }
 
     @Override
@@ -140,7 +179,7 @@ public class MainActivity extends BridgeActivity {
 }
 `;
   fs.writeFileSync(path.join(javaRoot, 'MainActivity.java'), mainActivity);
-  console.log('[native] Wrote MainActivity.java registering VinaxMediaPlugin and AudioRoutePlugin');
+  console.log('[native] Wrote MainActivity.java registering VinaxMediaPlugin and AudioRoutePlugin, with the sign-in check allowed');
 } else {
   console.error('[native] java root missing — cannot register plugin');
 }

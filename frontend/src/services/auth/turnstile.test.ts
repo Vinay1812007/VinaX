@@ -84,6 +84,30 @@ describe('Turnstile at sign-in', () => {
     el.remove();
   });
 
+  it('a token kept past four minutes (a phone froze the page) is not sent: the widget runs again', async () => {
+    vi.stubGlobal('fetch', answer({ turnstileSiteKey: '0xSITE' }));
+    const calls: string[] = [];
+    let opts: Record<string, unknown> = {};
+    (window as unknown as { turnstile: unknown }).turnstile = {
+      render: (_el: HTMLElement, o: Record<string, unknown>) => { opts = o; return 'w-old'; },
+      reset: (id: string) => calls.push(`reset:${id}`),
+      remove: () => undefined,
+    };
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const remove = await mountTurnstile(el, '', 'app-signin');
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    (opts.callback as (t: string) => void)('tok-stale');
+    now.mockReturnValue(1_000_000 + 4 * 60_000 + 1);
+    const pending = turnstileToken('', 'app-signin');
+    await vi.waitFor(() => expect(calls).toEqual(['reset:w-old']));
+    (opts.callback as (t: string) => void)('tok-fresh');
+    expect(await pending).toBe('tok-fresh');
+    now.mockRestore();
+    (remove as () => void)();
+    el.remove();
+  });
+
   it('nothing is drawn while the check is off', async () => {
     vi.stubGlobal('fetch', answer({ turnstileSiteKey: null }));
     const el = document.createElement('div');
