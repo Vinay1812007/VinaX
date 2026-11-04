@@ -16,6 +16,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.9.9': {
+    title: 'Sign-in security check now works in the Android app',
+    changes: [
+      { type: 'fixed', text: 'Fixed the security check at sign-in failing every time in the Android app.' },
+      { type: 'fixed', text: 'An old pass from before a phone paused the page is no longer sent; the check runs again instead.' },
+      { type: 'fixed', text: 'When the check fails, the reason is now recorded so it can be fixed faster.' },
+    ],
+  },
   '1.9.8': {
     title: 'Remove all ads and Google AdSense',
     changes: [
