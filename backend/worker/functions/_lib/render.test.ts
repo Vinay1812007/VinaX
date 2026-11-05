@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { entityPage, matchHub, MIRROR_BASES, renderEntity, renderHub, useCatalogBases } from './render';
+import { entityPage, matchHub, MIRROR_BASES, renderEntity, renderHub, songIdOf, useCatalogBases } from './render';
 
 const shell = readFileSync(resolve(__dirname, '../../../index.html'), 'utf8');
 
@@ -374,5 +374,15 @@ describe('13.6.0 — entityPage (shared by the edge and the build-time prerender
     expect(await entityPage('song', 'abc123', shell)).not.toBeNull();
     expect(asked.length).toBeGreaterThan(0);
     expect(asked.some((u) => u.startsWith('https://www.vinaxmusic.online/'))).toBe(false);
+  });
+});
+
+describe('songIdOf — song ids may contain a dash', () => {
+  it('keeps an 8-character id with a dash whole, and reads the rest as before', () => {
+    expect(songIdOf('teeje-week-H7SU6-O2')).toBe('H7SU6-O2');
+    expect(songIdOf('mahi-from-deewana-MRYcngMQ')).toBe('MRYcngMQ');
+    expect(songIdOf('abc123')).toBe('abc123');
+    expect(songIdOf('gone-x-404')).toBe('404');
+    expect(songIdOf('H7SU6-O2')).toBe('H7SU6-O2'); // a bare id with no slug
   });
 });

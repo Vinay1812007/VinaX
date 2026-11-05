@@ -55,6 +55,8 @@ const MAX_ALBUMS = num(process.env.ENTITY_MAX_ALBUMS, 400);
 const MAX_ARTISTS = num(process.env.ENTITY_MAX_ARTISTS, 400);
 /** Songs linked from the hubs, built ahead of the chart picks (V2 1.0). */
 const MAX_HUB_SONGS = num(process.env.ENTITY_MAX_HUB_SONGS, 1500);
+/** SEO 2026-11 — pages the built pages link to most, built next while the time budget lasts. */
+const MAX_LINKED = num(process.env.ENTITY_MAX_LINKED, 1500);
 const CONCURRENCY = num(process.env.ENTITY_CONCURRENCY, 8);
 const BUDGET_MS = num(process.env.ENTITY_BUDGET_MS, 12 * 60_000);
 const WORKER_FN = resolve(dirname(fileURLToPath(import.meta.url)), '../../backend/worker/functions');
@@ -71,10 +73,10 @@ export const STATIC_SITEMAPS = [
 const enabled = process.env.PRERENDER_ENTITIES === '1' || (process.env.CF_PAGES === '1' && process.env.PRERENDER_ENTITIES !== '0');
 
 function writeSitemap(urls) {
-  const today = new Date().toISOString().slice(0, 10);
   const body =
     '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' +
-    urls.map((u) => `<url><loc>${ORIGIN}${u}</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq></url>`).join('') +
+    // No per-URL lastmod: it was always "today" (every build), which Google learns to ignore.
+    urls.map((u) => `<url><loc>${ORIGIN}${u}</loc></url>`).join('') +
     '</urlset>';
   writeFileSync(join(DIST, 'entity-pages.xml'), body);
 }
@@ -102,7 +104,7 @@ async function getJson(suffix) {
  *  seeds the app's charts use, ranked by play count), then their albums and
  *  lead artists. Off-language results and junk (year-only titles, almost no
  *  plays) are dropped. */
-export async function pickEntities(get = getJson, langs = LANGS, perLang = SONGS_PER_LANG) {
+export async function pickEntities(get = getJson, langs = LANGS, perLang = SONGS_PER_LANG, info = new Map()) {
   const year = new Date().getFullYear();
   const seeds = (l) => [`top ${l} songs ${year}`, `${l} popular songs`, `${l} trending now`];
   const chosen = [];
@@ -135,6 +137,14 @@ export async function pickEntities(get = getJson, langs = LANGS, perLang = SONGS
       byTitle.set(title, known);
       seen.add(String(s.id));
       chosen.push(s);
+      // What the song lists on Charts, Top Songs, Trending and the language pages show.
+      info.set(String(s.id), {
+        lang,
+        title: String(s?.name ?? '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#0?39;/g, "'"),
+        artist: (s?.artists?.primary ?? []).slice(0, 2).map((a) => String(a?.name ?? '')).filter(Boolean).join(', '),
+        year: Number(s?.year) || 0,
+        plays: Number(s?.playCount) || 0,
+      });
       if (++kept >= perLang) break;
     }
   }
@@ -158,7 +168,10 @@ export async function pickEntities(get = getJson, langs = LANGS, perLang = SONGS
 /** The song ids a rendered hub page links to, in its order. */
 export function hubSongIds(html) {
   const out = [];
-  for (const m of String(html).matchAll(/href="\/song\/[a-z0-9-]*-(\w+)"/g)) if (!out.includes(m[1])) out.push(m[1]);
+  for (const m of String(html).matchAll(/href="\/song\/([\w-]+)"/g)) {
+    const id = songIdOf(m[1]);
+    if (!out.includes(id)) out.push(id);
+  }
   return out;
 }
 
@@ -206,10 +219,134 @@ async function writeHubs(render, shell) {
   return [...new Set(songs)];
 }
 
+/**
+ * The id in "<slug>-<id>". Song ids are 8 characters and may contain "-"
+ * (H7SU6-O2); the slug is lowercase, so a last piece shorter than an id means
+ * the id is the last 8 characters (same rule as songIdOf in render.ts and
+ * extractSongId in src/utils/slug.ts). Album and artist ids are plain.
+ */
+export function songIdOf(param) {
+  const p = String(param);
+  const last = p.split('-').pop() ?? '';
+  if (last.length >= 8 || p.length < 8) return last || p;
+  return p.length === 8 || p[p.length - 9] === '-' ? p.slice(-8) : last || p;
+}
+
+/** "song:<id>" for an entity page path ("/song/some-title-<id>"), or null. */
+export function entityKey(path) {
+  const m = /^\/(song|album|artist)\/([\w-]+)$/.exec(String(path));
+  if (!m) return null;
+  return `${m[1]}:${m[1] === 'song' ? songIdOf(m[2]) : m[2].split('-').pop()}`;
+}
+
+const ENTITY_LINK = /<a href="(\/(?:song|album|artist)\/[\w-]+)">([\s\S]*?)<\/a>/g;
+
+/** Entity pages a rendered page links to, as "type:id" keys, with how often. */
+export function linkedEntities(html, counts = new Map()) {
+  for (const m of String(html).matchAll(ENTITY_LINK)) {
+    const k = entityKey(m[1]);
+    if (k) counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * SEO 2026-11 — a link to a song, album or artist page that was not built
+ * would land a crawler on the 404 app shell, so it becomes plain text; a link
+ * to a built page whose slug differs points at the built path. `built` maps
+ * "type:id" to the built page's path.
+ */
+export function pruneEntityLinks(html, built) {
+  return String(html).replace(ENTITY_LINK, (m, href, text) => {
+    const path = built.get(entityKey(href) ?? '');
+    return path ? `<a href="${path}">${text}</a>` : text;
+  });
+}
+
+const escHtml = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const capWord = (w) => w.charAt(0).toUpperCase() + w.slice(1);
+
+/** An <ol> of built song pages: "Title — Artist". */
+function songOl(rows) {
+  return `<ol>${rows.map((r) => `<li><a href="${r.path}">${escHtml(r.title)}</a>${r.artist ? ` — ${escHtml(r.artist)}` : ''}</li>`).join('')}</ol>`;
+}
+
+/**
+ * The song lists the prerendered Charts, Top Songs, Trending and language
+ * pages carry for crawlers (before SEO 2026-11 they linked to no song at
+ * all). `rows` are built songs: { path, lang, title, artist, year, plays }.
+ * Returns { '/charts': html, ... } keyed by route.
+ */
+export function songSections(rows, year = new Date().getFullYear()) {
+  const byPlays = [...rows].sort((a, b) => b.plays - a.plays);
+  const langs = [...new Set(LANGS.filter((l) => byPlays.some((r) => r.lang === l)))];
+  const out = {};
+  if (!byPlays.length) return out;
+  out['/charts'] = langs
+    .map((l) => `<h2>Top ${capWord(l)} songs</h2>${songOl(byPlays.filter((r) => r.lang === l).slice(0, 10))}<p><a href="/${l}-songs/">More ${capWord(l)} songs</a></p>`)
+    .join('');
+  out['/top-songs'] = `<h2>The 50 most played songs</h2>${songOl(byPlays.slice(0, 50))}`;
+  const fresh = byPlays.filter((r) => r.year >= year - 1).slice(0, 40);
+  if (fresh.length) out['/trending'] = `<h2>Popular new songs from ${year - 1} and ${year}</h2>${songOl(fresh)}`;
+  for (const l of langs) {
+    out[`/${l}-songs`] = `<h2>Top ${capWord(l)} songs right now</h2>${songOl(byPlays.filter((r) => r.lang === l).slice(0, 30))}`;
+  }
+  return out;
+}
+
+/** Put a section into a prerendered page, just before its site nav. */
+export function injectSection(html, section) {
+  const at = String(html).indexOf('<nav aria-label="Browse VinaX">');
+  if (!section || at < 0) return html;
+  return html.slice(0, at) + section + html.slice(at);
+}
+
 /** Where a rendered page path ("/song/x-1") is written: a flat .html file. */
 export function fileFor(path) {
-  if (!/^\/(song|album|artist)\/[a-z0-9-]+-\w+$/.test(path)) return null;
+  if (!/^\/(song|album|artist)\/[\w-]+$/.test(path)) return null;
   return join(DIST, `${path.slice(1)}.html`);
+}
+
+/**
+ * After the build: song lists into the prerendered Charts, Top Songs,
+ * Trending and language pages, then every built page and hub has its links
+ * to pages that were not built turned into plain text.
+ */
+function finishPages(built, info) {
+  const rows = [];
+  for (const [id, s] of info) {
+    const path = built.get(`song:${id}`);
+    if (path) rows.push({ path, ...s });
+  }
+  let injected = 0;
+  for (const [route, section] of Object.entries(songSections(rows))) {
+    const file = join(DIST, route.slice(1), 'index.html');
+    try {
+      const html = readFileSync(file, 'utf8');
+      const out = injectSection(html, section);
+      if (out !== html) {
+        writeFileSync(file, out);
+        injected++;
+      }
+    } catch {
+      /* that page was not prerendered */
+    }
+  }
+  const files = [...built.values()].map(fileFor).concat(HUB_PATHS.map(hubFileFor)).filter(Boolean);
+  let pruned = 0;
+  for (const file of files) {
+    try {
+      const html = readFileSync(file, 'utf8');
+      const out = pruneEntityLinks(html, built);
+      if (out !== html) {
+        writeFileSync(file, out);
+        pruned++;
+      }
+    } catch {
+      /* not written */
+    }
+  }
+  console.log(`entity pages: song lists on ${injected} pages; links to unbuilt pages removed on ${pruned}`);
 }
 
 async function main() {
@@ -235,35 +372,60 @@ async function main() {
       console.log('entity pages: skipped (static-host builds only; PRERENDER_ENTITIES=1 to run here)');
       return;
     }
-    const picked = await pickEntities();
+    const info = new Map();
+    const picked = await pickEntities(getJson, LANGS, SONGS_PER_LANG, info);
     const fromHubs = hubSongs.slice(0, MAX_HUB_SONGS).map((id) => ['song', id]);
     const have = new Set(fromHubs.map(([, id]) => id));
     const todo = [...fromHubs, ...picked.filter(([t, id]) => t !== 'song' || !have.has(id))];
     console.log(`entity pages: ${todo.length} to build (${CONCURRENCY} at a time, ${Math.round(BUDGET_MS / 1000)} s budget)`);
-    let next = 0;
-    const worker = async () => {
-      while (next < todo.length && Date.now() - started < BUDGET_MS) {
-        const [type, id] = todo[next++];
-        try {
-          const page = await render.entityPage(type, id, shell);
-          const file = page && fileFor(page.path);
-          if (!page || !file) {
+    /** "type:id" → the built page's path; and every built page's links, counted. */
+    const built = new Map();
+    const tried = new Set();
+    const links = new Map();
+    const buildAll = async (list) => {
+      let next = 0;
+      const worker = async () => {
+        while (next < list.length && Date.now() - started < BUDGET_MS) {
+          const [type, id] = list[next++];
+          const key = `${type}:${id}`;
+          if (tried.has(key)) continue;
+          tried.add(key);
+          try {
+            const page = await render.entityPage(type, id, shell);
+            const file = page && fileFor(page.path);
+            if (!page || !file) {
+              failed++;
+              continue;
+            }
+            mkdirSync(dirname(file), { recursive: true });
+            writeFileSync(file, page.html);
+            urls.push(page.path);
+            built.set(entityKey(page.path) ?? key, page.path);
+            linkedEntities(page.html, links);
+          } catch {
             failed++;
-            continue;
           }
-          mkdirSync(dirname(file), { recursive: true });
-          writeFileSync(file, page.html);
-          urls.push(page.path);
-        } catch {
-          failed++;
         }
-      }
+      };
+      await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+      return list.length - next;
     };
-    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
-    const skipped = todo.length - urls.length - failed;
+    let skipped = await buildAll(todo);
+    // SEO 2026-11 — then the pages the built ones link to most (an artist's
+    // other albums, an album's other songs), so their links lead somewhere.
+    if (!skipped) {
+      const linked = [...links.entries()]
+        .filter(([k]) => !built.has(k) && !tried.has(k))
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, MAX_LINKED)
+        .map(([k]) => k.split(':'));
+      console.log(`entity pages: ${linked.length} more that built pages link to`);
+      skipped = await buildAll(linked);
+    }
     console.log(
       `entity pages: wrote ${urls.length} (${failed} unavailable${skipped > 0 ? `, ${skipped} left for the time budget` : ''}) in ${Math.round((Date.now() - started) / 1000)} s`,
     );
+    finishPages(built, info);
   } catch (e) {
     console.warn('entity pages: stopped early —', e && e.message);
   } finally {

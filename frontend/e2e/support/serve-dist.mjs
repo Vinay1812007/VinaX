@@ -5,7 +5,9 @@
  * Mirrors the static host rather than `vite preview`: files from dist/,
  * directory index (`/admin/` → dist/admin/index.html), `/song/x` served from
  * `song/x.html` (13.6.0 prerendered entity pages), a clean 404 for missing
- * hashed assets, and SPA fallback to index.html for every other route.
+ * hashed assets, the nearest <dir>/404.html with a 404 for a missing song,
+ * album, artist, playlist or lyrics page (SEO 2026-11, scripts/prerender.mjs),
+ * and SPA fallback to index.html for every other route.
  */
 /* global URL, process, console */
 import { createServer } from 'node:http';
@@ -41,6 +43,9 @@ async function resolveFile(urlPath) {
   const html = `${normalize(join(DIST, urlPath))}.html`;
   if (html.startsWith(DIST) && (await stat(html).catch(() => null))?.isFile()) return html;
   if (urlPath.startsWith('/assets/')) return null;
+  const dir = /^\/([a-z]+)\//.exec(urlPath)?.[1];
+  const nearest404 = dir ? join(DIST, dir, '404.html') : null;
+  if (nearest404 && (await stat(nearest404).catch(() => null))?.isFile()) return { fp: nearest404, status: 404 };
   return join(DIST, 'index.html');
 }
 
@@ -56,14 +61,15 @@ try {
 createServer(async (req, res) => {
   try {
     const urlPath = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname);
-    const fp = await resolveFile(urlPath);
+    const found = await resolveFile(urlPath);
+    const fp = typeof found === 'object' && found ? found.fp : found;
     if (!fp) {
       res.writeHead(404, { 'content-type': 'text/plain' });
       res.end('not found');
       return;
     }
     const body = await readFile(fp);
-    res.writeHead(200, {
+    res.writeHead(typeof found === 'object' && found ? found.status : 200, {
       'content-type': MIME[extname(fp)] ?? 'application/octet-stream',
       'x-content-type-options': 'nosniff',
       'cache-control': 'no-store',

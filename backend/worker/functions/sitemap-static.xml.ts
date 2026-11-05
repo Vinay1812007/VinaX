@@ -26,12 +26,12 @@ const ROUTES: Array<[path: string, changefreq: string, priority: string]> = [
 ];
 
 export const onRequestGet = async (): Promise<Response> => {
-  const today = new Date().toISOString().slice(0, 10);
+  // No per-URL lastmod: it was always "today" (every build), so Google learned to ignore it.
   const body =
     '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' +
     ROUTES.map(
       ([p, c, pr]) =>
-        `<url><loc>${ORIGIN}${p === '/' ? '' : p}/</loc><lastmod>${today}</lastmod><changefreq>${c}</changefreq><priority>${pr}</priority></url>`,
+        `<url><loc>${ORIGIN}${p === '/' ? '' : p}/</loc><changefreq>${c}</changefreq><priority>${pr}</priority></url>`,
     ).join('') +
     '</urlset>';
   return new Response(body, {

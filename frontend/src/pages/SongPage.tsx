@@ -1,5 +1,5 @@
 import { Link, useParams } from 'react-router-dom';
-import { albumPath, artistPath, extractId, songPath } from '@/utils/slug';
+import { albumPath, artistPath, extractSongId, songPath } from '@/utils/slug';
 import { useCanonicalRedirect, useJsonLd } from '@/hooks/useSeo';
 import { buildSongBreadcrumbs, buildSongJsonLd } from '@/utils/schema';
 import { usePageMeta } from '@/hooks/usePageMeta';
@@ -20,7 +20,7 @@ import { shareLink } from '@/utils/share';
 
 export default function SongPage() {
   const { id: rawId } = useParams();
-  const id = extractId(rawId);
+  const id = extractSongId(rawId);
   const { data: song, isLoading, isError, refetch } = useSongDetails(id);
   const suggestions = useSongSuggestions(id);
   const playQueue = usePlayerStore((s) => s.playQueue);

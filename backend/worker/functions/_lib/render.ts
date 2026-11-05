@@ -101,6 +101,18 @@ function idOf(param: string): string {
   const parts = String(param).split('-');
   return parts[parts.length - 1] || String(param);
 }
+/**
+ * A song id from "<slug>-<id>": catalogue song ids are 8 characters and may
+ * contain "-" (H7SU6-O2). The slug is lowercase, so when the last piece is
+ * shorter than an id, the id is the last 8 characters (same rule as
+ * extractSongId in frontend/src/utils/slug.ts).
+ */
+export function songIdOf(param: string): string {
+  const p = String(param);
+  const last = p.split('-').pop() ?? '';
+  if (last.length >= 8 || p.length < 8) return last || p;
+  return p.length === 8 || p[p.length - 9] === '-' ? p.slice(-8) : last || p;
+}
 function isoDuration(secs: unknown): string | undefined {
   const n = Number(secs);
   if (!n || n <= 0) return undefined;
@@ -255,7 +267,7 @@ function hubLinks(lang: unknown): string {
   const moods = Object.entries(HUB_MOODS)
     .map(([k, m]) => `<a href="/${l}-${k}-songs">${label} ${m.label.toLowerCase()} songs</a>`)
     .join(' \u00b7 ');
-  return `<h2>More ${esc(label)} music</h2><p><a href="/${l}-songs">${esc(label)} songs</a>: trending, new releases, top artists and a guide to ${esc(label)} music. By mood: ${moods}.</p>`;
+  return `<h2>More ${esc(label)} music</h2><p><a href="/${l}-songs/">${esc(label)} songs</a>: trending, new releases, top artists and a guide to ${esc(label)} music. By mood: ${moods}.</p>`;
 }
 
 async function buildMeta(type: string, id: string): Promise<Meta | null> {
@@ -687,10 +699,10 @@ export async function renderHub(
     const content =
       `<main id="seo-content"><h1>${esc(label)} ${esc(hub.label)} Songs</h1>` +
       `<p>${esc(label)} ${esc(hub.label.toLowerCase())} songs \u2014 ${esc(hub.blurb)}. Stream free on VinaX: no login, synced lyrics and offline downloads in the Android app.</p>` +
-      `<p>Tap any song below to play it, and the VinaX DJ keeps going with the next five songs that follow from it, in ${esc(label)} first. The <a href="/${lang}-songs">${esc(label)} songs</a> page adds trending songs, new releases, top artists and a short guide to ${esc(label)} music, its composers and its singers.</p>` +
+      `<p>Tap any song below to play it, and the VinaX DJ keeps going with the next five songs that follow from it, in ${esc(label)} first. The <a href="/${lang}-songs/">${esc(label)} songs</a> page adds trending songs, new releases, top artists and a short guide to ${esc(label)} music, its composers and its singers.</p>` +
       list +
       `<p>${siblings}</p>` +
-      `<nav aria-label="VinaX"><a href="/${lang}-songs">${esc(label)} Songs</a> <a href="/">Home</a> <a href="/charts">Charts</a> <a href="/discover">Discover</a></nav></main>`;
+      `<nav aria-label="VinaX"><a href="/${lang}-songs/">${esc(label)} Songs</a> <a href="/">Home</a> <a href="/charts/">Charts</a> <a href="/discover/">Discover</a></nav></main>`;
     const html = shell
       .replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`)
       .replace(/(<meta name="description" content=")[^"]*(")/, `$1${esc(desc)}$2`)
@@ -718,7 +730,7 @@ export async function entityPage(
   id: string,
   shell: string,
 ): Promise<{ path: string; html: string } | null> {
-  const realId = idOf(id);
+  const realId = type === 'song' ? songIdOf(id) : idOf(id);
   const meta = await buildMeta(type, realId);
   if (!meta) return null;
   // Catalog names are unbounded — keep the description inside Bing's
@@ -757,7 +769,7 @@ export async function entityPage(
     (meta.image ? `<img src="${esc(meta.image)}" alt="${esc(meta.h1)}" width="300" height="300"/>` : '') +
     list +
     (meta.sections ?? '') +
-    `<nav aria-label="VinaX"><a href="/">Home</a> <a href="/charts">Charts</a> <a href="/discover">Discover</a> <a href="/telugu-songs">Telugu Songs</a> <a href="/hindi-songs">Hindi Songs</a> <a href="/tamil-songs">Tamil Songs</a></nav></main>`;
+    `<nav aria-label="VinaX"><a href="/">Home</a> <a href="/charts/">Charts</a> <a href="/discover/">Discover</a> <a href="/telugu-songs/">Telugu Songs</a> <a href="/hindi-songs/">Hindi Songs</a> <a href="/tamil-songs/">Tamil Songs</a></nav></main>`;
   const html = shell
     .replace(/<title>[^<]*<\/title>/, `<title>${esc(meta.title)}</title>`)
     .replace(/(<meta name="description" content=")[^"]*(")/, `$1${esc(meta.desc)}$2`)

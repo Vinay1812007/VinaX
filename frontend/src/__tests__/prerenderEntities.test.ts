@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — a plain .mjs build script, no types
-import { HUB_PATHS, STATIC_SITEMAPS, fileFor, hubFileFor, hubSongIds, pickEntities } from '../../scripts/prerender-entities.mjs';
+import { HUB_PATHS, STATIC_SITEMAPS, entityKey, songIdOf, fileFor, hubFileFor, hubSongIds, injectSection, linkedEntities, pickEntities, pruneEntityLinks, songSections } from '../../scripts/prerender-entities.mjs';
 
 type Song = { id: string; name: string; language: string; playCount: number; album?: { id: string }; artists?: { primary: Array<{ id: string }> } };
 const song = (id: string, name: string, plays: number, extra: Partial<Song> = {}): Song => ({
@@ -80,5 +80,50 @@ describe('V2 1.0 — hubs and sitemaps are static files, not Worker requests', (
     expect(patterns.some((p) => /-songs\*?$/.test(p))).toBe(false);
     expect(patterns.some((p) => p.includes('/sitemap'))).toBe(false);
     expect(patterns).toContain('www.vinaxmusic.online/api/*');
+  });
+});
+
+describe('SEO 2026-11 — links lead only to built pages, and the chart pages list songs', () => {
+  it('keys an entity path by type and id, whatever its slug', () => {
+    expect(entityKey('/song/mahi-from-deewana-MRYcngMQ')).toBe('song:MRYcngMQ');
+    expect(entityKey('/album/aashiqui-2-1139549')).toBe('album:1139549');
+    expect(entityKey('/artist/x-1')).toBe('artist:1');
+    expect(entityKey('/playlist/x-1')).toBeNull();
+    expect(entityKey('/charts/')).toBeNull();
+    // Song ids are 8 characters and may contain a dash.
+    expect(entityKey('/song/teeje-week-H7SU6-O2')).toBe('song:H7SU6-O2');
+    expect(songIdOf('x-123')).toBe('123');
+    expect(hubSongIds('<a href="/song/teeje-week-H7SU6-O2">T</a>')).toEqual(['H7SU6-O2']);
+    expect(fileFor('/song/teeje-week-H7SU6-O2')).toBe(join('dist', 'song/teeje-week-H7SU6-O2.html'));
+  });
+
+  it('counts the entity pages a page links to', () => {
+    const html = '<a href="/album/a-1">A</a> <a href="/song/s-X2">S</a> <a href="/album/other-slug-1">A again</a> <a href="/charts/">Charts</a>';
+    expect([...linkedEntities(html)]).toEqual([['album:1', 2], ['song:X2', 1]]);
+  });
+
+  it('unlinks pages that were not built and points the rest at the built path', () => {
+    const built = new Map([['album:1', '/album/a-1'], ['song:X2', '/song/real-title-X2']]);
+    const html = '<li><a href="/album/a-1">A</a></li><li><a href="/song/old-slug-X2">S</a></li><li><a href="/artist/nobody-9">Nobody</a></li><a href="/telugu-songs/">Telugu</a>';
+    expect(pruneEntityLinks(html, built)).toBe('<li><a href="/album/a-1">A</a></li><li><a href="/song/real-title-X2">S</a></li><li>Nobody</li><a href="/telugu-songs/">Telugu</a>');
+  });
+
+  it('builds song lists for Charts, Top Songs, Trending and each language page', () => {
+    const rows = [
+      { path: '/song/a-1', lang: 'telugu', title: 'A & B', artist: 'Sid', year: 2026, plays: 9 },
+      { path: '/song/b-2', lang: 'hindi', title: 'Old', artist: '', year: 2001, plays: 99 },
+    ];
+    const out = songSections(rows, 2026);
+    expect(Object.keys(out).sort()).toEqual(['/charts', '/hindi-songs', '/telugu-songs', '/top-songs', '/trending']);
+    expect(out['/charts']).toContain('<h2>Top Telugu songs</h2><ol><li><a href="/song/a-1">A &amp; B</a> — Sid</li></ol>');
+    expect(out['/top-songs'].indexOf('/song/b-2')).toBeLessThan(out['/top-songs'].indexOf('/song/a-1'));
+    expect(out['/trending']).toContain('/song/a-1');
+    expect(out['/trending']).not.toContain('/song/b-2');
+    expect(songSections([])).toEqual({});
+  });
+
+  it('puts a section just before the site nav, and leaves a page without one alone', () => {
+    expect(injectSection('<main><h1>T</h1><nav aria-label="Browse VinaX">n</nav></main>', '<h2>S</h2>')).toBe('<main><h1>T</h1><h2>S</h2><nav aria-label="Browse VinaX">n</nav></main>');
+    expect(injectSection('<main></main>', '<h2>S</h2>')).toBe('<main></main>');
   });
 });

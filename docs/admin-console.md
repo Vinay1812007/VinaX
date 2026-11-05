@@ -458,6 +458,7 @@ The page: status cards (on/off, last and next check, phones linked), "Right now"
 | `personal-embed` | every 30 min | recommendation learning |
 | `alerts` | every 5 min (each cron run) | Smart Alerts, `runAlerts` from `_lib/alerts.ts` (runs before the scheduled sends so a big scheduled audience never spends the run's requests first) |
 | `scheduled-notifications` | every 5 min (each cron run) | `runScheduledNotifications` from `_lib/scheduledPush.ts` |
+| `indexnow` | every 6 hours | `runIndexNow` from `_lib/indexnow.ts`: posts the sitemap URLs that are new since its last run to IndexNow (Bing, Yandex and others); the last list is kept in the `HANDOFF` KV namespace under `indexnow:urls` |
 
 The `jobs` setting `{ "<job>": { enabled, every } }` switches a job off or slows it; `every` must be one of the job's `choices`. A job is due when it is on and its last run started at least `every − 2` minutes ago (read from `job_runs`), so the cron's own interval only sets the finest grain. A job is "running late" after `max(2 × every + 15, 45)` minutes.
 

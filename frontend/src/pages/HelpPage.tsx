@@ -244,7 +244,7 @@ export default function HelpPage() {
                 <ChevronRightIcon className="vx-row-chev" />
               </Link>
             ))}
-            <a href="https://status.vinaxmusic.online" target="_blank" rel="noreferrer" className="vx-row is-link">
+            <a href="https://www.vinaxmusic.online/status/" target="_blank" rel="noreferrer" className="vx-row is-link">
               <span className="vx-row-main">
                 <span className="vx-row-label">Service status</span>
                 <span className="vx-row-hint">Opens in a new tab</span>

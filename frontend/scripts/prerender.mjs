@@ -114,6 +114,23 @@ const SHELL_CACHE = 'node_modules/.cache/vinax/shell.html';
 mkdirSync(dirname(SHELL_CACHE), { recursive: true });
 writeFileSync(SHELL_CACHE, base);
 
+// SEO 2026-11 — song, album, artist, playlist and lyrics URLs that were not
+// built as pages answer with a real 404 instead of a copy of Home. The static
+// host serves the nearest 404.html for a missing file (as public/assets/
+// 404.html already does), so <dir>/404.html is the plain app shell with no
+// page text, no canonical and noindex: listeners still get the app (it reads
+// the id from the URL and renders the page), while crawlers no longer see
+// thousands of Home duplicates with Home's canonical. Built pages
+// (song/<slug>-<id>.html) are real files and keep their 200.
+const SHELL_404_DIRS = ['song', 'album', 'artist', 'playlist', 'lyrics'];
+const shell404 = base
+  .replace(/<title>[^<]*<\/title>/, '<title>VinaX</title>')
+  .replace('</head>', '<meta name="robots" content="noindex"/></head>');
+for (const d of SHELL_404_DIRS) {
+  mkdirSync(join(DIST, d), { recursive: true });
+  writeFileSync(join(DIST, d, '404.html'), shell404);
+}
+
 // Inline the built stylesheet (4.17.8): the <link rel="stylesheet"> was the
 // last render-blocking request on the critical path (~450 ms on PSI's
 // throttled mobile — Lighthouse "Render-blocking requests" named exactly this
@@ -225,13 +242,16 @@ function bodyFor(r) {
   return intro;
 }
 
+/** "Charts · VinaX" — but a title that already names VinaX (Home) is not suffixed twice. */
+const fullTitle = (t) => (/\bVinaX\b/.test(t) ? t : `${t} · VinaX`);
+
 let ok = 0;
 const failures = [];
 for (const r of ROUTES) {
   try {
     const head =
       `<link rel="canonical" href="${ORIGIN}${pageUrl(r.p)}"/>` +
-      `<meta property="og:title" content="${esc(r.t)} · VinaX"/>` +
+      `<meta property="og:title" content="${esc(fullTitle(r.t))}"/>` +
       `<meta property="og:description" content="${esc(r.d)}"/>` +
       `<meta property="og:url" content="${ORIGIN}${pageUrl(r.p)}"/>` +
       (r.ld ? `<script type="application/ld+json">${jsonForScript(r.ld)}</script>` : '') +
@@ -243,7 +263,7 @@ for (const r of ROUTES) {
       // React wipes #root children on hydrate, so there is never a duplicate.
       slashLinks(`<main id="seo-content">${bodyFor(r)}${NAV}</main>`);
     const html = base
-      .replace(/<title>[^<]*<\/title>/, `<title>${esc(r.t)} · VinaX</title>`)
+      .replace(/<title>[^<]*<\/title>/, `<title>${esc(fullTitle(r.t))}</title>`)
       .replace(/(<meta name="description" content=")[^"]*(")/, `$1${esc(r.d)}$2`)
       .replace('</head>', head)
       .replace('<div id="seo-slot"></div>', content);

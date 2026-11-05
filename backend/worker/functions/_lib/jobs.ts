@@ -14,6 +14,8 @@
  *   alerts                   every run      Smart Alerts: errors rising, site down, no plays, new
  *                                           feedback → one push to the admins' phones (_lib/alerts.ts)
  *   scheduled-notifications  every run      send notifications whose scheduled time has come
+ *   indexnow                 every 6 hours  tell Bing and the other IndexNow engines about new pages
+ *                                           in the sitemaps (_lib/indexnow.ts)
  *
  * Console rebuild — the owner can switch a job off or change how often it runs from
  * the console: the `jobs` setting `{ "<job>": { enabled, every } }` (every in
@@ -30,8 +32,9 @@ import { runEmbedBacklog, runVerifyBacklog, type EmbedEnv } from './personal/emb
 import { COMPONENTS, probeAll } from '../api/status';
 import { runScheduledNotifications } from './scheduledPush';
 import { runAlerts } from './alerts';
+import { runIndexNow, type IndexNowEnv } from './indexnow';
 
-export type JobId = 'status-tick' | 'housekeeping' | 'personal-embed' | 'alerts' | 'scheduled-notifications';
+export type JobId = 'status-tick' | 'housekeeping' | 'personal-embed' | 'alerts' | 'scheduled-notifications' | 'indexnow';
 
 export interface JobSpec {
   id: JobId;
@@ -51,6 +54,7 @@ export const JOBS: readonly JobSpec[] = [
   // Before the scheduled sends: a large scheduled audience must not spend the run's requests first.
   { id: 'alerts', label: 'Smart Alerts', about: 'Looks for problems (app errors rising, the site not answering, no songs played, new feedback) and alerts admins on their phones.', every: 5, choices: [5, 10, 15, 30] },
   { id: 'scheduled-notifications', label: 'Scheduled notifications', about: 'Sends notifications whose scheduled time has come.', every: 5, choices: [5, 15, 30, 60] },
+  { id: 'indexnow', label: 'Search engine updates', about: 'Tells Bing and the other IndexNow search engines about new pages on the website, so they are found sooner.', every: 360, choices: [180, 360, 720, 1440] },
 ] as const;
 
 /** The owner's choices for one job, after checking them. */
@@ -208,6 +212,7 @@ export async function runJob(env: DbEnv, job: JobId, now = Date.now()): Promise<
         : job === 'personal-embed' ? await personalEmbed(env)
           : job === 'scheduled-notifications' ? { ...(await runScheduledNotifications(env as never, now)) }
             : job === 'alerts' ? await alertsJob(env, now)
+            : job === 'indexnow' ? await runIndexNow(env as IndexNowEnv)
             : await housekeeping(env, now);
   } catch (e) {
     ok = false;
