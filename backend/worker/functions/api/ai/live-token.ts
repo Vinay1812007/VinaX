@@ -30,7 +30,7 @@ import { aiSettings } from '../../_lib/ai/config';
 import {
   ALL_LIVE_MODELS, DEFAULT_LIVE_VOICE, LIVE_MODELS, LIVE_SEARCH_MODELS, LIVE_THINKING_MODEL, LIVE_VOICES, LIVE_WS_URL, liveSetup, mintLiveToken, noteVoiceFailure, voiceResting,
 } from '../../_lib/ai/voice';
-import { chatContextBlock, firstNameOf, languageReminder, ownerBlock, personalBlock, safeLocale, safeTimezone, sanitizePersonal, voicePrompt, voiceRecapBlock } from '../../_lib/ai/prompt';
+import { chatContextBlock, firstNameOf, languageReminder, transcriptionLanguages, ownerBlock, personalBlock, safeLocale, safeTimezone, sanitizePersonal, voicePrompt, voiceRecapBlock } from '../../_lib/ai/prompt';
 import { memoryBlock, memoryFor } from '../../_lib/ai/memory';
 import { asProviderError } from '../../_lib/ai/errors';
 import type { AiEnv } from '../../_lib/ai/types';
@@ -67,6 +67,7 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
   const candidates = liveCandidates(body.thinking === true, skip, Date.now(), body.model, search);
   if (!candidates.length) return voiceFailure([]);
   const tuned = body.lean !== true;
+  const heard = transcriptionLanguages(body.language, safeLocale(body.locale));
   const personal = sanitizePersonal(body.personal);
   const conversationId = typeof body.conversationId === 'string' && UUID.test(body.conversationId) ? body.conversationId : null;
   const [account, memory] = await Promise.all([
@@ -97,7 +98,7 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
       providerName: 'Google',
     }, search, body.language);
     const prompt = [spoken, ...extra].join('\n\n');
-    const setup = liveSetup(model.id, voice, prompt, search, tuned);
+    const setup = liveSetup(model.id, voice, prompt, search, tuned, heard);
     try {
       const t = await mintLiveToken(env, setup);
       console.log(JSON.stringify({ route: 'ai-live-token', provider: 'gemini', model: model.id, shape: t.shape, search, tuned, ok: true }));

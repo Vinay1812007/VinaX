@@ -192,6 +192,24 @@ export const LIVE_LANGUAGES: ReadonlyArray<{ code: string; name: string; native:
   { code: 'zh', name: 'Chinese (Mandarin)', native: '中文' },
 ];
 
+const INDIAN = new Set(['hi', 'te', 'ta', 'kn', 'ml', 'bn', 'mr', 'gu', 'pa', 'ur']);
+
+/**
+ * BCP-47 hints for Google's speech-to-text (Live API
+ * `inputAudioTranscription.languageCodes`, checked 2026-11-05): without
+ * them it guesses, and an Indian accent saying "hello hello" came out as
+ * "हेलो हेलो". The device's own locale goes first when it is that language.
+ * None for 'auto'.
+ */
+export function transcriptionLanguages(code: unknown, locale: string): string[] {
+  if (!LIVE_LANGUAGES.some((l) => l.code === code)) return [];
+  const c = code as string;
+  const out: string[] = [];
+  if (locale.includes('-') && locale.toLowerCase().split('-')[0] === c) out.push(locale);
+  out.push(c === 'en' ? 'en-US' : INDIAN.has(c) ? `${c}-IN` : c);
+  return [...new Set(out)];
+}
+
 /**
  * How Live voice picks its language. A picked language is held firmly
  * (accents and borrowed words used to flip the reply into another
@@ -203,7 +221,7 @@ export function languageRule(code: unknown): string {
     return "Language: reply in the language the user is speaking, and stay in it. Don't switch because of an accent, a single word, a name, a song title or a phrase you may have misheard; switch only when the user clearly speaks whole sentences in another language or asks you to. When you can't tell which language they're using, keep to the one you were using.";
   }
   const up = lang.name.toUpperCase();
-  return `Language: RESPOND IN ${up}. YOU MUST RESPOND UNMISTAKABLY IN ${up}, in every reply, whatever language the user speaks: the user chose ${lang.name} for Live voice. If they speak to you in another language, still answer in ${lang.name}; the first time, add one short sentence saying you're set to ${lang.name} and they can change it under Language at the top. Accents, names, song titles and words from other languages never change the language. Switch only if the user explicitly asks you to speak another language, then keep to that one.`;
+  return `Language: RESPOND IN ${up}. YOU MUST RESPOND UNMISTAKABLY IN ${up}, in every reply, whatever language the user speaks: the user chose ${lang.name} for Live voice. Expect them to speak ${lang.name}, often with an accent; greetings and short words like hello, okay, yes or thanks are ${lang.name}, however they sound. Accents, names, song titles and words from other languages never change the language. Just answer in ${lang.name}: don't mention the language or the setting, and don't say you're set to a language, unless the user asks about it. Switch only if the user explicitly asks you to speak another language, then keep to that one.`;
 }
 
 /**

@@ -414,7 +414,8 @@ export interface LiveSetup {
     thinkingConfig?: { thinkingBudget: number } | { thinkingLevel: string };
   };
   systemInstruction: { parts: Array<{ text: string }> };
-  inputAudioTranscription: Record<string, never>;
+  /** `languageCodes`: hints for Google's speech-to-text (the captions), else it guesses the language. */
+  inputAudioTranscription: { languageCodes?: string[] };
   outputAudioTranscription: Record<string, never>;
   contextWindowCompression: { slidingWindow: Record<string, never> };
   /** When the listener has finished speaking (Live API voice activity detection). */
@@ -447,7 +448,7 @@ export function quickThinking(model: string): { thinkingBudget: number } | { thi
  * (quick end of turn, quick thinking); the page asks again without them
  * when a model refuses the setup (an invalid-argument close).
  */
-export function liveSetup(model: string, voice: string, prompt: string, search = false, tuned = false): LiveSetup {
+export function liveSetup(model: string, voice: string, prompt: string, search = false, tuned = false, heard: readonly string[] = []): LiveSetup {
   const thinking = tuned ? quickThinking(model) : null;
   return {
     model: `models/${model}`,
@@ -457,7 +458,8 @@ export function liveSetup(model: string, voice: string, prompt: string, search =
       ...(thinking ? { thinkingConfig: thinking } : {}),
     },
     systemInstruction: { parts: [{ text: prompt }] },
-    inputAudioTranscription: {},
+    // The listener's language for the captions (a lean setup leaves it out too).
+    inputAudioTranscription: tuned && heard.length ? { languageCodes: [...heard] } : {},
     outputAudioTranscription: {},
     contextWindowCompression: { slidingWindow: {} },
     ...(tuned ? { realtimeInputConfig: { automaticActivityDetection: { endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH' as const, silenceDurationMs: LIVE_SILENCE_MS } } } : {}),
@@ -482,7 +484,7 @@ export function tokenBodies(setup: LiveSetup, now = Date.now()): Array<{ shape: 
     responseModalities: setup.generationConfig.responseModalities,
     speechConfig: setup.generationConfig.speechConfig,
     systemInstruction: setup.systemInstruction,
-    inputAudioTranscription: {},
+    inputAudioTranscription: setup.inputAudioTranscription,
     outputAudioTranscription: {},
     contextWindowCompression: setup.contextWindowCompression,
     ...(setup.generationConfig.thinkingConfig ? { thinkingConfig: setup.generationConfig.thinkingConfig } : {}),

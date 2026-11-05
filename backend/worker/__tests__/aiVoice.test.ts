@@ -16,7 +16,7 @@ import {
   _resetTokenShape, _resetVoiceRests, GEMINI_TTS_CHARS, LIVE_VOICES, inlineAudio, isMostlyArabic, liveSetup, noteVoiceFailure, ORPHEUS_MAX_CHARS, planSpeech, splitSpeech, tokenBodies,
 } from '../functions/_lib/ai/voice';
 import { ProviderError } from '../functions/_lib/ai/errors';
-import { chatContextBlock, languageRule, RECAP_CHARS, VOICE_PROMPT, VOICE_SEARCH_PROMPT, voicePrompt, voiceRecapBlock } from '../functions/_lib/ai/prompt';
+import { chatContextBlock, languageRule, transcriptionLanguages, RECAP_CHARS, VOICE_PROMPT, VOICE_SEARCH_PROMPT, voicePrompt, voiceRecapBlock } from '../functions/_lib/ai/prompt';
 import { issueSession } from '../functions/_lib/googleAuth';
 import { resetSettingsMemo } from '../functions/_lib/settings';
 import { _resetRateLimitsForTests } from '../functions/_lib/ratelimit';
@@ -419,6 +419,24 @@ describe('POST /api/ai/live-token', () => {
     expect(auto).not.toContain('RESPOND IN');
     expect(auto).not.toContain('Reminder:');
     expect(languageRule('xx')).toBe(languageRule('auto'));
+    // It answers in the language without announcing it (it used to say "I'm set to English" to an accented hello).
+    expect(languageRule('en')).toContain("don't say you're set to a language");
+    expect(languageRule('en')).toContain('greetings and short words like hello');
+    expect(languageRule('en')).not.toContain('change it under Language');
+  });
+
+  it('tells Google which language the captions are in, so an accented hello is not written in Hindi', async () => {
+    seed();
+    upstream = (url) => (url.endsWith('/v1beta/auth_tokens') ? json({ name: 'tok' }) : new Response('', { status: 500 }));
+    const en = await (await ask({ language: 'en', locale: 'en-IN' })).json();
+    expect(en.setup.inputAudioTranscription).toEqual({ languageCodes: ['en-IN', 'en-US'] });
+    expect(JSON.parse(String(seen[0].init!.body)).liveConnectConstraints.config.inputAudioTranscription).toEqual({ languageCodes: ['en-IN', 'en-US'] });
+    expect((await (await ask({ language: 'te', locale: 'en-IN' })).json()).setup.inputAudioTranscription).toEqual({ languageCodes: ['te-IN'] });
+    // Auto guesses as before; a lean setup (a model that refused the extras) leaves the hint out.
+    expect((await (await ask({ language: 'auto' })).json()).setup.inputAudioTranscription).toEqual({});
+    expect((await (await ask({ language: 'en', lean: true })).json()).setup.inputAudioTranscription).toEqual({});
+    expect(transcriptionLanguages('de', 'de-AT')).toEqual(['de-AT', 'de']);
+    expect(transcriptionLanguages('xx', 'en-IN')).toEqual([]);
   });
 
   it('carries on from the typed chat, with the listener’s preferences and the owner’s instructions, before the call recap', async () => {
