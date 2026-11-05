@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — a plain .mjs build script, no types
-import { HUB_PATHS, STATIC_SITEMAPS, entityKey, songIdOf, fileFor, hubFileFor, hubSongIds, injectSection, linkedEntities, pickEntities, pruneEntityLinks, songSections } from '../../scripts/prerender-entities.mjs';
+import { HUB_PATHS, MIRRORS, STATIC_SITEMAPS, entityKey, songIdOf, tooFewPages, fileFor, hubFileFor, hubSongIds, injectSection, linkedEntities, pickEntities, pruneEntityLinks, songSections } from '../../scripts/prerender-entities.mjs';
 
 type Song = { id: string; name: string; language: string; playCount: number; album?: { id: string }; artists?: { primary: Array<{ id: string }> } };
 const song = (id: string, name: string, plays: number, extra: Partial<Song> = {}): Song => ({
@@ -125,5 +125,19 @@ describe('SEO 2026-11 — links lead only to built pages, and the chart pages li
   it('puts a section just before the site nav, and leaves a page without one alone', () => {
     expect(injectSection('<main><h1>T</h1><nav aria-label="Browse VinaX">n</nav></main>', '<h2>S</h2>')).toBe('<main><h1>T</h1><h2>S</h2><nav aria-label="Browse VinaX">n</nav></main>');
     expect(injectSection('<main></main>', '<h2>S</h2>')).toBe('<main></main>');
+  });
+});
+
+describe('2026-11-05 — a build without catalogue pages never goes live', () => {
+  it('reads VinaX\'s own catalogue API first, never the Worker', () => {
+    expect(MIRRORS[0]).toBe('https://musicapi.vinaxmusic.online/api');
+    expect(MIRRORS.some((m: string) => m.startsWith('https://www.vinaxmusic.online'))).toBe(false);
+  });
+  it('fails a static-host build that wrote too few pages', () => {
+    expect(tooFewPages(0, true, 300)).toBe(true);
+    expect(tooFewPages(299, true, 300)).toBe(true);
+    expect(tooFewPages(1700, true, 300)).toBe(false);
+    expect(tooFewPages(0, false, 300)).toBe(false); // local builds skip entity pages
+    expect(tooFewPages(0, true, 0)).toBe(false); // ENTITY_MIN_PAGES=0
   });
 });

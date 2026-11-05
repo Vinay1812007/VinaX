@@ -45,8 +45,25 @@ const DIST = process.env.PRERENDER_DIST || 'dist';
 const ORIGIN = 'https://www.vinaxmusic.online';
 const SHELL_CACHE = 'node_modules/.cache/vinax/shell.html';
 const RENDER_TS = resolve(dirname(fileURLToPath(import.meta.url)), '../../backend/worker/functions/_lib/render.ts');
-/** Public catalogue mirrors, in order. Never this site's own /api. */
-const MIRRORS = ['https://saavn.sumit.co/api', 'https://nepotuneapi.vercel.app/api'];
+/**
+ * Catalogue sources, in order. Never this site's own /api (that is the
+ * Worker and would spend its daily request budget). 2026-11-05: VinaX's own
+ * catalogue API (musicapi.vinaxmusic.online, on Render, not a Worker route)
+ * comes first: the public mirrors answered 429 and 402 that day, and a build
+ * shipped with no song, album or artist pages at all.
+ */
+export const MIRRORS = ['https://musicapi.vinaxmusic.online/api', 'https://saavn.sumit.co/api', 'https://nepotuneapi.vercel.app/api'];
+/**
+ * A static-host build that writes fewer entity pages than this fails, so the
+ * host keeps the last good deployment instead of replacing every song, album
+ * and artist page with a 404 (ENTITY_MIN_PAGES=0 turns the check off).
+ */
+const MIN_PAGES = Number.isFinite(Number(process.env.ENTITY_MIN_PAGES)) && process.env.ENTITY_MIN_PAGES !== '' && process.env.ENTITY_MIN_PAGES !== undefined ? Number(process.env.ENTITY_MIN_PAGES) : 300;
+
+/** True when a build wrote too few entity pages to replace the live site. */
+export function tooFewPages(written, enabledHere, min = MIN_PAGES) {
+  return enabledHere && min > 0 && written < min;
+}
 const LANGS = ['telugu', 'hindi', 'tamil', 'punjabi', 'kannada', 'malayalam', 'bengali', 'marathi', 'bhojpuri', 'gujarati', 'urdu', 'english'];
 
 const num = (v, d) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : d);
@@ -432,11 +449,21 @@ async function main() {
     writeSitemap(urls.sort());
     await vite.close();
   }
+  return enabled ? urls.length : null;
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().then(
-    () => process.exit(0),
+    (written) => {
+      // main() answers undefined/null when entity pages are off (local builds).
+      if (typeof written === 'number' && tooFewPages(written, true)) {
+        console.error(
+          `entity pages: only ${written} written (minimum ${MIN_PAGES}) — failing the build so the live site keeps its pages. Check the catalogue sources in MIRRORS; ENTITY_MIN_PAGES=0 overrides.`,
+        );
+        process.exit(1);
+      }
+      process.exit(0);
+    },
     (e) => {
       console.warn('entity pages: skipped —', e && e.message);
       try {
@@ -444,7 +471,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       } catch {
         /* dist missing */
       }
-      process.exit(0);
+      // On the static host a build with no entity pages must not go live.
+      process.exit(enabled && MIN_PAGES > 0 ? 1 : 0);
     },
   );
 }
