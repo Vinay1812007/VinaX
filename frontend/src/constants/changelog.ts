@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.10.3': {
+    title: 'Live voice: colourful orb, model, voice and language pickers, quicker replies, keeps one…',
+    changes: [
+      { type: 'new', text: 'Live voice has a new orb in every colour that swirls faster while VinaX AI talks; tap it to stop VinaX AI mid-sentence.' },
+      { type: 'improved', text: 'Pick the model, the voice (all 30 Gemini voices) and the language right on the Live voice screen, even while it connects.' },
+      { type: 'fixed', text: 'Live voice no longer switches language on its own: it keeps to the language you pick (your device\'s by default).' },
+      { type: 'improved', text: 'Live voice starts and answers quicker, and carries on from your typed chat with your Personalisation and memory.' },
+    ],
+  },
   '1.10.2': {
     title: 'Home scrolls smoothly: no more blank shelves or a disappearing sidebar',
     changes: [
