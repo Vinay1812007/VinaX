@@ -16,6 +16,13 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.10.7': {
+    title: 'Song pages show the film in search results: "Suttamla Soosi - Gangs Of Godavari | Telugu…',
+    changes: [
+      { type: 'improved', text: 'In Google, a song\'s page now reads like other music sites: the song name, then its film, then the language.' },
+      { type: 'improved', text: 'The search snippet says what people look for: the language, the film and who sang it.' },
+    ],
+  },
   '1.10.6': {
     title: 'Songs with a dash in their link open correctly; search engines find VinaX\'s pages more…',
     changes: [
