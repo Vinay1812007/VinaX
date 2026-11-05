@@ -23,6 +23,7 @@ import { toast } from '@/store/toastStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { cleanMicLabel, closeMic, listMics, micLabelOf, MicError, micNotice, newAudioContext, openMic, silentMicNotice, watchMic, type MicDevice } from './mic';
 import { PERSONAL_MAX, usePrefs, type ReplyStyle } from './prefs';
+import { voiceLabel } from './live/liveOptions';
 import { SharedLinks } from './SharedLinks';
 import { MemorySettings } from './MemorySettings';
 import { ArtifactsIcon, CloseIcon, DownloadIcon, MicIcon } from './icons';
@@ -215,7 +216,15 @@ export function SettingsPanel({ models, groups, voice, search, section, onClose 
               {(voice.live || voice.readAloud) && live && (
                 <Field id="live" label="Live voice" hint="Also reads long replies aloud.">
                   <select id="vx-ai-set-live" aria-describedby="vx-ai-set-live-hint" value={live} onChange={(e) => prefs.set({ liveVoice: e.target.value })}>
-                    {voice.liveVoices.map((v) => <option key={v} value={v}>{v}</option>)}
+                    {voice.liveVoices.map((v) => <option key={v} value={v}>{voiceLabel(v)}</option>)}
+                  </select>
+                </Field>
+              )}
+              {voice.live && (voice.liveLanguages?.length ?? 0) > 0 && (
+                <Field id="livelang" label="Live voice language" hint="Live voice replies in this language and doesn’t switch unless you ask.">
+                  <select id="vx-ai-set-livelang" aria-describedby="vx-ai-set-livelang-hint" value={voice.liveLanguages!.some((l) => l.code === prefs.liveLanguage) ? prefs.liveLanguage : 'auto'} onChange={(e) => prefs.set({ liveLanguage: e.target.value })}>
+                    <option value="auto">Match how I speak</option>
+                    {voice.liveLanguages!.map((l) => <option key={l.code} value={l.code}>{l.native === l.name ? l.name : `${l.name} · ${l.native}`}</option>)}
                   </select>
                 </Field>
               )}

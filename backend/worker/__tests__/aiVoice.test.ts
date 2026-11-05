@@ -13,10 +13,10 @@ import { onRequestPost as liveTranscript, cleanSources, cleanTurns } from '../fu
 import { onRequestGet as getModels } from '../functions/api/ai/models';
 import { onRequestGet as getConversation } from '../functions/api/ai/conversations/[id]';
 import {
-  _resetVoiceRests, GEMINI_TTS_CHARS, inlineAudio, isMostlyArabic, liveSetup, noteVoiceFailure, ORPHEUS_MAX_CHARS, planSpeech, splitSpeech, tokenBodies,
+  _resetTokenShape, _resetVoiceRests, GEMINI_TTS_CHARS, LIVE_VOICES, inlineAudio, isMostlyArabic, liveSetup, noteVoiceFailure, ORPHEUS_MAX_CHARS, planSpeech, splitSpeech, tokenBodies,
 } from '../functions/_lib/ai/voice';
 import { ProviderError } from '../functions/_lib/ai/errors';
-import { RECAP_CHARS, VOICE_PROMPT, VOICE_SEARCH_PROMPT, voicePrompt, voiceRecapBlock } from '../functions/_lib/ai/prompt';
+import { chatContextBlock, languageRule, RECAP_CHARS, VOICE_PROMPT, VOICE_SEARCH_PROMPT, voicePrompt, voiceRecapBlock } from '../functions/_lib/ai/prompt';
 import { issueSession } from '../functions/_lib/googleAuth';
 import { resetSettingsMemo } from '../functions/_lib/settings';
 import { _resetRateLimitsForTests } from '../functions/_lib/ratelimit';
@@ -83,6 +83,7 @@ beforeEach(() => {
   resetSettingsMemo();
   _resetRateLimitsForTests();
   _resetVoiceRests();
+  _resetTokenShape();
   seen = [];
   upstream = () => new Response('{}', { status: 500 });
 });
@@ -369,6 +370,83 @@ describe('POST /api/ai/live-token', () => {
     expect(res.status).toBe(503);
     expect(await res.json()).toEqual({ error: 'voice_unavailable' });
     expect(seen).toHaveLength(1); // a refused key is not tried on every model
+  });
+
+  it('a quick setup: end of turn after 500 ms of silence and the least thinking each model takes', async () => {
+    seed();
+    upstream = (url) => (url.endsWith('/v1beta/auth_tokens') ? json({ name: 'tok' }) : new Response('', { status: 500 }));
+    const body = await (await ask({ model: 'gemini-2.5-flash-native-audio-latest' })).json();
+    expect(body.tuned).toBe(true);
+    expect(body.setup.realtimeInputConfig).toEqual({ automaticActivityDetection: { endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH', silenceDurationMs: 500 } });
+    expect(body.setup.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 });
+    const locked = JSON.parse(String(seen[0].init!.body)).liveConnectConstraints.config;
+    expect(locked.realtimeInputConfig.automaticActivityDetection.silenceDurationMs).toBe(500);
+    expect(locked.thinkingConfig).toEqual({ thinkingBudget: 0 });
+    expect(liveSetup('gemini-3.1-flash-live-preview', 'Kore', 'p', false, true).generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'minimal' });
+    // 3.8 Live takes no thinking setting, and Extended thinking keeps its own.
+    expect(liveSetup('gemini-3.8-live', 'Kore', 'p', false, true).generationConfig.thinkingConfig).toBeUndefined();
+    expect(liveSetup('gemini-3.8-live-extended-thinking', 'Kore', 'p', false, true).generationConfig.thinkingConfig).toBeUndefined();
+  });
+
+  it('asked for a lean setup (the model refused the quick one): neither speed setting', async () => {
+    seed();
+    upstream = (url) => (url.endsWith('/v1beta/auth_tokens') ? json({ name: 'tok' }) : new Response('', { status: 500 }));
+    const body = await (await ask({ model: 'gemini-2.5-flash-native-audio-latest', lean: true })).json();
+    expect(body.tuned).toBe(false);
+    expect(body.setup.realtimeInputConfig).toBeUndefined();
+    expect(body.setup.generationConfig.thinkingConfig).toBeUndefined();
+  });
+
+  it('every one of the 30 Gemini voices can be picked', async () => {
+    seed();
+    upstream = (url) => (url.endsWith('/v1beta/auth_tokens') ? json({ name: 'tok' }) : new Response('', { status: 500 }));
+    const body = await (await ask({ voice: 'Sadaltager' })).json();
+    expect(body.setup.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe('Sadaltager');
+    expect(LIVE_VOICES).toHaveLength(30);
+  });
+
+  it('holds replies to the picked language; Auto follows the user without hopping between languages', async () => {
+    seed();
+    upstream = (url) => (url.endsWith('/v1beta/auth_tokens') ? json({ name: 'tok' }) : new Response('', { status: 500 }));
+    const te = (await (await ask({ language: 'te' })).json()).setup.systemInstruction.parts[0].text as string;
+    expect(te).toContain('RESPOND IN TELUGU');
+    expect(te).toContain('Switch to another language only if the user explicitly asks you to');
+    const auto = (await (await ask({ language: 'auto' })).json()).setup.systemInstruction.parts[0].text as string;
+    expect(auto).toContain("Don't switch because of an accent");
+    expect(auto).not.toContain('RESPOND IN');
+    expect(languageRule('xx')).toBe(languageRule('auto'));
+  });
+
+  it('carries on from the typed chat, with the listener’s preferences and the owner’s instructions, before the call recap', async () => {
+    seed({}, { enabled: true, instructions: 'Mention VinaX Premium never.' });
+    upstream = (url) => (url.endsWith('/v1beta/auth_tokens') ? json({ name: 'tok' }) : new Response('', { status: 500 }));
+    const body = await (await ask({
+      context: [{ role: 'user', text: 'Plan a trip to Goa' }, { role: 'assistant', text: 'Sure: three days.' }],
+      personal: { name: 'Vin', about: 'I play drums', style: 'concise' },
+      recap: [{ role: 'user', text: 'And the beaches?' }],
+    })).json();
+    const text = body.setup.systemInstruction.parts[0].text as string;
+    expect(text).toContain("User's first name: Vin");
+    expect(text).toContain('<this_chat_so_far>');
+    expect(text).toContain('User: Plan a trip to Goa\nYou: Sure: three days.');
+    expect(text).toContain('I play drums');
+    expect(text).toContain('Mention VinaX Premium never.');
+    expect(text.indexOf('<this_chat_so_far>')).toBeLessThan(text.indexOf('<earlier_in_this_call>'));
+    expect(chatContextBlock([])).toBeNull();
+  });
+
+  it('remembers which token body Google accepted and tries it first next time', async () => {
+    seed();
+    upstream = (url, init) => {
+      if (!url.endsWith('/v1beta/auth_tokens')) return new Response('', { status: 500 });
+      return 'liveConnectConstraints' in JSON.parse(String(init?.body)) ? new Response('{"error":{"message":"Unknown name"}}', { status: 400 }) : json({ name: 'tok' });
+    };
+    await ask({});
+    expect(seen.filter((x) => x.url.endsWith('/auth_tokens'))).toHaveLength(2);
+    seen = [];
+    await ask({});
+    expect(seen.filter((x) => x.url.endsWith('/auth_tokens'))).toHaveLength(1);
+    expect('bidiGenerateContentSetup' in JSON.parse(String(seen[0].init!.body))).toBe(true);
   });
 
   it('builds the token bodies from the setup, with a start window and a lifetime', () => {

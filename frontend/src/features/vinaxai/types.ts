@@ -44,6 +44,8 @@ export interface VoiceInfo {
   liveSearch?: boolean;
   /** Live models the listener may pick (Auto tries them in this order). */
   liveModels?: Array<{ id: string; name: string; note?: string }>;
+  /** Languages Live voice can be held to. */
+  liveLanguages?: Array<{ code: string; name: string; native: string }>;
 }
 
 export type StopReason = 'end' | 'length' | 'aborted' | 'error';

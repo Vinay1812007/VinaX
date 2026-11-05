@@ -21,6 +21,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { haptic } from '@/services/native';
 import { AiError, getConversation, getModels, listProjects, PROJECTS_KEY } from './api';
 import { pathTo } from './chatState';
+import { chatContext } from './live/liveOptions';
 import { Composer, type ComposerHandle } from './Composer';
 import { AssistantMessage, UserMessage } from './Message';
 import { NowPlayingPill } from './NowPlayingPill';
@@ -575,7 +576,11 @@ export function ChatView(): ReactNode {
       {sharing && conversationId && <ShareDialog conversationId={conversationId} title={title} onClose={() => setSharing(false)} />}
       {liveOpen && (
         <Suspense fallback={<div className="vx-ai-live" role="status" aria-label="Opening Live voice" />}>
-          <LiveView conversationId={conversationId} parentMessageId={leafId} thinking={prefs.extendedThinking} voice={prefs.liveVoice} model={prefs.liveModel} micId={prefs.micId} searchAllowed={!!voice?.liveSearch} search={!!voice?.liveSearch && prefs.liveSearch} onClose={closeLive} />
+          <LiveView
+            conversationId={conversationId} parentMessageId={leafId} thinking={prefs.extendedThinking} voice={prefs.liveVoice} model={prefs.liveModel} micId={prefs.micId}
+            searchAllowed={!!voice?.liveSearch} search={!!voice?.liveSearch && prefs.liveSearch}
+            voiceInfo={voice} context={chatContext(thread)} incognito={incognito} onClose={closeLive}
+          />
         </Suspense>
       )}
     </div>

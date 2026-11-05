@@ -5,15 +5,24 @@
  * Talking over VinaX AI cuts it off (Gemini says "interrupted"); the
  * transcript is kept for the chat.
  *
+ * Speed: the token and the socket are fetched while the mic opens (not
+ * after), and the setup asks for a quick end of turn and quick thinking
+ * (voice.ts). A model that refuses that setup (an invalid-argument close) is
+ * asked again without it before the next model is tried.
+ *
  * When a model will not start (the socket closes before setupComplete), the
- * next Live model is asked for, at most three times. With web search on,
+ * next Live model is asked for, at most four times. With web search on,
  * the next model keeps search (some Live models refuse the search tool on
  * VinaX's key); only the last try goes without it, so search is never
  * dropped while a model that can search is left.
  *
- * Web search is part of the setup, so switching it during a session
- * reconnects: same mic, same transcript, and the new session is told what
- * was said so far.
+ * Web search, the model, the voice and the language are part of the setup,
+ * so switching one during a session reconnects: same mic, same transcript,
+ * and the new session is told what was said so far. A switch made while it
+ * is still connecting is applied once it is ready.
+ *
+ * `interrupt` (tapping the orb) cuts VinaX AI off without saying anything:
+ * its voice stops and the rest of that reply is dropped.
  *
  * The orb follows the real audio: an analyser on the mic and one on the
  * voice, read every frame, on a loudness scale (mic.ts). When the mic gives
@@ -30,7 +39,7 @@
  * A dropped connection reconnects (twice at most) with what was said so far,
  * and the audio is resumed when the app comes back to the front.
  */
-import { liveToken, type LiveTokenReply } from '../api';
+import { liveToken, type LiveTokenOptions, type LiveTokenReply } from '../api';
 import { closeMic, hasSignal, loudness, micLabelOf, micSource, newAudioContext, openMic, rmsOf } from '../mic';
 import { base64ToBytes, pcm16 } from '../speechStream';
 import { isNativePlatform } from '@/services/native';
@@ -59,7 +68,9 @@ export interface LiveCallbacks {
 
 /** Phones on mobile data take longer to open the socket and set up. */
 const setupTimeoutMs = (): number => (isNativePlatform() ? 20_000 : 12_000);
-const MAX_ATTEMPTS = 3;
+const MAX_ATTEMPTS = 4;
+/** Gemini closes the socket with this code when it refuses a setup field. */
+const INVALID_SETUP = 1007;
 /** Reconnects after the connection drops mid-session. */
 const MAX_RECONNECTS = 2;
 /**
@@ -70,6 +81,26 @@ const MAX_RECONNECTS = 2;
 const silentAfterMs = (): number => (isNativePlatform() ? 6_000 : 2_500);
 /** The voice counts as playing for this long after its last sample (the room's echo). */
 const ECHO_TAIL_S = 0.25;
+
+export interface LiveOptions {
+  thinking: boolean;
+  voice: string;
+  /** 'auto' or a Live model id. */
+  model?: string;
+  micId?: string;
+  search?: boolean;
+  speaker?: boolean;
+  /** 'auto' or a language code the replies are held to. */
+  language?: string;
+  /** The typed chat Live voice was opened from (its latest turns). */
+  context?: LiveTokenOptions['context'];
+  personal?: LiveTokenOptions['personal'];
+  conversationId?: string | null;
+  incognito?: boolean;
+}
+
+/** What a session was asked for (a switch differs from it). */
+interface Asked { model: string; voice: string; language: string }
 
 export class LiveSession {
   readonly transcript = new Transcript();
@@ -107,9 +138,19 @@ export class LiveSession {
   private echoOff = false;
   private readonly guard = new EchoGuard();
   private readonly native = isNativePlatform();
+  /** The model, voice and language the connected session was set up with. */
+  private asked: Asked | null = null;
+  /** The listener cut VinaX AI off: the rest of this reply is not played. */
+  private cutOff = false;
+  private readonly opts: LiveOptions;
 
-  constructor(private readonly opts: { thinking: boolean; voice: string; model?: string; micId?: string; search?: boolean; speaker?: boolean }, private readonly cb: LiveCallbacks) {
+  constructor(opts: LiveOptions, private readonly cb: LiveCallbacks) {
+    this.opts = { ...opts };
     this.wantSearch = opts.search === true;
+  }
+
+  private wanted(): Asked {
+    return { model: this.opts.model || 'auto', voice: this.opts.voice, language: this.opts.language || 'auto' };
   }
 
   /** The mic in use now. */
@@ -128,13 +169,18 @@ export class LiveSession {
     if (!this.routed && !this.makeOutput()) { this.finish('failed', 'unsupported'); return; }
     this.setState('connecting');
     document.addEventListener('visibilitychange', this.onVisibility);
+    // Connect while the mic opens: the token, the socket and Gemini's setup
+    // don't need it, and this used to wait for the mic first.
+    const opening = this.open();
+    let stream: MediaStream;
     try {
-      this.stream = await openMic(this.opts.micId ?? '');
+      stream = await openMic(this.opts.micId ?? '');
     } catch (e) {
       this.finish('mic', (e as { problem?: string }).problem ?? 'unsupported');
       return;
     }
-    if (this.ended) { closeMic(this.stream); return; }
+    if (this.ended) { closeMic(stream); return; }
+    this.stream = stream;
     if (this.routed) {
       // The WebView is in call mode now: put the voice on the loudspeaker
       // (or the earpiece the listener chose), then make the voice's context,
@@ -145,12 +191,17 @@ export class LiveSession {
       this.cb.onRoute?.(this.route);
       if (!this.makeOutput()) { this.finish('failed', 'unsupported'); return; }
     }
-    if (!(await this.open())) return;
     try {
       await this.startMic();
     } catch {
       this.finish('mic', 'unsupported');
+      return;
     }
+    if (!(await opening) || this.ended) return;
+    this.setState('listening');
+    this.cb.onMic?.({ label: this.micLabel, silent: false });
+    this.meterLoop();
+    this.applySwitch();
   }
 
   /** The voice's audio context, its volume and its meter; false when there is none. */
@@ -186,13 +237,21 @@ export class LiveSession {
   private async open(recap?: Array<{ role: 'user' | 'assistant'; text: string }>, fail: 'failed' | 'dropped' = 'failed'): Promise<boolean> {
     const skip: string[] = [];
     let search = this.wantSearch;
+    let lean = false;
     for (let attempt = 0; attempt < MAX_ATTEMPTS && !this.ended; attempt += 1) {
+      const asked = this.wanted();
+      const o = this.opts;
       let token: LiveTokenReply;
       try {
         token = await liveToken({
-          thinking: this.opts.thinking, skip, voice: this.opts.voice, search,
-          ...(this.opts.model && this.opts.model !== 'auto' ? { model: this.opts.model } : {}),
+          thinking: o.thinking, skip, voice: asked.voice, search, language: asked.language,
+          ...(asked.model !== 'auto' ? { model: asked.model } : {}),
           ...(recap?.length ? { recap } : {}),
+          ...(o.context?.length ? { context: o.context } : {}),
+          ...(o.personal ? { personal: o.personal } : {}),
+          ...(o.conversationId ? { conversationId: o.conversationId } : {}),
+          ...(o.incognito ? { incognito: true } : {}),
+          ...(lean ? { lean: true } : {}),
         });
       } catch (e) {
         this.finish(fail, (e as { code?: string }).code ?? 'voice_unavailable');
@@ -201,7 +260,11 @@ export class LiveSession {
       if (this.ended) return false;
       this.model = token.model;
       this.search = token.search === true;
-      if (await this.connect(token)) return true;
+      const closed = await this.connect(token);
+      if (closed === null) { this.asked = asked; return true; }
+      // A refused setup may be the speed settings: the same model without them.
+      if (token.tuned && !lean && closed === INVALID_SETUP) { lean = true; continue; }
+      lean = false;
       skip.push(token.model.id);
       // The last try goes without search, in case search is what fails.
       if (attempt === MAX_ATTEMPTS - 2) search = false;
@@ -220,6 +283,23 @@ export class LiveSession {
     await this.reconnect('failed');
   }
 
+  /**
+   * Switch the model, the voice or the language: like search, this
+   * reconnects; while it is still connecting, it is applied once ready.
+   */
+  setOptions(patch: { model?: string; voice?: string; language?: string }): void {
+    Object.assign(this.opts, patch);
+    this.applySwitch();
+  }
+
+  /** Reconnect when the listener has switched something since this session was set up. */
+  private applySwitch(): void {
+    if (this.ended || this.reconnecting || !this.ready || !this.asked) return;
+    const now = this.wanted();
+    if (now.model === this.asked.model && now.voice === this.asked.voice && now.language === this.asked.language) return;
+    void this.reconnect('failed');
+  }
+
   /** A new socket (a fresh token), same mic, same transcript; the new session is told what was said. */
   private async reconnect(fail: 'failed' | 'dropped'): Promise<void> {
     this.reconnecting = true;
@@ -234,6 +314,7 @@ export class LiveSession {
     const ok = await this.open(recap, fail);
     this.reconnecting = false;
     if (ok && !this.ended) this.setState('listening');
+    if (ok) this.applySwitch();
     if (this.droppedWhileReconnecting) {
       this.droppedWhileReconnecting = false;
       // (this.open() replaced the socket; TypeScript still thinks it is the null set above.)
@@ -254,30 +335,33 @@ export class LiveSession {
     await this.reconnect('dropped');
   }
 
-  /** Open the socket and send the setup; true once Gemini says it is ready. */
-  private connect(token: LiveTokenReply): Promise<boolean> {
+  /**
+   * Open the socket and send the setup: null once Gemini says it is ready,
+   * else the close code it gave (0 when it timed out).
+   */
+  private connect(token: LiveTokenReply): Promise<number | null> {
     return new Promise((resolve) => {
       let settled = false;
-      const settle = (ok: boolean) => {
+      const settle = (closed: number | null) => {
         if (settled) return;
         settled = true;
         window.clearTimeout(timer);
-        resolve(ok);
+        resolve(closed);
       };
       const ws = new WebSocket(`${token.url}?access_token=${encodeURIComponent(token.token)}`);
       ws.binaryType = 'arraybuffer';
       this.ws = ws;
-      const timer = window.setTimeout(() => { settle(false); try { ws.close(); } catch { /* closed */ } }, setupTimeoutMs());
+      const timer = window.setTimeout(() => { settle(0); try { ws.close(); } catch { /* closed */ } }, setupTimeoutMs());
       ws.onopen = () => ws.send(JSON.stringify({ setup: token.setup }));
       ws.onmessage = (e) => {
         const raw = typeof e.data === 'string' ? e.data : new TextDecoder().decode(e.data as ArrayBuffer);
         for (const ev of parseServerMessage(raw)) {
-          if (ev.type === 'ready') { this.ready = true; settle(true); }
+          if (ev.type === 'ready') { this.ready = true; settle(null); }
           this.handle(ev);
         }
       };
-      ws.onclose = () => {
-        if (!settled) { settle(false); return; }
+      ws.onclose = (e) => {
+        if (!settled) { settle(e?.code ?? 0); return; }
         if (this.ws === ws) void this.recover();
       };
       ws.onerror = () => { /* onclose follows */ };
@@ -306,9 +390,6 @@ export class LiveSession {
     silent.gain.value = 0;
     this.tap.connect(silent).connect(inCtx.destination);
     this.plugMic(source);
-    this.setState('listening');
-    this.cb.onMic?.({ label: this.micLabel, silent: false });
-    this.meterLoop();
   }
 
   /**
@@ -399,11 +480,12 @@ export class LiveSession {
 
   private handle(ev: LiveEvent): void {
     switch (ev.type) {
-      case 'audio': this.play(ev.data); break;
+      case 'audio': if (!this.cutOff) this.play(ev.data); break;
       case 'heard': this.transcript.heard(ev.text); this.showCaptions(); break;
-      case 'said': this.transcript.said(ev.text); this.showCaptions(); break;
-      case 'interrupted': this.silence(); break;
-      case 'turnComplete': this.transcript.complete(); this.cb.onWeb?.(this.transcript.web()); break;
+      // What VinaX AI would have said after it was cut off was never heard: leave it out.
+      case 'said': if (!this.cutOff) { this.transcript.said(ev.text); this.showCaptions(); } break;
+      case 'interrupted': this.cutOff = false; this.silence(); break;
+      case 'turnComplete': this.cutOff = false; this.transcript.complete(); this.cb.onWeb?.(this.transcript.web()); break;
       case 'searching': this.transcript.searching(); this.cb.onWeb?.(this.transcript.web()); break;
       case 'sources': this.transcript.found(ev); this.cb.onWeb?.(this.transcript.web()); break;
       case 'goAway': this.finish('time'); break;
@@ -444,6 +526,13 @@ export class LiveSession {
     this.playing.clear();
     this.nextAt = 0;
     if (!this.ended) this.setState('listening');
+  }
+
+  /** The listener tapped to cut VinaX AI off: its voice stops now and the rest of this reply is dropped. */
+  interrupt(): void {
+    if (this.ended || this.state !== 'speaking') return;
+    this.cutOff = true;
+    this.silence();
   }
 
   setMuted(muted: boolean): void {

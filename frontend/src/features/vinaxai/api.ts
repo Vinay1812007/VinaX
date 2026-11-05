@@ -232,10 +232,31 @@ export interface LiveTokenReply {
   model: { id: string; name: string };
   /** The setup carries the web search tool. */
   search?: boolean;
+  /** The setup carries the speed settings (quick end of turn, quick thinking). */
+  tuned?: boolean;
   expiresAt: string;
 }
 
-export const liveToken = (opts: { thinking: boolean; skip: string[]; voice?: string; model?: string; search?: boolean; recap?: Array<{ role: 'user' | 'assistant'; text: string }> }): Promise<LiveTokenReply> =>
+export interface LiveTokenOptions {
+  thinking: boolean;
+  skip: string[];
+  voice?: string;
+  model?: string;
+  search?: boolean;
+  /** What was said earlier in this call (a reconnect). */
+  recap?: Array<{ role: 'user' | 'assistant'; text: string }>;
+  /** The typed chat Live voice was opened from. */
+  context?: Array<{ role: 'user' | 'assistant'; text: string }>;
+  /** 'auto' or a language code the replies are held to. */
+  language?: string;
+  /** Without the speed settings (the model refused them). */
+  lean?: boolean;
+  personal?: { name?: string; about?: string; instructions?: string; style?: string };
+  conversationId?: string | null;
+  incognito?: boolean;
+}
+
+export const liveToken = (opts: LiveTokenOptions): Promise<LiveTokenReply> =>
   call('/live-token', { method: 'POST', body: JSON.stringify({ ...opts, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, locale: navigator.language }) });
 
 export const saveLiveTranscript = (body: { conversationId: string | null; parentMessageId?: string; model: string; turns: Array<{ role: 'user' | 'assistant'; text: string }> }): Promise<{ conversationId: string; messageIds: string[] }> =>

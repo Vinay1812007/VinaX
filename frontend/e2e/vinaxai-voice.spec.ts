@@ -214,7 +214,7 @@ test('Live voice: talks over Gemini Live’s protocol, shows captions, and saves
   const audio = fromPage.find((m) => (m.realtimeInput as { audio?: unknown } | undefined)?.audio) as { realtimeInput: { audio: { mimeType: string; data: string } } };
   expect(audio.realtimeInput.audio.mimeType).toBe('audio/pcm;rate=16000');
   expect(audio.realtimeInput.audio.data.length).toBeGreaterThan(100);
-  await expect(live.getByText('Gemini 3.8 Live')).toBeVisible();
+  await expect(live.locator('.vx-ai-live-model')).toHaveText('Gemini 3.8 Live');
 
   await live.getByRole('button', { name: 'End' }).click();
   await expect(live).toHaveCount(0);
