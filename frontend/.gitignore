@@ -26,3 +26,6 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
+
+# SEO page store for the daily build (GitHub Actions cache)
+.seo-corpus

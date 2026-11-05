@@ -1,0 +1,131 @@
+# Daily SEO pages — grows the website's song, album and artist pages.
+#
+# Every night (02:00 India time) this builds the website with its page store
+# (frontend/scripts/prerender-entities.mjs) restored from the Actions cache,
+# rebuilds the charts' pages, re-renders the 1,000 oldest pages, adds up to
+# 3,000 new pages that the others link to, and deploys to Cloudflare Pages.
+# The site grows until ENTITY_MAX_TOTAL (17,000 on the Free plan, whose limit
+# is 20,000 files per site; the app itself is about 560 files).
+#
+# It costs no Worker requests: pages are rendered from VinaX's own catalogue
+# API (musicapi.vinaxmusic.online, on Render) and the live pages are read from
+# the static host. Cloudflare's own builds (every push, the console's robots
+# button) keep working: each one first downloads the pages the live site has,
+# so it never shrinks the site, and a build that would drop more than 20% of
+# the live pages fails and leaves the live site as it is.
+#
+# Google decides how fast it crawls and indexes; this makes the pages exist,
+# lists them in the sitemap and, through the Worker's indexnow job, tells
+# Bing and Yandex about new ones.
+#
+# IT IS INERT UNTIL CONFIGURED: with no CLOUDFLARE_API_TOKEN secret it says so
+# and succeeds. The token (the one the Worker deploy uses) needs
+# "Account → Cloudflare Pages → Edit" as well as the Workers permissions.
+#
+# Actions pinned by SHA — rotate via Dependabot (github-actions ecosystem).
+name: Daily SEO pages
+
+on:
+  schedule:
+    - cron: '30 20 * * *'
+  workflow_dispatch:
+    inputs:
+      new_pages:
+        description: 'New pages to add this run (0 = only keep and refresh)'
+        type: number
+        default: 3000
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seo-pages
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check whether deployment is configured
+        id: config
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLOUDFLARE_API_TOKEN is not set, so the daily SEO pages are not built. See the header of this file."
+          fi
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.config.outputs.configured == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - if: steps.config.outputs.configured == 'true'
+        run: npm ci
+
+      - name: Check the token can deploy the website
+        if: steps.config.outputs.configured == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if ! npx wrangler pages deployment list --project-name vinax > /tmp/pages.txt 2>&1; then
+            tail -5 /tmp/pages.txt
+            echo "::error::The CLOUDFLARE_API_TOKEN secret cannot read the vinax Pages project. Edit the token in Cloudflare (My Profile → API Tokens) and add Account → Cloudflare Pages → Edit."
+            exit 1
+          fi
+
+      - name: Restore the page store
+        if: steps.config.outputs.configured == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: frontend/.seo-corpus
+          key: seo-corpus-${{ github.run_id }}
+          restore-keys: seo-corpus-
+
+      - name: Build the website with its SEO pages
+        if: steps.config.outputs.configured == 'true'
+        env:
+          PRERENDER_ENTITIES: '1'
+          VINAX_ROBOTS_URL: https://www.vinaxmusic.online/api/robots
+          ENTITY_CORPUS_DIR: .seo-corpus
+          ENTITY_MAX_TOTAL: '17000'
+          ENTITY_MAX_LINKED: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.new_pages) || '3000' }}
+          ENTITY_REFRESH: '1000'
+          ENTITY_BUDGET_MS: '2400000'
+        run: npm run build
+
+      - name: Check the host's file limit
+        if: steps.config.outputs.configured == 'true'
+        run: |
+          files=$(find dist -type f | wc -l)
+          pages=$(grep -o '<loc>' dist/entity-pages.xml | wc -l)
+          echo "::notice title=SEO pages::${pages} song, album and artist pages; ${files} files in the deployment (limit 20000)"
+          if [ "$files" -gt 19900 ]; then echo "::error::${files} files is over the Pages limit; lower ENTITY_MAX_TOTAL."; exit 1; fi
+
+      # Saved before the deploy: the pages rendered tonight are kept even if
+      # the upload fails, and the next run deploys them.
+      - name: Save the page store
+        if: steps.config.outputs.configured == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: frontend/.seo-corpus
+          key: seo-corpus-${{ github.run_id }}
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.config.outputs.configured == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler pages deploy dist --project-name vinax --branch main --commit-hash "$GITHUB_SHA" --commit-message "Daily SEO pages" --commit-dirty=true

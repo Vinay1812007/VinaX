@@ -36,7 +36,7 @@
 // spends nothing from the daily request quota. The songs each hub lists are
 // built first, so a hub's links land on real pages.
 /* global fetch, AbortController, setTimeout, clearTimeout, Request, Response */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
@@ -73,7 +73,31 @@ const MAX_ARTISTS = num(process.env.ENTITY_MAX_ARTISTS, 400);
 /** Songs linked from the hubs, built ahead of the chart picks (V2 1.0). */
 const MAX_HUB_SONGS = num(process.env.ENTITY_MAX_HUB_SONGS, 1500);
 /** SEO 2026-11 — pages the built pages link to most, built next while the time budget lasts. */
-const MAX_LINKED = num(process.env.ENTITY_MAX_LINKED, 1500);
+/** Like num(), but 0 is a real value (a push build adds no new pages). */
+const num0 = (v, d) => (v !== undefined && v !== '' && Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : d);
+// New pages per build. Cloudflare's own builds (every push) add a few; the
+// daily GitHub job (.github/workflows/seo-pages.yml) sets 3,000.
+const MAX_LINKED = num0(process.env.ENTITY_MAX_LINKED, 300);
+/**
+ * SEO 2026-11 (daily growth). Every build keeps the pages the site already
+ * has: a page store (ENTITY_CORPUS_DIR; the daily GitHub job caches it between
+ * runs) holds each page's unpruned HTML, and anything the live sitemap lists
+ * that the store lacks is downloaded from the live site first
+ * (ENTITY_SEED_FROM; static files, no Worker requests; '' turns it off). The
+ * charts' pages are rebuilt, the ENTITY_REFRESH oldest stored pages are
+ * re-rendered, and up to ENTITY_MAX_LINKED new pages the others link to are
+ * added, until ENTITY_MAX_TOTAL pages, and never past the static host's file
+ * limit (PAGES_FILE_LIMIT, 20,000 on the Free plan).
+ */
+const CORPUS_DIR = resolve(process.env.ENTITY_CORPUS_DIR || 'node_modules/.cache/vinax/seo-corpus');
+const SEED_FROM = (process.env.ENTITY_SEED_FROM ?? ORIGIN).replace(/\/$/, '');
+const MAX_TOTAL = num(process.env.ENTITY_MAX_TOTAL, 17_000);
+const REFRESH = num0(process.env.ENTITY_REFRESH, 0);
+const FILE_LIMIT = num(process.env.PAGES_FILE_LIMIT, 20_000);
+/** Files kept free under the host's limit, for whatever else a release adds. */
+const FILE_MARGIN = 300;
+/** A build may not drop more than this share of the pages the live site has. */
+const KEEP_SHARE = 0.8;
 const CONCURRENCY = num(process.env.ENTITY_CONCURRENCY, 8);
 const BUDGET_MS = num(process.env.ENTITY_BUDGET_MS, 12 * 60_000);
 const WORKER_FN = resolve(dirname(fileURLToPath(import.meta.url)), '../../backend/worker/functions');
@@ -318,6 +342,129 @@ export function injectSection(html, section) {
   return html.slice(0, at) + section + html.slice(at);
 }
 
+/** The <loc> paths ("/song/x-1") of an entity sitemap on this site. */
+export function sitemapPaths(xml) {
+  const out = [];
+  for (const m of String(xml).matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)) {
+    if (!m[1].startsWith(`${ORIGIN}/`)) continue;
+    const path = m[1].slice(ORIGIN.length);
+    if (entityKey(path)) out.push(path);
+  }
+  return out;
+}
+
+/**
+ * How many entity pages this build may hold: the configured total, but never
+ * so many that the deployment passes the host's file limit.
+ */
+export function pageRoom(otherFiles, maxTotal = MAX_TOTAL, fileLimit = FILE_LIMIT, margin = FILE_MARGIN) {
+  return Math.max(0, Math.min(maxTotal, fileLimit - margin - otherFiles));
+}
+
+/**
+ * The new pages to build: the ones built pages link to most, that are neither
+ * built nor already tried, at most `max` and only while `room` lasts.
+ */
+export function nextPages(links, built, tried, room, max) {
+  const take = Math.max(0, Math.min(max, room));
+  return [...links.entries()]
+    .filter(([k]) => !built.has(k) && !tried.has(k))
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, take)
+    .map(([k]) => k.split(':'));
+}
+
+/** The fewest pages this build may write: the floor, and most of what is live. */
+export function minimumPages(liveCount, floor = MIN_PAGES, keep = KEEP_SHARE) {
+  return floor > 0 ? Math.max(floor, Math.floor((Number(liveCount) || 0) * keep)) : 0;
+}
+
+/** Every file under a directory, counted (the static host's limit is per file). */
+function countFiles(dir) {
+  let n = 0;
+  for (const e of readdirSync(dir, { withFileTypes: true })) n += e.isDirectory() ? countFiles(join(dir, e.name)) : 1;
+  return n;
+}
+
+/** The page store: manifest + one unpruned HTML file per page. */
+function storeFile(path) {
+  return join(CORPUS_DIR, 'pages', `${path.slice(1)}.html`);
+}
+function loadStore() {
+  try {
+    const m = JSON.parse(readFileSync(join(CORPUS_DIR, 'manifest.json'), 'utf8'));
+    const out = new Map();
+    for (const [key, v] of Object.entries(m?.pages ?? {})) {
+      if (v && typeof v.path === 'string' && entityKey(v.path) === key && existsSync(storeFile(v.path))) out.set(key, { path: v.path, at: Number(v.at) || 0 });
+    }
+    return out;
+  } catch {
+    return new Map();
+  }
+}
+function saveStore(store) {
+  mkdirSync(CORPUS_DIR, { recursive: true });
+  const pages = {};
+  for (const [key, v] of store) pages[key] = { path: v.path, at: v.at };
+  writeFileSync(join(CORPUS_DIR, 'manifest.json'), JSON.stringify({ version: 1, pages }));
+}
+function putStore(store, key, path, html, at) {
+  const f = storeFile(path);
+  mkdirSync(dirname(f), { recursive: true });
+  writeFileSync(f, html);
+  store.set(key, { path, at });
+}
+
+/**
+ * Pages the live site lists but the store lacks, downloaded from the live
+ * site (static files: no Worker requests). Answers how many the live sitemap
+ * lists, or null when it could not be read.
+ */
+async function seedFromLive(store, skip) {
+  if (!SEED_FROM) return null;
+  let paths;
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 20_000);
+    const r = await fetch(`${SEED_FROM}/entity-pages.xml`, { signal: ctrl.signal });
+    clearTimeout(t);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    paths = sitemapPaths(await r.text());
+  } catch (e) {
+    console.warn(`entity pages: could not read the live sitemap (${e && e.message}) — building without it`);
+    return null;
+  }
+  const todo = paths.filter((p) => {
+    const k = entityKey(p);
+    return k && !store.has(k) && !skip.has(k);
+  });
+  let got = 0;
+  let next = 0;
+  const worker = async () => {
+    while (next < todo.length) {
+      const path = todo[next++];
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 15_000);
+      try {
+        const r = await fetch(`${SEED_FROM}${path}`, { signal: ctrl.signal, headers: { 'user-agent': 'VinaX-build' } });
+        const html = r.ok ? await r.text() : '';
+        // Only the real page (its own canonical), never the 404 app shell.
+        if (html.includes('id="seo-content"') && html.includes(`<link rel="canonical" href="${ORIGIN}${path}"`)) {
+          putStore(store, entityKey(path), path, html, 0);
+          got++;
+        }
+      } catch {
+        /* that page is rebuilt or added again later */
+      } finally {
+        clearTimeout(t);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: 16 }, worker));
+  console.log(`entity pages: the live site lists ${paths.length}; ${todo.length} were missing here, ${got} downloaded`);
+  return paths.length;
+}
+
 /** Where a rendered page path ("/song/x-1") is written: a flat .html file. */
 export function fileFor(path) {
   if (!/^\/(song|album|artist)\/[\w-]+$/.test(path)) return null;
@@ -379,6 +526,8 @@ async function main() {
   const vite = await createServer({ logLevel: 'error', server: { middlewareMode: true }, appType: 'custom' });
   const urls = [];
   let failed = 0;
+  /** How many entity pages the live site lists (null when unknown). */
+  let liveCount = null;
   try {
     await writeStaticSitemaps(vite);
     const render = await vite.ssrLoadModule(RENDER_TS);
@@ -394,11 +543,16 @@ async function main() {
     const fromHubs = hubSongs.slice(0, MAX_HUB_SONGS).map((id) => ['song', id]);
     const have = new Set(fromHubs.map(([, id]) => id));
     const todo = [...fromHubs, ...picked.filter(([t, id]) => t !== 'song' || !have.has(id))];
-    console.log(`entity pages: ${todo.length} to build (${CONCURRENCY} at a time, ${Math.round(BUDGET_MS / 1000)} s budget)`);
+    const room = pageRoom(countFiles(DIST));
+    // The pages the site already has: the store, plus whatever the live sitemap lists that it lacks.
+    const store = loadStore();
+    liveCount = await seedFromLive(store, new Set(todo.map(([t, id]) => `${t}:${id}`)));
+    console.log(`entity pages: ${store.size} kept from earlier builds; ${todo.length} chart pages to rebuild; room for ${room} (${CONCURRENCY} at a time, ${Math.round(BUDGET_MS / 1000)} s budget)`);
     /** "type:id" → the built page's path; and every built page's links, counted. */
     const built = new Map();
     const tried = new Set();
     const links = new Map();
+    let rendered = 0;
     const buildAll = async (list) => {
       let next = 0;
       const worker = async () => {
@@ -406,6 +560,7 @@ async function main() {
           const [type, id] = list[next++];
           const key = `${type}:${id}`;
           if (tried.has(key)) continue;
+          if (!built.has(key) && built.size >= room) continue;
           tried.add(key);
           try {
             const page = await render.entityPage(type, id, shell);
@@ -414,11 +569,16 @@ async function main() {
               failed++;
               continue;
             }
+            const k = entityKey(page.path) ?? key;
+            // A song renamed in the catalogue gets a new address; drop the old copy.
+            const old = store.get(k);
+            if (old && old.path !== page.path) store.delete(k);
             mkdirSync(dirname(file), { recursive: true });
             writeFileSync(file, page.html);
-            urls.push(page.path);
-            built.set(entityKey(page.path) ?? key, page.path);
+            putStore(store, k, page.path, page.html, Date.now());
+            built.set(k, page.path);
             linkedEntities(page.html, links);
+            rendered++;
           } catch {
             failed++;
           }
@@ -428,39 +588,65 @@ async function main() {
       return list.length - next;
     };
     let skipped = await buildAll(todo);
-    // SEO 2026-11 — then the pages the built ones link to most (an artist's
-    // other albums, an album's other songs), so their links lead somewhere.
-    if (!skipped) {
-      const linked = [...links.entries()]
-        .filter(([k]) => !built.has(k) && !tried.has(k))
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, MAX_LINKED)
+    // The oldest kept pages are rendered again, so their text and links stay current.
+    if (REFRESH > 0) {
+      const oldest = [...store.entries()]
+        .filter(([k]) => !tried.has(k))
+        .sort((a, b) => a[1].at - b[1].at)
+        .slice(0, REFRESH)
         .map(([k]) => k.split(':'));
-      console.log(`entity pages: ${linked.length} more that built pages link to`);
-      skipped = await buildAll(linked);
+      skipped += await buildAll(oldest);
     }
+    // Everything else the site had goes out as it was.
+    let kept = 0;
+    for (const [k, v] of store) {
+      if (built.has(k) || built.size >= room) continue;
+      const file = fileFor(v.path);
+      if (!file) continue;
+      let html;
+      try {
+        html = readFileSync(storeFile(v.path), 'utf8');
+      } catch {
+        continue;
+      }
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, html);
+      built.set(k, v.path);
+      linkedEntities(html, links);
+      kept++;
+    }
+    // SEO 2026-11 — then new pages: the ones built pages link to most (an
+    // artist's other albums, an album's other songs), so links lead somewhere.
+    const fresh = nextPages(links, built, tried, room - built.size, MAX_LINKED);
+    console.log(`entity pages: ${kept} kept as they were; ${fresh.length} new ones that built pages link to`);
+    if (!skipped) skipped = await buildAll(fresh);
+    urls.push(...built.values());
     console.log(
-      `entity pages: wrote ${urls.length} (${failed} unavailable${skipped > 0 ? `, ${skipped} left for the time budget` : ''}) in ${Math.round((Date.now() - started) / 1000)} s`,
+      `entity pages: ${urls.length} in this build (${rendered} rendered, ${kept} kept, ${failed} unavailable${skipped > 0 ? `, ${skipped} left for the time budget` : ''}) in ${Math.round((Date.now() - started) / 1000)} s`,
     );
     finishPages(built, info);
+    saveStore(store);
   } catch (e) {
     console.warn('entity pages: stopped early —', e && e.message);
   } finally {
     writeSitemap(urls.sort());
     await vite.close();
   }
-  return enabled ? urls.length : null;
+  return enabled ? { written: urls.length, live: liveCount } : null;
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().then(
-    (written) => {
+    (result) => {
       // main() answers undefined/null when entity pages are off (local builds).
-      if (typeof written === 'number' && tooFewPages(written, true)) {
-        console.error(
-          `entity pages: only ${written} written (minimum ${MIN_PAGES}) — failing the build so the live site keeps its pages. Check the catalogue sources in MIRRORS; ENTITY_MIN_PAGES=0 overrides.`,
-        );
-        process.exit(1);
+      if (result && typeof result.written === 'number') {
+        const min = minimumPages(result.live);
+        if (tooFewPages(result.written, true, min)) {
+          console.error(
+            `entity pages: only ${result.written} in this build (minimum ${min}; the live site lists ${result.live ?? 'an unknown number'}) — failing the build so the live site keeps its pages. Check the catalogue sources in MIRRORS; ENTITY_MIN_PAGES=0 overrides.`,
+          );
+          process.exit(1);
+        }
       }
       process.exit(0);
     },

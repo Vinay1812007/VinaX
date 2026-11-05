@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — a plain .mjs build script, no types
-import { HUB_PATHS, MIRRORS, STATIC_SITEMAPS, entityKey, songIdOf, tooFewPages, fileFor, hubFileFor, hubSongIds, injectSection, linkedEntities, pickEntities, pruneEntityLinks, songSections } from '../../scripts/prerender-entities.mjs';
+import { HUB_PATHS, MIRRORS, STATIC_SITEMAPS, entityKey, minimumPages, nextPages, pageRoom, sitemapPaths, songIdOf, tooFewPages, fileFor, hubFileFor, hubSongIds, injectSection, linkedEntities, pickEntities, pruneEntityLinks, songSections } from '../../scripts/prerender-entities.mjs';
 
 type Song = { id: string; name: string; language: string; playCount: number; album?: { id: string }; artists?: { primary: Array<{ id: string }> } };
 const song = (id: string, name: string, plays: number, extra: Partial<Song> = {}): Song => ({
@@ -139,5 +139,34 @@ describe('2026-11-05 — a build without catalogue pages never goes live', () =>
     expect(tooFewPages(1700, true, 300)).toBe(false);
     expect(tooFewPages(0, false, 300)).toBe(false); // local builds skip entity pages
     expect(tooFewPages(0, true, 0)).toBe(false); // ENTITY_MIN_PAGES=0
+  });
+});
+
+describe('SEO daily growth — keep what is live, add what pages link to, stay under the file limit', () => {
+  it('reads entity paths from a sitemap, on this site only', () => {
+    const xml = '<urlset><url><loc>https://www.vinaxmusic.online/song/a-1</loc></url><url><loc>https://www.vinaxmusic.online/charts/</loc></url><url><loc>https://evil.example/song/x-1</loc></url><url><loc> https://www.vinaxmusic.online/album/b-2 </loc></url></urlset>';
+    expect(sitemapPaths(xml)).toEqual(['/song/a-1', '/album/b-2']);
+  });
+
+  it('never plans more pages than the host\'s file limit allows', () => {
+    expect(pageRoom(1500, 17000, 20000, 300)).toBe(17000);
+    expect(pageRoom(4000, 17000, 20000, 300)).toBe(15700);
+    expect(pageRoom(25000, 17000, 20000, 300)).toBe(0);
+  });
+
+  it('adds the most-linked pages that are not built or tried yet, within room and the daily cap', () => {
+    const links = new Map([['album:1', 9], ['song:A', 5], ['artist:7', 7], ['song:B', 1]]);
+    const built = new Map([['album:1', '/album/x-1']]);
+    const tried = new Set(['song:B']);
+    expect(nextPages(links, built, tried, 10, 3000)).toEqual([['artist', '7'], ['song', 'A']]);
+    expect(nextPages(links, built, tried, 1, 3000)).toEqual([['artist', '7']]);
+    expect(nextPages(links, built, tried, 10, 0)).toEqual([]);
+  });
+
+  it('fails a build that would drop most of the live pages', () => {
+    expect(minimumPages(null, 300)).toBe(300);
+    expect(minimumPages(17000, 300)).toBe(13600);
+    expect(minimumPages(100, 300)).toBe(300);
+    expect(minimumPages(17000, 0)).toBe(0); // ENTITY_MIN_PAGES=0 turns every check off
   });
 });
