@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { entityPage, matchHub, MIRROR_BASES, renderEntity, renderHub, songIdOf, useCatalogBases } from './render';
+import { entityPage, matchHub, MIRROR_BASES, renderEntity, renderHub, songDesc, songIdOf, songTitle, useCatalogBases } from './render';
 
 const shell = readFileSync(resolve(__dirname, '../../../index.html'), 'utf8');
 
@@ -37,7 +37,7 @@ describe('renderEntity — song', () => {
     const res = await renderEntity('song', 'chukkala-chunni-abc123', req(), env());
     const html = await res.text();
 
-    expect(html).toContain('<title>Chukkala Chunni — Anurag Kulkarni · Telugu Song | VinaX</title>');
+    expect(html).toContain('<title>Chukkala Chunni - Sr Kalyanamandapam | Telugu Song | VinaX</title>');
     expect(html).toContain('Telugu song');
     // The share-card bug: the shell's generic og:title used to survive ahead
     // of ours — crawlers take the FIRST, so shares showed the site card.
@@ -64,7 +64,7 @@ describe('renderEntity — song', () => {
     });
     const res = await renderEntity('song', 'abc123', req(), env());
     const html = await res.text();
-    expect(html).toContain('Chukkala Chunni — Anurag Kulkarni');
+    expect(html).toContain('<title>Chukkala Chunni - Sr Kalyanamandapam | Telugu Song | VinaX</title>');
   });
 
   it('serves the untouched shell when every mirror is down (fail-soft)', async () => {
@@ -384,5 +384,28 @@ describe('songIdOf — song ids may contain a dash', () => {
     expect(songIdOf('abc123')).toBe('abc123');
     expect(songIdOf('gone-x-404')).toBe('404');
     expect(songIdOf('H7SU6-O2')).toBe('H7SU6-O2'); // a bare id with no slug
+  });
+});
+
+describe('SEO 2026-11 — song titles say the film, as people search for it', () => {
+  it('puts the film or album after the song', () => {
+    expect(songTitle('Suttamla Soosi', 'Gangs Of Godavari', 'Anurag Kulkarni, Yuvan Shankar Raja', 'telugu')).toBe('Suttamla Soosi - Gangs Of Godavari | Telugu Song | VinaX');
+  });
+  it('reads the film out of a "(From …)" album, and keeps a name that already says it', () => {
+    expect(songTitle('Suttamla Soosi - Official Remix', 'Suttamla Soosi - Official Remix (From "Gangs Of Godavari")', 'Yuvan Shankar Raja', 'telugu')).toBe('Suttamla Soosi - Official Remix - Gangs Of Godavari | VinaX'); // 72 characters with the language, so it is dropped
+    expect(songTitle('Mahi (From "Deewana")', 'Evergreen Bangla Romantic Movie Songs', 'Prasenjit Mallick', 'bengali')).toBe('Mahi (From "Deewana") | Bengali Song | VinaX');
+  });
+  it('names the lead singer when the album is the song itself', () => {
+    expect(songTitle('Aaho Raja', 'Aaho Raja', 'Anirudh Ravichander, Arivu', 'tamil')).toBe('Aaho Raja - Anirudh Ravichander | Tamil Song | VinaX');
+  });
+  it('drops the language when the title would run long', () => {
+    const t = songTitle('Shiv Rudrashtakam Stotram (Namami Shamishaan Nirvana Roopam)', 'Shiv Bhajans Collection Vol 2', 'Anup Jalota', 'sanskrit');
+    expect(t).toBe('Shiv Rudrashtakam Stotram (Namami Shamishaan Nirvana Roopam) - Shiv Bhajans Collection Vol 2 | VinaX');
+  });
+  it('describes the song the way search results do', () => {
+    expect(songDesc('Suttamla Soosi', 'Gangs Of Godavari', 'Anurag Kulkarni, Yuvan Shankar Raja', 'telugu')).toBe(
+      'Listen to Suttamla Soosi online. Suttamla Soosi is a Telugu song from Gangs Of Godavari, sung by Anurag Kulkarni and Yuvan Shankar Raja. Stream it free on…',
+    );
+    expect(songDesc('Aaho Raja', 'Aaho Raja', undefined, undefined)).toBe('Listen to Aaho Raja online. Aaho Raja is a song. Stream it free on VinaX, with lyrics and no subscription.');
   });
 });

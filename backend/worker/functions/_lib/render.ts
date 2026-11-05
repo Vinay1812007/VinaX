@@ -529,7 +529,7 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
       ...(album && albumId ? [{ name: String(album), item: `${ORIGIN}/album/${slugify(album)}-${albumId}` }] : []),
       { name: String(d.name) },
     ],
-    title: `${d.name}${artist ? ` — ${artist}` : ''}${lang ? ` · ${capWord(lang)} Song` : ''} | VinaX`,
+    title: songTitle(d.name, album, artist, lang),
     ogType: 'music.song',
     music: [
       ...(duration ? [['music:duration', String(Math.floor(duration))] as [string, string]] : []),
@@ -537,7 +537,7 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
       ...(album ? [['music:album', album] as [string, string]] : []),
       ...(year ? [['music:release_date', year] as [string, string]] : []),
     ],
-    desc: `Listen to ${d.name}${artist ? ` by ${artist}` : ''}${album ? ` from ${album}` : ''}${year ? ` (${year})` : ''}${lang ? ` — ${capWord(lang)} song` : ''} on VinaX — free, no login.`,
+    desc: songDesc(d.name, album, artist, lang),
     image,
     h1: d.name,
     sub: `Song${artist ? ` · ${artist}` : ''}${album ? ` · ${album}` : ''}${lang ? ` · ${capWord(lang)}` : ''}${year ? ` · ${year}` : ''}`,
@@ -615,6 +615,46 @@ export function matchHub(pathname: string): { lang: string; mood: string } | nul
  * catalog names (song/album/artist titles are unbounded) could blow the
  * maximum, so clamp at a word boundary with an ellipsis.
  */
+/** The film in a catalogue name: "Mahi (From \"Deewana\")" → "Deewana". */
+function filmOf(text: string | undefined): string | undefined {
+  const m = /\(From\s+["\u201c]([^"\u201d]+)["\u201d]\)/i.exec(String(text ?? ''));
+  return m ? m[1].trim() : undefined;
+}
+
+/** "A, B, C" → "A, B and C". */
+function andList(names: string): string {
+  const parts = names.split(',').map((x) => x.trim()).filter(Boolean);
+  return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : parts[0] ?? '';
+}
+
+/**
+ * SEO 2026-11 — a song page's title as people search for Indian film songs:
+ * the song, then its film or album ("Suttamla Soosi - Gangs Of Godavari"),
+ * then the language. A song whose album is just itself (a single) names its
+ * lead singer instead, and a name that already says its film keeps it.
+ */
+export function songTitle(name: string, album: string | undefined, artist: string | undefined, lang: string | undefined): string {
+  const lower = name.toLowerCase();
+  const albumFilm = filmOf(album) ?? (album ? album.replace(/\(From\s+["\u201c][^)]*\)/i, '').trim() : undefined);
+  let context: string | undefined;
+  if (!filmOf(name)) {
+    if (albumFilm && albumFilm.toLowerCase() !== lower && !lower.includes(albumFilm.toLowerCase())) context = albumFilm;
+    else if (artist) context = artist.split(',')[0].trim();
+  }
+  const base = `${name}${context ? ` - ${context}` : ''}`;
+  const withLang = `${base}${lang ? ` | ${capWord(lang)} Song` : ''} | VinaX`;
+  return withLang.length <= 70 ? withLang : `${base} | VinaX`;
+}
+
+/** The song page's description, in the words people search with. */
+export function songDesc(name: string, album: string | undefined, artist: string | undefined, lang: string | undefined): string {
+  const film = filmOf(name) ?? filmOf(album) ?? (album ? album.replace(/\(From\s+["\u201c][^)]*\)/i, '').trim() : undefined);
+  const from = film && film.toLowerCase() !== name.toLowerCase() ? ` from ${film}` : '';
+  const kind = lang ? `a ${capWord(lang)} song` : 'a song';
+  const by = artist ? `, sung by ${andList(artist)}` : '';
+  return clampDesc(`Listen to ${name} online. ${name} is ${kind}${from}${by}. Stream it free on VinaX, with lyrics and no subscription.`);
+}
+
 function clampDesc(s: string): string {
   if (s.length <= 160) return s;
   const cut = s.slice(0, 157);

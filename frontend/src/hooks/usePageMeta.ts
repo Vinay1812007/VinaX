@@ -38,7 +38,8 @@ export function usePageMeta(opts: {
 }): void {
   const { title, description, image, type, canonicalPath } = opts;
   useEffect(() => {
-    const fullTitle = title ? `${title} · ${APP_NAME}` : APP_NAME;
+    // A title that already ends with the brand (song pages: "… | VinaX") is not suffixed again.
+    const fullTitle = title ? (/\bVinaX$/.test(title) ? title : `${title} · ${APP_NAME}`) : APP_NAME;
     const desc = description || DEFAULT_DESCRIPTION;
     const url = canonicalPath ? `https://www.vinaxmusic.online${canonicalPath}` : window.location.href.split('?')[0];
     document.title = fullTitle;

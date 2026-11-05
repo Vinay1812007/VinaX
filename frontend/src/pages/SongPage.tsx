@@ -3,6 +3,7 @@ import { albumPath, artistPath, extractSongId, songPath } from '@/utils/slug';
 import { useCanonicalRedirect, useJsonLd } from '@/hooks/useSeo';
 import { buildSongBreadcrumbs, buildSongJsonLd } from '@/utils/schema';
 import { usePageMeta } from '@/hooks/usePageMeta';
+import { songDesc, songTitle } from '@/utils/songSeo';
 import { useSongDetails, useSongSuggestions } from '@/features/player/useSongDetails';
 import { usePlayerStore } from '@/store/playerStore';
 import { SongRow } from '@/components/SongRow';
@@ -28,10 +29,9 @@ export default function SongPage() {
   const canonicalPath = song ? songPath(song) : undefined;
   useCanonicalRedirect(canonicalPath);
   usePageMeta({
-    title: song ? `${song.title} — ${song.artists[0]?.name ?? song.subtitle}${song.album ? ` | ${song.album.name}` : ''}` : undefined,
-    description: song
-      ? `Play ${song.title} by ${song.subtitle}${song.year ? ` (${song.year})` : ''} free on VinaX — synced lyrics, HD audio.`
-      : undefined,
+    // The prerendered page's words (utils/songSeo.ts), so the tab and search results agree.
+    title: song ? songTitle(song.title, song.album?.name, song.artists.map((a) => a.name).join(', ') || song.subtitle, song.language) : undefined,
+    description: song ? songDesc(song.title, song.album?.name, song.artists.map((a) => a.name).join(', ') || song.subtitle, song.language) : undefined,
     image: song ? bestImage(song.images, 500) : undefined,
     type: 'music.song',
     canonicalPath,
