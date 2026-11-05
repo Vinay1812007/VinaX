@@ -203,11 +203,25 @@ export function languageRule(code: unknown): string {
     return "Language: reply in the language the user is speaking, and stay in it. Don't switch because of an accent, a single word, a name, a song title or a phrase you may have misheard; switch only when the user clearly speaks whole sentences in another language or asks you to. When you can't tell which language they're using, keep to the one you were using.";
   }
   const up = lang.name.toUpperCase();
-  return `Language: RESPOND IN ${up}. YOU MUST RESPOND UNMISTAKABLY IN ${up}, in every reply, even when the user's speech sounds like another language, mixes in words from other languages, or has an accent. Expect the user to speak ${lang.name}. Switch to another language only if the user explicitly asks you to, then keep to that one.`;
+  return `Language: RESPOND IN ${up}. YOU MUST RESPOND UNMISTAKABLY IN ${up}, in every reply, whatever language the user speaks: the user chose ${lang.name} for Live voice. If they speak to you in another language, still answer in ${lang.name}; the first time, add one short sentence saying you're set to ${lang.name} and they can change it under Language at the top. Accents, names, song titles and words from other languages never change the language. Switch only if the user explicitly asks you to speak another language, then keep to that one.`;
 }
 
+/**
+ * The language rule again, as the last words of the instructions (after the
+ * chat and the call so far): native-audio models follow the language they
+ * hear unless the rule is both first and last (live test 2026-11-05: Telugu
+ * in, Telugu out, with English picked). Null for 'auto'.
+ */
+export function languageReminder(code: unknown): string | null {
+  const lang = LIVE_LANGUAGES.find((l) => l.code === code);
+  return lang ? `Reminder: reply only in ${lang.name}, whatever language the user speaks, unless they explicitly ask you to switch.` : null;
+}
+
+/** The spoken prompt; a picked language's rule leads it (it is also repeated last, `languageReminder`). */
 export function voicePrompt(vars: PromptVars, search = false, language: unknown = 'auto'): string {
-  return `${fill(search ? VOICE_SEARCH_PROMPT : VOICE_PROMPT, vars)}\n${languageRule(language)}`;
+  const body = fill(search ? VOICE_SEARCH_PROMPT : VOICE_PROMPT, vars);
+  const picked = LIVE_LANGUAGES.some((l) => l.code === language);
+  return picked ? `${languageRule(language)}\n${body}` : `${body}\n${languageRule(language)}`;
 }
 
 export const RECAP_TURNS = 20;

@@ -30,7 +30,7 @@ import { aiSettings } from '../../_lib/ai/config';
 import {
   ALL_LIVE_MODELS, DEFAULT_LIVE_VOICE, LIVE_MODELS, LIVE_SEARCH_MODELS, LIVE_THINKING_MODEL, LIVE_VOICES, LIVE_WS_URL, liveSetup, mintLiveToken, noteVoiceFailure, voiceResting,
 } from '../../_lib/ai/voice';
-import { chatContextBlock, firstNameOf, ownerBlock, personalBlock, safeLocale, safeTimezone, sanitizePersonal, voicePrompt, voiceRecapBlock } from '../../_lib/ai/prompt';
+import { chatContextBlock, firstNameOf, languageReminder, ownerBlock, personalBlock, safeLocale, safeTimezone, sanitizePersonal, voicePrompt, voiceRecapBlock } from '../../_lib/ai/prompt';
 import { memoryBlock, memoryFor } from '../../_lib/ai/memory';
 import { asProviderError } from '../../_lib/ai/errors';
 import type { AiEnv } from '../../_lib/ai/types';
@@ -83,6 +83,7 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
     memory ? memoryBlock(memory, '', { voice: true }) : null,
     chatContextBlock(body.context),
     voiceRecapBlock(body.recap),
+    languageReminder(body.language),
   ].filter((b): b is string => !!b);
 
   const kinds: string[] = [];

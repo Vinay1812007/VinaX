@@ -31,7 +31,7 @@ vi.mock('@/features/voice/stt', () => ({ nativeMicPermission: async () => true }
 vi.mock('../api', () => ({ liveToken: h.liveToken }));
 
 import { LiveSession, type LiveCallbacks } from './liveSession';
-import { EchoGuard } from './liveProtocol';
+import { EchoGuard, NoiseGate } from './liveProtocol';
 import { audioRouteAvailable, setSpeaker, startAudioRoute, stopAudioRoute } from './audioRoute';
 
 // ---------- stand-ins ----------
@@ -205,6 +205,8 @@ describe('Live voice: VinaX AI does not hear itself', () => {
     const started = s.start();
     const ws = await sessionReady(s);
     await started;
+    // A quiet room first, so the noise gate knows its floor.
+    for (let i = 0; i < 3; i += 1) mic(0.0003);
     return { s, ws };
   };
   const mic = (level: number) => FakeTap.last!.port.onmessage!({ data: new Float32Array(4096).fill(level) });
@@ -396,6 +398,61 @@ describe('Live voice: quicker, switchable, and easy to cut in on', () => {
     expect(s.transcript.turns()).toEqual([{ role: 'assistant', text: 'One two' }]);
     ws.say({ serverContent: { modelTurn: { parts: [{ inlineData: { data: voiceChunk() } }] } } });
     expect(played).toHaveBeenCalledTimes(2);
+    s.stop();
+  });
+});
+
+describe('Live voice in a noisy room', () => {
+  const batch = (rms: number) => new Float32Array(640).fill(rms);
+  const sent = (out: Float32Array) => out.some((x) => x !== 0);
+
+  it('NoiseGate: steady room noise goes as silence, the listener’s voice gets through, and a short pause after it is kept', () => {
+    const g = new NoiseGate(12, 350);
+    let t = 0;
+    // An office: noise wandering between −46 and −36 dBFS.
+    for (let i = 0; i < 40; i += 1, t += 40) expect(sent(g.filter(batch(i % 3 ? 0.005 : 0.015), t))).toBe(false);
+    expect(g.floorDb!).toBeLessThan(-38);
+    // The listener, close to the mic (−20 dBFS).
+    expect(sent(g.filter(batch(0.1), t))).toBe(true);
+    // A pause inside the sentence is kept for a moment, then it is silence again.
+    t += 200;
+    expect(sent(g.filter(batch(0.005), t))).toBe(true);
+    t += 400;
+    expect(sent(g.filter(batch(0.005), t))).toBe(false);
+  });
+
+  it('NoiseGate: a sentence does not teach it that speech is the room, but a room that stays louder is learned', () => {
+    const g = new NoiseGate(12, 350);
+    let t = 0;
+    for (let i = 0; i < 20; i += 1, t += 40) g.filter(batch(0.003), t);
+    const quiet = g.floorDb!;
+    for (let i = 0; i < 75; i += 1, t += 40) g.filter(batch(0.1), t); // three seconds of talking
+    expect(g.floorDb! - quiet).toBeLessThan(5);
+    // Music comes on and stays (−26 dBFS): after a while it is the room.
+    for (let i = 0; i < 1000; i += 1, t += 40) g.filter(batch(0.05), t);
+    expect(sent(g.filter(batch(0.05), t + 1000))).toBe(false);
+  });
+
+  it('NoiseGate: digital silence (the echo guard’s) leaves the floor alone, and a quiet room still lets soft speech through', () => {
+    const g = new NoiseGate(12, 350);
+    for (let i = 0; i < 10; i += 1) g.filter(batch(0.0005), i * 40);
+    const floor = g.floorDb!;
+    g.filter(new Float32Array(640), 500);
+    expect(g.floorDb).toBe(floor);
+    expect(sent(g.filter(batch(0.004), 600))).toBe(true); // −48 dBFS, soft but far above the room
+  });
+
+  it('the session sends room noise as silence and the listener as they are', async () => {
+    h.cap.native = false;
+    const s = new LiveSession({ thinking: false, voice: 'Kore' }, callbacks());
+    const started = s.start();
+    const ws = await sessionReady(s);
+    await started;
+    const mic = (level: number) => FakeTap.last!.port.onmessage!({ data: new Float32Array(2048).fill(level) });
+    for (let i = 0; i < 10; i += 1) mic(0.006);
+    expect(sentSamples(ws).every((x) => x === 0)).toBe(true);
+    mic(0.15);
+    expect(sentSamples(ws).some((x) => x !== 0)).toBe(true);
     s.stop();
   });
 });
