@@ -87,6 +87,55 @@ export class EchoGuard {
   }
 }
 
+/**
+ * Keeps the room's steady noise out of what is sent. Gemini decides the
+ * listener has finished when it hears a pause; in a noisy room (a fan, an
+ * office, people talking nearby) the mic never goes quiet, so it kept
+ * waiting: a live test on 2026-11-05 measured replies starting 6 to 40
+ * seconds after the question ended.
+ *
+ * The gate follows the room's noise floor (in dB: down quickly, up slowly)
+ * and sends a batch as silence unless it is clearly louder than that floor
+ * (the listener's voice, close to the mic). Once a batch gets through, the
+ * next ones do too for a moment, so word endings and short pauses are not
+ * chopped. Silence is sent, not nothing, so the stream keeps its timing.
+ */
+export class NoiseGate {
+  private floor: number | null = null;
+  private openUntil = 0;
+
+  /**
+   * @param marginDb how far above the noise floor a batch must be to get through.
+   * @param holdMs how long the gate stays open after a loud batch.
+   * @param minDb a batch quieter than this never opens it (a near-silent room).
+   */
+  constructor(private readonly marginDb = 12, private readonly holdMs = 350, private readonly minDb = -60) {}
+
+  /** The noise floor now, in dBFS (null before the first batch). */
+  get floorDb(): number | null {
+    return this.floor;
+  }
+
+  /** The batch to send: `samples` as they are, or silence of the same length. */
+  filter(samples: Float32Array, nowMs: number): Float32Array {
+    let sum = 0;
+    for (const s of samples) sum += s * s;
+    const db = 20 * Math.log10(Math.sqrt(samples.length ? sum / samples.length : 0) + 1e-9);
+    // Digital silence (the echo guard's, a muted track) says nothing about the room.
+    if (db < -120) return samples;
+    const loud = this.floor !== null && db >= Math.max(this.floor + this.marginDb, this.minDb);
+    if (this.floor === null) this.floor = db;
+    // Quieter than the floor: follow it down quickly. Room noise just above
+    // it: drift up. Speech: creep up about 1 dB a second, so a room that
+    // gets lastingly louder (music on) is learned, but a sentence is not.
+    else if (db < this.floor) this.floor += (db - this.floor) * 0.3;
+    else if (!loud) this.floor += (db - this.floor) * 0.03;
+    else this.floor += 0.05;
+    if (loud) this.openUntil = nowMs + this.holdMs;
+    return nowMs < this.openUntil ? samples : new Float32Array(samples.length);
+  }
+}
+
 /** Floats (−1…1) to little-endian 16-bit PCM bytes. */
 export function floatTo16(samples: Float32Array): Uint8Array {
   const out = new Uint8Array(samples.length * 2);

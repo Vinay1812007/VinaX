@@ -8,7 +8,9 @@
  * Speed: the token and the socket are fetched while the mic opens (not
  * after), and the setup asks for a quick end of turn and quick thinking
  * (voice.ts). A model that refuses that setup (an invalid-argument close) is
- * asked again without it before the next model is tried.
+ * asked again without it before the next model is tried. `NoiseGate` sends
+ * the room's steady noise as silence, so Gemini hears the listener stop even
+ * in a noisy room (it used to wait 6 to 40 seconds there).
  *
  * When a model will not start (the socket closes before setupComplete), the
  * next Live model is asked for, at most four times. With web search on,
@@ -43,7 +45,7 @@ import { liveToken, type LiveTokenOptions, type LiveTokenReply } from '../api';
 import { closeMic, hasSignal, loudness, micLabelOf, micSource, newAudioContext, openMic, rmsOf } from '../mic';
 import { base64ToBytes, pcm16 } from '../speechStream';
 import { isNativePlatform } from '@/services/native';
-import { audioMessage, EchoGuard, floatTo16, OUTPUT_RATE, parseServerMessage, Resampler, streamEndMessage, Transcript, type LiveEvent } from './liveProtocol';
+import { audioMessage, EchoGuard, floatTo16, NoiseGate, OUTPUT_RATE, parseServerMessage, Resampler, streamEndMessage, Transcript, type LiveEvent } from './liveProtocol';
 import { audioRouteAvailable, setSpeaker, startAudioRoute, stopAudioRoute, type AudioRoute } from './audioRoute';
 import type { SourcesInfo } from '../types';
 import tapUrl from './micTap.worklet.js?url';
@@ -137,6 +139,8 @@ export class LiveSession {
   /** The mic says its echo cancellation is off. */
   private echoOff = false;
   private readonly guard = new EchoGuard();
+  /** Room noise out of what is sent, so Gemini hears the listener stop (liveProtocol.ts). */
+  private gate = new NoiseGate();
   private readonly native = isNativePlatform();
   /** The model, voice and language the connected session was set up with. */
   private asked: Asked | null = null;
@@ -380,8 +384,10 @@ export class LiveSession {
     const resampler = new Resampler(inCtx.sampleRate);
     this.tap.port.onmessage = (e: MessageEvent<Float32Array>) => {
       if (this.ended || this.muted || !this.ready || this.ws?.readyState !== WebSocket.OPEN) return;
+      const now = performance.now();
       const pcm = resampler.push(e.data);
-      this.ws.send(audioMessage(floatTo16(this.echoGuarded() ? this.guard.filter(pcm, this.voicePlaying(), performance.now()) : pcm)));
+      const guarded = this.echoGuarded() ? this.guard.filter(pcm, this.voicePlaying(), now) : pcm;
+      this.ws.send(audioMessage(floatTo16(this.gate.filter(guarded, now))));
     };
     this.micMeter = inCtx.createAnalyser();
     this.micMeter.fftSize = 1024;
@@ -416,6 +422,8 @@ export class LiveSession {
   }
 
   private plugMic(source: MediaStreamAudioSourceNode): void {
+    // Another mic hears the room at another level.
+    this.gate = new NoiseGate();
     this.echoOff = this.stream?.getAudioTracks()[0]?.getSettings?.().echoCancellation === false;
     source.connect(this.tap!);
     source.connect(this.micMeter!);

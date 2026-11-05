@@ -410,10 +410,14 @@ describe('POST /api/ai/live-token', () => {
     upstream = (url) => (url.endsWith('/v1beta/auth_tokens') ? json({ name: 'tok' }) : new Response('', { status: 500 }));
     const te = (await (await ask({ language: 'te' })).json()).setup.systemInstruction.parts[0].text as string;
     expect(te).toContain('RESPOND IN TELUGU');
-    expect(te).toContain('Switch to another language only if the user explicitly asks you to');
+    expect(te).toContain('Switch only if the user explicitly asks you to speak another language');
+    // First and last, so the language heard doesn't win.
+    expect(te.startsWith('Language: RESPOND IN TELUGU')).toBe(true);
+    expect(te.trimEnd().endsWith('reply only in Telugu, whatever language the user speaks, unless they explicitly ask you to switch.')).toBe(true);
     const auto = (await (await ask({ language: 'auto' })).json()).setup.systemInstruction.parts[0].text as string;
     expect(auto).toContain("Don't switch because of an accent");
     expect(auto).not.toContain('RESPOND IN');
+    expect(auto).not.toContain('Reminder:');
     expect(languageRule('xx')).toBe(languageRule('auto'));
   });
 
