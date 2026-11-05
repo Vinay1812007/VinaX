@@ -16,6 +16,13 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.10.5': {
+    title: 'Live voice captions show what you said in your language, and it stops announcing its…',
+    changes: [
+      { type: 'fixed', text: 'Live voice captions no longer write your English in Hindi script: they follow the language picked at the top.' },
+      { type: 'fixed', text: 'Live voice no longer says "I\'m set to English" when you greet it; it just answers in your language.' },
+    ],
+  },
   '1.10.4': {
     title: 'Live voice answers quickly in noisy rooms and keeps to the language you pick',
     changes: [
