@@ -42,8 +42,12 @@ https://vinaxmusic.online/* https://www.vinaxmusic.online/:splat 301
 #     / and /app.js are served from /status/ and /status/app.js.
 #   - Redirect Rule "Status host to status page": any other path on that host
 #     (except /icons/*) goes to https://status.vinaxmusic.online/.
+#   - Redirect Rule "www status path to status host": www.vinaxmusic.online/
+#     status and everything under it goes to https://status.vinaxmusic.online/,
+#     so the page has one address. The files stay under /status/ because the
+#     status host is served from them.
 # The apex redirect at the top of this file is likewise the zone rule
-# "Apex to www". The same page is also at https://www.vinaxmusic.online/status/.
+# "Apex to www".
 
 # V2 1.0 — the sitemaps are static files now (dist/sitemap.xml and the maps
 # it lists). The maps the index stopped listing in 13.6.0 still had links in
