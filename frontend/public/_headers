@@ -88,7 +88,7 @@
   Cache-Control: no-cache
 
 # SEO 2026-11 — the same site answers on other hosts: status.vinaxmusic.online
-# (now redirected to www's /status/ in _redirects; Google had crawled /dmca/,
+# (now redirected to www's /status/ by a Cloudflare Redirect Rule; Google had crawled /dmca/,
 # /download and Home there while that redirect did not fire) and the project's
 # own vinax.pages.dev. Their pages already name www as canonical; this keeps
 # them out of the index outright.
