@@ -16,6 +16,13 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.10.4': {
+    title: 'Live voice answers quickly in noisy rooms and keeps to the language you pick',
+    changes: [
+      { type: 'fixed', text: 'Live voice no longer waits a long time to answer in a noisy room: background noise is filtered out so it hears when you stop talking.' },
+      { type: 'fixed', text: 'Live voice no longer replies in another language when you speak one: it keeps to the language picked at the top.' },
+    ],
+  },
   '1.10.3': {
     title: 'Live voice: colourful orb, model, voice and language pickers, quicker replies, keeps one…',
     changes: [
