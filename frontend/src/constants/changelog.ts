@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.10.6': {
+    title: 'Songs with a dash in their link open correctly; search engines find VinaX\'s pages more…',
+    changes: [
+      { type: 'improved', text: 'Opening a link to a song whose ID contains a dash (about 1 in 8 songs) now opens that song instead of failing.' },
+      { type: 'improved', text: 'Charts, Top Songs, Trending and each language page list their songs for search engines.' },
+      { type: 'new', text: 'Search engines are told about new song, album and artist pages as soon as they go live.' },
+      { type: 'improved', text: 'status.vinaxmusic.online opens the status page again, with no sign-in.' },
+    ],
+  },
   '1.10.5': {
     title: 'Live voice captions show what you said in your language, and it stops announcing its…',
     changes: [
