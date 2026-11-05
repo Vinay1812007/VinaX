@@ -34,13 +34,16 @@ https://vinaxmusic.online/* https://www.vinaxmusic.online/:splat 301
 /ai-playlist/*  /  301
 /ai/shared/*  /  301
 
-# Status page — status.vinaxmusic.online is sent to the standalone status
-# page at https://www.vinaxmusic.online/status/ (public/status/, plain static
-# files, no sign-in) by a Cloudflare Redirect Rule on the zone ("Status host
-# to status page", Rules → Redirect Rules, added 2026-11-05), not by this
-# file: host-based sources here never fired in production, so the status host
-# showed the whole app and its sign-in. The apex redirect at the top of this
-# file is likewise done by the zone rule "Apex to www".
+# Status page — status.vinaxmusic.online serves the standalone status page
+# (public/status/, plain static files, no sign-in) at its own root. This is
+# done by two Cloudflare zone rules, not by this file, because host-based
+# lines here never fire in production:
+#   - URL Rewrite Rule "Status host serves the status page": on that host,
+#     / and /app.js are served from /status/ and /status/app.js.
+#   - Redirect Rule "Status host to status page": any other path on that host
+#     (except /icons/*) goes to https://status.vinaxmusic.online/.
+# The apex redirect at the top of this file is likewise the zone rule
+# "Apex to www". The same page is also at https://www.vinaxmusic.online/status/.
 
 # V2 1.0 — the sitemaps are static files now (dist/sitemap.xml and the maps
 # it lists). The maps the index stopped listing in 13.6.0 still had links in
