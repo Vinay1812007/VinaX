@@ -786,16 +786,63 @@
   min-height: 40px; max-width: 100%; padding: 0 10px; border-radius: var(--vx-radius-control);
   border: 1px solid var(--glass-border); background: rgb(var(--ink-800)); color: rgb(var(--ink-100)); font: inherit;
 }
+/* The pickers: model, voice and language, under the title. */
+.vx-ai-live-picks { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 4px 0 8px; }
+.vx-ai-live-pick {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 40px; padding: 0 4px 0 12px;
+  border-radius: 999px; border: 1px solid var(--glass-border); background: rgb(var(--ink-100) / 0.06);
+  font-size: 0.8125rem; color: rgb(var(--ink-400));
+}
+.vx-ai-live-pick select {
+  min-width: 0; max-width: min(220px, 52vw); min-height: 38px; padding: 0 8px; border: 0; border-radius: 999px;
+  background: transparent; color: rgb(var(--ink-100)); font: inherit; font-weight: 600; text-overflow: ellipsis;
+}
+.vx-ai-live-pick select option { background: rgb(var(--ink-800)); color: rgb(var(--ink-100)); }
+.vx-ai-live-pick:focus-within { border-color: rgb(var(--ink-100) / 0.5); }
+
+/* The orb: a ball of every colour (a turning rainbow, drifting colour
+   clouds and a glossy highlight) that swells with the voice. Tapping it
+   while VinaX AI talks cuts it off. */
+.vx-ai-live-orb-btn { display: grid; place-items: center; padding: 18px; border: 0; border-radius: 50%; background: none; color: inherit; cursor: default; }
+.vx-ai-live-orb-btn:not(:disabled) { cursor: pointer; }
+.vx-ai-live-orb-btn:disabled { opacity: 1; }
 .vx-ai-live-orb {
   --vx-live-level: 0;
+  display: block; position: relative;
   width: 168px; height: 168px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, rgb(var(--ember-400)), rgb(var(--ember-500)) 55%, rgb(var(--ember-500) / 0.55));
-  box-shadow: 0 0 calc(24px + 60px * var(--vx-live-level)) rgb(var(--ember-500) / 0.45);
+  box-shadow:
+    0 0 calc(28px + 70px * var(--vx-live-level)) rgb(139 92 246 / 0.5),
+    0 0 calc(56px + 110px * var(--vx-live-level)) rgb(236 72 153 / 0.28),
+    0 0 calc(90px + 120px * var(--vx-live-level)) rgb(56 189 248 / 0.18);
   transform: scale(calc(0.92 + 0.22 * var(--vx-live-level)));
-  transition: transform 120ms ease-out, box-shadow 120ms ease-out, opacity 200ms ease;
+  transition: transform 120ms ease-out, box-shadow 120ms ease-out, opacity 200ms ease, filter 300ms ease;
 }
-.vx-ai-live-orb.is-connecting { opacity: 0.55; animation: vx-ai-breathe 1.6s ease-in-out infinite; }
-.vx-ai-live-orb.is-muted, .vx-ai-live-orb.is-ended { opacity: 0.35; transform: scale(0.9); box-shadow: none; }
+.vx-ai-live-orb > span { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; }
+.vx-ai-live-orb-colors { will-change: transform; }
+/* Blurred once (the layer turns, the blur is not redrawn), so the rainbow has no point in the middle. */
+.vx-ai-live-orb-colors::before {
+  content: ''; position: absolute; inset: -18%;
+  background: conic-gradient(from 0deg, #4f8cff, #8b5cf6, #ec4899, #f43f5e, #f97316, #facc15, #22c55e, #06b6d4, #4f8cff);
+  filter: blur(14px);
+}
+.vx-ai-live-orb-swirl {
+  will-change: transform;
+  background:
+    radial-gradient(circle at 28% 72%, rgb(236 72 153 / 0.85), transparent 46%),
+    radial-gradient(circle at 74% 26%, rgb(59 130 246 / 0.85), transparent 46%),
+    radial-gradient(circle at 70% 76%, rgb(250 204 21 / 0.7), transparent 40%),
+    radial-gradient(circle at 26% 24%, rgb(34 197 94 / 0.55), transparent 40%),
+    radial-gradient(circle at 50% 50%, rgb(168 85 247 / 0.5), transparent 60%);
+}
+.vx-ai-live-orb-shine {
+  background:
+    radial-gradient(circle at 34% 26%, rgb(255 255 255 / 0.6), rgb(255 255 255 / 0.12) 26%, transparent 46%),
+    radial-gradient(circle at 50% 120%, rgb(0 0 0 / 0.28), transparent 60%);
+  box-shadow: inset 0 0 24px rgb(255 255 255 / 0.18);
+}
+.vx-ai-live-orb.is-connecting { opacity: 0.7; filter: saturate(0.6) brightness(0.85); animation: vx-ai-breathe 1.6s ease-in-out infinite; }
+.vx-ai-live-orb.is-muted, .vx-ai-live-orb.is-ended { opacity: 0.35; transform: scale(0.9); box-shadow: none; filter: grayscale(1); }
+.vx-ai-live-hint { margin: -10px 0 0; font-size: 0.8125rem; color: rgb(var(--ink-400)); }
 @keyframes vx-ai-breathe { 50% { transform: scale(0.98); } }
 .vx-ai-live-status { margin: 0; font-size: 1rem; font-weight: 600; color: rgb(var(--ink-200)); }
 .vx-ai-live-note { margin: 0; max-width: 34ch; font-size: 0.9375rem; color: rgb(var(--ink-300)); }
@@ -818,7 +865,7 @@
 .vx-ai-live-foot { margin: 0; text-align: center; font-size: 0.75rem; color: rgb(var(--ink-400)); }
 
 @media (prefers-reduced-motion: reduce) {
-  .vx-ai-pulse, .vx-ai-rec-dot, .vx-ai-rec-spin, .vx-ai-live-orb.is-connecting { animation: none; }
+  .vx-ai-pulse, .vx-ai-rec-dot, .vx-ai-rec-spin, .vx-ai-live-orb.is-connecting, .vx-ai-live-orb > span { animation: none; }
   .vx-ai-live-orb, .vx-ai-rec-meter i { transition: none; }
   .vx-ai-live-orb { transform: none; }
 }
@@ -1156,8 +1203,10 @@ html.light .vx-ai-scrim::before { background: rgb(48 22 34 / 0.3); }
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(42% 36% at 50% 42%, rgb(var(--ember-500) / calc(var(--vx-ai-glow-a) * 1.4)), transparent 70%),
-    radial-gradient(40% 30% at 50% 100%, rgb(var(--tide-500) / var(--vx-ai-glow-b)), transparent 75%);
+    radial-gradient(30% 26% at 42% 40%, rgb(139 92 246 / 0.22), transparent 70%),
+    radial-gradient(28% 24% at 60% 46%, rgb(236 72 153 / 0.16), transparent 70%),
+    radial-gradient(26% 22% at 50% 30%, rgb(56 189 248 / 0.14), transparent 70%),
+    radial-gradient(40% 30% at 50% 100%, rgb(249 115 22 / 0.12), transparent 75%);
 }
 .vx-ai-live-orb { position: relative; }
 /* A ring of light just outside the orb while the line is open. */
@@ -1166,12 +1215,13 @@ html.light .vx-ai-scrim::before { background: rgb(48 22 34 / 0.3); }
   position: absolute;
   inset: -16px;
   border-radius: 50%;
-  background: conic-gradient(from 0deg, rgb(var(--ember-400) / 0), rgb(var(--ember-400) / 0.7), rgb(var(--tide-500) / 0.55), rgb(var(--ember-400) / 0));
+  background: conic-gradient(from 0deg, #4f8cff, #8b5cf6, #ec4899, #f97316, #facc15, #22c55e, #06b6d4, #4f8cff);
   -webkit-mask: radial-gradient(closest-side, transparent 86%, #000 89%, #000 95%, transparent 100%);
   mask: radial-gradient(closest-side, transparent 86%, #000 89%, #000 95%, transparent 100%);
   opacity: 0;
 }
 .vx-ai-live-orb:is(.is-listening, .is-speaking)::before { opacity: 0.85; }
+.vx-ai-live-orb.is-connecting::before { opacity: 0.4; }
 .vx-ai-live-btn { background: rgb(var(--ink-100) / 0.08); box-shadow: inset 0 1px 0 var(--vx-mat-specular), var(--vx-ai-lift-sm); }
 .vx-ai-live-btn.is-on { background: rgb(var(--ink-100)); }
 .vx-ai-live-btn.is-end { background: var(--vx-danger); }
@@ -1268,8 +1318,15 @@ html.light .vx-ai-scrim::before { background: rgb(48 22 34 / 0.3); }
   .vx-ai-live { animation: vx-ai-fade 260ms ease backwards; }
   .vx-ai-live-stage { animation: vx-ai-dialog-in 360ms var(--vx-ai-ease) 60ms backwards; }
   .vx-ai-live-orb::before { transition: opacity 300ms ease; }
-  .vx-ai-live-orb:is(.is-listening, .is-speaking)::before { animation: vx-ai-spin 6s linear infinite; }
+  .vx-ai-live-orb:is(.is-connecting, .is-listening, .is-speaking)::before { animation: vx-ai-spin 6s linear infinite; }
   .vx-ai-live-orb.is-speaking::before { animation-duration: 2.4s; }
+  /* The colours turn slowly while it listens, faster while it talks. */
+  .vx-ai-live-orb-colors { animation: vx-ai-spin 9s linear infinite; }
+  .vx-ai-live-orb-swirl { animation: vx-ai-spin 13s linear infinite reverse; }
+  .vx-ai-live-orb.is-speaking .vx-ai-live-orb-colors { animation-duration: 3s; }
+  .vx-ai-live-orb.is-speaking .vx-ai-live-orb-swirl { animation-duration: 4.5s; }
+  .vx-ai-live-orb:is(.is-muted, .is-ended) > span { animation-play-state: paused; }
+  .vx-ai-live-orb-btn:not(:disabled):active .vx-ai-live-orb { transform: scale(0.88); }
   .vx-ai-jump { animation: vx-ai-jump-in 220ms var(--vx-ai-ease) backwards; }
 
   /* Press and hover. */

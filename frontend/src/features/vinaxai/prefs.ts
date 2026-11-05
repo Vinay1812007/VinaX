@@ -2,13 +2,14 @@
  * VinaX AI — this device's chat preferences: the model picked in the
  * composer ('auto' or a registry id), Extended thinking, whether the
  * desktop sidebar is collapsed, the voices for Read aloud and Live, the
- * Live model, web search in Live voice, the microphone, and the Personalisation
+ * Live model, language and captions, web search in Live voice, the microphone, and the Personalisation
  * and Features choices in VinaX AI's settings (sent with each message, never
  * stored on the server).
  * Kept in localStorage under a key the boot migration does not sweep (it
  * clears the old `vinax.ai…` keys).
  */
 import { create } from 'zustand';
+import { deviceLanguage } from './live/liveOptions';
 
 export const PREFS_KEY = 'vinax.vxai.prefs.v1';
 
@@ -39,6 +40,10 @@ export interface ChatPrefs {
   liveSearch: boolean;
   /** Android app: Live voice plays on the loudspeaker (true) or the earpiece, like a phone call. */
   liveSpeaker: boolean;
+  /** The language Live voice replies in: a code, or 'auto' (follows the user, without hopping between languages). */
+  liveLanguage: string;
+  /** Live voice shows what each side says. */
+  liveCaptions: boolean;
 }
 
 export type ReplyStyle = 'normal' | 'concise' | 'explanatory' | 'formal' | 'learning';
@@ -46,12 +51,14 @@ export const REPLY_STYLES: readonly ReplyStyle[] = ['normal', 'concise', 'explan
 export const PERSONAL_MAX = Object.freeze({ name: 40, about: 1_500, instructions: 1_500 });
 
 const DEFAULTS: ChatPrefs = {
+  liveLanguage: deviceLanguage(), liveCaptions: true,
   model: 'auto', webSearch: 'auto', extendedThinking: false, sidebarCollapsed: false, voice: 'troy', liveVoice: 'Kore', liveModel: 'auto', micId: '',
   artifacts: true, inlinePreviews: true, personalName: '', personalAbout: '', personalInstructions: '', style: 'normal', liveSearch: true, liveSpeaker: true,
 };
 const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.slice(0, max) : '');
 const VOICE_ID = /^[A-Za-z]{2,20}$/;
 const LIVE_MODEL_ID = /^[a-z0-9][a-z0-9.-]{1,80}$/;
+const LANGUAGE = /^(?:auto|[a-z]{2,3})$/;
 
 function load(): ChatPrefs {
   try {
@@ -74,6 +81,8 @@ function load(): ChatPrefs {
       style: REPLY_STYLES.includes(raw.style as ReplyStyle) ? (raw.style as ReplyStyle) : 'normal',
       liveSearch: raw.liveSearch !== false,
       liveSpeaker: raw.liveSpeaker !== false,
+      liveLanguage: typeof raw.liveLanguage === 'string' && LANGUAGE.test(raw.liveLanguage) ? raw.liveLanguage : DEFAULTS.liveLanguage,
+      liveCaptions: raw.liveCaptions !== false,
     };
   } catch {
     return DEFAULTS;

@@ -35,6 +35,7 @@ export const DownloadIcon = ({ className }: P) => (<svg {...base(className)}><pa
 export const MicIcon = ({ className }: P) => (<svg {...base(className)}><rect x="9" y="3.5" width="6" height="11" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5" /></svg>);
 export const MicOffIcon = ({ className }: P) => (<svg {...base(className)}><path d="M15 9.5V6.5a3 3 0 0 0-5.6-1.5M9 9v2.5a3 3 0 0 0 4.6 2.5M5.5 11.5a6.5 6.5 0 0 0 10.4 5.2M18.5 11.5a6.4 6.4 0 0 1-.6 2.7M12 18v2.5M4 4l16 16" /></svg>);
 export const WaveIcon = ({ className }: P) => (<svg {...base(className)}><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4" /></svg>);
+export const CaptionsIcon = ({ className }: P) => (<svg {...base(className)}><rect x="3.5" y="5.5" width="17" height="13" rx="2.5" /><path d="M10.5 10.2a2.2 2.2 0 1 0 0 3.6M16.5 10.2a2.2 2.2 0 1 0 0 3.6" /></svg>);
 export const SpeakerIcon = ({ className }: P) => (<svg {...base(className)}><path d="M4.5 9.5h3l4.5-4v13l-4.5-4h-3zM15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" /></svg>);
 export const CheckIcon = ({ className }: P) => (<svg {...base(className)}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>);
 export const ShareIcon = ({ className }: P) => (<svg {...base(className)}><path d="M12 15V4.5M7.5 9 12 4.5 16.5 9M5.5 13v4.5a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V13" /></svg>);

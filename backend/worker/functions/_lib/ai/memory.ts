@@ -201,12 +201,15 @@ export async function memoryFor(env: DbEnv, accountId: string, conversationId: s
  * The <memory> block for the system prompt, or null when there is nothing
  * to say (no notes and the message does not ask to remember anything).
  */
-export function memoryBlock(ctx: MemoryContext, latestText: string): string | null {
+export function memoryBlock(ctx: MemoryContext, latestText: string, opts: { voice?: boolean } = {}): string | null {
   if (!ctx.use) return null;
   const asked = asksToRemember(latestText);
   if (!ctx.items.length && !asked) return null;
   const list = ctx.items.length ? ctx.items.map((m) => `- ${m.text.replace(/[<>]/g, ' ')}`).join('\n') : '(nothing saved yet)';
-  const saving = ctx.learn
+  // Live voice saves the call as chat messages but does not learn from it.
+  const saving = opts.voice
+    ? 'Nothing new is saved to memory from a Live voice call. If the user asks you to remember something, say they can type it in the chat or add it in VinaX AI settings → Memory.'
+    : ctx.learn
     ? 'If the user asks you to remember or forget something, say briefly that you will; VinaX AI updates the memory after this reply. Never offer to remember passwords, card or account numbers, contact details or health details.'
     : 'Learning is switched off, so nothing new is saved from chats. If the user asks you to remember something, tell them they can add it in VinaX AI settings → Memory.';
   return `# Memory

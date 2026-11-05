@@ -315,3 +315,87 @@ describe('the route plugin wrapper', () => {
     await expect(stopAudioRoute()).resolves.toBeUndefined();
   });
 });
+
+describe('Live voice: quicker, switchable, and easy to cut in on', () => {
+  beforeEach(() => { h.cap.native = false; h.cap.plugin = false; });
+
+  it('asks for the token while the mic is still opening, not after it', async () => {
+    let openMic!: () => void;
+    (navigator.mediaDevices.getUserMedia as ReturnType<typeof vi.fn>).mockImplementation(() => new Promise((r) => { openMic = () => { h.log.push('mic'); r(stream); }; }));
+    const s = new LiveSession({ thinking: false, voice: 'Kore' }, callbacks());
+    void s.start();
+    await vi.waitFor(() => expect(h.liveToken).toHaveBeenCalledTimes(1));
+    expect(h.log).not.toContain('mic');
+    openMic();
+    await sessionReady(s);
+    s.stop();
+  });
+
+  it('sends the language, the chat so far and the personal settings with the token request', async () => {
+    const s = new LiveSession({ thinking: false, voice: 'Puck', language: 'te', context: [{ role: 'user', text: 'hi' }], personal: { about: 'drummer' }, conversationId: 'c1', incognito: true }, callbacks());
+    void s.start();
+    await sessionReady(s);
+    expect(h.liveToken.mock.calls[0][0]).toMatchObject({ voice: 'Puck', language: 'te', context: [{ role: 'user', text: 'hi' }], personal: { about: 'drummer' }, conversationId: 'c1', incognito: true });
+    expect(h.liveToken.mock.calls[0][0].lean).toBeUndefined();
+    s.stop();
+  });
+
+  it('a model that refuses the quick setup is asked again without it before the next model', async () => {
+    h.liveToken.mockImplementation(async () => ({ token: 't', url: 'wss://live.example/ws', setup: { model: 'models/m' }, model: { id: 'm', name: 'M' }, search: false, tuned: true }));
+    const s = new LiveSession({ thinking: false, voice: 'Kore' }, callbacks());
+    void s.start();
+    await vi.waitFor(() => expect(FakeWS.all.length).toBe(1));
+    await vi.waitFor(() => expect(FakeWS.all[0].readyState).toBe(1));
+    FakeWS.all[0].readyState = 3;
+    FakeWS.all[0].onclose?.({ code: 1007 });
+    await sessionReady(s, 2);
+    expect(h.liveToken.mock.calls[1][0]).toMatchObject({ lean: true, skip: [] });
+    s.stop();
+  });
+
+  it('switching the voice, the model or the language reconnects with the new choice and the call so far', async () => {
+    const s = new LiveSession({ thinking: false, voice: 'Kore', model: 'auto', language: 'en' }, callbacks());
+    void s.start();
+    const ws = await sessionReady(s);
+    ws.say({ serverContent: { inputTranscription: { text: 'Hello' } } });
+    ws.say({ serverContent: { outputTranscription: { text: 'Hi there' }, turnComplete: true } });
+    s.setOptions({ voice: 'Puck', language: 'hi' });
+    await sessionReady(s, 2);
+    expect(h.liveToken.mock.calls[1][0]).toMatchObject({ voice: 'Puck', language: 'hi', recap: [{ role: 'user', text: 'Hello' }, { role: 'assistant', text: 'Hi there' }] });
+    // The same choice again changes nothing.
+    s.setOptions({ voice: 'Puck' });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(FakeWS.all.length).toBe(2);
+    s.stop();
+  });
+
+  it('a switch made while connecting is applied once it is ready', async () => {
+    const s = new LiveSession({ thinking: false, voice: 'Kore' }, callbacks());
+    void s.start();
+    await vi.waitFor(() => expect(FakeWS.all.length).toBe(1));
+    s.setOptions({ model: 'gemini-3.8-live' });
+    await sessionReady(s, 1);
+    await sessionReady(s, 2);
+    expect(h.liveToken.mock.calls[1][0]).toMatchObject({ model: 'gemini-3.8-live' });
+    s.stop();
+  });
+
+  it('tapping to interrupt stops the voice and drops the rest of that reply, until the next turn', async () => {
+    const s = new LiveSession({ thinking: false, voice: 'Kore' }, callbacks());
+    void s.start();
+    const ws = await sessionReady(s);
+    await vi.waitFor(() => expect(FakeTap.last).not.toBeNull());
+    const ctx = FakeCtx.made[0];
+    const played = vi.spyOn(ctx, 'createBufferSource');
+    ws.say({ serverContent: { modelTurn: { parts: [{ inlineData: { data: voiceChunk() } }] }, outputTranscription: { text: 'One two' } } });
+    expect(played).toHaveBeenCalledTimes(1);
+    s.interrupt();
+    ws.say({ serverContent: { modelTurn: { parts: [{ inlineData: { data: voiceChunk() } }] }, outputTranscription: { text: ' three four' } } });
+    expect(played).toHaveBeenCalledTimes(1);
+    ws.say({ serverContent: { turnComplete: true } });
+    expect(s.transcript.turns()).toEqual([{ role: 'assistant', text: 'One two' }]);
+    ws.say({ serverContent: { modelTurn: { parts: [{ inlineData: { data: voiceChunk() } }] } } });
+    expect(played).toHaveBeenCalledTimes(2);
+    s.stop();
+  });
+});

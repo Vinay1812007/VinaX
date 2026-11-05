@@ -5,19 +5,23 @@
  * messages (POST /api/ai/live-transcript) and the chat reloads to show it.
  * With web search on, the sources of the latest reply show under the
  * captions; the globe button switches search (Live voice reconnects).
+ * The model, the voice and the language can be switched here at any time,
+ * even while it connects (it reconnects and carries on). Tapping the orb
+ * cuts VinaX AI off; the captions button hides or shows what is said.
  * Loaded on demand, only when someone opens it.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import { saveLiveTranscript, voiceNotice } from '../api';
 import { cleanMicLabel, listMics, micNotice, silentMicNotice, type MicDevice, type MicProblem } from '../mic';
-import { usePrefs } from '../prefs';
+import { personalOf, usePrefs } from '../prefs';
 import { holdMusic } from '../musicHold';
-import { CloseIcon, GlobeSmallIcon, MicIcon, MicOffIcon, SpeakerIcon } from '../icons';
+import { CaptionsIcon, CloseIcon, GlobeSmallIcon, MicIcon, MicOffIcon, SpeakerIcon } from '../icons';
 import { isNativePlatform } from '@/services/native';
 import { audioRouteAvailable, type AudioRoute } from './audioRoute';
 import { SourcesRow } from '../Sources';
-import type { SourcesInfo } from '../types';
+import type { SourcesInfo, VoiceInfo } from '../types';
+import { voiceLabel } from './liveOptions';
 import { LiveSession, type LiveEndReason, type LiveState } from './liveSession';
 
 interface Props {
@@ -34,6 +38,12 @@ interface Props {
   searchAllowed?: boolean;
   /** Start with web search on. */
   search?: boolean;
+  /** The models, voices and languages on offer (GET /api/ai/models). */
+  voiceInfo?: VoiceInfo;
+  /** The typed chat so far, so the call carries on from it. */
+  context?: Array<{ role: 'user' | 'assistant'; text: string }>;
+  /** The chat is incognito: no memory. */
+  incognito?: boolean;
   /** Closed; `savedTo` names the chat the session was saved into, when it was. */
   onClose(savedTo: string | null): void;
 }
@@ -53,7 +63,10 @@ function endMessage(reason: LiveEndReason, error?: string): string | null {
   return error === 'unsupported' ? 'Live voice isn’t supported in this browser.' : voiceNotice(error ?? 'voice_unavailable');
 }
 
-export default function LiveView({ conversationId, parentMessageId, thinking, voice, model, micId, searchAllowed = false, search: searchAtStart = false, onClose }: Props): ReactNode {
+export default function LiveView({ conversationId, parentMessageId, thinking, voice, model, micId, searchAllowed = false, search: searchAtStart = false, voiceInfo, context, incognito = false, onClose }: Props): ReactNode {
+  const captionsOn = usePrefs((p) => p.liveCaptions);
+  /** What the pickers show: the listener's choices, applied to the session as they change. */
+  const [pick, setPick] = useState(() => ({ model, voice, language: usePrefs.getState().liveLanguage }));
   const [state, setState] = useState<LiveState>('connecting');
   const [captions, setCaptions] = useState({ user: '', assistant: '' });
   const [muted, setMuted] = useState(false);
@@ -71,7 +84,7 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
   /** An Android app built before the route plugin: it cannot switch, so say how to get the button. */
   const [oldApp] = useState(() => isNativePlatform() && !audioRouteAvailable());
   const session = useRef<LiveSession | null>(null);
-  const orb = useRef<HTMLDivElement>(null);
+  const orb = useRef<HTMLSpanElement>(null);
   const endButton = useRef<HTMLButtonElement>(null);
   const closing = useRef(false);
 
@@ -103,7 +116,11 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
     const back = document.activeElement as HTMLElement | null;
     endButton.current?.focus();
     const release = holdMusic('pause');
-    const s = new LiveSession({ thinking, voice, model, micId, search: searchAtStart, speaker: usePrefs.getState().liveSpeaker }, {
+    const prefs = usePrefs.getState();
+    const s = new LiveSession({
+      thinking, voice: pick.voice, model: pick.model, micId, search: searchAtStart, speaker: prefs.liveSpeaker,
+      language: pick.language, context, personal: personalOf(prefs), conversationId, incognito,
+    }, {
       onState: (st) => {
         setState(st);
         if (s.model) setModelName(s.model.name);
@@ -140,6 +157,21 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
     setMuted(m);
     session.current?.setMuted(m);
   };
+
+  /** Switch the model, the voice or the language: remembered, and the call reconnects with it. */
+  const choose = (patch: Partial<typeof pick>) => {
+    setPick((p) => ({ ...p, ...patch }));
+    usePrefs.getState().set({
+      ...(patch.model !== undefined ? { liveModel: patch.model } : {}),
+      ...(patch.voice !== undefined ? { liveVoice: patch.voice } : {}),
+      ...(patch.language !== undefined ? { liveLanguage: patch.language } : {}),
+    });
+    session.current?.setOptions(patch);
+  };
+
+  const models = voiceInfo?.liveModels ?? [];
+  const voices = voiceInfo?.liveVoices ?? [];
+  const languages = voiceInfo?.liveLanguages ?? [];
 
   const toggleSearch = () => {
     const on = !search;
@@ -198,9 +230,53 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
           <CloseIcon className="w-5 h-5" />
         </button>
       </div>
+      {!ended && (models.length > 0 || voices.length > 0 || languages.length > 0) && (
+        <div className="vx-ai-live-picks">
+          {models.length > 0 && (
+            <label className="vx-ai-live-pick">
+              <span>Model</span>
+              <select value={models.some((m) => m.id === pick.model) ? pick.model : 'auto'} onChange={(e) => choose({ model: e.target.value })}>
+                <option value="auto">Auto</option>
+                {models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </label>
+          )}
+          {voices.length > 0 && (
+            <label className="vx-ai-live-pick">
+              <span>Voice</span>
+              <select value={voices.includes(pick.voice) ? pick.voice : voices[0]} onChange={(e) => choose({ voice: e.target.value })}>
+                {voices.map((v) => <option key={v} value={v}>{voiceLabel(v)}</option>)}
+              </select>
+            </label>
+          )}
+          {languages.length > 0 && (
+            <label className="vx-ai-live-pick">
+              <span>Language</span>
+              <select value={languages.some((l) => l.code === pick.language) ? pick.language : 'auto'} onChange={(e) => choose({ language: e.target.value })}>
+                <option value="auto">Match how I speak</option>
+                {languages.map((l) => <option key={l.code} value={l.code}>{l.native === l.name ? l.name : `${l.name} · ${l.native}`}</option>)}
+              </select>
+            </label>
+          )}
+        </div>
+      )}
       <div className="vx-ai-live-stage">
-        <div ref={orb} className={`vx-ai-live-orb is-${ended ? 'ended' : muted ? 'muted' : state}`} aria-hidden />
+        <button
+          type="button"
+          className="vx-ai-live-orb-btn"
+          onClick={() => session.current?.interrupt()}
+          disabled={!!ended || state !== 'speaking'}
+          aria-label="Stop VinaX AI talking"
+          title={state === 'speaking' ? 'Tap to stop VinaX AI talking' : undefined}
+        >
+          <span ref={orb} className={`vx-ai-live-orb is-${ended ? 'ended' : muted ? 'muted' : state}`} aria-hidden>
+            <span className="vx-ai-live-orb-colors" />
+            <span className="vx-ai-live-orb-swirl" />
+            <span className="vx-ai-live-orb-shine" />
+          </span>
+        </button>
         <p className="vx-ai-live-status" role="status">{status}</p>
+        {!ended && state === 'speaking' && !muted && <p className="vx-ai-live-hint">Tap the orb or start talking to cut in</p>}
         {ended?.message && <p className="vx-ai-live-note" role="alert">{ended.message}</p>}
         {!ended && mic?.silent && <p className="vx-ai-live-note" role="alert">{silentMicNotice(mic.label, 'Pick another microphone below.')}</p>}
         {!ended && mic && (
@@ -219,7 +295,7 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
             {micError && <p className="vx-ai-live-note" role="alert">{micError}</p>}
           </div>
         )}
-        <div className="vx-ai-live-captions" aria-hidden={!!ended}>
+        <div className="vx-ai-live-captions" aria-hidden={!!ended} hidden={!captionsOn}>
           {captions.user && <p className="vx-ai-live-you"><span className="sr-only">You: </span>{captions.user}</p>}
           {captions.assistant && <p className="vx-ai-live-ai"><span className="sr-only">VinaX AI: </span>{captions.assistant}</p>}
         </div>
@@ -242,6 +318,18 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
             title={search ? 'Web search is on' : 'Web search is off'}
           >
             <GlobeSmallIcon className="w-6 h-6" />
+          </button>
+        )}
+        {!ended && (
+          <button
+            type="button"
+            className={`vx-ai-live-btn${captionsOn ? ' is-on' : ''}`}
+            onClick={() => usePrefs.getState().set({ liveCaptions: !captionsOn })}
+            aria-pressed={captionsOn}
+            aria-label="Captions"
+            title={captionsOn ? 'Captions are on' : 'Captions are off'}
+          >
+            <CaptionsIcon className="w-6 h-6" />
           </button>
         )}
         {!ended && route && (

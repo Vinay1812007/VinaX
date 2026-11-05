@@ -38,8 +38,16 @@ export const DEFAULT_READ_VOICE = 'troy';
 /** Arabic text is read by Orpheus Arabic's default voice. */
 export const ARABIC_VOICE = 'abdullah';
 
-/** Gemini's prebuilt voices offered for Live (and for Read aloud when Gemini reads). */
-export const LIVE_VOICES = ['Kore', 'Puck', 'Charon', 'Aoede', 'Fenrir', 'Leda', 'Orus', 'Zephyr', 'Sulafat', 'Achird'] as const;
+/**
+ * Gemini's 30 prebuilt voices, offered for Live (and for Read aloud when
+ * Gemini reads). Google: native audio Live models take any TTS voice
+ * (checked 2026-11-05). The first ten are the ones offered before.
+ */
+export const LIVE_VOICES = [
+  'Kore', 'Puck', 'Charon', 'Aoede', 'Fenrir', 'Leda', 'Orus', 'Zephyr', 'Sulafat', 'Achird',
+  'Callirrhoe', 'Autonoe', 'Enceladus', 'Iapetus', 'Umbriel', 'Algieba', 'Despina', 'Erinome', 'Algenib', 'Rasalgethi',
+  'Laomedeia', 'Achernar', 'Alnilam', 'Schedar', 'Gacrux', 'Pulcherrima', 'Zubenelgenubi', 'Vindemiatrix', 'Sadachbia', 'Sadaltager',
+] as const;
 export const DEFAULT_LIVE_VOICE = 'Kore';
 
 /**
@@ -400,23 +408,59 @@ export async function geminiTranscribe(env: AiEnv, clip: Uint8Array, mime: strin
 
 export interface LiveSetup {
   model: string;
-  generationConfig: { responseModalities: ['AUDIO']; speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: string } } } };
+  generationConfig: {
+    responseModalities: ['AUDIO'];
+    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: string } } };
+    thinkingConfig?: { thinkingBudget: number } | { thinkingLevel: string };
+  };
   systemInstruction: { parts: Array<{ text: string }> };
   inputAudioTranscription: Record<string, never>;
   outputAudioTranscription: Record<string, never>;
   contextWindowCompression: { slidingWindow: Record<string, never> };
+  /** When the listener has finished speaking (Live API voice activity detection). */
+  realtimeInputConfig?: { automaticActivityDetection: { endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH'; silenceDurationMs: number } };
   /** Web search: the model's own search tool (Live API `tools`, checked 2026-11-02). */
   tools?: Array<{ googleSearch: Record<string, never> }>;
 }
 
-export function liveSetup(model: string, voice: string, prompt: string, search = false): LiveSetup {
+/**
+ * How long a pause ends the listener's turn. Google's default is about
+ * 800 ms and its guide recommends 500–800 ms (checked 2026-11-05); the low
+ * end makes replies start sooner without cutting people off mid-sentence.
+ */
+export const LIVE_SILENCE_MS = 500;
+
+/**
+ * The quickest thinking each Live model takes (Google's Live guide,
+ * 2026-11-05): 3.1 Flash Live takes `minimal`; 2.5 Flash Live takes a token
+ * budget (0 = answer straight away); 3.8 Live must not be sent one, and
+ * the Extended thinking model is picked to think, so it keeps its default.
+ */
+export function quickThinking(model: string): { thinkingBudget: number } | { thinkingLevel: string } | null {
+  if (model === 'gemini-3.1-flash-live-preview') return { thinkingLevel: 'minimal' };
+  if (model.startsWith('gemini-2.5-flash-native-audio')) return { thinkingBudget: 0 };
+  return null;
+}
+
+/**
+ * The first message of a Live session. `tuned` adds the speed settings
+ * (quick end of turn, quick thinking); the page asks again without them
+ * when a model refuses the setup (an invalid-argument close).
+ */
+export function liveSetup(model: string, voice: string, prompt: string, search = false, tuned = false): LiveSetup {
+  const thinking = tuned ? quickThinking(model) : null;
   return {
     model: `models/${model}`,
-    generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } },
+    generationConfig: {
+      responseModalities: ['AUDIO'],
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
+      ...(thinking ? { thinkingConfig: thinking } : {}),
+    },
     systemInstruction: { parts: [{ text: prompt }] },
     inputAudioTranscription: {},
     outputAudioTranscription: {},
     contextWindowCompression: { slidingWindow: {} },
+    ...(tuned ? { realtimeInputConfig: { automaticActivityDetection: { endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH' as const, silenceDurationMs: LIVE_SILENCE_MS } } } : {}),
     ...(search ? { tools: [{ googleSearch: {} }] } : {}),
   };
 }
@@ -441,6 +485,8 @@ export function tokenBodies(setup: LiveSetup, now = Date.now()): Array<{ shape: 
     inputAudioTranscription: {},
     outputAudioTranscription: {},
     contextWindowCompression: setup.contextWindowCompression,
+    ...(setup.generationConfig.thinkingConfig ? { thinkingConfig: setup.generationConfig.thinkingConfig } : {}),
+    ...(setup.realtimeInputConfig ? { realtimeInputConfig: setup.realtimeInputConfig } : {}),
     // The token is locked to the search tool too, so the page can't add it.
     ...(setup.tools ? { tools: setup.tools } : {}),
   };
@@ -451,11 +497,25 @@ export function tokenBodies(setup: LiveSetup, now = Date.now()): Array<{ shape: 
   ];
 }
 
+/**
+ * The body shape Google last accepted, tried first next time: a refused
+ * shape costs a round trip before every Live session (kept per isolate).
+ */
+let goodShape: string | null = null;
+
+/** Test seam. */
+export function _resetTokenShape(): void {
+  goodShape = null;
+}
+
 export async function mintLiveToken(env: AiEnv, setup: LiveSetup, now = Date.now()): Promise<{ token: string; shape: string; expiresAt: string }> {
   const key = geminiKey(env);
   if (!key) throw new ProviderError('not_configured');
   let last: ProviderError = new ProviderError('upstream');
-  for (const { shape, body } of tokenBodies(setup, now)) {
+  const bodies = tokenBodies(setup, now);
+  const known = bodies.findIndex((b) => b.shape === goodShape);
+  if (known > 0) bodies.unshift(...bodies.splice(known, 1));
+  for (const { shape, body } of bodies) {
     const sig = AbortSignal.timeout(10_000);
     try {
       const res = await fetch(`${GEMINI}/v1beta/auth_tokens`, {
@@ -472,6 +532,7 @@ export async function mintLiveToken(env: AiEnv, setup: LiveSetup, now = Date.now
       }
       const j = (await res.json().catch(() => null)) as { name?: unknown } | null;
       if (typeof j?.name !== 'string' || !j.name) throw new ProviderError('upstream');
+      goodShape = shape;
       return { token: j.name, shape, expiresAt: body.expireTime as string };
     } catch (e) {
       throw asProviderError(e, sig);

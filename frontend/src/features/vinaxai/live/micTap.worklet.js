@@ -1,6 +1,7 @@
 /**
  * VinaX AI Live voice — the microphone tap. Runs in the audio thread and
- * hands the page the raw samples in ~85 ms batches; the page turns them into
+ * hands the page the raw samples in ~43 ms batches (at 48 kHz; smaller
+ * batches reach Gemini sooner, so it hears the end of a sentence sooner); the page turns them into
  * 16 kHz 16-bit PCM for Gemini Live (live/liveAudio.ts). Loaded with
  * audioWorklet.addModule() from this same origin (the app's CSP has no blob:
  * scripts).
@@ -8,7 +9,7 @@
 class VinaxMicTap extends AudioWorkletProcessor {
   constructor() {
     super();
-    this.buf = new Float32Array(4096);
+    this.buf = new Float32Array(2048);
     this.n = 0;
   }
 

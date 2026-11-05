@@ -8,12 +8,18 @@
  *     skip?: ["<live model id>"],// models that just failed to connect (the page asks again)
  *     search?: boolean,          // web search in Live voice (only when the owner allows search)
  *     recap?: [{ role, text }],  // what was said before a reconnect (the latest 20 turns are kept)
+ *     context?: [{ role, text }],// the typed chat Live voice was opened from (the latest 12 turns are kept)
+ *     language?: "auto" | "<code>", // hold replies to one language (prompt.ts LIVE_LANGUAGES)
+ *     lean?: true,               // without the speed settings (the model refused them)
+ *     personal?: { name?, about?, instructions?, style? }, // VinaX AI settings → Personalisation, never stored
+ *     conversationId?, incognito?, // whose memory applies (none in an incognito chat)
  *     voice?: "<Gemini voice>", timezone?, locale? }
  *
- *   → 200 { token, url, setup, model: { id, name }, search, expiresAt }
+ *   → 200 { token, url, setup, model: { id, name }, search, tuned, expiresAt }
  *         `setup` is the first message the page sends on the socket; the
  *         token is locked to it where Google allows that. `search` says
- *         whether the setup carries the search tool.
+ *         whether the setup carries the search tool; `tuned` whether it
+ *         carries the speed settings (quick end of turn, quick thinking).
  *   → 401 signed_out · 429 rate_limited | voice_busy
  *   → 503 ai_not_configured | ai_disabled | unavailable | voice_unavailable
  */
@@ -24,9 +30,12 @@ import { aiSettings } from '../../_lib/ai/config';
 import {
   ALL_LIVE_MODELS, DEFAULT_LIVE_VOICE, LIVE_MODELS, LIVE_SEARCH_MODELS, LIVE_THINKING_MODEL, LIVE_VOICES, LIVE_WS_URL, liveSetup, mintLiveToken, noteVoiceFailure, voiceResting,
 } from '../../_lib/ai/voice';
-import { firstNameOf, safeLocale, safeTimezone, voicePrompt, voiceRecapBlock } from '../../_lib/ai/prompt';
+import { chatContextBlock, firstNameOf, ownerBlock, personalBlock, safeLocale, safeTimezone, sanitizePersonal, voicePrompt, voiceRecapBlock } from '../../_lib/ai/prompt';
+import { memoryBlock, memoryFor } from '../../_lib/ai/memory';
 import { asProviderError } from '../../_lib/ai/errors';
 import type { AiEnv } from '../../_lib/ai/types';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: { ...CORS, 'access-control-allow-methods': 'POST, OPTIONS' } });
 
@@ -52,29 +61,46 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
   const body = read.value && typeof read.value === 'object' ? read.value : {};
   const skip = Array.isArray(body.skip) ? body.skip.filter((s): s is string => typeof s === 'string').slice(0, 10) : [];
   const voice = (LIVE_VOICES as readonly string[]).includes(body.voice as string) ? (body.voice as string) : DEFAULT_LIVE_VOICE;
+  const settings = await aiSettings(env);
   // The owner's search switch covers Live voice too.
-  const search = body.search === true && (await aiSettings(env)).search;
+  const search = body.search === true && settings.search;
   const candidates = liveCandidates(body.thinking === true, skip, Date.now(), body.model, search);
   if (!candidates.length) return voiceFailure([]);
-  const recap = voiceRecapBlock(body.recap);
+  const tuned = body.lean !== true;
+  const personal = sanitizePersonal(body.personal);
+  const conversationId = typeof body.conversationId === 'string' && UUID.test(body.conversationId) ? body.conversationId : null;
+  const [account, memory] = await Promise.all([
+    accountOf(env, gate.sub),
+    memoryFor(env, gate.sub, conversationId, body.incognito === true).catch(() => null),
+  ]);
+  const accountName = firstNameOf(account.ok ? account.value?.name : null);
+  // What the model is told besides the spoken prompt, in the chat's order:
+  // the owner's instructions, the listener's preferences, memory, then the
+  // typed chat and the call so far.
+  const extra = [
+    ownerBlock(settings.instructions),
+    personalBlock(personal),
+    memory ? memoryBlock(memory, '', { voice: true }) : null,
+    chatContextBlock(body.context),
+    voiceRecapBlock(body.recap),
+  ].filter((b): b is string => !!b);
 
-  const account = await accountOf(env, gate.sub);
   const kinds: string[] = [];
   for (const model of candidates) {
     const spoken = voicePrompt({
       now: new Date(),
       timezone: safeTimezone(body.timezone),
       locale: safeLocale(body.locale),
-      firstName: firstNameOf(account.ok ? account.value?.name : null),
+      firstName: personal?.name || accountName,
       modelName: model.name,
       providerName: 'Google',
-    }, search);
-    const prompt = recap ? `${spoken}\n\n${recap}` : spoken;
-    const setup = liveSetup(model.id, voice, prompt, search);
+    }, search, body.language);
+    const prompt = [spoken, ...extra].join('\n\n');
+    const setup = liveSetup(model.id, voice, prompt, search, tuned);
     try {
       const t = await mintLiveToken(env, setup);
-      console.log(JSON.stringify({ route: 'ai-live-token', provider: 'gemini', model: model.id, shape: t.shape, search, ok: true }));
-      return json({ token: t.token, url: LIVE_WS_URL, setup, model, search, expiresAt: t.expiresAt });
+      console.log(JSON.stringify({ route: 'ai-live-token', provider: 'gemini', model: model.id, shape: t.shape, search, tuned, ok: true }));
+      return json({ token: t.token, url: LIVE_WS_URL, setup, model, search, tuned, expiresAt: t.expiresAt });
     } catch (e) {
       const err = asProviderError(e);
       kinds.push(err.kind);

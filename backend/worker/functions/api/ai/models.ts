@@ -3,7 +3,7 @@
  *
  *   → 200 { enabled, configured, search, groups: [...], models: [{ id, name, provider, group,
  *            description, flags: { vision, web, thinking, code }, available, reason? }],
- *            voice: { dictation, readAloud, live, liveSearch, voices: [...], liveVoices: [...], liveModels: [{ id, name }] },
+ *            voice: { dictation, readAloud, live, liveSearch, voices: [...], liveVoices: [...], liveModels: [{ id, name }], liveLanguages: [{ code, name, native }] },
  *            limits: { imagesPerMessage, filesPerMessage, filesPerChat, pdfMB, pdfPages, textMB } }
  *
  * `voice` says which voice features have a provider key (phase 6) and
@@ -32,6 +32,7 @@ import { ladderModels, PICKER_GROUPS } from '../../_lib/ai/models';
 import { searchConfigured } from '../../_lib/ai/search';
 import { ALL_LIVE_MODELS, LIVE_VOICES, READ_VOICES, voiceAvailability } from '../../_lib/ai/voice';
 import type { AiEnv } from '../../_lib/ai/types';
+import { LIVE_LANGUAGES } from '../../_lib/ai/prompt';
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: { ...CORS, 'access-control-allow-methods': 'GET, OPTIONS' } });
 
@@ -64,7 +65,7 @@ export const onRequestGet = async (ctx: { request: Request; env: AiEnv; waitUnti
   const registry = registryFor(settings);
   const canSearch = searchConfigured(env, settings.limits.searchesPerDay) || ladderModels(registry, 'grounded').some((spec) => providerConfigured(env, spec.provider));
   const avail = voiceAvailability(env);
-  const voice = { ...avail, liveSearch: avail.live && settings.search, voices: READ_VOICES, liveVoices: LIVE_VOICES, liveModels: ALL_LIVE_MODELS };
+  const voice = { ...avail, liveSearch: avail.live && settings.search, voices: READ_VOICES, liveVoices: LIVE_VOICES, liveModels: ALL_LIVE_MODELS, liveLanguages: LIVE_LANGUAGES };
   // The owner's file limits, so the page checks files against the same numbers (searchesPerDay and the rate stay server-side).
   const { imagesPerMessage, filesPerMessage, filesPerChat, pdfMB, pdfPages, textMB } = settings.limits;
   const limits = { imagesPerMessage, filesPerMessage, filesPerChat, pdfMB, pdfPages, textMB };
