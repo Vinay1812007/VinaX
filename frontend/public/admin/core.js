@@ -853,7 +853,8 @@
     var max = Math.max.apply(null, items.map(function (x) { return Number(x.value) || 0; })) || 1;
     var f = o.format || fmt.num;
     return h('ol.hbars', items.slice(0, o.limit || 12).map(function (it, i) {
-      return h('li', { title: it.title || null },
+      // Long names end in "…"; the tooltip keeps the full name.
+      return h('li', { title: it.title || [it.label, it.sub].filter(Boolean).join(' — ') || null },
         h('span.hb-rank', String(i + 1)),
         h('div.hb-main',
           h('div.hb-top', h('span.hb-label', it.label || '—'), h('span.hb-val', f(it.value))),
