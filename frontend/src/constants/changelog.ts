@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.10.8': {
+    title: 'Every sign-in emails you: the time, browser, IP address and rough location',
+    changes: [
+      { type: 'new', text: 'Each time you sign in to VinaX you get an email, not only on a new device, so you can spot a sign-in that wasn\'t you.' },
+      { type: 'improved', text: 'The email shows when it happened, the browser or app (like "Chrome on Windows"), the IP address and the rough location.' },
+      { type: 'improved', text: 'A sign-in from a phone or browser your account hasn\'t used before is called out in the subject.' },
+      { type: 'improved', text: 'The welcome email shows where you signed up from.' },
+    ],
+  },
   '1.10.7': {
     title: 'Song pages show the film in search results: "Suttamla Soosi - Gangs Of Godavari | Telugu…',
     changes: [
