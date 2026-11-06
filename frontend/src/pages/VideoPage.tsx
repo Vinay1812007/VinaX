@@ -27,7 +27,7 @@ import '@/styles/pages/browse.css';
 function VideoSkeleton() {
   return (
     <div className="vx-browse max-w-5xl mx-auto" role="status" aria-label="Loading video">
-      <div className="skeleton aspect-video rounded-sheet" />
+      <div className="skeleton skeleton-art aspect-video rounded-sheet" />
       <div className="skeleton h-6 w-2/3 mt-5" />
       <div className="skeleton h-4 w-1/3 mt-2 mb-8" />
       <ListSkeleton rows={4} />

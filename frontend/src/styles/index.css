@@ -895,12 +895,28 @@ html.pointer-coarse .overflow-x-auto::-webkit-scrollbar { display: none; }
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  /* A slanted white stripe that flashes across every loading shape. */
+  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.2) 50%, transparent 70%);
   animation: vxShimmer 1.6s infinite;
 }
 html.light .skeleton::after {
-  background: linear-gradient(90deg, transparent, rgba(48, 22, 34, 0.06), transparent);
+  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.75) 50%, transparent 70%);
 }
+
+/* Artwork tiles: a see-through VinaX "V" sits in the middle and brightens as
+   the white stripe flashes past. The logo is a mask, so only opacity animates
+   (compositor-friendly, same as the stripe). */
+.skeleton-art::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Cline x1='30' y1='26' x2='64' y2='102' stroke='%23000' stroke-width='16' stroke-linecap='round'/%3E%3Cpolyline points='98,26 78,52 90,70 64,102' fill='none' stroke='%23000' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / auto 38% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Cline x1='30' y1='26' x2='64' y2='102' stroke='%23000' stroke-width='16' stroke-linecap='round'/%3E%3Cpolyline points='98,26 78,52 90,70 64,102' fill='none' stroke='%23000' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / auto 38% no-repeat;
+  opacity: 0.08;
+  animation: vxLogoFlash 1.6s infinite;
+}
+html.light .skeleton-art::before { background: rgb(48 22 34); }
 
 /* ============================================================================
    Mini-player effects (the shell itself is styled in shell.css).
@@ -1307,6 +1323,11 @@ html.light .glass-sidebar::before {
   100% { background-position: 400px 0; }
 }
 @keyframes vxShimmer { to { transform: translateX(100%); } }
+/* Peaks at ~29%: when the eased stripe (vxShimmer) crosses the tile centre. */
+@keyframes vxLogoFlash {
+  0%, 12%, 52%, 100% { opacity: 0.08; }
+  29% { opacity: 0.32; }
+}
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -1432,7 +1453,7 @@ html.reduce-motion *::after {
 @media (prefers-reduced-motion: reduce) {
   .reveal, .hero-animated, .animate-marquee, .animate-fade-up, .skeleton,
   .animate-pulse-bar, .vx-stagger > *, .vx-blob-a, .vx-blob-b, .vx-blob-c,
-  .vx-blob-d, .vx-eq i, .karaoke-fill, .skeleton::after,
+  .vx-blob-d, .vx-eq i, .karaoke-fill, .skeleton::after, .skeleton-art::before,
   .np-mini.np-changed, .np-mini[data-buffering='true'] .np-mini-thumb::after,
   .vx-dock-active {
     animation: none !important;

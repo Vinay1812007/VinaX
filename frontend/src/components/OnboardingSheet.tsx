@@ -485,7 +485,7 @@ export function OnboardingSheet() {
               {lede('Home starts from the songs you pick here. They are saved to Liked songs on this device.')}
               {seedSongs.length === 0 ? (
                 <div className="grid grid-cols-3 gap-3 mt-5" aria-hidden>
-                  {Array.from({ length: 12 }).map((_, i) => <div key={i} className="aspect-square rounded-lg skeleton" />)}
+                  {Array.from({ length: 12 }).map((_, i) => <div key={i} className="aspect-square rounded-lg skeleton skeleton-art" />)}
                 </div>
               ) : (
                 <div className="grid grid-cols-3 gap-3 mt-5">

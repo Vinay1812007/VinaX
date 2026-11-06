@@ -52,7 +52,7 @@ function VideoGridSkeleton({ n = 8 }: { n?: number }) {
     <div className="vx-video-grid">
       {Array.from({ length: n }).map((_, i) => (
         <div key={i}>
-          <div className="skeleton aspect-video rounded-card" />
+          <div className="skeleton skeleton-art aspect-video rounded-card" />
           <div className="skeleton mt-2 h-3.5 w-3/4" />
           <div className="skeleton mt-1.5 h-3 w-1/2" />
         </div>

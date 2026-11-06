@@ -6,7 +6,7 @@
 function CardBones() {
   return (
     <>
-      <div className="skeleton aspect-square rounded-lg" />
+      <div className="skeleton skeleton-art aspect-square rounded-lg" />
       <div className="skeleton h-3.5 w-4/5 mt-3 rounded" />
       <div className="skeleton h-3 w-1/2 mt-2 rounded" />
     </>
@@ -33,7 +33,7 @@ export function ListSkeleton({ rows = 8 }: { rows?: number }) {
     <div className="space-y-1">
       {Array.from({ length: rows }).map((_, i) => (
         <div key={i} className="flex items-center gap-3 min-h-[68px] px-2.5 py-1.5">
-          <div className="skeleton w-14 h-14 rounded-md shrink-0" />
+          <div className="skeleton skeleton-art w-14 h-14 rounded-md shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="skeleton h-3.5 w-1/2 rounded" />
             <div className="skeleton h-3 w-1/3 mt-2 rounded" />
@@ -50,7 +50,7 @@ export function HeaderSkeleton() {
     // column with centred 200px art on phones, an end-aligned row with fluid
     // art from md up — so nothing jumps when the data lands.
     <div className="vx-entity-hero" role="status" aria-label="Loading">
-      <div className="skeleton shrink-0 aspect-square w-[200px] self-center md:self-auto md:w-[clamp(160px,18vw,232px)] rounded-xl" />
+      <div className="skeleton skeleton-art shrink-0 aspect-square w-[200px] self-center md:self-auto md:w-[clamp(160px,18vw,232px)] rounded-xl" />
       <div className="flex-1 w-full min-w-0">
         <div className="skeleton h-3 w-16 mb-4 rounded" />
         <div className="skeleton h-10 w-2/3 mb-4 rounded-md" />
