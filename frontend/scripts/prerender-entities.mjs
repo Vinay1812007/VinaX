@@ -342,6 +342,19 @@ export function injectSection(html, section) {
   return html.slice(0, at) + section + html.slice(at);
 }
 
+/** Pages every build includes: the ones Google already shows (scripts/seo-priority.txt). */
+const PRIORITY_FILE = resolve(dirname(fileURLToPath(import.meta.url)), 'seo-priority.txt');
+
+/** "song:<id>" lines → [type, id] pairs; comments, blanks and junk are skipped. */
+export function priorityPages(text) {
+  const out = [];
+  for (const line of String(text).split('\n')) {
+    const m = /^\s*(song|album|artist):([\w-]+)\s*$/.exec(line);
+    if (m) out.push([m[1], m[2]]);
+  }
+  return out;
+}
+
 /** The <loc> paths ("/song/x-1") of an entity sitemap on this site. */
 export function sitemapPaths(xml) {
   const out = [];
@@ -542,7 +555,13 @@ async function main() {
     const picked = await pickEntities(getJson, LANGS, SONGS_PER_LANG, info);
     const fromHubs = hubSongs.slice(0, MAX_HUB_SONGS).map((id) => ['song', id]);
     const have = new Set(fromHubs.map(([, id]) => id));
-    const todo = [...fromHubs, ...picked.filter(([t, id]) => t !== 'song' || !have.has(id))];
+    let priority = [];
+    try {
+      priority = priorityPages(readFileSync(PRIORITY_FILE, 'utf8'));
+    } catch {
+      /* no list: nothing extra */
+    }
+    const todo = [...priority, ...fromHubs, ...picked.filter(([t, id]) => t !== 'song' || !have.has(id))];
     const room = pageRoom(countFiles(DIST));
     // The pages the site already has: the store, plus whatever the live sitemap lists that it lacks.
     const store = loadStore();

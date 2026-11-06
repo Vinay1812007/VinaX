@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — a plain .mjs build script, no types
-import { HUB_PATHS, MIRRORS, STATIC_SITEMAPS, entityKey, minimumPages, nextPages, pageRoom, sitemapPaths, songIdOf, tooFewPages, fileFor, hubFileFor, hubSongIds, injectSection, linkedEntities, pickEntities, pruneEntityLinks, songSections } from '../../scripts/prerender-entities.mjs';
+import { HUB_PATHS, MIRRORS, STATIC_SITEMAPS, entityKey, minimumPages, nextPages, pageRoom, priorityPages, sitemapPaths, songIdOf, tooFewPages, fileFor, hubFileFor, hubSongIds, injectSection, linkedEntities, pickEntities, pruneEntityLinks, songSections } from '../../scripts/prerender-entities.mjs';
 
 type Song = { id: string; name: string; language: string; playCount: number; album?: { id: string }; artists?: { primary: Array<{ id: string }> } };
 const song = (id: string, name: string, plays: number, extra: Partial<Song> = {}): Song => ({
@@ -168,5 +168,21 @@ describe('SEO daily growth — keep what is live, add what pages link to, stay u
     expect(minimumPages(17000, 300)).toBe(13600);
     expect(minimumPages(100, 300)).toBe(300);
     expect(minimumPages(17000, 0)).toBe(0); // ENTITY_MIN_PAGES=0 turns every check off
+  });
+});
+
+describe('pages Google already shows are always built', () => {
+  it('reads the priority list, skipping comments and junk', () => {
+    expect(priorityPages('# a comment\nsong:ncBHw-c5\n\nalbum:82456046\nartist:455663\nplaylist:9\nsong:../x\n')).toEqual([
+      ['song', 'ncBHw-c5'],
+      ['album', '82456046'],
+      ['artist', '455663'],
+    ]);
+  });
+  it('ships a list with the pages Search Console reports', () => {
+    const list = priorityPages(readFileSync(resolve(__dirname, '../../scripts/seo-priority.txt'), 'utf8'));
+    expect(list.length).toBeGreaterThan(150);
+    expect(list).toContainEqual(['song', 'mecRUmkQ']); // Odahuttidavale Male, ranked on the old status address
+    expect(list).toContainEqual(['song', 'ncBHw-c5']); // Suttamla Soosi
   });
 });
