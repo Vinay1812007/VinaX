@@ -16,6 +16,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.10.11': {
+    title: 'Album cards: glass shine on hover now shows above the cover',
+    changes: [
+      { type: 'improved', text: 'The hover stripe was running underneath the cover image: the slight hover.' },
+    ],
+  },
   '1.10.10': {
     title: 'Opening screen: the VinaX logo lights up like a neon sign',
     changes: [
