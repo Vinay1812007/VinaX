@@ -5,6 +5,7 @@ import { albumPath, artistPath, extractId } from '@/utils/slug';
 import { useCanonicalRedirect, useJsonLd } from '@/hooks/useSeo';
 import { buildArtistBreadcrumbs, buildArtistJsonLd } from '@/utils/schema';
 import { usePageMeta } from '@/hooks/usePageMeta';
+import { artistDesc, artistTitle, mainLanguage } from '@/utils/songSeo';
 import { useArtist, useInfiniteArtistSongs } from '@/features/artists/useArtist';
 import { pickRelatedArtists, useSimilarArtistsOf } from '@/features/artists/useSimilar';
 import { playArtistStation } from '@/features/radio/stations';
@@ -38,10 +39,9 @@ export default function ArtistPage() {
   const canonicalPath = artist ? artistPath(artist) : undefined;
   useCanonicalRedirect(canonicalPath);
   usePageMeta({
-    title: artist ? `${artist.name} Songs — Hits & Latest` : undefined,
-    description: artist
-      ? `Play ${artist.name} songs free on VinaX — top hits, latest releases and albums. Private by design.`
-      : undefined,
+    // The prerendered page's words (utils/songSeo.ts): "Arijit Singh Songs - Top Hindi Hits".
+    title: artist ? artistTitle(artist.name, mainLanguage(artist.topSongs)) : undefined,
+    description: artist ? artistDesc(artist.name, artist.topSongs.map((s) => s.title)) : undefined,
     image: artist ? bestImage(artist.images, 500) : undefined,
     type: 'profile',
     canonicalPath,

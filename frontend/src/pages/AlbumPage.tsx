@@ -3,6 +3,7 @@ import { albumPath, artistPath, extractId } from '@/utils/slug';
 import { useCanonicalRedirect, useJsonLd } from '@/hooks/useSeo';
 import { buildAlbumBreadcrumbs, buildAlbumJsonLd } from '@/utils/schema';
 import { usePageMeta } from '@/hooks/usePageMeta';
+import { albumDesc, albumTitle } from '@/utils/songSeo';
 import { useAlbum } from '@/features/albums/useAlbum';
 import { useSimilarAlbumsOf } from '@/features/artists/useSimilar';
 import { playAlbum } from '@/features/player/playEntity';
@@ -30,10 +31,9 @@ export default function AlbumPage() {
   const canonicalPath = album ? albumPath(album) : undefined;
   useCanonicalRedirect(canonicalPath);
   usePageMeta({
-    title: album ? `${album.title}${album.year ? ` (${album.year})` : ''} — Album` : undefined,
-    description: album
-      ? `Listen to ${album.title}${album.year ? ` (${album.year})` : ''} — ${album.songCount ?? album.songs.length} songs free on VinaX. Private by design.`
-      : undefined,
+    // The prerendered page's words (utils/songSeo.ts): "Gangs Of Godavari Songs - …".
+    title: album ? albumTitle(album.title, album.year, album.language) : undefined,
+    description: album ? albumDesc(album.title, album.year, album.language, album.songs.map((s) => s.title)) : undefined,
     image: album ? bestImage(album.images, 500) : undefined,
     type: 'music.album',
     canonicalPath,

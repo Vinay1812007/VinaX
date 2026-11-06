@@ -280,7 +280,6 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
     const image = bestImg(d.image);
     const rawSongs: any[] = Array.isArray(d.songs) ? d.songs : Array.isArray(d.list) ? d.list : [];
     const tracks = songRows(rawSongs);
-    const year = d.year ? ` (${d.year})` : '';
     const lang = typeof d.language === 'string' ? d.language : undefined;
     const first = rawSongs[0] ?? {};
     const label = plain(first.label ?? first.more_info?.label) || undefined;
@@ -295,6 +294,8 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
     const singers = tally(['singer', 'playbacksinger', 'vocals']);
     const music = tally(['music']);
     const lyrics = tally(['lyricist']);
+    // A soundtrack: its songs credit who is on screen.
+    const film = rawSongs.some((s) => creditNames(s, ['starring']).length > 0);
     // Per-track singers read better than the primary credit on a soundtrack.
     const trackRows = tracks.map((t, i) => {
       const s = creditNames(rawSongs[i], ['singer', 'playbacksinger', 'vocals']);
@@ -320,9 +321,9 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
       para: albumPara,
       sections: albumSections,
       crumbs: [{ name: 'Home', item: `${ORIGIN}/` }, ...hubCrumbs(d.language), { name: String(d.name) }],
-      title: `${d.name}${year} — Album · VinaX`,
+      title: albumTitle(d.name, d.year ? String(d.year) : undefined, lang, film),
       ogType: 'music.album',
-      desc: `Listen to the album ${d.name}${artist ? ` by ${artist}` : ''}${d.year ? `, released ${d.year}` : ''}, on VinaX — free, no login.`,
+      desc: albumDesc(d.name, d.year ? String(d.year) : undefined, lang, film, tracks.map((t) => t.title), music),
       image,
       h1: d.name,
       sub: `Album${artist ? ` · ${artist}` : ''}${d.year ? ` · ${d.year}` : ''}`,
@@ -436,9 +437,9 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
       para: artistPara,
       sections: artistSections,
       crumbs: [{ name: 'Home', item: `${ORIGIN}/` }, { name: String(d.name) }],
-      title: `${d.name} — Songs & Albums · VinaX`,
+      title: artistTitle(d.name, main),
       ogType: 'profile',
-      desc: `Top songs, albums and tracks by ${d.name} on VinaX — free, no login.`,
+      desc: artistDesc(d.name, role, main, top.map((t) => t.title), albums.map((a) => a.name.replace(SOUNDTRACK, '').trim())),
       image,
       h1: d.name,
       sub: capWord(role),
@@ -644,6 +645,70 @@ export function songTitle(name: string, album: string | undefined, artist: strin
   const base = `${name}${context ? ` - ${context}` : ''}`;
   const withLang = `${base}${lang ? ` | ${capWord(lang)} Song` : ''} | VinaX`;
   return withLang.length <= 70 ? withLang : `${base} | VinaX`;
+}
+
+/** "(Original Motion Picture Soundtrack)" and the like at the end of an album name. */
+const SOUNDTRACK = /\s*[([]?\s*(?:original\s+)?(?:motion\s+picture\s+)?soundtrack\s*[)\]]?\s*$|\s*[([]\s*ost\s*[)\]]\s*$/i;
+/** An album name that already says it is a set of songs. */
+const SONGS_WORD = /\b(?:songs|hits|collection|jukebox|mix|vol\.?\s*\d+)\b/i;
+
+/**
+ * SEO 2026-11 — an album page's title as people search for soundtracks:
+ * "Gangs Of Godavari Songs - Telugu Movie Songs 2024 | VinaX". Compilations
+ * are an album, not a movie; a single from a film keeps its "(From …)" name.
+ */
+export function albumTitle(name: string, year: string | undefined, lang: string | undefined, film: boolean): string {
+  const L = lang ? capWord(lang) : '';
+  const clean = name.replace(SOUNDTRACK, '').trim() || name;
+  if (filmOf(name)) return `${clean}${L ? ` | ${L} Song` : ''} | VinaX`;
+  const isFilm = film || SOUNDTRACK.test(name);
+  const head = SONGS_WORD.test(clean) ? clean : `${clean} Songs`;
+  const kind = isFilm ? `${L ? `${L} ` : ''}Movie Songs` : `${L ? `${L} ` : ''}Album`;
+  for (const t of [`${head} - ${kind}${year ? ` ${year}` : ''} | VinaX`, `${head} - ${kind} | VinaX`]) if (t.length <= 70) return t;
+  return `${head} | VinaX`;
+}
+
+/** A song name for a list: without "(From …)", "(Telugu)" and other brackets. */
+function shortName(t: string): string {
+  return t.replace(/\s*[([][^)\]]*[)\]]/g, '').trim() || t;
+}
+
+/** "a, b and c", or "a, b, c and more" when there are more than three. */
+function someOf(names: string[]): string {
+  const top = names.slice(0, 3).map(shortName);
+  if (names.length > 3) return `${top.join(', ')} and more`;
+  return top.length > 1 ? `${top.slice(0, -1).join(', ')} and ${top[top.length - 1]}` : (top[0] ?? '');
+}
+
+/** The album page's description: every song, the film and who made the music. */
+export function albumDesc(name: string, year: string | undefined, lang: string | undefined, film: boolean, songs: string[], music: string[]): string {
+  const clean = name.replace(SOUNDTRACK, '').trim() || name;
+  const isFilm = (film || SOUNDTRACK.test(name)) && !filmOf(name);
+  const L = lang ? capWord(lang) : '';
+  const n = songs.length;
+  const by = music.length ? ` Music by ${andList(music.slice(0, 2).join(', '))}.` : '';
+  const single = filmOf(name);
+  if (n <= 1 || single) {
+    const song = shortName(clean);
+    const kind = L ? `a ${L} song` : 'a song';
+    return clampDesc(`Listen to ${song} online. ${song} is ${kind}${single ? ` from ${single}` : ''}.${by} Stream free on VinaX.`);
+  }
+  const from = isFilm ? `, from the ${[year, L].filter(Boolean).join(' ')} movie`.replace('the  movie', 'the movie') : L ? `, a ${L} album` : '';
+  return clampDesc(`Listen to all ${n} ${clean} songs online${from}: ${someOf(songs)}.${by} Stream free on VinaX.`);
+}
+
+/** An artist page's title: "Anirudh Ravichander Songs - Top Tamil Hits | VinaX". */
+export function artistTitle(name: string, lang: string | undefined): string {
+  const t = `${name} Songs - Top ${lang ? `${capWord(lang)} ` : ''}Hits | VinaX`;
+  return t.length <= 70 ? t : `${name} Songs | VinaX`;
+}
+
+/** An artist page's description: their best-known songs and soundtracks. */
+export function artistDesc(name: string, role: string, lang: string | undefined, songs: string[], albums: string[]): string {
+  const list = songs.length ? `: ${songs.slice(0, 3).map(shortName).join(', ')} and more` : '';
+  const who = `${name} is a${/^[aeiou]/i.test(lang ?? role) ? 'n' : ''} ${lang ? `${capWord(lang)} ` : ''}${role}`;
+  const known = albums.length ? ` known for ${andList(albums.slice(0, 2).join(', '))}` : '';
+  return clampDesc(`Listen to ${name} songs online${list}. ${who}${known}. Stream free on VinaX.`);
 }
 
 /** The song page's description, in the words people search with. */

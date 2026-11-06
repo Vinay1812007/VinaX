@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { entityPage, matchHub, MIRROR_BASES, renderEntity, renderHub, songDesc, songIdOf, songTitle, useCatalogBases } from './render';
+import { albumDesc, albumTitle, artistDesc, artistTitle, entityPage, matchHub, MIRROR_BASES, renderEntity, renderHub, songDesc, songIdOf, songTitle, useCatalogBases } from './render';
 
 const shell = readFileSync(resolve(__dirname, '../../../index.html'), 'utf8');
 
@@ -407,5 +407,38 @@ describe('SEO 2026-11 — song titles say the film, as people search for it', ()
       'Listen to Suttamla Soosi online. Suttamla Soosi is a Telugu song from Gangs Of Godavari, sung by Anurag Kulkarni and Yuvan Shankar Raja. Stream it free on…',
     );
     expect(songDesc('Aaho Raja', 'Aaho Raja', undefined, undefined)).toBe('Listen to Aaho Raja online. Aaho Raja is a song. Stream it free on VinaX, with lyrics and no subscription.');
+  });
+});
+
+describe('SEO 2026-11 — album and artist pages say what people search for', () => {
+  it('names a soundtrack as the movie\'s songs', () => {
+    expect(albumTitle('Gangs Of Godavari', '2024', 'telugu', true)).toBe('Gangs Of Godavari Songs - Telugu Movie Songs 2024 | VinaX');
+    expect(albumTitle('Jailer 2 (Original Motion Picture Soundtrack)', '2026', 'tamil', false)).toBe('Jailer 2 Songs - Tamil Movie Songs 2026 | VinaX');
+  });
+  it('calls a compilation an album, and keeps a name that already says songs', () => {
+    expect(albumTitle('AUJLA SZN 1', '2026', 'punjabi', false)).toBe('AUJLA SZN 1 Songs - Punjabi Album 2026 | VinaX');
+    expect(albumTitle('Bangla Romantic Lofi Hits', '2022', 'bengali', false)).toBe('Bangla Romantic Lofi Hits - Bengali Album 2022 | VinaX');
+  });
+  it('treats a single from a film as a song', () => {
+    expect(albumTitle('Odahuttidavale (Male) (From "Mahaan")', '2025', 'kannada', false)).toBe('Odahuttidavale (Male) (From "Mahaan") | Kannada Song | VinaX');
+    expect(albumDesc('Odahuttidavale (Male) (From "Mahaan")', '2025', 'kannada', false, ['Odahuttidavale (Male) (From "Mahaan")'], ['Arjun Janya'])).toBe(
+      'Listen to Odahuttidavale online. Odahuttidavale is a Kannada song from Mahaan. Music by Arjun Janya. Stream free on VinaX.',
+    );
+  });
+  it('lists the songs and the music director', () => {
+    expect(albumDesc('AUJLA SZN 1', '2026', 'punjabi', false, ['Ashke', 'Real Bad Man', 'Straight Up', 'One More'], ['Karan Aujla'])).toBe(
+      'Listen to all 4 AUJLA SZN 1 songs online, a Punjabi album: Ashke, Real Bad Man, Straight Up and more. Music by Karan Aujla. Stream free on VinaX.',
+    );
+    expect(albumDesc('Gangs Of Godavari', '2024', 'telugu', true, ['Suttamla Soosi', 'Motha'], [])).toBe(
+      'Listen to all 2 Gangs Of Godavari songs online, from the 2024 Telugu movie: Suttamla Soosi and Motha. Stream free on VinaX.',
+    );
+  });
+  it('names an artist\'s songs and best-known films', () => {
+    expect(artistTitle('Arijit Singh', 'hindi')).toBe('Arijit Singh Songs - Top Hindi Hits | VinaX');
+    expect(artistTitle('Arijit Singh', undefined)).toBe('Arijit Singh Songs - Top Hits | VinaX');
+    expect(artistDesc('Arijit Singh', 'singer', 'hindi', ['Tu Mil Jaaye (From "KING")', 'Tum Hi Ho', 'Kesariya'], ['Bhediya', 'Aashiqui 2'])).toBe(
+      'Listen to Arijit Singh songs online: Tu Mil Jaaye, Tum Hi Ho, Kesariya and more. Arijit Singh is a Hindi singer known for Bhediya and Aashiqui 2. Stream…', // cut to 160 characters
+    );
+    expect(artistDesc('Sid Sriram', 'singer', 'english', [], [])).toBe('Listen to Sid Sriram songs online. Sid Sriram is an English singer. Stream free on VinaX.');
   });
 });
