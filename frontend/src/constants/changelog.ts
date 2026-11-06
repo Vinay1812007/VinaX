@@ -16,6 +16,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.10.10': {
+    title: 'Opening screen: the VinaX logo lights up like a neon sign',
+    changes: [
+      { type: 'improved', text: 'The loading screen is now a 2.4 second neon reveal: the glass tubes draw.' },
+    ],
+  },
   '1.10.9': {
     title: 'Sign-in history: every sign-in is kept for 90 days with its IP address, browser and place',
     changes: [
