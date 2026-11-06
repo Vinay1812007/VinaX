@@ -267,25 +267,49 @@ html[data-density='compact'] .vx-track-art { width: 38px; height: 38px; }
 }
 .vx-media-art img { border-radius: inherit; transition: filter 200ms var(--ease-calm); }
 .vx-media-art.is-artist { border-radius: 50%; }
-/* Hover flash: a slanted white stripe sweeps across the art once each time the
-   pointer enters. ::before (not ::after) so the heart and play buttons, which
-   come later in the card, still paint above it. Transform only. */
+/* Hover shine (glass sweep): two sharp slanted white stripes, one wide and one
+   thin, sweep across the art once each time the pointer enters, and the edge
+   lights up with a thin white rim. Layering: the hover darken filter lifts the
+   img into its own layer, so the stripes need z-index 1 to stay above it, and
+   the heart / play buttons get z-index 2 to stay above the stripes.
+   Transform and opacity only. */
 .vx-media-art::before {
   content: '';
   position: absolute;
   inset: 0;
+  z-index: 1;
   pointer-events: none;
-  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.45) 50%, transparent 70%);
-  transform: translateX(-110%);
+  background: linear-gradient(
+    115deg,
+    transparent 36%,
+    rgba(255, 255, 255, 0.55) 36.6%, rgba(255, 255, 255, 0.55) 44%,
+    transparent 44.6%, transparent 47%,
+    rgba(255, 255, 255, 0.45) 47.6%, rgba(255, 255, 255, 0.45) 49.4%,
+    transparent 50%
+  );
+  transform: translateX(-100%);
 }
+.vx-media-art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.5);
+  opacity: 0;
+  transition: opacity 200ms var(--ease-calm);
+}
+.vx-media-art .vx-card-fav,
+.vx-media-art .card-play { z-index: 2; }
 @media (hover: hover) and (pointer: fine) {
   .vx-media-card:hover .vx-media-art { transform: translateY(-3px); }
   .vx-media-card:hover .vx-media-art img { filter: brightness(0.92); }
-  .vx-media-card:hover .vx-media-art::before { animation: vxCardFlash 750ms var(--ease-calm) both; }
+  .vx-media-card:hover .vx-media-art::before { animation: vxCardShine 650ms cubic-bezier(0.3, 0.6, 0.4, 1) both; }
+  .vx-media-card:hover .vx-media-art::after { opacity: 1; }
 }
-@keyframes vxCardFlash {
-  from { transform: translateX(-110%); }
-  to { transform: translateX(110%); }
+@keyframes vxCardShine {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
 }
 @media (prefers-reduced-motion: reduce) {
   .vx-media-card:hover .vx-media-art::before { animation: none; }
