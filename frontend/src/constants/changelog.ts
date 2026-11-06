@@ -16,6 +16,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.10.9': {
+    title: 'Sign-in history: every sign-in is kept for 90 days with its IP address, browser and place',
+    changes: [
+      { type: 'improved', text: 'VinaX now keeps a record of each sign-in for 90 days: when, the IP address, the browser or app, and the rough location.' },
+      { type: 'improved', text: 'It is deleted automatically after 90 days, and at once when you delete your account.' },
+      { type: 'improved', text: 'The Privacy page explains the sign-in history and why it is kept.' },
+    ],
+  },
   '1.10.8': {
     title: 'Every sign-in emails you: the time, browser, IP address and rough location',
     changes: [
