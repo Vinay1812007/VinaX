@@ -22,7 +22,7 @@ export const ENV_ITEMS: Array<{ name: string; group: string; required: boolean; 
   { name: 'TURNSTILE_SITE_KEY', group: 'Data', required: false, note: 'Cloudflare Turnstile site key (plain var, public): with TURNSTILE_SECRET_KEY, a security check on every sign-in (app and console)' },
   { name: 'TURNSTILE_SECRET_KEY', group: 'Data', required: false, note: 'Cloudflare Turnstile secret: with TURNSTILE_SITE_KEY, a security check on every sign-in (off until both are set)' },
   { name: 'RESEND_API_KEY', group: 'Email', required: false, note: 'Resend API key: welcome, new-sign-in and console sign-in emails (off without it)' },
-  { name: 'EMAIL_FROM', group: 'Email', required: false, note: 'plain var: sender, on a domain verified in Resend (default VinaX <hello@vinaxmusic.online>)' },
+  { name: 'EMAIL_FROM', group: 'Email', required: false, note: 'plain var: sender, on a domain verified in Resend (default VinaX <notifications@vinaxmusic.online>)' },
   { name: 'EMAIL_REPLY_TO', group: 'Email', required: false, note: 'plain var: where replies go (default support@vinaxmusic.online)' },
   { name: 'CATALOG_UPSTREAMS', group: 'Catalogue', required: false, note: 'comma-separated wrapper base URLs the catalogue tries first, in order (the app only ever sees /api/cat)' },
   { name: 'CATALOG_DIRECT_URL', group: 'Catalogue', required: false, note: 'overrides the direct JioSaavn web API the catalogue falls back to' },

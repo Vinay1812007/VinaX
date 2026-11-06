@@ -9,7 +9,7 @@
  *   adminInvite    an owner adds an email to the console's admins
  *
  * Off until the Worker has RESEND_API_KEY. EMAIL_FROM (default
- * `VinaX <hello@vinaxmusic.online>`) must be on a domain verified in Resend;
+ * `VinaX <notifications@vinaxmusic.online>`) must be on a domain verified in Resend;
  * EMAIL_REPLY_TO (default support@vinaxmusic.online) is where replies go.
  *
  * Sending never throws and never blocks a sign-in: callers hand the promise
@@ -26,7 +26,7 @@ export interface EmailEnv extends DbEnv {
 }
 
 export const RESEND_URL = 'https://api.resend.com/emails';
-export const DEFAULT_FROM = 'VinaX <hello@vinaxmusic.online>';
+export const DEFAULT_FROM = 'VinaX <notifications@vinaxmusic.online>';
 export const DEFAULT_REPLY_TO = 'support@vinaxmusic.online';
 export const SITE = 'https://www.vinaxmusic.online';
 export const CONSOLE = 'https://admin.vinaxmusic.online/admin/';

@@ -69,7 +69,7 @@ describe('the Resend client', () => {
     expect(r).toEqual({ ok: true, id: 'em_1' });
     expect(sent).toHaveLength(1);
     expect(sent[0]!.headers).toMatchObject({ authorization: 'Bearer re_test_key', 'idempotency-key': 'welcome/1' });
-    expect(sent[0]!.body).toMatchObject({ from: 'VinaX <hello@vinaxmusic.online>', to: ['a@example.com'], reply_to: 'support@vinaxmusic.online', subject: 'Welcome to VinaX', tags: [{ name: 'kind', value: 'welcome' }] });
+    expect(sent[0]!.body).toMatchObject({ from: 'VinaX <notifications@vinaxmusic.online>', to: ['a@example.com'], reply_to: 'support@vinaxmusic.online', subject: 'Welcome to VinaX', tags: [{ name: 'kind', value: 'welcome' }] });
     expect(String(sent[0]!.body.text)).toContain('Welcome, Asha!');
   });
 
@@ -230,7 +230,7 @@ describe('the console sends', () => {
     const boss = (await issueAdminSession(CONSOLE_ENV, 'boss@example.com'))!;
     const viewer = (await issueAdminSession(CONSOLE_ENV, 'viewer@example.com'))!;
     const get = await emailRoute.onRequestGet({ request: req('/api/admin/email', undefined, viewer), env: CONSOLE_ENV });
-    expect(await get.json()).toMatchObject({ configured: true, from: 'VinaX <hello@vinaxmusic.online>', settings: { enabled: true } });
+    expect(await get.json()).toMatchObject({ configured: true, from: 'VinaX <notifications@vinaxmusic.online>', settings: { enabled: true } });
     expect((await emailRoute.onRequestPost({ request: req('/api/admin/email', { action: 'test' }, viewer), env: CONSOLE_ENV })).status).toBe(403);
     const ok = await emailRoute.onRequestPost({ request: req('/api/admin/email', { action: 'test' }, boss), env: CONSOLE_ENV });
     expect(ok.status).toBe(200);
