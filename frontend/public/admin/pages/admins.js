@@ -62,7 +62,7 @@
           VX.modal({
             title: 'Invite an admin',
             body: [
-              h('p.muted', 'They sign in with this Google account. Nothing is emailed — tell them the console address yourself.'),
+              h('p.muted', 'They sign in with this Google account. When account emails are on (App Settings › Notification Rules), VinaX emails them the console address; otherwise tell them yourself.'),
               ui.field('Google email', email),
               ui.radios('Role', ROLES.map(function (r) { return { value: r.value, label: r.label, hint: r.hint }; }), role, function (v) { role = v; }),
               err
@@ -76,7 +76,7 @@
                 return VX.api.post('/api/admin/admins', { action: 'invite', email: v, role: role }).then(function (res) {
                   if (!res.ok) { err.textContent = errText(res); return; }
                   close();
-                  VX.toast(v + ' invited as ' + ROLE_LABEL[role] + ' ✓', 'ok');
+                  VX.toast(v + ' invited as ' + ROLE_LABEL[role] + (res.data && res.data.emailed ? ' and emailed' : '') + ' ✓', 'ok');
                   ctx.refresh();
                 });
               } }

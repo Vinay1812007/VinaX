@@ -13,6 +13,7 @@ import { adminJson, badRequest, dbFailure } from '../../_lib/admin';
 import { adminGet, adminPost } from '../../_lib/adminRoute';
 import { bootstrapOwners, isAdminRole, normEmail, resetAdminMemo, type AdminRow } from '../../_lib/adminAuth';
 import { db, q } from '../../_lib/db';
+import { adminInviteEmail, sendLater, type EmailEnv } from '../../_lib/email';
 
 const COLS = 'email,name,picture,role,invited_by,created_at,last_sign_in';
 const shape = (r: AdminRow) => ({ email: r.email, name: r.name, picture: r.picture, role: r.role, invitedBy: r.invited_by, createdAt: r.created_at, lastSignIn: r.last_sign_in });
@@ -28,7 +29,7 @@ export const onRequestGet = adminGet(async ({ env, me }) => {
   });
 });
 
-export const onRequestPost = adminPost(async ({ env, body, audit, me }) => {
+export const onRequestPost = adminPost(async ({ env, body, audit, me, waitUntil }) => {
   const email = normEmail(body.email);
   if (!email) return badRequest('bad_email');
   const all = await db.select<AdminRow>(env, 'admins', q().select(COLS).limit(200));
@@ -43,7 +44,8 @@ export const onRequestPost = adminPost(async ({ env, body, audit, me }) => {
     if (!w.ok) return dbFailure(w);
     resetAdminMemo();
     await audit({ action: 'admin-invite', summary: `invited ${email} as ${body.role}`, target: email, after: { email, role: body.role } });
-    return adminJson({ ok: true, row: w.rows[0] ? shape(w.rows[0]) : null });
+    const sent = await sendLater(env as EmailEnv, waitUntil, 'adminInvite', () => adminInviteEmail(email, String(body.role), me.email === 'owner' ? 'The owner' : me.email));
+    return adminJson({ ok: true, row: w.rows[0] ? shape(w.rows[0]) : null, emailed: !!sent?.ok });
   }
   if (body.action === 'role') {
     if (!isAdminRole(body.role)) return badRequest('bad_role');

@@ -28,6 +28,12 @@ export default function PrivacyPage() {
           admin console, to support listeners and keep the service safe. What you play and search is not part of this:
           that is the anonymous usage sharing described below, which you can switch off.
         </p>
+        <p>
+          VinaX emails your Google address about your account only: a welcome the first time you sign in, and an
+          alert when your account signs in on a phone or browser it hasn&rsquo;t used before (with the device type and
+          the rough location above). These emails are sent through our email provider, Resend, which receives your
+          email address, your first name and what the email says. VinaX never sends marketing emails.
+        </p>
         <H>The personal engine — on while you are signed in, unless you switch it off</H>
         <p>
           Signed in, VinaX keeps a <b>taste model</b> for your account on its own server and uses it to build Home,

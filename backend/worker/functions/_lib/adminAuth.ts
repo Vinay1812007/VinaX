@@ -152,6 +152,16 @@ export async function adminRowOf(env: AdminSessionEnv, email: string, now = Date
   return row;
 }
 
+/** Every owner's email: the bootstrap owners and the `admins` rows with role owner (at most 20). */
+export async function ownerEmails(env: AdminSessionEnv): Promise<string[]> {
+  const out = new Set(bootstrapOwners(env));
+  if (dbConfigured(env)) {
+    const r = await db.select<{ email: string }>(env, 'admins', q().eq('role', 'owner').select('email').limit(50));
+    if (r.ok) for (const row of r.rows) { const e = normEmail(row.email); if (e) out.add(e); }
+  }
+  return [...out].slice(0, 20);
+}
+
 /** A Google session token → the principal, or null. */
 export async function principalFromSession(env: AdminSessionEnv & { ADMIN_LOGIN_PASSWORD?: string }, token: string, now = Date.now()): Promise<AdminPrincipal | null> {
   const p = await readSessionPayload(env, token, now);

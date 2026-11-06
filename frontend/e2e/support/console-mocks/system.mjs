@@ -141,6 +141,8 @@ export default {
     : b.action === 'check'
       ? { ok: true, result: { on: true, checked: ['errorsSpike', 'siteDown', 'noPlays'], firing: ['errorsSpike'], sent: [], held: [{ rule: 'errorsSpike', reason: 'cooldown' }], recipients: 2, devices: 1 } }
       : { __status: 400, error: 'unknown_action' }),
+  'GET /api/admin/email': () => ({ configured: true, from: 'VinaX <hello@vinaxmusic.online>', replyTo: 'support@vinaxmusic.online', settings: { enabled: true, welcome: true, newSignIn: true, consoleSignIn: true, adminInvite: true } }),
+  'POST /api/admin/email': (url, b) => (b.action === 'test' ? { ok: true, id: 'em_1', to: ['owner@example.com'] } : { __status: 400, error: 'unknown_action' }),
   'GET /api/admin/admins': () => ({ configured: true, rows: admins, bootstrap: ['owner@example.com'], me: { email: 'owner@example.com', role: 'owner', via: 'google' } }),
   'POST /api/admin/admins': (url, b) => {
     if (b.action === 'invite') { if (admins.some((a) => a.email === b.email)) return { __status: 409, error: 'already_admin' }; admins = admins.concat([{ email: b.email, name: null, picture: null, role: b.role, invitedBy: 'owner@example.com', createdAt: new Date().toISOString(), lastSignIn: null }]); return { ok: true }; }

@@ -19,7 +19,9 @@
  * (503 human_check_unavailable).
  */
 import { adminJson, adminPrincipal, badRequest, ownerPasswordMatches, type AdminAuthEnv } from '../../_lib/admin';
-import { ADMIN_SESSION_TTL_S, adminRowOf, bootstrapOwners, googleSignInReady, issueAdminSession, issuePasswordSession, normEmail, PASSWORD_PRINCIPAL, resetAdminMemo } from '../../_lib/adminAuth';
+import { ADMIN_SESSION_TTL_S, adminRowOf, bootstrapOwners, googleSignInReady, issueAdminSession, issuePasswordSession, normEmail, ownerEmails, PASSWORD_PRINCIPAL, resetAdminMemo } from '../../_lib/adminAuth';
+import { consoleSignInEmail, edgeTimezone, sendLater, type EmailEnv } from '../../_lib/email';
+import { edgeGeo, platformOf } from '../../_lib/edge';
 import { turnstileSiteKey, verifyTurnstile } from '../../_lib/turnstile';
 import { audit } from '../../_lib/audit';
 import { readJsonCapped } from '../../_lib/body';
@@ -89,6 +91,7 @@ export const onRequestPost = async (ctx: { request: Request; env: Env; waitUntil
     resetAdminMemo();
     await audit({ env, request, waitUntil: ctx.waitUntil, actor: email }, { action: 'admin-signin', summary: `${email} signed in (${row.role})`, target: email });
   }
+  void sendLater(env as EmailEnv, ctx.waitUntil, 'consoleSignIn', () => consoleSignInEmail(email, email, row.role, 'google', signInFacts(request)));
   return adminJson({
     token,
     expiresIn: ADMIN_SESSION_TTL_S,
@@ -109,5 +112,12 @@ async function passwordSignIn(ctx: { request: Request; env: Env; waitUntil?: (p:
   if (!token) return adminJson({ error: 'not_configured' }, 503);
   const me = PASSWORD_PRINCIPAL;
   if (dbConfigured(env)) await audit({ env, request, waitUntil: ctx.waitUntil, actor: me.email }, { action: 'admin-signin', summary: 'Owner signed in with the recovery password', target: me.email });
+  // The recovery password has no inbox of its own: every owner hears of it.
+  void sendLater(env as EmailEnv, ctx.waitUntil, 'consoleSignIn', async () => consoleSignInEmail(await ownerEmails(env), 'Someone', 'owner', 'password', signInFacts(request)));
   return adminJson({ token, expiresIn: ADMIN_SESSION_TTL_S, me: { email: me.email, name: me.name, picture: me.picture, role: me.role, via: me.via } });
+}
+
+/** Where the console sign-in came from, for the alert email. */
+function signInFacts(request: Request) {
+  return { ...edgeGeo(request), platform: platformOf(null, request), timezone: edgeTimezone(request) };
 }

@@ -148,6 +148,17 @@ In the Android app the check needs two WebView settings that Android leaves off 
 
 With Turnstile on, the recovery password is no longer a key by itself: the console trades it once, with a passed check, at `POST /api/admin/session { password, turnstile }` for a 12-hour session, and changing the password ends those sessions. Removing either key turns the check off again.
 
+### Account emails (Resend)
+
+VinaX sends four emails through [Resend](https://resend.com) (`backend/worker/functions/_lib/email.ts`): a **welcome** on an account's first Google sign-in, a **new sign-in alert** when an account signs in on a device it has not used before, a **console sign-in alert** to the admin who signed in (to every owner for the recovery password), and an **admin invite** when an owner adds someone on Admins & Roles. They are off until the Worker has `RESEND_API_KEY`.
+
+1. Sign up at resend.com → Domains → Add domain → `vinaxmusic.online`. Resend lists a DKIM TXT record (`resend._domainkey`) and, for the `send` subdomain, an MX and an SPF TXT record. Add each in Cloudflare → vinaxmusic.online → DNS as **DNS only** (grey cloud), then press Verify in Resend. They do not touch Email Routing: its MX records stay on the apex, Resend's are on `send.`. A DMARC record (`_dmarc` TXT `v=DMARC1; p=none;`) helps Gmail trust the mail if there is none yet.
+2. Resend → API Keys → Create, permission **Sending access**, domain `vinaxmusic.online`. Then `npx wrangler secret put RESEND_API_KEY --config worker/wrangler.toml` (or Workers → vinax-api → Settings → Variables and secrets → add it as a Secret).
+3. Optional plain vars: `EMAIL_FROM` (default `VinaX <hello@vinaxmusic.online>`, must be on the verified domain) and `EMAIL_REPLY_TO` (default `support@vinaxmusic.online`, which Email Routing already forwards).
+4. Console → App Settings › Notification Rules › Account emails → **Send me a test email**. A `validation_error` there almost always means the domain is not verified yet.
+
+Each kind can be switched off in that same section (the owner-only `email` setting). Emails go out after the response (`waitUntil`) and carry an `Idempotency-Key`, so a slow or failed send never delays or breaks a sign-in, and a retried request is not emailed twice. A failed send logs `[email] <kind> not sent (<status> <error>)` in the Worker logs. Resend's free plan allows 100 emails a day and 3,000 a month: enough for welcomes and alerts at today's sign-up rate; if sign-ups outgrow it, switch the welcome off first.
+
 ## The database
 
 The schema, the Worker's data layer and the admin API are in [database.md](database.md). This section is what an operator does with it.

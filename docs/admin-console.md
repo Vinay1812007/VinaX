@@ -363,6 +363,8 @@ Read-only mode refuses POST/PUT/PATCH/DELETE on `/api/feedback`, `/api/account/d
 
 "Max notifications per person" (1 every 6 h / 12 h / day / 2 days), Quiet hours switch with from/until time pickers, and a switch per kind (New releases, Recommendations, Announcements, Reminders). Stored in `push` as `{ minGapHours: 6 | 12 | 24 | 48, quiet: { enabled, start: "HH:MM", end: "HH:MM" }, types: { releases, recommendations, announcements, reminders } }`. Unset means no limits (the page says so). The push sender enforces it.
 
+**Account emails** (owner only, key `email`): a master switch and one per email (Welcome, New sign-in alert, Console sign-in alert, Admin invite), stored as `{ enabled, welcome, newSignIn, consoleSignIn, adminInvite }`; anything not `false` is on. A status line from `GET /api/admin/email` says whether the Worker has `RESEND_API_KEY` and which sender it uses, and **Send me a test email** (`POST /api/admin/email { action: 'test' }`) sends one to the signed-in owner. Setup: [operations.md](operations.md#account-emails-resend).
+
 ### App Settings › Search & Music Sources (`#/app-settings/search`)
 
 | Section | Controls | Stored value | Who reads it |
@@ -396,7 +398,7 @@ Admins sign in with Google. Only an email on the **Admins & Roles** list (the `a
 | `GET /api/admin/session` | Never 401: `{ googleClientId, googleReady, passwordAllowed, me, schema, schemaWanted, databaseConfigured }` |
 | `POST /api/admin/session { credential }` | Google ID token → `{ token, me, expiresIn }`; `403 not_an_admin` / `email_not_verified`, `401 invalid_token`, `503 google_not_configured` |
 | Roles | viewer < editor < owner. `adminGet` allows any admin; `adminPost` needs editor unless the route asks for owner (`{ role: 'owner' }` or a function of the body). Viewers get `403 { error: 'forbidden', need }` |
-| Owner-only writes | Database (all actions), Admins & Roles, clearing app errors, deleting a user's data, the `retention`, `jobs` and `alert-rules` settings, Smart Alerts → Check now |
+| Owner-only writes | Database (all actions), Admins & Roles, clearing app errors, deleting a user's data, the `retention`, `jobs`, `alert-rules` and `email` settings, Smart Alerts → Check now, the account-email test |
 | `GET/POST /api/admin/admins` | List (any admin); `invite { email, role }`, `role { email, role }`, `remove { email }` (owner). `409 last_owner` when the last Owner would be demoted or removed; `409 already_admin` |
 | Audit | Every row names the admin (`actor` = email) |
 
@@ -486,6 +488,7 @@ Table: admin (photo, name, "You", "Always Owner" for `ADMIN_OWNER_EMAILS`), emai
 
 - `backend/worker/__tests__/consoleAuth.test.ts` — sessions (issue, read, expiry, forgery, other secret), principals (Google role from `admins`, recovery password = owner, removed admin refused, bootstrap owners, unreadable table refused), role gating (viewer 403, editor allowed, owner-only actions, database owner-only, audit actor), `POST/GET /api/admin/session`, Admins & Roles (owner-only, invite/role/remove, duplicates, last owner).
 - `backend/worker/__tests__/consoleSystem.test.ts` — App Errors (grouped answer, status upsert with who, clear owner-only, `db_update_needed`), Change log filters and dropdown choices, jobs (settings, due rule, retention, cron skips switched-off jobs, per-kind purges, `job_setting`), bots (built-in rules match the committed robots.txt, owner choices, `/api/robots`, the bots view, publish via the deploy hook), API keys (plain labels, no values).
+- `backend/worker/__tests__/email.test.ts` — Account emails (Resend): the client's request and failures, the `email` setting (everything on unless switched off), welcome on a first sign-in only, the new-device alert (never for a linked device), console sign-in alerts (owners for the recovery password), the invite email, `GET/POST /api/admin/email` (test send owner-only, Resend refusals reported).
 - `backend/worker/__tests__/consoleAlerts.test.ts` — Smart Alerts: the `alert-rules` defaults and cleaning (owner-only), which rules fire, the job (one alert per problem to the chosen admins, receipt row, no listener-cap side effect, cooldown, quiet hours except site down, duplicate key, switched off, broken database), `GET/POST /api/admin/alerts` (recipients and phones, recent alerts, test to own phone only, Check now owner-only).
 - `frontend/src/__tests__/robotsFromApi.test.ts` — the build step only publishes a real robots file.
 - Mocks for the preview server and e2e: `frontend/e2e/support/console-mocks/system.mjs`.

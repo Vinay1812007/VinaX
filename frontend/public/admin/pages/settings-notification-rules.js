@@ -1,5 +1,6 @@
 /* App Settings › Notification Rules — how often people may get a
-   notification, quiet hours, and which kinds may be sent. Stored key: push
+   notification, quiet hours, which kinds may be sent, and the account emails
+   (key `email`, below). Stored key: push
    { minGapHours, quiet: { enabled, start, end }, types: { releases, recommendations, announcements, reminders } }.
    The push sender enforces it. */
 (function () {
@@ -93,9 +94,70 @@
     }
   };
 
+  /* Account emails — stored key: email { enabled, welcome, newSignIn, consoleSignIn, adminInvite }.
+     Anything not false is on. Sent through Resend; GET/POST /api/admin/email says
+     whether the key is set and sends a test. */
+  var EMAILS = [
+    { key: 'welcome', title: 'Welcome email', desc: 'Sent once, the first time someone signs in to VinaX with Google.' },
+    { key: 'newSignIn', title: 'New sign-in alert', desc: 'Sent when someone’s account signs in on a phone or browser it has not used before, with the device and rough location.' },
+    { key: 'consoleSignIn', title: 'Console sign-in alert', desc: 'Sent to an admin each time they sign in here. A recovery-password sign-in is sent to every Owner.' },
+    { key: 'adminInvite', title: 'Admin invite', desc: 'Sent when an Owner adds someone on Admins & Roles, with the console address.' }
+  ];
+  var emails = {
+    key: 'email', title: 'Account emails', role: 'owner',
+    desc: 'Emails VinaX sends people about their account. Sent through Resend.',
+    fromValue: function (v) {
+      var r = VX.obj(v), m = { enabled: r.enabled !== false, _new: !v };
+      EMAILS.forEach(function (x) { m[x.key] = r[x.key] !== false; });
+      return m;
+    },
+    toValue: function (m) {
+      if (m._new) return null;
+      var out = { enabled: !!m.enabled };
+      EMAILS.forEach(function (x) { out[x.key] = !!m[x.key]; });
+      return out;
+    },
+    describe: function (v) {
+      var m = emails.fromValue(v);
+      if (!m.enabled) return 'All account emails off';
+      var off = EMAILS.filter(function (x) { return !m[x.key]; }).map(function (x) { return x.title.toLowerCase(); });
+      return off.length ? 'On, except ' + off.join(', ') : 'All account emails on';
+    },
+    render: function (m, set, api) {
+      var touch = function () { m._new = false; set(m); };
+      var status = h('div', ui.notice('Checking the email service…', 'info'));
+      VX.api.get('/api/admin/email', null, { fresh: true }).then(function (res) {
+        var d = res.data || {};
+        VX.clear(status);
+        if (!res.ok) { status.appendChild(ui.notice('Could not check the email service: ' + res.message, 'bad')); return; }
+        if (!d.configured) {
+          status.appendChild(ui.notice('Emails are off: the Worker has no RESEND_API_KEY yet. Add it on the Worker (App Health › API Keys Status shows when it is set) and these switches take effect.', 'warn'));
+          return;
+        }
+        status.appendChild(h('div.form-row',
+          ui.notice('Email is set up.' + (d.from ? ' Sending from ' + d.from + '.' : '') + (d.replyTo ? ' Replies go to ' + d.replyTo + '.' : ''), 'ok'),
+          api.readOnly ? null : ui.button('Send me a test email', { small: true, icon: 'send', onClick: function () {
+            return VX.api.post('/api/admin/email', { action: 'test' }).then(function (r) {
+              if (r.ok) VX.toast('Test email sent to ' + ((r.data && r.data.to) || []).join(', ') + ' ✓', 'ok');
+              else VX.toast(r.error === 'validation_error' ? 'Resend refused it: check that the sender’s domain is verified in Resend.' : 'Not sent: ' + r.message, 'bad');
+            });
+          } })));
+      });
+      var list = h('div', EMAILS.map(function (x) {
+        return ui.switchRow(x.title, x.desc, m[x.key], function (on) { m[x.key] = on; touch(); });
+      }));
+      list.hidden = !m.enabled;
+      return [
+        status,
+        ui.switchRow('Send account emails', 'Off stops every email below.', m.enabled, function (on) { m.enabled = on; list.hidden = !on; touch(); }),
+        list
+      ];
+    }
+  };
+
   VX.settingsPage({
     id: 'app-settings/notification-rules', title: 'Notification Rules', icon: 'bell', order: 5,
-    desc: 'How often people may get a notification, when not to send, and which kinds are allowed.',
-    sections: [rules]
+    desc: 'How often people may get a notification, when not to send, which kinds are allowed, and account emails.',
+    sections: [rules, emails]
   });
 })();
