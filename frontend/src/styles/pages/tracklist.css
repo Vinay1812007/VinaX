@@ -267,9 +267,28 @@ html[data-density='compact'] .vx-track-art { width: 38px; height: 38px; }
 }
 .vx-media-art img { border-radius: inherit; transition: filter 200ms var(--ease-calm); }
 .vx-media-art.is-artist { border-radius: 50%; }
+/* Hover flash: a slanted white stripe sweeps across the art once each time the
+   pointer enters. ::before (not ::after) so the heart and play buttons, which
+   come later in the card, still paint above it. Transform only. */
+.vx-media-art::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.45) 50%, transparent 70%);
+  transform: translateX(-110%);
+}
 @media (hover: hover) and (pointer: fine) {
   .vx-media-card:hover .vx-media-art { transform: translateY(-3px); }
   .vx-media-card:hover .vx-media-art img { filter: brightness(0.92); }
+  .vx-media-card:hover .vx-media-art::before { animation: vxCardFlash 750ms var(--ease-calm) both; }
+}
+@keyframes vxCardFlash {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(110%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vx-media-card:hover .vx-media-art::before { animation: none; }
 }
 .vx-media-title {
   display: block;
