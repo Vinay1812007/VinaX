@@ -43,6 +43,8 @@ export interface SettingsState {
   startPage: 'home' | 'search' | 'library' | 'last';
   /** v5.17.0 — high-contrast text and borders. */
   highContrast: boolean;
+  /** Desktop mouse: the pointer is the see-through VinaX logo (utils/logoCursor.ts). */
+  logoCursor: boolean;
   /** 0-100 — iOS-style adjustable glass translucency (utils/theme.ts). */
   glassLevel: number;
   /** 0-100 — background blur intensity, independent from glassLevel. */
@@ -150,6 +152,7 @@ export interface SettingsState {
   setDataSaver(v: boolean): void;
   setStartPage(v: 'home' | 'search' | 'library' | 'last'): void;
   setHighContrast(v: boolean): void;
+  setLogoCursor(v: boolean): void;
   setAccent(accent: string): void;
   setTemplate(template: string): void;
   setGlassLevel(v: number): void;
@@ -223,6 +226,7 @@ const defaults = {
   dataSaver: false,
   startPage: 'home' as const,
   highContrast: false,
+  logoCursor: true,
   glassLevel: 40,
   glassBlur: 40,
   autoplay: true,
@@ -363,6 +367,7 @@ export const useSettingsStore = create<SettingsState>()(
       setDataSaver: (dataSaver) => set(dataSaver ? { dataSaver, audioQuality: 'low' } : { dataSaver }),
       setStartPage: (startPage) => set({ startPage }),
       setHighContrast: (highContrast) => set({ highContrast }),
+      setLogoCursor: (logoCursor) => set({ logoCursor }),
       setAccent: (accent) => set({ accent }),
       setTemplate: (template) => set({ template: normalizeTemplate(template) }),
       setGlassLevel: (v) => set({ glassLevel: Math.min(100, Math.max(0, Math.round(v))) }),

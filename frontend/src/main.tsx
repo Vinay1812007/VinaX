@@ -10,7 +10,6 @@ import './styles/features.css';
 import './styles/templates/index.css';
 import './styles/festivals.css';
 import { captureServerPage } from './services/seo/serverPage';
-import { installLogoCursor } from './utils/logoCursor';
 
 // 13.5.0 — keep this URL's server-rendered text before React replaces #root
 // (signed-out visitors read it on PublicPage; see services/seo/serverPage.ts).
@@ -104,8 +103,11 @@ function applyDeviceClass(): void {
   for (const d of ['phone', 'tablet', 'desktop', 'tv']) el.classList.toggle(`device-${d}`, device === d);
 }
 applyDeviceClass();
-// Desktop mouse: the pointer becomes the see-through VinaX logo.
-installLogoCursor();
+// Desktop mouse: the pointer becomes the see-through VinaX logo (Settings can
+// turn it off). Loaded on its own so phones never download it.
+if (window.matchMedia('(any-hover: hover) and (any-pointer: fine)').matches && !navigator.webdriver) {
+  void import('./utils/logoCursor').then((m) => m.installLogoCursor()).catch(() => undefined);
+}
 // Coalesce burst resize events with a rAF-throttled scheduler so a
 // desktop drag doesn't fire tens of classList toggles per second and
 // force a style recalc each time (audit finding L4).

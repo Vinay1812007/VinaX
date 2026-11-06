@@ -11,6 +11,7 @@
  * touch and pen input. Automated browsers are skipped so tests see the
  * normal page.
  */
+import { useSettingsStore } from '../store/settingsStore';
 import { reducedMotion } from './motion';
 
 // Hotspot: the top-left tip of the V (30,26 in the 128-unit logo).
@@ -90,8 +91,16 @@ export function installLogoCursor(): void {
     el.dataset.hover = node?.closest(CLICKABLE) ? 'true' : 'false';
   };
 
+  // Settings → Appearance → "VinaX logo cursor".
+  let enabled = useSettingsStore.getState().logoCursor;
+  useSettingsStore.subscribe((s) => {
+    if (s.logoCursor === enabled) return;
+    enabled = s.logoCursor;
+    if (!enabled) setActive(false);
+  });
+
   const onMove = (e: PointerEvent) => {
-    if (e.pointerType !== 'mouse' || !fine.matches) {
+    if (!enabled || e.pointerType !== 'mouse' || !fine.matches) {
       setActive(false);
       return;
     }
@@ -121,7 +130,7 @@ export function installLogoCursor(): void {
 
   document.addEventListener('pointermove', onMove, { passive: true });
   document.addEventListener('pointerdown', (e) => {
-    if (e.pointerType !== 'mouse') return setActive(false);
+    if (!enabled || e.pointerType !== 'mouse') return setActive(false);
     el.dataset.down = 'true';
     if (el.dataset.hidden !== 'true') flash();
   }, { passive: true });

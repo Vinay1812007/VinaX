@@ -593,6 +593,9 @@ export default function SettingsPage() {
               <Row label="Reduce motion" note="Fewer animations and transitions." keywords="accessibility motion sensitivity older phones">
                 <Toggle on={s.reduceMotion} onChange={(v) => { s.setReduceMotion(v); document.documentElement.classList.toggle('reduce-motion', v); }} label="Reduce motion" />
               </Row>
+              <Row label="VinaX logo cursor" note="On a computer, the mouse pointer is the VinaX logo." keywords="mouse pointer cursor logo flash animation">
+                <Toggle on={s.logoCursor} onChange={s.setLogoCursor} label="VinaX logo cursor" />
+              </Row>
               <Row stack label="Glass effect" note="From solid panels to frosted glass." keywords="transparency see-through classic">
                 <RangeRow from="Solid" to="Glass">
                   <input
