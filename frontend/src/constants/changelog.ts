@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.10.12': {
+    title: 'VinaX logo cursor, with a switch in Settings',
+    changes: [
+      { type: 'improved', text: 'On a computer, the mouse pointer is now the see-through VinaX logo.' },
+      { type: 'improved', text: 'A white light flashes across it, and it glows over buttons and links.' },
+      { type: 'improved', text: 'Each click sends out a quick flash of light.' },
+      { type: 'improved', text: 'Turn it off any time in Settings, Size and comfort, VinaX logo cursor.' },
+    ],
+  },
   '1.10.11': {
     title: 'Album cards: glass shine on hover now shows above the cover',
     changes: [
