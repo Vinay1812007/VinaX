@@ -5,7 +5,7 @@
  * (POST /api/cron/run, or the console's "Run now").
  *
  *   status-tick              every 30 min   probe the public components, uptime_tick each
- *   housekeeping             hourly         room_sweep · old data removed per the `retention` setting
+ *   housekeeping             hourly         room_sweep · old data removed per the `retention` setting · sign-ins after 90 days
  *                                           (usage, error reports, feedback, notification history)
  *                                           · retire_push_devices · VinaX AI chats deleted more than a
  *                                           day ago · the personal engine: old events and pages purged,
@@ -176,6 +176,9 @@ async function housekeeping(env: DbEnv, now = Date.now()): Promise<Record<string
     // Remember the rebuild (its own job_runs row) so the next one waits a day.
     if (colisten.ok) await db.insert(env, 'job_runs', { job: 'colisten', started_at: new Date(now).toISOString(), finished_at: new Date().toISOString(), ok: true, summary: { pairs: colisten.value?.pairs ?? null } });
   }
+  // Sign-in history (schema 12) keeps 90 days. Not fatal before the update.
+  const signIns = await db.remove(env, 'sign_ins', q().lt('at', since(90 * DAY_MS)));
+  out.signInsPruned = signIns.ok ? 'done' : `failed: ${signIns.error}`;
   // The job log keeps 30 days (the two 5-minute jobs, scheduled notifications and Smart Alerts, add 288 rows a day each).
   const pruned = await db.remove(env, 'job_runs', q().lt('started_at', since(30 * DAY_MS)));
   out.jobRunsPruned = pruned.ok ? 'done' : `failed: ${pruned.error}`;

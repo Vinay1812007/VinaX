@@ -34,7 +34,7 @@ drop table if exists
   job_runs, uptime_latest, uptime_days, audit_log, experiments, settings_history, settings,
   notifications, push_devices, room_members, rooms, blocked_content, feedback, ai_calls, events,
   shared_chats, shared_playlists, follows, profiles,
-  account_backups, accounts, listeners, meta
+  sign_ins, account_backups, accounts, listeners, meta
 cascade;
 
 select 'VinaX database reset — now run schema.sql' as done;

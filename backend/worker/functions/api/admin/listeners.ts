@@ -75,6 +75,8 @@ export function userArgs(url: URL): Record<string, unknown> {
   };
 }
 
+interface SignInRow { at: string; ip: string | null; browser: string | null; platform: string | null; app_version: string | null; country: string | null; region: string | null; city: string | null; new_device: boolean; signup: boolean }
+
 export const onRequestGet = adminGet(async ({ env, url }) => {
   if (url.searchParams.get('filters') === '1') {
     const r = await db.rpc<{ places?: unknown[]; versions?: unknown[]; languages?: unknown[] }>(env, 'admin_user_filters');
@@ -85,10 +87,15 @@ export const onRequestGet = adminGet(async ({ env, url }) => {
   const account = url.searchParams.get('account');
   if (account !== null) {
     if (!SUB_RE.test(account)) return badRequest('bad_id');
-    const r = await db.rpc<Record<string, unknown> | null>(env, 'user_profile', { p_account: account });
+    const [r, s] = await Promise.all([
+      db.rpc<Record<string, unknown> | null>(env, 'user_profile', { p_account: account }),
+      // Schema 12: the last 100 sign-ins. Before the update the table is missing: an empty list.
+      db.select<SignInRow>(env, 'sign_ins', q().eq('account_id', account).select('at,ip,browser,platform,app_version,country,region,city,new_device,signup').order('at', 'desc').limit(100)),
+    ]);
     if (!r.ok) return dbFailure(r);
     if (!r.value || typeof r.value !== 'object') return adminJson({ configured: true, error: 'not_found' }, 404);
-    return adminJson({ configured: true, profile: r.value });
+    const signIns = s.ok ? s.rows.map((x) => ({ at: x.at, ip: x.ip, browser: x.browser, platform: x.platform, appVersion: x.app_version, country: x.country, region: x.region, city: x.city, newDevice: x.new_device, signup: x.signup })) : [];
+    return adminJson({ configured: true, profile: { ...r.value, signIns } });
   }
   const args = userArgs(url);
   const r = await db.rpc<UsersAnswer>(env, 'admin_users', args);

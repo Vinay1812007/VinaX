@@ -32,7 +32,7 @@ import { bindingAllows, clientKey } from '../../_lib/ratelimit';
 type Env = AdminAuthEnv & Record<string, unknown>;
 
 /** The schema.sql version this Worker is written against. */
-export const SCHEMA_WANTED = 11;
+export const SCHEMA_WANTED = 12;
 
 export const onRequestGet = async (ctx: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = ctx;

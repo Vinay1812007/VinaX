@@ -5,7 +5,7 @@ VinaX 14.0 brings back a server database, designed from a clean sheet: one schem
 ## Setting it up
 
 1. Create a Supabase project (any region; Mumbai is closest to most listeners).
-2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 11), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
+2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 12), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
 3. Set two Worker secrets from `backend/`:
 
 ```sh
@@ -14,6 +14,10 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml
 ```
 
 4. Open the console's **Database** page: it shows the schema version the paste wrote and every table.
+
+### Moving from version 11
+
+Version 12 adds one table, `sign_ins`: a row per Google sign-in to the app (time, IP address, browser, platform and version, edge geo, `signup`, `new_device`), written by `POST /api/auth/google`, deleted after 90 days by the housekeeping job and with its account (`on delete cascade`). It is the only table that holds an IP address ([data-and-privacy.md](data-and-privacy.md)). Paste `schema.sql` once (or let the Schema workflow apply it); the Database page then shows version 12. Until then sign-ins are simply not recorded (the insert fails quietly), the profile's Sign-ins tab is empty, and the console shows its "one-time update" note; sign-in itself keeps working.
 
 ### Moving from version 10
 
@@ -88,6 +92,7 @@ Only the Worker holds the service-role key. Row-level security is enabled and fo
 | `meta` | fact | `schema` → `{ version, appliedAt }` |
 | `listeners` | device that opted in | display name, handle (unique, lower-case), platform, app version, edge country/region/city, what is playing now, first/last seen |
 | `accounts` | Google sign-in | Google subject id, email, name, picture, the linked `listener_id`, sign-in platform/version/geo, created/last seen |
+| `sign_ins` | each Google sign-in (schema 12) | account, time, IP address, browser, platform/version, edge geo, first sign-in / new device; 90 days, cascades with the account |
 | `account_backups` | signed-in account | the app's backup JSON (`payload`), `version`, `bytes`; deleted with the account |
 | `profiles` | signed-in account (15.0) | opt-in public profile: `handle` (unique, case-insensitive), `public`, `bio`, `summary` (the device's digest), `now_playing`, `share_now`; deleted with the account |
 | `follows` | account → account (15.0) | `follower_id`, `followee_id`; no self-follow; both sides cascade |
@@ -264,4 +269,4 @@ The Worker's Cron Trigger (`[triggers] crons` in `wrangler.toml`) fires every 5 
 
 ## Privacy
 
-Stored: coarse edge geo, anonymous device ids, display names and handles the listener chose, Google profile basics for signed-in listeners, the synced backup, song facts for plays, and — for signed-in listeners who keep the personal engine on — their reported listening events, taste model, exposure and composed pages. Not stored: IP addresses, precise location. Usage events are purged after `retention.eventsDays` (default 180); personal events after a year. VinaX AI chats are stored with the account and removed with it. A listener's **Erase my taste model** removes every `personal_*` row of theirs; **Delete my data** removes the account, its backup, its VinaX AI chats, its personal-engine rows and the device row; the console's delete removes everything about one person.
+Stored: coarse edge geo, anonymous device ids, display names and handles the listener chose, Google profile basics for signed-in listeners, the synced backup, song facts for plays, and — for signed-in listeners who keep the personal engine on — their reported listening events, taste model, exposure and composed pages. Not stored: precise location; an IP address only in `sign_ins` (schema 12, 90 days). Usage events are purged after `retention.eventsDays` (default 180); personal events after a year. VinaX AI chats are stored with the account and removed with it. A listener's **Erase my taste model** removes every `personal_*` row of theirs; **Delete my data** removes the account, its sign-in history, its backup, its VinaX AI chats, its personal-engine rows and the device row; the console's delete removes everything about one person.

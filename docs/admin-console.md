@@ -225,6 +225,7 @@ The Users page is laid out as follows:
   - Overview: four stat cards, the facts, top artists and top songs.
   - Listening history.
   - Devices: each device with platform, version, place and last seen, and **Sign out this device**.
+  - Sign-ins (schema 12): each Google sign-in from the last 90 days, newest first: when, browser or app and version, IP address, place, and a **First sign-in** or **New device** chip. From `profile.signIns` (the last 100 `sign_ins` rows, added by `GET /api/admin/listeners?account=`).
   - Feedback sent.
   - Activity log, in plain words ("Liked a song", "Hit a problem").
   - Closing the drawer removes `user` from the address.

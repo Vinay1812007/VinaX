@@ -577,7 +577,14 @@ begin
   assert not has_table_privilege('anon', 'public.personal_events', 'select'), 'anon cannot read personal events';
   assert not has_function_privilege('anon', 'public.personal_neighbours(text, text, integer, text[], boolean)', 'execute'), 'anon cannot call the personal engine';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 11, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 12, 'meta.schema.version';
+  -- v12: sign-in history is locked like every table and goes with its account.
+  assert (select relforcerowsecurity from pg_class where relname = 'sign_ins'), 'sign_ins: row level security forced';
+  assert not has_table_privilege('anon', 'public.sign_ins', 'select'), 'anon cannot read sign-in history';
+  insert into accounts (id, email) values ('check_si', 'si@example.com');
+  insert into sign_ins (account_id, ip, browser, signup) values ('check_si', '203.0.113.9', 'Chrome on macOS', true);
+  delete from accounts where id = 'check_si';
+  assert not exists (select 1 from sign_ins where account_id = 'check_si'), 'sign_ins: deleted with the account';
   raise notice 'check.sql: every function answered as expected';
 end $$;
 

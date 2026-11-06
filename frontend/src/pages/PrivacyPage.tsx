@@ -22,19 +22,25 @@ export default function PrivacyPage() {
         </p>
         <p>
           To run the service, your account also records where and on what you last signed in: the city, region and
-          country our network sees for the connection (worked out by our hosting provider; the IP address itself is never
-          stored), whether you use the web app or the Android app, the app version, and when you were last active.
+          country our network sees for the connection (worked out by our hosting provider), whether you use the web app
+          or the Android app, the app version, and when you were last active.
           VinaX&rsquo;s owner can see your account details — name, email, profile photo and these sign-in facts — in the
           admin console, to support listeners and keep the service safe. What you play and search is not part of this:
           that is the anonymous usage sharing described below, which you can switch off.
         </p>
         <p>
+          <strong>Sign-in history.</strong> Each time you sign in, VinaX keeps a record of it for 90 days: the time, the
+          IP address of your connection, the browser or app and its version, the rough location above, and whether it
+          was your first sign-in or a device your account hadn&rsquo;t used before. It is kept so that you and VinaX can
+          spot a sign-in that wasn&rsquo;t you. VinaX&rsquo;s owner can see it in the admin console; it is deleted
+          automatically after 90 days, and at once when you delete your account. This is the only place VinaX keeps an
+          IP address.
+        </p>
+        <p>
           VinaX emails your Google address about your account only: a welcome the first time you sign in, and an
-          alert each time your account signs in after that, so you can spot a sign-in that wasn&rsquo;t you. Both say
-          when it happened, the browser or app, the IP address of the connection and the rough location above; VinaX
-          doesn&rsquo;t store the IP address, it is only written into the email. These emails are sent through our
-          email provider, Resend, which receives your email address, your first name and what the email says. VinaX
-          never sends marketing emails.
+          alert each time your account signs in after that. Both show the same details as the sign-in history. These
+          emails are sent through our email provider, Resend, which receives your email address, your first name and
+          what the email says. VinaX never sends marketing emails.
         </p>
         <H>The personal engine — on while you are signed in, unless you switch it off</H>
         <p>
@@ -67,8 +73,8 @@ export default function PrivacyPage() {
           Anonymous usage sharing is on by default: the welcome screen shows it as a ticked box you can untick, and
           Settings &rarr; Region &amp; privacy has the switch. While it is on, the app sends events like &ldquo;a song
           was played&rdquo; or &ldquo;a search found nothing&rdquo; with a random device ID, your app version, platform
-          and city-level location, to VinaX&rsquo;s own database and nowhere else. <strong>IP addresses are never
-          stored.</strong> No names, no emails, no precise location and no advertising identifiers. Switching it off
+          and city-level location, to VinaX&rsquo;s own database and nowhere else. <strong>No IP address is stored
+          with usage</strong> (only with your sign-in history, above). No names, no emails, no precise location and no advertising identifiers. Switching it off
           stops this entirely, at once.
         </p>
         <p>

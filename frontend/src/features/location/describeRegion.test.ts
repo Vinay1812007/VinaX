@@ -78,6 +78,6 @@ describe('what the listener is told it is for', () => {
     expect(REGION_USES).toMatch(/charts/i);
     expect(REGION_USES).toMatch(/date and time/i);
     expect(REGION_USES).toMatch(/never used to decide your music language/i);
-    expect(REGION_USES).toMatch(/IP address is never stored or sent on/i);
+    expect(REGION_USES).toMatch(/IP address is not kept for it/i);
   });
 });

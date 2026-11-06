@@ -65,7 +65,7 @@ describe('Dashboard (overview)', () => {
       if (p === 'rpc/stats_overview') return json(kpis);
       if (p === 'rpc/stats_timeline') { expect(c.body).toEqual({ p_days: 30 }); return json([{ day: '2026-11-01', plays: 4 }]); }
       if (p === 'rpc/stats_platforms') return json({ platforms: [{ platform: 'android', users: 9 }], versions: [] });
-      if (p === 'meta') return json([{ key: 'schema', value: { version: 11, appliedAt: 'x' } }]);
+      if (p === 'meta') return json([{ key: 'schema', value: { version: 12, appliedAt: 'x' } }]);
       return undefined;
     });
     const { res, body } = await run(overview.onRequestGet as Handler, '/api/admin/overview?days=30');
@@ -117,7 +117,7 @@ describe('Users (listeners)', () => {
       return undefined;
     });
     expect((await run(listeners.onRequestGet as Handler, '/api/admin/listeners?filters=1')).body?.places).toHaveLength(1);
-    expect((await run(listeners.onRequestGet as Handler, `/api/admin/listeners?account=${ACCT}`)).body?.profile).toEqual({ account: { id: ACCT }, devices: [] });
+    expect((await run(listeners.onRequestGet as Handler, `/api/admin/listeners?account=${ACCT}`)).body?.profile).toEqual({ account: { id: ACCT }, devices: [], signIns: [] });
     expect((await run(listeners.onRequestGet as Handler, '/api/admin/listeners?account=999')).res.status).toBe(404);
   });
 

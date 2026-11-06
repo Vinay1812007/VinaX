@@ -142,6 +142,12 @@ test.describe('console pages', () => {
     await page.locator('#pageBody tbody tr').first().click();
     await expect(page.locator('#drawer')).toBeVisible();
     await expect(page.locator('#drawer').getByRole('tab', { name: 'Devices' })).toBeVisible();
+    // Schema 12: the sign-in history, with the IP address and a chip for a new device.
+    await page.locator('#drawer').getByRole('tab', { name: /Sign-ins/ }).click();
+    await expect(page.locator('#drawer').getByText('203.0.113.7')).toBeVisible();
+    await expect(page.locator('#drawer').getByText('Chrome on Windows')).toBeVisible();
+    await expect(page.locator('#drawer').getByText('New device')).toBeVisible();
+    await expect(page.locator('#drawer').getByText('First sign-in')).toBeVisible();
     expect(errors).toEqual([]);
   });
 });

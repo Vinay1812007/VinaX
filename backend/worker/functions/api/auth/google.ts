@@ -32,6 +32,11 @@
  * welcome; every later sign-in gets a sign-in alert with the time, browser,
  * IP address and rough place, saying so when the device was not yet linked
  * to the account. Both go out after the answer (waitUntil).
+ *
+ * Schema 12: every sign-in also writes a `sign_ins` row (time, IP, browser,
+ * app, geo, first sign-in / new device), kept 90 days, shown on the user's
+ * profile in the console. Best effort: before the database update it fails
+ * quietly and the sign-in still works.
  */
 import { clientIds, issueSession, verifyGoogleIdToken, type AuthEnv } from '../../_lib/googleAuth';
 import { readJsonCapped } from '../../_lib/body';
@@ -40,7 +45,7 @@ import { db, dbConfigured, q, type DbEnv } from '../../_lib/db';
 import { DEVICE_HEADER, resolveIdentity, verifiedIdentity, type IdentityEnv } from '../../_lib/identity';
 import { accountFacts, accountOf, CORS, handleOf, json, linkDevice, publicUser } from '../../_lib/authShared';
 import { turnstileSiteKey, verifyTurnstile, type TurnstileEnv } from '../../_lib/turnstile';
-import { emailConfigured, newSignInEmail, requestFacts, sendLater, welcomeEmail, type EmailEnv } from '../../_lib/email';
+import { newSignInEmail, requestFacts, sendLater, welcomeEmail, type EmailEnv } from '../../_lib/email';
 
 type Env = AuthEnv & DbEnv & IdentityEnv & TurnstileEnv & EmailEnv;
 
@@ -99,7 +104,7 @@ export const onRequestPost = async (ctx: { request: Request; env: Env; waitUntil
     const listenerId = thisDevice ?? prior?.listener_id ?? null;
     // Was this device already this account's? Read before the link below.
     let newDevice = false;
-    if (prior && thisDevice && thisDevice !== prior.listener_id && emailConfigured(env)) {
+    if (prior && thisDevice && thisDevice !== prior.listener_id) {
       const dev = await db.one<{ account_id: string | null }>(env, 'listeners', q().eq('id', thisDevice).select('account_id'));
       newDevice = dev.ok && dev.value?.account_id !== profile.sub;
     }
@@ -124,8 +129,16 @@ export const onRequestPost = async (ctx: { request: Request; env: Env; waitUntil
       await db.update(env, 'listeners', q().eq('id', thisDevice).not('signed_out_at', 'is', 'null'), { signed_out_at: null });
     }
     username = await handleOf(env, listenerId);
+    const where = { ...facts, ...requestFacts(request) };
+    if (written.ok) {
+      const record = db.insert(env, 'sign_ins', {
+        account_id: profile.sub, at: now, ip: where.ip, browser: where.browser, platform: facts.platform, app_version: facts.app_version,
+        country: facts.country, region: facts.region, city: facts.city, new_device: newDevice, signup: existing.ok && !prior,
+      }).then((r) => { if (!r.ok) console.warn(`[auth] sign-in not recorded (${r.error}${r.status ? ` ${r.status}` : ''})`); });
+      if (ctx.waitUntil) ctx.waitUntil(record);
+      else await record;
+    }
     if (written.ok && profile.email && profile.emailVerified) {
-      const where = { ...facts, ...requestFacts(request) };
       if (existing.ok && !prior) void sendLater(env, ctx.waitUntil, 'welcome', () => ({ ...welcomeEmail(profile.email!, profile.name, where), idempotencyKey: `welcome/${profile.sub}` }));
       // One alert per sign-in; the minute in the key only stops a retried request mailing twice.
       else if (prior) void sendLater(env, ctx.waitUntil, 'newSignIn', () => ({ ...newSignInEmail(profile.email!, profile.name, where, newDevice), idempotencyKey: `signin/${profile.sub}/${thisDevice ?? 'unknown'}/${Math.floor(Date.now() / 60_000)}` }));

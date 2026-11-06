@@ -35,6 +35,10 @@ function profile(u) {
       { id: 'd_' + 'ab'.repeat(16), platform: u.platform, appVersion: u.appVersion, country: u.country, region: u.region, city: u.city, firstSeen: u.joined, lastSeen: u.lastSeen, signedOutAt: null, nowPlaying: u.nowPlaying, isPlaying: u.isPlaying },
       ...(u.devices > 1 ? [{ id: 'd_' + 'cd'.repeat(16), platform: 'web', appVersion: '1.8.3', country: u.country, region: u.region, city: u.city, firstSeen: u.joined, lastSeen: ago(3000), signedOutAt: null, nowPlaying: null, isPlaying: false }] : []),
     ],
+    signIns: [
+      { at: ago(1200), ip: '203.0.113.7', browser: 'Chrome on Windows', platform: 'web', appVersion: '1.10.8', country: u.country, region: u.region, city: u.city, newDevice: true, signup: false },
+      { at: u.joined, ip: '2001:db8::1', browser: 'the VinaX Android app (Android 14)', platform: 'android', appVersion: '1.10.7', country: u.country, region: u.region, city: u.city, newDevice: false, signup: true },
+    ],
     backup: { version: 12, bytes: 48213, updatedAt: ago(200) },
     stats: { plays: u.plays, plays30d: Math.round(u.plays / 3), activeDays30d: 18, favorites: 34, searches: 61, errors: 2, firstEvent: u.joined, lastEvent: u.lastSeen },
     topSongs: SONGS.map((s, i) => ({ title: s[0], artist: s[1], image: null, plays: 40 - i * 6 })),

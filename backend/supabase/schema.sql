@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 11
+-- VinaX database · schema version 12
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -10,8 +10,10 @@
 -- policy exists, so the public anon key can read and write nothing. The app
 -- and the owner console never hold a database key.
 --
--- What is NOT here: raw IP addresses, precise locations, the listener's
--- library. Geo is Cloudflare's edge country / region / city.
+-- What is NOT here: precise locations, the listener's library. Geo is
+-- Cloudflare's edge country / region / city. The one place an IP address is
+-- kept is sign_ins (version 12): each Google sign-in, for 90 days, so the
+-- owner and the listener can tell a sign-in that was not theirs.
 --
 -- Layout
 --   1. extensions and meta        2. listeners and accounts
@@ -23,6 +25,7 @@
 --  10. views
 --  11. functions (stats_*, room_*, housekeeping; Trending and Search
 --      Insights: version 11)
+--  (2b. sign-in history, version 12, sits after accounts)
 --  12. security
 -- =============================================================================
 
@@ -95,6 +98,30 @@ create index if not exists listeners_account_idx on listeners (account_id) where
 update listeners l set account_id = a.id
   from accounts a
   where a.listener_id = l.id and l.account_id is null;
+
+-- ---------------------------------------------- 2b. sign-in history (v12) --
+-- One row per Google sign-in to the app, written by POST /api/auth/google:
+-- when, the connection's IP address, the browser / system from the user
+-- agent, the app, the edge's geo, and whether this was the account's first
+-- sign-in or a device it had not used before. The housekeeping job deletes
+-- rows older than 90 days; deleting the account deletes its rows.
+create table if not exists sign_ins (
+  id           bigint generated always as identity primary key,
+  account_id   text not null references accounts (id) on delete cascade,
+  at           timestamptz not null default now(),
+  ip           text,
+  browser      text,
+  platform     text,
+  app_version  text,
+  country      text,
+  region       text,
+  city         text,
+  new_device   boolean not null default false,
+  signup       boolean not null default false
+);
+create index if not exists sign_ins_account_idx on sign_ins (account_id, at desc);
+create index if not exists sign_ins_at_idx on sign_ins (at);
+comment on table sign_ins is 'Google sign-ins to the app with IP address, browser and edge geo. Kept 90 days (housekeeping); cascades with the account.';
 -- …and the twins already listed: a device nobody linked that carries an
 -- account's name, in the same place, and first reported within 15 minutes of
 -- that account's first sign-in is that account's browser (the sign-in came
@@ -2277,7 +2304,7 @@ do $$
 declare t text;
 begin
   foreach t in array array[
-    'meta', 'listeners', 'accounts', 'account_backups', 'profiles', 'follows', 'shared_playlists',
+    'meta', 'listeners', 'accounts', 'sign_ins', 'account_backups', 'profiles', 'follows', 'shared_playlists',
     'events', 'feedback',
     'blocked_content', 'rooms', 'room_members', 'push_devices', 'notifications',
     'settings', 'settings_history', 'experiments', 'audit_log', 'uptime_days', 'uptime_latest', 'job_runs',
@@ -2322,7 +2349,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 11, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 11, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 12, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 12, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 11 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 12 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;

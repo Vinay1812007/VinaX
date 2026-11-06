@@ -290,11 +290,12 @@
           { id: 'overview', label: 'Overview' },
           { id: 'history', label: 'Listening history' },
           { id: 'devices', label: 'Devices', badge: arr(p.devices).length || null },
+          { id: 'signins', label: 'Sign-ins', badge: arr(p.signIns).length || null },
           { id: 'feedback', label: 'Feedback sent', badge: arr(p.feedback).length || null },
           { id: 'activity', label: 'Activity log' }
         ];
         function show(id) {
-          var fn = { overview: overview, history: history, devices: devices, feedback: feedback, activity: activity }[id];
+          var fn = { overview: overview, history: history, devices: devices, signins: signIns, feedback: feedback, activity: activity }[id];
           VX.mount(panel, fn(p, u, ctx, load));
         }
         var bar = ui.tabs(tabs, 'overview', show);
@@ -377,6 +378,24 @@
           np.title ? h('div.small', dev.isPlaying ? ui.dot('ok') : null, ' ', np.title + (np.artist ? ' · ' + np.artist : '')) : null),
         canEdit && !dev.signedOutAt ? ui.button('Sign out this device', { kind: 'ghost', small: true, icon: 'logout', onClick: function () { return signOut(dev, i + 1); } }) : null);
     }));
+  }
+
+  /* Schema 12: each Google sign-in to the app, newest first (the server keeps 90 days). */
+  function signIns(p) {
+    return [
+      h('p.muted.small', 'Each time this person signed in with Google, from the last 90 days. The IP address is the connection’s; the place is approximate.'),
+      ui.dataTable({
+        columns: [
+          { key: 'at', label: 'When', nowrap: true, render: function (e) { return h('span', { title: fmt.full(e.at) }, ui.ago(e.at)); }, csv: function (e) { return fmt.full(e.at); } },
+          { key: 'browser', label: 'Device', sortVal: function (e) { return e.browser || VX.platformName(e.platform); }, render: function (e) { return [e.browser || VX.platformName(e.platform), e.appVersion ? h('span.muted.small', ' · ' + e.appVersion) : null]; } },
+          { key: 'ip', label: 'IP address', render: function (e) { return e.ip ? h('code', e.ip) : h('span.muted', '—'); } },
+          { key: 'city', label: 'Place', sortVal: function (e) { return place(e) || ''; }, render: function (e) { return place(e) || h('span.muted', '—'); } },
+          { key: 'flags', label: '', sortVal: function (e) { return e.signup ? 2 : e.newDevice ? 1 : 0; }, render: function (e) { return e.signup ? ui.pill('First sign-in', 'ok') : e.newDevice ? ui.pill('New device', 'warn') : null; }, csv: function (e) { return e.signup ? 'first sign-in' : e.newDevice ? 'new device' : ''; } }
+        ],
+        rows: arr(p.signIns), exportName: 'vinax-sign-ins', search: arr(p.signIns).length > 10 ? 'Search sign-ins…' : false, pageSize: 25, sortKey: 'at',
+        empty: { title: 'No sign-ins recorded yet', hint: 'Sign-ins appear here from the next time they sign in (after the database update to version 12).' }
+      })
+    ];
   }
 
   var FEEDBACK_KIND = { bug: 'Bug', idea: 'Idea', content: 'Music', other: 'Other' };
