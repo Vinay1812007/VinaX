@@ -21,7 +21,7 @@ vi.mock('../functions/_lib/googleAuth', async (orig) => {
 });
 
 import { DB_ENV, fakeDb } from './helpers/fakeDb';
-import { emailSettingsOf, escapeHtml, newSignInEmail, placeOf, RESEND_URL, sendEmail, sendLater, welcomeEmail } from '../functions/_lib/email';
+import { describeAgent, emailSettingsOf, escapeHtml, newSignInEmail, placeOf, RESEND_URL, sendEmail, sendLater, welcomeEmail } from '../functions/_lib/email';
 import { issueAdminSession, resetAdminMemo } from '../functions/_lib/adminAuth';
 import { resetSettingsMemo } from '../functions/_lib/settings';
 import { _resetRateLimitsForTests } from '../functions/_lib/ratelimit';
@@ -119,20 +119,32 @@ describe('the email setting and templates', () => {
     const e = newSignInEmail('a@example.com', '<script>x</script>', { platform: 'android', city: 'Hyderabad', region: 'Telangana', country: 'IN', timezone: 'Asia/Kolkata', at: new Date('2026-11-06T10:00:00Z') });
     expect(e.html).not.toContain('<script>x');
     expect(e.html).toContain('&lt;script&gt;');
-    expect(e.text).toContain('Device: the Android app');
+    expect(e.text).toContain('Device: the VinaX Android app');
     expect(e.text).toContain('Near: Hyderabad, Telangana, India (approximate)');
     expect(e.text).toMatch(/When: 6 Nov 2026, 3:30\s?pm IST/i);
     expect(placeOf({ city: null, region: null, country: null })).toBeNull();
     expect(escapeHtml(`"'&`)).toBe('&quot;&#39;&amp;');
   });
+
+  it('names the browser and system from the user agent', () => {
+    expect(describeAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36')).toBe('Chrome on macOS');
+    expect(describeAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0')).toBe('Edge on Windows');
+    expect(describeAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1')).toBe('Safari on iOS');
+    expect(describeAgent('Mozilla/5.0 (Linux; Android 14; Pixel 8; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.0.0 Mobile Safari/537.36')).toBe('the VinaX Android app (Android 14)');
+    expect(describeAgent('Mozilla/5.0 (Linux; Android 13; SM-A536E) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/122.0.0.0 Mobile Safari/537.36')).toBe('Samsung Internet on Android 13');
+    expect(describeAgent('Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0')).toBe('Firefox on Linux');
+    expect(describeAgent('curl/8.0')).toBeNull();
+    expect(describeAgent(null)).toBeNull();
+  });
 });
 
 describe('the app sign-in sends', () => {
-  const post = (body: unknown) => new Request('https://www.vinaxmusic.online/api/auth/google', { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': '10.99.2.1', 'cf-ipcountry': 'IN' }, body: JSON.stringify(body) });
+  const CHROME_MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
+  const post = (body: unknown) => new Request('https://www.vinaxmusic.online/api/auth/google', { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': '10.99.2.1', 'cf-ipcountry': 'IN', 'user-agent': CHROME_MAC }, body: JSON.stringify(body) });
   const PHONE = 'd_' + 'ef'.repeat(16);
   const LAPTOP = 'd_' + 'ab'.repeat(16);
 
-  it('a welcome on the first sign-in only, with its idempotency key', async () => {
+  it('a welcome on the first sign-in, then a sign-in alert on every later one', async () => {
     fakeDb({}, outside);
     const w = later();
     expect((await google.onRequestPost({ request: post({ credential: 'listener-token' }), env: ENV, waitUntil: w.waitUntil })).status).toBe(200);
@@ -140,36 +152,44 @@ describe('the app sign-in sends', () => {
     expect(sent.map((s) => s.body.subject)).toEqual(['Welcome to VinaX']);
     expect(sent[0]!.headers['idempotency-key']).toBe('welcome/110000000000000000001');
     expect(sent[0]!.body.html).toContain('Welcome, Asha!');
-    // Signing in again on no particular device: nothing more.
+    expect(String(sent[0]!.body.text)).toContain('You signed up from:');
+    expect(String(sent[0]!.body.text)).toContain('IP address: 10.99.2.1');
+    // Signing out and in again on the same browser: a sign-in alert (not a second welcome).
     const w2 = later();
     await google.onRequestPost({ request: post({ credential: 'listener-token' }), env: ENV, waitUntil: w2.waitUntil });
     await w2.drain();
-    expect(sent).toHaveLength(1);
+    expect(sent.map((s) => s.body.subject)).toEqual(['Welcome to VinaX', 'New sign-in to your VinaX account']);
+    expect(String(sent[1]!.body.text)).toContain('Device: Chrome on macOS');
+    expect(String(sent[1]!.body.text)).toContain('IP address: 10.99.2.1');
+    expect(String(sent[1]!.body.text)).toContain('Near: India (approximate)');
+    expect(sent[1]!.headers['idempotency-key']).toMatch(/^signin\/110000000000000000001\/unknown\/\d+$/);
   });
 
-  it('an alert on a device the account has not used, never on one it has', async () => {
+  it('an alert on every sign-in, and a new device is called out', async () => {
     const fake = fakeDb({
       accounts: [{ id: '110000000000000000001', email: 'listener@example.com', email_verified: true, name: 'Asha', picture: null, listener_id: PHONE, last_seen: 't' }],
       listeners: [{ id: PHONE, account_id: '110000000000000000001' }, { id: LAPTOP }],
     }, outside);
-    // The known phone: no email.
+    // The known phone: a plain sign-in alert.
     let w = later();
     await google.onRequestPost({ request: post({ credential: 'listener-token', signed_device_id: await signId(SECRETS.DEVICE_ID_SECRET, PHONE) }), env: ENV, waitUntil: w.waitUntil });
     await w.drain();
-    expect(sent).toHaveLength(0);
-    // A new laptop: one alert, then it is linked, so the next sign-in there is quiet.
+    expect(sent.map((s) => s.body.subject)).toEqual(['New sign-in to your VinaX account']);
+    expect(sent[0]!.body.to).toEqual(['listener@example.com']);
+    expect(String(sent[0]!.body.text)).not.toContain("hasn't used before");
+    // A new laptop: the alert says it is a new device, then the laptop is linked.
     w = later();
     await google.onRequestPost({ request: post({ credential: 'listener-token', signed_device_id: await signId(SECRETS.DEVICE_ID_SECRET, LAPTOP), platform: 'web' }), env: ENV, waitUntil: w.waitUntil });
     await w.drain();
-    expect(sent.map((s) => s.body.subject)).toEqual(['New sign-in to your VinaX account']);
-    expect(sent[0]!.body.to).toEqual(['listener@example.com']);
-    expect(String(sent[0]!.body.text)).toContain('Device: a web browser');
-    expect(sent[0]!.headers['idempotency-key']).toBe(`signin/110000000000000000001/${LAPTOP}`);
+    expect(sent[1]!.body.subject).toBe('New device signed in to your VinaX account');
+    expect(String(sent[1]!.body.text)).toContain("on a device it hasn't used before");
+    expect(sent[1]!.headers['idempotency-key']).toMatch(new RegExp(`^signin/110000000000000000001/${LAPTOP}/\\d+$`));
     expect(fake.rows('listeners').find((l) => l.id === LAPTOP)?.account_id).toBe('110000000000000000001');
+    // The laptop again: a plain alert.
     w = later();
     await google.onRequestPost({ request: post({ credential: 'listener-token', signed_device_id: await signId(SECRETS.DEVICE_ID_SECRET, LAPTOP) }), env: ENV, waitUntil: w.waitUntil });
     await w.drain();
-    expect(sent).toHaveLength(1);
+    expect(sent[2]!.body.subject).toBe('New sign-in to your VinaX account');
   });
 
   it('nothing without the Resend key, or for an unverified email', async () => {

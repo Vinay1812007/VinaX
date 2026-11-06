@@ -30,9 +30,11 @@ export default function PrivacyPage() {
         </p>
         <p>
           VinaX emails your Google address about your account only: a welcome the first time you sign in, and an
-          alert when your account signs in on a phone or browser it hasn&rsquo;t used before (with the device type and
-          the rough location above). These emails are sent through our email provider, Resend, which receives your
-          email address, your first name and what the email says. VinaX never sends marketing emails.
+          alert each time your account signs in after that, so you can spot a sign-in that wasn&rsquo;t you. Both say
+          when it happened, the browser or app, the IP address of the connection and the rough location above; VinaX
+          doesn&rsquo;t store the IP address, it is only written into the email. These emails are sent through our
+          email provider, Resend, which receives your email address, your first name and what the email says. VinaX
+          never sends marketing emails.
         </p>
         <H>The personal engine — on while you are signed in, unless you switch it off</H>
         <p>

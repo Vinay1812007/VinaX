@@ -20,7 +20,7 @@
  */
 import { adminJson, adminPrincipal, badRequest, ownerPasswordMatches, type AdminAuthEnv } from '../../_lib/admin';
 import { ADMIN_SESSION_TTL_S, adminRowOf, bootstrapOwners, googleSignInReady, issueAdminSession, issuePasswordSession, normEmail, ownerEmails, PASSWORD_PRINCIPAL, resetAdminMemo } from '../../_lib/adminAuth';
-import { consoleSignInEmail, edgeTimezone, sendLater, type EmailEnv } from '../../_lib/email';
+import { consoleSignInEmail, requestFacts, sendLater, type EmailEnv } from '../../_lib/email';
 import { edgeGeo, platformOf } from '../../_lib/edge';
 import { turnstileSiteKey, verifyTurnstile } from '../../_lib/turnstile';
 import { audit } from '../../_lib/audit';
@@ -119,5 +119,5 @@ async function passwordSignIn(ctx: { request: Request; env: Env; waitUntil?: (p:
 
 /** Where the console sign-in came from, for the alert email. */
 function signInFacts(request: Request) {
-  return { ...edgeGeo(request), platform: platformOf(null, request), timezone: edgeTimezone(request) };
+  return { ...edgeGeo(request), platform: platformOf(null, request), ...requestFacts(request) };
 }

@@ -99,7 +99,7 @@
      whether the key is set and sends a test. */
   var EMAILS = [
     { key: 'welcome', title: 'Welcome email', desc: 'Sent once, the first time someone signs in to VinaX with Google.' },
-    { key: 'newSignIn', title: 'New sign-in alert', desc: 'Sent when someone’s account signs in on a phone or browser it has not used before, with the device and rough location.' },
+    { key: 'newSignIn', title: 'Sign-in alert', desc: 'Sent each time someone signs in to VinaX again, with the time, browser, IP address and rough location; it says so when the phone or browser is new to their account.' },
     { key: 'consoleSignIn', title: 'Console sign-in alert', desc: 'Sent to an admin each time they sign in here. A recovery-password sign-in is sent to every Owner.' },
     { key: 'adminInvite', title: 'Admin invite', desc: 'Sent when an Owner adds someone on Admins & Roles, with the console address.' }
   ];
@@ -139,7 +139,7 @@
           api.readOnly ? null : ui.button('Send me a test email', { small: true, icon: 'send', onClick: function () {
             return VX.api.post('/api/admin/email', { action: 'test' }).then(function (r) {
               if (r.ok) VX.toast('Test email sent to ' + ((r.data && r.data.to) || []).join(', ') + ' ✓', 'ok');
-              else VX.toast(r.error === 'validation_error' ? 'Resend refused it: check that the sender’s domain is verified in Resend.' : 'Not sent: ' + r.message, 'bad');
+              else VX.toast(r.error === 'validation_error' ? 'Resend refused it: check that the sender’s domain is verified in Resend.' : r.error === 'no_recipient' ? 'No Owner email to send to. Add your Google email as an Owner on Admins & Roles, or sign in with Google.' : 'Not sent: ' + r.message, 'bad');
             });
           } })));
       });

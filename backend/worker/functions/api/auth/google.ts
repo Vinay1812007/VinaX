@@ -29,8 +29,9 @@
  * linked right away, and its signed id comes back as `signed_device_id_next`.
  *
  * Emails (_lib/email.ts, off without RESEND_API_KEY): a new account gets a
- * welcome; a returning one signing in on a device that was not yet linked to
- * it gets a "new sign-in" alert. Both go out after the answer (waitUntil).
+ * welcome; every later sign-in gets a sign-in alert with the time, browser,
+ * IP address and rough place, saying so when the device was not yet linked
+ * to the account. Both go out after the answer (waitUntil).
  */
 import { clientIds, issueSession, verifyGoogleIdToken, type AuthEnv } from '../../_lib/googleAuth';
 import { readJsonCapped } from '../../_lib/body';
@@ -39,7 +40,7 @@ import { db, dbConfigured, q, type DbEnv } from '../../_lib/db';
 import { DEVICE_HEADER, resolveIdentity, verifiedIdentity, type IdentityEnv } from '../../_lib/identity';
 import { accountFacts, accountOf, CORS, handleOf, json, linkDevice, publicUser } from '../../_lib/authShared';
 import { turnstileSiteKey, verifyTurnstile, type TurnstileEnv } from '../../_lib/turnstile';
-import { edgeTimezone, emailConfigured, newSignInEmail, sendLater, welcomeEmail, type EmailEnv } from '../../_lib/email';
+import { emailConfigured, newSignInEmail, requestFacts, sendLater, welcomeEmail, type EmailEnv } from '../../_lib/email';
 
 type Env = AuthEnv & DbEnv & IdentityEnv & TurnstileEnv & EmailEnv;
 
@@ -124,8 +125,10 @@ export const onRequestPost = async (ctx: { request: Request; env: Env; waitUntil
     }
     username = await handleOf(env, listenerId);
     if (written.ok && profile.email && profile.emailVerified) {
-      if (existing.ok && !prior) void sendLater(env, ctx.waitUntil, 'welcome', () => ({ ...welcomeEmail(profile.email!, profile.name), idempotencyKey: `welcome/${profile.sub}` }));
-      else if (newDevice) void sendLater(env, ctx.waitUntil, 'newSignIn', () => ({ ...newSignInEmail(profile.email!, profile.name, { ...facts, timezone: edgeTimezone(request) }), idempotencyKey: `signin/${profile.sub}/${thisDevice}` }));
+      const where = { ...facts, ...requestFacts(request) };
+      if (existing.ok && !prior) void sendLater(env, ctx.waitUntil, 'welcome', () => ({ ...welcomeEmail(profile.email!, profile.name, where), idempotencyKey: `welcome/${profile.sub}` }));
+      // One alert per sign-in; the minute in the key only stops a retried request mailing twice.
+      else if (prior) void sendLater(env, ctx.waitUntil, 'newSignIn', () => ({ ...newSignInEmail(profile.email!, profile.name, where, newDevice), idempotencyKey: `signin/${profile.sub}/${thisDevice ?? 'unknown'}/${Math.floor(Date.now() / 60_000)}` }));
     }
   }
   return json({ session, stored, returning, hasData, user: publicUser(profile, username), ...(issued ? { signed_device_id_next: issued } : {}) });

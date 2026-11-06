@@ -3,7 +3,8 @@
  *
  * Four emails, each switchable in the console's `email` setting:
  *   welcome        the first time a Google account signs in to VinaX
- *   newSignIn      an account signs in on a device it has not used before
+ *   newSignIn      every later sign-in to the app (says when it is a device
+ *                  the account has not used before)
  *   consoleSignIn  someone signs in to the owner console (to that admin;
  *                  recovery-password sign-ins go to the owners)
  *   adminInvite    an owner adds an email to the console's admins
@@ -135,10 +136,48 @@ export interface SignInFacts {
   country: string | null;
   /** IANA zone from the edge, for the time line. */
   timezone?: string | null;
+  /** The connection's IP address (shown in the email, never stored by VinaX). */
+  ip?: string | null;
+  /** "Chrome on macOS", read from the user agent. */
+  browser?: string | null;
   at?: Date;
 }
 
-const PLATFORM_NAME: Record<string, string> = { web: 'a web browser', android: 'the Android app', ios: 'iPhone' };
+const PLATFORM_NAME: Record<string, string> = { web: 'a web browser', android: 'the VinaX Android app', ios: 'iPhone' };
+
+/** "Chrome on Windows", "Safari on iOS", "Android app (Android 14)"… or null for an unknown agent. */
+export function describeAgent(ua: string | null | undefined): string | null {
+  if (!ua) return null;
+  const u = ua.slice(0, 512);
+  const android = /Android (\d+(?:\.\d+)?)/.exec(u);
+  const os = /iPhone|iPod/.test(u) ? 'iOS'
+    : /iPad/.test(u) ? 'iPadOS'
+      : android ? `Android ${android[1]}`
+        : /Windows NT/.test(u) ? 'Windows'
+          : /CrOS/.test(u) ? 'ChromeOS'
+            : /Mac OS X|Macintosh/.test(u) ? 'macOS'
+              : /Linux/.test(u) ? 'Linux' : null;
+  // The Android app is a WebView (`; wv)`): name it, not "Chrome".
+  if (android && /; wv\)/.test(u)) return `the VinaX Android app (${os})`;
+  const browser = /Edg(e|A|iOS)?\//.test(u) ? 'Edge'
+    : /OPR\/|Opera/.test(u) ? 'Opera'
+      : /SamsungBrowser/.test(u) ? 'Samsung Internet'
+        : /Firefox\/|FxiOS/.test(u) ? 'Firefox'
+          : /Chrome\/|CriOS/.test(u) ? 'Chrome'
+            : /Safari\//.test(u) && /Version\//.test(u) ? 'Safari' : null;
+  if (browser && os) return `${browser} on ${os}`;
+  return browser ?? os;
+}
+
+/** IP and browser of a request, for a sign-in email. */
+export function requestFacts(request: Request): Pick<SignInFacts, 'ip' | 'browser' | 'timezone'> {
+  const ip = request.headers.get('cf-connecting-ip')?.trim() || null;
+  return {
+    ip: ip && ip.length <= 45 && /^[0-9a-fA-F:.]+$/.test(ip) ? ip : null,
+    browser: describeAgent(request.headers.get('user-agent')),
+    timezone: edgeTimezone(request),
+  };
+}
 
 export function placeOf(f: Pick<SignInFacts, 'city' | 'region' | 'country'>): string | null {
   const country = f.country ? (() => {
@@ -188,8 +227,9 @@ const firstName = (name: string | null | undefined): string | null => {
   return n ? n.slice(0, 40) : null;
 };
 
-export function welcomeEmail(to: string, name: string | null): Email {
+export function welcomeEmail(to: string, name: string | null, facts?: SignInFacts): Email {
   const hi = firstName(name);
+  const f = facts ? factLines(facts) : null;
   return {
     kind: 'welcome',
     to,
@@ -199,20 +239,22 @@ export function welcomeEmail(to: string, name: string | null): Email {
       lines: [
         'Your VinaX account is ready. Your favourites, playlists and history now follow you to every device you sign in on.',
         'Pick your languages on Home and VinaX will fill it with songs you&rsquo;ll like. The more you play, the better it gets.',
+        ...(f ? ['You signed up from:', ...f.html, 'If this wasn&rsquo;t you, reply to this email.'] : []),
       ],
       button: { label: 'Start listening', href: SITE },
       footer: ACCOUNT_FOOTER,
     }),
-    text: `${hi ? `Welcome, ${hi}!` : 'Welcome to VinaX!'}\n\nYour VinaX account is ready. Your favourites, playlists and history now follow you to every device you sign in on.\n\nStart listening: ${SITE}\n\nQuestions? Reply to this email or write to ${SUPPORT}.`,
+    text: `${hi ? `Welcome, ${hi}!` : 'Welcome to VinaX!'}\n\nYour VinaX account is ready. Your favourites, playlists and history now follow you to every device you sign in on.\n\n${f ? `You signed up from:\n${f.text.join('\n')}\n\n` : ''}Start listening: ${SITE}\n\nQuestions? Reply to this email or write to ${SUPPORT}.`,
   };
 }
 
 function factLines(f: SignInFacts): { html: string[]; text: string[] } {
-  const device = f.platform ? PLATFORM_NAME[f.platform] ?? f.platform : null;
+  const device = f.browser ?? (f.platform ? PLATFORM_NAME[f.platform] ?? f.platform : null);
   const place = placeOf(f);
   const when = timeOf(f.at ?? new Date(), f.timezone);
   const rows: Array<[string, string]> = [['When', when]];
   if (device) rows.push(['Device', device]);
+  if (f.ip) rows.push(['IP address', f.ip]);
   if (place) rows.push(['Near', `${place} (approximate)`]);
   return {
     html: [`<span style="display:block;background:#f4f2f8;border-radius:12px;padding:12px 16px">${rows.map(([k, v]) => `<strong>${k}:</strong> ${escapeHtml(v)}`).join('<br>')}</span>`],
@@ -220,17 +262,18 @@ function factLines(f: SignInFacts): { html: string[]; text: string[] } {
   };
 }
 
-export function newSignInEmail(to: string, name: string | null, facts: SignInFacts): Email {
+export function newSignInEmail(to: string, name: string | null, facts: SignInFacts, newDevice = true): Email {
   const hi = firstName(name);
   const f = factLines(facts);
+  const what = newDevice ? 'was just signed in to on a device it hasn&rsquo;t used before' : 'was just signed in to';
   return {
     kind: 'newSignIn',
     to,
-    subject: 'New sign-in to your VinaX account',
+    subject: newDevice ? 'New device signed in to your VinaX account' : 'New sign-in to your VinaX account',
     html: layout({
-      title: 'New sign-in to VinaX',
+      title: newDevice ? 'New device signed in to VinaX' : 'New sign-in to VinaX',
       lines: [
-        `${hi ? `Hi ${escapeHtml(hi)}, your` : 'Your'} VinaX account was just signed in to on a new device.`,
+        `${hi ? `Hi ${escapeHtml(hi)}, your` : 'Your'} VinaX account ${what}.`,
         ...f.html,
         'If this was you, there&rsquo;s nothing to do.',
         'If it wasn&rsquo;t, secure your Google account (VinaX signs in only with Google), then reply to this email and we&rsquo;ll sign that device out.',
@@ -238,7 +281,7 @@ export function newSignInEmail(to: string, name: string | null, facts: SignInFac
       button: { label: 'Check your Google account', href: 'https://myaccount.google.com/notifications' },
       footer: ACCOUNT_FOOTER,
     }),
-    text: `Your VinaX account was just signed in to on a new device.\n\n${f.text.join('\n')}\n\nIf this was you, there's nothing to do.\nIf it wasn't, secure your Google account (https://myaccount.google.com/notifications), then reply to this email and we'll sign that device out.`,
+    text: `Your VinaX account ${what.replace('&rsquo;', "'")}.\n\n${f.text.join('\n')}\n\nIf this was you, there's nothing to do.\nIf it wasn't, secure your Google account (https://myaccount.google.com/notifications), then reply to this email and we'll sign that device out.`,
   };
 }
 
