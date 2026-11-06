@@ -21,6 +21,39 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>,
 );
 
+// Neon boot sign (index.html .vxb): it sits above #root, so the app mounts
+// underneath while it plays. Drop the #boot id now — the boot recovery script
+// and the smoke test read a missing #boot as "app mounted" — then let the
+// reveal finish (about 2.4 s from first paint) and fade it out. A tap skips it;
+// automated browsers skip it so tests can click straight away.
+function releaseBootSign(): void {
+  const sign = document.getElementById('boot');
+  if (!sign) return;
+  sign.removeAttribute('id');
+  let done = false;
+  const remove = () => sign.remove();
+  const fade = () => {
+    if (done) return;
+    done = true;
+    if (navigator.webdriver) return remove();
+    sign.classList.add('out');
+    sign.addEventListener('animationend', (e) => { if (e.target === sign) remove(); });
+    window.setTimeout(remove, 600);
+  };
+  if (navigator.webdriver) return fade();
+  sign.addEventListener('pointerdown', fade, { once: true });
+  window.setTimeout(fade, 3500); // never hold the app longer than this
+  if (typeof sign.getAnimations !== 'function') {
+    window.setTimeout(fade, Math.max(0, 2500 - performance.now()));
+    return;
+  }
+  const reveal = sign
+    .getAnimations({ subtree: true })
+    .filter((a) => Number.isFinite(Number(a.effect?.getComputedTiming().endTime)));
+  void Promise.all(reveal.map((a) => a.finished.catch(() => undefined))).then(fade);
+}
+releaseBootSign();
+
 // Lift the boot transition guard (index.html pre-paint script) once the first
 // hydrated frame has painted — transitions behave normally from then on.
 requestAnimationFrame(() =>

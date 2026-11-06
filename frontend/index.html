@@ -163,19 +163,35 @@
          replaces this one as soon as the stylesheet applies. */
       body { font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; }
       #root { min-height: 100dvh; color: #eff2f8; }
-      #boot { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: var(--boot-bg, #0f0f11); padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom); }
-      html.amoled #boot { background: #000; }
-      #boot svg { width: 96px; height: 96px; border-radius: 24px; box-shadow: 0 18px 48px -18px rgba(255, 164, 46, 0.5); }
-      #boot .bt { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; margin-top: 20px; }
-      #boot .bs { font-size: 13px; color: #b6abb8; margin-top: 8px; }
-      #boot .bw { display: flex; align-items: flex-end; gap: 5px; height: 26px; margin-top: 26px; }
-      #boot .bw i { width: 4px; height: 100%; border-radius: 3px; transform-origin: bottom; background: linear-gradient(to top, #ff6384, #ffa42e); animation: bw 1s ease-in-out infinite; }
-      #boot .bw i:nth-child(2) { animation-delay: 0.15s; }
-      #boot .bw i:nth-child(3) { animation-delay: 0.3s; }
-      #boot .bw i:nth-child(4) { animation-delay: 0.45s; }
-      #boot .bw i:nth-child(5) { animation-delay: 0.6s; }
-      @keyframes bw { 0%, 100% { transform: scaleY(0.32); } 50% { transform: scaleY(1); } }
-      @media (prefers-reduced-motion: reduce) { #boot .bw i { animation: none; transform: scaleY(0.5); } }
+      /* Neon boot sign (14.x, 2026-11-06): the logo lights up like a neon
+         sign — the glass tubes draw in, the V buzzes on, then the bolt, then
+         the wordmark — in about 2.4 s. The sign sits ABOVE #root (not inside
+         it), so React mounts underneath while it plays; main.tsx drops the
+         #boot id at mount (the recovery script below reads a missing #boot as
+         "mounted"), waits for the reveal to finish, then fades it out. Styles
+         key on .vxb, never #boot, so dropping the id keeps every animation. */
+      .vxb { position: fixed; inset: 0; z-index: 2147483600; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: var(--boot-bg, #0f0f11); padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom); }
+      html.amoled .vxb { background: #000; }
+      html.light .vxb { background: #0f0d12; }
+      .vxb.out { animation: vxb-out .35s ease-in forwards; pointer-events: none; }
+      .vxb-sign { position: relative; width: 112px; height: 112px; }
+      .vxb-sign svg { position: relative; display: block; width: 100%; height: 100%; }
+      .vxb-halo { position: absolute; inset: -46px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255,140,90,.34), rgba(255,99,132,.14) 55%, transparent); animation: vxb-on .5s 1.45s ease-out both, vxb-hum 2.6s 2.4s ease-in-out infinite; }
+      .vxb-tile { animation: vxb-on .3s both; }
+      .vxb-glass { stroke: rgba(255,226,206,.1); stroke-dasharray: 100; animation: vxb-draw .55s .15s ease-out both; }
+      .vxb-t1 { animation: vxb-buzz1 .5s .7s linear both; }
+      .vxb-t2 { animation: vxb-buzz2 .55s 1.05s linear both; }
+      .vxb .bt { font-size: 32px; font-weight: 800; letter-spacing: -0.01em; line-height: 1; margin-top: 26px; color: #fff4ea; text-shadow: 0 0 1px #fff, 0 0 8px rgba(255,164,46,.85), 0 0 20px rgba(255,99,132,.6), 0 0 42px rgba(255,99,132,.35); animation: vxb-buzz3 .5s 1.5s linear both; }
+      .vxb .bs { font-size: 13px; color: #c9bcc6; margin-top: 10px; max-width: 300px; animation: vxb-rise .45s 1.9s ease-out both; }
+      @keyframes vxb-on { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes vxb-out { to { opacity: 0; } }
+      @keyframes vxb-draw { from { stroke-dashoffset: 101; } to { stroke-dashoffset: 0; } }
+      @keyframes vxb-buzz1 { 0% { opacity: 0; } 10% { opacity: 1; } 20% { opacity: .1; } 32% { opacity: 1; } 40% { opacity: .25; } 52% { opacity: 1; } 60% { opacity: .6; } 70%, 100% { opacity: 1; } }
+      @keyframes vxb-buzz2 { 0% { opacity: 0; } 8% { opacity: .9; } 16% { opacity: 0; } 30% { opacity: 1; } 38% { opacity: .15; } 46% { opacity: .15; } 56% { opacity: 1; } 64% { opacity: .7; } 74%, 100% { opacity: 1; } }
+      @keyframes vxb-buzz3 { 0% { opacity: .12; } 12% { opacity: 1; } 22% { opacity: .12; } 36% { opacity: .9; } 44% { opacity: .3; } 60%, 100% { opacity: 1; } }
+      @keyframes vxb-rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+      @keyframes vxb-hum { 0%, 100% { opacity: 1; } 50% { opacity: .7; } }
+      @media (prefers-reduced-motion: reduce) { .vxb, .vxb * { animation: none !important; } .vxb-glass { display: none; } }
       /* The prerendered / edge-rendered content block, styled as the hero. */
       #seo-content { padding: 14px 20px 32px; max-width: 720px; }
       #seo-content h1 { font-size: clamp(28px, 7vw, 40px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.12; margin: 14px 0 10px; }
@@ -197,8 +213,7 @@
       html.light #seo-content p strong { color: #9c4404; }
       html.light #seo-content a { color: #4a3c46; }
       html.light #seo-content nav a { background: rgba(10,15,25,0.05); border-color: rgba(10,15,25,0.1); }
-      html.light #boot .bs { color: #545a68; }
-      html.fest-ind #boot .bt::after { content: '80 \1F1EE\1F1F3'; font-size: 11px; font-weight: 900; padding: 3px 8px; border-radius: 999px; margin-left: 8px; vertical-align: 4px; color: #ffd9ad; background: linear-gradient(90deg, rgba(255,153,51,.22), rgba(19,136,8,.22)); border: 1px solid rgba(255,153,51,.5); white-space: nowrap; }
+      html.fest-ind .vxb .bt::after { content: '80 \1F1EE\1F1F3'; font-size: 11px; font-weight: 900; padding: 3px 8px; border-radius: 999px; margin-left: 8px; vertical-align: 4px; color: #ffd9ad; background: linear-gradient(90deg, rgba(255,153,51,.22), rgba(19,136,8,.22)); border: 1px solid rgba(255,153,51,.5); white-space: nowrap; text-shadow: none; }
     </style>
     <script type="application/ld+json">
       {"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://www.vinaxmusic.online/#org","name":"VinaX","alternateName":["VinaX V1","VinaX Music","vinaxmusic.online"],"url":"https://www.vinaxmusic.online/","logo":{"@type":"ImageObject","url":"https://www.vinaxmusic.online/icons/icon.svg"},"slogan":"Music tuned to you","description":"VinaX is a free, no-login music app with playlists, synced lyrics, offline downloads and casting. Private by design — your taste stays on your device.","sameAs":["https://github.com/Vinay1812007/VinaX"]},{"@type":"WebSite","@id":"https://www.vinaxmusic.online/#website","url":"https://www.vinaxmusic.online/","name":"VinaX","publisher":{"@id":"https://www.vinaxmusic.online/#org"},"inLanguage":"en","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://www.vinaxmusic.online/search/{search_term_string}"},"query-input":"required name=search_term_string"}},{"@type":"SoftwareApplication","@id":"https://www.vinaxmusic.online/#app","name":"VinaX","operatingSystem":"Android, Web","applicationCategory":"MusicApplication","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"},"publisher":{"@id":"https://www.vinaxmusic.online/#org"},"url":"https://www.vinaxmusic.online/download"}]}
@@ -242,7 +257,8 @@
       <link rel="preload" href="/fonts/manrope-var.woff2" as="font" type="font/woff2" crossorigin />
   </head>
   <body>
-    <div id="root"><div id="boot"><svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" aria-label="VinaX"><defs><linearGradient id="vxa" x1="98" y1="26" x2="64" y2="102" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ff6384"/><stop offset="1" stop-color="#ffc066"/></linearGradient></defs><rect width="128" height="128" rx="28" fill="#130e16"/><line x1="30" y1="26" x2="64" y2="102" stroke="#ffa42e" stroke-width="16" stroke-linecap="round"/><polyline points="98,26 78,52 90,70 64,102" fill="none" stroke="url(#vxa)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt">VinaX</div><div class="bs">Free music, for everyone.</div><div class="bw"><i></i><i></i><i></i><i></i><i></i></div></div><div id="seo-slot"></div></div>
+    <div id="boot" class="vxb"><div class="vxb-sign"><i class="vxb-halo"></i><svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="VinaX"><defs><linearGradient id="vxbGrad" x1="98" y1="26" x2="64" y2="102" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ff6384"/><stop offset="1" stop-color="#ffc066"/></linearGradient><filter id="vxbGlow" filterUnits="userSpaceOnUse" x="-16" y="-16" width="160" height="160"><feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="a"/><feGaussianBlur in="SourceGraphic" stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="a"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><rect class="vxb-tile" width="128" height="128" rx="28" fill="#130e16"/><g class="vxb-glass" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="30" y1="26" x2="64" y2="102" stroke-width="16"/><polyline points="98,26 78,52 90,70 64,102" stroke-width="12"/></g><g class="vxb-t1" filter="url(#vxbGlow)" fill="none" stroke-linecap="round"><line x1="30" y1="26" x2="64" y2="102" stroke="#ffa42e" stroke-width="16"/><line x1="30" y1="26" x2="64" y2="102" stroke="#ffe7c4" stroke-opacity=".55" stroke-width="5"/></g><g class="vxb-t2" filter="url(#vxbGlow)" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="98,26 78,52 90,70 64,102" stroke="url(#vxbGrad)" stroke-width="12"/><polyline points="98,26 78,52 90,70 64,102" stroke="#ffe9e0" stroke-opacity=".55" stroke-width="4"/></g></svg></div><div class="bt">VinaX</div><div class="bs">Free music, for everyone.</div></div>
+    <div id="root"><div id="seo-slot"></div></div>
     <script>
       // Boot self-healing (v4.13.2): if the entry chunk fails to load (mid-
       // deploy edge skew, flaky network, or \u2014 the outage this now recovers
