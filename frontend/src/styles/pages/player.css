@@ -626,7 +626,6 @@ html.light .vx-queue-origin[data-origin='manual'] { background: rgb(var(--ember-
 .vx-lyrics-stage [data-line]:not(:disabled):hover { background: var(--vx-hover); }
 .vx-lyrics-stage [data-line]:focus-visible { outline-offset: 0; }
 .vx-lyrics-stage .karaoke-fill {
-  background-image: linear-gradient(90deg, rgb(var(--ink-100)) calc(var(--kfill) - 4%), rgb(var(--ink-100) / 0.82) calc(var(--kfill) + 4%));
   font-weight: 800;
 }
 @media (max-width: 380px) {

@@ -1182,21 +1182,49 @@ html.light .vx-reason {
     display: inline-block;
     transform-origin: left center;
     font-weight: 800;
-    background-image: linear-gradient(
-      90deg,
-      rgb(var(--lyric-active)) calc(var(--kfill) - 4%),
-      rgb(var(--lyric-active) / 0.62) calc(var(--kfill) + 4%)
-    );
+    /* 1.11 — the sung part turns gold, a bright slanted stripe rides the
+       edge of the sweep, and the rest waits dim. Both layers are clipped to
+       the letters. --kfill is written every frame from the song's clock
+       (SyncedLyrics), so there is no transition: one would trail the voice. */
+    background-image:
+      linear-gradient(
+        105deg,
+        transparent calc(var(--kfill) - 9%),
+        rgb(var(--kstripe) / 0.95) calc(var(--kfill) - 2.5%),
+        rgb(var(--kstripe)) var(--kfill),
+        transparent calc(var(--kfill) + 2%)
+      ),
+      linear-gradient(
+        90deg,
+        rgb(var(--ksung-from)) 0%,
+        rgb(var(--ksung-to)) calc(var(--kfill) - 1%),
+        rgb(var(--lyric-active) / 0.45) calc(var(--kfill) + 1.5%)
+      );
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
     -webkit-text-fill-color: transparent;
-    transition: --kfill 180ms linear;
-    animation: lyr-pop 0.4s var(--ease-calm) both;
-    filter: none;
+    /* The line pops in with a quick flash as it starts. */
+    animation: lyr-pop 0.4s var(--ease-calm) both, lyr-flash 0.65s ease-out both;
+    filter: drop-shadow(0 0 14px rgb(var(--ksung-to) / 0.28));
   }
 }
-html.light .karaoke-fill { filter: none; }
+.karaoke-fill {
+  --kstripe: 255 255 255;
+  --ksung-from: var(--ember-300);
+  --ksung-to: var(--ember-400);
+}
+html.light .karaoke-fill {
+  --kstripe: var(--ember-500);
+  --ksung-from: var(--ember-600);
+  --ksung-to: var(--ember-400);
+  filter: none;
+}
+@keyframes lyr-flash {
+  0% { filter: brightness(2.1) drop-shadow(0 0 22px rgb(var(--kstripe) / 0.75)); }
+  100% { filter: brightness(1) drop-shadow(0 0 14px rgb(var(--ksung-to) / 0.28)); }
+}
+html.light .karaoke-fill { animation-name: lyr-pop, none; }
 
 .vx-lyric-active {
   color: rgb(var(--lyric-active));
