@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 14
+-- VinaX database · schema version 15
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -505,6 +505,22 @@ begin
       on conflict (id) do update set public = true, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
   end if;
 end $$;
+
+-- --------------------------------------- 8c. owner notes and tags (v15) --
+-- The console's private note and tags about one signed-in person (tester,
+-- friend, VIP, or the owner's own words). Never shown in the app; deleting
+-- the account deletes its row.
+create table if not exists owner_notes (
+  account_id  text primary key references accounts (id) on delete cascade,
+  tags        text[] not null default '{}',
+  note        text,
+  updated_at  timestamptz not null default now(),
+  updated_by  text,
+  constraint owner_notes_tags_shape check (cardinality(tags) <= 12),
+  constraint owner_notes_note_len check (note is null or char_length(note) <= 2000)
+);
+create index if not exists owner_notes_tags_idx on owner_notes using gin (tags);
+comment on table owner_notes is 'Console-only notes and tags about a signed-in person. Cascades with the account.';
 
 -- --------------------------------------------- 9. VinaX AI conversations --
 
@@ -2423,6 +2439,58 @@ begin
 end;
 $$;
 
+-- Version 15 — the extras on a person's profile: when in the day they
+-- listen (24 India-time hours, last 30 days, from _listen_spans: the
+-- listen_time rule), the songs they skip most (`skip` events: the app sends one
+-- when a song is skipped early), the songs they come back to on the most
+-- different days, and their latest searches (the app sends
+-- "<results>|<query>"). The owner's note and tags come from owner_notes.
+create or replace function profile_extras(p_account text) returns jsonb
+language sql stable set search_path = public, pg_temp as $$
+  with d as (
+    select l.id from listeners l
+    where l.account_id = p_account or l.id = (select listener_id from accounts where id = p_account)
+  ),
+  ev as (select e.* from events e where e.listener_id in (select id from d)),
+  spans as (
+    select t.at, t.seconds
+    from _listen_spans(coalesce((select array_agg(id) from d), array[]::text[]), now() - interval '30 days') t
+  )
+  select case when not exists (select 1 from accounts where id = p_account) then null else jsonb_build_object(
+    'hours', (select jsonb_agg(jsonb_build_object('hour', h, 'seconds', coalesce(t.seconds, 0)) order by h)
+              from generate_series(0, 23) h
+              left join (select extract(hour from at at time zone 'Asia/Kolkata')::int as hour, sum(seconds)::bigint as seconds
+                         from spans group by 1) t on t.hour = h),
+    'skips', (select count(*) from ev where kind = 'skip'),
+    'topSkipped', coalesce((select jsonb_agg(t) from (
+        select song_title as title, song_artist as artist, max(song_image) as image, count(*) as skips, max(at) as "lastAt"
+        from ev where kind = 'skip' and song_title is not null
+        group by 1, 2 order by skips desc, "lastAt" desc limit 10) t), '[]'::jsonb),
+    'topReplayed', coalesce((select jsonb_agg(t) from (
+        select song_title as title, song_artist as artist, max(song_image) as image,
+               count(distinct (at at time zone 'Asia/Kolkata')::date) as days, count(*) as plays, max(at) as "lastAt"
+        from ev where kind = 'play' and song_title is not null
+        group by 1, 2 having count(distinct (at at time zone 'Asia/Kolkata')::date) >= 2
+        order by days desc, plays desc limit 10) t), '[]'::jsonb),
+    'searches', coalesce((select jsonb_agg(t order by t.at desc) from (
+        select at,
+               case when message ~ '^[0-9]{1,9}[|]' then split_part(message, '|', 1)::int end as results,
+               case when message ~ '^[0-9]{1,9}[|]' then substr(message, strpos(message, '|') + 1) else message end as query,
+               platform
+        from ev where kind = 'search' and message is not null
+        order by at desc limit 100) t), '[]'::jsonb),
+    'notes', (select jsonb_build_object('tags', to_jsonb(tags), 'note', note, 'updatedAt', updated_at, 'updatedBy', updated_by)
+              from owner_notes where account_id = p_account)
+  ) end;
+$$;
+
+-- Every tag the owner has used, with how many people carry it (the Tag filter).
+create or replace function owner_tags() returns jsonb
+language sql stable set search_path = public, pg_temp as $$
+  select coalesce(jsonb_agg(t order by t.users desc, t.tag), '[]'::jsonb) from (
+    select tag, count(*) as users from owner_notes, unnest(tags) tag group by 1) t;
+$$;
+
 -- One tap on a notification (counted from the app; ids are not secret, so
 -- the count is a guide, not an audit).
 create or replace function notification_opened(p_id bigint) returns void
@@ -2583,7 +2651,8 @@ begin
     'settings', 'settings_history', 'experiments', 'audit_log', 'uptime_days', 'uptime_latest', 'job_runs',
     'admins', 'error_status',
     'ai_conversations', 'ai_messages', 'ai_attachments', 'ai_daily_usage', 'ai_shares', 'ai_projects', 'ai_memories', 'ai_memory_prefs',
-    'personal_songs', 'personal_events', 'personal_taste', 'personal_exposure', 'personal_pages', 'personal_colisten']
+    'personal_songs', 'personal_events', 'personal_taste', 'personal_exposure', 'personal_pages', 'personal_colisten',
+    'owner_notes']
   loop
     execute format('alter table public.%I enable row level security', t);
     execute format('alter table public.%I force row level security', t);
@@ -2608,7 +2677,8 @@ begin
                         'personal_record_events', 'personal_recompute_vector', 'personal_neighbours', 'personal_similar_songs',
                         'personal_colisten_for', 'personal_refresh_colisten', 'personal_trending', 'personal_embed_backlog', 'personal_set_embeddings', 'personal_mark_shown',
                         'personal_touch_songs', 'personal_unverified', 'personal_exposure_for',
-                        'personal_erase', 'personal_purge', 'personal_stats')
+                        'personal_erase', 'personal_purge', 'personal_stats',
+                        'profile_extras', 'owner_tags')
   loop
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);
     execute format('grant execute on function %s to service_role', r.sig);
@@ -2622,7 +2692,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 14, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 14, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 15, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 15, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 14 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 15 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;

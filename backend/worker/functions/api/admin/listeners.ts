@@ -13,8 +13,11 @@
  *        platform: android | web | ios, or a device key (DEVICES below, schema 13)
  *        sort: last_active (default) | joined | plays | listening | name
  *        listen30d / listenToday are seconds of listening (schema 13's listen_time)
- * GET  /api/admin/listeners?filters=1 → { configured, places, versions, languages }
+ *        tag: only people carrying this owner tag (schema 15); rows carry `tags`
+ * GET  /api/admin/listeners?filters=1 → { configured, places, versions, languages, tags }
  * GET  /api/admin/listeners?account=<id> → { configured, profile }   (user_profile)
+ *        profile.extras (schema 15, null before): { hours, skips, topSkipped,
+ *        topReplayed, searches, notes: { tags, note, updatedAt, updatedBy } | null }
  * GET  /api/admin/listeners?view=top&days=1|7|30 → { configured, days, since, people, total, rows }
  *        Top listeners (schema 14): ranked by listening seconds in the window
  *        (1 = today since midnight India time); rows: { id, name, email, picture,
@@ -27,6 +30,7 @@
  *        { action: 'unblock', account }
  *        { action: 'signout_device', account, device } that device's session stops working
  *        { action: 'delete', account, reason }       owner only: everything about the person
+ *        { action: 'notes', account, tags?, note? }   the owner's private tags and note (schema 15)
  */
 import { forgetBlocked } from '../../_lib/googleAuth';
 import { removeAccountFiles } from '../../_lib/ai/attachments';
@@ -37,6 +41,11 @@ import { clip, intIn, PLATFORMS } from '../../_lib/edge';
 
 const ID_RE = /^[a-z]_[a-f0-9]{16,64}$/;
 const SUB_RE = /^\d{1,40}$/;
+/** Schema 15: an owner tag — lower case letters, digits, spaces and dashes, 1–24 characters. */
+const TAG_RE = /^[a-z0-9][a-z0-9 _-]{0,23}$/;
+const MAX_TAGS = 12;
+/** The account ids `admin_users` can never match: a tag nobody carries filters to nothing. */
+const NOBODY = ['0'];
 const SORTS = ['last_active', 'joined', 'plays', 'listening', 'name'] as const;
 /** Schema 13: the kinds of device the Users page shows and filters by. */
 export const DEVICES = ['android-app', 'ios-app', 'android-web', 'ios-web', 'ipados-web', 'macos-web', 'windows-web', 'linux-web', 'chromeos-web', 'other-web'] as const;
@@ -47,16 +56,36 @@ interface UserRow {
   joined: string; last_seen: string; devices: number; plays: number; language: string | null; blocked_at: string | null;
   os?: string | null; browser?: string | null; device?: string | null; listen30d?: number; listen_today?: number;
 }
+interface NoteRow { account_id: string; tags: string[] | null; note?: string | null }
 interface UsersAnswer { total: number; rows: UserRow[]; counts: Record<string, unknown> }
 
-const shape = (r: UserRow) => ({
+const shape = (r: UserRow, tags: Map<string, string[]>) => ({
   id: r.id, name: r.name, email: r.email, picture: r.picture, platform: r.platform, appVersion: r.app_version,
   country: r.country, region: r.region, city: r.city, nowPlaying: r.now_playing ?? null, isPlaying: !!r.is_playing,
   joined: r.joined, lastSeen: r.last_seen, devices: Number(r.devices) || 0, plays: Number(r.plays) || 0,
   language: r.language, blocked: !!r.blocked_at,
   os: r.os ?? null, browser: r.browser ?? null, device: r.device ?? null,
   listen30d: Number(r.listen30d) || 0, listenToday: Number(r.listen_today) || 0,
+  tags: tags.get(r.id) ?? [],
 });
+
+/** Owner tags typed in the console: trimmed, lower case, valid, unique, at most 12. Null when the input is not a list. */
+export function cleanTags(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: string[] = [];
+  for (const t of raw) {
+    if (typeof t !== 'string') continue;
+    const v = t.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (TAG_RE.test(v) && !out.includes(v)) out.push(v);
+  }
+  return out.slice(0, MAX_TAGS);
+}
+
+/** The tag in `?tag=`, or null. */
+export function tagParam(url: URL): string | null {
+  const v = (url.searchParams.get('tag') ?? '').trim().toLowerCase();
+  return TAG_RE.test(v) ? v : null;
+}
 
 const dayIso = (v: string | null): string | null => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)) ? new Date(`${v}T00:00:00+05:30`).toISOString() : null);
 
@@ -110,34 +139,58 @@ export const onRequestGet = adminGet(async ({ env, url }) => {
   }
   if (view !== null) return badRequest('unknown_view', { views: ['top', 'at-risk'] });
   if (url.searchParams.get('filters') === '1') {
-    const r = await db.rpc<{ places?: unknown[]; versions?: unknown[]; languages?: unknown[] }>(env, 'admin_user_filters');
+    const [r, t] = await Promise.all([
+      db.rpc<{ places?: unknown[]; versions?: unknown[]; languages?: unknown[] }>(env, 'admin_user_filters'),
+      // Schema 15: the owner's tags. Before the update: none.
+      db.rpc<unknown[]>(env, 'owner_tags'),
+    ]);
     if (!r.ok) return dbFailure(r);
     const v = r.value ?? {};
-    return adminJson({ configured: true, places: v.places ?? [], versions: v.versions ?? [], languages: v.languages ?? [] });
+    return adminJson({ configured: true, places: v.places ?? [], versions: v.versions ?? [], languages: v.languages ?? [], tags: t.ok && Array.isArray(t.value) ? t.value : [] });
   }
   const account = url.searchParams.get('account');
   if (account !== null) {
     if (!SUB_RE.test(account)) return badRequest('bad_id');
-    const [r, s] = await Promise.all([
+    const [r, s, x] = await Promise.all([
       db.rpc<Record<string, unknown> | null>(env, 'user_profile', { p_account: account }),
       // Schema 12: the last 100 sign-ins. Before the update the table is missing: an empty list.
       db.select<SignInRow>(env, 'sign_ins', q().eq('account_id', account).select('at,ip,browser,platform,app_version,country,region,city,new_device,signup').order('at', 'desc').limit(100)),
+      // Schema 15: hours, skips, replays, searches, the owner's notes. Before the update: null.
+      db.rpc<Record<string, unknown> | null>(env, 'profile_extras', { p_account: account }),
     ]);
     if (!r.ok) return dbFailure(r);
     if (!r.value || typeof r.value !== 'object') return adminJson({ configured: true, error: 'not_found' }, 404);
     const signIns = s.ok ? s.rows.map((x) => ({ at: x.at, ip: x.ip, browser: x.browser, platform: x.platform, appVersion: x.app_version, country: x.country, region: x.region, city: x.city, newDevice: x.new_device, signup: x.signup })) : [];
-    return adminJson({ configured: true, profile: { ...r.value, signIns } });
+    const extras = x.ok && x.value && typeof x.value === 'object' ? x.value : null;
+    return adminJson({ configured: true, profile: { ...r.value, signIns, extras } });
   }
   const args = userArgs(url);
+  // Schema 15: a tag filter narrows the people to the accounts carrying it
+  // (with ?ids= as well, to the ones on both lists).
+  const tag = tagParam(url);
+  if (tag) {
+    const t = await db.select<NoteRow>(env, 'owner_notes', q().raw(`tags=cs.${encodeURIComponent(`{"${tag}"}`)}`).select('account_id').limit(200));
+    if (!t.ok) return dbFailure(t);
+    const tagged = t.rows.map((x) => x.account_id);
+    const ids = Array.isArray(args.p_ids) ? tagged.filter((id) => (args.p_ids as string[]).includes(id)) : tagged;
+    args.p_ids = ids.length ? ids : NOBODY;
+  }
   const r = await db.rpc<UsersAnswer>(env, 'admin_users', args);
   if (!r.ok) return dbFailure(r);
   const v = r.value ?? { total: 0, rows: [], counts: {} };
+  const rows = Array.isArray(v.rows) ? v.rows : [];
+  const tags = new Map<string, string[]>();
+  if (rows.length) {
+    // Before the update the table is missing: nobody has tags.
+    const n = await db.select<NoteRow>(env, 'owner_notes', q().in('account_id', rows.map((x) => x.id)).select('account_id,tags'));
+    if (n.ok) for (const x of n.rows) if (x.tags?.length) tags.set(x.account_id, x.tags);
+  }
   return adminJson({
     configured: true,
     total: Number(v.total) || 0,
     limit: args.p_limit,
     offset: args.p_offset,
-    rows: (Array.isArray(v.rows) ? v.rows : []).map(shape),
+    rows: rows.map((x) => shape(x, tags)),
     counts: v.counts ?? {},
   });
 });
@@ -154,7 +207,7 @@ async function devicesOf(env: Parameters<typeof db.select>[0], account: string):
   return [...ids];
 }
 
-export const onRequestPost = adminPost(async ({ env, body, audit }) => {
+export const onRequestPost = adminPost(async ({ env, body, audit, me }) => {
   const account = typeof body.account === 'string' ? body.account : '';
   if (!SUB_RE.test(account)) return badRequest('bad_id');
   const who = await db.one<{ id: string; email: string | null; name: string | null; listener_id: string | null; blocked_at: string | null }>(env, 'accounts', q().eq('id', account).select('id,email,name,listener_id,blocked_at'));
@@ -173,6 +226,27 @@ export const onRequestPost = adminPost(async ({ env, body, audit }) => {
     const reason = clip(body.reason, 200);
     await audit({ action: body.action === 'block' ? 'user-block' : 'user-unblock', summary: `${body.action === 'block' ? 'blocked' : 'unblocked'} ${label}${reason ? ` — ${reason}` : ''}`, target: account, before: { blocked: !!who.value.blocked_at }, after: { blocked: !!blocked_at } });
     return adminJson({ ok: true, blocked: !!blocked_at });
+  }
+
+  if (body.action === 'notes') {
+    const tags = body.tags === undefined ? undefined : cleanTags(body.tags);
+    if (tags === null) return badRequest('bad_tags');
+    if (body.note !== undefined && body.note !== null && typeof body.note !== 'string') return badRequest('bad_note');
+    const note = typeof body.note === 'string' ? body.note.trim().slice(0, 2000) || null : body.note === null ? null : undefined;
+    const before = await db.one<NoteRow>(env, 'owner_notes', q().eq('account_id', account).select('account_id,tags,note'));
+    if (!before.ok) return dbFailure(before);
+    const row = {
+      account_id: account,
+      tags: tags ?? before.value?.tags ?? [],
+      note: note === undefined ? before.value?.note ?? null : note,
+      updated_at: new Date().toISOString(),
+      updated_by: me.email,
+    };
+    const r = await db.upsert(env, 'owner_notes', row, 'account_id');
+    if (!r.ok) return dbFailure(r);
+    await audit({ action: 'user-notes', summary: `updated the notes and tags on ${label}`, target: account,
+      before: { tags: before.value?.tags ?? [], note: !!before.value?.note }, after: { tags: row.tags, note: !!row.note } });
+    return adminJson({ ok: true, notes: { tags: row.tags, note: row.note, updatedAt: row.updated_at, updatedBy: row.updated_by } });
   }
 
   if (body.action === 'signout_device') {

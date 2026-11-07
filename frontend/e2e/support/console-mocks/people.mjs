@@ -32,7 +32,23 @@ const users = NAMES.map((n, i) => ({
   joined: ago(60 * 24 * (i * 3 + 1)), lastSeen: ago(i < 5 ? i : i * 90), devices: i % 4 === 0 ? 2 : 1, plays: 400 - i * 23, blocked: i === 13,
   os: n[2] === 'android' ? 'android' : n[2] === 'ios' ? 'ios' : OS[i], browser: n[2] === 'web' ? BROWSER[OS[i]] : null,
   device: deviceKey(n[2], OS[i]), listen30d: (400 - i * 23) * 190, listenToday: i < 9 ? 3600 - i * 300 : 0,
+  // Schema 15: the owner's private tags (and a note on the first person).
+  tags: i === 0 ? ['vip', 'tester'] : i === 2 ? ['friend'] : i === 4 ? ['tester'] : [],
+  note: i === 0 ? 'Early tester from the Telugu group. Reports bugs quickly.' : null,
 }));
+
+// Schema 15: hours, skips, replays, searches and the owner's notes.
+function extras(u) {
+  return {
+    hours: Array.from({ length: 24 }, (_, h) => ({ hour: h, seconds: h < 6 ? 0 : Math.round(900 + 2400 * Math.max(0, Math.sin((h - 6) / 18 * Math.PI)) + (h === 21 ? 3600 : 0)) })),
+    skips: 23,
+    topSkipped: SONGS.slice(0, 4).map((s, i) => ({ title: s[0], artist: s[1], image: null, skips: 9 - i * 2, lastAt: ago(i * 300 + 20) })),
+    topReplayed: SONGS.slice(1).map((s, i) => ({ title: s[0], artist: s[1], image: null, days: 11 - i * 2, plays: 30 - i * 5, lastAt: ago(i * 200 + 5) })),
+    searches: [['naatu naatu', 14], ['sid sriram melody', 22], ['old telugu devotional 1980', 0], ['anirudh', 31], ['kesariya lofi', 0], ['ilaiyaraaja', 40]]
+      .map(([query, results], i) => ({ at: ago(i * 95 + 4), query, results, platform: u.platform })),
+    notes: u.tags.length || u.note ? { tags: u.tags, note: u.note, updatedAt: ago(1440), updatedBy: 'owner@example.com' } : null,
+  };
+}
 
 function profile(u) {
   return {
@@ -54,6 +70,7 @@ function profile(u) {
     languages: [{ language: u.language, plays: 120 }, { language: 'hindi', plays: 40 }, { language: 'english', plays: 12 }],
     history: Array.from({ length: 30 }, (_, i) => ({ at: ago(i * 37 + 3), songId: 's' + i, title: SONGS[i % 5][0], artist: SONGS[i % 5][1], image: null, language: u.language, platform: u.platform })),
     feedback: [{ id: 7, at: ago(3000), kind: 'bug', message: 'Lyrics did not load for one song.', status: 'resolved', platform: u.platform, appVersion: u.appVersion }],
+    extras: extras(u),
     activity: ['play', 'favorite', 'search', 'skip', 'open', 'error', 'complete', 'share'].map((k, i) => ({ at: ago(i * 50 + 2), kind: k, title: k === 'search' || k === 'open' ? null : SONGS[i % 5][0], artist: SONGS[i % 5][1], errorKind: k === 'error' ? 'download' : null, message: k === 'error' ? 'Song download timed out' : null, platform: u.platform, appVersion: u.appVersion, city: u.city })),
   };
 }
@@ -111,7 +128,8 @@ export default {
       return { configured: true,
         places: Object.entries(places).map(([k, n]) => { const [country, region, city] = k.split('|'); return { country, region, city, users: n }; }),
         versions: [['android', '1.8.3', 6], ['android', '1.8.2', 1], ['android', '1.8.1', 1], ['android', '1.8.0', 1], ['android', '1.7.9', 1], ['web', '1.8.3', 5], ['ios', '1.8.2', 1]].map(([platform, version, n]) => ({ platform, version, users: n })),
-        languages: [['telugu', 4], ['hindi', 3], ['kannada', 2], ['malayalam', 2], ['tamil', 1], ['bengali', 1], ['urdu', 1], ['english', 1]].map(([language, n]) => ({ language, users: n })) };
+        languages: [['telugu', 4], ['hindi', 3], ['kannada', 2], ['malayalam', 2], ['tamil', 1], ['bengali', 1], ['urdu', 1], ['english', 1]].map(([language, n]) => ({ language, users: n })),
+        tags: [['tester', 2], ['friend', 1], ['vip', 1]].map(([tag, n]) => ({ tag, users: n })) };
     }
     const acct = p.get('account');
     if (acct) { const u = users.find((x) => x.id === acct); return u ? { configured: true, profile: profile(u) } : { __status: 404, configured: true, error: 'not_found' }; }
@@ -123,6 +141,7 @@ export default {
     for (const [k, f] of [['country', 'country'], ['region', 'region'], ['city', 'city'], ['version', 'appVersion'], ['language', 'language']]) if (p.get(k)) rows = rows.filter((u) => String(u[f]).toLowerCase() === p.get(k).toLowerCase());
     if (p.get('active')) rows = rows.filter((u) => Date.parse(u.lastSeen) > now - Number(p.get('active')) * 86_400_000);
     if (p.get('joined')) rows = rows.filter((u) => Date.parse(u.joined) > now - Number(p.get('joined')) * 86_400_000);
+    if (p.get('tag')) rows = rows.filter((u) => u.tags.includes(p.get('tag')));
     const ids = (p.get('ids') || '').split(',').filter(Boolean);
     if (ids.length) rows = rows.filter((u) => ids.includes(u.id));
     const sort = p.get('sort') || 'last_active';
@@ -133,5 +152,5 @@ export default {
         byDevice: users.reduce((m, u) => { m[u.device] = (m[u.device] || 0) + 1; return m; }, {}),
         listenToday: users.reduce((t, u) => t + u.listenToday, 0), listenersToday: users.filter((u) => u.listenToday > 0).length } };
   },
-  'POST /api/admin/listeners': (url, b) => (b.action === 'block' || b.action === 'unblock' ? { ok: true, blocked: b.action === 'block' } : b.action === 'signout_device' ? { ok: true, signedOutAt: new Date().toISOString() } : { ok: true, deleted: { listener: 1, account: 1, events: 230 } }),
+  'POST /api/admin/listeners': (url, b) => (b.action === 'notes' ? { ok: true, notes: { tags: b.tags, note: (b.note || '').trim() || null, updatedAt: new Date().toISOString(), updatedBy: 'owner@example.com' } } : b.action === 'block' || b.action === 'unblock' ? { ok: true, blocked: b.action === 'block' } : b.action === 'signout_device' ? { ok: true, signedOutAt: new Date().toISOString() } : { ok: true, deleted: { listener: 1, account: 1, events: 230 } }),
 };

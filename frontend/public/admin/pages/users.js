@@ -4,12 +4,14 @@
  * server; ?filters=1 gives the dropdown choices; ?account= gives one
  * person's profile, shown on its own page (#/user?id=<account id>).
  * Actions: block / unblock, sign one device out, delete a person's data
- * (owner only, type-to-confirm), add as VinaX AI testers, send a notification. */
+ * (owner only, type-to-confirm), add as VinaX AI testers, send a notification.
+ * Schema 15: the profile's notes and tags, hour pattern, skips and searches
+ * live in pages/user-extras.js; All Users filters by tag (?tag=). */
 (function () {
   'use strict';
   var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt, arr = VX.arr, obj = VX.obj, num = VX.num;
   var API = '/api/admin/listeners';
-  var KEYS = ['q', 'platform', 'active', 'joined', 'joinedFrom', 'joinedTo', 'country', 'region', 'city', 'version', 'language', 'sort', 'limit', 'offset'];
+  var KEYS = ['q', 'platform', 'active', 'joined', 'joinedFrom', 'joinedTo', 'country', 'region', 'city', 'version', 'language', 'tag', 'sort', 'limit', 'offset'];
   var SORTS = [{ value: 'last_active', label: 'Last active' }, { value: 'joined', label: 'Joined (newest)' }, { value: 'plays', label: 'Most plays' }, { value: 'listening', label: 'Most listening' }, { value: 'name', label: 'Name A–Z' }];
   var COL_SORT = { lastSeen: 'last_active', joined: 'joined', plays: 'plays', listen30d: 'listening', user: 'name' };
   var LISTEN_INFO = 'Worked out from the app’s “still playing” signal (every 25 seconds while music plays) and each song played; a gap over 6 minutes counts as stopped. An estimate: a phone in the background can send fewer signals.';
@@ -155,7 +157,7 @@
     state.limit = Number(state.limit) || 25;
     state.offset = Number(state.offset) || 0;
     var cardsHost = h('div.users-stats'), filterHost = h('div.user-filters'), tableHost = h('div');
-    var filters = { places: [], versions: [], languages: [] };
+    var filters = { places: [], versions: [], languages: [], tags: [] };
     var newest = null;
 
     function sync() {
@@ -205,7 +207,9 @@
           ui.dropdown('App version', opts(versions.map(function (v) { return { value: v.platform + '|' + v.version, label: VX.platformName(v.platform) + ' ' + v.version + (newest && cmpVersion(v.version, newest) === 0 ? ' (latest)' : '') + ' · ' + fmt.num(v.users) }; }), 'All versions'),
             state.version ? (plat || (arr(filters.versions).filter(function (v) { return v.version === state.version; })[0] || {}).platform) + '|' + state.version : '',
             function (v) { var p = v.split('|'); set(v ? { platform: plat === p[0] ? state.platform : p[0], version: p[1] } : { version: '' }); }),
-          ui.dropdown('Language', opts(arr(filters.languages).map(function (l) { return { value: l.language, label: VX.langName(l.language) }; }), 'All languages'), state.language || '', function (v) { set({ language: v }); })),
+          ui.dropdown('Language', opts(arr(filters.languages).map(function (l) { return { value: l.language, label: VX.langName(l.language) }; }), 'All languages'), state.language || '', function (v) { set({ language: v }); }),
+          // Schema 15: the owner's private tags (only once someone has one).
+          arr(filters.tags).length || state.tag ? ui.dropdown('Tag', opts(arr(filters.tags).map(function (t) { return { value: t.tag, label: t.tag + ' · ' + fmt.num(t.users) }; }), 'Any tag'), state.tag || '', function (v) { set({ tag: v }); }) : null),
         anyFilter() ? h('div.toolbar', ui.button('Clear filters', { kind: 'ghost', small: true, icon: 'close', onClick: function () { KEYS.forEach(function (k) { if (k !== 'limit') delete state[k]; }); state.offset = 0; sync(); drawFilters(); load(); } })) : null);
     }
 
@@ -215,8 +219,11 @@
         { key: 'user', label: 'User', always: true, render: function (r) {
           var m = ui.media(r.picture, who(r), r.name ? r.email : null, true);
           if (r.blocked) m.lastChild.firstChild.appendChild(h('span', ' ', ui.pill('Blocked', 'bad')));
+          var chips = VX.userExtras ? VX.userExtras.tagChips(r.tags) : null;
+          if (chips) m.lastChild.appendChild(chips);
           return m;
         }, csv: function (r) { return who(r); } },
+        { key: 'tags', label: 'Tags', hidden: true, sort: false, render: function (r) { return arr(r.tags).join(', ') || null; }, csv: function (r) { return arr(r.tags).join(', '); } },
         { key: 'email', label: 'Email', hidden: true, sort: false },
         { key: 'devices', label: 'Devices', sort: false, render: function (r) { return fmt.plural(r.devices || 1, 'device'); }, csv: function (r) { return num(r.devices); } },
         { key: 'platform', label: 'Device & version', sort: false, render: function (r) {
@@ -335,13 +342,17 @@
         var tabs = [
           { id: 'overview', label: 'Overview' },
           { id: 'history', label: 'Listening history' },
+          { id: 'skips', label: 'Skips & replays' },
+          { id: 'searches', label: 'Searches', badge: arr(obj(p.extras).searches).length || null },
           { id: 'devices', label: 'Devices', badge: arr(p.devices).length || null },
           { id: 'signins', label: 'Sign-ins', badge: arr(p.signIns).length || null },
           { id: 'feedback', label: 'Feedback sent', badge: arr(p.feedback).length || null },
           { id: 'activity', label: 'Activity log' }
         ];
         function show(id) {
-          var fn = { overview: overview, history: history, devices: devices, signins: signIns, feedback: feedback, activity: activity }[id];
+          var x = VX.userExtras;
+          var fn = { overview: overview, history: history, devices: devices, signins: signIns, feedback: feedback, activity: activity,
+            skips: function () { return x.skips(p.extras || null); }, searches: function () { return x.searches(p.extras || null); } }[id];
           VX.mount(panel, fn(p, u, ctx, load));
         }
         var bar = ui.tabs(tabs, 'overview', show);
@@ -353,6 +364,7 @@
             h('span.grow'),
             VX.can('edit') ? ui.button('Send notification', { kind: 'ghost', small: true, icon: 'send', onClick: function () { ctx.go('send-notification', null, { users: u.id }); } }) : null,
             ui.menu(personMenu(u, ctx, refreshAll, true), { label: 'More for ' + who(u) })),
+          VX.userExtras.notes(u, p.extras || null, function (saved) { if (p.extras) p.extras.notes = saved; }),
           bar.el, panel
         ];
       }, { skeleton: 8 });
@@ -390,6 +402,7 @@
         ui.chart({ labels: byDay.map(function (x) { return x.day; }), series: [{ name: 'Listening', values: byDay.map(function (x) { return Math.round(num(x.seconds) / 60); }), color: 'var(--c2)' }],
           type: 'bar', height: 160, title: 'Minutes listened per day', empty: 'No listening in the last 14 days',
           format: function (v) { v = Math.round(v); var hr = Math.floor(v / 60), m = v % 60; return !v ? '0' : hr ? hr + 'h' + (m ? ' ' + m + 'm' : '') : m + 'm'; } })) : null,
+      VX.userExtras.hours(p.extras || null),
       h('div.grid.cols-2.profile-lists',
         h('div', ui.heading('Top artists', 'Artists this person played most.'), ui.hbars(arr(p.topArtists).map(function (x) { return { label: x.artist, value: num(x.plays) }; }), { empty: 'No plays yet', limit: 6 })),
         h('div', ui.heading('Top songs', 'Songs this person played most.'), ui.hbars(arr(p.topSongs).map(function (x) { return { label: x.title, sub: x.artist, value: num(x.plays) }; }), { empty: 'No plays yet', limit: 6 })))

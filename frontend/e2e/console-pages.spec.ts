@@ -152,6 +152,13 @@ test.describe('console pages', () => {
     await expect(page.locator('#pageBody tbody tr')).toHaveCount(1);
     await page.goto('/admin/#/users');
     await settle(page);
+    // Schema 15: tags show as chips and filter the list.
+    await expect(page.locator('#pageBody tbody .tag-chips').first()).toBeVisible();
+    await page.locator('#pageBody select[aria-label="Tag"]').selectOption('tester');
+    await expect(page).toHaveURL(/tag=tester/);
+    await expect(page.locator('#pageBody tbody tr')).toHaveCount(2);
+    await page.goto('/admin/#/users');
+    await settle(page);
     await page.locator('#pageBody tbody tr').first().click();
     // The profile is its own page, with a way back to the list.
     await expect(page).toHaveURL(/#\/user\?id=\d+$/);
@@ -160,6 +167,22 @@ test.describe('console pages', () => {
     await expect(body.getByRole('tab', { name: 'Devices' })).toBeVisible();
     await expect(body.locator('.kpi-label').filter({ hasText: /^Listening time$/ })).toHaveCount(1);
     await expect(body.getByText('Time spent each day')).toBeVisible();
+    // Schema 15: notes and tags, when they listen, skips and replays, searches.
+    await expect(body.locator('.profile-notes')).toContainText('Early tester from the Telugu group.');
+    await expect(body.getByText('When they listen')).toBeVisible();
+    await expect(body.getByText(/Most often 9 pm–10 pm/)).toBeVisible();
+    await body.locator('.profile-notes').getByRole('button', { name: 'Edit', exact: true }).click();
+    await page.getByLabel('New tag').fill('Family');
+    await page.getByLabel('New tag').press('Enter');
+    await page.locator('.modal').getByRole('button', { name: 'Save' }).click();
+    await expect(body.locator('.profile-notes .tag-chips')).toContainText('family');
+    await body.getByRole('tab', { name: 'Skips & replays' }).click();
+    await expect(body.getByText('Skipped most')).toBeVisible();
+    await expect(body.getByText('Comes back to')).toBeVisible();
+    await body.getByRole('tab', { name: /Searches/ }).click();
+    await expect(body.getByText('old telugu devotional 1980')).toBeVisible();
+    await expect(body.getByText('No results').first()).toBeVisible();
+    await body.getByRole('tab', { name: 'Overview' }).click();
     // Schema 12: the sign-in history, with the IP address and a chip for a new device.
     await body.getByRole('tab', { name: /Sign-ins/ }).click();
     await expect(body.getByText('203.0.113.7')).toBeVisible();

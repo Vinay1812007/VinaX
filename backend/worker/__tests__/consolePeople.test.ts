@@ -65,7 +65,7 @@ describe('Dashboard (overview)', () => {
       if (p === 'rpc/stats_overview') return json(kpis);
       if (p === 'rpc/stats_timeline') { expect(c.body).toEqual({ p_days: 30 }); return json([{ day: '2026-11-01', plays: 4 }]); }
       if (p === 'rpc/stats_platforms') return json({ platforms: [{ platform: 'android', users: 9 }], versions: [] });
-      if (p === 'meta') return json([{ key: 'schema', value: { version: 14, appliedAt: 'x' } }]);
+      if (p === 'meta') return json([{ key: 'schema', value: { version: 15, appliedAt: 'x' } }]);
       return undefined;
     });
     const { res, body } = await run(overview.onRequestGet as Handler, '/api/admin/overview?days=30');
@@ -98,7 +98,7 @@ describe('Users (listeners)', () => {
     const { res, body } = await run(listeners.onRequestGet as Handler, '/api/admin/listeners' + q);
     expect(res.status).toBe(200);
     expect(body?.total).toBe(1);
-    expect(body?.rows).toEqual([{ id: ACCT, name: 'Asha', email: 'a@x.in', picture: null, platform: 'android', appVersion: '1.8.3', country: 'IN', region: 'Telangana', city: 'Hyderabad', nowPlaying: null, isPlaying: false, joined: 'j', lastSeen: 'l', devices: 2, plays: 40, language: 'telugu', blocked: false, os: null, browser: null, device: null, listen30d: 0, listenToday: 0 }]);
+    expect(body?.rows).toEqual([{ id: ACCT, name: 'Asha', email: 'a@x.in', picture: null, platform: 'android', appVersion: '1.8.3', country: 'IN', region: 'Telangana', city: 'Hyderabad', nowPlaying: null, isPlaying: false, joined: 'j', lastSeen: 'l', devices: 2, plays: 40, language: 'telugu', blocked: false, os: null, browser: null, device: null, listen30d: 0, listenToday: 0, tags: [] }]);
     expect(JSON.stringify(body)).not.toMatch(/d_[a-f0-9]{8}/);
   });
 
@@ -128,7 +128,7 @@ describe('Users (listeners)', () => {
       return undefined;
     });
     expect((await run(listeners.onRequestGet as Handler, '/api/admin/listeners?filters=1')).body?.places).toHaveLength(1);
-    expect((await run(listeners.onRequestGet as Handler, `/api/admin/listeners?account=${ACCT}`)).body?.profile).toEqual({ account: { id: ACCT }, devices: [], signIns: [] });
+    expect((await run(listeners.onRequestGet as Handler, `/api/admin/listeners?account=${ACCT}`)).body?.profile).toEqual({ account: { id: ACCT }, devices: [], signIns: [], extras: null });
     expect((await run(listeners.onRequestGet as Handler, '/api/admin/listeners?account=999')).res.status).toBe(404);
   });
 
@@ -154,6 +154,95 @@ describe('Users (listeners)', () => {
     expect(typeof (patches[0].body as { signed_out_at: string }).signed_out_at).toBe('string');
     const other = await run(listeners.onRequestPost as Handler, '/api/admin/listeners', { body: { action: 'signout_device', account: ACCT, device: ANON } });
     expect(other.res.status).toBe(404);
+  });
+
+  it('filters by an owner tag through p_ids and shows each person’s tags (schema 15)', async () => {
+    const OTHER = '110000000000000000002';
+    stub((c) => {
+      const p = path(c);
+      if (p === 'owner_notes' && c.url.searchParams.get('tags')) {
+        expect(c.url.searchParams.get('tags')).toBe('cs.{"vip"}');
+        return json([{ account_id: ACCT }, { account_id: OTHER }]);
+      }
+      if (p === 'owner_notes') return json([{ account_id: ACCT, tags: ['vip', 'tester'] }]);
+      if (p === 'rpc/admin_users') return json({ total: 1, rows: [{ id: ACCT, platform: 'web' }], counts: {} });
+      return undefined;
+    });
+    const { body } = await run(listeners.onRequestGet as Handler, '/api/admin/listeners?tag=VIP');
+    expect((calls.find((c) => path(c) === 'rpc/admin_users')?.body as Record<string, unknown>).p_ids).toEqual([ACCT, OTHER]);
+    expect((body?.rows as Array<Record<string, unknown>>)[0].tags).toEqual(['vip', 'tester']);
+    // With ?ids= too: only people on both lists.
+    await run(listeners.onRequestGet as Handler, `/api/admin/listeners?tag=vip&ids=${OTHER},110000000000000000003`);
+    expect((calls.filter((c) => path(c) === 'rpc/admin_users').pop()?.body as Record<string, unknown>).p_ids).toEqual([OTHER]);
+  });
+
+  it('a tag nobody carries matches nobody; a malformed tag is ignored', async () => {
+    stub((c) => (path(c) === 'rpc/admin_users' ? json({ total: 0, rows: [], counts: {} }) : undefined));
+    await run(listeners.onRequestGet as Handler, '/api/admin/listeners?tag=ghost');
+    expect((calls.find((c) => path(c) === 'rpc/admin_users')?.body as Record<string, unknown>).p_ids).toEqual(['0']);
+    calls = [];
+    await run(listeners.onRequestGet as Handler, '/api/admin/listeners?tag=%7B%22x%22%7D');
+    expect(calls.some((c) => path(c) === 'owner_notes')).toBe(false);
+    expect((calls.find((c) => path(c) === 'rpc/admin_users')?.body as Record<string, unknown>).p_ids).toBeNull();
+  });
+
+  it('answers the owner’s tags with the filter choices and the profile extras (schema 15)', async () => {
+    const extras = { hours: [{ hour: 21, seconds: 600 }], skips: 3, topSkipped: [], topReplayed: [], searches: [{ query: 'kanne', results: 0 }], notes: { tags: ['vip'], note: 'Friend from college' } };
+    stub((c) => {
+      if (path(c) === 'rpc/admin_user_filters') return json({ places: [], versions: [], languages: [] });
+      if (path(c) === 'rpc/owner_tags') return json([{ tag: 'vip', users: 2 }]);
+      if (path(c) === 'rpc/user_profile') return json({ account: { id: ACCT } });
+      if (path(c) === 'rpc/profile_extras') return json(extras);
+      return undefined;
+    });
+    expect((await run(listeners.onRequestGet as Handler, '/api/admin/listeners?filters=1')).body?.tags).toEqual([{ tag: 'vip', users: 2 }]);
+    expect(((await run(listeners.onRequestGet as Handler, `/api/admin/listeners?account=${ACCT}`)).body?.profile as Record<string, unknown>).extras).toEqual(extras);
+  });
+
+  it('before the database update the profile still opens and nobody has tags', async () => {
+    const missing = () => json({ code: 'PGRST202', message: 'Could not find the function' }, 404);
+    stub((c) => {
+      if (path(c) === 'rpc/owner_tags' || path(c) === 'rpc/profile_extras') return missing();
+      if (path(c) === 'owner_notes') return json({ code: '42P01', message: 'relation does not exist' }, 404);
+      if (path(c) === 'rpc/admin_user_filters') return json({ places: [], versions: [], languages: [] });
+      if (path(c) === 'rpc/user_profile') return json({ account: { id: ACCT } });
+      if (path(c) === 'rpc/admin_users') return json({ total: 1, rows: [{ id: ACCT, platform: 'web' }], counts: {} });
+      return undefined;
+    });
+    expect((await run(listeners.onRequestGet as Handler, '/api/admin/listeners?filters=1')).body?.tags).toEqual([]);
+    const prof = await run(listeners.onRequestGet as Handler, `/api/admin/listeners?account=${ACCT}`);
+    expect(prof.res.status).toBe(200);
+    expect((prof.body?.profile as Record<string, unknown>).extras).toBeNull();
+    expect(((await run(listeners.onRequestGet as Handler, '/api/admin/listeners')).body?.rows as Array<Record<string, unknown>>)[0].tags).toEqual([]);
+  });
+
+  it('saves the owner’s tags and note, cleaned, with an audit row; viewers cannot', async () => {
+    stub((c) => {
+      if (path(c) === 'admins') return json([{ email: 'viewer@example.com', name: null, picture: null, role: 'viewer', invited_by: null, created_at: 'x', last_sign_in: null }]);
+      if (path(c) === 'owner_notes' && c.method === 'GET') return json([{ account_id: ACCT, tags: ['friend'], note: 'Old note' }]);
+      return account(c);
+    });
+    const { res, body } = await run(listeners.onRequestPost as Handler, '/api/admin/listeners', { body: { action: 'notes', account: ACCT, tags: [' VIP ', 'vip', 'Early   tester', '{bad}', 42], note: '  Met at the meetup  ' } });
+    expect(res.status).toBe(200);
+    expect((body?.notes as Record<string, unknown>)).toMatchObject({ tags: ['vip', 'early tester'], note: 'Met at the meetup' });
+    const up = calls.find((c) => path(c) === 'owner_notes' && c.method === 'POST');
+    expect(up?.url.searchParams.get('on_conflict')).toBe('account_id');
+    expect(up?.body).toMatchObject({ account_id: ACCT, tags: ['vip', 'early tester'], note: 'Met at the meetup' });
+    expect((calls.find((c) => path(c) === 'audit_log')?.body as { action: string; summary: string })).toMatchObject({ action: 'user-notes', summary: 'updated the notes and tags on a@x.in' });
+    // Only the tags: the note stays.
+    calls = [];
+    await run(listeners.onRequestPost as Handler, '/api/admin/listeners', { body: { action: 'notes', account: ACCT, tags: [] } });
+    expect(calls.find((c) => path(c) === 'owner_notes' && c.method === 'POST')?.body).toMatchObject({ tags: [], note: 'Old note' });
+    expect((await run(listeners.onRequestPost as Handler, '/api/admin/listeners', { body: { action: 'notes', account: ACCT, tags: 'vip' } })).res.status).toBe(400);
+    expect((await run(listeners.onRequestPost as Handler, '/api/admin/listeners', { body: { action: 'notes', account: ACCT, note: 5 } })).res.status).toBe(400);
+    const viewer = (await issueAdminSession(ENV, 'viewer@example.com'))!;
+    expect((await run(listeners.onRequestPost as Handler, '/api/admin/listeners', { body: { action: 'notes', account: ACCT, tags: ['x'] }, token: viewer })).res.status).toBe(403);
+  });
+
+  it('cleanTags keeps at most 12 valid, unique, lower-case tags', () => {
+    expect(listeners.cleanTags(null)).toBeNull();
+    expect(listeners.cleanTags(['A', 'a', ' b c ', '-x', 'y'.repeat(25)])).toEqual(['a', 'b c']);
+    expect(listeners.cleanTags(Array.from({ length: 20 }, (_, i) => `t${i}`))).toHaveLength(12);
   });
 
   it('only an owner deletes a person, across every device; viewers change nothing', async () => {

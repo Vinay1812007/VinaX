@@ -263,6 +263,36 @@ begin
   assert (user_profile('check_a2') -> 'stats' ->> 'listenAll')::int = 0, 'user_profile: no devices, no listening';
   delete from events where listener_id in ('check_lar', 'check_laq');
   delete from accounts where id in ('check_ar', 'check_aq');
+  -- v15: profile extras, owner notes and tags (locked, cascade with the account)
+  insert into events (at, listener_id, kind, song_title, song_artist) values
+    (now() - interval '1 day',  'check_l1', 'skip', 'Check Skip', 'Check Artist'),
+    (now() - interval '2 days', 'check_l1', 'skip', 'Check Skip', 'Check Artist'),
+    (now() - interval '1 day',  'check_l1', 'play', 'Check Again', 'Check Artist'),
+    (now() - interval '3 days', 'check_l1', 'play', 'Check Again', 'Check Artist');
+  v := profile_extras('check_a1');
+  assert jsonb_array_length(v -> 'hours') = 24 and (v -> 'hours' -> 0 ->> 'hour')::int = 0, 'profile_extras: 24 hours';
+  assert (v ->> 'skips')::int >= 2 and jsonb_array_length(v -> 'topSkipped') between 1 and 10
+     and (select max((x ->> 'skips')::int) from jsonb_array_elements(v -> 'topSkipped') x) = (v -> 'topSkipped' -> 0 ->> 'skips')::int, 'profile_extras: most skipped first';
+  assert exists (select 1 from jsonb_array_elements(v -> 'topReplayed') r where r ->> 'title' = 'Check Again' and (r ->> 'days')::int >= 2), 'profile_extras: replayed on different days';
+  assert exists (select 1 from jsonb_array_elements(v -> 'searches') x where x ->> 'query' = 'check nothing here' and (x ->> 'results')::int = 0), 'profile_extras: searches with result counts';
+  assert exists (select 1 from jsonb_array_elements(v -> 'searches') x where x ->> 'query' = 'no bar at all' and x -> 'results' = 'null'::jsonb), 'profile_extras: a search without a count';
+  assert v -> 'notes' = 'null'::jsonb and profile_extras('check_nobody') is null, 'profile_extras: no notes yet, unknown account';
+  insert into owner_notes (account_id, tags, note, updated_by) values ('check_a1', array['vip', 'tester'], 'Check note', 'owner@example.com');
+  v := profile_extras('check_a1');
+  assert (v -> 'notes' ->> 'note') = 'Check note' and (v -> 'notes' -> 'tags') ? 'vip', 'profile_extras: notes and tags';
+  assert exists (select 1 from jsonb_array_elements(owner_tags()) t where t ->> 'tag' = 'vip' and (t ->> 'users')::int = 1), 'owner_tags';
+  assert (select relforcerowsecurity from pg_class where relname = 'owner_notes'), 'owner_notes: row level security forced';
+  assert not has_table_privilege('anon', 'public.owner_notes', 'select'), 'anon cannot read owner notes';
+  assert not has_function_privilege('anon', 'public.profile_extras(text)', 'execute'), 'anon cannot call profile_extras';
+  begin
+    insert into owner_notes (account_id, tags) values ('check_a2', array['a','b','c','d','e','f','g','h','i','j','k','l','m']);
+    raise exception 'owner_notes accepted 13 tags';
+  exception when check_violation then null;
+  end;
+  insert into accounts (id, email) values ('check_on', 'on@example.com');
+  insert into owner_notes (account_id, tags) values ('check_on', array['friend']);
+  delete from accounts where id = 'check_on';
+  assert not exists (select 1 from owner_notes where account_id = 'check_on'), 'owner_notes: deleted with the account';
   n := purge_kind('errors', 180);
   assert n = 0, 'purge_kind keeps recent errors';
   begin
@@ -636,7 +666,7 @@ begin
   assert not has_table_privilege('anon', 'public.personal_events', 'select'), 'anon cannot read personal events';
   assert not has_function_privilege('anon', 'public.personal_neighbours(text, text, integer, text[], boolean)', 'execute'), 'anon cannot call the personal engine';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 14, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 15, 'meta.schema.version';
   -- v12: sign-in history is locked like every table and goes with its account.
   assert (select relforcerowsecurity from pg_class where relname = 'sign_ins'), 'sign_ins: row level security forced';
   assert not has_table_privilege('anon', 'public.sign_ins', 'select'), 'anon cannot read sign-in history';
