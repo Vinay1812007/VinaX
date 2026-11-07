@@ -16,6 +16,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.11.1': {
+    title: 'Lyrics light up as they\'re sung: a gold sweep with a flashing stripe',
+    changes: [
+      { type: 'improved', text: 'The line being sung fills in gold, in time with the song, with a bright stripe flashing along the edge.' },
+      { type: 'new', text: 'Each new line starts with a quick flash.' },
+      { type: 'fixed', text: 'The sweep no longer trails the singer by a fifth of a second.' },
+    ],
+  },
   '1.11.0': {
     title: 'Easier browsing: Home for everyone, one languages picker, podcasts in search',
     changes: [
