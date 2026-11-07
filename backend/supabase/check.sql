@@ -204,6 +204,32 @@ begin
   assert jsonb_array_length(v -> 'devices') = 1 and (v -> 'stats' ->> 'plays')::int > 0 and jsonb_array_length(v -> 'history') > 0, 'user_profile';
   assert jsonb_array_length(v -> 'feedback') = 1 and jsonb_array_length(v -> 'topArtists') > 0, 'user_profile: feedback and artists';
   assert user_profile('check_nobody') is null, 'user_profile: unknown account';
+
+  -- version 13: device keys and listening time
+  assert _device_key('android', 'android') = 'android-app' and _device_key('ios', null) = 'ios-app', '_device_key: the apps';
+  assert _device_key('web', 'macos') = 'macos-web' and _device_key('web', 'ios') = 'ios-web' and _device_key(null, null) = 'other-web' and _device_key('web', 'beos') = 'other-web', '_device_key: browsers';
+  -- three heartbeats 25 s apart then a pause = 75 s; a play with nothing after it for an hour = 6 min; an open breaks nothing
+  insert into events (at, listener_id, kind) values
+    (now() - interval '2 hours',                         'check_lt', 'heartbeat'),
+    (now() - interval '2 hours' + interval '25 seconds', 'check_lt', 'heartbeat'),
+    (now() - interval '2 hours' + interval '50 seconds', 'check_lt', 'heartbeat'),
+    (now() - interval '2 hours' + interval '75 seconds', 'check_lt', 'pause'),
+    (now() - interval '2 hours' + interval '80 seconds', 'check_lt', 'search'),
+    (now() - interval '3 hours',                         'check_lt', 'play'),
+    (now() - interval '50 days',                         'check_lt', 'play');
+  assert (select sum(seconds) from listen_time(array['check_lt'], now() - interval '30 days')) = 75 + 360, 'listen_time: heartbeats, pause, 6-minute cap';
+  assert (select sum(seconds) from listen_time(array['check_lt'], null)) = 75 + 360 + 360, 'listen_time: all time';
+  update listeners set os = 'macos', browser = 'Chrome' where id = 'check_l1';
+  v := admin_users(p_platform => 'macos-web');
+  assert (v ->> 'total')::int = 1 and (v -> 'rows' -> 0 ->> 'device') = 'macos-web' and (v -> 'rows' -> 0 ->> 'browser') = 'Chrome', 'admin_users: device filter';
+  v := admin_users(p_platform => 'web');
+  assert (v ->> 'total')::int = 2, 'admin_users: plain platform still filters';
+  v := admin_users(p_sort => 'listening');
+  assert (v -> 'rows' -> 0 ->> 'id') = 'check_a1' and (v -> 'rows' -> 0 ->> 'listen30d')::int > 0, 'admin_users: most listening first';
+  assert (v -> 'counts' -> 'byDevice' ->> 'macos-web')::int = 1 and (v -> 'counts' ->> 'listenToday') is not null, 'admin_users.counts: byDevice, listenToday';
+  v := user_profile('check_a1');
+  assert (v -> 'stats' ->> 'listen30d')::int > 0 and (v -> 'stats' ->> 'listenAll')::int >= (v -> 'stats' ->> 'listen30d')::int, 'user_profile: listening time';
+  assert jsonb_array_length(v -> 'listenByDay') = 14 and (v -> 'devices' -> 0 ->> 'device') = 'macos-web', 'user_profile: 14 days, device key';
   n := purge_kind('errors', 180);
   assert n = 0, 'purge_kind keeps recent errors';
   begin
@@ -577,7 +603,7 @@ begin
   assert not has_table_privilege('anon', 'public.personal_events', 'select'), 'anon cannot read personal events';
   assert not has_function_privilege('anon', 'public.personal_neighbours(text, text, integer, text[], boolean)', 'execute'), 'anon cannot call the personal engine';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 12, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 13, 'meta.schema.version';
   -- v12: sign-in history is locked like every table and goes with its account.
   assert (select relforcerowsecurity from pg_class where relname = 'sign_ins'), 'sign_ins: row level security forced';
   assert not has_table_privilege('anon', 'public.sign_ins', 'select'), 'anon cannot read sign-in history';

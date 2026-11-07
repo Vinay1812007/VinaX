@@ -9,12 +9,13 @@
  *   → 200 { signed_device_id_next }          first contact: the signed id the app keeps
  *
  * What is written: one `events` row (the event itself, song facts, coarse edge
- * geo) and the device's latest-state `listeners` row. Device identity comes
+ * geo) and the device's latest-state `listeners` row (schema 13: with the
+ * system and browser read from the user agent). Device identity comes
  * from _lib/identity.ts — never the raw client id. The database work runs
  * after the answer (waitUntil), so a slow database never delays the app.
  */
 import { db, dbConfigured, type DbEnv } from '../_lib/db';
-import { appVersionOf, asObject, clip, edgeGeo, platformOf, songFacts } from '../_lib/edge';
+import { appVersionOf, asObject, clip, deviceOf, edgeGeo, platformOf, songFacts } from '../_lib/edge';
 import { resolveIdentity, type IdentityEnv } from '../_lib/identity';
 import { rateLimitAsync } from '../_lib/ratelimit';
 
@@ -159,6 +160,17 @@ export const onRequestPost = async (context: Ctx): Promise<Response> => {
     city: geo.city,
     last_seen: now,
   };
+  // Schema 13: the system and browser from the user agent, so the console can
+  // tell the Android app from Android in a browser, an iPhone, a Mac… The
+  // apps are WebViews, not browsers: they keep their system and no browser.
+  const ua = request.headers.get('user-agent');
+  if (ua) {
+    const dev = deviceOf(ua);
+    if (dev.os || platform !== 'web') {
+      listenerRow.os = platform === 'android' ? 'android' : platform === 'ios' ? (dev.os === 'ipados' ? 'ipados' : 'ios') : dev.os;
+      listenerRow.browser = platform === 'web' ? dev.browser : null;
+    }
+  }
   const name = clip(body.name, 80);
   if (name) listenerRow.display_name = name;
   if (appVersion) listenerRow.app_version = appVersion;
@@ -167,7 +179,15 @@ export const onRequestPost = async (context: Ctx): Promise<Response> => {
   if (song?.title) listenerRow.now_playing = { id: song.id, title: song.title, artist: song.artist, image: song.image, language: song.language };
 
   const write = (async () => {
-    const [ev, li] = await Promise.all([db.insert(env, 'events', eventRow), db.upsert(env, 'listeners', listenerRow, 'id')]);
+    const [ev, first] = await Promise.all([db.insert(env, 'events', eventRow), db.upsert(env, 'listeners', listenerRow, 'id')]);
+    // A database still on schema 12 has no os / browser columns (PostgREST
+    // answers PGRST204): store the presence without them.
+    let li = first;
+    if (!li.ok && li.code === 'PGRST204' && 'os' in listenerRow) {
+      delete listenerRow.os;
+      delete listenerRow.browser;
+      li = await db.upsert(env, 'listeners', listenerRow, 'id');
+    }
     if (!ev.ok) console.warn(`[events] event not stored (${ev.error}${ev.status ? ` ${ev.status}` : ''}${ev.code ? ` ${ev.code}` : ''})`);
     if (!li.ok) console.warn(`[events] listener not stored (${li.error}${li.status ? ` ${li.status}` : ''}${li.code ? ` ${li.code}` : ''})`);
   })().catch(() => undefined);

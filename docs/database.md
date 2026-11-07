@@ -5,7 +5,7 @@ VinaX 14.0 brings back a server database, designed from a clean sheet: one schem
 ## Setting it up
 
 1. Create a Supabase project (any region; Mumbai is closest to most listeners).
-2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 12), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
+2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 13), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
 3. Set two Worker secrets from `backend/`:
 
 ```sh
@@ -18,6 +18,8 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml
 ### Moving from version 11
 
 Version 12 adds one table, `sign_ins`: a row per Google sign-in to the app (time, IP address, browser, platform and version, edge geo, `signup`, `new_device`), written by `POST /api/auth/google`, deleted after 90 days by the housekeeping job and with its account (`on delete cascade`). It is the only table that holds an IP address ([data-and-privacy.md](data-and-privacy.md)). Paste `schema.sql` once (or let the Schema workflow apply it); the Database page then shows version 12. Until then sign-ins are simply not recorded (the insert fails quietly), the profile's Sign-ins tab is empty, and the console shows its "one-time update" note; sign-in itself keeps working.
+
+Version 13 adds two columns to `listeners`, `os` (android, ios, ipados, macos, windows, chromeos, linux) and `browser` (Chrome, Safari, Edge, Firefox, Samsung Internet, Opera), which `POST /api/events` reads from the user agent of every usage report; the `directory` view carries them as its last columns. `_device_key(platform, os)` turns them into the kind of device the Users page shows and filters by (android-app, ios-app, android-web, ios-web, ipados-web, macos-web, windows-web, linux-web, chromeos-web, other-web). `listen_time(listeners, since)` estimates listening time from the existing events: each `play` or `heartbeat` counts the time to the device's next play, heartbeat, pause or open, at most 6 minutes. `admin_users` gains `device`, `os`, `browser`, `listen30d` and `listen_today` per row, a `listening` sort, a device-key value for `p_platform`, and `byDevice`, `listenToday`, `listenersToday` counts; `user_profile` gains listening totals in `stats` and a 14-day `listenByDay`. Until the update is applied the Worker stores presence without the two columns (it retries without them on PGRST204), and devices read as Other web until they next send a usage report.
 
 ### Moving from version 10
 

@@ -139,12 +139,27 @@ test.describe('console pages', () => {
     await expect(page.getByText('Users · signed in with Google')).toBeVisible();
     await expect(page.locator('#pageBody th').filter({ hasText: /^Account$/ })).toHaveCount(0);
     await expect(page.locator('#pageBody th').filter({ hasText: /^Devices$/ })).toHaveCount(1);
+    // Schema 13: people by device (the Android app first) and listening time.
+    const cards = page.locator('#pageBody .users-stats .kpi-label');
+    await expect(cards.filter({ hasText: /^Listening today$/ })).toHaveCount(1);
+    await expect(cards.filter({ hasText: /^Android app$/ })).toHaveCount(1);
+    await expect(cards.filter({ hasText: /^Mac web$/ })).toHaveCount(1);
+    await expect(cards.filter({ hasText: /^(Android|Web|iOS)$/ })).toHaveCount(0);
+    await expect(page.locator('#pageBody th').filter({ hasText: /^Listening \(30 d\)$/ })).toHaveCount(1);
+    await expect(page.locator('#pageBody tbody').getByText('Mac web · Chrome')).toBeVisible();
+    await page.locator('#pageBody .users-stats button.kpi').filter({ hasText: 'Mac web' }).click();
+    await expect(page).toHaveURL(/platform=macos-web/);
+    await expect(page.locator('#pageBody tbody tr')).toHaveCount(1);
+    await page.goto('/admin/#/users');
+    await settle(page);
     await page.locator('#pageBody tbody tr').first().click();
     // The profile is its own page, with a way back to the list.
     await expect(page).toHaveURL(/#\/user\?id=\d+$/);
     await expect(page.locator('#pageTitle')).toHaveText('User Profile');
     const body = page.locator('#pageBody');
     await expect(body.getByRole('tab', { name: 'Devices' })).toBeVisible();
+    await expect(body.locator('.kpi-label').filter({ hasText: /^Listening time$/ })).toHaveCount(1);
+    await expect(body.getByText('Time spent each day')).toBeVisible();
     // Schema 12: the sign-in history, with the IP address and a chip for a new device.
     await body.getByRole('tab', { name: /Sign-ins/ }).click();
     await expect(body.getByText('203.0.113.7')).toBeVisible();

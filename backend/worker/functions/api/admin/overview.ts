@@ -12,7 +12,7 @@ import { db, q, firstFailure } from '../../_lib/db';
 import { intIn } from '../../_lib/edge';
 
 /** The schema.sql version this console is written against. */
-const SCHEMA_WANTED = 12;
+const SCHEMA_WANTED = 13;
 
 interface Kpis {
   activeNow?: number; playingNow?: number; users?: number; listeners?: number; accounts?: number; newListeners24h?: number;

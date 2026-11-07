@@ -46,6 +46,35 @@
 
   /** Friendly names for platforms and languages. */
   VX.platformName = function (p) { return ({ android: 'Android', web: 'Web', ios: 'iOS' })[String(p || 'web').toLowerCase()] || fmt.label(p || 'web'); };
+  /* Schema 13: the kind of device — an app, or a browser on a system. The
+   * same keys as the database's _device_key(). */
+  var DEVICE_NAMES = { 'android-app': 'Android app', 'ios-app': 'iOS app', 'android-web': 'Android web', 'ios-web': 'iPhone web', 'ipados-web': 'iPad web', 'macos-web': 'Mac web', 'windows-web': 'Windows web', 'linux-web': 'Linux web', 'chromeos-web': 'ChromeOS web', 'other-web': 'Other web' };
+  VX.DEVICES = Object.keys(DEVICE_NAMES);
+  VX.deviceKey = function (platform, os) {
+    var p = String(platform || 'web').toLowerCase();
+    if (p === 'android') return 'android-app';
+    if (p === 'ios') return 'ios-app';
+    return DEVICE_NAMES[os + '-web'] ? os + '-web' : 'other-web';
+  };
+  VX.deviceName = function (key) { return DEVICE_NAMES[key] || VX.platformName(key); };
+  /** The platform (android | ios | web) a device key belongs to; a plain platform stays itself. */
+  VX.devicePlatform = function (key) { return key === 'android-app' ? 'android' : key === 'ios-app' ? 'ios' : /-web$/.test(String(key || '')) ? 'web' : key || ''; };
+  /** "Android app", "Mac web · Chrome" — for a row or device with platform / os / browser / device. */
+  VX.deviceText = function (d) {
+    d = d || {};
+    var key = d.device || VX.deviceKey(d.platform, d.os);
+    return VX.deviceName(key) + (/-web$/.test(key) && d.browser ? ' · ' + d.browser : '');
+  };
+  /** Listening time: "45 min", "3 h 12 min", "under a minute". */
+  VX.listenText = function (sec) {
+    var v = Math.max(0, Math.round(Number(sec) || 0));
+    if (!v) return '0 min';
+    if (v < 60) return 'under a minute';
+    var m = Math.round(v / 60);
+    if (m < 60) return m + ' min';
+    var hrs = Math.floor(m / 60), min = m % 60;
+    return fmt.num(hrs) + ' h' + (min ? ' ' + min + ' min' : '');
+  };
   var LANGS = { te: 'Telugu', telugu: 'Telugu', hi: 'Hindi', hindi: 'Hindi', ta: 'Tamil', tamil: 'Tamil', kn: 'Kannada', kannada: 'Kannada', ml: 'Malayalam', malayalam: 'Malayalam', en: 'English', english: 'English', pa: 'Punjabi', punjabi: 'Punjabi', bn: 'Bengali', bengali: 'Bengali', mr: 'Marathi', marathi: 'Marathi', gu: 'Gujarati', gujarati: 'Gujarati', ur: 'Urdu', urdu: 'Urdu', bhojpuri: 'Bhojpuri', bho: 'Bhojpuri', unknown: 'Not known' };
   VX.langName = function (l) { if (!l) return 'Not known'; var k = String(l).toLowerCase(); return LANGS[k] || LANGS[k.split('-')[0]] || fmt.label(l); };
 

@@ -65,7 +65,7 @@ describe('Dashboard (overview)', () => {
       if (p === 'rpc/stats_overview') return json(kpis);
       if (p === 'rpc/stats_timeline') { expect(c.body).toEqual({ p_days: 30 }); return json([{ day: '2026-11-01', plays: 4 }]); }
       if (p === 'rpc/stats_platforms') return json({ platforms: [{ platform: 'android', users: 9 }], versions: [] });
-      if (p === 'meta') return json([{ key: 'schema', value: { version: 12, appliedAt: 'x' } }]);
+      if (p === 'meta') return json([{ key: 'schema', value: { version: 13, appliedAt: 'x' } }]);
       return undefined;
     });
     const { res, body } = await run(overview.onRequestGet as Handler, '/api/admin/overview?days=30');
@@ -98,8 +98,19 @@ describe('Users (listeners)', () => {
     const { res, body } = await run(listeners.onRequestGet as Handler, '/api/admin/listeners' + q);
     expect(res.status).toBe(200);
     expect(body?.total).toBe(1);
-    expect(body?.rows).toEqual([{ id: ACCT, name: 'Asha', email: 'a@x.in', picture: null, platform: 'android', appVersion: '1.8.3', country: 'IN', region: 'Telangana', city: 'Hyderabad', nowPlaying: null, isPlaying: false, joined: 'j', lastSeen: 'l', devices: 2, plays: 40, language: 'telugu', blocked: false }]);
+    expect(body?.rows).toEqual([{ id: ACCT, name: 'Asha', email: 'a@x.in', picture: null, platform: 'android', appVersion: '1.8.3', country: 'IN', region: 'Telangana', city: 'Hyderabad', nowPlaying: null, isPlaying: false, joined: 'j', lastSeen: 'l', devices: 2, plays: 40, language: 'telugu', blocked: false, os: null, browser: null, device: null, listen30d: 0, listenToday: 0 }]);
     expect(JSON.stringify(body)).not.toMatch(/d_[a-f0-9]{8}/);
+  });
+
+  it('passes a device filter, the listening sort and the listening time (schema 13)', async () => {
+    stub((c) => (path(c) === 'rpc/admin_users'
+      ? json({ total: 1, rows: [{ id: ACCT, platform: 'web', os: 'macos', browser: 'Chrome', device: 'macos-web', listen30d: '7260', listen_today: 900 }], counts: { byDevice: { 'macos-web': 1 } } })
+      : undefined));
+    const { body } = await run(listeners.onRequestGet as Handler, '/api/admin/listeners?platform=macos-web&sort=listening');
+    const b = calls.find((c) => path(c) === 'rpc/admin_users')?.body as Record<string, unknown>;
+    expect(b).toMatchObject({ p_platform: 'macos-web', p_sort: 'listening' });
+    expect((body?.rows as Array<Record<string, unknown>>)[0]).toMatchObject({ os: 'macos', browser: 'Chrome', device: 'macos-web', listen30d: 7260, listenToday: 900 });
+    expect(body?.counts).toEqual({ byDevice: { 'macos-web': 1 } });
   });
 
   it('ignores junk filters, keeps ?q=&limit= for the user picker, and refuses a bad account id', async () => {

@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 12
+-- VinaX database · schema version 13
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -25,7 +25,8 @@
 --  10. views
 --  11. functions (stats_*, room_*, housekeeping; Trending and Search
 --      Insights: version 11)
---  (2b. sign-in history, version 12, sits after accounts)
+--  (2b. sign-in history, version 12, sits after accounts; version 13 adds
+--  the device system and browser to listeners, and listening time)
 --  12. security
 -- =============================================================================
 
@@ -98,6 +99,13 @@ create index if not exists listeners_account_idx on listeners (account_id) where
 update listeners l set account_id = a.id
   from accounts a
   where a.listener_id = l.id and l.account_id is null;
+
+-- Version 13 — the device's system and browser, read by the Worker from the
+-- user agent of every usage report, so the console can tell the Android app
+-- from Android in a browser, an iPhone, a Mac, a Windows PC… (iPad Safari
+-- usually says it is a Mac, so iPads mostly count as Mac web.)
+alter table listeners add column if not exists os text;        -- android | ios | ipados | macos | windows | chromeos | linux
+alter table listeners add column if not exists browser text;   -- Chrome | Safari | Edge | Firefox | Samsung Internet | Opera
 
 -- ---------------------------------------------- 2b. sign-in history (v12) --
 -- One row per Google sign-in to the app, written by POST /api/auth/google:
@@ -1316,7 +1324,8 @@ $$;
 -- and how many devices); a device nobody signed in on is a row of its own.
 -- V2 1.0.1 — it used to be one row per device, so a listener who signed in
 -- on a new browser was listed twice ("Device only" + "Signed in").
--- (`devices` is a new LAST column, so the view is replaced in place.)
+-- (`devices` is a new LAST column, so the view is replaced in place; so are
+-- version 13's `os` and `browser`.)
 create or replace view directory as
   with dev as (
     select l.*, coalesce(l.account_id, (select a.id from accounts a where a.listener_id = l.id limit 1)) as acct
@@ -1334,13 +1343,15 @@ create or replace view directory as
   select d.id as listener_id, null::text as account_id, d.display_name as name, d.handle as handle,
          null::text as email, null::text as picture, d.platform as platform, d.app_version as app_version,
          d.country as country, d.region as region, d.city as city, d.now_playing as now_playing, d.is_playing as is_playing,
-         d.first_seen as first_seen, d.last_seen as last_seen, 1::bigint as devices
+         d.first_seen as first_seen, d.last_seen as last_seen, 1::bigint as devices,
+         d.os as os, d.browser as browser
   from dev d
   where d.acct is null
   union all
   select m.id, a.id, coalesce(a.name, m.display_name), m.handle, a.email, a.picture,
          m.platform, m.app_version, m.country, m.region, m.city, m.now_playing, m.is_playing,
-         least(m.first_any, a.created_at), greatest(m.last_any, a.last_seen), m.n
+         least(m.first_any, a.created_at), greatest(m.last_any, a.last_seen), m.n,
+         m.os, m.browser
   from mine m
   join accounts a on a.id = m.acct
   where m.rn = 1
@@ -1348,7 +1359,8 @@ create or replace view directory as
   select null, a.id, a.name, null, a.email, a.picture,
          coalesce(a.platform, 'web'), a.app_version,
          a.country, a.region, a.city,
-         null, false, a.created_at, a.last_seen, 0::bigint
+         null, false, a.created_at, a.last_seen, 0::bigint,
+         null::text, null::text
   from accounts a
   where not exists (select 1 from dev d where d.acct = a.id);
 
@@ -1982,9 +1994,48 @@ begin
 end;
 $$;
 
+-- Version 13 — which kind of device a person uses, as one key the console
+-- shows and filters by: the apps (android-app, ios-app), or a browser on a
+-- system (android-web, ios-web, ipados-web, macos-web, windows-web,
+-- linux-web, chromeos-web), or other-web when the system is not known yet.
+create or replace function _device_key(p_platform text, p_os text) returns text
+language sql immutable as $$
+  select case
+    when coalesce(nullif(p_platform, ''), 'web') = 'android' then 'android-app'
+    when p_platform = 'ios' then 'ios-app'
+    when p_os in ('android', 'ios', 'ipados', 'macos', 'windows', 'linux', 'chromeos') then p_os || '-web'
+    else 'other-web'
+  end
+$$;
+
+-- Version 13 — listening time, estimated from the usage events the app
+-- already sends: a heartbeat every 25 s while music plays, a play when a song
+-- counts, a pause, and an open when the app starts or comes back. Each play
+-- or heartbeat counts the time until the device's next one of those four
+-- events, at most 6 minutes (a phone in the background can send fewer
+-- heartbeats; a gap longer than that means the music had stopped). Seconds
+-- per device per day (India time), from p_since (all time when null), for
+-- p_listeners (every device when null).
+create or replace function listen_time(p_listeners text[] default null, p_since timestamptz default null)
+returns table (listener_id text, day date, seconds bigint)
+language sql stable set search_path = public, pg_temp as $$
+  select x.listener_id, (x.at at time zone 'Asia/Kolkata')::date as day,
+         sum(greatest(0, extract(epoch from least(coalesce(x.nxt, now()), x.at + interval '6 minutes') - x.at)))::bigint as seconds
+  from (
+    select e.listener_id, e.kind, e.at, lead(e.at) over (partition by e.listener_id order by e.at) as nxt
+    from events e
+    where e.kind in ('play', 'heartbeat', 'pause', 'open')
+      and e.listener_id is not null
+      and (p_listeners is null or e.listener_id = any (p_listeners))
+      and (p_since is null or e.at > p_since)
+  ) x
+  where x.kind in ('play', 'heartbeat')
+  group by 1, 2
+$$;
+
 -- Version 10 — the console's Users page: signed-in people only, filtered and
 -- sorted on the server, one page at a time, with the counts the page shows.
--- p_sort: last_active | joined | plays | name.
+-- p_sort: last_active | joined | plays | listening (v13) | name.
 create or replace function admin_users(
   p_q text default null, p_platform text default null, p_active_days int default null,
   p_joined_days int default null, p_joined_from timestamptz default null, p_joined_to timestamptz default null,
@@ -1998,6 +2049,14 @@ language sql stable set search_path = public, pg_temp as $$
     from events e join s on s.listener_id = e.listener_id
     where e.kind = 'play' group by 1
   ),
+  -- Version 13: listening time over the last 30 days (seconds), per person.
+  listen as (
+    select s.account_id,
+           sum(t.seconds) as listen30d,
+           sum(t.seconds) filter (where t.day = _ist_today()) as listen_today
+    from listen_time(null, now() - interval '30 days') t join s on s.listener_id = t.listener_id
+    group by 1
+  ),
   lang as (
     select distinct on (account_id) account_id, language from (
       select s.account_id, coalesce(nullif(e.language, ''), 'unknown') as language, count(*) as n
@@ -2009,15 +2068,19 @@ language sql stable set search_path = public, pg_temp as $$
     select d.account_id as id, a.name, a.email, a.picture,
            coalesce(nullif(d.platform, ''), 'web') as platform, d.app_version, d.country, d.region, d.city,
            d.now_playing, d.is_playing, a.created_at as joined, d.last_seen, d.devices,
-           coalesce(p.plays, 0) as plays, lg.language, a.blocked_at
+           coalesce(p.plays, 0) as plays, lg.language, a.blocked_at,
+           d.os, d.browser, _device_key(d.platform, d.os) as device,
+           coalesce(ls.listen30d, 0) as listen30d, coalesce(ls.listen_today, 0) as listen_today
     from directory d
     join accounts a on a.id = d.account_id
     left join plays p on p.account_id = d.account_id
+    left join listen ls on ls.account_id = d.account_id
     left join lang lg on lg.account_id = d.account_id
     where d.account_id is not null
       and (p_ids is null or d.account_id = any (p_ids))
       and (coalesce(p_q, '') = '' or strpos(lower(coalesce(a.name, '')), lower(p_q)) > 0 or strpos(lower(coalesce(a.email, '')), lower(p_q)) > 0)
-      and (p_platform is null or coalesce(nullif(d.platform, ''), 'web') = p_platform)
+      -- a platform (android | web | ios) or, since version 13, a device key (android-app, macos-web…)
+      and (p_platform is null or coalesce(nullif(d.platform, ''), 'web') = p_platform or _device_key(d.platform, d.os) = p_platform)
       and (p_active_days is null or d.last_seen > now() - make_interval(days => p_active_days))
       and (p_joined_days is null or a.created_at > now() - make_interval(days => p_joined_days))
       and (p_joined_from is null or a.created_at >= p_joined_from)
@@ -2032,11 +2095,12 @@ language sql stable set search_path = public, pg_temp as $$
     select f.*, row_number() over (order by
       case when p_sort = 'joined' then f.joined end desc nulls last,
       case when p_sort = 'plays' then f.plays end desc nulls last,
+      case when p_sort = 'listening' then f.listen30d end desc nulls last,
       case when p_sort = 'name' then lower(coalesce(f.name, f.email, '')) end asc nulls last,
       f.last_seen desc, f.id) as rn
     from f
   ),
-  everyone as (select coalesce(nullif(platform, ''), 'web') as platform, last_seen from directory where account_id is not null)
+  everyone as (select coalesce(nullif(platform, ''), 'web') as platform, _device_key(platform, os) as device, last_seen from directory where account_id is not null)
   select jsonb_build_object(
     'total', (select count(*) from f),
     'rows', coalesce((select jsonb_agg(to_jsonb(r) - 'rn' order by r.rn) from (
@@ -2049,7 +2113,11 @@ language sql stable set search_path = public, pg_temp as $$
       'byPlatform', jsonb_build_object(
         'android', (select count(*) from everyone where platform = 'android'),
         'web', (select count(*) from everyone where platform = 'web'),
-        'ios', (select count(*) from everyone where platform = 'ios')))
+        'ios', (select count(*) from everyone where platform = 'ios')),
+      -- Version 13: people per device key (newest device), and today's listening.
+      'byDevice', coalesce((select jsonb_object_agg(device, n) from (select device, count(*) as n from everyone group by 1) t), '{}'::jsonb),
+      'listenToday', coalesce((select sum(listen_today) from listen), 0),
+      'listenersToday', (select count(*) from listen where listen_today > 0))
   );
 $$;
 
@@ -2084,7 +2152,10 @@ language sql stable set search_path = public, pg_temp as $$
     select l.* from listeners l
     where l.account_id = p_account or l.id = (select listener_id from a)
   ),
-  ev as (select e.* from events e where e.listener_id in (select id from d))
+  ev as (select e.* from events e where e.listener_id in (select id from d)),
+  -- Version 13: listening time per India-time day, all devices together.
+  lt as (select t.day, sum(t.seconds)::bigint as seconds
+         from listen_time((select array_agg(id) from d), null) t group by 1)
   select case when not exists (select 1 from a) then null else jsonb_build_object(
     'account', (select jsonb_build_object('id', id, 'email', email, 'name', name, 'picture', picture,
                   'platform', platform, 'appVersion', app_version, 'country', country, 'region', region, 'city', city,
@@ -2093,6 +2164,7 @@ language sql stable set search_path = public, pg_temp as $$
                   'id', d.id, 'platform', coalesce(nullif(d.platform, ''), 'web'), 'appVersion', d.app_version,
                   'country', d.country, 'region', d.region, 'city', d.city,
                   'firstSeen', d.first_seen, 'lastSeen', d.last_seen, 'signedOutAt', d.signed_out_at,
+                  'os', d.os, 'browser', d.browser, 'device', _device_key(d.platform, d.os),
                   'nowPlaying', d.now_playing, 'isPlaying', d.is_playing) order by d.last_seen desc) from d), '[]'::jsonb),
     'backup', (select jsonb_build_object('version', version, 'bytes', bytes, 'updatedAt', updated_at)
                from account_backups where account_id = p_account),
@@ -2104,7 +2176,16 @@ language sql stable set search_path = public, pg_temp as $$
       'searches',      (select count(*) from ev where kind = 'search'),
       'errors',        (select count(*) from ev where kind = 'error'),
       'firstEvent',    (select min(at) from ev),
-      'lastEvent',     (select max(at) from ev)),
+      'lastEvent',     (select max(at) from ev),
+      'listenToday',   coalesce((select seconds from lt where day = _ist_today()), 0),
+      'listen7d',      coalesce((select sum(seconds) from lt where day > _ist_today() - 7), 0),
+      'listen30d',     coalesce((select sum(seconds) from lt where day > _ist_today() - 30), 0),
+      'listenAll',     coalesce((select sum(seconds) from lt), 0),
+      'listenDays30d', (select count(*) from lt where day > _ist_today() - 30 and seconds > 0),
+      'avgPerActiveDay30d', coalesce((select round(avg(seconds)) from lt where day > _ist_today() - 30 and seconds > 0), 0)),
+    'listenByDay', (select jsonb_agg(jsonb_build_object('day', g.day, 'seconds', coalesce(lt.seconds, 0)) order by g.day)
+                    from (select (_ist_today() - i) as day from generate_series(0, 13) i) g
+                    left join lt on lt.day = g.day),
     'topSongs', coalesce((select jsonb_agg(t) from (
         select song_title as title, song_artist as artist, max(song_image) as image, count(*) as plays
         from ev where kind = 'play' and song_title is not null
@@ -2349,7 +2430,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 12, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 12, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 13, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 13, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 12 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 13 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;

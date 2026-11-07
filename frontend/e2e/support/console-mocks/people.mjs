@@ -21,26 +21,34 @@ const NAMES = [
   ['Farhan Ali', 'farhan.ali@gmail.com', 'web', '1.8.3', 'IN', 'Telangana', 'Hyderabad', 'urdu'],
 ];
 const SONGS = [['Naatu Naatu', 'Rahul Sipligunj'], ['Kesariya', 'Arijit Singh'], ['Vaathi Coming', 'Anirudh'], ['Srivalli', 'Sid Sriram'], ['Apna Bana Le', 'Arijit Singh']];
+// Schema 13: the system and browser of each person's newest device.
+const OS = ['android', 'macos', 'android', 'android', 'windows', 'android', 'ios', 'android', 'ios', 'android', 'android', 'linux', 'android', 'android', 'android'];
+const BROWSER = { macos: 'Chrome', windows: 'Edge', ios: 'Safari', linux: 'Firefox', android: 'Chrome' };
+const deviceKey = (platform, os) => (platform === 'android' ? 'android-app' : platform === 'ios' ? 'ios-app' : os ? `${os}-web` : 'other-web');
 const users = NAMES.map((n, i) => ({
   id: '1100000000000000000' + String(i + 10),
   name: n[0], email: n[1], picture: null, platform: n[2], appVersion: n[3], country: n[4], region: n[5], city: n[6], language: n[7],
   nowPlaying: i < 5 ? { title: SONGS[i][0], artist: SONGS[i][1] } : null, isPlaying: i < 3,
   joined: ago(60 * 24 * (i * 3 + 1)), lastSeen: ago(i < 5 ? i : i * 90), devices: i % 4 === 0 ? 2 : 1, plays: 400 - i * 23, blocked: i === 13,
+  os: n[2] === 'android' ? 'android' : n[2] === 'ios' ? 'ios' : OS[i], browser: n[2] === 'web' ? BROWSER[OS[i]] : null,
+  device: deviceKey(n[2], OS[i]), listen30d: (400 - i * 23) * 190, listenToday: i < 9 ? 3600 - i * 300 : 0,
 }));
 
 function profile(u) {
   return {
     account: { id: u.id, email: u.email, name: u.name, picture: null, platform: u.platform, appVersion: u.appVersion, country: u.country, region: u.region, city: u.city, createdAt: u.joined, lastSeen: u.lastSeen, blockedAt: u.blocked ? ago(600) : null },
     devices: [
-      { id: 'd_' + 'ab'.repeat(16), platform: u.platform, appVersion: u.appVersion, country: u.country, region: u.region, city: u.city, firstSeen: u.joined, lastSeen: u.lastSeen, signedOutAt: null, nowPlaying: u.nowPlaying, isPlaying: u.isPlaying },
-      ...(u.devices > 1 ? [{ id: 'd_' + 'cd'.repeat(16), platform: 'web', appVersion: '1.8.3', country: u.country, region: u.region, city: u.city, firstSeen: u.joined, lastSeen: ago(3000), signedOutAt: null, nowPlaying: null, isPlaying: false }] : []),
+      { id: 'd_' + 'ab'.repeat(16), platform: u.platform, os: u.os, browser: u.browser, device: u.device, appVersion: u.appVersion, country: u.country, region: u.region, city: u.city, firstSeen: u.joined, lastSeen: u.lastSeen, signedOutAt: null, nowPlaying: u.nowPlaying, isPlaying: u.isPlaying },
+      ...(u.devices > 1 ? [{ id: 'd_' + 'cd'.repeat(16), platform: 'web', os: 'windows', browser: 'Chrome', device: 'windows-web', appVersion: '1.8.3', country: u.country, region: u.region, city: u.city, firstSeen: u.joined, lastSeen: ago(3000), signedOutAt: null, nowPlaying: null, isPlaying: false }] : []),
     ],
     signIns: [
       { at: ago(1200), ip: '203.0.113.7', browser: 'Chrome on Windows', platform: 'web', appVersion: '1.10.8', country: u.country, region: u.region, city: u.city, newDevice: true, signup: false },
       { at: u.joined, ip: '2001:db8::1', browser: 'the VinaX Android app (Android 14)', platform: 'android', appVersion: '1.10.7', country: u.country, region: u.region, city: u.city, newDevice: false, signup: true },
     ],
     backup: { version: 12, bytes: 48213, updatedAt: ago(200) },
-    stats: { plays: u.plays, plays30d: Math.round(u.plays / 3), activeDays30d: 18, favorites: 34, searches: 61, errors: 2, firstEvent: u.joined, lastEvent: u.lastSeen },
+    stats: { plays: u.plays, plays30d: Math.round(u.plays / 3), activeDays30d: 18, favorites: 34, searches: 61, errors: 2, firstEvent: u.joined, lastEvent: u.lastSeen,
+      listenToday: u.listenToday, listen7d: Math.round(u.listen30d / 4), listen30d: u.listen30d, listenAll: u.listen30d * 2, listenDays30d: 18, avgPerActiveDay30d: Math.round(u.listen30d / 18) },
+    listenByDay: Array.from({ length: 14 }, (_, i) => ({ day: day(13 - i), seconds: i % 5 === 3 ? 0 : 1200 + ((i * 977) % 5400) })),
     topSongs: SONGS.map((s, i) => ({ title: s[0], artist: s[1], image: null, plays: 40 - i * 6 })),
     topArtists: SONGS.map((s, i) => ({ artist: s[1], plays: 60 - i * 9 })),
     languages: [{ language: u.language, plays: 120 }, { language: 'hindi', plays: 40 }, { language: 'english', plays: 12 }],
@@ -97,16 +105,20 @@ export default {
     let rows = users.slice();
     const q = (p.get('q') || '').toLowerCase();
     if (q) rows = rows.filter((u) => (u.name + ' ' + u.email).toLowerCase().includes(q));
-    for (const [k, f] of [['platform', 'platform'], ['country', 'country'], ['region', 'region'], ['city', 'city'], ['version', 'appVersion'], ['language', 'language']]) if (p.get(k)) rows = rows.filter((u) => String(u[f]).toLowerCase() === p.get(k).toLowerCase());
+    const plat = p.get('platform');
+    if (plat) rows = rows.filter((u) => u.platform === plat || u.device === plat);
+    for (const [k, f] of [['country', 'country'], ['region', 'region'], ['city', 'city'], ['version', 'appVersion'], ['language', 'language']]) if (p.get(k)) rows = rows.filter((u) => String(u[f]).toLowerCase() === p.get(k).toLowerCase());
     if (p.get('active')) rows = rows.filter((u) => Date.parse(u.lastSeen) > now - Number(p.get('active')) * 86_400_000);
     if (p.get('joined')) rows = rows.filter((u) => Date.parse(u.joined) > now - Number(p.get('joined')) * 86_400_000);
     const ids = (p.get('ids') || '').split(',').filter(Boolean);
     if (ids.length) rows = rows.filter((u) => ids.includes(u.id));
     const sort = p.get('sort') || 'last_active';
-    rows.sort((a, b) => sort === 'joined' ? Date.parse(b.joined) - Date.parse(a.joined) : sort === 'plays' ? b.plays - a.plays : sort === 'name' ? a.name.localeCompare(b.name) : Date.parse(b.lastSeen) - Date.parse(a.lastSeen));
+    rows.sort((a, b) => sort === 'joined' ? Date.parse(b.joined) - Date.parse(a.joined) : sort === 'plays' ? b.plays - a.plays : sort === 'listening' ? b.listen30d - a.listen30d : sort === 'name' ? a.name.localeCompare(b.name) : Date.parse(b.lastSeen) - Date.parse(a.lastSeen));
     const limit = Number(p.get('limit')) || 50, offset = Number(p.get('offset')) || 0;
     return { configured: true, total: rows.length, limit, offset, rows: rows.slice(offset, offset + limit),
-      counts: { users: 15, new7d: 3, activeToday: 9, byPlatform: { android: 9, web: 5, ios: 1 } } };
+      counts: { users: 15, new7d: 3, activeToday: 9, byPlatform: { android: 9, web: 5, ios: 1 },
+        byDevice: users.reduce((m, u) => { m[u.device] = (m[u.device] || 0) + 1; return m; }, {}),
+        listenToday: users.reduce((t, u) => t + u.listenToday, 0), listenersToday: users.filter((u) => u.listenToday > 0).length } };
   },
   'POST /api/admin/listeners': (url, b) => (b.action === 'block' || b.action === 'unblock' ? { ok: true, blocked: b.action === 'block' } : b.action === 'signout_device' ? { ok: true, signedOutAt: new Date().toISOString() } : { ok: true, deleted: { listener: 1, account: 1, events: 230 } }),
 };

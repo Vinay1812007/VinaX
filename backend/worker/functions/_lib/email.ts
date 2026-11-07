@@ -19,6 +19,7 @@
  */
 import { setting } from './settings';
 import type { DbEnv } from './db';
+import { deviceOf, type DeviceOs } from './edge';
 
 export interface EmailEnv extends DbEnv {
   RESEND_API_KEY?: string;
@@ -148,26 +149,15 @@ const PLATFORM_NAME: Record<string, string> = { web: 'a web browser', android: '
 /** "Chrome on Windows", "Safari on iOS", "Android app (Android 14)"… or null for an unknown agent. */
 export function describeAgent(ua: string | null | undefined): string | null {
   if (!ua) return null;
-  const u = ua.slice(0, 512);
-  const android = /Android (\d+(?:\.\d+)?)/.exec(u);
-  const os = /iPhone|iPod/.test(u) ? 'iOS'
-    : /iPad/.test(u) ? 'iPadOS'
-      : android ? `Android ${android[1]}`
-        : /Windows NT/.test(u) ? 'Windows'
-          : /CrOS/.test(u) ? 'ChromeOS'
-            : /Mac OS X|Macintosh/.test(u) ? 'macOS'
-              : /Linux/.test(u) ? 'Linux' : null;
+  const d = deviceOf(ua);
+  const os = d.os === 'android' ? (d.androidVersion ? `Android ${d.androidVersion}` : 'Android') : d.os ? OS_NAME[d.os] : null;
   // The Android app is a WebView (`; wv)`): name it, not "Chrome".
-  if (android && /; wv\)/.test(u)) return `the VinaX Android app (${os})`;
-  const browser = /Edg(e|A|iOS)?\//.test(u) ? 'Edge'
-    : /OPR\/|Opera/.test(u) ? 'Opera'
-      : /SamsungBrowser/.test(u) ? 'Samsung Internet'
-        : /Firefox\/|FxiOS/.test(u) ? 'Firefox'
-          : /Chrome\/|CriOS/.test(u) ? 'Chrome'
-            : /Safari\//.test(u) && /Version\//.test(u) ? 'Safari' : null;
-  if (browser && os) return `${browser} on ${os}`;
-  return browser ?? os;
+  if (d.androidVersion && d.webView) return `the VinaX Android app (${os})`;
+  if (d.browser && os) return `${d.browser} on ${os}`;
+  return d.browser ?? os;
 }
+
+const OS_NAME: Record<DeviceOs, string> = { android: 'Android', ios: 'iOS', ipados: 'iPadOS', macos: 'macOS', windows: 'Windows', chromeos: 'ChromeOS', linux: 'Linux' };
 
 /** IP and browser of a request, for a sign-in email. */
 export function requestFacts(request: Request): Pick<SignInFacts, 'ip' | 'browser' | 'timezone'> {

@@ -32,6 +32,33 @@ export function platformOf(raw: unknown, request?: Request): Platform {
   return (PLATFORMS as readonly string[]).includes(v) ? (v as Platform) : 'web';
 }
 
+export type DeviceOs = 'android' | 'ios' | 'ipados' | 'macos' | 'windows' | 'chromeos' | 'linux';
+export interface DeviceFacts { os: DeviceOs | null; browser: string | null; androidVersion: string | null; webView: boolean }
+
+/**
+ * The system and browser in a user agent. iPad Safari usually presents itself
+ * as a Mac ("Macintosh"), so most iPads read as macOS: nothing on the server
+ * can tell them apart. The Android app is a WebView (`; wv)`).
+ */
+export function deviceOf(ua: string | null | undefined): DeviceFacts {
+  const u = (ua ?? '').slice(0, 512);
+  const android = /Android (\d+(?:\.\d+)?)/.exec(u);
+  const os: DeviceOs | null = /iPhone|iPod/.test(u) ? 'ios'
+    : /iPad/.test(u) ? 'ipados'
+      : /Android/.test(u) ? 'android'
+        : /Windows NT/.test(u) ? 'windows'
+          : /CrOS/.test(u) ? 'chromeos'
+            : /Mac OS X|Macintosh/.test(u) ? 'macos'
+              : /Linux/.test(u) ? 'linux' : null;
+  const browser = /Edg(e|A|iOS)?\//.test(u) ? 'Edge'
+    : /OPR\/|Opera/.test(u) ? 'Opera'
+      : /SamsungBrowser/.test(u) ? 'Samsung Internet'
+        : /Firefox\/|FxiOS/.test(u) ? 'Firefox'
+          : /Chrome\/|CriOS/.test(u) ? 'Chrome'
+            : /Safari\//.test(u) && /Version\//.test(u) ? 'Safari' : null;
+  return { os, browser, androidVersion: android ? android[1] : null, webView: !!android && /; wv\)/.test(u) };
+}
+
 /** The app build (body `appVersion` or `x-vinax-version`), clipped. */
 export function appVersionOf(raw: unknown, request?: Request): string | null {
   return clip(typeof raw === 'string' ? raw : request?.headers.get('x-vinax-version'), 24);

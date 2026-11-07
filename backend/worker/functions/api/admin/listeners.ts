@@ -7,9 +7,12 @@
  *        → { configured, total, limit, offset, rows, counts }
  *        rows: [{ id (Google account id), name, email, picture, platform, appVersion,
  *                 country, region, city, nowPlaying, isPlaying, joined, lastSeen,
- *                 devices, plays, language, blocked }]
- *        counts: { users, new7d, activeToday, byPlatform: { android, web, ios } }
- *        sort: last_active (default) | joined | plays | name
+ *                 devices, plays, language, blocked, os, browser, device, listen30d, listenToday }]
+ *        counts: { users, new7d, activeToday, byPlatform: { android, web, ios },
+ *                  byDevice: { 'android-app': n, 'macos-web': n, … }, listenToday, listenersToday }
+ *        platform: android | web | ios, or a device key (DEVICES below, schema 13)
+ *        sort: last_active (default) | joined | plays | listening | name
+ *        listen30d / listenToday are seconds of listening (schema 13's listen_time)
  * GET  /api/admin/listeners?filters=1 → { configured, places, versions, languages }
  * GET  /api/admin/listeners?account=<id> → { configured, profile }   (user_profile)
  * POST /api/admin/listeners
@@ -27,12 +30,15 @@ import { clip, intIn, PLATFORMS } from '../../_lib/edge';
 
 const ID_RE = /^[a-z]_[a-f0-9]{16,64}$/;
 const SUB_RE = /^\d{1,40}$/;
-const SORTS = ['last_active', 'joined', 'plays', 'name'] as const;
+const SORTS = ['last_active', 'joined', 'plays', 'listening', 'name'] as const;
+/** Schema 13: the kinds of device the Users page shows and filters by. */
+export const DEVICES = ['android-app', 'ios-app', 'android-web', 'ios-web', 'ipados-web', 'macos-web', 'windows-web', 'linux-web', 'chromeos-web', 'other-web'] as const;
 
 interface UserRow {
   id: string; name: string | null; email: string | null; picture: string | null; platform: string; app_version: string | null;
   country: string | null; region: string | null; city: string | null; now_playing: unknown; is_playing: boolean;
   joined: string; last_seen: string; devices: number; plays: number; language: string | null; blocked_at: string | null;
+  os?: string | null; browser?: string | null; device?: string | null; listen30d?: number; listen_today?: number;
 }
 interface UsersAnswer { total: number; rows: UserRow[]; counts: Record<string, unknown> }
 
@@ -41,6 +47,8 @@ const shape = (r: UserRow) => ({
   country: r.country, region: r.region, city: r.city, nowPlaying: r.now_playing ?? null, isPlaying: !!r.is_playing,
   joined: r.joined, lastSeen: r.last_seen, devices: Number(r.devices) || 0, plays: Number(r.plays) || 0,
   language: r.language, blocked: !!r.blocked_at,
+  os: r.os ?? null, browser: r.browser ?? null, device: r.device ?? null,
+  listen30d: Number(r.listen30d) || 0, listenToday: Number(r.listen_today) || 0,
 });
 
 const dayIso = (v: string | null): string | null => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)) ? new Date(`${v}T00:00:00+05:30`).toISOString() : null);
@@ -57,7 +65,7 @@ export function userArgs(url: URL): Record<string, unknown> {
   const ids = (p.get('ids') ?? '').split(',').map((s) => s.trim()).filter((s) => SUB_RE.test(s)).slice(0, 200);
   return {
     p_q: clip(p.get('q'), 80) ?? null,
-    p_platform: platform && (PLATFORMS as readonly string[]).includes(platform) ? platform : null,
+    p_platform: platform && ((PLATFORMS as readonly string[]).includes(platform) || (DEVICES as readonly string[]).includes(platform)) ? platform : null,
     p_active_days: intIn(p.get('active'), 1, 365) ?? null,
     p_joined_days: intIn(p.get('joined'), 1, 365) ?? null,
     p_joined_from: dayIso(p.get('joinedFrom')),
