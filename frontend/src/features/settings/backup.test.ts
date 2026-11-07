@@ -317,6 +317,38 @@ describe('merge mode', () => {
   });
 });
 
+describe('saved items: removals travel with the sync (1.11)', () => {
+  const ent = (id: string, kind: string, savedAt: number) => ({ id, kind, title: `T ${id}`, subtitle: '', image: null, savedAt });
+  const lib = (saved: unknown[], unsaved: unknown[]) => ({
+    state: { favorites: [], collections: [], saved, unsaved, hiddenSongIds: [], later: [], hiddenArtists: [], trash: [] },
+    version: 0,
+  });
+  const mergeFile = (incoming: unknown) => {
+    const device = localStorage.getItem(KEYS.library);
+    set(KEYS.library, incoming);
+    const file = createBackup(['library']);
+    localStorage.setItem(KEYS.library, device ?? 'null');
+    const parsed = parseBackup(serializeBackup(file));
+    if (!parsed.ok) throw new Error('parse');
+    expect(applyBackup(parsed, { mode: 'merge', categories: ['library'] }).ok).toBe(true);
+    return (get(KEYS.library) as { state: { saved: Array<{ id: string; kind: string }>; unsaved: Array<{ id: string; at: number }> } }).state;
+  };
+
+  it('an unfollow on another device removes the item here; a podcast follow arrives', () => {
+    set(KEYS.library, lib([ent('ar1', 'artist', 1_000), ent('al1', 'album', 1_000)], []));
+    const out = mergeFile(lib([ent('pod9', 'podcast', 5_000)], [{ id: 'ar1', kind: 'artist', at: Date.now() }]));
+    expect(out.saved.map((e) => `${e.kind}:${e.id}`).sort()).toEqual(['album:al1', 'podcast:pod9']);
+    expect(out.unsaved.map((m) => m.id)).toEqual(['ar1']);
+  });
+
+  it('a removal here is not undone by an older copy, but a newer re-save wins', () => {
+    const now = Date.now();
+    set(KEYS.library, lib([], [{ id: 'ar1', kind: 'artist', at: now - 10_000 }, { id: 'al1', kind: 'album', at: now - 10_000 }]));
+    const out = mergeFile(lib([ent('ar1', 'artist', now - 20_000), ent('al1', 'album', now)], []));
+    expect(out.saved.map((e) => e.id)).toEqual(['al1']);
+  });
+});
+
 describe('device handoff payload', () => {
   it('carries identity keys that a plain backup never does, and restores them', () => {
     const payload = createTransferPayload();

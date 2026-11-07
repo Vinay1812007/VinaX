@@ -53,6 +53,32 @@ export function searchSongs(rawQuery: string, limit = 25, opts?: CatalogOpts): P
   });
 }
 
+export type SearchKind = 'songs' | 'albums' | 'artists' | 'playlists';
+
+// The catalogue's match count per paged search ("5,273 results"). The paged
+// calls answer a plain list, so the count rides alongside: noted when a page
+// arrives, read by the Search page. Small and bounded.
+const totals = new Map<string, number>();
+const TOTALS_MAX = 100;
+
+function noteTotal(kind: SearchKind, query: string, data: unknown): void {
+  const t = Number((data as { total?: unknown } | null)?.total);
+  if (!Number.isFinite(t) || t <= 0) return;
+  const key = `${kind}:${query}`;
+  totals.delete(key);
+  totals.set(key, Math.round(t));
+  while (totals.size > TOTALS_MAX) {
+    const oldest = totals.keys().next().value;
+    if (oldest === undefined) break;
+    totals.delete(oldest);
+  }
+}
+
+/** How many matches the catalogue reported for a paged search, once a page has loaded; null when it did not say. */
+export function searchTotal(kind: SearchKind, rawQuery: string): number | null {
+  return totals.get(`${kind}:${rewriteQuery(rawQuery)}`) ?? null;
+}
+
 /** Paged song search — powers infinite scroll. Page is 1-based. */
 export function searchSongsPage(rawQuery: string, page: number, limit = 25, opts?: CatalogOpts): Promise<Song[]> {
   const query = rewriteQuery(rawQuery);
@@ -63,7 +89,9 @@ export function searchSongsPage(rawQuery: string, page: number, limit = 25, opts
       `/search/songs?query=${enc(query)}&p=${page}&limit=${limit}`,
     ],
     validate: (json) => {
-      const list = listFrom(unwrap(json));
+      const d = unwrap(json);
+      const list = listFrom(d);
+      if (list) noteTotal('songs', query, d);
       return list ? normalizeSongList(list) : null;
     },
   });
@@ -94,8 +122,10 @@ export function searchAlbumsPage(rawQuery: string, page: number, limit = 20, opt
       `/search/albums?query=${enc(query)}&p=${page}&limit=${limit}`,
     ],
     validate: (json) => {
-      const list = listFrom(unwrap(json));
+      const d = unwrap(json);
+      const list = listFrom(d);
       if (!list) return null;
+      noteTotal('albums', query, d);
       return list.map(normalizeAlbum).filter((a): a is Album => a !== null);
     },
   });
@@ -140,8 +170,10 @@ export function searchArtistsPage(rawQuery: string, page: number, limit = 20, op
       `/search/artists?query=${enc(query)}&p=${page}&limit=${limit}`,
     ],
     validate: (json) => {
-      const list = listFrom(unwrap(json));
+      const d = unwrap(json);
+      const list = listFrom(d);
       if (!list) return null;
+      noteTotal('artists', query, d);
       return list.map(normalizeArtist).filter((a): a is Artist => a !== null);
     },
   });
@@ -157,8 +189,10 @@ export function searchPlaylistsPage(rawQuery: string, page: number, limit = 20, 
       `/search/playlists?query=${enc(query)}&p=${page}&limit=${limit}`,
     ],
     validate: (json) => {
-      const list = listFrom(unwrap(json));
+      const d = unwrap(json);
+      const list = listFrom(d);
       if (!list) return null;
+      noteTotal('playlists', query, d);
       return list.map(normalizePlaylist).filter((p): p is Playlist => p !== null);
     },
   });

@@ -126,7 +126,7 @@ for (const size of SIZES) {
     await page.getByRole('button', { name: 'New' }).click();
     await expect(page.getByRole('dialog', { name: 'New smart collection' })).toBeVisible();
     await page.fill('#smart-name', 'Telugu favourites');
-    await page.getByRole('button', { name: 'Telugu' }).click();
+    await page.getByRole('button', { name: 'Telugu', exact: true }).click();
     await page.getByRole('button', { name: 'Favourites only' }).click();
     await expect.poll(() => bodyText(page)).toMatch(/1 of 4 local songs/);
     await expect(page.getByRole('dialog', { name: 'New smart collection' }).locator('b', { hasText: 'Samajavaragamana' })).toBeVisible();

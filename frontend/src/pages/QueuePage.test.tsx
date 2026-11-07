@@ -23,14 +23,15 @@ vi.mock('@/services/native', () => ({ checkNotificationOnFirstPlay: vi.fn(), hap
 vi.mock('@/services/feedback', () => ({ sendFeedback: vi.fn(async () => true) }));
 vi.mock('@/services/downloads', () => ({ downloadSong: vi.fn(), removeDownload: vi.fn(), lastDownloadFailure: vi.fn(() => null), downloadFailureMessage: vi.fn(() => 'Download failed — please try again') }));
 vi.mock('@/services/personalization/updater', () => ({
-  recordComplete: vi.fn(), recordPlay: vi.fn(), recordQueueAdd: vi.fn(), recordSkip: vi.fn(), recordFavorite: vi.fn(), softMuteArtist: vi.fn(),
+  recordComplete: vi.fn(), recordPlay: vi.fn(), recordQueueAdd: vi.fn(), recordSkip: vi.fn(), recordFavorite: vi.fn(), softMuteArtist: vi.fn(), recordPlaylistAdd: vi.fn(), recordDislike: vi.fn(),
 }));
 vi.mock('@/features/queue/TuneChips', () => ({ TuneChips: () => null }));
 
 import { usePlayerStore } from '@/store/playerStore';
 import { useToastStore } from '@/store/toastStore';
 import { makeSong } from '@/__fixtures__/songs';
-import QueuePage, { slotForY } from './QueuePage';
+import QueuePage, { defaultQueueName, slotForY } from './QueuePage';
+import { useLibraryStore } from '@/store/libraryStore';
 
 const dup = makeSong('x', { title: 'Twice' });
 const queue = [makeSong('now'), makeSong('a', { title: 'Alpha' }), dup, makeSong('b', { title: 'Beta' }), dup];
@@ -211,5 +212,34 @@ describe('slotForY', () => {
   });
   it('is safe on an empty list', () => {
     expect(slotForY([], 10)).toBe(0);
+  });
+});
+
+describe('1.11 — Save as playlist and Clear', () => {
+  it('suggests a dated name and saves each song once', () => {
+    useLibraryStore.setState({ collections: [] });
+    const prompt = vi.spyOn(window, 'prompt').mockImplementation((_m, def) => def ?? null);
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Save as playlist' }));
+    expect(prompt.mock.calls[0][1]).toMatch(/^Queue · \d{1,2} [A-Z][a-z]{2}/);
+    const saved = useLibraryStore.getState().collections[0];
+    expect(saved.songs.map((s) => s.id).sort()).toEqual(['a', 'b', 'now', 'x']);
+    prompt.mockRestore();
+  });
+
+  it('defaultQueueName reads like "Queue · 7 Nov"', () => {
+    expect(defaultQueueName(new Date(2026, 10, 7))).toBe('Queue · 7 Nov');
+  });
+
+  it('Clear keeps the playing song, empties what follows and offers Undo', () => {
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear the queue after this song' }));
+    expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['now']);
+    const toasts = useToastStore.getState().toasts;
+    const last = toasts[toasts.length - 1];
+    expect(last.message).toBe('Cleared 4 upcoming songs');
+    expect(toasts.filter((t) => t.message === last.message)).toHaveLength(1);
+    act(() => last.action!.onClick());
+    expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['now', 'a', 'x', 'b', 'x']);
   });
 });

@@ -18,16 +18,18 @@ const LABEL: Record<SavedEntity['kind'], string> = {
   album: 'album',
   artist: 'artist',
   playlist: 'playlist',
+  podcast: 'podcast',
 };
 
-/** Save/follow an album, artist, or playlist to the local library. */
+/** Save/follow an album, artist, playlist or podcast; it syncs with the account like the rest of the library. */
 export function SaveButton({ entity, className, variant = 'pill' }: Props) {
   const saved = useLibraryStore((s) => s.saved.some((e) => e.id === entity.id && e.kind === entity.kind));
   const toggle = useLibraryStore((s) => s.toggleSaved);
-  const verb = entity.kind === 'artist' ? (saved ? 'Following' : 'Follow') : saved ? 'Saved' : 'Save';
+  const follows = entity.kind === 'artist' || entity.kind === 'podcast';
+  const verb = follows ? (saved ? 'Following' : 'Follow') : saved ? 'Saved' : 'Save';
   const onClick = () => {
     toggle(entity);
-    toast(saved ? `Removed ${LABEL[entity.kind]}` : `${entity.kind === 'artist' ? 'Following' : 'Saved'} ${LABEL[entity.kind]}`);
+    toast(saved ? `Removed ${LABEL[entity.kind]}` : `${follows ? 'Following' : 'Saved'} ${LABEL[entity.kind]}`);
   };
   if (variant === 'icon') {
     return (

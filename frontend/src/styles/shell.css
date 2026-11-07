@@ -177,6 +177,11 @@ html.amoled .vx-workspace {
   line-height: 1;
 }
 .vx-sidebar-nav ul { display: grid; gap: 2px; padding: 6px 12px; }
+/* The Browse list: smaller rows, so the library keeps its room. */
+.vx-sidebar-nav.is-browse ul { gap: 0; padding-top: 0; }
+.vx-sidebar-nav.is-browse .vx-lib-label { padding: 6px 26px 2px; }
+.vx-sidebar-nav.is-browse .vx-nav-link { min-height: 36px; font-size: 14px; }
+.vx-sidebar-nav.is-browse svg { width: 20px; height: 20px; }
 .vx-nav-link {
   position: relative;
   display: flex;
@@ -364,6 +369,16 @@ html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)
 .vx-avatar:hover { transform: scale(1.05); }
 .vx-avatar.is-open { box-shadow: 0 0 0 2px rgb(var(--ink-950)), 0 0 0 4px rgb(var(--vx-accent-rgb, 236 72 153) / 0.9); }
 .vx-avatar:focus-visible { outline: 2px solid rgb(var(--vx-accent-rgb, 236 72 153)); outline-offset: 3px; }
+
+/* The "Music languages" button (TopBar → LanguagePicker). */
+.vx-langbtn {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 36px; max-width: 220px; padding: 0 10px;
+  border-radius: 999px; color: rgb(var(--ink-100)); background: rgb(var(--ink-950) / 0.4); text-align: left;
+}
+.vx-langbtn:hover, .vx-langbtn[aria-expanded='true'] { background: rgb(var(--ink-950) / 0.7); }
+.vx-langbtn-text { display: flex; flex-direction: column; min-width: 0; font-size: 12.5px; font-weight: 750; line-height: 1.15; }
+.vx-langbtn-text small { overflow: hidden; color: rgb(var(--ink-400)); font-size: 11.5px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+@media (max-width: 767px) { .vx-langbtn-text small { color: rgb(var(--ink-100)); font-size: 12.5px; font-weight: 700; } }
 
 /* 13.9 — a visitor browsing signed out: Sign in where the avatar goes. */
 .vx-topbar-signin {

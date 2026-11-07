@@ -44,8 +44,9 @@ const KIND_CHIPS: Array<{ id: Exclude<Kind, 'all'>; label: string }> = [
   { id: 'playlist', label: 'Playlists' },
   { id: 'artist', label: 'Artists' },
   { id: 'album', label: 'Albums' },
+  { id: 'podcast', label: 'Podcasts' },
 ];
-const KIND_LABEL: Record<SavedEntity['kind'], string> = { album: 'Album', artist: 'Artist', playlist: 'Playlist' };
+const KIND_LABEL: Record<SavedEntity['kind'], string> = { album: 'Album', artist: 'Artist', playlist: 'Playlist', podcast: 'Podcast' };
 const songsText = (n: number) => `${n} song${n === 1 ? '' : 's'}`;
 const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
 const normal = (s: string) => s.toLocaleLowerCase().normalize('NFC');
@@ -179,10 +180,10 @@ export default function LibraryPage() {
       const e = it.entity;
       return [
         {
-          label: e.kind === 'artist' ? 'Unfollow' : 'Remove from your library',
+          label: e.kind === 'artist' || e.kind === 'podcast' ? 'Unfollow' : 'Remove from your library',
           onSelect: () => {
             toggleSaved(e);
-            toast(e.kind === 'artist' ? `Unfollowed ${e.title}` : `Removed “${e.title}”`, {
+            toast(e.kind === 'artist' || e.kind === 'podcast' ? `Unfollowed ${e.title}` : `Removed “${e.title}”`, {
               action: { label: 'Undo', onClick: () => toggleSaved(e) },
               duration: 7000,
             });
@@ -215,6 +216,8 @@ export default function LibraryPage() {
     const e = it.entity;
     if (e.kind === 'album') return () => void playAlbum(e.id, e.title);
     if (e.kind === 'playlist') return () => void playPlaylist(e.id, e.title);
+    // A followed podcast opens its page (episodes are picked there).
+    if (e.kind === 'podcast') return undefined;
     return () => void playArtist(e.id, e.title);
   };
 
@@ -232,7 +235,9 @@ export default function LibraryPage() {
         ? `No playlists carry ${activeTags.length === 1 ? 'that tag' : 'those tags'}.`
         : showCollections
           ? 'Group songs your way — add any song from its ⋯ menu, or save albums, artists and playlists.'
-          : `No saved ${kind === 'album' ? 'albums' : 'artists'} yet. Save one from its page.`;
+          : kind === 'podcast'
+            ? 'No podcasts followed yet. Tap Follow on a show’s page.'
+            : `No saved ${kind === 'album' ? 'albums' : 'artists'} yet. Save one from its page.`;
 
   return (
     <div className="vx-lp">

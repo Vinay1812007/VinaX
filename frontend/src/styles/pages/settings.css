@@ -146,6 +146,8 @@ html.amoled .vx-settings { --set-card: rgb(var(--ink-850)); --set-inset: rgb(var
   pointer-events: none;
 }
 .vx-set-search-clear { position: absolute; top: 32px; right: 18px; transform: translateY(-50%); }
+.vx-set-view { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0 0 18px; }
+.vx-set-view .vx-set-hint { margin: 0; }
 .vx-set-count { margin: -4px 0 24px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 600; }
 .vx-set-mark { padding: 0 1px; border-radius: 3px; color: inherit; background: rgb(var(--ember-500) / 0.3); }
 

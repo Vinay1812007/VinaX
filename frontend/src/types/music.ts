@@ -88,6 +88,12 @@ export interface Artist {
   albums: Album[];
   /** 8.2.0 — the catalogue's own "similar artists", when it sends them. */
   similarArtists?: ArtistRef[];
+  /** Monthly listeners (the catalogue's fan count), when it sends one. */
+  listeners?: number | null;
+  /** Followers on the catalogue, when it sends them. */
+  followers?: number | null;
+  /** The catalogue's verified tick. */
+  verified?: boolean;
 }
 
 export interface Lyrics {

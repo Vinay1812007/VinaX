@@ -2,8 +2,8 @@ import type { ReactNode } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { cn } from '@/utils/cn';
 import { useSettingsStore } from '@/store/settingsStore';
-import { useLibraryStore } from '@/store/libraryStore';
-import { PRIMARY_NAV } from '@/constants/nav';
+import { savedPath, useLibraryStore } from '@/store/libraryStore';
+import { BROWSE_NAV, PRIMARY_NAV, type NavItem } from '@/constants/nav';
 import { bestImage } from '@/utils/images';
 import { useT } from '@/i18n';
 import { BookmarkIcon, ChevronDownIcon, ClockIcon, DownloadIcon, HeartIcon, LibraryIcon, PlusIcon } from './Icons';
@@ -31,6 +31,7 @@ function LibraryRow({ to, title, meta, art, collapsed }: { to: string; title: st
   );
 }
 
+const SAVED_KIND_LABEL = { album: 'Album', playlist: 'Playlist', podcast: 'Podcast', artist: 'Artist' } as const;
 const count = (n: number, one: string): string => `${n} ${one}${n === 1 ? '' : 's'}`;
 
 /**
@@ -59,6 +60,18 @@ export function Sidebar() {
     navigate(`/collection/${id}`);
   };
   const ordered = [...collections].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned));
+  const navItem = ({ to, label, icon: Icon }: NavItem) => (
+    <li key={to}>
+      <NavLink to={to} end={to === '/'} title={collapsed ? t(label) : undefined} aria-label={collapsed ? t(label) : undefined} className={({ isActive }) => cn('vx-nav-link', isActive && 'vx-nav-active')}>
+        {({ isActive }) => (
+          <>
+            <Icon className="w-6 h-6 shrink-0" filled={isActive} />
+            {!collapsed && <span>{t(label)}</span>}
+          </>
+        )}
+      </NavLink>
+    </li>
+  );
 
   return (
     <aside className={cn('vx-sidebar vx-mat-thin hidden md:flex', collapsed && 'is-collapsed')} aria-label="Sidebar">
@@ -84,20 +97,12 @@ export function Sidebar() {
       )}
 
       <nav aria-label="Main navigation" className="vx-sidebar-nav">
-        <ul>
-          {PRIMARY_NAV.filter((i) => i.to !== '/library').map(({ to, label, icon: Icon }) => (
-            <li key={to}>
-              <NavLink to={to} end={to === '/'} title={collapsed ? t(label) : undefined} aria-label={collapsed ? t(label) : undefined} className={({ isActive }) => cn('vx-nav-link', isActive && 'vx-nav-active')}>
-                {({ isActive }) => (
-                  <>
-                    <Icon className="w-6 h-6 shrink-0" filled={isActive} />
-                    {!collapsed && <span>{t(label)}</span>}
-                  </>
-                )}
-              </NavLink>
-            </li>
-          ))}
-        </ul>
+        <ul>{PRIMARY_NAV.filter((i) => i.to !== '/library').map(navItem)}</ul>
+      </nav>
+      {/* The browse lists, one click away (JioSaavn-style "Browse"). */}
+      <nav aria-label="Browse" className="vx-sidebar-nav is-browse">
+        {!collapsed && <p className="vx-lib-label" aria-hidden>Browse</p>}
+        <ul>{BROWSE_NAV.map(navItem)}</ul>
       </nav>
 
       <section className="vx-library" aria-label="Your library">
@@ -128,7 +133,7 @@ export function Sidebar() {
             return <LibraryRow key={c.id} collapsed={collapsed} to={`/collection/${c.id}`} title={c.name} meta={`Playlist · ${count(c.songs.length, 'song')}`} art={<LibraryArt image={cover} glyph={c.emoji || c.name.slice(0, 1).toUpperCase()} tone="is-playlist" />} />;
           })}
           {saved.map((e) => (
-            <LibraryRow key={`${e.kind}:${e.id}`} collapsed={collapsed} to={`/${e.kind}/${e.id}`} title={e.title} meta={e.kind === 'artist' ? 'Artist' : `${e.kind === 'album' ? 'Album' : 'Playlist'}${e.subtitle ? ` · ${e.subtitle}` : ''}`} art={<LibraryArt image={e.image} round={e.kind === 'artist'} glyph={e.title.slice(0, 1).toUpperCase()} tone="is-playlist" />} />
+            <LibraryRow key={`${e.kind}:${e.id}`} collapsed={collapsed} to={savedPath(e)} title={e.title} meta={e.kind === 'artist' ? 'Artist' : `${SAVED_KIND_LABEL[e.kind]}${e.subtitle ? ` · ${e.subtitle}` : ''}`} art={<LibraryArt image={e.image} round={e.kind === 'artist'} glyph={e.title.slice(0, 1).toUpperCase()} tone="is-playlist" />} />
           ))}
         </ul>
       </section>

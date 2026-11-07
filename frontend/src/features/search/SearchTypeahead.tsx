@@ -1,7 +1,8 @@
 /**
  * 10.1 — the typeahead panel under the search field: query completions
  * (recent, trending, titles already returned) with the typed part in bold,
- * then quick hits for songs (tap plays), artists and albums.
+ * then quick hits for songs (tap plays), artists, albums and podcasts, and
+ * "View all" links that open the full results on that tab.
  *
  * One listbox for the whole panel, grouped, so ↑/↓ walk every row and the
  * field's aria-activedescendant always names a real option. Focus never
@@ -10,6 +11,7 @@
  */
 import { useRef, type ReactNode } from 'react';
 import type { Album, Artist, Song } from '@/types';
+import type { PodcastSummary } from '@/services/api/catalog';
 import { ListSkeleton } from '@/components/Skeletons';
 import { ClockIcon, PlayIcon, SearchIcon } from '@/components/Icons';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
@@ -21,24 +23,32 @@ export type TypeaheadItem =
   | { kind: 'query'; text: string; source: Completion['source'] }
   | { kind: 'song'; song: Song; index: number }
   | { kind: 'artist'; artist: Artist }
-  | { kind: 'album'; album: Album };
+  | { kind: 'album'; album: Album }
+  | { kind: 'podcast'; podcast: PodcastSummary };
+
+/** A quick-hit group the panel can open in full. */
+export type TypeaheadGroup = 'song' | 'artist' | 'album' | 'podcast';
+
+const GROUP_LABEL: Record<TypeaheadGroup, string> = { song: 'Songs', artist: 'Artists', album: 'Albums', podcast: 'Podcasts' };
 
 /** Rows shown per quick-hit group. */
 export const TYPEAHEAD_SONGS = 4;
 export const TYPEAHEAD_ARTISTS = 3;
 export const TYPEAHEAD_ALBUMS = 3;
+export const TYPEAHEAD_PODCASTS = 2;
 
-/** Completions first, then songs, artists and albums — the panel's order,
- *  and the order the arrow keys walk. */
+/** Completions first, then songs, artists, albums and podcasts — the panel's
+ *  order, and the order the arrow keys walk. */
 export function typeaheadItems(
   queries: readonly Completion[],
-  hits: { songs: readonly Song[]; artists: readonly Artist[]; albums: readonly Album[] },
+  hits: { songs: readonly Song[]; artists: readonly Artist[]; albums: readonly Album[]; podcasts?: readonly PodcastSummary[] },
 ): TypeaheadItem[] {
   return [
     ...queries.map((c): TypeaheadItem => ({ kind: 'query', text: c.text, source: c.source })),
     ...hits.songs.slice(0, TYPEAHEAD_SONGS).map((song, index): TypeaheadItem => ({ kind: 'song', song, index })),
     ...hits.artists.slice(0, TYPEAHEAD_ARTISTS).map((artist): TypeaheadItem => ({ kind: 'artist', artist })),
     ...hits.albums.slice(0, TYPEAHEAD_ALBUMS).map((album): TypeaheadItem => ({ kind: 'album', album })),
+    ...(hits.podcasts ?? []).slice(0, TYPEAHEAD_PODCASTS).map((podcast): TypeaheadItem => ({ kind: 'podcast', podcast })),
   ];
 }
 
@@ -68,6 +78,8 @@ export function itemKey(item: TypeaheadItem): string {
       return `ar:${item.artist.id}`;
     case 'album':
       return `al:${item.album.id}`;
+    case 'podcast':
+      return `pc:${item.podcast.id}`;
   }
 }
 
@@ -172,6 +184,7 @@ export function SearchTypeahead({
   stale,
   onPick,
   onHover,
+  onViewAll,
 }: {
   listId: string;
   items: TypeaheadItem[];
@@ -181,6 +194,8 @@ export function SearchTypeahead({
   stale: boolean;
   onPick: (item: TypeaheadItem) => void;
   onHover: (index: number) => void;
+  /** Opens the full results on a group's tab; no "View all" links without it. */
+  onViewAll?: (group: TypeaheadGroup) => void;
 }) {
   const groups: { label: string | null; key: string; rows: { item: TypeaheadItem; i: number }[] }[] = [];
   items.forEach((item, i) => {
@@ -190,11 +205,12 @@ export function SearchTypeahead({
     else
       groups.push({
         key,
-        label: key === 'song' ? 'Songs' : key === 'artist' ? 'Artists' : key === 'album' ? 'Albums' : null,
+        label: key === 'query' ? null : GROUP_LABEL[key],
         rows: [{ item, i }],
       });
   });
   const hasHits = items.some((x) => x.kind !== 'query');
+  const hitGroups = groups.map((g) => g.key).filter((k): k is TypeaheadGroup => k !== 'query');
 
   const row = ({ item, i }: { item: TypeaheadItem; i: number }) => {
     const common = {
@@ -260,6 +276,20 @@ export function SearchTypeahead({
         </Option>
       );
     }
+    if (item.kind === 'podcast') {
+      const pc = item.podcast;
+      return (
+        <Option {...common} dim={stale} className="is-hit">
+          <img src={bestImage(pc.images, 150)} onError={onArtError} alt="" width={44} height={44} decoding="async" />
+          <span className="search-quick-text">
+            <span className="search-quick-title">
+              <Highlight text={pc.name} term={term} />
+            </span>
+            <span className="search-quick-sub">Podcast{pc.season ? ` · Season ${pc.season}` : ''}</span>
+          </span>
+        </Option>
+      );
+    }
     const al = item.album;
     return (
       <Option {...common} dim={stale} className="is-hit">
@@ -292,6 +322,24 @@ export function SearchTypeahead({
           ),
         )}
       </div>
+      {onViewAll && hitGroups.length > 0 && (
+        <div className="search-panel-foot" role="group" aria-label="View all results">
+          <span className="search-panel-label">View all</span>
+          {hitGroups.map((g) => (
+            <button
+              key={g}
+              type="button"
+              className="search-panel-all"
+              aria-label={`View all ${GROUP_LABEL[g].toLowerCase()}`}
+              // Keep the field focused until the tap lands, like the rows.
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={() => onViewAll(g)}
+            >
+              {GROUP_LABEL[g]}
+            </button>
+          ))}
+        </div>
+      )}
       {loading && !hasHits && (
         <div className="search-panel-loading" aria-hidden>
           <ListSkeleton rows={3} />

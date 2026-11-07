@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -137,5 +137,52 @@ describe('Radio page', () => {
     await waitFor(() => expect(getRadioStations).toHaveBeenCalled());
     expect(screen.queryByRole('heading', { name: 'Stations' })).toBeNull();
     expect(screen.getByRole('heading', { name: 'Pick a mood' })).toBeTruthy();
+  });
+
+  it('a language chip shows that language\u2019s stations, and For you goes back to the pinned ones', async () => {
+    getRadioStations.mockImplementation(async (langs: unknown) =>
+      (langs as string[])[0] === 'tamil'
+        ? [{ name: 'Tamil Hits', description: null, language: 'tamil', color: null, images: [] }]
+        : [{ name: 'Retro Spin', description: null, language: 'telugu', color: null, images: [] }],
+    );
+    mount();
+    expect(await screen.findByRole('button', { name: 'Start Retro Spin station' })).toBeTruthy();
+    const chips = screen.getByRole('group', { name: 'Station language' });
+    fireEvent.click(within(chips).getByRole('button', { name: 'Tamil' }));
+    expect(await screen.findByRole('button', { name: 'Start Tamil Hits station' })).toBeTruthy();
+    expect(getRadioStations.mock.calls[getRadioStations.mock.calls.length - 1][0]).toEqual(['tamil']);
+    expect(within(chips).getByRole('button', { name: 'Tamil' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(within(chips).getByRole('button', { name: 'For you' }));
+    expect(await screen.findByRole('button', { name: 'Start Retro Spin station' })).toBeTruthy();
+  });
+
+  it('a language with no stations says so and keeps the chips', async () => {
+    getRadioStations.mockImplementation(async (langs: unknown) =>
+      (langs as string[])[0] === 'odia' ? Promise.reject(new Error('none')) : [{ name: 'Retro Spin', description: null, language: 'telugu', color: null, images: [] }],
+    );
+    mount();
+    await screen.findByRole('button', { name: 'Start Retro Spin station' });
+    fireEvent.click(within(screen.getByRole('group', { name: 'Station language' })).getByRole('button', { name: 'Odia' }));
+    expect(await screen.findByText(/No Odia stations right now/)).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Station language' })).toBeTruthy();
+  });
+
+  it('Surprise me starts one of the stations on screen', async () => {
+    getRadioStations.mockResolvedValue([{ name: 'Retro Spin', description: null, language: 'telugu', color: null, images: [] }]);
+    startFeaturedStation.mockResolvedValue({ stationId: 'station-1', songs: ['1', '2', '3'].map((id) => makeSong(`sp${id}`)) });
+    mount();
+    await screen.findByRole('button', { name: 'Start Retro Spin station' });
+    fireEvent.click(screen.getByRole('button', { name: 'Surprise me' }));
+    await waitFor(() => expect(startRadio).toHaveBeenCalledOnce());
+    expect(startFeaturedStation.mock.calls[0].slice(0, 2)).toEqual(['Retro Spin', 'telugu']);
+  });
+
+  it('Surprise me falls back to a random mood when there are no stations', async () => {
+    search.mockResolvedValue(['1', '2', '3', '4', '5'].map((id) => makeSong(`m${id}`)));
+    mount();
+    await waitFor(() => expect(getRadioStations).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Surprise me' }));
+    await waitFor(() => expect(startRadio).toHaveBeenCalledOnce());
+    expect(search).toHaveBeenCalled();
   });
 });

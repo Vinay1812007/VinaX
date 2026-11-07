@@ -12,6 +12,7 @@ import {
   searchPlaylistsPage,
   searchSongs,
   searchSongsPage,
+  searchTotal,
 } from './saavn';
 beforeEach(() => {
   request.mockReset();
@@ -98,4 +99,16 @@ it('a topQuery item already in its group moves to the front, once', async () => 
     ),
   );
   expect((await searchAll('b')).artists.map((a) => a.id)).toEqual(['2', '1']);
+});
+
+it('remembers the catalogue match count from a paged search', async () => {
+  request.mockImplementation(({ validate }) =>
+    Promise.resolve(validate({ success: true, data: { total: 5273, start: 1, results: [] } })),
+  );
+  expect(searchTotal('songs', 'count me')).toBeNull();
+  await searchSongsPage('count me', 1);
+  expect(searchTotal('songs', 'count me')).toBe(5273);
+  await searchAlbumsPage('count me', 1);
+  expect(searchTotal('albums', 'count me')).toBe(5273);
+  expect(searchTotal('artists', 'count me')).toBeNull();
 });

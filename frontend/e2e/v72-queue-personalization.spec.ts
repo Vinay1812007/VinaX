@@ -220,6 +220,8 @@ test('Less like this asks for how long; Settings lists the mute and takes it bac
   expect(artist).toMatch(/[\u0C00-\u0C7F\u0900-\u097F\u0B80-\u0BFF]/);
 
   await row.getByRole('button', { name: /More options/ }).click();
+  // 1.11 — the song menu opens short; the steering items live under More….
+  await page.getByRole('menuitem', { name: 'More…' }).click();
   await expect(page.getByRole('menuitem', { name: 'More like this' })).toBeVisible();
   await page.getByRole('menuitem', { name: 'Less like this…' }).click();
   // The menu asks for how long, naming the artist, and the permanent block is not here.

@@ -9,6 +9,7 @@ import {
   HeartIcon,
   HomeIcon,
   LibraryIcon,
+  ListIcon,
   MicIcon,
   MusicIcon,
   QueueIcon,
@@ -18,6 +19,7 @@ import {
   SparkleIcon,
   UsersIcon,
   WaveIcon,
+  WaveformIcon,
 } from '@/components/Icons';
 
 export interface NavItem {
@@ -30,6 +32,17 @@ export interface NavGroup {
   items: NavItem[];
 }
 
+/** The browse lists, always one click away in the desktop sidebar (Discover's grid on a phone). */
+export const BROWSE_NAV: NavItem[] = [
+  { to: '/new-releases', label: 'New Releases', icon: SparkleIcon },
+  { to: '/charts', label: 'Top Charts', icon: WaveIcon },
+  { to: '/top-playlists', label: 'Top Playlists', icon: ListIcon },
+  // 1.3 — the catalogue's shows.
+  { to: '/podcasts', label: 'Podcasts', icon: MicIcon },
+  { to: '/top-artists', label: 'Top Artists', icon: UsersIcon },
+  { to: '/radio', label: 'Radio', icon: WaveformIcon },
+];
+
 /** One source of truth for the sidebar routes — also feeds the ⌘K palette. */
 export const NAV_GROUPS: NavGroup[] = [
   {
@@ -39,11 +52,11 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: '/search', label: 'Search', icon: SearchIcon },
       { to: '/discover', label: 'Discover', icon: CompassIcon },
       { to: '/flow', label: 'Flow', icon: FlowIcon },
-      { to: '/charts', label: 'Charts', icon: WaveIcon },
       { to: '/made-for-you', label: 'Made For You', icon: SparkleIcon },
       { to: '/weekly', label: 'Your Week', icon: SparkleIcon },
     ],
   },
+  { label: 'Browse', items: BROWSE_NAV },
   {
     label: 'Your Music',
     items: [
@@ -61,8 +74,6 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Explore',
     items: [
       { to: '/videos', label: 'Videos', icon: VideoIcon },
-      // 1.3 — the catalogue's shows.
-      { to: '/podcasts', label: 'Podcasts', icon: MicIcon },
       { to: '/movies', label: 'Movies', icon: FilmIcon },
       { to: '/languages', label: 'Languages', icon: MusicIcon },
       { to: '/moods', label: 'Moods', icon: WaveIcon },

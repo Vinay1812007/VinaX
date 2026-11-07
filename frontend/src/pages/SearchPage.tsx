@@ -47,7 +47,9 @@ import { topArtists } from '@/services/personalization/profile';
 import { recordSearchPlay } from '@/services/personalization/updater';
 import { fetchWithTimeout } from '@/services/api/client';
 import { getTopSearches } from '@/services/api/catalog';
-import { getSong } from '@/services/api/saavn';
+import { getSong, searchTotal } from '@/services/api/saavn';
+import { useAllPodcasts, usePodcastMatches } from '@/features/search/podcastSearch';
+import { resultCountLine } from '@/features/search/resultCount';
 import { pinFor, withPinnedFirst, type SearchPins } from '@/services/search/pins';
 import type { Song } from '@/types';
 import { playAlbum, playArtist, playPlaylist } from '@/features/player/playEntity';
@@ -74,6 +76,7 @@ import {
   stepSelection,
   typeaheadItems,
   TYPEAHEAD_SONGS,
+  type TypeaheadGroup,
   type TypeaheadItem,
 } from '@/features/search/SearchTypeahead';
 import { PageHeader } from '@/components/PageHeader';
@@ -87,13 +90,17 @@ import '@/styles/pages/browse.css';
 
 // The app on a phone has no same-origin API (as in useAppConfig).
 const PIN_BASE = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
-const TABS = ['All', 'Songs', 'Albums', 'Artists', 'Playlists'] as const;
+const TABS = ['All', 'Songs', 'Albums', 'Artists', 'Playlists', 'Podcasts'] as const;
 type Tab = (typeof TABS)[number];
 
 // Package D4 — the picked filter tab sticks for the whole browsing session, so
 // leaving Search and coming back lands on the same view (session-scoped only;
 // a fresh open always starts on All).
 const TAB_KEY = 'vinax.search.tab.v1';
+
+/** The results tab each typeahead group's "View all" opens. */
+const PANEL_TABS: Record<TypeaheadGroup, Tab> = { song: 'Songs', artist: 'Artists', album: 'Albums', podcast: 'Podcasts' };
+
 function loadStickyTab(): Tab {
   try {
     const t = window.sessionStorage.getItem(TAB_KEY);
@@ -348,6 +355,9 @@ export default function SearchPage() {
   const albums = useInfiniteAlbums(q, tab === 'Albums' && !lyricsMode); // paged — was capped at 20 (P2-29)
   const artists = useInfiniteArtists(q, tab === 'Artists' && !lyricsMode); // paged — was capped at 20 (P2-30)
   const playlists = useInfinitePlaylists(q, tab === 'Playlists' && !lyricsMode);
+  // The catalogue has no podcast search: its short show list is matched here.
+  const podcastList = usePodcastMatches(q, (tab === 'All' || tab === 'Podcasts') && !lyricsMode);
+  const podcastShows = useAllPodcasts(tab === 'Podcasts' && !lyricsMode && q.length > 1);
 
   const active = q.length > 1;
   // v5.17.0 — lyric-line search: the lyrics service finds the candidates and
@@ -470,6 +480,27 @@ export default function SearchPage() {
   const albumList = albumLang ? allAlbums.filter((a) => a.language === albumLang) : allAlbums;
   const artistList = flattenArtistPages(artists.data?.pages);
   const playlistList = flattenPlaylistPages(playlists.data?.pages);
+  // The count line reads the catalogue's total once the tab's first page is in
+  // (the All tab shows the songs count, as the catalogue's own site does).
+  const resultCount = resultCountLine(
+    tab === 'Podcasts'
+      ? podcastList.length || null
+      : tab === 'Albums'
+        ? albums.data
+          ? searchTotal('albums', q)
+          : null
+        : tab === 'Artists'
+          ? artists.data
+            ? searchTotal('artists', q)
+            : null
+          : tab === 'Playlists'
+            ? playlists.data
+              ? searchTotal('playlists', q)
+              : null
+            : songPages
+              ? searchTotal('songs', q)
+              : null,
+  );
   const trimmed = input.trim();
   // v5.17.0 — pinned recents first (in pin order), then the rest as recorded.
   const recentOrdered = useMemo(
@@ -507,6 +538,7 @@ export default function SearchPage() {
     [quickHits.songs, quick.key, pinnedLangs],
   );
   const quickAlbums = useMemo(() => pinnedFirst(quickHits.albums, pinnedLangs), [quickHits.albums, pinnedLangs]);
+  const quickPodcasts = usePodcastMatches(typedNow, focused && !lyricsMode && typedNow.length >= 2);
   const trendingList = trendingQ.data?.queries;
   // Completions: recents, trending terms, then titles already returned —
   // minus the songs shown as hits right below them.
@@ -525,9 +557,9 @@ export default function SearchPage() {
         queryCompletions,
         lyricsMode || typedNow.length < 2
           ? { songs: [], artists: [], albums: [] }
-          : { songs: quickSongs, artists: quickHits.artists, albums: quickAlbums },
+          : { songs: quickSongs, artists: quickHits.artists, albums: quickAlbums, podcasts: quickPodcasts },
       ),
-    [queryCompletions, lyricsMode, typedNow, quickSongs, quickHits.artists, quickAlbums],
+    [queryCompletions, lyricsMode, typedNow, quickSongs, quickHits.artists, quickAlbums, quickPodcasts],
   );
   // Escape, Enter and a pick close the panel for the text they acted on;
   // the next keystroke opens it again.
@@ -570,9 +602,23 @@ export default function SearchPage() {
       recordSearchPlay(item.song);
     } else if (item.kind === 'artist') {
       navigate(artistPath(item.artist));
+    } else if (item.kind === 'podcast') {
+      navigate(`/podcast/${encodeURIComponent(item.podcast.id)}`);
     } else {
       navigate(albumPath(item.album));
     }
+  };
+
+  // "View all" under the typeahead: search the typed words, on that group's tab.
+  const viewAllFromPanel = (group: TypeaheadGroup) => {
+    const text = input.trim();
+    if (!text) return;
+    setTaSel(-1);
+    setClosedFor(normalizeQuery(text));
+    setTab(PANEL_TABS[group]);
+    applySuggestion(text);
+    setFocused(false);
+    searchInputRef.current?.blur();
   };
 
   // v5.19.0 — "Did you mean …?" once a committed query settles with no songs:
@@ -807,6 +853,7 @@ export default function SearchPage() {
               stale={quick.stale}
               onPick={pickItem}
               onHover={setTaSel}
+              onViewAll={viewAllFromPanel}
             />
           )}
         </div>
@@ -1022,6 +1069,11 @@ export default function SearchPage() {
 
       {active && !lyricsMode && (
         <div className="search-results">
+          {resultCount && (
+            <p className="search-count" role="status">
+              {resultCount}
+            </p>
+          )}
           {tab === 'All' && (
             <>
               {all.isLoading && <ResultsSkeleton />}
@@ -1118,6 +1170,20 @@ export default function SearchPage() {
                           title={p.title}
                           subtitle={p.subtitle}
                           onPlay={() => void playPlaylist(p.id, p.title)}
+                        />
+                      ))}
+                    </Shelf>
+                  )}
+                  {podcastList.length > 0 && (
+                    <Shelf title="Podcasts" action={seeAll('Podcasts')}>
+                      {podcastList.slice(0, 12).map((p) => (
+                        <MediaCard
+                          key={p.id}
+                          to={`/podcast/${encodeURIComponent(p.id)}`}
+                          image={bestImage(p.images)}
+                          images={p.images}
+                          title={p.name}
+                          subtitle={p.season ? `Podcast · Season ${p.season}` : 'Podcast'}
                         />
                       ))}
                     </Shelf>
@@ -1357,6 +1423,34 @@ export default function SearchPage() {
                 disabled={!playlists.hasNextPage || playlists.isFetchingNextPage}
                 loading={playlists.isFetchingNextPage}
               />
+            </>
+          )}
+          {tab === 'Podcasts' && (
+            <>
+              {podcastShows.isLoading && <CardGridSkeleton />}
+              {podcastList.length === 0 && !podcastShows.isLoading && (
+                <NoMatches noun="podcasts" hint="Podcasts are matched by show name. Try a shorter name, or browse every show." />
+              )}
+              <div className="vx-card-grid">
+                {podcastList.map((p) => (
+                  <MediaCard
+                    key={p.id}
+                    to={`/podcast/${encodeURIComponent(p.id)}`}
+                    image={bestImage(p.images)}
+                    images={p.images}
+                    title={p.name}
+                    subtitle={p.season ? `Podcast · Season ${p.season}` : 'Podcast'}
+                    fluid
+                  />
+                ))}
+              </div>
+              {podcastList.length === 0 && !podcastShows.isLoading && (
+                <p className="mt-3">
+                  <a className="vx-section-link" href="/podcasts" onClick={(e) => { e.preventDefault(); navigate('/podcasts'); }}>
+                    Browse all podcasts
+                  </a>
+                </p>
+              )}
             </>
           )}
         </div>

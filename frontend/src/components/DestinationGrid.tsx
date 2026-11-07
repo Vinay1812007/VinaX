@@ -9,14 +9,23 @@ import {
   FilmIcon,
   GlobeIcon,
   HeartIcon,
+  ListIcon,
   MicIcon,
+  SparkleIcon,
+  UsersIcon,
   VideoIcon,
+  WaveIcon,
   WaveformIcon,
 } from './Icons';
 import '@/styles/pages/browse.css';
 
 /** The rest of the browse destinations: route, name, one line, tone, icon. */
 const DESTINATIONS: Array<{ to: string; title: string; meta: string; tone: number; icon: typeof GlobeIcon }> = [
+  // The browse lists, one tap from Discover on a phone (the desktop sidebar has them too).
+  { to: '/new-releases', title: 'New Releases', meta: 'Fresh albums and songs', tone: 9, icon: SparkleIcon },
+  { to: '/top-playlists', title: 'Top Playlists', meta: 'Most played playlists', tone: 11, icon: ListIcon },
+  { to: '/top-artists', title: 'Top Artists', meta: 'Who everyone plays', tone: 12, icon: UsersIcon },
+  { to: '/radio', title: 'Radio', meta: 'Stations by language', tone: 1, icon: WaveIcon },
   { to: '/regions', title: 'Regions', meta: 'Local favourites', tone: 4, icon: GlobeIcon },
   { to: '/movies', title: 'Movies', meta: 'Film soundtracks', tone: 5, icon: FilmIcon },
   { to: '/videos', title: 'Videos', meta: 'Music videos', tone: 6, icon: VideoIcon },

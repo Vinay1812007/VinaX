@@ -1036,3 +1036,27 @@ html.light .vx-home .vxh-free-facts li::before {
 .vx-home .vxh-ai-title { font-family: var(--vx-font-display); font-size: var(--vx-type-section); font-weight: 750; line-height: 1.2; letter-spacing: -0.03em; color: rgb(var(--ink-100)); }
 .vx-home .vxh-ai-why { margin-top: 2px; font-size: 13.5px; line-height: 1.4; color: rgb(var(--ink-300)); }
 .vx-home .vxh-ai-notint { min-height: 36px; padding: 0 14px; font-size: 13px; }
+
+/* JioSaavn-style top: a short greeting, so Trending now sits right under it. */
+.vx-home .vxh-greet.is-compact { margin-bottom: 14px; }
+.vx-home .vxh-greet.is-compact h1 { font-size: clamp(22px, 3.2vw, 30px); }
+.vx-home .vxh-greet.is-compact .vxh-greet-sub { margin-top: 4px; }
+.vx-home .vxh-greet.is-compact .vxh-greet-note { margin-top: 0; }
+
+/* Signed-out Home: one slim card asking the visitor to sign in. */
+.vx-home .vxh-guest-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin: 0 0 20px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: rgb(var(--ink-100) / 0.06);
+  box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.12);
+  color: rgb(var(--ink-200));
+  font-size: 14.5px;
+}
+.vx-home .vxh-guest-card p { margin: 0; flex: 1 1 220px; }
+.vx-home.vxh-guest .vxh-chips { margin-bottom: 20px; }

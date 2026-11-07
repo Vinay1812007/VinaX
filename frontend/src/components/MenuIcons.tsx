@@ -41,6 +41,13 @@ export const MENU_GLYPHS = {
   chevron: () => svg(<path d="M9 5l7 7-7 7" />),
   clock: () => svg([<circle key="a" cx="12" cy="12" r="8.5" />, <path key="b" d="M12 7.5V12l3 2" />]),
   generic: () => svg(<circle cx="12" cy="12" r="1.5" />),
+  // 1.11 — the short menu's Like, Quality, More… and the picked level.
+  like: () => svg(<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0112 7.3a4.3 4.3 0 017.5 2.5C19.5 15.4 12 20 12 20z" />),
+  liked: () => svg(<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0112 7.3a4.3 4.3 0 017.5 2.5C19.5 15.4 12 20 12 20z" fill="currentColor" />),
+  quality: () => svg(<path d="M5 18v-4M9.5 18V9M14 18v-7M18.5 18V5" />),
+  more: () => svg([<circle key="a" cx="6" cy="12" r="1.3" />, <circle key="b" cx="12" cy="12" r="1.3" />, <circle key="c" cx="18" cy="12" r="1.3" />]),
+  check: () => svg(<path d="M5 12.5l4.5 4.5L19 7.5" />),
+  blank: () => svg([]),
 } satisfies Record<string, Glyph>;
 
 export type MenuGlyph = keyof typeof MENU_GLYPHS;

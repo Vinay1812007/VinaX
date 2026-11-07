@@ -32,9 +32,7 @@ import { KEYS } from '@/constants/storage-keys';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
 import { getStreak } from '@/utils/streak';
 import { bestImage } from '@/utils/images';
-import { albumPath, playlistPath } from '@/utils/slug';
-import { playPlaylist } from '@/features/player/playEntity';
-import type { Playlist } from '@/types';
+import { albumPath } from '@/utils/slug';
 import { listeningTotal } from '@/features/stats/listening';
 import { useRegion } from '@/features/location/useRegion';
 import { useExperiment } from '@/features/experiments/useExperiment';
@@ -56,7 +54,10 @@ import { resetShelfDeduper } from '@/features/home/dedupeShelves';
 import { personalMessage } from '@/features/home/personalMessage';
 import { useClientConfig } from '@/features/home/useAppConfig';
 import { useContinueListening, useTrendingNow } from '@/features/home/useHomeShelves';
-import { playlistSubtitle, useCatalogueCharts, useFeaturedPlaylists, useNewAlbums, useTrendingPlaylists } from '@/features/home/useCatalogFeeds';
+import { useNewAlbums } from '@/features/home/useCatalogFeeds';
+import { ArtistStationsRow, CityHotRow, EditorialRows, PodcastsRow, RadioStationsRow, TRENDING_NOW_BLOCK, TrendingNowRow } from '@/features/home/CatalogueRows';
+import { GuestHome } from '@/features/home/GuestHome';
+import { useAccount } from '@/components/useAccount';
 import { useDailyMix } from '@/features/home/useDailyMix';
 import { refreshHome, useHomeVisit } from '@/features/home/homeRefresh';
 import { useShelfSafety } from '@/features/home/useShelfSafety';
@@ -95,34 +96,13 @@ const HOME_BLOCKS: Record<HomeSection, () => ReactNode> = {
   feed: FeedBlock,
 };
 
-function PlaylistShelf({ title, explanation, playlists }: { title: string; explanation?: string; playlists: Playlist[] }) {
-  return (
-    <Shelf title={title} explanation={explanation}>
-      {playlists.map((p) => (
-        <MediaCard key={p.id} to={playlistPath(p)} image={bestImage(p.images)} images={p.images} title={p.title} subtitle={playlistSubtitle(p)} onPlay={() => void playPlaylist(p.id, p.title)} />
-      ))}
-    </Shelf>
-  );
-}
-
 /**
  * 1.3 — the catalogue's own feeds, each riding with the block it belongs to
- * (so a hidden or reordered block takes them along): its chart and featured
- * playlists after Charts, its new albums after Trending albums. Optional
- * shelves: nothing shows while they load, on a miss or when they are empty.
+ * (so a hidden or reordered block takes them along): editorial picks, fresh
+ * hits and Best of 90s after Charts (whose own cards are the chart
+ * playlists), new albums after Trending albums. Optional shelves: nothing
+ * shows while they load, on a miss or when they are empty.
  */
-function CatalogueChartShelves() {
-  const charts = useCatalogueCharts();
-  const trending = useTrendingPlaylists();
-  const featured = useFeaturedPlaylists();
-  return (
-    <>
-      {!charts.isError && !!charts.data?.length && <PlaylistShelf title="Top charts" explanation="The catalogue's own chart playlists" playlists={charts.data} />}
-      {!trending.isError && !!trending.data?.length && <PlaylistShelf title="Trending playlists" playlists={trending.data} />}
-      {!featured.isError && !!featured.data?.length && <PlaylistShelf title="Featured playlists" playlists={featured.data} />}
-    </>
-  );
-}
 
 function NewAlbumsShelf() {
   const albums = useNewAlbums();
@@ -137,7 +117,7 @@ function NewAlbumsShelf() {
 }
 
 const BLOCK_EXTRAS: Partial<Record<HomeSection, () => ReactNode>> = {
-  charts: CatalogueChartShelves,
+  charts: EditorialRows,
   albums: NewAlbumsShelf,
 };
 
@@ -150,7 +130,23 @@ const HOME_BLOCK_KEYS: HomeSection[] = ['quick', 'personal', 'discovery', 'chart
  * artists, albums, the endless feed…) waits behind "Explore more". The order
  * and the hidden set still come from Customise Home and the owner's layout.
  */
-const PRIMARY_BLOCKS = 4;
+const PRIMARY_BLOCKS = 8;
+/**
+ * JioSaavn-style catalogue rows (what's hot in the listener's city, radio and
+ * artist stations, trending podcasts) sit after this many primary blocks; each
+ * mounts as it scrolls near and hides when the catalogue has none.
+ */
+const CATALOGUE_ROWS_AFTER = 3;
+function CatalogueRowsBand() {
+  return (
+    <>
+      <DeferredBlock render={() => <CityHotRow />} />
+      <DeferredBlock render={() => <RadioStationsRow />} />
+      <DeferredBlock render={() => <ArtistStationsRow />} />
+      <DeferredBlock render={() => <PodcastsRow />} />
+    </>
+  );
+}
 /** Blocks with an inner disclosure claim shelves in their own ledger slot, right after their block. */
 const INNER = { personal: 'personal-more', discovery: 'discovery-more' } as const;
 
@@ -219,7 +215,13 @@ function BrowseChips({ className, railLangs }: { className: string; railLangs: s
   );
 }
 
+/** Signed out: the catalogue-only Home (features/home/GuestHome.tsx); signed in: the listener's Home. */
 export default function HomePage() {
+  const account = useAccount();
+  return account ? <SignedInHome /> : <GuestHome />;
+}
+
+function SignedInHome() {
   // 9.0.0 — one Home generation per visit window (features/home/homeRefresh.ts).
   const generation = useHomeVisit();
   const [homeDesign, setHomeDesign] = useState<HomeDesign | null>(loadHomeDesign);
@@ -392,7 +394,7 @@ export default function HomePage() {
   const homeBlocks = blocks.filter((k): k is HomeSection => k in HOME_BLOCKS);
   // Customise Home starts from the order the listener actually sees.
   const design = layout.orderChosen ? layout.design : { ...layout.design, order: [...homeBlocks, ...layout.design.order.filter((k) => !homeBlocks.includes(k))] };
-  setShelfBlockOrder(blocks.flatMap((b) => (b in INNER ? [b, INNER[b as keyof typeof INNER]] : [b])));
+  setShelfBlockOrder([TRENDING_NOW_BLOCK, ...blocks.flatMap((b) => (b in INNER ? [b, INNER[b as keyof typeof INNER]] : [b]))]);
   const primary = blocks.slice(0, PRIMARY_BLOCKS);
   const explore = blocks.slice(PRIMARY_BLOCKS);
   const [exploreOpen, setExploreOpen] = useRememberedOpen('explore');
@@ -477,20 +479,22 @@ export default function HomePage() {
           <FestivalBannerSlot />
           <NotificationSheet open={notifOpen} onClose={() => setNotifOpen(false)} />
 
+          {/* JioSaavn-style top: a short greeting, then Trending now; the hero, chips and cards follow it. */}
           {firstVisit ? (
             ownerGreeting && <p className="vxh-greet-note">{ownerGreeting}</p>
           ) : (
-            <header className="vxh-greet">
+            <header className="vxh-greet is-compact">
               <h1>{hello.title}</h1>
-              <p className="vxh-greet-sub">
-                {hello.subtitle}
-                {streakDays > 1 && <span className="vxh-streak">{streakDays}-day streak</span>}
-              </p>
-              {ownerGreeting && <p className="vxh-greet-note">{ownerGreeting}</p>}
+              {(streakDays > 1 || ownerGreeting) && (
+                <p className="vxh-greet-sub">
+                  {streakDays > 1 && <span className="vxh-streak">{streakDays}-day streak</span>}
+                  {ownerGreeting && <span className="vxh-greet-note">{ownerGreeting}</span>}
+                </p>
+              )}
             </header>
           )}
 
-          <BrowseChips className="vxh-chips vxh-topchips" railLangs={railLangs} />
+          <TrendingNowRow songs={trendingNow.data} loading={trendingNow.isLoading} />
 
           <HomeHero
             design={design}
@@ -502,6 +506,7 @@ export default function HomePage() {
             onRadio={() => navigate('/radio')}
             onSurprise={surprise}
           />
+          <BrowseChips className="vxh-chips vxh-topchips" railLangs={railLangs} />
           {firstVisit && <HomeFeatures />}
           <FriendsListening />
           <ListeningGuide />
@@ -509,7 +514,12 @@ export default function HomePage() {
           {/* V2 1.4 — the personal engine's page first (nothing when signed out, switched off or the model is new). */}
           {engineFirst && <Suspense fallback={null}><PersonalHome generation={generation} /></Suspense>}
 
-          {decision ? primary.map(renderBlock) : (
+          {decision ? primary.map((k, i) => (
+            <Fragment key={k}>
+              {renderBlock(k, i)}
+              {i === Math.min(CATALOGUE_ROWS_AFTER, primary.length) - 1 && <CatalogueRowsBand />}
+            </Fragment>
+          )) : (
             // 1.4 — the AI is being asked (at most 2.5 s): placeholders, then one layout for the whole visit.
             <div aria-busy="true" aria-label="Building your Home"><ShelfSkeleton /><ShelfSkeleton /></div>
           )}

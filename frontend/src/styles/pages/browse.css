@@ -785,6 +785,28 @@ html.light .vx-browse .search-panel { box-shadow: 0 24px 56px -18px rgb(var(--in
   font-weight: 700;
   letter-spacing: -0.01em;
 }
+/* "View all": opens the full results on a group's tab. */
+.vx-browse .search-panel-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 6px 12px 10px 0;
+  border-top: 1px solid rgb(var(--ink-100) / 0.08);
+}
+.vx-browse .search-panel-foot .search-panel-label { padding: 4px 6px 4px 18px; }
+.vx-browse .search-panel-all {
+  min-height: 32px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgb(var(--ink-100) / 0.06);
+  color: rgb(var(--ink-200));
+  font-size: 13px;
+  font-weight: 600;
+}
+.vx-browse .search-panel-all:hover,
+.vx-browse .search-panel-all:focus-visible { background: rgb(var(--ink-100) / 0.12); color: rgb(var(--ink-100)); }
 .vx-browse .search-option {
   display: flex;
   align-items: center;
@@ -1103,6 +1125,7 @@ html.light .vx-browse .search-top-bg { opacity: 0.18; }
 .vx-browse .search-top-songs { margin: 0 -8px; }
 @media (max-width: 767px) { .vx-browse .search-top-songs { margin: 0 -6px; } }
 
+.vx-browse .search-count { margin: 0 0 12px; color: rgb(var(--ink-400)); font-size: 13px; font-variant-numeric: tabular-nums; }
 .vx-browse .search-dym { display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; margin-bottom: 20px; color: rgb(var(--ink-300)); font-size: 16px; }
 .vx-browse .search-dym button {
   position: relative;

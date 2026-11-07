@@ -20,6 +20,10 @@ import { SNOOZE_DAYS, snoozeSong } from '@/services/recommendation/exposure';
 import { notifyShelfSafetyChanged } from '@/features/home/useShelfSafety';
 import { evidenceLine, useEvidenceStore } from '@/store/evidenceStore';
 import { lessLikeThis, moreLikeThis, tuneLabel } from '@/features/queue/steer';
+import { useSettingsStore } from '@/store/settingsStore';
+import type { AudioQualityPref } from '@/services/audio/quality';
+import { QUALITY_LEVELS } from '@/services/audio/qualityLevels';
+import { audioEngine } from '@/services/audio/engine';
 import { DotsIcon } from './Icons';
 import { MENU_GLYPHS, type MenuGlyph } from './MenuIcons';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
@@ -119,7 +123,16 @@ interface PanelProps {
   leadItems?: TrackMenuItem[];
 }
 
-type MenuEntry = (TrackMenuItem & { submenu?: boolean; id?: string; icon?: MenuGlyph; danger?: boolean }) | 'divider' | null;
+type MenuEntry = (TrackMenuItem & { submenu?: boolean; id?: string; icon?: MenuGlyph; danger?: boolean; checked?: boolean }) | 'divider' | null;
+type MenuView = 'main' | 'more' | 'playlist' | 'quality' | 'less' | 'snooze';
+/** The view a sub-view's Back (and Escape / ArrowLeft) returns to, and the item that gets focus there. */
+const PARENT: Partial<Record<MenuView, { view: MenuView; focus: string }>> = {
+  more: { view: 'main', focus: 'more' },
+  playlist: { view: 'main', focus: 'playlist' },
+  quality: { view: 'main', focus: 'quality' },
+  less: { view: 'more', focus: 'less' },
+  snooze: { view: 'more', focus: 'snooze' },
+};
 
 const fmtDate = (ts: number): string => new Date(ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 
@@ -134,9 +147,13 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
   useDismissOnBack(true, onClose);
   const navigate = useNavigate();
   const { enqueue, enqueueNext, startRadio } = usePlayerStore.getState();
-  const { addToCollection, createCollection, toggleHidden, toggleLater, toggleHiddenArtist } = useLibraryStore.getState();
+  const { addToCollection, createCollection, toggleFavorite, toggleHidden, toggleLater, toggleHiddenArtist } = useLibraryStore.getState();
   const collections = useLibraryStore((s) => s.collections);
   const inLater = useLibraryStore((s) => s.later.some((x) => x.id === song.id));
+  const liked = useLibraryStore((s) => s.favorites.some((x) => x.id === song.id));
+  // Quality is offered for the song that is playing (it switches the stream in place).
+  const isCurrent = usePlayerStore((s) => s.queue[s.index]?.id === song.id);
+  const quality = useSettingsStore((s) => s.audioQuality);
   const downloaded = useDownloadsStore((s) => !!s.items[song.id]);
   const downloading = useDownloadsStore((s) => !!s.downloading[song.id]);
   // Package C4 — the honest "why am I seeing this?" line from catalog recommendations.
@@ -151,7 +168,9 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
   const asSheet = useMediaQuery('(max-width: 767px)');
   // 7.2 — "Less like this" asks for how long in a second view of the same menu.
   // 9.1.0 — "Snooze this song" asks the same way, in its own view.
-  const [view, setView] = useState<'main' | 'less' | 'snooze'>('main');
+  // 1.11 — the menu opens short ("main"); "More…" holds the rest, and Add to
+  // playlist and Quality each pick in their own view.
+  const [view, setView] = useState<MenuView>('main');
   const returnTo = useRef<string | null>(null);
 
   // Position before first paint, then follow the trigger on scroll / resize.
@@ -223,7 +242,7 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
   }, []);
 
   const itemEls = (): HTMLElement[] =>
-    Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role=menuitem]') ?? []);
+    Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role=menuitem], [role=menuitemradio]') ?? []);
 
   useEffect(() => {
     // Escape is caught on the document so it still works if focus wandered.
@@ -241,20 +260,22 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     if (!placed) return;
     const back = returnTo.current;
     returnTo.current = null;
-    const target = (back && menuRef.current?.querySelector<HTMLElement>(`[data-menu-id="${back}"]`)) || menuRef.current?.querySelector<HTMLElement>('[role=menuitem]');
+    const target = (back && menuRef.current?.querySelector<HTMLElement>(`[data-menu-id="${back}"]`)) || menuRef.current?.querySelector<HTMLElement>('[role=menuitem], [role=menuitemradio]');
     target?.focus({ preventScroll: true });
   }, [placed, view]);
 
-  const openLess = (): void => setView('less');
-  const leaveLess = (): void => {
-    returnTo.current = 'less';
-    setView('main');
+  const open = (v: MenuView) => (): void => setView(v);
+  const openLess = open('less');
+  const openSnooze = open('snooze');
+  /** Step back one view; false on the main view. */
+  const leave = (): boolean => {
+    const up = PARENT[view];
+    if (!up) return false;
+    returnTo.current = up.focus;
+    setView(up.view);
+    return true;
   };
-  const openSnooze = (): void => setView('snooze');
-  const leaveSnooze = (): void => {
-    returnTo.current = 'snooze';
-    setView('main');
-  };
+  const back: MenuEntry = { id: 'back', label: 'Back', icon: 'back', action: () => void leave(), submenu: true };
 
   const onMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     // Portals bubble React events to the React parent — a song row that plays on Enter.
@@ -262,15 +283,13 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     if (e.key === 'Escape') {
       // Stopping the React event above also keeps it from the document listener.
       e.nativeEvent.stopPropagation();
-      // In a "how long?" view, Escape steps back to the full menu first.
-      if (view === 'less') leaveLess();
-      else if (view === 'snooze') leaveSnooze();
-      else onClose();
+      // In a sub-view, Escape steps back one view first.
+      if (!leave()) onClose();
       return;
     }
-    if (view === 'less' && e.key === 'ArrowLeft') {
+    if (view !== 'main' && e.key === 'ArrowLeft') {
       e.preventDefault();
-      leaveLess();
+      leave();
       return;
     }
     if (e.key === 'Tab') {
@@ -336,12 +355,56 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     });
   };
 
+  const pickQuality = (q: AudioQualityPref): void => {
+    useSettingsStore.getState().setAudioQuality(q);
+    const label = QUALITY_LEVELS.find((l) => l.value === q)?.label ?? q;
+    const switched = isCurrent && audioEngine.switchQuality(q);
+    toast(switched ? `Quality: ${label} — switching now` : `Quality: ${label}`);
+  };
+  const newPlaylist = (): void => {
+    const name = window.prompt('Playlist name');
+    if (name && name.trim()) {
+      const cid = createCollection(name.trim());
+      addToCollection(cid, song);
+      toast(`Added to ${name.trim()}`);
+    }
+  };
+
+  // 1.11 — the short list first; everything else is one tap away under More….
   const entries: MenuEntry[] = [
     ...(leadItems?.length ? [...leadItems, 'divider' as const] : []),
-    // 8.2.0 — Radio: this song starts, and VinaX keeps adding songs that follow from it.
-    { label: 'Start radio', icon: 'radio', action: () => { startRadio(song); toast(`Radio: ${song.title}`); } },
+    {
+      label: liked ? 'Remove from Liked songs' : 'Like',
+      icon: liked ? 'liked' : 'like',
+      action: () => {
+        toggleFavorite(song);
+        toast(liked ? 'Removed from Liked songs' : 'Added to Liked songs');
+      },
+    },
+    { id: 'playlist', label: 'Add to playlist…', icon: 'addTo', action: open('playlist'), submenu: true },
     { label: 'Play next', icon: 'playNext', action: () => enqueueNext(song) },
     { label: 'Add to queue', icon: 'addQueue', action: () => enqueue(song) },
+    {
+      label: 'Share',
+      icon: 'share',
+      action: () => void shareLink(songPath(song), song.title).then((r) => r === 'copied' && toast('Link copied')),
+    },
+    { label: 'View lyrics', icon: 'lyrics', action: () => navigate(`/lyrics/${song.id}`) },
+    // 1.3 — an episode's "album" is its podcast.
+    song.album?.id ? { label: isEpisode(song) ? 'Go to podcast' : 'Go to album', icon: 'album', action: () => navigate(collectionPath(song)!) } : null,
+    song.artists[0]?.id
+      ? { label: 'Go to artist', icon: 'artist', action: () => navigate(artistPath(song.artists[0])) }
+      : null,
+    isCurrent && !isEpisode(song) ? { id: 'quality', label: 'Quality…', icon: 'quality', action: open('quality'), submenu: true } : null,
+    'divider',
+    { id: 'more', label: 'More…', icon: 'more', action: open('more'), submenu: true },
+  ];
+
+  const moreEntries: MenuEntry[] = [
+    back,
+    'divider',
+    // 8.2.0 — Radio: this song starts, and VinaX keeps adding songs that follow from it.
+    { label: 'Start radio', icon: 'radio', action: () => { startRadio(song); toast(`Radio: ${song.title}`); } },
     // 7.2 — steer what comes next. "More like this" is for this sitting and
     // retunes the automatic picks now; "Less like this" plays the artist less for a
     // while (a soft mute that ends on its own).
@@ -391,12 +454,6 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     { label: 'Song details', icon: 'details', action: () => navigate(songPath(song)) },
     // v5.17.0 — your own history with this song, from on-device data.
     { label: 'Your history with this song', icon: 'history', action: onShowMemories },
-    // 1.3 — an episode's "album" is its podcast.
-    song.album?.id ? { label: isEpisode(song) ? 'Go to podcast' : 'Go to album', icon: 'album', action: () => navigate(collectionPath(song)!) } : null,
-    song.artists[0]?.id
-      ? { label: 'Go to artist', icon: 'artist', action: () => navigate(artistPath(song.artists[0])) }
-      : null,
-    { label: 'View lyrics', icon: 'lyrics', action: () => navigate(`/lyrics/${song.id}`) },
     isNativePlatform()
       ? {
           label: downloading ? 'Downloading…' : downloaded ? 'Remove download' : 'Download',
@@ -408,26 +465,6 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
           },
         }
       : null,
-    ...collections.map((c) => ({
-      label: `Add to “${c.name}”`,
-      icon: 'addTo' as const,
-      action: () => {
-        addToCollection(c.id, song);
-        toast(`Added to ${c.name}`);
-      },
-    })),
-    {
-      label: 'New playlist…',
-      icon: 'newList',
-      action: () => {
-        const name = window.prompt('Playlist name');
-        if (name && name.trim()) {
-          const cid = createCollection(name.trim());
-          addToCollection(cid, song);
-          toast(`Added to ${name.trim()}`);
-        }
-      },
-    },
     {
       label: 'Report broken track',
       icon: 'report',
@@ -464,11 +501,6 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
       : null,
     'divider',
     {
-      label: 'Share',
-      icon: 'share',
-      action: () => void shareLink(songPath(song), song.title).then((r) => r === 'copied' && toast('Link copied')),
-    },
-    {
       // D15 — pre-filled share to a messaging app (works on app + web).
       label: 'Share to WhatsApp',
       icon: 'message',
@@ -503,20 +535,46 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     },
   ];
 
+  const playlistEntries: MenuEntry[] = [
+    back,
+    'divider',
+    { label: 'New playlist…', icon: 'newList', action: newPlaylist },
+    ...collections.map((c) => ({
+      label: `Add to “${c.name}”`,
+      icon: 'addTo' as const,
+      action: () => {
+        addToCollection(c.id, song);
+        toast(`Added to ${c.name}`);
+      },
+    })),
+  ];
+
+  const qualityEntries: MenuEntry[] = [
+    back,
+    'divider',
+    ...QUALITY_LEVELS.map((l) => ({
+      label: `${l.label} · ${l.kbps} kbps`,
+      icon: (l.value === quality ? 'check' : 'blank') as MenuGlyph,
+      checked: l.value === quality,
+      action: () => pickQuality(l.value),
+    })),
+  ];
+
   const lessEntries: MenuEntry[] = [
     ...SOFT_MUTE_DAYS.map((d) => ({ label: `${d} days`, icon: 'clock' as const, action: () => lessLike(d) })),
     'divider',
-    { id: 'back', label: 'Back', icon: 'back', action: leaveLess, submenu: true },
+    back,
   ];
 
   const snoozeEntries: MenuEntry[] = [
     ...SNOOZE_DAYS.map((d) => ({ label: `${d} days`, icon: 'clock' as const, action: () => snooze(d) })),
     'divider',
-    { id: 'back', label: 'Back', icon: 'back', action: leaveSnooze, submenu: true },
+    back,
   ];
 
   // Dividers only between real items: none leading, trailing or doubled.
-  const shown = (view === 'less' ? lessEntries : view === 'snooze' ? snoozeEntries : entries).filter((e): e is Exclude<MenuEntry, null> => e !== null);
+  const byView: Record<MenuView, MenuEntry[]> = { main: entries, more: moreEntries, playlist: playlistEntries, quality: qualityEntries, less: lessEntries, snooze: snoozeEntries };
+  const shown = byView[view].filter((e): e is Exclude<MenuEntry, null> => e !== null);
   const visible = shown.filter((e, i) => e !== 'divider' || (i > 0 && i < shown.length - 1 && shown[i - 1] !== 'divider'));
 
   const stop = (e: React.SyntheticEvent): void => e.stopPropagation();
@@ -530,7 +588,15 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
       <div
         ref={menuRef}
         role="menu"
-        aria-label={view === 'less' ? `Less like this: play less of ${artist} for how long?` : `More options for ${song.title}`}
+        aria-label={
+          view === 'less'
+            ? `Less like this: play less of ${artist} for how long?`
+            : view === 'playlist'
+              ? `Add ${song.title} to a playlist`
+              : view === 'quality'
+                ? 'Sound quality'
+                : `More options for ${song.title}`
+        }
         onKeyDown={onMenuKeyDown}
         className={cn('vx-menu vx-mat-thick fixed z-[71] overflow-y-auto overscroll-contain', asSheet && 'is-sheet')}
         style={pos ? (asSheet ? undefined : { top: pos.top, left: pos.left }) : { top: 0, left: 0, visibility: 'hidden' }}
@@ -559,10 +625,11 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
             <button
               key={item.id ?? item.label}
               type="button"
-              role="menuitem"
+              role={item.checked !== undefined ? 'menuitemradio' : 'menuitem'}
+              aria-checked={item.checked}
               tabIndex={-1}
               data-menu-id={item.id}
-              aria-haspopup={item.id === 'less' ? 'menu' : undefined}
+              aria-haspopup={item.submenu && item.id !== 'back' ? 'menu' : undefined}
               title={item.label}
               onClick={() => {
                 // Opening or leaving the "how long?" view keeps the menu open.
@@ -577,7 +644,7 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
             >
               <Glyph />
               <span className="vx-menu-label">{item.label}</span>
-              {item.id === 'less' && <span className="vx-menu-chev"><Chevron /></span>}
+              {item.submenu && item.id !== 'back' && <span className="vx-menu-chev"><Chevron /></span>}
             </button>
           );
         })}

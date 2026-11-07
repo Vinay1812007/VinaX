@@ -57,6 +57,8 @@ for (const where of [{ name: 'the player', path: '/now-playing' }, { name: 'a so
     await page.getByRole('button', { name: /More options/ }).first().click();
     const menu = page.getByRole('menu');
     await expect(menu).toBeVisible();
+    // 1.11 — the menu opens short; the full list (long enough to scroll) is under More….
+    await page.getByRole('menuitem', { name: 'More…' }).click();
     const before = await pageScroll(page);
     const box = (await menu.boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);

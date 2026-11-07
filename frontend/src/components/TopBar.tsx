@@ -13,6 +13,8 @@ import { useUiStore } from '@/store/uiStore';
 const ACTIONS_SLOT = 'vx-topbar-actions';
 // 13.4.0 — the avatar's menu loads the first time it opens.
 const ProfileMenu = lazy(() => import('./ProfileMenu'));
+// The "Music languages" button and its picker: their own chunk, so the app shell stays small.
+const LanguageButton = lazy(() => import('./LanguageButton'));
 
 /**
  * v7.0.1 — the bar carries no search box: Search is a primary destination and
@@ -71,6 +73,9 @@ export function TopBar({ onCommands }: { onCommands: () => void }) {
       <div className="vx-topbar-actions">
         {/* Pages add their own actions here through <TopBarActions>. */}
         <div id={ACTIONS_SLOT} className="contents" />
+        <Suspense fallback={null}>
+          <LanguageButton />
+        </Suspense>
         <button type="button" className="vx-command-key hidden lg:inline-flex" onClick={onCommands} aria-label="Open command palette, ⌘K" aria-keyshortcuts="Meta+K Control+K"><kbd>⌘</kbd><kbd>K</kbd></button>
         {!account ? (
           <button type="button" className="vx-topbar-signin" onClick={() => openSignIn('account')}>

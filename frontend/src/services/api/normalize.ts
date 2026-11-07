@@ -219,7 +219,16 @@ export function normalizeArtist(raw: any): Artist | null {
           .filter((a): a is Album => a !== null)
       : [],
     similarArtists: similarArtistRefs(raw.similarArtists ?? raw.similar_artists),
+    listeners: count(raw.fanCount ?? raw.fan_count),
+    followers: count(raw.followerCount ?? raw.follower_count),
+    verified: raw.isVerified === true || raw.isVerified === 'true' || raw.is_verified === true,
   };
+}
+
+/** A whole, positive count from a number or a numeric string ("9512264"); null otherwise. */
+function count(v: unknown): number | null {
+  const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v.replace(/,/g, '')) : NaN;
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
 }
 
 /** 8.2.0 — the artist page's "similar artists" list, in either dialect the bases speak. */

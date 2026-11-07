@@ -98,6 +98,8 @@ test('the track menu offers "Snooze this song…" with named durations', async (
   await expect(page.getByRole('button', { name: 'More options' }).first()).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole('button', { name: 'More options' }).first().click();
+  // 1.11 — the song menu opens short; Snooze lives under More….
+  await page.getByRole('menuitem', { name: 'More…' }).click();
   const snooze = page.getByRole('menuitem', { name: /Snooze this song/i });
   await expect(snooze).toBeVisible();
   await snooze.click();
@@ -106,7 +108,7 @@ test('the track menu offers "Snooze this song…" with named durations', async (
   await expect(page.getByRole('menuitem', { name: '30 days' })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Back' })).toBeVisible();
 
-  // Escape steps back to the full menu rather than closing outright.
+  // Escape steps back to the More… list rather than closing outright.
   await page.keyboard.press('Escape');
   await expect(page.getByRole('menuitem', { name: /Snooze this song/i })).toBeVisible();
 

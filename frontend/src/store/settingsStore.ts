@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { RegionInfo } from '@/types';
 import { KEYS } from '@/constants/storage-keys';
-import type { AudioQualityPref } from '@/services/audio/engine';
+import { QUALITY_IDS, type AudioQualityPref } from '@/services/audio/quality';
 import { guardedLocalStorage } from '@/services/storage/local';
 import { DEFAULT_TEMPLATE, LEGACY_TEMPLATES, normalizeTemplate, type TemplateId } from '@/utils/theme';
 
@@ -68,6 +68,8 @@ export interface SettingsState {
   density: 'comfortable' | 'compact';
   resumePlayback: boolean;
   audioQuality: AudioQualityPref;
+  /** 1.11 — the level downloads save at (services/audio/quality.ts); separate from streaming. */
+  downloadQuality: AudioQualityPref;
   lyricsSize: 'sm' | 'md' | 'lg' | 'xl';
   /** 1.3 — lyrics as written ('original') or in English letters ('latin'). */
   lyricsScript: 'original' | 'latin';
@@ -170,6 +172,7 @@ export interface SettingsState {
   setDensity(v: 'comfortable' | 'compact'): void;
   setResumePlayback(v: boolean): void;
   setAudioQuality(q: AudioQualityPref): void;
+  setDownloadQuality(q: AudioQualityPref): void;
   setLyricsSize(v: 'sm' | 'md' | 'lg' | 'xl'): void;
   setLyricsScript(v: 'original' | 'latin'): void;
   setUiLanguage(v: 'en' | 'te' | 'hi' | 'ta'): void;
@@ -244,6 +247,7 @@ const defaults = {
   density: 'comfortable' as const,
   resumePlayback: true,
   audioQuality: 'high' as AudioQualityPref,
+  downloadQuality: 'high' as AudioQualityPref,
   lyricsSize: 'md' as 'sm' | 'md' | 'lg' | 'xl',
   lyricsScript: 'original' as 'original' | 'latin',
   uiLanguage: 'en' as 'en' | 'te' | 'hi' | 'ta',
@@ -284,7 +288,8 @@ const SETTINGS_ENUMS: Partial<Record<keyof SettingsData, readonly string[]>> = {
   uiScale: ['sm', 'md', 'lg'],
   startPage: ['home', 'search', 'library', 'last'],
   density: ['comfortable', 'compact'],
-  audioQuality: ['low', 'medium', 'high'],
+  audioQuality: QUALITY_IDS,
+  downloadQuality: QUALITY_IDS,
   lyricsSize: ['sm', 'md', 'lg', 'xl'],
   lyricsScript: ['original', 'latin'],
   uiLanguage: ['en', 'te', 'hi', 'ta'],
@@ -385,6 +390,7 @@ export const useSettingsStore = create<SettingsState>()(
       setDensity: (density) => set({ density }),
       setResumePlayback: (resumePlayback) => set({ resumePlayback }),
       setAudioQuality: (audioQuality) => set({ audioQuality }),
+      setDownloadQuality: (downloadQuality) => set({ downloadQuality }),
       setLyricsSize: (lyricsSize) => set({ lyricsSize }),
       setLyricsScript: (lyricsScript) => set({ lyricsScript }),
       setUiLanguage: (uiLanguage) => set({ uiLanguage }),

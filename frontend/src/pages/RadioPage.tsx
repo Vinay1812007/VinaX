@@ -18,6 +18,8 @@ import { byArtist, pickRadioSeeds, RADIO_MOODS } from '@/features/radio/radioSee
 import { RadioGlyph } from '@/features/radio/RadioGlyph';
 import { playFeaturedStation, useRadioStations } from '@/features/radio/stations';
 import { languageLabel } from '@/constants/languages';
+import { API_LANGUAGES } from '@/services/api/catalog';
+import { Chip } from '@/components/Chip';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { letterAvatar } from '@/utils/avatar';
 import type { RadioStation } from '@/services/api';
@@ -37,8 +39,8 @@ type Attempt =
   | { kind: 'artist'; name: string }
   | { kind: 'station'; station: RadioStation };
 
-/** 1.3 — at most this many featured stations in the row. */
-const STATIONS_MAX = 16;
+/** 1.3 — at most this many featured stations in the grid. */
+const STATIONS_MAX = 24;
 
 /**
  * 8.2.0 — Radio: endless music from a song, an artist or a mood. The page
@@ -60,7 +62,9 @@ export default function RadioPage() {
   const pinned = useSettingsStore((s) => s.pinnedLanguages);
   const recent = useContinueListening(8);
   const artists = useYourArtists(8);
-  const stations = useRadioStations();
+  /** The stations' language chip: null is "For you" (the pinned languages). */
+  const [stationLang, setStationLang] = useState<string | null>(null);
+  const stations = useRadioStations(stationLang);
   const language = useMemo(() => pinned[0] ?? topLanguages(loadProfile(), 1)[0]?.id ?? null, [pinned]);
 
   /** What is being looked for, and which control asked (so that control can show it is starting). */
@@ -156,6 +160,17 @@ export default function RadioPage() {
     }
   };
 
+  /** Surprise me: a random station on screen, or a random mood when there are none. */
+  const surprise = () => {
+    const list = stations.data?.slice(0, STATIONS_MAX) ?? [];
+    if (list.length) {
+      void fromStation(list[Math.floor(Math.random() * list.length)]);
+      return;
+    }
+    const m = RADIO_MOODS[Math.floor(Math.random() * RADIO_MOODS.length)];
+    void fromMood(m.id, m.label);
+  };
+
   const retry = () => {
     if (!attempt) return;
     if (attempt.kind === 'mood') void fromMood(attempt.intent, attempt.label);
@@ -169,7 +184,15 @@ export default function RadioPage() {
 
   return (
     <div className="vx-studio vx-radio">
-      <PageHeader title="Radio" subtitle="Endless music from a song, an artist, a mood or a station." />
+      <PageHeader
+        title="Radio"
+        subtitle="Endless music from a song, an artist, a mood or a station."
+        actions={
+          <button type="button" className="btn-primary vx-radio-surprise" onClick={surprise} disabled={!!busy}>
+            Surprise me
+          </button>
+        }
+      />
 
       <div className="vx-radio-live" data-state={liveState}>
         {playing && !busy ? <span className="vx-radio-onair" aria-hidden /> : null}
@@ -239,36 +262,52 @@ export default function RadioPage() {
         </div>
       </section>
 
-      {stationList.length > 0 && (
+      {(stationList.length > 0 || stationLang !== null) && (
         <section className="vx-studio-section" aria-labelledby="vx-radio-stations">
           <h2 id="vx-radio-stations" className="vx-studio-title">
             Stations
           </h2>
-          <div className="vx-radio-seeds" role="group" aria-label="Stations">
-            {stationList.map((st) => {
-              const starting = busy?.key === `station:${st.name}`;
-              return (
-                <button
-                  key={`${st.language}:${st.name}`}
-                  type="button"
-                  className="vx-radio-seed"
-                  disabled={!!busy}
-                  aria-busy={starting || undefined}
-                  onClick={() => void fromStation(st)}
-                  aria-label={`Start ${st.name} station`}
-                >
-                  <span className="vx-radio-seed-art" style={st.color ? { background: st.color } : undefined}>
-                    <img src={bestImage(st.images, 300)} alt="" width={152} height={152} loading="lazy" decoding="async" onError={onArtError} />
-                    <span className="vx-radio-seed-badge" aria-hidden>
-                      {starting ? <span className="vx-spin" /> : <RadioGlyph />}
-                    </span>
-                  </span>
-                  <span className="vx-radio-seed-title">{st.name}</span>
-                  <span className="vx-radio-seed-sub">{st.description ?? languageLabel(st.language)}</span>
-                </button>
-              );
-            })}
+          <div className="vx-chip-rail vx-radio-langs" role="group" aria-label="Station language">
+            <Chip active={stationLang === null} onClick={() => setStationLang(null)}>
+              For you
+            </Chip>
+            {API_LANGUAGES.map((l) => (
+              <Chip key={l} active={stationLang === l} onClick={() => setStationLang(l)}>
+                {languageLabel(l)}
+              </Chip>
+            ))}
           </div>
+          {stations.isLoading ? (
+            <p className="vx-meta-line">Finding stations…</p>
+          ) : stationList.length === 0 ? (
+            <p className="vx-meta-line">No {stationLang ? languageLabel(stationLang) : ''} stations right now. Try another language.</p>
+          ) : (
+            <div className="vx-radio-stations" role="group" aria-label="Stations">
+              {stationList.map((st) => {
+                const starting = busy?.key === `station:${st.name}`;
+                return (
+                  <button
+                    key={`${st.language}:${st.name}`}
+                    type="button"
+                    className="vx-radio-seed is-station"
+                    disabled={!!busy}
+                    aria-busy={starting || undefined}
+                    onClick={() => void fromStation(st)}
+                    aria-label={`Start ${st.name} station`}
+                  >
+                    <span className="vx-radio-seed-art" style={st.color ? { background: st.color } : undefined}>
+                      <img src={bestImage(st.images, 300)} alt="" width={152} height={152} loading="lazy" decoding="async" onError={onArtError} />
+                      <span className="vx-radio-seed-badge" aria-hidden>
+                        {starting ? <span className="vx-spin" /> : <RadioGlyph />}
+                      </span>
+                    </span>
+                    <span className="vx-radio-seed-title">{st.name}</span>
+                    <span className="vx-radio-seed-sub">{st.description ?? `${languageLabel(st.language)} radio`}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </section>
       )}
 

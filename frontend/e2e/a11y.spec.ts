@@ -120,7 +120,7 @@ test.describe('phone (390×844), dark theme', () => {
 
 test('the sign-in screen has no WCAG A/AA violations', async ({ page }) => {
   await seed(page, 'dark');
-  await page.goto('/?e2e-signed-out');
+  await page.goto('/library?e2e-signed-out');
   await settle(page, page.getByRole('heading', { name: 'Welcome to VinaX', level: 1 }));
   expect(await scan(page, 'sign-in')).toEqual([]);
 });

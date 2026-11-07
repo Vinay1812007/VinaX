@@ -4,6 +4,8 @@ import type { Song } from '@/types';
 import { isNativePlatform } from '@/services/native';
 import { useDownloadsStore, type DownloadDir } from '@/store/downloadsStore';
 import { reportError } from '@/services/analytics/telemetry';
+import { useSettingsStore } from '@/store/settingsStore';
+import { orderByQuality, type AudioQualityPref } from '@/services/audio/quality';
 
 /**
  * Offline downloads (Android app only). Audio is fetched with native HTTP (no
@@ -221,20 +223,23 @@ function mimeForPath(path: string): string {
 }
 
 /**
- * Every download URL for a song, highest bitrate first. 8.2.0 — the service
+ * Every download URL for a song, best match for the Download quality setting
+ * first (1.11; "Very high" = highest bitrate first, as before). 8.2.0 — the service
  * lists a URL for every bitrate whether or not that file exists, so taking
  * only the top one made any song without a 320 kbps master fail outright.
  * The download walks this ladder like the player does. The NUMBER is parsed
  * out of the label ('320kbps', '320', '320 kbps' all rank the same).
  */
-export function downloadUrls(song: Song): string[] {
-  const kbps = (q: string | undefined): number => {
-    const m = /(\d+)/.exec(q ?? '');
-    return m ? Number(m[1]) : 0;
-  };
-  const urls = [...song.audio]
-    .filter((v) => v.url)
-    .sort((a, b) => kbps(b.quality) - kbps(a.quality))
+function currentDownloadQuality(): AudioQualityPref {
+  try {
+    return useSettingsStore.getState().downloadQuality ?? 'high';
+  } catch {
+    return 'high';
+  }
+}
+
+export function downloadUrls(song: Song, pref: AudioQualityPref = currentDownloadQuality()): string[] {
+  const urls = orderByQuality(song.audio.filter((v) => v.url), pref)
     // Some variants are http:// — Android blocks cleartext, so force TLS.
     .map((v) => v.url.replace(/^http:\/\//, 'https://'));
   return [...new Set(urls)];

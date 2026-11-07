@@ -221,7 +221,12 @@ export const onRequestGet = async (context: { request: Request; params: { path?:
       if (!call) return nf();
       const j = await upstream(`__call=${call}&q=${encodeURIComponent(q('query'))}&n=${limit}&p=${page}`);
       const results = Array.isArray(j?.results) ? j.results : [];
-      return json({ results: seg[1] === 'songs' ? mapList(results, origin) : results });
+      // The catalogue's match count ("5,273 results"), when it sends one.
+      const total = Number(j?.total);
+      return json({
+        ...(Number.isFinite(total) && total > 0 ? { total } : {}),
+        results: seg[1] === 'songs' ? mapList(results, origin) : results,
+      });
     }
 
     // /search?query= → grouped autocomplete (client reads d.<kind>.data).

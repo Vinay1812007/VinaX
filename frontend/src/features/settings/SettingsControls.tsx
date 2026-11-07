@@ -16,6 +16,37 @@ import { ChevronRightIcon } from '@/components/Icons';
  */
 
 export const SettingsSearchCtx = createContext('');
+
+/**
+ * Basic or All. Basic shows the everyday sections only; All shows every
+ * section. A search always looks through everything.
+ */
+export type SettingsView = 'basic' | 'all';
+export const SettingsViewCtx = createContext<SettingsView>('all');
+/** The sections Basic keeps. */
+export const BASIC_SECTIONS: ReadonlySet<string> = new Set(['profile', 'appearance', 'playback', 'notifications', 'your-data', 'help']);
+
+const VIEW_KEY = 'vinax.settings.view.v1';
+/** The remembered view; All when none was chosen or storage is unavailable. */
+export function loadSettingsView(): SettingsView {
+  try {
+    return window.localStorage.getItem(VIEW_KEY) === 'basic' ? 'basic' : 'all';
+  } catch {
+    return 'all';
+  }
+}
+export function saveSettingsView(v: SettingsView): void {
+  try {
+    window.localStorage.setItem(VIEW_KEY, v);
+  } catch {
+    /* private mode: the choice lasts until the page closes */
+  }
+}
+
+/** True when a section shows under this view and query. */
+export function sectionVisible(id: string, view: SettingsView, q: string): boolean {
+  return view === 'all' || !!q || BASIC_SECTIONS.has(id);
+}
 /** The id of the row's note, so the control inside can point at it. */
 const RowNoteCtx = createContext<string | undefined>(undefined);
 
@@ -306,6 +337,9 @@ export function SectionHead({ id, title, lede }: { id: string; title: string; le
 export function Section({ title, lede, id, children }: { title: string; lede?: string; id: string; children: ReactNode }) {
   const ref = useRef<HTMLElement>(null);
   const empty = useEmptyUnderQuery(ref);
+  const view = useContext(SettingsViewCtx);
+  const q = useContext(SettingsSearchCtx);
+  if (!sectionVisible(id, view, q)) return null;
   return (
     <section ref={ref} id={id} className={cn('vx-set-section', empty && 'hidden')} data-settings-section aria-labelledby={`${id}-title`}>
       <SectionHead id={id} title={title} lede={lede} />

@@ -64,8 +64,13 @@ test('the top bar Sign in button opens the sheet; the sign-in page links to Expl
   await expect(page.getByRole('dialog', { name: 'Sign in to VinaX' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: 'Sign in to VinaX' })).toHaveCount(0);
-  // Home stays the sign-in screen for a visitor; its card links into Explore.
+  // 1.11 — Home is the catalogue Home for a visitor, with a slim sign-in card.
   await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Hi there' })).toBeVisible();
+  await expect(page.getByRole('complementary', { name: 'Sign in' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toHaveCount(0);
+  // A personal page stays the sign-in screen; its card links into Explore.
+  await page.goto('/library');
   await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toBeVisible();
   await page.getByRole('link', { name: 'Explore VinaX first' }).click();
   await expect(page).toHaveURL(/\/explore/);

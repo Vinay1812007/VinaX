@@ -342,3 +342,32 @@ html.light .vx-smartq [role='switch'][aria-checked='true'] { background: rgb(var
 html.reduce-motion .vx-studio *,
 html.reduce-motion .vx-smartq * { animation: none !important; transition: none !important; }
 html.reduce-motion .vx-shimmer { background: none; color: rgb(var(--ink-100)); }
+
+/* Stations: a language chip row, then a grid of round station tiles. */
+.vx-radio-langs {
+  display: flex;
+  gap: 8px;
+  margin: 0 calc(-1 * var(--vx-gutter)) 14px;
+  padding: 4px var(--vx-gutter);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.vx-radio-langs::-webkit-scrollbar { display: none; }
+.vx-radio-langs > * { flex-shrink: 0; }
+.vx-radio-stations {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 20px var(--vx-card-gap);
+}
+@media (max-width: 767px) { .vx-radio-stations { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 16px 12px; } }
+.vx-radio-seed.is-station { text-align: center; }
+.vx-radio-seed.is-station .vx-radio-seed-art { border-radius: 50%; }
+.vx-radio-seed.is-station .vx-radio-seed-badge { right: 50%; bottom: 50%; transform: translate(50%, 50%) scale(0.85); border-radius: 50%; }
+.vx-radio-seed.is-station:hover .vx-radio-seed-badge,
+.vx-radio-seed.is-station:focus-visible .vx-radio-seed-badge,
+.vx-radio-seed.is-station[aria-busy='true'] .vx-radio-seed-badge { transform: translate(50%, 50%); }
+@media (hover: none), (pointer: coarse) {
+  .vx-radio-seed.is-station .vx-radio-seed-badge { opacity: 0; }
+  .vx-radio-seed.is-station[aria-busy='true'] .vx-radio-seed-badge { opacity: 1; }
+}
+.vx-radio-surprise { min-height: 40px; padding: 0 20px; border-radius: 999px; font-weight: 750; }

@@ -106,6 +106,10 @@ const VideosPage = lazy(() => import('@/pages/VideosPage'));
 const VideoPage = lazy(() => import('@/pages/VideoPage'));
 // 8.2.0 — Radio: endless music from a song, an artist, a mood or a station.
 const RadioPage = lazy(() => import('@/pages/RadioPage'));
+// Browse pages: New Releases, Top Artists, Top Playlists.
+const NewReleasesPage = lazy(() => import('@/pages/NewReleasesPage'));
+const TopArtistsPage = lazy(() => import('@/pages/TopArtistsPage'));
+const TopPlaylistsPage = lazy(() => import('@/pages/TopPlaylistsPage'));
 // 10.1 — Flow: a full-screen, swipeable feed of song previews.
 const FlowPage = lazy(() => import('@/pages/FlowPage'));
 // VinaX AI — the chat assistant (src/features/vinaxai, docs/ai.md).
@@ -138,6 +142,9 @@ export const router = createBrowserRouter([
       { path: 'top-songs', element: <ChartLandingPage variant="top" /> },
       { path: 'trending', element: <ChartLandingPage variant="trending" /> },
       { path: 'most-searched', element: <ChartLandingPage variant="most-searched" /> },
+      { path: 'new-releases', element: <NewReleasesPage /> },
+      { path: 'top-artists', element: <TopArtistsPage /> },
+      { path: 'top-playlists', element: <TopPlaylistsPage /> },
       { path: 'made-for-you', element: <MadeForYouPage /> },
       { path: 'ai-playlist', element: <Navigate to="/" replace /> },
       { path: 'vinaxai', caseSensitive: true, element: <VinaXAIPage /> },

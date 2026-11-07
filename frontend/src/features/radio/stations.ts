@@ -60,13 +60,18 @@ export function playArtistStation(artistId: string, opts?: FeedOpts): Promise<So
   return playStation(() => startArtistRadio(artistId, START_LIMIT, opts));
 }
 
-/** Featured stations in the listener's pinned languages; an error (hidden by the page) when the catalogue has none. */
-export function useRadioStations() {
+/**
+ * Featured stations in the listener's pinned languages, or in one language
+ * when `language` is given (the Radio page's language chips); an error
+ * (hidden by the page) when the catalogue has none.
+ */
+export function useRadioStations(language?: string | null) {
   const pinned = useSettingsStore((s) => s.pinnedLanguages);
-  const langs = pinned.join(',');
+  const list = language ? [language] : pinned;
+  const langs = list.join(',');
   return useQuery({
     queryKey: ['radio-stations', langs],
-    queryFn: ({ signal }) => getRadioStations(pinned, { signal }),
+    queryFn: ({ signal }) => getRadioStations(list, { signal }),
     staleTime: 60 * 60_000,
     retry: false,
   });

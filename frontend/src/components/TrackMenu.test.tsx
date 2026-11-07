@@ -9,7 +9,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/services/audio/engine', () => ({
-  audioEngine: { load: vi.fn(), preloadNext: vi.fn(), pause: vi.fn(), play: vi.fn(), seek: vi.fn() },
+  audioEngine: { load: vi.fn(), preloadNext: vi.fn(), pause: vi.fn(), play: vi.fn(), seek: vi.fn(), switchQuality: vi.fn(() => false) },
   orderedSources: () => [],
 }));
 vi.mock('@/services/media-session', () => ({
@@ -22,7 +22,7 @@ vi.mock('@/services/storage/idb', () => ({ addEvent: vi.fn(async () => undefined
 vi.mock('@/services/personalization/updater', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/personalization/updater')>();
   return {
-    recordComplete: vi.fn(), recordPlay: vi.fn(), recordQueueAdd: vi.fn(), recordSkip: vi.fn(), recordFavorite: vi.fn(),
+    recordComplete: vi.fn(), recordPlay: vi.fn(), recordQueueAdd: vi.fn(), recordSkip: vi.fn(), recordFavorite: vi.fn(), recordPlaylistAdd: vi.fn(), recordDislike: vi.fn(),
     softMuteArtist: actual.softMuteArtist,
   };
 });
@@ -30,6 +30,8 @@ vi.mock('@/services/feedback', () => ({ sendFeedback: vi.fn(async () => true) })
 vi.mock('@/services/downloads', () => ({ downloadSong: vi.fn(), removeDownload: vi.fn(), lastDownloadFailure: vi.fn(() => null), downloadFailureMessage: vi.fn(() => 'Download failed — please try again') }));
 
 import { usePlayerStore } from '@/store/playerStore';
+import { useLibraryStore } from '@/store/libraryStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { useToastStore } from '@/store/toastStore';
 import { makeSong } from '@/__fixtures__/songs';
 import { listSoftMutes, clearSoftMutes } from '@/services/personalization/softMutes';
@@ -57,6 +59,11 @@ const mount = () =>
   );
 const trigger = () => screen.getByRole('button', { name: 'More options' });
 const items = () => screen.getAllByRole('menuitem');
+/** 1.11 — open the menu and step into More…, where the longer list lives. */
+const openMore = () => {
+  fireEvent.click(trigger());
+  fireEvent.click(screen.getByRole('menuitem', { name: 'More…' }));
+};
 
 describe('<TrackMenu />', () => {
   it('trigger is a typed button that announces its popup and state; nothing is mounted while closed', () => {
@@ -137,7 +144,7 @@ describe('<TrackMenu />', () => {
 
   it('7.2 — "Less like this" asks for how long, mutes for that long and offers an exact Undo', () => {
     mount();
-    fireEvent.click(trigger());
+    openMore();
     const less = screen.getByRole('menuitem', { name: 'Less like this…' });
     expect(less.getAttribute('aria-haspopup')).toBe('menu');
     fireEvent.click(less);
@@ -147,7 +154,7 @@ describe('<TrackMenu />', () => {
     expect(items().map((i) => i.textContent)).toEqual(['7 days', '14 days', '30 days', 'Back']);
     expect(document.activeElement).toBe(items()[0]);
 
-    // Escape steps back to the full menu (and keeps it open), focus on the item that opened it.
+    // Escape steps back to More… (and keeps it open), focus on the item that opened it.
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
     expect(screen.getByRole('menu')).toBeTruthy();
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Less like this…' }));
@@ -165,7 +172,7 @@ describe('<TrackMenu />', () => {
 
   it('7.2 — the permanent blocks sit in their own group, and a long artist name is never sliced', () => {
     mount();
-    fireEvent.click(trigger());
+    openMore();
     const labels = items().map((i) => i.textContent);
     expect(labels).toContain('More like this');
     expect(labels).toContain('Not interested');
@@ -198,10 +205,68 @@ describe('<TrackMenu />', () => {
     const startRadio = vi.fn();
     usePlayerStore.setState({ startRadio });
     mount();
-    fireEvent.click(trigger());
+    openMore();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Start radio' }));
     expect(startRadio).toHaveBeenCalledWith(song);
     expect(useToastStore.getState().toasts.slice(-1)[0]?.message).toBe(`Radio: ${song.title}`);
+  });
+});
+
+describe('1.11 — the short menu', () => {
+  it('opens on the main actions, with everything else under More…', () => {
+    mount();
+    fireEvent.click(trigger());
+    const labels = items().map((i) => i.textContent);
+    expect(labels.slice(0, 4)).toEqual(['Like', 'Add to playlist…', 'Play next', 'Add to queue']);
+    expect(labels).toContain('Share');
+    expect(labels).toContain('View lyrics');
+    expect(labels[labels.length - 1]).toBe('More…');
+    expect(labels).not.toContain('Start radio');
+    expect(labels).not.toContain('Not interested');
+    // Not the playing song: no Quality.
+    expect(labels).not.toContain('Quality…');
+    // More… lists the rest, with Back first; Back returns to the short list.
+    fireEvent.click(screen.getByRole('menuitem', { name: 'More…' }));
+    const more = items().map((i) => i.textContent);
+    expect(more[0]).toBe('Back');
+    for (const l of ['Start radio', 'Listen later', 'Song details', 'Report broken track', 'Not interested', 'Share to WhatsApp', 'Share as story']) expect(more).toContain(l);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Back' }));
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'More…' }));
+  });
+
+  it('Add to playlist… picks a playlist in its own view', () => {
+    useLibraryStore.setState({ collections: [{ id: 'c1', name: 'Road trip', createdAt: 1, songs: [] }] });
+    mount();
+    fireEvent.click(trigger());
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add to playlist…' }));
+    expect(items().map((i) => i.textContent)).toEqual(['Back', 'New playlist…', 'Add to “Road trip”']);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add to “Road trip”' }));
+    expect(useLibraryStore.getState().collections[0].songs.map((x) => x.id)).toEqual([song.id]);
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('Like adds the song to Liked songs, and the label turns into a remove', () => {
+    useLibraryStore.setState({ favorites: [] });
+    mount();
+    fireEvent.click(trigger());
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Like' }));
+    expect(useLibraryStore.getState().favorites.map((x) => x.id)).toEqual([song.id]);
+    fireEvent.click(trigger());
+    expect(screen.getByRole('menuitem', { name: 'Remove from Liked songs' })).toBeTruthy();
+  });
+
+  it('Quality… is offered for the playing song and sets the streaming level', () => {
+    usePlayerStore.setState({ queue: [song], index: 0 });
+    useSettingsStore.setState({ audioQuality: 'high' });
+    mount();
+    fireEvent.click(trigger());
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Quality…' }));
+    const levels = screen.getAllByRole('menuitemradio');
+    expect(levels.map((i) => i.textContent)).toEqual(['Low · 48 kbps', 'Medium · 96 kbps', 'High · 160 kbps', 'Very high · 320 kbps']);
+    expect(levels[3].getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(levels[2]);
+    expect(useSettingsStore.getState().audioQuality).toBe('medium');
+    expect(useToastStore.getState().toasts.slice(-1)[0]?.message).toMatch(/^Quality: High/);
   });
 });
 

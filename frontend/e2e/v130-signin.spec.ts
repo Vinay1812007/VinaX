@@ -8,8 +8,8 @@ import { expect, test } from './support/test';
 test('signed out, every personal page is the sign-in screen; the legal pages stay readable', async ({ page }) => {
   await page.route('**/accounts.google.com/**', (r) => r.abort());
   // 13.5.0 — published pages (Charts, hubs…) show their own text instead; see below.
-  // 13.9 — Search and the song pages open signed out (v139-guest-browse.spec.ts); Home and the personal pages do not.
-  for (const path of ['/', '/library', '/settings', '/favorites']) {
+  // 13.9 — Search and the song pages open signed out (v139-guest-browse.spec.ts); the personal pages do not (Home opens signed out since 1.11, see v139-guest-browse.spec.ts).
+  for (const path of ['/library', '/settings', '/favorites']) {
     await page.goto(`${path}?e2e-signed-out`);
     await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toBeVisible();
     await expect(page.getByText('Sign in with your Google account to start listening.', { exact: false })).toBeVisible();
@@ -24,7 +24,7 @@ test('signed out, every personal page is the sign-in screen; the legal pages sta
 
 test('13.3.0: the sign-in screen explains VinaX, and carries no ads', async ({ page }) => {
   await page.route('**/accounts.google.com/**', (r) => r.abort());
-  await page.goto('/?e2e-signed-out');
+  await page.goto('/library?e2e-signed-out');
   for (const name of ['What you get', 'Free, and how it stays free', 'What signing in shares', 'Questions']) {
     await expect(page.getByRole('heading', { name, level: 2 })).toBeVisible();
   }
@@ -42,7 +42,7 @@ test('13.3.0: the sign-in screen explains VinaX, and carries no ads', async ({ p
 test('13.3.0: when Google’s script is blocked, the screen says why and Try again redraws the button', async ({ page }) => {
   let blocked = true;
   await page.route('**/accounts.google.com/**', (r) => (blocked ? r.abort() : r.fulfill({ contentType: 'text/javascript', body: 'window.google={accounts:{id:{initialize(){},renderButton(el){el.textContent="google-button"},disableAutoSelect(){}}}};' })));
-  await page.goto('/?e2e-signed-out');
+  await page.goto('/library?e2e-signed-out');
   await expect(page.getByRole('alert').filter({ hasText: 'Google sign-in couldn’t load' })).toBeVisible();
   await expect(page.getByText('sign in later in Settings', { exact: false })).toHaveCount(0);
   blocked = false;
@@ -62,7 +62,7 @@ test('signed in, the app opens with the account in the top bar', async ({ page }
 test('13.4.0: the sign-in card has What you get on its left and Free on its right; no "What you get with VinaX" link', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.route('**/accounts.google.com/**', (r) => r.abort());
-  await page.goto('/?e2e-signed-out');
+  await page.goto('/library?e2e-signed-out');
   await expect(page.getByText('What you get with VinaX')).toHaveCount(0);
   const box = async (sel: string) => (await page.locator(sel).boundingBox())!;
   const card = await box('.vx-signin-card');
@@ -135,7 +135,7 @@ test('13.5.0: signed out, a published page shows its own text with a sign-in car
 
 test('13.5.0: the sign-in page links to the published pages', async ({ page }) => {
   await page.route('**/accounts.google.com/**', (r) => r.abort());
-  await page.goto('/?e2e-signed-out');
+  await page.goto('/library?e2e-signed-out');
   const browse = page.getByRole('navigation', { name: 'Browse VinaX' });
   await expect(browse.getByRole('link', { name: 'Top charts' })).toHaveAttribute('href', '/charts/');
   await browse.getByRole('link', { name: 'Telugu songs' }).click();

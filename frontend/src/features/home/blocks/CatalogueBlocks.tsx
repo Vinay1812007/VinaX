@@ -27,6 +27,8 @@ import { useContinueListening, useTimeOfDayShelf } from '../useHomeShelves';
 import { useDailyMix } from '../useDailyMix';
 import { useMostListened, useOnRepeat } from '../usePersonalShelves';
 import { useTrendingAlbums, useTrendingArtists } from '../useTrendingShelves';
+import { useCatalogueCharts } from '../useCatalogFeeds';
+import { ChartCardsRow } from '../CatalogueRows';
 import { moodRotationOfTheDay, useMoodShelf } from '../useMoodShelves';
 import { GENRE_SHELVES, useGenreShelf } from '../useGenreShelves';
 import { rankGenreTiles, topGenreShelves } from '../genreAffinity';
@@ -78,6 +80,11 @@ export function QuickBlock() {
 /** Top 50 Global / Top 50 in your country / Viral 50 — tiles into /charts. */
 export function ChartsBlock() {
   const region = useRegion();
+  // JioSaavn-style: the catalogue's chart playlists as playable cards. The
+  // three link tiles stay only as the fallback while that feed is down.
+  const charts = useCatalogueCharts();
+  if (charts.isPending) return <ShelfSkeleton />;
+  if (!charts.isError && charts.data?.length) return <ChartCardsRow />;
   const tiles = [
     { kicker: 'Top 50', title: 'Global', tone: 5 },
     { kicker: 'Top 50', title: region?.regionLabel ?? region?.country ?? 'Your country', tone: 3 },

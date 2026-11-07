@@ -95,9 +95,10 @@ test('the wider catalogue mounts (and asks the catalogue) only after "Show more 
   await scrollDown(page, 24);
   await page.waitForTimeout(1000);
   const text = () => page.evaluate(() => document.body.innerText);
-  expect(await text()).not.toMatch(/Mood playlists|Trending artists|More for you/);
-  expect(seen.searches.some((q) => /trending albums/.test(q))).toBe(false);
+  // 1.11 — eight blocks are the page now; the endless feed (always last) still waits.
+  expect(await text()).not.toMatch(/More for you/);
+  const before = seen.searches.length;
   await page.getByRole('button', { name: /Show more for you/ }).click();
   await scrollDown(page, 24);
-  await expect.poll(() => seen.searches.some((q) => /trending albums|underrated|new .* artists|artists 20/.test(q)), { timeout: 20_000 }).toBe(true);
+  await expect.poll(() => seen.searches.length, { timeout: 20_000 }).toBeGreaterThan(before);
 });

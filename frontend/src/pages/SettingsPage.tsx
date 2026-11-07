@@ -28,10 +28,16 @@ import {
   SectionHead,
   Segmented,
   SettingsSearchCtx,
+  SettingsViewCtx,
   Toggle,
+  loadSettingsView,
   matchesQuery,
+  saveSettingsView,
+  sectionVisible,
   type SectionDef,
+  type SettingsView,
 } from '@/features/settings/SettingsControls';
+import { useSearchStore } from '@/store/searchStore';
 import { DISCOVERY_OPTIONS, QUEUE_LANGUAGE_OPTIONS, intensityWords } from '@/features/settings/recommendationCopy';
 import { PersonalizationPreview } from '@/features/personalization/PersonalizationPreview';
 import { HomeAiSettings } from '@/features/home/HomeAiSettings';
@@ -58,7 +64,8 @@ import { toast } from '@/store/toastStore';
 import { LANGUAGES } from '@/constants/languages';
 import { Chip } from '@/components/Chip';
 import { UI_LANGS } from '@/i18n';
-import type { AudioQualityPref } from '@/services/audio/engine';
+import type { AudioQualityPref } from '@/services/audio/quality';
+import { QUALITY_LEVELS, qualityLevel } from '@/services/audio/qualityLevels';
 import { PageHeader } from '@/components/PageHeader';
 import { SoundSettings } from '@/components/SoundSettings';
 import { Sheet } from '@/components/Sheet';
@@ -329,10 +336,38 @@ function AccountRow() {
               <RowButton onClick={() => setConfirm(false)}>Cancel</RowButton>
             </span>
           ) : (
-            <RowButton onClick={() => setConfirm(true)}>Delete account</RowButton>
+            <RowButton tone="danger" onClick={() => setConfirm(true)}>Delete account</RowButton>
           )}
         </div>
       )}
+    </Row>
+  );
+}
+
+/** Recent searches: how many are kept, and one tap to clear them. */
+function ClearRecentSearchesRow() {
+  const recent = useSearchStore((st) => st.recent);
+  const pinned = useSearchStore((st) => st.pinned);
+  const clearRecent = useSearchStore((st) => st.clearRecent);
+  // Clearing keeps pinned searches, so only the others count.
+  const n = recent.filter((r) => !pinned.includes(r)).length;
+  return (
+    <Row
+      label="Clear recent searches"
+      note={n ? `${n} recent search${n === 1 ? '' : 'es'} on this device.${pinned.length ? ' Pinned searches stay.' : ''}` : 'No recent searches to clear.'}
+      keywords="search history recents forget"
+    >
+      <RowButton
+        tone="danger"
+        disabled={!n}
+        label="Clear recent searches"
+        onClick={() => {
+          clearRecent();
+          toast('Recent searches cleared');
+        }}
+      >
+        Clear
+      </RowButton>
     </Row>
   );
 }
@@ -441,6 +476,11 @@ function FestivalRow() {
 
 export default function SettingsPage() {
   const [settingsQuery, setSettingsQuery] = useState('');
+  const [view, setViewState] = useState<SettingsView>(loadSettingsView);
+  const setView = (v: SettingsView) => {
+    setViewState(v);
+    saveSettingsView(v);
+  };
   usePageTitle('Settings');
   const s = useSettingsStore();
   const wide = useMediaQuery('(min-width: 1024px)');
@@ -502,16 +542,24 @@ export default function SettingsPage() {
   const { hash } = useLocation();
   useEffect(() => {
     if (!hash) return;
+    // A link to a section Basic hides opens the full list first.
+    if (!sectionVisible(hash.slice(1), view, '')) {
+      setViewState('all');
+      return;
+    }
     const el = document.getElementById(hash.slice(1));
     el?.scrollIntoView({ block: 'start', behavior: scrollBehavior() });
-  }, [hash]);
+  }, [hash, view]);
 
   const q = settingsQuery.trim();
   const showNotifications = pushSupported() || isNativePlatform();
-  const sections = showNotifications ? SECTIONS : SECTIONS.filter((x) => x.id !== 'notifications');
+  const sections = (showNotifications ? SECTIONS : SECTIONS.filter((x) => x.id !== 'notifications')).filter((x) =>
+    sectionVisible(x.id, view, q),
+  );
 
   return (
     <SettingsSearchCtx.Provider value={q}>
+      <SettingsViewCtx.Provider value={view}>
       <div className="vx-settings">
         {wide && !q && <SectionIndex sections={sections} />}
         <div className="vx-set-main">
@@ -533,11 +581,29 @@ export default function SettingsPage() {
               </IconButton>
             )}
           </div>
+          {!q && (
+            <div className="vx-set-view">
+              <Segmented
+                label="Settings shown"
+                value={view}
+                options={[
+                  { value: 'basic', label: 'Basic', title: 'The everyday settings' },
+                  { value: 'all', label: 'All', title: 'Every setting' },
+                ]}
+                onChange={setView}
+              />
+              <p className="vx-set-hint">
+                {view === 'basic' ? 'The everyday settings. Search still finds every setting.' : 'Every setting VinaX has.'}
+              </p>
+            </div>
+          )}
           {!wide && !q && <SectionJump sections={sections} />}
           {q && <SearchStatus q={q} />}
 
           <Section title="Profile" id="profile" lede="Your Google account, what syncs with it, and what VinaX has learned about you.">
             <AccountRow />
+            <LinkRow to="/languages" label="Music languages" note="The languages Home, charts, radio and search lean on." keywords="language pick choose content hindi telugu tamil english punjabi" />
+            <ClearRecentSearchesRow />
             <ProfileSettings />
             <LinkRow to="/taste-profile" label="Taste profile" note="The languages, artists and moods VinaX has learned you like." keywords="taste profile likes profile settings" />
             <LinkRow to="/stats" label="Listening stats" note="Your minutes, top songs and streaks." keywords="stats minutes streak profile" />
@@ -655,10 +721,13 @@ export default function SettingsPage() {
             <Row label="Resume playback" note="Pick up longer tracks where you left off.">
               <Toggle on={s.resumePlayback} onChange={s.setResumePlayback} label="Resume playback" />
             </Row>
-            <Row stack label="Audio quality" note="The closest available stream; falls back automatically." keywords="bitrate low medium high">
-              <Segmented<AudioQualityPref> label="Audio quality" value={s.audioQuality} onChange={s.setAudioQuality} options={[{ value: 'low', label: 'Low' }, { value: 'medium', label: 'Medium' }, { value: 'high', label: 'High' }]} />
+            <Row stack label="Audio quality" note={`Streaming: ${qualityLevel(s.audioQuality).kbps} kbps, or the closest available.`} keywords="bitrate low medium high very high 320 kbps streaming">
+              <Segmented<AudioQualityPref> label="Audio quality" value={s.audioQuality} onChange={s.setAudioQuality} options={QUALITY_LEVELS.map((l) => ({ value: l.value, label: l.label }))} />
             </Row>
-            <Row label="Data saver" note="Lightest audio, no video canvas, lighter artwork." keywords="mobile data">
+            <Row stack label="Download quality" note={`Downloads save at ${qualityLevel(s.downloadQuality).kbps} kbps, or the closest available.`} keywords="bitrate offline download very high 320 kbps">
+              <Segmented<AudioQualityPref> label="Download quality" value={s.downloadQuality} onChange={s.setDownloadQuality} options={QUALITY_LEVELS.map((l) => ({ value: l.value, label: l.label }))} />
+            </Row>
+            <Row label="Data saver" note="Medium audio (96 kbps), no video canvas, lighter artwork." keywords="mobile data">
               <Toggle on={s.dataSaver} onChange={s.setDataSaver} label="Data saver" />
             </Row>
             {isNativePlatform() && (
@@ -730,7 +799,7 @@ export default function SettingsPage() {
 
           {/* v5.19.0 — on-device sound processing. Its rows are its own markup
               (restyled from settings.css), so search matches the block as a whole. */}
-          {matchesQuery(q, SOUND_KEYWORDS) && (
+          {matchesQuery(q, SOUND_KEYWORDS) && sectionVisible('sound', view, q) && (
             <section data-tour="sound" id="sound" className="vx-set-section vx-set-sound" aria-labelledby="sound-title">
               <SectionHead id="sound" title="Sound" lede="Equaliser, balance and loudness, processed on this device." />
               {q && <span data-settings-row hidden />}
@@ -1152,6 +1221,7 @@ export default function SettingsPage() {
           </div>
         </Sheet>
       )}
+      </SettingsViewCtx.Provider>
     </SettingsSearchCtx.Provider>
   );
 }

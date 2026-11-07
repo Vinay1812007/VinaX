@@ -2,13 +2,9 @@ import type { Song } from '@/types';
 import { getOfflineSources } from '@/services/downloads';
 import { useSettingsStore } from '@/store/settingsStore';
 
-export type AudioQualityPref = 'low' | 'medium' | 'high';
+import { orderByQuality, type AudioQualityPref } from './quality';
 
-/** Parse the bitrate (kbps) out of a quality label like "320kbps", "320" or "320 kbps". */
-function bitrateOf(quality: string): number {
-  const m = String(quality).match(/\d+/);
-  return m ? parseInt(m[0], 10) : 0;
-}
+export type { AudioQualityPref };
 
 /**
  * Order a song's audio variants by the user's quality preference — by NUMERIC
@@ -36,16 +32,7 @@ function isAbortError(err: unknown): boolean {
 }
 
 export function orderedSources(song: Song, pref: AudioQualityPref): string[] {
-  const target = pref === 'high' ? Infinity : pref === 'low' ? 96 : 160;
-  return [...song.audio]
-    .filter((v) => v.url)
-    .sort((a, b) => {
-      const ba = bitrateOf(a.quality);
-      const bb = bitrateOf(b.quality);
-      if (pref === 'high') return bb - ba;
-      return Math.abs(ba - target) - Math.abs(bb - target) || bb - ba;
-    })
-    .map((v) => v.url);
+  return orderByQuality(song.audio.filter((v) => v.url), pref).map((v) => v.url);
 }
 
 export interface EngineCallbacks {
@@ -417,6 +404,20 @@ class AudioEngine {
       this.cb?.onBuffering(false);
       this.cb?.onFatalError(this.song.id);
     }
+  }
+
+  /**
+   * 1.11 — the player menu's Quality: restart the current song's stream at
+   * another level, at the same position, playing only if it was. A song
+   * playing from a download has nothing to switch (false).
+   */
+  switchQuality(pref: AudioQualityPref): boolean {
+    if (!this.el || !this.song) return false;
+    if (getOfflineSources(this.song.id).length) return false;
+    const urls = orderedSources(this.song, pref);
+    if (!urls.length || urls[0] === this.sources[this.sourceIdx]) return false;
+    this.wantAutoplay = !this.el.paused && !this.el.ended;
+    return this.reloadWithSources(urls);
   }
 
   /** Retry the current song with freshly-fetched URLs (details refetch). */

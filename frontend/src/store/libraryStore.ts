@@ -94,17 +94,55 @@ export function orderCollections(collections: LocalCollection[]): LocalCollectio
 
 export interface SavedEntity {
   id: string;
-  kind: 'album' | 'artist' | 'playlist';
+  /** 'podcast' (1.11) — a followed show. */
+  kind: 'album' | 'artist' | 'playlist' | 'podcast';
   title: string;
   subtitle: string;
   image: string | null;
   savedAt: number;
 }
 
+/**
+ * 1.11 — a saved album, artist, playlist or podcast the listener removed, and
+ * when. The account sync merges two devices' libraries as a union; without
+ * this, an unfollow on one device came back from the other's copy. The merge
+ * drops a saved entry whose removal is newer than its save.
+ */
+export interface UnsavedMark {
+  id: string;
+  kind: SavedEntity['kind'];
+  at: number;
+}
+
+/** Where a saved item opens: `/album/<id>`, `/artist/<id>`, `/playlist/<id>` or `/podcast/<id>` (the podcast page reads a bare id too). */
+export function savedPath(e: Pick<SavedEntity, 'id' | 'kind'> & { title?: string }): string {
+  return `/${e.kind}/${e.id}`;
+}
+
+/** How many removals are remembered, and for how long. */
+export const UNSAVED_MAX = 500;
+export const UNSAVED_DAYS = 180;
+
+/** Keep the newest mark per item, drop old ones, cap the list. */
+export function pruneUnsaved(marks: readonly UnsavedMark[], now = Date.now()): UnsavedMark[] {
+  const cutoff = now - UNSAVED_DAYS * 86_400_000;
+  const best = new Map<string, UnsavedMark>();
+  for (const m of marks) {
+    if (!m || typeof m.id !== 'string' || typeof m.at !== 'number' || m.at < cutoff) continue;
+    const key = `${m.kind}:${m.id}`;
+    const had = best.get(key);
+    if (!had || had.at < m.at) best.set(key, m);
+  }
+  return [...best.values()].sort((a, b) => b.at - a.at).slice(0, UNSAVED_MAX);
+}
+
+
 export interface LibraryState {
   favorites: Song[];
   collections: LocalCollection[];
   saved: SavedEntity[];
+  /** 1.11 — recent removals from `saved`, so a sync merge does not bring them back. */
+  unsaved: UnsavedMark[];
   hiddenSongIds: string[];
   /** v5.12.0 — Listen Later: a lightweight 'save for later' queue, separate from favorites. */
   later: Song[];
@@ -159,6 +197,7 @@ export const useLibraryStore = create<LibraryState>()(
       favorites: [],
       collections: [],
       saved: [],
+      unsaved: [],
       hiddenSongIds: [],
       later: [],
       hiddenArtists: [],
@@ -217,11 +256,14 @@ export const useLibraryStore = create<LibraryState>()(
         if (!requireAccount('save', () => get().toggleSaved(entity))) return;
         const { saved, favorites, hiddenSongIds } = get();
         const exists = saved.some((e) => e.id === entity.id && e.kind === entity.kind);
+        const now = Date.now();
         const newSaved = exists
             ? saved.filter((e) => !(e.id === entity.id && e.kind === entity.kind))
-            : [{ ...entity, savedAt: Date.now() }, ...saved];
+            : [{ ...entity, savedAt: now }, ...saved];
+        const others = get().unsaved.filter((m) => !(m.id === entity.id && m.kind === entity.kind));
+        const unsaved = exists ? pruneUnsaved([{ id: entity.id, kind: entity.kind, at: now }, ...others], now) : others;
         rebuildIndexes({ favorites, saved: newSaved, hiddenSongIds });
-        set({ saved: newSaved });
+        set({ saved: newSaved, unsaved });
       },
       isSaved: (id) => _savedIds.has(id),
       toggleHidden: (songId, song) => {
@@ -412,12 +454,12 @@ export const useLibraryStore = create<LibraryState>()(
         // A list field that is not a list (damaged or hand-edited record) falls
         // back to the empty default instead of crashing the first `.some()`.
         const lists: Partial<LibraryState> = {};
-        for (const key of ['favorites', 'collections', 'saved', 'hiddenSongIds', 'later', 'hiddenArtists'] as const) {
+        for (const key of ['favorites', 'collections', 'saved', 'unsaved', 'hiddenSongIds', 'later', 'hiddenArtists'] as const) {
           if (p[key] !== undefined && !Array.isArray(p[key])) delete p[key];
         }
         if (Array.isArray(p.collections)) lists.collections = p.collections.filter((c) => !!c && typeof c.id === 'string' && Array.isArray(c.songs));
         // pruneTrash also drops entries whose collection has no song list.
-        return { ...current, ...p, ...lists, trash: pruneTrash(p.trash) };
+        return { ...current, ...p, ...lists, trash: pruneTrash(p.trash), unsaved: pruneUnsaved(p.unsaved ?? []) };
       },
       onRehydrateStorage: () => (state) => { if (state) rebuildIndexes(state); },
     },

@@ -204,6 +204,8 @@ test('song menu: history sheet, and "Not interested" offers an undo toast', asyn
 
   await visit(page, '/favorites', /song 0/i);
   await openMoreOptions(page, 'first');
+  // 1.11 — the song menu opens short; these live under More….
+  await clickButton(page, /^More…$/);
   await expect.poll(() => bodyText(page)).toMatch(/your history with this song/i);
   await clickButton(page, /your history with this song/i);
   const sheet = page.locator('[role="dialog"]').last();
@@ -213,6 +215,7 @@ test('song menu: history sheet, and "Not interested" offers an undo toast', asyn
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
   await openMoreOptions(page, 'first');
+  await clickButton(page, /^More…$/);
   await expect.poll(() => bodyText(page)).toMatch(/not interested/i);
   await clickButton(page, /^not interested/i);
   await expect.poll(() => bodyText(page)).toMatch(/undo/i);

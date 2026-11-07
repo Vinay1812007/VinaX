@@ -16,6 +16,9 @@ vi.mock('@/services/audio/engine', () => ({
 vi.mock('@/services/media-session', () => ({
   setMediaHandlers: vi.fn(), updateMediaMetadata: vi.fn(), updatePlaybackState: vi.fn(), updatePositionState: vi.fn(),
 }));
+// 1.11 — signed out, Home is the catalogue-only GuestHome; these tests drive the listener's Home.
+const signedIn = vi.hoisted(() => ({ on: true }));
+vi.mock('@/components/useAccount', () => ({ useAccount: () => (signedIn.on ? { session: 'vx1.test', user: { name: 'Tester', email: 't@example.com', picture: null, username: 'tester' } } : null) }));
 vi.mock('@/services/native', () => ({ checkNotificationOnFirstPlay: vi.fn(), haptic: vi.fn(), isNativePlatform: () => false, platformName: () => 'web' }));
 vi.mock('@/services/personalization/updater', () => ({
   recordComplete: vi.fn(), recordPlay: vi.fn(), recordQueueAdd: vi.fn(), recordSkip: vi.fn(), recordFavorite: vi.fn(), softMuteArtist: vi.fn(),
@@ -195,15 +198,15 @@ describe('HomePage — the top bar', () => {
 });
 
 describe('HomePage 9.0', () => {
-  it('shows the first four blocks; the wider catalogue mounts (and fetches) only behind "Show more for you"', async () => {
+  it('shows the first eight blocks; the rest (the endless feed last) mounts only behind "Show more for you"', async () => {
     useLibraryStore.setState({ favorites: ['a', 'b', 'c'].map((id) => makeSong(`m${id}`, { title: `Melody ${id}` })) });
     renderHome();
     await screen.findByRole('group', { name: 'Shortcuts' });
     await act(async () => {});
-    expect(markers()).toHaveLength(4);
+    // 1.11 — eight blocks are the page (was four), like JioSaavn's long Home.
+    expect(markers()).toHaveLength(8);
     expect(markers()[0]).toBe('quick');
-    expect(markers()).not.toContain('genres');
-    expect(searched).not.toContain('telugu melody songs'); // the genres block has not mounted
+    expect(markers()).not.toContain('feed');
     await openExplore();
     expect(markers()).toHaveLength(12);
     expect(sessionStorage.getItem('vinax.home.open.explore')).toBe('1');
@@ -258,7 +261,7 @@ describe('HomePage 10.0 — the first visit', () => {
 describe('HomePage 1.3 — the catalogue’s own feeds', () => {
   const playlist = (id: string, title: string) => ({ kind: 'playlist', id, title, subtitle: 'JioSaavn', images: [], songs: [], songCount: null, language: 'telugu' });
 
-  it('adds "Top charts", "Trending playlists", "Featured playlists" and "New albums" when the catalogue has them', async () => {
+  it('adds "Top charts" (playable chart cards), "Fresh hits", "Editorial picks" and "New albums" when the catalogue has them', async () => {
     feeds.charts = [playlist('110858205', 'Trending Today')];
     feeds.trendingPlaylists = [playlist('89652091', 'Paisa Paisa')];
     feeds.featured = [playlist('4562515', 'Karwa Chauth Special')];
@@ -267,8 +270,9 @@ describe('HomePage 1.3 — the catalogue’s own feeds', () => {
     await screen.findByRole('group', { name: 'Shortcuts' });
     await openExplore();
     expect(await screen.findByRole('heading', { name: 'Top charts' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Featured playlists' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Trending playlists' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Editorial picks' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Fresh hits' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Play Trending Today' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'New albums' })).toBeTruthy();
     expect(screen.getByText('Trending Today').closest('a')?.getAttribute('href')).toBe('/playlist/trending-today-110858205');
     expect(screen.getByText('Rangulu Ranguley').closest('a')?.getAttribute('href')).toBe('/album/rangulu-ranguley-82567150');
@@ -281,9 +285,31 @@ describe('HomePage 1.3 — the catalogue’s own feeds', () => {
     expect(await screen.findByRole('heading', { name: 'Charts' })).toBeTruthy();
     await act(async () => {});
     expect(screen.queryByRole('heading', { name: 'Top charts' })).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Featured playlists' })).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Trending playlists' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Editorial picks' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Fresh hits' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'New albums' })).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('HomePage 1.11 — JioSaavn-style Home', () => {
+  it('opens with Trending now, before the hero', async () => {
+    renderHome();
+    const trending = await screen.findByRole('heading', { name: 'Trending now' });
+    const hero = document.querySelector('.vx-hero');
+    expect(hero).toBeTruthy();
+    expect(trending.compareDocumentPosition(hero!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('signed out, Home is the catalogue Home with a sign-in card and none of the personal blocks', async () => {
+    signedIn.on = false;
+    onTestFinished(() => { signedIn.on = true; });
+    renderHome();
+    expect(await screen.findByRole('heading', { name: 'Hi there' })).toBeTruthy();
+    expect(screen.getByRole('complementary', { name: 'Sign in' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Trending now' })).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Shortcuts' })).toBeNull();
+    expect(document.querySelector('.vx-hero')).toBeNull();
+    expect(markers()).toHaveLength(0);
   });
 });

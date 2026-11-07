@@ -45,3 +45,16 @@ describe('typeahead highlight follows the row, not the position (11.0.1)', () =>
     expect(indexOfKey(after, itemKey(before[0]))).toBe(1);
   });
 });
+
+describe('podcasts in the typeahead', () => {
+  it('come last, capped, with their own key', () => {
+    const show = (id: string) => ({ id, name: id, season: null, releaseDate: null, explicit: false, images: [] });
+    const items = typeaheadItems([q('arijit')], {
+      songs: [song('s1', 'Kesariya')],
+      artists: [],
+      albums: [album('al1')],
+      podcasts: [show('p1'), show('p2'), show('p3')],
+    });
+    expect(items.map(itemKey)).toEqual(['q:arijit', 's:s1', 'al:al1', 'pc:p1', 'pc:p2']);
+  });
+});

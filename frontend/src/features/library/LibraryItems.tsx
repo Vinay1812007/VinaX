@@ -1,7 +1,7 @@
 import type { SyntheticEvent } from 'react';
 import { Link } from 'react-router-dom';
 import type { Song } from '@/types';
-import type { LocalCollection, SavedEntity } from '@/store/libraryStore';
+import { savedPath, type LocalCollection, type SavedEntity } from '@/store/libraryStore';
 import { EntityMenu, type EntityMenuItem } from '@/components/EntityHeader';
 import { PlayIcon } from '@/components/Icons';
 import { FALLBACK_ART } from '@/utils/images';
@@ -21,7 +21,7 @@ export type LibraryItem =
   | { type: 'saved'; key: string; at: number; title: string; entity: SavedEntity };
 
 export const itemPath = (item: LibraryItem): string =>
-  item.type === 'collection' ? `/collection/${item.col.id}` : `/${item.entity.kind}/${item.entity.id}`;
+  item.type === 'collection' ? `/collection/${item.col.id}` : savedPath(item.entity);
 
 const toFallback = (e: SyntheticEvent<HTMLImageElement>) => {
   const img = e.target as HTMLImageElement;

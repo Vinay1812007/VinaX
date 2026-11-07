@@ -186,6 +186,11 @@ const QueueRow = memo(function QueueRow({
 /** Where focus goes after the list re-orders or loses the control that had it. */
 type Refocus = { key: string; target: 'grip' | 'menu' | 'remove' } | { key: null; target: 'heading' } | null;
 
+/** 1.11 — "Queue · 7 Nov": the suggested name when the queue is saved as a playlist. */
+export function defaultQueueName(now = new Date()): string {
+  return `Queue · ${now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
+}
+
 export default function QueuePage() {
   usePageTitle('Queue');
   const queue = usePlayerStore((s) => s.queue);
@@ -476,8 +481,9 @@ export default function QueuePage() {
   const keyOfRow = useCallback((_s: Song, i: number) => rowKeys[i], [rowKeys]);
 
   // Package D5 — freeze this queue into a Collection the listener keeps.
+  // 1.11 — the suggested name carries the day ("Queue · 7 Nov").
   const saveAsPlaylist = (): void => {
-    const name = window.prompt('Playlist name', 'My queue');
+    const name = window.prompt('Playlist name', defaultQueueName());
     if (!name || !name.trim()) return;
     const { createCollection, addToCollection } = useLibraryStore.getState();
     const cid = createCollection(name.trim());
@@ -490,6 +496,20 @@ export default function QueuePage() {
       n += 1;
     }
     toast(`Saved ${n} songs to “${name.trim()}”`);
+  };
+
+  // 1.11 — Clear: everything after the playing song goes, with an Undo that puts it back.
+  const clearUpNext = (): void => {
+    const { queue: q, index: at, clearFrom, enqueueAll } = usePlayerStore.getState();
+    const tail = q.slice(at + 1);
+    if (!tail.length) return;
+    clearFrom(at + 1);
+    setAnnouncement('Cleared everything after this song');
+    // Same words as the store's own confirmation, so this one (with Undo) replaces it.
+    toast(`Cleared ${tail.length} upcoming ${tail.length === 1 ? 'song' : 'songs'}`, {
+      action: { label: 'Undo', onClick: () => enqueueAll(tail) },
+      duration: 7000,
+    });
   };
 
   if (!queue.length) {
@@ -554,6 +574,11 @@ export default function QueuePage() {
           {queue.length >= 2 && (
             <button type="button" onClick={saveAsPlaylist} className="vx-queue-btn is-outline">
               Save as playlist
+            </button>
+          )}
+          {upNext.length > 0 && (
+            <button type="button" onClick={clearUpNext} className="vx-queue-btn is-outline" aria-label="Clear the queue after this song">
+              Clear
             </button>
           )}
         </div>

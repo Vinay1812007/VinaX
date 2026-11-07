@@ -9,8 +9,9 @@ vi.mock('@/services/analytics/telemetry', () => ({ trackDislike: vi.fn(), trackP
 const likeReplan = vi.fn();
 vi.mock('@/services/recommendation/adaptive', () => ({ noteLikeAndMaybeReplan: (...a: unknown[]) => likeReplan(...a) }));
 
-import { orderCollections, setNowPlayingProbe, useLibraryStore } from './libraryStore';
+import { orderCollections, pruneUnsaved, savedPath, setNowPlayingProbe, useLibraryStore } from './libraryStore';
 import { recordDislike, recordPlaylistAdd } from '@/services/personalization/updater';
+import { mergeSaved } from '@/features/settings/backup';
 
 const song = (id: string, title: string, artist = 'Artist'): Song => ({
   kind: 'song',
@@ -218,5 +219,38 @@ describe('libraryStore 8.5.1 — a like re-plans only for the song that is playi
     useLibraryStore.getState().toggleFavorite(song('p2', 'X'));
     await flush();
     expect(likeReplan).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('saved items remember removals (1.11)', () => {
+  it('unsaving records a mark, saving again clears it', () => {
+    useLibraryStore.setState({ saved: [], unsaved: [] });
+    const e = { id: 'p1', kind: 'podcast' as const, title: 'Show', subtitle: '', image: null };
+    useLibraryStore.getState().toggleSaved(e);
+    expect(useLibraryStore.getState().saved.map((x) => x.kind)).toEqual(['podcast']);
+    useLibraryStore.getState().toggleSaved(e);
+    expect(useLibraryStore.getState().saved).toEqual([]);
+    expect(useLibraryStore.getState().unsaved.map((m) => m.id)).toEqual(['p1']);
+    useLibraryStore.getState().toggleSaved(e);
+    expect(useLibraryStore.getState().unsaved).toEqual([]);
+  });
+
+  it('mergeSaved keeps the newest copy and drops items removed after their save', () => {
+    const a = [{ id: 'x', kind: 'artist' as const, title: 'X', subtitle: '', image: null, savedAt: 5 }];
+    const b = [{ id: 'x', kind: 'artist' as const, title: 'X2', subtitle: '', image: null, savedAt: 9 }, { id: 'y', kind: 'album' as const, title: 'Y', subtitle: '', image: null, savedAt: 1 }];
+    expect(mergeSaved(a, b, []).map((e) => e.title)).toEqual(['X2', 'Y']);
+    expect(mergeSaved(a, b, [{ id: 'y', kind: 'album', at: 2 }]).map((e) => e.id)).toEqual(['x']);
+    expect(mergeSaved(a, b, [{ id: 'x', kind: 'artist', at: 7 }]).map((e) => e.title)).toEqual(['X2', 'Y']);
+  });
+
+  it('pruneUnsaved keeps one recent mark per item', () => {
+    const now = Date.now();
+    const out = pruneUnsaved([{ id: 'a', kind: 'album', at: now - 5 }, { id: 'a', kind: 'album', at: now }, { id: 'old', kind: 'album', at: now - 400 * 86_400_000 }], now);
+    expect(out).toEqual([{ id: 'a', kind: 'album', at: now }]);
+  });
+
+  it('a podcast opens its own page', () => {
+    expect(savedPath({ id: '62', kind: 'podcast', title: 'Talking Music' })).toBe('/podcast/62');
+    expect(savedPath({ id: '9', kind: 'album', title: 'A' })).toBe('/album/9');
   });
 });

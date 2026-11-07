@@ -10,6 +10,7 @@ import { EmptyState, ErrorState, InlineError } from '@/components/States';
 import { TrackMenu } from '@/components/TrackMenu';
 import { Chip } from '@/components/Chip';
 import { Button } from '@/components/Button';
+import { SaveButton } from '@/components/SaveButton';
 import { MicIcon, PlayIcon, ShareIcon } from '@/components/Icons';
 import { getEpisodePage, type Episode } from '@/features/podcasts/api';
 import { podcastPath } from '@/features/podcasts/paths';
@@ -169,6 +170,8 @@ function PodcastView({ id }: { id: string }) {
         actions={
           <>
             <PlayFab size="lg" label="Play all" disabled={!songs.length} onClick={() => usePlayerStore.getState().playQueue(songs, 0)} />
+            {/* 1.11 — follow the show: it lands in Library › Podcasts and syncs with the account. */}
+            <SaveButton variant="icon" entity={{ id: podcast.id, kind: 'podcast', title: podcast.name, subtitle: podcast.hosts.map((h) => h.name).slice(0, 2).join(', '), image: bestImage(podcast.images, 300) }} />
             <EntityAction label="Share" onClick={() => void shareLink(podcastPath(podcast), podcast.name)}><ShareIcon /></EntityAction>
             <EntityMenu items={[songs.length > 0 && { label: 'Add to queue', onSelect: () => usePlayerStore.getState().enqueueAll(songs) }]} />
           </>

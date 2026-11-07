@@ -10,7 +10,7 @@ import { SMART_COLLECTIONS_KEY, sanitizeSmartCollections } from '@/features/libr
 import { normalizeProfile } from '@/services/personalization/profile';
 import { sanitizeAlarm, sanitizeLyricOffsets } from '@/services/storage/sanitize';
 import { pickSettings, useSettingsStore } from '@/store/settingsStore';
-import { useLibraryStore } from '@/store/libraryStore';
+import { pruneUnsaved, useLibraryStore, type SavedEntity, type UnsavedMark } from '@/store/libraryStore';
 import { useSmartCollectionStore } from '@/store/smartCollectionStore';
 import { useHistoryStore } from '@/store/historyStore';
 import { useSearchStore } from '@/store/searchStore';
@@ -19,6 +19,30 @@ import { useBookmarkStore } from '@/store/bookmarkStore';
 import { useAlarmStore } from '@/store/alarmStore';
 import { useLyricsOffsetStore } from '@/store/lyricsOffsetStore';
 import type { HistoryEntry, Song } from '@/types';
+
+/** Saved entries from two copies, minus anything removed after it was saved. */
+export function mergeSaved(
+  a: readonly SavedEntity[],
+  b: readonly SavedEntity[],
+  marks: readonly UnsavedMark[],
+): SavedEntity[] {
+  const removed = new Map(marks.map((m) => [`${m.kind}:${m.id}`, m.at]));
+  const out: SavedEntity[] = [];
+  const seen = new Map<string, number>();
+  for (const e of [...a, ...b]) {
+    const key = `${e.kind}:${e.id}`;
+    const gone = removed.get(key);
+    if (gone !== undefined && gone >= (e.savedAt ?? 0)) continue;
+    const at = seen.get(key);
+    if (at === undefined) {
+      seen.set(key, out.length);
+      out.push(e);
+    } else if ((out[at].savedAt ?? 0) < (e.savedAt ?? 0)) {
+      out[at] = e;
+    }
+  }
+  return out;
+}
 
 /**
  * Versioned, portable backup of the listener's own data.
@@ -286,16 +310,18 @@ const settingsCategory: BackupCategory = {
   },
 };
 
+const isSavedKind = (k: unknown): k is SavedEntity['kind'] => k === 'album' || k === 'artist' || k === 'playlist' || k === 'podcast';
+
 const libraryCategory: BackupCategory = {
   id: 'library',
   label: 'Library',
-  description: 'Favourites, playlists (with tags, pins and descriptions), Listen Later, saved albums/artists and hidden songs.',
+  description: 'Favourites, playlists (with tags, pins and descriptions), Listen Later, saved albums, artists and podcasts, and hidden songs.',
   keys: [{ key: KEYS.library }],
   sanitize: (values, ctx) => {
     const env = envelope(values[KEYS.library]);
     if (!env) return { error: 'Library data is not in the expected shape.' };
     const s = env.state;
-    for (const field of ['favorites', 'collections', 'saved', 'hiddenSongIds', 'later', 'hiddenArtists']) {
+    for (const field of ['favorites', 'collections', 'saved', 'unsaved', 'hiddenSongIds', 'later', 'hiddenArtists']) {
       if (s[field] !== undefined && !Array.isArray(s[field])) return { error: `Library field "${field}" is not a list.` };
     }
     const strings = (x: unknown): string[] => (Array.isArray(x) ? x : []).filter((v): v is string => typeof v === 'string');
@@ -312,7 +338,7 @@ const libraryCategory: BackupCategory = {
           .filter(isObj)
           .map((e) => ({
             id: str(e.id, 128) ?? '',
-            kind: e.kind === 'album' || e.kind === 'artist' || e.kind === 'playlist' ? e.kind : null,
+            kind: isSavedKind(e.kind) ? e.kind : null,
             title: str(e.title, 300) ?? '',
             subtitle: str(e.subtitle, 400) ?? '',
             image: httpUrl(e.image),
@@ -322,6 +348,13 @@ const libraryCategory: BackupCategory = {
         2000,
         'Saved albums and artists',
         ctx,
+      ),
+      // 1.11 — removals, so a merge does not bring an unfollowed item back.
+      unsaved: pruneUnsaved(
+        (Array.isArray(s.unsaved) ? s.unsaved : [])
+          .filter(isObj)
+          .map((m) => ({ id: str(m.id, 128) ?? '', kind: isSavedKind(m.kind) ? m.kind : null, at: num(m.at) ?? 0 }))
+          .filter((m): m is UnsavedMark => !!m.id && !!m.kind && m.at > 0),
       ),
       hiddenSongIds: capped(strings(s.hiddenSongIds), 500, 'Hidden songs', ctx),
       later: uniqueById(songList(s.later, 500, 'Listen Later', ctx)),
@@ -355,14 +388,16 @@ const libraryCategory: BackupCategory = {
     });
     for (const d of colsB) if (!collections.some((c) => c.id === d.id)) collections.push(d);
     const strs = (x: unknown[], y: unknown[]) => [...new Set([...(x as string[]), ...(y as string[])])];
-    const saved = [...(list(A.saved) as { id: string; kind: string }[])];
-    for (const e of list(B.saved) as { id: string; kind: string }[]) if (!saved.some((s) => s.id === e.id && s.kind === e.kind)) saved.push(e);
+    // 1.11 — a removal newer than the save wins on both sides of the merge.
+    const unsaved = pruneUnsaved([...(list(A.unsaved) as UnsavedMark[]), ...(list(B.unsaved) as UnsavedMark[])]);
+    const saved = mergeSaved(list(A.saved) as SavedEntity[], list(B.saved) as SavedEntity[], unsaved);
     return {
       [KEYS.library]: wrap(
         {
           favorites: byId(list(A.favorites), list(B.favorites)),
           collections,
           saved,
+          unsaved,
           // Ceilings bound what a file can ADD; they never drop below what this device already holds.
           hiddenSongIds: strs(list(A.hiddenSongIds), list(B.hiddenSongIds)).slice(0, Math.max(500, list(A.hiddenSongIds).length)),
           later: byId(list(A.later), list(B.later)).slice(0, Math.max(500, list(A.later).length)),

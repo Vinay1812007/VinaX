@@ -19,7 +19,9 @@ import { MediaCard } from '@/components/MediaCard';
 import { HeaderSkeleton, ListSkeleton } from '@/components/Skeletons';
 import { ErrorState } from '@/components/States';
 import { InfiniteSentinel } from '@/components/InfiniteSentinel';
-import { ShuffleIcon } from '@/components/Icons';
+import { CheckIcon, ShuffleIcon } from '@/components/Icons';
+import { Chip } from '@/components/Chip';
+import { ARTIST_SONG_SORTS, compactCount, sortArtistSongs, type ArtistSongSort } from '@/features/artists/sortSongs';
 import { EntityAction, EntityHeader, EntityMenu, EntityMeta, PlayFab } from '@/components/EntityHeader';
 import { SectionHeader } from '@/components/SectionHeader';
 import { shuffled } from '@/features/library/sort';
@@ -34,6 +36,7 @@ export default function ArtistPage() {
   const playQueue = usePlayerStore((s) => s.playQueue);
   const startRadio = usePlayerStore((s) => s.startRadio);
   const [showAll, setShowAll] = useState(false);
+  const [sort, setSort] = useState<ArtistSongSort>('popular');
   const similar = useSimilarArtistsOf(id);
   const [radioBusy, setRadioBusy] = useState(false);
   const canonicalPath = artist ? artistPath(artist) : undefined;
@@ -59,7 +62,8 @@ export default function ArtistPage() {
     return true;
   });
   const art = bestImage(artist.images, 500);
-  const shown = showAll ? songs : songs.slice(0, POPULAR_PREVIEW);
+  const sorted = sortArtistSongs(songs, sort);
+  const shown = showAll ? sorted : sorted.slice(0, POPULAR_PREVIEW);
   // Short releases (one to three tracks) read as singles; the rest as albums.
   const singles = artist.albums.filter((a) => a.songCount != null && a.songCount <= 3);
   const albums = artist.albums.filter((a) => !singles.includes(a));
@@ -92,7 +96,18 @@ export default function ArtistPage() {
       {/* 9.0 — the shared Encore header; a person gets a circle. */}
       <EntityHeader
         kind="Artist"
-        title={artist.name}
+        title={
+          artist.verified ? (
+            <>
+              {artist.name}
+              <span className="vx-verified" role="img" aria-label="Verified artist" title="Verified artist">
+                <CheckIcon className="w-3.5 h-3.5" />
+              </span>
+            </>
+          ) : (
+            artist.name
+          )
+        }
         titleText={artist.name}
         round
         artUrl={art}
@@ -101,6 +116,8 @@ export default function ArtistPage() {
           <EntityMeta
             items={[
               artist.subtitle && artist.subtitle !== 'Artist' ? artist.subtitle[0].toUpperCase() + artist.subtitle.slice(1) : null,
+              artist.listeners ? `${compactCount(artist.listeners)} listeners` : null,
+              artist.followers ? `${compactCount(artist.followers)} followers` : null,
               artist.albums.length ? `${artist.albums.length} release${artist.albums.length === 1 ? '' : 's'}` : null,
             ]}
           />
@@ -118,9 +135,18 @@ export default function ArtistPage() {
 
       {songs.length > 0 && (
         <section className="vx-esection" aria-label="Popular">
-          <SectionHeader title="Popular" />
+          <SectionHeader title={sort === 'popular' ? 'Popular' : 'Songs'} />
+          {songs.length > 1 && (
+            <div className="vx-chip-rail mb-2" role="group" aria-label="Sort songs">
+              {ARTIST_SONG_SORTS.map((o) => (
+                <Chip key={o.id} active={sort === o.id} onClick={() => setSort(o.id)}>
+                  {o.label}
+                </Chip>
+              ))}
+            </div>
+          )}
           <div className="vx-tracklist">
-            {shown.map((song, i) => <SongRow key={song.id} song={song} songs={songs} index={i} />)}
+            {shown.map((song, i) => <SongRow key={song.id} song={song} songs={sorted} index={i} />)}
           </div>
           {showAll && (
             <InfiniteSentinel
