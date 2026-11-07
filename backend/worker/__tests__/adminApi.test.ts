@@ -134,7 +134,7 @@ describe('every admin GET', () => {
 describe('analytics', () => {
   it('maps each view to its function and refuses an unknown view', async () => {
     stub((c) => (path(c).startsWith('rpc/') ? json(path(c) === 'rpc/stats_engagement' ? { byKind: [] } : path(c) === 'rpc/stats_platforms' ? { platforms: [], versions: [] } : [{ x: 1 }]) : undefined));
-    for (const [view, fn] of [['music', 'stats_music'], ['geo', 'stats_geo'], ['retention', 'stats_retention'], ['funnel', 'stats_funnel'], ['skips', 'stats_skips'], ['errors', 'stats_errors']]) {
+    for (const [view, fn] of [['music', 'stats_music'], ['geo', 'stats_geo'], ['retention', 'stats_retention'], ['funnel', 'stats_funnel'], ['skips', 'stats_skips'], ['errors', 'stats_errors'], ['listening', 'stats_listening']]) {
       calls = [];
       const { res, body } = await run(analytics.onRequestGet as Handler, `/api/admin/analytics?view=${view}&days=30`);
       expect(res.status, view).toBe(200);
@@ -144,7 +144,8 @@ describe('analytics', () => {
     }
     calls = [];
     const eng = await run(analytics.onRequestGet as Handler, '/api/admin/analytics?view=engagement');
-    expect(eng.body?.data).toEqual({ byKind: [], timeline: [{ x: 1 }], platforms: [], versions: [] });
+    // stats_listening answered a list here, not an object: listening is null.
+    expect(eng.body?.data).toEqual({ byKind: [], timeline: [{ x: 1 }], platforms: [], versions: [], listening: null });
     expect((await run(analytics.onRequestGet as Handler, '/api/admin/analytics?view=nope')).res.status).toBe(400);
   });
 });

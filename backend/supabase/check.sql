@@ -230,6 +230,39 @@ begin
   v := user_profile('check_a1');
   assert (v -> 'stats' ->> 'listen30d')::int > 0 and (v -> 'stats' ->> 'listenAll')::int >= (v -> 'stats' ->> 'listen30d')::int, 'user_profile: listening time';
   assert jsonb_array_length(v -> 'listenByDay') = 14 and (v -> 'devices' -> 0 ->> 'device') = 'macos-web', 'user_profile: 14 days, device key';
+  -- version 14: the spans add up to listen_time; Top listeners, At risk, the heat map, retention
+  assert (select sum(seconds) from _listen_spans(array['check_lt'], null)) = 75 + 360 + 360, '_listen_spans adds up like listen_time';
+  assert (select count(*) from _listen_spans(array[]::text[], null)) = 0, '_listen_spans: an empty list is nobody';
+  v := stats_top_listeners(30, 10);
+  assert (v -> 'rows' -> 0 ->> 'id') = 'check_a1' and (v -> 'rows' -> 0 ->> 'seconds')::int > 0 and (v -> 'rows' -> 0 ->> 'device') = 'macos-web', 'stats_top_listeners: ranked, with the device';
+  assert (v ->> 'people')::int = jsonb_array_length(v -> 'rows') and (v -> 'rows' -> 0 ->> 'topArtist') like 'Check Artist%', 'stats_top_listeners: people and top artist';
+  assert (stats_listening(30) ->> 'total')::bigint = (v ->> 'total')::bigint, 'stats_listening and stats_top_listeners agree';
+  v := stats_listening(30);
+  assert jsonb_array_length(v -> 'hourly' -> 'cells') = 7 and jsonb_array_length(v -> 'hourly' -> 'cells' -> 0) = 24 and jsonb_array_length(v -> 'hourly' -> 'byHour') = 24, 'stats_listening: 7 × 24 grid';
+  assert (v -> 'hourly' -> 'peak' ->> 'seconds')::int > 0 and jsonb_array_length(v -> 'timeline') = 31, 'stats_listening: peak and one row per day';
+  assert (stats_listening(1) -> 'timeline' -> 0 ->> 'day') = to_char(_ist_today(), 'YYYY-MM-DD'), 'stats_listening: 1 day is today';
+  -- a regular who went quiet 8 days ago (6 active days before), and a light one
+  insert into accounts (id, email, name, created_at, last_seen) values
+    ('check_ar', 'ar@example.com', 'Regular', now() - interval '40 days', now() - interval '8 days'),
+    ('check_aq', 'aq@example.com', 'Light',   now() - interval '40 days', now() - interval '8 days');
+  insert into listeners (id, platform, account_id, first_seen, last_seen) values
+    ('check_lar', 'android', 'check_ar', now() - interval '40 days', now() - interval '8 days'),
+    ('check_laq', 'web',     'check_aq', now() - interval '40 days', now() - interval '8 days');
+  insert into events (at, listener_id, kind, song_artist)
+    select now() - interval '8 days' - (g || ' days')::interval, 'check_lar', 'play', 'Risk Artist' from generate_series(0, 5) g;
+  insert into events (at, listener_id, kind, song_artist) values (now() - interval '8 days', 'check_laq', 'play', 'Risk Artist');
+  v := stats_at_risk(7, 50);
+  assert (v ->> 'total')::int = 1 and (v -> 'rows' -> 0 ->> 'id') = 'check_ar' and (v -> 'rows' -> 0 ->> 'days')::int = 6, 'stats_at_risk: the regular, not the light one';
+  assert (v -> 'rows' -> 0 ->> 'topArtist') = 'Risk Artist' and (v -> 'rows' -> 0 ->> 'device') = 'android-app' and (v -> 'rule' ->> 'minDays')::int = 5, 'stats_at_risk: artist, device, rule';
+  assert (stats_at_risk(9, 50) ->> 'total')::int = 0, 'stats_at_risk: quiet for 9 days is nobody yet';
+  v := stats_retention(8);
+  assert (select bool_and((r ->> 'd1')::int <= (r ->> 'd1Of')::int and (r ->> 'd30')::int <= (r ->> 'd30Of')::int and (r ->> 'd1Of')::int <= (r ->> 'size')::int) from jsonb_array_elements(v) r), 'stats_retention: rates only count finished windows';
+  assert (select sum((r ->> 'size')::int) from jsonb_array_elements(v) r) = (select count(*) from accounts where created_at >= ((date_trunc('week', _ist_today()) - interval '7 weeks')::timestamp at time zone 'Asia/Kolkata')), 'stats_retention: cohorts by sign-in week';
+  assert (select sum((r ->> 'd1')::int) from jsonb_array_elements(v) r) >= 1, 'stats_retention: Asha came back the next day';
+  -- a person with no device has no listening (not everyone's)
+  assert (user_profile('check_a2') -> 'stats' ->> 'listenAll')::int = 0, 'user_profile: no devices, no listening';
+  delete from events where listener_id in ('check_lar', 'check_laq');
+  delete from accounts where id in ('check_ar', 'check_aq');
   n := purge_kind('errors', 180);
   assert n = 0, 'purge_kind keeps recent errors';
   begin
@@ -603,7 +636,7 @@ begin
   assert not has_table_privilege('anon', 'public.personal_events', 'select'), 'anon cannot read personal events';
   assert not has_function_privilege('anon', 'public.personal_neighbours(text, text, integer, text[], boolean)', 'execute'), 'anon cannot call the personal engine';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 13, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 14, 'meta.schema.version';
   -- v12: sign-in history is locked like every table and goes with its account.
   assert (select relforcerowsecurity from pg_class where relname = 'sign_ins'), 'sign_ins: row level security forced';
   assert not has_table_privilege('anon', 'public.sign_ins', 'select'), 'anon cannot read sign-in history';

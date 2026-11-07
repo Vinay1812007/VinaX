@@ -969,10 +969,16 @@
       grid.appendChild(h('span.heat-lbl', DAYS[d] || String(d)));
       for (var x = 0; x < 24; x++) {
         var v = VX.num(VX.arr(row)[x]);
-        grid.appendChild(h('div.heat-cell', { title: DAYS[d] + ' ' + x + ':00 · ' + fmt.num(v), style: { opacity: v ? (0.15 + 0.85 * v / max).toFixed(2) : '0.06' } }));
+        grid.appendChild(h('div.heat-cell', { title: DAYS[d] + ' ' + x + ':00 · ' + (o.format ? o.format(v) : fmt.num(v)), style: { opacity: v ? (0.15 + 0.85 * v / max).toFixed(2) : '0.06' } }));
       }
     });
-    return grid;
+    if (!o.key) return grid;
+    // A low → high key, so the shading reads without hovering.
+    var steps = [0.06, 0.36, 0.57, 0.79, 1];
+    return h('div.heat-wrap', grid, h('div.heat-key', { 'aria-hidden': 'true' },
+      h('span.muted.small', o.keyLow || 'Less'),
+      steps.map(function (op) { return h('span.heat-cell.heat-swatch', { style: { opacity: String(op) } }); }),
+      h('span.muted.small', (o.keyHigh || 'More') + (o.format ? ' (' + o.format(max) + ')' : ''))));
   };
 
   /** Previous / Next controls for server-side paging. */

@@ -170,4 +170,40 @@ test.describe('console pages', () => {
     await expect(page).toHaveURL(/#\/users$/);
     expect(errors).toEqual([]);
   });
+
+  test('Top Listeners, At Risk, When They Listen and Do They Come Back show their data', async ({ page }) => {
+    const errors = watchErrors(page);
+    await mockConsole(page);
+    await signedIn(page);
+    const body = page.locator('#pageBody');
+    // Schema 14: ranked by listening time, with a Today / 7 days / 30 days switch.
+    await page.goto('/admin/#/top-listeners');
+    await settle(page);
+    await expect(body.locator('tbody tr').first()).toContainText('Asha Rao');
+    await body.getByRole('radio', { name: '30 days' }).click();
+    await expect(page).toHaveURL(/days=30/);
+    await expect(body.getByText('Top listeners in the last 30 days')).toBeVisible();
+    await body.locator('tbody tr').first().click();
+    await expect(page).toHaveURL(/#\/user\?id=\d+$/);
+    await page.goto('/admin/#/at-risk');
+    await settle(page);
+    await expect(body.getByText('Regular listeners who went quiet')).toBeVisible();
+    await expect(body.locator('tbody tr')).toHaveCount(5);
+    await page.goto('/admin/#/listening-hours');
+    await settle(page);
+    await expect(body.locator('.heat-cell').first()).toBeVisible();
+    await expect(body.getByText('Friday 21:00')).toBeVisible();
+    // A list answer reaches the page (it used to be turned into {} and the page looked empty).
+    await page.goto('/admin/#/coming-back');
+    await settle(page);
+    await expect(body.locator('table.cohort-grid tbody tr')).toHaveCount(8);
+    await expect(body.getByText('Not yet').first()).toBeVisible();
+    await page.goto('/admin/#/signup-journey');
+    await settle(page);
+    await expect(body.locator('.funnel-step')).toHaveCount(4);
+    await page.goto('/admin/#/skipped-songs');
+    await settle(page);
+    await expect(body.locator('tbody tr').first()).toBeVisible();
+    expect(errors).toEqual([]);
+  });
 });

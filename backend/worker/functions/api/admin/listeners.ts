@@ -15,6 +15,13 @@
  *        listen30d / listenToday are seconds of listening (schema 13's listen_time)
  * GET  /api/admin/listeners?filters=1 → { configured, places, versions, languages }
  * GET  /api/admin/listeners?account=<id> → { configured, profile }   (user_profile)
+ * GET  /api/admin/listeners?view=top&days=1|7|30 → { configured, days, since, people, total, rows }
+ *        Top listeners (schema 14): ranked by listening seconds in the window
+ *        (1 = today since midnight India time); rows: { id, name, email, picture,
+ *        seconds, days, plays, topArtist, device, os, browser, platform, appVersion, place…, lastSeen }
+ * GET  /api/admin/listeners?view=at-risk&quiet=7 → { configured, quiet, rule, total, rows }
+ *        At risk (schema 14): quiet for `quiet` days (1–60) after listening ≥ 2 h or
+ *        on ≥ 5 days in the 30 days before; rows add lastActive.
  * POST /api/admin/listeners
  *        { action: 'block', account, reason? }       the person cannot sign in again
  *        { action: 'unblock', account }
@@ -86,6 +93,22 @@ export function userArgs(url: URL): Record<string, unknown> {
 interface SignInRow { at: string; ip: string | null; browser: string | null; platform: string | null; app_version: string | null; country: string | null; region: string | null; city: string | null; new_device: boolean; signup: boolean }
 
 export const onRequestGet = adminGet(async ({ env, url }) => {
+  const view = url.searchParams.get('view');
+  if (view === 'top') {
+    const days = intIn(url.searchParams.get('days'), 1, 90) ?? 7;
+    const r = await db.rpc<Record<string, unknown>>(env, 'stats_top_listeners', { p_days: days, p_limit: 100 });
+    if (!r.ok) return dbFailure(r);
+    const v = r.value ?? {};
+    return adminJson({ configured: true, days, since: v.since ?? null, people: Number(v.people) || 0, total: Number(v.total) || 0, rows: Array.isArray(v.rows) ? v.rows : [] });
+  }
+  if (view === 'at-risk') {
+    const quiet = intIn(url.searchParams.get('quiet'), 1, 60) ?? 7;
+    const r = await db.rpc<Record<string, unknown>>(env, 'stats_at_risk', { p_quiet_days: quiet, p_limit: 200 });
+    if (!r.ok) return dbFailure(r);
+    const v = r.value ?? {};
+    return adminJson({ configured: true, quiet, rule: v.rule ?? null, total: Number(v.total) || 0, rows: Array.isArray(v.rows) ? v.rows : [] });
+  }
+  if (view !== null) return badRequest('unknown_view', { views: ['top', 'at-risk'] });
   if (url.searchParams.get('filters') === '1') {
     const r = await db.rpc<{ places?: unknown[]; versions?: unknown[]; languages?: unknown[] }>(env, 'admin_user_filters');
     if (!r.ok) return dbFailure(r);

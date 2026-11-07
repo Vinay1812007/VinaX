@@ -53,6 +53,19 @@ const feedbackRows = [
   { id: 38, at: ago(60 * 80), kind: 'other', message: 'Love the app! Thank you.', status: 'resolved', note: 'Replied by notification', platform: 'web', appVersion: '1.8.0', country: 'US', city: 'Dallas', name: 'Sam', user: { id: '1003', name: 'Sam', email: 'sam@example.com', picture: null }, canReply: true },
 ];
 
+/** Schema 14 — stats_listening: listening seconds by weekday × hour, per day, per person. */
+function listening(days) {
+  const cells = Array.from({ length: 7 }, (_, d) => Array.from({ length: 24 }, (_, h) => Math.max(0, Math.round(5400 * Math.sin((h - 6) / 24 * Math.PI) + (d === 0 || d === 6 ? 1500 : 0) + (h === 21 && d === 5 ? 4000 : 0)))));
+  const byHour = Array.from({ length: 24 }, (_, h) => cells.reduce((t, r) => t + r[h], 0));
+  const total = byHour.reduce((t, v) => t + v, 0);
+  return {
+    since: new Date(Date.now() - days * 86_400_000).toISOString(), total, people: 158, perPerson: Math.round(total / 158), perPersonDay: 2700,
+    hourly: { cells, byHour, peak: { day: 5, hour: 21, seconds: cells[5][21] } },
+    timeline: Array.from({ length: days }, (_, i) => ({ day: day(days - 1 - i), seconds: 90000 + i * 3000 + (i % 3) * 8000, people: 30 + (i % 5) * 3 })),
+    buckets: { light: 70, regular: 66, heavy: 22 },
+  };
+}
+
 export default {
   'GET /api/admin/feedback': (url) => {
     const status = url.searchParams.get('status') || 'new';
@@ -88,9 +101,11 @@ export default {
         timeline: Array.from({ length: days }, (_, i) => ({ day: day(days - 1 - i), plays: 180 + i * 7, listeners: 30 + (i % 5) * 3, newListeners: 2 + (i % 3), errors: 3, searches: 60, heartbeats: 0 })),
         platforms: [{ platform: 'android', users: 110 }, { platform: 'web', users: 48 }],
         versions: [],
+        listening: listening(days),
       } };
     }
-    if (view === 'retention') return { ...base, data: Array.from({ length: 8 }, (_, i) => ({ week: day(7 * (i + 1)), size: 30 - i * 2, d1: 14 - i, d7: 9 - Math.min(i, 8), d30: i > 3 ? 0 : 6 - i })) };
+    if (view === 'listening') return { ...base, data: listening(days) };
+    if (view === 'retention') return { ...base, data: Array.from({ length: 8 }, (_, i) => ({ week: day(7 * i), size: 30 - i * 2, d1: i ? 14 - i : 4, d7: i ? 9 - Math.min(i, 8) : 0, d30: i > 4 ? 6 - (i - 4) : 0, d1Of: i ? 30 - i * 2 : 9, d7Of: i ? 30 - i * 2 : 0, d30Of: i > 4 ? 30 - i * 2 : 0 })) };
     if (view === 'funnel') return { ...base, data: [{ id: 'open', label: 'Opened the app', listeners: 410 }, { id: 'play', label: 'Played a song', listeners: 352 }, { id: 'signin', label: 'Signed in with Google', listeners: 158 }, { id: 'return', label: 'Came back another day', listeners: 97 }] };
     if (view === 'skips') return { ...base, data: songs.map((s, i) => ({ id: s.id, title: s.title, artist: s.artist, image: s.image, plays: s.plays, skips: Math.round(s.plays * (0.6 - i * 0.08)), rate: Math.round((0.6 - i * 0.08) * 100) })) };
     return { ...base, data: {} };

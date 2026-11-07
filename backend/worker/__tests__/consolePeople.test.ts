@@ -65,7 +65,7 @@ describe('Dashboard (overview)', () => {
       if (p === 'rpc/stats_overview') return json(kpis);
       if (p === 'rpc/stats_timeline') { expect(c.body).toEqual({ p_days: 30 }); return json([{ day: '2026-11-01', plays: 4 }]); }
       if (p === 'rpc/stats_platforms') return json({ platforms: [{ platform: 'android', users: 9 }], versions: [] });
-      if (p === 'meta') return json([{ key: 'schema', value: { version: 13, appliedAt: 'x' } }]);
+      if (p === 'meta') return json([{ key: 'schema', value: { version: 14, appliedAt: 'x' } }]);
       return undefined;
     });
     const { res, body } = await run(overview.onRequestGet as Handler, '/api/admin/overview?days=30');
@@ -178,6 +178,35 @@ describe('Users (listeners)', () => {
     ]);
     expect(body?.deleted).toEqual({ listener: 2, account: 2, events: 20 });
     expect((calls.find((c) => path(c) === 'audit_log')?.body as { action: string }).action).toBe('user-delete');
+  });
+});
+
+describe('Top Listeners and At Risk (schema 14)', () => {
+  it('view=top reads stats_top_listeners with a 1–90 day window', async () => {
+    stub((c) => (path(c) === 'rpc/stats_top_listeners' ? json({ since: '2026-11-07T00:00:00Z', people: 1, total: 600, rows: [{ id: ACCT, seconds: 600 }] }) : undefined));
+    const r = await run(listeners.onRequestGet, '/api/admin/listeners?view=top&days=1');
+    expect(r.res.status).toBe(200);
+    expect(r.body).toMatchObject({ configured: true, days: 1, people: 1, total: 600, rows: [{ id: ACCT, seconds: 600 }] });
+    expect(calls.find((c) => path(c) === 'rpc/stats_top_listeners')!.body).toEqual({ p_days: 1, p_limit: 100 });
+    await run(listeners.onRequestGet, '/api/admin/listeners?view=top&days=999');
+    expect(calls.filter((c) => path(c) === 'rpc/stats_top_listeners').at(-1)!.body).toEqual({ p_days: 7, p_limit: 100 });
+  });
+
+  it('view=at-risk reads stats_at_risk; quiet days stay within 1–60; unknown views are refused', async () => {
+    stub((c) => (path(c) === 'rpc/stats_at_risk' ? json({ rule: { minSeconds: 7200, minDays: 5 }, total: 1, rows: [{ id: ACCT, lastActive: '2026-10-30T00:00:00Z' }] }) : undefined));
+    const r = await run(listeners.onRequestGet, '/api/admin/listeners?view=at-risk&quiet=14');
+    expect(r.body).toMatchObject({ configured: true, quiet: 14, total: 1, rule: { minDays: 5 } });
+    expect(calls.find((c) => path(c) === 'rpc/stats_at_risk')!.body).toEqual({ p_quiet_days: 14, p_limit: 200 });
+    await run(listeners.onRequestGet, '/api/admin/listeners?view=at-risk&quiet=0');
+    expect(calls.filter((c) => path(c) === 'rpc/stats_at_risk').at(-1)!.body).toEqual({ p_quiet_days: 7, p_limit: 200 });
+    expect((await run(listeners.onRequestGet, '/api/admin/listeners?view=nope')).res.status).toBe(400);
+  });
+
+  it('an older database answers db_update_needed', async () => {
+    stub((c) => (path(c) === 'rpc/stats_top_listeners' ? json({ code: 'PGRST202', message: 'Could not find the function' }, 404) : undefined));
+    const r = await run(listeners.onRequestGet, '/api/admin/listeners?view=top');
+    expect(r.res.status).toBe(502);
+    expect(r.body?.error).toBe('db_update_needed');
   });
 });
 

@@ -92,6 +92,19 @@ export default {
   'POST /api/admin/live': (url, b) => ({ ok: true, ended: b.action === 'end_all_rooms' ? 1 : 1 }),
   'GET /api/admin/listeners': (url) => {
     const p = url.searchParams;
+    // Schema 14: Top Listeners and At Risk.
+    if (p.get('view') === 'top') {
+      const days = Number(p.get('days')) || 7;
+      const scale = days === 1 ? 1 / 20 : days / 30;
+      const rows = users.filter((u) => !u.blocked).map((u, i) => ({ ...u, seconds: Math.round(u.listen30d * scale), days: Math.min(days, 12 - (i % 6)), plays: Math.round(u.plays * scale), topArtist: SONGS[i % SONGS.length][1] }))
+        .filter((r) => r.seconds > 0).sort((a, b) => b.seconds - a.seconds);
+      return { configured: true, days, since: ago(days * 1440), people: rows.length, total: rows.reduce((t, r) => t + r.seconds, 0), rows };
+    }
+    if (p.get('view') === 'at-risk') {
+      const quiet = Number(p.get('quiet')) || 7;
+      const rows = users.slice(9, 14).map((u, i) => ({ ...u, lastActive: ago(1440 * (quiet + 1 + i * 3)), seconds: 36000 - i * 6000, days: 14 - i * 2, plays: 120 - i * 15, topArtist: SONGS[i][1] }));
+      return { configured: true, quiet, rule: { quietDays: quiet, minSeconds: 7200, minDays: 5, lookbackDays: 30 }, total: rows.length, rows };
+    }
     if (p.get('filters') === '1') {
       const places = {};
       users.forEach((u) => { const k = [u.country, u.region, u.city].join('|'); places[k] = (places[k] || 0) + 1; });

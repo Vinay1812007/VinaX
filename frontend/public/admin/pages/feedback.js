@@ -145,7 +145,7 @@
   }
 
   VX.page({
-    id: 'feedback', title: 'Feedback', group: 'Users', icon: 'message', order: 2,
+    id: 'feedback', title: 'Feedback', group: 'Users', icon: 'message', order: 4,
     desc: 'Messages people send from Settings → Feedback in the app.',
     keywords: 'bug idea report inbox messages',
     render: render

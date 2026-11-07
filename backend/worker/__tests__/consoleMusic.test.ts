@@ -159,6 +159,20 @@ describe('Song Stats views', () => {
     expect((await run(analytics.onRequestGet, '/api/admin/analytics?view=nope')).res.status).toBe(400);
   });
 
+  it('listening reads stats_listening (schema 14); engagement carries it, or null on an older database', async () => {
+    stub((c) => (c.url.pathname.endsWith('/rpc/stats_listening') ? json({ total: 3600, people: 2, hourly: { cells: [], byHour: [] } }) : undefined));
+    const r = await run(analytics.onRequestGet, '/api/admin/analytics?view=listening&days=7');
+    expect(r.res.status).toBe(200);
+    expect(r.body).toMatchObject({ view: 'listening', days: 7, data: { total: 3600, people: 2 } });
+    expect(calls.find((c) => c.url.pathname.endsWith('/rpc/stats_listening'))!.body).toEqual({ p_days: 7 });
+    const e = await run(analytics.onRequestGet, '/api/admin/analytics?view=engagement&days=30');
+    expect((e.body?.data as Record<string, unknown>).listening).toMatchObject({ total: 3600 });
+    stub((c) => (c.url.pathname.endsWith('/rpc/stats_listening') ? json({ code: 'PGRST202', message: 'Could not find the function' }, 404) : c.url.pathname.includes('/rpc/') ? json({}) : undefined));
+    const old = await run(analytics.onRequestGet, '/api/admin/analytics?view=engagement&days=30');
+    expect(old.res.status).toBe(200);
+    expect((old.body?.data as Record<string, unknown>).listening).toBeNull();
+  });
+
   it('an older database answers db_update_needed, not a zero', async () => {
     stub((c) => (c.url.pathname.endsWith('/rpc/stats_funnel') ? json({ code: 'PGRST202', message: 'Could not find the function' }, 404) : undefined));
     const r = await run(analytics.onRequestGet, '/api/admin/analytics?view=funnel');

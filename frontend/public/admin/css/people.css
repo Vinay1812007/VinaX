@@ -69,3 +69,10 @@
 .drawer-body > .tabs { min-height: 42px; }
 .profile-top .media { flex: 1 1 220px; min-width: 0; }
 .profile-top > .grow { display: none; }
+
+/* Top Listeners, At Risk, When They Listen (schema 14) */
+.rank-bar { margin-bottom: 12px; }
+.rank-rule { margin: -4px 0 12px; max-width: 80ch; }
+.heat-wrap { display: grid; gap: 10px; }
+.heat-key { display: flex; align-items: center; gap: 4px; justify-content: flex-end; flex-wrap: wrap; }
+.heat-key .heat-swatch { width: 14px; height: 14px; min-width: 14px; aspect-ratio: 1; }

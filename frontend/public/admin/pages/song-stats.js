@@ -80,7 +80,9 @@
   /* ------------------------------------------------------------ helpers */
   function load(host, view, ctx, render) {
     return ui.load(host, function () { return VX.api.get('/api/admin/analytics', { view: view, days: ctx.range.days }); }, function (d) {
-      return ui.gate(d, ctx) || render(VX.obj(d.data), d);
+      // Retention, the funnel and skips answer a list: pass it through (VX.obj
+      // would turn it into {} and those pages would always look empty).
+      return ui.gate(d, ctx) || render(Array.isArray(d.data) ? d.data : VX.obj(d.data), d);
     });
   }
   function rangeText(ctx) { return ctx.range.days === 1 ? 'today' : ctx.range.key === 'custom' ? 'in ' + ctx.range.label : 'in the ' + ctx.range.label.toLowerCase(); }
@@ -235,38 +237,115 @@
     });
   }
 
+  var LISTEN_INFO = 'Worked out from the app’s “still playing” signal (every 25 seconds while music plays) and each song played; a gap over 6 minutes counts as stopped. An estimate: a phone in the background can send fewer signals.';
+  var DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  function hourText(hr) { return String(hr).padStart(2, '0') + ':00–' + String((hr + 1) % 24).padStart(2, '0') + ':00'; }
+  function minutesAxis(v) { v = Math.round(v); var hr = Math.floor(v / 60), m = v % 60; return !v ? '0' : hr ? fmt.num(hr) + 'h' + (m ? ' ' + m + 'm' : '') : m + 'm'; }
+  function segmentsCard(seg) {
+    return ui.card({ title: 'Who is coming back', sub: 'All signed-in users, today.', body: ui.hbars([
+      { label: 'Joined this week', value: num(seg.new7d) },
+      { label: 'Came back this week', value: num(seg.returning7d) },
+      { label: 'Quiet for 1–4 weeks', value: num(seg.inactive30d) },
+      { label: 'Away for over a month', value: num(seg.dormant) },
+      { label: 'Big fans (20+ plays in 30 days)', value: num(seg.power) }
+    ], { format: function (v) { return fmt.plural(v, 'person', 'people'); } }) });
+  }
+
+  /* Schema 14: listening time. On an older database `listening` is null and
+   * the page shows plays, as before. */
   function engagement(host, ctx) {
     return load(host, 'engagement', ctx, function (d) {
-      var per = obj(d.perUser), b = obj(per.buckets), seg = obj(d.segments), tl = arr(d.timeline);
-      var peak = obj(obj(d.hourly).peak);
-      var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      var L = d.listening && typeof d.listening === 'object' ? d.listening : null;
+      if (!L) return engagementPlays(d, ctx);
+      var per = obj(d.perUser), seg = obj(d.segments), tl = arr(L.timeline), b = obj(L.buckets);
       return [
         ui.stats([
-          { label: 'People listening', value: fmt.num(per.people), info: 'Signed-in users who did anything in the app ' + rangeText(ctx) + '.' },
-          { label: 'Plays per person', value: per.playsPerPerson == null ? '—' : fmt.num(per.playsPerPerson), info: 'On average, how many songs each of those people played ' + rangeText(ctx) + '.' },
-          { label: 'Days active per person', value: per.daysPerPerson == null ? '—' : fmt.num(per.daysPerPerson), info: 'On average, on how many different days each person used the app ' + rangeText(ctx) + '.' },
-          { label: 'Busiest time', value: peak.n ? DAYS[peak.day] + ' ' + String(peak.hour).padStart(2, '0') + ':00' : '—', info: 'The hour of the week (India time) with the most listening.' }
+          { label: 'Listening, everyone', value: VX.listenText(L.total), info: 'Time all signed-in people spent listening ' + rangeText(ctx) + ', all devices together. ' + LISTEN_INFO },
+          { label: 'People listening', value: fmt.num(L.people), info: 'Signed-in people who listened to anything ' + rangeText(ctx) + '.' },
+          { label: 'Per person', value: L.perPerson == null ? '—' : VX.listenText(L.perPerson), info: 'Listening time divided by the people who listened ' + rangeText(ctx) + '.' },
+          { label: 'Per person, per day', value: L.perPersonDay == null ? '—' : VX.listenText(L.perPersonDay), info: 'On a day someone listens, how long they listen on average.' },
+          { label: 'Plays per person', value: per.playsPerPerson == null ? '—' : fmt.num(per.playsPerPerson), info: 'On average, how many songs each person played ' + rangeText(ctx) + '.' }
         ]),
-        ui.card({ title: 'Plays per person each day', sub: 'Plays divided by the people who listened that day.', body: ui.chart({
-          labels: tl.map(function (x) { return x.day; }), type: 'bar', height: 200,
-          series: [{ name: 'Plays per person', values: tl.map(function (x) { return num(x.listeners) ? Math.round(num(x.plays) / num(x.listeners) * 10) / 10 : 0; }) }],
-          format: function (v) { return fmt.num(v); }, empty: 'No plays ' + rangeText(ctx)
+        ui.card({ title: 'Time spent listening each day', sub: 'Hours everyone listened each day (India time).', body: ui.chart({
+          labels: tl.map(function (x) { return x.day; }), type: 'bar', height: 200, title: 'Minutes listened per day',
+          series: [{ name: 'Listening', values: tl.map(function (x) { return Math.round(num(x.seconds) / 60); }) }],
+          format: minutesAxis, empty: 'No listening ' + rangeText(ctx)
         }) }),
         h('div.grid.cols-2',
-          ui.card({ title: 'How much people listen', sub: 'Signed-in users by plays ' + rangeText(ctx) + '.', body: ui.hbars([
-            { label: 'Light (1–9 plays)', value: num(b.light) },
-            { label: 'Regular (10–49 plays)', value: num(b.regular) },
-            { label: 'Heavy (50+ plays)', value: num(b.heavy) }
+          ui.card({ title: 'How much people listen', sub: 'Signed-in people by listening time ' + rangeText(ctx) + '.', body: ui.hbars([
+            { label: 'Light (under 30 min)', value: num(b.light) },
+            { label: 'Regular (30 min – 5 h)', value: num(b.regular) },
+            { label: 'Heavy (5 h or more)', value: num(b.heavy) }
           ], { format: function (v) { return fmt.plural(v, 'person', 'people'); }, empty: 'No listening ' + rangeText(ctx) }) }),
-          ui.card({ title: 'Who is coming back', sub: 'All signed-in users, today.', body: ui.hbars([
-            { label: 'Joined this week', value: num(seg.new7d) },
-            { label: 'Came back this week', value: num(seg.returning7d) },
-            { label: 'Quiet for 1–4 weeks', value: num(seg.inactive30d) },
-            { label: 'Away for over a month', value: num(seg.dormant) },
-            { label: 'Big fans (20+ plays in 30 days)', value: num(seg.power) }
-          ], { format: function (v) { return fmt.plural(v, 'person', 'people'); } }) })),
-        ui.card({ title: 'When people listen', sub: 'Each square is one hour of the week (India time). Darker means more listening.', body: ui.heatmap(obj(d.hourly).cells, { empty: 'No listening ' + rangeText(ctx) }) }),
-        h('p.muted.small', 'Minutes listened are not recorded by the app yet, so listening is shown as plays.')
+          segmentsCard(seg)),
+        h('div.toolbar', ui.button('See when people listen', { kind: 'ghost', small: true, icon: 'calendar', onClick: function () { ctx.go('listening-hours'); } }),
+          ui.button('Top listeners', { kind: 'ghost', small: true, icon: 'play', onClick: function () { ctx.go('top-listeners'); } }))
+      ];
+    });
+  }
+
+  function engagementPlays(d, ctx) {
+    var per = obj(d.perUser), b = obj(per.buckets), seg = obj(d.segments), tl = arr(d.timeline);
+    var peak = obj(obj(d.hourly).peak);
+    var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return [
+      ui.stats([
+        { label: 'People listening', value: fmt.num(per.people), info: 'Signed-in users who did anything in the app ' + rangeText(ctx) + '.' },
+        { label: 'Plays per person', value: per.playsPerPerson == null ? '—' : fmt.num(per.playsPerPerson), info: 'On average, how many songs each of those people played ' + rangeText(ctx) + '.' },
+        { label: 'Days active per person', value: per.daysPerPerson == null ? '—' : fmt.num(per.daysPerPerson), info: 'On average, on how many different days each person used the app ' + rangeText(ctx) + '.' },
+        { label: 'Busiest time', value: peak.n ? DAYS[peak.day] + ' ' + String(peak.hour).padStart(2, '0') + ':00' : '—', info: 'The hour of the week (India time) with the most listening.' }
+      ]),
+      ui.card({ title: 'Plays per person each day', sub: 'Plays divided by the people who listened that day.', body: ui.chart({
+        labels: tl.map(function (x) { return x.day; }), type: 'bar', height: 200,
+        series: [{ name: 'Plays per person', values: tl.map(function (x) { return num(x.listeners) ? Math.round(num(x.plays) / num(x.listeners) * 10) / 10 : 0; }) }],
+        format: function (v) { return fmt.num(v); }, empty: 'No plays ' + rangeText(ctx)
+      }) }),
+      h('div.grid.cols-2',
+        ui.card({ title: 'How much people listen', sub: 'Signed-in users by plays ' + rangeText(ctx) + '.', body: ui.hbars([
+          { label: 'Light (1–9 plays)', value: num(b.light) },
+          { label: 'Regular (10–49 plays)', value: num(b.regular) },
+          { label: 'Heavy (50+ plays)', value: num(b.heavy) }
+        ], { format: function (v) { return fmt.plural(v, 'person', 'people'); }, empty: 'No listening ' + rangeText(ctx) }) }),
+        ui.card({ title: 'Who is coming back', sub: 'All signed-in users, today.', body: ui.hbars([
+          { label: 'Joined this week', value: num(seg.new7d) },
+          { label: 'Came back this week', value: num(seg.returning7d) },
+          { label: 'Quiet for 1–4 weeks', value: num(seg.inactive30d) },
+          { label: 'Away for over a month', value: num(seg.dormant) },
+          { label: 'Big fans (20+ plays in 30 days)', value: num(seg.power) }
+        ], { format: function (v) { return fmt.plural(v, 'person', 'people'); } }) })),
+      ui.card({ title: 'When people listen', sub: 'Each square is one hour of the week (India time). Darker means more listening.', body: ui.heatmap(obj(d.hourly).cells, { empty: 'No listening ' + rangeText(ctx) }) }),
+      h('p.muted.small', 'Listening time appears here after the database update to version 14; until then listening is shown as plays.')
+    ];
+  }
+
+  /* Schema 14: when people listen — listening time by weekday and hour. */
+  function listeningHours(host, ctx) {
+    return load(host, 'listening', ctx, function (L) {
+      var hr = obj(L.hourly), peak = obj(hr.peak), byHour = arr(hr.byHour);
+      var cells = arr(hr.cells).map(function (row) { return arr(row).map(function (v) { return Math.round(num(v) / 60); }); });
+      var total = num(L.total);
+      var topHour = -1, topVal = 0;
+      byHour.forEach(function (v, i) { if (num(v) > topVal) { topVal = num(v); topHour = i; } });
+      var byDay = [0, 0, 0, 0, 0, 0, 0];
+      arr(hr.cells).forEach(function (row, d) { arr(row).forEach(function (v) { byDay[d] += num(v); }); });
+      var topDay = byDay.indexOf(Math.max.apply(null, byDay));
+      var nightShare = total ? byHour.reduce(function (t, v, i) { return t + (i >= 21 || i < 5 ? num(v) : 0); }, 0) / total * 100 : 0;
+      return [
+        ui.stats([
+          { label: 'Busiest hour of the week', value: peak.seconds ? DAY_NAMES[peak.day] + ' ' + String(peak.hour).padStart(2, '0') + ':00' : '—', sub: peak.seconds ? VX.listenText(peak.seconds) + ' of listening' : null, info: 'The single hour of the week (India time) with the most listening ' + rangeText(ctx) + '.' },
+          { label: 'Busiest time of day', value: topHour >= 0 ? hourText(topHour) : '—', sub: topVal ? VX.listenText(topVal) + (total ? ' · ' + fmt.pct(topVal / total * 100) + ' of all' : '') : null, info: 'Adding up every day ' + rangeText(ctx) + ', the hour (India time) people listen most.' },
+          { label: 'Busiest day', value: total ? DAY_NAMES[topDay] : '—', sub: total ? VX.listenText(byDay[topDay]) : null, info: 'The weekday with the most listening ' + rangeText(ctx) + '.' },
+          { label: 'Late night share', value: total ? fmt.pct(nightShare) : '—', info: 'How much of all listening happens between 21:00 and 05:00 India time.' }
+        ]),
+        ui.card({ title: 'When people listen', sub: 'Each square is one hour of the week (India time), ' + rangeText(ctx) + '. Darker means more listening; hover a square for the time.', body: ui.heatmap(cells, {
+          label: 'Listening by weekday and hour', empty: 'No listening ' + rangeText(ctx), key: true, format: function (m) { return VX.listenText(m * 60); }
+        }) }),
+        ui.card({ title: 'Listening by hour of the day', sub: 'Every day added together (India time).', body: ui.chart({
+          labels: byHour.map(function (_, i) { return String(i).padStart(2, '0') + ':00'; }), type: 'bar', height: 180, title: 'Minutes listened by hour',
+          series: [{ name: 'Listening', values: byHour.map(function (v) { return Math.round(num(v) / 60); }) }],
+          format: minutesAxis, empty: 'No listening ' + rangeText(ctx)
+        }) }),
+        h('p.muted.small', LISTEN_INFO)
       ];
     });
   }
@@ -275,21 +354,31 @@
     return load(host, 'retention', ctx, function (rows) {
       rows = arr(rows);
       if (!rows.length) return ui.emptyState('No groups yet', 'Each week’s new users form a group. It shows here once people start signing in and listening.');
+      // Schema 14: d1Of / d7Of / d30Of are the people whose window is over; a
+      // younger group shows "Not yet" instead of looking like people who left.
+      var exact = rows.some(function (r) { return r.d1Of != null; });
+      function of(r, k) { return exact ? num(r[k + 'Of']) : num(r.size); }
       function cell(n, size) {
-        var p = size ? num(n) / size * 100 : 0;
-        return h('td.right.cohort', { style: { '--p': (p / 100).toFixed(2) }, title: fmt.plural(n, 'person', 'people') + ' of ' + fmt.num(size) }, size ? fmt.pct(p) : '—');
+        if (!size) return h('td.right.cohort.muted', { title: 'Too early to tell: this window is not over yet for anyone in this group.' }, 'Not yet');
+        var p = num(n) / size * 100;
+        return h('td.right.cohort', { style: { '--p': (p / 100).toFixed(2) }, title: fmt.plural(n, 'person', 'people') + ' of ' + fmt.num(size) }, fmt.pct(p));
       }
-      var all = rows.reduce(function (a, r) { a.size += num(r.size); a.d7 += num(r.d7); a.d30 += num(r.d30); a.d1 += num(r.d1); return a; }, { size: 0, d1: 0, d7: 0, d30: 0 });
+      var all = rows.reduce(function (a, r) {
+        ['d1', 'd7', 'd30'].forEach(function (k) { a[k] += num(r[k]); a[k + 'Of'] += of(r, k); });
+        return a;
+      }, { d1: 0, d7: 0, d30: 0, d1Of: 0, d7Of: 0, d30Of: 0 });
+      function rate(k) { return all[k + 'Of'] ? fmt.pct(all[k] / all[k + 'Of'] * 100) : '—'; }
+      var who = exact ? 'Of people who first signed in during these weeks' : 'Of people who started in these weeks';
       return [
         ui.stats([
-          { label: 'Came back after 1 day', value: all.size ? fmt.pct(all.d1 / all.size * 100) : '—', info: 'Of people who started in these weeks, how many used the app again the next day.' },
-          { label: 'Came back after 7 days', value: all.size ? fmt.pct(all.d7 / all.size * 100) : '—', info: 'How many used the app again between day 2 and day 7.' },
-          { label: 'Came back after 30 days', value: all.size ? fmt.pct(all.d30 / all.size * 100) : '—', info: 'How many used the app again between day 8 and day 30.' }
+          { label: 'Came back after 1 day', value: rate('d1'), sub: all.d1Of ? fmt.plural(all.d1Of, 'person', 'people') + ' counted' : null, info: who + ', how many used the app again on the next calendar day (India time). People who joined today or yesterday are not counted yet.' },
+          { label: 'Came back after 7 days', value: rate('d7'), sub: all.d7Of ? fmt.plural(all.d7Of, 'person', 'people') + ' counted' : null, info: who + ', how many used the app again on any of days 2 to 7. Only people who joined over a week ago count.' },
+          { label: 'Came back after 30 days', value: rate('d30'), sub: all.d30Of ? fmt.plural(all.d30Of, 'person', 'people') + ' counted' : null, info: who + ', how many used the app again on any of days 8 to 30. Only people who joined over a month ago count.' }
         ]),
-        ui.card({ title: 'Do they come back?', sub: 'Each row is the people whose first visit was that week. Darker means more of them came back.', pad: false, body: h('div.tbl-scroll', h('table.tbl.cohort-grid',
-          h('thead', h('tr', h('th', { scope: 'col' }, 'First visit in the week of'), h('th.right', { scope: 'col' }, 'People'), h('th.right', { scope: 'col' }, 'Came back after 1 day'), h('th.right', { scope: 'col' }, 'Came back after 7 days'), h('th.right', { scope: 'col' }, 'Came back after 30 days'))),
+        ui.card({ title: 'Do they come back?', sub: exact ? 'Each row is the people who first signed in with Google that week (Monday to Sunday, India time). Darker means more of them came back.' : 'Each row is the people whose first visit was that week. Darker means more of them came back.', pad: false, body: h('div.tbl-scroll', h('table.tbl.cohort-grid',
+          h('thead', h('tr', h('th', { scope: 'col' }, exact ? 'Signed in first in the week of' : 'First visit in the week of'), h('th.right', { scope: 'col' }, 'People'), h('th.right', { scope: 'col' }, 'Came back after 1 day'), h('th.right', { scope: 'col' }, 'Came back after 7 days'), h('th.right', { scope: 'col' }, 'Came back after 30 days'))),
           h('tbody', rows.map(function (r) {
-            return h('tr', h('td', fmt.day(r.week)), h('td.right', fmt.num(r.size)), cell(r.d1, num(r.size)), cell(r.d7, num(r.size)), cell(r.d30, num(r.size)));
+            return h('tr', h('td', fmt.day(r.week)), h('td.right', fmt.num(r.size)), cell(r.d1, of(r, 'd1')), cell(r.d7, of(r, 'd7')), cell(r.d30, of(r, 'd30')));
           })))) })
       ];
     });
@@ -341,10 +430,12 @@
     { id: 'where-users-are', title: 'Where Users Are', group: 'Audience', icon: 'globe', order: 1, render: places,
       desc: 'The countries, states and cities signed-in users listen from.', keywords: 'places map countries cities states location' },
     { id: 'listening-time', title: 'How Much They Listen', group: 'Audience', icon: 'play', order: 2, render: engagement,
-      desc: 'How many songs and minutes people play, and at what times of day.', keywords: 'engagement minutes time listening sessions' },
-    { id: 'coming-back', title: 'Do They Come Back', group: 'Audience', icon: 'refresh', order: 3, render: retention,
+      desc: 'How long people listen each day and how many are light, regular or heavy listeners.', keywords: 'engagement minutes time listening sessions hours spent' },
+    { id: 'listening-hours', title: 'When They Listen', group: 'Audience', icon: 'calendar', order: 3, render: listeningHours,
+      desc: 'Listening time by weekday and hour, with the busiest hour of the week.', keywords: 'heat map heatmap hours time of day peak busiest night' },
+    { id: 'coming-back', title: 'Do They Come Back', group: 'Audience', icon: 'refresh', order: 4, render: retention,
       desc: 'Of the people who joined, how many come back in the following days and weeks.', keywords: 'retention return come back loyal' },
-    { id: 'signup-journey', title: 'Sign-up Journey', group: 'Audience', icon: 'target', order: 4, render: funnel,
+    { id: 'signup-journey', title: 'Sign-up Journey', group: 'Audience', icon: 'target', order: 5, render: funnel,
       desc: 'Each step from opening the app to signing in and playing songs, and where people stop.', keywords: 'funnel sign up journey steps drop off' }
   ].forEach(function (p) {
     VX.page(Object.assign({ range: true }, p));

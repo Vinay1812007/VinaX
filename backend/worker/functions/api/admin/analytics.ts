@@ -1,5 +1,5 @@
 /**
- * GET  /api/admin/analytics?view=music|rising|geo|engagement|retention|funnel|skips|errors&days=
+ * GET  /api/admin/analytics?view=music|rising|geo|engagement|listening|retention|funnel|skips|errors&days=
  *        → { configured, days, view, data }
  * POST /api/admin/analytics { action: 'clear_errors' }   (owner only)
  *
@@ -7,8 +7,12 @@
  * people), except `funnel` (aggregate sign-up journey) and `errors`.
  *   music / rising → { songs [{ id, title, artist, image, plays, listeners, prev_plays }], artists, languages, rising }
  *   geo            → { countries, regions, cities }
- *   engagement     → { byKind, byPlatform, hourly, perUser, segments, total, timeline, platforms, versions }
- *   retention      → [{ week, size, d1, d7, d30 }]
+ *   engagement     → { byKind, byPlatform, hourly, perUser, segments, total, timeline, platforms, versions,
+ *                      listening (schema 14: stats_listening, null on an older database) }
+ *   listening      → { since, total, people, perPerson, perPersonDay, hourly { cells, byHour, peak },
+ *                      timeline [{ day, seconds, people }], buckets }   (seconds; schema 14)
+ *   retention      → [{ week, size, d1, d7, d30, d1Of, d7Of, d30Of }]   (d*Of from schema 14:
+ *                      people whose window is over; cohorts are sign-in weeks)
  *   funnel         → [{ id, label, listeners }] (4 steps)
  *   skips          → [{ id, title, artist, image, plays, skips, rate }]
  */
@@ -17,7 +21,7 @@ import { adminGet, adminPost } from '../../_lib/adminRoute';
 import { db, q } from '../../_lib/db';
 import { daysParam } from '../../_lib/edge';
 
-const VIEWS = ['music', 'rising', 'geo', 'engagement', 'retention', 'funnel', 'skips', 'errors'] as const;
+const VIEWS = ['music', 'rising', 'geo', 'engagement', 'listening', 'retention', 'funnel', 'skips', 'errors'] as const;
 type View = (typeof VIEWS)[number];
 
 export const onRequestGet = adminGet(async ({ env, url }) => {
@@ -26,19 +30,22 @@ export const onRequestGet = adminGet(async ({ env, url }) => {
   const days = daysParam(url, 7, 90);
 
   if (view === 'engagement') {
-    const [eng, timeline, platforms] = await Promise.all([
+    const [eng, timeline, platforms, listening] = await Promise.all([
       db.rpc<Record<string, unknown>>(env, 'stats_engagement', { p_days: days }),
       db.rpc<unknown[]>(env, 'stats_timeline', { p_days: days }),
       db.rpc<Record<string, unknown>>(env, 'stats_platforms'),
+      db.rpc<Record<string, unknown>>(env, 'stats_listening', { p_days: days }),
     ]);
     if (!eng.ok) return dbFailure(eng);
     if (!timeline.ok) return dbFailure(timeline);
     if (!platforms.ok) return dbFailure(platforms);
-    return adminJson({ configured: true, days, view, data: { ...(eng.value ?? {}), timeline: timeline.value ?? [], ...(platforms.value ?? {}) } });
+    // Listening time needs schema 14; on an older database the page shows plays only.
+    return adminJson({ configured: true, days, view, data: { ...(eng.value ?? {}), timeline: timeline.value ?? [], ...(platforms.value ?? {}), listening: listening.ok && listening.value && typeof listening.value === 'object' && !Array.isArray(listening.value) ? listening.value : null } });
   }
 
   const call: Record<Exclude<View, 'engagement'>, [string, Record<string, unknown>]> = {
     music: ['stats_music', { p_days: days, p_limit: 100 }],
+    listening: ['stats_listening', { p_days: days }],
     rising: ['stats_music', { p_days: days, p_limit: 100 }],
     geo: ['stats_geo', { p_days: days }],
     retention: ['stats_retention', { p_weeks: Math.min(26, Math.max(8, Math.ceil(days / 7))) }],
@@ -49,7 +56,7 @@ export const onRequestGet = adminGet(async ({ env, url }) => {
   const [fn, args] = call[view];
   const r = await db.rpc<unknown>(env, fn, args);
   if (!r.ok) return dbFailure(r);
-  return adminJson({ configured: true, days, view, data: r.value ?? (view === 'music' || view === 'rising' || view === 'geo' || view === 'errors' ? {} : []) });
+  return adminJson({ configured: true, days, view, data: r.value ?? (view === 'music' || view === 'rising' || view === 'geo' || view === 'errors' || view === 'listening' ? {} : []) });
 });
 
 export const onRequestPost = adminPost(async ({ env, body, audit }) => {
