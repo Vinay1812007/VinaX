@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.11.0': {
+    title: 'Easier browsing: Home for everyone, one languages picker, podcasts in search',
+    changes: [
+      { type: 'improved', text: 'Home opens without signing in: Trending now first, then charts, editorial picks, radio stations, artist stations and podcasts.' },
+      { type: 'improved', text: 'One "Music languages" button in the top bar changes Home, charts, radio and search together.' },
+      { type: 'improved', text: 'Search finds podcasts and shows how many results there are; artist pages show listeners, followers and a verified tick.' },
+      { type: 'new', text: 'New pages for New Releases, Top Playlists and Top Artists, and radio stations by language with Surprise me.' },
+    ],
+  },
   '1.10.13': {
     title: 'Fix the App Errors: Android push setup, downloads, and noisy reports',
     changes: [
