@@ -3,7 +3,7 @@
  * onboarding) never drags the full changelog history into the first-load
  * bundle. Bumped every release alongside package.json and the changelog.
  */
-export const LATEST_VERSION = '1.10.12';
+export const LATEST_VERSION = '1.10.13';
 
 /**
  * Marketing display name for the release — what listeners see everywhere a

@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.10.13': {
+    title: 'Fix the App Errors: Android push setup, downloads, and noisy reports',
+    changes: [
+      { type: 'fixed', text: 'Push (179 reports, 49 people): loadPlugin() resolved a promise with the.' },
+      { type: 'fixed', text: 'Downloads ("no audio variants", ~30 groups): songs from saved lists carry no.' },
+      { type: 'fixed', text: 'Offline cache: a saved song whose file is gone from the phone is no longer.' },
+      { type: 'fixed', text: '"reading \'default\'": cancelling vite:preloadError resolves the lazy import.' },
+    ],
+  },
   '1.10.12': {
     title: 'VinaX logo cursor, with a switch in Settings',
     changes: [
