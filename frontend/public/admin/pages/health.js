@@ -12,19 +12,30 @@
   'use strict';
   var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt, arr = VX.arr, obj = VX.obj, num = VX.num;
 
-  VX.page({
-    id: 'health', title: 'App Health', group: 'System', icon: 'pulse', order: 1, range: true, noAuto: false,
-    desc: 'Errors people hit in the app, and whether every service is working.',
-    keywords: 'errors crashes problems status keys versions releases ai recommendations music sources',
-    tabs: [
-      { id: 'errors', label: 'App Errors', desc: 'Problems people hit in the app, grouped so the same problem shows once. Set a status as you work on each one.', render: renderErrors },
-      { id: 'checks', label: 'Server Checks', desc: 'The website and every service the app calls, checked from the server right now.', render: renderChecks },
-      { id: 'sources', label: 'Music Sources', desc: 'Where songs come from. Each source is checked with a one-song search.', render: renderSources },
-      { id: 'ai', label: 'AI Assistant', desc: 'The companies and models behind VinaX AI, and whether each one is ready.', render: renderAi },
-      { id: 'recommendations', label: 'Recommendations', desc: 'The engine behind “For you” picks: what it has learned and what it is still working on.', render: renderRecs },
-      { id: 'versions', label: 'App Versions', desc: 'The newest app release and the latest builds.', render: renderVersions },
-      { id: 'keys', label: 'API Keys Status', desc: 'Which service keys the server has. Only “Set” or “Missing” is shown — never the keys themselves.', render: renderKeys }
-    ]
+  [
+    { id: 'app-errors', title: 'App Errors', icon: 'alert', range: true, render: renderErrors,
+      desc: 'Problems people hit in the app, grouped so the same problem shows once. Set a status as you work on each one.',
+      keywords: 'errors crashes problems bugs reports' },
+    { id: 'server-checks', title: 'Server Checks', icon: 'pulse', render: renderChecks,
+      desc: 'The website and every service the app calls, checked from the server right now.',
+      keywords: 'status up down outage services website' },
+    { id: 'music-sources', title: 'Music Sources', icon: 'music', render: renderSources,
+      desc: 'Where songs come from. Each source is checked with a one-song search.',
+      keywords: 'music api catalogue sources search working' },
+    { id: 'ai-status', title: 'AI Assistant', icon: 'spark', render: renderAi,
+      desc: 'The companies and models behind VinaX AI, and whether each one is ready.',
+      keywords: 'ai vinax ai models providers chat' },
+    { id: 'recommendations', title: 'Recommendations', icon: 'target', render: renderRecs,
+      desc: 'The engine behind “For you” picks: what it has learned and what it is still working on.',
+      keywords: 'recommendations for you picks engine up next' },
+    { id: 'app-versions', title: 'App Versions', icon: 'phone', render: renderVersions,
+      desc: 'The newest app release and the latest builds.',
+      keywords: 'versions releases builds apk android update' },
+    { id: 'api-keys', title: 'API Keys Status', icon: 'key', render: renderKeys,
+      desc: 'Which service keys the server has. Only “Set” or “Missing” is shown — never the keys themselves.',
+      keywords: 'keys secrets env environment configured missing' }
+  ].forEach(function (p, i) {
+    VX.page(Object.assign({ group: 'App Health', order: i + 1 }, p));
   });
 
   function extLink(url, text) {
@@ -437,7 +448,7 @@
       if (d.configured === false) {
         return ui.card({ title: 'Release information is not connected', tone: 'warn', body: [
           h('p', 'The server needs the “App releases access” key to read releases and builds. Until then this tab has nothing to show, and Android’s update check may not work.'),
-          h('div.toolbar', { style: { 'margin-top': '12px' } }, ui.button('See API Keys Status', { kind: 'ghost', small: true, icon: 'key', onClick: function () { ctx.go('health', 'keys'); } }))
+          h('div.toolbar', { style: { 'margin-top': '12px' } }, ui.button('See API Keys Status', { kind: 'ghost', small: true, icon: 'key', onClick: function () { ctx.go('api-keys'); } }))
         ] });
       }
       var rel = d.release, live = d.live && typeof d.live === 'object' ? d.live : null;

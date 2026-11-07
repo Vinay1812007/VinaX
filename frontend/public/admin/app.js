@@ -1,8 +1,9 @@
 /* VinaX console — shell (console rebuild).
  *
- * Owns Google sign-in (with the owner recovery password), the grouped
- * sidebar with the App Settings sub-menu, the hash router (#/page/tab, with
- * redirects from the old addresses and a "Page not found" screen), the top
+ * Owns Google sign-in (with the owner recovery password), the sidebar (ten
+ * folding groups, one job per page, and a "Find a page" box), the hash
+ * router (#/page, with every old page and tab address sent to its page now
+ * and a "Page not found" screen), the top
  * bar (breadcrumb, global search, date range, auto-refresh, theme, profile),
  * keyboard shortcuts (press ?) with quick actions in Ctrl K, and the
  * unsaved-changes guard. Pages register with VX.page() in
@@ -12,25 +13,51 @@
   'use strict';
   var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt, $ = function (id) { return document.getElementById(id); };
 
-  var GROUPS = ['Home', 'People', 'Music', 'Engage', 'App Settings', 'System'];
+  /** Sidebar groups, top to bottom, with the icon each shows when the menu is collapsed. */
+  var GROUPS = ['Overview', 'Users', 'Music Stats', 'Audience', 'Search & Library', 'Notifications', 'App Settings', 'App Health', 'Growth & SEO', 'System'];
+  var GROUP_ICONS = {
+    Overview: 'grid', Users: 'users', 'Music Stats': 'growth', Audience: 'globe', 'Search & Library': 'library',
+    Notifications: 'bell', 'App Settings': 'settings', 'App Health': 'pulse', 'Growth & SEO': 'target', System: 'database'
+  };
   var THEME_KEY = 'vinax_admin_theme';
   var AUTO_KEY = 'vinax_admin_auto';
   var AUTO_MS_KEY = 'vinax_admin_auto_ms';
   var RANGE_KEY = 'vinax_admin_range';
   var RAIL_KEY = 'vinax_admin_sidebar';
 
-  /** Old addresses → new ones. Tabs map where the page was split or renamed. */
+  /**
+   * Old addresses → today's pages. Every tab of the old pages is its own page
+   * now, so "page/tab" keys come first; a bare old page id goes to its first
+   * page. Alerts, emails and dashboard notices from the server still use the
+   * old addresses, so these stay.
+   */
   var REDIRECTS = {
     '': 'dashboard', overview: 'dashboard', listeners: 'users', audience: 'users',
     publish: 'app-settings/home-screen', settings: 'app-settings/home-screen', 'app-settings': 'app-settings/home-screen',
-    notify: 'notifications', push: 'notifications', analytics: 'song-stats', catalog: 'library',
-    experiments: 'ab-tests', seo: 'google-search', admin: 'admins', roles: 'admins'
-  };
-  var TAB_REDIRECTS = {
-    'analytics/errors': ['health', 'errors'],
-    'publish/home': ['app-settings/home-screen'], 'publish/app': ['app-settings/features'],
-    'publish/catalog': ['app-settings/search'], 'publish/operations': ['app-settings/maintenance'],
-    'notify/send': ['notifications', 'compose'], 'notify/audience': ['notifications', 'compose'], 'notify/push': ['notifications', 'setup']
+    notify: 'send-notification', push: 'send-notification', analytics: 'top-songs', catalog: 'find-music',
+    experiments: 'ab-tests', seo: 'google-search', admin: 'admins', roles: 'admins',
+    'analytics/errors': 'app-errors',
+    'publish/home': 'app-settings/home-screen', 'publish/app': 'app-settings/features',
+    'publish/catalog': 'app-settings/search', 'publish/operations': 'app-settings/maintenance',
+    'notify/send': 'send-notification', 'notify/audience': 'send-notification', 'notify/push': 'notification-setup',
+    // Split in the one-job-per-page rebuild.
+    live: 'listening-now', 'live/now': 'listening-now', 'live/activity': 'recent-activity', 'live/rooms': 'listen-together',
+    'song-stats': 'top-songs', 'song-stats/top-songs': 'top-songs', 'song-stats/rising': 'rising-songs',
+    'song-stats/artists': 'top-artists', 'song-stats/languages': 'languages', 'song-stats/skips': 'skipped-songs',
+    'song-stats/places': 'where-users-are', 'song-stats/engagement': 'listening-time',
+    'song-stats/retention': 'coming-back', 'song-stats/funnel': 'signup-journey',
+    library: 'find-music', 'library/search': 'find-music', 'library/blocked': 'blocked-music',
+    'search-insights': 'search-overview', 'search-insights/overview': 'search-overview',
+    'search-insights/nothing-found': 'search-no-results', 'search-insights/pins': 'search-pins',
+    notifications: 'send-notification', 'notifications/compose': 'send-notification',
+    'notifications/history': 'sent-notifications', 'notifications/audiences': 'saved-audiences',
+    'notifications/setup': 'notification-setup', 'app-settings/notification-rules': 'notification-rules',
+    health: 'app-errors', 'health/errors': 'app-errors', 'health/checks': 'server-checks',
+    'health/sources': 'music-sources', 'health/ai': 'ai-status', 'health/recommendations': 'recommendations',
+    'health/versions': 'app-versions', 'health/keys': 'api-keys',
+    'google-search/summary': 'google-search', 'google-search/pages': 'page-check', 'google-search/console': 'search-console',
+    database: 'db-tables', 'database/tables': 'db-tables', 'database/jobs': 'scheduled-jobs',
+    'database/changes': 'change-log', 'database/maintenance': 'db-maintenance'
   };
 
   var pages = VX.pages().slice().sort(function (a, b) {
@@ -39,6 +66,8 @@
   });
   var byId = {};
   pages.forEach(function (p) { byId[p.id] = p; });
+  /** Pages in the menu and in search (a user's profile opens from a person, not the menu). */
+  var navPages = pages.filter(function (p) { return !p.hidden; });
 
   var current = null; // { page, tab, params, timers, disposers, leave }
   var lastHash = location.hash;
@@ -59,35 +88,56 @@
   themeSel.addEventListener('change', function () { setThemePref(themeSel.value); }); // re-render: charts read colours from CSS variables
 
   /* ------------------------------------------------------------- nav */
-  var openSub = {};
+  /*
+   * Every group folds open and shut. Only the group of the page you are on
+   * starts open; moving to a page in another group starts fresh. Typing in
+   * "Find a page" opens every group and shows only the pages that match.
+   */
+  var openGroups = {};      // group → true / false, set by the admin's clicks
+  var navGroup = null;      // the group of the page on screen
+  var navFilter = '';
+  function navMatch(p, q) { return (p.title + ' ' + p.group + ' ' + (p.keywords || '') + ' ' + (p.desc || '')).toLowerCase().indexOf(q) >= 0; }
   function buildNav() {
     var nav = VX.clear($('nav'));
-    GROUPS.forEach(function (g) {
-      var list = pages.filter(function (p) { return p.group === g; });
+    var q = navFilter.trim().toLowerCase();
+    var shown = 0;
+    GROUPS.forEach(function (g, gi) {
+      var list = navPages.filter(function (p) { return p.group === g && (!q || navMatch(p, q)); });
       if (!list.length) return;
-      if (g === 'App Settings') {
-        var expanded = openSub[g] !== false;
-        var btn = h('button.nav-group-toggle', { type: 'button', 'aria-expanded': String(expanded), onclick: function () { openSub[g] = !expanded; buildNav(); if (current) markNav(current.page.id); } },
-          VX.icon('settings'), h('span', 'App Settings'), VX.icon('chevron'));
-        nav.appendChild(h('div.nav-group.sub' + (expanded ? '.open' : ''),
-          h('div.nav-group-label', g), btn,
-          h('ul', { hidden: !expanded }, list.map(function (p) {
-            return h('li', h('a.nav-link.nav-sub', { href: '#/' + p.id, dataset: { page: p.id }, title: p.title }, VX.icon(p.icon || 'settings'), h('span', p.title)));
-          }))));
-        return;
-      }
-      nav.appendChild(h('div.nav-group',
-        h('div.nav-group-label', g),
-        h('ul', list.map(function (p) {
+      shown += list.length;
+      var open = q ? true : openGroups[g] != null ? openGroups[g] : g === navGroup;
+      var listId = 'navg-' + gi;
+      var btn = h('button.nav-group-toggle', {
+        type: 'button', title: g, 'aria-expanded': String(open), 'aria-controls': listId,
+        onclick: function () { if (q) return; openGroups[g] = !open; buildNav(); }
+      }, VX.icon(GROUP_ICONS[g] || 'grid'), h('span', g), VX.icon('chevron'));
+      nav.appendChild(h('div.nav-group' + (open ? '.open' : '') + (g === navGroup ? '.has-current' : ''), { dataset: { group: g } },
+        btn,
+        h('ul', { id: listId, hidden: !open }, list.map(function (p) {
           return h('li', h('a.nav-link', { href: '#/' + p.id, dataset: { page: p.id }, title: p.title }, VX.icon(p.icon || 'grid'), h('span', p.title)));
         }))));
     });
+    if (!shown) nav.appendChild(h('p.nav-empty', 'No page matches “' + navFilter.trim() + '”.'));
+    if (current) markNav(current.page.id);
   }
   function markNav(id) {
+    var g = id && byId[id] ? byId[id].group : null;
+    if (g !== navGroup) { navGroup = g; openGroups = {}; buildNav(); return; }
+    var on = id && byId[id] && byId[id].navAs ? byId[id].navAs : id; // a profile lights up All Users
     VX.$$('.nav-link').forEach(function (a) {
-      if (a.dataset.page === id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+      if (a.dataset.page === on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
     });
   }
+  var filterBox = $('navFilter');
+  filterBox.addEventListener('input', function () { navFilter = filterBox.value; buildNav(); });
+  filterBox.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && filterBox.value) { e.preventDefault(); e.stopPropagation(); filterBox.value = ''; navFilter = ''; buildNav(); }
+    else if (e.key === 'Enter') { var a = VX.$('#nav .nav-link'); if (a) { e.preventDefault(); a.click(); } }
+  });
+  // Choosing a page clears the filter so the menu goes back to its groups.
+  $('nav').addEventListener('click', function (e) {
+    if (navFilter && e.target.closest && e.target.closest('.nav-link')) { filterBox.value = ''; navFilter = ''; setTimeout(buildNav, 0); }
+  });
   function openNav(open) {
     document.body.classList.toggle('nav-open', open);
     $('scrimNav').hidden = !open;
@@ -163,17 +213,28 @@
     VX.mount($('pageBody'), ui.notFound(function () { setHash('dashboard', null, {}); route(); }));
   }
 
+  /**
+   * An old address → { path, params } of today's page, or null when the
+   * address is already current. "page/tab" wins over "page"; an unknown old
+   * tab falls back to the old page's first page. "#/users?user=<id>" opens
+   * that person's profile page.
+   */
+  function own(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+  function translate(path, params) {
+    var segs = path.split('/').filter(Boolean);
+    var two = segs.slice(0, 2).join('/');
+    var to = null;
+    if (segs.length >= 2 && own(REDIRECTS, two)) to = REDIRECTS[two];
+    else if (own(REDIRECTS, path)) to = REDIRECTS[path];
+    else if (!resolve(path) && segs.length && own(REDIRECTS, segs[0])) to = REDIRECTS[segs[0]];
+    if (to == null && segs[0] === 'users' && params && params.user) return { path: 'user', params: { id: params.user } };
+    return to == null ? null : { path: to, params: params || {} };
+  }
+
   function route() {
     var r = parseHash();
-    if (Object.prototype.hasOwnProperty.call(REDIRECTS, r.path)) {
-      setHash(REDIRECTS[r.path], null, r.params, true); return route();
-    }
-    var two = r.path.split('/').slice(0, 2).join('/');
-    if (TAB_REDIRECTS[two]) { setHash(TAB_REDIRECTS[two][0], TAB_REDIRECTS[two][1] || null, r.params, true); return route(); }
-    var first = r.path.split('/')[0];
-    if (!resolve(r.path) && REDIRECTS[first]) {
-      setHash(REDIRECTS[first], r.path.split('/')[1] || null, r.params, true); return route();
-    }
+    var moved = translate(r.path, r.params);
+    if (moved) { setHash(moved.path, null, moved.params, true); return route(); }
     var hit = resolve(r.path);
     if (!hit) return notFound();
     var page = hit.page;
@@ -200,6 +261,8 @@
 
   /** Navigate, asking first when the current page has unsaved changes. */
   function go(page, tab, params) {
+    var moved = translate(page + (tab ? '/' + tab : ''), params || {});
+    if (moved) { page = moved.path; tab = null; params = moved.params; }
     leaveOk().then(function (ok) { if (ok) { setHash(page, tab, params || {}); route(); } });
   }
   function leaveOk() {
@@ -338,10 +401,10 @@
   /* ---------------------------------------------------- global search */
   function openPalette() {
     var items = [];
-    pages.forEach(function (p) {
+    navPages.forEach(function (p) {
       items.push({ label: p.title, sub: p.group, page: p.id, kind: 'Pages', words: (p.keywords || '') + ' ' + (p.desc || '') });
       (p.tabs || []).forEach(function (t) { if (p.tabs.length > 1) items.push({ label: t.label, sub: p.title, page: p.id, tab: t.id, kind: 'Pages' }); });
-      (p.sections || []).forEach(function (s) { items.push({ label: s.title, sub: 'App Settings › ' + p.title, page: p.id, params: { section: s.key }, kind: 'Settings' }); });
+      (p.sections || []).forEach(function (s) { items.push({ label: s.title, sub: p.group + ' › ' + p.title, page: p.id, params: { section: s.key }, kind: 'Settings' }); });
     });
     var actions = quickActions().map(function (a) { return { label: a.label, sub: a.keys ? 'Shortcut: ' + a.keys : 'Quick action', kind: 'Quick actions', run: a.run, words: a.words || '' }; });
     var list = h('ul.palette-list', { role: 'listbox', id: 'paletteList' });
@@ -376,8 +439,8 @@
           VX.findMusic(q, 'songs').catch(function () { return []; })
         ]).then(function (res) {
           if (my !== seq) return;
-          remote = res[0].slice(0, 5).map(function (u) { return { kind: 'Users', label: u.name || u.email || 'User', sub: u.name ? u.email : '', img: u.picture, round: true, page: 'users', params: { user: u.id } }; })
-            .concat(res[1].slice(0, 5).map(function (s) { return { kind: 'Songs', label: s.title, sub: s.sub || '', img: s.image, page: 'library', params: { q: s.title } }; }));
+          remote = res[0].slice(0, 5).map(function (u) { return { kind: 'Users', label: u.name || u.email || 'User', sub: u.name ? u.email : '', img: u.picture, round: true, page: 'user', params: { id: u.id } }; })
+            .concat(res[1].slice(0, 5).map(function (s) { return { kind: 'Songs', label: s.title, sub: s.sub || '', img: s.image, page: 'find-music', params: { q: s.title } }; }));
           draw();
         });
       }, 300);
@@ -398,8 +461,8 @@
   /* ------------------------------------------- shortcuts, quick actions */
   /** "g" then a letter opens a page. Only pages that exist are listed. */
   var GO_KEYS = [
-    ['d', 'dashboard'], ['l', 'live'], ['u', 'users'], ['f', 'feedback'], ['s', 'song-stats'], ['m', 'library'],
-    ['t', 'trending'], ['i', 'search-insights'], ['n', 'notifications'], ['h', 'health'], ['a', 'alerts'], ['b', 'database']
+    ['d', 'dashboard'], ['l', 'listening-now'], ['u', 'users'], ['f', 'feedback'], ['s', 'top-songs'], ['m', 'find-music'],
+    ['t', 'trending'], ['i', 'search-overview'], ['n', 'send-notification'], ['h', 'app-errors'], ['a', 'alerts'], ['b', 'db-tables']
   ];
   function setThemePref(v) {
     try { if (v === 'system') localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY, v); } catch (e) {}
@@ -412,14 +475,14 @@
   function quickActions() {
     var light = document.documentElement.classList.contains('light');
     var list = [
-      { label: 'Send a notification', words: 'push message compose', run: function () { go('notifications', 'compose', {}); }, edit: true },
+      { label: 'Send a notification', words: 'push message compose', run: function () { go('send-notification', null, {}); }, edit: true },
       { label: 'Customise the dashboard', words: 'layout cards move hide', run: function () { go('dashboard', null, { customise: '1' }); } },
       { label: light ? 'Switch to dark theme' : 'Switch to light theme', keys: 'T', words: 'theme dark light mode', run: toggleTheme },
       { label: $('autoRefresh').checked ? 'Turn auto-refresh off' : 'Turn auto-refresh on', words: 'auto refresh', run: toggleAuto },
       { label: 'Refresh this page', keys: 'R', words: 'reload', run: function () { rerender(); } },
       { label: 'Keyboard shortcuts', keys: '?', words: 'keys help hotkeys', run: openShortcuts },
       { label: 'Put the app in maintenance', words: 'maintenance downtime offline', run: function () { go('app-settings/maintenance', null, {}); }, edit: true },
-      { label: 'See app errors', words: 'errors crashes problems', run: function () { go('health', 'errors', {}); } },
+      { label: 'See app errors', words: 'errors crashes problems', run: function () { go('app-errors', null, {}); } },
       { label: 'Collapse or expand the menu', keys: '[', words: 'sidebar rail menu', run: function () { $('railBtn').click(); } },
       { label: 'Copy a link to this page', words: 'share url address', run: function () { VX.copy(location.href, 'Link copied'); } },
       { label: 'Sign out', words: 'log out logout', run: signOut }
@@ -669,7 +732,7 @@
       if (d.databaseConfigured && d.schemaWanted && (d.schema == null || d.schema < d.schemaWanted) && VX.can('owner')) {
         VX.mount(banner, ui.notice(h('span', h('strong', 'One-time database update needed. '),
           'Until it runs, some numbers can still include people who never signed in, and some pages may not load. ',
-          ui.button('How to update', { kind: 'ghost', small: true, onClick: function () { go('database', 'maintenance'); } })), 'warn'));
+          ui.button('How to update', { kind: 'ghost', small: true, onClick: function () { go('db-maintenance'); } })), 'warn'));
         banner.hidden = false;
       }
       $('login').hidden = true;

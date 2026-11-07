@@ -1,4 +1,5 @@
-/* VinaX console — Live Now.
+/* VinaX console — Listening Now, Recent Activity and Listen Together Rooms
+ * (one page each, sharing the live cards and refresh).
  * GET /api/admin/live (refreshes on its own, every 15 s by default):
  * signed-in people listening now with their song, the newest activity, and
  * the Listen Together rooms. Ending rooms needs the Editor role. */
@@ -16,14 +17,22 @@
   VX.kindText = function (k) { return KIND[k] || fmt.label(k || 'activity'); };
 
   VX.page({
-    id: 'live', title: 'Live Now', group: 'Home', icon: 'live', order: 2, noAuto: true,
-    desc: 'Who is listening right now and what they are playing. Signed-in users only.',
-    keywords: 'realtime now playing rooms listen together activity',
-    tabs: [
-      { id: 'now', label: 'Listening now', render: function (host, ctx) { return frame(host, ctx, now); } },
-      { id: 'activity', label: 'Recent activity', render: function (host, ctx) { return frame(host, ctx, activity); } },
-      { id: 'rooms', label: 'Listen Together rooms', render: function (host, ctx) { return frame(host, ctx, rooms); } }
-    ]
+    id: 'listening-now', title: 'Listening Now', group: 'Overview', icon: 'live', order: 2, noAuto: true,
+    desc: 'Who has the app open right now and what they are playing. Signed-in users only.',
+    keywords: 'live realtime now playing active',
+    render: function (host, ctx) { return frame(host, ctx, now); }
+  });
+  VX.page({
+    id: 'recent-activity', title: 'Recent Activity', group: 'Overview', icon: 'inbox', order: 3, noAuto: true,
+    desc: 'The latest things people did in the app: songs played, sign-ins and more.',
+    keywords: 'live activity feed latest plays events',
+    render: function (host, ctx) { return frame(host, ctx, activity); }
+  });
+  VX.page({
+    id: 'listen-together', title: 'Listen Together Rooms', group: 'Overview', icon: 'users', order: 4, noAuto: true,
+    desc: 'Rooms where friends are listening to the same song at the same time.',
+    keywords: 'live rooms listen together party friends',
+    render: function (host, ctx) { return frame(host, ctx, rooms); }
   });
 
   function intervalMs() { var v = '15000'; try { v = localStorage.getItem(MS_KEY) || '15000'; } catch (e) {} return INTERVALS.some(function (i) { return i.value === v; }) ? v : '15000'; }
@@ -44,9 +53,9 @@
         if (gate) { VX.clear(top); return gate; }
         var c = obj(d.counts);
         var cards = ui.stats([
-          { label: 'Active now', value: fmt.num(c.activeNow), tone: num(c.activeNow) ? 'ok' : null, info: 'Signed-in people with the app open in the last 5 minutes.', onClick: function () { ctx.go('live', 'now'); } },
-          { label: 'Playing now', value: fmt.num(c.playingNow), info: 'Of those, how many have a song playing at this moment.', onClick: function () { ctx.go('live', 'now'); } },
-          { label: 'Rooms open', value: fmt.num(c.roomsOpen), info: 'Listen Together rooms with activity in the last 15 minutes.', onClick: function () { ctx.go('live', 'rooms'); } },
+          { label: 'Active now', value: fmt.num(c.activeNow), tone: num(c.activeNow) ? 'ok' : null, info: 'Signed-in people with the app open in the last 5 minutes.', onClick: function () { ctx.go('listening-now'); } },
+          { label: 'Playing now', value: fmt.num(c.playingNow), info: 'Of those, how many have a song playing at this moment.', onClick: function () { ctx.go('listening-now'); } },
+          { label: 'Rooms open', value: fmt.num(c.roomsOpen), info: 'Listen Together rooms with activity in the last 15 minutes.', onClick: function () { ctx.go('listen-together'); } },
           { label: 'Server time', value: fmt.time(d.now), sub: VX.tzShort(), info: 'The time on the server when these numbers were read, in your time zone.' }
         ]);
         first = false;
@@ -62,8 +71,8 @@
 
   function userMenu(u, ctx) {
     return [
-      { label: 'View profile', icon: 'user', onClick: function () { ctx.go('users', null, { user: u.id }); } },
-      { label: 'Send notification', icon: 'send', hidden: !VX.can('edit'), onClick: function () { ctx.go('notifications', 'compose', { users: u.id }); } },
+      { label: 'View profile', icon: 'user', onClick: function () { ctx.go('user', null, { id: u.id }); } },
+      { label: 'Send notification', icon: 'send', hidden: !VX.can('edit'), onClick: function () { ctx.go('send-notification', null, { users: u.id }); } },
       { label: 'Copy email', icon: 'copy', hidden: !u.email, onClick: function () { VX.copy(u.email, 'Email copied'); } }
     ];
   }
@@ -86,7 +95,7 @@
       ],
       rows: rows, exportName: 'vinax-listening-now', search: 'Search people or songs…', sortKey: 'lastSeen',
       rowMenu: function (r) { return userMenu(obj(r.user), ctx); },
-      onRow: function (r) { ctx.go('users', null, { user: obj(r.user).id }); },
+      onRow: function (r) { ctx.go('user', null, { id: obj(r.user).id }); },
       empty: { title: 'Nobody is listening right now', hint: 'Signed-in people show up here the moment they open the app.', action: { label: 'See all users', icon: 'users', onClick: function () { ctx.go('users'); } } }
     }) })];
   }

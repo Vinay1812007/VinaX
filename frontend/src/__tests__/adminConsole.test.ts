@@ -14,9 +14,11 @@
  *    throwing and without printing undefined / NaN / [object Object].
  *  - 14.0 — the database is back: every page talks to the server only
  *    through /api/admin.
- *  - Console rebuild — twenty pages in six groups (eight App Settings
- *    pages), the shared controls in kit/, the console lands on the
- *    Dashboard, old addresses redirect, and the spec's plain words.
+ *  - Console rebuild — the shared controls in kit/, the console lands on
+ *    the Dashboard, old addresses redirect, and the spec's plain words.
+ *  - One job per page — every old tab is its own page: fifty pages in ten
+ *    groups, each with a one-line description; old page/tab addresses go
+ *    to the page that does that job now.
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -27,11 +29,11 @@ const read = (rel: string): string => readFileSync(join(ADMIN, rel), 'utf8');
 const indexHtml = read('index.html');
 const pageFiles = readdirSync(join(ADMIN, 'pages')).filter((f) => f.endsWith('.js')).sort();
 const HOSTILE = '<img src=x onerror="window.__pwned=1">';
-const GROUPS = ['Home', 'People', 'Music', 'Engage', 'App Settings', 'System'];
+const GROUPS = ['Overview', 'Users', 'Music Stats', 'Audience', 'Search & Library', 'Notifications', 'App Settings', 'App Health', 'Growth & SEO', 'System'];
 const KIT = ['kit/controls.js', 'kit/settings.js'];
 
 interface Tab { id: string; label: string; render: (host: HTMLElement, ctx: unknown) => unknown }
-interface PageDef { id: string; title: string; group: string; icon?: string; render?: Tab['render']; tabs?: Tab[] }
+interface PageDef { id: string; title: string; group: string; icon?: string; desc?: string; hidden?: boolean; render?: Tab['render']; tabs?: Tab[] }
 interface ApiRes { ok: boolean; status: number; data: unknown; error: string | null; message: string }
 interface VXType {
   h: (sel: string, ...rest: unknown[]) => HTMLElement;
@@ -88,18 +90,28 @@ describe('index.html', () => {
 });
 
 describe('page registry', () => {
-  it('every page file registers a well-formed page', () => {
+  it('every page file registers well-formed pages, one job each', () => {
     const pages = VX.pages();
-    expect(pages.length).toBe(pageFiles.length);
     const ids = pages.map((p) => p.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids.sort()).toEqual([
-      'ab-tests', 'admins', 'alerts',
+      'ab-tests', 'admins', 'ai-status', 'alerts', 'api-keys', 'app-errors',
       'app-settings/features', 'app-settings/help-center', 'app-settings/home-screen', 'app-settings/maintenance',
-      'app-settings/notification-rules', 'app-settings/privacy', 'app-settings/search', 'app-settings/updates',
-      'dashboard', 'database', 'feedback', 'google-search', 'health', 'library', 'live', 'notifications', 'search-insights', 'song-stats', 'trending', 'users']);
+      'app-settings/privacy', 'app-settings/search', 'app-settings/updates', 'app-versions',
+      'blocked-music', 'change-log', 'coming-back', 'dashboard', 'db-maintenance', 'db-tables', 'feedback', 'find-music',
+      'google-search', 'languages', 'listen-together', 'listening-now', 'listening-time', 'music-sources',
+      'notification-rules', 'notification-setup', 'page-check', 'recent-activity', 'recommendations', 'rising-songs',
+      'saved-audiences', 'scheduled-jobs', 'search-console', 'search-no-results', 'search-overview', 'search-pins',
+      'send-notification', 'sent-notifications', 'server-checks', 'signup-journey', 'skipped-songs', 'top-artists',
+      'top-songs', 'trending', 'user', 'users', 'where-users-are']);
+    // Only a person's profile stays out of the menu.
+    expect(pages.filter((p) => p.hidden).map((p) => p.id)).toEqual(['user']);
     for (const p of pages) {
       expect(p.title, p.id).toBeTruthy();
+      // Every page says in one plain sentence what it is for.
+      expect(p.desc, `${p.id} description`).toMatch(/^[A-Z].{15,}[.?]$/);
+      // One job per page: no tabs inside the console's own pages.
+      expect(p.tabs, p.id).toBeUndefined();
       expect(GROUPS, p.id).toContain(p.group);
       expect(indexHtml, `${p.id} icon`).toContain(`id="i-${p.icon}"`);
       if (p.tabs) {
@@ -119,25 +131,44 @@ describe('page registry', () => {
   it('the shell lands on the Dashboard and sends old addresses to the new pages', () => {
     const app = read('app.js');
     expect(app).toContain("'': 'dashboard', overview: 'dashboard', listeners: 'users'");
-    for (const pair of ["publish: 'app-settings/home-screen'", "notify: 'notifications'", "analytics: 'song-stats'", "catalog: 'library'", "experiments: 'ab-tests'", "seo: 'google-search'"]) expect(app).toContain(pair);
+    for (const pair of ["publish: 'app-settings/home-screen'", "notify: 'send-notification'", "analytics: 'top-songs'", "catalog: 'find-music'", "experiments: 'ab-tests'", "seo: 'google-search'"]) expect(app).toContain(pair);
     expect(app).toContain("setHash('dashboard'");
     expect(app).toContain('ui.notFound(');
     // Redirect targets and the tabs other pages link to exist.
     const ids = new Set(VX.pages().map((p) => p.id));
     const block = /var REDIRECTS = \{([\s\S]*?)\};/.exec(app)?.[1] ?? '';
-    const targets = [...block.matchAll(/:\s*'([^']+)'/g)].map((m) => m[1]);
-    expect(targets.length).toBeGreaterThan(8);
-    for (const t of targets) expect(ids.has(t), t).toBe(true);
-    const tabs = (id: string) => VX.pages().find((p) => p.id === id)?.tabs?.map((t) => t.id) ?? [];
-    expect(tabs('health')).toEqual(['errors', 'checks', 'sources', 'ai', 'recommendations', 'versions', 'keys']);
-    expect(tabs('database')).toEqual(['tables', 'jobs', 'changes', 'maintenance']);
-    expect(tabs('notifications')).toEqual(['compose', 'history', 'audiences', 'setup']);
-    expect(tabs('live')).toEqual(['now', 'activity', 'rooms']);
+    const pairs = [...block.matchAll(/'?([\w/-]*)'?:\s*'([^']+)'/g)].map((m) => [m[1], m[2]]);
+    expect(pairs.length).toBeGreaterThan(40);
+    for (const [, t] of pairs) expect(ids.has(t), t).toBe(true);
+    const map = Object.fromEntries(pairs);
+    // Every tab of the old pages, and the server's links (alerts, emails, dashboard notices), still land on a page.
+    expect(map).toMatchObject({
+      'health/errors': 'app-errors', 'health/checks': 'server-checks', 'health/keys': 'api-keys',
+      'database/changes': 'change-log', 'database/maintenance': 'db-maintenance',
+      'notifications/compose': 'send-notification', 'notifications/setup': 'notification-setup',
+      'live/now': 'listening-now', 'live/rooms': 'listen-together',
+      'song-stats/places': 'where-users-are', 'song-stats/funnel': 'signup-journey',
+      'library/blocked': 'blocked-music', 'search-insights/pins': 'search-pins',
+      'google-search/pages': 'page-check', 'app-settings/notification-rules': 'notification-rules',
+    });
+    // A redirect target is never itself redirected (no loops).
+    for (const [, t] of pairs) expect(Object.prototype.hasOwnProperty.call(map, t), t).toBe(false);
+    // Pages link to each other by today's ids only.
+    for (const f of ['core.js', 'app.js', ...KIT, ...pageFiles.map((x) => `pages/${x}`)]) {
+      for (const m of read(f).matchAll(/\bgo\('([^']+)'/g)) expect(ids.has(m[1]), `${f} links to ${m[1]}`).toBe(true);
+    }
+  });
+
+  it('every group has its own pages in the sidebar', () => {
+    const counts = Object.fromEntries(GROUPS.map((g) => [g, VX.pages().filter((p) => p.group === g && !p.hidden).length]));
+    expect(counts).toEqual({ Overview: 5, Users: 2, 'Music Stats': 6, Audience: 4, 'Search & Library': 5, Notifications: 5, 'App Settings': 7, 'App Health': 7, 'Growth & SEO': 4, System: 5 });
   });
 
   it('App Settings pages are listed under one group, in the spec order', () => {
     const titles = VX.pages().filter((p) => p.group === 'App Settings').sort((a, b) => ((a as { order?: number }).order ?? 0) - ((b as { order?: number }).order ?? 0)).map((p) => p.title);
-    expect(titles).toEqual(['Home Screen', 'Features & AI', 'App Updates', 'Maintenance', 'Notification Rules', 'Search & Music Sources', 'Help Center', 'Data & Privacy']);
+    expect(titles).toEqual(['Home Screen', 'Features & AI', 'App Updates', 'Maintenance', 'Search & Music Sources', 'Help Center', 'Data & Privacy']);
+    // Notification Rules lives with the other notification pages.
+    expect(VX.pages().find((p) => p.id === 'notification-rules')?.group).toBe('Notifications');
   });
 
   it('uses the plain words from the spec: no Publish, App default, Device only or usage sharing', () => {

@@ -23,7 +23,7 @@
   function errText(res) { return ERRORS[res.error] || res.message || 'Something went wrong'; }
 
   VX.page({
-    id: 'admins', title: 'Admins & Roles', group: 'System', icon: 'shield', order: 4, noAuto: true,
+    id: 'admins', title: 'Admins & Roles', group: 'System', icon: 'shield', order: 5, noAuto: true,
     desc: 'Who can open this console and what each person may change.',
     keywords: 'admins roles owner editor viewer invite team access permissions',
     render: function (host, ctx) {
@@ -62,7 +62,7 @@
           VX.modal({
             title: 'Invite an admin',
             body: [
-              h('p.muted', 'They sign in with this Google account. When account emails are on (App Settings › Notification Rules), VinaX emails them the console address; otherwise tell them yourself.'),
+              h('p.muted', 'They sign in with this Google account. When account emails are on (Notifications › Notification Rules), VinaX emails them the console address; otherwise tell them yourself.'),
               ui.field('Google email', email),
               ui.radios('Role', ROLES.map(function (r) { return { value: r.value, label: r.label, hint: r.hint }; }), role, function (v) { role = v; }),
               err

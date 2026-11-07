@@ -11,15 +11,18 @@
   var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt, arr = VX.arr, obj = VX.obj, num = VX.num;
   var SITE = 'https://www.vinaxmusic.online';
 
-  VX.page({
-    id: 'google-search', title: 'Google Search', group: 'System', icon: 'globe', order: 3, noAuto: true,
-    desc: 'Whether Google and other search engines can find and read the website.',
-    keywords: 'seo sitemap robots crawlers bots search console indexing',
-    tabs: [
-      { id: 'summary', label: 'Summary', desc: 'How many pages search engines can find, and which bots may read the site.', render: renderSummary },
-      { id: 'pages', label: 'Page check', desc: 'The main pages read the way Google reads them: what is wrong and how to fix it.', render: renderPages },
-      { id: 'console', label: 'Search Console', desc: 'Where to tell Google and Bing about the site, and what to check each week.', render: renderConsole }
-    ]
+  [
+    { id: 'google-search', title: 'Google Search', icon: 'globe', render: renderSummary,
+      desc: 'How many pages search engines can find, and which bots may read the site.',
+      keywords: 'seo sitemap robots crawlers bots indexing' },
+    { id: 'page-check', title: 'Page Check', icon: 'check', render: renderPages,
+      desc: 'The main pages read the way Google reads them: what is wrong and how to fix it.',
+      keywords: 'seo page check problems titles meta' },
+    { id: 'search-console', title: 'Search Console', icon: 'external', render: renderConsole,
+      desc: 'Where to tell Google and Bing about the site, and what to check each week.',
+      keywords: 'search console bing webmaster submit sitemap' }
+  ].forEach(function (p, i) {
+    VX.page(Object.assign({ group: 'Growth & SEO', order: i + 1, noAuto: true }, p));
   });
 
   var cache = null;
@@ -68,7 +71,7 @@
           ui.stats([
             { label: 'Pages Google can find', value: fmt.num(d.indexable), info: 'Pages listed in the site’s sitemaps — the lists that tell search engines which pages exist.' },
             { label: 'Sitemaps', value: fmt.num(mapsOk) + (mapsOk === maps.length && maps.length ? ' ✓' : ' of ' + fmt.num(maps.length)), tone: sitemap.status === 200 && mapsOk === maps.length ? 'ok' : 'bad', info: 'Each sitemap must open and list pages. Submit the main one in Search Console.' },
-            { label: 'Pages with no problems', value: fmt.num(clean) + ' of ' + fmt.num(pages.length), tone: clean === pages.length ? 'ok' : 'warn', info: 'Of the main pages checked, how many Google can read with nothing to fix.', onClick: function () { ctx.go('google-search', 'pages'); } },
+            { label: 'Pages with no problems', value: fmt.num(clean) + ' of ' + fmt.num(pages.length), tone: clean === pages.length ? 'ok' : 'warn', info: 'Of the main pages checked, how many Google can read with nothing to fix.', onClick: function () { ctx.go('page-check'); } },
             { label: 'robots.txt', value: robots.status === 200 ? 'Working ✓' : 'Not working ✗', tone: robots.status === 200 ? 'ok' : 'bad', info: 'The file that tells search engines and bots what they may read. If it does not open, Google may stop reading the whole site.' },
             { label: 'Server load per check', value: 'None', sub: 'pages are ready-made files', info: 'How much of the server’s daily allowance search engines use. The public pages are ready-made files, so crawlers cost nothing; only this check uses about 20 quick reads.' }
           ]),

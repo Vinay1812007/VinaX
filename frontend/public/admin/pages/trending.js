@@ -2,7 +2,7 @@
  * before: songs climbing the chart (place change and plays per day), new
  * entries, top artists and languages. Follows the date range in the top bar.
  * Route: GET /api/admin/trends?view=trending&days= (stats_trending, schema 11).
- * A song opens Music Library searching for it. */
+ * A song opens Find Music searching for it. */
 (function () {
   'use strict';
   var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt, arr = VX.arr, obj = VX.obj, num = VX.num;
@@ -15,7 +15,7 @@
     return ui.card({ title: 'One-time database update needed', tone: 'warn', body: [
       h('p', 'This page needs numbers the database can give only after its one-time update. Every other page keeps working.'),
       VX.can('owner')
-        ? h('div.toolbar', ui.button('How to update', { kind: 'primary', small: true, icon: 'database', onClick: function () { ctx.go('database', 'maintenance'); } }))
+        ? h('div.toolbar', ui.button('How to update', { kind: 'primary', small: true, icon: 'database', onClick: function () { ctx.go('db-maintenance'); } }))
         : h('p.muted.small', 'Ask an Owner to run it from Database › Maintenance.')
     ] });
   }
@@ -35,13 +35,13 @@
     var p = Math.round((cur - prev) / prev * 100);
     return ui.pill((p > 0 ? '▲ ' : p < 0 ? '▼ ' : '') + Math.abs(p) + '%', p > 0 ? 'ok' : p < 0 ? 'bad' : null);
   }
-  function openSong(r, ctx) { ctx.go('library', null, { q: r.title || '' }); }
+  function openSong(r, ctx) { ctx.go('find-music', null, { q: r.title || '' }); }
 
   /** One song in a chart list: place, move, picture and names, plays per day, plays now and before. */
   function songRow(r, ctx) {
     var daily = arr(r.daily).map(num);
     return h('li',
-      h('button.tr-row', { type: 'button', title: 'Find “' + (r.title || 'this song') + '” in Music Library', onclick: function () { openSong(r, ctx); } },
+      h('button.tr-row', { type: 'button', title: 'Search for “' + (r.title || 'this song') + '” in Find Music', onclick: function () { openSong(r, ctx); } },
         h('span.tr-rank', String(num(r.rank) || '—')),
         move(r),
         h('span.tr-song', ui.media(r.image, r.title || 'Untitled', r.artist || null)),
@@ -78,7 +78,7 @@
       return [
         stats,
         h('div.grid.cols-2',
-          ui.card({ title: 'Rising songs', sub: 'Most extra plays compared with ' + beforeText(ctx) + '. ▲ is how many places a song climbed; NEW was not played before. Choose a song to find it in Music Library.', body:
+          ui.card({ title: 'Rising songs', sub: 'Most extra plays compared with ' + beforeText(ctx) + '. ▲ is how many places a song climbed; NEW was not played before. Choose a song to look it up in Find Music.', body:
             rising.length ? h('ol.tr-list', rising.map(function (r) { return songRow(r, ctx); })) : ui.emptyState('Nothing is rising ' + rangeText(ctx), 'A song shows here when it gets more plays than in the period before.') }),
           ui.card({ title: 'The chart', sub: 'The most played songs ' + rangeText(ctx) + ', with their move since ' + beforeText(ctx) + '.', body:
             h('ol.tr-list', songs.slice(0, 15).map(function (r) { return songRow(r, ctx); })) })),
@@ -94,7 +94,7 @@
             ],
             rows: artists, rowId: function (r) { return r.artist; }, search: false, exportName: 'vinax-trending-artists', pageSize: 10,
             rowMenu: function (r) { return [
-              { label: 'Find in Music Library', icon: 'search', onClick: function () { ctx.go('library', 'search', { q: r.artist, type: 'artists' }); } },
+              { label: 'Look up in Find Music', icon: 'search', onClick: function () { ctx.go('find-music', null, { q: r.artist, type: 'artists' }); } },
               { label: 'Copy name', icon: 'copy', onClick: function () { VX.copy(r.artist, 'Name copied'); } }
             ]; },
             empty: { title: 'No artists yet', hint: 'Artists appear once signed-in users play music.' }
@@ -108,7 +108,7 @@
   }
 
   VX.page({
-    id: 'trending', title: 'Trending', group: 'Music', icon: 'flame', order: 3, range: true,
+    id: 'trending', title: 'Trending', group: 'Music Stats', icon: 'flame', order: 5, range: true,
     desc: 'Songs, artists and languages getting more plays than in the period before.',
     keywords: 'trending rising climbing chart new entries hot popular artists languages',
     render: render

@@ -189,7 +189,7 @@
           api.readOnly ? null : h('div.toolbar', ui.button('Add banner', { kind: 'primary', small: true, icon: 'plus', onClick: function () { add(); } })));
       }
       draw();
-      // Arriving from Song Stats → "Add to banner": open the form with that song.
+      // Arriving from Music Stats → "Add to banner": open the form with that song.
       var p = api.ctx && api.ctx.params;
       if (p && p.addSong && !api.readOnly && !host.dataset.prefilled) {
         host.dataset.prefilled = '1';

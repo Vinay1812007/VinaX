@@ -9,7 +9,7 @@
   var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt, arr = VX.arr, obj = VX.obj, num = VX.num;
 
   VX.page({
-    id: 'dashboard', title: 'Dashboard', group: 'Home', icon: 'grid', order: 1, range: true,
+    id: 'dashboard', title: 'Dashboard', group: 'Overview', icon: 'grid', order: 1, range: true,
     desc: 'What is happening in VinaX today, and anything that needs you.',
     keywords: 'overview home summary attention',
     render: render
@@ -166,9 +166,9 @@
       today: function () {
         return group('Right now and today', [
           { label: 'Listening right now', value: fmt.num(k.activeNow), sub: fmt.num(k.playingNow) + ' playing a song', tone: num(k.activeNow) ? 'ok' : null,
-            info: 'Signed-in people who had the app open in the last 90 seconds.', onClick: go('live', 'now') },
+            info: 'Signed-in people who had the app open in the last 90 seconds.', onClick: go('listening-now') },
           { label: 'Plays today', value: fmt.num(k.playsToday), delta: VX.change(k.playsToday, k.playsYesterday), deltaLabel: 'vs yesterday',
-            info: 'Songs played today (India time) by signed-in users.', onClick: go('song-stats', 'top-songs', { range: '1' }) },
+            info: 'Songs played today (India time) by signed-in users.', onClick: go('top-songs', null, { range: '1' }) },
           { label: 'Total users', value: fmt.num(k.users != null ? k.users : k.accounts),
             info: 'Everyone who has ever signed in to VinaX with Google.', onClick: go('users') },
           { label: 'New users this week', value: fmt.num(k.newAccounts7d), delta: VX.change(k.newAccounts7d, k.newAccountsPrev7d), deltaLabel: 'vs last week',
@@ -177,7 +177,7 @@
       },
       map: function () {
         var card = ui.card({ title: 'Where people are listening', sub: 'Signed-in people with the app open in the last 5 minutes',
-          actions: [ui.button('Live Now', { kind: 'ghost', small: true, icon: 'chevron', onClick: go('live', 'now') })], body: h('div') });
+          actions: [ui.button('Listening Now', { kind: 'ghost', small: true, icon: 'chevron', onClick: go('listening-now') })], body: h('div') });
         ui.load(card.body, function () { return VX.api.get('/api/admin/live'); }, function (live) {
           var points = arr(obj(live).listening).map(function (r) { return { country: r.country, city: r.city, count: 1, playing: r.isPlaying && r.song ? 1 : 0 }; });
           return VX.worldMap(points);
@@ -198,17 +198,17 @@
         return group('Things to keep an eye on', [
           { label: 'App errors (24 h)', value: fmt.num(k.errors24h), delta: VX.change(k.errors24h, k.errorsPrev24h), deltaLabel: 'vs the day before', inverse: true,
             tone: num(k.errors24h) > 20 ? 'bad' : num(k.errors24h) > 0 ? 'warn' : null,
-            info: 'Problems the app reported in the last 24 hours, such as a song that would not download. Counts every report.', onClick: go('health', 'errors', { range: '1' }) },
+            info: 'Problems the app reported in the last 24 hours, such as a song that would not download. Counts every report.', onClick: go('app-errors', null, { range: '1' }) },
           { label: 'New feedback', value: fmt.num(k.feedbackNew), tone: num(k.feedbackNew) ? 'warn' : null,
-            info: 'Messages from Settings → Feedback in the app that nobody has read yet.', onClick: go('feedback', 'new') },
+            info: 'Messages from Settings → Feedback in the app that nobody has read yet.', onClick: go('feedback') },
           { label: 'Phones ready for notifications', value: fmt.num(k.pushPeople != null ? k.pushPeople : k.pushDevices), sub: fmt.plural(k.pushDevices, 'phone or browser', 'phones and browsers'),
-            info: 'Signed-in people with at least one phone or browser that can receive a notification from Send Notification.', onClick: go('notifications', 'setup') },
+            info: 'Signed-in people with at least one phone or browser that can receive a notification from Send Notification.', onClick: go('notification-setup') },
           { label: 'Listen Together rooms live', value: fmt.num(k.roomsActive),
-            info: 'Rooms where friends are listening to the same song together, active in the last 15 minutes.', onClick: go('live', 'rooms') }
+            info: 'Rooms where friends are listening to the same song together, active in the last 15 minutes.', onClick: go('listen-together') }
         ]);
       },
       plays: function () {
-        return chartCard('Plays and active users per day', span, go('song-stats', 'top-songs', rangeParams(range)),
+        return chartCard('Plays and active users per day', span, go('top-songs', null, rangeParams(range)),
           ui.chart({ labels: days, type: 'line', height: 240, title: 'Plays and active users per day',
             series: [{ name: 'Plays', values: series('plays') }, { name: 'Active users', values: series('listeners'), color: 'var(--c3)' }],
             empty: 'No plays in this period', emptyHint: 'Plays by signed-in users show up here.' }));
@@ -223,7 +223,7 @@
             series: [{ name: 'New users', values: series('newListeners'), color: 'var(--c3)' }], empty: 'Nobody new in this period' }));
       },
       searches: function () {
-        return chartCard('Searches and errors per day', span, go('health', 'errors', rangeParams(range)),
+        return chartCard('Searches and errors per day', span, go('app-errors', null, rangeParams(range)),
           ui.chart({ labels: days, type: 'line', height: 200, title: 'Searches and errors per day',
             series: [{ name: 'Searches', values: series('searches'), color: 'var(--c2)' }, { name: 'Errors', values: series('errors'), color: 'var(--c5)' }],
             empty: 'No searches or errors in this period' }));

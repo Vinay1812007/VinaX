@@ -9,7 +9,7 @@
   var FOREVER = 3650;
   var KEEP = [{ value: '30', label: '30 days' }, { value: '90', label: '90 days' }, { value: '180', label: '180 days' }, { value: '365', label: '365 days' }, { value: String(FOREVER), label: 'Forever' }];
   var KINDS = [
-    { key: 'eventsDays', title: 'Play history', desc: 'What people played, searched and liked. Song Stats and Users read it.' },
+    { key: 'eventsDays', title: 'Play history', desc: 'What people played, searched and liked. Music Stats, Audience and All Users read it.' },
     { key: 'errorsDays', title: 'Error reports', desc: 'Problems the app reported. App Health reads them.' },
     { key: 'feedbackDays', title: 'Feedback', desc: 'Messages people sent from Settings → Feedback.' },
     { key: 'notificationsDays', title: 'Notification logs', desc: 'The record of notifications sent, with how many were delivered and opened.' }

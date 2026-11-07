@@ -62,6 +62,8 @@ function ctx(gone: unknown[] = []) {
   };
 }
 const page = (id: string) => VX.pages().find((p) => p.id === id)!;
+// Search Insights was one page with three tabs; each is its own page now.
+const SEARCH: Record<string, string> = { overview: 'search-overview', 'nothing-found': 'search-no-results', pins: 'search-pins' };
 async function show(id: string, tab?: string, c = ctx()): Promise<HTMLElement> {
   const host = document.createElement('div');
   document.body.appendChild(host);
@@ -74,11 +76,11 @@ async function show(id: string, tab?: string, c = ctx()): Promise<HTMLElement> {
 const JUNK = /\bundefined\b|\bNaN\b|\[object Object\]/;
 
 describe('Trending', () => {
-  it('is a Music page after Music Library, following the date range', () => {
+  it('is a Music Stats page between Languages and Songs People Skip, following the date range', () => {
     const p = page('trending');
-    expect(p).toMatchObject({ title: 'Trending', group: 'Music', icon: 'flame', order: 3, range: true });
-    expect(p.order).toBeGreaterThan(page('library').order);
-    expect(page('search-insights').order).toBeGreaterThan(p.order);
+    expect(p).toMatchObject({ title: 'Trending', group: 'Music Stats', icon: 'flame', range: true });
+    expect(p.order).toBeGreaterThan(page('languages').order);
+    expect(p.order).toBeLessThan(page('skipped-songs').order);
   });
 
   it('shows plays against the period before, rank moves, new entries and a sparkline per song', async () => {
@@ -96,7 +98,7 @@ describe('Trending', () => {
     expect(host.querySelector('.tr-move.new')?.textContent).toBe('NEW');
     expect(host.querySelector('.tr-spark .spark')).not.toBeNull();
     (host.querySelector('.tr-row') as HTMLButtonElement).click();
-    expect(gone[0]).toEqual(['library', null, { q: expect.any(String) }]);
+    expect(gone[0]).toEqual(['find-music', null, { q: expect.any(String) }]);
   });
 
   it('asks for the database update instead of failing on an older schema', async () => {
@@ -110,22 +112,23 @@ describe('Trending', () => {
 });
 
 describe('Search Insights', () => {
-  it('has the three tabs, and every stat card explains itself', async () => {
-    expect(page('search-insights')).toMatchObject({ group: 'Music', icon: 'search', range: true });
-    expect(page('search-insights').tabs!.map((t) => t.id)).toEqual(['overview', 'nothing-found', 'pins']);
+  it('is three pages under Search & Library, and every stat card explains itself', async () => {
+    expect(page('search-overview')).toMatchObject({ group: 'Search & Library', icon: 'search', range: true });
+    expect(page('search-no-results')).toMatchObject({ group: 'Search & Library', range: true });
+    expect(page('search-pins')).toMatchObject({ group: 'Search & Library', icon: 'pin' });
     for (const tab of ['overview', 'nothing-found', 'pins']) {
-      const host = await show('search-insights', tab);
+      const host = await show(SEARCH[tab]);
       expect(host.textContent, tab).not.toMatch(JUNK);
       expect(host.querySelectorAll('.stat-wrap').length, tab).toBeGreaterThan(0);
       host.querySelectorAll('.stat-wrap').forEach((s) => expect(s.querySelector('.info-btn'), tab).not.toBeNull());
     }
-    const o = await show('search-insights', 'overview');
+    const o = await show(SEARCH['overview']);
     expect(o.textContent).toContain('9%'); // 58 of 642 searches found nothing
     expect(o.querySelector('.chart-svg')).not.toBeNull();
   });
 
   it('pins a song for a search that found nothing, with the words as typed', async () => {
-    const host = await show('search-insights', 'nothing-found');
+    const host = await show(SEARCH['nothing-found']);
     expect(host.textContent).toContain('kesariya remix');
     expect(host.textContent).toContain('Pinned: Naatu Naatu');
     const pinBtn = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Pin a song…')!;
@@ -151,7 +154,7 @@ describe('Search Insights', () => {
   });
 
   it('adds a synonym from the same list', async () => {
-    const host = await show('search-insights', 'nothing-found');
+    const host = await show(SEARCH['nothing-found']);
     [...host.querySelectorAll('button')].find((b) => b.textContent === 'Add a synonym…')!.click();
     const modal = document.querySelector('.modal') as HTMLElement;
     const [from, to] = [...modal.querySelectorAll('input')] as HTMLInputElement[];
@@ -164,7 +167,7 @@ describe('Search Insights', () => {
 
   it('lists pins with remove and the synonyms read-only', async () => {
     const gone: unknown[] = [];
-    const host = await show('search-insights', 'pins', ctx(gone));
+    const host = await show(SEARCH.pins, undefined, ctx(gone));
     expect(host.textContent).toContain('naatu song');
     expect(host.textContent).toContain('A. R. Rahman');
     [...host.querySelectorAll('button')].find((b) => b.textContent === 'Open App Settings')!.click();
@@ -179,7 +182,7 @@ describe('Search Insights', () => {
   it('viewers see the numbers but no way to change them', async () => {
     VX.me = { role: 'viewer' };
     for (const tab of ['nothing-found', 'pins']) {
-      const host = await show('search-insights', tab);
+      const host = await show(SEARCH[tab]);
       expect(host.textContent, tab).toContain('view-only access');
       const labels = [...host.querySelectorAll('button')].map((b) => b.textContent);
       for (const l of ['Pin a song…', 'Add a synonym…', 'Remove', 'Change…']) expect(labels, `${tab}: ${l}`).not.toContain(l);

@@ -21,7 +21,7 @@ Version 12 adds one table, `sign_ins`: a row per Google sign-in to the app (time
 
 ### Moving from version 10
 
-Version 11 adds two functions for the console's **Trending** and **Search Insights** pages ([admin-console.md](admin-console.md)); it changes no table and deletes nothing. Paste `schema.sql` once (or let the Schema workflow apply it); the Database page then shows version 11. Until then those two pages say the database needs its one-time update (`502 db_update_needed`) and every other page keeps working.
+Version 11 adds two functions for the console's **Trending** and **Search & Library** pages ([admin-console.md](admin-console.md)); it changes no table and deletes nothing. Paste `schema.sql` once (or let the Schema workflow apply it); the Database page then shows version 11. Until then those two pages say the database needs its one-time update (`502 db_update_needed`) and every other page keeps working.
 
 - `stats_trending(days, limit)` compares the songs, artists and languages signed-in users played in the window with the window of the same length just before it: plays, people, rank now and rank before (null = a new entry) and, for songs, one count per India calendar day.
 - `stats_searches(days, limit)` reads search events (their `message` is `'<song results>|<query>'`, as the app's search writes it) and answers the totals, the most searched words, the searches that found nothing, what is searched more than before, and a daily series. Rows without that shape are left out.

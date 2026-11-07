@@ -167,7 +167,7 @@
   /** Register an App Settings page. */
   VX.settingsPage = function (page) {
     VX.page({
-      id: page.id, title: page.title, group: 'App Settings', icon: page.icon || 'settings', order: page.order, desc: page.desc, noAuto: true,
+      id: page.id, title: page.title, group: page.group || 'App Settings', icon: page.icon || 'settings', order: page.order, desc: page.desc, noAuto: true,
       keywords: (page.sections || []).map(function (s) { return s.title; }).join(' '),
       sections: (page.sections || []).map(function (s) { return { key: s.key, title: s.title }; }),
       render: function (host, ctx) {

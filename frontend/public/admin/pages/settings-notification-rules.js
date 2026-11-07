@@ -156,7 +156,7 @@
   };
 
   VX.settingsPage({
-    id: 'app-settings/notification-rules', title: 'Notification Rules', icon: 'bell', order: 5,
+    id: 'notification-rules', title: 'Notification Rules', group: 'Notifications', icon: 'bell', order: 4,
     desc: 'How often people may get a notification, when not to send, which kinds are allowed, and account emails.',
     sections: [rules, emails]
   });

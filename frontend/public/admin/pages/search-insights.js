@@ -19,7 +19,7 @@
     return ui.card({ title: 'One-time database update needed', tone: 'warn', body: [
       h('p', 'This page needs numbers the database can give only after its one-time update. Every other page keeps working.'),
       VX.can('owner')
-        ? h('div.toolbar', ui.button('How to update', { kind: 'primary', small: true, icon: 'database', onClick: function () { ctx.go('database', 'maintenance'); } }))
+        ? h('div.toolbar', ui.button('How to update', { kind: 'primary', small: true, icon: 'database', onClick: function () { ctx.go('db-maintenance'); } }))
         : h('p.muted.small', 'Ask an Owner to run it from Database › Maintenance.')
     ] });
   }
@@ -130,7 +130,7 @@
   function fixMenu(q, pins, ctx) {
     var edit = VX.can('edit');
     return [
-      { label: 'Search the catalogue', icon: 'search', onClick: function () { ctx.go('library', 'search', { q: q }); } },
+      { label: 'Search the catalogue', icon: 'search', onClick: function () { ctx.go('find-music', null, { q: q }); } },
       { label: 'Copy the words', icon: 'copy', onClick: function () { VX.copy(q, 'Words copied'); } },
       '-',
       { label: 'Add a synonym…', icon: 'plus', hidden: !edit, onClick: function () { synonymModal(q, ctx); } },
@@ -246,13 +246,21 @@
   }
 
   VX.page({
-    id: 'search-insights', title: 'Search Insights', group: 'Music', icon: 'search', order: 4, range: true,
-    desc: 'What people search for, which searches find nothing, and how to fix them.',
-    keywords: 'search searches queries found nothing no results zero synonyms pin pinned results',
-    tabs: [
-      { id: 'overview', label: 'Overview', render: overview },
-      { id: 'nothing-found', label: 'Found nothing', render: nothingFound },
-      { id: 'pins', label: 'Pins & synonyms', render: pinsTab }
-    ]
+    id: 'search-overview', title: 'Search Overview', group: 'Search & Library', icon: 'search', order: 1, range: true,
+    desc: 'What people search for in the app, and how often they find what they want.',
+    keywords: 'search insights searches queries top popular',
+    render: overview
+  });
+  VX.page({
+    id: 'search-no-results', title: 'Searches That Found Nothing', group: 'Search & Library', icon: 'alert', order: 2, range: true,
+    desc: 'Searches that showed no songs. Fix one by pinning a song or adding a synonym.',
+    keywords: 'search found nothing no results zero empty',
+    render: nothingFound
+  });
+  VX.page({
+    id: 'search-pins', title: 'Pins & Synonyms', group: 'Search & Library', icon: 'pin', order: 3,
+    desc: 'Songs you pinned to the top of a search, and words that also search for other words.',
+    keywords: 'search pin pinned results synonyms words',
+    render: pinsTab
   });
 })();

@@ -1,6 +1,7 @@
 /* VinaX console — Send Notification (console rebuild).
  *
- * Compose · History · Saved audiences · Setup check.
+ * Send Notification · Sent History · Saved Audiences · Setup Check, one page
+ * each (they share the draft carried over by Duplicate and Edit draft).
  * Routes: GET/POST /api/admin/push (counts, dry run, send, test, draft,
  * schedule), GET/POST /api/admin/notifications (history, cancel, delete,
  * retract), the `push-audiences` setting, /api/admin/envcheck and fcmcheck.
@@ -281,7 +282,7 @@
       function done(msg) {
         VX.toast(msg, 'ok');
         dirty = false;
-        ctx.go('notifications', 'history', {});
+        ctx.go('sent-notifications');
       }
 
       drawPreview();
@@ -340,7 +341,7 @@
       var table = ui.dataTable({
         rows: rows, exportName: 'vinax-notifications', search: 'Search by title or message…',
         filters: [ui.dropdown('Show', [{ value: 'all', label: 'Everything' }, { value: 'sent', label: 'Sent' }, { value: 'scheduled', label: 'Scheduled' }, { value: 'draft', label: 'Drafts' }], filter, function (v) { ctx.setParam('status', v === 'all' ? null : v); ctx.refresh(); }, { inline: true })],
-        empty: { title: 'Nothing sent yet', hint: 'Notifications you send, schedule or save as drafts appear here.', action: canEdit ? { label: 'Write one', icon: 'send', onClick: function () { ctx.go('notifications', 'compose'); } } : null },
+        empty: { title: 'Nothing sent yet', hint: 'Notifications you send, schedule or save as drafts appear here.', action: canEdit ? { label: 'Write one', icon: 'send', onClick: function () { ctx.go('send-notification'); } } : null },
         onRow: details,
         columns: [
           { key: 'at', label: 'Date', sortVal: function (r) { return r.status === 'scheduled' ? r.scheduledFor : r.at; }, render: function (r) { return ui.ago(r.status === 'scheduled' ? r.scheduledFor : r.at); }, csv: function (r) { return r.status === 'scheduled' ? r.scheduledFor : r.at; } },
@@ -354,8 +355,8 @@
         rowMenu: function (r) {
           return [
             { label: 'View details', icon: 'info', onClick: function () { details(r); } },
-            { label: 'Duplicate', icon: 'copy', hidden: !canEdit, onClick: function () { seed = fromRow(r); ctx.go('notifications', 'compose'); } },
-            { label: 'Edit draft', icon: 'edit', hidden: !canEdit || r.status !== 'draft', onClick: function () { seed = fromRow(r); seed.draftId = r.id; ctx.go('notifications', 'compose'); } },
+            { label: 'Duplicate', icon: 'copy', hidden: !canEdit, onClick: function () { seed = fromRow(r); ctx.go('send-notification'); } },
+            { label: 'Edit draft', icon: 'edit', hidden: !canEdit || r.status !== 'draft', onClick: function () { seed = fromRow(r); seed.draftId = r.id; ctx.go('send-notification'); } },
             { label: 'Cancel sending', icon: 'close', hidden: !canEdit || r.status !== 'scheduled', onClick: function () {
               VX.confirm({ title: 'Cancel this scheduled notification?', body: '“' + (r.title || 'VinaX') + '” will not be sent.', confirmLabel: 'Cancel sending', danger: true }).then(function (ok) { if (ok) act({ action: 'cancel', id: r.id }, 'Cancelled ✓'); });
             } },
@@ -412,7 +413,7 @@
       var list = arr(d.value).filter(function (a) { return a && a.id && a.name; });
       var canEdit = VX.can('edit');
       if (!list.length) {
-        return ui.card({ body: ui.emptyState('No saved audiences yet', 'On Compose, choose who gets it and press “Save this audience”. It then appears here for next time.', { label: 'Go to Compose', icon: 'send', onClick: function () { ctx.go('notifications', 'compose'); } }) });
+        return ui.card({ body: ui.emptyState('No saved audiences yet', 'On Send Notification, choose who gets it and press “Save this audience”. It then appears here for next time.', { label: 'Go to Send Notification', icon: 'send', onClick: function () { ctx.go('send-notification'); } }) });
       }
       var counts = {};
       var table = ui.dataTable({
@@ -424,7 +425,7 @@
         ],
         rowMenu: function (a) {
           return [
-            { label: 'Use in a notification', icon: 'send', hidden: !canEdit, onClick: function () { var st = fromRow({ filter: Object.assign({}, a.filter, { activity: a.activity, users: a.users }), link: '/' }); seed = st; ctx.go('notifications', 'compose'); } },
+            { label: 'Use in a notification', icon: 'send', hidden: !canEdit, onClick: function () { var st = fromRow({ filter: Object.assign({}, a.filter, { activity: a.activity, users: a.users }), link: '/' }); seed = st; ctx.go('send-notification'); } },
             { label: 'Rename', icon: 'edit', hidden: !canEdit, onClick: function () {
               var name = ui.input({ maxlength: 60, value: a.name });
               VX.modal({ title: 'Rename audience', body: [ui.field('Name', name)], actions: [{ label: 'Cancel', kind: 'ghost' }, { label: 'Save', kind: 'primary', onClick: function (close) {
@@ -490,7 +491,7 @@
           row(signed > 0, 'Signed-in people you can reach', signed ? plural(push.people, 'person', 'people') + ' signed in with Google on ' + plural(signed, 'device') + '.' : 'None of those phones belong to a signed-in person yet.',
             'Only people signed in with Google get notifications. A phone links to its owner the next time they open the app while signed in.')
         ) }),
-        ui.card({ title: 'Notification Rules in force', sub: 'Change them in App Settings → Notification Rules.', actions: [ui.button('Open Notification Rules', { kind: 'ghost', small: true, icon: 'settings', onClick: function () { ctx.go('app-settings/notification-rules'); } })], body: ui.dl([
+        ui.card({ title: 'Notification Rules in force', sub: 'Change them in Notifications → Notification Rules.', actions: [ui.button('Open Notification Rules', { kind: 'ghost', small: true, icon: 'settings', onClick: function () { ctx.go('notification-rules'); } })], body: ui.dl([
           ['At most', num(rules.minGapHours) ? 'One notification per person every ' + (num(rules.minGapHours) >= 24 ? plural(num(rules.minGapHours) / 24, 'day') : plural(rules.minGapHours, 'hour')) : 'No limit'],
           ['Quiet hours', quiet.enabled ? quiet.start + ' to ' + quiet.end + ' (India time)' + (obj(push && push.quiet).quiet ? ' — quiet now' : '') : 'Off']
         ]) }),
@@ -500,14 +501,27 @@
   }
 
   VX.page({
-    id: 'notifications', title: 'Send Notification', group: 'Engage', icon: 'bell', order: 1, noAuto: true,
-    desc: 'Send a message to people’s phones and browsers. Only people signed in with Google can get them.',
-    keywords: 'push notify message announcement broadcast',
-    tabs: [
-      { id: 'compose', label: 'Compose', render: renderCompose },
-      { id: 'history', label: 'History', render: renderHistory },
-      { id: 'audiences', label: 'Saved audiences', render: renderAudiences },
-      { id: 'setup', label: 'Setup check', render: renderSetup }
-    ]
+    id: 'send-notification', title: 'Send Notification', group: 'Notifications', icon: 'send', order: 1, noAuto: true,
+    desc: 'Write a message for people’s phones and browsers. Only people signed in with Google can get them.',
+    keywords: 'push notify message announcement broadcast compose write',
+    render: renderCompose
+  });
+  VX.page({
+    id: 'sent-notifications', title: 'Sent History', group: 'Notifications', icon: 'inbox', order: 2, noAuto: true,
+    desc: 'Notifications you sent, scheduled or saved as drafts, and how many people they reached.',
+    keywords: 'push history sent scheduled drafts',
+    render: renderHistory
+  });
+  VX.page({
+    id: 'saved-audiences', title: 'Saved Audiences', group: 'Notifications', icon: 'users', order: 3, noAuto: true,
+    desc: 'Groups of people you saved so you can send to them again quickly.',
+    keywords: 'push audiences groups segments saved',
+    render: renderAudiences
+  });
+  VX.page({
+    id: 'notification-setup', title: 'Setup Check', group: 'Notifications', icon: 'check', order: 5, noAuto: true,
+    desc: 'Whether notifications are set up on the server and how many phones and browsers can get them.',
+    keywords: 'push setup firebase fcm devices check',
+    render: renderSetup
   });
 })();

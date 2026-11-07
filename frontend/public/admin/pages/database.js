@@ -9,16 +9,21 @@
   'use strict';
   var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt, arr = VX.arr, obj = VX.obj, num = VX.num;
 
-  VX.page({
-    id: 'database', title: 'Database', group: 'System', icon: 'database', order: 2,
-    desc: 'How much is stored, the jobs that run by themselves, and every change admins made.',
-    keywords: 'tables storage jobs change log audit maintenance clean up update schema',
-    tabs: [
-      { id: 'tables', label: 'Tables', desc: 'What the database holds, how big it is, and how long each kind of data is kept.', render: renderTables },
-      { id: 'jobs', label: 'Scheduled jobs', desc: 'Work the server does by itself on a timer. Owners can switch a job off, change how often it runs, or run it now.', render: renderJobs },
-      { id: 'changes', label: 'Change log', desc: 'Every change an admin made in this console: who, what and when.', render: renderChanges },
-      { id: 'maintenance', label: 'Maintenance', desc: 'Keep the database up to date and tidy.', render: renderMaintenance }
-    ]
+  [
+    { id: 'db-tables', title: 'Database Tables', icon: 'database', render: renderTables,
+      desc: 'What the database holds, how big it is, and how long each kind of data is kept.',
+      keywords: 'database tables storage size rows kept' },
+    { id: 'scheduled-jobs', title: 'Scheduled Jobs', icon: 'calendar', render: renderJobs,
+      desc: 'Work the server does by itself on a timer. Owners can switch a job off, change how often it runs, or run it now.',
+      keywords: 'jobs cron timer schedule automatic' },
+    { id: 'change-log', title: 'Change Log', icon: 'edit', render: renderChanges,
+      desc: 'Every change an admin made in this console: who, what and when.',
+      keywords: 'change log audit history who changed' },
+    { id: 'db-maintenance', title: 'Database Maintenance', icon: 'wrench', render: renderMaintenance,
+      desc: 'Keep the database up to date and tidy.',
+      keywords: 'maintenance clean up update schema upgrade' }
+  ].forEach(function (p, i) {
+    VX.page(Object.assign({ group: 'System', order: i + 1 }, p));
   });
 
   function fetchDb() { return VX.api.get('/api/admin/database', null, { fresh: true }); }
@@ -33,7 +38,7 @@
       var schema = obj(d.schema);
       var behind = d.schemaWanted && (schema.version == null || num(schema.version) < num(d.schemaWanted));
       return [
-        behind ? ui.notice(h('span', 'The database needs a one-time update. ', ui.button('How to update', { kind: 'ghost', small: true, onClick: function () { ctx.go('database', 'maintenance'); } })), 'warn') : null,
+        behind ? ui.notice(h('span', 'The database needs a one-time update. ', ui.button('How to update', { kind: 'ghost', small: true, onClick: function () { ctx.go('db-maintenance'); } })), 'warn') : null,
         ui.stats([
           { label: 'Total size', value: fmt.bytes(d.totalBytes), info: 'Space the whole database uses, including its search indexes. The free plan allows 500 MB.' },
           { label: 'Tables', value: fmt.num(tables.length) + (missing.length ? '' : ' ✓'), sub: missing.length ? fmt.plural(missing.length, 'missing') : 'all present', tone: missing.length ? 'bad' : 'ok', info: 'Each table holds one kind of data. All of them must exist for every page to work.' },
@@ -233,7 +238,7 @@
           action('Clean up old data now', 'Removes play history and activity older than the period you choose, and data past its Data & Privacy period. This also runs by itself every hour.',
             ui.dropdown('Delete activity older than', purgeChoices.map(function (n) { return { value: n, label: (n % 365 === 0 ? n / 365 + ' year' + (n === 365 ? '' : 's') : n + ' days') + (n === keep ? ' (your Data & Privacy setting)' : '') }; }), keep, function (v) { purgeDays = Number(v); }, { disabled: !owner }),
             ui.button('Clean up now', { kind: 'danger', icon: 'trash', onClick: function () {
-              return VX.confirm({ title: 'Delete activity older than ' + fmt.plural(purgeDays, 'day') + '?', body: 'Plays, searches and other activity older than that are deleted for good, and Song Stats for that time go with them. Users, feedback and settings are not touched.', danger: true, typed: true, confirmLabel: 'Delete old activity' }).then(function (yes) {
+              return VX.confirm({ title: 'Delete activity older than ' + fmt.plural(purgeDays, 'day') + '?', body: 'Plays, searches and other activity older than that are deleted for good, and Music Stats for that time go with them. Users, feedback and settings are not touched.', danger: true, typed: true, confirmLabel: 'Delete old activity' }).then(function (yes) {
                 if (yes) return post({ action: 'purge_events', days: purgeDays }, 'Clean-up', function (r) { return fmt.plural(r.deleted, 'row') + ' removed'; });
               });
             } })),

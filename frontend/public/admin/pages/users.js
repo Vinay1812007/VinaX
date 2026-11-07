@@ -1,7 +1,8 @@
 /* VinaX console — Users.
  * Everyone who signed in with Google (anonymous devices are never listed).
  * GET /api/admin/listeners does the filtering, sorting and paging on the
- * server; ?filters=1 gives the dropdown choices; ?account= opens a profile.
+ * server; ?filters=1 gives the dropdown choices; ?account= gives one
+ * person's profile, shown on its own page (#/user?id=<account id>).
  * Actions: block / unblock, sign one device out, delete a person's data
  * (owner only, type-to-confirm), add as VinaX AI testers, send a notification. */
 (function () {
@@ -13,10 +14,17 @@
   var COL_SORT = { lastSeen: 'last_active', joined: 'joined', plays: 'plays', user: 'name' };
 
   VX.page({
-    id: 'users', title: 'Users', group: 'People', icon: 'users', order: 1,
-    desc: 'Everyone who signed in to VinaX with Google. Click a person to see their profile.',
+    id: 'users', title: 'All Users', group: 'Users', icon: 'users', order: 1,
+    desc: 'Everyone who signed in to VinaX with Google. Click a person to open their profile.',
     keywords: 'listeners people accounts google profile block delete devices',
     render: render
+  });
+  // One person's profile. Not in the menu: All Users, Feedback, Listening Now
+  // and search open it.
+  VX.page({
+    id: 'user', title: 'User Profile', group: 'Users', icon: 'user', order: 9, hidden: true, navAs: 'users',
+    desc: 'Everything about one person: what they play, their devices, sign-ins and feedback.',
+    render: renderProfile
   });
 
   /* ---------------------------------------------------------- helpers */
@@ -99,16 +107,16 @@
     return m;
   }
 
-  function personMenu(u, ctx, reload, inDrawer) {
+  function personMenu(u, ctx, reload, onProfile) {
     var edit = VX.can('edit'), owner = VX.can('owner');
     return [
-      inDrawer ? null : { label: 'View profile', icon: 'user', onClick: function () { openProfile(u, ctx, reload); } },
-      { label: 'Send notification', icon: 'send', hidden: !edit, onClick: function () { ctx.go('notifications', 'compose', { users: u.id }); } },
+      onProfile ? null : { label: 'View profile', icon: 'user', onClick: function () { openProfile(u, ctx); } },
+      { label: 'Send notification', icon: 'send', hidden: !edit, onClick: function () { ctx.go('send-notification', null, { users: u.id }); } },
       { label: 'Copy email', icon: 'copy', hidden: !u.email, onClick: function () { VX.copy(u.email, 'Email copied'); } },
       { label: 'Add as AI tester', icon: 'spark', hidden: !edit, onClick: function () { VX.addAiTesters([u]); } },
       { label: u.blocked ? 'Unblock user' : 'Block user', icon: 'lock', hidden: !edit, danger: !u.blocked, onClick: function () { setBlocked(u, !u.blocked, reload); } },
       owner ? '-' : null,
-      { label: 'Delete user’s data', icon: 'trash', danger: true, hidden: !owner, onClick: function () { deleteData(u, reload); } }
+      { label: 'Delete user’s data', icon: 'trash', danger: true, hidden: !owner, onClick: function () { deleteData(u, onProfile ? function () { ctx.go('users'); } : reload); } }
     ].filter(Boolean);
   }
 
@@ -234,9 +242,9 @@
           rows: rows,
           exportName: 'vinax-users',
           rowMenu: function (r) { return personMenu(r, ctx, load); },
-          onRow: function (r) { openProfile(r, ctx, load); },
+          onRow: function (r) { openProfile(r, ctx); },
           bulk: [
-            { label: 'Send notification', icon: 'send', onClick: function (sel) { if (!VX.can('edit')) { VX.toast(VX.errorText('forbidden'), 'bad'); return; } ctx.go('notifications', 'compose', { users: sel.map(function (u) { return u.id; }).join(',') }); } },
+            { label: 'Send notification', icon: 'send', onClick: function (sel) { if (!VX.can('edit')) { VX.toast(VX.errorText('forbidden'), 'bad'); return; } ctx.go('send-notification', null, { users: sel.map(function (u) { return u.id; }).join(',') }); } },
             { label: 'Export', icon: 'download', onClick: function (sel) { VX.download.csv('vinax-users-' + VX.stamp(), sel, columns().filter(function (cl) { return cl.label; }).map(function (cl) { return { key: cl.key, label: cl.label, csv: cl.csv }; })); } },
             { label: 'Add as AI testers', icon: 'spark', onClick: function (sel) { if (!VX.can('edit')) { VX.toast(VX.errorText('forbidden'), 'bad'); return; } VX.addAiTesters(sel); } }
           ],
@@ -258,7 +266,6 @@
     VX.mount(host, cardsHost, filterHost, tableHost);
     drawFilters();
     VX.api.get(API, { filters: 1 }).then(function (res) { if (res.ok) { filters = obj(res.data); drawFilters(); } });
-    if (ctx.params.user) setTimeout(function () { openProfile({ id: ctx.params.user }, ctx, load, function () { ctx.setParam('user', ''); }); }, 30);
     // The newest app version decides the "Update available" chips: wait for it briefly.
     var wait = new Promise(function (resolve) { setTimeout(resolve, 1500); });
     return Promise.race([latestVersion(), wait]).then(function (v) {
@@ -270,19 +277,26 @@
 
   /* ---------------------------------------------------------- profile */
 
-  function openProfile(row, ctx, reload, onClose) {
+  function openProfile(row, ctx) {
     if (!row || !/^\d{1,40}$/.test(String(row.id || ''))) return;
-    ctx.setParam('user', row.id);
-    var dr = VX.drawer({ title: 'User profile' });
-    var baseClose = dr.close;
-    function refreshAll() { dr.close(); if (reload) reload(); }
-    // Leaving the page (any navigation) closes the drawer.
-    ctx.onDispose(function () { if (document.getElementById('drawer')) dr.close(); });
-    var obs = new MutationObserver(function () { if (!document.getElementById('drawer')) { obs.disconnect(); ctx.setParam('user', ''); if (onClose) onClose(); } });
-    obs.observe(document.body, { childList: true });
-    void baseClose;
+    ctx.go('user', null, { id: row.id });
+  }
+
+  function renderProfile(host, ctx) {
+    var id = String(ctx.params.id || '');
+    var back = h('div.toolbar.profile-back', ui.button('Back to All Users', { kind: 'ghost', small: true, icon: 'users', onClick: function () { ctx.go('users'); } }));
+    if (!/^\d{1,40}$/.test(id)) {
+      VX.mount(host, ui.card({ body: ui.emptyState('Choose a person first', 'Open All Users and click a person to see their profile here.', { label: 'Go to All Users', icon: 'users', onClick: function () { ctx.go('users'); } }) }));
+      return;
+    }
+    var box = h('div.profile-page');
+    VX.mount(host, back, box);
+    var row = { id: id };
+    function refreshAll() { load(); }
     function load() {
-      return ui.load(dr.body, function () { return VX.api.get(API, { account: row.id }, { fresh: true }); }, function (d) {
+      return ui.load(box, function () { return VX.api.get(API, { account: row.id }, { fresh: true }); }, function (d) {
+        var gate = ui.gate(d, ctx);
+        if (gate) return gate;
         var p = obj(d.profile), a = obj(p.account);
         var u = { id: a.id || row.id, name: a.name, email: a.email, picture: a.picture, blocked: !!a.blockedAt };
         var panel = h('div.profile-panel');
@@ -305,14 +319,13 @@
             ui.media(u.picture, who(u), u.name ? u.email : null, true),
             u.blocked ? ui.pill('Blocked', 'bad') : null,
             h('span.grow'),
-            VX.can('edit') ? ui.button('Send notification', { kind: 'ghost', small: true, icon: 'send', onClick: function () { dr.close(); ctx.go('notifications', 'compose', { users: u.id }); } }) : null,
+            VX.can('edit') ? ui.button('Send notification', { kind: 'ghost', small: true, icon: 'send', onClick: function () { ctx.go('send-notification', null, { users: u.id }); } }) : null,
             ui.menu(personMenu(u, ctx, refreshAll, true), { label: 'More for ' + who(u) })),
           bar.el, panel
         ];
       }, { skeleton: 8 });
     }
-    load();
-    return dr;
+    return load();
   }
 
   function overview(p) {
@@ -406,7 +419,7 @@
     return [h('ul.feedback-mini', list.map(function (f) {
       var st = FEEDBACK_STATUS[f.status] || ['New', 'warn'];
       return h('li', h('div.toolbar', ui.pill(FEEDBACK_KIND[f.kind] || 'Other'), ui.pill(st[0], st[1]), h('span.grow'), ui.ago(f.at)), h('p', f.message || ''));
-    })), h('div.toolbar', ui.button('Open Feedback page', { kind: 'ghost', small: true, icon: 'message', onClick: function () { ctx.go('feedback', 'all'); } }))];
+    })), h('div.toolbar', ui.button('Open Feedback page', { kind: 'ghost', small: true, icon: 'message', onClick: function () { ctx.go('feedback'); } }))];
   }
 
   function activity(p) {

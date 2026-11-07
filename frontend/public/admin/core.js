@@ -939,9 +939,9 @@
         h('ol.steps', { style: { 'margin-top': '10px' } },
           h('li', 'Create a Supabase project and paste ', h('code.mono', 'backend/supabase/schema.sql'), ' into its SQL editor, then Run.'),
           h('li', 'Set the Worker secrets ', h('code.mono', 'SUPABASE_URL'), ' and ', h('code.mono', 'SUPABASE_SERVICE_ROLE_KEY'), '.'),
-          h('li', 'Open the Database page — it shows the schema version the paste wrote.')),
+          h('li', 'Open System › Database Tables — it shows the schema version the paste wrote.')),
         h('pre.json', { style: { 'margin-top': '10px' } }, 'cd backend\nnpx wrangler secret put SUPABASE_URL --config worker/wrangler.toml\nnpx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml'),
-        ctx && ctx.go ? h('div.toolbar', { style: { 'margin-top': '12px' } }, ui.button('Open Database page', { kind: 'ghost', small: true, icon: 'database', onClick: function () { ctx.go('database', 'tables'); } })) : null
+        ctx && ctx.go ? h('div.toolbar', { style: { 'margin-top': '12px' } }, ui.button('Open Database Tables', { kind: 'ghost', small: true, icon: 'database', onClick: function () { ctx.go('db-tables'); } })) : null
       ]
     });
   };

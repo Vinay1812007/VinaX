@@ -1,19 +1,25 @@
 # Owner console
 
-The owner console is served at `/admin/` (https://admin.vinaxmusic.online/admin/). The console rebuild (schema version 10) reorganised it for someone who has never seen the code: twenty pages in six groups, plain English everywhere, and no setting that needs JSON, an id, a version string or a raw address typed by hand. Every control is a dropdown, toggle, slider, date or time picker, search picker, drag-to-reorder list, checkbox, radio button, chip or "⋯" menu.
+The owner console is served at `/admin/` (https://admin.vinaxmusic.online/admin/). The console rebuild (schema version 10) reorganised it for someone who has never seen the code: plain English everywhere, and no setting that needs JSON, an id, a version string or a raw address typed by hand. Every control is a dropdown, toggle, slider, date or time picker, search picker, drag-to-reorder list, checkbox, radio button, chip or "⋯" menu.
 
-It counts **people signed in with Google** only. Anonymous devices (`listeners` rows without an account) stay in the database but never leave the API: the `stats_*` functions, the Users list, Live Now, the notification audience and the AI tester picker all filter on the server ([database.md](database.md#moving-from-version-8)). App errors are the one exception: every report counts.
+It counts **people signed in with Google** only. Anonymous devices (`listeners` rows without an account) stay in the database but never leave the API: the `stats_*` functions, the Users list, Listening Now, the notification audience and the AI tester picker all filter on the server ([database.md](database.md#moving-from-version-8)). App errors are the one exception: every report counts.
+
+**One job per page** (2026-11-07). Every tab of the old pages is its own page now, with its own address, its own place in the menu and one plain sentence under the title saying what it is for. No console page has tabs; a person's profile keeps its six sections (Overview, Listening history, Devices, Sign-ins, Feedback sent, Activity log) on its own page. Fifty pages in ten folding groups:
 
 | Group | Pages (route) |
 | --- | --- |
-| Home | Dashboard (`#/dashboard`), Live Now (`#/live`) |
-| People | Users (`#/users`), Feedback (`#/feedback`) |
-| Music | Song Stats (`#/song-stats`), Music Library (`#/library`), Trending (`#/trending`), Search Insights (`#/search-insights`) |
-| Engage | Send Notification (`#/notifications`), A/B Tests (`#/ab-tests`) |
-| App Settings | Home Screen, Features & AI, App Updates, Maintenance, Notification Rules, Search & Music Sources, Help Center, Data & Privacy (`#/app-settings/<page>`) |
-| System | App Health (`#/health`), Database (`#/database`), Google Search (`#/google-search`), Admins & Roles (`#/admins`) |
+| Overview | Dashboard (`#/dashboard`), Listening Now (`#/listening-now`), Recent Activity (`#/recent-activity`), Listen Together Rooms (`#/listen-together`), Smart Alerts (`#/alerts`) |
+| Users | All Users (`#/users`), Feedback (`#/feedback`); a person's profile is `#/user?id=<account id>` (not in the menu: opened from a person anywhere in the console) |
+| Music Stats | Top Songs (`#/top-songs`), Rising Songs (`#/rising-songs`), Top Artists (`#/top-artists`), Languages (`#/languages`), Trending (`#/trending`), Songs People Skip (`#/skipped-songs`) |
+| Audience | Where Users Are (`#/where-users-are`), How Much They Listen (`#/listening-time`), Do They Come Back (`#/coming-back`), Sign-up Journey (`#/signup-journey`) |
+| Search & Library | Search Overview (`#/search-overview`), Searches That Found Nothing (`#/search-no-results`), Pins & Synonyms (`#/search-pins`), Find Music (`#/find-music`), Blocked Songs & Albums (`#/blocked-music`) |
+| Notifications | Send Notification (`#/send-notification`), Sent History (`#/sent-notifications`), Saved Audiences (`#/saved-audiences`), Notification Rules (`#/notification-rules`), Setup Check (`#/notification-setup`) |
+| App Settings | Home Screen, Features & AI, App Updates, Maintenance, Search & Music Sources, Help Center, Data & Privacy (`#/app-settings/<page>`) |
+| App Health | App Errors (`#/app-errors`), Server Checks (`#/server-checks`), Music Sources (`#/music-sources`), AI Assistant (`#/ai-status`), Recommendations (`#/recommendations`), App Versions (`#/app-versions`), API Keys Status (`#/api-keys`) |
+| Growth & SEO | Google Search (`#/google-search`), Page Check (`#/page-check`), Search Console (`#/search-console`), A/B Tests (`#/ab-tests`) |
+| System | Database Tables (`#/db-tables`), Scheduled Jobs (`#/scheduled-jobs`), Change Log (`#/change-log`), Database Maintenance (`#/db-maintenance`), Admins & Roles (`#/admins`) |
 
-Old addresses redirect (`#/overview` → Dashboard, `#/listeners` → Users, `#/publish` → App Settings › Home Screen, `#/notify` → Send Notification, `#/analytics` → Song Stats, `#/analytics/errors` → App Health › App Errors, `#/catalog` → Music Library, `#/experiments` → A/B Tests, `#/seo` → Google Search). Any other unknown address shows **Page not found** with a **Go to Dashboard** button.
+Old addresses keep working: `REDIRECTS` in `app.js` sends every old page and every old tab to the page that does that job now (`#/health/errors` → App Errors, `#/database/changes` → Change Log, `#/live/now` → Listening Now, `#/notifications/compose` → Send Notification, `#/song-stats/places` → Where Users Are, `#/app-settings/notification-rules` → Notification Rules, `#/users?user=<id>` → that person's profile, and the older `#/overview`, `#/listeners`, `#/publish`, `#/notify`, `#/analytics`, `#/catalog`, `#/experiments`, `#/seo`). A bare old page goes to its first page (`#/health` → App Errors) and the query string is kept (`?range=1`). The server's own links (Smart Alerts, sign-in emails, the dashboard's "Needs your attention") still use the old addresses and rely on this. Links inside the console use today's ids; `ctx.go` translates an old one too. Any other unknown address shows **Page not found** with a **Go to Dashboard** button.
 
 ## The three answers every page handles
 
@@ -87,20 +93,20 @@ Every change leaves a row in `audit_log` through `_lib/audit.ts` with the admin'
 
 ## The shell (`app.js`)
 
-- Sidebar in six groups with the App Settings sub-menu; it collapses to icons on a laptop and becomes a menu on a phone. At the bottom: "Live site" (green) or "Test site" (amber) and the app version.
-- Top bar: breadcrumb, global search (**Ctrl K** / ⌘K: pages, tabs, settings, users and songs), the date range (Today, Last 7 / 30 / 90 days, Custom) on pages that declare `range: true` (`ctx.range`), auto-refresh with an interval (15 s, 30 s, 1 min, 5 min), "Last updated 17:00 IST" and refresh, the theme (Light, Dark, Match my device), and the profile menu (email, role, time zone, sign out).
-- Routes are `#/<page id>/<tab>?<params>`; page ids may contain a slash (`app-settings/home-screen`). `ctx.onLeave(fn)` guards unsaved changes: leaving asks first.
+- Sidebar in ten groups (`GROUPS` in `app.js`, each with an icon for the collapsed menu). Every group folds open and shut; only the group of the page on screen starts open, and moving to a page in another group starts fresh. **Find a page** (under Search) filters the menu by title, group, keywords and description as you type, opens every group with a match, **Enter** opens the first match and **Esc** clears it. Pages with `hidden: true` (the user profile) stay out of the menu and search; `navAs` names the menu item that lights up for them. The menu collapses to icons on a laptop and becomes a menu on a phone. At the bottom: "Live site" (green) or "Test site" (amber) and the app version.
+- Top bar: breadcrumb, global search (**Ctrl K** / ⌘K: pages, settings, users and songs), the date range (Today, Last 7 / 30 / 90 days, Custom) on pages that declare `range: true` (`ctx.range`), auto-refresh with an interval (15 s, 30 s, 1 min, 5 min), "Last updated 17:00 IST" and refresh, the theme (Light, Dark, Match my device), and the profile menu (email, role, time zone, sign out).
+- Routes are `#/<page id>?<params>`; page ids may contain a slash (`app-settings/home-screen`). The shell still supports `tabs` on a page, but no page uses them. `ctx.onLeave(fn)` guards unsaved changes: leaving asks first.
 - Owners see a "One-time database update needed" banner while `meta.schema` is older than the Worker's `SCHEMA_WANTED`.
-- Keyboard shortcuts (press **?** for the list; off while typing in a box): **/** search, **R** refresh, **T** light/dark, **[** collapse the menu, and **G** then a letter to open a page (D Dashboard, L Live Now, U Users, F Feedback, S Song Stats, M Music Library, T Trending, I Search Insights, N Send Notification, H App Health, A Smart Alerts, B Database).
+- Keyboard shortcuts (press **?** for the list; off while typing in a box): **/** search, **R** refresh, **T** light/dark, **[** collapse the menu, and **G** then a letter to open a page (D Dashboard, L Listening Now, U All Users, F Feedback, S Top Songs, M Find Music, T Trending, I Search Overview, N Send Notification, H App Errors, A Smart Alerts, B Database Tables).
 - **Quick actions** in Ctrl K: listed first while the box is empty and after pages once you type: send a notification, customise the dashboard, switch theme, auto-refresh on/off, refresh, keyboard shortcuts, maintenance, app errors, collapse the menu, copy a link to this page, sign out. Editing actions are hidden from viewers.
 
 ## The App Settings framework (`kit/settings.js`)
 
-Each App Settings page is `VX.settingsPage({ id, title, sections })`; each section edits one key of the `settings` table through `POST /api/admin/settings { key, value }` (null = back to the app's built-in setting). Every section gets the status chip, **Save & apply** (with "Users will see this change within 1 minute. Continue?"), **Cancel changes**, **Reset to built-in setting**, an optional live preview, and **Change history** (the last 20 changes in plain words, each with **Restore this version**). A section supplies `fromValue`, `toValue`, `validate`, `describe`, `render`, optional `preview` and `confirmSave` (used for Maintenance mode and forced updates, which need `CONFIRM`).
+Each App Settings page is `VX.settingsPage({ id, title, sections, group? })` (`group` defaults to App Settings; Notification Rules passes Notifications); each section edits one key of the `settings` table through `POST /api/admin/settings { key, value }` (null = back to the app's built-in setting). Every section gets the status chip, **Save & apply** (with "Users will see this change within 1 minute. Continue?"), **Cancel changes**, **Reset to built-in setting**, an optional live preview, and **Change history** (the last 20 changes in plain words, each with **Restore this version**). A section supplies `fromValue`, `toValue`, `validate`, `describe`, `render`, optional `preview` and `confirmSave` (used for Maintenance mode and forced updates, which need `CONFIRM`).
 
 ## Adding a page
 
-1. Create `frontend/public/admin/pages/<id>.js` calling `VX.page({ id, title, group, icon, order, desc, tabs | render, range })` (group is one of Home, People, Music, Engage, App Settings, System; icons are the sprite ids in `index.html` without `i-`), or `VX.settingsPage(...)` for a settings page.
+1. Give the page **one job**. Create `frontend/public/admin/pages/<area>.js` (or add to the area's file when it shares helpers) calling `VX.page({ id, title, group, icon, order, desc, render, range, keywords, hidden })`: group is one of the ten in `GROUPS`; `desc` is the one plain sentence under the title (required, the unit test checks it); icons are the sprite ids in `index.html` without `i-`. Use `VX.settingsPage(...)` for a settings page. If the page takes over an old address, add it to `REDIRECTS` in `app.js`.
 2. Add its `<script>` to `index.html` before `app.js`.
 3. Add the Worker route under `backend/worker/functions/api/admin/` with `adminGet` / `adminPost`, register it in `backend/worker/index.ts`, and add mocks to `frontend/e2e/support/console-mocks/` — the unit test and `e2e/console-pages.spec.ts` then cover it automatically.
 
@@ -109,7 +115,7 @@ Each App Settings page is `VX.settingsPage({ id, title, sections })`; each secti
 
 Each page below lists its tabs, the routes it calls and what each control writes. `?days=` is 1..90 wherever a page follows the date range.
 
-### Home · Dashboard (`#/dashboard`)
+### Overview · Dashboard (`#/dashboard`)
 
 The landing page. One call: `GET /api/admin/overview?days=1..90` (default 14). The page sends the top bar's date range: a preset sends its days, and a custom range asks for the days from its start to today and keeps only the chosen days.
 
@@ -130,7 +136,7 @@ The page is laid out as follows:
 - **Needs your attention.** Built with `ui.attention`. Each alert has a button that opens its page, and a "⋯ → Dismiss for today" menu. Dismissals are stored in this browser for the current day.
 - **Ten stat cards.** Each has an ⓘ tooltip and opens its page with the filter already applied:
   - Listening right now → Live
-  - Plays today, compared with yesterday → Song Stats, today
+  - Plays today, compared with yesterday → Top Songs, today
   - Total users → Users
   - New users this week, compared with last week → Users, joined in the last 7 days, newest first
   - Active today, this week and this month, each compared with the period before → Users, active in the last 1, 7 or 30 days
@@ -138,7 +144,7 @@ The page is laid out as follows:
   - New feedback → Feedback, New
   - Phones ready for notifications → Send Notification, Setup check
   - Listen Together rooms live → Live, Rooms
-- **Where people are listening.** The Live Now world map (below), from its own `GET /api/admin/live`.
+- **Where people are listening.** The Listening Now world map (below), from its own `GET /api/admin/live`.
 - **Four charts.** Each card has a **See details** button that opens the related page with the same range:
   - plays and active users per day (line)
   - users by platform (donut)
@@ -147,7 +153,7 @@ The page is laid out as follows:
 
 **Customise** (top right, or `#/dashboard?customise=1`, or the Ctrl K quick action) lets each admin arrange the dashboard: drag a card or use its arrows to move it, pick a size (Small, Wide, Full width, where the card allows it), Hide it, or add it back from **Hidden cards**; **Reset to default** restores the built-in layout. The layout is `{ order, hidden, size }` in this browser's storage under `vinax_admin_dash.<admin email>`; cards it does not know are ignored and new cards join at their default place.
 
-### Home · Live Now (`#/live/now|activity|rooms`)
+### Overview · Listening Now, Recent Activity, Listen Together Rooms (`#/listening-now`, `#/recent-activity`, `#/listen-together`)
 
 The page makes one call, `GET /api/admin/live`. The answer is `{ configured, now, counts: { activeNow, playingNow, roomsOpen }, listening, feed, rooms }`.
 
@@ -162,14 +168,14 @@ The page has three tabs: **Listening now**, **Recent activity** and **Listen Tog
 
 - Above the tabs are four cards: Active now, Playing now, Rooms open and Server time.
 - A **Refresh** dropdown polls every 15 s (the default), 30 s or 1 min, or not at all. The choice is stored per browser.
-- On a person's row, the ⋯ menu offers View profile (opens Users with the drawer), Send notification (`#/notifications/compose?users=<id>`) and Copy email.
+- On a person's row, the ⋯ menu offers View profile (opens the person's profile page), Send notification (`#/send-notification?users=<id>`) and Copy email.
 
 Two actions change things, and both need the Editor role:
 
 - **End this room**, after a confirm: `POST /api/admin/live { action: 'end_room', code }`.
 - **End all rooms**, after typing CONFIRM: `{ action: 'end_all_rooms' }`.
 
-### People · Users (`#/users`)
+### Users · All Users (`#/users`) and User Profile (`#/user?id=`)
 
 The page lists only Google accounts, with one row per person.
 
@@ -220,8 +226,8 @@ The Users page is laid out as follows:
 - **Table columns.** User (photo, name, email, a "Blocked" chip), Devices, Platform & version (with an "Update available" chip when the version is older than `/api/version`), Location, Now playing (a green dot while live), Joined and Last active. Email, Favourite language and Plays start hidden and can be turned on from the Columns menu.
 - **Paging and export.** Rows per page and paging come from the server. Export downloads CSV or Excel, of the selected rows or of every matching row (up to 5,000).
 - **Row ⋯ menu.** View profile, Send notification, Copy email, Add as AI tester, Block or Unblock user, and Delete user's data (Owner only: pick a reason, then type CONFIRM).
-- **Bulk actions.** Send notification goes to `#/notifications/compose?users=<id,id>`. Export downloads the selected rows. Add as AI testers reads the `vinax-ai` setting, merges the people into `testers` (at most 50) and, after a confirm, posts the whole value to `/api/admin/settings`.
-- **Profile drawer.** Opened by clicking a row, or by `#/users?user=<id>`. It has five tabs:
+- **Bulk actions.** Send notification goes to `#/send-notification?users=<id,id>`. Export downloads the selected rows. Add as AI testers reads the `vinax-ai` setting, merges the people into `testers` (at most 50) and, after a confirm, posts the whole value to `/api/admin/settings`.
+- **Profile page** (`#/user?id=<account id>`, title User Profile, with **Back to All Users**). Opened by clicking a row or View profile anywhere in the console; `#/users?user=<id>` redirects to it. After **Delete user's data** it goes back to All Users. It has six sections:
   - Overview: four stat cards, the facts, top artists and top songs.
   - Listening history.
   - Devices: each device with platform, version, place and last seen, and **Sign out this device**.
@@ -232,7 +238,7 @@ The Users page is laid out as follows:
 
 Viewers see every number. Actions that change something are hidden from them or refused, and the server answers 403 regardless.
 
-### People · Feedback (`pages/feedback.js`)
+### Users · Feedback (`pages/feedback.js`)
 
 Tabs with counts (New · Read · Resolved · All, kept in `?status=`), filters for type (Bug, Idea, Song problem, Other), platform and time (Any time, Today, 7/30/90 days). Each message is a card: who sent it (photo, name, email, or "Not signed in"), the type, when, the message, any owner note, the device (platform, version, city) and a Status dropdown. The "⋯" menu has Reply by notification, Copy message, Copy email, View profile (opens Users with `?user=`) and Delete (confirm). The Resolved tab has **Delete all resolved** (type `CONFIRM`). Empty state: "No new feedback. Messages users send from Settings → Feedback appear here."
 
@@ -243,17 +249,17 @@ Tabs with counts (New · Read · Resolved · All, kept in `?status=`), filters f
 | `POST { action: 'reply', id, title?, message }` | Sends a notification to the sender's signed-in devices (`push_devices.account_id`), writes a `notifications` row (`audience.feedback`, `created_by`), notes the reply on the message and marks it Read. `409 no_account` (sent while signed out) or `409 no_device` (no notifications turned on), `400 push_not_configured` |
 | `POST { action: 'delete', id }` · `{ action: 'delete_resolved' }` | Delete |
 
-### Music · Song Stats (`pages/song-stats.js`)
+### Music Stats and Audience pages (`pages/song-stats.js`)
 
-Follows the top-bar date range (`ctx.range.days`, 1–90). Every number counts signed-in users only (schema 8), except the sign-up journey. Tabs: **Top Songs** (stat cards, table with art, plays, users, a "▲ rising" chip when plays grew at least 20 % and by 3 on the period before, "New" when there were none), **Rising** (extra plays and % change), **Top Artists**, **Languages** (bars, share donut, table), **Where Users Are** (countries as bars, then Country → State dropdowns narrowing a states table and a cities table; places come from the network edge, never GPS; no map, so no third-party requests), **How Much They Listen** (people, plays per person, days active per person, busiest hour, plays per person per day, light/regular/heavy listeners, who is coming back, the hour-of-week heat map in India time), **Do They Come Back** (weekly groups with "Came back after 1 day / 7 days / 30 days"), **Sign-up Journey** (Opened the app → Played a song → Signed in with Google → Came back another day, as step bars with the % of the step before) and **Songs People Skip** (skip rate meter). Song rows have a "⋯" menu: Copy song ID, Open in app, Add to banner (`#/app-settings/home-screen?section=banners&addSong=<id>&title=`), Use in notification (`#/notifications/compose?song=<id>&title=`), Block song.
+Follows the top-bar date range (`ctx.range.days`, 1–90). Every number counts signed-in users only (schema 8), except the sign-up journey. Music Stats: **Top Songs** (`#/top-songs`) (stat cards, table with art, plays, users, a "▲ rising" chip when plays grew at least 20 % and by 3 on the period before, "New" when there were none), **Rising Songs** (`#/rising-songs`, extra plays and % change), **Top Artists** (`#/top-artists`), **Languages** (`#/languages`, bars, share donut, table), and **Songs People Skip** (`#/skipped-songs`, skip rate meter). Audience: **Where Users Are** (`#/where-users-are`, countries as bars, then Country → State dropdowns narrowing a states table and a cities table; places come from the network edge, never GPS; no map, so no third-party requests), **How Much They Listen** (`#/listening-time`, people, plays per person, days active per person, busiest hour, plays per person per day, light/regular/heavy listeners, who is coming back, the hour-of-week heat map in India time), **Do They Come Back** (`#/coming-back`, weekly groups with "Came back after 1 day / 7 days / 30 days"), and **Sign-up Journey** (`#/signup-journey`, Opened the app → Played a song → Signed in with Google → Came back another day, as step bars with the % of the step before). Song rows have a "⋯" menu: Copy song ID, Open in app, Add to banner (`#/app-settings/home-screen?section=banners&addSong=<id>&title=`), Use in notification (`#/send-notification?song=<id>&title=`), Block song.
 
 `GET /api/admin/analytics?view=music|rising|geo|engagement|retention|funnel|skips|errors&days=` → `{ days, view, data }`; `music`/`rising` → `stats_music` (songs carry `prev_plays`), `geo` → `{ countries, regions, cities }`, `engagement` adds `perUser` and the timeline. `view=errors` and `POST { action: 'clear_errors' }` (owner) stay for App Health.
 
-The page also defines `VX.music` (shared with Music Library): `url(kind, id)`, `open`, `block(kind, value, label)` (asks the reason: Copyright, Wrong audio, Offensive, Other), `songMenu(song, ctx)`, `previewButton(src, title)` (plays the first 30 seconds) and `stop()`.
+The file also defines `VX.music` (shared with Find Music): `url(kind, id)`, `open`, `block(kind, value, label)` (asks the reason: Copyright, Wrong audio, Offensive, Other), `songMenu(song, ctx)`, `previewButton(src, title)` (plays the first 30 seconds) and `stop()`.
 
-### Music · Music Library (`pages/library.js`)
+### Search & Library · Find Music, Blocked Songs & Albums (`pages/library.js`)
 
-**Search music**: a Look for dropdown (Songs, Albums, Artists, Playlists) and a search box (kept in `?q=` and `?type=`, so the global search opens it prefilled). Result cards show art, title, artist, year, language and length, a ▶ 30-second preview on songs, and a "⋯" menu: Copy ID, Open in app, Add to banner, Use in notification, Block. **Blocked songs & albums**: stat cards per kind, a table (item and kind, Reason dropdown that saves at once, Blocked by, Date, **Unblock** with a confirm), a Show filter, and **Block more** (an artist picker, a word in titles).
+**Find Music** (`#/find-music`): a Look for dropdown (Songs, Albums, Artists, Playlists) and a search box (kept in `?q=` and `?type=`, so the global search opens it prefilled). Result cards show art, title, artist, year, language and length, a ▶ 30-second preview on songs, and a "⋯" menu: Copy ID, Open in app, Add to banner, Use in notification, Block. **Blocked Songs & Albums** (`#/blocked-music`): stat cards per kind, a table (item and kind, Reason dropdown that saves at once, Blocked by, Date, **Unblock** with a confirm), a Show filter, and **Block more** (an artist picker, a word in titles).
 
 | Route | Shape |
 | --- | --- |
@@ -264,15 +270,15 @@ The page also defines `VX.music` (shared with Music Library): `url(kind, id)`, `
 
 `GET /api/blocklist` now also returns `albums`. The app hides a blocked album (`normalizeAlbum` answers null, so it drops out of search, artist pages and album pages) and every song whose `album.id` is blocked (`isBlockedSong`).
 
-### Music · Trending (`pages/trending.js`, schema 11)
+### Music Stats · Trending (`pages/trending.js`, schema 11)
 
-Follows the top-bar date range. Compares the window (from midnight India time, `days − 1` days ago, to now) with the window of the same length just before it, signed-in users only. Stat cards: Plays and People listening (with the change), Songs climbing (in the chart and more plays than before), New entries (songs nobody played before). **Rising songs** (most extra plays) and **The chart** (the 15 most played): place, move since before (▲3, ▼2, =, NEW), picture and names, a sparkline of plays per day, plays now and before; choosing a song opens Music Library searching for its title. **Top artists** (table with move and % change, ⋯ Find in Music Library) and **Languages** (bars with the change).
+Follows the top-bar date range. Compares the window (from midnight India time, `days − 1` days ago, to now) with the window of the same length just before it, signed-in users only. Stat cards: Plays and People listening (with the change), Songs climbing (in the chart and more plays than before), New entries (songs nobody played before). **Rising songs** (most extra plays) and **The chart** (the 15 most played): place, move since before (▲3, ▼2, =, NEW), picture and names, a sparkline of plays per day, plays now and before; choosing a song opens Find Music searching for its title. **Top artists** (table with move and % change, ⋯ Look up in Find Music) and **Languages** (bars with the change).
 
 `GET /api/admin/trends?view=trending&days=` → `{ days, view, data }`, `data` = `stats_trending(days, 50)`: `{ totals: { plays, prev_plays, listeners, prev_listeners, songs, new_songs }, songs: [{ id, title, artist, image, plays, prev_plays, listeners, rank, prev_rank, daily }], artists: [{ artist, plays, prev_plays, listeners, rank, prev_rank }], languages }`. On a database older than schema 11 the route answers `502 db_update_needed` and the page shows a "One-time database update needed" card (Owners get a button to Database › Maintenance) instead of an error.
 
-### Music · Search Insights (`pages/search-insights.js`, schema 11)
+### Search & Library · Search Overview, Searches That Found Nothing, Pins & Synonyms (`pages/search-insights.js`, schema 11)
 
-What signed-in users search for (the app records each settled search as `'<song results>|<words>'`), following the date range. Tabs:
+What signed-in users search for (the app records each settled search as `'<song results>|<words>'`), following the date range (Pins & Synonyms does not). Pages:
 
 - **Overview** — Searches, People searching (with the change), Found nothing (% of searches that showed no songs), Different searches; a chart of searches and searches that found nothing per day; **Top searches** (table; a chip shows an existing pin or synonym; ⋯ Search the catalogue, Copy, Add a synonym…, Pin a song…) and **Searched more than before**.
 - **Found nothing** — the searches that showed no songs (how often, how many people, last time, "found songs N other times") with **Fix** buttons: **Add a synonym…** (a small dialog: when people type → also search for; adds to `search-synonyms`) and **Pin a song…** (the words and a song picker over the catalogue, `VX.findMusic`; saves to `search-pins`).
@@ -288,9 +294,9 @@ Viewers see everything but no Fix, Change or Remove buttons (the buttons are not
 
 **How a pin reaches the app:** the `search-pins` setting rides the public client bundle as `searchPins` (`publicSearchPins` in `_lib/clientConfig.ts`: clean words, a catalogue id and title, https pictures only, at most 100; absent when there are none). The Search page (a lazy route, nothing in the app shell) reads the bundle once while searching (edge- and browser-cached a minute), and when the normalised words match a pin exactly (`services/search/pins.ts`) it loads that song by id and puts it first in the results, as the Top result and at the top of the Songs tab, without showing it twice.
 
-### Engage · Send Notification (`#/notifications`)
+### Notifications · Send Notification, Sent History, Saved Audiences, Setup Check (`pages/notifications.js`)
 
-Tabs: **Compose** (`compose`) · **History** (`history`) · **Saved audiences** (`audiences`) · **Setup check** (`setup`). Old `#/notify/*` addresses redirect here.
+Pages: **Send Notification** (`#/send-notification`, was Compose) · **Sent History** (`#/sent-notifications`) · **Saved Audiences** (`#/saved-audiences`) · **Setup Check** (`#/notification-setup`). Old `#/notify/*` and `#/notifications/<tab>` addresses redirect here. Duplicate, Edit draft and Use in a notification carry the message over to Send Notification in memory (the same file).
 
 Only people signed in with Google are ever reached: a `push_devices` row counts when `account_id` is set. The app sends its session (`Authorization: Bearer vx1…`) with `POST /api/push/subscribe` and `POST /api/push/fcm-register`; the Worker links the device to that account (or unlinks it when no session comes). Signing in or out re-registers at once (`relinkPush` / `relinkNativePush`, wired in `AnnouncementBridge`). A database still on schema 7 saves the device unlinked instead of failing.
 
@@ -310,7 +316,7 @@ Activity filters read the account's `last_seen`, not the device. Audience labels
 
 **Saved audiences** live in the `push-audiences` setting: `[{ id, name, filter, activity, users }]` (up to 30). **Setup check** reads `GET /api/admin/push`, `envcheck` (Push group) and `fcmcheck`, and explains each ✗ in plain words, with the secret names under "Technical".
 
-### Engage · A/B Tests (`#/ab-tests`)
+### Growth & SEO · A/B Tests (`#/ab-tests`)
 
 The app picks each device's version on the device (FNV-1a over `deviceId:key`), so the server never knows who is in which version; "users per version" is people active in the last 7 days × the test's share, labelled "about".
 
@@ -326,7 +332,7 @@ Targeting is real on both sides (`inAudience` in `_lib/experiments.ts` and `src/
 
 | Section | Controls | Stored value (`settings` key) | Who reads it |
 | --- | --- | --- | --- |
-| Banners & Offers | Card list with drag to reorder; per card an On/Off switch, a state chip (Live / Starts … / Ended / Off) and ⋯ Edit · Duplicate · Delete; **Add banner** opens a form: title, subtitle, square picture (`ui.imageUpload`, purpose `banner`, 400×400), **Opens** dropdown (a song, album, playlist or artist through a search picker; Charts; a page in the app from a fixed list; nothing), start/end dates, show switch. At most 10 live. `#/app-settings/home-screen?addSong=<id>&songTitle=&songArtist=&songImage=` opens the form prefilled (Song Stats → Add to banner) | `banners`: `[{ id, title, subtitle, img, linkType: song\|album\|playlist\|artist\|charts\|page, linkId, linkLabel, start, end, enabled }]` (dates `YYYY-MM-DD`; `linkLabel` is console-only) | `activeBanners` (`_lib/clientConfig.ts`) drops `enabled: false` and out-of-date cards, accepts `charts` and `page` (only the paths in `BANNER_PAGES`); the app's `PromoBanner` opens `/charts` or the page |
+| Banners & Offers | Card list with drag to reorder; per card an On/Off switch, a state chip (Live / Starts … / Ended / Off) and ⋯ Edit · Duplicate · Delete; **Add banner** opens a form: title, subtitle, square picture (`ui.imageUpload`, purpose `banner`, 400×400), **Opens** dropdown (a song, album, playlist or artist through a search picker; Charts; a page in the app from a fixed list; nothing), start/end dates, show switch. At most 10 live. `#/app-settings/home-screen?addSong=<id>&songTitle=&songArtist=&songImage=` opens the form prefilled (Top Songs → Add to banner) | `banners`: `[{ id, title, subtitle, img, linkType: song\|album\|playlist\|artist\|charts\|page, linkId, linkLabel, start, end, enabled }]` (dates `YYYY-MM-DD`; `linkLabel` is console-only) | `activeBanners` (`_lib/clientConfig.ts`) drops `enabled: false` and out-of-date cards, accepts `charts` and `page` (only the paths in `BANNER_PAGES`); the app's `PromoBanner` opens `/charts` or the page |
 | Festival Theme | Radio: follow the festival calendar (built-in) / choose the look myself; then a dropdown None · Diwali · Sankranti · Ugadi · Holi · Eid · Christmas · New Year · Custom; Custom adds any festival from `festivals.js` and a colour picker; dates; On/Off; phone preview | `festival`: `{ mode: off\|force, id, color, start, end, enabled }`; following the calendar clears the key | `publicFestival` passes `color` for a forced festival; `enabled: false` = no override (calendar). The app (`useFestivalNow` → `FestiveSplash`) sets `--ember-400/500/600` from the colour while the skin is on |
 | Home Greeting | On/Off; Morning, Afternoon, Evening, Night text boxes (160 characters); "Start with the person's first name" checkbox; preview of the line showing now | `greeting`: `{ morning, afternoon, evening, night, withName, enabled }` (an older `{ text }` loads into all four boxes) | `publicGreeting` sends `{ text, parts, withName }` (`text` = first filled part, for older apps); the app's `greetingLine` (`services/appRules.ts`) picks the part of the day on the device clock (5–12, 12–17, 17–21, night) and prefixes "Hi Asha!" |
 | Top Message Bar | Message (240), Style (Info / Good news / Warning / Urgent), "Where a tap goes" (nothing, an app page, a song/album/playlist picker), dates, "Can users close it?", On/Off, preview | `broadcast`: `{ id, text, style, link, linkLabel, start, end, dismissible, enabled }` — `id` is derived from the words, link and style, so changing them shows the bar again to people who closed it; dates are stored as the start and end of the day in the console's time zone | `publicBroadcast` passes `style` and `dismissible: false`; the app's `BroadcastBar` (`components/OwnerMessages.tsx`) shows it above every page (it replaced the 15-second toast) |
@@ -360,7 +366,7 @@ Who reads it: `publicVersionPolicy` adds `versionPolicy` to the client bundle (`
 
 Read-only mode refuses POST/PUT/PATCH/DELETE on `/api/feedback`, `/api/account/data`, `/api/profile`, `/api/follow`, `/api/shared-playlist` and `/api/username`. Listening, events, Listen Together, sign-in, push registration, VinaX AI and the console keep working. Older apps treat `readonly` as live (the server still refuses their writes).
 
-### App Settings › Notification Rules (`#/app-settings/notification-rules`)
+### Notifications · Notification Rules (`#/notification-rules`, `pages/settings-notification-rules.js`)
 
 "Max notifications per person" (1 every 6 h / 12 h / day / 2 days), Quiet hours switch with from/until time pickers, and a switch per kind (New releases, Recommendations, Announcements, Reminders). Stored in `push` as `{ minGapHours: 6 | 12 | 24 | 48, quiet: { enabled, start: "HH:MM", end: "HH:MM" }, types: { releases, recommendations, announcements, reminders } }`. Unset means no limits (the page says so). The push sender enforces it.
 
@@ -370,7 +376,7 @@ Read-only mode refuses POST/PUT/PATCH/DELETE on `/api/feedback`, `/api/account/d
 
 | Section | Controls | Stored value | Who reads it |
 | --- | --- | --- | --- |
-| Search Synonyms (`search-synonyms`) | Two word boxes ("When people type" ↔ "Also search for"), Add, a delete button per pair (Search Insights › Found nothing can add one too) | `{ "typed": "meant" }` | client bundle `synonyms` → app search |
+| Search Synonyms (`search-synonyms`) | Two word boxes ("When people type" ↔ "Also search for"), Add, a delete button per pair (Searches That Found Nothing can add one too) | `{ "typed": "meant" }` | client bundle `synonyms` → app search |
 | Music Sources (`catalog-sources`) | Drag to set priority, On/Off per source (at least one stays on) | `{ "<source>": false, _order: ["<source>", …] }` (`_order` only when reordered) | client bundle `disabledSources`, `sourceOrder` → `constants/endpoints.ts` `activeBases()` |
 | Language Order (`language-order`) | Drag to reorder the 12 Home languages, Shown/Hidden per language, phone preview | `{ order: [...], hidden: [...] }` (the old plain list is still read) | client bundle `languageOrder`, `hiddenLanguages` → Home's language rail |
 
@@ -403,9 +409,9 @@ Admins sign in with Google. Only an email on the **Admins & Roles** list (the `a
 | `GET/POST /api/admin/admins` | List (any admin); `invite { email, role }`, `role { email, role }`, `remove { email }` (owner). `409 last_owner` when the last Owner would be demoted or removed; `409 already_admin` |
 | Audit | Every row names the admin (`actor` = email) |
 
-### App Health (`#/health/<tab>`)
+### App Health (`pages/health.js`: `#/app-errors`, `#/server-checks`, `#/music-sources`, `#/ai-status`, `#/recommendations`, `#/app-versions`, `#/api-keys`)
 
-| Tab | id | Route |
+| Page | old tab id | Route |
 | --- | --- | --- |
 | App Errors | `errors` | `GET /api/admin/errors?days=` → `{ total, groups, users, byDay, top }` from `stats_errors`: every report counts, grouped by kind + message shape (`_error_shape` strips song names, ids and numbers, so "Download timed out — 14 songs" is one row), each with `fingerprint`, `variants`, `samples`, `users` (signed-in people affected), platforms, versions, `status`. `POST { action: 'status', fingerprint, status: new\|investigating\|fixed\|ignored, note? }` (editor) upserts `error_status`; `POST { action: 'clear' }` (owner, typed CONFIRM in the page) deletes error events |
 | Server Checks | `checks` | `GET /api/admin/edge` |
@@ -434,7 +440,7 @@ The server looks for trouble every 5 minutes (the `alerts` job) and sends **one*
 - **Repeats**: a rule that alerted less than `cooldownMinutes` ago is held; each alert is a `notifications` row (`kind 'system'`, `sent_by 'schedule'`, `dedupe_key 'alert:<rule>:<cooldown>:<bucket>'`) written before the push, so two overlapping runs send it once. The receipt lands on the row. Alert rows also appear in Send Notification → History.
 - **Quiet hours** hold every rule except `siteDown`; a held rule is not recorded, so it alerts when quiet hours end if the problem is still there.
 - Alerts do **not** count toward the listener frequency cap (`fanOut(…, { countTowardCap: false })`). Every alert is in the change log (`alert-send`, actor `schedule` or the admin who pressed Check now).
-- Tapping an alert opens the console page for it (`/admin/#/health/errors`, `/health/checks`, `/live/now`, `/feedback`) in a browser; the Android app opens itself and does not route `/admin/` links.
+- Tapping an alert opens the console page for it (`/admin/#/health/errors`, `/health/checks`, `/live/now`, `/feedback`; the console redirects the old addresses to App Errors, Server Checks and Listening Now) in a browser; the Android app opens itself and does not route `/admin/` links.
 
 | Route | |
 | --- | --- |
@@ -445,7 +451,7 @@ The server looks for trouble every 5 minutes (the `alerts` job) and sends **one*
 
 The page: status cards (on/off, last and next check, phones linked), "Right now" signals, **Try it** (Send me a test alert, Check now), **Who gets alerts** (each admin, role, phone linked or not, and how to link one), **Alert rules** (Owners edit; everyone else sees them read-only) and **Recent alerts**.
 
-### Database (`#/database/<tab>`)
+### System · Database pages (`pages/database.js`: `#/db-tables`, `#/scheduled-jobs`, `#/change-log`, `#/db-maintenance`)
 
 - **Tables** (`tables`): `GET /api/admin/database` now gives each table a friendly `label`, `about`, exact or `approximate` row count (an ⓘ explains "Approximate"), size, and `keptFor` from the `retention` setting; plus `totalBytes`, `schemaWanted` and `expected`.
 - **Scheduled jobs** (`jobs`): each job has a plain `about`, `enabled`, `every` (minutes) and `choices`. `POST { action: 'job_setting', job, enabled?, every? }` (owner) writes the `jobs` setting; `run_job` runs one now.
@@ -467,11 +473,11 @@ The `jobs` setting `{ "<job>": { enabled, every } }` switches a job off or slows
 
 Retention (`retention` setting): `eventsDays` (usage, default 180, 7–3650), `errorsDays`, `feedbackDays`, `notificationsDays` (missing or 0 = keep forever). With `errorsDays` set, usage and error reports are purged separately (`purge_kind('plays' | 'errors')`); otherwise `purge_events` keeps the old behaviour. There is no "forever" for usage: the longest is 3650 days.
 
-### Google Search (`#/google-search/<tab>`)
+### Growth & SEO · Google Search, Page Check, Search Console (`pages/google-search.js`)
 
-- **Summary** (`summary`): cards (Pages Google can find, Sitemaps, Pages with no problems, robots.txt, Server load per check), sitemaps table, **Check again**, and **Bots allowed to read the site**.
-- **Page check** (`pages`): each key page with *What's wrong* and *How to fix* (`VX.seoExplain` turns crawler findings into plain words), plus a song / album / artist picker that checks that page.
-- **Search Console** (`console`): links and the weekly routine.
+- **Google Search** (`#/google-search`, was Summary): cards (Pages Google can find, Sitemaps, Pages with no problems, robots.txt, Server load per check), sitemaps table, **Check again**, and **Bots allowed to read the site**.
+- **Page Check** (`#/page-check`): each key page with *What's wrong* and *How to fix* (`VX.seoExplain` turns crawler findings into plain words), plus a song / album / artist picker that checks that page.
+- **Search Console** (`#/search-console`): links and the weekly routine.
 
 **Bots and robots.txt.** `_lib/robots.ts` lists the crawlers (Search engines / AI bots / SEO tools) with their built-in rule; the `robots` setting `{ bots: { "<bot>": true | false } }` overrides any of them. robots.txt itself stays a **static file** on the website host — a Worker-served robots.txt answered 429 when the daily quota ran out and Google stopped crawling the domain (wrangler.toml, 11.0.3). So:
 
@@ -497,16 +503,16 @@ Table: admin (photo, name, "You", "Always Owner" for `ADMIN_OWNER_EMAILS`), emai
 
 ## Tests
 
-- `frontend/src/__tests__/adminConsole.test.ts` loads the real `core.js`, the kit and every page into a DOM: `index.html` loads every file in order under the strict CSP, every page registers a unique id in one of the six groups with an existing icon, App Settings pages come in the spec's order, old addresses redirect to existing pages, the spec's plain words (no "Publish", "App default", "Device only"), no markup from strings, and **every page and tab renders from empty answers and from failing ones** without printing `undefined`, `NaN` or `[object Object]`.
-- `frontend/e2e/console-shell.spec.ts`: sign-in, the six groups and the sub-menu, redirects and Page not found, Ctrl+K, date range / theme / auto-refresh, the phone menu, the database update banner.
-- `frontend/e2e/console-pages.spec.ts`: every page and tab with data, with empty answers and with a failing server (no errors, an ⓘ on every stat card, no banned words, no `d_` ids), no sideways scrolling at phone width, viewers cannot save, saving asks first and posts, Users opens a profile. Both specs use `e2e/support/consoleMocks.ts` and the per-area mock files in `e2e/support/console-mocks/` (the same files drive a local preview server).
-- `frontend/src/__tests__/consoleTrends.test.ts`: Trending and Search Insights from the e2e mock answers (rank moves, NEW, sparklines, the database-update card, pin and synonym dialogs posting the right body, viewers without edit buttons); `frontend/src/services/search/pins.test.ts`: exact-words matching and pinned-first without duplicates; `backend/worker/__tests__/adminApi.test.ts` › trends: views, `db_update_needed`, pin/unpin/synonym limits and audit.
+- `frontend/src/__tests__/adminConsole.test.ts` loads the real `core.js`, the kit and every page into a DOM: `index.html` loads every file in order under the strict CSP, every page registers a unique id in one of the ten groups with an existing icon and a one-sentence description and no tabs, each group's page count, App Settings pages come in the spec's order, every old page and tab address redirects to an existing page (never to another redirect), every `go('<id>')` link names an existing page, the spec's plain words (no "Publish", "App default", "Device only"), no markup from strings, and **every page and tab renders from empty answers and from failing ones** without printing `undefined`, `NaN` or `[object Object]`.
+- `frontend/e2e/console-shell.spec.ts`: sign-in, the ten folding groups (only the current one open), Find a page, old page and tab addresses and Page not found, Ctrl+K, date range / theme / auto-refresh, the phone menu, the database update banner.
+- `frontend/e2e/console-pages.spec.ts`: every page and tab with data, with empty answers and with a failing server (no errors, an ⓘ on every stat card, no banned words, no `d_` ids), no sideways scrolling at phone width, viewers cannot save, saving asks first and posts, All Users opens a profile page and goes back. Both specs use `e2e/support/consoleMocks.ts` and the per-area mock files in `e2e/support/console-mocks/` (the same files drive a local preview server).
+- `frontend/src/__tests__/consoleTrends.test.ts`: Trending and the three Search pages from the e2e mock answers (rank moves, NEW, sparklines, the database-update card, pin and synonym dialogs posting the right body, viewers without edit buttons); `frontend/src/services/search/pins.test.ts`: exact-words matching and pinned-first without duplicates; `backend/worker/__tests__/adminApi.test.ts` › trends: views, `db_update_needed`, pin/unpin/synonym limits and audit.
 - `backend/worker/__tests__/console*.test.ts`: one file per area (Auth, People, Music, Engage, SettingsA, SettingsB, System) against a mocked database, including role checks; `backend/supabase/check.sql` asserts every new SQL function.
 
 ## Limits
 
 - Dates and "today" follow India's calendar on the server; the profile menu only changes how times are shown.
 - Users per version on A/B Tests is an estimate: the app picks each person's version on their phone.
-- Minutes listened and feedback screenshots are not collected by the app, so Song Stats shows plays per person and feedback cards show no picture.
+- Minutes listened and feedback screenshots are not collected by the app, so How Much They Listen shows plays per person and feedback cards show no picture.
 - Existing phones join the notification audience only after they register again while signed in (Android on its next open, the web app within a day).
 - Blocking a user stops new sign-ins and session checks at once; other account routes accept their existing session until the app next checks it.

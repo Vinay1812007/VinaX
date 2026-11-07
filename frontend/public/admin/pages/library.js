@@ -29,7 +29,7 @@
       } });
       items.push({ label: 'Use in notification', icon: 'bell', disabled: !VX.can('edit'), onClick: function () {
         var p = { title: it.title }; p[t.kind] = it.id;
-        ctx.go('notifications', 'compose', p);
+        ctx.go('send-notification', null, p);
       } });
     }
     if (t.kind !== 'playlist') {
@@ -149,12 +149,15 @@
   }
 
   VX.page({
-    id: 'library', title: 'Music Library', group: 'Music', icon: 'library', order: 2,
+    id: 'find-music', title: 'Find Music', group: 'Search & Library', icon: 'library', order: 4,
     desc: 'Find any song, album or artist, listen to a preview, and block what should not appear in the app.',
-    keywords: 'catalog catalogue search block unblock songs albums artists playlists',
-    tabs: [
-      { id: 'search', label: 'Search music', render: searchTab },
-      { id: 'blocked', label: 'Blocked songs & albums', render: blockedTab }
-    ]
+    keywords: 'music library catalog catalogue search songs albums artists playlists preview',
+    render: searchTab
+  });
+  VX.page({
+    id: 'blocked-music', title: 'Blocked Songs & Albums', group: 'Search & Library', icon: 'lock', order: 5,
+    desc: 'Songs and albums hidden from the app. Unblock one to show it again.',
+    keywords: 'blocked hidden unblock songs albums',
+    render: blockedTab
   });
 })();

@@ -285,7 +285,7 @@
   }
 
   VX.page({
-    id: 'ab-tests', title: 'A/B Tests', group: 'Engage', icon: 'flask', order: 2,
+    id: 'ab-tests', title: 'A/B Tests', group: 'Growth & SEO', icon: 'flask', order: 4,
     desc: 'Try two versions of something in the app and see which one works better.',
     keywords: 'experiment split test variant',
     render: render

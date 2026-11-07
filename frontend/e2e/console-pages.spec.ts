@@ -114,7 +114,7 @@ test.describe('console pages', () => {
     const errors = watchErrors(page);
     const { sent } = await mockConsole(page);
     await signedIn(page);
-    await page.goto('/admin/#/app-settings/notification-rules');
+    await page.goto('/admin/#/notification-rules');
     await settle(page);
     const card = page.locator('#setting-push');
     await expect(card.locator('.status-chip')).toHaveText("Using app's built-in setting");
@@ -140,14 +140,19 @@ test.describe('console pages', () => {
     await expect(page.locator('#pageBody th').filter({ hasText: /^Account$/ })).toHaveCount(0);
     await expect(page.locator('#pageBody th').filter({ hasText: /^Devices$/ })).toHaveCount(1);
     await page.locator('#pageBody tbody tr').first().click();
-    await expect(page.locator('#drawer')).toBeVisible();
-    await expect(page.locator('#drawer').getByRole('tab', { name: 'Devices' })).toBeVisible();
+    // The profile is its own page, with a way back to the list.
+    await expect(page).toHaveURL(/#\/user\?id=\d+$/);
+    await expect(page.locator('#pageTitle')).toHaveText('User Profile');
+    const body = page.locator('#pageBody');
+    await expect(body.getByRole('tab', { name: 'Devices' })).toBeVisible();
     // Schema 12: the sign-in history, with the IP address and a chip for a new device.
-    await page.locator('#drawer').getByRole('tab', { name: /Sign-ins/ }).click();
-    await expect(page.locator('#drawer').getByText('203.0.113.7')).toBeVisible();
-    await expect(page.locator('#drawer').getByText('Chrome on Windows')).toBeVisible();
-    await expect(page.locator('#drawer').getByText('New device')).toBeVisible();
-    await expect(page.locator('#drawer').getByText('First sign-in')).toBeVisible();
+    await body.getByRole('tab', { name: /Sign-ins/ }).click();
+    await expect(body.getByText('203.0.113.7')).toBeVisible();
+    await expect(body.getByText('Chrome on Windows')).toBeVisible();
+    await expect(body.getByText('New device')).toBeVisible();
+    await expect(body.getByText('First sign-in')).toBeVisible();
+    await body.getByRole('button', { name: 'Back to All Users' }).click();
+    await expect(page).toHaveURL(/#\/users$/);
     expect(errors).toEqual([]);
   });
 });

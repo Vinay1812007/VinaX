@@ -76,7 +76,7 @@
         onClick: function () { reply(r, reload); } },
       { label: 'Copy message', icon: 'copy', onClick: function () { VX.copy(r.message || '', 'Message copied'); } },
       r.user && r.user.email ? { label: 'Copy email', icon: 'copy', onClick: function () { VX.copy(r.user.email, 'Email copied'); } } : null,
-      r.user ? { label: 'View profile', icon: 'user', onClick: function () { ctx.go('users', null, { user: r.user.id }); } } : null,
+      r.user ? { label: 'View profile', icon: 'user', onClick: function () { ctx.go('user', null, { id: r.user.id }); } } : null,
       '-',
       { label: 'Delete', icon: 'trash', danger: true, disabled: !canEdit, onClick: function () {
         VX.confirm({ title: 'Delete this message?', body: 'It is removed for good. This cannot be undone.', confirmLabel: 'Delete', danger: true }).then(function (ok) {
@@ -145,7 +145,7 @@
   }
 
   VX.page({
-    id: 'feedback', title: 'Feedback', group: 'People', icon: 'message', order: 2,
+    id: 'feedback', title: 'Feedback', group: 'Users', icon: 'message', order: 2,
     desc: 'Messages people send from Settings → Feedback in the app.',
     keywords: 'bug idea report inbox messages',
     render: render

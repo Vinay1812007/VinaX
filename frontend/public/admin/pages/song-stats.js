@@ -49,7 +49,7 @@
         { label: 'Copy song ID', icon: 'copy', disabled: !id, onClick: function () { VX.copy(id, 'Song ID copied'); } },
         { label: 'Open in app', icon: 'external', disabled: !id, onClick: function () { music.open('song', id); } },
         { label: 'Add to banner', icon: 'layout', disabled: !id || !VX.can('edit'), onClick: function () { ctx.go('app-settings/home-screen', null, { section: 'banners', addSong: id, title: s.title || '' }); } },
-        { label: 'Use in notification', icon: 'bell', disabled: !id || !VX.can('edit'), onClick: function () { ctx.go('notifications', 'compose', { song: id, title: s.title || '' }); } },
+        { label: 'Use in notification', icon: 'bell', disabled: !id || !VX.can('edit'), onClick: function () { ctx.go('send-notification', null, { song: id, title: s.title || '' }); } },
         '-',
         { label: 'Block song', icon: 'trash', danger: true, disabled: !id || !VX.can('edit'), onClick: function () { music.block('song', id, [s.title, s.artist].filter(Boolean).join(' — ')); } }
       ];
@@ -154,7 +154,7 @@
           rows: list, rowId: function (r) { return r.artist; }, exportName: 'vinax-top-artists',
           rowMenu: function (r) { return [
             { label: 'Copy name', icon: 'copy', onClick: function () { VX.copy(r.artist, 'Name copied'); } },
-            { label: 'Find in Music Library', icon: 'search', onClick: function () { ctx.go('library', 'search', { q: r.artist, type: 'artists' }); } },
+            { label: 'Look up in Find Music', icon: 'search', onClick: function () { ctx.go('find-music', null, { q: r.artist, type: 'artists' }); } },
             '-',
             { label: 'Block artist', icon: 'trash', danger: true, disabled: !VX.can('edit'), onClick: function () { music.block('artist', r.artist, r.artist); } }
           ]; },
@@ -327,20 +327,26 @@
     });
   }
 
-  VX.page({
-    id: 'song-stats', title: 'Song Stats', group: 'Music', icon: 'growth', order: 1, range: true,
-    desc: 'What signed-in users play, where they are, how much they listen and whether they come back.',
-    keywords: 'analytics top songs artists languages places engagement retention funnel skips',
-    tabs: [
-      { id: 'top-songs', label: 'Top Songs', render: topSongs },
-      { id: 'rising', label: 'Rising', render: rising },
-      { id: 'artists', label: 'Top Artists', render: artists },
-      { id: 'languages', label: 'Languages', render: languages },
-      { id: 'places', label: 'Where Users Are', render: places },
-      { id: 'engagement', label: 'How Much They Listen', render: engagement },
-      { id: 'retention', label: 'Do They Come Back', render: retention },
-      { id: 'funnel', label: 'Sign-up Journey', render: funnel },
-      { id: 'skips', label: 'Songs People Skip', render: skips }
-    ]
+  [
+    { id: 'top-songs', title: 'Top Songs', group: 'Music Stats', icon: 'music', order: 1, render: topSongs,
+      desc: 'The songs signed-in users played the most in the chosen dates.', keywords: 'song stats analytics most played popular' },
+    { id: 'rising-songs', title: 'Rising Songs', group: 'Music Stats', icon: 'up', order: 2, render: rising,
+      desc: 'Songs getting clearly more plays than in the period before.', keywords: 'rising climbing new growing' },
+    { id: 'top-artists', title: 'Top Artists', group: 'Music Stats', icon: 'user', order: 3, render: artists,
+      desc: 'The artists signed-in users played the most.', keywords: 'artists singers most played' },
+    { id: 'languages', title: 'Languages', group: 'Music Stats', icon: 'globe', order: 4, render: languages,
+      desc: 'Which languages people listen to, by share of plays.', keywords: 'languages telugu hindi tamil english share' },
+    { id: 'skipped-songs', title: 'Songs People Skip', group: 'Music Stats', icon: 'down', order: 6, render: skips,
+      desc: 'Songs people often skip in the first few seconds.', keywords: 'skips skipped disliked' },
+    { id: 'where-users-are', title: 'Where Users Are', group: 'Audience', icon: 'globe', order: 1, render: places,
+      desc: 'The countries, states and cities signed-in users listen from.', keywords: 'places map countries cities states location' },
+    { id: 'listening-time', title: 'How Much They Listen', group: 'Audience', icon: 'play', order: 2, render: engagement,
+      desc: 'How many songs and minutes people play, and at what times of day.', keywords: 'engagement minutes time listening sessions' },
+    { id: 'coming-back', title: 'Do They Come Back', group: 'Audience', icon: 'refresh', order: 3, render: retention,
+      desc: 'Of the people who joined, how many come back in the following days and weeks.', keywords: 'retention return come back loyal' },
+    { id: 'signup-journey', title: 'Sign-up Journey', group: 'Audience', icon: 'target', order: 4, render: funnel,
+      desc: 'Each step from opening the app to signing in and playing songs, and where people stop.', keywords: 'funnel sign up journey steps drop off' }
+  ].forEach(function (p) {
+    VX.page(Object.assign({ range: true }, p));
   });
 })();

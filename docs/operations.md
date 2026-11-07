@@ -234,7 +234,7 @@ Workflows that are checks rather than jobs:
 ## Monitoring
 
 - **Status page.** `frontend/public/status/` reads `/api/status`, which probes the website, the catalogue and the console live (memoised 60 s per isolate) and adds the 90-day history the `status-tick` job recorded (`uptime_report`) and the owner's note (the `status-note` setting, edited on the console's Publish page). Without the database `days` is empty and `uptime90` is `null`.
-- **Owner console.** **Overview** is the first look (tiles, the 14-day timeline, an "attention" list naming anything that needs the owner), **Health** the live checks, **Database → Jobs** whether the scheduled jobs are running ([admin-console.md](admin-console.md)). A panel with no data means "unknown", not "healthy".
+- **Owner console.** **Dashboard** is the first look (tiles, the 14-day timeline, an "attention" list naming anything that needs the owner), **App Health → Server Checks** the live checks, **System → Scheduled Jobs** whether the scheduled jobs are running ([admin-console.md](admin-console.md)). A panel with no data means "unknown", not "healthy".
 - **Uptime issue.** The "Synthetic uptime probe failed" issue is the alert from outside.
 
 ## Rate limiting
