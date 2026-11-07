@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 15
+-- VinaX database · schema version 16
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -28,7 +28,10 @@
 --  (2b. sign-in history, version 12, sits after accounts; version 13 adds
 --  the device system and browser to listeners, and listening time;
 --  version 14 adds Top listeners, At risk, the listening heat map and
---  retention by sign-in week)
+--  retention by sign-in week; version 15 adds the owner's notes and tags
+--  and the profile extras)
+--  version 16 adds phone model, system version and how the app runs, and
+--  time in the app)
 --  12. security
 -- =============================================================================
 
@@ -108,6 +111,15 @@ update listeners l set account_id = a.id
 -- usually says it is a Mac, so iPads mostly count as Mac web.)
 alter table listeners add column if not exists os text;        -- android | ios | ipados | macos | windows | chromeos | linux
 alter table listeners add column if not exists browser text;   -- Chrome | Safari | Edge | Firefox | Samsung Internet | Opera
+
+-- Version 16 — device detail, read by the Worker from the same user agent
+-- (the Android app's WebView names the phone model; Chrome's reduced agent
+-- and iPhones do not), and how the listener runs VinaX: the Android / iOS
+-- app, a web app added to the home screen, or a browser tab (sent by the app).
+alter table listeners add column if not exists os_version text;    -- "14", "17.4"
+alter table listeners add column if not exists device_model text;  -- "SM-S918B", "RMX3741"
+alter table listeners add column if not exists device_brand text;  -- Samsung | Vivo | Xiaomi | Apple | …
+alter table listeners add column if not exists display_mode text;  -- app | installed | tab
 
 -- ---------------------------------------------- 2b. sign-in history (v12) --
 -- One row per Google sign-in to the app, written by POST /api/auth/google:
@@ -2040,6 +2052,116 @@ language sql immutable as $$
   end
 $$;
 
+-- ------------------------------------------ device detail, time in app (v16) --
+
+-- Version 16 — time in the app: listening plus time VinaX is on screen with
+-- nothing playing. The app sends a `presence` about once a minute while it is
+-- visible and idle (from the app version after 1.11.1; older versions only
+-- send open / pause, so their idle time is mostly missing). Each play or
+-- heartbeat counts until the device's next one of these events, at most 6
+-- minutes (as listen_time); each open, pause or presence at most 3 minutes
+-- (a longer gap means the app was closed). Seconds per device per India-time
+-- day, from p_since (all time when null), for p_listeners (all when null).
+create or replace function app_time(p_listeners text[] default null, p_since timestamptz default null)
+returns table (listener_id text, day date, seconds bigint)
+language sql stable set search_path = public, pg_temp as $$
+  select x.listener_id, (x.at at time zone 'Asia/Kolkata')::date as day,
+         sum(greatest(0, extract(epoch from least(coalesce(x.nxt, now()),
+             x.at + case when x.kind in ('play', 'heartbeat') then interval '6 minutes' else interval '3 minutes' end) - x.at)))::bigint as seconds
+  from (
+    select e.listener_id, e.kind, e.at, lead(e.at) over (partition by e.listener_id order by e.at) as nxt
+    from events e
+    where e.kind in ('play', 'heartbeat', 'pause', 'open', 'presence')
+      and e.listener_id is not null
+      and (p_listeners is null or e.listener_id = any (p_listeners))
+      and (p_since is null or e.at > p_since)
+  ) x
+  group by 1, 2
+$$;
+
+-- Time in the app per signed-in person, for a page of the console's lists
+-- (All Users, Top listeners): seconds since p_since and today (India time).
+create or replace function account_app_time(p_accounts text[], p_since timestamptz default null)
+returns table (account_id text, seconds bigint, today bigint)
+language sql stable set search_path = public, pg_temp as $$
+  with s as (select * from signed_devices() d where d.account_id = any (coalesce(p_accounts, '{}'::text[])))
+  select s.account_id, sum(t.seconds)::bigint, coalesce(sum(t.seconds) filter (where t.day = _ist_today()), 0)::bigint
+  from app_time((select array_agg(listener_id) from s), p_since) t
+  join s on s.listener_id = t.listener_id
+  group by 1
+$$;
+
+-- One person's device detail and time in the app, beside user_profile: per
+-- device the system version, phone model and maker and how it runs; time in
+-- the app today, 7 / 30 days, all time, and per day for the last 14 days.
+create or replace function profile_app_time(p_account text) returns jsonb
+language sql stable set search_path = public, pg_temp as $$
+  with d as (
+    select l.* from listeners l
+    where l.account_id = p_account or l.id = (select listener_id from accounts where id = p_account)
+  ),
+  t as (select x.day, sum(x.seconds)::bigint as seconds
+        from app_time((select array_agg(id) from d), null) x group by 1)
+  select jsonb_build_object(
+    'devices', coalesce((select jsonb_agg(jsonb_build_object('id', d.id, 'osVersion', d.os_version, 'model', d.device_model,
+                 'brand', d.device_brand, 'display', d.display_mode) order by d.last_seen desc) from d), '[]'::jsonb),
+    'today', coalesce((select seconds from t where day = _ist_today()), 0),
+    'days7', coalesce((select sum(seconds) from t where day > _ist_today() - 7), 0),
+    'days30', coalesce((select sum(seconds) from t where day > _ist_today() - 30), 0),
+    'all', coalesce((select sum(seconds) from t), 0),
+    'byDay', (select jsonb_agg(jsonb_build_object('day', g.day, 'seconds', coalesce(t.seconds, 0)) order by g.day)
+              from (select (_ist_today() - i) as day from generate_series(0, 13) i) g
+              left join t on t.day = g.day))
+$$;
+
+-- The console's Phones & Browsers page: the devices of signed-in people seen
+-- in the last p_days, by how they run VinaX, maker, phone model, Android and
+-- iOS version, system and browser. Devices that have not reported since the
+-- schema-16 update count as "not known yet".
+create or replace function device_breakdown(p_days int default 90) returns jsonb
+language sql stable set search_path = public, pg_temp as $$
+  with d as (
+    select l.* from listeners l
+    join signed_devices() s on s.listener_id = l.id
+    where l.last_seen > now() - make_interval(days => _days(p_days))
+  )
+  select jsonb_build_object(
+    'days', _days(p_days),
+    'devices', (select count(*) from d),
+    'display', coalesce((select jsonb_object_agg(k, n) from (
+        select coalesce(display_mode, case when coalesce(nullif(platform, ''), 'web') <> 'web' then 'app' else 'unknown' end) as k, count(*) as n
+        from d group by 1) x), '{}'::jsonb),
+    'brands', coalesce((select jsonb_agg(x) from (
+        select device_brand as brand, count(*) as devices from d
+        where device_brand is not null group by 1 order by devices desc, brand limit 12) x), '[]'::jsonb),
+    'models', coalesce((select jsonb_agg(x) from (
+        select device_model as model, max(device_brand) as brand, count(*) as devices from d
+        where device_model is not null group by 1 order by devices desc, model limit 15) x), '[]'::jsonb),
+    'android', coalesce((select jsonb_agg(x) from (
+        select os_version as version, count(*) as devices from d
+        where os = 'android' and os_version is not null group by 1 order by devices desc, version limit 12) x), '[]'::jsonb),
+    'ios', coalesce((select jsonb_agg(x) from (
+        select os_version as version, count(*) as devices from d
+        where os in ('ios', 'ipados') and os_version is not null group by 1 order by devices desc, version limit 12) x), '[]'::jsonb),
+    'browsers', coalesce((select jsonb_agg(x) from (
+        select browser, count(*) as devices from d
+        where browser is not null group by 1 order by devices desc, browser limit 10) x), '[]'::jsonb),
+    'androidKnown', (select count(*) from d where os = 'android' and os_version is not null),
+    'androidAll', (select count(*) from d where os = 'android' or platform = 'android'),
+    'modelKnown', (select count(*) from d where device_model is not null)
+  )
+$$;
+
+-- Locked like every other function: only the Worker's service role runs them.
+revoke all on function app_time(text[], timestamptz) from public, anon, authenticated;
+revoke all on function account_app_time(text[], timestamptz) from public, anon, authenticated;
+revoke all on function profile_app_time(text) from public, anon, authenticated;
+revoke all on function device_breakdown(int) from public, anon, authenticated;
+grant execute on function app_time(text[], timestamptz) to service_role;
+grant execute on function account_app_time(text[], timestamptz) to service_role;
+grant execute on function profile_app_time(text) to service_role;
+grant execute on function device_breakdown(int) to service_role;
+
 -- Version 13 — listening time, estimated from the usage events the app
 -- already sends: a heartbeat every 25 s while music plays, a play when a song
 -- counts, a pause, and an open when the app starts or comes back. Each play
@@ -2692,7 +2814,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 15, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 15, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 16, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 16, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 15 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 16 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;

@@ -108,6 +108,16 @@ export default {
     if (view === 'retention') return { ...base, data: Array.from({ length: 8 }, (_, i) => ({ week: day(7 * i), size: 30 - i * 2, d1: i ? 14 - i : 4, d7: i ? 9 - Math.min(i, 8) : 0, d30: i > 4 ? 6 - (i - 4) : 0, d1Of: i ? 30 - i * 2 : 9, d7Of: i ? 30 - i * 2 : 0, d30Of: i > 4 ? 30 - i * 2 : 0 })) };
     if (view === 'funnel') return { ...base, data: [{ id: 'open', label: 'Opened the app', listeners: 410 }, { id: 'play', label: 'Played a song', listeners: 352 }, { id: 'signin', label: 'Signed in with Google', listeners: 158 }, { id: 'return', label: 'Came back another day', listeners: 97 }] };
     if (view === 'skips') return { ...base, data: songs.map((s, i) => ({ id: s.id, title: s.title, artist: s.artist, image: s.image, plays: s.plays, skips: Math.round(s.plays * (0.6 - i * 0.08)), rate: Math.round((0.6 - i * 0.08) * 100) })) };
+    // Schema 16: Phones & Browsers.
+    if (view === 'devices') return { ...base, data: {
+      days, devices: 96, display: { app: 59, installed: 9, tab: 24, unknown: 4 },
+      brands: [{ brand: 'Samsung', devices: 21 }, { brand: 'Vivo', devices: 12 }, { brand: 'Xiaomi', devices: 10 }, { brand: 'Realme', devices: 8 }, { brand: 'Apple', devices: 6 }, { brand: 'Oppo / OnePlus', devices: 4 }],
+      models: [{ model: 'SM-A536E', brand: 'Samsung', devices: 6 }, { model: 'V2120', brand: 'Vivo', devices: 5 }, { model: 'RMX3741', brand: 'Realme', devices: 4 }, { model: '23021RAAEG', brand: 'Xiaomi', devices: 3 }, { model: 'Pixel 8', brand: 'Google', devices: 2 }],
+      android: [{ version: '14', devices: 24 }, { version: '13', devices: 18 }, { version: '12', devices: 9 }, { version: '15', devices: 6 }],
+      ios: [{ version: '18.1', devices: 4 }, { version: '17.5', devices: 2 }],
+      browsers: [{ browser: 'Chrome', devices: 22 }, { browser: 'Safari', devices: 7 }, { browser: 'Edge', devices: 3 }, { browser: 'Samsung Internet', devices: 1 }],
+      androidKnown: 57, androidAll: 66, modelKnown: 55,
+    } };
     return { ...base, data: {} };
   },
 

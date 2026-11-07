@@ -25,6 +25,12 @@
  * GET  /api/admin/listeners?view=at-risk&quiet=7 → { configured, quiet, rule, total, rows }
  *        At risk (schema 14): quiet for `quiet` days (1–60) after listening ≥ 2 h or
  *        on ≥ 5 days in the 30 days before; rows add lastActive.
+ * GET  /api/admin/listeners?filters=1 → { configured, places, versions, languages }
+ *        rows also carry appTime30d / appToday: seconds in the app (schema 16's
+ *        account_app_time; absent before the update)
+ * GET  /api/admin/listeners?account=<id> → { configured, profile }   (user_profile;
+ *        schema 16: profile.appTime { today, days7, days30, all, byDay } and per-device
+ *        osVersion / model / brand / display merged into profile.devices)
  * POST /api/admin/listeners
  *        { action: 'block', account, reason? }       the person cannot sign in again
  *        { action: 'unblock', account }
@@ -160,9 +166,10 @@ export const onRequestGet = adminGet(async ({ env, url }) => {
     ]);
     if (!r.ok) return dbFailure(r);
     if (!r.value || typeof r.value !== 'object') return adminJson({ configured: true, error: 'not_found' }, 404);
+    const extra = await withAppTime(env, account, r.value);
     const signIns = s.ok ? s.rows.map((x) => ({ at: x.at, ip: x.ip, browser: x.browser, platform: x.platform, appVersion: x.app_version, country: x.country, region: x.region, city: x.city, newDevice: x.new_device, signup: x.signup })) : [];
-    const extras = x.ok && x.value && typeof x.value === 'object' ? x.value : null;
-    return adminJson({ configured: true, profile: { ...r.value, signIns, extras } });
+    const extras = x.ok && x.value && typeof x.value === 'object' && !Array.isArray(x.value) ? x.value : null;
+    return adminJson({ configured: true, profile: { ...r.value, ...extra, signIns, extras } });
   }
   const args = userArgs(url);
   // Schema 15: a tag filter narrows the people to the accounts carrying it
@@ -190,10 +197,40 @@ export const onRequestGet = adminGet(async ({ env, url }) => {
     total: Number(v.total) || 0,
     limit: args.p_limit,
     offset: args.p_offset,
-    rows: rows.map((x) => shape(x, tags)),
+    rows: await withRowAppTime(env, rows.map((x) => shape(x, tags))),
     counts: v.counts ?? {},
   });
 });
+
+type Env = Parameters<typeof db.rpc>[0];
+interface AppTimeAnswer { devices?: Array<{ id: string; osVersion: string | null; model: string | null; brand: string | null; display: string | null }>; today?: number; days7?: number; days30?: number; all?: number; byDay?: unknown[] }
+
+/**
+ * Schema 16 — device detail and time in the app beside user_profile. Before
+ * the update the function is missing: the profile is returned as it was.
+ */
+async function withAppTime(env: Env, account: string, profile: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const t = await db.rpc<AppTimeAnswer | null>(env, 'profile_app_time', { p_account: account });
+  if (!t.ok || !t.value) return {};
+  const detail = new Map((t.value.devices ?? []).map((d) => [d.id, d]));
+  const devices = (Array.isArray(profile.devices) ? profile.devices : []).map((d: Record<string, unknown>) => {
+    const x = detail.get(String(d.id));
+    return x ? { ...d, osVersion: x.osVersion, model: x.model, brand: x.brand, display: x.display } : d;
+  });
+  const n = (v: unknown) => Number(v) || 0;
+  return { devices, appTime: { today: n(t.value.today), days7: n(t.value.days7), days30: n(t.value.days30), all: n(t.value.all), byDay: Array.isArray(t.value.byDay) ? t.value.byDay : [] } };
+}
+
+/** Schema 16 — seconds in the app (30 days, today) for one page of people. Missing before the update. */
+export async function withRowAppTime<T extends { id: string }>(env: Env, rows: T[]): Promise<Array<T & { appTime30d?: number; appToday?: number }>> {
+  if (!rows.length) return rows;
+  const t = await db.rpc<Array<{ account_id: string; seconds: number; today: number }>>(env, 'account_app_time', {
+    p_accounts: rows.map((r) => r.id), p_since: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+  });
+  if (!t.ok || !Array.isArray(t.value)) return rows;
+  const by = new Map(t.value.map((x) => [x.account_id, x]));
+  return rows.map((r) => { const x = by.get(r.id); return { ...r, appTime30d: Number(x?.seconds) || 0, appToday: Number(x?.today) || 0 }; });
+}
 
 /** Every device row that belongs to an account (its own link, or the account's latest device). */
 async function devicesOf(env: Parameters<typeof db.select>[0], account: string): Promise<string[] | null> {

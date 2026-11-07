@@ -31,6 +31,17 @@ const ENDPOINT = isNativePlatform()
   : '/api/events';
 const PLATFORM = platformName();
 const HEARTBEAT_MS = 25_000;
+// Schema 16 — while the app is on screen and nothing plays, a `presence`
+// every third heartbeat tick (75 s), so the console can count time in the
+// app, not only time listening. It rides the heartbeat timer.
+
+/**
+ * Schema 16 — how a web listener runs VinaX: a web app added to the home
+ * screen ('installed', which iOS Safari also reports) or a browser tab. The
+ * server counts the Android / iOS app as 'app' whatever this says. Read per
+ * send: installing mid-session changes it.
+ */
+export const displayMode = (): 'installed' | 'tab' => (window.matchMedia?.('(display-mode: standalone)').matches ? 'installed' : 'tab');
 /**
  * 13.7.3 — the version a row reports: on Android the installed APK's version
  * and build (the app loads the live website, so __APP_VERSION__ is the
@@ -110,6 +121,7 @@ async function send(type: string, song?: Song | null, extra?: Record<string, unk
         type,
         platform: PLATFORM,
         appVersion,
+        display: displayMode(),
         song: toEventSong(song),
         ...(extra ?? {}),
         ...(meta ? { meta } : {}),
@@ -270,10 +282,13 @@ export function initTelemetry(): void {
     lastPlaying = s.isPlaying;
   });
 
+  let ticks = 0;
   telemetryInterval = window.setInterval(() => {
     const s = usePlayerStore.getState();
     const song = s.queue[s.index] ?? null;
-    if (s.isPlaying && song) void send('heartbeat', song);
+    if (s.isPlaying && song) { void send('heartbeat', song); ticks = 0; }
+    // On screen, nothing playing: a `presence` every third tick, 75 s (time in the app).
+    else if (++ticks % 3 === 0 && document.visibilityState === 'visible') void send('presence');
   }, HEARTBEAT_MS);
 
   // Surface uncaught errors to Technical Monitoring.

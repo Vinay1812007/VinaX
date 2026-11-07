@@ -238,6 +238,8 @@
         { key: 'language', label: 'Favourite language', hidden: true, sort: false, render: function (r) { return r.language ? VX.langName(r.language) : null; } },
         { key: 'plays', label: 'Plays', align: 'right', hidden: true, render: function (r) { return fmt.num(r.plays); } },
         { key: 'listen30d', label: 'Listening (30 d)', align: 'right', render: function (r) { return num(r.listen30d) ? h('span.nowrap', VX.listenText(r.listen30d)) : h('span.muted', '—'); }, csv: function (r) { return VX.listenText(r.listen30d); } },
+        // Schema 16: time on screen or playing (account_app_time); not sortable.
+        { key: 'appTime30d', label: 'Time in app (30 d)', align: 'right', hidden: true, sort: false, render: function (r) { return num(r.appTime30d) ? h('span.nowrap', { title: VX.APP_TIME_INFO || null }, VX.listenText(r.appTime30d)) : h('span.muted', '—'); }, csv: function (r) { return r.appTime30d == null ? '' : VX.listenText(r.appTime30d); } },
         { key: 'joined', label: 'Joined', render: function (r) { return ui.ago(r.joined); }, csv: function (r) { return fmt.full(r.joined); } },
         { key: 'lastSeen', label: 'Last active', render: function (r) { return ui.ago(r.lastSeen); }, csv: function (r) { return fmt.full(r.lastSeen); } }
       ];
@@ -382,6 +384,8 @@
       ui.stats([
         hasListen ? { label: 'Listening time', value: VX.listenText(st.listen30d), sub: 'last 30 days · today ' + VX.listenText(st.listenToday) + ' · 7 days ' + VX.listenText(st.listen7d),
           info: 'Time this person spent listening on all their devices. ' + LISTEN_INFO } : null,
+        p.appTime ? { label: 'Time in app', value: VX.listenText(obj(p.appTime).days30), sub: 'last 30 days · today ' + VX.listenText(obj(p.appTime).today) + ' · 7 days ' + VX.listenText(obj(p.appTime).days7),
+          info: 'On all their devices. ' + VX.APP_TIME_INFO } : null,
         { label: 'Total plays', value: fmt.num(st.plays), sub: fmt.num(st.plays30d) + ' in the last 30 days', info: 'Songs this person played on all their devices.' },
         { label: 'Active days', value: fmt.num(st.activeDays30d), sub: 'of the last 30', info: 'Days in the last month they opened the app.' },
         { label: 'Liked songs', value: fmt.num(st.favorites), info: 'Times they tapped the heart on a song.' },
@@ -398,8 +402,8 @@
         ['Library backup', bk.updatedAt ? 'Synced ' + fmt.ago(bk.updatedAt) + ' · ' + fmt.bytes(bk.bytes) : 'Not synced yet']
       ].filter(Boolean)),
       byDay.length ? h('div.profile-listen',
-        ui.heading('Time spent each day', 'Minutes this person listened each day for the last 14 days (India time). ' + LISTEN_INFO),
-        ui.chart({ labels: byDay.map(function (x) { return x.day; }), series: [{ name: 'Listening', values: byDay.map(function (x) { return Math.round(num(x.seconds) / 60); }), color: 'var(--c2)' }],
+        ui.heading('Time spent each day', p.appTime ? 'Minutes this person listened, and minutes VinaX was open, each day for the last 14 days (India time). ' + LISTEN_INFO + ' ' + VX.APP_TIME_INFO : 'Minutes this person listened each day for the last 14 days (India time). ' + LISTEN_INFO),
+        ui.chart({ labels: byDay.map(function (x) { return x.day; }), series: [{ name: 'Listening', values: byDay.map(function (x) { return Math.round(num(x.seconds) / 60); }), color: 'var(--c2)' }].concat(appByDay(p, byDay)),
           type: 'bar', height: 160, title: 'Minutes listened per day', empty: 'No listening in the last 14 days',
           format: function (v) { v = Math.round(v); var hr = Math.floor(v / 60), m = v % 60; return !v ? '0' : hr ? hr + 'h' + (m ? ' ' + m + 'm' : '') : m + 'm'; } })) : null,
       VX.userExtras.hours(p.extras || null),
@@ -407,6 +411,15 @@
         h('div', ui.heading('Top artists', 'Artists this person played most.'), ui.hbars(arr(p.topArtists).map(function (x) { return { label: x.artist, value: num(x.plays) }; }), { empty: 'No plays yet', limit: 6 })),
         h('div', ui.heading('Top songs', 'Songs this person played most.'), ui.hbars(arr(p.topSongs).map(function (x) { return { label: x.title, sub: x.artist, value: num(x.plays) }; }), { empty: 'No plays yet', limit: 6 })))
     ];
+  }
+
+  /* Schema 16: minutes in the app per day, beside listening, when the server sends them. */
+  function appByDay(p, byDay) {
+    var t = p.appTime && arr(obj(p.appTime).byDay);
+    if (!t || !t.length) return [];
+    var by = {};
+    t.forEach(function (x) { by[x.day] = num(x.seconds); });
+    return [{ name: 'In the app', values: byDay.map(function (x) { return Math.round((by[x.day] || 0) / 60); }), color: 'var(--c4)' }];
   }
 
   function history(p) {
@@ -442,6 +455,7 @@
         h('div.device-icon', VX.icon(/^(macos|windows|linux|chromeos|other)-web$/.test(dev.device || VX.deviceKey(dev.platform, dev.os)) ? 'globe' : 'phone')),
         h('div.device-main',
           h('strong', VX.deviceText(dev) + ' · device ' + (i + 1), active ? [' ', ui.pill('Online', 'ok')] : null, dev.signedOutAt ? [' ', ui.pill('Signed out', 'warn')] : null),
+          VX.deviceDetailText && VX.deviceDetailText(dev) ? h('div.small', VX.deviceDetailText(dev)) : null,
           h('div.muted.small', ['App version ' + (dev.appVersion || 'not known'), place(dev)].filter(Boolean).join(' · ')),
           h('div.muted.small', 'Last seen ', ui.ago(dev.lastSeen), ' · first used ', fmt.date(dev.firstSeen)),
           np.title ? h('div.small', dev.isPlaying ? ui.dot('ok') : null, ' ', np.title + (np.artist ? ' · ' + np.artist : '')) : null),

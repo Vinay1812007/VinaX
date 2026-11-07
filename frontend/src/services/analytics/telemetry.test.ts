@@ -120,7 +120,7 @@ describe('structured events', () => {
     expect(body.type).toBe('rec_served');
     expect(body.meta).toEqual({ alg: '7.2.0/1.2.0', n: 5, relaxed: [], exp: {} });
     expect(body).not.toHaveProperty('song');
-    expect(Object.keys(body).sort()).toEqual(['appVersion', 'deviceId', 'meta', 'platform', 'type'].sort());
+    expect(Object.keys(body).sort()).toEqual(['appVersion', 'deviceId', 'display', 'meta', 'platform', 'type'].sort());
   });
 
   it('an oversized meta is dropped, not truncated', async () => {
@@ -174,5 +174,40 @@ describe('isOpaqueScriptError', () => {
     expect(isOpaqueScriptError({ message: 'Script error.', filename: '', error: null })).toBe(true);
     expect(isOpaqueScriptError({ message: 'Script error.', filename: 'https://www.vinaxmusic.online/assets/a.js', error: null })).toBe(false);
     expect(isOpaqueScriptError({ message: 'Uncaught TypeError: x is undefined', filename: '', error: null })).toBe(false);
+  });
+});
+
+describe('schema 16 — time in the app and how VinaX runs', () => {
+  const setVisibility = (v: 'visible' | 'hidden') => Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => v });
+  afterEach(() => setVisibility('visible'));
+
+  it('on screen with nothing playing, a presence about once a minute; none while hidden or without consent', async () => {
+    consent(true);
+    setVisibility('visible');
+    initTelemetry();
+    await vi.advanceTimersByTimeAsync(3 * 60_000);
+    const n = posted().filter((b) => b.type === 'presence').length;
+    expect(n).toBeGreaterThanOrEqual(2);
+    expect(n).toBeLessThanOrEqual(3);
+    setVisibility('hidden');
+    fetchMock.mockClear();
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(posted().filter((b) => b.type === 'presence')).toHaveLength(0);
+    disposeTelemetry();
+    consent(false);
+    setVisibility('visible');
+    initTelemetry();
+    await vi.advanceTimersByTimeAsync(3 * 60_000);
+    expect(posted()).toHaveLength(0);
+  });
+
+  it('every event says how VinaX runs: a browser tab here, installed when standalone', async () => {
+    consent(true);
+    initTelemetry();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(posted()[0]?.display).toBe('tab');
+    const { displayMode } = await import('./telemetry');
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: q === '(display-mode: standalone)' }));
+    expect(displayMode()).toBe('installed');
   });
 });

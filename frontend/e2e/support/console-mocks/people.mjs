@@ -35,6 +35,8 @@ const users = NAMES.map((n, i) => ({
   // Schema 15: the owner's private tags (and a note on the first person).
   tags: i === 0 ? ['vip', 'tester'] : i === 2 ? ['friend'] : i === 4 ? ['tester'] : [],
   note: i === 0 ? 'Early tester from the Telugu group. Reports bugs quickly.' : null,
+  // Schema 16: time on screen or playing (a little more than listening).
+  appTime30d: (400 - i * 23) * 230, appToday: i < 9 ? 4200 - i * 300 : 0,
 }));
 
 // Schema 15: hours, skips, replays, searches and the owner's notes.
@@ -54,7 +56,8 @@ function profile(u) {
   return {
     account: { id: u.id, email: u.email, name: u.name, picture: null, platform: u.platform, appVersion: u.appVersion, country: u.country, region: u.region, city: u.city, createdAt: u.joined, lastSeen: u.lastSeen, blockedAt: u.blocked ? ago(600) : null },
     devices: [
-      { id: 'd_' + 'ab'.repeat(16), platform: u.platform, os: u.os, browser: u.browser, device: u.device, appVersion: u.appVersion, country: u.country, region: u.region, city: u.city, firstSeen: u.joined, lastSeen: u.lastSeen, signedOutAt: null, nowPlaying: u.nowPlaying, isPlaying: u.isPlaying },
+      { id: 'd_' + 'ab'.repeat(16), platform: u.platform, os: u.os, browser: u.browser, device: u.device, appVersion: u.appVersion, country: u.country, region: u.region, city: u.city, firstSeen: u.joined, lastSeen: u.lastSeen, signedOutAt: null, nowPlaying: u.nowPlaying, isPlaying: u.isPlaying,
+        ...(u.platform === 'android' ? { osVersion: '14', model: 'SM-S918B', brand: 'Samsung', display: 'app' } : u.os === 'ios' ? { osVersion: '18.1', model: null, brand: 'Apple', display: 'installed' } : { osVersion: null, model: null, brand: null, display: 'tab' }) },
       ...(u.devices > 1 ? [{ id: 'd_' + 'cd'.repeat(16), platform: 'web', os: 'windows', browser: 'Chrome', device: 'windows-web', appVersion: '1.8.3', country: u.country, region: u.region, city: u.city, firstSeen: u.joined, lastSeen: ago(3000), signedOutAt: null, nowPlaying: null, isPlaying: false }] : []),
     ],
     signIns: [
@@ -65,6 +68,8 @@ function profile(u) {
     stats: { plays: u.plays, plays30d: Math.round(u.plays / 3), activeDays30d: 18, favorites: 34, searches: 61, errors: 2, firstEvent: u.joined, lastEvent: u.lastSeen,
       listenToday: u.listenToday, listen7d: Math.round(u.listen30d / 4), listen30d: u.listen30d, listenAll: u.listen30d * 2, listenDays30d: 18, avgPerActiveDay30d: Math.round(u.listen30d / 18) },
     listenByDay: Array.from({ length: 14 }, (_, i) => ({ day: day(13 - i), seconds: i % 5 === 3 ? 0 : 1200 + ((i * 977) % 5400) })),
+    appTime: { today: u.appToday, days7: Math.round(u.appTime30d / 4), days30: u.appTime30d, all: u.appTime30d * 2,
+      byDay: Array.from({ length: 14 }, (_, i) => ({ day: day(13 - i), seconds: i % 5 === 3 ? 300 : 1700 + ((i * 977) % 5400) })) },
     topSongs: SONGS.map((s, i) => ({ title: s[0], artist: s[1], image: null, plays: 40 - i * 6 })),
     topArtists: SONGS.map((s, i) => ({ artist: s[1], plays: 60 - i * 9 })),
     languages: [{ language: u.language, plays: 120 }, { language: 'hindi', plays: 40 }, { language: 'english', plays: 12 }],

@@ -202,7 +202,7 @@ describe('what leaves the device', () => {
     expect(events.map((b) => b.type)).toEqual(['rec_served', 'rec_outcome']);
     for (const body of events) {
       // Exactly the fields every usage event already carries, plus meta.
-      expect(Object.keys(body).sort()).toEqual(['appVersion', 'deviceId', 'meta', 'platform', 'type']);
+      expect(Object.keys(body).sort()).toEqual(['appVersion', 'deviceId', 'display', 'meta', 'platform', 'type']);
       expect(JSON.stringify(body)).not.toContain('secret-song-id');
       expect(JSON.stringify(body.meta)).not.toMatch(/"batch"|"song"|"id"/);
     }

@@ -59,6 +59,54 @@ export function deviceOf(ua: string | null | undefined): DeviceFacts {
   return { os, browser, androidVersion: android ? android[1] : null, webView: !!android && /; wv\)/.test(u) };
 }
 
+/** Schema 16 — the phone in a user agent: system version, model and maker. */
+export interface PhoneFacts { osVersion: string | null; model: string | null; brand: string | null }
+
+/** Model-number prefixes → maker, for the phones VinaX listeners use most. */
+const BRANDS: ReadonlyArray<[RegExp, string]> = [
+  [/^(SM-|GT-|Galaxy)|samsung/i, 'Samsung'],
+  [/^Pixel/i, 'Google'],
+  [/^RMX/i, 'Realme'],
+  [/^(CPH|OPPO|PH[A-Z]M)/i, 'Oppo / OnePlus'],
+  [/^(IN|LE|KB|NE|HD|GM|AC|BE|EB|DN)\d{4}|OnePlus/i, 'OnePlus'],
+  [/^I\d{4}|iQOO/i, 'iQOO'],
+  [/^V\d{4}|vivo/i, 'Vivo'],
+  [/^(Redmi|POCO|Mi |MI |Xiaomi|M\d{4}[A-Z]|2\d{3}[A-Z0-9]{3,})/i, 'Xiaomi'],
+  [/^moto|Motorola|^XT\d{4}/i, 'Motorola'],
+  [/Infinix/i, 'Infinix'],
+  [/TECNO/i, 'Tecno'],
+  [/^itel/i, 'itel'],
+  [/Nokia|^TA-\d{4}/i, 'Nokia'],
+  [/^(A\d{3}|Nothing)/, 'Nothing'],
+  [/^LAVA|^LXX/i, 'Lava'],
+  [/HUAWEI|^(ELE|VOG|ANA|MAR)-/i, 'Huawei'],
+  [/HONOR|^(RMO|CRT|ALI)-/i, 'Honor'],
+  [/^(ASUS|ASUS_)/i, 'Asus'],
+  [/^LM-|LG-/i, 'LG'],
+];
+
+/**
+ * Schema 16 — the system version and, on Android, the phone model. The
+ * Android app's WebView still names the model ("Android 14; SM-S918B
+ * Build/…; wv"); Chrome's reduced user agent says "Android 10; K", which
+ * means the model (and often the real version) is hidden: unknown. iPhones
+ * never share their model.
+ */
+export function phoneOf(ua: string | null | undefined): PhoneFacts {
+  const u = (ua ?? '').slice(0, 512);
+  const ios = /(?:iPhone|CPU) OS (\d+)(?:_(\d+))?/.exec(u);
+  if (ios && /iPhone|iPad|iPod/.test(u)) return { osVersion: ios[2] ? `${ios[1]}.${ios[2]}` : ios[1], model: null, brand: 'Apple' };
+  const m = /Android (\d+(?:\.\d+)?)(?:;\s*([^;)]*))?/.exec(u);
+  if (!m) return { osVersion: null, model: null, brand: null };
+  const reduced = /^K$/.test((m[2] ?? '').trim());
+  let model: string | null = (m[2] ?? '').replace(/\s*Build\/.*$/, '').trim() || null;
+  if (model && (reduced || /^(wv|Mobile|Linux|[a-z]{2}[-_][a-z]{2}|U)$/i.test(model))) model = null;
+  if (model) model = model.slice(0, 40);
+  const brand = model ? BRANDS.find(([re]) => re.test(model as string))?.[1] ?? null : null;
+  // Reduced agents freeze the version at 10: not the phone's real one.
+  return { osVersion: reduced ? null : m[1], model, brand };
+}
+
 /** The app build (body `appVersion` or `x-vinax-version`), clipped. */
 export function appVersionOf(raw: unknown, request?: Request): string | null {
   return clip(typeof raw === 'string' ? raw : request?.headers.get('x-vinax-version'), 24);

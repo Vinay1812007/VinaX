@@ -229,4 +229,34 @@ test.describe('console pages', () => {
     await expect(body.locator('tbody tr').first()).toBeVisible();
     expect(errors).toEqual([]);
   });
+
+  test('Phones & Browsers and time in the app (schema 16)', async ({ page }) => {
+    const errors = watchErrors(page);
+    await mockConsole(page);
+    await signedIn(page);
+    await page.goto('/admin/#/phones-browsers');
+    await settle(page);
+    await expect(page.locator('#pageTitle')).toHaveText('Phones & Browsers');
+    const body = page.locator('#pageBody');
+    await expect(body.locator('.kpi-label').filter({ hasText: /^On the home screen$/ })).toHaveCount(1);
+    await expect(body.getByText('Web app on the home screen')).toBeVisible();
+    await expect(body.getByText('SM-A536E')).toBeVisible();
+    await expect(body.getByText('Android 14', { exact: true })).toBeVisible();
+    // All Users: a time-in-app column beside listening.
+    await page.goto('/admin/#/users');
+    await settle(page);
+    // Hidden until chosen from the Columns picker (the table is wide already).
+    await expect(body.locator('th').filter({ hasText: /^Time in app \(30 d\)$/ })).toHaveCount(0);
+    await body.getByRole('button', { name: 'Show or hide columns' }).click();
+    await page.getByRole('menuitem', { name: /Time in app \(30 d\)/ }).click();
+    await expect(body.locator('th').filter({ hasText: /^Time in app \(30 d\)$/ })).toHaveCount(1);
+    await expect(body.locator('tbody').getByText('25 h 33 min')).toBeVisible();
+    // A profile: the card, and the phone model on the Devices tab.
+    await page.locator('#pageBody tbody tr').first().click();
+    await expect(page).toHaveURL(/#\/user\?id=\d+$/);
+    await expect(body.locator('.kpi-label').filter({ hasText: /^Time in app$/ })).toHaveCount(1);
+    await body.getByRole('tab', { name: /Devices/ }).click();
+    await expect(body.getByText('Samsung SM-S918B · Android 14')).toBeVisible();
+    expect(errors).toEqual([]);
+  });
 });

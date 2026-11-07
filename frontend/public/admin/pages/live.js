@@ -11,7 +11,7 @@
 
   var KIND = {
     play: 'Played a song', heartbeat: 'Listening', complete: 'Finished a song', skip: 'Skipped a song', pause: 'Paused',
-    favorite: 'Liked a song', search: 'Searched', share: 'Shared a song', open: 'Opened the app', register: 'Chose a name',
+    favorite: 'Liked a song', search: 'Searched', share: 'Shared a song', open: 'Opened the app', presence: 'Had the app open', register: 'Chose a name',
     error: 'Hit a problem', 'lyric-miss': 'Lyrics not found', rec_served: 'Got suggestions', rec_outcome: 'Used a suggestion'
   };
   VX.kindText = function (k) { return KIND[k] || fmt.label(k || 'activity'); };

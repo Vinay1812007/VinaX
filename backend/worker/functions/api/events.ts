@@ -3,19 +3,21 @@
  * opted in to usage sharing (Settings → Your data).
  *
  *   headers  x-vinax-consent: analytics      (required — no consent, nothing is kept)
- *   body     { deviceId?, signed_device_id?, name?, type, platform?, appVersion?,
+ *   body     { deviceId?, signed_device_id?, name?, type, platform?, appVersion?, display?,
  *              song?: { id, title, artist, language, image }, errorKind?, message?, meta? }
+ *            display (schema 16): installed | tab — how a web listener runs VinaX
  *   → 204                                    stored (or dropped — the answer never tells)
  *   → 200 { signed_device_id_next }          first contact: the signed id the app keeps
  *
  * What is written: one `events` row (the event itself, song facts, coarse edge
  * geo) and the device's latest-state `listeners` row (schema 13: with the
- * system and browser read from the user agent). Device identity comes
+ * system and browser read from the user agent; schema 16: the system
+ * version, phone model and maker, and how the app runs). Device identity comes
  * from _lib/identity.ts — never the raw client id. The database work runs
  * after the answer (waitUntil), so a slow database never delays the app.
  */
 import { db, dbConfigured, type DbEnv } from '../_lib/db';
-import { appVersionOf, asObject, clip, deviceOf, edgeGeo, platformOf, songFacts } from '../_lib/edge';
+import { appVersionOf, asObject, clip, deviceOf, edgeGeo, phoneOf, platformOf, songFacts } from '../_lib/edge';
 import { resolveIdentity, type IdentityEnv } from '../_lib/identity';
 import { rateLimitAsync } from '../_lib/ratelimit';
 
@@ -68,6 +70,17 @@ export function isReservedKind(kind: string): boolean {
   const k = kind.toLowerCase();
   return k.startsWith('admin') || RESERVED_KINDS.has(k);
 }
+
+/** Schema 16 — the values the app may send as `display`. The apps always count as 'app'. */
+const DISPLAY_MODES: ReadonlySet<string> = new Set(['installed', 'tab']);
+/**
+ * Listener columns newer than some databases, newest first: when PostgREST
+ * answers PGRST204 (unknown column) the presence is stored without them.
+ */
+const LATE_COLUMNS: ReadonlyArray<readonly string[]> = [
+  ['os_version', 'device_model', 'device_brand', 'display_mode'], // schema 16
+  ['os', 'browser'],                                              // schema 13
+];
 
 /** Kinds that may carry structured `meta` (recommendation telemetry). */
 const META_KINDS: ReadonlySet<string> = new Set(['rec_served', 'rec_outcome']);
@@ -170,7 +183,17 @@ export const onRequestPost = async (context: Ctx): Promise<Response> => {
       listenerRow.os = platform === 'android' ? 'android' : platform === 'ios' ? (dev.os === 'ipados' ? 'ipados' : 'ios') : dev.os;
       listenerRow.browser = platform === 'web' ? dev.browser : null;
     }
+    // Schema 16: the system version and phone model (when the agent names them).
+    const phone = phoneOf(ua);
+    if (phone.osVersion || phone.model) {
+      listenerRow.os_version = phone.osVersion;
+      listenerRow.device_model = phone.model;
+      listenerRow.device_brand = phone.brand;
+    }
   }
+  // Schema 16: how the app runs — the Android / iOS app, an installed web app, a browser tab.
+  const display = platform !== 'web' ? 'app' : DISPLAY_MODES.has(String(body.display)) ? String(body.display) : null;
+  if (display) listenerRow.display_mode = display;
   const name = clip(body.name, 80);
   if (name) listenerRow.display_name = name;
   if (appVersion) listenerRow.app_version = appVersion;
@@ -180,12 +203,12 @@ export const onRequestPost = async (context: Ctx): Promise<Response> => {
 
   const write = (async () => {
     const [ev, first] = await Promise.all([db.insert(env, 'events', eventRow), db.upsert(env, 'listeners', listenerRow, 'id')]);
-    // A database still on schema 12 has no os / browser columns (PostgREST
-    // answers PGRST204): store the presence without them.
+    // A database older than a column answers PGRST204 (unknown column):
+    // store the presence without the newest columns, then without the next.
     let li = first;
-    if (!li.ok && li.code === 'PGRST204' && 'os' in listenerRow) {
-      delete listenerRow.os;
-      delete listenerRow.browser;
+    for (const cols of LATE_COLUMNS) {
+      if (li.ok || li.code !== 'PGRST204' || !cols.some((c) => c in listenerRow)) continue;
+      for (const c of cols) delete listenerRow[c];
       li = await db.upsert(env, 'listeners', listenerRow, 'id');
     }
     if (!ev.ok) console.warn(`[events] event not stored (${ev.error}${ev.status ? ` ${ev.status}` : ''}${ev.code ? ` ${ev.code}` : ''})`);

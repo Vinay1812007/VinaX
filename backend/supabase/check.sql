@@ -293,6 +293,27 @@ begin
   insert into owner_notes (account_id, tags) values ('check_on', array['friend']);
   delete from accounts where id = 'check_on';
   assert not exists (select 1 from owner_notes where account_id = 'check_on'), 'owner_notes: deleted with the account';
+
+  -- version 16: time in the app, device detail
+  -- listening as above (75 s + 6 min), and the pause with nothing after it counts 3 minutes
+  assert (select sum(seconds) from app_time(array['check_lt'], now() - interval '30 days')) = 75 + 180 + 360, 'app_time: listening plus a capped pause';
+  -- an open, two presences a minute apart, then nothing for an hour = 60 + 60 + 180
+  insert into events (at, listener_id, kind) values
+    (now() - interval '5 hours',                          'check_at', 'open'),
+    (now() - interval '5 hours' + interval '60 seconds',  'check_at', 'presence'),
+    (now() - interval '5 hours' + interval '120 seconds', 'check_at', 'presence'),
+    (now() - interval '5 hours' + interval '125 seconds', 'check_at', 'search');
+  assert (select sum(seconds) from app_time(array['check_at'], null)) = 300, 'app_time: idle on screen, 3-minute cap';
+  assert (select sum(seconds) from app_time(array['check_nobody'], null)) is null, 'app_time: no events';
+  assert (select seconds from account_app_time(array['check_a1'], null)) > 0, 'account_app_time: a signed-in person';
+  assert (select count(*) from account_app_time(array['check_nobody'], null)) = 0 and (select count(*) from account_app_time(null, null)) = 0, 'account_app_time: nobody';
+  update listeners set os = 'android', os_version = '14', device_model = 'SM-S918B', device_brand = 'Samsung', display_mode = 'installed' where id = 'check_l1';
+  v := profile_app_time('check_a1');
+  assert jsonb_array_length(v -> 'byDay') = 14 and (v ->> 'all')::int >= (v ->> 'days30')::int and (v ->> 'days30')::int > 0, 'profile_app_time: totals, 14 days';
+  assert (v -> 'devices' -> 0 ->> 'model') = 'SM-S918B' and (v -> 'devices' -> 0 ->> 'display') = 'installed' and (v -> 'devices' -> 0 ->> 'osVersion') = '14', 'profile_app_time: device detail';
+  v := device_breakdown(90);
+  assert (v -> 'brands' -> 0 ->> 'brand') = 'Samsung' and (v -> 'display' ->> 'installed')::int = 1 and (v -> 'android' -> 0 ->> 'version') = '14', 'device_breakdown';
+  assert (v ->> 'devices')::int >= 1 and (v ->> 'modelKnown')::int = 1, 'device_breakdown: counts';
   n := purge_kind('errors', 180);
   assert n = 0, 'purge_kind keeps recent errors';
   begin
@@ -666,7 +687,7 @@ begin
   assert not has_table_privilege('anon', 'public.personal_events', 'select'), 'anon cannot read personal events';
   assert not has_function_privilege('anon', 'public.personal_neighbours(text, text, integer, text[], boolean)', 'execute'), 'anon cannot call the personal engine';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 15, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 16, 'meta.schema.version';
   -- v12: sign-in history is locked like every table and goes with its account.
   assert (select relforcerowsecurity from pg_class where relname = 'sign_ins'), 'sign_ins: row level security forced';
   assert not has_table_privilege('anon', 'public.sign_ins', 'select'), 'anon cannot read sign-in history';
