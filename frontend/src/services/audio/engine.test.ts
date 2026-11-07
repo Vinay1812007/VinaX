@@ -344,3 +344,15 @@ describe('AudioEngine', () => {
     });
   });
 });
+
+describe('mediaErrorDetail', () => {
+  it('names the failure and where the source lives, without ids', async () => {
+    const { mediaErrorDetail } = await import('./engine');
+    expect(mediaErrorDetail({ code: 2 }, 'https://aac.saavncdn.com/208/abc_320.mp4')).toBe('network (aac.saavncdn.com)');
+    expect(mediaErrorDetail({ code: 4, message: 'MEDIA_ELEMENT_ERROR: Format error' }, 'blob:https://x/1')).toBe(
+      'unsupported source (saved song (blob)): MEDIA_ELEMENT_ERROR: Format error',
+    );
+    expect(mediaErrorDetail({ code: 3 }, 'https://localhost/_capacitor_file_/data/user/0/a.mp4')).toBe('decode (saved song (file))');
+    expect(mediaErrorDetail(null, undefined)).toBe('unknown (no source)');
+  });
+});

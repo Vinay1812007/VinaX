@@ -10,6 +10,7 @@ import './styles/features.css';
 import './styles/templates/index.css';
 import './styles/festivals.css';
 import { captureServerPage } from './services/seo/serverPage';
+import { reloadPage } from './utils/pageReload';
 
 // 13.5.0 — keep this URL's server-rendered text before React replaces #root
 // (signed-out visitors read it on PublicPage; see services/seo/serverPage.ts).
@@ -86,8 +87,11 @@ window.addEventListener('vite:preloadError', (event) => {
   try { n = Number(sessionStorage.getItem(KEY) || 0); } catch { /* ignore */ }
   if (n >= 1) return; // one reload per session, then stop and let the user see the error
   try { sessionStorage.setItem(KEY, '1'); } catch { /* proceed anyway */ }
+  // Cancelling the event makes Vite resolve the import with `undefined`, so a
+  // lazy page throws "reading 'default'" until the reload lands; pageReloading()
+  // keeps that out of App Errors and off the screen.
   event.preventDefault();
-  window.location.reload();
+  reloadPage();
 });
 
 // Device-class engine: html carries device-* and pointer-* classes so styles

@@ -83,9 +83,17 @@ type PushPlugin = typeof import('@capacitor/push-notifications').PushNotificatio
 /** Where a tapped notification navigates; the app shell sets the router's navigate. */
 let navigateTo: (to: string) => void = (to) => window.location.assign(to);
 
-async function loadPlugin(): Promise<PushPlugin | null> {
+/**
+ * The plugin comes back inside an object, never as the promise's value: a
+ * Capacitor plugin is a Proxy that answers every property, `then` included, so
+ * resolving a promise with it calls `PushNotifications.then()`, which rejects
+ * with "not implemented on android" and leaves the await hanging forever —
+ * push never registered (179 reports in App Errors).
+ */
+async function loadPlugin(): Promise<{ PushNotifications: PushPlugin } | null> {
   try {
-    return (await import('@capacitor/push-notifications')).PushNotifications;
+    const { PushNotifications } = await import('@capacitor/push-notifications');
+    return { PushNotifications };
   } catch (e) {
     report(`plugin unavailable: ${String(e).slice(0, 120)}`);
     return null;
@@ -160,8 +168,9 @@ export type NativePermission = 'granted' | 'denied' | 'prompt' | 'unsupported';
 
 export async function nativePushPermission(): Promise<NativePermission> {
   if (!isNativePlatform()) return 'unsupported';
-  const PushNotifications = await loadPlugin();
-  if (!PushNotifications) return 'unsupported';
+  const loaded = await loadPlugin();
+  if (!loaded) return 'unsupported';
+  const { PushNotifications } = loaded;
   try {
     const r = (await PushNotifications.checkPermissions()).receive;
     return r === 'granted' ? 'granted' : r === 'denied' ? 'denied' : 'prompt';
@@ -177,8 +186,9 @@ export async function nativePushPermission(): Promise<NativePermission> {
  */
 export async function enableNativePush(): Promise<'ok' | 'denied' | 'unsupported' | 'error'> {
   if (!isNativePlatform()) return 'unsupported';
-  const PushNotifications = await loadPlugin();
-  if (!PushNotifications) return 'unsupported';
+  const loaded = await loadPlugin();
+  if (!loaded) return 'unsupported';
+  const { PushNotifications } = loaded;
   try {
     await wire(PushNotifications);
     const granted = await withNotificationPermission(async (ask) => {
@@ -202,8 +212,9 @@ export async function enableNativePush(): Promise<'ok' | 'denied' | 'unsupported
 export async function registerNativePush(navigate: (to: string) => void): Promise<void> {
   if (!isNativePlatform()) return;
   navigateTo = navigate;
-  const PushNotifications = await loadPlugin();
-  if (!PushNotifications) return;
+  const loaded = await loadPlugin();
+  if (!loaded) return;
+  const { PushNotifications } = loaded;
   try {
     await wire(PushNotifications);
     // Queued behind a dialog that is already up, so this reads its answer.
@@ -222,8 +233,9 @@ export async function registerNativePush(navigate: (to: string) => void): Promis
  */
 export async function refreshNativePush(): Promise<void> {
   if (!isNativePlatform() || uploaded) return;
-  const PushNotifications = await loadPlugin();
-  if (!PushNotifications) return;
+  const loaded = await loadPlugin();
+  if (!loaded) return;
+  const { PushNotifications } = loaded;
   try {
     await wire(PushNotifications);
     if ((await PushNotifications.checkPermissions()).receive !== 'granted') return;

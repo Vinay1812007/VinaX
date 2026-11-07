@@ -6,6 +6,7 @@ import { onPlaybackEvent } from '@/services/playback/session';
 import { usePlayerStore } from '@/store/playerStore';
 import { bestImage } from '@/utils/images';
 import type { Song } from '@/types';
+import { pageReloading } from '@/utils/pageReload';
 
 /**
  * Privacy-bounded usage telemetry. 14.0.3 — on by default, off with one
@@ -148,6 +149,9 @@ export function reportLyricMiss(song: Song): void {
 }
 
 export function reportError(kind: string, message: unknown): void {
+  // The app is reloading itself (a missing chunk after a deploy): what breaks
+  // on the way out is not a bug.
+  if (pageReloading()) return;
   const msg = String(message ?? '').slice(0, 300);
   const key = kind + '|' + msg;
   if (errorCount >= 25 || seenErrors.has(key)) return;
@@ -273,11 +277,21 @@ export function initTelemetry(): void {
   }, HEARTBEAT_MS);
 
   // Surface uncaught errors to Technical Monitoring.
-  window.addEventListener('error', (e: ErrorEvent) => reportError('js', e.message || 'error'));
+  window.addEventListener('error', (e: ErrorEvent) => {
+    // A script from another site (Google sign-in, the Cloudflare check) threw:
+    // the browser hides everything but "Script error.", so there is nothing to act on.
+    if (isOpaqueScriptError(e)) return;
+    reportError('js', e.message || 'error');
+  });
   window.addEventListener('unhandledrejection', (e: PromiseRejectionEvent) => {
     const r = e.reason as { message?: string } | undefined;
     reportError('promise', (r && r.message) || String(e.reason ?? 'rejection'));
   });
+}
+
+/** The browser's stand-in for an error thrown by a cross-origin script: no message, file or stack. */
+export function isOpaqueScriptError(e: Pick<ErrorEvent, 'message' | 'filename' | 'error'>): boolean {
+  return /^script error\.?$/i.test((e.message ?? '').trim()) && !e.filename && !e.error;
 }
 
 /** Search analytics: query + result count ("0|query" marks a content gap). */

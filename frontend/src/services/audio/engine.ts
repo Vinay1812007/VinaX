@@ -388,9 +388,14 @@ class AudioEngine {
   private handleMediaError(): void {
     // Policy is pure + unit-tested (recoveryAction); this method only applies it.
     this.clearStall();
-    void import('@/services/analytics/telemetry').then((m) => m.reportError('playback', 'audio element error')).catch(() => undefined);
     if (!this.song) return;
-    if (recoveryAction(this.srcPlayedOk, this.retriedCurrentSrc) === 'retry-same') {
+    const action = recoveryAction(this.srcPlayedOk, this.retriedCurrentSrc);
+    const detail = mediaErrorDetail(this.el?.error ?? null, this.sources[this.sourceIdx]);
+    const next = action === 'retry-same' ? 'retrying' : this.sourceIdx < this.sources.length - 1 ? 'next source' : 'no sources left';
+    void import('@/services/analytics/telemetry')
+      .then((m) => m.reportError('playback', `audio element error: ${detail}; ${next}`))
+      .catch(() => undefined);
+    if (action === 'retry-same') {
       this.retriedCurrentSrc = true;
       this.srcPlayedOk = false;
       this.pendingSeek = this.lastTime;
@@ -625,6 +630,32 @@ class AudioEngine {
     this.cb = null;
     this.song = null;
   }
+}
+
+const MEDIA_ERRORS: Record<number, string> = { 1: 'aborted', 2: 'network', 3: 'decode', 4: 'unsupported source' };
+
+/**
+ * What App Errors shows for a failed <audio> load: the kind of failure and
+ * where the source lives, with no song ids or numbers, so the same failure
+ * groups across songs.
+ */
+export function mediaErrorDetail(err: { code: number; message?: string } | null, src: string | undefined): string {
+  const kind = err ? MEDIA_ERRORS[err.code] ?? 'unknown' : 'unknown';
+  let where = 'no source';
+  if (src) {
+    if (src.startsWith('blob:')) where = 'saved song (blob)';
+    else if (src.includes('/offline-audio/')) where = 'saved song (cache)';
+    else if (/^(file|capacitor|https?:\/\/localhost)/.test(src) || src.includes('_capacitor_file_')) where = 'saved song (file)';
+    else {
+      try {
+        where = new URL(src).hostname.replace(/[0-9]+/g, '');
+      } catch {
+        where = 'stream';
+      }
+    }
+  }
+  const msg = (err?.message ?? '').replace(/https?:\/\/\S+/g, '').trim().slice(0, 80);
+  return msg ? `${kind} (${where}): ${msg}` : `${kind} (${where})`;
 }
 
 export const audioEngine = new AudioEngine();

@@ -33,7 +33,18 @@ const push = {
     setTimeout(() => listeners.registration?.({ value: 'fcm-token-'.padEnd(40, 'x') }), 0);
   }),
 };
-vi.mock('@capacitor/push-notifications', () => ({ PushNotifications: push }));
+/**
+ * Like Capacitor's registerPlugin: a Proxy that answers every property, so a
+ * method the plugin lacks (`then`, when the plugin is resolved from a promise)
+ * is a call that rejects "not implemented on android" and never settles the await.
+ */
+const pushProxy = new Proxy(push, {
+  get(target, prop) {
+    if (prop in target) return target[prop as keyof typeof target];
+    return () => Promise.reject(new Error(`"PushNotifications.${String(prop)}()" is not implemented on android`));
+  },
+});
+vi.mock('@capacitor/push-notifications', () => ({ PushNotifications: pushProxy }));
 vi.mock('@capacitor/local-notifications', () => ({
   LocalNotifications: {
     checkPermissions: async () => ({ display: os.state }),

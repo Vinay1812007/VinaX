@@ -167,3 +167,12 @@ describe('14.0.3 — usage sharing is on by default', () => {
     expect(applyUsageSharingDefault()).toBe(false);
   });
 });
+
+describe('isOpaqueScriptError', () => {
+  it('skips the browser stand-in for a cross-origin script error, keeps real ones', async () => {
+    const { isOpaqueScriptError } = await import('./telemetry');
+    expect(isOpaqueScriptError({ message: 'Script error.', filename: '', error: null })).toBe(true);
+    expect(isOpaqueScriptError({ message: 'Script error.', filename: 'https://www.vinaxmusic.online/assets/a.js', error: null })).toBe(false);
+    expect(isOpaqueScriptError({ message: 'Uncaught TypeError: x is undefined', filename: '', error: null })).toBe(false);
+  });
+});

@@ -26,7 +26,9 @@ const h = vi.hoisted(() => ({
   readFile: vi.fn<(o: ReadArgs) => Promise<{ data: string | Blob }>>(),
   stat: vi.fn<(o: FileArgs) => Promise<{ size: number }>>(),
   httpGet: vi.fn<() => Promise<{ status: number; data: unknown }>>(),
+  getSong: vi.fn<(id: string) => Promise<Song>>(),
 }));
+vi.mock('@/services/api', () => ({ getSong: h.getSong }));
 
 vi.mock('@capacitor/filesystem', () => ({
   Directory: { External: 'EXTERNAL', Data: 'DATA' },
@@ -98,6 +100,7 @@ beforeEach(() => {
   h.readFile.mockReset().mockRejectedValue(new Error('unused'));
   h.stat.mockReset().mockResolvedValue({ size: 5_000_000 });
   h.httpGet.mockReset().mockResolvedValue({ status: 500, data: null });
+  h.getSong.mockReset().mockRejectedValue(new Error('not looked up'));
 });
 
 afterEach(() => {
@@ -106,6 +109,29 @@ afterEach(() => {
 });
 
 describe('downloadSong', () => {
+  it('looks up the stream URLs of a saved-list song that has none, like playback does', async () => {
+    h.getSong.mockResolvedValue(song('lk'));
+    const bare = { ...song('lk'), audio: [] } as Song;
+    expect(await downloadSong(bare)).toBe(true);
+    expect(h.getSong).toHaveBeenCalledWith('lk');
+    expect(h.downloadFile.mock.calls[0][0].url).toBe('https://cdn.test/lk_320kbps.mp4');
+    expect(h.errors).toEqual([]);
+  });
+
+  it('still reports a song the catalogue has no audio for', async () => {
+    h.getSong.mockResolvedValue({ ...song('n'), audio: [] } as Song);
+    expect(await downloadSong({ ...song('n'), audio: [] } as Song)).toBe(false);
+    expect(lastDownloadFailure('n')).toBe('unavailable');
+    expect(h.downloadFile).not.toHaveBeenCalled();
+    // Quoted, so App Errors makes one row for every song with this problem.
+    expect(h.errors).toEqual(['"Song n": unavailable: no audio variants']);
+  });
+
+  it('does not look up a song that already has stream URLs', async () => {
+    expect(await downloadSong(song('hs'))).toBe(true);
+    expect(h.getSong).not.toHaveBeenCalled();
+  });
+
   it('concurrent calls for one song share a single download', async () => {
     let finish: () => void = () => undefined;
     h.downloadFile.mockImplementation(() => new Promise<void>((resolve) => { finish = resolve; }));
@@ -359,6 +385,18 @@ describe('offline sources', () => {
     h.items.z = { path: 'vinax-downloads/z.mp4', uri: 'file:///z.mp4', dir: 'DATA' };
     getOfflineSources('z');
     await vi.waitFor(() => expect(getOfflineSources('z')).toEqual(['bridge:file:///z.mp4']));
+    expect(h.items.z).toBeDefined(); // the file is still at its saved address
+    expect(h.errors).toEqual([]);
     await removeDownload('z');
+  });
+
+  it('stops listing a song as saved once its file is gone from the phone', async () => {
+    stubCaches();
+    h.readFile.mockRejectedValue(new Error("'readFile' failed because file at '/data/user/0/app/files/vinax-downloads/gone.mp4' does not exist."));
+    h.stat.mockRejectedValue(new Error('File does not exist'));
+    h.items.gone = { path: 'vinax-downloads/gone.mp4', uri: 'file:///gone.mp4', dir: 'DATA' };
+    getOfflineSources('gone');
+    await vi.waitFor(() => expect(h.items.gone).toBeUndefined());
+    expect(h.errors).toEqual([]); // not an app error: the listener's storage was cleared
   });
 });

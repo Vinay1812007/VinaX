@@ -2,6 +2,7 @@ import { reportError } from '@/services/analytics/telemetry';
 import { Component, type ReactNode } from 'react';
 import { Link, useRouteError } from 'react-router-dom';
 import { KEYS } from '@/constants/storage-keys';
+import { pageReloading, reloadPage } from '@/utils/pageReload';
 
 /** Clear persisted player state (queue + resume positions) — the recovery
  *  hatch when corrupt persisted data keeps crashing the player chrome. */
@@ -40,6 +41,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error): void {
+    if (pageReloading()) return; // the page is going: nothing to report or repair
     reportError('react', error?.message ?? 'render error');
     if (import.meta.env.DEV) console.error('[vinax:boundary]', error);
     // A failed lazy chunk rejects its import promise permanently — remounting
@@ -59,12 +61,14 @@ export class ErrorBoundary extends Component<Props, State> {
         } catch {
           /* reload anyway */
         }
-        window.location.reload();
+        reloadPage();
       }
     }
   }
 
   render() {
+    // The app is already reloading for a new build: show nothing rather than flash an error.
+    if (this.state.error && pageReloading()) return null;
     if (this.state.error) {
       // Distinguish "an update was mid-publish and this page's chunk moved"
       // (the common, self-healing case during a deploy) from a real render

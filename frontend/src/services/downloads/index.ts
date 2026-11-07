@@ -305,17 +305,20 @@ async function blobUrlFromCache(id: string): Promise<string | null> {
   }
 }
 
+/** The file a saved song points at is gone (storage cleared, file deleted). */
+const FILE_MISSING = /does not exist|no such file|ENOENT|FileNotFound/i;
+
 /**
  * Copy a downloaded file from disk into the Cache API so the service worker
  * can serve it at /offline-audio/<id>. Returns true when the cache entry is
- * in place.
+ * in place, 'missing' when the file on disk no longer exists.
  */
 async function cacheAudioFromDisk(
   id: string,
   path: string,
   fs: FilesystemPlugin,
   directory: FsDirectory,
-): Promise<boolean> {
+): Promise<boolean | 'missing'> {
   try {
     if (typeof caches === 'undefined') return false;
     const blob = await readFileBlob(fs, path, directory);
@@ -333,9 +336,11 @@ async function cacheAudioFromDisk(
     );
     return true;
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (FILE_MISSING.test(msg)) return 'missing';
     // Visible in Technical Monitoring — a silent false here is exactly how
     // offline playback failures hid for three releases.
-    reportError('offline-cache', `${id}: ${e instanceof Error ? e.message : String(e)}`);
+    reportError('offline-cache', `${id}: ${msg}`);
     return false;
   }
 }
@@ -379,7 +384,16 @@ async function cacheOne(id: string): Promise<boolean> {
   let ok = await hasCachedAudio(id);
   if (!ok) {
     const { Filesystem, Directory } = await loadFs();
-    ok = await cacheAudioFromDisk(id, it.path, Filesystem, dirOf(Directory, it.dir));
+    const copied = await cacheAudioFromDisk(id, it.path, Filesystem, dirOf(Directory, it.dir));
+    // Gone from its folder and from its saved address too: the phone no longer
+    // has the file (storage cleared). Stop listing the song as saved, so it
+    // shows as not downloaded and can be saved again, instead of failing
+    // offline every time. A file still at its saved address keeps the bridge.
+    if (copied === 'missing' && !(it.uri && (await Filesystem.stat({ path: it.uri }).then(() => true, () => false)))) {
+      await removeDownload(id);
+      return false;
+    }
+    ok = copied === true;
   }
   if (!useDownloadsStore.getState().items[id]) {
     // Removed while we were copying — don't leave an orphan entry behind.
@@ -498,10 +512,27 @@ async function saveOnce({ Filesystem }: Fs, url: string, path: string, directory
  */
 const SAVE_DIRS: DownloadDir[] = ['DATA', 'EXTERNAL'];
 
-async function runDownload(song: Song): Promise<boolean> {
+/**
+ * Songs from saved lists (liked, history, server shelves) carry no stream
+ * URLs — playback looks them up on play, and so must a download, or it fails
+ * with "no audio variants" (most of the download reports in App Errors).
+ */
+async function withStreams(song: Song): Promise<Song> {
+  if (downloadUrls(song).length || isOffline()) return song;
+  try {
+    const { getSong } = await import('@/services/api');
+    const fresh = await getSong(song.id);
+    return fresh.audio?.length ? { ...song, audio: fresh.audio } : song;
+  } catch {
+    return song;
+  }
+}
+
+async function runDownload(original: Song): Promise<boolean> {
+  if (isOffline()) return fail(original, 'offline', 'device offline');
+  const song = await withStreams(original);
   const urls = downloadUrls(song);
   if (!urls.length) return fail(song, 'unavailable', 'no audio variants');
-  if (isOffline()) return fail(song, 'offline', 'device offline');
 
   useDownloadsStore.getState().setDownloading(song.id, true);
   try {
@@ -543,7 +574,9 @@ async function runDownload(song: Song): Promise<boolean> {
 function fail(song: Song, reason: DownloadFailure, detail: string): false {
   lastFailure.set(song.id, reason);
   // Surface the real device error in Technical Monitoring instead of dying silently.
-  reportError('download', `${song.title}: ${reason}: ${detail}`);
+  // The title is quoted so App Errors groups the same failure across songs
+  // (the server drops quoted text from the grouping key) instead of one row per song.
+  reportError('download', `"${song.title.replace(/"/g, "'")}": ${reason}: ${detail}`);
   return false;
 }
 
