@@ -314,6 +314,14 @@ begin
   v := device_breakdown(90);
   assert (v -> 'brands' -> 0 ->> 'brand') = 'Samsung' and (v -> 'display' ->> 'installed')::int = 1 and (v -> 'android' -> 0 ->> 'version') = '14', 'device_breakdown';
   assert (v ->> 'devices')::int >= 1 and (v ->> 'modelKnown')::int = 1, 'device_breakdown: counts';
+  -- version 17: the owner's weekly summary (the 7 days before today, and the 7 before those)
+  v := weekly_summary();
+  assert (v ->> 'to')::date = _ist_today() - 1 and (v ->> 'from')::date = _ist_today() - 7, 'weekly_summary: last seven whole days';
+  assert (v ->> 'totalUsers') is not null and jsonb_typeof(v -> 'topSongs') = 'array' and jsonb_typeof(v -> 'topArtists') = 'array', 'weekly_summary: shape';
+  assert (v ->> 'listenSeconds') is not null and (v ->> 'atRisk') is not null and (v ->> 'errors') is not null, 'weekly_summary: totals';
+  v := weekly_summary(_ist_today() + 1);
+  assert (v ->> 'activeUsers')::int >= 1 and (v ->> 'plays')::int >= 1 and (v ->> 'listenSeconds')::int > 0, 'weekly_summary: a week that includes today';
+  assert jsonb_array_length(v -> 'topSongs') >= 1 and (v ->> 'totalUsers')::int >= 1 and (v ->> 'newUsers')::int >= 1, 'weekly_summary: top songs, users';
   n := purge_kind('errors', 180);
   assert n = 0, 'purge_kind keeps recent errors';
   begin
@@ -687,7 +695,7 @@ begin
   assert not has_table_privilege('anon', 'public.personal_events', 'select'), 'anon cannot read personal events';
   assert not has_function_privilege('anon', 'public.personal_neighbours(text, text, integer, text[], boolean)', 'execute'), 'anon cannot call the personal engine';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 16, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 17, 'meta.schema.version';
   -- v12: sign-in history is locked like every table and goes with its account.
   assert (select relforcerowsecurity from pg_class where relname = 'sign_ins'), 'sign_ins: row level security forced';
   assert not has_table_privilege('anon', 'public.sign_ins', 'select'), 'anon cannot read sign-in history';

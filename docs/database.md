@@ -5,7 +5,7 @@ VinaX 14.0 brings back a server database, designed from a clean sheet: one schem
 ## Setting it up
 
 1. Create a Supabase project (any region; Mumbai is closest to most listeners).
-2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 16), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
+2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 17), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
 3. Set two Worker secrets from `backend/`:
 
 ```sh
@@ -26,6 +26,8 @@ Version 14 adds the console's Top Listeners, At Risk and When They Listen pages 
 Version 15 adds `owner_notes` (one row per signed-in person: the console's private `tags`, at most 12, and `note`, at most 2000 characters; it cascades with the account and the app never reads it), `profile_extras(account)` (24 India-time hours of listening over the last 30 days by the listen_time rule, the songs skipped most from `skip` events, the songs played on the most different days, the latest 100 searches split into result count and query, and the owner's notes) and `owner_tags()` (every tag with how many people carry it). `GET /api/admin/listeners?account=` returns them as `profile.extras` (null before the update), `?tag=` filters the Users list through `p_ids`, and `POST {action: 'notes'}` saves tags and note with an audit entry.
 
 Version 16 adds `os_version`, `device_model`, `device_brand` and `display_mode` (app, installed, tab) to `listeners`. `POST /api/events` reads the system version and phone model from the user agent (the Android app's WebView names the model; Chrome's reduced agent says "Android 10; K", read as unknown; iPhones give only the iOS version) and keeps the app's `display` field; the apps always count as `app`. The app also sends a `presence` event about once a minute while it is on screen with nothing playing. `app_time(listeners, since)` estimates time in the app: each play or heartbeat counts to the device's next play, heartbeat, pause, open or presence, at most 6 minutes; each open, pause or presence at most 3 minutes. `account_app_time(accounts, since)` sums it per signed-in person for a page of the console's lists, `profile_app_time(account)` gives one person's per-device detail and time in the app (today, 7 / 30 days, all time, 14 days), and `device_breakdown(days)` answers the Phones & Browsers page (`GET /api/admin/analytics?view=devices`). None of the older functions changed. Until the update is applied the Worker retries a refused listener write without the newest columns, then without the version-13 ones.
+
+Version 17 adds `weekly_summary(p_to date)` for the owner's Monday email (`_lib/weeklySummary.ts`, the `weekly-summary` job): the seven whole India-time days before `p_to` (default today) next to the seven before them — new, total and active signed-in people, plays, listening seconds (`listen_time`), top five songs and artists, errors, new feedback, and `atRisk` (people who listened 2 hours or more in the 30 days before the last 7 and have not been seen in the last 7). It adds no table; the email's switch and recipients live in the `email` setting (`weeklySummary`, `weeklyTo`), and each week's send leaves a `weekly-summary-sent` row in `job_runs`.
 
 ### Moving from version 10
 

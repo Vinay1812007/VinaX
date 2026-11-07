@@ -65,7 +65,7 @@ describe('Dashboard (overview)', () => {
       if (p === 'rpc/stats_overview') return json(kpis);
       if (p === 'rpc/stats_timeline') { expect(c.body).toEqual({ p_days: 30 }); return json([{ day: '2026-11-01', plays: 4 }]); }
       if (p === 'rpc/stats_platforms') return json({ platforms: [{ platform: 'android', users: 9 }], versions: [] });
-      if (p === 'meta') return json([{ key: 'schema', value: { version: 16, appliedAt: 'x' } }]);
+      if (p === 'meta') return json([{ key: 'schema', value: { version: 17, appliedAt: 'x' } }]);
       return undefined;
     });
     const { res, body } = await run(overview.onRequestGet as Handler, '/api/admin/overview?days=30');

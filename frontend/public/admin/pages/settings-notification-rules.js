@@ -94,27 +94,39 @@
     }
   };
 
-  /* Account emails — stored key: email { enabled, welcome, newSignIn, consoleSignIn, adminInvite }.
-     Anything not false is on. Sent through Resend; GET/POST /api/admin/email says
-     whether the key is set and sends a test. */
+  /* Account emails — stored key: email { enabled, welcome, newSignIn, consoleSignIn, adminInvite,
+     weeklySummary, weeklyTo: [email] }. Anything not false is on; an empty weeklyTo
+     sends the weekly summary to every Owner. Sent through Resend; GET/POST
+     /api/admin/email says whether the key is set, who gets the weekly summary and
+     when it last went, and sends tests. */
   var EMAILS = [
     { key: 'welcome', title: 'Welcome email', desc: 'Sent once, the first time someone signs in to VinaX with Google.' },
     { key: 'newSignIn', title: 'Sign-in alert', desc: 'Sent each time someone signs in to VinaX again, with the time, browser, IP address and rough location; it says so when the phone or browser is new to their account.' },
     { key: 'consoleSignIn', title: 'Console sign-in alert', desc: 'Sent to an admin each time they sign in here. A recovery-password sign-in is sent to every Owner.' },
-    { key: 'adminInvite', title: 'Admin invite', desc: 'Sent when an Owner adds someone on Admins & Roles, with the console address.' }
+    { key: 'adminInvite', title: 'Admin invite', desc: 'Sent when an Owner adds someone on Admins & Roles, with the console address.' },
+    { key: 'weeklySummary', title: 'Weekly summary to you', desc: 'Every Monday from 9 AM India time: last week’s listening hours, active and new people, top songs and artists, At risk, errors and feedback, next to the week before.' }
   ];
+  var cleanEmails = function (text) {
+    var seen = {};
+    return String(text || '').split(/[\s,;]+/).map(function (x) { return x.trim().toLowerCase(); }).filter(function (x) {
+      if (!x || seen[x] || !/^[^\s@<>",;]+@[^\s@<>",;]+\.[^\s@<>",;]+$/.test(x)) return false;
+      seen[x] = true; return true;
+    }).slice(0, 10);
+  };
   var emails = {
     key: 'email', title: 'Account emails', role: 'owner',
     desc: 'Emails VinaX sends people about their account. Sent through Resend.',
     fromValue: function (v) {
       var r = VX.obj(v), m = { enabled: r.enabled !== false, _new: !v };
       EMAILS.forEach(function (x) { m[x.key] = r[x.key] !== false; });
+      m.weeklyTo = cleanEmails((Array.isArray(r.weeklyTo) ? r.weeklyTo : []).join(' '));
       return m;
     },
     toValue: function (m) {
       if (m._new) return null;
       var out = { enabled: !!m.enabled };
       EMAILS.forEach(function (x) { out[x.key] = !!m[x.key]; });
+      out.weeklyTo = (m.weeklyTo || []).slice(0, 10);
       return out;
     },
     describe: function (v) {
@@ -142,9 +154,35 @@
               else VX.toast(r.error === 'validation_error' ? 'Resend refused it: check that the sender’s domain is verified in Resend.' : r.error === 'no_recipient' ? 'No Owner email to send to. Add your Google email as an Owner on Admins & Roles, or sign in with Google.' : 'Not sent: ' + r.message, 'bad');
             });
           } })));
+        var w = d.weekly || {};
+        var last = w.last ? 'Last sent ' + VX.fmt.ago(w.last.at) + (w.last.to && w.last.to.length ? ' to ' + w.last.to.join(', ') : '') + '.' : 'Not sent yet: the first one goes out on Monday from 9 AM India time.';
+        weeklyStatus.appendChild(h('div.form-row',
+          h('p.muted', last + (w.to && w.to.length ? ' Goes to ' + w.to.join(', ') + (w.owners ? ' (every Owner)' : '') + '.' : '')),
+          api.readOnly ? null : ui.button('Send a test now', { small: true, icon: 'send', onClick: function () {
+            return VX.api.post('/api/admin/email', { action: 'weekly-test' }).then(function (r) {
+              if (r.ok) VX.toast('Test weekly summary sent to ' + ((r.data && r.data.to) || []).join(', ') + ' ✓', 'ok');
+              else VX.toast(r.error === 'validation_error' ? 'Resend refused it: check that the sender’s domain is verified in Resend.' : 'Not sent: ' + r.message, 'bad');
+            });
+          } })));
       });
+      var weeklyStatus = h('div');
+      var toInput = ui.input({ placeholder: 'Every Owner', 'aria-label': 'Who gets the weekly summary', value: (m.weeklyTo || []).join(', '), maxlength: 600 });
+      toInput.addEventListener('change', function () {
+        m.weeklyTo = cleanEmails(toInput.value);
+        toInput.value = m.weeklyTo.join(', ');
+        touch();
+      });
+      var weeklyExtra = h('div.b-weekly',
+        ui.field('Send the weekly summary to', toInput, 'Email addresses, separated by commas (at most 10). Empty sends it to every Owner.'),
+        weeklyStatus);
+      weeklyExtra.hidden = !m.weeklySummary;
       var list = h('div', EMAILS.map(function (x) {
-        return ui.switchRow(x.title, x.desc, m[x.key], function (on) { m[x.key] = on; touch(); });
+        var row = ui.switchRow(x.title, x.desc, m[x.key], function (on) {
+          m[x.key] = on;
+          if (x.key === 'weeklySummary') weeklyExtra.hidden = !on;
+          touch();
+        });
+        return x.key === 'weeklySummary' ? h('div', row, weeklyExtra) : row;
       }));
       list.hidden = !m.enabled;
       return [

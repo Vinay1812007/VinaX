@@ -127,6 +127,14 @@
     VX.$$('.nav-link').forEach(function (a) {
       if (a.dataset.page === on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
     });
+    // The phone bar: its page lights up; any other page lights up Menu.
+    var inBar = false;
+    VX.$$('#bottomBar a.bb-link').forEach(function (a) {
+      var hit = a.dataset.page === on;
+      inBar = inBar || hit;
+      if (hit) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+    $('bbMenu').classList.toggle('on', !!on && !inBar);
   }
   var filterBox = $('navFilter');
   filterBox.addEventListener('input', function () { navFilter = filterBox.value; buildNav(); });
@@ -142,11 +150,13 @@
     document.body.classList.toggle('nav-open', open);
     $('scrimNav').hidden = !open;
     $('menuBtn').setAttribute('aria-expanded', String(open));
+    $('bbMenu').setAttribute('aria-expanded', String(open));
     if (open) { var a = VX.$('.nav-link[aria-current]') || VX.$('.nav-link'); if (a) a.focus(); }
   }
   $('menuBtn').addEventListener('click', function () { openNav(!document.body.classList.contains('nav-open')); });
   $('sbClose').addEventListener('click', function () { openNav(false); $('menuBtn').focus(); });
   $('scrimNav').addEventListener('click', function () { openNav(false); });
+  $('bbMenu').addEventListener('click', function () { openNav(!document.body.classList.contains('nav-open')); });
   $('railBtn').addEventListener('click', function () {
     var rail = !document.documentElement.classList.contains('sb-rail');
     document.documentElement.classList.toggle('sb-rail', rail);

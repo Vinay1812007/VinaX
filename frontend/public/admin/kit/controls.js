@@ -648,7 +648,10 @@
     var q = '', page = 0, size = server ? server.limit : (o.pageSize || 25);
     var selected = {};
     var idOf = o.rowId || function (r, i) { return r.id != null ? String(r.id) : String(i); };
-    var wrap = h('div.tbl-wrap.dt');
+    // Phones (<= 720 px, css/phone.css): each row becomes a card, the first
+    // column its title (or the column marked `primary: true`), the others
+    // label + value. `cards: false` keeps a sideways-scrolling table instead.
+    var wrap = h('div.tbl-wrap.dt' + (o.cards === false ? '.no-cards' : ''));
     var bodyHost = h('div.tbl-scroll');
     var pager = h('div.tbl-pager');
     var info = h('span.tbl-info.muted');
@@ -755,9 +758,10 @@
           cb.addEventListener('change', function () { if (cb.checked) selected[id] = true; else delete selected[id]; tr.classList.toggle('selected', cb.checked); drawBulk(); });
           cells.push(h('td.check-col', cb));
         }
+        var primary = cs.filter(function (c) { return c.primary; })[0] || cs[0];
         cs.forEach(function (c) {
           var v = c.render ? c.render(r) : r[c.key];
-          cells.push(h('td' + (c.align ? '.' + c.align : '') + (c.nowrap ? '.nowrap' : ''), { 'data-label': c.label || '' }, v == null || v === '' ? h('span.muted', '—') : v));
+          cells.push(h('td' + (c.align ? '.' + c.align : '') + (c.nowrap ? '.nowrap' : '') + (c === primary ? '.cell-primary' : ''), { 'data-label': c.label || '' }, v == null || v === '' ? h('span.muted', '—') : v));
         });
         if (o.rowMenu) cells.push(h('td.menu-col', ui.menu(o.rowMenu(r), { label: 'Actions' })));
         var tr = h('tr' + (o.onRow ? '.clickable' : '') + (selected[id] ? '.selected' : ''), cells);

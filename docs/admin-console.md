@@ -38,6 +38,7 @@ The console is standalone static files in `frontend/public/admin/`, copied into 
 | `index.html` | Content security policy, icon sprite, sign-in screen, sidebar, top bar, one `<script>` per file and one stylesheet per area |
 | `theme-boot.js` | Pre-paint: the stored theme (Light, Dark, Match my device) and the collapsed sidebar |
 | `console.css` | Base tokens (dark default, `html.light`), layout, shared components; `css/<area>.css` hold page styles (people, music, engage, system, settings-a, settings-b) |
+| `css/phone.css` | Phones (720 px and narrower), loaded after the glass theme: the bottom bar (Dashboard, Live, Users, Notify, Menu), stat cards two to a row, and every `ui.dataTable` as one card per row (first column, or the one marked `primary: true`, as the title; `cards: false` keeps a sideways-scrolling table) |
 | `css/glass.css` | The glass theme, loaded last: aqua→blue accent, frosted panels (60–80% opaque, blur) over slow colour glows (`.aurora` in `index.html`; still when the device asks for reduced motion). Only tokens and surface treatments; sticky table cells use `--surface-solid` so rows never show through. Without `backdrop-filter` panels fall back to solid |
 | `core.js` | The framework, global `VX`: DOM builder, API client, formatting (Indian numbers, one time zone, India by default), base components, charts, page registry |
 | `kit/controls.js` | The shared controls (below). Loaded right after `core.js` |

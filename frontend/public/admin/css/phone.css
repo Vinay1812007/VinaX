@@ -1,0 +1,107 @@
+/* Phones (720 px and narrower): a bottom bar with the pages used most and
+   Menu (every page), stat cards two to a row, and every data table
+   (ui.dataTable) shown as one card per row — the first column (or the one
+   marked `primary: true`) as the card's title, the others as label + value.
+   A table built with `cards: false` keeps scrolling sideways. Loaded last, so
+   these rules win over the desktop ones. */
+
+.bottom-bar { display: none; }
+
+/* Weekly summary settings (Notification Rules › Account emails) */
+.b-weekly { display: grid; gap: 8px; margin: 4px 0 12px; padding-left: 52px; }
+.b-weekly .form-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.b-weekly .form-row p { margin: 0; flex: 1 1 260px; }
+
+@media (max-width: 720px) {
+  /* ---------------------------------------------------------- bottom bar */
+  .bottom-bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+    background: color-mix(in srgb, var(--surface-solid) 96%, transparent);
+    -webkit-backdrop-filter: var(--glass-blur-strong); backdrop-filter: var(--glass-blur-strong);
+    border-top: 1px solid var(--border-strong);
+    box-shadow: 0 -6px 18px rgb(0 0 0 / .18);
+  }
+  .bb-link {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    min-height: 48px; padding: 4px 2px; border: 0; border-radius: var(--r-md);
+    background: none; color: var(--text-3); font: 600 11px/1.2 var(--font-ui); text-decoration: none; cursor: pointer;
+  }
+  .bb-link .ic { width: 22px; height: 22px; }
+  .bb-link span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bb-link[aria-current="page"], .bb-link.on, .bb-link[aria-expanded="true"] { color: var(--text); background: var(--accent-soft); }
+  .bb-link:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  /* Room for the bar under the last thing on the page and the toasts. */
+  .page { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+  .toasts { bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
+  /* The menu drawer slides over the bar. */
+  .sidebar { z-index: 50; }
+  .scrim-nav { z-index: 45; }
+
+  /* The page never scrolls sideways. */
+  .app, .main-col, .page, .page-body { min-width: 0; max-width: 100vw; }
+  .page-body > * { min-width: 0; }
+
+  /* ------------------------------------------------------- stat cards */
+  .kpis, .kpis.stats, .users-stats .kpis.stats, .profile-panel .kpis.stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .kpi-value { font-size: 22px; overflow-wrap: anywhere; }
+
+  /* ------------------------------------------------- tables → cards */
+  .dt:not(.no-cards) .tbl-scroll { overflow: visible; }
+  .dt:not(.no-cards) .tbl,
+  .dt:not(.no-cards) .tbl tbody { display: block; width: 100%; }
+  .dt:not(.no-cards) .tbl thead { display: none; }
+  .dt:not(.no-cards) .tbl tr {
+    position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px;
+    margin: 0 0 10px; padding: 12px 14px;
+    border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2);
+  }
+  .dt:not(.no-cards) .tbl tr:last-child { margin-bottom: 0; }
+  .dt:not(.no-cards) .tbl tbody tr:hover { background: var(--surface-3); }
+  .dt:not(.no-cards) .tbl td {
+    display: block; min-width: 0; padding: 0; border: 0; text-align: left;
+    overflow-wrap: anywhere; white-space: normal;
+  }
+  .dt:not(.no-cards) .tbl td { overflow: hidden; }
+  .dt:not(.no-cards) .tbl td.nowrap,
+  .dt:not(.no-cards) .tbl td *:not(.pill):not(.btn) { white-space: normal; }
+  /* A cell that lays its parts out in a row lets them wrap as one line of text. */
+  .dt:not(.no-cards) .tbl td > * { flex-wrap: wrap; max-width: 100%; }
+  .dt:not(.no-cards) .tbl td::before {
+    content: attr(data-label); display: block; margin-bottom: 2px;
+    font-size: 11px; font-weight: 700; color: var(--text-3); letter-spacing: .01em;
+  }
+  .dt:not(.no-cards) .tbl td[data-label=""]::before,
+  .dt:not(.no-cards) .tbl td.cell-primary::before,
+  .dt:not(.no-cards) .tbl td.check-col::before,
+  .dt:not(.no-cards) .tbl td.menu-col::before { display: none; }
+  /* The title spans the card, clear of the tick box and the ⋯ menu. */
+  .dt:not(.no-cards) .tbl td.cell-primary { grid-column: 1 / -1; padding-right: 40px; font-size: 14px; }
+  .dt:not(.no-cards) .tbl tr:has(td.check-col) td.cell-primary { padding-left: 30px; }
+  .dt:not(.no-cards) .tbl td.check-col { position: absolute; top: 13px; left: 12px; width: auto; }
+  .dt:not(.no-cards) .tbl td.menu-col {
+    position: absolute; top: 6px; right: 6px; width: auto;
+    background: none; box-shadow: none;
+  }
+  .dt:not(.no-cards) .tbl tbody tr:hover td.menu-col { background: none; }
+  .dt:not(.no-cards) .tbl tr.selected td { background: none; }
+  .dt:not(.no-cards) .tbl tr.selected { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+  .card-body.flush .dt:not(.no-cards) .tbl-scroll { padding: 0 12px; }
+
+  /* Table toolbar and footer wrap instead of widening the page. */
+  .tbl-bar > * { max-width: 100%; }
+  .tbl-bar .grow { display: none; }
+  .tbl-foot { justify-content: space-between; }
+  .tbl-foot .grow { display: none; }
+
+  /* Card titles keep room; a status chip or action wraps under them. */
+  .card-head { flex-wrap: wrap; }
+  .card-titles { flex: 1 1 200px; }
+  .b-weekly { padding-left: 0; }
+}
+
+@media (max-width: 340px) {
+  .dt:not(.no-cards) .tbl tr { grid-template-columns: minmax(0, 1fr); }
+}
+

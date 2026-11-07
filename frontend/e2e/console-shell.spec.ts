@@ -184,6 +184,44 @@ test.describe('console shell', () => {
     expect(errors).toEqual([]);
   });
 
+  test('on a phone: a bottom bar, two stat cards a row, tables as cards, no sideways scroll', async ({ page }) => {
+    const errors = watchErrors(page);
+    await page.setViewportSize({ width: 375, height: 812 });
+    await mockConsole(page);
+    await signedIn(page);
+    await page.goto('/admin/#/users');
+    const bar = page.locator('#bottomBar');
+    await expect(bar).toBeVisible();
+    await expect(bar.getByRole('link', { name: 'Users' })).toHaveAttribute('aria-current', 'page');
+    // Each person is a card: no header row, the name spans the card.
+    const row = page.locator('#pageBody .dt tbody tr').first();
+    await expect(row).toBeVisible();
+    await expect(page.locator('#pageBody .dt thead').first()).toBeHidden();
+    const [cardBox, nameBox] = await Promise.all([row.boundingBox(), row.locator('td.cell-primary').boundingBox()]);
+    expect(nameBox!.width).toBeGreaterThan(cardBox!.width * 0.7);
+    // Stat cards: two to a row.
+    const stats = page.locator('#pageBody .kpis.stats').first().locator('.stat-wrap');
+    const [a, b, c] = await Promise.all([0, 1, 2].map((i) => stats.nth(i).boundingBox()));
+    expect(Math.abs(a!.y - b!.y)).toBeLessThan(2);
+    expect(c!.y).toBeGreaterThan(a!.y + 10);
+    for (const path of ['users', 'feedback', 'dashboard', 'notification-rules']) {
+      await page.goto(`/admin/#/${path}`);
+      await page.waitForTimeout(300);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      expect(overflow, path).toBeLessThanOrEqual(1);
+    }
+    // A page outside the bar lights up Menu; Menu opens the drawer.
+    await expect(bar.getByRole('button', { name: 'Menu' })).toHaveClass(/\bon\b/);
+    await bar.getByRole('button', { name: 'Menu' }).click();
+    await expect(page.locator('#sidebar')).toBeInViewport();
+    await page.locator('#scrimNav').click({ position: { x: 360, y: 400 } });
+    await bar.getByRole('link', { name: 'Dashboard' }).click();
+    await expect(page).toHaveURL(/#\/dashboard/);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(bar).toBeHidden();
+    expect(errors).toEqual([]);
+  });
+
   test('an owner sees the database update banner while the database is behind', async ({ page }) => {
     await mockConsole(page, { schema: 7 });
     await signedIn(page);

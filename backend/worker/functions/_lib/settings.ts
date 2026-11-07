@@ -47,7 +47,7 @@ export const SETTING_KEYS: readonly SettingSpec[] = [
   { key: 'robots', group: 'Operations', title: 'Bots allowed to read the site', note: 'Which crawlers robots.txt allows: { bots: { "<bot name>": false } } — false blocks that bot; anything not listed keeps the built-in rule.', shape: 'object' },
   { key: 'jobs', group: 'Operations', title: 'Scheduled jobs', note: 'Switch a background job off or slow it down: { "<job>": { enabled, every } }.', shape: 'object' },
   { key: 'alert-rules', group: 'Operations', title: 'Smart Alerts', note: 'Alerts to admins\' phones when something goes wrong: { enabled, who: owners | editors | all, quiet: { enabled, start, end }, cooldownMinutes, rules: { errorsSpike: { on, minErrors, factor }, siteDown: { on }, noPlays: { on, minutes, onlyIfUsualPlays }, newFeedback: { on, minCount } } }.', shape: 'object' },
-  { key: 'email', group: 'Operations', title: 'Account emails', note: 'Emails sent through Resend: { enabled, welcome, newSignIn, consoleSignIn, adminInvite } — anything not false is on; nothing is sent without RESEND_API_KEY.', shape: 'object' },
+  { key: 'email', group: 'Operations', title: 'Account emails', note: 'Emails sent through Resend: { enabled, welcome, newSignIn, consoleSignIn, adminInvite, weeklySummary, weeklyTo: [email] } — anything not false is on; an empty weeklyTo sends the Monday summary to every Owner; nothing is sent without RESEND_API_KEY.', shape: 'object' },
   { key: 'push-audiences', group: 'Operations', title: 'Saved notification audiences', note: 'Audiences the owner saved on Send Notification: [{ id, name, filter, activity }]. Console only.', shape: 'array' },
 ] as const;
 

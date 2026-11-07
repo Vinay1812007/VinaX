@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 16
+-- VinaX database · schema version 17
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -32,6 +32,7 @@
 --  and the profile extras)
 --  version 16 adds phone model, system version and how the app runs, and
 --  time in the app)
+--  version 17 adds weekly_summary for the owner's Monday email)
 --  12. security
 -- =============================================================================
 
@@ -2761,6 +2762,59 @@ language sql stable set search_path = public, pg_temp as $$
   );
 $$;
 
+-- Version 17 — the owner's weekly summary email (Monday morning): the last
+-- seven whole days in India time (Monday to Sunday when sent on a Monday)
+-- next to the seven before. p_to is the first day AFTER the week (default
+-- today). Signed-in people only, like the rest of the console; app errors
+-- count every report. `atRisk` is the At Risk page's own count (stats_at_risk,
+-- version 14: quiet 7+ days after 2 h or 5 active days in the 30 days before),
+-- as of now, whatever week p_to names.
+create or replace function weekly_summary(p_to date default null) returns jsonb
+language sql stable set search_path = public, pg_temp as $$
+  with b as (
+    select coalesce(p_to, _ist_today()) as d_to,
+           (coalesce(p_to, _ist_today()) - 7)::timestamp at time zone 'Asia/Kolkata' as t_from,
+           coalesce(p_to, _ist_today())::timestamp at time zone 'Asia/Kolkata' as t_to,
+           (coalesce(p_to, _ist_today()) - 14)::timestamp at time zone 'Asia/Kolkata' as t_prev
+  ),
+  s as (select * from signed_devices()),
+  ev as (
+    select e.kind, e.at, e.song_title, e.song_artist, s.account_id, (e.at >= b.t_from) as cur
+    from events e join s on s.listener_id = e.listener_id, b
+    where e.at >= b.t_prev and e.at < b.t_to
+  ),
+  lt as (
+    select s.account_id, t.day, t.seconds
+    from listen_time(null, (select (d_to - 38)::timestamp at time zone 'Asia/Kolkata' from b)) t
+    join s on s.listener_id = t.listener_id
+  )
+  select jsonb_build_object(
+    'from', (select d_to - 7 from b),
+    'to', (select d_to - 1 from b),
+    'newUsers', (select count(*) from accounts, b where created_at >= b.t_from and created_at < b.t_to),
+    'newUsersPrev', (select count(*) from accounts, b where created_at >= b.t_prev and created_at < b.t_from),
+    'totalUsers', (select count(*) from accounts, b where created_at < b.t_to),
+    'activeUsers', (select count(distinct account_id) from ev where cur),
+    'activeUsersPrev', (select count(distinct account_id) from ev where not cur),
+    'plays', (select count(*) from ev where cur and kind = 'play'),
+    'playsPrev', (select count(*) from ev where not cur and kind = 'play'),
+    'listenSeconds', (select coalesce(sum(seconds), 0) from lt, b where day >= b.d_to - 7 and day < b.d_to),
+    'listenSecondsPrev', (select coalesce(sum(seconds), 0) from lt, b where day >= b.d_to - 14 and day < b.d_to - 7),
+    'topSongs', coalesce((select jsonb_agg(t) from (
+        select song_title as title, song_artist as artist, count(*) as plays, count(distinct account_id) as people
+        from ev where cur and kind = 'play' and song_title is not null
+        group by 1, 2 order by plays desc, people desc limit 5) t), '[]'::jsonb),
+    'topArtists', coalesce((select jsonb_agg(t) from (
+        select song_artist as artist, count(*) as plays, count(distinct account_id) as people
+        from ev where cur and kind = 'play' and song_artist is not null
+        group by 1 order by plays desc, people desc limit 5) t), '[]'::jsonb),
+    'atRisk', (stats_at_risk(7, 1) ->> 'total')::int,
+    'errors', (select count(*) from events, b where kind = 'error' and at >= b.t_from and at < b.t_to),
+    'errorsPrev', (select count(*) from events, b where kind = 'error' and at >= b.t_prev and at < b.t_from),
+    'feedback', (select count(*) from feedback, b where at >= b.t_from and at < b.t_to)
+  );
+$$;
+
 -- --------------------------------------------------------- 12. security --
 
 do $$
@@ -2814,7 +2868,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 16, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 16, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 17, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 17, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 16 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 17 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;

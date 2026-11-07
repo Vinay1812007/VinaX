@@ -126,8 +126,8 @@ describe('scheduler', () => {
     const out = await runScheduled(DB, T);
     expect(out).toEqual([]);
     const reads = calls.filter((c) => c.url.pathname.endsWith('/job_runs') && c.method === 'GET');
-    expect(reads.length).toBe(JOBS.length); // one per job (six with IndexNow)
-    expect(JOBS.length).toBe(6);
+    expect(reads.length).toBe(JOBS.length); // one per job (seven with the weekly summary)
+    expect(JOBS.length).toBe(7);
     for (const r of reads) {
       expect(r.url.searchParams.get('job')).toMatch(/^eq\./);
       expect(r.url.searchParams.get('limit')).toBe('1');

@@ -130,6 +130,32 @@ test.describe('console pages', () => {
     expect(errors).toEqual([]);
   });
 
+  test('the weekly summary email: switch, recipients, last send and a test', async ({ page }) => {
+    const errors = watchErrors(page);
+    const { sent } = await mockConsole(page);
+    await signedIn(page);
+    await page.goto('/admin/#/notification-rules');
+    await settle(page);
+    const card = page.locator('#setting-email');
+    await expect(card.getByText('Weekly summary to you')).toBeVisible();
+    await expect(card.getByText(/Last sent .* to owner@example\.com\./)).toBeVisible();
+    await expect(card.getByText(/Goes to owner@example\.com \(every Owner\)/)).toBeVisible();
+    const to = card.getByLabel('Who gets the weekly summary');
+    await to.fill('Me@Example.com, not-an-email, me@example.com, two@example.in');
+    await to.blur();
+    await expect(to).toHaveValue('me@example.com, two@example.in');
+    await expect(card.locator('.status-chip')).toHaveText('Unsaved changes');
+    await card.getByRole('button', { name: 'Send a test now' }).click();
+    await expect(page.getByText('Test weekly summary sent to owner@example.com ✓')).toBeVisible();
+    expect(sent.find((s) => s.method === 'POST' && s.path === '/api/admin/email')?.body).toMatchObject({ action: 'weekly-test' });
+    await card.getByRole('button', { name: 'Save & apply' }).click();
+    await page.locator('.modal').getByRole('button', { name: 'Save & apply' }).click();
+    await expect(page.getByText('Saved ✓')).toBeVisible();
+    const post = sent.find((s) => s.method === 'POST' && s.path === '/api/admin/settings');
+    expect(post?.body).toMatchObject({ key: 'email', value: { weeklySummary: true, weeklyTo: ['me@example.com', 'two@example.in'] } });
+    expect(errors).toEqual([]);
+  });
+
   test('Users lists signed-in people only and opens a profile', async ({ page }) => {
     const errors = watchErrors(page);
     await mockConsole(page);

@@ -51,7 +51,7 @@ function stub(): void {
       if (method === 'DELETE') { const out = adminsTable.filter((r) => r.email === emailEq); adminsTable = adminsTable.filter((r) => r.email !== emailEq); return json(out); }
     }
     if (table === 'audit_log') return json([], 201);
-    if (table === 'meta') return json([{ value: { version: 16 } }]);
+    if (table === 'meta') return json([{ value: { version: 17 } }]);
     if (table === 'settings') return json([]);
     return json([]);
   }));
@@ -182,7 +182,7 @@ describe('POST /api/admin/session', () => {
     expect(anon.body).toMatchObject({ googleReady: true, passwordAllowed: true, me: null, googleClientId: '1-abc.apps.googleusercontent.com' });
     const t = (await issueAdminSession(ENV, 'viewer@example.com'))!;
     const me = await call(session.onRequestGet, req('/api/admin/session', t));
-    expect(me.body).toMatchObject({ me: { email: 'viewer@example.com', role: 'viewer' }, schema: 16, schemaWanted: 16 });
+    expect(me.body).toMatchObject({ me: { email: 'viewer@example.com', role: 'viewer' }, schema: 17, schemaWanted: 17 });
   });
 });
 

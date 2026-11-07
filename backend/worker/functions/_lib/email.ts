@@ -1,13 +1,16 @@
 /**
  * Account emails, sent through Resend (https://resend.com).
  *
- * Four emails, each switchable in the console's `email` setting:
+ * Five emails, each switchable in the console's `email` setting:
  *   welcome        the first time a Google account signs in to VinaX
  *   newSignIn      every later sign-in to the app (says when it is a device
  *                  the account has not used before)
  *   consoleSignIn  someone signs in to the owner console (to that admin;
  *                  recovery-password sign-ins go to the owners)
  *   adminInvite    an owner adds an email to the console's admins
+ *   weeklySummary  every Monday at 9 AM India time, last week's numbers to the
+ *                  owner (`weeklyTo`, or every Owner when empty); built and
+ *                  sent by the `weekly-summary` job (_lib/weeklySummary.ts)
  *
  * Off until the Worker has RESEND_API_KEY. EMAIL_FROM (default
  * `VinaX <notifications@vinaxmusic.online>`) must be on a domain verified in Resend;
@@ -33,8 +36,8 @@ export const DEFAULT_REPLY_TO = 'support@vinaxmusic.online';
 export const SITE = 'https://www.vinaxmusic.online';
 export const CONSOLE = 'https://admin.vinaxmusic.online/admin/';
 
-export type EmailKind = 'welcome' | 'newSignIn' | 'consoleSignIn' | 'adminInvite' | 'test';
-export const EMAIL_KINDS: readonly Exclude<EmailKind, 'test'>[] = ['welcome', 'newSignIn', 'consoleSignIn', 'adminInvite'];
+export type EmailKind = 'welcome' | 'newSignIn' | 'consoleSignIn' | 'adminInvite' | 'weeklySummary' | 'test';
+export const EMAIL_KINDS: readonly Exclude<EmailKind, 'test'>[] = ['welcome', 'newSignIn', 'consoleSignIn', 'adminInvite', 'weeklySummary'];
 
 export interface EmailSettings {
   enabled: boolean;
@@ -42,13 +45,32 @@ export interface EmailSettings {
   newSignIn: boolean;
   consoleSignIn: boolean;
   adminInvite: boolean;
+  weeklySummary: boolean;
+  /** Who gets the weekly summary; empty = every Owner. */
+  weeklyTo: string[];
+}
+
+const EMAIL_RE = /^[^\s@<>",;]+@[^\s@<>",;]+\.[^\s@<>",;]+$/;
+
+/** A list of email addresses, cleaned: lower case, valid shape, no repeats, at most 10. */
+export function emailList(raw: unknown): string[] {
+  const src = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(/[\s,;]+/) : [];
+  const out = new Set<string>();
+  for (const v of src) {
+    const e = typeof v === 'string' ? v.trim().toLowerCase() : '';
+    if (e && e.length <= 254 && EMAIL_RE.test(e)) out.add(e);
+  }
+  return [...out].slice(0, 10);
 }
 
 /** The `email` setting, read safely: anything not explicitly false is on. */
 export function emailSettingsOf(raw: unknown): EmailSettings {
   const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const on = (k: string): boolean => o[k] !== false;
-  return { enabled: on('enabled'), welcome: on('welcome'), newSignIn: on('newSignIn'), consoleSignIn: on('consoleSignIn'), adminInvite: on('adminInvite') };
+  return {
+    enabled: on('enabled'), welcome: on('welcome'), newSignIn: on('newSignIn'), consoleSignIn: on('consoleSignIn'), adminInvite: on('adminInvite'),
+    weeklySummary: on('weeklySummary'), weeklyTo: emailList(o.weeklyTo),
+  };
 }
 
 export const emailConfigured = (env: EmailEnv): boolean => !!env.RESEND_API_KEY?.trim();
@@ -188,10 +210,10 @@ export function edgeTimezone(request: Request): string | null {
   return typeof tz === 'string' && tz.length <= 64 ? tz : null;
 }
 
-interface Layout { title: string; lines: string[]; button?: { label: string; href: string }; footer: string }
+export interface Layout { title: string; lines: string[]; button?: { label: string; href: string }; footer: string }
 
 /** One plain, light card that reads the same in every mail app. `lines` are already-escaped HTML. */
-function layout({ title, lines, button, footer }: Layout): string {
+export function layout({ title, lines, button, footer }: Layout): string {
   const btn = button
     ? `<p style="margin:28px 0 8px"><a href="${escapeHtml(button.href)}" style="display:inline-block;background:#7c3aed;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:999px">${escapeHtml(button.label)}</a></p>`
     : '';

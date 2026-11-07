@@ -99,7 +99,7 @@ describe('the Resend client', () => {
 
 describe('the email setting and templates', () => {
   it('everything is on unless switched off', () => {
-    expect(emailSettingsOf(null)).toEqual({ enabled: true, welcome: true, newSignIn: true, consoleSignIn: true, adminInvite: true });
+    expect(emailSettingsOf(null)).toEqual({ enabled: true, welcome: true, newSignIn: true, consoleSignIn: true, adminInvite: true, weeklySummary: true, weeklyTo: [] });
     expect(emailSettingsOf({ welcome: false, newSignIn: 0 })).toMatchObject({ welcome: false, newSignIn: true });
     expect(emailSettingsOf([false])).toMatchObject({ enabled: true });
   });

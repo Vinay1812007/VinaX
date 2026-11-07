@@ -22,6 +22,7 @@
     <link rel="stylesheet" href="/admin/css/settings-a.css" />
     <link rel="stylesheet" href="/admin/css/settings-b.css" />
     <link rel="stylesheet" href="/admin/css/glass.css" />
+    <link rel="stylesheet" href="/admin/css/phone.css" />
   </head>
   <body>
 <svg class="sprite" width="0" height="0" aria-hidden="true" focusable="false">
@@ -152,6 +153,14 @@
           <div id="pageBody" class="page-body"></div>
         </main>
       </div>
+      <!-- Phones: the pages used most, one tap away; Menu opens every page. -->
+      <nav id="bottomBar" class="bottom-bar" aria-label="Quick pages">
+        <a class="bb-link" href="#/dashboard" data-page="dashboard"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg><span>Dashboard</span></a>
+        <a class="bb-link" href="#/listening-now" data-page="listening-now"><svg class="ic" aria-hidden="true"><use href="#i-live"/></svg><span>Live</span></a>
+        <a class="bb-link" href="#/users" data-page="users"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg><span>Users</span></a>
+        <a class="bb-link" href="#/send-notification" data-page="send-notification"><svg class="ic" aria-hidden="true"><use href="#i-send"/></svg><span>Notify</span></a>
+        <button id="bbMenu" class="bb-link" type="button" aria-controls="sidebar" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg><span>Menu</span></button>
+      </nav>
     </div>
 
     <div id="toasts" class="toasts" aria-live="polite"></div>

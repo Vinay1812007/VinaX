@@ -58,7 +58,7 @@
           ui.card({ title: 'Top listeners ' + windowText(days), sub: 'The 100 people who listened longest. Click a person to open their profile.', pad: false, body: ui.dataTable({
             columns: [
               { key: 'rank', label: '#', align: 'right', width: '44px', sortVal: function (r) { return rows.indexOf(r) + 1; }, render: function (r) { return String(rows.indexOf(r) + 1); } },
-              { key: 'user', label: 'User', always: true, sortVal: who, render: userCell, csv: who },
+              { key: 'user', label: 'User', always: true, primary: true, sortVal: who, render: userCell, csv: who },
               { key: 'email', label: 'Email', hidden: true },
               { key: 'seconds', label: 'Listening', align: 'right', render: function (r) { return h('strong.nowrap', VX.listenText(r.seconds)); }, csv: function (r) { return Math.round(num(r.seconds) / 60); } },
               { key: 'days', label: 'Days listened', align: 'right', render: function (r) { return fmt.num(r.days); } },
@@ -103,7 +103,7 @@
           h('p.muted.small.rank-rule', rule),
           ui.card({ title: 'Regular listeners who went quiet', sub: 'Most listening first. Select people to send them a notification, or open a profile.', pad: false, body: ui.dataTable({
             columns: [
-              { key: 'user', label: 'User', always: true, sortVal: who, render: userCell, csv: who },
+              { key: 'user', label: 'User', always: true, primary: true, sortVal: who, render: userCell, csv: who },
               { key: 'email', label: 'Email', hidden: true },
               { key: 'lastActive', label: 'Last active', render: function (r) { return ui.ago(r.lastActive); }, csv: function (r) { return fmt.full(r.lastActive); } },
               { key: 'seconds', label: 'Listened before', align: 'right', render: function (r) { return h('strong.nowrap', VX.listenText(r.seconds)); }, csv: function (r) { return Math.round(num(r.seconds) / 60); } },
