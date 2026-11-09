@@ -15,6 +15,10 @@ const FLAG_DAYS = new Set(['independence', 'republic']);
 
 /** Festivals with a drawn scene of their own (art fetched only on those days). */
 const DussehraScene = lazy(() => import('@/components/DussehraScene').then((m) => ({ default: m.DussehraScene })));
+// 1.12 — the live effects (fireworks, confetti, petals, kites…) and the
+// one-shot celebrations: their own chunk, fetched only while a festival is on.
+const FestivalFxCanvas = lazy(() => import('@/features/festival/fx/FestivalFxCanvas'));
+const CelebrationLayer = lazy(() => import('@/features/festival/fx/CelebrationLayer'));
 const SCENE_DAYS = new Set(['dussehra']);
 
 /** Pieces in the one-shot burst behind the greeting card's emblem. */
@@ -179,6 +183,11 @@ export function FestBackdrop({ festival }: { festival: Festival }) {
   const balls = festival.id === 'independence' ? Math.min(14, Math.max(8, count)) : 0;
   return (
     <div className={`fest-sky${paused ? ' is-paused' : ''}`} data-festival={festival.id} aria-hidden>
+      {!still && (
+        <Suspense fallback={null}>
+          <FestivalFxCanvas festival={festival} />
+        </Suspense>
+      )}
       {flag ? <FlagBackdrop balls={balls} /> : scene ? null : <FestivalEmblem id={visual.emblem} className="fest-wm" />}
       <SetPiece signature={signature} count={plan.pieces} />
       {scene && (
@@ -322,7 +331,19 @@ export function FestiveSplash() {
   // plays anyway; on a device that asked for stillness they are not drawn at
   // all rather than drawn and then suppressed in CSS.
   const stillCard = useStillMotion();
-  const backdrop = theme ? <FestBackdrop festival={theme} /> : null;
+  const backdrop = (
+    <>
+      {theme ? <FestBackdrop festival={theme} /> : null}
+      <Suspense fallback={null}>
+        <CelebrationLayer />
+      </Suspense>
+    </>
+  );
+  // 1.12 — the greeting card arrives with a pour of confetti (once per festival per session).
+  useEffect(() => {
+    if (!visible || !festival || stillCard) return;
+    void import('@/features/festival/fx/celebrate').then((m) => m.celebrateOncePerSession(`greeting-${festival.id}`, 'confetti', { sound: false })).catch(() => undefined);
+  }, [visible, festival, stillCard]);
   if (!visible || !festival || !visual) return backdrop;
   const short = festival.name.split(' · ')[0].replace(/\s*\(.*\)$/, '');
 
@@ -355,7 +376,7 @@ export function FestiveSplash() {
             <button
               type="button"
               className="fest-btn fest-btn-primary"
-              onClick={() => { close(); navigate(`/search/${encodeURIComponent(visual.query)}`); }}
+              onClick={() => { void import('@/features/festival/fx/celebrate').then((m) => m.celebrate('confetti')).catch(() => undefined); close(); navigate(`/search/${encodeURIComponent(visual.query)}`); }}
             >
               Play {short} songs
             </button>

@@ -48,7 +48,7 @@ export function FestivalLookaheadCard() {
         aria-hidden
       />
       <span className="min-w-0 flex-1">
-        <span className="vxh-card-label">Coming up</span>
+        <span className="vxh-card-label">Coming up · <Link to="/festivals">Festivals</Link></span>
         <span className="vxh-card-title">{info.title}</span>
         <span className="vxh-card-sub">{info.note}</span>
         <span className="vxh-card-links">

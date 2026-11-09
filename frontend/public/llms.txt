@@ -16,6 +16,7 @@
 - [Movies](https://www.vinaxmusic.online/movies): Film soundtracks
 - [Moods](https://www.vinaxmusic.online/moods): Music by mood
 - [Videos](https://www.vinaxmusic.online/videos): Music videos
+- [Festivals](https://www.vinaxmusic.online/festivals): Today's festival, a live countdown to the next, every festival's look and its songs
 - [Made For You](https://www.vinaxmusic.online/made-for-you): Personal mixes from your listening
 - [Your Week](https://www.vinaxmusic.online/weekly): A personalised weekly mix, new every Monday (signed in)
 - [VinaX AI](https://www.vinaxmusic.online/vinaxai): The chat assistant for signed-in listeners

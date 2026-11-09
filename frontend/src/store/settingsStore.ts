@@ -33,6 +33,12 @@ export interface SettingsState {
   dailyGoalMinutes: number;
   /** 5.14.0 — festival skins (accent, canvas, glow, splash). Off = the plain theme all year. */
   festivalSkins: boolean;
+  /** 1.12 — the live festival effects (fireworks, confetti, petals…) behind the app and on taps. */
+  festivalFx: boolean;
+  /** 1.12 — festive sounds with the celebrations (pops, fireworks, a chime). Off by default. */
+  festivalSound: boolean;
+  /** 1.12 — a festival look kept on by hand (its id), or null for the calendar. */
+  festivalPin: string | null;
   /** v5.17.0 — custom accent hex when `accent === 'custom'`. */
   accentCustom: string | null;
   /** v5.17.0 — display size: text and controls scale. */
@@ -150,6 +156,9 @@ export interface SettingsState {
   setTheme(theme: 'dark' | 'light' | 'system' | 'amoled' | 'auto'): void;
   setDailyGoalMinutes(n: number): void;
   setFestivalSkins(v: boolean): void;
+  setFestivalFx(v: boolean): void;
+  setFestivalSound(v: boolean): void;
+  setFestivalPin(id: string | null): void;
   setAccentCustom(hex: string | null): void;
   setUiScale(v: 'sm' | 'md' | 'lg'): void;
   setDataSaver(v: boolean): void;
@@ -225,6 +234,9 @@ const defaults = {
   template: DEFAULT_TEMPLATE as TemplateId,
   dailyGoalMinutes: 0,
   festivalSkins: true,
+  festivalFx: true,
+  festivalSound: false,
+  festivalPin: null as string | null,
   accentCustom: null,
   uiScale: 'md' as const,
   dataSaver: false,
@@ -366,6 +378,9 @@ export const useSettingsStore = create<SettingsState>()(
       setTheme: (theme) => set({ theme }),
       setDailyGoalMinutes: (n) => set({ dailyGoalMinutes: Math.max(0, Math.min(600, Math.round(n))) }),
       setFestivalSkins: (festivalSkins) => set({ festivalSkins }),
+      setFestivalFx: (festivalFx) => set({ festivalFx }),
+      setFestivalSound: (festivalSound) => set({ festivalSound }),
+      setFestivalPin: (festivalPin) => set({ festivalPin: festivalPin || null }),
       setAccentCustom: (accentCustom) => set({ accentCustom, accent: accentCustom ? 'custom' : 'crimson' }),
       setUiScale: (uiScale) => set({ uiScale }),
       // Data saver also drops the stream to the lightest quality; turning it

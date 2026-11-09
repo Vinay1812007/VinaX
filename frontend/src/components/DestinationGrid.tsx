@@ -31,6 +31,7 @@ const DESTINATIONS: Array<{ to: string; title: string; meta: string; tone: numbe
   { to: '/videos', title: 'Videos', meta: 'Music videos', tone: 6, icon: VideoIcon },
   // 1.3 — podcasts sit with the other non-song listening.
   { to: '/podcasts', title: 'Podcasts', meta: 'Shows and conversations', tone: 10, icon: MicIcon },
+  { to: '/festivals', title: 'Festivals', meta: 'Today, next, and every look', tone: 3, icon: SparkleIcon },
   { to: '/made-for-you', title: 'Made for you', meta: 'Mixes from your listening', tone: 7, icon: HeartIcon },
   { to: '/weekly', title: 'Your week', meta: 'Your weekly mix', tone: 8, icon: ClockIcon },
 ];

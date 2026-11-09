@@ -443,6 +443,12 @@ function AiChatsExportRow() {
 function FestivalRow() {
   const on = useSettingsStore((x) => x.festivalSkins);
   const setOn = useSettingsStore((x) => x.setFestivalSkins);
+  const fx = useSettingsStore((x) => x.festivalFx);
+  const setFx = useSettingsStore((x) => x.setFestivalFx);
+  const sound = useSettingsStore((x) => x.festivalSound);
+  const setSound = useSettingsStore((x) => x.setFestivalSound);
+  const pin = useSettingsStore((x) => x.festivalPin);
+  const setPin = useSettingsStore((x) => x.setFestivalPin);
   const previewId = useFestivalPreview((x) => x.id);
   const setPreviewId = useFestivalPreview((x) => x.setId);
   const today = activeFestival();
@@ -457,7 +463,21 @@ function FestivalRow() {
       <Row label="Festival themes" note={`${line}.`} keywords="every festival brings its own look accent background glow greeting">
         <Toggle on={on} onChange={setOn} label="Festival themes" />
       </Row>
-      <Row label="Preview a festival" note="See any festival look now. Lasts until you stop it or reload." keywords="festival preview try skin diwali holi christmas eid">
+      <Row label="Festival animations" note="Live fireworks, confetti, petals, kites, lanterns and snow behind the app, and a burst when you tap the festival banner." keywords="festival fireworks confetti particles animation live effects">
+        <Toggle on={fx} onChange={setFx} label="Festival animations" disabled={!on} />
+      </Row>
+      <Row label="Festival sounds" note="A pop with confetti and a boom with fireworks. Quiet, short, and never over the music by much." keywords="festival sound pop fireworks chime audio">
+        <Toggle on={sound} onChange={setSound} label="Festival sounds" disabled={!on} />
+      </Row>
+      <Row label="Festival look" note="Automatic follows the calendar. Pin a festival to keep its look on every day." keywords="festival manual pin choose theme automatic calendar">
+        <select aria-label="Festival look" value={pin ?? ''} onChange={(e) => setPin(e.target.value || null)} className="vx-set-select" disabled={!on}>
+          <option value="">Automatic</option>
+          {FESTIVALS.map((f) => (
+            <option key={f.id} value={f.id}>{f.name}</option>
+          ))}
+        </select>
+      </Row>
+      <Row label="Preview a festival" note="See any festival look now. Lasts until you stop it or reload. The Festivals page has every look with its dates." keywords="festival preview try skin diwali holi christmas eid">
         <select
           aria-label="Preview a festival"
           value={previewId ?? ''}

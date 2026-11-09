@@ -52,6 +52,7 @@ const ROUTES = [
   { p: '/podcasts', t: 'Podcasts', d: 'Shows and conversations in Hindi, Telugu, Tamil, English and more — listen free on VinaX.', h1: 'Podcasts', ld: collection('/podcasts', 'Podcasts on VinaX') },
   { p: '/radio', t: 'Radio — Endless Music by Language and Mood', d: 'Endless radio from a song, an artist, a mood or a station — Telugu, Hindi, Tamil, Punjabi and more. Free on VinaX.', h1: 'Radio', ld: collection('/radio', 'Radio on VinaX') },
   { p: '/videos', t: 'Music Videos', d: 'Watch music videos from Indian films and independent artists, free on VinaX.', h1: 'Music Videos', ld: collection('/videos', 'Music Videos on VinaX') },
+  { p: '/festivals', t: 'Festivals — Live Countdown, Themes & Festive Songs', d: 'Today’s festival and the next ones, with a live countdown, each festival’s look in the app and its songs: Diwali, Holi, Sankranti, Eid, Christmas, Pongal and 37 more.', h1: 'Festivals on VinaX', ld: collection('/festivals', 'Festivals on VinaX') },
   { p: '/about', t: 'About', d: 'VinaX is a free music app for India. Private by design, tuned to you.', h1: 'About VinaX', ld: { '@context': 'https://schema.org', '@type': 'AboutPage', '@id': 'https://www.vinaxmusic.online/about/#page', name: 'About VinaX', url: 'https://www.vinaxmusic.online/about/', mainEntity: { '@id': 'https://www.vinaxmusic.online/#org' } } },
   { p: '/help', t: 'Help & Feedback', d: 'FAQs, how-tos, and how to report a problem.', h1: 'Help & Feedback' },
   { p: '/download', t: 'Get the App', d: 'Install VinaX on Android for background playback and offline downloads.', h1: 'Get VinaX for Android' },
@@ -93,7 +94,7 @@ const NAV_LINKS = [
   ['/', 'Home'], ['/discover', 'Discover'], ['/charts', 'Charts'], ['/top-songs', 'Top Songs'],
   ['/trending', 'Trending'], ['/most-searched', 'Most Searched'], ['/explore', 'Explore'],
   ['/moods', 'Moods'], ['/movies', 'Movies'], ['/languages', 'Languages'], ['/telugu-songs', 'Telugu Songs'], ['/hindi-songs', 'Hindi Songs'], ['/tamil-songs', 'Tamil Songs'],
-  ['/new-releases', 'New Releases'], ['/top-playlists', 'Top Playlists'], ['/top-artists', 'Top Artists'], ['/podcasts', 'Podcasts'], ['/radio', 'Radio'], ['/videos', 'Videos'],
+  ['/new-releases', 'New Releases'], ['/top-playlists', 'Top Playlists'], ['/top-artists', 'Top Artists'], ['/podcasts', 'Podcasts'], ['/radio', 'Radio'], ['/videos', 'Videos'], ['/festivals', 'Festivals'],
   ['/made-for-you', 'Made For You'], ['/about', 'About'], ['/privacy', 'Privacy'],
   ['/terms', 'Terms'], ['/contact', 'Contact'],
 ];

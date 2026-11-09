@@ -78,6 +78,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: '/movies', label: 'Movies', icon: FilmIcon },
       { to: '/languages', label: 'Languages', icon: MusicIcon },
       { to: '/moods', label: 'Moods', icon: WaveIcon },
+      { to: '/festivals', label: 'Festivals', icon: SparkleIcon },
       { to: '/regions', label: 'Regions', icon: GlobeIcon },
       { to: '/taste-profile', label: 'Taste Profile', icon: SparkleIcon },
       { to: '/settings', label: 'Settings', icon: SettingsIcon },
