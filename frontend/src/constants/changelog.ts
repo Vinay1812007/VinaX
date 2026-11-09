@@ -16,6 +16,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.11.3': {
+    title: 'Song reactions: five public reactions under every song, and a Song Reactions page in the…',
+    changes: [
+      { type: 'new', text: 'Under a song on its page, and in Now Playing\'s player tools under React: 🔥 fire, ❤️ love, 😢 feels, 🕺 dance, 🤩 wow, with everyone\'s counts. Tap to add yours, again to take it back, another to change it; one per song per device; the bar…' },
+      { type: 'improved', text: 'Counts are public; who reacted is not: the device is kept as the same derived id usage reports use, never the raw install id, and a bare read mints no id.' },
+      { type: 'improved', text: 'Owner console → Music → Song Reactions: reactions in the range with the change against the window before, people reacting, songs reacted to, most used; a share of each reaction, reactions per day, and the songs people react to with a…' },
+    ],
+  },
   '1.11.2': {
     title: 'App language: Settings, the song menu and section titles in Telugu, Hindi and Tamil',
     changes: [
