@@ -16,6 +16,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.12.1': {
+    title: 'Ideas & bugs: the top-bar button\'s spoken name now starts with its visible words',
+    changes: [
+      { type: 'fixed', text: 'Screen readers say "Ideas & bugs: suggest a feature or report a bug", matching the label on screen (the accessibility scan on every page flagged the mismatch).' },
+    ],
+  },
   '1.12.0': {
     title: 'Live festivals, a Festivals page, listening moments, and Ideas & bugs',
     changes: [
