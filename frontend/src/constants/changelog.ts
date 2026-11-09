@@ -16,11 +16,16 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
-  '1.11.4': {
-    title: 'One README: every Markdown document folded into README.md, the old docs removed',
+  '1.12.0': {
+    title: 'Live festivals, a Festivals page, listening moments, and Ideas & bugs',
     changes: [
-      { type: 'improved', text: 'README.md is now the single document: what a listener gets, architecture, repository layout, running, checks, releases, workflows, deployment, secrets, operations, database, owner console, Android and push setup, VinaX AI, music AI, the…' },
-      { type: 'improved', text: '72 Markdown files (docs/, docs/history/, docs/user-guide/, frontend/docs, backend/README, DEPLOYMENT.md, the Android README) and the history screenshots are deleted; comments and workflow messages that pointed at them now name the README…' },
+      { type: 'new', text: 'Festivals (Explore › Festivals): today’s festival as LIVE with “Day x of y” and a clock to its end, or the next one with a live countdown; the next eight with dates; wishes to share; every one of the 43 looks as a card you can preview, pin or play.' },
+      { type: 'new', text: 'On a festival’s days the sky behind the app comes alive in its colours: Diwali diyas and fireworks, Holi colour powder, Sankranti kites, Eid lanterns, Christmas snow, New Year fireworks and confetti. Confetti greets the first Home of the day; tap the festival banner for fireworks.' },
+      { type: 'new', text: 'Settings › Appearance: Festival animations, Festival sounds (off until you turn them on) and Festival look — Automatic, or pin a festival to keep it.' },
+      { type: 'new', text: 'Listening moments: VinaX learns what you play at each time of day on weekdays and weekends, from your history on this device. Up Next leans that way, the AI DJ knows it, Home gets “For your weekday evenings”. Settings › Recommendations › Time and day awareness switches it off.' },
+      { type: 'new', text: 'Ideas & bugs: tap the VinaX mark in the top bar to suggest a feature or report a bug; your phone or computer, app version and page are filled in for you.' },
+      { type: 'improved', text: 'A faster first screen: the neon sign is half as long, text no longer shifts when the font arrives, and the festival sky waits for your first tap.' },
+      { type: 'improved', text: 'Account emails wear the VinaX look, and signing in from the Android app now sends them too.' },
     ],
   },
   '1.11.3': {
