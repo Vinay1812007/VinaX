@@ -1,7 +1,9 @@
 {
   "version": 1,
   "description": "Keep Pages Functions OFF static files. Before this file, _middleware.ts ran on EVERY request — ~30 function invocations per page view just for hashed chunks/fonts/icons — which blew through the 100k/day free Functions quota (101,774 on 2026-08-21) and risked /api/* dying for the rest of each day. Static paths listed here are served by the asset layer with zero invocations; every real route (api, hubs, song/album/artist/playlist SEO, sitemaps, apk, img) stays on Functions.",
-  "include": ["/*"],
+  "include": [
+    "/*"
+  ],
   "exclude": [
     "/assets/*",
     "/icons/*",
@@ -12,6 +14,8 @@
     "/sw.js",
     "/robots.txt",
     "/llms.txt",
-    "/8ce2bf3b0262a2340b3aac6836a2e3c1.txt"
+    "/8ce2bf3b0262a2340b3aac6836a2e3c1.txt",
+    "/.well-known/*",
+    "/ai-catalog.json"
   ]
 }

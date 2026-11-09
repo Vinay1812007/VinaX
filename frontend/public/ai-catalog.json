@@ -1,0 +1,45 @@
+{
+  "$schema": "https://www.vinaxmusic.online/.well-known/ai-catalog.json",
+  "version": "1.0",
+  "name": "VinaX",
+  "url": "https://www.vinaxmusic.online/",
+  "description": "Free music streaming web app and Android app for India in 12 languages. Browse without signing in; sign in with Google to play and save. No subscription.",
+  "llms_txt": "https://www.vinaxmusic.online/llms.txt",
+  "sitemap": "https://www.vinaxmusic.online/sitemap.xml",
+  "languages": ["hindi", "telugu", "tamil", "english", "punjabi", "kannada", "malayalam", "bengali", "marathi", "bhojpuri", "gujarati", "urdu"],
+  "pages": [
+    { "title": "Home", "url": "https://www.vinaxmusic.online/", "description": "Trending now, charts, new releases and shelves arranged for you" },
+    { "title": "Search", "url": "https://www.vinaxmusic.online/search", "description": "Songs, albums, artists, playlists, podcasts and lyrics" },
+    { "title": "Discover", "url": "https://www.vinaxmusic.online/discover", "description": "Charts, languages, moods, regions, films, radio and podcasts" },
+    { "title": "Top Charts", "url": "https://www.vinaxmusic.online/charts", "description": "The most played songs by language" },
+    { "title": "New Releases", "url": "https://www.vinaxmusic.online/new-releases", "description": "The newest songs and albums" },
+    { "title": "Top Playlists", "url": "https://www.vinaxmusic.online/top-playlists", "description": "The most played playlists" },
+    { "title": "Top Artists", "url": "https://www.vinaxmusic.online/top-artists", "description": "The artists people play most" },
+    { "title": "Radio", "url": "https://www.vinaxmusic.online/radio", "description": "Endless music from a song, an artist, a mood or a station" },
+    { "title": "Podcasts", "url": "https://www.vinaxmusic.online/podcasts", "description": "Shows and conversations" },
+    { "title": "Movies", "url": "https://www.vinaxmusic.online/movies", "description": "Film soundtracks" },
+    { "title": "Moods", "url": "https://www.vinaxmusic.online/moods", "description": "Music by mood" },
+    { "title": "Videos", "url": "https://www.vinaxmusic.online/videos", "description": "Music videos" },
+    { "title": "Languages", "url": "https://www.vinaxmusic.online/languages", "description": "Music by language, each with its own page" },
+    { "title": "Get the app", "url": "https://www.vinaxmusic.online/download", "description": "The Android app" },
+    { "title": "About", "url": "https://www.vinaxmusic.online/about", "description": "What VinaX is and who makes it" },
+    { "title": "Help", "url": "https://www.vinaxmusic.online/help", "description": "Guides, answers, shortcuts and feedback" },
+    { "title": "Privacy", "url": "https://www.vinaxmusic.online/privacy", "description": "What is stored where" }
+  ],
+  "url_patterns": {
+    "song": "https://www.vinaxmusic.online/song/{id}",
+    "album": "https://www.vinaxmusic.online/album/{id}",
+    "artist": "https://www.vinaxmusic.online/artist/{id}",
+    "playlist": "https://www.vinaxmusic.online/playlist/{id}",
+    "lyrics": "https://www.vinaxmusic.online/lyrics/{id}",
+    "search": "https://www.vinaxmusic.online/search/{query}",
+    "language": "https://www.vinaxmusic.online/{language}-songs",
+    "language_mood": "https://www.vinaxmusic.online/{language}-{mood}-songs"
+  },
+  "actions": [
+    { "name": "search", "url": "https://www.vinaxmusic.online/search/{query}", "description": "Search songs, albums, artists and playlists" },
+    { "name": "play_song", "url": "https://www.vinaxmusic.online/song/{id}", "description": "Open a song page; playing asks for a Google sign-in" }
+  ],
+  "pricing": { "free": true, "subscription": false, "ads_in_player": false },
+  "sign_in": { "required_to_browse": false, "required_to_play": true, "method": "google" }
+}

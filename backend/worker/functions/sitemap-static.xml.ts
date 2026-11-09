@@ -16,6 +16,13 @@ const ROUTES: Array<[path: string, changefreq: string, priority: string]> = [
   ['/languages', 'weekly', '0.6'],
   ['/regions', 'weekly', '0.6'],
   ['/made-for-you', 'daily', '0.8'],
+  // 1.12 — the browse pages a visitor can open signed out.
+  ['/new-releases', 'daily', '0.8'],
+  ['/top-playlists', 'daily', '0.7'],
+  ['/top-artists', 'daily', '0.7'],
+  ['/podcasts', 'weekly', '0.6'],
+  ['/radio', 'weekly', '0.7'],
+  ['/videos', 'weekly', '0.6'],
   ['/download', 'weekly', '0.9'],
   ['/about', 'monthly', '0.4'],
   ['/help', 'monthly', '0.4'],

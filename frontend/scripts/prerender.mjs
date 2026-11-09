@@ -25,6 +25,9 @@ const ORIGIN = 'https://www.vinaxmusic.online';
 const esc = (s) =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+/** CollectionPage JSON-LD for a browse page. */
+const collection = (p, name) => ({ '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': `${ORIGIN}${p}/#page`, name, url: `${ORIGIN}${p}/`, isPartOf: { '@id': `${ORIGIN}/#website` } });
+
 const ROUTES = [
   // Home description must sit in Bing's 25–160 char window (BWT flagged the
   // old 205-char version, 2026-08-17). This one is 152. 10.0 — it leads with
@@ -41,6 +44,14 @@ const ROUTES = [
   { p: '/regions', t: 'Regions', d: 'Music tuned to your region and language.', h1: 'Music by region' },
   { p: '/languages', t: 'Languages', d: 'Pin the languages you listen to — Telugu, Hindi, Tamil, English and more.', h1: 'Browse by language', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.vinaxmusic.online/languages/#page', name: 'Music by Language', url: 'https://www.vinaxmusic.online/languages/', isPartOf: { '@id': 'https://www.vinaxmusic.online/#website' } } },
   { p: '/made-for-you', t: 'Made For You', d: 'Personal mixes built from your listening — private and on-device.', h1: 'Made for you' },
+  // 1.12 — the browse pages a visitor can open signed out were missing from the
+  // prerender and the sitemap, so search engines never listed them.
+  { p: '/new-releases', t: 'New Releases — Latest Songs & Albums', d: 'The newest songs and albums in Telugu, Hindi, Tamil, Punjabi and more, as they land. Stream free on VinaX.', h1: 'New Releases', ld: collection('/new-releases', 'New Releases on VinaX') },
+  { p: '/top-playlists', t: 'Top Playlists', d: 'The most played playlists on VinaX by language and mood — love songs, party, devotional, 90s hits and more. Free to stream.', h1: 'Top Playlists', ld: collection('/top-playlists', 'Top Playlists on VinaX') },
+  { p: '/top-artists', t: 'Top Artists', d: 'The artists people play most on VinaX right now, across Indian languages, with their top songs. Free to stream.', h1: 'Top Artists', ld: collection('/top-artists', 'Top Artists on VinaX') },
+  { p: '/podcasts', t: 'Podcasts', d: 'Shows and conversations in Hindi, Telugu, Tamil, English and more — listen free on VinaX.', h1: 'Podcasts', ld: collection('/podcasts', 'Podcasts on VinaX') },
+  { p: '/radio', t: 'Radio — Endless Music by Language and Mood', d: 'Endless radio from a song, an artist, a mood or a station — Telugu, Hindi, Tamil, Punjabi and more. Free on VinaX.', h1: 'Radio', ld: collection('/radio', 'Radio on VinaX') },
+  { p: '/videos', t: 'Music Videos', d: 'Watch music videos from Indian films and independent artists, free on VinaX.', h1: 'Music Videos', ld: collection('/videos', 'Music Videos on VinaX') },
   { p: '/about', t: 'About', d: 'VinaX is a free music app for India. Private by design, tuned to you.', h1: 'About VinaX', ld: { '@context': 'https://schema.org', '@type': 'AboutPage', '@id': 'https://www.vinaxmusic.online/about/#page', name: 'About VinaX', url: 'https://www.vinaxmusic.online/about/', mainEntity: { '@id': 'https://www.vinaxmusic.online/#org' } } },
   { p: '/help', t: 'Help & Feedback', d: 'FAQs, how-tos, and how to report a problem.', h1: 'Help & Feedback' },
   { p: '/download', t: 'Get the App', d: 'Install VinaX on Android for background playback and offline downloads.', h1: 'Get VinaX for Android' },
@@ -82,6 +93,7 @@ const NAV_LINKS = [
   ['/', 'Home'], ['/discover', 'Discover'], ['/charts', 'Charts'], ['/top-songs', 'Top Songs'],
   ['/trending', 'Trending'], ['/most-searched', 'Most Searched'], ['/explore', 'Explore'],
   ['/moods', 'Moods'], ['/movies', 'Movies'], ['/languages', 'Languages'], ['/telugu-songs', 'Telugu Songs'], ['/hindi-songs', 'Hindi Songs'], ['/tamil-songs', 'Tamil Songs'],
+  ['/new-releases', 'New Releases'], ['/top-playlists', 'Top Playlists'], ['/top-artists', 'Top Artists'], ['/podcasts', 'Podcasts'], ['/radio', 'Radio'], ['/videos', 'Videos'],
   ['/made-for-you', 'Made For You'], ['/about', 'About'], ['/privacy', 'Privacy'],
   ['/terms', 'Terms'], ['/contact', 'Contact'],
 ];
