@@ -210,10 +210,22 @@ export async function sendFcm(env: FcmEnv, tokens: string[], msg: FcmMessage): P
           message: {
             token,
             notification: { title: msg.title.slice(0, 120), body: (msg.body || '').slice(0, 240), ...(msg.image && /^https:\/\//.test(msg.image) ? { image: msg.image } : {}) },
-            data: { link: msg.link || '/', ...(msg.id ? { id: String(msg.id) } : {}) },
+            // The title and body ride in `data` too, so a build that handles the
+            // message itself (a data listener) can draw the same notification.
+            data: { link: msg.link || '/', title: msg.title.slice(0, 120), body: (msg.body || '').slice(0, 240), ...(msg.id ? { id: String(msg.id) } : {}) },
             android: {
+              // 1.12 — delivered while the app is closed, not held until it opens:
+              // high priority wakes the device out of Doze for this message, the
+              // notification itself is marked high so Android shows it at once
+              // (a normal one can sit silently in the tray), and a phone that is
+              // off keeps it for a day instead of dropping it after a while.
               priority: 'high',
-              notification: { channel_id: FCM_CHANNEL_ID, icon: FCM_SMALL_ICON, color: FCM_ACCENT, default_sound: true },
+              ttl: '86400s',
+              direct_boot_ok: true,
+              notification: {
+                channel_id: FCM_CHANNEL_ID, icon: FCM_SMALL_ICON, color: FCM_ACCENT, default_sound: true, default_vibrate_timings: true,
+                notification_priority: 'PRIORITY_HIGH', visibility: 'PUBLIC',
+              },
             },
           },
         }),

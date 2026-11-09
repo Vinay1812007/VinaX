@@ -39,7 +39,9 @@ describe('sendFcm', () => {
     expect(r).toEqual({ sent: 1, dead: [], failed: {}, error: null });
     const msg = JSON.parse(bodies[0]).message;
     expect(msg.android.notification).toMatchObject({ channel_id: FCM_CHANNEL_ID, icon: FCM_SMALL_ICON });
-    expect(msg.data).toEqual({ link: '/song/x-1' });
+    expect(msg.data).toEqual({ link: '/song/x-1', title: 'Hi', body: 'There' });
+    expect(msg.android).toMatchObject({ priority: 'high', ttl: '86400s', direct_boot_ok: true });
+    expect(msg.android.notification.notification_priority).toBe('PRIORITY_HIGH');
   });
 
   it('prunes only tokens FCM says are gone, and names every other failure', async () => {
