@@ -14,7 +14,7 @@ import { addViolations, eligible, inEvalStyle, leadName, noViolations, violation
  *   recommendNextSongs (the whole continuation as one list — the baseline's only entry point)
  */
 export const LIMIT = 5;
-/** Share of a stretch open to never-played artists, per mode (docs/recommendations.md). */
+/** Share of a stretch open to never-played artists, per mode (README.md (Recommendations on the device)). */
 export const DISCOVERY_SHARE = { familiar: 0.05, balanced: 0.2, discover: 0.45 } as const;
 /** Nothing in a fixture should take this long; a run that does is reported, not awaited forever. */
 export const SAFETY_CAP_MS = 20_000;
@@ -204,7 +204,7 @@ export function armFixture(fixture: EvalFixture, seedId: string, over: { suggest
 function ruleContext(fixture: EvalFixture, queue: Song[], played: Song[], seed: Song = fixture.seed): RuleContext {
   // "Recently played" is the documented window: the profile's recent ids, or
   // the identity of any of the LAST TWENTY plays — this sitting's plays
-  // included, and they push older ones out of it (docs/recommendations.md).
+  // included, and they push older ones out of it (README.md (Recommendations on the device)).
   const recentIds = new Set<string>(fixture.profile.recentSongIds);
   const recentKeys = new Set<string>([...[...played].reverse(), ...fixture.history.map((e) => e.song)].slice(0, 20).map((s) => workKey(s)));
   return {
@@ -298,7 +298,7 @@ export async function runSession(engine: EngineLike, fixture: EvalFixture, salt:
       relaxed: outcome.relaxed,
       violations,
       violationsQueueReady: violationsOf(outcome.queueReady, rc),
-      // The lock bends only when fewer than three in-language candidates are left (docs/recommendations.md).
+      // The lock bends only when fewer than three in-language candidates are left (README.md (Recommendations on the device)).
       offLanguageExcused: inLanguage < 3 ? violations['off-language'] : 0,
       lockStarved: inLanguage < 3,
       discovery: outcome.final.filter(isDiscovery).length,

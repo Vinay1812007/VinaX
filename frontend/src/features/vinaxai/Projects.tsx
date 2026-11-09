@@ -6,7 +6,7 @@
  *                          its chats, its instructions and its files
  *
  * Every chat in a project follows its instructions and can read its files
- * (docs/ai.md → Projects). Loaded only when a project page opens.
+ * (README.md (VinaX AI) → Projects). Loaded only when a project page opens.
  */
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';

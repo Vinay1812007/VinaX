@@ -10,7 +10,7 @@
  * visitors never get here: the app's sign-in gate answers first.
  * /vinaxai/projects and /vinaxai/project/:projectId show the projects in the
  * same frame (Projects.tsx, lazy); a project's page uses this composer to
- * start a chat in the project. See docs/ai.md.
+ * start a chat in the project. See README.md (VinaX AI).
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';

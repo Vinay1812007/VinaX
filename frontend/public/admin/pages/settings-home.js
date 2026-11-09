@@ -1,7 +1,7 @@
 /* App Settings › Home Screen — banners, festival look, greeting, the top
  * message bar, the order of Home sections and the pop-up announcement.
  * Each section edits one stored setting through VX.settingsPage (kit/settings.js).
- * Stored shapes and who reads them: docs/admin-console.md → "Home Screen". */
+ * Stored shapes and who reads them: README.md (Owner console) → "Home Screen". */
 (function () {
   'use strict';
   var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt, st = VX.st;

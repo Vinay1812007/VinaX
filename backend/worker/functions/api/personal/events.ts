@@ -6,7 +6,7 @@
  *     → 413 too_large                            more than 64 KB
  *   401 signed_out · 503 unavailable (no database) · 503 personal_disabled (the owner's switch)
  *
- * The shapes are in docs/personalisation.md "Learning: events". A repeated
+ * The shapes are in README.md (The personal engine) "Learning: events". A repeated
  * event id counts once however often it is retried.
  */
 import { readJsonCapped } from '../../_lib/body';

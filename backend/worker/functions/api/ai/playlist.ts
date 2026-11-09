@@ -1,6 +1,6 @@
 /**
  * VinaX music AI — POST /api/ai/playlist: a playlist from a vibe described in
- * plain words. The device sends (docs/data-and-privacy.md):
+ * plain words. The device sends (README.md (Data and privacy)):
  *
  *   { prompt: "rainy night drive, old telugu melodies",  // what the listener typed, at most 200 characters
  *     count: 10..30,

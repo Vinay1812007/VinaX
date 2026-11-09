@@ -292,7 +292,7 @@
   function reason(kind) { return REST_REASON[kind] || (kind ? fmt.label(kind) : '—'); }
   function until(iso) { return iso ? h('span', { title: fmt.full(iso) }, 'until ' + fmt.time(iso)) : null; }
 
-  /** The free models found in each AI company's own list (refreshed every 6 hours; docs/ai.md "Found models"). */
+  /** The free models found in each AI company's own list (refreshed every 6 hours; README.md (VinaX AI) "Found models"). */
   function discoveryCard(disc, providers) {
     var on = disc.enabled;
     var byId = {};

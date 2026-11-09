@@ -35,7 +35,7 @@ routes = [
   # pre-rendered song text and share card. The handlers in functions/song,
   # album, artist and playlist stay in the code; to bring the pages back, put
   # the four patterns here again — and put a challenge rule in front of them
-  # first (docs/operations.md, "Scraper traffic on entity pages").
+  # first (README.md (Operations), "Scraper traffic on entity pages").
 
   # V2 1.0 — /sitemap* is NOT a Worker route any more. The sitemap index,
   # sitemap-static.xml and sitemap-hubs.xml are static files the frontend
@@ -87,11 +87,11 @@ GITHUB_REPO = "Vinay1812007/VinaX"
 # signed with the AUTH_SECRET secret (else DEVICE_ID_SECRET).
 GOOGLE_CLIENT_ID = "152181244509-biv1p3bge1endo5pd8qpc1ormhb4a75l.apps.googleusercontent.com"
 # VinaX AI — which web search API backs the SEARCH_API_KEY secret:
-# "tavily" (the default) or "serper". See docs/ai.md.
+# "tavily" (the default) or "serper". See README.md (VinaX AI).
 SEARCH_API_PROVIDER = "tavily"
 # Cloudflare Turnstile — the public site key of the sign-in security check
 # (app and console). Not a secret. The check runs only while the
-# TURNSTILE_SECRET_KEY secret is set too; see docs/operations.md.
+# TURNSTILE_SECRET_KEY secret is set too; see README.md (Operations).
 TURNSTILE_SITE_KEY = "0x4AAAAAAFxurV4s1_LIX_00"
 
 # Secrets (set with `npx wrangler secret put <NAME> --config worker/wrangler.toml`
@@ -105,7 +105,7 @@ id = "34a611e441644d0b9eb77cbbe584a766"
 # VinaX AI — Cloudflare Workers AI, the last model in Auto's default ladder
 # (worker/functions/_lib/ai/adapters/workersAi.ts). The free pool is about
 # 10,000 neurons a day for the whole account; a spent pool rests until
-# 00:00 UTC. See docs/ai.md.
+# 00:00 UTC. See README.md (VinaX AI).
 [ai]
 binding = "AI"
 

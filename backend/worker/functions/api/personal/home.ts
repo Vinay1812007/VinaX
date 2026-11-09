@@ -7,7 +7,7 @@
  *   401 signed_out · 503 unavailable · 503 personal_disabled
  *
  * Served from the saved page for 30 minutes; `fresh=1` builds a new one
- * (one a minute per account). docs/personalisation.md "Composing Home".
+ * (one a minute per account). README.md (The personal engine) "Composing Home".
  */
 import { json } from '../../_lib/authShared';
 import { bindingAllows } from '../../_lib/ratelimit';

@@ -19,7 +19,7 @@ import { getLocal } from '@/services/storage/local';
  * sha256 hash list stays untouched (public/_headers, cspHashes.test.ts); the
  * tag's hosts are allowed in script-src / connect-src instead. Any change to
  * what this collects must be reflected in PrivacyPage.tsx and
- * docs/phase1/privacy-baseline.md BEFORE it ships.
+ * README.md (History) BEFORE it ships.
  */
 const PROJECT_ID = 'yghemvilpu';
 const TAG_SRC = `https://www.clarity.ms/tag/${PROJECT_ID}`;

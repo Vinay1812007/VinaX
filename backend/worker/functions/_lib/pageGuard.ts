@@ -12,7 +12,7 @@
  * What this can and cannot do. A request on a Worker route invokes the Worker
  * before any cache, so code cannot make such a request free: only a WAF rule
  * at the zone edge stops it from counting (see backend/scripts/cf-edge-rules.mjs
- * and docs/operations.md "Scraper traffic on entity pages"). What code CAN do
+ * and README.md (Operations) "Scraper traffic on entity pages"). What code CAN do
  * is make the robot's request as cheap as possible and useless to it:
  *
  *  1. A browser impostor — a user agent that claims a Chromium browser but

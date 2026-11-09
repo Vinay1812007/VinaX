@@ -1,7 +1,7 @@
 /**
  * VinaX AI — the shapes every part of the chat shares: the model registry
  * entry, the request an adapter gets, and the normalised events every
- * adapter yields whatever its provider streams. See docs/ai.md.
+ * adapter yields whatever its provider streams. See README.md (VinaX AI).
  */
 import type { AuthEnv } from '../googleAuth';
 import type { DbEnv } from '../db';

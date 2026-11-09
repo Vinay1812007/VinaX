@@ -7,7 +7,7 @@
  * bar (breadcrumb, global search, date range, auto-refresh, theme, profile),
  * keyboard shortcuts (press ?) with quick actions in Ctrl K, and the
  * unsaved-changes guard. Pages register with VX.page() in
- * /admin/pages/*.js; this file only mounts them. See docs/admin-console.md.
+ * /admin/pages/*.js; this file only mounts them. See README.md (Owner console).
  */
 (function () {
   'use strict';

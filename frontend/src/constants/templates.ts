@@ -9,7 +9,7 @@
  * utils/theme.ts (first-load code); this module is the picker's copy and is
  * only loaded with Settings.
  *
- * 15.0 — the six styles were replaced (docs/app-styles.md). Each is modelled
+ * 15.0 — the six styles were replaced (README.md (App styles)). Each is modelled
  * on the design language of one kind of music app a listener already knows,
  * in VinaX's own names and colours; the ids of the 11.0–14.x styles map to
  * their replacements in utils/theme.ts (LEGACY_TEMPLATES).

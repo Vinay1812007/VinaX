@@ -7,7 +7,7 @@
  *   - images are never loaded from arbitrary hosts; they show as links.
  * Maths ($inline$, $$display$$) renders with KaTeX, loaded the first time
  * a reply has a dollar sign (math.ts); prices stay prices (mathText.ts).
- * Citation chips arrive with web search (docs/ai.md).
+ * Citation chips arrive with web search (README.md (VinaX AI)).
  */
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import ReactMarkdown, { type Components, type Options } from 'react-markdown';

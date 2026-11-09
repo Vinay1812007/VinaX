@@ -1,4 +1,4 @@
-/** VinaX AI — the shapes the page shares with /api/ai/* (docs/ai.md). */
+/** VinaX AI — the shapes the page shares with /api/ai/* (README.md (VinaX AI)). */
 
 export interface ModelLabel {
   id: string;

@@ -4,7 +4,7 @@
  * Nothing outside this file may name a model id. The owner can switch a
  * model off or reorder the picker without a deploy through the `vinax-ai`
  * setting (`models: { "<registry id>": { enabled, order } }`), applied by
- * `applyOverrides`. Flags marked in docs/ai.md as "probe" come from
+ * `applyOverrides`. Flags marked in README.md (VinaX AI) as "probe" come from
  * `npm run ai:probe` (backend/scripts/ai-probe.mjs).
  *
  * This module only uses type imports, so the probe script can import it with
@@ -229,7 +229,7 @@ export const UTILITY_MODELS: readonly UtilityModel[] = [
 
 export type LadderName = 'vision' | 'long' | 'deep' | 'code' | 'fast' | 'default' | 'title' | 'grounded' | 'music';
 
-/** Auto's ladders, best first (docs/ai.md "Auto"). */
+/** Auto's ladders, best first (README.md (VinaX AI) "Auto"). */
 export const LADDERS: Readonly<Record<LadderName, readonly string[]>> = {
   vision: ['gemini:gemini-3.6-flash', 'gemini:gemini-3.5-flash', 'nvidia:nvidia/nemotron-3.5-super-vl-120b-a12b', 'openrouter:nvidia/nemotron-3.5-super-vl:free'],
   long: ['gemini:gemini-3.6-flash', 'gemini:gemini-3.5-flash', 'gemini:gemini-3-flash-preview', 'groq:openai/gpt-oss-120b'],

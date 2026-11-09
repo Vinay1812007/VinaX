@@ -18,7 +18,7 @@
  *
  * Mic audio goes as 16-bit PCM at 16 kHz; Gemini's voice comes back as
  * 16-bit PCM at 24 kHz. Shapes checked against Google's Live API reference
- * (2026-10-31); see docs/ai.md.
+ * (2026-10-31); see README.md (VinaX AI).
  */
 
 import type { Source, SourcesInfo } from '../types';

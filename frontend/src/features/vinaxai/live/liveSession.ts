@@ -31,7 +31,7 @@
  * pure silence for a few seconds, the view says so and offers other mics;
  * `switchMic` swaps the mic without ending the session.
  *
- * In the Android app (docs/ai.md, "Live voice in the Android app"): opening
+ * In the Android app (README.md (VinaX AI), "Live voice in the Android app"): opening
  * the mic puts the WebView in call mode, so the voice plays as call audio
  * (the phone's echo canceller then hears it) and Android sends it to the
  * earpiece. An APK with the VinaxAudioRoute plugin moves it to the

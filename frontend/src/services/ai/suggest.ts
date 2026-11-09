@@ -103,7 +103,7 @@ export const songRef = (s: Song): SongRef => ({ title: s.title, artist: leadArti
 /**
  * The listener's last plays they let run, newest first, as title/artist pairs:
  * what the AI DJ and AI Playlist send so they do not suggest them again
- * (docs/data-and-privacy.md). At most `n`.
+ * (README.md (Data and privacy)). At most `n`.
  */
 export function recentPlays(history: readonly HistoryEntry[] | undefined, n = 10): SongRef[] {
   const out: SongRef[] = [];

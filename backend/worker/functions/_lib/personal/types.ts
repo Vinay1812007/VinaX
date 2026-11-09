@@ -1,6 +1,6 @@
 /**
  * The personal engine — the shapes it stores and the shapes it sends
- * (docs/personalisation.md). Rows mirror backend/supabase/schema.sql § 9b;
+ * (README.md (The personal engine)). Rows mirror backend/supabase/schema.sql § 9b;
  * wire shapes are what the device's services/personal/api.ts validates.
  */
 

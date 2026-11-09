@@ -2,7 +2,7 @@
  * VinaX music AI — POST /api/ai/home-layout: choose which Home shelves appear,
  * in what order, under what titles, and what feeds the new "Made for right
  * now" shelf, for this listener at this hour. The device sends only
- * (docs/data-and-privacy.md):
+ * (README.md (Data and privacy)):
  *
  *   { generation,                       // the device's Home generation, echoed back
  *     taste: <compact taste summary>, intent: <this sitting's intent>,

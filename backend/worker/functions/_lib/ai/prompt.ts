@@ -1,5 +1,5 @@
 /**
- * VinaX AI — the system message, assembled in this order (docs/ai.md):
+ * VinaX AI — the system message, assembled in this order (README.md (VinaX AI)):
  *
  *   0. (after 1) the owner's own instructions from the `vinax-ai` setting,
  *      marked as the owner's;

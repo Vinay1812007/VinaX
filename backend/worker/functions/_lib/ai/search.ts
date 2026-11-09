@@ -1,5 +1,5 @@
 /**
- * VinaX AI — web search (docs/ai.md "Web search").
+ * VinaX AI — web search (README.md (VinaX AI) "Web search").
  *
  *   wantsSearch   the toggle is on, or it is on auto and the message has a
  *                 recency cue (today, latest, news, prices, scores, weather,

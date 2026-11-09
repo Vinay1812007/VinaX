@@ -129,7 +129,7 @@ export interface SettingsState {
   /**
    * V2 1.4 — the personal engine: while signed in, listening is reported to
    * the account's taste model on the server, which builds Home, playlists
-   * and radio (docs/personalisation.md). On by default; off stops the
+   * and radio (README.md (The personal engine)). On by default; off stops the
    * reporting at once and Home goes back to the on-device engine.
    */
   personalEngine: boolean;

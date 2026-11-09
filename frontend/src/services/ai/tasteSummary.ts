@@ -9,7 +9,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import type { TuneIntent } from '@/services/recommendation/tune';
 
 /**
- * The COMPACT summaries the music AI routes receive (docs/data-and-privacy.md
+ * The COMPACT summaries the music AI routes receive (README.md (Data and privacy)
  * lists every field). They are built here, on the device, from the taste
  * profile and the last plays, and nothing else about the listener leaves:
  * never the history, the heard-set, a song title or a catalogue id.

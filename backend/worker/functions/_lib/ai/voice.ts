@@ -2,7 +2,7 @@
  * VinaX AI — voice (phase 6): speech to text for dictation, text to speech
  * for Read aloud, and the short-lived tokens Live voice connects with.
  * Provider details were checked against the providers' docs on 2026-10-31
- * (docs/ai.md, "Voice"):
+ * (README.md (VinaX AI), "Voice"):
  *
  *   Dictation   Groq whisper-large-v3-turbo → whisper-large-v3 → Gemini
  *               gemini-3.5-transcribe → gemini-3.8-flash (the audio reaches

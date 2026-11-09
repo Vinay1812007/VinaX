@@ -1,6 +1,6 @@
 /**
  * VinaX music AI — POST /api/ai/dj: the AI DJ suggests songs to follow the
- * one playing now. The device sends (docs/data-and-privacy.md):
+ * one playing now. The device sends (README.md (Data and privacy)):
  *
  *   { seed: { title, artist, language, mood, energy },   // the song playing now
  *     recent: [{ title, artist }],                       // at most 10 recent plays

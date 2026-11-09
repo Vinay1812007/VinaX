@@ -1,6 +1,6 @@
 /* App Settings › App Updates — the oldest app version allowed on each
  * platform, and whether people are asked or made to update.
- * Stored shape and who reads it: docs/admin-console.md → "App Updates". */
+ * Stored shape and who reads it: README.md (Owner console) → "App Updates". */
 (function () {
   'use strict';
   var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt, st = VX.st;

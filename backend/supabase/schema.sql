@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 18
+-- VinaX database · schema version 19
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -881,7 +881,7 @@ alter table ai_conversations add column if not exists incognito boolean not null
 
 -- ------------------------------------------------- 9b. the personal engine --
 
--- Version 7: the account-side recommendation engine (docs/personalisation.md).
+-- Version 7: the account-side recommendation engine (README.md (The personal engine)).
 -- One taste model per signed-in account, learned from the events the device
 -- reports while the listener keeps the engine on; a pool of every song any
 -- listener touched, with its embedding; what each account was shown; and the

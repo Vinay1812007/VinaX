@@ -1,6 +1,6 @@
 /**
  * Candidate gathering: a pool of a few hundred songs from the six sources in
- * docs/personalisation.md, each tagged with where it came from. Catalogue
+ * README.md (The personal engine), each tagged with where it came from. Catalogue
  * answers are written to personal_songs on the way through, so they are
  * embedded for next time. Every source is optional: one that fails leaves a
  * smaller pool, never an error.

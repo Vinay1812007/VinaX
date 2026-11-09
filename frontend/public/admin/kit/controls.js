@@ -10,7 +10,7 @@
  *
  * Rules every control follows: text is always text (VX.h), every control has
  * a visible label or aria-label, keyboard works, and nothing throws on empty
- * input. See docs/admin-console.md → "Controls".
+ * input. See README.md (Owner console) → "Controls".
  */
 (function () {
   'use strict';

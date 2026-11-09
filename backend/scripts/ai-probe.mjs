@@ -29,7 +29,7 @@
  * (which voice field Gemini accepts, and the audio type it returns), which
  * Live token body Google accepts, and a real Live handshake (setup →
  * setupComplete) on each Live model. About 15 small requests. It prints a table and writes nothing; it never prints a key or a
- * response body. Use the results to set the registry flags (docs/ai.md).
+ * response body. Use the results to set the registry flags (README.md (VinaX AI)).
  * Needs Node 22.18+ (it imports the TypeScript registry directly).
  */
 import { readFileSync } from 'node:fs';

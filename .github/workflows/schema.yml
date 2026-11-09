@@ -10,7 +10,7 @@
 #
 # apply — a push to main that touches backend/supabase/**, or this workflow
 #   run by hand: applies schema.sql to the production project with psql, so
-#   the SQL editor paste in docs/database.md is no longer the only path. It
+#   the SQL editor paste in README.md (Database) is no longer the only path. It
 #   runs only after `check` is green and only ever runs schema.sql, which
 #   adds what is missing and deletes nothing. reset.sql and check.sql are
 #   never run against production from here.

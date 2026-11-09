@@ -3,7 +3,7 @@
  * ai_memory_prefs, ai_conversations.incognito). A short list of durable
  * facts and preferences about the listener, learned from their chats or
  * added by them in settings, put into the system prompt of every new reply
- * as a marked <memory> block (prompt.ts). See docs/ai.md "Memory".
+ * as a marked <memory> block (prompt.ts). See README.md (VinaX AI) "Memory".
  *
  *   read    every reply, unless the listener turned "Use memory" off, the
  *           chat is incognito, or the owner turned memory off;

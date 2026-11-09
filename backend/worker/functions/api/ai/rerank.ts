@@ -1,7 +1,7 @@
 /**
  * VinaX music AI — POST /api/ai/rerank: put Up Next's best candidates in a
  * better order for this listener, right now. The device sends only what the
- * order needs (docs/data-and-privacy.md):
+ * order needs (README.md (Data and privacy)):
  *
  *   { candidates: [{ key, language, mood, energy, genre, leadArtist }],   // at most 40
  *     taste: <compact taste summary>, intent: <this sitting's intent> }

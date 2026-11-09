@@ -1,7 +1,7 @@
 /**
  * VinaX AI settings → Memory: the two switches (kept with the account, as
  * learning runs on the server), every note with its own Delete, Add a
- * memory, and Forget everything. See docs/ai.md "Memory".
+ * memory, and Forget everything. See README.md (VinaX AI) "Memory".
  */
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';

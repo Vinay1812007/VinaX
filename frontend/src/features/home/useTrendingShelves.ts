@@ -15,7 +15,7 @@ const STALE = 4 * 60 * 60_000;
  * popular phrases ("trending albums 2026"), ranked on the device. That is the
  * catalogue's own relevance, not evidence from any public chart, so these
  * shelves must never be labelled as one. Verified public charts come only
- * from services/trends (see docs/trends.md).
+ * from services/trends (see README.md (Charts, trends and canvas clips)).
  */
 export const CATALOGUE_SEARCH_PROVENANCE = {
   kind: 'catalogue-search',

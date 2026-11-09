@@ -11,7 +11,7 @@ import type { Song } from '../../src/types';
  * contract, so "a remix of a song played minutes ago" means the same thing on
  * both sides of the comparison. Everything else here — the rules, the
  * repetition counts, what a discovery is — is written out again from the
- * documentation (docs/recommendations.md) rather than imported, so the
+ * documentation (README.md (Recommendations on the device)) rather than imported, so the
  * evaluation cannot agree with a bug by sharing its code.
  */
 export const leadName = (s: Song): string => normalizeIdentityText(s.artists?.[0]?.name ?? s.subtitle?.split(',')[0] ?? '').trim();

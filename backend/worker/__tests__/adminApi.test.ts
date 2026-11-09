@@ -2,7 +2,7 @@
  * 14.0 — the database-backed admin API against a mocked PostgREST.
  *
  * Every GET answers { configured: false } without the database secrets; the
- * happy paths answer the exact keys docs/database.md promises the console; a
+ * happy paths answer the exact keys README.md (Database) promises the console; a
  * database failure is a 502 with its reason, never a silent zero; writes are
  * validated and audited.
  */

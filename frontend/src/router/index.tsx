@@ -115,7 +115,7 @@ const TopArtistsPage = lazy(() => import('@/pages/TopArtistsPage'));
 const TopPlaylistsPage = lazy(() => import('@/pages/TopPlaylistsPage'));
 // 10.1 — Flow: a full-screen, swipeable feed of song previews.
 const FlowPage = lazy(() => import('@/pages/FlowPage'));
-// VinaX AI — the chat assistant (src/features/vinaxai, docs/ai.md).
+// VinaX AI — the chat assistant (src/features/vinaxai, README.md (VinaX AI)).
 const VinaXAIPage = lazy(() => import('@/pages/VinaXAIPage'));
 // A shared VinaX AI chat: read-only, opens signed out.
 const VinaXAISharePage = lazy(() => import('@/pages/VinaXAISharePage'));

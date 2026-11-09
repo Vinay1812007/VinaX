@@ -32,7 +32,7 @@ export const TEMPLATE_CANVAS: Record<TemplateId, readonly [string, string]> = {
 };
 
 /** 15.0 — the 11.0–14.x styles, each mapped to the 15.0 style that took its
- *  place (docs/app-styles.md), so a listener who chose Pulse opens 15.0 in
+ *  place (README.md (App styles)), so a listener who chose Pulse opens 15.0 in
  *  Verdant rather than in the default. The pre-paint script in index.html
  *  carries the same map. */
 export const LEGACY_TEMPLATES: Readonly<Record<string, TemplateId>> = {

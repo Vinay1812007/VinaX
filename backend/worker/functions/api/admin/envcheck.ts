@@ -38,7 +38,7 @@ export const ENV_ITEMS: Array<{ name: string; group: string; required: boolean; 
   { name: 'ASSETS_HOST', group: 'Edge', required: true, note: 'Pages origin the Worker proxies' },
   { name: 'HANDOFF', group: 'Edge', required: true, note: 'KV namespace for device handoff' },
   { name: 'NOTIFY_MIN_GAP_HOURS', group: 'Push', required: false, note: 'push frequency cap' },
-  // VinaX AI (docs/ai.md): any one provider is enough for the chat to work.
+  // VinaX AI (README.md (VinaX AI)): any one provider is enough for the chat to work.
   { name: 'GROQ_API_KEY', group: 'VinaX AI', required: false, note: 'Groq chat models (Auto default), dictation (Whisper) and Read aloud (Orpheus)' },
   { name: 'GEMINI_API_KEY', group: 'VinaX AI', required: false, note: 'Gemini chat models (images, long documents), Live voice, and the voice fallbacks' },
   { name: 'OPENROUTER_API_KEY', group: 'VinaX AI', required: false, note: 'OpenRouter free models' },

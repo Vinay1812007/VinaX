@@ -35,7 +35,7 @@
  * it ends (also after a disconnect, with the partial text and 'aborted').
  * A continued reply is appended to the message it continues.
  * Logs carry route, model, provider, latency, status and token counts, never
- * message text. See docs/ai.md.
+ * message text. See README.md (VinaX AI).
  */
 import { bearer, readSession } from '../../_lib/googleAuth';
 import { CORS, accountOf, json } from '../../_lib/authShared';

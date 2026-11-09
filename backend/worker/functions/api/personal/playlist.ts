@@ -8,7 +8,7 @@
  *   GET /api/personal/playlist?id=<id>          a playlist built earlier, for the account that built it
  *   401 signed_out · 503 unavailable · 503 personal_disabled · 429 (six a minute per account)
  *
- * docs/personalisation.md "Building a playlist".
+ * README.md (The personal engine) "Building a playlist".
  */
 import { readJsonCapped } from '../../_lib/body';
 import { json } from '../../_lib/authShared';

@@ -6,7 +6,7 @@
  *   401 signed_out · 503 unavailable · 503 personal_disabled
  *
  * The device's Up Next engine uses it as one source among its own
- * (docs/personalisation.md "Radio and next songs").
+ * (README.md (The personal engine) "Radio and next songs").
  */
 import { json } from '../../_lib/authShared';
 import { recommend, type PersonalEnv } from '../../_lib/personal/engine';

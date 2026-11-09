@@ -1,6 +1,6 @@
 /* App Settings › Features & AI — feature switches, VinaX AI (who may use it,
  * models, limits, instructions), recommendations and music AI.
- * Stored shapes and who reads them: docs/admin-console.md → "Features & AI". */
+ * Stored shapes and who reads them: README.md (Owner console) → "Features & AI". */
 (function () {
   'use strict';
   var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt, st = VX.st;

@@ -1,7 +1,7 @@
 import { isNativePlatform } from '@/services/native';
 
 /**
- * 7.2 — verified trends (GET /api/trends; contract in docs/trends.md).
+ * 7.2 — verified trends (GET /api/trends; contract in README.md (Charts, trends and canvas clips)).
  *
  * A verified trend is a CATALOGUE song that the server matched with
  * confidence to an entry of an outside chart or an editorial pick, with the
