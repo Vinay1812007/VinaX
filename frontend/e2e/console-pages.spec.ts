@@ -156,6 +156,47 @@ test.describe('console pages', () => {
     expect(errors).toEqual([]);
   });
 
+  test('Send Notification: who gets it by device, tags and email, with a live count; history shows the group and reach', async ({ page }) => {
+    const errors = watchErrors(page);
+    const { sent } = await mockConsole(page);
+    await signedIn(page);
+    await page.goto('/admin/#/send-notification');
+    await settle(page);
+    const who = page.locator('.compose-main').filter({ hasText: 'Who gets it' });
+    await expect(who.getByText(/Will reach about 15 people/)).toBeVisible();
+    // Device: the kinds reachable people use carry their counts; the wide groups come first.
+    const device = who.getByLabel('Device', { exact: true });
+    await expect(device.locator('option', { hasText: 'Any web browser' })).toHaveCount(1);
+    await expect(device.locator('option', { hasText: 'Android app (9)' })).toHaveCount(1);
+    await expect(device.locator('option', { hasText: 'iPhone web (3)' })).toHaveCount(1);
+    await device.selectOption('android-app');
+    await expect(who.getByText(/Will reach about 8 people/)).toBeVisible();
+    // Tags from the profiles, any of them.
+    await who.getByLabel('tester (4)').check();
+    await expect(who.getByText(/Will reach about 3 people/)).toBeVisible();
+    // Emails: typed or pasted; the ones nobody signed in with are named.
+    await who.getByLabel('Email addresses').fill('one@example.com, nobody@example.com\nTwo@Example.com');
+    await expect(who.getByText('3 addresses')).toBeVisible();
+    await expect(who.getByText(/Nobody signed in with 1 of these addresses: nobody@example\.com/)).toBeVisible();
+    const dry = sent.filter((s) => s.method === 'POST' && s.path === '/api/admin/push').pop()?.body as { filter: Record<string, unknown>; dryRun: boolean };
+    expect(dry.dryRun).toBe(true);
+    expect(dry.filter).toMatchObject({ device: 'android-app', tags: ['tester'], emails: ['one@example.com', 'nobody@example.com', 'two@example.com'] });
+    // History: the group it went to and how many it reached, and "Send again to this group" opens Compose with only that group.
+    await page.goto('/admin/#/sent-notifications');
+    await settle(page);
+    const row = page.locator('tr', { hasText: 'New Telugu hits are here' });
+    await expect(row.getByText('Telugu · Android app · Andhra Pradesh · tester')).toBeVisible();
+    await expect(row.getByText('7 people · 9 devices')).toBeVisible();
+    await row.getByRole('button', { name: /More|Actions|⋯/ }).first().click();
+    await page.getByRole('menuitem', { name: 'Send again to this group' }).click();
+    await expect(page).toHaveURL(/#\/send-notification$/);
+    await settle(page);
+    await expect(page.getByLabel('Device', { exact: true })).toHaveValue('android-app');
+    await expect(page.getByLabel('tester (4)')).toBeChecked();
+    await expect(page.getByLabel('Title', { exact: true })).toHaveValue('');
+    expect(errors).toEqual([]);
+  });
+
   test('Users lists signed-in people only and opens a profile', async ({ page }) => {
     const errors = watchErrors(page);
     await mockConsole(page);

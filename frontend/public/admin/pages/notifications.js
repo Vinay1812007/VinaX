@@ -27,18 +27,35 @@
   ];
   var ACTIVITY = [
     { value: '', label: 'Anyone', hint: 'Every signed-in person' },
+    { value: 'today', label: 'Active today', hint: 'Opened the app today (India time)' },
     { value: 'active7', label: 'Active in last 7 days', hint: 'Opened the app this week' },
+    { value: 'active30', label: 'Active in last 30 days', hint: 'Opened the app this month' },
+    { value: 'heavy', label: 'Heavy listeners', hint: 'Listened 2 hours or more in the last 30 days' },
     { value: 'quiet', label: 'Quiet 7–14 days', hint: 'Last seen one to two weeks ago' },
+    { value: 'away7', label: 'Away 7+ days', hint: 'Not seen for a week or more' },
     { value: 'dormant14', label: 'Inactive 14+ days', hint: 'Not seen for two weeks or more' }
   ];
-  var PLATFORM = [{ value: '', label: 'All' }, { value: 'web', label: 'Web' }, { value: 'fcm', label: 'Android' }];
-  var TITLE_MAX = 120, BODY_MAX = 300;
+  /** Kinds of device (the Users page's keys), plus two wide groups. */
+  var DEVICE_GROUPS = [{ value: 'web', label: 'Any web browser' }, { value: 'android', label: 'Android (app or web)' }];
+  var DEVICE_INFO = 'The kind of device a person uses VinaX on, from the devices they sign in with. A browser kind reaches that person’s browsers; “Android app” reaches the app. Most iPads show up as “Mac web”.';
+  var TITLE_MAX = 120, BODY_MAX = 300, EMAILS_MAX = 200;
+  /** The old Platform choice (web / fcm) read as a kind of device. */
+  var CHANNEL_AS_DEVICE = { web: 'web', fcm: 'android-app' };
 
   /** What Compose starts from (Duplicate, Edit draft and saved audiences fill it). */
   var seed = null;
 
   function blank() {
-    return { title: '', body: '', image: null, tap: 'home', target: null, page: '/library', country: '', region: '', city: '', lang: '', channel: '', activity: '', users: [], when: 'now', scheduledFor: null, draftId: null };
+    return { title: '', body: '', image: null, tap: 'home', target: null, page: '/library', country: '', region: '', city: '', lang: '', device: '', tags: [], emails: '', activity: '', users: [], when: 'now', scheduledFor: null, draftId: null };
+  }
+  /** Addresses typed or pasted, one per comma, space or line; lower case; unique; at most 200. */
+  function emailList(raw) {
+    var out = [];
+    String(raw || '').split(/[\s,;]+/).forEach(function (v) {
+      var e = v.trim().toLowerCase();
+      if (e && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e) && out.indexOf(e) < 0 && out.length < EMAILS_MAX) out.push(e);
+    });
+    return out;
   }
   function linkOf(st) {
     if (st.tap === 'charts') return '/charts';
@@ -51,7 +68,10 @@
     var st = blank();
     var f = obj(r.filter);
     st.title = r.title || ''; st.body = r.body || ''; st.image = r.image || null;
-    st.country = f.country || ''; st.region = f.region || ''; st.city = f.city || ''; st.lang = f.lang || ''; st.channel = f.channel || ''; st.activity = f.activity || '';
+    st.country = f.country || ''; st.region = f.region || ''; st.city = f.city || ''; st.lang = f.lang || ''; st.activity = f.activity || '';
+    st.device = f.device || CHANNEL_AS_DEVICE[f.channel] || '';
+    st.tags = arr(f.tags).map(String);
+    st.emails = arr(f.emails).join('\n');
     st.users = arr(f.users).map(function (id) { return { id: String(id), name: null, email: null, picture: null }; });
     var link = r.link || '/';
     var m = /^\/(song|album|playlist)\/(.+)$/.exec(link);
@@ -67,8 +87,23 @@
     if (st.region) f.region = st.region;
     if (st.city) f.city = st.city;
     if (st.lang) f.lang = st.lang;
-    if (st.channel) f.channel = st.channel;
+    if (st.device) f.device = st.device;
+    if (st.tags.length) f.tags = st.tags.slice();
+    var emails = emailList(st.emails);
+    if (emails.length) f.emails = emails;
     return { filter: f, activity: st.activity || null, users: st.users.map(function (u) { return u.id; }) };
+  }
+  /** "Only this audience" from a stored row: the message is left blank. */
+  function audienceOnly(r) {
+    var st = fromRow(r);
+    st.title = ''; st.body = ''; st.image = null; st.tap = 'home'; st.target = null; st.draftId = null;
+    return st;
+  }
+  /** How many people and devices a stored row reached (counted when it was sent). */
+  function reachText(r) {
+    var f = obj(r.filter);
+    if (f.people == null) return null;
+    return plural(f.people, 'person', 'people') + (f.devices != null ? ' · ' + plural(f.devices, 'device') : '');
   }
   function plural(n, one, many) { return fmt.plural(num(n), one, many); }
 
@@ -128,11 +163,13 @@
             if (!res.ok) { lastReach = null; VX.mount(reachEl, h('span.muted', res.error === 'kind_off' ? 'Announcements are switched off in Notification Rules.' : 'Could not count the audience — ' + res.message)); return; }
             var r = res.data || {};
             lastReach = r;
+            var missing = arr(r.unresolvedEmails);
             VX.mount(reachEl,
-              h('strong.reach-num', 'Will reach about ' + plural(r.people, 'user')),
-              h('span.muted.small', ' · ' + plural(r.devices, 'phone or browser', 'phones and browsers')),
+              h('strong.reach-num', 'Will reach about ' + plural(r.people, 'person', 'people')),
+              h('span.muted.small', ' on ' + plural(r.devices, 'phone or browser', 'phones and browsers')),
               num(r.skippedRecent) ? h('span.muted.small', ' · ' + plural(r.skippedRecent, 'device') + ' skipped (had a notification recently)') : null,
-              ui.info('Counts people signed in with Google who allowed notifications and match every choice under “Who gets it”. People who got a notification too recently (Notification Rules) are left out.', 'Reach'));
+              ui.info('Counts people signed in with Google who allowed notifications and match every choice under “Who gets it”. People who got a notification too recently (Notification Rules) are left out.', 'Reach'),
+              missing.length ? h('p.reach-missing.small', { role: 'status' }, 'Nobody signed in with ' + plural(missing.length, 'of these addresses', 'of these addresses') + ': ' + missing.slice(0, 8).join(', ') + (missing.length > 8 ? ' and ' + (missing.length - 8) + ' more' : '')) : null);
           });
         }, 350);
       }
@@ -168,23 +205,46 @@
       /* -- who gets it -- */
       var whoHost = h('div.form-col');
       function opts(list, all, labelOf) { return [{ value: '', label: all }].concat(list.map(function (x) { return { value: x.key, label: (labelOf ? labelOf(x.key) : x.key) + ' (' + fmt.num(x.count) + ')' }; })); }
+      // The device kinds reachable people use (counts of people), with the
+      // two wide groups first; a kind nobody uses is still offered so a saved
+      // audience keeps its choice.
+      var deviceCounts = {};
+      arr(d.devices).forEach(function (x) { if (x && x.key) deviceCounts[x.key] = num(x.people); });
+      var deviceOpts = [{ value: '', label: 'Every kind of device' }].concat(DEVICE_GROUPS).concat(VX.DEVICES.map(function (k) {
+        return { value: k, label: VX.deviceName(k) + (deviceCounts[k] ? ' (' + fmt.num(deviceCounts[k]) + ')' : '') };
+      }));
+      var tagOpts = arr(d.tags).filter(function (t) { return t && t.tag; }).map(function (t) { return { value: t.tag, label: t.tag + ' (' + fmt.num(t.users) + ')' }; });
+      st.tags.forEach(function (t) { if (!tagOpts.some(function (o) { return o.value === t; })) tagOpts.push({ value: t, label: t + ' (0)' }); });
+      var emailsInput = ui.textarea({ rows: 2, placeholder: 'name@example.com, another@example.com', 'aria-label': 'Email addresses' });
+      emailsInput.value = st.emails || '';
+      var emailsCount = h('span.counter.muted.small', '');
+      function drawEmailsCount() { var n = emailList(st.emails).length; emailsCount.textContent = n ? plural(n, 'address', 'addresses') : ''; }
+      drawEmailsCount();
+      var emailsTimer = null;
+      emailsInput.addEventListener('input', function () { st.emails = emailsInput.value; drawEmailsCount(); touch(); clearTimeout(emailsTimer); emailsTimer = setTimeout(countReach, 600); });
       function drawWho() {
         var regions = arr(geo.regions).filter(function (r) { return !st.country || (r.country || 'Unknown') === st.country || (!r.country && st.country === 'Unknown'); });
         var cities = arr(geo.cities).filter(function (c) { return (!st.country || (c.country || 'Unknown') === st.country) && (!st.region || (c.region || 'Unknown') === st.region); });
         var userChips = st.users.map(function (u) { return { id: u.id, label: u.name || u.email || 'Chosen user', sub: u.name ? u.email : null, img: u.picture || null }; });
         VX.mount(whoHost,
-          h('p.muted.small', 'Leave everything on “Everyone” to reach every signed-in person.'),
+          h('p.muted.small', 'Leave everything on “Everyone” to reach every signed-in person. Every choice narrows it further.'),
           h('div.form-row.three',
             ui.dropdown('Country', opts(arr(geo.countries), 'Everyone', function (k) { return k === 'Unknown' ? 'Not known' : fmt.country(k); }), st.country, function (v) { st.country = v; st.region = ''; st.city = ''; drawWho(); changed(); }),
             ui.dropdown('State', opts(regions, 'All states'), st.region, function (v) { st.region = v; st.city = ''; drawWho(); changed(); }, { disabled: !st.country }),
             ui.dropdown('City', opts(cities, 'All cities'), st.city, function (v) { st.city = v; changed(); }, { disabled: !st.country })),
-          ui.dropdown('Language', [{ value: '', label: 'Every language' }].concat(arr(d.langs).filter(function (l) { return l.lang && l.lang !== 'unknown'; }).map(function (l) { return { value: l.lang, label: VX.langName(l.lang) + ' (' + fmt.num(l.count) + ')' }; })), st.lang, function (v) { st.lang = v; changed(); }),
-          ui.radios('Platform', PLATFORM, st.channel, function (v) { st.channel = v; changed(); }, { row: true }),
+          h('div.form-row.two',
+            ui.dropdown('Language', [{ value: '', label: 'Every language' }].concat(arr(d.langs).filter(function (l) { return l.lang && l.lang !== 'unknown'; }).map(function (l) { return { value: l.lang, label: VX.langName(l.lang) + ' (' + fmt.num(l.count) + ')' }; })), st.lang, function (v) { st.lang = v; changed(); }),
+            h('div.dd-with-info', ui.dropdown('Device', deviceOpts, st.device, function (v) { st.device = v; changed(); }), ui.info(DEVICE_INFO, 'Device'))),
           ui.radios('Activity', ACTIVITY, st.activity, function (v) { st.activity = v; changed(); }),
+          h('div.field.who-tags',
+            tagOpts.length
+              ? ui.checks('Tags (any of these)', tagOpts, st.tags, function (vals) { st.tags = vals; changed(); })
+              : h('div', h('span.field-label', 'Tags'), h('p.muted.small', 'No tags yet. Tag people on their profile (tester, friend, VIP…) and they can be picked here.'))),
           h('div.field',
             h('span.field-label', 'Only these people (optional)'),
             ui.chips(userChips, function (id) { st.users = st.users.filter(function (u) { return u.id !== id; }); drawWho(); changed(); }, { empty: 'Not limited to chosen people.' }),
             ui.userPicker({ label: 'Add a person', hideLabel: true, onPick: function (u) { if (!st.users.some(function (x) { return x.id === u.id; })) st.users.push(u); drawWho(); changed(); } })),
+          ui.field('Or by email address (optional)', emailsInput, h('span', 'Paste the Google emails they signed in with, separated by commas or lines (up to ' + EMAILS_MAX + '). ', emailsCount)),
           h('div.toolbar', reachEl, h('span.grow'), canEdit ? ui.button('Save this audience', { kind: 'ghost', small: true, icon: 'plus', onClick: saveAudience }) : null));
       }
       function changed() { touch(); countReach(); }
@@ -329,7 +389,7 @@
             [r.status === 'scheduled' ? 'Sends on' : r.status === 'draft' ? 'Saved' : 'Sent', ui.ago(r.status === 'scheduled' ? r.scheduledFor : r.at)],
             ['Message', r.body],
             ['A tap opens', r.link === '/' ? 'Home' : r.link],
-            ['Audience', r.audience],
+            ['Audience', reachText(r) ? r.audience + ' — ' + reachText(r) : r.audience],
             ['Delivered', fmt.num(r.delivered) + ' (web ' + fmt.num(obj(r.web).sent) + ' · Android ' + fmt.num(obj(r.fcm).sent) + ')'],
             ['Opened', fmt.num(r.opened) + (r.openRate != null ? ' (' + fmt.pct(r.openRate) + ')' : '')],
             ['Phones no longer reachable', fmt.num(obj(r.web).gone)],
@@ -346,7 +406,7 @@
         columns: [
           { key: 'at', label: 'Date', sortVal: function (r) { return r.status === 'scheduled' ? r.scheduledFor : r.at; }, render: function (r) { return ui.ago(r.status === 'scheduled' ? r.scheduledFor : r.at); }, csv: function (r) { return r.status === 'scheduled' ? r.scheduledFor : r.at; } },
           { key: 'title', label: 'Title', render: function (r) { return h('div', h('div.cell-main', r.title || 'VinaX'), h('div.cell-sub', fmt.trunc(r.body || '', 90))); } },
-          { key: 'audience', label: 'Audience' },
+          { key: 'audience', label: 'Audience', render: function (r) { var reach = reachText(r); return h('div', h('div.cell-main', r.audience || 'Everyone'), reach ? h('div.cell-sub', reach) : null); } },
           { key: 'status', label: 'Status', render: function (r) { return statusPill(r.status); } },
           { key: 'delivered', label: 'Delivered', align: 'right', render: function (r) { return r.status === 'sent' || r.status === 'retracted' ? fmt.num(r.delivered) : null; } },
           { key: 'opened', label: 'Opened', align: 'right', render: function (r) { return r.status === 'sent' || r.status === 'retracted' ? fmt.num(r.opened) : null; } },
@@ -356,6 +416,7 @@
           return [
             { label: 'View details', icon: 'info', onClick: function () { details(r); } },
             { label: 'Duplicate', icon: 'copy', hidden: !canEdit, onClick: function () { seed = fromRow(r); ctx.go('send-notification'); } },
+            { label: 'Send again to this group', icon: 'users', hidden: !canEdit || r.audience === 'Everyone', onClick: function () { seed = audienceOnly(r); ctx.go('send-notification'); } },
             { label: 'Edit draft', icon: 'edit', hidden: !canEdit || r.status !== 'draft', onClick: function () { seed = fromRow(r); seed.draftId = r.id; ctx.go('send-notification'); } },
             { label: 'Cancel sending', icon: 'close', hidden: !canEdit || r.status !== 'scheduled', onClick: function () {
               VX.confirm({ title: 'Cancel this scheduled notification?', body: '“' + (r.title || 'VinaX') + '” will not be sent.', confirmLabel: 'Cancel sending', danger: true }).then(function (ok) { if (ok) act({ action: 'cancel', id: r.id }, 'Cancelled ✓'); });
@@ -398,9 +459,12 @@
   function describeAudience(a) {
     var f = obj(a.filter), parts = [];
     if (arr(a.users).length) parts.push(plural(arr(a.users).length, 'chosen user'));
+    if (arr(f.emails).length) parts.push(plural(arr(f.emails).length, 'person by email', 'people by email'));
     if (f.city) parts.push(f.city); else if (f.region) parts.push(f.region); else if (f.country) parts.push(fmt.country(f.country));
     if (f.lang) parts.push(VX.langName(f.lang));
-    if (f.channel) parts.push(f.channel === 'web' ? 'Web' : 'Android');
+    var device = f.device || CHANNEL_AS_DEVICE[f.channel];
+    if (device) { var g = DEVICE_GROUPS.filter(function (x) { return x.value === device; })[0]; parts.push(g ? g.label : VX.deviceName(device)); }
+    if (arr(f.tags).length) parts.push(arr(f.tags).length <= 2 ? arr(f.tags).join(', ') : plural(arr(f.tags).length, 'tag'));
     var act = ACTIVITY.filter(function (x) { return x.value === (a.activity || ''); })[0];
     if (act && act.value) parts.push(act.label);
     return parts.join(' · ') || 'Everyone';

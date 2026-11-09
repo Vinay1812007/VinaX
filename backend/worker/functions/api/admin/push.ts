@@ -1,13 +1,14 @@
 /**
- * GET  /api/admin/push → { configured, web, fcm, people, geo, langs, rules, quiet }
+ * GET  /api/admin/push → { configured, web, fcm, people, geo, langs, devices, tags, rules, quiet }
  *        What can be sent: each channel (set up? how many signed-in phones and
- *        browsers), how many people that is, the places and languages they are
- *        in, and the Notification Rules in force.
+ *        browsers), how many people that is, the places, languages and kinds of
+ *        device they are on, the owner's tags, and the Notification Rules in force.
  * POST /api/admin/push
  *        { title, body, link, image?, filter?, activity?, users?, dedupeKey?,
  *          dryRun?, test?, draft?, draftId?, when?: 'now' | 'schedule', scheduledFor?, ignoreQuiet? }
+ *        filter: { country, region, city, lang, device, tags[], emails[], users[] } — every key optional, all combine.
  *
- *   dryRun   → { dryRun, people, devices, web, fcm, skippedRecent, audience, quiet }  (sends nothing)
+ *   dryRun   → { dryRun, people, devices, web, fcm, skippedRecent, audience, quiet, unresolvedEmails }  (sends nothing)
  *   test     → sends only to the signed-in admin's own devices (no history row)
  *   draft    → saves (or updates draftId) a draft: { ok, id, status: 'draft' }
  *   schedule → saves a scheduled send (the cron job sends it): { ok, id, status: 'scheduled', scheduledFor }
@@ -26,8 +27,8 @@ import { db, q, firstFailure } from '../../_lib/db';
 import { clip } from '../../_lib/edge';
 import { fcmConfigured, type FcmEnv } from '../../_lib/fcm';
 import {
-  audienceDevices, audienceOf, devicesOfEmail, fanOut, kindAllowed, peopleIn, publishAnnouncement, pushRules, quietNow,
-  recordReceipt, underCap, type Audience, type PushEnv,
+  accountsForEmails, audienceDevices, audienceOf, DEVICE_KEYS, deviceKeyOf, devicesOfEmail, fanOut, kindAllowed, peopleIn,
+  publishAnnouncement, pushRules, quietNow, recordReceipt, underCap, type Audience, type PushEnv,
 } from '../../_lib/pushSend';
 import { pushConfigured, type VapidEnv } from '../../_lib/webpush';
 
@@ -94,30 +95,49 @@ function bucket(rows: GeoRow[]) {
   };
 }
 
+/** How many reachable people use each kind of device (the Users page's keys), from the devices they sign in on. */
+function deviceKinds(reachable: Set<string>, rows: Array<{ account_id: string | null; platform: string | null; os: string | null }>) {
+  const people = new Map<string, Set<string>>();
+  for (const r of rows) {
+    if (!r.account_id || !reachable.has(r.account_id)) continue;
+    const key = deviceKeyOf(r.platform, r.os);
+    if (!people.has(key)) people.set(key, new Set());
+    people.get(key)!.add(r.account_id);
+  }
+  return DEVICE_KEYS.map((key) => ({ key, people: people.get(key)?.size ?? 0 })).filter((d) => d.people > 0);
+}
+
 export const onRequestGet = adminGet(async ({ env }) => {
   const e = env as unknown as PushEnv;
-  const [all, signed, rules] = await Promise.all([
+  const [all, signed, rules, kinds, tags] = await Promise.all([
     db.select<{ channel: string }>(env, 'push_devices', q().eq('active', 'true').select('channel').limit(20_000)),
     db.select<GeoRow>(env, 'push_devices', q().eq('active', 'true').not('account_id', 'is', 'null').select('country,region,city,lang,account_id,channel').limit(5000)),
     pushRules(env),
+    // Schema 13 (os): which kinds of device reachable people use. Before the update: no breakdown.
+    db.select<{ account_id: string | null; platform: string | null; os: string | null }>(env, 'listeners', q().not('account_id', 'is', 'null').is('signed_out_at', 'null').select('account_id,platform,os').limit(20_000)),
+    // Schema 15: the owner's tags. Before the update: none.
+    db.rpc<Array<{ tag: string; users: number }>>(env, 'owner_tags'),
   ]);
   const failed = firstFailure(all, signed);
   if (failed) return dbFailure(failed);
   if (!all.ok || !signed.ok) return adminJson({ configured: true, error: 'db_unavailable' }, 502);
   const count = (rows: Array<{ channel: string }>, ch: string) => rows.filter((r) => r.channel === ch).length;
+  const reachable = new Set(signed.rows.map((r) => r.account_id).filter((x): x is string => !!x));
   return adminJson({
     configured: true,
     web: { configured: pushConfigured(e as VapidEnv), active: count(signed.rows, 'web'), allDevices: count(all.rows, 'web') },
     fcm: { configured: fcmConfigured(e as FcmEnv), active: count(signed.rows, 'fcm'), allDevices: count(all.rows, 'fcm') },
-    people: new Set(signed.rows.map((r) => r.account_id)).size,
+    people: reachable.size,
     ...bucket(signed.rows),
+    devices: kinds.ok ? deviceKinds(reachable, kinds.rows) : [],
+    tags: tags.ok && Array.isArray(tags.value) ? tags.value.filter((t) => t && typeof t.tag === 'string').slice(0, 60) : [],
     rules,
     quiet: quietNow(rules),
   });
 });
 
-/** Where the draft / scheduled row keeps everything needed to send it later. */
-const audienceJson = (a: Audience, ts: number) => ({ ...a.filter, ...(a.activity ? { activity: a.activity } : {}), label: a.label, everyone: a.everyone, ts });
+/** Where the draft / scheduled row keeps everything needed to send it later (plus the reach counted at the time, for the history). */
+const audienceJson = (a: Audience, ts: number, reach?: { people: number; devices: number }) => ({ ...a.filter, ...(a.activity ? { activity: a.activity } : {}), label: a.label, everyone: a.everyone, ts, ...(reach ?? {}) });
 
 export const onRequestPost = adminPost(async ({ env, body, audit, me }) => {
   const e = env as unknown as PushEnv;
@@ -163,8 +183,12 @@ export const onRequestPost = adminPost(async ({ env, body, audit, me }) => {
   const web = capped.allowed.filter((d) => d.channel === 'web').length;
   const fcm = capped.allowed.length - web;
   const quiet = quietNow(rules, now);
+  const reach = { people: peopleIn(capped.allowed), devices: capped.allowed.length };
   if (body.dryRun === true) {
-    return adminJson({ dryRun: true, people: peopleIn(capped.allowed), devices: capped.allowed.length, web, fcm, skippedRecent: capped.skipped, audience: audience.label, quiet });
+    // Addresses nobody signed in with, so the owner can fix a typo before sending.
+    const mailed = await accountsForEmails(env, audience.filter.emails);
+    const unresolvedEmails = mailed && mailed !== 'failed' ? mailed.unresolved : [];
+    return adminJson({ dryRun: true, ...reach, web, fcm, skippedRecent: capped.skipped, audience: audience.label, quiet, unresolvedEmails });
   }
 
   // Scheduled: the row waits; _lib/scheduledPush.ts sends it when its time comes.
@@ -173,7 +197,7 @@ export const onRequestPost = adminPost(async ({ env, body, audit, me }) => {
     if (!Number.isFinite(at) || at < now + 60_000) return badRequest('schedule_in_past', { message: 'Pick a time at least a minute from now.' });
     if (at > now + MAX_AHEAD_MS) return badRequest('schedule_too_far', { message: 'Pick a time within the next 60 days.' });
     const row = {
-      kind: 'announcement', title, body: text, link, image, audience: audienceJson(audience, now), status: 'scheduled',
+      kind: 'announcement', title, body: text, link, image, audience: audienceJson(audience, now, reach), status: 'scheduled',
       scheduled_for: new Date(at).toISOString(), web_total: web, fcm_total: fcm, created_by: me.email, sent_by: me.email,
     };
     const w = draftId
@@ -192,7 +216,7 @@ export const onRequestPost = adminPost(async ({ env, body, audit, me }) => {
   const ts = now;
   const sentAt = new Date(now).toISOString();
   const rowFields = {
-    kind: 'announcement', title, body: text, link, image, audience: audienceJson(audience, ts),
+    kind: 'announcement', title, body: text, link, image, audience: audienceJson(audience, ts, reach),
     web_total: web, fcm_total: fcm, status: 'sending', sent_by: me.email, created_by: me.email,
   };
   const made = draftId

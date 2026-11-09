@@ -15,12 +15,14 @@ const PUSH = {
     cities: [{ key: 'Hyderabad', region: 'Telangana', country: 'IN', count: 15 }, { key: 'Warangal', region: 'Telangana', country: 'IN', count: 3 }, { key: 'Bengaluru', region: 'Karnataka', country: 'IN', count: 9 }],
   },
   langs: [{ lang: 'te', count: 20 }, { lang: 'hi', count: 8 }, { lang: 'en', count: 5 }],
+  devices: [{ key: 'android-app', people: 9 }, { key: 'ios-web', people: 3 }, { key: 'macos-web', people: 2 }, { key: 'windows-web', people: 1 }],
+  tags: [{ tag: 'tester', users: 4 }, { tag: 'vip', users: 2 }],
   rules: { minGapHours: 12, quiet: { enabled: true, start: '22:00', end: '08:00' }, types: { announcements: true, releases: true, recommendations: true, reminders: true } },
   quiet: { quiet: false, until: null },
 };
 
 const ROWS = [
-  { id: 41, at: iso(now - 2 * 3600e3), kind: 'announcement', title: 'New Telugu hits are here', body: 'Fresh songs from this week — tap to listen.', link: '/charts', image: null, status: 'sent', scheduledFor: null, audience: 'Telugu', filter: { lang: 'te', label: 'Telugu' }, web: { total: 5, sent: 5, gone: 0 }, fcm: { total: 9, sent: 8 }, delivered: 13, opened: 4, openRate: 30.8, failures: null, sentBy: 'owner@example.com', createdBy: 'owner@example.com', retractedAt: null },
+  { id: 41, at: iso(now - 2 * 3600e3), kind: 'announcement', title: 'New Telugu hits are here', body: 'Fresh songs from this week — tap to listen.', link: '/charts', image: null, status: 'sent', scheduledFor: null, audience: 'Telugu · Android app · Andhra Pradesh · tester', filter: { lang: 'te', device: 'android-app', region: 'Andhra Pradesh', country: 'IN', tags: ['tester'], label: 'Telugu · Android app · Andhra Pradesh · tester', people: 7, devices: 9 }, web: { total: 0, sent: 0, gone: 0 }, fcm: { total: 9, sent: 8 }, delivered: 8, opened: 4, openRate: 50, failures: null, sentBy: 'owner@example.com', createdBy: 'owner@example.com', retractedAt: null },
   { id: 42, at: iso(now - 3600e3), kind: 'announcement', title: 'Weekend picks', body: 'Your weekend playlist is ready.', link: '/made-for-you', image: null, status: 'scheduled', scheduledFor: iso(now + 26 * 3600e3), audience: 'Everyone', filter: { label: 'Everyone' }, web: { total: 12, sent: 0, gone: 0 }, fcm: { total: 21, sent: 0 }, delivered: 0, opened: 0, openRate: null, failures: null, sentBy: 'owner@example.com', createdBy: 'owner@example.com', retractedAt: null },
   { id: 43, at: iso(now - 30 * 60e3), kind: 'announcement', title: 'Diwali greetings', body: 'Happy Diwali from VinaX!', link: '/', image: null, status: 'draft', scheduledFor: null, audience: 'Hyderabad', filter: { city: 'Hyderabad', label: 'Hyderabad' }, web: { total: 0, sent: 0, gone: 0 }, fcm: { total: 0, sent: 0 }, delivered: 0, opened: 0, openRate: null, failures: null, sentBy: 'owner@example.com', createdBy: 'owner@example.com', retractedAt: null },
 ];
@@ -33,11 +35,14 @@ const EXPERIMENTS = [
 function dry(body) {
   const users = Array.isArray(body?.users) ? body.users.length : 0;
   const f = body?.filter || {};
-  let people = users || 15;
+  const emails = Array.isArray(f.emails) ? f.emails : [];
+  let people = users || (emails.length ? emails.filter((e) => !/nobody/.test(e)).length : 15);
   if (f.lang) people = Math.max(1, Math.round(people * 0.6));
   if (f.city) people = Math.max(1, Math.round(people * 0.5));
+  if (f.device) people = Math.max(1, Math.round(people * 0.5));
+  if (Array.isArray(f.tags) && f.tags.length) people = Math.max(1, Math.round(people * 0.4));
   if (body?.activity) people = Math.max(1, Math.round(people * 0.7));
-  return { dryRun: true, people, devices: people * 2, web: people, fcm: people, skippedRecent: 1, audience: 'Everyone', quiet: { quiet: false, until: null } };
+  return { dryRun: true, people, devices: people * 2, web: people, fcm: people, skippedRecent: 1, audience: 'Everyone', quiet: { quiet: false, until: null }, unresolvedEmails: emails.filter((e) => /nobody/.test(e)) };
 }
 
 export default {

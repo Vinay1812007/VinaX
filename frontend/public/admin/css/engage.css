@@ -8,7 +8,16 @@
 .compose .fieldset, .compose fieldset.ro { display: grid; gap: 16px; }
 @media (max-width: 1080px) { .compose { grid-template-columns: minmax(0, 1fr); } .compose-side { position: static; } .compose-side .phone { width: 220px; } }
 .form-row.three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-@media (max-width: 720px) { .form-row.three { grid-template-columns: minmax(0, 1fr); } }
+.form-row.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: end; }
+@media (max-width: 720px) { .form-row.three, .form-row.two { grid-template-columns: minmax(0, 1fr); } }
+/* A dropdown with its ⓘ beside it */
+.dd-with-info { display: flex; align-items: end; gap: 6px; min-width: 0; }
+.dd-with-info .dd { flex: 1; min-width: 0; }
+.dd-with-info .info-btn { margin-bottom: 8px; }
+/* Tags: wrapping checkboxes */
+.who-tags .checks { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.who-tags .checks legend { width: 100%; }
+.reach-missing { flex-basis: 100%; margin: 2px 0 0; color: var(--warn, var(--text-2)); overflow-wrap: anywhere; }
 .compose-actions { margin-top: 0; }
 .picked { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); }
 .reach { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }

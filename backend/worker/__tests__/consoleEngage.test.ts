@@ -13,7 +13,7 @@ import * as opened from '../functions/api/push/opened';
 import * as subscribe from '../functions/api/push/subscribe';
 import * as fcmRegister from '../functions/api/push/fcm-register';
 import { runScheduledNotifications } from '../functions/_lib/scheduledPush';
-import { audienceOf, quietNow, rulesOf, underCap } from '../functions/_lib/pushSend';
+import { audienceOf, channelOf, deviceKeyOf, deviceMatches, emailList, quietNow, rulesOf, underCap } from '../functions/_lib/pushSend';
 import { compareVersions, inAudience, sanitizeAudience } from '../functions/_lib/experiments';
 import { issueAdminSession, resetAdminMemo } from '../functions/_lib/adminAuth';
 import { issueSession } from '../functions/_lib/googleAuth';
@@ -101,6 +101,34 @@ describe('Notification Rules', () => {
     expect(chosen.label).toBe('2 chosen users');
     expect(chosen.everyone).toBe(false);
   });
+
+  it('reads device kinds, tags, emails and the new activity choices, and drops what is not valid', () => {
+    const a = audienceOf({ lang: 'te', device: 'Android-App', region: 'Andhra Pradesh', tags: ['Tester', 'VIP', 'bad tag!', 'tester'] }, 'heavy');
+    expect(a.filter).toEqual({ lang: 'te', device: 'android-app', region: 'Andhra Pradesh', tags: ['tester', 'vip'] });
+    expect(a.label).toBe('Andhra Pradesh · Telugu · Android app · tester, vip · Heavy listeners (2 h+ in 30 days)');
+    expect(audienceOf({ device: 'toaster', tags: 'a,b,c' }, 'today').label).toBe('3 tags · Active today');
+    expect(audienceOf({ device: 'web' }, 'away7').label).toBe('Any web browser · Away 7+ days');
+    expect(audienceOf({ device: 'ios-web' }, 'active30').label).toBe('iPhone web · Active in last 30 days');
+    const m = audienceOf({ emails: 'A@x.com, b@y.in\nnot-an-email;a@x.com' }, 'nope');
+    expect(m.filter.emails).toEqual(['a@x.com', 'b@y.in']);
+    expect(m.activity).toBeNull();
+    expect(m.label).toBe('2 people by email');
+    expect(emailList(Array.from({ length: 250 }, (_, i) => `p${i}@x.com`))).toHaveLength(200);
+  });
+
+  it('a device kind picks the channel: browsers for a web kind, the Android app for the app', () => {
+    expect(channelOf({ device: 'macos-web' })).toBe('web');
+    expect(channelOf({ device: 'web' })).toBe('web');
+    expect(channelOf({ device: 'android-app' })).toBe('fcm');
+    expect(channelOf({ device: 'android' })).toBeNull();
+    expect(channelOf({ device: 'ios-app' })).toBeNull();
+    expect(channelOf({ channel: 'fcm' })).toBe('fcm');
+    expect(deviceKeyOf('android', null)).toBe('android-app');
+    expect(deviceKeyOf('web', 'macos')).toBe('macos-web');
+    expect(deviceKeyOf(null, 'kaios')).toBe('other-web');
+    expect(deviceMatches('android', 'android-web')).toBe(true);
+    expect(deviceMatches('web', 'android-app')).toBe(false);
+  });
 });
 
 describe('POST /api/admin/push', () => {
@@ -142,6 +170,65 @@ describe('POST /api/admin/push', () => {
     expect(calls.filter((c) => isDb(c) && c.method !== 'GET')).toEqual([]);
     const chosen = await run(push.onRequestPost, '/api/admin/push', { body: { body: 'Hi', users: '333', dryRun: true } });
     expect(chosen.body).toMatchObject({ people: 1, devices: 1, audience: '1 chosen user' });
+  });
+
+  it('GET lists the kinds of device reachable people use and the owner tags', async () => {
+    stub((c) => {
+      if (path(c) === 'push_devices') return json(c.url.searchParams.get('account_id') === 'not.is.null' ? [{ country: 'IN', region: null, city: null, lang: 'te', account_id: '1', channel: 'fcm' }, { country: 'IN', region: null, city: null, lang: 'te', account_id: '2', channel: 'web' }] : []);
+      if (path(c) === 'listeners') return json([{ account_id: '1', platform: 'android', os: 'android' }, { account_id: '2', platform: 'web', os: 'macos' }, { account_id: '2', platform: 'web', os: 'ios' }, { account_id: '9', platform: 'web', os: 'windows' }]);
+      if (path(c) === 'rpc/owner_tags') return json([{ tag: 'tester', users: 3 }, { tag: 'vip', users: 1 }]);
+      return undefined;
+    });
+    const { body } = await run(push.onRequestGet, '/api/admin/push');
+    // Account 9 has no push device, so Windows web is not offered.
+    expect(body?.devices).toEqual([{ key: 'android-app', people: 1 }, { key: 'ios-web', people: 1 }, { key: 'macos-web', people: 1 }]);
+    expect(body?.tags).toEqual([{ tag: 'tester', users: 3 }, { tag: 'vip', users: 1 }]);
+    const l = calls.find((c) => path(c) === 'listeners');
+    expect(l?.url.searchParams.get('signed_out_at')).toBe('is.null');
+  });
+
+  it('a dry run narrows by device kind (through the people who use it), by tags and by email, and names addresses nobody signed in with', async () => {
+    stub((c) => {
+      if (path(c) === 'push_devices' && c.method === 'GET') {
+        const ch = c.url.searchParams.get('channel');
+        const all = [DEV(1, '111'), DEV(2, '111', { channel: 'web', p256dh: 'a', auth: 'b' }), DEV(3, '222', { channel: 'web', p256dh: 'a', auth: 'b' }), DEV(4, '333', { channel: 'web', p256dh: 'a', auth: 'b' })];
+        return json(ch ? all.filter((d) => `eq.${d.channel}` === ch) : all);
+      }
+      if (path(c) === 'listeners') return json([{ account_id: '111', platform: 'android', os: 'android' }, { account_id: '111', platform: 'web', os: 'macos' }, { account_id: '222', platform: 'web', os: 'ios' }, { account_id: '333', platform: 'web', os: 'macos' }]);
+      if (path(c) === 'owner_notes') return json([{ account_id: '222' }, { account_id: '333' }]);
+      if (path(c) === 'accounts' && c.url.searchParams.get('email')) return json([{ id: '111', email: 'one@x.com' }]);
+      if (path(c) === 'rpc/stats_top_listeners') return json({ rows: [{ id: '111', seconds: 9000 }, { id: '222', seconds: 100 }] });
+      return undefined;
+    });
+    const mac = await run(push.onRequestPost, '/api/admin/push', { body: { body: 'Hi', filter: { device: 'macos-web' }, dryRun: true } });
+    // Mac web: the browsers (channel web) of the people who use a Mac — 111 and 333, not 222's iPhone.
+    expect(mac.body).toMatchObject({ people: 2, devices: 2, web: 2, fcm: 0, audience: 'Mac web' });
+    expect(calls.find((c) => path(c) === 'push_devices')?.url.searchParams.get('channel')).toBe('eq.web');
+    const app = await run(push.onRequestPost, '/api/admin/push', { body: { body: 'Hi', filter: { device: 'android-app' }, dryRun: true } });
+    expect(app.body).toMatchObject({ people: 1, devices: 1, fcm: 1, audience: 'Android app' });
+    const tagged = await run(push.onRequestPost, '/api/admin/push', { body: { body: 'Hi', filter: { tags: ['vip'] }, dryRun: true } });
+    expect(tagged.body).toMatchObject({ people: 2, devices: 2, audience: 'vip' });
+    expect(calls.find((c) => path(c) === 'owner_notes')?.url.search).toContain('tags=ov.');
+    const mailed = await run(push.onRequestPost, '/api/admin/push', { body: { body: 'Hi', filter: { emails: 'one@x.com, nobody@x.com' }, dryRun: true } });
+    expect(mailed.body).toMatchObject({ people: 1, devices: 2, audience: '2 people by email', unresolvedEmails: ['nobody@x.com'] });
+    const heavy = await run(push.onRequestPost, '/api/admin/push', { body: { body: 'Hi', activity: 'heavy', dryRun: true } });
+    expect(heavy.body).toMatchObject({ people: 1, devices: 2, audience: 'Heavy listeners (2 h+ in 30 days)' });
+    // Everything combines: tagged AND Mac web = 333 only.
+    const both = await run(push.onRequestPost, '/api/admin/push', { body: { body: 'Hi', filter: { device: 'macos-web', tags: ['vip'] }, dryRun: true } });
+    expect(both.body).toMatchObject({ people: 1, devices: 1, audience: 'Mac web · vip' });
+  });
+
+  it('a send keeps the reach it counted on the row, so the history can show it', async () => {
+    stub((c) => {
+      if (path(c) === 'push_devices' && c.method === 'GET') return json([DEV(1, '111'), DEV(2, '222')]);
+      if (path(c) === 'listeners') return json([{ account_id: '111', platform: 'android', os: 'android' }, { account_id: '222', platform: 'web', os: 'android' }]);
+      if (path(c) === 'notifications' && c.method === 'POST') return json([{ id: 77 }], 201);
+      return undefined;
+    });
+    const { body } = await run(push.onRequestPost, '/api/admin/push', { body: { body: 'Hi', filter: { device: 'android' }, when: 'now' } });
+    expect(body?.ok).toBe(true);
+    const row = calls.find((c) => path(c) === 'notifications' && c.method === 'POST')?.body as { audience: Record<string, unknown> };
+    expect(row.audience).toMatchObject({ device: 'android', label: 'Android (app or web)', people: 2, devices: 2 });
   });
 
   it('a real send writes the row first, fans out with the id, marks it sent and publishes the announcement for everyone', async () => {
