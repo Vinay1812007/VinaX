@@ -322,6 +322,53 @@ begin
   v := weekly_summary(_ist_today() + 1);
   assert (v ->> 'activeUsers')::int >= 1 and (v ->> 'plays')::int >= 1 and (v ->> 'listenSeconds')::int > 0, 'weekly_summary: a week that includes today';
   assert jsonb_array_length(v -> 'topSongs') >= 1 and (v ->> 'totalUsers')::int >= 1 and (v ->> 'newUsers')::int >= 1, 'weekly_summary: top songs, users';
+  -- version 18: automatic notifications (weekly recap, win-back, new releases)
+  insert into push_devices (channel, target, platform, account_id, tz_offset) values ('fcm', 'check_token_a1', 'android', 'check_a1', 330);
+  v := outreach_recap(now() - interval '7 days', 0);
+  assert exists (select 1 from jsonb_array_elements(v) r where r ->> 'id' = 'check_a1' and (r ->> 'seconds')::int > 0 and r ->> 'topArtist' is not null and r ->> 'topSong' is not null and (r ->> 'tzOffset')::int = 330), 'outreach_recap: a reachable person with their top artist and song';
+  assert jsonb_array_length(outreach_recap(now() - interval '7 days', 0, array['check_a2'])) = 0, 'outreach_recap: a person without a push device is not reached';
+  assert jsonb_array_length(outreach_recap(now() - interval '7 days', 100000000)) = 0, 'outreach_recap: under the minimum';
+  -- quiet for 10 days after playing in the 30 before: a win-back candidate with one nudge unanswered
+  insert into accounts (id, email, name, last_seen) values ('check_wb', 'wb@example.com', 'Wb', now() - interval '10 days');
+  insert into listeners (id, account_id, platform, last_seen) values ('check_lwb', 'check_wb', 'android', now() - interval '10 days');
+  insert into events (at, listener_id, kind, song_artist) values
+    (now() - interval '12 days', 'check_lwb', 'play', 'Check Artist 9'),
+    (now() - interval '10 days', 'check_lwb', 'play', 'Check Artist 9');
+  insert into push_devices (channel, target, platform, account_id) values ('fcm', 'check_token_wb', 'android', 'check_wb');
+  insert into outreach (account_id, kind, sent_at, dedupe_key) values ('check_wb', 'winback', now() - interval '2 days', 'winback:check_wb:check');
+  v := outreach_winback(7);
+  assert exists (select 1 from jsonb_array_elements(v) r where r ->> 'id' = 'check_wb' and r ->> 'topArtist' = 'Check Artist 9' and (r ->> 'unanswered')::int = 1 and r ->> 'lastWinbackAt' is not null), 'outreach_winback: a quiet regular with one unanswered nudge';
+  assert not exists (select 1 from jsonb_array_elements(v) r where r ->> 'id' = 'check_a1'), 'outreach_winback: an active person is not a candidate';
+  assert jsonb_array_length(outreach_winback(30)) = 0, 'outreach_winback: not quiet long enough';
+  insert into outreach (account_id, kind, dedupe_key, facts) values ('check_a1', 'release', 'release:check_a1:check', '{"songIds": ["check_s9"]}');
+  v := outreach_release_people(100);
+  assert exists (select 1 from jsonb_array_elements(v) r where r ->> 'id' = 'check_a1' and jsonb_array_length(r -> 'artists') between 1 and 3 and jsonb_array_length(r -> 'languages') >= 1 and (r -> 'sentSongs') ? 'check_s9' and r ->> 'lastReleaseAt' is not null), 'outreach_release_people: an active person, their artists and the songs already sent';
+  assert not exists (select 1 from jsonb_array_elements(v) r where r ->> 'id' = 'check_a2'), 'outreach_release_people: a person without a push device is not a candidate';
+  assert jsonb_array_length(outreach_release_people(100, array['check_a2'])) = 0, 'outreach_release_people: limited to given people';
+  insert into notifications (kind, title, body, sent_by) values ('recap', 'Your week in VinaX', 'automatic', 'auto');
+  insert into outreach (account_id, kind, notification_id, dedupe_key, title, body, link, facts, devices, sent)
+    values ('check_a1', 'recap', (select max(id) from notifications), 'recap:2026-11-08:check_a1', 'Your week in VinaX', '1 h of music', '/weekly', '{"seconds": 3600}', 1, 1);
+  begin
+    insert into outreach (account_id, kind, dedupe_key) values ('check_a1', 'recap', 'recap:2026-11-08:check_a1');
+    raise exception 'outreach accepted the same dedupe key twice';
+  exception when unique_violation then null;
+  end;
+  begin
+    insert into outreach (account_id, kind) values ('check_a1', 'poke');
+    raise exception 'outreach accepted an unknown kind';
+  exception when check_violation then null;
+  end;
+  v := outreach_summary(14);
+  assert (v -> 'kinds' -> 'recap' ->> 'people')::int = 1 and (v -> 'kinds' -> 'winback' ->> 'people')::int = 1 and (v -> 'kinds' -> 'release' ->> 'people')::int = 1, 'outreach_summary: people per kind';
+  assert (v -> 'kinds' -> 'recap' ->> 'sent')::int = 1 and (v -> 'kinds' -> 'recap' ->> 'runs')::int = 1, 'outreach_summary: sent and runs';
+  assert jsonb_array_length(v -> 'runs') = 3 and jsonb_array_length(v -> 'latest') = 3 and jsonb_array_length(v -> 'byDay') >= 1, 'outreach_summary: runs, latest, by day';
+  assert exists (select 1 from jsonb_array_elements(v -> 'latest') r where r ->> 'kind' = 'recap' and r ->> 'name' = 'Asha' and r ->> 'link' = '/weekly'), 'outreach_summary: the newest recap names the person';
+  assert (select relforcerowsecurity from pg_class where relname = 'outreach'), 'outreach: row level security forced';
+  assert not has_table_privilege('anon', 'public.outreach', 'select'), 'anon cannot read outreach';
+  assert not has_function_privilege('anon', 'public.outreach_summary(integer)', 'execute'), 'anon cannot call outreach_summary';
+  assert not has_function_privilege('anon', 'public.outreach_recap(timestamptz, integer, text[])', 'execute'), 'anon cannot call outreach_recap';
+  delete from accounts where id = 'check_wb';
+  assert not exists (select 1 from outreach where account_id = 'check_wb'), 'outreach: deleted with the account';
   n := purge_kind('errors', 180);
   assert n = 0, 'purge_kind keeps recent errors';
   begin
@@ -695,7 +742,7 @@ begin
   assert not has_table_privilege('anon', 'public.personal_events', 'select'), 'anon cannot read personal events';
   assert not has_function_privilege('anon', 'public.personal_neighbours(text, text, integer, text[], boolean)', 'execute'), 'anon cannot call the personal engine';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 17, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 18, 'meta.schema.version';
   -- v12: sign-in history is locked like every table and goes with its account.
   assert (select relforcerowsecurity from pg_class where relname = 'sign_ins'), 'sign_ins: row level security forced';
   assert not has_table_privilege('anon', 'public.sign_ins', 'select'), 'anon cannot read sign-in history';

@@ -334,6 +334,9 @@ export interface CatalogCandidate {
   year: number | null;
   /** Seconds, when the catalogue knows it. Tells a compilation copy of a recording from a different song. */
   durationSec?: number | null;
+  /** Version 18 — the catalogue's release date (YYYY-MM-DD) and cover, for the automatic new-release pushes. */
+  releaseDate?: string | null;
+  image?: string | null;
 }
 
 /** The title with version decorations and featured credits removed, compact. */

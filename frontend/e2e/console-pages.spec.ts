@@ -297,6 +297,37 @@ test.describe('console pages', () => {
     expect(errors).toEqual([]);
   });
 
+  test('Automatic Notifications: the runs, who got the newest one, the switches and a preview (schema 18)', async ({ page }) => {
+    const errors = watchErrors(page);
+    const { sent } = await mockConsole(page);
+    await signedIn(page);
+    await page.goto('/admin/#/automatic-notifications');
+    await settle(page);
+    const body = page.locator('#pageBody');
+    await expect(body.locator('.kpi-label').filter({ hasText: /^Messages sent$/ })).toHaveCount(1);
+    await expect(body.locator('.outreach-kinds .card')).toHaveCount(3);
+    await expect(body.getByText('Who got the newest run')).toBeVisible();
+    await expect(body.getByText('Your week in VinaX').first()).toBeVisible();
+    await body.getByRole('radio', { name: '30 days' }).click();
+    await expect(page).toHaveURL(/days=30/);
+    await body.locator('.outreach-kinds .card').first().getByRole('button', { name: 'Send me a preview' }).click();
+    await expect(page.getByText(/Weekly recap preview sent to 2 devices ✓/)).toBeVisible();
+    expect(sent.find((s) => s.method === 'POST' && s.path === '/api/admin/outreach')?.body).toEqual({ action: 'preview', kind: 'recap' });
+    // The switches live on Notification Rules, with their own previews.
+    await page.goto('/admin/#/notification-rules');
+    await settle(page);
+    const card = page.locator('#setting-outreach');
+    await expect(card.getByRole('switch', { name: 'Win-back' })).toBeVisible();
+    await expect(card.getByRole('button', { name: 'Send me a preview' })).toHaveCount(3);
+    await card.getByRole('switch', { name: 'Win-back' }).click({ force: true });
+    await expect(card.locator('.status-chip')).toHaveText('Unsaved changes');
+    await card.getByRole('button', { name: 'Save & apply' }).click();
+    await page.locator('.modal').getByRole('button', { name: 'Save & apply' }).click();
+    await expect(page.getByText('Saved ✓')).toBeVisible();
+    expect(sent.find((s) => s.method === 'POST' && s.path === '/api/admin/settings' && (s.body as { key?: string })?.key === 'outreach')?.body).toMatchObject({ key: 'outreach', value: { recap: true, winback: false, release: true } });
+    expect(errors).toEqual([]);
+  });
+
   test('Phones & Browsers and time in the app (schema 16)', async ({ page }) => {
     const errors = watchErrors(page);
     await mockConsole(page);

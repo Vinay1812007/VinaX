@@ -5,7 +5,7 @@ VinaX 14.0 brings back a server database, designed from a clean sheet: one schem
 ## Setting it up
 
 1. Create a Supabase project (any region; Mumbai is closest to most listeners).
-2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 17), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
+2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 18), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
 3. Set two Worker secrets from `backend/`:
 
 ```sh
@@ -28,6 +28,8 @@ Version 15 adds `owner_notes` (one row per signed-in person: the console's priva
 Version 16 adds `os_version`, `device_model`, `device_brand` and `display_mode` (app, installed, tab) to `listeners`. `POST /api/events` reads the system version and phone model from the user agent (the Android app's WebView names the model; Chrome's reduced agent says "Android 10; K", read as unknown; iPhones give only the iOS version) and keeps the app's `display` field; the apps always count as `app`. The app also sends a `presence` event about once a minute while it is on screen with nothing playing. `app_time(listeners, since)` estimates time in the app: each play or heartbeat counts to the device's next play, heartbeat, pause, open or presence, at most 6 minutes; each open, pause or presence at most 3 minutes. `account_app_time(accounts, since)` sums it per signed-in person for a page of the console's lists, `profile_app_time(account)` gives one person's per-device detail and time in the app (today, 7 / 30 days, all time, 14 days), and `device_breakdown(days)` answers the Phones & Browsers page (`GET /api/admin/analytics?view=devices`). None of the older functions changed. Until the update is applied the Worker retries a refused listener write without the newest columns, then without the version-13 ones.
 
 Version 17 adds `weekly_summary(p_to date)` for the owner's Monday email (`_lib/weeklySummary.ts`, the `weekly-summary` job): the seven whole India-time days before `p_to` (default today) next to the seven before them — new, total and active signed-in people, plays, listening seconds (`listen_time`), top five songs and artists, errors, new feedback, and `atRisk` (people who listened 2 hours or more in the 30 days before the last 7 and have not been seen in the last 7). It adds no table; the email's switch and recipients live in the `email` setting (`weeklySummary`, `weeklyTo`), and each week's send leaves a `weekly-summary-sent` row in `job_runs`.
+
+Version 18 adds `outreach` (one row per person per automatic push: `kind` recap | winback | release, the `notifications` row of that run, a `dedupe_key` that is the cap, the message, `facts`, devices and sent; cascades with the account; housekeeping keeps 180 days) and the functions the `outreach` job calls (`_lib/outreach.ts`): `_outreach_people()` (signed in, not blocked, with an active linked push device, and the newest device's `tz_offset`), `outreach_recap(since, min_seconds, accounts)` (each person's listening since then by the listen_time rule with their top artist and most played song), `outreach_winback(quiet_days, limit, accounts)` (last activity 7–37 days ago, top artist of their last 90 active days, last win-back and how many went unanswered in a row), `outreach_release_people(limit, accounts)` (played in the last 30 days: top three artists, languages, songs already sent as releases) and `outreach_summary(days)` for the console. The switches live in the `outreach` setting.
 
 ### Moving from version 10
 
@@ -274,6 +276,7 @@ The Worker's Cron Trigger (`[triggers] crons` in `wrangler.toml`) fires every 5 
 | `personal-embed` | every 30 min | confirms up to 25 device-asserted songs with the catalogue, then embeds up to 200 verified songs that have no vector in the configured model yet; skipped while the engine is off |
 | `alerts` | every 5 min | Smart Alerts (`_lib/alerts.ts`): counts `events` (errors, plays) and new `feedback`, probes the site, and for each firing rule writes one `notifications` row (`kind = 'system'`, `dedupe_key = 'alert:<rule>:<cooldown>:<bucket>'`) and pushes it to the chosen admins' phones; see admin-console.md → Smart Alerts |
 | `scheduled-notifications` | every 5 min | sends `notifications` rows whose `scheduled_for` has come (`_lib/scheduledPush.ts`) |
+| `outreach` | hourly | the automatic notifications that are due (`_lib/outreach.ts`): the weekly recap Sunday from 7 PM in each person's own time, win-back nudges after 7 quiet days (one a week, three unanswered at most), new releases from a person's top three artists (one a day, never the same song twice); one `notifications` row per kind and run, one `outreach` row per person; quiet hours, the per-person cap and the Reminders / New releases switches apply |
 
 `POST /api/cron/run { job }` with `x-cron-secret: $CRON_SECRET` (or the owner token) runs a job now; the Database page has a button for it.
 

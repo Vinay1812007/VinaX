@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 17
+-- VinaX database · schema version 18
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -32,7 +32,9 @@
 --  and the profile extras)
 --  version 16 adds phone model, system version and how the app runs, and
 --  time in the app)
---  version 17 adds weekly_summary for the owner's Monday email)
+--  version 17 adds weekly_summary for the owner's Monday email;
+--  version 18 adds outreach and the outreach_* functions for the automatic
+--  notifications: weekly recap, win-back, new releases)
 --  12. security
 -- =============================================================================
 
@@ -370,6 +372,35 @@ create table if not exists notifications (
 );
 create unique index if not exists notifications_dedupe_key on notifications (dedupe_key) where dedupe_key is not null;
 create index if not exists notifications_at_idx on notifications (at desc);
+
+-- ------------------------------ 6b. automatic notifications (version 18) --
+
+-- One row per person per automatic push the Worker sent (the weekly recap,
+-- the win-back nudge, new releases from their artists): what it said, the
+-- notifications row it was part of (one per run and kind, so taps are
+-- counted there) and a dedupe key that is the cap (one recap a week, one
+-- win-back a week, one release push a day). The housekeeping job keeps 180
+-- days; deleting the account deletes its rows.
+create table if not exists outreach (
+  id               bigint generated always as identity primary key,
+  account_id       text not null references accounts (id) on delete cascade,
+  kind             text not null,                        -- recap | winback | release
+  sent_at          timestamptz not null default now(),
+  notification_id  bigint references notifications (id) on delete set null,
+  dedupe_key       text,                                 -- recap:<sunday>:<account> · winback:<account>:<day> · release:<account>:<day>
+  title            text,
+  body             text,
+  link             text,
+  facts            jsonb,                                -- { seconds, topArtist, topSong, songIds }
+  devices          integer not null default 0,
+  sent             integer not null default 0,
+  constraint outreach_kind_shape check (kind in ('recap', 'winback', 'release')),
+  constraint outreach_facts_shape check (facts is null or jsonb_typeof(facts) = 'object')
+);
+create unique index if not exists outreach_dedupe_key on outreach (dedupe_key) where dedupe_key is not null;
+create index if not exists outreach_account_idx on outreach (account_id, kind, sent_at desc);
+create index if not exists outreach_kind_at_idx on outreach (kind, sent_at desc);
+comment on table outreach is 'Automatic pushes per person (weekly recap, win-back, new releases). Kept 180 days; cascades with the account.';
 
 -- --------------------------------------------- 7. settings, experiments --
 
@@ -2815,6 +2846,196 @@ language sql stable set search_path = public, pg_temp as $$
   );
 $$;
 
+-- Version 18 — automatic notifications (_lib/outreach.ts, the `outreach` job):
+-- who can get one, who is due which kind, and what the console shows.
+
+-- The people an automatic push can reach: signed in, not blocked, with an
+-- active push device linked to the account. tz_offset is the newest device's
+-- (minutes east of UTC), so the Worker can send at THEIR evening.
+create or replace function _outreach_people() returns table (account_id text, tz_offset int)
+language sql stable set search_path = public, pg_temp as $$
+  select a.id, (select p.tz_offset from push_devices p where p.account_id = a.id and p.active order by p.updated_at desc limit 1)
+  from accounts a
+  where a.blocked_at is null
+    and exists (select 1 from push_devices p where p.account_id = a.id and p.active)
+$$;
+
+-- Weekly recap candidates: each reachable person's listening since p_since
+-- across their devices (listen_time's rule), with their top artist and most
+-- played song in it; only people at or over p_min_seconds. p_accounts limits
+-- it to some people (the console's preview).
+create or replace function outreach_recap(p_since timestamptz, p_min_seconds int default 1800, p_accounts text[] default null) returns jsonb
+language sql stable set search_path = public, pg_temp as $$
+  with ppl as (select * from _outreach_people() where p_accounts is null or account_id = any (p_accounts)),
+  s as (select sd.listener_id, sd.account_id from signed_devices() sd join ppl on ppl.account_id = sd.account_id),
+  sp as (
+    select s.account_id, t.seconds
+    from _listen_spans(coalesce((select array_agg(listener_id) from s), array[]::text[]), p_since) t
+    join s on s.listener_id = t.listener_id
+  ),
+  secs as (select account_id, sum(seconds)::bigint as seconds from sp group by 1 having sum(seconds) >= greatest(coalesce(p_min_seconds, 0), 0)),
+  pl as (
+    select s.account_id, e.song_id, e.song_title, e.song_artist, e.at
+    from events e join s on s.listener_id = e.listener_id
+    where e.kind = 'play' and e.at >= p_since and s.account_id in (select account_id from secs)
+  ),
+  art as (
+    select distinct on (account_id) account_id, song_artist from (
+      select account_id, song_artist, count(*) as n from pl where song_artist is not null and song_artist <> '' group by 1, 2) x
+    order by account_id, n desc, song_artist
+  ),
+  song as (
+    select distinct on (account_id) account_id, song_id, song_title, song_artist from (
+      select account_id, song_id, song_title, song_artist, count(*) as n from pl where song_title is not null group by 1, 2, 3, 4) x
+    order by account_id, n desc, song_title
+  ),
+  cnt as (select account_id, count(*) as plays, count(distinct (at at time zone 'Asia/Kolkata')::date) as days from pl group by 1)
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'id', a.id, 'name', a.name, 'email', a.email, 'tzOffset', ppl.tz_offset,
+      'seconds', sc.seconds, 'plays', coalesce(c.plays, 0), 'days', coalesce(c.days, 0),
+      'topArtist', art.song_artist, 'topSong', song.song_title, 'topSongId', song.song_id, 'topSongArtist', song.song_artist
+    ) order by sc.seconds desc), '[]'::jsonb)
+  from secs sc
+  join ppl on ppl.account_id = sc.account_id
+  join accounts a on a.id = sc.account_id
+  left join art on art.account_id = sc.account_id
+  left join song on song.account_id = sc.account_id
+  left join cnt c on c.account_id = sc.account_id
+$$;
+
+-- Win-back candidates: reachable people whose last activity (any event from
+-- any device, or a session check) was p_quiet_days or more ago but inside the
+-- 30 days before that, with the top artist of their last 90 active days, when
+-- the last win-back went to them, and how many went unanswered in a row (sent
+-- after their last activity). Most recently quiet first.
+create or replace function outreach_winback(p_quiet_days int default 7, p_limit int default 300, p_accounts text[] default null) returns jsonb
+language sql stable set search_path = public, pg_temp as $$
+  with ppl as (select * from _outreach_people() where p_accounts is null or account_id = any (p_accounts)),
+  s as (select sd.listener_id, sd.account_id from signed_devices() sd join ppl on ppl.account_id = sd.account_id),
+  ev as (
+    select s.account_id, e.kind, e.at, e.song_artist
+    from events e join s on s.listener_id = e.listener_id
+    where e.at > now() - interval '130 days'
+  ),
+  last as (
+    select ppl.account_id, greatest(coalesce(max(ev.at), a.last_seen), a.last_seen) as last_at
+    from ppl join accounts a on a.id = ppl.account_id left join ev on ev.account_id = ppl.account_id
+    group by ppl.account_id, a.last_seen
+  ),
+  quiet as (
+    select * from last
+    where last_at < now() - make_interval(days => least(greatest(coalesce(p_quiet_days, 7), 1), 60))
+      and last_at > now() - make_interval(days => least(greatest(coalesce(p_quiet_days, 7), 1), 60) + 30)
+    order by last_at desc
+    limit least(greatest(coalesce(p_limit, 300), 1), 1000)
+  ),
+  art as (
+    select distinct on (account_id) account_id, song_artist from (
+      select ev.account_id, ev.song_artist, count(*) as n
+      from ev join quiet q on q.account_id = ev.account_id
+      where ev.kind = 'play' and ev.song_artist is not null and ev.song_artist <> '' and ev.at > q.last_at - interval '90 days'
+      group by 1, 2) x
+    order by account_id, n desc, song_artist
+  ),
+  wb as (
+    select o.account_id, max(o.sent_at) as last_sent, count(*) filter (where o.sent_at > q.last_at) as unanswered
+    from outreach o join quiet q on q.account_id = o.account_id
+    where o.kind = 'winback' group by 1
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'id', a.id, 'name', a.name, 'email', a.email, 'tzOffset', ppl.tz_offset,
+      'lastActive', q.last_at, 'topArtist', art.song_artist,
+      'lastWinbackAt', wb.last_sent, 'unanswered', coalesce(wb.unanswered, 0)
+    ) order by q.last_at desc), '[]'::jsonb)
+  from quiet q
+  join ppl on ppl.account_id = q.account_id
+  join accounts a on a.id = q.account_id
+  left join art on art.account_id = q.account_id
+  left join wb on wb.account_id = q.account_id
+$$;
+
+-- New-release candidates: reachable people who played something in the last
+-- 30 days, their top three artists and the languages they play (90 days),
+-- the songs already sent to them as new releases (no song goes twice) and
+-- when the last release push went to them.
+create or replace function outreach_release_people(p_limit int default 500, p_accounts text[] default null) returns jsonb
+language sql stable set search_path = public, pg_temp as $$
+  with ppl as (select * from _outreach_people() where p_accounts is null or account_id = any (p_accounts)),
+  s as (select sd.listener_id, sd.account_id from signed_devices() sd join ppl on ppl.account_id = sd.account_id),
+  pl as (
+    select s.account_id, e.song_artist, e.language, e.at
+    from events e join s on s.listener_id = e.listener_id
+    where e.kind = 'play' and e.at > now() - interval '90 days'
+  ),
+  active as (
+    select account_id from pl where at > now() - interval '30 days'
+    group by 1 order by max(at) desc limit least(greatest(coalesce(p_limit, 500), 1), 2000)
+  ),
+  art as (
+    select account_id, song_artist, row_number() over (partition by account_id order by n desc, song_artist) as rn from (
+      select account_id, song_artist, count(*) as n from pl where song_artist is not null and song_artist <> '' group by 1, 2) x
+  ),
+  lang as (
+    select account_id, language, row_number() over (partition by account_id order by n desc, language) as rn from (
+      select account_id, lower(language) as language, count(*) as n from pl where language is not null and language <> '' group by 1, 2) x
+  ),
+  sent as (
+    select o.account_id, array_agg(distinct sid) as ids
+    from outreach o, jsonb_array_elements_text(coalesce(o.facts -> 'songIds', '[]'::jsonb)) sid
+    where o.kind = 'release' and o.sent_at > now() - interval '90 days' group by 1
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'id', a.id, 'name', a.name, 'tzOffset', ppl.tz_offset,
+      'artists', coalesce((select jsonb_agg(song_artist order by rn) from art where art.account_id = ac.account_id and rn <= 3), '[]'::jsonb),
+      'languages', coalesce((select jsonb_agg(language order by rn) from lang where lang.account_id = ac.account_id and rn <= 3), '[]'::jsonb),
+      'sentSongs', coalesce(to_jsonb(st.ids), '[]'::jsonb),
+      'lastReleaseAt', (select max(o.sent_at) from outreach o where o.account_id = ac.account_id and o.kind = 'release')
+    )), '[]'::jsonb)
+  from active ac
+  join ppl on ppl.account_id = ac.account_id
+  join accounts a on a.id = ac.account_id
+  left join sent st on st.account_id = ac.account_id
+$$;
+
+-- The console's Automatic Notifications page: the last p_days of automatic
+-- sends per kind (people, delivered, taps), each run, who got the newest run
+-- of each kind, and a per-day series.
+create or replace function outreach_summary(p_days int default 14) returns jsonb
+language sql stable set search_path = public, pg_temp as $$
+  with o as (select * from outreach where sent_at > now() - make_interval(days => least(greatest(coalesce(p_days, 14), 1), 90))),
+  runs as (
+    select o.kind, o.notification_id, min(o.sent_at) as at, count(*) as people, sum(o.sent) as sent, sum(o.devices) as devices,
+           coalesce(max(n.opened), 0) as opened
+    from o left join notifications n on n.id = o.notification_id
+    group by o.kind, o.notification_id
+  ),
+  latest as (select distinct on (kind) kind, notification_id, at from runs order by kind, at desc)
+  select jsonb_build_object(
+    'days', least(greatest(coalesce(p_days, 14), 1), 90),
+    'kinds', coalesce((select jsonb_object_agg(k.kind, jsonb_build_object(
+        'runs', (select count(*) from runs r where r.kind = k.kind),
+        'people', (select count(*) from o where o.kind = k.kind),
+        'sent', (select coalesce(sum(o.sent), 0) from o where o.kind = k.kind),
+        'opened', (select coalesce(sum(r.opened), 0) from runs r where r.kind = k.kind),
+        'lastAt', (select max(o.sent_at) from o where o.kind = k.kind)))
+      from (values ('recap'), ('winback'), ('release')) k(kind)), '{}'::jsonb),
+    'runs', coalesce((select jsonb_agg(jsonb_build_object(
+        'kind', r.kind, 'notificationId', r.notification_id, 'at', r.at, 'people', r.people, 'sent', r.sent, 'devices', r.devices, 'opened', r.opened
+      ) order by r.at desc) from runs r), '[]'::jsonb),
+    'latest', coalesce((select jsonb_agg(jsonb_build_object(
+        'kind', o.kind, 'at', o.sent_at, 'id', a.id, 'name', a.name, 'email', a.email, 'picture', a.picture,
+        'title', o.title, 'body', o.body, 'link', o.link, 'sent', o.sent, 'devices', o.devices, 'facts', o.facts
+      ) order by o.sent_at desc)
+      from o
+      join latest l on l.kind = o.kind and l.notification_id is not distinct from o.notification_id
+      join accounts a on a.id = o.account_id), '[]'::jsonb),
+    'byDay', coalesce((select jsonb_agg(jsonb_build_object('day', x.d, 'recap', x.r, 'winback', x.w, 'release', x.rl) order by x.d) from (
+        select (sent_at at time zone 'Asia/Kolkata')::date as d,
+               count(*) filter (where kind = 'recap') as r, count(*) filter (where kind = 'winback') as w, count(*) filter (where kind = 'release') as rl
+        from o group by 1) x), '[]'::jsonb)
+  )
+$$;
+
 -- --------------------------------------------------------- 12. security --
 
 do $$
@@ -2828,7 +3049,7 @@ begin
     'admins', 'error_status',
     'ai_conversations', 'ai_messages', 'ai_attachments', 'ai_daily_usage', 'ai_shares', 'ai_projects', 'ai_memories', 'ai_memory_prefs',
     'personal_songs', 'personal_events', 'personal_taste', 'personal_exposure', 'personal_pages', 'personal_colisten',
-    'owner_notes']
+    'owner_notes', 'outreach']
   loop
     execute format('alter table public.%I enable row level security', t);
     execute format('alter table public.%I force row level security', t);
@@ -2854,7 +3075,8 @@ begin
                         'personal_colisten_for', 'personal_refresh_colisten', 'personal_trending', 'personal_embed_backlog', 'personal_set_embeddings', 'personal_mark_shown',
                         'personal_touch_songs', 'personal_unverified', 'personal_exposure_for',
                         'personal_erase', 'personal_purge', 'personal_stats',
-                        'profile_extras', 'owner_tags')
+                        'profile_extras', 'owner_tags',
+                        '_outreach_people', 'outreach_recap', 'outreach_winback', 'outreach_release_people', 'outreach_summary')
   loop
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);
     execute format('grant execute on function %s to service_role', r.sig);
@@ -2868,7 +3090,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 17, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 17, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 18, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 18, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 17 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 18 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;

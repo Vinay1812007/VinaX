@@ -18,6 +18,8 @@
  *                                           in the sitemaps (_lib/indexnow.ts)
  *   weekly-summary           hourly         Monday from 9 AM India time: last week's numbers emailed to
  *                                           the owner, once a week (_lib/weeklySummary.ts)
+ *   outreach                 hourly         the automatic notifications that are due: the Sunday-evening
+ *                                           weekly recap, win-back nudges, new releases (_lib/outreach.ts)
  *
  * Console rebuild — the owner can switch a job off or change how often it runs from
  * the console: the `jobs` setting `{ "<job>": { enabled, every } }` (every in
@@ -36,8 +38,9 @@ import { runScheduledNotifications } from './scheduledPush';
 import { runAlerts } from './alerts';
 import { runIndexNow, type IndexNowEnv } from './indexnow';
 import { runWeeklySummary } from './weeklySummary';
+import { runOutreach } from './outreach';
 
-export type JobId = 'status-tick' | 'housekeeping' | 'personal-embed' | 'alerts' | 'scheduled-notifications' | 'indexnow' | 'weekly-summary';
+export type JobId = 'status-tick' | 'housekeeping' | 'personal-embed' | 'alerts' | 'scheduled-notifications' | 'indexnow' | 'weekly-summary' | 'outreach';
 
 export interface JobSpec {
   id: JobId;
@@ -59,6 +62,7 @@ export const JOBS: readonly JobSpec[] = [
   { id: 'scheduled-notifications', label: 'Scheduled notifications', about: 'Sends notifications whose scheduled time has come.', every: 5, choices: [5, 15, 30, 60] },
   { id: 'indexnow', label: 'Search engine updates', about: 'Tells Bing and the other IndexNow search engines about new pages on the website, so they are found sooner.', every: 360, choices: [180, 360, 720, 1440] },
   { id: 'weekly-summary', label: 'Weekly summary email', about: 'Every Monday from 9 AM India time, emails the owner last week’s numbers: listening, active and new people, top songs, At risk, errors. Sends once a week; switch the email itself in Notification Rules.', every: 60, choices: [30, 60] },
+  { id: 'outreach', label: 'Automatic notifications', about: 'Sends the automatic notifications that are due: the Sunday-evening weekly recap, win-back nudges to regular listeners who went quiet, and new releases from each person’s favourite artists. Each kind has its own switch in Notification Rules; quiet hours and the per-person cap apply.', every: 60, choices: [30, 60, 180] },
 ] as const;
 
 /** The owner's choices for one job, after checking them. */
@@ -180,6 +184,9 @@ async function housekeeping(env: DbEnv, now = Date.now()): Promise<Record<string
     // Remember the rebuild (its own job_runs row) so the next one waits a day.
     if (colisten.ok) await db.insert(env, 'job_runs', { job: 'colisten', started_at: new Date(now).toISOString(), finished_at: new Date().toISOString(), ok: true, summary: { pairs: colisten.value?.pairs ?? null } });
   }
+  // Automatic notifications (schema 18) keep 180 days of per-person rows. Not fatal before the update.
+  const outreach = await db.remove(env, 'outreach', q().lt('sent_at', since(180 * DAY_MS)));
+  out.outreachPruned = outreach.ok ? 'done' : `failed: ${outreach.error}`;
   // Sign-in history (schema 12) keeps 90 days. Not fatal before the update.
   const signIns = await db.remove(env, 'sign_ins', q().lt('at', since(90 * DAY_MS)));
   out.signInsPruned = signIns.ok ? 'done' : `failed: ${signIns.error}`;
@@ -221,6 +228,7 @@ export async function runJob(env: DbEnv, job: JobId, now = Date.now()): Promise<
             : job === 'alerts' ? await alertsJob(env, now)
             : job === 'indexnow' ? await runIndexNow(env as IndexNowEnv)
             : job === 'weekly-summary' ? await runWeeklySummary(env as never, now)
+            : job === 'outreach' ? await runOutreach(env as never, now)
             : await housekeeping(env, now);
   } catch (e) {
     ok = false;

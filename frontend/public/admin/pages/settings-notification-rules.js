@@ -94,6 +94,61 @@
     }
   };
 
+
+  /* Automatic notifications — stored key: outreach { recap, winback, release }.
+     Anything not false is on. The `outreach` job (_lib/outreach.ts) sends them;
+     POST /api/admin/outreach { action: 'preview', kind } sends the real message to
+     the signed-in admin's own phone. */
+  var AUTO = [
+    { key: 'recap', title: 'Weekly recap', desc: 'Sunday from 7 PM in each person’s own time: how long they listened this week, their top artist and most played song. Once a week, only to people who listened 30 minutes or more.' },
+    { key: 'winback', title: 'Win-back', desc: 'When nothing has come from any of a person’s devices for 7 days (after they were active): a recent song from their top artist, in the daytime. One a week per person, and no more after three in a row go unanswered. Needs Reminders on above.' },
+    { key: 'release', title: 'New releases from their artists', desc: 'Within a day and a half of a release by one of a person’s top three artists: the new song, in the daytime. One a day per person, never the same song twice. Needs New releases on above.' }
+  ];
+  var auto = {
+    key: 'outreach', title: 'Automatic notifications',
+    desc: 'Messages VinaX sends on its own, one per person. The limits above (how often, quiet hours) apply to them too.',
+    fromValue: function (v) {
+      var r = VX.obj(v), m = { _new: !v };
+      AUTO.forEach(function (x) { m[x.key] = r[x.key] !== false; });
+      return m;
+    },
+    toValue: function (m) {
+      if (m._new) return null;
+      var out = {};
+      AUTO.forEach(function (x) { out[x.key] = !!m[x.key]; });
+      return out;
+    },
+    describe: function (v) {
+      var m = auto.fromValue(v);
+      var off = AUTO.filter(function (x) { return !m[x.key]; }).map(function (x) { return x.title.toLowerCase(); });
+      return off.length === AUTO.length ? 'All automatic notifications off' : off.length ? 'On, except ' + off.join(', ') : 'All three on';
+    },
+    render: function (m, set, api) {
+      var touch = function () { m._new = false; set(m); };
+      var preview = function (x) {
+        return ui.button('Send me a preview', { small: true, icon: 'send', onClick: function () {
+          return VX.api.post('/api/admin/outreach', { action: 'preview', kind: x.key }).then(function (r) {
+            if (r.ok) VX.toast(x.title + ' preview sent to ' + VX.fmt.plural(VX.num(VX.obj(r.data).devices), 'device') + ' ✓', 'ok');
+            else if (r.error === 'no_devices') VX.toast('None of your devices has notifications on. Open VinaX with your Google account on your phone and allow notifications first.', 'bad');
+            else if (r.error === 'no_google') VX.toast('Previews need a Google sign-in to this console.', 'bad');
+            else VX.toast('Not sent: ' + r.message, 'bad');
+          });
+        } });
+      };
+      return [
+        h('p.muted', 'See what went out, and to whom, on ', h('a', { href: '#/automatic-notifications' }, 'Automatic Notifications'), '.'),
+        h('div', AUTO.map(function (x) {
+          return h('div.b-auto-row', ui.switchRow(x.title, x.desc, m[x.key], function (on) { m[x.key] = on; touch(); }),
+            api.readOnly ? null : h('div.toolbar.b-auto-actions', preview(x)));
+        }))
+      ];
+    },
+    preview: function (m) {
+      var on = AUTO.filter(function (x) { return m[x.key]; });
+      return h('div.b-rules', h('div.b-rule', h('span.b-rule-k', 'Sent automatically'), h('strong', on.length ? on.map(function (x) { return x.title; }).join(', ') : 'Nothing')));
+    }
+  };
+
   /* Account emails — stored key: email { enabled, welcome, newSignIn, consoleSignIn, adminInvite,
      weeklySummary, weeklyTo: [email] }. Anything not false is on; an empty weeklyTo
      sends the weekly summary to every Owner. Sent through Resend; GET/POST
@@ -195,7 +250,7 @@
 
   VX.settingsPage({
     id: 'notification-rules', title: 'Notification Rules', group: 'Notifications', icon: 'bell', order: 4,
-    desc: 'How often people may get a notification, when not to send, which kinds are allowed, and account emails.',
-    sections: [rules, emails]
+    desc: 'How often people may get a notification, when not to send, which kinds are allowed, the automatic ones, and account emails.',
+    sections: [rules, auto, emails]
   });
 })();

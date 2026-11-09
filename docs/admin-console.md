@@ -371,6 +371,26 @@ Who reads it: `publicVersionPolicy` adds `versionPolicy` to the client bundle (`
 
 Read-only mode refuses POST/PUT/PATCH/DELETE on `/api/feedback`, `/api/account/data`, `/api/profile`, `/api/follow`, `/api/shared-playlist` and `/api/username`. Listening, events, Listen Together, sign-in, push registration, VinaX AI and the console keep working. Older apps treat `readonly` as live (the server still refuses their writes).
 
+### Notifications · Automatic Notifications (`#/automatic-notifications`, `pages/outreach.js`, schema 18)
+
+The pushes VinaX sends on its own, one message per person, from the hourly `outreach` job (`_lib/outreach.ts`):
+
+| Kind | When | Limit |
+| --- | --- | --- |
+| Weekly recap | Sunday from 7 PM in the person's own time (`push_devices.tz_offset`; a missed Sunday is caught up Monday before noon) | once a week, only after 30 minutes or more of listening that week; opens `/weekly` |
+| Win-back | daytime (9 AM – 9 PM, their time) once nothing has come from any of their devices for 7 days, after being active in the 30 before | one a week per person; none after three in a row go unanswered; counts as a Reminder |
+| New releases | daytime, within a day and a half of a release by one of their top three artists (the catalogue's `new-releases` feed per language, then a search per popular artist, matched by spelling-folded artist name) | one a day per person, never the same song twice; counts as a New release |
+
+Every send keeps to Notification Rules (quiet hours, the per-person cap, the Reminders / New releases switches) and to the `outreach` setting `{ recap, winback, release }` (switches and **Send me a preview** on Notification Rules; a preview sends the real message of that kind to the signed-in admin's own phone from their own listening when there is any, marked `[Preview]`, and leaves no row). A run writes one `notifications` row per kind (`kind` recap | winback | release, `sent_by` auto; taps are counted there) and one `outreach` row per person whose `dedupe_key` (`recap:<sunday>:<account>`, `winback:<account>:<day>`, `release:<account>:<day>`) is the cap, so overlapping runs never double-send.
+
+| Route | Shape |
+| --- | --- |
+| `GET /api/admin/outreach?days=` | `{ settings, rules: { reminders, releases, minGapHours, quiet }, kinds: { <kind>: { label, when, cap, rule } }, job: { at, ok, summary }, summary: outreach_summary(days) → { kinds, runs, latest, byDay } }`; 502 `db_update_needed` before version 18 |
+| `POST /api/admin/outreach { action: 'preview', kind }` | editor; `{ ok, devices, sent, message, real }`; 409 `no_devices` / `no_google` |
+| `POST /api/admin/outreach { action: 'run' }` | owner; runs the job now and answers its summary |
+
+The page shows the totals for the window (messages, people reached, opened, last run), a card per kind (status, when, limit, what the last run did and why people were skipped, a preview button), each run and the people in the newest run of each kind with the exact message they got.
+
 ### Notifications · Notification Rules (`#/notification-rules`, `pages/settings-notification-rules.js`)
 
 "Max notifications per person" (1 every 6 h / 12 h / day / 2 days), Quiet hours switch with from/until time pickers, and a switch per kind (New releases, Recommendations, Announcements, Reminders). Stored in `push` as `{ minGapHours: 6 | 12 | 24 | 48, quiet: { enabled, start: "HH:MM", end: "HH:MM" }, types: { releases, recommendations, announcements, reminders } }`. Unset means no limits (the page says so). The push sender enforces it.
@@ -472,6 +492,7 @@ The page: status cards (on/off, last and next check, phones linked), "Right now"
 | `personal-embed` | every 30 min | recommendation learning |
 | `alerts` | every 5 min (each cron run) | Smart Alerts, `runAlerts` from `_lib/alerts.ts` (runs before the scheduled sends so a big scheduled audience never spends the run's requests first) |
 | `scheduled-notifications` | every 5 min (each cron run) | `runScheduledNotifications` from `_lib/scheduledPush.ts` |
+| `outreach` | hourly | `runOutreach` from `_lib/outreach.ts`: the automatic notifications that are due (weekly recap, win-back, new releases), see Automatic Notifications |
 | `indexnow` | every 6 hours | `runIndexNow` from `_lib/indexnow.ts`: posts the sitemap URLs that are new since its last run to IndexNow (Bing, Yandex and others); the last list is kept in the `HANDOFF` KV namespace under `indexnow:urls` |
 
 The `jobs` setting `{ "<job>": { enabled, every } }` switches a job off or slows it; `every` must be one of the job's `choices`. A job is due when it is on and its last run started at least `every − 2` minutes ago (read from `job_runs`), so the cron's own interval only sets the finest grain. A job is "running late" after `max(2 × every + 15, 45)` minutes.

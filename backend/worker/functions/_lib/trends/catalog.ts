@@ -47,7 +47,34 @@ export function toCandidate(raw: any): CatalogCandidate | null {
     language: typeof raw.language === 'string' && raw.language ? raw.language.toLowerCase() : null,
     year: Number.isFinite(year) ? year : null,
     durationSec: Number.isFinite(duration) && duration > 0 ? duration : null,
+    releaseDate: releaseDateOf(raw),
+    image: imageOf(raw),
   };
+}
+
+/** The release date (YYYY-MM-DD) the catalogue gives a song, under any of its names, or null. */
+export function releaseDateOf(raw: any): string | null {
+  const v = raw?.more_info?.release_date ?? raw?.releaseDate ?? raw?.release_date ?? null;
+  const m = typeof v === 'string' ? /^(\d{4}-\d{2}-\d{2})/.exec(v.trim()) : null;
+  return m ? m[1] : null;
+}
+
+/** The cover (https only), from a string or the client's { quality, url } list. */
+function imageOf(raw: any): string | null {
+  const v = raw?.image;
+  const url = typeof v === 'string' ? v : Array.isArray(v) ? (v[v.length - 1]?.url ?? v[v.length - 1]?.link ?? null) : null;
+  return typeof url === 'string' && /^https:\/\//.test(url) ? url.replace(/150x150|50x50/, '500x500') : null;
+}
+
+/**
+ * Version 18 — the catalogue's new releases for a language (the configured
+ * wrapper's `new-releases` route). [] when the catalogue has no such feed;
+ * throws CatalogUnavailable when it is down.
+ */
+export async function catalogNewReleases(language: string, limit = 50): Promise<CatalogCandidate[]> {
+  const data = await callCatalogue(['new-releases'], { language, limit: String(limit) });
+  const list = Array.isArray(data) ? data : Array.isArray(data?.songs) ? data.songs : Array.isArray(data?.results) ? data.results : [];
+  return list.map(toCandidate).filter((c: CatalogCandidate | null): c is CatalogCandidate => !!c);
 }
 
 async function callCatalogue(path: string[], query: Record<string, string>): Promise<any> {
