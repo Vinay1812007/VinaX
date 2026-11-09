@@ -1,9 +1,8 @@
 /**
  * Account emails through Resend: the client (request shape, failures), the
  * `email` setting, and when each email goes out — welcome on a first
- * sign-in, an alert on a new device (never on a known one), console sign-in
- * alerts (the recovery password tells every owner), the admin invite, and the
- * console's test button. Resend is never really called.
+ * sign-in, an alert on every later sign-in, nothing for a console sign-in,
+ * the admin invite, and the console's test button. Resend is never really called.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -99,7 +98,7 @@ describe('the Resend client', () => {
 
 describe('the email setting and templates', () => {
   it('everything is on unless switched off', () => {
-    expect(emailSettingsOf(null)).toEqual({ enabled: true, welcome: true, newSignIn: true, consoleSignIn: true, adminInvite: true, weeklySummary: true, weeklyTo: [] });
+    expect(emailSettingsOf(null)).toEqual({ enabled: true, welcome: true, newSignIn: true, adminInvite: true, weeklySummary: true, weeklyTo: [] });
     expect(emailSettingsOf({ welcome: false, newSignIn: 0 })).toMatchObject({ welcome: false, newSignIn: true });
     expect(emailSettingsOf([false])).toMatchObject({ enabled: true });
   });
@@ -192,14 +191,22 @@ describe('the app sign-in sends', () => {
     expect(sent[2]!.body.subject).toBe('New sign-in to your VinaX account');
   });
 
-  it('nothing without the Resend key, or for an unverified email', async () => {
+  it('nothing without the Resend key', async () => {
     fakeDb({}, outside);
     const w = later();
     const noKey: Record<string, unknown> = { ...ENV }; delete noKey.RESEND_API_KEY;
     expect((await google.onRequestPost({ request: post({ credential: 'listener-token' }), env: noKey, waitUntil: w.waitUntil })).status).toBe(200);
-    await google.onRequestPost({ request: post({ credential: 'unverified-token' }), env: ENV, waitUntil: w.waitUntil });
     await w.drain();
     expect(sent).toHaveLength(0);
+  });
+
+  it('a token without email_verified (the Android app) still gets its emails', async () => {
+    fakeDb({}, outside);
+    const w = later();
+    expect((await google.onRequestPost({ request: post({ credential: 'unverified-token' }), env: ENV, waitUntil: w.waitUntil })).status).toBe(200);
+    await w.drain();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.body.subject).toBe('Welcome to VinaX');
   });
 });
 
@@ -216,23 +223,13 @@ describe('the console sends', () => {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
-  it('an alert to the admin who signed in with Google', async () => {
+  it('signing in to the console sends nothing (Google or the recovery password)', async () => {
     fakeDb({ admins: ADMINS() }, outside);
     const w = later();
     expect((await session.onRequestPost({ request: req('/api/admin/session', { credential: 'boss-token' }), env: CONSOLE_ENV, waitUntil: w.waitUntil })).status).toBe(200);
-    await w.drain();
-    expect(sent).toHaveLength(1);
-    expect(sent[0]!.body).toMatchObject({ to: ['boss@example.com'], subject: 'VinaX console sign-in' });
-  });
-
-  it('the recovery password tells every owner', async () => {
-    fakeDb({ admins: ADMINS() }, outside);
-    const w = later();
     expect((await session.onRequestPost({ request: req('/api/admin/session', { password: 'owner-pass' }), env: CONSOLE_ENV, waitUntil: w.waitUntil })).status).toBe(200);
     await w.drain();
-    expect(sent).toHaveLength(1);
-    expect(sent[0]!.body).toMatchObject({ subject: 'VinaX console: recovery password used' });
-    expect((sent[0]!.body.to as string[]).sort()).toEqual(['boss@example.com', 'second@example.com']);
+    expect(sent).toHaveLength(0);
   });
 
   it('an invite email, and the answer says it went', async () => {

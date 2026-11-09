@@ -149,7 +149,7 @@
     }
   };
 
-  /* Account emails — stored key: email { enabled, welcome, newSignIn, consoleSignIn, adminInvite,
+  /* Account emails — stored key: email { enabled, welcome, newSignIn, adminInvite,
      weeklySummary, weeklyTo: [email] }. Anything not false is on; an empty weeklyTo
      sends the weekly summary to every Owner. Sent through Resend; GET/POST
      /api/admin/email says whether the key is set, who gets the weekly summary and
@@ -157,7 +157,6 @@
   var EMAILS = [
     { key: 'welcome', title: 'Welcome email', desc: 'Sent once, the first time someone signs in to VinaX with Google.' },
     { key: 'newSignIn', title: 'Sign-in alert', desc: 'Sent each time someone signs in to VinaX again, with the time, browser, IP address and rough location; it says so when the phone or browser is new to their account.' },
-    { key: 'consoleSignIn', title: 'Console sign-in alert', desc: 'Sent to an admin each time they sign in here. A recovery-password sign-in is sent to every Owner.' },
     { key: 'adminInvite', title: 'Admin invite', desc: 'Sent when an Owner adds someone on Admins & Roles, with the console address.' },
     { key: 'weeklySummary', title: 'Weekly summary to you', desc: 'Every Monday from 9 AM India time: last week’s listening hours, active and new people, top songs and artists, At risk, errors and feedback, next to the week before.' }
   ];

@@ -31,7 +31,9 @@
  * Emails (_lib/email.ts, off without RESEND_API_KEY): a new account gets a
  * welcome; every later sign-in gets a sign-in alert with the time, browser,
  * IP address and rough place, saying so when the device was not yet linked
- * to the account. Both go out after the answer (waitUntil).
+ * to the account. Both go out after the answer (waitUntil), to the address in
+ * the Google token whether or not it carries `email_verified` (1.12: the
+ * Android app's tokens were being refused by that check).
  *
  * Schema 12: every sign-in also writes a `sign_ins` row (time, IP, browser,
  * app, geo, first sign-in / new device), kept 90 days, shown on the user's
@@ -138,10 +140,17 @@ export const onRequestPost = async (ctx: { request: Request; env: Env; waitUntil
       if (ctx.waitUntil) ctx.waitUntil(record);
       else await record;
     }
-    if (written.ok && profile.email && profile.emailVerified) {
+    // 1.12 — the address Google puts in the ID token is the account's own, so
+    // the emails go to it whether or not the token says `email_verified`
+    // (some Android sign-ins, and Workspace accounts, carry no such claim;
+    // those listeners never got a welcome or a sign-in alert).
+    if (written.ok && profile.email) {
+      if (!profile.emailVerified) console.warn(`[auth] ${facts.platform} sign-in with an unverified email claim; emails still sent`);
       if (existing.ok && !prior) void sendLater(env, ctx.waitUntil, 'welcome', () => ({ ...welcomeEmail(profile.email!, profile.name, where), idempotencyKey: `welcome/${profile.sub}` }));
       // One alert per sign-in; the minute in the key only stops a retried request mailing twice.
       else if (prior) void sendLater(env, ctx.waitUntil, 'newSignIn', () => ({ ...newSignInEmail(profile.email!, profile.name, where, newDevice), idempotencyKey: `signin/${profile.sub}/${thisDevice ?? 'unknown'}/${Math.floor(Date.now() / 60_000)}` }));
+    } else if (!written.ok || !profile.email) {
+      console.warn(`[auth] no email sent: ${!written.ok ? 'account not stored' : 'token carries no email'} (${facts.platform})`);
     }
   }
   return json({ session, stored, returning, hasData, user: publicUser(profile, username), ...(issued ? { signed_device_id_next: issued } : {}) });

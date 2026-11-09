@@ -100,13 +100,13 @@ export function weeklySummaryEmail(to: string | string[], s: WeeklySummary, opts
   ];
   const tileHtml = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:0 8px">${
     [0, 2].map((i) => `<tr>${tiles.slice(i, i + 2).map(([k, v, c]) =>
-      `<td width="48%" style="background:#f4f2f8;border-radius:12px;padding:12px 14px;vertical-align:top"><span style="display:block;font-size:12px;color:#6b6480">${escapeHtml(k)}</span><strong style="display:block;font-size:22px;line-height:1.3">${escapeHtml(v)}</strong><span style="display:block;font-size:12px;color:${c.startsWith('▼') ? '#b45309' : '#047857'}">${escapeHtml(c)}</span></td>`,
+      `<td width="48%" style="background:#241a2b;border:1px solid #2b2033;border-radius:12px;padding:12px 14px;vertical-align:top"><span style="display:block;font-size:12px;color:#a899ad">${escapeHtml(k)}</span><strong style="display:block;font-size:22px;line-height:1.3;color:#fff4ea">${escapeHtml(v)}</strong><span style="display:block;font-size:12px;color:${c.startsWith('▼') ? '#ff6384' : '#5ad39a'}">${escapeHtml(c)}</span></td>`,
     ).join('<td width="4%" style="font-size:0;line-height:0">&nbsp;</td>')}</tr>`).join('')
   }</table>`;
   const list = (title: string, rows: WeeklyRow[], label: (r: WeeklyRow) => string): string =>
     rows.length
-      ? `<strong>${escapeHtml(title)}</strong><br>${rows.map((r, i) => `${i + 1}. ${escapeHtml(label(r))} <span style="color:#6b6480">· ${fmtInt(r.plays)} plays, ${fmtInt(r.people)} ${r.people === 1 ? 'person' : 'people'}</span>`).join('<br>')}`
-      : `<strong>${escapeHtml(title)}</strong><br><span style="color:#6b6480">Nothing played last week.</span>`;
+      ? `<strong>${escapeHtml(title)}</strong><br>${rows.map((r, i) => `${i + 1}. ${escapeHtml(label(r))} <span style="color:#a899ad">· ${fmtInt(r.plays)} plays, ${fmtInt(r.people)} ${r.people === 1 ? 'person' : 'people'}</span>`).join('<br>')}`
+      : `<strong>${escapeHtml(title)}</strong><br><span style="color:#a899ad">Nothing played last week.</span>`;
   const songLabel = (r: WeeklyRow): string => `${r.title ?? 'Unknown song'} — ${r.artist}`;
   const health = [
     `${fmtInt(s.atRisk)} ${s.atRisk === 1 ? 'regular listener has' : 'regular listeners have'} not been back for a week (At risk).`,
@@ -120,6 +120,7 @@ export function weeklySummaryEmail(to: string | string[], s: WeeklySummary, opts
     subject,
     idempotencyKey: opts.test ? undefined : `weekly-summary:${s.from}`,
     html: layout({
+      kicker: 'Weekly summary',
       title: `Your week in VinaX · ${range}`,
       lines: [
         tileHtml,

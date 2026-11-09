@@ -1,12 +1,10 @@
 /**
  * Account emails, sent through Resend (https://resend.com).
  *
- * Five emails, each switchable in the console's `email` setting:
+ * Four emails, each switchable in the console's `email` setting:
  *   welcome        the first time a Google account signs in to VinaX
  *   newSignIn      every later sign-in to the app (says when it is a device
  *                  the account has not used before)
- *   consoleSignIn  someone signs in to the owner console (to that admin;
- *                  recovery-password sign-ins go to the owners)
  *   adminInvite    an owner adds an email to the console's admins
  *   weeklySummary  every Monday at 9 AM India time, last week's numbers to the
  *                  owner (`weeklyTo`, or every Owner when empty); built and
@@ -15,6 +13,13 @@
  * Off until the Worker has RESEND_API_KEY. EMAIL_FROM (default
  * `VinaX <notifications@vinaxmusic.online>`) must be on a domain verified in Resend;
  * EMAIL_REPLY_TO (default support@vinaxmusic.online) is where replies go.
+ *
+ * Signing in to the owner console sends nothing (owner decision, 2026-11-09:
+ * the console's own audit trail records every sign-in).
+ *
+ * Every email is one branded card (`layout`): the VinaX mark and wordmark, the
+ * ember-to-rose ribbon and the app's plum canvas, so a mail from VinaX looks
+ * like the app it comes from.
  *
  * Sending never throws and never blocks a sign-in: callers hand the promise
  * to waitUntil. Each email carries an Idempotency-Key, so a retried request
@@ -36,14 +41,15 @@ export const DEFAULT_REPLY_TO = 'support@vinaxmusic.online';
 export const SITE = 'https://www.vinaxmusic.online';
 export const CONSOLE = 'https://admin.vinaxmusic.online/admin/';
 
-export type EmailKind = 'welcome' | 'newSignIn' | 'consoleSignIn' | 'adminInvite' | 'weeklySummary' | 'test';
-export const EMAIL_KINDS: readonly Exclude<EmailKind, 'test'>[] = ['welcome', 'newSignIn', 'consoleSignIn', 'adminInvite', 'weeklySummary'];
+export type EmailKind = 'welcome' | 'newSignIn' | 'adminInvite' | 'weeklySummary' | 'test';
+export const EMAIL_KINDS: readonly Exclude<EmailKind, 'test'>[] = ['welcome', 'newSignIn', 'adminInvite', 'weeklySummary'];
+/** The VinaX mark the emails carry (hosted, so every mail app shows the same logo). */
+export const LOGO_URL = `${SITE}/icons/icon-192.png`;
 
 export interface EmailSettings {
   enabled: boolean;
   welcome: boolean;
   newSignIn: boolean;
-  consoleSignIn: boolean;
   adminInvite: boolean;
   weeklySummary: boolean;
   /** Who gets the weekly summary; empty = every Owner. */
@@ -68,7 +74,7 @@ export function emailSettingsOf(raw: unknown): EmailSettings {
   const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const on = (k: string): boolean => o[k] !== false;
   return {
-    enabled: on('enabled'), welcome: on('welcome'), newSignIn: on('newSignIn'), consoleSignIn: on('consoleSignIn'), adminInvite: on('adminInvite'),
+    enabled: on('enabled'), welcome: on('welcome'), newSignIn: on('newSignIn'), adminInvite: on('adminInvite'),
     weeklySummary: on('weeklySummary'), weeklyTo: emailList(o.weeklyTo),
   };
 }
@@ -210,29 +216,62 @@ export function edgeTimezone(request: Request): string | null {
   return typeof tz === 'string' && tz.length <= 64 ? tz : null;
 }
 
-export interface Layout { title: string; lines: string[]; button?: { label: string; href: string }; footer: string }
+export interface Layout { title: string; lines: string[]; button?: { label: string; href: string }; footer: string; /** A short line above the title ("Account", "Console"). */ kicker?: string }
 
-/** One plain, light card that reads the same in every mail app. `lines` are already-escaped HTML. */
-export function layout({ title, lines, button, footer }: Layout): string {
+/** VinaX colours, as the app paints them: plum canvas, ember accent, warm cream text. */
+const C = {
+  canvas: '#0f0b14',
+  card: '#1a1320',
+  cardBorder: '#2b2033',
+  box: '#241a2b',
+  text: '#eadfe6',
+  muted: '#a899ad',
+  title: '#fff4ea',
+  accent: '#ffa42e',
+  accent2: '#ff6384',
+  onAccent: '#1a0f08',
+} as const;
+
+/**
+ * One branded card that reads the same in every mail app: the VinaX mark and
+ * wordmark on top, an ember-to-rose ribbon, the title, the lines, one button
+ * and a quiet footer. Table layout with inline styles and bgcolor fallbacks
+ * (Outlook paints no gradients, so every gradient has a solid colour under
+ * it). `lines` are already-escaped HTML.
+ */
+export function layout({ title, lines, button, footer, kicker }: Layout): string {
   const btn = button
-    ? `<p style="margin:28px 0 8px"><a href="${escapeHtml(button.href)}" style="display:inline-block;background:#7c3aed;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:999px">${escapeHtml(button.label)}</a></p>`
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:28px 0 6px"><tr><td bgcolor="${C.accent}" style="background:${C.accent};background-image:linear-gradient(90deg,${C.accent},${C.accent2});border-radius:999px"><a href="${escapeHtml(button.href)}" style="display:inline-block;color:${C.onAccent};text-decoration:none;font-weight:700;font-size:15px;padding:13px 24px;border-radius:999px">${escapeHtml(button.label)}</a></td></tr></table>`
     : '';
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${escapeHtml(title)}</title></head>
-<body style="margin:0;padding:0;background:#f4f2f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f1b2d">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f2f8;padding:32px 16px"><tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;padding:32px 28px">
-<tr><td>
-<p style="margin:0 0 24px;font-size:20px;font-weight:800;letter-spacing:-0.02em;color:#7c3aed">VinaX</p>
-<h1 style="margin:0 0 16px;font-size:22px;line-height:1.3">${escapeHtml(title)}</h1>
-${lines.map((l) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.6">${l}</p>`).join('\n')}
-${btn}
-</td></tr></table>
-<p style="max-width:520px;margin:16px auto 0;font-size:12px;line-height:1.5;color:#6b6480">${footer}</p>
+  const kick = kicker ? `<p style="margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:${C.accent}">${escapeHtml(kicker)}</p>` : '';
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark"><title>${escapeHtml(title)}</title></head>
+<body style="margin:0;padding:0;background:${C.canvas};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${C.text}" bgcolor="${C.canvas}">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.canvas}" style="background:${C.canvas};padding:32px 16px"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:540px">
+<tr><td style="padding:0 6px 18px">
+  <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+    <td style="padding-right:12px"><a href="${SITE}" style="text-decoration:none"><img src="${LOGO_URL}" width="44" height="44" alt="VinaX" style="display:block;width:44px;height:44px;border-radius:12px;border:0"></a></td>
+    <td style="vertical-align:middle"><a href="${SITE}" style="font-size:22px;font-weight:800;letter-spacing:-0.02em;color:${C.title};text-decoration:none">VinaX</a><br><span style="font-size:12px;color:${C.muted}">Free music, for everyone</span></td>
+  </tr></table>
+</td></tr>
+<tr><td bgcolor="${C.card}" style="background:${C.card};border:1px solid ${C.cardBorder};border-radius:18px;overflow:hidden">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr><td height="4" bgcolor="${C.accent}" style="height:4px;line-height:4px;font-size:0;background:${C.accent};background-image:linear-gradient(90deg,${C.accent},${C.accent2})">&nbsp;</td></tr>
+    <tr><td style="padding:30px 28px 28px">
+      ${kick}
+      <h1 style="margin:0 0 16px;font-size:23px;line-height:1.3;color:${C.title};font-weight:800;letter-spacing:-0.01em">${escapeHtml(title)}</h1>
+      ${lines.map((l) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.65;color:${C.text}">${l}</p>`).join('\n')}
+      ${btn}
+    </td></tr>
+  </table>
+</td></tr>
+<tr><td style="padding:18px 8px 0;font-size:12px;line-height:1.6;color:${C.muted}">${footer}<br><a href="${SITE}" style="color:${C.muted}">vinaxmusic.online</a> · Hindi, Telugu, Tamil, Punjabi and 8 more languages · free, no subscription.</td></tr>
+</table>
 </td></tr></table></body></html>`;
 }
 
 const SUPPORT = 'support@vinaxmusic.online';
-const ACCOUNT_FOOTER = `You get this because you signed in to <a href="${SITE}" style="color:#6b6480">VinaX</a> with this Google account. Questions? Reply to this email or write to ${SUPPORT}.`;
+const ACCOUNT_FOOTER = `You get this because you signed in to <a href="${SITE}" style="color:#a899ad">VinaX</a> with this Google account. Questions? Reply to this email or write to ${SUPPORT}.`;
 
 const firstName = (name: string | null | undefined): string | null => {
   const n = (name ?? '').trim().split(/\s+/)[0];
@@ -247,6 +286,7 @@ export function welcomeEmail(to: string, name: string | null, facts?: SignInFact
     to,
     subject: 'Welcome to VinaX',
     html: layout({
+      kicker: 'Your account',
       title: hi ? `Welcome, ${hi}!` : 'Welcome to VinaX!',
       lines: [
         'Your VinaX account is ready. Your favourites, playlists and history now follow you to every device you sign in on.',
@@ -269,7 +309,7 @@ function factLines(f: SignInFacts): { html: string[]; text: string[] } {
   if (f.ip) rows.push(['IP address', f.ip]);
   if (place) rows.push(['Near', `${place} (approximate)`]);
   return {
-    html: [`<span style="display:block;background:#f4f2f8;border-radius:12px;padding:12px 16px">${rows.map(([k, v]) => `<strong>${k}:</strong> ${escapeHtml(v)}`).join('<br>')}</span>`],
+    html: [`<span style="display:block;background:${C.box};border:1px solid ${C.cardBorder};border-radius:12px;padding:12px 16px;line-height:1.8">${rows.map(([k, v]) => `<strong style="color:${C.title}">${k}:</strong> ${escapeHtml(v)}`).join('<br>')}</span>`],
     text: rows.map(([k, v]) => `${k}: ${v}`),
   };
 }
@@ -283,6 +323,7 @@ export function newSignInEmail(to: string, name: string | null, facts: SignInFac
     to,
     subject: newDevice ? 'New device signed in to your VinaX account' : 'New sign-in to your VinaX account',
     html: layout({
+      kicker: 'Security',
       title: newDevice ? 'New device signed in to VinaX' : 'New sign-in to VinaX',
       lines: [
         `${hi ? `Hi ${escapeHtml(hi)}, your` : 'Your'} VinaX account ${what}.`,
@@ -297,29 +338,6 @@ export function newSignInEmail(to: string, name: string | null, facts: SignInFac
   };
 }
 
-export function consoleSignInEmail(to: string | string[], who: string, role: string, via: 'google' | 'password', facts: SignInFacts): Email {
-  const f = factLines(facts);
-  const how = via === 'password' ? 'with the owner recovery password' : 'with Google';
-  return {
-    kind: 'consoleSignIn',
-    to,
-    subject: via === 'password' ? 'VinaX console: recovery password used' : 'VinaX console sign-in',
-    html: layout({
-      title: via === 'password' ? 'The recovery password was used' : 'You signed in to the VinaX console',
-      lines: [
-        `${escapeHtml(who)} signed in to the owner console ${how} (${escapeHtml(role)}).`,
-        ...f.html,
-        via === 'password'
-          ? 'If this wasn&rsquo;t you, change ADMIN_LOGIN_PASSWORD on the Worker now: that ends every recovery-password session.'
-          : 'If this wasn&rsquo;t you, secure that Google account and ask an owner to remove it under Admins &amp; Roles.',
-      ],
-      button: { label: 'Open the change log', href: `${CONSOLE}#/database/changes` },
-      footer: 'You get this because you are an admin of the VinaX console. Owners can switch these emails off in App Settings › Notification Rules › Account emails.',
-    }),
-    text: `${who} signed in to the VinaX owner console ${how} (${role}).\n\n${f.text.join('\n')}\n\nIf this wasn't you, ${via === 'password' ? 'change ADMIN_LOGIN_PASSWORD on the Worker now' : 'secure that Google account and ask an owner to remove it'}.\nChange log: ${CONSOLE}#/database/changes`,
-  };
-}
-
 export function adminInviteEmail(to: string, role: string, invitedBy: string): Email {
   const what: Record<string, string> = { viewer: 'see the dashboards', editor: 'see the dashboards and change settings and content', owner: 'run everything, including admins and the database' };
   return {
@@ -327,6 +345,7 @@ export function adminInviteEmail(to: string, role: string, invitedBy: string): E
     to,
     subject: 'You have been added to the VinaX console',
     html: layout({
+      kicker: 'Owner console',
       title: 'You’re a VinaX admin',
       lines: [
         `${escapeHtml(invitedBy)} added you to the VinaX owner console as <strong>${escapeHtml(role)}</strong>: you can ${escapeHtml(what[role] ?? 'use the console')}.`,
@@ -345,6 +364,7 @@ export function testEmail(to: string, by: string): Email {
     to,
     subject: 'VinaX test email',
     html: layout({
+      kicker: 'Console test',
       title: 'Email works',
       lines: [`${escapeHtml(by)} sent this from the VinaX console to check that account emails go out through Resend.`],
       footer: 'Sent from the VinaX console.',
