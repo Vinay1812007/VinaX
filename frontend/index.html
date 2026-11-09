@@ -161,11 +161,15 @@
          listener's novelty font. Only sheets portaled to <body> were right.
          The app style's own body face (html[data-template] body, base.css)
          replaces this one as soon as the stylesheet applies. */
-      body { font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; }
+      /* 1.12 — Manrope's metrics on the system Arial until Manrope arrives (same face as styles/index.css): the swap moves nothing. */
+      @font-face { font-family: 'Manrope Fallback'; src: local('Arial'), local('Helvetica Neue'), local('Liberation Sans'); size-adjust: 101%; ascent-override: 105.5%; descent-override: 29.7%; line-gap-override: 0%; }
+      body { font-family: 'Manrope', 'Manrope Fallback', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; }
       #root { min-height: 100dvh; color: #eff2f8; }
       /* Neon boot sign (14.x, 2026-11-06): the logo lights up like a neon
          sign — the glass tubes draw in, the V buzzes on, then the bolt, then
-         the wordmark — in about 2.4 s. The sign sits ABOVE #root (not inside
+         the wordmark — in about 1.3 s (halved on 2026-11-09 for the first
+         paint: the sign is what the eye waits on, so the shorter it plays the
+         sooner Home is complete; nothing in it loops). The sign sits ABOVE #root (not inside
          it), so React mounts underneath while it plays; main.tsx drops the
          #boot id at mount (the recovery script below reads a missing #boot as
          "mounted"), waits for the reveal to finish, then fades it out. Styles
@@ -176,13 +180,13 @@
       .vxb.out { animation: vxb-out .35s ease-in forwards; pointer-events: none; }
       .vxb-sign { position: relative; width: 112px; height: 112px; }
       .vxb-sign svg { position: relative; display: block; width: 100%; height: 100%; }
-      .vxb-halo { position: absolute; inset: -46px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255,140,90,.34), rgba(255,99,132,.14) 55%, transparent); animation: vxb-on .5s 1.45s ease-out both, vxb-hum 2.6s 2.4s ease-in-out infinite; }
-      .vxb-tile { animation: vxb-on .3s both; }
-      .vxb-glass { stroke: rgba(255,226,206,.1); stroke-dasharray: 100; animation: vxb-draw .55s .15s ease-out both; }
-      .vxb-t1 { animation: vxb-buzz1 .5s .7s linear both; }
-      .vxb-t2 { animation: vxb-buzz2 .55s 1.05s linear both; }
-      .vxb .bt { font-size: 32px; font-weight: 800; letter-spacing: -0.01em; line-height: 1; margin-top: 26px; color: #fff4ea; text-shadow: 0 0 1px #fff, 0 0 8px rgba(255,164,46,.85), 0 0 20px rgba(255,99,132,.6), 0 0 42px rgba(255,99,132,.35); animation: vxb-buzz3 .5s 1.5s linear both; }
-      .vxb .bs { font-size: 13px; color: #c9bcc6; margin-top: 10px; max-width: 300px; animation: vxb-rise .45s 1.9s ease-out both; }
+      .vxb-halo { position: absolute; inset: -46px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255,140,90,.34), rgba(255,99,132,.14) 55%, transparent); animation: vxb-on .4s .75s ease-out both; }
+      .vxb-tile { animation: vxb-on .25s both; }
+      .vxb-glass { stroke: rgba(255,226,206,.1); stroke-dasharray: 100; animation: vxb-draw .4s .1s ease-out both; }
+      .vxb-t1 { animation: vxb-buzz1 .4s .35s linear both; }
+      .vxb-t2 { animation: vxb-buzz2 .4s .55s linear both; }
+      .vxb .bt { font-size: 32px; font-weight: 800; letter-spacing: -0.01em; line-height: 1; margin-top: 26px; color: #fff4ea; text-shadow: 0 0 1px #fff, 0 0 8px rgba(255,164,46,.85), 0 0 20px rgba(255,99,132,.6), 0 0 42px rgba(255,99,132,.35); animation: vxb-buzz3 .4s .75s linear both; }
+      .vxb .bs { font-size: 13px; color: #c9bcc6; margin-top: 10px; max-width: 300px; animation: vxb-rise .35s 1s ease-out both; }
       @keyframes vxb-on { from { opacity: 0; } to { opacity: 1; } }
       @keyframes vxb-out { to { opacity: 0; } }
       @keyframes vxb-draw { from { stroke-dashoffset: 101; } to { stroke-dashoffset: 0; } }
@@ -190,7 +194,6 @@
       @keyframes vxb-buzz2 { 0% { opacity: 0; } 8% { opacity: .9; } 16% { opacity: 0; } 30% { opacity: 1; } 38% { opacity: .15; } 46% { opacity: .15; } 56% { opacity: 1; } 64% { opacity: .7; } 74%, 100% { opacity: 1; } }
       @keyframes vxb-buzz3 { 0% { opacity: .12; } 12% { opacity: 1; } 22% { opacity: .12; } 36% { opacity: .9; } 44% { opacity: .3; } 60%, 100% { opacity: 1; } }
       @keyframes vxb-rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-      @keyframes vxb-hum { 0%, 100% { opacity: 1; } 50% { opacity: .7; } }
       @media (prefers-reduced-motion: reduce) { .vxb, .vxb * { animation: none !important; } .vxb-glass { display: none; } }
       /* The prerendered / edge-rendered content block, styled as the hero. */
       #seo-content { padding: 14px 20px 32px; max-width: 720px; }

@@ -41,6 +41,17 @@
   font-style: normal;
   font-display: swap;
 }
+@font-face {
+  /* 1.12 — Manrope's metrics on the system Arial while Manrope loads, so the
+     swap moves nothing (Manrope: ascent 1.066, descent 0.30, no line gap,
+     about 1% wider than Arial; measured in Chromium). */
+  font-family: 'Manrope Fallback';
+  src: local('Arial'), local('Helvetica Neue'), local('Liberation Sans');
+  size-adjust: 101%;
+  ascent-override: 105.5%;
+  descent-override: 29.7%;
+  line-gap-override: 0%;
+}
 
 /* ============================================================================
    Tokens — dark theme defaults. Every downstream selector reads these.
@@ -494,7 +505,7 @@ html.light[data-accent='azure'] {
    ========================================================================= */
 body {
   @apply bg-ink-900 text-ink-100 antialiased;
-  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui,
+  font-family: 'Manrope', 'Manrope Fallback', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui,
     'Segoe UI', Roboto, sans-serif;
   font-feature-settings: 'ss01', 'cv11', 'ss03';
   letter-spacing: -0.005em;

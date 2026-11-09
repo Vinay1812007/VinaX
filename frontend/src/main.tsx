@@ -29,7 +29,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 // Neon boot sign (index.html .vxb): it sits above #root, so the app mounts
 // underneath while it plays. Drop the #boot id now — the boot recovery script
 // and the smoke test read a missing #boot as "app mounted" — then let the
-// reveal finish (about 2.4 s from first paint) and fade it out. A tap skips it;
+// reveal finish (about 1.3 s from first paint) and fade it out. A tap skips it;
 // automated browsers skip it so tests can click straight away.
 function releaseBootSign(): void {
   const sign = document.getElementById('boot');
@@ -47,9 +47,9 @@ function releaseBootSign(): void {
   };
   if (navigator.webdriver) return fade();
   sign.addEventListener('pointerdown', fade, { once: true });
-  window.setTimeout(fade, 3500); // never hold the app longer than this
+  window.setTimeout(fade, 2200); // never hold the app longer than this
   if (typeof sign.getAnimations !== 'function') {
-    window.setTimeout(fade, Math.max(0, 2500 - performance.now()));
+    window.setTimeout(fade, Math.max(0, 1400 - performance.now()));
     return;
   }
   const reveal = sign

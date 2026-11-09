@@ -22,7 +22,7 @@ export const FX_DPR_CAP = 1.5;
  * pieces rather than half the frame rate). `setup` creates the system for
  * the first measured size; `onSystem` hands it back for bursts.
  */
-export function useFxCanvas(kinds: FxKind[], palette: string[], o: { burst?: boolean; seed?: number; onSystem?: (s: FxSystem | null) => void; onIdle?: () => void }): React.RefObject<HTMLCanvasElement | null> {
+export function useFxCanvas(kinds: FxKind[], palette: string[], o: { burst?: boolean; seed?: number; onSystem?: (s: FxSystem | null) => void; onIdle?: () => void; /** The device cannot afford even a thin sky: the caller takes the canvas down. */ onTooSlow?: () => void }): React.RefObject<HTMLCanvasElement | null> {
   const ref = useRef<HTMLCanvasElement | null>(null);
   const key = `${kinds.join(',')}|${palette.join(',')}`;
   useEffect(() => {
@@ -46,17 +46,35 @@ export function useFxCanvas(kinds: FxKind[], palette: string[], o: { burst?: boo
         o.onSystem?.(system);
       } else resize(system, w, h);
     };
+    // The ambient sky runs at 30 frames a second (a burst at the display's
+    // rate); each frame's own cost is measured, and a device that cannot
+    // afford it gets a thinner sky, then none — the music comes first.
+    const interval = o.burst ? 0 : 1000 / 30;
+    let acc = 0;
+    let costSum = 0;
+    let costN = 0;
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       if (!system || document.hidden) { last = now; return; }
       const dt = last ? (now - last) / 1000 : 0.016;
       last = now;
-      // Long frames: trim the budget by a fifth, at most three times.
-      if (dt > 0.045) { if (++slow > 20 && system.maxParticles > 40) { system.maxParticles = Math.round(system.maxParticles * 0.8); slow = 0; } } else slow = Math.max(0, slow - 1);
-      step(system, dt);
+      acc += dt * 1000;
+      if (acc < interval) return;
+      acc = 0;
+      const t0 = performance.now();
+      step(system, Math.max(dt, interval / 1000));
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, system.w, system.h);
       draw(system, ctx);
+      costSum += performance.now() - t0;
+      if (++costN >= 45) {
+        const avg = costSum / costN;
+        costSum = 0; costN = 0;
+        if (avg > 4) {
+          if (system.maxParticles > 24) system.maxParticles = Math.max(24, Math.round(system.maxParticles * 0.6));
+          else if (!o.burst && ++slow >= 2) { o.onTooSlow?.(); return; }
+        } else slow = 0;
+      }
       if (o.burst) {
         idleFrames = system.particles.length ? 0 : idleFrames + 1;
         if (idleFrames > 30) o.onIdle?.();

@@ -94,7 +94,7 @@ html[data-template] {
   --tpl-r-mini: 16px;       /* phone mini player */
   --tpl-r-np-art: 22px;     /* Now Playing artwork */
   /* Type. */
-  --tpl-font-body: 'Manrope', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --tpl-font-body: 'Manrope', 'Manrope Fallback', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, sans-serif;
   --tpl-title-weight: 800;
   --tpl-title-tracking: -0.035em;
   --tpl-section-weight: 750;

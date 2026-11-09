@@ -15,18 +15,32 @@ export default function FestivalFxCanvas({ festival }: { festival: Festival }) {
   const allowed = useFestivalMotionAllowed();
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    let t = 0;
     let idle = 0;
-    const go = () => {
+    // Not before the page has settled: after load, then on the listener's
+    // first tap, click or key, then idle. A full-screen canvas painted on its
+    // own is measured as the page's largest paint (it made the lab LCP 14 s
+    // when it started on a timer), so it waits for a real touch: a listener
+    // who never touches the page keeps the CSS particles and no sky.
+    const EVENTS = ['pointerdown', 'touchstart', 'keydown'] as const;
+    let armed = false;
+    const start = () => {
+      if (!armed) return;
+      armed = false;
+      for (const e of EVENTS) window.removeEventListener(e, start);
       const ric = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
-      if (ric) idle = ric(() => setReady(true), { timeout: 2500 });
-      else t = window.setTimeout(() => setReady(true), 1200);
+      if (ric) idle = ric(() => setReady(true), { timeout: 3000 });
+      else setReady(true);
+    };
+    const go = () => {
+      armed = true;
+      for (const e of EVENTS) window.addEventListener(e, start, { passive: true, once: true });
     };
     if (document.readyState === 'complete') go();
     else window.addEventListener('load', go, { once: true });
     return () => {
+      armed = false;
       window.removeEventListener('load', go);
-      window.clearTimeout(t);
+      for (const e of EVENTS) window.removeEventListener(e, start);
       const cic = (window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
       if (idle && cic) cic(idle);
     };
@@ -35,7 +49,12 @@ export default function FestivalFxCanvas({ festival }: { festival: Festival }) {
   return <Sky festival={festival} />;
 }
 
+/** Remembered for the session: this device could not afford the sky, so it is not tried again on every page. */
+let tooSlow = false;
+
 function Sky({ festival }: { festival: Festival }) {
-  const ref = useFxCanvas(fxFor(festival.id), paletteOf(festival), { seed: festival.id.length * 131 });
+  const [off, setOff] = useState(tooSlow);
+  const ref = useFxCanvas(fxFor(festival.id), paletteOf(festival), { seed: festival.id.length * 131, onTooSlow: () => { tooSlow = true; setOff(true); } });
+  if (off) return null;
   return <canvas ref={ref} className="fest-fx" data-testid="fest-fx" data-fx={fxFor(festival.id).join(' ')} aria-hidden />;
 }

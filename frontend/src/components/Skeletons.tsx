@@ -14,9 +14,12 @@ function CardBones() {
 }
 
 export function ShelfSkeleton() {
+  // The same box as the shelf it stands in for (1.12): the shelf's own
+  // bottom gap and a title line of the shelf title's height, so the rows
+  // below do not move when the songs arrive (it was a 0.01 layout shift on Home).
   return (
-    <div className="mb-8 md:mb-10">
-      <div className="skeleton h-5 w-44 mb-4 rounded" />
+    <div className="vx-shelf" aria-hidden>
+      <div className="skeleton h-7 w-44 mb-4 rounded" />
       <div className="flex gap-3 md:gap-4 overflow-hidden">
         {Array.from({ length: 7 }).map((_, i) => (
           <div key={i} className="w-40 md:w-44 shrink-0">

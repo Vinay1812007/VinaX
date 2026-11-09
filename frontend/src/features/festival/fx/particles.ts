@@ -53,19 +53,26 @@ export function seeded(seed: number): () => number {
   };
 }
 
-/** How many pieces a screen can carry (one rule for ambient and bursts). */
+/**
+ * How many pieces a screen can carry (one rule for ambient and bursts). The
+ * sky is decoration behind the app, so the budget is small: about 70 on a
+ * laptop, 40 on a phone, 120 at most; the canvas lowers it further when
+ * frames run long (useFxCanvas).
+ */
 export function budgetFor(w: number, h: number, intensity = 1): number {
   const area = (w * h) / (1280 * 720);
-  return Math.max(24, Math.min(260, Math.round(150 * Math.min(1.6, Math.max(0.35, area)) * intensity)));
+  return Math.max(16, Math.min(120, Math.round(70 * Math.min(1.5, Math.max(0.45, area)) * intensity)));
 }
 
 export function createSystem(kinds: FxKind[], palette: string[], w: number, h: number, o: { seed?: number; maxParticles?: number; burst?: boolean } = {}): FxSystem {
-  return { kinds: kinds.length ? kinds : ['sparkle'], palette: palette.length ? palette : ['#ffa42e'], w, h, maxParticles: o.maxParticles ?? budgetFor(w, h), particles: [], rnd: seeded(o.seed ?? 7), sinceLaunch: 99, burst: !!o.burst, time: 0 };
+  // A celebration is short and on top of everything, so it may spend twice the ambient budget.
+  const budget = o.maxParticles ?? (o.burst ? Math.min(200, budgetFor(w, h) * 2.5) : budgetFor(w, h));
+  return { kinds: kinds.length ? kinds : ['sparkle'], palette: palette.length ? palette : ['#ffa42e'], w, h, maxParticles: Math.round(budget), particles: [], rnd: seeded(o.seed ?? 7), sinceLaunch: 99, burst: !!o.burst, time: 0 };
 }
 
 export function resize(s: FxSystem, w: number, h: number): void {
   s.w = w; s.h = h;
-  s.maxParticles = budgetFor(w, h);
+  s.maxParticles = Math.min(s.maxParticles, s.burst ? Math.round(Math.min(200, budgetFor(w, h) * 2.5)) : budgetFor(w, h));
 }
 
 const pick = <T,>(s: FxSystem, list: readonly T[]): T => list[Math.floor(s.rnd() * list.length)]!;
@@ -199,6 +206,36 @@ export function step(s: FxSystem, dt: number): void {
   s.particles = keep;
 }
 
+/** Pre-rendered soft glows (a radial gradient is costly per particle per frame; a sprite is one drawImage). */
+const glowCache = new Map<string, CanvasImageSource>();
+function glowSprite(color: string, radius: number): CanvasImageSource | null {
+  const r = Math.max(4, Math.round(radius));
+  const key = `${color}|${r}`;
+  const hit = glowCache.get(key);
+  if (hit) return hit;
+  if (typeof document === 'undefined') return null;
+  const c = document.createElement('canvas');
+  c.width = c.height = r * 2;
+  const g = c.getContext('2d');
+  if (!g) return null;
+  const grad = g.createRadialGradient(r, r, 1, r, r, r);
+  grad.addColorStop(0, color);
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, r * 2, r * 2);
+  if (glowCache.size > 40) glowCache.clear();
+  glowCache.set(key, c);
+  return c;
+}
+function glow(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, color: string, alpha: number): void {
+  const sp = glowSprite(color, radius);
+  if (!sp) return;
+  const prev = ctx.globalAlpha;
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(sp, x - radius, y - radius, radius * 2, radius * 2);
+  ctx.globalAlpha = prev;
+}
+
 /** Alpha for a piece that fades in and out over its life. */
 const fadeOf = (p: Particle): number => {
   if (!Number.isFinite(p.life)) return 1;
@@ -220,14 +257,21 @@ export function draw(s: FxSystem, ctx: CanvasRenderingContext2D): void {
   for (const p of s.particles) {
     const a = fadeOf(p);
     if (a <= 0) continue;
+    // Plain dots (snow, sparks, embers, powder grains) skip save/restore and paths: one arc each.
+    if (p.kind === 'snow' || (p.kind === 'fireworks' && !p.rocket) || (p.kind === 'diyas' && !p.rocket) || (p.kind === 'powder' && !p.rocket)) {
+      ctx.globalAlpha = p.kind === 'snow' ? a * 0.85 : a;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.kind === 'fireworks' ? p.size * (1 - 0.4 * (p.age / p.life)) : p.size, 0, 6.3);
+      ctx.fill();
+      continue;
+    }
     ctx.save();
     ctx.globalAlpha = a;
     ctx.fillStyle = p.color;
     switch (p.kind) {
       case 'confetti':
         ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.scale(1, 0.55 + 0.45 * Math.sin(t * 6 + p.phase)); ctx.fillRect(-p.size / 2, -p.size / 3, p.size, p.size * 0.66); break;
-      case 'snow':
-        ctx.globalAlpha = a * 0.85; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, 6.3); ctx.fill(); break;
       case 'petals': case 'leaves':
         ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.beginPath(); ctx.ellipse(0, 0, p.size, p.size * (p.kind === 'leaves' ? 0.4 : 0.6), 0, 0, 6.3); ctx.fill(); break;
       case 'hearts':
@@ -239,9 +283,7 @@ export function draw(s: FxSystem, ctx: CanvasRenderingContext2D): void {
       }
       case 'lanterns': {
         const flick = 0.75 + 0.25 * Math.sin(t * 9 + p.phase);
-        const g = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, p.size * 3.2);
-        g.addColorStop(0, `rgba(255,200,110,${0.42 * flick})`); g.addColorStop(1, 'rgba(255,170,60,0)');
-        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, p.size * 3.2, 0, 6.3); ctx.fill();
+        glow(ctx, p.x, p.y, p.size * 3.2, 'rgba(255,200,110,0.42)', a * flick);
         ctx.fillStyle = p.color; ctx.globalAlpha = a * 0.95; ctx.beginPath(); ctx.roundRect(p.x - p.size * 0.6, p.y - p.size, p.size * 1.2, p.size * 2, p.size * 0.3); ctx.fill();
         ctx.fillStyle = `rgba(255,230,160,${flick})`; ctx.fillRect(p.x - p.size * 0.35, p.y - p.size * 0.6, p.size * 0.7, p.size * 1.1); break;
       }
@@ -259,16 +301,14 @@ export function draw(s: FxSystem, ctx: CanvasRenderingContext2D): void {
       case 'diyas': {
         if (p.rocket) {
           const flick = 0.8 + 0.2 * Math.sin(t * 11 + p.phase) + 0.08 * Math.sin(t * 23 + p.phase * 2);
-          const g = ctx.createRadialGradient(p.x, p.y - p.size, 1, p.x, p.y - p.size, p.size * 4.5);
-          g.addColorStop(0, `rgba(255,190,90,${0.5 * flick})`); g.addColorStop(1, 'rgba(255,150,40,0)');
-          ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y - p.size, p.size * 4.5, 0, 6.3); ctx.fill();
+          glow(ctx, p.x, p.y - p.size, p.size * 4.5, 'rgba(255,190,90,0.5)', a * flick);
           ctx.fillStyle = '#b4532a'; ctx.beginPath(); ctx.ellipse(p.x, p.y, p.size, p.size * 0.45, 0, 0, 6.3); ctx.fill();
           ctx.fillStyle = `rgba(255,214,120,${flick})`; ctx.beginPath(); ctx.ellipse(p.x, p.y - p.size * 0.9, p.size * 0.32, p.size * 0.9 * flick, 0, 0, 6.3); ctx.fill();
         } else { ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, 6.3); ctx.fill(); }
         break;
       }
       case 'powder': {
-        if (p.rocket) { const r = p.age / p.life; const g = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, p.size * (0.4 + r)); g.addColorStop(0, p.color); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.45 * (1 - r); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (0.4 + r), 0, 6.3); ctx.fill(); }
+        if (p.rocket) { const r = p.age / p.life; glow(ctx, p.x, p.y, p.size * (0.4 + r), p.color, 0.45 * (1 - r)); }
         else { ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, 6.3); ctx.fill(); }
         break;
       }
