@@ -123,7 +123,15 @@ const DIST = 'dist';
 // share card stay lazy (verified: catalog-*.js and engine-*.js are not in
 // the first-load list; the badge chunk is loaded by the player store on
 // demand and by the Stats page).
-const FIRST_LOAD_BUDGET = 193 * 1024; // gzipped
+// 2026-11-09 (later): re-based 193 -> 194 for the rest of 1.12 (measured
+// 193.4 KB). First-load by nature, a few hundred bytes each: Auto streaming
+// quality on the play path (connection watch in the engine), the iPhone
+// effects bypass in the engine, the lazy dictionary loader in i18n (the
+// Telugu / Hindi / Tamil dictionaries themselves are te-/hi-/ta-*.js, on
+// demand), the Following route and nav entry, and a re-grouped shared
+// chunk (browserSignals) the bundler now splits out. Dictionaries, the
+// install guide, the badge engine and the share cards all stay lazy.
+const FIRST_LOAD_BUDGET = 194 * 1024; // gzipped
 const CHUNK_BUDGET = 80 * 1024; // gzipped — chunks that ship in the first load
 const LAZY_CHUNK_BUDGET = 160 * 1024; // gzipped — on-demand chunks (routes, features)
 

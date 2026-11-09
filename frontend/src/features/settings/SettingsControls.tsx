@@ -1,4 +1,5 @@
 import { createContext, useContext, useId, useLayoutEffect, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { useT } from '@/i18n';
 import { Link } from 'react-router-dom';
 import { cn } from '@/utils/cn';
 import { ChevronRightIcon } from '@/components/Icons';
@@ -80,11 +81,14 @@ function Highlight({ text, q }: { text: string; q: string }) {
 export function Row({ label, note, keywords, children, stack }: { label: string; note?: string; keywords?: string; children: ReactNode; stack?: boolean }) {
   const q = useContext(SettingsSearchCtx);
   const noteId = useId();
-  if (!matchesQuery(q, label, note, keywords)) return null;
+  const t = useT();
+  // The label shows in the app language; search finds it in English or translated.
+  const shown = t(label);
+  if (!matchesQuery(q, shown === label ? label : `${label} ${shown}`, note, keywords)) return null;
   return (
     <div data-settings-row className={cn('vx-set-row', stack && 'is-stack')}>
       <div className="vx-set-text">
-        <p className="vx-set-label"><Highlight text={label} q={q} /></p>
+        <p className="vx-set-label"><Highlight text={shown} q={q} /></p>
         {note && <p id={noteId} className="vx-set-hint"><Highlight text={note} q={q} /></p>}
       </div>
       <div className="vx-set-control">
@@ -326,9 +330,10 @@ export interface SectionDef {
 
 /** The title and the one line of explanation every section opens with. */
 export function SectionHead({ id, title, lede }: { id: string; title: string; lede?: string }) {
+  const t = useT();
   return (
     <div className="vx-set-head">
-      <h2 id={`${id}-title`} className="vx-set-title">{title}</h2>
+      <h2 id={`${id}-title`} className="vx-set-title">{t(title)}</h2>
       {lede && <p className="vx-set-lede">{lede}</p>}
     </div>
   );
@@ -352,12 +357,13 @@ export function Section({ title, lede, id, children }: { title: string; lede?: s
 export function Group({ title, icon, children }: { title?: string; icon?: ReactNode; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const empty = useEmptyUnderQuery(ref);
+  const t = useT();
   return (
     <div ref={ref} className={cn('vx-set-group', empty && 'hidden')}>
       {title && (
         <h3 className="vx-set-sub">
           {icon}
-          {title}
+          {t(title)}
         </h3>
       )}
       <div className="vx-set-rows">{children}</div>

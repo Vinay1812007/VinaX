@@ -10,11 +10,15 @@ import './styles/features.css';
 import './styles/templates/index.css';
 import './styles/festivals.css';
 import { captureServerPage } from './services/seo/serverPage';
+import { initI18n } from './i18n';
 import { reloadPage } from './utils/pageReload';
 
 // 13.5.0 — keep this URL's server-rendered text before React replaces #root
 // (signed-out visitors read it on PublicPage; see services/seo/serverPage.ts).
 captureServerPage();
+
+// 1.12 — the page's lang attribute follows the app language, and its dictionary loads early.
+initI18n();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

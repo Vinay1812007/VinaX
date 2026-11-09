@@ -65,6 +65,7 @@ Everything about the look is in **Settings → Appearance**:
 - **Accent color** — the style's own colour, a preset, or any colour with **Custom accent**.
 - **Festival themes** and **Preview a festival** — see [Festival themes](festival-themes.md).
 - **Display size**, **Density**, **High contrast** and **Reduce motion**, under Size and comfort.
+- **App language** — English, Telugu, Hindi or Tamil for the menus: the sidebar, Settings titles and rows, the song's ⋯ menu, and section and page titles. Song names, lyrics and anything from the catalogue stay as they are. A string without a translation yet shows in English.
 
 ## Learn by doing
 

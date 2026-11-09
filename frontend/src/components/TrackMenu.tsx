@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useT } from '@/i18n';
 import { createPortal } from 'react-dom';
 import { artistPath, songPath } from '@/utils/slug';
 import { collectionPath, isEpisode } from '@/features/podcasts/paths';
@@ -154,6 +155,8 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
   // Quality is offered for the song that is playing (it switches the stream in place).
   const isCurrent = usePlayerStore((s) => s.queue[s.index]?.id === song.id);
   const quality = useSettingsStore((s) => s.audioQuality);
+  // 1.12 — menu labels in the app language (English keys; untranslated ones stay English).
+  const t = useT();
   const downloaded = useDownloadsStore((s) => !!s.items[song.id]);
   const downloading = useDownloadsStore((s) => !!s.downloading[song.id]);
   // Package C4 — the honest "why am I seeing this?" line from catalog recommendations.
@@ -636,7 +639,7 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
               tabIndex={-1}
               data-menu-id={item.id}
               aria-haspopup={item.submenu && item.id !== 'back' ? 'menu' : undefined}
-              title={item.label}
+              title={t(item.label)}
               onClick={() => {
                 // Opening or leaving the "how long?" view keeps the menu open.
                 if (item.submenu) {
@@ -649,7 +652,7 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
               className={cn('vx-menu-item', item.danger && 'is-danger')}
             >
               <Glyph />
-              <span className="vx-menu-label">{item.label}</span>
+              <span className="vx-menu-label">{t(item.label)}</span>
               {item.submenu && item.id !== 'back' && <span className="vx-menu-chev"><Chevron /></span>}
             </button>
           );

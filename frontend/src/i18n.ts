@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 import { useSettingsStore } from '@/store/settingsStore';
 
 export type UiLang = 'en' | 'te' | 'hi' | 'ta';
@@ -10,8 +10,16 @@ export const UI_LANGS: { id: UiLang; label: string }[] = [
   { id: 'ta', label: 'தமிழ்' },
 ];
 
-// Translations are keyed by the English string, so untranslated keys fall back
-// to English automatically and new strings can be wrapped incrementally.
+/**
+ * Translations are keyed by the English string, so untranslated keys fall
+ * back to English automatically and new strings can be wrapped incrementally.
+ *
+ * Two layers (1.12): the sidebar's few words live here, in the first load,
+ * so the menu is never English for a beat; everything else — Settings
+ * titles and rows, the song menu, section and page titles — is in
+ * `i18n/<lang>.ts`, fetched once the app language asks for it. Until it
+ * arrives those strings show in English; `useT` re-renders when it lands.
+ */
 const TE: Record<string, string> = {
   Listen: 'వినండి', 'Your Music': 'మీ సంగీతం', Explore: 'అన్వేషించండి',
   Home: 'హోమ్', Discover: 'డిస్కవర్', Charts: 'చార్ట్స్', 'Made For You': 'మీ కోసం',
@@ -48,15 +56,58 @@ const TA: Record<string, string> = {
   'App language': 'பயன்பாட்டு மொழி',
 };
 
-const DICT: Record<UiLang, Record<string, string>> = { en: {}, te: TE, hi: HI, ta: TA };
+const CORE: Record<UiLang, Record<string, string>> = { en: {}, te: TE, hi: HI, ta: TA };
+
+/** The extended dictionaries, once fetched. */
+const EXTRA: Partial<Record<UiLang, Record<string, string>>> = {};
+const loading = new Set<UiLang>();
+let version = 0;
+const listeners = new Set<() => void>();
+const bump = (): void => { version += 1; for (const l of listeners) l(); };
+
+const LOADERS: Record<Exclude<UiLang, 'en'>, () => Promise<{ default: Record<string, string> }>> = {
+  te: () => import('./i18n/te'),
+  hi: () => import('./i18n/hi'),
+  ta: () => import('./i18n/ta'),
+};
+
+/** Fetch a language's full dictionary (once). Resolves when it is in place. */
+export function ensureDictionary(lang: UiLang): Promise<void> {
+  if (lang === 'en' || EXTRA[lang] || loading.has(lang)) return Promise.resolve();
+  loading.add(lang);
+  return LOADERS[lang]()
+    .then((m) => { EXTRA[lang] = m.default; bump(); })
+    .catch(() => undefined)
+    .finally(() => loading.delete(lang));
+}
+
+/** For tests: the loaded extended dictionaries. */
+export const loadedDictionaries = (): Partial<Record<UiLang, Record<string, string>>> => EXTRA;
 
 export function translate(key: string, lang: UiLang): string {
   if (lang === 'en') return key;
-  return DICT[lang]?.[key] ?? key;
+  return CORE[lang]?.[key] ?? EXTRA[lang]?.[key] ?? key;
 }
+
+const subscribe = (fn: () => void): (() => void) => { listeners.add(fn); return () => listeners.delete(fn); };
+const getVersion = (): number => version;
 
 /** Reactive translator bound to the user's selected app language. */
 export function useT(): (key: string) => string {
   const lang = useSettingsStore((s) => s.uiLanguage);
-  return useCallback((key: string) => translate(key, lang), [lang]);
+  const v = useSyncExternalStore(subscribe, getVersion, getVersion);
+  if (lang !== 'en' && !EXTRA[lang]) void ensureDictionary(lang);
+  // A new callback when the language changes or a dictionary lands (the
+  // version is read inside so the dependency is real).
+  return useCallback((key: string) => (v >= 0 ? translate(key, lang) : key), [lang, v]);
+}
+
+/** The page's language tag (assistive tech, hyphenation, fonts) follows the app language; the dictionary is fetched early. */
+export function initI18n(): void {
+  const apply = (lang: UiLang): void => {
+    if (typeof document !== 'undefined') document.documentElement.lang = lang;
+    if (lang !== 'en') void ensureDictionary(lang);
+  };
+  apply(useSettingsStore.getState().uiLanguage);
+  useSettingsStore.subscribe((s, prev) => { if (s.uiLanguage !== prev.uiLanguage) apply(s.uiLanguage); });
 }
