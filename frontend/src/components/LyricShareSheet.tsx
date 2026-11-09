@@ -4,34 +4,11 @@ import { cn } from '@/utils/cn';
 import { toast } from '@/store/toastStore';
 import { shareOrSaveImage } from '@/utils/shareImage';
 import { Sheet, SheetHeader } from './Sheet';
+import { fitText } from '@/utils/fitText';
 
 const MAX = 6;
 const FONT = 'Manrope, system-ui, sans-serif';
 
-/** Whole characters as the reader sees them — an Indic conjunct or a vowel sign is never split. */
-function graphemes(s: string): string[] {
-  const Seg = (Intl as unknown as { Segmenter?: new (l?: string, o?: { granularity: 'grapheme' }) => { segment(t: string): Iterable<{ segment: string }> } }).Segmenter;
-  if (Seg) return Array.from(new Seg(undefined, { granularity: 'grapheme' }).segment(s), (x) => x.segment);
-  return Array.from(s);
-}
-
-/**
- * The longest start of `text` that fits `maxW` on this canvas, with an
- * ellipsis when it had to be cut. Measured, and cut between whole
- * characters — slicing code units broke Telugu and Hindi titles mid-letter.
- */
-function fitText(x: CanvasRenderingContext2D, text: string, maxW: number): string {
-  if (x.measureText(text).width <= maxW) return text;
-  const g = graphemes(text);
-  let lo = 0;
-  let hi = g.length;
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >> 1;
-    if (x.measureText(g.slice(0, mid).join('') + '…').width <= maxW) lo = mid;
-    else hi = mid - 1;
-  }
-  return g.slice(0, lo).join('').trimEnd() + '…';
-}
 
 /** The share card. Canvas art is the standing exception to "no raw colours": these are Encore's charcoal, Iris and Lagoon. */
 async function renderLyricCard(lines: string[], song: Song): Promise<Blob> {

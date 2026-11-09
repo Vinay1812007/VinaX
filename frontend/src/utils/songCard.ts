@@ -3,7 +3,7 @@ import { isNativePlatform } from '@/services/native';
 import { bestImage } from '@/utils/images';
 import { shareOrSaveImage } from '@/utils/shareImage';
 
-const trunc = (s: string, n: number): string => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+import { fitText } from '@/utils/fitText';
 
 /** Same-origin CORS image proxy so the cover can be drawn on a canvas. */
 function proxied(url: string): string {
@@ -87,10 +87,10 @@ export async function shareSongCard(song: Song): Promise<boolean> {
   x.textAlign = 'center';
   x.fillStyle = '#ffffff';
   x.font = '800 60px -apple-system, BlinkMacSystemFont, sans-serif';
-  x.fillText(trunc(song.title, 22), 540, 900);
+  x.fillText(fitText(x, song.title, 960), 540, 900);
   x.fillStyle = '#eae3e2';
   x.font = '500 38px -apple-system, BlinkMacSystemFont, sans-serif';
-  x.fillText(trunc(song.subtitle, 32), 540, 956);
+  x.fillText(fitText(x, song.subtitle, 960), 540, 956);
   x.fillStyle = '#ffa42e';
   x.font = '700 30px -apple-system, BlinkMacSystemFont, sans-serif';
   x.fillText('♫  Playing on VinaX', 540, 1024);
@@ -162,10 +162,10 @@ export async function shareSongStoryCard(song: Song): Promise<boolean> {
 
   x.fillStyle = '#ffffff';
   x.font = '800 72px -apple-system, BlinkMacSystemFont, sans-serif';
-  x.fillText(trunc(song.title, 20), W / 2, 1360);
+  x.fillText(fitText(x, song.title, W - 140), W / 2, 1360);
   x.fillStyle = '#eae3e2';
   x.font = '500 44px -apple-system, BlinkMacSystemFont, sans-serif';
-  x.fillText(trunc(song.subtitle, 30), W / 2, 1432);
+  x.fillText(fitText(x, song.subtitle, W - 140), W / 2, 1432);
 
   // Fake progress bar for the "live moment" feel — decorative, honest enough.
   const bw = 640;

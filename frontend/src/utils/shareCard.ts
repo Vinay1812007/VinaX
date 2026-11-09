@@ -2,6 +2,7 @@ import type { Song } from '@/types';
 import { bestImage } from '@/utils/images';
 import { extractAverageColor } from '@/utils/color';
 import { isNativePlatform } from '@/services/native';
+import { fitText } from '@/utils/fitText';
 
 /**
  * Renders a square "now playing" share card (artwork + title + artist + a
@@ -52,10 +53,10 @@ export async function shareNowPlayingCard(song: Song): Promise<'shared' | 'downl
     // Title + artist.
     ctx.fillStyle = '#ffffff';
     ctx.font = '700 58px system-ui, sans-serif';
-    ctx.fillText(truncate(ctx, song.title, size - pad * 2), pad, barY + 110);
+    ctx.fillText(fitText(ctx, song.title, size - pad * 2), pad, barY + 110);
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
     ctx.font = '400 38px system-ui, sans-serif';
-    ctx.fillText(truncate(ctx, song.subtitle, size - pad * 2), pad, barY + 168);
+    ctx.fillText(fitText(ctx, song.subtitle, size - pad * 2), pad, barY + 168);
 
     // Brand mark.
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
@@ -72,10 +73,10 @@ export async function shareNowPlayingCard(song: Song): Promise<'shared' | 'downl
       x2.fillStyle = grad; x2.fillRect(0, 0, size, size);
       x2.fillStyle = '#ffffff';
       x2.font = '700 58px system-ui, sans-serif';
-      x2.fillText(truncate(x2, song.title, size - pad * 2), pad, size / 2);
+      x2.fillText(fitText(x2, song.title, size - pad * 2), pad, size / 2);
       x2.fillStyle = 'rgba(255,255,255,0.7)';
       x2.font = '400 38px system-ui, sans-serif';
-      x2.fillText(truncate(x2, song.subtitle, size - pad * 2), pad, size / 2 + 58);
+      x2.fillText(fitText(x2, song.subtitle, size - pad * 2), pad, size / 2 + 58);
       x2.fillStyle = 'rgba(255,255,255,0.55)';
       x2.font = '700 32px system-ui, sans-serif';
       x2.fillText('VinaX', pad, size - 70);
@@ -181,9 +182,3 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-function truncate(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
-  if (ctx.measureText(text).width <= maxWidth) return text;
-  let t = text;
-  while (t.length > 1 && ctx.measureText(t + '…').width > maxWidth) t = t.slice(0, -1);
-  return t + '…';
-}

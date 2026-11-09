@@ -70,6 +70,8 @@ export const onRequestPost = async (ctx: { request: Request; env: SocialEnv; par
   const add = body.add !== undefined ? cleanSong(body.add) : null;
   const remove = clip(body.remove, 64);
   if (!add && !remove) return json({ error: 'bad_request' }, 400);
+  // 1.12 — collaborators add; only the owner takes songs out (an invite link is not a key to empty the list).
+  if (remove && viewer !== r.row.owner_id) return json({ error: 'owner_only' }, 403);
   if (add) {
     if (songs.some((s) => s.id === add.id)) return json({ playlist: publicPlaylist(r.row) });
     if (songs.length >= MAX_PLAYLIST_SONGS) return json({ error: 'too_large' }, 413);

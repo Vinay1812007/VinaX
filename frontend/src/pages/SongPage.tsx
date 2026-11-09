@@ -17,6 +17,7 @@ import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { formatDuration, formatCount } from '@/utils/format';
 import { languageLabel } from '@/constants/languages';
 import { shareLink } from '@/utils/share';
+import { toast } from '@/store/toastStore';
 
 
 export default function SongPage() {
@@ -84,6 +85,9 @@ export default function SongPage() {
             <FavButton song={song} className="vx-ehead-fav" />
             <EntityAction label="Add to queue" onClick={() => enqueue(song)}><PlusIcon /></EntityAction>
             <EntityAction label="Share" onClick={() => void shareLink(songPath(song), song.title)}><ShareIcon /></EntityAction>
+            <button type="button" onClick={() => void import('@/utils/songCard').then((m) => m.shareSongCard(song)).then((ok) => { if (!ok) toast('Could not create the card'); })} className="vx-ehead-pill">
+              Share card
+            </button>
             {song.hasLyrics && (
               <Link to={`/lyrics/${song.id}`} className="vx-ehead-pill">
                 Lyrics

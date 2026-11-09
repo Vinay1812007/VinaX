@@ -22,7 +22,7 @@ Open someone's profile (a link they sent, or `/u/<handle>`) and press **Follow**
 On any of your playlists, open **⋯ → Share…**.
 
 - **Share as a public page** makes a page anyone with the link can open, play and save to their own library.
-- **Invite friends to add songs** makes an invite link. Whoever opens it can search and add songs, or remove them — no account needed. Their name shows beside what they added.
+- **Invite friends to add songs** makes an invite link. Whoever opens it can search and add songs — no account needed. Their name shows beside what they added. Only you can take songs out (**Remove** on the shared page, or in your own playlist and **Update the shared copy**).
 - **Update the shared copy** sends your latest list. If a friend added songs in the meantime, their additions come into your playlist first.
 - **Stop sharing** deletes the page; the links stop working. Your playlist stays.
 

@@ -71,10 +71,13 @@ export default function SharedPlaylistPage() {
       toast(e instanceof SocialError && e.code === 'too_large' ? 'The playlist is full' : 'Could not add it right now');
     }
   };
+  // 1.12 — only the owner takes songs out (signed in; the invite token is not needed).
+  const mine = !!playlist?.mine;
   const remove = async (s: Song) => {
-    if (!token) return;
+    if (!mine) return;
     try { await collabRemove(id, token, s.id); toast(`Removed ${s.title}`); void q.refetch(); } catch { toast('Could not remove it right now'); }
   };
+  const addedBy = (songId: string): string | null => playlist?.songs.find((p) => p.id === songId)?.by ?? null;
   const cover = songs[0] ? bestImage(songs[0].images, 500) : playlist.songs[0]?.image ?? FALLBACK_ART;
 
   return (
@@ -86,7 +89,7 @@ export default function SharedPlaylistPage() {
         art={<img src={cover} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" className="w-full h-full object-cover" />}
         artUrl={cover}
         description={playlist.description ?? undefined}
-        meta={<EntityMeta items={[playlist.owner ? `by ${playlist.owner}` : null, `${playlist.songs.length} song${playlist.songs.length === 1 ? '' : 's'}`, canEdit ? 'You can add songs' : null]} />}
+        meta={<EntityMeta items={[playlist.owner ? `by ${playlist.owner}` : null, `${playlist.songs.length} song${playlist.songs.length === 1 ? '' : 's'}`, canEdit && !mine ? 'You can add songs' : null]} />}
         actions={
           <>
             <PlayFab label="Play" onClick={() => usePlayerStore.getState().playQueue(songs, 0, { keepList: true })} disabled={!songs.length} />
@@ -120,7 +123,8 @@ export default function SharedPlaylistPage() {
           {songs.map((s, i) => (
             <div key={s.id} className="flex items-center gap-2">
               <div className="flex-1 min-w-0"><SongRow song={s} songs={songs} index={i} /></div>
-              {canEdit && <button type="button" onClick={() => void remove(s)} aria-label={`Remove ${s.title}`} className="vx-tap px-3 min-h-[36px] rounded-full text-[13px] font-semibold text-ink-300">Remove</button>}
+              {addedBy(s.id) && <span className="text-[12px] font-semibold text-ink-400 shrink-0 max-w-[96px] truncate" title={`Added by ${addedBy(s.id)}`}>by {addedBy(s.id)}</span>}
+              {mine && <button type="button" onClick={() => void remove(s)} aria-label={`Remove ${s.title}`} className="vx-tap px-3 min-h-[36px] rounded-full text-[13px] font-semibold text-ink-300">Remove</button>}
             </div>
           ))}
         </div>

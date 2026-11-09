@@ -3,6 +3,7 @@ import { Sheet, SheetHeader } from '@/components/Sheet';
 import type { LocalCollection } from '@/store/libraryStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { currentAccount } from '@/services/auth/google';
+import type { Song } from '@/types';
 import { liteSong, listSharedPlaylists, writeSharedPlaylist, deleteSharedPlaylist, SocialError, type SharedPlaylist } from '@/services/social/api';
 import { shareLink } from '@/utils/share';
 import { toast } from '@/store/toastStore';
@@ -45,7 +46,10 @@ export function SharePlaylistSheet({ collection, open, onClose }: { collection: 
     if (!currentAccount()) { toast('Sign in to share a playlist'); return; }
     setBusy(true);
     try {
-      const body = { id: link?.id, name: collection.name, description: collection.description ?? null, songs: collection.songs.map(liteSong), version: link?.version, public: opts.public ?? remote?.public ?? link?.public ?? (link ? undefined : false), collab: opts.collab ?? remote?.collab };
+      // 1.12 — "added by" stays on songs a collaborator put in, across the owner's own writes.
+      const byOf = new Map((remote?.songs ?? []).filter((s) => s.by).map((s) => [s.id, s.by as string]));
+      const lite = (s: Song) => { const l = liteSong(s); const by = byOf.get(s.id); return by ? { ...l, by } : l; };
+      const body = { id: link?.id, name: collection.name, description: collection.description ?? null, songs: collection.songs.map(lite), version: link?.version, public: opts.public ?? remote?.public ?? link?.public ?? (link ? undefined : false), collab: opts.collab ?? remote?.collab };
       let r = await writeSharedPlaylist(body).catch(async (e: unknown) => {
         if (e instanceof SocialError && e.status === 409) return null;
         throw e;
@@ -58,7 +62,7 @@ export function SharePlaylistSheet({ collection, open, onClose }: { collection: 
           const have = new Set(collection.songs.map((s) => s.id));
           const extra = theirs.songs.filter((s) => !have.has(s.id));
           if (extra.length) toast(`${extra.length} song${extra.length === 1 ? '' : 's'} added by collaborators came in`);
-          r = await writeSharedPlaylist({ ...body, version: theirs.version, songs: [...collection.songs.map(liteSong), ...extra] });
+          r = await writeSharedPlaylist({ ...body, version: theirs.version, songs: [...collection.songs.map(lite), ...extra] });
           if (extra.length) {
             const { resolveSongs } = await import('@/features/social/resolve');
             const full = await resolveSongs(extra, 100);

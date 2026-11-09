@@ -55,9 +55,10 @@ export function cleanSong(raw: unknown): Record<string, unknown> | null {
   const s = asObject(raw);
   if (!s) return null;
   const out: Record<string, unknown> = {};
-  for (const k of ['id', 'title', 'subtitle', 'image', 'language', 'year']) {
+  // `by` (1.12): who added it to a shared playlist, kept across the owner's writes.
+  for (const k of ['id', 'title', 'subtitle', 'image', 'language', 'year', 'by']) {
     const v = s[k];
-    if (typeof v === 'string') out[k] = v.slice(0, k === 'image' ? 512 : 200);
+    if (typeof v === 'string') out[k] = v.slice(0, k === 'image' ? 512 : k === 'by' ? 40 : 200);
     else if (typeof v === 'number' && Number.isFinite(v)) out[k] = v;
   }
   if (typeof s.duration === 'number' && Number.isFinite(s.duration)) out.duration = s.duration;

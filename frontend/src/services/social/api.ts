@@ -132,5 +132,6 @@ export const getSharedPlaylist = (id: string, token?: string | null) =>
     return { playlist: r.playlist, canEdit: r.canEdit === true };
   });
 export const collabAdd = (id: string, token: string, song: LiteSong, by?: string) => call<{ playlist: SharedPlaylist }>(`/shared-playlist/${encodeURIComponent(id)}`, { method: 'POST', body: JSON.stringify({ token, add: song, by }) }).then((r) => r.playlist);
-export const collabRemove = (id: string, token: string, songId: string) => call<{ playlist: SharedPlaylist }>(`/shared-playlist/${encodeURIComponent(id)}`, { method: 'POST', body: JSON.stringify({ token, remove: songId }) }).then((r) => r.playlist);
+/** Take a song out: the owner (signed in; token optional) — a collaborator's token alone is refused (403 owner_only). */
+export const collabRemove = (id: string, token: string | null, songId: string) => call<{ playlist: SharedPlaylist }>(`/shared-playlist/${encodeURIComponent(id)}`, { method: 'POST', body: JSON.stringify({ token, remove: songId }) }).then((r) => r.playlist);
 

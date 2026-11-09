@@ -129,15 +129,24 @@ describe('/api/shared-playlist', () => {
     const added = await playlistId.onRequestPost({ request: await req(`/api/shared-playlist/${id}`, 'POST', { token: body.collabToken, add: { id: 's2', title: 'C' }, by: 'Ravi' }, null), env: ENV, params: { id } });
     expect(added.status).toBe(200);
     expect(await added.json()).toMatchObject({ playlist: { version: 2, songs: [{ id: 's1' }, { id: 's2', by: 'Ravi' }] } });
+    // 1.12 — a collaborator cannot take songs out; the owner can (signed in, no token needed), and "added by" survives.
+    const collabRemove = await playlistId.onRequestPost({ request: await req(`/api/shared-playlist/${id}`, 'POST', { token: body.collabToken, remove: 's1' }, null), env: ENV, params: { id } });
+    expect(collabRemove.status).toBe(403);
+    expect(await collabRemove.json()).toEqual({ error: 'owner_only' });
+    const ownerRemove = await playlistId.onRequestPost({ request: await req(`/api/shared-playlist/${id}`, 'POST', { remove: 's1' }), env: ENV, params: { id } });
+    expect(ownerRemove.status).toBe(200);
+    expect(await ownerRemove.json()).toMatchObject({ playlist: { version: 3, songs: [{ id: 's2', by: 'Ravi' }] } });
+    const ownerAdd = await playlistId.onRequestPost({ request: await req(`/api/shared-playlist/${id}`, 'POST', { add: { id: 's1', title: 'A' } }), env: ENV, params: { id } });
+    expect(await ownerAdd.json()).toMatchObject({ playlist: { version: 4, songs: [{ id: 's2', by: 'Ravi' }, { id: 's1' }] } });
     // The owner's stale write (version 1) is a 409 carrying the newer copy; with version 2 it lands.
     const stale = await playlist.onRequestPost({ request: await req('/api/shared-playlist', 'POST', { id, name: 'Road trip 2', songs: [{ id: 's1' }], version: 1 }), env: ENV });
     expect(stale.status).toBe(409);
-    expect(await stale.json()).toMatchObject({ playlist: { version: 2 } });
-    const ok = await playlist.onRequestPost({ request: await req('/api/shared-playlist', 'POST', { id, name: 'Road trip 2', songs: [{ id: 's1' }, { id: 's2' }, { id: 's3' }], version: 2, public: true }), env: ENV });
-    expect(await ok.json()).toMatchObject({ playlist: { version: 3, public: true, name: 'Road trip 2' } });
+    expect(await stale.json()).toMatchObject({ playlist: { version: 4 } });
+    const ok = await playlist.onRequestPost({ request: await req('/api/shared-playlist', 'POST', { id, name: 'Road trip 2', songs: [{ id: 's1' }, { id: 's2', by: 'Ravi' }, { id: 's3' }], version: 4, public: true }), env: ENV });
+    expect(await ok.json()).toMatchObject({ playlist: { version: 5, public: true, name: 'Road trip 2', songs: [{ id: 's1' }, { id: 's2', by: 'Ravi' }, { id: 's3' }] } });
     // Now public: anyone reads it. Another account cannot write it.
     expect((await playlistId.onRequestGet({ request: await req(`/api/shared-playlist/${id}`, 'GET', undefined, null), env: ENV, params: { id } })).status).toBe(200);
-    expect((await playlist.onRequestPost({ request: await req('/api/shared-playlist', 'POST', { id, name: 'Mine now', songs: [], version: 3 }, 'a2'), env: ENV })).status).toBe(403);
+    expect((await playlist.onRequestPost({ request: await req('/api/shared-playlist', 'POST', { id, name: 'Mine now', songs: [], version: 5 }, 'a2'), env: ENV })).status).toBe(403);
     // The owner lists it and deletes it.
     expect(await (await playlist.onRequestGet({ request: await req('/api/shared-playlist', 'GET'), env: ENV })).json()).toMatchObject({ playlists: [{ id }] });
     expect((await playlist.onRequestDelete({ request: await req(`/api/shared-playlist?id=${id}`, 'DELETE'), env: ENV })).status).toBe(204);
