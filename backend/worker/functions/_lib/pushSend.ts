@@ -246,31 +246,39 @@ export async function accountsForEmails(env: DbEnv, emails: string[] | undefined
   return { ids, unresolved: emails.filter((e) => !found.has(e)) };
 }
 
-/** Every signed-in device the audience reaches (up to 5000), activity, device kind, tags, emails and chosen users applied. */
+/**
+ * Every signed-in device the audience reaches (up to 5000). Chosen users and
+ * pasted emails are the same thing said two ways, so they ADD UP (the console
+ * says "or by email"); the place, language, device, activity and tags then
+ * narrow that list, each one an AND.
+ */
 export async function audienceDevices(env: DbEnv, a: Audience, now = Date.now()): Promise<Rows<DeviceRow>> {
   const COLS = 'id,channel,target,p256dh,auth,account_id,last_pushed_at';
-  // Chosen people are asked for in groups of 150 (an address-length limit),
+  const fail = (detail: string): Rows<DeviceRow> => ({ ok: false, error: 'unavailable', status: null, code: null, detail, rows: [] });
+  // The people named outright: the chosen users plus whoever the emails resolve to.
+  const mailed = await accountsForEmails(env, a.filter.emails);
+  if (mailed === 'failed') return fail('accounts');
+  const named: string[] | undefined = a.filter.users || mailed ? [...new Set([...(a.filter.users ?? []), ...(mailed ? mailed.ids : [])])] : undefined;
+  if (named && !named.length) return { ok: true, rows: [] };
+  // Named people are asked for in groups of 150 (an address-length limit),
   // so a long list is never cut by the 5000-device cap of one read.
   const groups: Array<string[] | undefined> = [];
-  if (a.filter.users) for (let i = 0; i < a.filter.users.length; i += 150) groups.push(a.filter.users.slice(i, i + 150));
+  if (named) for (let i = 0; i < named.length; i += 150) groups.push(named.slice(i, i + 150));
   else groups.push(undefined);
-  const [reads, active, kind, tagged, mailed] = await Promise.all([
+  const [reads, active, kind, tagged] = await Promise.all([
     Promise.all(groups.map((g) => db.select<DeviceRow>(env, 'push_devices', audienceQuery(a, g).select(COLS).limit(5000)))),
     accountsForActivity(env, a.activity, now),
     accountsForDevice(env, a.filter.device),
     accountsForTags(env, a.filter.tags),
-    accountsForEmails(env, a.filter.emails),
   ]);
   const bad = reads.find((r) => !r.ok);
   if (bad) return bad;
-  const fail = (detail: string): Rows<DeviceRow> => ({ ok: false, error: 'unavailable', status: null, code: null, detail, rows: [] });
   if (active === 'failed') return fail('accounts');
   if (kind === 'failed') return fail('listeners');
   if (tagged === 'failed') return fail('owner_notes');
-  if (mailed === 'failed') return fail('accounts');
   const sets: Set<string>[] = [];
-  if (a.filter.users) sets.push(new Set(a.filter.users));
-  for (const s of [active, kind, tagged, mailed ? mailed.ids : null]) if (s) sets.push(s);
+  if (named) sets.push(new Set(named));
+  for (const s of [active, kind, tagged]) if (s) sets.push(s);
   const rows = reads.flatMap((r) => r.rows).filter((d) => !!d.account_id && sets.every((s) => s.has(d.account_id!)));
   return { ok: true, rows };
 }

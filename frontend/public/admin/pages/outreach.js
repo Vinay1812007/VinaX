@@ -57,10 +57,11 @@
         var people = KINDS.reduce(function (t, k) { return t + num(obj(per[k]).people); }, 0);
         var sent = KINDS.reduce(function (t, k) { return t + num(obj(per[k]).sent); }, 0);
         var opened = KINDS.reduce(function (t, k) { return t + num(obj(per[k]).opened); }, 0);
+        var devices = runs.reduce(function (t, r) { return t + num(r.devices); }, 0);
         var window_ = 'in the last ' + days + ' days';
         var stats = ui.stats([
           { label: 'Messages sent', value: fmt.num(people), info: 'Automatic messages sent ' + window_ + ', one per person per send. A person who got a recap and a new-release message counts twice.' },
-          { label: 'People reached', value: fmt.num(sent), sub: people ? fmt.num(people - sent) + ' not delivered' : null, info: 'Phones and browsers that accepted a message ' + window_ + '. A message is not delivered when every device of the person has gone (the app was removed) or the push service refused it.' },
+          { label: 'Delivered', value: fmt.num(sent), sub: devices ? 'of ' + fmt.plural(devices, 'device') + (devices > sent ? ' · ' + fmt.num(devices - sent) + ' missed' : '') : null, info: 'Phones and browsers that accepted a message ' + window_ + '. A person with two devices counts twice here. A device misses it when it has gone (the app was removed or notifications were switched off) or the push service refused it.' },
           { label: 'Opened', value: rate(opened, sent), sub: fmt.num(opened) + ' taps', info: 'Taps on these messages, as a share of the ones delivered. The app counts a tap when the notification opens it; a message read and swiped away is not counted.' },
           { label: 'Last run', value: job ? fmt.ago(job.at) : 'Not yet', tone: job && job.ok === false ? 'bad' : null, sub: job && job.ok === false ? 'Failed' : null, info: 'When the Automatic notifications job last looked for messages to send. It runs hourly (System › Scheduled Jobs) and sends only what is due in each person’s own time.' }
         ]);
@@ -75,16 +76,25 @@
             body: [
               h('p.muted', 'When: ' + (info.when || '—') + '.'),
               h('p.muted', 'Limit: ' + (info.cap || '—') + '.'),
+              // dt/dd straight under the list: .kv is a two-column grid of its children.
               h('dl.kv',
-                h('div', h('dt', 'Sent ' + window_), h('dd', fmt.num(mine.people) + (mine.people ? ' · opened ' + rate(mine.opened, mine.sent) : ''))),
-                h('div', h('dt', 'Last sent'), h('dd', mine.lastAt ? fmt.ago(mine.lastAt) : 'Not yet')),
-                last ? h('div', h('dt', 'Last run'), h('dd', typeof last.error === 'string' ? 'Failed: ' + last.error : fmt.plural(num(last.due), 'person', 'people') + ' due, ' + fmt.plural(num(last.people), 'message') + ' sent' + (last.note ? ' · ' + last.note : ''))) : null,
-                last && why ? h('div', h('dt', 'Not sent because'), h('dd.muted', why)) : null),
+                h('dt', 'Sent ' + window_), h('dd', fmt.num(mine.people) + (mine.people ? ' · opened ' + rate(mine.opened, mine.sent) : '')),
+                h('dt', 'Last sent'), h('dd', mine.lastAt ? fmt.ago(mine.lastAt) : 'Not yet'),
+                last ? h('dt', 'Last run') : null,
+                last ? h('dd', typeof last.error === 'string' ? 'Failed: ' + last.error : fmt.plural(num(last.due), 'person', 'people') + ' due, ' + fmt.plural(num(last.people), 'message') + ' sent' + (k === 'release' && last.found != null ? ', ' + fmt.plural(num(last.found), 'new song') + ' in the catalogue' : '') + (last.note ? ' · ' + last.note : '')) : null,
+                last && why ? h('dt', 'Not sent because') : null,
+                last && why ? h('dd.muted', why) : null),
               h('div.toolbar', VX.can('edit') ? previewButton(k, kinds) : null,
                 h('a.btn.ghost.sm', { href: '#/notification-rules?section=outreach' }, 'Switch in Notification Rules'))
             ]
           });
         }));
+        var byDay = arr(sum.byDay);
+        var chart = ui.card({ title: 'Sent each day', sub: 'Automatic messages per day ' + window_ + ' (India time), one per person.', body: ui.chart({
+          labels: byDay.map(function (r) { return r.day; }), type: 'bar', stacked: true, height: 180, title: 'Automatic notifications sent per day',
+          series: KINDS.map(function (k, i) { return { name: kindName(k, kinds), values: byDay.map(function (r) { return num(r[k]); }), color: ['var(--c1)', 'var(--c3)', 'var(--c2)'][i] }; }),
+          empty: 'Nothing sent ' + window_, emptyHint: 'Messages go out on their own once people are due.'
+        }) });
         var runsTable = ui.card({ title: 'Each send', sub: 'One row per run and kind. Taps are counted on the run, not per person.', pad: false, body: ui.dataTable({
           columns: [
             { key: 'at', label: 'When', always: true, primary: true, sortVal: function (r) { return r.at || ''; }, render: function (r) { return ui.ago(r.at); }, csv: function (r) { return fmt.full(r.at); } },
@@ -115,7 +125,7 @@
             else VX.toast('Could not run: ' + r.message, 'bad');
           });
         } })) : null;
-        return [stats, cards, runNow, runsTable, latestTable];
+        return [stats, cards, runNow, chart, runsTable, latestTable];
       }, { skeleton: 6 });
     }
     return load();

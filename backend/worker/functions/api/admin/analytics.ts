@@ -41,7 +41,8 @@ export const onRequestGet = adminGet(async ({ env, url }) => {
     if (!eng.ok) return dbFailure(eng);
     if (!timeline.ok) return dbFailure(timeline);
     if (!platforms.ok) return dbFailure(platforms);
-    // Listening time needs schema 14; on an older database the page shows plays only.
+    // Listening time needs schema 14; on an older database the page shows plays only. Any other failure is a failure.
+    if (!listening.ok && listening.code !== 'PGRST202') return dbFailure(listening);
     return adminJson({ configured: true, days, view, data: { ...(eng.value ?? {}), timeline: timeline.value ?? [], ...(platforms.value ?? {}), listening: listening.ok && listening.value && typeof listening.value === 'object' && !Array.isArray(listening.value) ? listening.value : null } });
   }
 

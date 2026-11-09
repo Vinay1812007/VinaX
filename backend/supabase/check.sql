@@ -224,6 +224,10 @@ begin
   assert (v ->> 'total')::int = 1 and (v -> 'rows' -> 0 ->> 'device') = 'macos-web' and (v -> 'rows' -> 0 ->> 'browser') = 'Chrome', 'admin_users: device filter';
   v := admin_users(p_platform => 'web');
   assert (v ->> 'total')::int = 2, 'admin_users: plain platform still filters';
+  -- Asha in an Android browser: "Android (app or web)" finds her, "Android app" does not.
+  update listeners set os = 'android' where id = 'check_l1';
+  assert (admin_users(p_platform => 'android') ->> 'total')::int = 1 and (admin_users(p_platform => 'android-app') ->> 'total')::int = 0, 'admin_users: "Android (app or web)" is the app and Android browsers';
+  update listeners set os = 'macos' where id = 'check_l1';
   v := admin_users(p_sort => 'listening');
   assert (v -> 'rows' -> 0 ->> 'id') = 'check_a1' and (v -> 'rows' -> 0 ->> 'listen30d')::int > 0, 'admin_users: most listening first';
   assert (v -> 'counts' -> 'byDevice' ->> 'macos-web')::int = 1 and (v -> 'counts' ->> 'listenToday') is not null, 'admin_users.counts: byDevice, listenToday';
@@ -311,6 +315,8 @@ begin
   v := profile_app_time('check_a1');
   assert jsonb_array_length(v -> 'byDay') = 14 and (v ->> 'all')::int >= (v ->> 'days30')::int and (v ->> 'days30')::int > 0, 'profile_app_time: totals, 14 days';
   assert (v -> 'devices' -> 0 ->> 'model') = 'SM-S918B' and (v -> 'devices' -> 0 ->> 'display') = 'installed' and (v -> 'devices' -> 0 ->> 'osVersion') = '14', 'profile_app_time: device detail';
+  v := profile_app_time('check_nobody');
+  assert (v ->> 'all')::int = 0 and (v ->> 'today')::int = 0 and jsonb_array_length(v -> 'devices') = 0, 'profile_app_time: a person with no device has no time (not everyone''s)';
   v := device_breakdown(90);
   assert (v -> 'brands' -> 0 ->> 'brand') = 'Samsung' and (v -> 'display' ->> 'installed')::int = 1 and (v -> 'android' -> 0 ->> 'version') = '14', 'device_breakdown';
   assert (v ->> 'devices')::int >= 1 and (v ->> 'modelKnown')::int = 1, 'device_breakdown: counts';

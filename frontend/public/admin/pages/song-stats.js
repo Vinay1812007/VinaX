@@ -266,7 +266,7 @@
           { label: 'Per person, per day', value: L.perPersonDay == null ? '—' : VX.listenText(L.perPersonDay), info: 'On a day someone listens, how long they listen on average.' },
           { label: 'Plays per person', value: per.playsPerPerson == null ? '—' : fmt.num(per.playsPerPerson), info: 'On average, how many songs each person played ' + rangeText(ctx) + '.' }
         ]),
-        ui.card({ title: 'Time spent listening each day', sub: 'Hours everyone listened each day (India time).', body: ui.chart({
+        ui.card({ title: 'Time spent listening each day', sub: 'Minutes everyone listened each day (India time).', body: ui.chart({
           labels: tl.map(function (x) { return x.day; }), type: 'bar', height: 200, title: 'Minutes listened per day',
           series: [{ name: 'Listening', values: tl.map(function (x) { return Math.round(num(x.seconds) / 60); }) }],
           format: minutesAxis, empty: 'No listening ' + rangeText(ctx)

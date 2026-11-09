@@ -2118,7 +2118,7 @@ returns table (account_id text, seconds bigint, today bigint)
 language sql stable set search_path = public, pg_temp as $$
   with s as (select * from signed_devices() d where d.account_id = any (coalesce(p_accounts, '{}'::text[])))
   select s.account_id, sum(t.seconds)::bigint, coalesce(sum(t.seconds) filter (where t.day = _ist_today()), 0)::bigint
-  from app_time((select array_agg(listener_id) from s), p_since) t
+  from app_time(coalesce((select array_agg(listener_id) from s), array[]::text[]), p_since) t
   join s on s.listener_id = t.listener_id
   group by 1
 $$;
@@ -2132,8 +2132,9 @@ language sql stable set search_path = public, pg_temp as $$
     select l.* from listeners l
     where l.account_id = p_account or l.id = (select listener_id from accounts where id = p_account)
   ),
+  -- No device row: no time (a null list would mean every listener's time).
   t as (select x.day, sum(x.seconds)::bigint as seconds
-        from app_time((select array_agg(id) from d), null) x group by 1)
+        from app_time(coalesce((select array_agg(id) from d), array[]::text[]), null) x group by 1)
   select jsonb_build_object(
     'devices', coalesce((select jsonb_agg(jsonb_build_object('id', d.id, 'osVersion', d.os_version, 'model', d.device_model,
                  'brand', d.device_brand, 'display', d.display_mode) order by d.last_seen desc) from d), '[]'::jsonb),
@@ -2442,7 +2443,9 @@ language sql stable set search_path = public, pg_temp as $$
       and (p_ids is null or d.account_id = any (p_ids))
       and (coalesce(p_q, '') = '' or strpos(lower(coalesce(a.name, '')), lower(p_q)) > 0 or strpos(lower(coalesce(a.email, '')), lower(p_q)) > 0)
       -- a platform (android | web | ios) or, since version 13, a device key (android-app, macos-web…)
-      and (p_platform is null or coalesce(nullif(d.platform, ''), 'web') = p_platform or _device_key(d.platform, d.os) = p_platform)
+      and (p_platform is null or coalesce(nullif(d.platform, ''), 'web') = p_platform or _device_key(d.platform, d.os) = p_platform
+           -- "Android (app or web)": the app, or Android in a browser
+           or (p_platform = 'android' and _device_key(d.platform, d.os) = 'android-web'))
       and (p_active_days is null or d.last_seen > now() - make_interval(days => p_active_days))
       and (p_joined_days is null or a.created_at > now() - make_interval(days => p_joined_days))
       and (p_joined_from is null or a.created_at >= p_joined_from)

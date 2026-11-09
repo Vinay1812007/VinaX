@@ -12,7 +12,7 @@
  */
 import { db, dbConfigured, q, type DbEnv } from './db';
 import { audit } from './audit';
-import { audienceDevices, audienceOf, fanOut, kindAllowed, publishAnnouncement, pushRules, quietNow, recordReceipt, underCap, type PushEnv } from './pushSend';
+import { audienceDevices, audienceOf, fanOut, kindAllowed, peopleIn, publishAnnouncement, pushRules, quietNow, recordReceipt, underCap, type PushEnv } from './pushSend';
 
 interface DueRow { id: number; title: string; body: string; link: string; image: string | null; audience: Record<string, unknown> | null }
 
@@ -60,6 +60,8 @@ export async function runScheduledNotifications(env: PushEnv & DbEnv, now = Date
       const msg = { title: row.title, body: row.body, link: row.link || '/', image: row.image, id: row.id };
       const report = await fanOut(env, capped.allowed, msg);
       await recordReceipt(env, row.id, report, new Date(now).toISOString());
+      // The reach stored when it was scheduled was an estimate; the history shows who it actually went to.
+      await db.update(env, 'notifications', q().eq('id', row.id), { audience: { ...a, people: peopleIn(capped.allowed), devices: capped.allowed.length } });
       if (audience.everyone) await publishAnnouncement(env, msg, now);
       await audit({ env, actor: 'schedule' }, { action: 'push-send', summary: `scheduled "${row.title.slice(0, 60)}" sent to ${audience.label}`, target: String(row.id), after: { web: report.web.sent, fcm: report.fcm.sent } });
       summary.sent += 1;

@@ -25,6 +25,8 @@ const UA = {
 describe('phoneOf', () => {
   it('reads the Android version, model and maker the agent names', () => {
     expect(phoneOf(UA.samsungApp)).toEqual({ osVersion: '14', model: 'SM-S918B', brand: 'Samsung' });
+    // Samsung Internet puts the maker before the model: the same phone as the app's WebView, under one name.
+    expect(phoneOf('Mozilla/5.0 (Linux; Android 14; SAMSUNG SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/27.0 Chrome/125.0.0.0 Mobile Safari/537.36')).toEqual({ osVersion: '14', model: 'SM-S918B', brand: 'Samsung' });
     expect(phoneOf(UA.pixelApp)).toEqual({ osVersion: '15', model: 'Pixel 8', brand: 'Google' });
     expect(phoneOf(UA.realme)).toEqual({ osVersion: '13', model: 'RMX3741', brand: 'Realme' });
     expect(phoneOf(UA.vivo)).toEqual({ osVersion: '12', model: 'V2120', brand: 'Vivo' });

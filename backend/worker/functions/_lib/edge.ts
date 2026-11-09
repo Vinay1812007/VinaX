@@ -99,7 +99,8 @@ export function phoneOf(ua: string | null | undefined): PhoneFacts {
   const m = /Android (\d+(?:\.\d+)?)(?:;\s*([^;)]*))?/.exec(u);
   if (!m) return { osVersion: null, model: null, brand: null };
   const reduced = /^K$/.test((m[2] ?? '').trim());
-  let model: string | null = (m[2] ?? '').replace(/\s*Build\/.*$/, '').trim() || null;
+  // Samsung Internet says "SAMSUNG SM-S918B" where the app's WebView says "SM-S918B": one phone, one name.
+  let model: string | null = (m[2] ?? '').replace(/\s*Build\/.*$/, '').replace(/^SAMSUNG\s+/i, '').trim() || null;
   if (model && (reduced || /^(wv|Mobile|Linux|[a-z]{2}[-_][a-z]{2}|U)$/i.test(model))) model = null;
   if (model) model = model.slice(0, 40);
   const brand = model ? BRANDS.find(([re]) => re.test(model as string))?.[1] ?? null : null;

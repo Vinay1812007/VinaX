@@ -205,7 +205,7 @@ describe('the job', () => {
     };
     const now = Date.UTC(2026, 10, 10, 8, 30); // 14:00 IST
     const r = await runOutreach(ENV as never, now, cat);
-    expect(r.release).toMatchObject({ candidates: 3, due: 2, people: 1, skipped: { alreadyToday: 1, nothingNewForThem: 1, freshSongsFound: 3 } });
+    expect(r.release).toMatchObject({ candidates: 3, due: 2, people: 1, skipped: { alreadyToday: 1, nothingNewForThem: 1 }, found: 3 });
     // Only the languages of people who are due are fetched (Ravi already had today's).
     expect(cat.newReleases.mock.calls.map((c) => c[0]).sort()).toEqual(['tamil', 'telugu']);
     const [row] = fake.rows('outreach');

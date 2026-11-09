@@ -59,7 +59,7 @@ export default {
       settings: { recap: true, winback: true, release: true },
       rules: { reminders: true, releases: true, minGapHours: 12, quiet: { enabled: true, start: '22:00', end: '08:00' } },
       kinds: KINDS,
-      job: { at: iso(now - 40 * 60e3), ok: true, summary: { recap: { candidates: 12, due: 0, people: 0, sent: 0, skipped: { notTheirEveningYet: 12 } }, winback: { candidates: 3, due: 1, people: 1, sent: 1, skipped: { nudgedThisWeek: 2 } }, release: { candidates: 30, due: 30, people: 3, sent: 4, skipped: { nothingNewForThem: 27, freshSongsFound: 6 } } } },
+      job: { at: iso(now - 40 * 60e3), ok: true, summary: { recap: { candidates: 12, due: 0, people: 0, sent: 0, skipped: { notTheirEveningYet: 12 } }, winback: { candidates: 3, due: 1, people: 1, sent: 1, skipped: { nudgedThisWeek: 2 } }, release: { candidates: 30, due: 30, people: 3, sent: 4, found: 6, skipped: { nothingNewForThem: 27 } } } },
       summary: summary(days),
     };
   },

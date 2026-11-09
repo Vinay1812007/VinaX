@@ -216,6 +216,12 @@ describe('POST /api/admin/push', () => {
     // Everything combines: tagged AND Mac web = 333 only.
     const both = await run(push.onRequestPost, '/api/admin/push', { body: { body: 'Hi', filter: { device: 'macos-web', tags: ['vip'] }, dryRun: true } });
     expect(both.body).toMatchObject({ people: 1, devices: 1, audience: 'Mac web · vip' });
+    // Chosen users and emails add up ("or by email"): 333 picked, 111 by email = both, on every device of theirs.
+    const named = await run(push.onRequestPost, '/api/admin/push', { body: { body: 'Hi', users: '333', filter: { emails: 'one@x.com' }, dryRun: true } });
+    expect(named.body).toMatchObject({ people: 2, devices: 3, audience: '1 chosen user · 1 person by email', unresolvedEmails: [] });
+    // …but the narrowing filters still apply to them: of the two, only 333 is tagged vip.
+    const namedVip = await run(push.onRequestPost, '/api/admin/push', { body: { body: 'Hi', users: '333', filter: { emails: 'one@x.com', tags: ['vip'] }, dryRun: true } });
+    expect(namedVip.body).toMatchObject({ people: 1, devices: 1 });
   });
 
   it('a send keeps the reach it counted on the row, so the history can show it', async () => {
@@ -409,8 +415,10 @@ describe('scheduled sends', () => {
     // First a sweep marks sends that died mid-way as failed; then this row is claimed and sent.
     const sweep = calls.find((c) => path(c) === 'notifications' && c.method === 'PATCH' && (c.body as { status: string }).status === 'failed');
     expect(sweep?.url.searchParams.get('status')).toBe('eq.sending');
-    const patches = calls.filter((c) => path(c) === 'notifications' && c.method === 'PATCH' && c !== sweep).map((c) => (c.body as { status: string }).status);
-    expect(patches).toEqual(['sending', 'sent']);
+    const patches = calls.filter((c) => path(c) === 'notifications' && c.method === 'PATCH' && c !== sweep).map((c) => c.body as { status?: string; audience?: Record<string, unknown> });
+    expect(patches.map((p) => p.status)).toEqual(['sending', 'sent', undefined]);
+    // The reach counted at scheduling time was an estimate: the row now says who it really went to.
+    expect(patches[2]?.audience).toEqual({ lang: 'te', label: 'Telugu', people: 1, devices: 1 });
   });
 
   it('skips a row another run already claimed, and waits during quiet hours', async () => {

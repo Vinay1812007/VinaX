@@ -305,7 +305,12 @@ test.describe('console pages', () => {
     await settle(page);
     const body = page.locator('#pageBody');
     await expect(body.locator('.kpi-label').filter({ hasText: /^Messages sent$/ })).toHaveCount(1);
+    // Delivered counts devices, never "people minus devices".
+    await expect(body.locator('.kpi-label').filter({ hasText: /^Delivered$/ })).toHaveCount(1);
+    await expect(body.locator('.kpi-sub').filter({ hasText: /^of 22 devices · 3 missed$/ })).toHaveCount(1);
     await expect(body.locator('.outreach-kinds .card')).toHaveCount(3);
+    await expect(body.getByText('Sent each day')).toBeVisible();
+    await expect(body.locator('.chart-wrap .legend-item')).toHaveCount(3);
     await expect(body.getByText('Who got the newest run')).toBeVisible();
     await expect(body.getByText('Your week in VinaX').first()).toBeVisible();
     await body.getByRole('radio', { name: '30 days' }).click();

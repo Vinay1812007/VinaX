@@ -195,7 +195,7 @@ async function recentSongBy(cat: Catalogue, artist: string, errors: { n: number 
 
 // ── Sending ──────────────────────────────────────────────────────────
 
-export interface KindSummary { candidates: number; due: number; people: number; sent: number; skipped: Record<string, number>; notificationId?: number | null; note?: string }
+export interface KindSummary { candidates: number; due: number; people: number; sent: number; skipped: Record<string, number>; notificationId?: number | null; note?: string; /** New releases: fresh songs the catalogue had this run. */ found?: number }
 
 interface Planned { account: string; key: string; msg: Message; facts: Record<string, unknown> }
 
@@ -367,7 +367,7 @@ async function runRelease(env: PushEnv & DbEnv, rules: PushRules, now: number, c
   }
   const byCount = (m: Map<string, number>): string[] => [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k]) => k);
   const songs = await freshReleases(cat, byCount(langCount), byCount(artistCount), now, s);
-  s.skipped.freshSongsFound = songs.length;
+  s.found = songs.length;
   const planned: Planned[] = [];
   for (const c of due) {
     const mine = songs.filter((song) => !c.sentSongs.includes(song.id) && c.artists.some((a) => byArtist(song, a))).slice(0, 3);

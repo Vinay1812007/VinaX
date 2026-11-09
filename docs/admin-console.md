@@ -389,7 +389,7 @@ Every send keeps to Notification Rules (quiet hours, the per-person cap, the Rem
 | `POST /api/admin/outreach { action: 'preview', kind }` | editor; `{ ok, devices, sent, message, real }`; 409 `no_devices` / `no_google` |
 | `POST /api/admin/outreach { action: 'run' }` | owner; runs the job now and answers its summary |
 
-The page shows the totals for the window (messages, people reached, opened, last run), a card per kind (status, when, limit, what the last run did and why people were skipped, a preview button), each run and the people in the newest run of each kind with the exact message they got.
+The page shows the totals for the window (messages sent — one per person; delivered — devices that accepted one, of how many; opened; last run), a card per kind (status, when, limit, what the last run did — for new releases also how many new songs the catalogue had — and why people were skipped, a preview button), a stacked chart of messages per day by kind (`byDay`), each run and the people in the newest run of each kind with the exact message they got.
 
 ### Notifications · Notification Rules (`#/notification-rules`, `pages/settings-notification-rules.js`)
 
