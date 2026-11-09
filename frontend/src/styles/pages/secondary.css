@@ -542,3 +542,23 @@ html.reduce-motion .vx-sec *, html.reduce-motion .vx-sec *::before, html.reduce-
 .vx-story-pill.is-primary { background: #fff; color: #111; }
 @media (prefers-reduced-motion: reduce) { .vx-story-bars i.is-live::after { animation: none; width: 100%; } .vx-story-body { animation: none; } }
 
+
+/* 1.12 — badges on the Stats page and a public profile. A locked badge is dim and grey; progress is a meter under it. */
+.vx-badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+.vx-badge { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 8px 12px; border-radius: 18px; background: rgb(var(--ink-100) / 0.05); border: 1px solid var(--sec-line); text-align: center; color: rgb(var(--ink-100)); transition: transform 180ms var(--ease-calm), background 180ms var(--ease-calm); }
+.vx-badge:hover { background: rgb(var(--ink-100) / 0.09); }
+.vx-badge[aria-pressed="true"] { outline: 2px solid hsl(var(--badge-h) 90% 66%); outline-offset: 1px; }
+.vx-badge.is-locked { color: rgb(var(--ink-300)); }
+.vx-badge.is-locked .vx-badge-glyph { filter: grayscale(1); opacity: 0.55; background: rgb(var(--ink-100) / 0.08); border-color: transparent; }
+.vx-badge-glyph { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 999px; font-size: 28px; line-height: 1; background: hsl(var(--badge-h) 70% 50% / 0.2); border: 2px solid hsl(var(--badge-h) 90% 66%); }
+.vx-badge-name { font-size: 12.5px; font-weight: 700; line-height: 1.2; }
+.vx-badge-meter { width: 100%; height: 4px; overflow: hidden; border-radius: 999px; background: rgb(var(--ink-100) / 0.1); }
+.vx-badge-meter > span { display: block; height: 100%; border-radius: inherit; background: hsl(var(--badge-h) 80% 60%); }
+.vx-badge-detail { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-top: 12px; padding: 14px 16px; border-radius: 16px; background: rgb(var(--ink-100) / 0.05); border: 1px solid var(--sec-line); }
+.vx-badge-detail .vx-badge-glyph { width: 48px; height: 48px; font-size: 24px; flex-shrink: 0; }
+.vx-badge-detail-main { flex: 1 1 200px; min-width: 0; }
+.vx-badge-detail-main h3 { margin: 0; font-size: 16px; font-weight: 750; }
+.vx-badge-detail-main p { margin: 2px 0 0; font-size: 13px; color: rgb(var(--ink-300)); }
+.vx-badge-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.vx-badge-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px 0 6px; border-radius: 999px; background: hsl(var(--badge-h) 70% 50% / 0.16); border: 1px solid hsl(var(--badge-h) 80% 60% / 0.5); font-size: 13.5px; font-weight: 650; color: rgb(var(--ink-100)); }
+.vx-badge-chip .vx-badge-glyph { width: 26px; height: 26px; font-size: 14px; border-width: 1px; }

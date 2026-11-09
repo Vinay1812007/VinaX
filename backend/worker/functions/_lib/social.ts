@@ -70,7 +70,11 @@ export interface ProfileSummary {
   topArtists: Array<{ name: string; plays: number }>;
   topLanguages: Array<{ id: string; pct: number }>;
   recentLikes: Array<Record<string, unknown>>;
+  /** 1.12 — the badges the device has earned (ids from the app's catalogue; the page draws them). */
+  badges?: string[];
 }
+
+const BADGE_ID_RE = /^[a-z0-9][a-z0-9-]{1,31}$/;
 
 /** The digest the device sends: a few top artists and languages, up to 20 recent likes. */
 export function cleanSummary(raw: unknown): ProfileSummary {
@@ -94,7 +98,8 @@ export function cleanSummary(raw: unknown): ProfileSummary {
     })
     .filter((l): l is { id: string; pct: number } => !!l);
   const recentLikes = (Array.isArray(s.recentLikes) ? s.recentLikes : []).slice(0, 20).map(cleanSong).filter((x): x is Record<string, unknown> => !!x);
-  return { topArtists, topLanguages, recentLikes };
+  const badges = [...new Set((Array.isArray(s.badges) ? s.badges : []).filter((b): b is string => typeof b === 'string' && BADGE_ID_RE.test(b)))].slice(0, 40);
+  return { topArtists, topLanguages, recentLikes, ...(badges.length ? { badges } : {}) };
 }
 
 export interface ProfileRow {
@@ -121,6 +126,7 @@ export function publicProfile(p: ProfileRow, extra: { following?: boolean; follo
     topArtists: p.summary?.topArtists ?? [],
     topLanguages: p.summary?.topLanguages ?? [],
     recentLikes: p.summary?.recentLikes ?? [],
+    badges: p.summary?.badges ?? [],
     nowPlaying: fresh ? p.now_playing : null,
     updatedAt: p.updated_at,
     ...(extra.following !== undefined ? { following: extra.following } : {}),

@@ -13,21 +13,8 @@ interface Cached {
 }
 
 /** ISO-week key like "2026-W26" — the weekly mix is stable within this. */
-export function isoWeekKey(d = new Date()): string {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = (date.getUTCDay() + 6) % 7;
-  date.setUTCDate(date.getUTCDate() - dayNum + 3);
-  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
-  const week =
-    1 +
-    Math.round(
-      ((date.getTime() - firstThursday.getTime()) / 86_400_000 -
-        3 +
-        ((firstThursday.getUTCDay() + 6) % 7)) /
-        7,
-    );
-  return `${date.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
-}
+import { isoWeekKey } from './weekKey';
+export { isoWeekKey };
 
 function saltOf(key: string): number {
   let h = 0;

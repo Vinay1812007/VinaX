@@ -14,6 +14,7 @@ import { useLibraryStore } from '@/store/libraryStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { recommendFromSeeds } from '@/services/recs/similar';
 import { languageLabel } from '@/constants/languages';
+import { BADGE_BY_ID } from '@/features/badges/catalog';
 import { FALLBACK_ART } from '@/utils/images';
 import { toast } from '@/store/toastStore';
 import { cn } from '@/utils/cn';
@@ -87,6 +88,19 @@ export default function ProfilePage() {
           <SectionHeader title="Top artists" />
           <div className="flex flex-wrap gap-2">
             {profile.topArtists.map((a) => <Link key={a.name} to={`/search/${encodeURIComponent(a.name)}`} className="vx-chip-idle px-4 min-h-[36px] inline-flex items-center text-[14px] font-semibold">{a.name}</Link>)}
+          </div>
+        </section>
+      )}
+
+      {profile.badges.some((id) => BADGE_BY_ID.has(id)) && (
+        <section className="vx-sec-block" aria-label="Badges">
+          <SectionHeader title="Badges" explanation={mine ? 'Earned on your devices; see them all on Your VinaX.' : undefined} seeAllTo={mine ? '/stats#badges' : undefined} />
+          <div className="vx-badge-chips">
+            {profile.badges.map((id) => BADGE_BY_ID.get(id)).filter((b): b is NonNullable<typeof b> => !!b).map((b) => (
+              <span key={b.id} className="vx-badge-chip" style={{ '--badge-h': b.hue } as React.CSSProperties} title={b.blurb}>
+                <span className="vx-badge-glyph" aria-hidden>{b.glyph}</span>{b.name}
+              </span>
+            ))}
           </div>
         </section>
       )}

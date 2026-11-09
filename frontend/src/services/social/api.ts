@@ -20,6 +20,8 @@ export interface PublicProfile {
   topArtists: Array<{ name: string; plays: number }>;
   topLanguages: Array<{ id: string; pct: number }>;
   recentLikes: LiteSong[];
+  /** 1.12 — badge ids the listener earned (features/badges/catalog.ts names them). */
+  badges: string[];
   nowPlaying: LiteSong | null;
   updatedAt: string;
   following?: boolean;
@@ -67,6 +69,7 @@ function profileOrNull(raw: unknown): PublicProfile | null {
     topArtists: Array.isArray(p.topArtists) ? p.topArtists : [],
     topLanguages: Array.isArray(p.topLanguages) ? p.topLanguages : [],
     recentLikes: Array.isArray(p.recentLikes) ? p.recentLikes.filter((x) => x && typeof x.id === 'string') : [],
+    badges: Array.isArray(p.badges) ? p.badges.filter((b): b is string => typeof b === 'string') : [],
     nowPlaying: p.nowPlaying && typeof p.nowPlaying.id === 'string' ? p.nowPlaying : null,
     updatedAt: typeof p.updatedAt === 'string' ? p.updatedAt : new Date(0).toISOString(),
   };
@@ -103,7 +106,7 @@ export function liteSong(s: Song): LiteSong {
 }
 
 // ---------------------------------------------------------------- profile
-export interface ProfileWrite { handle?: string; public?: boolean; bio?: string | null; summary?: { topArtists: Array<{ name: string; plays: number }>; topLanguages: Array<{ id: string; pct: number }>; recentLikes: LiteSong[] }; nowPlaying?: LiteSong | null; shareNow?: boolean }
+export interface ProfileWrite { handle?: string; public?: boolean; bio?: string | null; summary?: { topArtists: Array<{ name: string; plays: number }>; topLanguages: Array<{ id: string; pct: number }>; recentLikes: LiteSong[]; badges?: string[] }; nowPlaying?: LiteSong | null; shareNow?: boolean }
 
 export const getMyProfile = () => call<{ profile?: PublicProfile } | null>('/profile', { auth: true }).then((r) => profileOrNull(r?.profile));
 export const putMyProfile = (patch: ProfileWrite) => call<{ profile?: PublicProfile }>('/profile', { method: 'PUT', body: JSON.stringify(patch), auth: true }).then((r) => profileOrNull(r?.profile));

@@ -48,6 +48,15 @@ Save an artist (the **Save** button on their page) and VinaX checks their songs 
 
 **Your year in music → Play as a story** plays your recap as full-screen slides: tap the right side for the next, the left side for the previous. The last slide shares the card.
 
+## Badges
+
+**Your VinaX** (the Stats page) has a **Badges** section: small awards for how you listen, worked out on your device. There are seventeen — your first song, 100 / 500 / 1,000 songs, listening 7 / 30 / 100 days in a row, 25 late-night or early-morning plays, three hours in one day, songs in 3 or 5 languages, 50 different artists, 100 plays of one artist, 50 likes, 5 playlists, and a weekly goal met four weeks running. A badge you have not earned yet is grey, with a meter showing how close you are.
+
+- A new badge is announced the moment you earn it; tap the message to see it.
+- Tap a badge for its details and **Share**: a square card with the badge, the day and your name, sent through your phone's share sheet (or saved as a picture).
+- Badges never go away, even when the plays behind them have left your history. They travel in your backup and sync with your account.
+- If you have a public profile, your badges show on it under **Badges**. Remove the profile and they stop showing; the badges themselves stay with you.
+
 ## More in 15
 
 - **Focus sounds** — Player tools → Focus sounds: rain, wind, a deep hum or an even hush beside the music, with a timer. The sleep timer stops them too.

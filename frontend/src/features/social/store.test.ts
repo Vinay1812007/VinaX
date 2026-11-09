@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import type { Song } from '@/types';
-import { buildDigest } from './store';
+import { KEYS } from '@/constants/storage-keys';
+import { buildDigest, earnedBadgeIds } from './store';
 
 const song = (id: string): Song => ({ id, title: id, subtitle: 'A', images: [{ quality: '500x500', url: `u/${id}` }], language: 'telugu', year: '2020', duration: 200 } as unknown as Song);
 
@@ -16,5 +17,15 @@ describe('15.0 — the profile digest', () => {
     expect(d.topLanguages).toEqual([{ id: 'telugu', pct: 75 }, { id: 'hindi', pct: 25 }]);
     expect(d.recentLikes).toHaveLength(20);
     expect(d.recentLikes[0]).toEqual({ id: 's0', title: 's0', subtitle: 'A', image: 'u/s0', language: 'telugu', year: '2020', duration: 200 });
+    expect(d.badges).toEqual([]);
+  });
+
+  it('1.12 — carries the badges earned, oldest first, read from the ledger without the engine', () => {
+    localStorage.setItem(KEYS.badges, JSON.stringify({ earned: { century: '2026-03-01', 'first-note': '2026-01-02', junk: 5 }, counters: {} }));
+    expect(earnedBadgeIds()).toEqual(['first-note', 'century']);
+    expect(buildDigest([], { artists: {}, languages: {} } as never).badges).toEqual(['first-note', 'century']);
+    localStorage.setItem(KEYS.badges, '[1]');
+    expect(earnedBadgeIds()).toEqual([]);
+    localStorage.clear();
   });
 });

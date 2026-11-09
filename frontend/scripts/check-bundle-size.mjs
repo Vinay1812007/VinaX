@@ -115,7 +115,15 @@ const DIST = 'dist';
 // path) and the personal-engine setting. The personal Home block, its client,
 // the reporter and the playlist maker all stay lazy (verified in the chunk
 // list above).
-const FIRST_LOAD_BUDGET = 192 * 1024; // gzipped
+// 2026-11-09: re-based 192 -> 193 for 1.12 badges (measured 192.2 KB, main
+// was 192.0 with 38 bytes of room). What moved is first-load by nature: the
+// badge check on the play path (+0.2 KB in playerStore: a dynamic import
+// and the facts it hands over) and the public profile digest's badge list
+// (+0.1 KB in index). The catalogue, the engine, the Stats section and the
+// share card stay lazy (verified: catalog-*.js and engine-*.js are not in
+// the first-load list; the badge chunk is loaded by the player store on
+// demand and by the Stats page).
+const FIRST_LOAD_BUDGET = 193 * 1024; // gzipped
 const CHUNK_BUDGET = 80 * 1024; // gzipped — chunks that ship in the first load
 const LAZY_CHUNK_BUDGET = 160 * 1024; // gzipped — on-demand chunks (routes, features)
 

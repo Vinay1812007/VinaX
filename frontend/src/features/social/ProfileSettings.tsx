@@ -32,7 +32,7 @@ export function ProfileSettings() {
 
   return (
     <>
-      <Row stack label="Public profile" note="A page other listeners can follow: your name and picture, a line, your top artists and languages, and your recent likes. Off by default; switch it on and pick a handle." keywords="profile handle follow friends social public">
+      <Row stack label="Public profile" note="A page other listeners can follow: your name and picture, a line, your top artists and languages, your badges, and your recent likes. Off by default; switch it on and pick a handle." keywords="profile handle follow friends social public">
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <span className="text-[13px] text-ink-400">/u/</span>

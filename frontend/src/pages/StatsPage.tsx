@@ -18,6 +18,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { SectionHeader } from '@/components/SectionHeader';
 import { SongRow } from '@/components/SongRow';
 import { ChevronRightIcon, ShareIcon, WaveIcon } from '@/components/Icons';
+import { BadgesSection } from '@/features/badges/BadgesSection';
 import '@/styles/pages/secondary.css';
 
 /** One hue at falling strength: the language split reads as parts of one whole. */
@@ -302,6 +303,9 @@ export default function StatsPage() {
         </div>
         <WeekGoals />
       </section>
+
+      {/* 1.12 — badges: earned first, the rest with how close they are */}
+      <BadgesSection />
 
       {/* v5.17.0 — 12-week listening calendar */}
       <ListeningCalendar entries={entries} />

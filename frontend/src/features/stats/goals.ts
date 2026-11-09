@@ -16,7 +16,7 @@
 import type { HistoryEntry } from '@/types';
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal, setLocal } from '@/services/storage/local';
-import { isoWeekKey } from '@/features/weekly/useWeeklyMix';
+import { isoWeekKey } from '@/features/weekly/weekKey';
 import { listeningTotal } from '@/features/stats/listening';
 
 export interface WeekGoal {
