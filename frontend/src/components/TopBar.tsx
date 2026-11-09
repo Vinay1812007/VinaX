@@ -15,6 +15,8 @@ const ACTIONS_SLOT = 'vx-topbar-actions';
 const ProfileMenu = lazy(() => import('./ProfileMenu'));
 // The "Music languages" button and its picker: their own chunk, so the app shell stays small.
 const LanguageButton = lazy(() => import('./LanguageButton'));
+// 1.12 — Ideas & bugs: the popup behind the VinaX mark, loaded when it is first opened.
+const FeedbackSheet = lazy(() => import('./FeedbackSheet'));
 
 /**
  * v7.0.1 — the bar carries no search box: Search is a primary destination and
@@ -25,6 +27,8 @@ const LanguageButton = lazy(() => import('./LanguageButton'));
  * command palette key and the listener's avatar, which opens Settings.
  * 13.4.0 — the avatar opens a menu instead: profile settings, app settings
  * and Sign out (ProfileMenu).
+ * 1.12 — the VinaX mark in the bar is "Ideas & bugs": a popup for feature
+ * ideas and bug reports that names the device for the listener (FeedbackSheet).
  */
 export function TopBar({ onCommands }: { onCommands: () => void }) {
   const navigate = useNavigate();
@@ -60,6 +64,9 @@ export function TopBar({ onCommands }: { onCommands: () => void }) {
   const face = photo ? <img src={photo} alt="" width={36} height={36} referrerPolicy="no-referrer" onError={() => setPhotoFailed(true)} /> : initial || <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-5 h-5" aria-hidden><circle cx="12" cy="8.5" r="3.8" /><path d="M4.5 20c1.2-3.6 4.1-5.5 7.5-5.5s6.3 1.9 7.5 5.5" /></svg>;
   // 13.9 — a visitor browsing signed out gets a Sign in button where the avatar goes.
   const openSignIn = useUiStore((s) => s.openSignIn);
+  // 1.12 — the VinaX mark in the bar opens Ideas & bugs (feature ideas and bug
+  // reports), on every platform: the Android app, iPhone and iPad web, Windows, Mac.
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   return (
     <>
     <div ref={sentinel} className="vx-topbar-sentinel" aria-hidden />
@@ -73,6 +80,22 @@ export function TopBar({ onCommands }: { onCommands: () => void }) {
       <div className="vx-topbar-actions">
         {/* Pages add their own actions here through <TopBarActions>. */}
         <div id={ACTIONS_SLOT} className="contents" />
+        <button
+          type="button"
+          className="vx-topbar-feedback"
+          aria-label="Suggest a feature or report a bug"
+          aria-haspopup="dialog"
+          aria-expanded={feedbackOpen}
+          onClick={() => setFeedbackOpen(true)}
+        >
+          <img src="/icons/icon.svg?v=14" alt="" width={22} height={22} />
+          <span>Ideas &amp; bugs</span>
+        </button>
+        {feedbackOpen && (
+          <Suspense fallback={null}>
+            <FeedbackSheet onClose={() => setFeedbackOpen(false)} />
+          </Suspense>
+        )}
         <Suspense fallback={null}>
           <LanguageButton />
         </Suspense>

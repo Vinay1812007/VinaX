@@ -54,8 +54,6 @@
   Cache-Control: public, max-age=2592000
 /favicon.ico
   Cache-Control: public, max-age=2592000
-/og.png
-  Cache-Control: public, max-age=604800
 /manifest.webmanifest
   Cache-Control: public, max-age=86400
 
