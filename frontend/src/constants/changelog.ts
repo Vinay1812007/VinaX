@@ -16,6 +16,13 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.11.4': {
+    title: 'One README: every Markdown document folded into README.md, the old docs removed',
+    changes: [
+      { type: 'improved', text: 'README.md is now the single document: what a listener gets, architecture, repository layout, running, checks, releases, workflows, deployment, secrets, operations, database, owner console, Android and push setup, VinaX AI, music AI, the…' },
+      { type: 'improved', text: '72 Markdown files (docs/, docs/history/, docs/user-guide/, frontend/docs, backend/README, DEPLOYMENT.md, the Android README) and the history screenshots are deleted; comments and workflow messages that pointed at them now name the README…' },
+    ],
+  },
   '1.11.3': {
     title: 'Song reactions: five public reactions under every song, and a Song Reactions page in the…',
     changes: [
