@@ -114,6 +114,8 @@ export interface SettingsState {
    * order within 1.5 s, or the on-device order plays. On by default.
    */
   aiRerank: boolean;
+  /** 1.12 — Up Next, the AI DJ and Home know the time of day and weekday/weekend, from the listener's own history. */
+  momentAware: boolean;
   /** The AI DJ suggests songs for Up Next (not `aiDj`: that name belongs to a retired setting the migration removes) from a taste summary and recent plays (services/ai/dj.ts). On by default. */
   aiDjPicks: boolean;
   /** 1.4 — add one AI generated song to each automatic stretch (services/ai/genInQueue.ts). Off by default. */
@@ -194,6 +196,7 @@ export interface SettingsState {
   setQueueLanguages(v: QueueLanguages): void;
   setNeverRepeat(v: boolean): void;
   setAiRerank(v: boolean): void;
+  setMomentAware(v: boolean): void;
   setAiDjPicks(v: boolean): void;
   setGenInQueue(v: boolean): void;
   setDjTakeover(v: boolean): void;
@@ -272,6 +275,7 @@ const defaults = {
   queueLanguages: 'mix' as QueueLanguages,
   neverRepeat: false,
   aiRerank: true,
+  momentAware: true,
   aiDjPicks: true,
   genInQueue: false,
   djTakeover: true,
@@ -418,6 +422,7 @@ export const useSettingsStore = create<SettingsState>()(
       setQueueLanguages: (queueLanguages) => set({ queueLanguages: queueLanguages === 'one' ? 'one' : 'mix' }),
       setNeverRepeat: (neverRepeat) => set({ neverRepeat: !!neverRepeat }),
       setAiRerank: (aiRerank) => set({ aiRerank: !!aiRerank }),
+      setMomentAware: (momentAware) => set({ momentAware: !!momentAware }),
       setAiDjPicks: (aiDjPicks) => set({ aiDjPicks: !!aiDjPicks }),
       setGenInQueue: (genInQueue) => set({ genInQueue: !!genInQueue }),
       setDiscoveryMode: (mode) => {

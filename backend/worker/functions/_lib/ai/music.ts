@@ -240,13 +240,22 @@ export interface SittingIntent {
   /** −0.3..0.3: more energy (+) or less (−) than usual. */
   energySteer: number;
   completionStreak: number;
+  /** 1.12 — "weekday evening": the moment of day the device says this sitting is in. */
+  moment: string | null;
+  /** 1.12 — up to three artists the listener usually plays in this moment (their own history, on the device). */
+  momentArtists: string[];
 }
 
 export function sanitizeIntent(raw: unknown): SittingIntent {
   const v = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const steer = typeof v.energySteer === 'number' && Number.isFinite(v.energySteer) ? Math.round(Math.max(-0.3, Math.min(0.3, v.energySteer)) * 100) / 100 : 0;
   const streak = typeof v.completionStreak === 'number' && Number.isFinite(v.completionStreak) ? Math.max(0, Math.min(20, Math.round(v.completionStreak))) : 0;
-  return { mood: cleanText(v.mood, 20), tune: cleanText(v.tune, 24), language: cleanText(v.language, 24), energySteer: steer, completionStreak: streak };
+  const moment = cleanText(v.moment, 24);
+  const momentArtists = Array.isArray(v.momentArtists) ? v.momentArtists.map((a) => cleanText(a, 60)).filter((a): a is string => !!a).slice(0, 3) : [];
+  return {
+    mood: cleanText(v.mood, 20), tune: cleanText(v.tune, 24), language: cleanText(v.language, 24), energySteer: steer, completionStreak: streak,
+    moment: moment && /^(weekday|weekend) [a-z ]{3,16}$/.test(moment) ? moment : null, momentArtists,
+  };
 }
 
 /** A reason a listener reads ("Why this song?", a shelf's line): one plain sentence, no links, at most `max` characters. */

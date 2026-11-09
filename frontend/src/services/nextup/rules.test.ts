@@ -23,6 +23,20 @@ const scoring = (o: Partial<ScoreContext> = {}): ScoreContext => ({
 });
 const cand = (s: Song, ...sources: Source[]): Candidate => ({ song: s, sources: new Set(sources), at: 0 });
 
+describe('1.12 — listening moments', () => {
+  it('lifts the artists and languages the listener plays at this time of day, by confidence', () => {
+    const mine = song('m', 'Evening Singer', { language: 'telugu' });
+    const lang = song('l', 'Someone', { language: 'telugu' });
+    const other = song('o', 'Other', { language: 'hindi' });
+    const base = scoring({ languages: ['telugu', 'hindi'], salt: 0 });
+    const moment = scoring({ languages: ['telugu', 'hindi'], salt: 0, moment: { languages: new Set(['telugu']), artists: new Set(['evening singer']), confidence: 0.5 } });
+    const lift = (s: Song) => scoreCandidate(cand(s, 'anchor'), moment) - scoreCandidate(cand(s, 'anchor'), base);
+    expect(lift(mine)).toBeCloseTo(0.3 * 0.5, 5);
+    expect(lift(lang)).toBeCloseTo(0.3 * 0.5 * 0.4, 5);
+    expect(lift(other)).toBe(0);
+  });
+});
+
 describe('V2 Up Next rules — what may be picked', () => {
   it('no song comes back within 72 hours of playing; a liked one may after 18', () => {
     const s = song('x', 'A');

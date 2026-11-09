@@ -16,6 +16,7 @@ import { aiDjSongs, djReason } from '@/services/ai/dj';
 import { isSoftMuted } from '@/services/recommendation/admission';
 import { getSessionIntent } from '@/services/personalization/sessionIntent';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
+import { momentProfile } from '@/services/personalization/moments';
 import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import { useReasonStore } from '@/store/reasonStore';
 import { useDownloadsStore } from '@/store/downloadsStore';
@@ -248,6 +249,8 @@ function buildEnv(seed: Song, ctx: RecommendationContext, anchor: Anchor, option
   const tasteLeads = new Set(topArtists(ctx.profile, 20).map((a) => (a.affinity.name ?? '').trim().toLowerCase()).filter(Boolean));
   const tuneQuery = tune ? tuneSearchQuery(tune, languages[0] ?? null) : null;
   const moodCache = new Map<string, Mood>();
+  // 1.12 — what this listener plays at this time of day (their own history).
+  const moment = useSettingsStore.getState().momentAware === false ? null : momentProfile(ctx.history ?? [], new Date(now));
   const score: ScoreContext = {
     languages,
     mood,
@@ -264,6 +267,7 @@ function buildEnv(seed: Song, ctx: RecommendationContext, anchor: Anchor, option
     // A liked song pays a quarter of the exposure cost: the listener wants it back.
     exposure: (s) => ledger.penalty(songKey(s)) * (likedIds.has(s.id) ? 0.25 : 1),
     ...(tune ? { tune: (s: Song) => tuneScoreAdjust(s, tune, languages[0] ?? null) } : {}),
+    ...(moment?.confidence ? { moment: { languages: new Set(moment.languages), artists: new Set(moment.artists.map((a) => a.key)), confidence: moment.confidence } } : {}),
     salt: ctx.salt ?? 0,
   };
   return {

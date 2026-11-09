@@ -16,6 +16,7 @@ import { toast } from '@/store/toastStore';
 import { TuneChips } from '@/features/queue/TuneChips';
 import { SmartQueue } from '@/features/queue/SmartQueue';
 import { NeverRepeatChip } from '@/features/queue/NeverRepeatChip';
+import { MomentRow } from '@/features/queue/MomentRow';
 import { OriginBadge } from '@/features/queue/OriginBadge';
 import { originOf, type QueueOrigin } from '@/features/queue/origin';
 import { TrackMenu, type TrackMenuItem } from '@/components/TrackMenu';
@@ -672,6 +673,8 @@ export default function QueuePage() {
             </span>
             <NeverRepeatChip />
           </div>
+          {/* 1.12 — the moment Up Next is planning for (time of day, weekday or weekend). */}
+          <MomentRow />
           {/* D5 — sort the upcoming stretch; the playing song never moves. */}
           {upNext.length >= 3 && (
             <div className="vx-queue-toolrow">

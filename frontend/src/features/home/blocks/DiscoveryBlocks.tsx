@@ -7,6 +7,7 @@ import { useTrendingForYou } from '../useTrendingForYou';
 import { useTrendingForLanguage, useNewReleases, usePopular } from '../useHomeShelves';
 import { useFreshFinds, useHiddenGems, useTrendingNearYou } from '../useDiscoveryShelves';
 import { useMoodShelf } from '../useMoodShelves';
+import { useMomentShelf } from '../useMomentShelf';
 import { useShelfDedupe } from '../shelfLedger';
 import { MoreShelves, SongShelf, useShelfLens } from './shared';
 
@@ -30,8 +31,13 @@ export function DiscoveryBlock() {
   const trendingNow = useTrendingForYou();
   const trending = useTrendingForLanguage(primaryLang);
   const newReleases = useNewReleases();
+  // 1.12 — what this listener plays at this time of day, from their own history.
+  const moment = useMomentShelf();
   return (
     <>
+      {moment.isLoading ? <ShelfSkeleton /> : moment.data && (
+        <SongShelf title={moment.data.title} explanation={moment.data.explanation} songs={dedupe(lens(moment.data.songs, 'discovery'))} />
+      )}
       {nearYou.isLoading ? <ShelfSkeleton /> : (
         <SongShelf title={region?.country ? `Trending near you · ${region.regionLabel ?? region.country}` : 'Trending near you'} songs={dedupe(lens(nearYou.data, 'discovery'))} />
       )}

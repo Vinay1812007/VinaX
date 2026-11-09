@@ -4,6 +4,8 @@ import { topArtists, topLanguages } from '@/services/personalization/profile';
 import { energyOfSong } from '@/services/personalization/session';
 import { inferMood } from '@/services/recommendation/mood';
 import { isSkippedPlay } from '@/utils/plays';
+import { momentProfile } from '@/services/personalization/moments';
+import { useSettingsStore } from '@/store/settingsStore';
 import type { TuneIntent } from '@/services/recommendation/tune';
 
 /**
@@ -35,6 +37,10 @@ export interface SittingIntent {
   language: string | null;
   energySteer: number;
   completionStreak: number;
+  /** 1.12 — "weekday evening": the moment of day this sitting is in. */
+  moment: string | null;
+  /** 1.12 — up to three artists the listener usually plays in this moment (their own history). */
+  momentArtists: string[];
 }
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -66,13 +72,17 @@ export function buildTasteSummary(ctx: RecommendationContext, now = new Date()):
   };
 }
 
-export function buildSittingIntent(ctx: RecommendationContext, opts: { tune?: TuneIntent | null; language?: string | null } = {}): SittingIntent {
+export function buildSittingIntent(ctx: RecommendationContext, opts: { tune?: TuneIntent | null; language?: string | null; now?: Date } = {}): SittingIntent {
+  const aware = useSettingsStore.getState().momentAware !== false;
+  const moment = aware ? momentProfile(ctx.history ?? [], opts.now ?? new Date()) : null;
   return {
     mood: ctx.moodPin ?? ctx.sessionMood ?? null,
     tune: opts.tune ?? null,
     language: opts.language ?? ctx.sessionLanguage ?? null,
     energySteer: round2(ctx.sessionIntent?.energySteer ?? 0),
     completionStreak: ctx.sessionIntent?.completionStreak ?? 0,
+    moment: moment ? moment.label : null,
+    momentArtists: moment?.confidence ? moment.artists.slice(0, 3).map((a) => a.name) : [],
   };
 }
 

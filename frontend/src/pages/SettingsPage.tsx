@@ -866,6 +866,13 @@ export default function SettingsPage() {
               >
                 <Toggle on={s.aiRerank !== false} onChange={s.setAiRerank} label="AI fine-tunes Up Next" />
               </Row>
+              <Row
+                label="Time and day awareness"
+                note="VinaX learns what you play at each time of day on weekdays and weekends, from your history on this device, and leans Up Next, the AI DJ and a Home shelf towards it."
+                keywords="moment time of day weekday weekend morning evening habit personalised"
+              >
+                <Toggle on={s.momentAware !== false} onChange={s.setMomentAware} label="Time and day awareness" />
+              </Row>
               <GenerationSettings />
               <Block
                 label="Trending vs. your taste"

@@ -111,6 +111,13 @@ export interface ScoreContext {
   exposure(song: Song): number;
   /** A "Tune this queue" nudge. */
   tune?: (song: Song) => number;
+  /**
+   * 1.12 — this listener's pattern for the moment of day (services/
+   * personalization/moments): the languages and lead artists they usually
+   * play now, and how much to trust it. Absent when the pattern is thin or
+   * the listener switched the awareness off.
+   */
+  moment?: { languages: ReadonlySet<string>; artists: ReadonlySet<string>; confidence: number };
   salt: number;
 }
 
@@ -126,6 +133,8 @@ export const WEIGHTS = Object.freeze({
   eraMax: 0.3,
   exposure: 0.7,
   jitter: 0.12,
+  /** 1.12 — a song by an artist, or in a language, the listener plays at this time of day. */
+  moment: 0.3,
 });
 
 export function scoreCandidate(c: Candidate, x: ScoreContext): number {
@@ -145,6 +154,11 @@ export function scoreCandidate(c: Candidate, x: ScoreContext): number {
   if (x.year && Number.isFinite(year) && year > 1900) score -= Math.min(WEIGHTS.eraMax, Math.max(0, Math.abs(year - x.year) - WEIGHTS.eraFree) * WEIGHTS.eraPerYear);
   score -= WEIGHTS.exposure * Math.max(0, x.exposure(song));
   if (x.tune) score += x.tune(song);
+  if (x.moment?.confidence) {
+    const l = languageOf(song);
+    const fit = x.moment.artists.has(lead) ? 1 : l && x.moment.languages.has(l) ? 0.4 : 0;
+    score += WEIGHTS.moment * x.moment.confidence * fit;
+  }
   score += WEIGHTS.jitter * jitter(song.id, x.salt);
   return score;
 }
