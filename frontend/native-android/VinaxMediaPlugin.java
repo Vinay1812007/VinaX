@@ -176,6 +176,9 @@ public class VinaxMediaPlugin extends Plugin {
     public void setPlaybackState(PluginCall call) {
         Intent i = new Intent(VinaxMediaService.ACTION_STATE);
         i.putExtra("playing", "playing".equals(call.getString("playbackState", "")));
+        // A pause the WebView did not ask for (a call took the audio): the
+        // service watches for the call to end and plays again.
+        i.putExtra("interrupted", Boolean.TRUE.equals(call.getBoolean("interrupted", false)));
         finish(call, dispatch(i));
     }
 

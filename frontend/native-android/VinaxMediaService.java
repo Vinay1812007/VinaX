@@ -112,6 +112,31 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
     private volatile boolean started = false;
     private BroadcastReceiver noisyReceiver;
 
+    /* ── Resume after a call ──────────────────────────────────────────────
+     * A phone or VoIP call takes audio focus and the WebView pauses the
+     * song. Some devices hand the focus back as a transient loss and the
+     * WebView resumes by itself; many (and most VoIP apps) hand out a
+     * permanent loss, after which nothing restarts the music until the app
+     * is reopened. The service watches the audio MODE instead — it needs no
+     * permission, and every call (cellular or VoIP) moves it through
+     * RINGTONE / IN_CALL / IN_COMMUNICATION and back to NORMAL. */
+    private AudioManager audioManager;
+    /** Android 12+: the mode listener; null below that (polling is used). */
+    private Object modeListener;
+    /** Play again the moment the mode returns to NORMAL. */
+    private boolean resumeAfterCall = false;
+    /** When the WebView last reported a pause it did not ask for (0 = none). */
+    private long interruptedAt = 0;
+    private boolean inCallMode = false;
+    private final Runnable modePoll = new Runnable() {
+        @Override public void run() { pollMode(); }
+    };
+    private boolean polling = false;
+    private long pollStartedAt = 0;
+    /** An interruption older than this cannot be the start of a call. */
+    private static final long INTERRUPT_WINDOW_MS = 8000;
+    private static final long RESUME_DELAY_MS = 700;
+
     /* Pending browse result from a trusted car / watch client. */
     public static final Map<String, Result<List<MediaBrowserCompat.MediaItem>>> pendingResults = new HashMap<>();
 
@@ -147,6 +172,104 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
         session.setActive(true);
         setSessionToken(session.getSessionToken());
         registerNoisyReceiver();
+        watchAudioMode();
+    }
+
+    private static boolean isCallMode(int mode) {
+        return mode == AudioManager.MODE_RINGTONE
+                || mode == AudioManager.MODE_IN_CALL
+                || mode == AudioManager.MODE_IN_COMMUNICATION
+                || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                    && mode == AudioManager.MODE_CALL_SCREENING);
+    }
+
+    private void watchAudioMode() {
+        audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
+        if (audioManager == null) return;
+        try { inCallMode = isCallMode(audioManager.getMode()); } catch (Exception ignored) { }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return; // polling below
+        try {
+            AudioManager.OnModeChangedListener l = mode -> main.post(() -> onModeChanged(mode));
+            audioManager.addOnModeChangedListener(main::post, l);
+            modeListener = l;
+        } catch (Exception e) {
+            Log.w(TAG, "mode listener not registered: " + e.getMessage());
+            modeListener = null;
+        }
+    }
+
+    /** The audio mode moved: into a call (remember whether to come back) or
+     *  out of one (come back). */
+    private void onModeChanged(int mode) {
+        boolean call = isCallMode(mode);
+        if (call == inCallMode) return;
+        inCallMode = call;
+        if (call) {
+            // Playing right now, or paused by the focus loss a moment ago.
+            if (playing || (interruptedAt != 0
+                    && System.currentTimeMillis() - interruptedAt < INTERRUPT_WINDOW_MS)) {
+                resumeAfterCall = true;
+            }
+            return;
+        }
+        if (!resumeAfterCall) return;
+        resumeAfterCall = false;
+        // Let the telephony stack finish releasing focus first, or the
+        // WebView's own focus request is refused and the song stays silent.
+        main.postDelayed(() -> {
+            try {
+                if (audioManager != null && isCallMode(audioManager.getMode())) {
+                    resumeAfterCall = true; // another call began; wait for it
+                    inCallMode = true;
+                    return;
+                }
+            } catch (Exception ignored) { }
+            if (playing) return; // the WebView already came back on its own
+            Log.i(TAG, "call ended: resuming playback");
+            relay("play");
+            playing = true;
+            updateSession();
+            promote();
+            VinaxPlayerWidget.push(VinaxMediaService.this, title, artist, artwork, true);
+        }, RESUME_DELAY_MS);
+    }
+
+    /** The WebView paused without being asked (focus loss). Below Android 12
+     *  there is no mode listener: poll the mode for a while to see whether a
+     *  call is what took the focus, and until it ends. */
+    private void onInterruptedPause() {
+        interruptedAt = System.currentTimeMillis();
+        if (audioManager == null) return;
+        if (modeListener != null) {
+            // The mode may already have moved before this report arrived.
+            try { onModeChanged(audioManager.getMode()); } catch (Exception ignored) { }
+            return;
+        }
+        if (!polling) {
+            polling = true;
+            pollStartedAt = interruptedAt;
+            main.postDelayed(modePoll, 1000);
+        }
+    }
+
+    private void pollMode() {
+        polling = false;
+        if (audioManager == null) return;
+        int mode;
+        try { mode = audioManager.getMode(); } catch (Exception e) { return; }
+        onModeChanged(mode);
+        boolean keepGoing = inCallMode || resumeAfterCall
+                || System.currentTimeMillis() - pollStartedAt < INTERRUPT_WINDOW_MS;
+        if (keepGoing) {
+            polling = true;
+            main.postDelayed(modePoll, 1000);
+        }
+    }
+
+    /** A deliberate pause or stop from anywhere calls the pending resume off. */
+    private void cancelResume() {
+        resumeAfterCall = false;
+        interruptedAt = 0;
     }
 
     private void relay(String action) {
@@ -167,6 +290,7 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
                         || !playing) return;
                 relay("pause");
                 playing = false;
+                cancelResume();
                 updateSession();
                 promote();
                 VinaxPlayerWidget.push(VinaxMediaService.this, title, artist, artwork, false);
@@ -226,6 +350,13 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
                 break;
             case ACTION_STATE:
                 playing = intent.getBooleanExtra("playing", false);
+                if (playing) {
+                    interruptedAt = 0;
+                } else if (intent.getBooleanExtra("interrupted", false)) {
+                    onInterruptedPause();
+                } else {
+                    cancelResume(); // the listener pressed pause in the app
+                }
                 break;
             case ACTION_SLEEP:
                 // 13.0.2 — only the notification changes; the fall-through to
@@ -248,9 +379,9 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
                 if (!foreground) promote();
                 return;
             case ACTION_PLAY:  relay("play");          playing = true;  break;
-            case ACTION_PAUSE: relay("pause");         playing = false; break;
+            case ACTION_PAUSE: relay("pause");         playing = false; cancelResume(); break;
             case ACTION_TOGGLE:
-                if (playing) { relay("pause"); playing = false; }
+                if (playing) { relay("pause"); playing = false; cancelResume(); }
                 else         { relay("play");  playing = true;  }
                 break;
             case ACTION_PREV:  relay("previoustrack"); break;
@@ -259,6 +390,7 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
             case ACTION_STOP_SELF:
                 relay("stop");
                 playing = false;
+                cancelResume();
                 started = false;
                 stopForegroundCompat();
                 VinaxPlayerWidget.clear(this);
@@ -463,6 +595,14 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
         if (noisyReceiver != null) {
             try { unregisterReceiver(noisyReceiver); } catch (Exception ignored) { }
             noisyReceiver = null;
+        }
+        main.removeCallbacks(modePoll);
+        if (modeListener != null && audioManager != null
+                && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                audioManager.removeOnModeChangedListener((AudioManager.OnModeChangedListener) modeListener);
+            } catch (Exception ignored) { }
+            modeListener = null;
         }
         if (session != null) session.release();
         super.onDestroy();

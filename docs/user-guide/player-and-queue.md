@@ -173,6 +173,8 @@ When you return to a song you left part-way, VinaX starts it where you stopped a
 - Positions for your last 80 songs are kept, on this device only.
 - To turn it off: **Settings → Playback → Resume playback**.
 
+**After a phone call.** In the Android app a call pauses the song. When the call ends the song plays again by itself, from where it stopped, even with the app in the background. Pressing pause during the call keeps it paused.
+
 ## History
 
 To see what you played: open **Library** → **History**.

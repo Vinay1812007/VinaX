@@ -117,6 +117,17 @@ describe('native state and position pushes', () => {
     expect(h.setPosition).toHaveBeenCalledTimes(3);
   });
 
+  it('a pause the player did not ask for is flagged so native resumes after the call', () => {
+    updateMediaMetadata(song('f2'));
+    updatePlaybackState(false, true);
+    expect(h.setPlaybackState).toHaveBeenLastCalledWith({ playbackState: 'paused', interrupted: true });
+    // Playing again clears the flag; a plain pause never carries it.
+    updatePlaybackState(true, true);
+    expect(h.setPlaybackState).toHaveBeenLastCalledWith({ playbackState: 'playing' });
+    updatePlaybackState(false);
+    expect(h.setPlaybackState).toHaveBeenLastCalledWith({ playbackState: 'paused' });
+  });
+
   it('a new track lets its first tick through even when the position barely moved', () => {
     updateMediaMetadata(song('g'));
     updatePositionState(180, 0.2, 1);

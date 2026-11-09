@@ -25,7 +25,9 @@ export interface MediaSessionLogEntry {
 /** VinaX's own native plugin (android/native-android/VinaxMediaPlugin.java). */
 interface VinaxMediaPlugin {
   setMetadata(o: { title: string; artist: string; album: string; artwork: string }): Promise<void>;
-  setPlaybackState(o: { playbackState: 'playing' | 'paused' | 'none' }): Promise<void>;
+  /** `interrupted`: a pause the player did not ask for (a call took the
+   *  audio) — the service plays again once the call ends. */
+  setPlaybackState(o: { playbackState: 'playing' | 'paused' | 'none'; interrupted?: boolean }): Promise<void>;
   setPosition(o: { duration: number; position: number; playbackRate: number }): Promise<void>;
   /** 13.0.2 — sleep-timer line on the playback notification ('' = off). */
   setSleepLabel(o: { label: string }): Promise<void>;
@@ -213,6 +215,7 @@ let _artwork = '';
 let _lyricLine: string | null = null;
 let _sleepLabel = '';
 let _playing = false;
+let _interrupted = false;
 let _position: { duration: number; position: number; rate: number } | null = null;
 // Last position handed to native; ticks closer than 1 s to it are skipped.
 let lastSentPosition = -10;
@@ -232,7 +235,8 @@ function pushNativeMetadata(): void {
 function pushNativeState(): void {
   if (!native || !VinaxMedia) return;
   const state = _playing ? 'playing' : 'paused';
-  void VinaxMedia.setPlaybackState({ playbackState: state })
+  const interrupted = !_playing && _interrupted;
+  void VinaxMedia.setPlaybackState(interrupted ? { playbackState: state, interrupted: true } : { playbackState: state })
     .then(() => record(`setPlaybackState(${state})`, true))
     .catch((e) => record('setPlaybackState', false, String(e)));
 }
@@ -343,8 +347,14 @@ export function setLockScreenLyricLine(line: string | null): void {
   else pushWebMetadata();
 }
 
-export function updatePlaybackState(playing: boolean): void {
+/**
+ * `interrupted` marks a pause nobody asked for — a phone or VoIP call took
+ * the audio. The Android service then watches the call and presses play for
+ * the listener when it ends, without the app being opened.
+ */
+export function updatePlaybackState(playing: boolean, interrupted = false): void {
   _playing = playing;
+  _interrupted = !playing && interrupted;
   if (native && VinaxMedia) {
     pushNativeState();
     // The session's PlaybackState carries the position it was set with: send

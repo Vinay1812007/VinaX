@@ -880,7 +880,9 @@ export const usePlayerStore = create<PlayerState>()(
             },
             onPlayState: (isPlaying) => {
               set({ isPlaying });
-              updatePlaybackState(isPlaying);
+              // A pause the engine did not request (a call took the audio):
+              // tell the Android service so it resumes when the call ends.
+              updatePlaybackState(isPlaying, !isPlaying && audioEngine.lastInterruptionAt > 0);
               // Re-push metadata with every state flip: if an earlier attempt
               // raced the service bind, this heals the notification.
               const current = get().queue[get().index];
