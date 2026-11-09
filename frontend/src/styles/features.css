@@ -141,3 +141,15 @@
 .home-studio:not([open]) { border-color: transparent; background: transparent; margin-bottom: 12px; }
 .home-studio:not([open]) > summary { min-height: 44px; padding: 0; }
 .home-studio-intro h2 { font-size: var(--vx-type-section); line-height: 1.3; letter-spacing: -.025em; }
+
+/* 1.12 — song reactions: five glyph pills with counts; yours is lit. */
+.vx-reactions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.vx-reaction { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border-radius: 999px; background: rgb(var(--ink-100) / 0.06); border: 1px solid var(--sec-line); color: rgb(var(--ink-200)); font-size: 13.5px; font-weight: 650; transition: transform 160ms var(--ease-calm), background 160ms var(--ease-calm); }
+.vx-reaction:hover { background: rgb(var(--ink-100) / 0.1); }
+.vx-reaction:active { transform: scale(0.96); }
+.vx-reaction.is-mine { background: rgb(var(--ember-500) / 0.18); border-color: rgb(var(--ember-500) / 0.6); color: rgb(var(--ink-100)); }
+.vx-reaction.is-busy { opacity: 0.7; }
+.vx-reaction-glyph { font-size: 18px; line-height: 1; }
+.vx-reactions-total { margin-left: 4px; font-size: 13px; color: rgb(var(--ink-400)); }
+.vx-reactions.is-compact .vx-reaction { min-height: 34px; padding: 0 10px; font-size: 12.5px; }
+.vx-reactions.is-compact .vx-reaction-glyph { font-size: 16px; }

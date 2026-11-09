@@ -5,7 +5,7 @@ VinaX 14.0 brings back a server database, designed from a clean sheet: one schem
 ## Setting it up
 
 1. Create a Supabase project (any region; Mumbai is closest to most listeners).
-2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 18), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
+2. SQL Editor, paste `backend/supabase/schema.sql` (schema version 19), Run. It is idempotent; re-running it never deletes data. `backend/supabase/reset.sql` wipes everything, for starting over.
 3. Set two Worker secrets from `backend/`:
 
 ```sh
@@ -30,6 +30,8 @@ Version 16 adds `os_version`, `device_model`, `device_brand` and `display_mode` 
 Version 17 adds `weekly_summary(p_to date)` for the owner's Monday email (`_lib/weeklySummary.ts`, the `weekly-summary` job): the seven whole India-time days before `p_to` (default today) next to the seven before them — new, total and active signed-in people, plays, listening seconds (`listen_time`), top five songs and artists, errors, new feedback, and `atRisk` (people who listened 2 hours or more in the 30 days before the last 7 and have not been seen in the last 7). It adds no table; the email's switch and recipients live in the `email` setting (`weeklySummary`, `weeklyTo`), and each week's send leaves a `weekly-summary-sent` row in `job_runs`.
 
 Version 18 adds `outreach` (one row per person per automatic push: `kind` recap | winback | release, the `notifications` row of that run, a `dedupe_key` that is the cap, the message, `facts`, devices and sent; cascades with the account; housekeeping keeps 180 days) and the functions the `outreach` job calls (`_lib/outreach.ts`): `_outreach_people()` (signed in, not blocked, with an active linked push device, and the newest device's `tz_offset`), `outreach_recap(since, min_seconds, accounts)` (each person's listening since then by the listen_time rule with their top artist and most played song), `outreach_winback(quiet_days, limit, accounts)` (last activity 7–37 days ago, top artist of their last 90 active days, last win-back and how many went unanswered in a row), `outreach_release_people(limit, accounts)` (played in the last 30 days: top three artists, languages, songs already sent as releases) and `outreach_summary(days)` for the console. The switches live in the `outreach` setting.
+
+Version 19 adds `song_reactions` (public song reactions, one row per device per song: `song_id`, `listener_id` — the derived device id the events route uses — `emoji` fire | love | sad | dance | wow, the song's title, artist, picture and language for the console, `at`; `delete_listener` removes a device's rows) and two functions: `song_reaction_counts(song, listener)` (total, per-emoji counts and the viewer's own, for a song page) and `stats_reactions(days, limit)` for the console's Song Reactions page (total and the previous window, people, songs, by emoji, top songs with per-emoji counts, by day in India time).
 
 ### Moving from version 10
 

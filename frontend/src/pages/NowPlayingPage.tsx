@@ -57,6 +57,7 @@ import { shareLink } from '@/utils/share';
 import { useBookmarkStore } from '@/store/bookmarkStore';
 import { AmbientOverlay, useIdle } from '@/components/AmbientOverlay';
 import { shareNowPlayingCard } from '@/utils/shareCard';
+import { ReactionBar } from '@/features/reactions/ReactionBar';
 import { songsLikeThis } from '@/services/recs/similar';
 import { FocusSheet } from '@/features/focus/FocusSheet';
 import { useFocusStore } from '@/features/focus/focusSounds';
@@ -1052,6 +1053,11 @@ export default function NowPlayingPage() {
         <div className="vx-np-opt is-block">
           <span className="vx-np-opt-label">Tune this queue</span>
           <TuneChips compact />
+        </div>
+        {/* 1.12 — react to the song; everyone's counts. */}
+        <div className="vx-np-opt is-block">
+          <span className="vx-np-opt-label">React</span>
+          <ReactionBar song={song} compact />
         </div>
         {/* v5.17.0 — share this exact moment, ambient mode */}
         <div className="vx-np-opt">

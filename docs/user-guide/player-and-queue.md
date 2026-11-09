@@ -155,6 +155,10 @@ Inside **Player tools**:
 - **Player tools → Share this moment** shares or copies a link that opens the song at the current position.
 - **Player tools → Ambient mode** is a switch (the pill reads "Ambient mode on" or "off"). When it is on and you leave the player untouched for 45 seconds while music plays, the screen changes to artwork and a clock.
 
+## React to a song
+
+Under a song on its page, and in Now Playing's player tools under **React**, five reactions — 🔥 fire, ❤️ love, 😢 feels, 🕺 dance, 🤩 wow — show how everyone feels about it. Tap one to add yours; tap it again to take it back, or tap another to change it. One reaction per song per device. Counts are public; who reacted is not.
+
 ## Streaming quality
 
 **Settings → Sound → Audio quality** is **Auto** unless you pick a level. Auto follows your connection: Very high (320 kbps) on Wi-Fi, High (160) on 4G, Medium (96) on 3G, Low (48) on 2G or when your browser's data saver is on; a browser that says nothing about the connection gets High. When the connection changes while a song plays — Wi-Fi to mobile data, say — the song carries on from the same spot at the new level. Low, Medium, High and Very high pin a level instead. The player's **⋯ → Quality…** menu has the same choices for the song playing. Downloads have their own level (**Download quality**) and never follow the connection.

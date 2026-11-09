@@ -41,6 +41,7 @@ import * as m_api_admin_content from './functions/api/admin/content';
 import * as m_api_admin_settings from './functions/api/admin/settings';
 import * as m_api_admin_experiments from './functions/api/admin/experiments';
 import * as m_api_admin_push from './functions/api/admin/push';
+import * as m_api_admin_reactions from './functions/api/admin/reactions';
 import * as m_api_admin_notifications from './functions/api/admin/notifications';
 import * as m_api_admin_audit from './functions/api/admin/audit';
 import * as m_api_admin_database from './functions/api/admin/database';
@@ -103,6 +104,7 @@ import * as m_api_ai_memory_prefs from './functions/api/ai/memories/prefs';
 import * as m_api_ai_memory_id from './functions/api/ai/memories/[id]';
 // 15.0 — the social layer: profiles, follows, shared playlists.
 import * as m_api_profile from './functions/api/profile';
+import * as m_api_reactions from './functions/api/reactions';
 import * as m_api_profile_handle from './functions/api/profile/[handle]';
 import * as m_api_follow from './functions/api/follow';
 import * as m_api_shared_playlist from './functions/api/shared-playlist';
@@ -187,6 +189,7 @@ const EXACT: Record<string, Mod> = {
   '/api/admin/settings': m_api_admin_settings,
   '/api/admin/experiments': m_api_admin_experiments,
   '/api/admin/push': m_api_admin_push,
+  '/api/admin/reactions': m_api_admin_reactions,
   '/api/admin/notifications': m_api_admin_notifications,
   '/api/admin/audit': m_api_admin_audit,
   '/api/admin/database': m_api_admin_database,
@@ -235,6 +238,7 @@ const EXACT: Record<string, Mod> = {
   '/api/ai/memories': m_api_ai_memories,
   '/api/ai/memories/prefs': m_api_ai_memory_prefs,
   '/api/profile': m_api_profile,
+  '/api/reactions': m_api_reactions,
   '/api/follow': m_api_follow,
   '/api/shared-playlist': m_api_shared_playlist,
   '/api/push/fcm-register': m_api_push_fcm_register,

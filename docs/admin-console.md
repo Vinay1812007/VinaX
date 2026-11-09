@@ -371,6 +371,14 @@ Who reads it: `publicVersionPolicy` adds `versionPolicy` to the client bundle (`
 
 Read-only mode refuses POST/PUT/PATCH/DELETE on `/api/feedback`, `/api/account/data`, `/api/profile`, `/api/follow`, `/api/shared-playlist` and `/api/username`. Listening, events, Listen Together, sign-in, push registration, VinaX AI and the console keep working. Older apps treat `readonly` as live (the server still refuses their writes).
 
+### Music Stats · Song Reactions (`#/song-reactions`, `pages/reactions.js`, schema 19)
+
+The reactions people leave on songs (fire, love, feels, dance, wow; one per device per song, from the song page or Now Playing's React row). Follows the date range: Reactions (with the change against the window before), People reacting (devices, never who), Songs reacted to, Most used; a share of each reaction, reactions per day (India time), and **Songs people react to** — the top songs with a column per reaction, searchable, exportable, ⋯ Open in the app.
+
+| Route | Shape |
+| --- | --- |
+| `GET /api/admin/reactions?days=&limit=` | `stats_reactions(days, limit)` → `{ configured, days, total, prevTotal, people, songs, byEmoji: [{ emoji, n }], top: [{ id, title, artist, image, language, total, counts }], byDay: [{ day, n }] }`; 502 `db_update_needed` before version 19 |
+
 ### Notifications · Automatic Notifications (`#/automatic-notifications`, `pages/outreach.js`, schema 18)
 
 The pushes VinaX sends on its own, one message per person, from the hourly `outreach` job (`_lib/outreach.ts`):

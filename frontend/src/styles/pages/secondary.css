@@ -562,3 +562,5 @@ html.reduce-motion .vx-sec *, html.reduce-motion .vx-sec *::before, html.reduce-
 .vx-badge-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .vx-badge-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px 0 6px; border-radius: 999px; background: hsl(var(--badge-h) 70% 50% / 0.16); border: 1px solid hsl(var(--badge-h) 80% 60% / 0.5); font-size: 13.5px; font-weight: 650; color: rgb(var(--ink-100)); }
 .vx-badge-chip .vx-badge-glyph { width: 26px; height: 26px; font-size: 14px; border-width: 1px; }
+
+

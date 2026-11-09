@@ -102,7 +102,7 @@ describe('page registry', () => {
       'google-search', 'languages', 'listen-together', 'listening-hours', 'listening-now', 'listening-time', 'music-sources',
       'notification-rules', 'notification-setup', 'page-check', 'phones-browsers', 'recent-activity', 'recommendations', 'rising-songs',
       'saved-audiences', 'scheduled-jobs', 'search-console', 'search-no-results', 'search-overview', 'search-pins',
-      'send-notification', 'sent-notifications', 'server-checks', 'signup-journey', 'skipped-songs', 'top-artists',
+      'send-notification', 'sent-notifications', 'server-checks', 'signup-journey', 'skipped-songs', 'song-reactions', 'top-artists',
       'top-listeners', 'top-songs', 'trending', 'user', 'users', 'where-users-are']);
     // Only a person's profile stays out of the menu.
     expect(pages.filter((p) => p.hidden).map((p) => p.id)).toEqual(['user']);
@@ -161,7 +161,7 @@ describe('page registry', () => {
 
   it('every group has its own pages in the sidebar', () => {
     const counts = Object.fromEntries(GROUPS.map((g) => [g, VX.pages().filter((p) => p.group === g && !p.hidden).length]));
-    expect(counts).toEqual({ Overview: 5, Users: 4, 'Music Stats': 6, Audience: 6, 'Search & Library': 5, Notifications: 6, 'App Settings': 7, 'App Health': 7, 'Growth & SEO': 4, System: 5 });
+    expect(counts).toEqual({ Overview: 5, Users: 4, 'Music Stats': 7, Audience: 6, 'Search & Library': 5, Notifications: 6, 'App Settings': 7, 'App Health': 7, 'Growth & SEO': 4, System: 5 });
   });
 
   it('App Settings pages are listed under one group, in the spec order', () => {
