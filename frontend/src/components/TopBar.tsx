@@ -83,7 +83,7 @@ export function TopBar({ onCommands }: { onCommands: () => void }) {
         <button
           type="button"
           className="vx-topbar-feedback"
-          aria-label="Suggest a feature or report a bug"
+          aria-label="Ideas &amp; bugs: suggest a feature or report a bug"
           aria-haspopup="dialog"
           aria-expanded={feedbackOpen}
           onClick={() => setFeedbackOpen(true)}
