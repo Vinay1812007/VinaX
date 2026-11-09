@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { orderByQuality } from './quality';
+import { autoQuality, orderByQuality, resolveStreamQuality } from './quality';
 import { qualityLevel, QUALITY_LEVELS } from './qualityLevels';
 
 const v = (q: string) => ({ quality: q, url: q });
@@ -30,5 +30,20 @@ describe('1.11 — sound-quality levels', () => {
 
   it('an unknown id reads as the top level', () => {
     expect(qualityLevel('nope' as never).label).toBe('Very high');
+  });
+});
+
+describe('1.12 — Auto follows the connection', () => {
+  it('Wi-Fi gets the best, 4G High, 3G Medium, 2G or data saver Low, and a silent browser High', () => {
+    expect(autoQuality({ type: 'wifi', effectiveType: '4g' })).toBe('high');
+    expect(autoQuality({ type: 'ethernet' })).toBe('high');
+    expect(autoQuality({ type: 'cellular', effectiveType: '4g' })).toBe('medium');
+    expect(autoQuality({ effectiveType: '3g' })).toBe('low');
+    expect(autoQuality({ effectiveType: '2g' })).toBe('saver');
+    expect(autoQuality({ effectiveType: 'slow-2g', type: 'wifi' })).toBe('saver');
+    expect(autoQuality({ saveData: true, type: 'wifi', effectiveType: '4g' })).toBe('saver');
+    expect(autoQuality({})).toBe('medium');
+    expect(resolveStreamQuality('high')).toBe('high');
+    expect(['saver', 'low', 'medium', 'high']).toContain(resolveStreamQuality('auto'));
   });
 });

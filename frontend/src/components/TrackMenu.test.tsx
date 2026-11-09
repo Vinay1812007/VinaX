@@ -262,11 +262,17 @@ describe('1.11 — the short menu', () => {
     fireEvent.click(trigger());
     fireEvent.click(screen.getByRole('menuitem', { name: 'Quality…' }));
     const levels = screen.getAllByRole('menuitemradio');
-    expect(levels.map((i) => i.textContent)).toEqual(['Low · 48 kbps', 'Medium · 96 kbps', 'High · 160 kbps', 'Very high · 320 kbps']);
-    expect(levels[3].getAttribute('aria-checked')).toBe('true');
-    fireEvent.click(levels[2]);
+    // 1.12 — Auto (follows the connection) sits above the four levels.
+    expect(levels.map((i) => i.textContent)).toEqual(['Auto · follows your connection', 'Low · 48 kbps', 'Medium · 96 kbps', 'High · 160 kbps', 'Very high · 320 kbps']);
+    expect(levels[4].getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(levels[3]);
     expect(useSettingsStore.getState().audioQuality).toBe('medium');
     expect(useToastStore.getState().toasts.slice(-1)[0]?.message).toMatch(/^Quality: High/);
+    fireEvent.click(trigger());
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Quality…' }));
+    fireEvent.click(screen.getAllByRole('menuitemradio')[0]);
+    expect(useSettingsStore.getState().audioQuality).toBe('auto');
+    expect(useToastStore.getState().toasts.slice(-1)[0]?.message).toMatch(/^Quality: Auto \(/);
   });
 });
 

@@ -1,4 +1,4 @@
-import type { AudioQualityPref } from './quality';
+import type { AudioQualityPref, StreamQualityPref } from './quality';
 
 /**
  * The four levels' names and bitrates, for the Settings rows and the player's
@@ -21,3 +21,9 @@ export const QUALITY_LEVELS: readonly QualityLevel[] = [
 export function qualityLevel(pref: AudioQualityPref): QualityLevel {
   return QUALITY_LEVELS.find((l) => l.value === pref) ?? QUALITY_LEVELS[QUALITY_LEVELS.length - 1];
 }
+
+/** The streaming choices: Auto first, then the four levels (1.12). */
+export const STREAM_QUALITY_OPTIONS: ReadonlyArray<{ value: StreamQualityPref; label: string }> = [
+  { value: 'auto', label: 'Auto' },
+  ...QUALITY_LEVELS.map((l) => ({ value: l.value, label: l.label })),
+];

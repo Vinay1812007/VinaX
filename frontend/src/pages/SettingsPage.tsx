@@ -64,8 +64,8 @@ import { toast } from '@/store/toastStore';
 import { LANGUAGES } from '@/constants/languages';
 import { Chip } from '@/components/Chip';
 import { UI_LANGS } from '@/i18n';
-import type { AudioQualityPref } from '@/services/audio/quality';
-import { QUALITY_LEVELS, qualityLevel } from '@/services/audio/qualityLevels';
+import { autoQuality, type AudioQualityPref, type StreamQualityPref } from '@/services/audio/quality';
+import { QUALITY_LEVELS, STREAM_QUALITY_OPTIONS, qualityLevel } from '@/services/audio/qualityLevels';
 import { PageHeader } from '@/components/PageHeader';
 import { SoundSettings } from '@/components/SoundSettings';
 import { Sheet } from '@/components/Sheet';
@@ -721,8 +721,8 @@ export default function SettingsPage() {
             <Row label="Resume playback" note="Pick up longer tracks where you left off.">
               <Toggle on={s.resumePlayback} onChange={s.setResumePlayback} label="Resume playback" />
             </Row>
-            <Row stack label="Audio quality" note={`Streaming: ${qualityLevel(s.audioQuality).kbps} kbps, or the closest available.`} keywords="bitrate low medium high very high 320 kbps streaming">
-              <Segmented<AudioQualityPref> label="Audio quality" value={s.audioQuality} onChange={s.setAudioQuality} options={QUALITY_LEVELS.map((l) => ({ value: l.value, label: l.label }))} />
+            <Row stack label="Audio quality" note={s.audioQuality === 'auto' ? `Auto follows your connection: Very high on Wi-Fi, High on 4G, Medium on 3G, Low on 2G or with the browser's data saver. Right now: ${qualityLevel(autoQuality()).label}, ${qualityLevel(autoQuality()).kbps} kbps.` : `Streaming: ${qualityLevel(s.audioQuality).kbps} kbps, or the closest available.`} keywords="bitrate auto low medium high very high 320 kbps streaming connection">
+              <Segmented<StreamQualityPref> label="Audio quality" value={s.audioQuality} onChange={s.setAudioQuality} options={STREAM_QUALITY_OPTIONS.map((o) => ({ value: o.value, label: o.label }))} />
             </Row>
             <Row stack label="Download quality" note={`Downloads save at ${qualityLevel(s.downloadQuality).kbps} kbps, or the closest available.`} keywords="bitrate offline download very high 320 kbps">
               <Segmented<AudioQualityPref> label="Download quality" value={s.downloadQuality} onChange={s.setDownloadQuality} options={QUALITY_LEVELS.map((l) => ({ value: l.value, label: l.label }))} />

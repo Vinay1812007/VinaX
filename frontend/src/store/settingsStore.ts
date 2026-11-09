@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { RegionInfo } from '@/types';
 import { KEYS } from '@/constants/storage-keys';
-import { QUALITY_IDS, type AudioQualityPref } from '@/services/audio/quality';
+import { QUALITY_IDS, STREAM_QUALITY_IDS, type AudioQualityPref, type StreamQualityPref } from '@/services/audio/quality';
 import { guardedLocalStorage } from '@/services/storage/local';
 import { DEFAULT_TEMPLATE, LEGACY_TEMPLATES, normalizeTemplate, type TemplateId } from '@/utils/theme';
 
@@ -67,7 +67,8 @@ export interface SettingsState {
   eqOwnGains: number[] | null;
   density: 'comfortable' | 'compact';
   resumePlayback: boolean;
-  audioQuality: AudioQualityPref;
+  /** 1.12 — 'auto' follows the connection (services/audio/quality.ts autoQuality). */
+  audioQuality: StreamQualityPref;
   /** 1.11 — the level downloads save at (services/audio/quality.ts); separate from streaming. */
   downloadQuality: AudioQualityPref;
   lyricsSize: 'sm' | 'md' | 'lg' | 'xl';
@@ -171,7 +172,7 @@ export interface SettingsState {
   setWeeklyGoalArtists(n: number): void;
   setDensity(v: 'comfortable' | 'compact'): void;
   setResumePlayback(v: boolean): void;
-  setAudioQuality(q: AudioQualityPref): void;
+  setAudioQuality(q: StreamQualityPref): void;
   setDownloadQuality(q: AudioQualityPref): void;
   setLyricsSize(v: 'sm' | 'md' | 'lg' | 'xl'): void;
   setLyricsScript(v: 'original' | 'latin'): void;
@@ -246,7 +247,7 @@ const defaults = {
   eqOwnGains: null as number[] | null,
   density: 'comfortable' as const,
   resumePlayback: true,
-  audioQuality: 'high' as AudioQualityPref,
+  audioQuality: 'auto' as StreamQualityPref,
   downloadQuality: 'high' as AudioQualityPref,
   lyricsSize: 'md' as 'sm' | 'md' | 'lg' | 'xl',
   lyricsScript: 'original' as 'original' | 'latin',
@@ -288,7 +289,7 @@ const SETTINGS_ENUMS: Partial<Record<keyof SettingsData, readonly string[]>> = {
   uiScale: ['sm', 'md', 'lg'],
   startPage: ['home', 'search', 'library', 'last'],
   density: ['comfortable', 'compact'],
-  audioQuality: QUALITY_IDS,
+  audioQuality: STREAM_QUALITY_IDS,
   downloadQuality: QUALITY_IDS,
   lyricsSize: ['sm', 'md', 'lg', 'xl'],
   lyricsScript: ['original', 'latin'],

@@ -14,9 +14,45 @@
  */
 export type AudioQualityPref = 'saver' | 'low' | 'medium' | 'high';
 
+/** 1.12 — streaming may also follow the connection ('auto'); downloads always name a level. */
+export type StreamQualityPref = AudioQualityPref | 'auto';
+
 
 // A literal list (not mapped from QUALITY_LEVELS) so the settings store, in the app shell, doesn't pull in the labels.
 export const QUALITY_IDS: readonly AudioQualityPref[] = ['saver', 'low', 'medium', 'high'];
+export const STREAM_QUALITY_IDS: readonly StreamQualityPref[] = ['auto', ...QUALITY_IDS];
+
+/** What the browser says about the connection (the Network Information API, where it exists). */
+export interface NetworkFacts {
+  saveData?: boolean;
+  /** 'slow-2g' | '2g' | '3g' | '4g' */
+  effectiveType?: string;
+  /** 'wifi' | 'ethernet' | 'cellular' | 'bluetooth' | 'none' | 'other' | 'unknown' */
+  type?: string;
+}
+
+export function networkFacts(): NetworkFacts {
+  const nav = typeof navigator === 'undefined' ? null : (navigator as Navigator & { connection?: NetworkFacts; mozConnection?: NetworkFacts; webkitConnection?: NetworkFacts });
+  const c = nav?.connection ?? nav?.mozConnection ?? nav?.webkitConnection;
+  return c ? { saveData: c.saveData, effectiveType: c.effectiveType, type: c.type } : {};
+}
+
+/**
+ * The level Auto picks for a connection: Wi-Fi or a wire → Very high; 4G →
+ * High; 3G → Medium; 2G or the browser's data saver → Low. A browser that
+ * says nothing (Safari, Firefox) gets High: good sound, not the heaviest file.
+ */
+export function autoQuality(net: NetworkFacts = networkFacts()): AudioQualityPref {
+  if (net.saveData) return 'saver';
+  const t = String(net.effectiveType ?? '');
+  if (t === 'slow-2g' || t === '2g') return 'saver';
+  if (t === '3g') return 'low';
+  if (net.type === 'wifi' || net.type === 'ethernet') return 'high';
+  return 'medium';
+}
+
+/** The level to stream at right now, for a stored choice. */
+export const resolveStreamQuality = (pref: StreamQualityPref): AudioQualityPref => (pref === 'auto' ? autoQuality() : pref);
 
 
 /** Parse the bitrate (kbps) out of a quality label like "320kbps", "320" or "320 kbps". */

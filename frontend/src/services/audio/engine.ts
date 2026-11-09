@@ -2,9 +2,9 @@ import type { Song } from '@/types';
 import { getOfflineSources } from '@/services/downloads';
 import { useSettingsStore } from '@/store/settingsStore';
 
-import { orderByQuality, type AudioQualityPref } from './quality';
+import { networkFacts, orderByQuality, resolveStreamQuality, type AudioQualityPref, type StreamQualityPref } from './quality';
 
-export type { AudioQualityPref };
+export type { AudioQualityPref, StreamQualityPref };
 
 /**
  * Order a song's audio variants by the user's quality preference — by NUMERIC
@@ -31,8 +31,8 @@ function isAbortError(err: unknown): boolean {
   return err instanceof DOMException && err.name === 'AbortError';
 }
 
-export function orderedSources(song: Song, pref: AudioQualityPref): string[] {
-  return orderByQuality(song.audio.filter((v) => v.url), pref).map((v) => v.url);
+export function orderedSources(song: Song, pref: StreamQualityPref): string[] {
+  return orderByQuality(song.audio.filter((v) => v.url), resolveStreamQuality(pref)).map((v) => v.url);
 }
 
 export interface EngineCallbacks {
@@ -295,9 +295,11 @@ class AudioEngine {
   }
 
   /** `startAt` (10.1 Flow previews, a restored queue) starts the song part-way in, once its data loads. */
-  load(song: Song, pref: AudioQualityPref, autoplay: boolean, startAt = 0): void {
+  load(song: Song, pref: StreamQualityPref, autoplay: boolean, startAt = 0): void {
     if (!this.el) return;
     this.song = song;
+    this.pref = pref;
+    this.watchConnection();
     this.lastInterruptionAt = 0; // a new load supersedes any pending auto-resume
     const streaming = orderedSources(song, pref);
     // v5.6.0 — every offline source, best first (blob: → SW route → file
@@ -411,13 +413,39 @@ class AudioEngine {
    * another level, at the same position, playing only if it was. A song
    * playing from a download has nothing to switch (false).
    */
-  switchQuality(pref: AudioQualityPref): boolean {
+  switchQuality(pref: StreamQualityPref): boolean {
     if (!this.el || !this.song) return false;
+    this.pref = pref;
     if (getOfflineSources(this.song.id).length) return false;
     const urls = orderedSources(this.song, pref);
     if (!urls.length || urls[0] === this.sources[this.sourceIdx]) return false;
     this.wantAutoplay = !this.el.paused && !this.el.ended;
     return this.reloadWithSources(urls);
+  }
+
+  /** The streaming choice the last load was made with ('auto' follows the connection). */
+  private pref: StreamQualityPref = 'auto';
+  private watchingConnection = false;
+  private lastNet = '';
+
+  /**
+   * 1.12 — Auto: when the connection changes kind (Wi-Fi to mobile data, 4G
+   * to 3G), restart the current stream at the level the new connection
+   * earns, at the same position. Once, lazily, so a browser without the
+   * Network Information API costs nothing.
+   */
+  private watchConnection(): void {
+    if (this.watchingConnection || typeof navigator === 'undefined') return;
+    const c = (navigator as Navigator & { connection?: EventTarget }).connection;
+    if (!c || typeof c.addEventListener !== 'function') return;
+    this.watchingConnection = true;
+    this.lastNet = JSON.stringify(networkFacts());
+    c.addEventListener('change', () => {
+      const now = JSON.stringify(networkFacts());
+      if (now === this.lastNet) return;
+      this.lastNet = now;
+      if (this.pref === 'auto') this.switchQuality('auto');
+    });
   }
 
   /** Retry the current song with freshly-fetched URLs (details refetch). */

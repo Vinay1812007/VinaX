@@ -21,7 +21,7 @@ import { notifyShelfSafetyChanged } from '@/features/home/useShelfSafety';
 import { evidenceLine, useEvidenceStore } from '@/store/evidenceStore';
 import { lessLikeThis, moreLikeThis, tuneLabel } from '@/features/queue/steer';
 import { useSettingsStore } from '@/store/settingsStore';
-import type { AudioQualityPref } from '@/services/audio/quality';
+import { autoQuality, type StreamQualityPref } from '@/services/audio/quality';
 import { QUALITY_LEVELS } from '@/services/audio/qualityLevels';
 import { audioEngine } from '@/services/audio/engine';
 import { DotsIcon } from './Icons';
@@ -355,9 +355,9 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     });
   };
 
-  const pickQuality = (q: AudioQualityPref): void => {
+  const pickQuality = (q: StreamQualityPref): void => {
     useSettingsStore.getState().setAudioQuality(q);
-    const label = QUALITY_LEVELS.find((l) => l.value === q)?.label ?? q;
+    const label = q === 'auto' ? `Auto (${QUALITY_LEVELS.find((l) => l.value === autoQuality())?.label ?? 'High'} now)` : QUALITY_LEVELS.find((l) => l.value === q)?.label ?? q;
     const switched = isCurrent && audioEngine.switchQuality(q);
     toast(switched ? `Quality: ${label} — switching now` : `Quality: ${label}`);
   };
@@ -552,6 +552,12 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
   const qualityEntries: MenuEntry[] = [
     back,
     'divider',
+    {
+      label: `Auto · follows your connection`,
+      icon: (quality === 'auto' ? 'check' : 'blank') as MenuGlyph,
+      checked: quality === 'auto',
+      action: () => pickQuality('auto'),
+    },
     ...QUALITY_LEVELS.map((l) => ({
       label: `${l.label} · ${l.kbps} kbps`,
       icon: (l.value === quality ? 'check' : 'blank') as MenuGlyph,
