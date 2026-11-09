@@ -14,7 +14,7 @@ describe('browsableSignedOut', () => {
   });
 
   it('keeps the personal pages behind sign-in (Home opens signed out since 1.11)', () => {
-    for (const p of ['/library', '/favorites', '/later', '/history', '/queue', '/settings', '/stats', '/recap', '/together', '/radio', '/flow', '/now-playing', '/made-for-you', '/weekly', '/collection/1', '/smart/1', '/song/', '/nonsense-songs']) {
+    for (const p of ['/library', '/favorites', '/later', '/following', '/history', '/queue', '/settings', '/stats', '/recap', '/together', '/radio', '/flow', '/now-playing', '/made-for-you', '/weekly', '/collection/1', '/smart/1', '/song/', '/nonsense-songs']) {
       expect(browsableSignedOut(p), p).toBe(false);
     }
   });

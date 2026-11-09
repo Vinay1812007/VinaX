@@ -40,7 +40,9 @@ A card among your daily cards on Home: five songs you have not heard, one at a t
 
 ## Release alerts
 
-Save an artist (the **Save** button on their page) and VinaX checks their songs twice a day. New songs from this year appear in **New from your artists** on Home, and on Android as a notification. A release shows once it has picked up some plays, so it can be a few hours behind the day it came out.
+Press **Follow** on an artist's page and VinaX checks their songs twice a day. New songs from this year appear in **New from your artists** on Home, and on Android as a notification. A release shows once it has picked up some plays, so it can be a few hours behind the day it came out.
+
+**Following** (Your Music → Following, `/following`) gathers it in one place: the artists you follow, their new songs newest first (with a Dismiss on each), and the current top songs of each artist so there is always something to play. **Check for new songs** looks right away instead of waiting for the next check; **Play new songs** queues every new release.
 
 ## Weekly goals and your year as a story
 
