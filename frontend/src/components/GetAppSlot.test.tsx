@@ -65,7 +65,9 @@ describe('<GetAppSlot />', () => {
     renderAt('/');
     expect(screen.queryByRole('link', { name: 'Get the app' })).toBeNull();
     fireEvent.click(await screen.findByRole('button', { name: 'How' }));
-    expect(screen.getByText('Tap Share, then “Add to Home Screen”')).toBeTruthy();
+    // 1.12 — "How" opens the step-by-step guide.
+    expect(await screen.findByText('Add VinaX to your Home Screen')).toBeTruthy();
+    expect(screen.getByRole('list', { name: 'Steps' }).querySelectorAll('li')).toHaveLength(3);
   });
 
   it('"Not now" hides it for a week on this device', async () => {

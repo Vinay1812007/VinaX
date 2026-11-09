@@ -3,6 +3,7 @@ import { getOfflineSources } from '@/services/downloads';
 import { useSettingsStore } from '@/store/settingsStore';
 
 import { networkFacts, orderByQuality, resolveStreamQuality, type AudioQualityPref, type StreamQualityPref } from './quality';
+import { iosWeb } from '@/utils/platform';
 
 export type { AudioQualityPref, StreamQualityPref };
 
@@ -160,6 +161,11 @@ class AudioEngine {
    *  the same element in CORS mode; OFF swaps in a fresh element because the
    *  Web Audio API binds an element to its context for good. */
   setEffectsEnabled(on: boolean): void {
+    // 1.12 — an iPhone or iPad in Safari: audio routed through Web Audio
+    // goes quiet when the screen locks or the app goes to the background.
+    // The song plays straight from the element there; the equaliser, balance,
+    // mono and loudness wait for the Android app or a desktop browser.
+    if (on && iosWeb()) on = false;
     if (on === this.effectsOn) return;
     this.effectsOn = on;
     if (on) {
@@ -169,6 +175,7 @@ class AudioEngine {
           if (!this.effectsOn) return; // toggled back off while loading
           this.effectsMod = mod;
           this.wireEffects();
+          this.watchVisibility();
         })
         .catch(() => undefined);
       const el = this.el;
@@ -186,6 +193,17 @@ class AudioEngine {
     } else {
       el.crossOrigin = null; // takes effect on the next load; nothing to redo now
     }
+  }
+
+  private watchingVisibility = false;
+
+  /** Coming back to the tab: a context the browser suspended in the background is resumed, so the chain does not stay silent. */
+  private watchVisibility(): void {
+    if (this.watchingVisibility || typeof document === 'undefined') return;
+    this.watchingVisibility = true;
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && this.el && !this.el.paused) this.effectsMod?.resumeContext();
+    });
   }
 
   /** Attach the chain to the current element once its media is known. */

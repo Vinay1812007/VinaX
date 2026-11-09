@@ -6,6 +6,7 @@
  * starts the settings → engine bridge; the graph itself is a lazy chunk.
  */
 import { useEffect, type CSSProperties, type ReactNode } from 'react';
+import { iosWeb } from '@/utils/platform';
 import { useSettingsStore } from '@/store/settingsStore';
 import { Chip } from '@/components/Chip';
 import { WaveIcon } from '@/components/Icons';
@@ -82,8 +83,8 @@ export function SoundSettings() {
         <h2 className="text-[13px] font-bold text-ink-300">Sound</h2>
       </div>
       <div className="rounded-2xl glass-card px-5">
-        <Row label="Sound effects" note="Equalizer, balance, mono and loudness. Processed on this device — nothing is uploaded — and uses a little more battery while playing.">
-          <Toggle on={on} onChange={s.setSoundEffects} label="Sound effects" />
+        <Row label="Sound effects" note={iosWeb() ? 'Not on an iPhone or iPad in Safari: routing the sound through the effects would stop it when the screen locks, so songs play untouched here. The equalizer, balance, mono and loudness work in the Android app and in desktop browsers.' : 'Equalizer, balance, mono and loudness. Processed on this device — nothing is uploaded — and uses a little more battery while playing.'}>
+          <Toggle on={on && !iosWeb()} onChange={s.setSoundEffects} label="Sound effects" disabled={iosWeb()} />
         </Row>
 
         {/* 15.0 — the preset follows the song's genre, mood and energy (on the device). */}

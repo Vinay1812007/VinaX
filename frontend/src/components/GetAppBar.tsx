@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { XIcon } from './Icons';
 import { SNOOZE_KEY, SNOOZE_MS, type AppOffer } from './GetAppSlot';
+
+const InstallGuideSheet = lazy(() => import('./InstallGuideSheet').then((m) => ({ default: m.InstallGuideSheet })));
 
 /** 13.7.4 — the "Get the app" bar itself; GetAppSlot decides whether it shows. */
 export default function GetAppBar({ offer, onHide }: { offer: Exclude<AppOffer, null>; onHide: () => void }) {
@@ -34,13 +36,19 @@ export default function GetAppBar({ offer, onHide }: { offer: Exclude<AppOffer, 
           Get the app
         </Link>
       ) : (
-        <button type="button" className="vx-getapp-btn" aria-expanded={howOpen} onClick={() => (howOpen ? notNow() : setHowOpen(true))}>
-          {howOpen ? 'Got it' : 'How'}
+        <button type="button" className="vx-getapp-btn" aria-expanded={howOpen} onClick={() => setHowOpen(true)}>
+          How
         </button>
       )}
       <button type="button" className="vx-getapp-close" aria-label="Not now" onClick={notNow}>
         <XIcon className="w-4 h-4" />
       </button>
+      {/* 1.12 — the step-by-step guide (a sheet, loaded when asked for). */}
+      {howOpen && (
+        <Suspense fallback={null}>
+          <InstallGuideSheet open onClose={() => setHowOpen(false)} onDone={notNow} />
+        </Suspense>
+      )}
     </div>
   );
 }

@@ -42,6 +42,10 @@ After that, there are three quick ways to start:
 
 Tap the heart to save a song to your favourites. What you like, finish and skip shapes your recommendations, and that stays on this device. See [Discovery modes](discovery-modes.md).
 
+## On an iPhone or iPad
+
+There is no App Store app; the website is the app. In Safari, tap **Share**, then **Add to Home Screen**, then **Add** — the bar at the top of the site says **How** and walks you through it. From the Home Screen, VinaX opens full-screen, keeps playing with the screen off, and the song shows on your lock screen with play, pause and skip. Sound effects (the equalizer, balance, mono and loudness) are not available on an iPhone or iPad in Safari — routing the sound through them would stop it when the screen locks — so songs play untouched there; they work in the Android app and in desktop browsers.
+
 ## A Home built for you
 
 VinaX's AI builds your Home each time it is put together: which shelves you see, their order and their names, for the time of day and how you have been listening. Each shelf it chose says why in one line under its title, and it may add a shelf of its own, **Made for right now**. Every song on every shelf still comes from VinaX's own picks and the catalogue, with your hidden songs, muted languages and Kid mode respected.
