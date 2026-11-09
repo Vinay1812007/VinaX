@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.11.2': {
+    title: 'App language: Settings, the song menu and section titles in Telugu, Hindi and Tamil',
+    changes: [
+      { type: 'new', text: 'Settings → Appearance → App language now reaches far past the sidebar: every Settings section, group and row title, the song\'s ⋯ menu, section titles across the app (Recently played, Top artists, New from your artists…) and page titles.' },
+      { type: 'improved', text: 'Around 130 strings per language, in dictionaries fetched only when that language is chosen; the sidebar\'s words stay in the first load so the menu is never English for a beat; anything without a translation shows in English.' },
+      { type: 'improved', text: 'Settings search finds a row by its English or translated name; the page\'s language tag follows the choice for screen readers and fonts.' },
+      { type: 'improved', text: 'First-load budget re-based to 194 KB for the small play-path and loader additions of this round (measured 193.4 KB; dictionaries, guide, badges and cards stay on demand).' },
+    ],
+  },
   '1.11.1': {
     title: 'Lyrics light up as they\'re sung: a gold sweep with a flashing stripe',
     changes: [
