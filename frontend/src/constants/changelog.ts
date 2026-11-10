@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.12.9': {
+    title: 'Listen Together works for guests again: joining a room plays the host\'s song',
+    changes: [
+      { type: 'fixed', text: 'Fixed: joining a Listen Together room now plays the host\'s song. Since late October a guest who joined by code, link or QR never got into the room, so only the host heard anything.' },
+      { type: 'fixed', text: 'Fixed: a chat message in a room no longer makes everyone\'s music jump back a few seconds.' },
+      { type: 'fixed', text: 'Fixed: a song that ends on your phone a moment before the host\'s no longer starts again from the top for a second.' },
+      { type: 'improved', text: 'A song your device cannot get is said once and shown on the room page; the room carries on with the next song.' },
+    ],
+  },
   '1.12.8': {
     title: 'Song videos play in the artwork card, and Listen Together gets its own tab in the player…',
     changes: [
