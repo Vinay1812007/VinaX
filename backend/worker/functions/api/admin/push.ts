@@ -1,5 +1,5 @@
 /**
- * GET  /api/admin/push → { configured, web, fcm, people, geo, langs, devices, tags, rules, quiet }
+ * GET  /api/admin/push → { configured, web, fcm: { configured, active, allDevices, inactive, recent[] }, people, geo, langs, devices, tags, rules, quiet }
  *        What can be sent: each channel (set up? how many signed-in phones and
  *        browsers), how many people that is, the places, languages and kinds of
  *        device they are on, the owner's tags, and the Notification Rules in force.
@@ -109,7 +109,7 @@ function deviceKinds(reachable: Set<string>, rows: Array<{ account_id: string | 
 
 export const onRequestGet = adminGet(async ({ env }) => {
   const e = env as unknown as PushEnv;
-  const [all, signed, rules, kinds, tags] = await Promise.all([
+  const [all, signed, rules, kinds, tags, fcmRows] = await Promise.all([
     db.select<{ channel: string }>(env, 'push_devices', q().eq('active', 'true').select('channel').limit(20_000)),
     db.select<GeoRow>(env, 'push_devices', q().eq('active', 'true').not('account_id', 'is', 'null').select('country,region,city,lang,account_id,channel').limit(5000)),
     pushRules(env),
@@ -117,6 +117,10 @@ export const onRequestGet = adminGet(async ({ env }) => {
     db.select<{ account_id: string | null; platform: string | null; os: string | null }>(env, 'listeners', q().not('account_id', 'is', 'null').is('signed_out_at', 'null').select('account_id,platform,os').limit(20_000)),
     // Schema 15: the owner's tags. Before the update: none.
     db.rpc<Array<{ tag: string; users: number }>>(env, 'owner_tags'),
+    // 1.12 — Android diagnostics: every app token ever stored, active or not,
+    // newest first, so the Setup Check can say "registered but switched off"
+    // instead of "none" when a token was retired or marked dead.
+    db.select<{ active: boolean; platform: string | null; account_id: string | null; updated_at: string; last_pushed_at: string | null }>(env, 'push_devices', q().eq('channel', 'fcm').select('active,platform,account_id,updated_at,last_pushed_at').order('updated_at', 'desc').limit(20)),
   ]);
   const failed = firstFailure(all, signed);
   if (failed) return dbFailure(failed);
@@ -126,7 +130,11 @@ export const onRequestGet = adminGet(async ({ env }) => {
   return adminJson({
     configured: true,
     web: { configured: pushConfigured(e as VapidEnv), active: count(signed.rows, 'web'), allDevices: count(all.rows, 'web') },
-    fcm: { configured: fcmConfigured(e as FcmEnv), active: count(signed.rows, 'fcm'), allDevices: count(all.rows, 'fcm') },
+    fcm: {
+      configured: fcmConfigured(e as FcmEnv), active: count(signed.rows, 'fcm'), allDevices: count(all.rows, 'fcm'),
+      inactive: fcmRows.ok ? fcmRows.rows.filter((r) => !r.active).length : null,
+      recent: fcmRows.ok ? fcmRows.rows.slice(0, 10).map((r) => ({ active: r.active, linked: !!r.account_id, platform: r.platform, updatedAt: r.updated_at, lastPushedAt: r.last_pushed_at })) : [],
+    },
     people: reachable.size,
     ...bucket(signed.rows),
     devices: kinds.ok ? deviceKinds(reachable, kinds.rows) : [],
