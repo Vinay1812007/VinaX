@@ -144,8 +144,9 @@ describe('POST /api/admin/push', () => {
     expect(body?.web).toEqual({ configured: true, active: 1, allDevices: 2 });
     expect(body?.fcm).toMatchObject({ configured: false, active: 1, allDevices: 2 });
     // 1.12 — every stored app token, newest first, so a retired or dead one is told apart from none.
-    expect(body?.fcm.recent.length).toBeGreaterThan(0);
-    expect(typeof body?.fcm.inactive).toBe('number');
+    const fcm = body?.fcm as { recent: unknown[]; inactive: number };
+    expect(fcm.recent.length).toBeGreaterThan(0);
+    expect(typeof fcm.inactive).toBe('number');
     expect((body?.geo as { cities: unknown[] }).cities).toHaveLength(1);
     expect(body?.langs).toEqual([{ lang: 'te', count: 2 }]);
     expect((body?.quiet as { quiet: boolean }).quiet).toBe(false);
