@@ -16,6 +16,13 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.12.4': {
+    title: 'Android notifications: the app registers for push before the permission is granted, and…',
+    changes: [
+      { type: 'improved', text: 'The console showed 0 Android devices registered for push while 4 people use the app: the app only asked Android for a push token once the notification permission was granted, so nobody\'s phone had an address and every push to the app went…' },
+      { type: 'improved', text: 'A push with no picture of its own now shows the VinaX logo as its large icon, and the in-app announcement notification uses the white V small icon in the accent colour with the colour logo beside it (it drew a blank square before).' },
+    ],
+  },
   '1.12.3': {
     title: 'First artwork sooner: Home\'s first tiles are preloaded the moment the trending answer…',
     changes: [
