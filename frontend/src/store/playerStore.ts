@@ -92,8 +92,9 @@ export interface PlayerState {
    * the song starts alone and Up Next builds what follows. `keepList` forces
    * the list to become the queue whatever the setting (Queue Builder plans).
    */
-  playQueue(songs: Song[], startIndex?: number, opts?: { keepList?: boolean; asSeed?: boolean }): void;
-  playSong(song: Song): void;
+  playQueue(songs: Song[], startIndex?: number, opts?: { keepList?: boolean; asSeed?: boolean; startAt?: number }): void;
+  /** `startAt` (seconds): start part-way in. Listen Together starts a guest where the host is. */
+  playSong(song: Song, opts?: { startAt?: number }): void;
   /** v6.5.0 — reshape what comes next: keeps what played and the current song, rebuilds the rest for the intent. */
   /** `null` (v7.1.0) drops the active intent and rebuilds what follows without one. */
   tuneQueue(intent: TuneIntent | null): void;
@@ -489,7 +490,8 @@ export const usePlayerStore = create<PlayerState>()(
         if (opts.startAt) audioEngine.load(song, quality, autoplay, opts.startAt);
         else audioEngine.load(song, quality, autoplay);
         crossfadeArmed = false;
-        if (autoplay && !preview && useSettingsStore.getState().resumePlayback) {
+        // A follower plays where the host is, never where this device last left the song.
+        if (autoplay && !preview && !opts.startAt && !get().followMode && useSettingsStore.getState().resumePlayback) {
           const at = loadResume()[song.id];
           if (at && at > 20) {
             window.setTimeout(() => {
@@ -989,18 +991,19 @@ export const usePlayerStore = create<PlayerState>()(
           const takeover = (list.length < 2 || !!opts.asSeed) && settings.djTakeover && settings.autoplay && !opts.keepList && !get().followMode && get().repeat === 'off';
           radio = takeover;
           setAnchor(takeover ? [seed] : list);
+          const startAt = opts.startAt && Number.isFinite(opts.startAt) && opts.startAt > 0 ? opts.startAt : 0;
           if (takeover) {
-            set({ queue: [seed], index: 0, currentTime: 0, duration: 0, loopA: null, loopB: null, tuneIntent: null });
-            startTrack(seed, true);
+            set({ queue: [seed], index: 0, currentTime: startAt, duration: 0, loopA: null, loopB: null, tuneIntent: null });
+            startTrack(seed, true, { startAt });
             return;
           }
           const queue = list;
           const index = queue.indexOf(seed);
-          set({ queue: [...queue], index, currentTime: 0, duration: 0, loopA: null, loopB: null, tuneIntent: null });
-          startTrack(seed, true);
+          set({ queue: [...queue], index, currentTime: startAt, duration: 0, loopA: null, loopB: null, tuneIntent: null });
+          startTrack(seed, true, { startAt });
         },
 
-        playSong: (song) => get().playQueue([song], 0),
+        playSong: (song, opts) => get().playQueue([song], 0, opts?.startAt ? { startAt: opts.startAt } : {}),
 
         tuneQueue: (intent) => {
           if (intent !== null && !isTuneIntent(intent)) return;

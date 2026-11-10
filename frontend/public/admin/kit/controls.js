@@ -468,6 +468,12 @@
    * Image upload with a crop preview. The picture is cropped to `aspect`
    * (width / height) and resized in the browser, then stored by the server.
    * o = { label, value: url | null, aspect: 2, width: 1200, purpose: 'banner', onChange(url | null), disabled }
+   *
+   * The chosen file is read as a data: address. The console's content policy
+   * (index.html) lets pictures come from this site, data: and https: only, so
+   * the blob: address this used to make (URL.createObjectURL) was refused by
+   * the browser: every picture, on every page, stopped at "could not be
+   * opened as a picture" before the crop step.
    */
   ui.imageUpload = function (o) {
     var aspect = o.aspect || 2, W = o.width || 1200;
@@ -507,10 +513,13 @@
       if (!f) return;
       if (!/^image\/(png|jpeg|webp)$/.test(f.type)) { status.textContent = 'Choose a PNG, JPG or WebP picture.'; return; }
       if (f.size > 15 * 1024 * 1024) { status.textContent = 'That picture is over 15 MB. Choose a smaller one.'; return; }
-      var url = URL.createObjectURL(f);
+      var unreadable = function () { status.textContent = 'That file could not be opened as a picture.'; };
+      status.textContent = 'Opening the picture…';
       var img = new Image();
       img.onload = function () {
         var pos = 0.5;
+        status.textContent = '';
+        if (!img.naturalWidth || !img.naturalHeight) { unreadable(); return; }
         var canvasPreview = h('img.crop-img', { alt: 'Crop preview' });
         var redraw = function () { var d = crop(img, pos); if (d) canvasPreview.src = d; };
         redraw();
@@ -521,7 +530,6 @@
             h('div.crop-frame', { style: { 'aspect-ratio': String(aspect) } }, canvasPreview),
             ui.slider({ label: 'Position', min: 0, max: 100, value: 50, format: function (v) { return v < 34 ? 'Start' : v > 66 ? 'End' : 'Middle'; }, onChange: function (v) { pos = v / 100; redraw(); } })
           ],
-          onClose: function () { URL.revokeObjectURL(url); },
           actions: [
             { label: 'Cancel', kind: 'ghost' },
             { label: 'Use this picture', kind: 'primary', onClick: function (close) { var d = crop(img, pos); close(); if (d) upload(d); } }
@@ -529,8 +537,11 @@
         });
         void m;
       };
-      img.onerror = function () { URL.revokeObjectURL(url); status.textContent = 'That file could not be opened as a picture.'; };
-      img.src = url;
+      img.onerror = unreadable;
+      var reader = new FileReader();
+      reader.onerror = unreadable;
+      reader.onload = function () { if (typeof reader.result === 'string') img.src = reader.result; else unreadable(); };
+      reader.readAsDataURL(f);
     });
     show();
     return h('div.img-upload',

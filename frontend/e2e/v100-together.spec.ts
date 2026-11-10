@@ -11,6 +11,10 @@ import { latestNotesFingerprint } from '../src/constants/changelog';
  *     broadcasting, and the guest stopped following;
  *   - guests drifted and kept seeking (they anchored on when THEY saw a push);
  *   - a guest's song request reached the host as an unplayable stub.
+ *
+ * 1.12.10 — fine sync: a guest starts where the host is, and then closes the
+ * last fraction of a second by playing slightly faster or slower. Before, a
+ * guest within a second of the host was left there ("a little slow").
  */
 const SECONDS = 240;
 /** Four minutes of silent 8 kHz mono WAV: real, seekable audio. */
@@ -66,7 +70,7 @@ function roomServer() {
         const code = url.searchParams.get('code') ?? '';
         const r = rooms.get(code) ?? null;
         const live = [...(members.get(code)?.values() ?? [])].filter((t) => Date.now() - t < 12_000).length;
-        return { room: r, memberCount: live, reactions: [], now: Date.now() };
+        return { room: r, memberCount: live, reactions: [], now: Date.now(), took: 0 };
       }
       const code = String(body?.code ?? '');
       switch (body?.action) {
@@ -80,7 +84,7 @@ function roomServer() {
           const consumed = (body.consumedIds as string[]) ?? [];
           Object.assign(r, { song: roomSong(body.song), position: body.position, playing: body.playing, queue: roomQueue(body.queue), updated_at: new Date().toISOString() });
           r.requests = r.requests.filter((t) => !consumed.includes(t.song.id));
-          return { ok: true };
+          return { ok: true, took: 0 };
         }
         case 'request': {
           const r = rooms.get(code);
@@ -168,6 +172,12 @@ const audioState = (p: Page) =>
     return a ? { src: a.currentSrc || a.src, t: a.currentTime, paused: a.paused } : null;
   });
 
+/** How far apart the two players are (seconds); both are read in the same instant. */
+async function gap(host: Page, guest: Page): Promise<number> {
+  const [h, g] = await Promise.all([audioState(host), audioState(guest)]);
+  return h && g ? Math.abs(h.t - g.t) : 99;
+}
+
 async function startListeningIfAsked(p: Page): Promise<void> {
   const tap = p.getByRole('button', { name: 'Tap to start listening' }).first();
   if (await tap.isVisible().catch(() => false)) await tap.click();
@@ -190,11 +200,28 @@ test('a guest follows the host across pages, in sync, and its request is playabl
   await host.getByRole('link', { name: /^Search$/ }).first().click();
   await expect(host.locator('.vx-lt-pill')).toContainText('Hosting');
 
+  // The host is a minute into the song when the guest arrives.
+  await expect.poll(async () => host.evaluate(() => (window as unknown as { __audio?: HTMLMediaElement }).__audio?.seekable.length ?? 0)).toBeGreaterThan(0);
+  await host.evaluate(() => {
+    const a = (window as unknown as { __audio?: HTMLMediaElement }).__audio;
+    if (a) a.currentTime = 60;
+  });
+  await expect.poll(() => server.rooms.get('ABC123')?.position ?? 0, { timeout: 10_000 }).toBeGreaterThan(55);
+
   // Guest: the invite link joins by itself.
   await guest.goto('/together?code=ABC123');
   await expect(guest.locator('.vx-lt-status')).toBeVisible({ timeout: 10_000 });
   await startListeningIfAsked(guest);
   await expect.poll(async () => (await audioState(guest))?.src ?? '', { timeout: 15_000 }).toContain('/t-a.wav');
+
+  // The guest comes in where the host is (a minute into the song), not at
+  // 0:00 with a jump a few seconds later…
+  await expect.poll(async () => (await audioState(guest))?.paused, { timeout: 10_000 }).toBe(false);
+  await expect.poll(async () => (await audioState(guest))?.t ?? 0, { timeout: 5_000, intervals: [50] }).toBeGreaterThan(0.2);
+  expect((await audioState(guest))?.t ?? 0).toBeGreaterThan(55);
+  // …and then closes the last fraction of a second: the two players end up
+  // together, not "the host a little ahead".
+  await expect.poll(() => gap(host, guest), { timeout: 25_000, intervals: [500] }).toBeLessThan(0.2);
 
   // Knock the guest 20 s out of step (a stall, a stray tap on the seek bar):
   // the follower must pull it back within a second of the host.
@@ -203,15 +230,9 @@ test('a guest follows the host across pages, in sync, and its request is playabl
     const a = (window as unknown as { __audio?: HTMLMediaElement }).__audio;
     if (a) a.currentTime = Math.max(0, a.currentTime + 20);
   });
-  await expect
-    .poll(
-      async () => {
-        const [h, g] = await Promise.all([audioState(host), audioState(guest)]);
-        return h && g ? Math.abs(h.t - g.t) : 99;
-      },
-      { timeout: 15_000, intervals: [1000] },
-    )
-    .toBeLessThan(1.0);
+  await expect.poll(() => gap(host, guest), { timeout: 15_000, intervals: [1000] }).toBeLessThan(1.0);
+  // The seek gets it close; the fine sync finishes the job.
+  await expect.poll(() => gap(host, guest), { timeout: 25_000, intervals: [500] }).toBeLessThan(0.2);
 
   // The host skips from another page; the guest follows.
   await host.getByRole('button', { name: /^Next/ }).first().click();

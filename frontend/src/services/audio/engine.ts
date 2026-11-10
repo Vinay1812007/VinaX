@@ -26,6 +26,8 @@ export function recoveryAction(srcPlayedOk: boolean, retriedCurrentSrc: boolean)
 
 /** HTMLMediaElement.NETWORK_NO_SOURCE — no usable source on the element. */
 const NETWORK_NO_SOURCE = 3;
+/** HTMLMediaElement.HAVE_FUTURE_DATA — enough is buffered to keep playing. */
+const HAVE_FUTURE_DATA = 3;
 
 /** play() rejects with AbortError when a newer load()/pause() interrupted it. */
 function isAbortError(err: unknown): boolean {
@@ -261,6 +263,26 @@ class AudioEngine {
 
   get currentSongId(): string | null {
     return this.song?.id ?? null;
+  }
+
+  /**
+   * The playhead right now (seconds), read from the element. The player
+   * store's `currentTime` is only as fresh as the last `timeupdate` (up to a
+   * quarter of a second old, a full second in a hidden tab), which is too
+   * coarse for Listen Together. null before a song is loaded.
+   */
+  position(): number | null {
+    const el = this.el;
+    if (!el || !this.song) return null;
+    // A start position or recovery seek that has not landed yet.
+    if (this.pendingSeek > 0) return this.pendingSeek;
+    return Number.isFinite(el.currentTime) ? el.currentTime : null;
+  }
+
+  /** True while sound is actually coming out: not paused, not seeking, not waiting for data. */
+  isAdvancing(): boolean {
+    const el = this.el;
+    return !!el && !el.paused && !el.ended && !el.seeking && el.readyState >= HAVE_FUTURE_DATA;
   }
 
   /**
@@ -624,7 +646,7 @@ class AudioEngine {
   }
 
   setRate(r: number): void {
-    if (this.el) this.el.playbackRate = r;
+    if (this.el && this.el.playbackRate !== r) this.el.playbackRate = r;
   }
 
   /**

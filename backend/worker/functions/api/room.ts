@@ -2,8 +2,8 @@
  * Listen Together rooms — shared playback state every member polls.
  *
  *   POST { action: 'create', hostName?, song? }           → { code, hostToken }
- *   GET  ?code=…&hostToken=…                               → { room, now, memberCount, reactions, members? }
- *   POST { action: 'update', code, hostToken, song, queue, position, playing, consumedIds }   host only
+ *   GET  ?code=…&hostToken=…                               → { room, now, took, memberCount, reactions, members? }
+ *   POST { action: 'update', code, hostToken, song, queue, position, playing, consumedIds }   host only → { ok, took }
  *   POST { action: 'request', code, song, by }             a guest asks for a song
  *   POST { action: 'react', code, deviceId, emoji, name }  one live reaction per member
  *   POST { action: 'heartbeat', code, deviceId, name }     presence
@@ -20,6 +20,13 @@
  * and how many have voted to skip; the host's app skips when the votes pass
  * half the room. Rooms live in `rooms` and `room_members`; idle rooms are
  * swept by housekeeping.
+ *
+ * Timing. Followers place the host's playhead from two readings of this
+ * server's clock: `updated_at` (stamped when a host push ARRIVES) and `now`
+ * (stamped when a poll arrives). Both answers also say how long the server
+ * then spent on the database (`took`, ms), so a device can tell the network's
+ * share of a round trip from the server's. Without it a guest counted the
+ * database time as flight and sat a little behind the host.
  */
 import { db, dbConfigured, q, type DbEnv } from '../_lib/db';
 import { asObject, clip, jsonResponse } from '../_lib/edge';
@@ -202,6 +209,8 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     room: room.room ? publicRoom(room.room) : null,
     // The server's clock when it answered: followers project the host's position from it.
     now,
+    // How long this answer took to prepare after `now` was read (the database).
+    took: Math.max(0, Date.now() - now),
     memberCount: present.length,
     reactions,
   };
@@ -222,7 +231,8 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   if (!budget) return json({ error: 'unknown_action' }, 400);
   const limited = rateLimit(request, `room-${action}`, budget, env);
   if (limited) return limited;
-  const now = new Date().toISOString();
+  const arrived = Date.now();
+  const now = new Date(arrived).toISOString();
 
   if (action === 'create') {
     // The random code can collide: insert with ignore-duplicates and retry
@@ -270,7 +280,9 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
       // 15.0 — a new song starts with no skip votes.
       ...(changed ? { skip_votes: [] } : {}),
     });
-    return json({ ok: r.ok });
+    // `took`: the host subtracts it from the round trip to learn how long its
+    // pushes spend on the way here, and sends the next position that far ahead.
+    return json({ ok: r.ok, took: Math.max(0, Date.now() - arrived) });
   }
 
   if (action === 'request') {

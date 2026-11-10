@@ -1,6 +1,7 @@
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal, setLocal } from '@/services/storage/local';
 import { isNativePlatform } from '@/services/native';
+import { Flight } from '@/features/together/sync';
 import type { Song } from '@/types';
 
 const BASE = isNativePlatform() ? 'https://www.vinaxmusic.online/api/room' : '/api/room';
@@ -129,6 +130,17 @@ export async function createRoom(song: Song | null): Promise<CreateRoomResult> {
  *  swallowed, so a host kept "broadcasting" to nobody. */
 export type UpdateResult = 'ok' | 'gone' | 'forbidden' | 'error';
 
+/**
+ * How long a host push spends getting to the server. The server stamps a push
+ * when it ARRIVES, but the position inside it was read when it left, so every
+ * guest placed the host that much behind where it really was. Each push now
+ * measures the trip (round trip minus the server's own time, halved) and the
+ * next one is sent that far ahead.
+ */
+const uplink = new Flight();
+
+/** `position` is the host's playhead right now; while playing it is sent as
+ *  where the playhead will be when the push lands. */
 export async function updateRoom(
   code: string,
   song: Song | null,
@@ -138,12 +150,21 @@ export async function updateRoom(
   consumedIds: string[] = [],
 ): Promise<UpdateResult> {
   try {
+    const lands = playing ? position + uplink.ms / 1000 : position;
+    const sent = performance.now();
     const res = await fetch(BASE, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'update', code, hostToken: getHostToken(code), song, position, playing, queue, consumedIds }),
+      body: JSON.stringify({ action: 'update', code, hostToken: getHostToken(code), song, position: lands, playing, queue, consumedIds }),
     });
-    if (res.ok) return 'ok';
+    if (res.ok) {
+      const rtt = performance.now() - sent;
+      // A Worker older than 1.12.10 does not say how long it took: then the
+      // trip cannot be told from the database's time, and nothing is added.
+      const took = ((await res.json().catch(() => null)) as { took?: unknown } | null)?.took;
+      if (typeof took === 'number' && Number.isFinite(took) && took >= 0) uplink.add(Math.max(0, rtt - took) / 2);
+      return 'ok';
+    }
     if (res.status === 404) return 'gone';
     if (res.status === 403) return 'forbidden';
     return 'error';
@@ -230,8 +251,10 @@ export interface RoomPoll {
   /** 15.0 — the names members gave, for everyone in the room. */
   names?: string[];
   reactions?: RoomReaction[];
-  /** 10.0 — the server's clock (ms) when it answered; absent on older Workers. */
+  /** 10.0 — the server's clock (ms) when the poll arrived; absent on older Workers. */
   now?: number;
+  /** 1.12.10 — how long (ms) the server then took to answer. */
+  took?: number;
   /** 10.0 — client-measured round trip of this poll, and when it landed
    *  (performance.now()), so a follower can project the host's position. */
   rttMs?: number;

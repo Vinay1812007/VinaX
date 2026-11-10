@@ -61,13 +61,32 @@ const player = vi.hoisted(() => {
   return { getState: () => state, set, reset, subscribe: (f: (s: S) => void) => (subs.add(f), () => subs.delete(f)) };
 });
 
+// The audio element as the sync engine sees it: which song it holds, where
+// its playhead is right now, and the playback speed it was last given.
+const audio = vi.hoisted(() => ({
+  songId: null as string | null,
+  position: (): number | null => null,
+  advancing: true,
+  setRate: vi.fn<(r: number) => void>(),
+}));
+
 vi.mock('@/services/together', () => ({ ...api, REACTION_EMOJI: ['🔥'] }));
+vi.mock('@/services/audio/engine', () => ({
+  audioEngine: {
+    get currentSongId() {
+      return audio.songId;
+    },
+    position: () => audio.position(),
+    isAdvancing: () => audio.advancing,
+    setRate: audio.setRate,
+  },
+}));
 vi.mock('@/services/api', () => ({ getSong: api.getSong }));
 vi.mock('@/store/toastStore', () => ({ toast: api.toast }));
 vi.mock('@/store/playerStore', () => ({ usePlayerStore: { getState: player.getState, subscribe: player.subscribe } }));
 
 import { useTogether } from '@/services/together/session';
-import { addSong, joinSession, runSession, tapToListen } from './engine';
+import { addSong, joinSession, leaveSession, runSession, tapToListen } from './engine';
 
 const song = (id: string, playable = true) => ({ id, title: `Song ${id}`, subtitle: '', images: [], audio: playable ? [{ quality: '320kbps', url: 'u' }] : [] });
 const room = (over: Record<string, unknown> = {}) => ({
@@ -82,11 +101,17 @@ const room = (over: Record<string, unknown> = {}) => ({
 beforeEach(() => {
   vi.useFakeTimers();
   player.reset();
+  // Also forgets what the last test's session had learned about the host's clock.
+  leaveSession();
   useTogether.getState().reset();
   Object.values(api).forEach((f) => f.mockClear());
   // mockClear keeps implementations: restore the defaults a test may override.
   api.updateRoom.mockResolvedValue('ok');
   api.requestSong.mockResolvedValue(true);
+  audio.songId = null;
+  audio.position = () => null;
+  audio.advancing = true;
+  audio.setRate.mockClear();
 });
 afterEach(() => vi.useRealTimers());
 
@@ -158,6 +183,134 @@ describe('guest', () => {
     expect(player.getState().queue.map((s) => s.id)).toEqual(['r4']);
     expect(useTogether.getState().unplayable).toBeNull();
     stop();
+  });
+
+  it('starts the song where the host is, not at the top', async () => {
+    api.getRoom.mockResolvedValue(room({ position: 75 }));
+    const starts: Array<number | undefined> = [];
+    const orig = player.getState();
+    player.set({ playSong: (s: { id: string }, o?: { startAt?: number }) => (starts.push(o?.startAt), orig.playSong(s)) } as never);
+    expect((await joinSession('ABC123')).ok).toBe(true);
+    await vi.advanceTimersByTimeAsync(0);
+    // 75 s when the host pushed, plus the answer's flight and the half second a new stream takes to start.
+    expect(starts).toHaveLength(1);
+    expect(starts[0]).toBeGreaterThan(75.4);
+    expect(starts[0]).toBeLessThan(76);
+  });
+
+  it('a paused host is joined exactly where it stopped', async () => {
+    api.getRoom.mockResolvedValue(room({ position: 75, playing: false }));
+    const starts: Array<number | undefined> = [];
+    const orig = player.getState();
+    player.set({ playSong: (s: { id: string }, o?: { startAt?: number }) => (starts.push(o?.startAt), orig.playSong(s)) } as never);
+    await joinSession('ABC123');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(starts).toEqual([75]);
+  });
+
+  describe('fine sync', () => {
+    // These compare positions to the millisecond, so the engine's own clock
+    // (performance.now) has to move with the fake timers, not with the
+    // machine: left real, a busy test run reads as drift.
+    beforeEach(() => {
+      vi.useRealTimers();
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date', 'performance'] });
+    });
+
+    // The host as the guest's clock sees it: 10 s at the poll, moving on with time.
+    const follow = async (offset: () => number) => {
+      const t0 = performance.now();
+      const hostAt = () => 10.025 + (performance.now() - t0) / 1000;
+      api.getRoom.mockResolvedValue(room());
+      useTogether.getState().begin('guest', 'ABC123');
+      const stop = runSession('guest', 'ABC123');
+      await vi.advanceTimersByTimeAsync(0);
+      audio.songId = 'h1';
+      audio.position = () => hostAt() + offset();
+      return { stop, hostAt };
+    };
+    const lastRate = () => audio.setRate.mock.calls[audio.setRate.mock.calls.length - 1]?.[0];
+
+    it('a guest a little behind plays slightly faster; a little ahead, slightly slower; in step, normally', async () => {
+      let offset = -0.3;
+      const { stop } = await follow(() => offset);
+      // A fresh song is left to settle first.
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(lastRate()).toBe(1);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(lastRate()).toBeCloseTo(1.08, 2);
+      offset = 0.1;
+      await vi.advanceTimersByTimeAsync(250);
+      expect(lastRate()).toBeCloseTo(0.95, 2);
+      offset = 0.01;
+      await vi.advanceTimersByTimeAsync(250);
+      expect(lastRate()).toBe(1);
+      // Nothing was seeked for any of this.
+      expect(player.getState().currentTime).toBe(0);
+      stop();
+    });
+
+    it('does not touch the speed while the stream is waiting for data, or while the host is paused', async () => {
+      const { stop } = await follow(() => -0.3);
+      audio.advancing = false;
+      await vi.advanceTimersByTimeAsync(2500);
+      expect(audio.setRate.mock.calls.every(([r]) => r === 1)).toBe(true);
+      audio.advancing = true;
+      await vi.advanceTimersByTimeAsync(250);
+      expect(lastRate()).toBeCloseTo(1.08, 2);
+      api.getRoom.mockResolvedValue(room({ playing: false }));
+      await vi.advanceTimersByTimeAsync(2500);
+      expect(lastRate()).toBe(1);
+      stop();
+    });
+
+    it('a guest far off seeks ahead of the host by the time a seek takes', async () => {
+      // How far ahead of the host each seek aimed, at the moment it was made.
+      const seeks: number[] = [];
+      const orig = player.getState();
+      const t0 = performance.now();
+      player.set({ seek: (t: number) => (seeks.push(t - (10.025 + (performance.now() - t0) / 1000)), orig.seek(t)) } as never);
+      const { stop } = await follow(() => -20);
+      await vi.advanceTimersByTimeAsync(4000);
+      expect(seeks).toHaveLength(1);
+      // The first guess for a seek is a quarter of a second.
+      expect(seeks[0]).toBeCloseTo(0.25, 2);
+      stop();
+    });
+
+    it('a song that came in half a second off is put right with one early seek, not ten seconds of catching up', async () => {
+      // How far ahead of the host each seek aimed, at the moment it was made.
+      const seeks: number[] = [];
+      const orig = player.getState();
+      // A playing room, joined part-way in: the song starts in place (and its landing is measured).
+      api.getRoom.mockResolvedValue(room({ position: 75 }));
+      const t0 = performance.now();
+      const hostAt = () => 75.025 + (performance.now() - t0) / 1000;
+      player.set({ seek: (t: number) => (seeks.push(t - hostAt()), orig.seek(t)) } as never);
+      await joinSession('ABC123');
+      const stop = runSession('guest', 'ABC123');
+      await vi.advanceTimersByTimeAsync(0);
+      audio.songId = 'h1';
+      audio.position = () => hostAt() + 0.6;
+      await vi.advanceTimersByTimeAsync(1750);
+      expect(seeks).toHaveLength(1);
+      expect(seeks[0]).toBeCloseTo(0.25, 2);
+      // After it, the small remainder is closed by speed alone.
+      audio.position = () => hostAt() + 0.1;
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(seeks).toHaveLength(1);
+      expect(lastRate()).toBeCloseTo(0.95, 2);
+      stop();
+    });
+
+    it('leaving gives the listener their own playback speed back', async () => {
+      const { stop } = await follow(() => -0.3);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(lastRate()).toBeCloseTo(1.08, 2);
+      player.set({ rate: 1.25 } as never);
+      stop();
+      expect(lastRate()).toBe(1.25);
+    });
   });
 
   it('rejects a malformed code without a network call', async () => {
@@ -235,6 +388,82 @@ describe('host', () => {
     const stop = runSession('host', 'ABC123');
     await vi.advanceTimersByTimeAsync(0);
     expect(useTogether.getState().mode).toBe('idle');
+    stop();
+  });
+
+  it('pushes the playhead as the audio element has it, not the store’s older copy', async () => {
+    api.getRoom.mockResolvedValue(room());
+    player.set({ queue: [song('a')], index: 0, isPlaying: true, currentTime: 42 });
+    audio.songId = 'a';
+    audio.position = () => 42.2;
+    useTogether.getState().begin('host', 'ABC123');
+    const stop = runSession('host', 'ABC123');
+    await vi.advanceTimersByTimeAsync(0);
+    const calls = api.updateRoom.mock.calls as unknown as unknown[][];
+    expect(calls[calls.length - 1][2]).toBe(42.2);
+    // The instant the song changes the element still holds the old one: the
+    // new song is announced from its own start, never the old song's position.
+    api.updateRoom.mockClear();
+    player.getState().playSong(song('next'));
+    await vi.advanceTimersByTimeAsync(0);
+    const after = api.updateRoom.mock.calls as unknown as unknown[][];
+    expect(after[after.length - 1][1]).toMatchObject({ id: 'next' });
+    expect(after[after.length - 1][2]).toBe(0);
+    stop();
+  });
+
+  it('tells the room where the playhead is once a stalled stream is moving again', async () => {
+    api.getRoom.mockResolvedValue(room());
+    player.set({ queue: [song('a')], index: 0, isPlaying: true, currentTime: 30 });
+    useTogether.getState().begin('host', 'ABC123');
+    const stop = runSession('host', 'ABC123');
+    // Let the opening pushes finish (the first store change always pushes,
+    // and once more when the audio is moving).
+    player.set({});
+    await vi.advanceTimersByTimeAsync(1000);
+    api.updateRoom.mockClear();
+    audio.advancing = false;
+    player.set({ isBuffering: true });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(api.updateRoom).not.toHaveBeenCalled();
+    // Data is back, and a moment later sound is: one push, with the real position.
+    player.set({ isBuffering: false });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(api.updateRoom).not.toHaveBeenCalled();
+    audio.advancing = true;
+    await vi.advanceTimersByTimeAsync(600);
+    expect(api.updateRoom).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it('pushes again once the sound is really out: the first "playing" is sent before the audio starts', async () => {
+    api.getRoom.mockResolvedValue(room());
+    player.set({ queue: [song('a')], index: 0, isPlaying: false, currentTime: 30 });
+    audio.songId = 'a';
+    audio.advancing = false;
+    let at = 30;
+    audio.position = () => at;
+    useTogether.getState().begin('host', 'ABC123');
+    const stop = runSession('host', 'ABC123');
+    await vi.advanceTimersByTimeAsync(100);
+    api.updateRoom.mockClear();
+    // The host taps play: said at once…
+    player.set({ isPlaying: true });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(api.updateRoom).toHaveBeenCalledTimes(1);
+    // …the stream takes 0.7 s to start, and nothing more is said meanwhile…
+    await vi.advanceTimersByTimeAsync(700);
+    expect(api.updateRoom).toHaveBeenCalledTimes(1);
+    // …then it moves, and the room is told where the playhead really is.
+    audio.advancing = true;
+    at = 30.4;
+    await vi.advanceTimersByTimeAsync(600);
+    const calls = api.updateRoom.mock.calls as unknown as unknown[][];
+    expect(calls).toHaveLength(2);
+    expect(calls[1][2]).toBe(30.4);
+    // Once, not on every look.
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(api.updateRoom).toHaveBeenCalledTimes(2);
     stop();
   });
 

@@ -60,6 +60,9 @@ describe('/api/room', () => {
     expect(guest.memberCount).toBe(1);
     expect(guest.reactions).toEqual([{ e: '🔥', at: now }]);
     expect(typeof guest.now).toBe('number');
+    // How long the answer took to prepare: a follower takes it out of the round trip.
+    expect(typeof guest.took).toBe('number');
+    expect(guest.took).toBeGreaterThanOrEqual(0);
     expect(guest.members).toBeUndefined();
     expect(JSON.stringify(guest)).not.toContain('host-secret');
     const host = (await (await get('code=ABC234&hostToken=host-secret')).json()) as { members?: string[] };
@@ -75,7 +78,8 @@ describe('/api/room', () => {
     expect((await post({ action: 'end', code: 'ABC234' })).status).toBe(403);
     expect((await post({ action: 'update', code: 'NOPE00', hostToken: 'host-secret' })).status).toBe(404);
     const ok = await post({ action: 'update', code: 'ABC234', hostToken: 'host-secret', song: { id: 's9', title: 'Nine' }, queue: [{ song: { id: 'q1' }, by: null }], position: 40, playing: true, consumedIds: ['s2'] });
-    expect(await ok.json()).toEqual({ ok: true });
+    // The host learns how long the server spent, to tell its own network delay.
+    expect(await ok.json()).toEqual({ ok: true, took: expect.any(Number) });
     const row = fake.rows('rooms')[0];
     expect(row.requests).toEqual([{ song: { id: 's3' }, by: 'G' }]);
     expect(row.playing).toBe(true);

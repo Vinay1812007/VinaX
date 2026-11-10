@@ -344,8 +344,12 @@
     };
   }
 
+  var modalSeq = 0;
   /** Modal. Returns { el, close }. `actions` = [{ label, kind, onClick(close) }]. */
   VX.modal = function (o) {
+    // A modal can open over another (cropping a picture inside "Add banner"):
+    // each needs its own title id to be announced by its own name.
+    var titleId = 'mdl-title-' + (++modalSeq);
     lastFocus = document.activeElement;
     var scrim = h('div.scrim');
     var close = function () {
@@ -357,12 +361,18 @@
     var foot = (o.actions || []).map(function (a) {
       return VX.ui.button(a.label, { kind: a.kind, onClick: function () { return a.onClick ? a.onClick(close) : close(); } });
     });
-    var box = h('div.modal' + (o.wide ? '.wide' : ''), { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'mdl-title' },
-      h('div.modal-head', h('h2#mdl-title', o.title || ''), h('button.icon-btn', { type: 'button', 'aria-label': 'Close', onclick: close }, icon('close'))),
+    var box = h('div.modal' + (o.wide ? '.wide' : ''), { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId },
+      h('div.modal-head', h('h2', { id: titleId }, o.title || ''), h('button.icon-btn', { type: 'button', 'aria-label': 'Close', onclick: close }, icon('close'))),
       h('div.modal-body', o.body),
       foot.length ? h('div.modal-foot', foot) : null
     );
-    var onKey = trapKeys(box, close);
+    var keys = trapKeys(box, close);
+    // Only the modal on top answers the keyboard: Escape in the crop step must
+    // not also close the form underneath it.
+    var onKey = function (e) {
+      var all = document.querySelectorAll('.scrim');
+      if (all[all.length - 1] === scrim) keys(e);
+    };
     scrim.appendChild(box);
     scrim.addEventListener('mousedown', function (e) { if (e.target === scrim) close(); });
     document.addEventListener('keydown', onKey, true);

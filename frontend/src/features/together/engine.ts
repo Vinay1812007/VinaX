@@ -15,6 +15,12 @@
  * invite link opened without a tap), it raises `needsTap` instead of silently
  * sitting there muted.
  *
+ * 1.12.10 — fine sync. A song now starts where the host is (not at 0:00 and
+ * then a jump), a seek aims ahead by the time seeks have been taking, and
+ * four times a second the guest compares its own playhead with the host's
+ * and plays a few percent faster or slower until they match. Before, a guest
+ * within a second of the host was left there, always on the late side.
+ *
  * The room only NAMES a song (id, title, artwork): the server keeps no stream
  * URLs. So a guest looks the host's song up in the catalogue before playing
  * it, exactly as the host does for a guest's request. Guests used to hand the
@@ -22,6 +28,7 @@
  * streams: joining failed and nobody but the host heard anything.
  */
 import { getSong } from '@/services/api';
+import { audioEngine } from '@/services/audio/engine';
 import {
   createRoom,
   endRoom,
@@ -41,10 +48,31 @@ import { useTogether } from '@/services/together/session';
 import { usePlayerStore } from '@/store/playerStore';
 import { toast } from '@/store/toastStore';
 import type { Song } from '@/types';
-import { decideCorrection, HostClock, hostIsAway, ReactionFeed } from './sync';
+import { decideCorrection, HostClock, hostIsAway, RateNudge, ReactionFeed, SEEK_THRESHOLD_S, SeekLead, TRACK_SETTLE_MS } from './sync';
 
 const HOST_POLL_MS = 4000;
 const GUEST_POLL_MS = 2000;
+/** After a play or a song change, how often the host looks for the audio to be really moving. */
+const HOST_MOVING_CHECK_MS = 250;
+/** How often a guest compares its playhead with the host's and trims its speed. */
+const FINE_SYNC_MS = 250;
+/** A freshly started song further off than this (seconds) is put right with one seek. */
+const START_RESEEK_S = 0.35;
+/** After a seek or a play/pause, how long before the playhead is judged again. */
+const CORRECTION_SETTLE_MS = 600;
+
+/**
+ * The playhead right now, from the audio element. The store's `currentTime`
+ * is as old as the last `timeupdate`; and for an instant after a song change
+ * the engine still holds the previous song, so it is asked only about the
+ * song the store says is playing.
+ */
+function playhead(): number {
+  const s = usePlayerStore.getState();
+  const song = s.queue[s.index];
+  const live = song && audioEngine.currentSongId === song.id ? audioEngine.position() : null;
+  return live ?? s.currentTime;
+}
 /** Guests heartbeat every third poll — the server counts a member as present
  *  for 12 s, and halving the POSTs keeps a houseful of phones on one Wi-Fi
  *  inside the per-address budget. */
@@ -143,7 +171,7 @@ function runHost(code: string): () => void {
     const s = usePlayerStore.getState();
     const up = upNext();
     useTogether.getState().patch({ queue: up });
-    const r = await updateRoom(code, s.queue[s.index] ?? null, s.currentTime, s.isPlaying, up, [...consumed]);
+    const r = await updateRoom(code, s.queue[s.index] ?? null, playhead(), s.isPlaying, up, [...consumed]);
     inFlight = false;
     if (!alive) return;
     if (r === 'gone') {
@@ -163,9 +191,33 @@ function runHost(code: string): () => void {
     }
   };
 
+  // The push made the instant the host taps play, or a song changes, says
+  // "playing" before any sound has come out: guests then count the host's
+  // start-up time as music played and run ahead of it. So push once more as
+  // soon as the audio is really moving; guests take that one as the truth.
+  let watch = 0;
+  const pushWhenMoving = (): void => {
+    window.clearInterval(watch);
+    let looks = 0;
+    let moving = 0;
+    watch = window.setInterval(() => {
+      looks += 1;
+      if (!alive || !usePlayerStore.getState().isPlaying || looks > 80) {
+        window.clearInterval(watch);
+        return;
+      }
+      moving = audioEngine.isAdvancing() ? moving + 1 : 0;
+      if (moving >= 2) {
+        window.clearInterval(watch);
+        void push();
+      }
+    }, HOST_MOVING_CHECK_MS);
+  };
+
   let last = '';
   let lastT = usePlayerStore.getState().currentTime;
   let lastW = Date.now();
+  let wasBuffering = usePlayerStore.getState().isBuffering;
   const unsub = usePlayerStore.subscribe((s) => {
     const song = s.queue[s.index] ?? null;
     const key = `${song?.id ?? ''}|${s.isPlaying}|${s.queue.length}|${s.index}`;
@@ -176,9 +228,17 @@ function runHost(code: string): () => void {
     const jumped = Math.abs(s.currentTime - expected) > 2;
     lastT = s.currentTime;
     lastW = wall;
+    // The stream stalled and has just come back: the playhead stood still for
+    // a moment the guests did not see. Tell them where it really is, once it
+    // is moving again.
+    const resumed = wasBuffering && !s.isBuffering;
+    wasBuffering = s.isBuffering;
     if (key !== last || jumped) {
       last = key;
       void push();
+      if (s.isPlaying) pushWhenMoving();
+    } else if (resumed && s.isPlaying) {
+      pushWhenMoving();
     }
   });
 
@@ -246,6 +306,7 @@ function runHost(code: string): () => void {
     alive = false;
     unsub();
     window.clearInterval(iv);
+    window.clearInterval(watch);
   };
 }
 
@@ -255,12 +316,39 @@ let lastCorrection = 0;
 let trackStartedAt = 0;
 let playAttempts = 0;
 
+/** The host's playhead, and the room it is for. `joinSession` reads the room
+ *  once before the engine starts, so the first song can already start in place. */
+let clock = new HostClock();
+let clockCode: string | null = null;
+/** How far ahead a seek, and a freshly started song, must aim to land with the host. */
+let seekLead = new SeekLead();
+let startLead = new SeekLead(0.5);
+/** A seek or a start whose landing has not been measured yet, and when it was made. */
+let landing: { lead: SeekLead; at: number } | null = null;
+/** A landing measured later than this says nothing about the seek (the host paused meanwhile, say). */
+const LANDING_WINDOW_MS = 8000;
+
+/** Where a song that starts loading now should begin, to come in with the host. */
+function startPosition(id: string): number {
+  if (!clock.ready || clock.songId !== id) return 0;
+  const at = clock.positionAt() + (clock.isPlaying ? startLead.seconds : 0);
+  return at > 1 ? at : 0;
+}
+
 /** The host's song this device is looking up right now. */
 let fetching: string | null = null;
 /** The host's song this device could not get, and when it last tried. */
 let missed: { id: string; at: number } | null = null;
 /** How long before a song that could not be found is looked up again. */
 const MISSED_RETRY_MS = 20_000;
+
+/** Guest: start `song` where the host is, and note the start so its landing is measured. */
+function startInPlace(song: Song): void {
+  const at = startPosition(song.id);
+  usePlayerStore.getState().playSong(song, { startAt: at });
+  trackStartedAt = performance.now();
+  landing = at > 0 && clock.isPlaying ? { lead: startLead, at: trackStartedAt } : null;
+}
 
 /**
  * Guest: get the host's song from the catalogue and start it. The room may
@@ -287,8 +375,7 @@ async function loadHostSong(stub: Song): Promise<void> {
   missed = null;
   if (room.unplayable) room.patch({ unplayable: null });
   if (st.queue[st.index]?.id === id) return;
-  st.playSong(song);
-  trackStartedAt = performance.now();
+  startInPlace(song);
   lastCorrection = trackStartedAt;
   playAttempts += 1;
 }
@@ -297,9 +384,54 @@ function runGuest(code: string): () => void {
   let alive = true;
   let misses = 0;
   let ticks = 0;
-  const clock = new HostClock();
+  // Joining has already read the room once for this code; a session picked
+  // up any other way (a reloaded tab) starts from nothing.
+  if (clockCode !== code) {
+    clock = new HostClock();
+    clockCode = code;
+    seekLead = new SeekLead();
+    startLead = new SeekLead(0.5);
+    landing = null;
+  }
+  const nudge = new RateNudge();
   const player = usePlayerStore.getState();
   player.setFollowMode(true);
+
+  // Fine sync: between polls the host's playhead is projected locally, so the
+  // guest can be compared with it several times a second.
+  const fine = (): void => {
+    const st = usePlayerStore.getState();
+    const now = performance.now();
+    const local = st.queue[st.index] ?? null;
+    const together =
+      clock.ready && clock.isPlaying && !!local && local.id === clock.songId && st.isPlaying && !st.isBuffering && audioEngine.isAdvancing() &&
+      now - trackStartedAt >= TRACK_SETTLE_MS && now - lastCorrection >= CORRECTION_SETTLE_MS;
+    if (!together) {
+      nudge.reset();
+      audioEngine.setRate(1);
+      return;
+    }
+    const drift = playhead() - clock.positionAt(now);
+    // The first look after a seek or a start: how late (or early) did it land?
+    if (landing) {
+      const landed = landing;
+      landing = null;
+      if (now - landed.at < LANDING_WINDOW_MS) landed.lead.learn(drift);
+      // A song that came in well off (the first poll of a session is the
+      // least exact, and a stream can be slow to start): one small seek now
+      // beats ten seconds of catching up at a different speed.
+      if (landed.lead === startLead && Math.abs(drift) > START_RESEEK_S && Math.abs(drift) <= SEEK_THRESHOLD_S * 3) {
+        const target = clock.positionAt(now) + seekLead.seconds;
+        st.seek(Math.max(0, st.duration > 1 ? Math.min(target, st.duration - 0.5) : target));
+        lastCorrection = now;
+        landing = { lead: seekLead, at: now };
+        nudge.reset();
+        audioEngine.setRate(1);
+        return;
+      }
+    }
+    audioEngine.setRate(nudge.next(drift));
+  };
 
   const tick = async (): Promise<void> => {
     ticks += 1;
@@ -332,7 +464,7 @@ function runGuest(code: string): () => void {
     });
     floatReactions(d.reactions);
     if (!r.song) return;
-    clock.ingest({ position: r.position, playing: r.playing, updated_at: r.updated_at, now: d.now, rttMs: d.rttMs, receivedAt: d.receivedAt });
+    clock.ingest({ position: r.position, playing: r.playing, updated_at: r.updated_at, now: d.now, took: d.took, rttMs: d.rttMs, receivedAt: d.receivedAt, songId: r.song.id });
 
     const st = usePlayerStore.getState();
     const local = st.queue[st.index] ?? null;
@@ -346,11 +478,12 @@ function runGuest(code: string): () => void {
         songId: local?.id ?? null,
         isPlaying: st.isPlaying,
         isBuffering: st.isBuffering,
-        currentTime: st.currentTime,
+        currentTime: playhead(),
         duration: st.duration,
       },
       sinceLastCorrectionMs: now - lastCorrection,
       sinceTrackStartMs: now - trackStartedAt,
+      seekLeadS: seekLead.seconds,
     });
     store.patch({ drift: c.drift });
 
@@ -371,6 +504,8 @@ function runGuest(code: string): () => void {
       case 'seek':
         st.seek(c.to);
         lastCorrection = now;
+        // Only a seek that aimed ahead of a playing host teaches the lead.
+        landing = r.playing ? { lead: seekLead, at: now } : null;
         break;
       default:
         break;
@@ -389,6 +524,7 @@ function runGuest(code: string): () => void {
 
   void tick();
   const iv = window.setInterval(() => void tick(), GUEST_POLL_MS);
+  const fineIv = window.setInterval(fine, FINE_SYNC_MS);
   const onHide = (e: PageTransitionEvent): void => {
     // A real close (not a bfcache freeze): free our seat right away instead
     // of counting us as listening for another 12 s.
@@ -398,7 +534,10 @@ function runGuest(code: string): () => void {
   return () => {
     alive = false;
     window.clearInterval(iv);
+    window.clearInterval(fineIv);
     window.removeEventListener('pagehide', onHide);
+    // Back to the listener's own playback speed.
+    audioEngine.setRate(usePlayerStore.getState().rate || 1);
     usePlayerStore.getState().setFollowMode(false);
   };
 }
@@ -413,8 +552,7 @@ export function tapToListen(): void {
     // (a tap is also "try again" for a song that could not be found).
     const ready = isPlayable(hostSong) ? hostSong : songCache.get(hostSong.id);
     if (ready) {
-      st.playSong(ready);
-      trackStartedAt = performance.now();
+      startInPlace(ready);
     } else {
       missed = null;
       void loadHostSong(hostSong);
@@ -436,6 +574,8 @@ export function runSession(mode: 'host' | 'guest', code: string): () => void {
   trackStartedAt = 0;
   playAttempts = 0;
   missed = null;
+  // `landing` is left alone: joining may already have started the song, a
+  // moment before this engine was mounted, and its landing is still to be measured.
   return mode === 'host' ? runHost(code) : runGuest(code);
 }
 
@@ -478,6 +618,15 @@ export async function joinSession(rawCode: string): Promise<JoinResult> {
   usePlayerStore.getState().setFollowMode(true);
   useTogether.getState().begin('guest', code);
   useTogether.getState().patch({ hostName: d.room.host_name ?? null, hostSong: d.room.song ?? null });
+  // Where the host is right now, so the song can start there and not at 0:00.
+  clock = new HostClock();
+  clockCode = code;
+  seekLead = new SeekLead();
+  startLead = new SeekLead(0.5);
+  landing = null;
+  if (d.room.song) {
+    clock.ingest({ position: d.room.position, playing: d.room.playing, updated_at: d.room.updated_at, now: d.now, took: d.took, rttMs: d.rttMs, receivedAt: d.receivedAt, songId: d.room.song.id });
+  }
   // You are in the room now; the song starts as soon as this device has it.
   missed = null;
   if (d.room.song) void loadHostSong(d.room.song);
@@ -487,6 +636,8 @@ export async function joinSession(rawCode: string): Promise<JoinResult> {
 export function leaveSession(): void {
   const { mode, code } = useTogether.getState();
   if (code) void (mode === 'host' ? endRoom(code) : leaveRoom(code));
+  clockCode = null;
+  landing = null;
   useTogether.getState().reset();
 }
 
