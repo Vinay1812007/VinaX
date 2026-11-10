@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — a plain .mjs build script, no types
-import { HUB_PATHS, MIRRORS, STATIC_SITEMAPS, entityKey, minimumPages, nextPages, pageRoom, priorityPages, sitemapPaths, songIdOf, tooFewPages, fileFor, hubFileFor, hubSongIds, injectSection, linkedEntities, pickEntities, pruneEntityLinks, songSections } from '../../scripts/prerender-entities.mjs';
+import { HUB_PATHS, MIRRORS, STATIC_SITEMAPS, entityKey, minimumPages, nextPages, pageRoom, wantedPages, priorityPages, sitemapPaths, songIdOf, tooFewPages, fileFor, hubFileFor, hubSongIds, injectSection, linkedEntities, pickEntities, pruneEntityLinks, songSections } from '../../scripts/prerender-entities.mjs';
 
 type Song = { id: string; name: string; language: string; playCount: number; album?: { id: string }; artists?: { primary: Array<{ id: string }> } };
 const song = (id: string, name: string, plays: number, extra: Partial<Song> = {}): Song => ({
@@ -161,6 +161,23 @@ describe('SEO daily growth — keep what is live, add what pages link to, stay u
     expect(nextPages(links, built, tried, 10, 3000)).toEqual([['artist', '7'], ['song', 'A']]);
     expect(nextPages(links, built, tried, 1, 3000)).toEqual([['artist', '7']]);
     expect(nextPages(links, built, tried, 10, 0)).toEqual([]);
+  });
+
+  it('takes the pages Google already knows first: not built, not tried, once each, while room lasts', () => {
+    const wanted = [['song', 'A'], ['album', '1'], ['song', 'B'], ['song', 'A'], ['artist', '7'], ['song', 'C']];
+    const built = new Map([['album:1', '/album/x-1']]);
+    const tried = new Set(['song:B']);
+    expect(wantedPages(wanted, built, tried, 10)).toEqual([['song', 'A'], ['artist', '7'], ['song', 'C']]);
+    expect(wantedPages(wanted, built, tried, 2)).toEqual([['song', 'A'], ['artist', '7']]);
+    expect(wantedPages(wanted, built, tried, 0)).toEqual([]);
+    expect(wantedPages(wanted, built, tried, -5)).toEqual([]);
+  });
+
+  it('the wanted list in the repo is well formed', () => {
+    const lines = readFileSync(resolve(__dirname, '../../scripts/seo-wanted.txt'), 'utf8').split('\n').filter((l) => l && !l.startsWith('#'));
+    expect(lines.length).toBeGreaterThan(0);
+    expect(priorityPages(lines.join('\n'))).toHaveLength(lines.length);
+    expect(new Set(lines).size).toBe(lines.length);
   });
 
   it('fails a build that would drop most of the live pages', () => {

@@ -355,6 +355,23 @@ export function priorityPages(text) {
   return out;
 }
 
+/** Pages Google knows and the site lacks (seo-wanted.txt, same line format): built once, before the linked ones. */
+const WANTED_FILE = resolve(dirname(fileURLToPath(import.meta.url)), 'seo-wanted.txt');
+
+/** The wanted pages that are neither built nor already tried, in the list's order, while `room` lasts. */
+export function wantedPages(wanted, built, tried, room) {
+  const out = [];
+  const seen = new Set();
+  for (const [type, id] of wanted) {
+    if (out.length >= room) break;
+    const key = `${type}:${id}`;
+    if (seen.has(key) || built.has(key) || tried.has(key)) continue;
+    seen.add(key);
+    out.push([type, id]);
+  }
+  return out;
+}
+
 /** The <loc> paths ("/song/x-1") of an entity sitemap on this site. */
 export function sitemapPaths(xml) {
   const out = [];
@@ -636,8 +653,17 @@ async function main() {
     }
     // SEO 2026-11 — then new pages: the ones built pages link to most (an
     // artist's other albums, an album's other songs), so links lead somewhere.
-    const fresh = nextPages(links, built, tried, room - built.size, MAX_LINKED);
-    console.log(`entity pages: ${kept} kept as they were; ${fresh.length} new ones that built pages link to`);
+    // First the pages Google already knows and gets a 404 for (seo-wanted.txt).
+    let wanted = [];
+    try {
+      wanted = wantedPages(priorityPages(readFileSync(WANTED_FILE, 'utf8')), built, tried, room - built.size);
+    } catch {
+      /* no list: nothing extra */
+    }
+    const wantedKeys = new Set(wanted.map(([t, id]) => `${t}:${id}`));
+    const linked = nextPages(links, built, tried, room - built.size - wanted.length, MAX_LINKED).filter(([t, id]) => !wantedKeys.has(`${t}:${id}`));
+    const fresh = [...wanted, ...linked];
+    console.log(`entity pages: ${kept} kept as they were; ${wanted.length} new ones Google already knows; ${linked.length} new ones that built pages link to`);
     if (!skipped) skipped = await buildAll(fresh);
     urls.push(...built.values());
     console.log(

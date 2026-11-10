@@ -14,6 +14,11 @@
  * matches); POST { action: 'publish_robots' } asks the website host to rebuild
  * so robots.txt picks the choices up (PAGES_DEPLOY_HOOK). See _lib/robots.ts.
  *
+ * ?view=all&part=N checks EVERY page the static and hub sitemaps list (the
+ * sample above is 12 pages, and a problem on any other page went unseen):
+ * ALL_PART pages per request, so each stays under the free plan's 50
+ * sub-requests; the console asks for the parts one after another.
+ *
  * Since V2 1.0 these pages and maps are static files on the static host, so
  * crawlers reading them spend nothing from the Worker's daily quota; this
  * route spends about twenty sub-requests, only when the owner opens the tab,
@@ -52,6 +57,11 @@ export interface PageAudit {
   noindex: boolean;
   issues: string[];
 }
+
+/** Pages one ?view=all request audits: with the two sitemap reads it stays under the free plan's 50 sub-requests. */
+export const ALL_PART = 40;
+/** The sitemaps whose every page ?view=all checks. The song / album / artist map is sampled, never read in full. */
+export const FULL_MAPS = ['/sitemap-static.xml', '/sitemap-hubs.xml'];
 
 export interface MapInfo { path: string; status: number; urls: number; lastmod: string | null; sample: string[] }
 
@@ -127,6 +137,19 @@ export function readSitemap(xml: string): { locs: string[]; lastmod: string | nu
   return { locs, lastmod: mods[mods.length - 1] ?? null };
 }
 
+/** Every path the given sitemaps list on this site, once each, in the order listed. Pure. */
+export function listedPaths(xmls: string[], origin: string): string[] {
+  const out = new Set<string>();
+  for (const xml of xmls) {
+    for (const loc of readSitemap(xml).locs) {
+      if (!loc.startsWith(`${origin}/`)) continue;
+      const path = loc.slice(origin.length);
+      if (/^\/[\w\-./%]{0,200}$/.test(path) && !path.includes('..')) out.add(path);
+    }
+  }
+  return [...out];
+}
+
 /** robots.txt facts. Pure. */
 export function readRobots(text: string): { sitemaps: string[]; blockedAgents: string[]; disallowAll: boolean } {
   const sitemaps = [...text.matchAll(/^sitemap:\s*(\S+)/gim)].map((m) => m[1]);
@@ -172,6 +195,20 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
       publishReady: !!env.PAGES_DEPLOY_HOOK,
       liveStatus: live.status,
     });
+  }
+
+  // Every page in the static and hub sitemaps, ALL_PART at a time.
+  if (url.searchParams.get('view') === 'all') {
+    const limitedAll = await rateLimitAsync(request, 'admin-seo-all', { capacity: 8, refillPerMinute: 8 }, env);
+    if (limitedAll) return limitedAll;
+    const part = Math.min(50, Math.max(0, Math.floor(Number(url.searchParams.get('part')) || 0)));
+    const xmls = await Promise.all(FULL_MAPS.map((m) => get(`${origin}${m}`)));
+    const paths = listedPaths(xmls.map((x) => x.text), origin);
+    const pages: PageAudit[] = await Promise.all(paths.slice(part * ALL_PART, (part + 1) * ALL_PART).map(async (path) => {
+      const r = await get(`${origin}${path}`);
+      return { ...auditHtml(path, r.status, r.text, origin), ms: r.ms };
+    }));
+    return json({ total: paths.length, part, parts: Math.ceil(paths.length / ALL_PART), pages, checkedAt: new Date().toISOString() });
   }
 
   const limited = await rateLimitAsync(request, 'admin-seo', { capacity: 4, refillPerMinute: 4 }, env);

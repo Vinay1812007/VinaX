@@ -1,7 +1,8 @@
 /* VinaX console — Google Search (console rebuild).
  * Can search engines find and read the website? Tabs:
  *   summary  cards, Check again, and "Bots allowed to read the site" (Allow / Block per crawler)
- *   pages    Page check: what is wrong with each key page and how to fix it, or check one song / album / artist page
+ *   pages    Page check: what is wrong with each key page and how to fix it, or check one song / album / artist page;
+ *            "Check every page" reads every page in the static and hub sitemaps (/api/admin/seo?view=all, in parts)
  *   console  Search Console: where to submit the site and what to check each week
  * Reads /api/admin/seo (the live site, read the way a crawler reads it) and
  * /api/admin/seo?view=bots; saves bot choices to the `robots` setting.
@@ -200,8 +201,39 @@
       pickerHost) }));
     drawPicker();
     host.appendChild(one);
-    host.appendChild(h('div.toolbar', ui.button('Check again', { kind: 'ghost', icon: 'refresh', onClick: function () { return load(true); } })));
+    var all = h('div');
+    host.appendChild(h('div.toolbar',
+      ui.button('Check again', { kind: 'ghost', icon: 'refresh', onClick: function () { return load(true); } }),
+      ui.button('Check every page', { kind: 'primary', icon: 'check', onClick: function () { return loadAll(); } }),
+      ui.muted('“Main pages” is a sample of 12. “Check every page” reads every page in the sitemaps except songs, albums and artists; it takes a few seconds.')));
+    host.appendChild(all);
     host.appendChild(body);
+    /** Every page of the static and hub sitemaps: the server answers a part at a time, so ask until the last one. */
+    function fetchAll() {
+      var pages = [];
+      function part(n) {
+        return VX.api.get('/api/admin/seo', { view: 'all', part: n }, { fresh: true, timeout: 60000 }).then(function (res) {
+          if (!res.ok) return res;
+          var d = obj(res.data);
+          pages = pages.concat(arr(d.pages));
+          if (n + 1 < num(d.parts)) return part(n + 1);
+          return { ok: true, status: 200, data: { pages: pages, checkedAt: d.checkedAt } };
+        });
+      }
+      return part(0);
+    }
+    function loadAll() {
+      return ui.load(all, fetchAll, function (d) {
+        var pages = arr(d.pages);
+        var bad = pages.filter(function (p) { return arr(p.issues).length || p.status !== 200; }).length;
+        return [
+          bad ? ui.notice(fmt.num(bad) + ' of ' + fmt.num(pages.length) + ' pages ' + (bad === 1 ? 'has' : 'have') + ' something to fix. They are at the top of the list.', 'warn')
+            : ui.notice('All ' + fmt.num(pages.length) + ' pages are fine — nothing to fix.', 'ok'),
+          ui.card({ title: 'Every page', sub: 'Every page in the sitemaps except songs, albums and artists', pad: false, body: pageTable(pages) }),
+          d.checkedAt ? h('p.muted.small', 'Checked ' + fmt.full(d.checkedAt) + '.') : null
+        ];
+      });
+    }
     function load(force) {
       return ui.load(body, function () { return fetchSeo(force); }, function (d) {
         return ui.card({ title: 'Main pages', sub: 'Home, the top lists, popular language pages, and the first song, album and artist pages', pad: false, body: pageTable(arr(d.pages)) });

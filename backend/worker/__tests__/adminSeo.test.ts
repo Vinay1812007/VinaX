@@ -3,7 +3,7 @@
  * page, a sitemap and robots.txt, and the live run against a fake site.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { auditHtml, onRequestGet, readRobots, readSitemap } from '../functions/api/admin/seo';
+import { ALL_PART, auditHtml, listedPaths, onRequestGet, readRobots, readSitemap } from '../functions/api/admin/seo';
 
 const ORIGIN = 'https://www.vinaxmusic.online';
 const good = `<!doctype html><html><head><title>Telugu Romantic Songs — Stream Free | VinaX</title>
@@ -40,6 +40,14 @@ describe('sitemaps and robots', () => {
   });
 });
 
+describe('listedPaths', () => {
+  it('keeps this site\'s paths, once each, and drops anything else', () => {
+    const a = `<urlset><url><loc>${ORIGIN}/</loc></url><url><loc>${ORIGIN}/charts/</loc></url><url><loc>https://evil.example/x</loc></url></urlset>`;
+    const b = `<urlset><url><loc>${ORIGIN}/charts/</loc></url><url><loc>${ORIGIN}/a/../b</loc></url><url><loc>${ORIGIN}/hindi-songs</loc></url></urlset>`;
+    expect(listedPaths([a, b], ORIGIN)).toEqual(['/', '/charts/', '/hindi-songs']);
+  });
+});
+
 describe('GET /api/admin/seo', () => {
   afterEach(() => vi.unstubAllGlobals());
   const env = { ADMIN_LOGIN_PASSWORD: 'test-secret' };
@@ -70,6 +78,32 @@ describe('GET /api/admin/seo', () => {
     expect(d.robots.sitemaps).toEqual([`${ORIGIN}/sitemap.xml`]);
     // It reads the public site (www), never the console host.
     expect(seen.every((u) => u.startsWith(ORIGIN))).toBe(true);
+  });
+
+  it('checks every page the static and hub sitemaps list, a part at a time', async () => {
+    const statics = ['/', ...Array.from({ length: 44 }, (_, i) => `/page-${i}/`)];
+    const hubs = ['/telugu-romantic-songs', '/page-0/'];
+    const urlset = (paths: string[]) => `<urlset>${paths.map((p) => `<url><loc>${ORIGIN}${p}</loc></url>`).join('')}</urlset>`;
+    let reads = 0;
+    vi.stubGlobal('fetch', vi.fn(async (u: string) => {
+      reads++;
+      const path = new URL(u).pathname;
+      if (path === '/sitemap-static.xml') return new Response(urlset(statics));
+      if (path === '/sitemap-hubs.xml') return new Response(urlset(hubs));
+      if (path === '/page-3/') return new Response(good.replace(/<h1>[^<]*<\/h1>/, ''));
+      return new Response(good.replace(/\/telugu-romantic-songs"/, `${path}"`));
+    }));
+    type All = { total: number; part: number; parts: number; pages: Array<{ path: string; issues: string[] }> };
+    const first = (await (await onRequestGet({ request: req('?view=all'), env })).json()) as All;
+    expect(first.total).toBe(46); // 45 static + 1 hub; the page both maps list counts once
+    expect(first.parts).toBe(2);
+    expect(first.pages).toHaveLength(ALL_PART);
+    expect(reads).toBeLessThanOrEqual(50); // the free plan's sub-request limit
+    expect(first.pages.find((p) => p.path === '/page-3/')?.issues).toContain('no H1');
+    const second = (await (await onRequestGet({ request: req('?view=all&part=1'), env })).json()) as All;
+    expect(second.pages.map((p) => p.path)).toContain('/telugu-romantic-songs');
+    expect(first.pages.length + second.pages.length).toBe(46);
+    expect(((await (await onRequestGet({ request: req('?view=all&part=9'), env })).json()) as All).pages).toEqual([]);
   });
 
   it('audits one path on request, and refuses anything that is not a path', async () => {
