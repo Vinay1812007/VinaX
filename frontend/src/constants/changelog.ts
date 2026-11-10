@@ -16,6 +16,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.12.5': {
+    title: '"For your weekday evenings" is built from your own plays, so Home\'s first paint asks the…',
+    changes: [
+      { type: 'improved', text: 'The moment shelf now lists the songs you play most at this time of day, from the history on your device, and only asks the catalogue for one search when those are too few. It had asked for two artists\' top songs and a search before…' },
+    ],
+  },
   '1.12.4': {
     title: 'Android notifications: the app registers for push before the permission is granted, and…',
     changes: [
