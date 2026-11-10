@@ -44,8 +44,25 @@ export const PUSH_CHANNEL = {
   lights: true,
 } as const;
 
+/** The last thing that went wrong this launch, shown in Settings › Notifications (usage reports are consent-gated, this is not). */
+let lastReport = '';
 function report(message: string): void {
+  lastReport = message;
   void import('@/services/analytics/telemetry').then((m) => m.reportError('push-native', message)).catch(() => undefined);
+}
+
+export interface NativePushStatus {
+  /** Android handed the app a push token this launch. */
+  token: boolean;
+  /** The token reached the server (the console can send to this phone). */
+  uploaded: boolean;
+  /** The last failure this launch, or ''. */
+  last: string;
+}
+
+/** 1.12 — where push registration stands this launch, for Settings › Notifications › Push setup. */
+export function nativePushStatus(): NativePushStatus {
+  return { token: tokenSeen && !!lastToken, uploaded, last: lastReport };
 }
 
 /** Upload the token; three tries with a growing pause. True once the server saved it. */
