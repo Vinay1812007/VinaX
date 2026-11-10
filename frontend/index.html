@@ -150,12 +150,41 @@
             if (!langs.length) return;
             url = location.origin + '/api/cat/trending?language=' + encodeURIComponent(langs.slice(0, 3).join(',')) + '&limit=20';
           }
-          window.__vxBoot = {
-            url: url,
-            json: fetch(url, { headers: { Accept: 'application/json' } })
-              .then(function (r) { return r.ok ? r.json() : null; })
-              .catch(function () { return null; }),
-          };
+          var json = fetch(url, { headers: { Accept: 'application/json' } })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .catch(function () { return null; });
+          window.__vxBoot = { url: url, json: json };
+          // 1.12 — the first shelf's artwork starts downloading the moment the
+          // answer lands, before the app has mounted: a preload for each of
+          // the first tiles, at the size the card will ask for (the same
+          // rule as MediaCard's srcset/sizes: a 144 px cell below 640 px,
+          // 160 px above, times the pixel ratio, rounded up to the catalogue's
+          // 150/250/350/500 variants). The first one is the likely largest
+          // paint, so it goes out with high priority.
+          json.then(function (d) {
+            try {
+              var data = d && (d.data || d);
+              var songs = data && (data.songs || data.results || data.data);
+              if (!songs || !songs.length) return;
+              var cell = window.innerWidth >= 640 ? 160 : 144;
+              var need = cell * (window.devicePixelRatio || 1);
+              var sizes = [150, 250, 350, 500], px = 500;
+              for (var si = 0; si < sizes.length; si++) { if (sizes[si] >= need) { px = sizes[si]; break; } }
+              var count = window.innerWidth >= 640 ? 5 : 3;
+              for (var i = 0, added = 0; i < songs.length && added < count; i++) {
+                var imgs = songs[i] && (songs[i].image || songs[i].images);
+                var src = null;
+                if (Array.isArray(imgs)) { for (var k = 0; k < imgs.length; k++) { var u = imgs[k] && imgs[k].url; if (typeof u === 'string' && u.indexOf('500x500') !== -1) { src = u.replace(/500x500/g, px + 'x' + px); break; } } }
+                else if (typeof imgs === 'string' && imgs.indexOf('500x500') !== -1) src = imgs.replace(/500x500/g, px + 'x' + px);
+                if (!src || src.indexOf('https://') !== 0) continue;
+                var link = document.createElement('link');
+                link.rel = 'preload'; link.as = 'image'; link.href = src;
+                if (added === 0) link.setAttribute('fetchpriority', 'high');
+                document.head.appendChild(link);
+                added++;
+              }
+            } catch (e) { /* decoration only */ }
+          }).catch(function () {});
         } catch (e) { /* never block boot */ }
       })();
     </script>
