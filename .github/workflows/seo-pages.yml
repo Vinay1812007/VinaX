@@ -4,8 +4,10 @@
 # (frontend/scripts/prerender-entities.mjs) restored from the Actions cache,
 # rebuilds the charts' pages, re-renders the 1,000 oldest pages, adds up to
 # 3,000 new pages that the others link to, and deploys to Cloudflare Pages.
-# The site grows until ENTITY_MAX_TOTAL (17,000 on the Free plan, whose limit
-# is 20,000 files per site; the app itself is about 560 files).
+# The site grows until ENTITY_MAX_TOTAL (18,800 on the Free plan, whose limit
+# is 20,000 files per site; the app itself is about 610 files, so this leaves
+# room for about 290 more app files before pages would have to go).
+# Past that needs the paid plan (100,000 files) and a higher number here.
 #
 # It costs no Worker requests: pages are rendered from VinaX's own catalogue
 # API (musicapi.vinaxmusic.online, on Render) and the live pages are read from
@@ -100,7 +102,7 @@ jobs:
           PRERENDER_ENTITIES: '1'
           VINAX_ROBOTS_URL: https://www.vinaxmusic.online/api/robots
           ENTITY_CORPUS_DIR: .seo-corpus
-          ENTITY_MAX_TOTAL: '17000'
+          ENTITY_MAX_TOTAL: '18800'
           ENTITY_MAX_LINKED: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.new_pages) || '3000' }}
           ENTITY_REFRESH: '1000'
           ENTITY_BUDGET_MS: '2400000'

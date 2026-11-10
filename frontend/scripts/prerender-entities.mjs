@@ -91,7 +91,7 @@ const MAX_LINKED = num0(process.env.ENTITY_MAX_LINKED, 300);
  */
 const CORPUS_DIR = resolve(process.env.ENTITY_CORPUS_DIR || 'node_modules/.cache/vinax/seo-corpus');
 const SEED_FROM = (process.env.ENTITY_SEED_FROM ?? ORIGIN).replace(/\/$/, '');
-const MAX_TOTAL = num(process.env.ENTITY_MAX_TOTAL, 17_000);
+const MAX_TOTAL = num(process.env.ENTITY_MAX_TOTAL, 18_800);
 const REFRESH = num0(process.env.ENTITY_REFRESH, 0);
 const FILE_LIMIT = num(process.env.PAGES_FILE_LIMIT, 20_000);
 /** Files kept free under the host's limit, for whatever else a release adds. */
