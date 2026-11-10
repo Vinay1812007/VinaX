@@ -131,7 +131,13 @@ const DIST = 'dist';
 // demand), the Following route and nav entry, and a re-grouped shared
 // chunk (browserSignals) the bundler now splits out. Dictionaries, the
 // install guide, the badge engine and the share cards all stay lazy.
-const FIRST_LOAD_BUDGET = 194 * 1024; // gzipped
+// 2026-11-10: re-based 194 -> 195 (+1 KB). Measured 194.0 KB after the
+// 1.12.0–1.12.5 What's New cards (changelog.ts ships in the first load, so
+// every release card costs a few hundred bytes), the Ideas & bugs button in
+// the top bar and the settings keys for festivals and listening moments. No
+// new first-load feature code beyond those; the next re-base should move the
+// changelog's older cards out of the first load instead.
+const FIRST_LOAD_BUDGET = 195 * 1024; // gzipped
 const CHUNK_BUDGET = 80 * 1024; // gzipped — chunks that ship in the first load
 const LAZY_CHUNK_BUDGET = 160 * 1024; // gzipped — on-demand chunks (routes, features)
 
