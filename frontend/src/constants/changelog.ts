@@ -16,6 +16,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.12.6': {
+    title: 'Settings › Notifications shows whether your phone is registered for push, and why not',
+    changes: [
+      { type: 'fixed', text: 'A new "Push setup" line in the Android app says when the phone\'s push token has reached the server, or what went wrong (no token from Android, or the upload failed), with a "Register again" button. Usage reports are consent-gated, so…' },
+    ],
+  },
   '1.12.5': {
     title: '"For your weekday evenings" is built from your own plays, so Home\'s first paint asks the…',
     changes: [
