@@ -16,6 +16,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.12.2': {
+    title: 'Home paints its final look sooner: no entrance fade or stagger on the first page, the…',
+    changes: [
+      { type: 'improved', text: 'The first page of a visit skips the page-enter fade and the row-by-row stagger (the cold-boot flag was re-read on every render and flipped before the Home chunk arrived, so Home animated in after all). The text at the top of Home now…' },
+      { type: 'improved', text: 'Signed out, the HTML fires Home\'s "Trending now" feed request while the app is still downloading, as it already did for signed-in listeners, so the first artwork starts loading about 0.3 s earlier.' },
+      { type: 'improved', text: 'Shelf skeletons have the shelf\'s own header, rail padding and card text lines, so nothing moves when the songs arrive.' },
+    ],
+  },
   '1.12.1': {
     title: 'Ideas & bugs: the top-bar button\'s spoken name now starts with its visible words',
     changes: [
