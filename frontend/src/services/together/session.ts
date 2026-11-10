@@ -34,8 +34,11 @@ interface TogetherState {
   members: string[];
   listenerCount: number;
   queue: RoomTrack[];
-  /** What the host is playing, as the guest last saw it. */
+  /** What the host is playing, as the guest last saw it: the room's stub
+   *  (id, title, artwork), not a song the player can take as it is. */
   hostSong: Song | null;
+  /** Guest: the id of the host's song this device could not get, if any. */
+  unplayable: string | null;
   /** Guest: seconds ahead (+) or behind (−) the host, when measured. */
   drift: number | null;
   /** Guest: the browser blocked audio until the listener taps once. */
@@ -84,6 +87,7 @@ const EMPTY = {
   listenerCount: 1,
   queue: [] as RoomTrack[],
   hostSong: null,
+  unplayable: null as string | null,
   drift: null,
   needsTap: false,
   floats: [] as ReactionFloat[],

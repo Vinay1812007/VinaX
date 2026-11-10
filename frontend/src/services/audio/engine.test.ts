@@ -20,6 +20,9 @@ describe('orderedSources', () => {
   it('low targets ~96 kbps (nearest)', () => {
     expect(orderedSources(s, 'low')[0]).toBe('a');
   });
+  it('returns [] for a song that arrived without its streams, instead of throwing', () => {
+    expect(orderedSources({ id: 'x', title: 'From a room' } as unknown as Song, 'high')).toEqual([]);
+  });
   it('returns [] when there are no audio variants', () => {
     expect(orderedSources(song([]), 'high')).toEqual([]);
   });

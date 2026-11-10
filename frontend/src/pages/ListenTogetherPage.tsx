@@ -205,7 +205,13 @@ function Live(): ReactNode {
   const queue = useTogether((s) => s.queue);
   const floats = useTogether((s) => s.floats);
   const needsTap = useTogether((s) => s.needsTap);
-  const current = useCurrentSong();
+  const hostSong = useTogether((s) => s.hostSong);
+  const unplayable = useTogether((s) => s.unplayable);
+  const playing = useCurrentSong();
+  // A guest sees what the HOST is playing, also in the moment before this
+  // device has fetched the song, and when it cannot get it at all.
+  const current = mode === 'guest' && hostSong ? hostSong : playing;
+  const missing = mode === 'guest' && !!hostSong && unplayable === hostSong.id;
   const inviteLink = `/together?code=${code}`;
 
   // A QR of the invite link, so a friend in the room joins by pointing their
@@ -233,7 +239,7 @@ function Live(): ReactNode {
           <div className="min-w-0">
             <p className="vx-lt-kicker">{mode === 'host' ? 'Everyone hears' : `Playing with ${hostName ?? 'the host'}`}</p>
             <p className="vx-lt-song truncate-1">{current?.title ?? (mode === 'host' ? 'Play anything to start' : 'Waiting for the host…')}</p>
-            {current && <p className="vx-lt-artist truncate-1">{current.subtitle}</p>}
+            {current && <p className="vx-lt-artist truncate-1">{missing ? 'Not available on this device — the next song will play' : current.subtitle}</p>}
           </div>
         </div>
 

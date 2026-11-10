@@ -33,7 +33,11 @@ function isAbortError(err: unknown): boolean {
 }
 
 export function orderedSources(song: Song, pref: StreamQualityPref): string[] {
-  return orderByQuality(song.audio.filter((v) => v.url), resolveStreamQuality(pref)).map((v) => v.url);
+  // A song that arrived without its streams (a Listen Together room keeps
+  // only the id and artwork; a playlist saved from one did too) has no
+  // sources: the player then looks the song up again instead of crashing.
+  const audio = Array.isArray(song.audio) ? song.audio : [];
+  return orderByQuality(audio.filter((v) => v?.url), resolveStreamQuality(pref)).map((v) => v.url);
 }
 
 export interface EngineCallbacks {

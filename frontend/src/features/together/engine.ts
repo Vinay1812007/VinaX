@@ -14,6 +14,12 @@
  * (sync.ts) and corrects with a cooldown. If the browser blocks audio (an
  * invite link opened without a tap), it raises `needsTap` instead of silently
  * sitting there muted.
+ *
+ * The room only NAMES a song (id, title, artwork): the server keeps no stream
+ * URLs. So a guest looks the host's song up in the catalogue before playing
+ * it, exactly as the host does for a guest's request. Guests used to hand the
+ * room's stub straight to the player, which cannot play a song without
+ * streams: joining failed and nobody but the host heard anything.
  */
 import { getSong } from '@/services/api';
 import {
@@ -51,7 +57,8 @@ let lastVotedSkip: string | null = null;
 
 /** 15.0 — the songs this session has played (for "save as a playlist"), in order, no repeats. */
 function rememberPlayed(song: Song | null | undefined): void {
-  if (!song) return;
+  // Only a song this device can play: the list is saved to the Library.
+  if (!song || !isPlayable(song)) return;
   const st = useTogether.getState();
   if (st.played.some((s) => s.id === song.id)) return;
   st.patch({ played: [...st.played, song].slice(-200) });
@@ -95,9 +102,13 @@ export function react(emoji: string): void {
 
 const songCache = new Map<string, Song>();
 
+/** A stub from the room has no stream URL; a real Song from the catalogue does. */
+function isPlayable(song: Song): boolean {
+  return Array.isArray(song.audio) && song.audio.length > 0;
+}
+
 async function fullSong(stub: Song): Promise<Song | null> {
-  // A stub from a guest has no stream URL; a real Song from the catalogue does.
-  if (Array.isArray(stub.audio) && stub.audio.length) return stub;
+  if (isPlayable(stub)) return stub;
   const hit = songCache.get(stub.id);
   if (hit) return hit;
   try {
@@ -206,7 +217,6 @@ function runHost(code: string): () => void {
       skipVotes: d.room.skipVotes ?? 0,
     });
     floatReactions(d.reactions);
-    rememberPlayed(d.room.song);
     // 15.0 — vote-to-skip: when more than half the room (host included) has
     // voted, the host's player moves on; the server clears the votes with
     // the new song.
@@ -217,6 +227,8 @@ function runHost(code: string): () => void {
     const roomSong = d.room.song?.id ?? null;
     const st = usePlayerStore.getState();
     const playing = st.queue[st.index]?.id ?? null;
+    // The host's own copy of the song, not the room's stub of it.
+    if (st.isPlaying) rememberPlayed(st.queue[st.index]);
     if (roomSong && roomSong === playing && roomSong !== lastVotedSkip && (d.room.skipVotes ?? 0) > headcount / 2) {
       lastVotedSkip = roomSong;
       toast('The room voted to skip');
@@ -242,6 +254,44 @@ function runHost(code: string): () => void {
 let lastCorrection = 0;
 let trackStartedAt = 0;
 let playAttempts = 0;
+
+/** The host's song this device is looking up right now. */
+let fetching: string | null = null;
+/** The host's song this device could not get, and when it last tried. */
+let missed: { id: string; at: number } | null = null;
+/** How long before a song that could not be found is looked up again. */
+const MISSED_RETRY_MS = 20_000;
+
+/**
+ * Guest: get the host's song from the catalogue and start it. The room may
+ * have moved on (or ended) while the lookup was in flight; then nothing plays.
+ */
+async function loadHostSong(stub: Song): Promise<void> {
+  const id = stub.id;
+  if (fetching === id) return;
+  if (missed?.id === id && performance.now() - missed.at < MISSED_RETRY_MS) return;
+  fetching = id;
+  const song = await fullSong(stub);
+  if (fetching === id) fetching = null;
+  const room = useTogether.getState();
+  if (room.mode !== 'guest' || room.hostSong?.id !== id) return;
+  const st = usePlayerStore.getState();
+  if (!song) {
+    if (missed?.id !== id) toast(`Couldn’t get “${stub.title || 'this song'}” on this device — the next song will play`);
+    missed = { id, at: performance.now() };
+    room.patch({ unplayable: id });
+    // Do not keep the last song running: the room has moved past it.
+    if (st.isPlaying) st.togglePlay();
+    return;
+  }
+  missed = null;
+  if (room.unplayable) room.patch({ unplayable: null });
+  if (st.queue[st.index]?.id === id) return;
+  st.playSong(song);
+  trackStartedAt = performance.now();
+  lastCorrection = trackStartedAt;
+  playAttempts += 1;
+}
 
 function runGuest(code: string): () => void {
   let alive = true;
@@ -281,12 +331,12 @@ function runGuest(code: string): () => void {
       status: hostIsAway({ updated_at: r.updated_at, now: d.now }) ? 'host-away' : 'live',
     });
     floatReactions(d.reactions);
-    rememberPlayed(r.song);
     if (!r.song) return;
     clock.ingest({ position: r.position, playing: r.playing, updated_at: r.updated_at, now: d.now, rttMs: d.rttMs, receivedAt: d.receivedAt });
 
     const st = usePlayerStore.getState();
     const local = st.queue[st.index] ?? null;
+    if (local?.id === r.song.id) rememberPlayed(local);
     const now = performance.now();
     const c = decideCorrection({
       hostSongId: r.song.id,
@@ -306,10 +356,8 @@ function runGuest(code: string): () => void {
 
     switch (c.kind) {
       case 'load':
-        st.playSong(r.song);
-        trackStartedAt = now;
-        lastCorrection = now;
-        playAttempts += 1;
+        // The room names the song; this device fetches its own stream.
+        void loadHostSong(r.song);
         break;
       case 'play':
         if (!st.isPlaying) st.togglePlay();
@@ -361,8 +409,16 @@ export function tapToListen(): void {
   const st = usePlayerStore.getState();
   const local = st.queue[st.index] ?? null;
   if (hostSong && local?.id !== hostSong.id) {
-    st.playSong(hostSong);
-    trackStartedAt = performance.now();
+    // Already looked up: start it inside this tap. Otherwise look it up now
+    // (a tap is also "try again" for a song that could not be found).
+    const ready = isPlayable(hostSong) ? hostSong : songCache.get(hostSong.id);
+    if (ready) {
+      st.playSong(ready);
+      trackStartedAt = performance.now();
+    } else {
+      missed = null;
+      void loadHostSong(hostSong);
+    }
   } else if (!st.isPlaying) {
     st.togglePlay();
   }
@@ -379,6 +435,7 @@ export function runSession(mode: 'host' | 'guest', code: string): () => void {
   lastCorrection = 0;
   trackStartedAt = 0;
   playAttempts = 0;
+  missed = null;
   return mode === 'host' ? runHost(code) : runGuest(code);
 }
 
@@ -419,12 +476,11 @@ export async function joinSession(rawCode: string): Promise<JoinResult> {
   if (!d.room) return { ok: false, message: 'No live session with that code — it may have ended' };
   // Follow mode BEFORE the first play: the queue must not start auto-extending.
   usePlayerStore.getState().setFollowMode(true);
-  if (d.room.song) {
-    usePlayerStore.getState().playSong(d.room.song);
-    trackStartedAt = performance.now();
-  }
   useTogether.getState().begin('guest', code);
   useTogether.getState().patch({ hostName: d.room.host_name ?? null, hostSong: d.room.song ?? null });
+  // You are in the room now; the song starts as soon as this device has it.
+  missed = null;
+  if (d.room.song) void loadHostSong(d.room.song);
   return { ok: true };
 }
 

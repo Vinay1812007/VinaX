@@ -28,9 +28,14 @@ export function JoinRoom({ initialCode = '', inputId = 'vx-lt-code', disabled = 
 
   const join = async (value: string): Promise<void> => {
     setBusy(true);
-    const r = await joinSession(value);
-    setBusy(false);
-    if (!r.ok) toast(r.message);
+    try {
+      const r = await joinSession(value);
+      if (!r.ok) toast(r.message);
+    } catch {
+      toast('Couldn’t join that session — try again');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (

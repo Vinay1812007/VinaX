@@ -69,6 +69,13 @@ describe('decideCorrection', () => {
     expect(decideCorrection({ ...base, local: playing({ isPlaying: false }) }).kind).toBe('play');
     expect(decideCorrection({ ...base, hostPlaying: false, local: playing() }).kind).toBe('pause');
   });
+  it('waits for the host’s next song when ours ran out a moment early, instead of starting it again', () => {
+    const ended = playing({ isPlaying: false, currentTime: 200, duration: 200 });
+    expect(decideCorrection({ ...base, expected: 199.2, local: ended }).kind).toBe('none');
+    expect(decideCorrection({ ...base, expected: 203, local: ended }).kind).toBe('none');
+    // Paused mid-song is still a pause to undo.
+    expect(decideCorrection({ ...base, expected: 120, local: playing({ isPlaying: false, currentTime: 120, duration: 200 }) }).kind).toBe('play');
+  });
   it('never seeks past the end of the song', () => {
     const c = decideCorrection({ ...base, expected: 260, local: playing({ currentTime: 100, duration: 200 }) });
     expect(c).toMatchObject({ kind: 'seek', to: 199.5 });

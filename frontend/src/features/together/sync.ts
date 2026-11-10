@@ -83,6 +83,9 @@ const PAUSED_SEEK_THRESHOLD_S = 2.0;
 export const CORRECTION_COOLDOWN_MS = 3000;
 /** A freshly loaded track reports a moving currentTime before it settles. */
 export const TRACK_SETTLE_MS = 1500;
+/** This close to the end of the song, a guest that has stopped is waiting for
+ *  the host's next song, not paused. */
+export const END_GRACE_S = 2;
 
 export function decideCorrection(input: {
   hostSongId: string | null;
@@ -98,6 +101,9 @@ export function decideCorrection(input: {
   const drift = local.currentTime - expected;
   if (local.isBuffering) return { kind: 'none', drift };
   if (input.sinceLastCorrectionMs < CORRECTION_COOLDOWN_MS) return { kind: 'none', drift };
+  // The song ran out here a moment before the host's: wait for the next one.
+  // Pressing play now would start this song again from the top.
+  if (hostPlaying && !local.isPlaying && local.duration > 1 && expected >= local.duration - END_GRACE_S) return { kind: 'none', drift };
   if (hostPlaying !== local.isPlaying) return { kind: hostPlaying ? 'play' : 'pause', drift };
   if (input.sinceTrackStartMs < TRACK_SETTLE_MS) return { kind: 'none', drift };
   const limit = hostPlaying ? SEEK_THRESHOLD_S : PAUSED_SEEK_THRESHOLD_S;

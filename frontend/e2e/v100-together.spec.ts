@@ -39,6 +39,22 @@ const apiSong = (base: string, id: string, name: string) => ({
   downloadUrl: [{ quality: '160kbps', url: `${base}/t-${id}.wav` }],
 });
 
+/**
+ * What the real server keeps of a song (backend/worker/functions/api/room.ts,
+ * cleanSong): the id and what a room shows. No stream URLs. The stand-in
+ * used to hand the host's song back whole, which hid that a guest's player
+ * was being given a song it could not play.
+ */
+function roomSong(raw: unknown): Record<string, unknown> | null {
+  const s = raw as Record<string, unknown> | null;
+  if (!s || typeof s.id !== 'string') return null;
+  const out: Record<string, unknown> = {};
+  for (const k of ['id', 'title', 'subtitle', 'duration', 'language', 'year', 'artists', 'images']) if (s[k] !== undefined && s[k] !== null) out[k] = s[k];
+  return out;
+}
+const roomQueue = (raw: unknown): unknown[] =>
+  (Array.isArray(raw) ? (raw as Array<{ song?: unknown; by?: unknown }>) : []).map((t) => ({ song: roomSong(t.song), by: t.by ?? null })).filter((t) => t.song);
+
 interface Room { host_name: string; song: unknown; position: number; playing: boolean; updated_at: string; queue: unknown[]; requests: Array<{ song: { id: string }; by: string }> }
 function roomServer() {
   const rooms = new Map<string, Room>();
@@ -55,14 +71,14 @@ function roomServer() {
       const code = String(body?.code ?? '');
       switch (body?.action) {
         case 'create': {
-          rooms.set('ABC123', { host_name: String(body.hostName ?? ''), song: body.song ?? null, position: 0, playing: false, updated_at: new Date().toISOString(), queue: [], requests: [] });
+          rooms.set('ABC123', { host_name: String(body.hostName ?? ''), song: roomSong(body.song), position: 0, playing: false, updated_at: new Date().toISOString(), queue: [], requests: [] });
           return { code: 'ABC123', hostToken: 'tok' };
         }
         case 'update': {
           const r = rooms.get(code);
           if (!r) return { __status: 404 };
           const consumed = (body.consumedIds as string[]) ?? [];
-          Object.assign(r, { song: body.song, position: body.position, playing: body.playing, queue: body.queue, updated_at: new Date().toISOString() });
+          Object.assign(r, { song: roomSong(body.song), position: body.position, playing: body.playing, queue: roomQueue(body.queue), updated_at: new Date().toISOString() });
           r.requests = r.requests.filter((t) => !consumed.includes(t.song.id));
           return { ok: true };
         }

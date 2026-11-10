@@ -105,7 +105,12 @@ const codeOf = (v: unknown): string | null => {
 };
 const memberOf = (v: unknown): string | null => clip(v, MEMBER_ID_MAX);
 
-/** A song as the room keeps it: id, title, subtitle, image and a few display fields, ≤ 2 KB. */
+/**
+ * A song as the room keeps it: the id and what a room shows (title, subtitle,
+ * artwork, artists), ≤ 4 KB. Stream URLs are NOT kept, on purpose: the room
+ * names the song and every device fetches its own stream from the catalogue,
+ * so a host can never point a guest's player at an address of its choosing.
+ */
 function cleanSong(raw: unknown): Record<string, unknown> | null {
   const s = asObject(raw);
   if (!s) return null;
@@ -304,7 +309,10 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     if (!r.room) return json({ error: 'not_found' }, 404);
     const line = { by: clip(body.name, 40) ?? 'Someone', text, at: now };
     const messages = [...(Array.isArray(r.room.messages) ? r.room.messages : []), line].slice(-CHAT_MAX);
-    const w = await db.update(env, 'rooms', q().eq('code', code), { messages, updated_at: now });
+    // `updated_at` stays as the host's last push left it: followers measure the
+    // host's playhead from it, and a chat line that moved it made every guest
+    // jump back a few seconds.
+    const w = await db.update(env, 'rooms', q().eq('code', code), { messages });
     // Saying something is being here.
     void db.upsert(env, 'room_members', { room_code: code, member_id: memberId, name: clip(body.name, 60), last_seen: now }, 'room_code,member_id');
     return json({ ok: w.ok });

@@ -101,8 +101,63 @@ describe('guest', () => {
     } as never);
     const r = await joinSession('abc123');
     expect(r.ok).toBe(true);
+    await vi.advanceTimersByTimeAsync(0);
     expect(order).toEqual(['follow:true', 'play:h1']);
     expect(useTogether.getState()).toMatchObject({ mode: 'guest', code: 'ABC123', hostName: 'Asha' });
+  });
+
+  // The server keeps a song's id, title and artwork, never its streams.
+  const stub = (id: string) => ({ id, title: `Song ${id}`, subtitle: 'Artist', images: [], artists: [] });
+
+  it('joining looks the host’s song up before playing it: the room’s copy has no streams', async () => {
+    api.getRoom.mockResolvedValue(room({ song: stub('r1') }));
+    api.getSong.mockResolvedValue(song('r1'));
+    const r = await joinSession('ABC123');
+    expect(r.ok).toBe(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(api.getSong).toHaveBeenCalledWith('r1');
+    const now = player.getState().queue[0] as unknown as { id: string; audio: unknown[] };
+    expect(now.id).toBe('r1');
+    expect(now.audio).toHaveLength(1);
+    expect(player.getState().isPlaying).toBe(true);
+  });
+
+  it('follows the host to the next song with one lookup, and remembers only playable songs', async () => {
+    api.getRoom.mockResolvedValue(room({ song: stub('r2') }));
+    api.getSong.mockImplementation(async (id: string) => song(id));
+    useTogether.getState().begin('guest', 'ABC123');
+    const stop = runSession('guest', 'ABC123');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(player.getState().queue.map((s) => s.id)).toEqual(['r2']);
+    api.getRoom.mockResolvedValue(room({ song: stub('r3') }));
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(player.getState().queue.map((s) => s.id)).toEqual(['r3']);
+    expect(api.getSong.mock.calls.map((c) => c[0])).toEqual(['r2', 'r3']);
+    const played = useTogether.getState().played as unknown as Array<{ id: string; audio: unknown[] }>;
+    expect(played.length).toBeGreaterThan(0);
+    expect(played.every((s) => s.audio.length === 1)).toBe(true);
+    stop();
+  });
+
+  it('a song this device cannot get is said once, the old song stops, and the room carries on', async () => {
+    player.getState().playSong(song('old'));
+    api.getRoom.mockResolvedValue(room({ song: stub('lost') }));
+    api.getSong.mockRejectedValue(new Error('404'));
+    useTogether.getState().begin('guest', 'ABC123');
+    const stop = runSession('guest', 'ABC123');
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(api.getSong).toHaveBeenCalledTimes(1);
+    expect(api.toast.mock.calls.filter((c) => String(c[0]).includes('Couldn’t get'))).toHaveLength(1);
+    expect(useTogether.getState()).toMatchObject({ mode: 'guest', unplayable: 'lost' });
+    expect(player.getState().isPlaying).toBe(false);
+    // The host moves on to a song that is there: it plays and the note clears.
+    api.getRoom.mockResolvedValue(room({ song: stub('r4') }));
+    api.getSong.mockResolvedValue(song('r4'));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(player.getState().queue.map((s) => s.id)).toEqual(['r4']);
+    expect(useTogether.getState().unplayable).toBeNull();
+    stop();
   });
 
   it('rejects a malformed code without a network call', async () => {

@@ -84,6 +84,15 @@ describe('/api/room', () => {
     expect(fake.rows('rooms')).toHaveLength(0);
   });
 
+  it('a chat line is kept without moving the room clock that followers measure the playhead from', async () => {
+    const pushed = '2026-11-10T10:00:00.000Z';
+    const fake = fakeDb({ rooms: [{ code: 'ABC234', host_token: 'host-secret', host_name: 'V', current: { id: 's1' }, queue: [], requests: [], position: 30, playing: true, updated_at: pushed, messages: [] }] });
+    expect(await (await post({ action: 'say', code: 'ABC234', deviceId: 'g1', name: 'G', text: 'hello' })).json()).toEqual({ ok: true });
+    const row = fake.rows('rooms')[0];
+    expect(row.updated_at).toBe(pushed);
+    expect(row.messages).toMatchObject([{ by: 'G', text: 'hello' }]);
+  });
+
   it('a guest request goes through room_request; a missing room is 404; reactions only from the allowed set', async () => {
     const fake = fakeDb();
     fake.answer('rpc/room_request', (c) => new Response(JSON.stringify((c.body as { p_code: string }).p_code === 'ABC234'), { headers: { 'content-type': 'application/json' } }));
