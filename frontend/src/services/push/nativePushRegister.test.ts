@@ -81,12 +81,15 @@ describe('withNotificationPermission', () => {
     expect(push.register).toHaveBeenCalledTimes(1);
   });
 
-  it('push registration at app open never shows a dialog itself (the "Allow access" sheet asks)', async () => {
+  it('push registration at app open never shows a dialog itself, but registers the token before any permission (1.12)', async () => {
     const { registerNativePush } = await import('./nativePush');
     await registerNativePush(() => undefined);
     await flush();
     expect(os.dialogs).toBe(0);
-    expect(push.register).not.toHaveBeenCalled();
+    // The token is the device's address; Android shows nothing until the
+    // permission is granted, then every push sent since. Without this the
+    // server had no Android token at all.
+    expect(push.register).toHaveBeenCalledTimes(1);
   });
 
   it('after a "no", automatic callers do not ask again this launch, but a tap does', async () => {
@@ -128,15 +131,15 @@ describe('registerNativePush', () => {
 });
 
 describe('refreshNativePush (resume)', () => {
-  it('registers once Android Settings allowed notifications, without asking', async () => {
+  it('registers at open even while notifications are off, and again on resume until the token is uploaded, without asking', async () => {
     os.answer = 'denied';
     const { registerNativePush, refreshNativePush } = await import('./nativePush');
     await registerNativePush(() => undefined);
-    expect(push.register).not.toHaveBeenCalled();
+    expect(push.register).toHaveBeenCalledTimes(1);
     os.state = 'granted'; // the listener turned it on in Settings and came back
     await refreshNativePush();
     await flush();
-    expect(push.register).toHaveBeenCalledTimes(1);
+    expect(push.register).toHaveBeenCalledTimes(2);
     expect(os.dialogs).toBe(0);
   });
 

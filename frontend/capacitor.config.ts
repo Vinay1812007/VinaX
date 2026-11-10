@@ -44,6 +44,13 @@ const config: CapacitorConfig = {
     PushNotifications: {
       presentationOptions: ['badge', 'sound', 'alert'],
     },
+    // 1.12 — the in-app announcement notification (services/announcements.ts)
+    // wears the VinaX mark: the white V small icon in the accent colour, like
+    // a push. Without this Android drew the launcher icon as a blank square.
+    LocalNotifications: {
+      smallIcon: 'vinax_ic_notify',
+      iconColor: '#FFA42E',
+    },
   },
 };
 

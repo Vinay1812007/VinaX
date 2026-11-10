@@ -19,6 +19,8 @@
 export const FCM_CHANNEL_ID = 'vinax_picks';
 export const FCM_SMALL_ICON = 'vinax_ic_notify';
 export const FCM_ACCENT = '#FFA42E';
+/** The colour VinaX mark a push shows when the owner attached no picture. */
+export const FCM_LOGO_URL = 'https://www.vinaxmusic.online/icons/icon-512.png';
 export interface FcmEnv {
   FCM_SERVICE_ACCOUNT?: string;
 }
@@ -209,7 +211,10 @@ export async function sendFcm(env: FcmEnv, tokens: string[], msg: FcmMessage): P
         body: JSON.stringify({
           message: {
             token,
-            notification: { title: msg.title.slice(0, 120), body: (msg.body || '').slice(0, 240), ...(msg.image && /^https:\/\//.test(msg.image) ? { image: msg.image } : {}) },
+            // 1.12 — a push with no picture of its own carries the VinaX logo:
+            // Android shows it as the notification's large icon (and as the
+            // picture when expanded), so every push is recognisably VinaX.
+            notification: { title: msg.title.slice(0, 120), body: (msg.body || '').slice(0, 240), image: msg.image && /^https:\/\//.test(msg.image) ? msg.image : FCM_LOGO_URL },
             // The title and body ride in `data` too, so a build that handles the
             // message itself (a data listener) can draw the same notification.
             data: { link: msg.link || '/', title: msg.title.slice(0, 120), body: (msg.body || '').slice(0, 240), ...(msg.id ? { id: String(msg.id) } : {}) },

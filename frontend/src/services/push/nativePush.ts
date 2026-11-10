@@ -206,8 +206,17 @@ export async function enableNativePush(): Promise<'ok' | 'denied' | 'unsupported
 }
 
 /**
- * App open: wire the listeners and register when allowed. Never asks: the
- * "Allow access" sheet asks at start-up, after saying why.
+ * App open: wire the listeners and register. Never asks: the "Allow access"
+ * sheet asks at start-up, after saying why.
+ *
+ * 1.12 — registers whether or not the notification permission is granted
+ * yet. The token is the device's address, not the right to show anything:
+ * Android hands one out without POST_NOTIFICATIONS and simply shows nothing
+ * until the permission is granted, at which point every push sent since
+ * appears. Waiting for the permission first meant the server had NO Android
+ * token at all (console: 0 Android devices while 4 people used the app), so
+ * every push to the app went nowhere and only the in-app announcement
+ * appeared at the next open.
  */
 export async function registerNativePush(navigate: (to: string) => void): Promise<void> {
   if (!isNativePlatform()) return;
@@ -217,9 +226,8 @@ export async function registerNativePush(navigate: (to: string) => void): Promis
   const { PushNotifications } = loaded;
   try {
     await wire(PushNotifications);
-    // Queued behind a dialog that is already up, so this reads its answer.
-    const granted = await withNotificationPermission(async () => (await PushNotifications.checkPermissions()).receive === 'granted');
-    if (!granted) return; // not allowed yet: the "Allow access" sheet or Settings → Notifications asks
+    // Queued behind a dialog that is already up, so the registration runs after its answer.
+    await withNotificationPermission(async () => (await PushNotifications.checkPermissions()).receive);
     await registerToken(PushNotifications);
   } catch (e) {
     report(`register failed: ${String(e).slice(0, 160)}`);
@@ -228,8 +236,8 @@ export async function registerNativePush(navigate: (to: string) => void): Promis
 
 /**
  * 13.7.3 — back in the foreground: if this launch has no token on the server
- * yet (the permission was granted later in Android Settings, the upload failed
- * offline, or the first ask lost a race), register again. Never asks.
+ * yet (the upload failed offline, or the first registration produced no
+ * token), register again. Never asks.
  */
 export async function refreshNativePush(): Promise<void> {
   if (!isNativePlatform() || uploaded) return;
@@ -238,7 +246,6 @@ export async function refreshNativePush(): Promise<void> {
   const { PushNotifications } = loaded;
   try {
     await wire(PushNotifications);
-    if ((await PushNotifications.checkPermissions()).receive !== 'granted') return;
     await registerToken(PushNotifications);
   } catch (e) {
     report(`refresh failed: ${String(e).slice(0, 160)}`);

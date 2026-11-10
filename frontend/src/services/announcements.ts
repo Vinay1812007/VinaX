@@ -86,6 +86,11 @@ export async function checkAnnouncements(navigate: (to: string) => void): Promis
           id: Math.floor(a.ts % 2_000_000_000),
           title: a.title.slice(0, 120),
           body: (a.body ?? '').slice(0, 300),
+          // 1.12 — the VinaX mark: white V small icon in the accent colour, the
+          // colour logo as the large icon (native-android/res/drawable).
+          smallIcon: 'vinax_ic_notify',
+          iconColor: '#FFA42E',
+          largeIcon: 'vinax_ic_large',
           extra: { link: typeof a.link === 'string' ? a.link : '/' },
         },
       ],
