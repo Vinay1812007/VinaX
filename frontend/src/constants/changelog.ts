@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.12.8': {
+    title: 'Song videos play in the artwork card, and Listen Together gets its own tab in the player…',
+    changes: [
+      { type: 'improved', text: 'A song\'s video now plays inside the artwork card, in the clip\'s own shape, where the cover sits. The title, seek bar and buttons stay exactly where they are for a song without a video, on phones and on computers. The full-screen view is…' },
+      { type: 'improved', text: 'Listen Together has its own "Together" tab in the full-screen player, after Credits: start a room on the song that is playing, join by code, and see the room code, QR and listeners once it is live.' },
+      { type: 'improved', text: 'Scan the host\'s QR from inside VinaX (Listen Together › Scan the host\'s QR) to join without typing. The camera is used only while the scanner is open.' },
+      { type: 'improved', text: 'On an Android phone\'s browser, a room offers "Open in the VinaX app". The APK built from this release opens VinaX links and can use the camera for the scanner; earlier APKs go to the download page.' },
+    ],
+  },
   '1.12.7': {
     title: 'Android push rebuilt natively: the phone registers its own token and draws every push…',
     changes: [
