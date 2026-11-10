@@ -16,6 +16,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.12.3': {
+    title: 'First artwork sooner: Home\'s first tiles are preloaded the moment the trending answer…',
+    changes: [
+      { type: 'improved', text: 'The HTML\'s early trending request now also preloads the first three tiles\' artwork on a phone (five on a wider screen), at the size the card will ask for, with the first one at high priority — before the app has mounted. With saved music…' },
+    ],
+  },
   '1.12.2': {
     title: 'Home paints its final look sooner: no entrance fade or stagger on the first page, the…',
     changes: [
