@@ -1140,6 +1140,8 @@ html.light .vx-reason {
 
 /* Staggered mount reveal — first 8 children cascade in. */
 .vx-stagger > * { animation: vxRise 0.5s var(--ease-calm) backwards; }
+/* 1.12 — the first page of a visit reaches its final look at once: no stagger, no fade (layouts/AppLayout cold boot). */
+.vx-cold-boot .vx-stagger > * { animation: none; }
 .vx-stagger > *:nth-child(1) { animation-delay: 0.02s; }
 .vx-stagger > *:nth-child(2) { animation-delay: 0.06s; }
 .vx-stagger > *:nth-child(3) { animation-delay: 0.1s; }

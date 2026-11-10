@@ -120,18 +120,36 @@
       (function () {
         try {
           if (location.pathname !== '/') return; // only the home route uses it
-          // 13.5.0 — signed out, home is the sign-in screen: nothing would use it.
-          try { if (!localStorage.getItem('vinax.account.v1')) return; } catch (e) { return; }
+          var signedIn = false;
+          try { signedIn = !!localStorage.getItem('vinax.account.v1'); } catch (e) { return; }
           var raw = null;
           try { raw = localStorage.getItem('vinax.settings.v1'); } catch (e) { /* private mode */ }
           var st = {};
           try { st = (raw && JSON.parse(raw).state) || {}; } catch (e) { /* corrupt */ }
-          var lang = (st.pinnedLanguages && st.pinnedLanguages[0]) || 'hindi';
-          var q = 'top ' + lang + ' songs ' + new Date().getFullYear();
-          // 14.0.4 — the first ranked base is the app's own catalogue route
-          // (the providers live in a Worker secret); the client matches it
-          // by URL with the origin normalised away (services/api/client.ts).
-          var url = location.origin + '/api/cat/search/songs?query=' + encodeURIComponent(q) + '&limit=20';
+          var url;
+          if (signedIn) {
+            var lang = (st.pinnedLanguages && st.pinnedLanguages[0]) || 'hindi';
+            var q = 'top ' + lang + ' songs ' + new Date().getFullYear();
+            // 14.0.4 — the first ranked base is the app's own catalogue route
+            // (the providers live in a Worker secret); the client matches it
+            // by URL with the origin normalised away (services/api/client.ts).
+            url = location.origin + '/api/cat/search/songs?query=' + encodeURIComponent(q) + '&limit=20';
+          } else {
+            // 1.12 — signed out, Home's first shelf is "Trending now" from the
+            // trending feed (features/home/useHomeShelves useTrendingNow →
+            // trendingBundle → getTrending): the same languages (pinned, else
+            // hindi as that hook falls back to; known to the feed, at most
+            // three) and limit 20. The region's languages arrive later and
+            // refetch, but this answer paints the first shelf.
+            // KEEP IN SYNC with useTrendingNow and languageParam() in
+            // services/api/catalog.ts.
+            var KNOWN = ['hindi', 'english', 'punjabi', 'tamil', 'telugu', 'marathi', 'gujarati', 'bengali', 'kannada', 'bhojpuri', 'malayalam', 'urdu', 'haryanvi', 'rajasthani', 'odia', 'assamese'];
+            var pinned = (st.pinnedLanguages && st.pinnedLanguages.length ? st.pinnedLanguages : ['hindi']).slice(0, 3);
+            var langs = [];
+            for (var li = 0; li < pinned.length; li++) { var l = String(pinned[li]).trim().toLowerCase(); if (KNOWN.indexOf(l) !== -1 && langs.indexOf(l) === -1) langs.push(l); }
+            if (!langs.length) return;
+            url = location.origin + '/api/cat/trending?language=' + encodeURIComponent(langs.slice(0, 3).join(',')) + '&limit=20';
+          }
           window.__vxBoot = {
             url: url,
             json: fetch(url, { headers: { Accept: 'application/json' } })

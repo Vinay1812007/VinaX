@@ -4,23 +4,25 @@
  * line for cards; 56px art + two lines for rows.
  */
 function CardBones() {
+  // The MediaCard's own boxes: square art, a 19 px title 12 px below it, an 18 px line 3 px under that.
   return (
     <>
       <div className="skeleton skeleton-art aspect-square rounded-lg" />
-      <div className="skeleton h-3.5 w-4/5 mt-3 rounded" />
-      <div className="skeleton h-3 w-1/2 mt-2 rounded" />
+      <div className="skeleton h-[15px] w-4/5 rounded" style={{ marginTop: 14 }} />
+      <div className="skeleton h-[13px] w-1/2 rounded" style={{ marginTop: 8 }} />
     </>
   );
 }
 
 export function ShelfSkeleton() {
-  // The same box as the shelf it stands in for (1.12): the shelf's own
-  // bottom gap and a title line of the shelf title's height, so the rows
-  // below do not move when the songs arrive (it was a 0.01 layout shift on Home).
+  // The same boxes as the shelf it stands in for (1.12): the shelf's own
+  // header (34 px with its 14 px gap), the rail's padding and the card's
+  // text lines, so nothing below moves when the songs arrive (it was a
+  // 0.02–0.03 layout shift on Home).
   return (
     <div className="vx-shelf" aria-hidden>
-      <div className="skeleton h-7 w-44 mb-4 rounded" />
-      <div className="flex gap-3 md:gap-4 overflow-hidden">
+      <div className="vx-section-header"><div className="skeleton h-[26px] w-44 rounded" style={{ marginTop: 8 }} /></div>
+      <div className="vx-media-rail overflow-hidden">
         {Array.from({ length: 7 }).map((_, i) => (
           <div key={i} className="w-40 md:w-44 shrink-0">
             <CardBones />

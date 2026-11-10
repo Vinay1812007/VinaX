@@ -117,7 +117,11 @@ export function AppLayout() {
   const wideWorkspace = useMediaQuery('(min-width: 1280px)');
   const hasTrack = usePlayerStore(s => s.queue.length > 0);
   const inSession = useTogether((s) => s.mode !== 'idle');
-  const coldBoot = !hasBooted;
+  // 1.12 — read once per mount and kept until the first navigation: the flag
+  // used to be re-read on every render, and AppLayout re-renders before the
+  // lazy Home chunk arrives, so the first page got the fade-up and the
+  // stagger after all (the LCP text painted ~0.9 s after mount).
+  const [coldBoot, setColdBoot] = useState(() => !hasBooted);
   useClientConfigEffects();
   useLastRoute();
 
@@ -219,6 +223,12 @@ export function AppLayout() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // The first navigation ends the cold boot: every page after it animates in.
+  const firstPath = useRef(pathname);
+  useEffect(() => {
+    if (pathname !== firstPath.current) setColdBoot(false);
+  }, [pathname]);
 
   // One-time bootstrap.
   useEffect(() => {
@@ -517,7 +527,7 @@ export function AppLayout() {
               {/* Search keeps one mount across /search → /search/:q so
                   committing a query doesn't reset filters/scroll (P1-17);
                   every other route remounts for the page-enter animation. */}
-              <div key={pathname.startsWith('/search') ? '/search' : isChat ? '/vinaxai' : pathname} className={isChat ? 'h-full' : coldBoot ? undefined : 'animate-fade-up'}>
+              <div key={pathname.startsWith('/search') ? '/search' : isChat ? '/vinaxai' : pathname} className={isChat ? 'h-full' : coldBoot ? 'vx-cold-boot' : 'animate-fade-up'}>
                 <Outlet />
               </div>
             </Suspense>
