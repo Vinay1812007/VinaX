@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.12.7': {
+    title: 'Android push rebuilt natively: the phone registers its own token and draws every push…',
+    changes: [
+      { type: 'improved', text: 'A native messaging service in the app (VinaxPushService) uploads the phone\'s push token from Java at every start and whenever it changes, with the signed-in account once the page hands over the session. No page, permission flow or usage…' },
+      { type: 'improved', text: 'The same service draws a push that arrives while the app is open with the white V in orange and the colour VinaX logo (or the owner\'s picture) as its large icon; a tap opens the push\'s link inside the app. A push arriving while the app is…' },
+      { type: 'improved', text: 'The "Push setup" diagnostic row is gone from Settings › Notifications.' },
+      { type: 'improved', text: 'The APK built from this release carries the service; the page\'s older path stays as the fallback for earlier APKs.' },
+    ],
+  },
   '1.12.6': {
     title: 'Settings › Notifications shows whether your phone is registered for push, and why not',
     changes: [
