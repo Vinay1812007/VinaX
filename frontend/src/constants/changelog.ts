@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.12.10': {
+    title: 'Listen Together plays in step: the guest no longer runs a little behind the host',
+    changes: [
+      { type: 'fixed', text: 'Listen Together: the host and the guest now stay within a few hundredths of a second of each other; the guest no longer sits up to a second behind.' },
+      { type: 'fixed', text: 'Joining a room starts the song where the host is, not from the beginning with a jump a few seconds later.' },
+      { type: 'fixed', text: 'When the host plays, skips or the stream stalls, guests are put right within a moment.' },
+      { type: 'fixed', text: 'A guest\'s own playback speed and "resume where you left off" no longer pull it away from the host.' },
+    ],
+  },
   '1.12.9': {
     title: 'Listen Together works for guests again: joining a room plays the host\'s song',
     changes: [
