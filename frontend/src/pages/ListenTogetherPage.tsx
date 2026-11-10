@@ -6,6 +6,9 @@ import { useCurrentSong } from '@/store/playerStore';
 import { REACTION_EMOJI } from '@/services/together';
 import { useTogether } from '@/services/together/session';
 import { addSong, joinSession, leaveSession, react, say, startHosting, tapToListen, voteToSkip } from '@/features/together/engine';
+import { JoinRoom } from '@/features/together/JoinRoom';
+import { OpenInApp } from '@/features/together/OpenInApp';
+import { useInviteQr } from '@/features/together/useInviteQr';
 import { useLibraryStore } from '@/store/libraryStore';
 import { searchSongs } from '@/services/api';
 import { bestImage } from '@/utils/images';
@@ -105,7 +108,7 @@ function SyncBadge(): ReactNode {
 function Idle(): ReactNode {
   const [params, setParams] = useSearchParams();
   const current = useCurrentSong();
-  const [joinCode, setJoinCode] = useState((params.get('code') ?? '').toUpperCase());
+  const [linkCode] = useState(() => (params.get('code') ?? '').toUpperCase());
   const [busy, setBusy] = useState<'host' | 'join' | null>(null);
 
   const join = async (code: string): Promise<void> => {
@@ -165,31 +168,15 @@ function Idle(): ReactNode {
 
         <section className="vx-lt-card" aria-labelledby="vx-lt-join">
           <h2 id="vx-lt-join" className="vx-lt-h2">Join a session</h2>
-          <p className="vx-lt-note">Type the code your host shared. An invite link joins by itself.</p>
+          <p className="vx-lt-note">Type the code your host shared, or scan their QR. An invite link joins by itself.</p>
           <label className="vx-label" htmlFor="vx-lt-code">Room code</label>
-          <div className="flex gap-2">
-            <input
-              id="vx-lt-code"
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void join(joinCode);
-              }}
-              placeholder="ABC123"
-              maxLength={8}
-              autoCapitalize="characters"
-              autoCorrect="off"
-              autoComplete="off"
-              spellCheck={false}
-              className="vx-lt-code-input"
-            />
-            <button type="button" onClick={() => void join(joinCode)} disabled={busy !== null} className="vx-lt-join">
-              {busy === 'join' ? 'Joining…' : 'Join'}
-            </button>
-          </div>
+          {/* 1.13 — type the code or scan the host's QR without leaving VinaX. */}
+          <JoinRoom initialCode={linkCode} disabled={busy !== null} />
           <p className="vx-lt-foot">Your player follows the host. Songs you add join the shared queue.</p>
         </section>
       </div>
+      {/* 1.13 — on an Android phone's browser: carry on in the app. */}
+      <OpenInApp code={linkCode || undefined} />
     </div>
   );
 }
@@ -222,23 +209,9 @@ function Live(): ReactNode {
   const inviteLink = `/together?code=${code}`;
 
   // A QR of the invite link, so a friend in the room joins by pointing their
-  // camera instead of typing a code. Generated locally.
-  const [qr, setQr] = useState('');
-  useEffect(() => {
-    if (mode !== 'host' || !code) return;
-    let alive = true;
-    void import('qrcode')
-      .then(({ toDataURL }) =>
-        toDataURL(`${window.location.origin}${inviteLink}`, { margin: 1, width: 240, errorCorrectionLevel: 'M' }),
-      )
-      .then((url) => {
-        if (alive) setQr(url);
-      })
-      .catch(() => undefined);
-    return () => {
-      alive = false;
-    };
-  }, [mode, code, inviteLink]);
+  // camera (or VinaX's own scanner) instead of typing a code. Drawn on the
+  // device. 1.13 — guests see it too, so anyone in the room can bring one more.
+  const qr = useInviteQr(code);
 
   const art = current ? bestImage(current.images, 500) : '';
   const people = members.length ? members : ['You'];
@@ -275,7 +248,7 @@ function Live(): ReactNode {
             <p className="vx-lt-kicker">Room code</p>
             <p className="vx-lt-code">{code}</p>
           </div>
-          {mode === 'host' && qr && <img src={qr} alt={`QR code to join room ${code}`} className="vx-lt-qr" />}
+          {qr && <img src={qr} alt={`QR code to join room ${code}`} className="vx-lt-qr" />}
         </div>
         {mode === 'host' && (
           <div className="vx-lt-actions">
@@ -365,6 +338,8 @@ function Live(): ReactNode {
           <button type="button" onClick={saveSession} className="vx-sec-pill">Save this session as a playlist</button>
         </section>
       )}
+
+      {mode === 'guest' && <OpenInApp code={code} />}
 
       <button type="button" onClick={leaveSession} className="vx-sec-pill is-danger">
         {mode === 'host' ? 'End for everyone' : 'Leave session'}

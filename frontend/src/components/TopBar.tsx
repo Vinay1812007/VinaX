@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronDownIcon } from './Icons';
+import { ChevronDownIcon, IdeaIcon } from './Icons';
 import { IconButton } from './IconButton';
 import { NAV_GROUPS, PRIMARY_NAV } from '@/constants/nav';
 import { KEYS } from '@/constants/storage-keys';
@@ -15,7 +15,7 @@ const ACTIONS_SLOT = 'vx-topbar-actions';
 const ProfileMenu = lazy(() => import('./ProfileMenu'));
 // The "Music languages" button and its picker: their own chunk, so the app shell stays small.
 const LanguageButton = lazy(() => import('./LanguageButton'));
-// 1.12 — Ideas & bugs: the popup behind the VinaX mark, loaded when it is first opened.
+// 1.12 — Ideas & bugs: the popup behind the lightbulb, loaded when it is first opened.
 const FeedbackSheet = lazy(() => import('./FeedbackSheet'));
 
 /**
@@ -27,7 +27,7 @@ const FeedbackSheet = lazy(() => import('./FeedbackSheet'));
  * command palette key and the listener's avatar, which opens Settings.
  * 13.4.0 — the avatar opens a menu instead: profile settings, app settings
  * and Sign out (ProfileMenu).
- * 1.12 — the VinaX mark in the bar is "Ideas & bugs": a popup for feature
+ * 1.12 — the lightbulb in the bar is "Ideas & bugs": a popup for feature
  * ideas and bug reports that names the device for the listener (FeedbackSheet).
  */
 export function TopBar({ onCommands }: { onCommands: () => void }) {
@@ -64,7 +64,7 @@ export function TopBar({ onCommands }: { onCommands: () => void }) {
   const face = photo ? <img src={photo} alt="" width={36} height={36} referrerPolicy="no-referrer" onError={() => setPhotoFailed(true)} /> : initial || <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-5 h-5" aria-hidden><circle cx="12" cy="8.5" r="3.8" /><path d="M4.5 20c1.2-3.6 4.1-5.5 7.5-5.5s6.3 1.9 7.5 5.5" /></svg>;
   // 13.9 — a visitor browsing signed out gets a Sign in button where the avatar goes.
   const openSignIn = useUiStore((s) => s.openSignIn);
-  // 1.12 — the VinaX mark in the bar opens Ideas & bugs (feature ideas and bug
+  // 1.12 — the lightbulb in the bar opens Ideas & bugs (feature ideas and bug
   // reports), on every platform: the Android app, iPhone and iPad web, Windows, Mac.
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   return (
@@ -88,7 +88,10 @@ export function TopBar({ onCommands }: { onCommands: () => void }) {
           aria-expanded={feedbackOpen}
           onClick={() => setFeedbackOpen(true)}
         >
-          <img src="/icons/icon.svg?v=14" alt="" width={22} height={22} />
+          {/* A drawn lightbulb, not the app icon: the image sometimes failed to
+              paint on phones and left an empty pill, and the mark already
+              sits at the left of the bar. */}
+          <IdeaIcon className="vx-topbar-feedback-icon" />
           <span>Ideas &amp; bugs</span>
         </button>
         {feedbackOpen && (

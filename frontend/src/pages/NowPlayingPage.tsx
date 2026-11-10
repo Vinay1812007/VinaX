@@ -2,6 +2,8 @@ import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useSta
 import { createPortal } from 'react-dom';
 import { albumPath, artistPath, songPath } from '@/utils/slug';
 // 1.4 — "Generate a song like this": its own chunk, loaded with Now Playing, shown only where song making is on.
+// 1.13 — the Together tab's panel (start, join, scan a QR): loaded when the tab is first opened.
+const TogetherPanel = lazy(() => import('@/features/together/TogetherPanel'));
 const GenerateLikeThis = lazy(() => import('@/features/player/GenerateLikeThis').then((m) => ({ default: m.GenerateLikeThis })));
 import { isEpisode, podcastPath } from '@/features/podcasts/paths';
 import { filmTitleFromAlbumName } from '@/services/api/movies';
@@ -41,6 +43,7 @@ import {
   ShuffleIcon,
   SparkleIcon,
   DevicesIcon,
+  UsersIcon,
   VolumeIcon,
 } from '@/components/Icons';
 import { DeviceSheet } from '@/components/DeviceSheet';
@@ -52,6 +55,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useAudioOutputStore } from '@/services/audio/outputWatcher';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useCastStore } from '@/services/cast';
+import { useTogether } from '@/services/together/session';
 import { haptic } from '@/services/native';
 import { shareLink } from '@/utils/share';
 import { useBookmarkStore } from '@/store/bookmarkStore';
@@ -199,11 +203,13 @@ const MOOD_PINS: Array<[Mood, string, TuneIntent]> = [
   ['devotional', 'Devotional', 'devotional'],
 ];
 
-type PanelTab = 'queue' | 'lyrics' | 'about';
+type PanelTab = 'queue' | 'lyrics' | 'about' | 'together';
+// 1.13 — Together sits after Credits: Listen Together used to be one line in the ⋮ menu.
 const TABS: Array<[PanelTab, string]> = [
   ['queue', 'Up next'],
   ['lyrics', 'Lyrics'],
   ['about', 'Credits'],
+  ['together', 'Together'],
 ];
 
 export default function NowPlayingPage() {
@@ -398,6 +404,8 @@ export default function NowPlayingPage() {
   const externalDevice = useAudioOutputStore((s) => s.externalLabel);
   const castAvailable = useCastStore((s) => s.available);
   const castDeviceName = useCastStore((s) => s.deviceName);
+  // 1.13 — a live room marks the Together tab.
+  const togetherLive = useTogether((s) => s.mode !== 'idle');
   const lyrics = useSyncedLyrics(song);
   useEffect(() => {
     if (!tabTouched.current && lyrics.data?.synced) setRightTab('lyrics');
@@ -661,7 +669,7 @@ export default function NowPlayingPage() {
   return (
     <div
       ref={sheetRef}
-      className={cn('vx-now-playing vx-np', canvasOn && 'has-canvas')}
+      className="vx-now-playing vx-np"
       style={washStyle}
       onTouchStart={onSheetTouchStart}
       onTouchMove={onSheetTouchMove}
@@ -670,15 +678,10 @@ export default function NowPlayingPage() {
       {/* Backdrop: the artwork blurred under its own colour, darkened (or, in
           the light theme, lightened) so every line of text keeps its contrast. */}
       <StageBackdrop artUrl={artUrl}>
-        {/* v5.7.12 — the video canvas: the clip fills the whole player behind
-            the gradients on every screen size (full-screen canvas style). */}
-        {!chromeHidden && <SongCanvasBackdrop canvas={canvas} isPlaying={isPlaying} artUrl={artUrl} />}
+        {/* 1.13 — the clip plays in the artwork card (SongCanvas), not behind
+            the controls, so the stage is the same blurred cover either way. */}
         <div className="vx-np-bg-wash" />
-        {/* v5.8.2 — the scrim thins over a playing clip so the video reads
-            instead of drowning, and thins again once the controls are gone.
-            It stays bottom-weighted either way, so whatever chrome is still
-            on screen keeps its contrast. */}
-        <div className={cn('vx-np-bg-scrim', canvasOn && 'is-canvas', chromeHidden && 'is-bare')} />
+        <div className="vx-np-bg-scrim" />
       </StageBackdrop>
 
       <div className="vx-np-inner">
@@ -703,12 +706,12 @@ export default function NowPlayingPage() {
 
         <div className="vx-np-grid">
           <div className="vx-np-main">
-            {/* Artwork card normally; with a clip on (v5.9.0, full-screen canvas), a
-                transparent edge-to-edge pane over the full-screen clip that owns
-                every gesture. Immersive mode is a separate viewport-fixed layer
-                (see the portal below), so nothing here re-flows when the
-                controls come and go. */}
-            <div className={cn('vx-np-art', canvasOn && 'is-canvas')}>
+            {/* The artwork card — or, with a clip on, the clip in a card of its
+                own shape in the same square (1.13). The pane owns every
+                gesture. The full-screen view is a separate viewport-fixed
+                layer (see the portal below), so nothing here re-flows when it
+                comes and goes. */}
+            <div className="vx-np-art">
               <div
                 className={cn(
                   'vx-np-art-pane touch-pan-y',
@@ -721,8 +724,6 @@ export default function NowPlayingPage() {
                 onTouchEnd={onArtTouchEnd}
                 onTouchCancel={onArtTouchCancel}
               >
-                {/* Empty window over the clip while the canvas plays; the still
-                    artwork the moment it's off (see SongCanvas). */}
                 <SongCanvas canvas={canvas} isPlaying={isPlaying} artUrl={artUrl} hideToggle={chromeHidden} />
                 {tapZones}
               </div>
@@ -852,13 +853,17 @@ export default function NowPlayingPage() {
                     type="button"
                     role="tab"
                     id={`vx-np-tab-${tab}`}
+                    aria-label={label}
                     aria-selected={rightTab === tab}
                     aria-controls={`vx-np-panel-${tab}`}
                     tabIndex={rightTab === tab ? 0 : -1}
                     onClick={() => pickTab(tab)}
                     onKeyDown={(e) => onTabKey(e, i)}
+                    className={cn(tab === 'together' && 'is-together', tab === 'together' && togetherLive && 'is-live')}
                   >
-                    {label}
+                    {tab === 'together' && <UsersIcon className="vx-np-tab-icon" />}
+                    <span className="vx-np-tab-label">{label}</span>
+                    {tab === 'together' && togetherLive && <span className="vx-np-tab-live" aria-hidden />}
                   </button>
                 ))}
               </div>
@@ -870,6 +875,11 @@ export default function NowPlayingPage() {
               {rightTab === 'lyrics' && (
                 <Link to={`/lyrics/${song.id}`} className="vx-np-link">
                   Full lyrics
+                </Link>
+              )}
+              {rightTab === 'together' && togetherLive && (
+                <Link to="/together" className="vx-np-link">
+                  Open room
                 </Link>
               )}
             </div>
@@ -970,6 +980,14 @@ export default function NowPlayingPage() {
                 {!reasons[song.id] && creditChips.length === 0 && streamKbps == null && (
                   <p className="vx-np-empty">No credits for this song yet.</p>
                 )}
+              </div>
+            )}
+
+            {rightTab === 'together' && (
+              <div className="vx-np-tabpanel" role="tabpanel" id="vx-np-panel-together" aria-labelledby="vx-np-tab-together">
+                <Suspense fallback={null}>
+                  <TogetherPanel />
+                </Suspense>
               </div>
             )}
           </section>

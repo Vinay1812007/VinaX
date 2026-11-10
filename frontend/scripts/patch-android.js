@@ -220,7 +220,15 @@ if (fs.existsSync(manifestPath)) {
     // page (getUserMedia). Capacitor's WebView asks for RECORD_AUDIO AND
     // MODIFY_AUDIO_SETTINGS together and refuses the page if either is not
     // declared, so this one is required for the page's mic to work at all.
-    '<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />'
+    '<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />',
+    // 1.13 — Listen Together "Scan the host's QR": the page opens the camera
+    // (getUserMedia) only while the scanner sheet is up. Capacitor's WebView
+    // refuses the page's request unless CAMERA is declared here; Android
+    // still asks the listener the first time. The <uses-feature> lines keep
+    // phones and tablets without a camera able to install the app.
+    '<uses-permission android:name="android.permission.CAMERA" />',
+    '<uses-feature android:name="android.hardware.camera" android:required="false" />',
+    '<uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />'
   ];
   // REQUEST_INSTALL_PACKAGES is restricted by Google Play policy (only
   // installer / updater apps qualify) and would cause a Play Store listing
@@ -309,6 +317,35 @@ if (fs.existsSync(manifestPath)) {
                 android:resource="@xml/vinax_player_widget_info" />
         </receiver>
 `;
+
+  // 1.13 — website → app. VinaX links (an invite's "Open in the VinaX app"
+  // button, which names this package) open in the app: MainActivity takes
+  // https links to the site. Not autoVerify: that needs the release
+  // certificate's fingerprint published at /.well-known/assetlinks.json, and
+  // until it is, Android would mark the app's link handling as failed. The
+  // page reads the link through @capacitor/app (AppLayout: appUrlOpen and
+  // getLaunchUrl) and shows that page.
+  const linkFilter = `
+            <!-- vinax-links -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="www.vinaxmusic.online" />
+                <data android:host="vinaxmusic.online" />
+            </intent-filter>
+`;
+  if (!manifest.includes('<!-- vinax-links -->')) {
+    // After the launcher filter, which only MainActivity has.
+    const launcher = /(<category android:name="android\.intent\.category\.LAUNCHER"\s*\/>\s*<\/intent-filter>)/;
+    if (launcher.test(manifest)) {
+      manifest = manifest.replace(launcher, `$1\n${linkFilter}`);
+      console.log('[manifest] MainActivity opens VinaX links (website → app)');
+    } else {
+      console.warn('[manifest] launcher intent-filter not found — VinaX links will not open in the app');
+    }
+  }
 
   // WARNING (audit finding M-OPS-9): these regexes are fragile — they assume
   // the current Capacitor 8 manifest formatting (attribute order, whitespace,

@@ -279,6 +279,17 @@ describe('scripts/patch-android.js', () => {
     }
   });
 
+  it('declares the camera for the Listen Together QR scanner, without requiring one to install', () => {
+    expect(patchScript).toContain('<uses-permission android:name="android.permission.CAMERA" />');
+    expect(patchScript).toContain('<uses-feature android:name="android.hardware.camera" android:required="false" />');
+  });
+
+  it('lets MainActivity open VinaX links, so an invite can hand over from the website to the app', () => {
+    expect(patchScript).toContain('<category android:name="android.intent.category.BROWSABLE" />');
+    expect(patchScript).toContain('<data android:host="www.vinaxmusic.online" />');
+    expect(patchScript).not.toContain('android:autoVerify');
+  });
+
   it('declares both microphone permissions the WebView asks for when VinaX AI opens the mic', () => {
     // Capacitor's onPermissionRequest asks for these two together; one missing denies the page.
     expect(patchScript).toContain('<uses-permission android:name="android.permission.RECORD_AUDIO" />');

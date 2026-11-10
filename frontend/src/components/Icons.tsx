@@ -281,6 +281,15 @@ export const HelpIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+/** A lightbulb: "suggest an idea" — the top bar's Ideas & bugs button. */
+export const IdeaIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+    <path d="M9 18h6" />
+    <path d="M10 21.5h4" />
+    <path d="M12 2.5a6.5 6.5 0 0 0-4 11.6c.7.6 1 1.2 1 2v.4h6v-.4c0-.8.3-1.4 1-2a6.5 6.5 0 0 0-4-11.6z" />
+  </svg>
+);
+
 export const ShieldIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />

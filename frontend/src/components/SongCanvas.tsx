@@ -7,14 +7,15 @@ import { FALLBACK_ART } from '@/utils/images';
 import { cn } from '@/utils/cn';
 
 /**
- * The video canvas on Now Playing — v5.9.0, full-screen model: the
- * clip fills the WHOLE screen behind the player on every device, the
- * artwork card steps aside, and the controls sit over a bottom gradient.
- * (The catalogue's clips are landscape, so a portrait phone shows a
- * centre crop — that is the trade the owner chose over a letterboxed band.)
- * Exactly one <video> ever decodes: the backdrop. The ART/▶VIDEO toggle
- * brings the still artwork back any time and remembers the choice per
- * device.
+ * The video canvas on Now Playing. 1.13 — the clip plays inside the artwork
+ * card (SongCanvas, below), in its own shape, where the cover sits; the
+ * full-bleed version (SongCanvasBackdrop) is the full-screen view only.
+ * (v5.9.0 – 1.12 filled the whole player with the clip behind the controls:
+ * the title and buttons sat on moving video and a landscape clip left a
+ * band across a phone. The owner asked for the JioSaavn / Spotify layout.)
+ * One sharp <video> decodes at a time: the card, or the full-screen view.
+ * The Artwork / Video chip brings the still cover back any time and
+ * remembers the choice per device.
  *
  * 13.9 — quality. The clip is played at the best rendition the CDN has for
  * this screen (services/canvas/quality): Auto picks for the display, or the
@@ -191,8 +192,8 @@ function CanvasVideo({
 const AMBIENT_OVERSCAN = 1.45;
 
 /**
- * 13.0.2 — the full-bleed canvas behind the whole player, on every
- * viewport, with Spotify-style auto fit. A clip whose shape is close to
+ * 13.0.2 — the full-bleed canvas (1.13: the full-screen view's only), on
+ * every viewport, with Spotify-style auto fit. A clip whose shape is close to
  * the screen's fills it (object-cover, as before). A mismatched clip — a
  * landscape one on a phone, a portrait one on a PC — used to be
  * centre-cropped into a giant face; it now plays whole (object-contain)
@@ -262,9 +263,15 @@ export function SongCanvasBackdrop({ canvas, isPlaying, artUrl }: { canvas: Song
   );
 }
 
-/** The artwork slot: still art normally. While the canvas plays the slot is
- *  empty so the full-screen clip shows through uncovered; the parent pane
- *  keeps the space and hosts the ART/▶VIDEO chip. */
+/**
+ * The artwork slot. 1.13 — the clip plays INSIDE the artwork's own card, the
+ * way JioSaavn and Spotify show a music video: a rounded card in the clip's
+ * real shape (16:9 for most, 9:16 for a vertical canvas), centred in the
+ * square the cover normally fills, so the title, seek bar and controls sit
+ * exactly where they do for a song without a video and nothing overlaps.
+ * The whole clip is visible — no crop, no bands. The full-bleed
+ * SongCanvasBackdrop is now only the full-screen view's.
+ */
 export function SongCanvas({
   canvas,
   isPlaying,
@@ -274,12 +281,14 @@ export function SongCanvas({
   canvas: SongCanvasState;
   isPlaying: boolean;
   artUrl: string | null;
-  /** Immersive mode: the controls are gone, so the ART/VIDEO chip goes too. */
+  /** The full-screen view is up: it plays the clip, so this slot rests on the still cover (one decode) and drops its chip. */
   hideToggle?: boolean;
 }) {
-  // 8.0 — the artwork fills its column (player.css sizes it); it settles back
-  // a little while paused.
+  // Most clips are 16:9; the real ratio replaces this the moment the metadata arrives.
+  const [aspect, setAspect] = useState(16 / 9);
+  useEffect(() => setAspect(16 / 9), [canvas.src]);
   const baseClasses = cn('vx-np-art-img', !isPlaying && 'is-paused');
+  const showVideo = !!canvas.src && !hideToggle;
   // Over the artwork or the clip, so it keeps its own dark chip in every theme (player.css).
   const toggle = canvas.hasVideo && !hideToggle && (
     <button
@@ -293,17 +302,36 @@ export function SongCanvas({
     </button>
   );
   return (
-    <>
-      {!canvas.src && (
-        <img
-          src={artUrl ?? FALLBACK_ART}
-          onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
-          alt=""
-          draggable={false}
-          className={baseClasses}
-        />
+    <div className="vx-np-art-stage">
+      {showVideo && canvas.src ? (
+        <div
+          className={cn('vx-np-art-video', !isPlaying && 'is-paused')}
+          // A wide clip takes the slot's width, a tall one its height.
+          style={{ aspectRatio: String(aspect), ...(aspect >= 1 ? { width: '100%' } : { height: '100%' }), backgroundImage: artUrl ? `url("${artUrl}")` : undefined }}
+        >
+          <CanvasVideo
+            src={canvas.src}
+            isPlaying={isPlaying}
+            onError={canvas.markFailed}
+            onAspect={(a, w, hgt) => {
+              setAspect(Math.min(2.4, Math.max(0.5, a)));
+              canvas.quality.noteDecoded(w, hgt);
+            }}
+          />
+          {toggle}
+        </div>
+      ) : (
+        <>
+          <img
+            src={artUrl ?? FALLBACK_ART}
+            onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
+            alt=""
+            draggable={false}
+            className={baseClasses}
+          />
+          {toggle}
+        </>
       )}
-      {toggle}
-    </>
+    </div>
   );
 }

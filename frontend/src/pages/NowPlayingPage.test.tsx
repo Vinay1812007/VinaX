@@ -87,7 +87,7 @@ describe('NowPlayingPage', { timeout: 20_000 }, () => {
   it('panel tabs are a tablist: arrow keys move the selection and the focus', () => {
     mount();
     const tabs = screen.getAllByRole('tab');
-    expect(tabs.map((t) => t.textContent)).toEqual(['Up next', 'Lyrics', 'Credits']);
+    expect(tabs.map((t) => t.textContent)).toEqual(['Up next', 'Lyrics', 'Credits', 'Together']);
     expect(tabs[0].getAttribute('aria-selected')).toBe('true');
     expect(tabs[0].getAttribute('aria-controls')).toBe('vx-np-panel-queue');
     expect(tabs[1].getAttribute('tabindex')).toBe('-1');
@@ -99,8 +99,11 @@ describe('NowPlayingPage', { timeout: 20_000 }, () => {
     expect(screen.getByRole('tabpanel', { name: 'Lyrics' })).toBeTruthy();
     // No lyrics from any source: a calm empty state, not a blank panel.
     expect(screen.getByText('No lyrics for this song yet')).toBeTruthy();
-    fireEvent.keyDown(lyricsTab, { key: 'End' });
+    fireEvent.keyDown(lyricsTab, { key: 'ArrowRight' });
     expect(screen.getByRole('tab', { name: 'Credits' }).getAttribute('aria-selected')).toBe('true');
+    // 1.13 — Together is the last tab: Listen Together, from inside the player.
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Credits' }), { key: 'End' });
+    expect(screen.getByRole('tab', { name: 'Together' }).getAttribute('aria-selected')).toBe('true');
   });
 
   it('Up next says who queued each song, in words', () => {

@@ -72,6 +72,8 @@ const CommandPalette = lazy(() => import('@/components/CommandPalette'));
 // hero (the LCP element) paints the moment React commits, ~250ms sooner on
 // throttled mobile. Every navigation after that keeps the animation.
 let hasBooted = false;
+// 1.13 — the link that started the Android app is shown once, not on every remount of the layout.
+let launchLinkHandled = false;
 // Separate from the cold-boot animation flag above: AppLayout can REMOUNT
 // (a full-screen route outside it), and the bootstrap initialisers are not
 // idempotent (device-change / document / `online` / `resume` listeners would
@@ -193,6 +195,12 @@ export function AppLayout() {
   // dialog — audit P0-2), then pop history, or minimize on the root screen.
   useEffect(() => {
     if (!isNativePlatform()) return;
+    const openDeepLink = (link: string): void => {
+      void import('@/features/together/invite').then(({ deepLinkPath }) => {
+        const to = deepLinkPath(link);
+        if (to && to !== `${window.location.pathname}${window.location.search}${window.location.hash}`) navigate(to);
+      }).catch(() => undefined);
+    };
     let remove: (() => void) | null = null;
     let removeUrl: (() => void) | null = null;
     void import('@capacitor/app').then(({ App }) => {
@@ -212,10 +220,21 @@ export function AppLayout() {
         if (url && url.includes('widget=play')) {
           try { sessionStorage.setItem('vinax.widget-play', '1'); } catch { /* private mode */ }
           navigate('/');
+          return;
         }
+        // 1.13 — a VinaX link opened in the app (an invite's "Open in the
+        // VinaX app", a scanned QR): show that page instead of staying put.
+        if (url) openDeepLink(url);
       }).then((handle) => {
         removeUrl = () => void handle.remove();
       });
+      // The link that STARTED the app (a cold start has no appUrlOpen).
+      if (!launchLinkHandled) {
+        launchLinkHandled = true;
+        void App.getLaunchUrl().then((launch) => {
+          if (launch?.url) openDeepLink(launch.url);
+        }).catch(() => undefined);
+      }
     }).catch(() => undefined);
     return () => {
       remove?.();

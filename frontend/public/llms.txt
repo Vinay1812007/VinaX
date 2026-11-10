@@ -51,7 +51,7 @@ Each language also has mood pages at /{language}-{mood}-songs for romantic, sad,
 - Festivals: on each of 43 Indian and international festivals the whole app takes that festival's colours and live effects (fireworks, diyas, colour powder, kites, lanterns, snow, confetti), shows a greeting once and offers its songs; /festivals has today's festival, a live countdown and the calendar; Settings can preview any festival, pin one, or turn themes, animations and sounds off.
 - Android app: background playback, lock-screen and headset controls, home-screen widgets, offline downloads, push notifications and in-app updates. On an iPhone, Add to Home Screen keeps music playing with the screen off.
 - Back up the library and settings to one file, restore it, or move to a new device with a one-time code.
-- Ideas & bugs: the VinaX mark in the top bar opens a popup to suggest a feature or report a bug; it names your device for you.
+- Ideas & bugs: the lightbulb in the top bar opens a popup to suggest a feature or report a bug; it names your device for you.
 
 ## Notes
 
