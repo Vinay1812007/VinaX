@@ -83,9 +83,13 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(VinaxMediaPlugin.class);
         // VinaX AI Live voice: loudspeaker / earpiece (native-android/AudioRoutePlugin.java).
         registerPlugin(AudioRoutePlugin.class);
+        // 1.12 — push done natively (native-android/VinaxPushService.java): the
+        // phone registers its token itself; the page links it to the account.
+        registerPlugin(VinaxPushPlugin.class);
         super.onCreate(savedInstanceState);
         allowSignInCheck();
         maybeOpenPlayer(getIntent());
+        maybeOpenPushLink(getIntent());
     }
 
     /**
@@ -127,6 +131,21 @@ public class MainActivity extends BridgeActivity {
         // Warm start: the activity already exists (launchMode singleTask), so
         // a notification tap lands here instead of onCreate.
         maybeOpenPlayer(intent);
+        maybeOpenPushLink(intent);
+    }
+
+    /** A tap on a push VinaxPushService drew: open its link inside the app. */
+    private void maybeOpenPushLink(Intent intent) {
+        try {
+            if (intent == null) return;
+            final String link = intent.getStringExtra("vinax_link");
+            if (link == null || !link.startsWith("/") || link.startsWith("//")) return;
+            intent.removeExtra("vinax_link");
+            final Bridge bridge = getBridge();
+            if (bridge == null || bridge.getWebView() == null) return;
+            bridge.getWebView().post(() -> bridge.getWebView().loadUrl("https://www.vinaxmusic.online" + link));
+        } catch (Exception ignored) {
+        }
     }
 
     /** Playback-notification body tap (4.16.1): the launch intent carries
@@ -179,7 +198,7 @@ public class MainActivity extends BridgeActivity {
 }
 `;
   fs.writeFileSync(path.join(javaRoot, 'MainActivity.java'), mainActivity);
-  console.log('[native] Wrote MainActivity.java registering VinaxMediaPlugin and AudioRoutePlugin, with the sign-in check allowed');
+  console.log('[native] Wrote MainActivity.java registering VinaxMediaPlugin, AudioRoutePlugin and VinaxPushPlugin, with the sign-in check allowed');
 } else {
   console.error('[native] java root missing — cannot register plugin');
 }
@@ -244,6 +263,18 @@ if (fs.existsSync(manifestPath)) {
             </intent-filter>
         </receiver>
 
+        <!-- 1.12: push done natively (VinaxPushService.java). The higher
+             priority makes Android hand MESSAGING_EVENT to this service
+             rather than the Capacitor plugin's, so tokens are uploaded and
+             pushes drawn with the VinaX mark without the page. -->
+        <service
+            android:name=".VinaxPushService"
+            android:exported="false">
+            <intent-filter android:priority="1">
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <service
             android:name=".VinaxMediaService"
             android:enabled="true"
@@ -289,6 +320,8 @@ if (fs.existsSync(manifestPath)) {
 
   // Remove old service definition if it exists
   const oldServiceRegex = /<service[^>]*android:name="\.VinaxMediaService"[^>]*>.*?<\/service>|<service[^>]*android:name="\.VinaxMediaService"[^>]*\/>/gs;
+  manifest = manifest.replace(/<!-- 1\.12: push done natively[\s\S]*?<\/service>\s*/g, '');
+  manifest = manifest.replace(/<service[^>]*android:name="\.VinaxPushService"[^>]*>[\s\S]*?<\/service>\s*/g, '');
   manifest = manifest.replace(oldServiceRegex, '');
 
   // Remove old meta-data if it exists
@@ -332,6 +365,13 @@ if (fs.existsSync(buildGradlePath)) {
     buildGradle = buildGradle.replace('dependencies {', 'dependencies {\n    implementation "androidx.media:media:1.7.0"');
     changed = true;
     console.log('[gradle] Added androidx.media dependency to build.gradle');
+  }
+  // 1.12 — VinaxPushService / VinaxPushPlugin use Firebase Messaging directly
+  // (the same version the Capacitor push plugin pins, so one copy is resolved).
+  if (!buildGradle.includes('com.google.firebase:firebase-messaging')) {
+    buildGradle = buildGradle.replace('dependencies {', 'dependencies {\n    implementation "com.google.firebase:firebase-messaging:25.0.1"');
+    changed = true;
+    console.log('[gradle] Added firebase-messaging dependency to build.gradle');
   }
 
   // Sign every DEBUG build with one committed keystore. The default debug

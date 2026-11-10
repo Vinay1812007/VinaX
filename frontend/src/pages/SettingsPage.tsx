@@ -527,25 +527,6 @@ export default function SettingsPage() {
     if (!isNativePlatform()) return;
     void import('@/services/push/notifyAsk').then((m) => m.notifyState()).then(setNativePush).catch(() => setNativePush('unsupported'));
   }, []);
-  // 1.12 — Push setup: whether this phone's token reached the server, and the
-  // last failure if not. Read on open and after "Register again".
-  const [pushSetup, setPushSetup] = useState<{ token: boolean; uploaded: boolean; last: string } | null>(null);
-  const readPushSetup = async (): Promise<void> => {
-    const m = await import('@/services/push/nativePush');
-    setPushSetup(m.nativePushStatus());
-  };
-  useEffect(() => {
-    if (!isNativePlatform()) return;
-    void readPushSetup();
-    const t = window.setInterval(() => void readPushSetup(), 3000);
-    return () => window.clearInterval(t);
-  }, []);
-  const registerPushAgain = async (): Promise<void> => {
-    const m = await import('@/services/push/nativePush');
-    await m.refreshNativePush();
-    window.setTimeout(() => void readPushSetup(), 2500);
-    toast('Asking Android for a push token…');
-  };
   const toggleNativePush = async (v: boolean): Promise<void> => {
     const m = await import('@/services/push/notifyAsk');
     if (!v) {
@@ -1027,19 +1008,6 @@ export default function SettingsPage() {
                     note={nativePush === 'blocked' ? 'Blocked for VinaX — turn them on in Android Settings → Apps → VinaX → Notifications.' : 'Today’s pick and new music, even when the app is closed.'}
                   >
                     <Toggle on={nativePush === 'on'} onChange={(v) => void toggleNativePush(v)} label="Push notifications" />
-                  </Row>
-                )}
-                {isNativePlatform() && pushSetup && (
-                  <Row
-                    label="Push setup"
-                    note={pushSetup.uploaded
-                      ? `This phone is registered: the VinaX team can reach it even when the app is closed. Server: ${pushSetup.last || 'ok'}.`
-                      : pushSetup.token
-                        ? `Android gave a push token but it did not reach the server yet${pushSetup.last ? ` (${pushSetup.last})` : ''}.`
-                        : `No push token yet${pushSetup.last ? ` — ${pushSetup.last}` : ' — Android has not answered the registration'}.`}
-                    keywords="push token fcm register diagnose android"
-                  >
-                    {!pushSetup.uploaded && <RowButton onClick={() => void registerPushAgain()}>Register again</RowButton>}
                   </Row>
                 )}
                 <Row label="New-music alerts" note="New announcements appear as notifications when the app opens.">

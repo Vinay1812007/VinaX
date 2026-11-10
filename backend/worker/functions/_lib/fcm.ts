@@ -217,7 +217,7 @@ export async function sendFcm(env: FcmEnv, tokens: string[], msg: FcmMessage): P
             notification: { title: msg.title.slice(0, 120), body: (msg.body || '').slice(0, 240), image: msg.image && /^https:\/\//.test(msg.image) ? msg.image : FCM_LOGO_URL },
             // The title and body ride in `data` too, so a build that handles the
             // message itself (a data listener) can draw the same notification.
-            data: { link: msg.link || '/', title: msg.title.slice(0, 120), body: (msg.body || '').slice(0, 240), ...(msg.id ? { id: String(msg.id) } : {}) },
+            data: { link: msg.link || '/', title: msg.title.slice(0, 120), body: (msg.body || '').slice(0, 240), ...(msg.image && /^https:\/\//.test(msg.image) ? { image: msg.image } : {}), ...(msg.id ? { id: String(msg.id) } : {}) },
             android: {
               // 1.12 — delivered while the app is closed, not held until it opens:
               // high priority wakes the device out of Doze for this message, the

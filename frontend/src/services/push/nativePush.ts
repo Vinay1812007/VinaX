@@ -13,9 +13,25 @@
  * Technical Monitoring as `push-native`, the upload is retried, and a token
  * that never arrives is reported too — so the next failure has a name.
  */
+import { registerPlugin, Capacitor } from '@capacitor/core';
 import { isNativePlatform } from '@/services/native';
 import { withNotificationPermission } from '@/services/native/permissions';
-import { pushAuthHeaders } from '@/services/push/session';
+import { pushAuthHeaders, pushSession } from '@/services/push/session';
+
+/**
+ * 1.12 — push done natively (native-android/VinaxPushService.java): the phone
+ * uploads its own token from Java at every start and whenever Firebase
+ * rotates it, draws pushes with the VinaX mark, and this plugin lets the page
+ * read the token (to upload it linked to the signed-in account) and hand the
+ * session over (so native uploads are linked too). Absent on an APK built
+ * before 1.12.7: then the Capacitor plugin path below does the work alone.
+ */
+interface VinaxPushPlugin {
+  getToken(): Promise<{ token: string }>;
+  setSession(o: { session: string }): Promise<void>;
+  register(): Promise<{ token: string; result: string }>;
+}
+const VinaxPush = isNativePlatform() && Capacitor.isPluginAvailable('VinaxPush') ? registerPlugin<VinaxPushPlugin>('VinaxPush') : null;
 
 const BASE = 'https://www.vinaxmusic.online';
 /** How long `register()` may take to produce a token before that is reported. */
@@ -170,7 +186,9 @@ export function reportOpened(id: unknown, fetchImpl: typeof fetch = fetch): void
 
 /** Console rebuild — signed in or out: send this launch's token again so the server links (or unlinks) the account. */
 export async function relinkNativePush(): Promise<boolean> {
-  if (!isNativePlatform() || !lastToken) return false;
+  if (!isNativePlatform()) return false;
+  if (VinaxPush) void VinaxPush.setSession({ session: pushSession() }).catch(() => undefined);
+  if (!lastToken) return false;
   const ok = await uploadFcmToken(lastToken);
   if (ok) uploaded = true;
   return ok;
@@ -242,6 +260,22 @@ export async function enableNativePush(): Promise<'ok' | 'denied' | 'unsupported
 export async function registerNativePush(navigate: (to: string) => void): Promise<void> {
   if (!isNativePlatform()) return;
   navigateTo = navigate;
+  // Native first: the phone already uploaded its token from Java at start;
+  // read the same token here and upload it with the session, so the row is
+  // linked to the account the console sends to.
+  if (VinaxPush) {
+    try {
+      void VinaxPush.setSession({ session: pushSession() }).catch(() => undefined);
+      const { token } = await VinaxPush.getToken();
+      if (token) {
+        tokenSeen = true;
+        lastToken = token;
+        if (await uploadFcmToken(token)) uploaded = true;
+      }
+    } catch (e) {
+      report(`native token: ${String(e).slice(0, 160)}`);
+    }
+  }
   const loaded = await loadPlugin();
   if (!loaded) return;
   const { PushNotifications } = loaded;
