@@ -62,6 +62,11 @@ export const PUSH_CHANNEL = {
   lights: true,
 } as const;
 
+/** 1.12.8 — one line to the console's Setup Check (api/push/fcm-report): not consent-gated, no token, no id. */
+function sendReport(stage: string, result: string): void {
+  void fetch(`${BASE}/api/push/fcm-report`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-vinax-platform': 'android' }, body: JSON.stringify({ stage, result: result.slice(0, 300), appVersion: __APP_VERSION__ }) }).catch(() => undefined);
+}
+
 function report(message: string): void {
   lastReport = message;
   void import('@/services/analytics/telemetry').then((m) => m.reportError('push-native', message)).catch(() => undefined);
@@ -266,15 +271,21 @@ export async function registerNativePush(navigate: (to: string) => void): Promis
   if (VinaxPush) {
     try {
       void VinaxPush.setSession({ session: pushSession() }).catch(() => undefined);
+      // What the native service saw at start (its token and the server's answer), to the console.
+      void VinaxPush.register().then((r) => sendReport('native', `${r.token ? `token …${r.token.slice(-6)}` : 'no token'} · ${r.result || 'no upload yet'}`)).catch((e) => sendReport('native', `register: ${String(e).slice(0, 200)}`));
       const { token } = await VinaxPush.getToken();
       if (token) {
         tokenSeen = true;
         lastToken = token;
         if (await uploadFcmToken(token)) uploaded = true;
+        sendReport('page', uploaded ? `uploaded …${token.slice(-6)} linked=${!!pushSession()}` : `upload failed: ${lastReport}`);
       }
     } catch (e) {
       report(`native token: ${String(e).slice(0, 160)}`);
+      sendReport('page', `getToken: ${String(e).slice(0, 200)}`);
     }
+  } else {
+    sendReport('page', 'VinaxPush plugin not in this APK');
   }
   const loaded = await loadPlugin();
   if (!loaded) return;

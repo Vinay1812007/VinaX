@@ -114,7 +114,8 @@ describe('registerNativePush', () => {
     await flush();
     expect(push.createChannel).toHaveBeenCalledWith(expect.objectContaining({ id: 'vinax_picks', importance: 4 }));
     expect(PUSH_CHANNEL.id).toBe('vinax_picks');
-    const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    // 1.12.8 — the page also posts a registration report (fcm-report) first; the upload is the register call.
+    const [url, init] = vi.mocked(fetch).mock.calls.find(([u]) => /fcm-register$/.test(String(u))) as [string, RequestInit];
     expect(url).toMatch(/\/api\/push\/fcm-register$/);
     expect(JSON.parse(String(init.body))).toMatchObject({ platform: 'android', lang: navigator.language });
   });

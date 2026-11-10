@@ -110,6 +110,7 @@ import * as m_api_follow from './functions/api/follow';
 import * as m_api_shared_playlist from './functions/api/shared-playlist';
 import * as m_api_shared_playlist_id from './functions/api/shared-playlist/[id]';
 import * as m_api_push_fcm_register from './functions/api/push/fcm-register';
+import * as m_api_push_fcm_report from './functions/api/push/fcm-report';
 import * as m_api_push_opened from './functions/api/push/opened';
 import * as m_api_push_subscribe from './functions/api/push/subscribe';
 import * as m_api_push_unsubscribe from './functions/api/push/unsubscribe';
@@ -242,6 +243,7 @@ const EXACT: Record<string, Mod> = {
   '/api/follow': m_api_follow,
   '/api/shared-playlist': m_api_shared_playlist,
   '/api/push/fcm-register': m_api_push_fcm_register,
+  '/api/push/fcm-report': m_api_push_fcm_report,
   '/api/push/opened': m_api_push_opened,
   '/api/push/subscribe': m_api_push_subscribe,
   '/api/push/unsubscribe': m_api_push_unsubscribe,
