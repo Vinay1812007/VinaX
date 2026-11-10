@@ -1033,7 +1033,7 @@ export default function SettingsPage() {
                   <Row
                     label="Push setup"
                     note={pushSetup.uploaded
-                      ? 'This phone is registered: the VinaX team can reach it even when the app is closed.'
+                      ? `This phone is registered: the VinaX team can reach it even when the app is closed. Server: ${pushSetup.last || 'ok'}.`
                       : pushSetup.token
                         ? `Android gave a push token but it did not reach the server yet${pushSetup.last ? ` (${pushSetup.last})` : ''}.`
                         : `No push token yet${pushSetup.last ? ` — ${pushSetup.last}` : ' — Android has not answered the registration'}.`}

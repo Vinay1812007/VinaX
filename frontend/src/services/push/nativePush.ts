@@ -26,6 +26,8 @@ let tokenSeen = false;
 let uploaded = false;
 /** The token this launch received, so a sign-in can re-send it with the session (console rebuild). */
 let lastToken = '';
+/** The last thing that happened this launch (a failure, or the server's answer), shown in Settings › Notifications. */
+let lastReport = '';
 
 /**
  * 13.7.3 — the Android channel every VinaX push uses. The server names it in
@@ -44,8 +46,6 @@ export const PUSH_CHANNEL = {
   lights: true,
 } as const;
 
-/** The last thing that went wrong this launch, shown in Settings › Notifications (usage reports are consent-gated, this is not). */
-let lastReport = '';
 function report(message: string): void {
   lastReport = message;
   void import('@/services/analytics/telemetry').then((m) => m.reportError('push-native', message)).catch(() => undefined);
@@ -82,8 +82,12 @@ export async function uploadFcmToken(
         // console's language filter and the language-grouped song pick.
         body: JSON.stringify({ token, platform: 'android', lang: navigator.language || undefined, tzOffset: -new Date().getTimezoneOffset() }),
       });
-      const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
-      if (res.ok && body?.ok) return true;
+      const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; linked?: boolean } | null;
+      if (res.ok && body?.ok) {
+        // Kept for Settings › Push setup: what the server answered, verbatim.
+        lastReport = `fcm-register ${res.status} ok${body.linked ? ', linked to your account' : ', not linked (sign in to be reachable)'} · token ${token.slice(0, 6)}…${token.slice(-4)} · ${new Date().toLocaleTimeString()}`;
+        return true;
+      }
       last = `fcm-register ${res.status}${body?.error ? ` ${body.error}` : ''}`;
       if (res.status === 400) break; // a malformed token will not get better
     } catch (e) {
