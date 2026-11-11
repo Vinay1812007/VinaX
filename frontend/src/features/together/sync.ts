@@ -33,6 +33,13 @@
  * (`ServerClock`) and sends each position with the server moment it was read
  * at, so no single message's trip matters. The guest closes to within 4 ms,
  * a play or pause lands in place, and a gap over 0.45 s is seeked.
+ *
+ * 1.13: the live line (live.ts). The host's play state now also reaches a
+ * guest the moment it changes, not at the guest's next poll: `HostClock.pushed`
+ * takes such a reading (it needs no round trip of its own, the server's clock
+ * is already known from the polls), and `decideCorrection` lets a play, a
+ * pause or a host's seek through at once (`urgent`) instead of waiting out
+ * the three seconds between corrections.
  */
 
 export interface PollSnapshot {
@@ -60,6 +67,8 @@ const PUSH_BLEND = 0.5;
 /** After a start, a resume or a seek the host's audio takes a moment to run
  *  at full speed: this many pushes each replace the one before. */
 const SETTLING_PUSHES = 2;
+/** Two readings stamped closer than this (ms) are one reading seen twice. */
+const SAME_READING_MS = 2;
 /** How many answers the server-clock estimate looks back over (80 s of a
  *  guest's polls, 160 s of a host's). */
 const CLOCK_SAMPLES = 40;
@@ -132,6 +141,9 @@ export class HostClock {
   /** Pushes read since the playhead last jumped. */
   private pushes = 0;
   private stamp = '';
+  /** The server moment (ms) of the newest reading taken. The same reading can
+   *  arrive twice, on the live line and then in a poll: it counts once. */
+  private lastAt = 0;
   private playing = false;
   private song: string | null = null;
   // Pre-10.0 Worker (no server clock): anchored on this device's clock.
@@ -159,27 +171,8 @@ export class HostClock {
       this.legacy = false;
       const pushed = Date.parse(p.updated_at);
       const pushedAt = Number.isFinite(pushed) ? pushed : (p.now as number);
-      const fresh = p.updated_at !== this.stamp;
-      const steady = this.pushes > 0 && p.playing && this.playing && songId === this.song;
-      if (!steady) {
-        this.anchor = p.position;
-        this.anchorAt = pushedAt;
-        this.pushes = 1;
-      } else if (fresh) {
-        // Where the line so far says the host was when this push was stamped.
-        const believed = this.anchor + (pushedAt - this.anchorAt) / 1000;
-        const off = p.position - believed;
-        const jumped = Math.abs(off) > CLOCK_SNAP_S;
-        const trust = this.pushes <= SETTLING_PUSHES || jumped ? 1 : PUSH_BLEND;
-        this.anchor = believed + off * trust;
-        this.anchorAt = pushedAt;
-        // The push that reports a seek is, like the first "playing", sent
-        // while the host's audio is still refilling: the next ones replace it.
-        this.pushes = jumped ? 1 : this.pushes + 1;
-      }
+      this.reading(p.position, p.playing, pushedAt, songId, p.updated_at !== this.stamp);
       this.stamp = p.updated_at;
-      this.playing = p.playing;
-      this.song = songId;
       return;
     }
     // Pre-10.0 Worker: the old behaviour, so a stale deploy still works.
@@ -191,6 +184,54 @@ export class HostClock {
       this.base = p.position + (p.playing ? 0.35 : 0);
       this.baseAt = at;
     }
+  }
+
+  /** One reading of the host's playhead: `position` at server moment `pushedAt`. */
+  private reading(position: number, playing: boolean, pushedAt: number, songId: string | null, newStamp: boolean): void {
+    const fresh = newStamp && Math.abs(pushedAt - this.lastAt) > SAME_READING_MS;
+    const steady = this.pushes > 0 && playing && this.playing && songId === this.song;
+    if (!steady) {
+      this.anchor = position;
+      this.anchorAt = pushedAt;
+      this.pushes = 1;
+    } else if (fresh) {
+      // Where the line so far says the host was when this push was stamped.
+      const believed = this.anchor + (pushedAt - this.anchorAt) / 1000;
+      const off = position - believed;
+      const jumped = Math.abs(off) > CLOCK_SNAP_S;
+      const trust = this.pushes <= SETTLING_PUSHES || jumped ? 1 : PUSH_BLEND;
+      this.anchor = believed + off * trust;
+      this.anchorAt = pushedAt;
+      // The push that reports a seek is, like the first "playing", sent
+      // while the host's audio is still refilling: the next ones replace it.
+      this.pushes = jumped ? 1 : this.pushes + 1;
+    }
+    this.lastAt = pushedAt;
+    this.playing = playing;
+    this.song = songId;
+  }
+
+  /**
+   * 1.13 — a reading that came down the live line: the host's playhead at a
+   * server moment, with no poll around it. Usable only once a poll has told
+   * this device the server's clock; returns false otherwise.
+   */
+  pushed(p: { position: number; playing: boolean; at: number; songId: string | null }): boolean {
+    if (!this.server.ready || this.legacy || !Number.isFinite(p.at) || !Number.isFinite(p.position)) return false;
+    this.reading(Math.max(0, p.position), p.playing, p.at, p.songId, true);
+    if (this.stamp === '') this.stamp = 'live';
+    return true;
+  }
+
+  /** A poll whose playback part is not wanted (the live line is ahead of it)
+   *  still says what the server's clock is. */
+  sync(r: ClockReading, at: number = r.receivedAt ?? performance.now()): void {
+    this.server.add(r, at);
+  }
+
+  /** The server's clock (ms) now, or null before the first poll. */
+  serverNow(at: number = performance.now()): number | null {
+    return this.server.ready && !this.legacy ? this.server.at(at) : null;
   }
 
   /** Host position (seconds) at `at` (a performance.now() reading). */
@@ -313,6 +354,8 @@ const PAUSED_SEEK_THRESHOLD_S = 0.15;
 /** Between corrections: a seek makes the guest buffer, and correcting again
  *  mid-buffer is what used to make followers flap. */
 export const CORRECTION_COOLDOWN_MS = 3000;
+/** A gap this wide (seconds) is no drift: the host moved its playhead. */
+export const HOST_JUMP_S = 2;
 /** A freshly loaded track reports a moving currentTime before it settles. */
 export const TRACK_SETTLE_MS = 1500;
 /** This close to the end of the song, a guest that has stopped is waiting for
@@ -328,17 +371,24 @@ export function decideCorrection(input: {
   sinceTrackStartMs: number;
   /** Seconds a seek should aim ahead of a PLAYING host (SeekLead). */
   seekLeadS?: number;
+  /** 1.13 — the host's state came down the live line this instant: a play, a
+   *  pause or a jump of the host's playhead is something the host just DID,
+   *  and is followed at once. Small drift still waits out the cooldown. */
+  urgent?: boolean;
 }): Correction {
   const { hostSongId, hostPlaying, expected, local } = input;
   if (!hostSongId) return { kind: 'none', drift: null };
   if (local.songId !== hostSongId) return { kind: 'load', drift: null };
   const drift = local.currentTime - expected;
-  if (local.isBuffering) return { kind: 'none', drift };
-  if (input.sinceLastCorrectionMs < CORRECTION_COOLDOWN_MS) return { kind: 'none', drift };
+  const toggled = hostPlaying !== local.isPlaying;
+  // A host that paused is followed even while this device is refilling.
+  if (local.isBuffering && !(input.urgent && !hostPlaying && local.isPlaying)) return { kind: 'none', drift };
+  const acted = input.urgent === true && (toggled || Math.abs(drift) > HOST_JUMP_S);
+  if (!acted && input.sinceLastCorrectionMs < CORRECTION_COOLDOWN_MS) return { kind: 'none', drift };
   // The song ran out here a moment before the host's: wait for the next one.
   // Pressing play now would start this song again from the top.
   if (hostPlaying && !local.isPlaying && local.duration > 1 && expected >= local.duration - END_GRACE_S) return { kind: 'none', drift };
-  if (hostPlaying !== local.isPlaying) return { kind: hostPlaying ? 'play' : 'pause', drift };
+  if (toggled) return { kind: hostPlaying ? 'play' : 'pause', drift };
   if (input.sinceTrackStartMs < TRACK_SETTLE_MS) return { kind: 'none', drift };
   const limit = hostPlaying ? SEEK_THRESHOLD_S : PAUSED_SEEK_THRESHOLD_S;
   if (Math.abs(drift) <= limit) return { kind: 'none', drift };

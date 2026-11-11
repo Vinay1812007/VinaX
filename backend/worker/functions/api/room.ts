@@ -10,7 +10,7 @@
  *   POST { action: 'leave', code, deviceId }
  *   POST { action: 'end', code, hostToken }                host only
  *   15.0:
- *   POST { action: 'say', code, deviceId, name, text }     a chat line (≤ 200 chars, the room keeps 40)
+ *   POST { action: 'say', code, deviceId, name, text, id? } a chat line (≤ 200 chars, the room keeps 40)
  *   POST { action: 'skip', code, deviceId, songId }        vote to skip the current song (one per member)
  *
  * The 6-character code is the JOIN credential (anyone with it may watch and
@@ -33,13 +33,42 @@
  * at. It becomes `updated_at`, so how long that push took to get here no
  * longer matters. It is accepted only within a few seconds of the push's
  * arrival; a host that sends none is stamped on arrival as before.
+ *
+ * 1.13: the live line. Polling made a play, a pause or a chat line wait for
+ * each phone's next poll (2 s for a guest, 4 s for the host). `create` and
+ * every poll now also say where the room's live line is (`live`: Supabase
+ * Realtime's address and the project's PUBLIC key, from REALTIME_URL and
+ * REALTIME_KEY). Phones in a room hold one socket to it and pass each other
+ * the host's play state, chat lines, "typing" and reactions as they happen.
+ * Nothing here depends on it: this API stays the truth every phone polls, and
+ * a phone that cannot open the socket carries on exactly as before. The
+ * public key reads no table (schema.sql denies the anon role everything).
  */
 import { db, dbConfigured, q, type DbEnv } from '../_lib/db';
 import { asObject, clip, jsonResponse } from '../_lib/edge';
 import { rateLimit } from '../_lib/ratelimit';
 import { safeEqual } from '../_lib/safe-compare';
 
-type Env = DbEnv;
+type Env = DbEnv & { REALTIME_URL?: string; REALTIME_KEY?: string };
+
+/** Where the room's live line is, when the Worker has been told. */
+export function liveLine(env: { REALTIME_URL?: string; REALTIME_KEY?: string }): { url: string; key: string } | null {
+  const url = (env.REALTIME_URL ?? '').trim();
+  const key = (env.REALTIME_KEY ?? '').trim();
+  // Only Supabase Realtime over TLS, and only a key that is public by design:
+  // a secret or service key pasted here by mistake is never handed out.
+  if (!/^wss:\/\/[a-z0-9-]+\.supabase\.co\/realtime\/v1$/.test(url)) return null;
+  if (!key || key.length > 400) return null;
+  if (key.startsWith('eyJ')) {
+    try {
+      const claims = JSON.parse(atob(key.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) as { role?: unknown };
+      if (claims.role !== 'anon') return null;
+    } catch {
+      return null;
+    }
+  } else if (!key.startsWith('sb_publishable_')) return null;
+  return { url, key };
+}
 
 const CORS: Record<string, string> = {
   'access-control-allow-origin': '*',
@@ -99,7 +128,7 @@ interface RoomRow {
   position: number;
   playing: boolean;
   updated_at: string;
-  messages?: Array<{ by: string; text: string; at: string }>;
+  messages?: Array<{ by: string; text: string; at: string; id?: string }>;
   skip_votes?: string[];
 }
 interface Track { song: unknown; by: string | null }
@@ -238,6 +267,8 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const names = present.map((m) => m.name).filter((n): n is string => !!n);
   body.names = names;
   if (hostAuthorized) body.members = names;
+  const live = liveLine(env);
+  if (live) body.live = live;
   return json(body);
 };
 
@@ -272,7 +303,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
         updated_at: now,
       }, { returning: true, onConflict: 'code', ignoreDuplicates: true });
       if (!r.ok) return json({ error: r.error === 'not_found' ? 'needs_migration' : 'create_failed', message: r.error === 'not_found' ? 'The rooms table is missing — run backend/supabase/schema.sql' : undefined }, r.error === 'not_found' ? 503 : 500);
-      if (r.rows.length) return json({ code, hostToken });
+      if (r.rows.length) return json({ code, hostToken, live: liveLine(env) ?? undefined });
     }
     return json({ error: 'code_space_exhausted' }, 503);
   }
@@ -339,8 +370,14 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     const r = await readRoom(env, code);
     if (!r.ok) return json({ error: 'unavailable' }, 503);
     if (!r.room) return json({ error: 'not_found' }, 404);
-    const line = { by: clip(body.name, 40) ?? 'Someone', text, at: now };
-    const messages = [...(Array.isArray(r.room.messages) ? r.room.messages : []), line].slice(-CHAT_MAX);
+    // 1.13: the sender names each line (`id`), so a phone that already showed
+    // it from the live line knows this stored copy is the same one.
+    const id = clip(body.id, 24);
+    const line = { by: clip(body.name, 40) ?? 'Someone', text, at: now, ...(id && /^[A-Za-z0-9_-]{6,24}$/.test(id) ? { id } : {}) };
+    const kept = Array.isArray(r.room.messages) ? r.room.messages : [];
+    // A retry of a line the room already has changes nothing.
+    if ('id' in line && kept.some((m) => m.id === line.id)) return json({ ok: true });
+    const messages = [...kept, line].slice(-CHAT_MAX);
     // `updated_at` stays as the host's last push left it: followers measure the
     // host's playhead from it, and a chat line that moved it made every guest
     // jump back a few seconds.

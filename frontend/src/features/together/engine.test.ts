@@ -11,6 +11,9 @@ const api = vi.hoisted(() => ({
   leaveRoomBeacon: vi.fn(),
   requestSong: vi.fn(async () => true),
   sendReaction: vi.fn(async () => true),
+  sayInRoom: vi.fn(async (..._a: unknown[]) => true),
+  voteSkip: vi.fn(async () => 1),
+  myName: vi.fn(() => 'Me'),
   updateRoom: vi.fn(async (..._a: unknown[]): Promise<string> => 'ok'),
   getSong: vi.fn(),
   toast: vi.fn(),
@@ -71,6 +74,41 @@ const audio = vi.hoisted(() => ({
 }));
 
 vi.mock('@/services/together', () => ({ ...api, REACTION_EMOJI: ['🔥'] }));
+
+// The room's live line (live.ts), stood in for: what this device sent on it,
+// and a way to say something to this device as another phone in the room would.
+interface FakeLine {
+  code: string;
+  sent: Array<[string, Record<string, unknown>]>;
+  connected: boolean;
+  closed: boolean;
+  hear(event: string, payload: unknown): void;
+}
+const wire = vi.hoisted(() => ({ lines: [] as FakeLine[] }));
+vi.mock('./live', () => ({
+  cleanLive: (raw: unknown) => raw ?? null,
+  LiveLine: class {
+    code: string;
+    sent: Array<[string, Record<string, unknown>]> = [];
+    connected = true;
+    closed = false;
+    hear: (event: string, payload: unknown) => void;
+    constructor(_cfg: unknown, code: string, onEvent: (event: string, payload: unknown) => void, onStatus: (open: boolean) => void) {
+      this.code = code;
+      this.hear = onEvent;
+      wire.lines.push(this as unknown as FakeLine);
+      onStatus(true);
+    }
+    send(event: string, payload: Record<string, unknown>): boolean {
+      if (!this.connected) return false;
+      this.sent.push([event, payload]);
+      return true;
+    }
+    close(): void {
+      this.closed = true;
+    }
+  },
+}));
 vi.mock('@/services/audio/engine', () => ({
   audioEngine: {
     get currentSongId() {
@@ -86,7 +124,8 @@ vi.mock('@/store/toastStore', () => ({ toast: api.toast }));
 vi.mock('@/store/playerStore', () => ({ usePlayerStore: { getState: player.getState, subscribe: player.subscribe } }));
 
 import { useTogether } from '@/services/together/session';
-import { addSong, getTrimMs, joinSession, leaveSession, runSession, setTrimMs, tapToListen, TRIM_MAX_MS } from './engine';
+import { addSong, getTrimMs, joinSession, leaveSession, react, runSession, say, setTrimMs, tapToListen, TRIM_MAX_MS, typing } from './engine';
+import { useRoom } from './room';
 
 const song = (id: string, playable = true) => ({ id, title: `Song ${id}`, subtitle: '', images: [], audio: playable ? [{ quality: '320kbps', url: 'u' }] : [] });
 const room = (over: Record<string, unknown> = {}) => ({
@@ -113,6 +152,9 @@ beforeEach(() => {
   audio.advancing = true;
   audio.setRate.mockClear();
   setTrimMs(0);
+  wire.lines.length = 0;
+  api.sayInRoom.mockResolvedValue(true);
+  sessionStorage.clear();
 });
 afterEach(() => vi.useRealTimers());
 
@@ -563,5 +605,239 @@ describe('host', () => {
     expect(calls.length).toBeGreaterThan(0);
     expect(calls[calls.length - 1][1]).toMatchObject({ id: 'next' });
     stop();
+  });
+});
+
+describe('1.13 — the live line', () => {
+  // Positions are compared closely here: the engine's clock moves with the fake timers.
+  beforeEach(() => {
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date', 'performance'] });
+  });
+
+  const LIVE = { url: 'wss://abcdefgh.supabase.co/realtime/v1', key: 'sb_publishable_test' };
+  const liveRoom = (over: Record<string, unknown> = {}) => ({ ...room(over), live: LIVE });
+  const line = () => wire.lines[wire.lines.length - 1];
+
+  /** A guest in a room whose host is playing h1, with the song loaded and the live line up. */
+  const guest = async () => {
+    api.getRoom.mockResolvedValue(liveRoom());
+    useTogether.getState().begin('guest', 'ABC123');
+    const stop = runSession('guest', 'ABC123');
+    await vi.advanceTimersByTimeAsync(0);
+    audio.songId = 'h1';
+    audio.position = () => player.getState().currentTime;
+    return stop;
+  };
+
+  it('opens the line the server names, once, and closes it with the session', async () => {
+    const stop = await guest();
+    await vi.advanceTimersByTimeAsync(4100);
+    expect(wire.lines).toHaveLength(1);
+    expect(line().code).toBe('ABC123');
+    expect(useRoom.getState().online).toBe(true);
+    stop();
+    expect(line().closed).toBe(true);
+  });
+
+  it('a room with no live line is followed by polling alone, as before', async () => {
+    api.getRoom.mockResolvedValue(room());
+    useTogether.getState().begin('guest', 'ABC123');
+    const stop = runSession('guest', 'ABC123');
+    await vi.advanceTimersByTimeAsync(2100);
+    expect(wire.lines).toHaveLength(0);
+    expect(player.getState().queue[0]?.id).toBe('h1');
+    stop();
+  });
+
+  it('the host pauses: the guest stops at once, where the host stopped, without waiting for a poll', async () => {
+    const stop = await guest();
+    expect(player.getState().isPlaying).toBe(true);
+    const polls = api.getRoom.mock.calls.length;
+    line().hear('state', { song: { id: 'h1', title: 'Song h1' }, position: 12.5, playing: false, at: Date.now() });
+    expect(player.getState().isPlaying).toBe(false);
+    expect(player.getState().currentTime).toBe(12.5);
+    expect(api.getRoom.mock.calls.length).toBe(polls);
+    // A poll that still holds the host's older push (playing) does not start it again…
+    api.getRoom.mockResolvedValue(liveRoom({ updated_at: new Date(Date.now() - 1500).toISOString() }));
+    await vi.advanceTimersByTimeAsync(4100);
+    expect(player.getState().isPlaying).toBe(false);
+    // …and the host's play, said on the line, does: in place, with no seek and no silence.
+    const seeks: number[] = [];
+    const orig = player.getState();
+    player.set({ seek: (t: number) => (seeks.push(t), orig.seek(t)) } as never);
+    line().hear('state', { song: { id: 'h1', title: 'Song h1' }, position: 12.5, playing: true, at: Date.now() });
+    expect(player.getState().isPlaying).toBe(true);
+    expect(seeks).toEqual([]);
+    stop();
+  });
+
+  it('the server is the truth: something said on the line that it never confirms is undone', async () => {
+    const stop = await guest();
+    line().hear('state', { song: { id: 'h1', title: 'Song h1' }, position: 12.5, playing: false, at: Date.now() });
+    expect(player.getState().isPlaying).toBe(false);
+    // Five seconds on the server still says the host is playing: a prank, or a push that never landed.
+    api.getRoom.mockImplementation(async () => liveRoom({ updated_at: new Date(Date.now() - 20_000).toISOString() }));
+    await vi.advanceTimersByTimeAsync(8100);
+    expect(player.getState().isPlaying).toBe(true);
+    stop();
+  });
+
+  it('the host moves on: the guest starts the new song from the line, and shows it at once', async () => {
+    const stop = await guest();
+    api.getSong.mockResolvedValue(song('h2'));
+    line().hear('state', { song: { id: 'h2', title: 'Song h2', audio: [{ url: 'https://evil.example/x.mp3' }] }, position: 0.2, playing: true, at: Date.now() });
+    // The stub on the line is only what a room shows: the stream is this device's own lookup.
+    expect(useTogether.getState().hostSong).toMatchObject({ id: 'h2', title: 'Song h2' });
+    expect((useTogether.getState().hostSong as { audio?: unknown }).audio).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(api.getSong).toHaveBeenCalledWith('h2');
+    expect(player.getState().queue[0]?.id).toBe('h2');
+    stop();
+  });
+
+  it('a state that cannot be right is not acted on: this device asks the server instead', async () => {
+    const stop = await guest();
+    await vi.advanceTimersByTimeAsync(1000);
+    const polls = api.getRoom.mock.calls.length;
+    for (const bad of [
+      { song: { id: 'h1' }, position: 12, playing: false, at: Date.now() + 60_000 },
+      { song: { id: 'h1' }, position: 12, playing: false, at: Date.now() - 60_000 },
+      { song: { id: 'h1' }, position: -4, playing: false, at: Date.now() },
+      { song: { id: 'h1' }, position: 'now', playing: false, at: Date.now() },
+      null,
+    ]) line().hear('state', bad);
+    expect(player.getState().isPlaying).toBe(true);
+    await vi.advanceTimersByTimeAsync(0);
+    // One look at the server for the lot, not one each.
+    expect(api.getRoom.mock.calls.length).toBe(polls + 1);
+    stop();
+  });
+
+  it('the host says every change on the line with the server moment its playhead was read at', async () => {
+    api.getRoom.mockResolvedValue(liveRoom());
+    player.set({ queue: [song('a')], index: 0, isPlaying: true, currentTime: 20 });
+    audio.songId = 'a';
+    audio.position = () => 20;
+    useTogether.getState().begin('host', 'ABC123');
+    const stop = runSession('host', 'ABC123');
+    await vi.advanceTimersByTimeAsync(0);
+    const said = () => line().sent.filter(([e]) => e === 'state');
+    expect(said().length).toBeGreaterThan(0);
+    const before = said().length;
+    player.set({ isPlaying: false });
+    // At once: not after the push to the server has come back.
+    const last = said()[said().length - 1][1];
+    expect(said().length).toBe(before + 1);
+    expect(last).toMatchObject({ playing: false, position: 20, song: { id: 'a', title: 'Song a' } });
+    expect(Math.abs((last.at as number) - Date.now())).toBeLessThan(200);
+    // Never a stream address.
+    expect(JSON.stringify(last)).not.toContain('320kbps');
+    stop();
+  });
+
+  it('a chat line is on the sender’s screen at once, goes down the line and to the server under one id', async () => {
+    const stop = await guest();
+    let stored: (ok: boolean) => void = () => undefined;
+    api.sayInRoom.mockImplementation(() => new Promise<boolean>((r) => (stored = r)));
+    const sent = say('  hello there  ');
+    const mine = useRoom.getState().extra[0];
+    expect(mine).toMatchObject({ by: 'Me', text: 'hello there', mine: true, state: 'sending' });
+    expect(line().sent.find(([e]) => e === 'chat')?.[1]).toEqual({ id: mine.id, by: 'Me', text: 'hello there' });
+    expect(api.sayInRoom).toHaveBeenCalledWith('ABC123', 'hello there', mine.id);
+    stored(true);
+    expect(await sent).toBe(true);
+    expect(useRoom.getState().extra[0].state).toBe('sent');
+    // The server lists it: the copy in flight is let go.
+    api.getRoom.mockResolvedValue(liveRoom({ messages: [{ by: 'Me', text: 'hello there', at: new Date().toISOString(), id: mine.id }] }));
+    await vi.advanceTimersByTimeAsync(2100);
+    expect(useRoom.getState().extra).toHaveLength(0);
+    expect(useTogether.getState().messages).toHaveLength(1);
+    stop();
+  });
+
+  it('a line neither the line nor the server took is marked, and can be sent again as the same line', async () => {
+    const stop = await guest();
+    line().connected = false;
+    api.sayInRoom.mockResolvedValue(false);
+    expect(await say('lost')).toBe(false);
+    const failed = useRoom.getState().extra[0];
+    expect(failed.state).toBe('failed');
+    api.sayInRoom.mockResolvedValue(true);
+    expect(await say('lost', failed.id)).toBe(true);
+    expect(useRoom.getState().extra).toHaveLength(1);
+    expect(useRoom.getState().extra[0]).toMatchObject({ id: failed.id, state: 'sent' });
+    stop();
+  });
+
+  it('someone else’s line and their "typing" show as they happen; junk on the line shows nothing', async () => {
+    const stop = await guest();
+    line().hear('typing', { by: 'Asha' });
+    expect(useRoom.getState().typing).toEqual(['Asha']);
+    line().hear('chat', { id: 'abcdef123456', by: 'Asha', text: 'hi all' });
+    expect(useRoom.getState().typing).toEqual([]);
+    expect(useRoom.getState().extra).toMatchObject([{ id: 'abcdef123456', by: 'Asha', text: 'hi all', mine: false, state: 'sent' }]);
+    line().hear('chat', { id: '<img>', by: 'Asha', text: 'x' });
+    line().hear('chat', { id: 'abcdef123457', by: 'Asha', text: '   ' });
+    line().hear('chat', { id: 'abcdef123458', by: 'Asha', text: 7 });
+    line().hear('typing', {});
+    line().hear('nonsense', { anything: true });
+    expect(useRoom.getState().extra).toHaveLength(1);
+    expect(useRoom.getState().typing).toEqual([]);
+    stop();
+  });
+
+  it('says "typing" while the listener types, not on every key, and stops when the field is cleared', async () => {
+    const stop = await guest();
+    const typed = () => line().sent.filter(([e]) => e === 'typing');
+    typing(true);
+    typing(true);
+    typing(true);
+    expect(typed()).toEqual([['typing', { by: 'Me' }]]);
+    await vi.advanceTimersByTimeAsync(2600);
+    typing(true);
+    expect(typed()).toHaveLength(2);
+    typing(false);
+    expect(typed()[2]).toEqual(['typing', { by: 'Me', on: false }]);
+    typing(false);
+    expect(typed()).toHaveLength(3);
+    stop();
+  });
+
+  it('a reaction rises on every screen at once, with who sent it, and its echo in the next poll is not shown twice', async () => {
+    const stop = await guest();
+    line().hear('react', { e: '🔥', by: 'Asha' });
+    expect(useRoom.getState().floats.filter((f) => f.by === 'Asha')).toHaveLength(1);
+    line().hear('react', { e: '💀', by: 'Asha' });
+    const shown = useRoom.getState().floats.length;
+    expect(shown).toBe(4);
+    api.getRoom.mockResolvedValue(liveRoom({}));
+    api.getRoom.mockImplementation(async () => ({ ...liveRoom(), reactions: [{ e: '🔥', at: 'r1' }] }));
+    await vi.advanceTimersByTimeAsync(2100);
+    expect(useRoom.getState().floats.length).toBeLessThanOrEqual(shown);
+    // Mine goes down the line as well as to the server.
+    react('🔥');
+    expect(line().sent.find(([e]) => e === 'react')?.[1]).toEqual({ e: '🔥', by: 'Me' });
+    expect(api.sendReaction).toHaveBeenCalledWith('ABC123', '🔥');
+    stop();
+  });
+
+  it('a guest’s request asks the host to read the room now, and the host does', async () => {
+    const stop = await guest();
+    await addSong(song('g1') as never);
+    expect(line().sent.some(([e]) => e === 'poke')).toBe(true);
+    stop();
+
+    wire.lines.length = 0;
+    api.getRoom.mockResolvedValue(liveRoom());
+    useTogether.getState().begin('host', 'ABC123');
+    const stopHost = runSession('host', 'ABC123');
+    await vi.advanceTimersByTimeAsync(0);
+    const polls = api.getRoom.mock.calls.length;
+    line().hear('poke', {});
+    line().hear('poke', {});
+    await vi.advanceTimersByTimeAsync(0);
+    expect(api.getRoom.mock.calls.length).toBe(polls + 1);
+    stopHost();
   });
 });

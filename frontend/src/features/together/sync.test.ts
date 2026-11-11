@@ -205,6 +205,68 @@ describe('decideCorrection', () => {
   });
 });
 
+describe('1.13 — the live line', () => {
+  const stamp = new Date(T0).toISOString();
+  // A poll: the host pushed 30 s at T0, the server answered 2 s later, no flight.
+  const polled = () => {
+    const c = new HostClock();
+    c.ingest({ position: 30, playing: true, updated_at: stamp, now: T0 + 2000, rttMs: 0, receivedAt: 1000, songId: 'a' });
+    return c;
+  };
+
+  it('a reading from the line cannot be placed before a poll has told this device the server’s clock', () => {
+    const c = new HostClock();
+    expect(c.serverNow(0)).toBeNull();
+    expect(c.pushed({ position: 30, playing: true, at: T0, songId: 'a' })).toBe(false);
+    expect(c.ready).toBe(false);
+  });
+
+  it('a pause said on the line stops the projected playhead where the host stopped it', () => {
+    const c = polled();
+    expect(c.serverNow(1000)).toBe(T0 + 2000);
+    expect(c.positionAt(1000)).toBeCloseTo(32, 5);
+    // The host paused at 32.4 s, 400 ms of server time later.
+    expect(c.pushed({ position: 32.4, playing: false, at: T0 + 2400, songId: 'a' })).toBe(true);
+    expect(c.isPlaying).toBe(false);
+    expect(c.positionAt(1500)).toBe(32.4);
+    expect(c.positionAt(9000)).toBe(32.4);
+    // …and play again: the playhead runs from that moment on the server's clock.
+    c.pushed({ position: 32.4, playing: true, at: T0 + 5000, songId: 'a' });
+    expect(c.positionAt(4000)).toBeCloseTo(32.4, 5);
+    expect(c.positionAt(5000)).toBeCloseTo(33.4, 5);
+  });
+
+  it('the same reading heard on the line and then read in a poll counts once', () => {
+    const c = polled();
+    // Two more readings while it settles, then a steady one that is 100 ms off the line.
+    c.pushed({ position: 31, playing: true, at: T0 + 1000, songId: 'a' });
+    c.pushed({ position: 32, playing: true, at: T0 + 2000, songId: 'a' });
+    c.pushed({ position: 33.1, playing: true, at: T0 + 3000, songId: 'a' });
+    const after = c.positionAt(2000);
+    // Half way to it: 33.05 at T0 + 3 s.
+    expect(after).toBeCloseTo(33.05, 5);
+    // The poll that carries that same push (same server moment) must not move it half way again.
+    c.ingest({ position: 33.1, playing: true, updated_at: new Date(T0 + 3000).toISOString(), now: T0 + 3000, rttMs: 0, receivedAt: 2000, songId: 'a' });
+    expect(c.positionAt(2000)).toBeCloseTo(after, 5);
+  });
+
+  it('what the host just DID is followed at once; small drift still waits out the cooldown', () => {
+    const justCorrected = { ...base, sinceLastCorrectionMs: 200 };
+    // Polled: nothing inside the cooldown, as before.
+    expect(decideCorrection({ ...justCorrected, hostPlaying: false, local: playing() }).kind).toBe('none');
+    // Said on the line: a pause, a play and a jump of the host's playhead go through.
+    expect(decideCorrection({ ...justCorrected, urgent: true, hostPlaying: false, local: playing() }).kind).toBe('pause');
+    expect(decideCorrection({ ...justCorrected, urgent: true, local: playing({ isPlaying: false }) }).kind).toBe('play');
+    expect(decideCorrection({ ...justCorrected, urgent: true, expected: 90, local: playing() })).toMatchObject({ kind: 'seek', to: 90 });
+    expect(decideCorrection({ ...justCorrected, urgent: true, expected: 30.8, local: playing() }).kind).toBe('none');
+    // A host that paused is followed even while this device is refilling; nothing else is.
+    expect(decideCorrection({ ...base, urgent: true, hostPlaying: false, local: playing({ isBuffering: true }) }).kind).toBe('pause');
+    expect(decideCorrection({ ...base, urgent: true, expected: 90, local: playing({ isBuffering: true }) }).kind).toBe('none');
+    // A fresh track is still left to settle before its position is judged.
+    expect(decideCorrection({ ...justCorrected, urgent: true, expected: 90, sinceTrackStartMs: 300, local: playing() }).kind).toBe('none');
+  });
+});
+
 describe('ServerClock (what moment is it on the server?)', () => {
   it('is not ready until an answer carries the server clock', () => {
     const c = new ServerClock();

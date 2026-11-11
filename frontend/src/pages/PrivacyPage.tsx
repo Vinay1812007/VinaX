@@ -202,6 +202,13 @@ export default function PrivacyPage() {
           cleaned up afterwards. To count who is in a room, your device sends a random device ID that VinaX stores on
           this device; it is not linked to your name or account.
         </p>
+        <p>
+          While you are in a room, your device also keeps a live connection to VinaX&rsquo;s database provider, so that
+          a pause, a chat line or a reaction reaches everyone at once. What passes over it is what the room already
+          shares: the song the host is playing and where it is, chat lines, reactions, the name you gave the room and
+          the fact that you are typing. It is passed on to the room and not kept there; the connection closes when you
+          leave.
+        </p>
         <H>Ads and trackers — the honest version</H>
         <p>
           VinaX sets no tracking cookies of its own, and runs no third-party analytics unless you opt in to session

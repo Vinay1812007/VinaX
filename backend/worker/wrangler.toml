@@ -93,6 +93,14 @@ SEARCH_API_PROVIDER = "tavily"
 # (app and console). Not a secret. The check runs only while the
 # TURNSTILE_SECRET_KEY secret is set too; see README.md (Operations).
 TURNSTILE_SITE_KEY = "0x4AAAAAAFxurV4s1_LIX_00"
+# 1.13 — Listen Together's live line: Supabase Realtime (Broadcast) and the
+# project's PUBLISHABLE key. Not a secret: it is the key Supabase means for
+# browsers, and schema.sql denies the anon role every table and function, so
+# it reads and writes nothing. /api/room hands both to the phones in a room
+# (functions/api/room.ts liveLine). Remove either line and rooms go back to
+# polling only; nothing else changes.
+REALTIME_URL = "wss://tuccemfflasvshzyqqrg.supabase.co/realtime/v1"
+REALTIME_KEY = "sb_publishable__HaUd2EdtNC4Z-fFDTewfg_0XUpwSJ7"
 
 # Secrets (set with `npx wrangler secret put <NAME> --config worker/wrangler.toml`
 # or the Workers dashboard, never in this file) — every name documented in

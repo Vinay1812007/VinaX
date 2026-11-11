@@ -10,7 +10,8 @@
  * survives a reload of the tab (sessionStorage: per tab, gone when it closes).
  *
  * Kept tiny on purpose: it is on the first-load path. The engine, the page and
- * the floating "Live" pill are lazy.
+ * the floating "Live" pill are lazy; so is everything a live room shows on
+ * top (chat in flight, typing, reactions: features/together/room.ts).
  */
 import { create } from 'zustand';
 import type { Song } from '@/types';
@@ -18,12 +19,6 @@ import type { RoomMessage, RoomTrack } from './index';
 
 export type TogetherMode = 'idle' | 'host' | 'guest';
 export type TogetherStatus = 'connecting' | 'live' | 'reconnecting' | 'host-away';
-
-export interface ReactionFloat {
-  id: number;
-  e: string;
-  left: number;
-}
 
 interface TogetherState {
   mode: TogetherMode;
@@ -43,15 +38,13 @@ interface TogetherState {
   drift: number | null;
   /** Guest: the browser blocked audio until the listener taps once. */
   needsTap: boolean;
-  floats: ReactionFloat[];
   /** 15.0 — who is here (names members chose), the chat, skip votes, and the songs this session has played. */
   names: string[];
   messages: RoomMessage[];
   skipVotes: number;
   played: Song[];
   begin(mode: Exclude<TogetherMode, 'idle'>, code: string): void;
-  patch(p: Partial<Omit<TogetherState, 'begin' | 'patch' | 'reset' | 'float'>>): void;
-  float(emojis: string[]): void;
+  patch(p: Partial<Omit<TogetherState, 'begin' | 'patch' | 'reset'>>): void;
   reset(): void;
 }
 
@@ -90,14 +83,11 @@ const EMPTY = {
   unplayable: null as string | null,
   drift: null,
   needsTap: false,
-  floats: [] as ReactionFloat[],
   names: [] as string[],
   messages: [] as RoomMessage[],
   skipVotes: 0,
   played: [] as Song[],
 };
-
-let floatSeq = 0;
 
 export const useTogether = create<TogetherState>((set) => ({
   ...readSaved(),
@@ -107,13 +97,6 @@ export const useTogether = create<TogetherState>((set) => ({
     set({ mode, code, ...EMPTY });
   },
   patch: (p) => set(p),
-  float: (emojis) => {
-    const batch = emojis.slice(0, 6).map((e) => ({ id: ++floatSeq, e, left: 10 + Math.random() * 78 }));
-    if (!batch.length) return;
-    set((s) => ({ floats: [...s.floats, ...batch].slice(-24) }));
-    const ids = new Set(batch.map((b) => b.id));
-    setTimeout(() => set((s) => ({ floats: s.floats.filter((f) => !ids.has(f.id)) })), 2600);
-  },
   reset: () => {
     save('idle', '');
     set({ mode: 'idle', code: '', ...EMPTY });

@@ -27,6 +27,15 @@
  * has a fine-tune (`setTrimMs`) for a speaker that is slow to sound, which no
  * clock can measure.
  *
+ * 1.13 — the live line (live.ts). Polling made everything wait for a phone's
+ * next poll: a pause was heard two seconds late, a chat line took up to four.
+ * Now the host also SAYS each change on the room's live line the instant it
+ * happens, with the server moment its playhead was read at, and a guest acts
+ * on it at once (`liveState`); chat lines, "typing" and reactions travel the
+ * same way. Every write still goes to the server and every phone still polls
+ * it: the poll is the truth, the line is the shortcut. A poll that is older
+ * than what the line just said is not allowed to undo it.
+ *
  * The room only NAMES a song (id, title, artwork): the server keeps no stream
  * URLs. So a guest looks the host's song up in the catalogue before playing
  * it, exactly as the host does for a guest's request. Guests used to hand the
@@ -43,6 +52,8 @@ import {
   isHostOf,
   leaveRoom,
   leaveRoomBeacon,
+  myName,
+  REACTION_EMOJI,
   requestSong,
   sayInRoom,
   sendReaction,
@@ -57,6 +68,8 @@ import type { Song } from '@/types';
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal, setLocal } from '@/services/storage/local';
 import { decideCorrection, HostClock, hostIsAway, RateNudge, ReactionFeed, SEEK_THRESHOLD_S, SeekLead, ServerClock, TRACK_SETTLE_MS } from './sync';
+import { cleanLive, LiveLine } from './live';
+import { useRoom } from './room';
 
 const HOST_POLL_MS = 4000;
 const GUEST_POLL_MS = 2000;
@@ -102,10 +115,133 @@ function rememberPlayed(song: Song | null | undefined): void {
   st.patch({ played: [...st.played, song].slice(-200) });
 }
 
-/** 15.0 — say something to the room. */
-export async function say(text: string): Promise<boolean> {
+// ------------------------------------------------------------ live line
+
+/** The room's live line, while a session runs and the server has one. */
+let line: LiveLine | null = null;
+let lineCode = '';
+/** What this session does with the host's state and a "look now" (set by runHost / runGuest). */
+let liveState: ((raw: unknown) => void) | null = null;
+let livePoke: (() => void) | null = null;
+
+/** Opens the live line for `code` once the server has said where it is. */
+function ensureLine(code: string, raw: unknown): void {
+  if (line && lineCode === code) return;
+  const cfg = cleanLive(raw);
+  if (!cfg || typeof WebSocket === 'undefined') return;
+  line?.close();
+  lineCode = code;
+  line = new LiveLine(cfg, code, onLive, (open) => useRoom.getState().patch({ online: open }));
+}
+
+function dropLine(): void {
+  line?.close();
+  line = null;
+  lineCode = '';
+  liveState = null;
+  livePoke = null;
+}
+
+const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+const LINE_ID = /^[A-Za-z0-9_-]{6,24}$/;
+
+/** Everything arriving on the line is from another phone: checked like any stranger's input. */
+function onLive(event: string, raw: unknown): void {
+  const p = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const room = useRoom.getState();
+  if (event === 'state') {
+    liveState?.(raw);
+  } else if (event === 'poke') {
+    livePoke?.();
+  } else if (event === 'chat') {
+    const id = text(p.id, 24);
+    const words = text(p.text, 200);
+    const by = text(p.by, 40) || 'Someone';
+    if (!LINE_ID.test(id) || !words) return;
+    room.setTyping(by, false);
+    if (useTogether.getState().messages.some((m) => m.id === id)) return;
+    room.line({ id, by, text: words, at: Date.now(), mine: false, state: 'sent' });
+  } else if (event === 'typing') {
+    const by = text(p.by, 40);
+    if (by) room.setTyping(by, p.on !== false);
+  } else if (event === 'react') {
+    const e = text(p.e, 8);
+    if (!(REACTION_EMOJI as readonly string[]).includes(e)) return;
+    // The same reaction comes back in the next poll: it is already on screen.
+    feed.sent(e);
+    room.float([e], text(p.by, 40) || null);
+  }
+}
+
+/** The chat lines this tab has sent (kept for the tab, so they stay "mine" after a reload). */
+const SENT_KEY = 'vinax.together.sent.v1';
+let sentIds: Set<string> | null = null;
+export function sentLines(): Set<string> {
+  if (sentIds) return sentIds;
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(SENT_KEY) ?? '[]') as unknown;
+    sentIds = new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string').slice(-80) : []);
+  } catch {
+    sentIds = new Set();
+  }
+  return sentIds;
+}
+function rememberSent(id: string): void {
+  const ids = sentLines();
+  ids.add(id);
+  try {
+    sessionStorage.setItem(SENT_KEY, JSON.stringify([...ids].slice(-80)));
+  } catch {
+    /* storage blocked: lines just stop being "mine" after a reload */
+  }
+}
+
+const newLineId = (): string => {
+  const a = new Uint8Array(9);
+  crypto.getRandomValues(a);
+  return Array.from(a, (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 16);
+};
+
+/**
+ * 15.0 — say something to the room. 1.13: the line is on this screen at once,
+ * goes to everyone on the live line, and is stored by the server for whoever
+ * polls or joins later. It failed only if neither took it.
+ */
+export async function say(words: string, retryId?: string): Promise<boolean> {
   const { code } = useTogether.getState();
-  return code ? sayInRoom(code, text.trim().slice(0, 200)) : false;
+  const clean = words.trim().slice(0, 200);
+  if (!code || !clean) return false;
+  const room = useRoom.getState();
+  const id = retryId ?? newLineId();
+  const by = myName();
+  rememberSent(id);
+  if (retryId) room.mark(id, 'sending');
+  else room.line({ id, by, text: clean, at: Date.now(), mine: true, state: 'sending' });
+  typingStopped();
+  const heard = line?.send('chat', { id, by, text: clean }) ?? false;
+  const stored = await sayInRoom(code, clean, id);
+  useRoom.getState().mark(id, stored || heard ? 'sent' : 'failed');
+  return stored || heard;
+}
+
+/** How often "typing" is repeated while the listener keeps typing (ms). */
+const TYPING_EVERY_MS = 2500;
+let typingSaid = 0;
+
+/** The chat field changed: tell the room this listener is typing (the live line only). */
+export function typing(hasText: boolean): void {
+  if (!hasText) {
+    typingStopped();
+    return;
+  }
+  const now = Date.now();
+  if (now - typingSaid < TYPING_EVERY_MS) return;
+  if (line?.send('typing', { by: myName() })) typingSaid = now;
+}
+function typingStopped(): void {
+  if (!typingSaid) return;
+  typingSaid = 0;
+  line?.send('typing', { by: myName(), on: false });
 }
 
 /** 15.0 — vote to skip what is playing. The host simply skips. */
@@ -117,20 +253,27 @@ export async function voteToSkip(): Promise<void> {
   if (!song) return;
   const n = await voteSkip(st.code, song.id);
   if (n === null) toast('Could not send your vote');
-  else { st.patch({ skipVotes: n }); toast(`Vote to skip: ${n}`); }
+  else {
+    st.patch({ skipVotes: n });
+    toast(`Vote to skip: ${n}`);
+    // The host counts votes when it next reads the room: ask it to read now.
+    line?.send('poke', {});
+  }
 }
 
 function floatReactions(list: Array<{ e: string; at: string }> | undefined): void {
   const fresh = feed.ingest(list);
-  if (fresh.length) useTogether.getState().float(fresh);
+  if (fresh.length) useRoom.getState().float(fresh);
 }
 
-/** Tap a reaction: it floats here at once, and the poll's echo is skipped. */
+/** Tap a reaction: it rises here at once and, on the live line, on every
+ *  other screen in the room; the poll's echo of it is skipped. */
 export function react(emoji: string): void {
   const { code } = useTogether.getState();
   if (!code) return;
   feed.sent(emoji);
-  useTogether.getState().float([emoji]);
+  useRoom.getState().float([emoji]);
+  line?.send('react', { e: emoji, by: myName() });
   void sendReaction(code, emoji).then((ok) => {
     if (!ok) toast('Reactions aren’t switched on for this server yet');
   });
@@ -176,18 +319,25 @@ function runHost(code: string): () => void {
 
   // One push in flight at a time; a change during it schedules exactly one more.
   const push = async (): Promise<void> => {
+    const s = usePlayerStore.getState();
+    // The playhead and the moment it was read, taken together.
+    const position = playhead();
+    const read = performance.now();
+    const at = server.ready ? server.at(read) : undefined;
+    // 1.13 — said on the live line first, and whether or not a push is on
+    // its way: guests act on this now, and the server catches up behind it.
+    if (at !== undefined && line?.connected) {
+      const song = s.queue[s.index] ?? null;
+      line.send('state', { song: song ? roomStub(song) : null, position, playing: s.isPlaying, at });
+    }
     if (inFlight) {
       again = true;
       return;
     }
     inFlight = true;
-    const s = usePlayerStore.getState();
     const up = upNext();
     useTogether.getState().patch({ queue: up });
-    // The playhead and the moment it was read, taken together.
-    const position = playhead();
-    const read = performance.now();
-    const r = await updateRoom(code, s.queue[s.index] ?? null, position, s.isPlaying, up, [...consumed], server.ready ? server.at(read) : undefined);
+    const r = await updateRoom(code, s.queue[s.index] ?? null, position, s.isPlaying, up, [...consumed], at);
     inFlight = false;
     if (!alive) return;
     if (r === 'gone') {
@@ -286,6 +436,7 @@ function runHost(code: string): () => void {
       useTogether.getState().reset();
       return;
     }
+    ensureLine(code, d.live);
     useTogether.getState().patch({
       members: d.members ?? [],
       names: d.names ?? d.members ?? [],
@@ -293,6 +444,7 @@ function runHost(code: string): () => void {
       messages: d.room.messages ?? [],
       skipVotes: d.room.skipVotes ?? 0,
     });
+    chatListed(d.room.messages);
     floatReactions(d.reactions);
     // 15.0 — vote-to-skip: when more than half the room (host included) has
     // voted, the host's player moves on; the server clears the votes with
@@ -319,12 +471,53 @@ function runHost(code: string): () => void {
   void push();
   void poll();
   const iv = window.setInterval(() => void poll(), HOST_POLL_MS);
+  // A guest asked for a song or voted to skip: read the room now, not in four seconds.
+  let poked = -POKE_GAP_MS;
+  livePoke = () => {
+    const now = performance.now();
+    if (now - poked < POKE_GAP_MS) return;
+    poked = now;
+    void poll();
+  };
   return () => {
     alive = false;
     unsub();
     window.clearInterval(iv);
     window.clearInterval(watch);
+    dropLine();
   };
+}
+
+/** A phone reads the room for a "look now" at most this often (ms). */
+const POKE_GAP_MS = 700;
+
+/** Drop the chat lines in flight that the server now lists. */
+function chatListed(messages: Array<{ id?: string }> | undefined): void {
+  const ids = new Set((messages ?? []).map((m) => m.id).filter((x): x is string => !!x));
+  if (ids.size) useRoom.getState().listed(ids);
+}
+
+/** A song as the live line carries it: what a room shows, never a stream. */
+function roomStub(song: Song): Partial<Song> {
+  return { id: song.id, title: song.title, subtitle: song.subtitle, images: (song.images ?? []).slice(0, 4), duration: song.duration };
+}
+
+/** The host's state as it arrived on the live line, or null when it is not one. */
+function cleanState(raw: unknown): { song: Song | null; position: number; playing: boolean; at: number } | null {
+  const p = raw as { song?: unknown; position?: unknown; playing?: unknown; at?: unknown } | null;
+  if (!p || typeof p.position !== 'number' || !Number.isFinite(p.position) || p.position < 0 || typeof p.at !== 'number' || !Number.isFinite(p.at)) return null;
+  const s = p.song as Record<string, unknown> | null;
+  let song: Song | null = null;
+  if (s && typeof s === 'object') {
+    const id = text(s.id, 64);
+    if (!id) return null;
+    // Only what a room shows is taken; a stream address on the line is ignored.
+    const images = Array.isArray(s.images)
+      ? (s.images as unknown[]).slice(0, 4).filter((i): i is { quality: string; url: string } => !!i && typeof (i as { url?: unknown }).url === 'string' && /^https:\/\//.test((i as { url: string }).url))
+      : [];
+    song = { id, title: text(s.title, 200), subtitle: text(s.subtitle, 200), images, duration: typeof s.duration === 'number' && Number.isFinite(s.duration) ? s.duration : 0 } as unknown as Song;
+  }
+  return { song, position: p.position, playing: p.playing === true, at: p.at };
 }
 
 // ----------------------------------------------------------------- guest
@@ -386,6 +579,8 @@ const MISSED_RETRY_MS = 20_000;
 
 /** Closer than this (seconds), a play or pause needs no seek to be in place. */
 const IN_PLACE_S = 0.08;
+/** A play heard on the live line this close (seconds) to the host starts where it is. */
+const RESUME_IN_PLACE_S = 0.15;
 
 /** A seek target kept inside the song. */
 function inSong(seconds: number, duration: number): number {
@@ -430,12 +625,26 @@ async function loadHostSong(stub: Song): Promise<void> {
   playAttempts += 1;
 }
 
+/** For this long after the live line said something, a poll older than it is not believed (ms). */
+const LIVE_HOLD_MS = 5000;
+/** A state on the line is taken only if it was read about now on the server's
+ *  clock: not from the future, not from long ago (ms). */
+const LIVE_AHEAD_MS = 400;
+const LIVE_OLD_MS = 15_000;
+
 function runGuest(code: string): () => void {
   let alive = true;
   let misses = 0;
   let ticks = 0;
   /** The server moment of the newest answer acted on. */
   let newest = 0;
+  /** The server moment of the newest state taken from the live line, and when it came. */
+  let liveAt = 0;
+  let liveSeen = 0;
+  /** The server moment of the newest host push read from a poll. */
+  let polledAt = 0;
+  /** Songs up next that this device has already looked up. */
+  const fetched = new Set<string>();
   // Joining has already read the room once for this code; a session picked
   // up any other way (a reloaded tab) starts from nothing.
   if (clockCode !== code) {
@@ -509,26 +718,52 @@ function runGuest(code: string): () => void {
       store.reset();
       return;
     }
+    ensureLine(code, d.live);
+    // The live line has already said something newer than this answer holds
+    // (the host's push to the server is still on its way): its playback part
+    // would undo that for a moment, so only the rest of it is taken.
+    const pushedAt = Date.parse(r.updated_at);
+    const behind = liveAt > 0 && performance.now() - liveSeen < LIVE_HOLD_MS && Number.isFinite(pushedAt) && pushedAt < liveAt - 2;
     store.patch({
       members: d.members ?? [],
       names: d.names ?? d.members ?? [],
       listenerCount: d.memberCount ?? d.members?.length ?? 1,
       hostName: r.host_name ?? null,
       queue: r.queue ?? [],
-      hostSong: r.song ?? null,
+      ...(behind ? {} : { hostSong: r.song ?? null }),
       messages: r.messages ?? [],
       skipVotes: r.skipVotes ?? 0,
       status: hostIsAway({ updated_at: r.updated_at, now: d.now }) ? 'host-away' : 'live',
     });
+    chatListed(r.messages);
     floatReactions(d.reactions);
+    // The song after this one: look it up now, so that when the host moves on
+    // only the audio is left to fetch.
+    const next = r.queue?.[0]?.song;
+    if (next?.id && !fetched.has(next.id)) {
+      fetched.add(next.id);
+      void fullSong(next);
+    }
+    if (behind) {
+      clock.sync(d);
+      return;
+    }
     if (!r.song) return;
     clock.ingest({ position: r.position, playing: r.playing, updated_at: r.updated_at, now: d.now, took: d.took, rttMs: d.rttMs, receivedAt: d.receivedAt, songId: r.song.id });
+    if (Number.isFinite(pushedAt)) polledAt = pushedAt;
+    follow(r.song, r.playing, false);
+  };
 
+  /** Put this device where the host is: load, play, pause or seek, as needed. */
+  const follow = (song: Song, hostPlaying: boolean, urgent: boolean): void => {
+    const store = useTogether.getState();
+    const r = { song, playing: hostPlaying };
     const st = usePlayerStore.getState();
     const local = st.queue[st.index] ?? null;
     if (local?.id === r.song.id) rememberPlayed(local);
     const now = performance.now();
     const c = decideCorrection({
+      urgent,
       hostSongId: r.song.id,
       hostPlaying: r.playing,
       expected: target(now),
@@ -554,7 +789,12 @@ function runGuest(code: string): () => void {
         // The host has been playing since before this poll: start where it is
         // now (plus the moment a seek takes), not where this device stopped.
         const at = inSong(target(now) + seekLead.seconds, st.duration);
-        if (Math.abs(playhead() - at) > IN_PLACE_S) {
+        // 1.13 — heard on the live line a moment after the host pressed play,
+        // this device is where the host paused and only that moment behind:
+        // play now, and let the fine sync close the gap. A seek here would be
+        // a silence longer than the gap it mends.
+        const close = urgent && Math.abs(playhead() - target(now)) <= RESUME_IN_PLACE_S;
+        if (!close && Math.abs(playhead() - at) > IN_PLACE_S) {
           st.seek(at);
           landing = { lead: seekLead, at: now };
         }
@@ -594,6 +834,36 @@ function runGuest(code: string): () => void {
     }
   };
 
+  // 1.13 — the host's state, the instant the host said it on the live line.
+  liveState = (raw) => {
+    if (!alive) return;
+    const m = cleanState(raw);
+    const serverNow = clock.serverNow();
+    // Not placeable yet (no poll has told this device the server's clock), or
+    // not a moment that can be right: ask the server instead.
+    if (!m || serverNow === null || m.at > serverNow + LIVE_AHEAD_MS || m.at < serverNow - LIVE_OLD_MS) {
+      poke();
+      return;
+    }
+    // Older than what this device already has, from the line or from a poll.
+    if (m.at <= liveAt || m.at < polledAt - 2 || !m.song) return;
+    if (!clock.pushed({ position: m.position, playing: m.playing, at: m.at, songId: m.song.id })) return;
+    liveAt = m.at;
+    liveSeen = performance.now();
+    const store = useTogether.getState();
+    if (store.hostSong?.id !== m.song.id) store.patch({ hostSong: m.song });
+    if (store.status !== 'live') store.patch({ status: 'live' });
+    follow(m.song, m.playing, true);
+  };
+  let poked = -POKE_GAP_MS;
+  const poke = (): void => {
+    const now = performance.now();
+    if (now - poked < POKE_GAP_MS) return;
+    poked = now;
+    void tick();
+  };
+  livePoke = poke;
+
   void tick();
   const iv = window.setInterval(() => void tick(), GUEST_POLL_MS);
   const fineIv = window.setInterval(fine, FINE_SYNC_MS);
@@ -608,6 +878,7 @@ function runGuest(code: string): () => void {
     window.clearInterval(iv);
     window.clearInterval(fineIv);
     window.removeEventListener('pagehide', onHide);
+    dropLine();
     // Back to the listener's own playback speed.
     audioEngine.setRate(usePlayerStore.getState().rate || 1);
     usePlayerStore.getState().setFollowMode(false);
@@ -646,6 +917,8 @@ export function runSession(mode: 'host' | 'guest', code: string): () => void {
   trackStartedAt = 0;
   playAttempts = 0;
   missed = null;
+  typingSaid = 0;
+  useRoom.getState().reset();
   // `landing` is left alone: joining may already have started the song, a
   // moment before this engine was mounted, and its landing is still to be measured.
   return mode === 'host' ? runHost(code) : runGuest(code);
@@ -721,5 +994,7 @@ export async function addSong(song: Song): Promise<string> {
     return `Added “${song.title}” for everyone`;
   }
   const ok = await requestSong(code, song);
+  // The host adds requests when it next reads the room: ask it to read now.
+  if (ok) line?.send('poke', {});
   return ok ? `Sent — “${song.title}” joins the queue in a moment` : `Couldn’t send “${song.title}” — try again`;
 }

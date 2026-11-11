@@ -79,7 +79,12 @@ export interface RoomTrack {
   by: string | null;
 }
 
-export interface RoomMessage { by: string; text: string; at: string }
+export interface RoomMessage { by: string; text: string; at: string; id?: string }
+
+/** The name this device gives a room. */
+export function myName(): string {
+  return me().name;
+}
 
 export interface RoomState {
   host_name: string | null;
@@ -214,10 +219,12 @@ export async function sendReaction(code: string, emoji: string): Promise<boolean
   return r?.ok === true;
 }
 
-/** 15.0 — a chat line; everyone in the room sees it on their next poll. */
-export async function sayInRoom(code: string, text: string): Promise<boolean> {
+/** 15.0 — a chat line, kept by the room for whoever polls or joins later.
+ *  1.13: `id` names the line, so a phone that already showed it from the
+ *  live line knows the stored copy is the same one. */
+export async function sayInRoom(code: string, text: string, id?: string): Promise<boolean> {
   const m = me();
-  const r = await post({ action: 'say', code, deviceId: m.deviceId, name: m.name, text });
+  const r = await post({ action: 'say', code, deviceId: m.deviceId, name: m.name, text, ...(id ? { id } : {}) });
   return r?.ok === true;
 }
 
@@ -267,6 +274,8 @@ export interface RoomPoll {
   now?: number;
   /** 1.12.10 — how long (ms) the server then took to answer. */
   took?: number;
+  /** 1.13 — where the room's live line is (features/together/live.ts), when the server has one. */
+  live?: unknown;
   /** 10.0 — client-measured round trip of this poll, and when it landed
    *  (performance.now()), so a follower can project the host's position. */
   rttMs?: number;

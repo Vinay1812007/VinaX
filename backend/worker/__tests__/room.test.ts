@@ -5,7 +5,7 @@
  * without a database both verbs answer 503 not_configured.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { onRequestGet, onRequestOptions, onRequestPost, pushMoment, REACTION_EMOJI } from '../functions/api/room';
+import { liveLine, onRequestGet, onRequestOptions, onRequestPost, pushMoment, REACTION_EMOJI } from '../functions/api/room';
 import { DB_ENV, fakeDb } from './helpers/fakeDb';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -119,6 +119,39 @@ describe('/api/room', () => {
     const row = fake.rows('rooms')[0];
     expect(row.updated_at).toBe(pushed);
     expect(row.messages).toMatchObject([{ by: 'G', text: 'hello' }]);
+  });
+
+  it('a chat line keeps the id its sender gave it, once, and drops an id that is not one', async () => {
+    const fake = fakeDb({ rooms: [{ code: 'ABC234', host_token: 'host-secret', host_name: 'V', current: null, queue: [], requests: [], position: 0, playing: false, updated_at: 'x', messages: [] }] });
+    await post({ action: 'say', code: 'ABC234', deviceId: 'g1', name: 'G', text: 'hello', id: 'abc123def456' });
+    // The same line again (a retry after a lost answer) is not kept twice.
+    expect(await (await post({ action: 'say', code: 'ABC234', deviceId: 'g1', name: 'G', text: 'hello', id: 'abc123def456' })).json()).toEqual({ ok: true });
+    await post({ action: 'say', code: 'ABC234', deviceId: 'g1', name: 'G', text: 'again', id: '<script>' });
+    expect(fake.rows('rooms')[0].messages).toMatchObject([{ by: 'G', text: 'hello', id: 'abc123def456' }, { by: 'G', text: 'again' }]);
+    expect((fake.rows('rooms')[0].messages as Array<{ id?: string }>)[1].id).toBeUndefined();
+  });
+
+  it('says where the live line is only when it has a Supabase Realtime address and a PUBLIC key', async () => {
+    const url = 'wss://abcdefgh.supabase.co/realtime/v1';
+    const key = 'sb_publishable_abc123';
+    const jwt = (role: string) => `eyJhbGciOiJIUzI1NiJ9.${btoa(JSON.stringify({ role }))}.sig`;
+    expect(liveLine({ REALTIME_URL: url, REALTIME_KEY: key })).toEqual({ url, key });
+    expect(liveLine({ REALTIME_URL: url, REALTIME_KEY: jwt('anon') })).toEqual({ url, key: jwt('anon') });
+    // Never a key that can read the database, and never some other address.
+    expect(liveLine({ REALTIME_URL: url, REALTIME_KEY: jwt('service_role') })).toBeNull();
+    expect(liveLine({ REALTIME_URL: url, REALTIME_KEY: 'sb_secret_abc123' })).toBeNull();
+    expect(liveLine({ REALTIME_URL: 'wss://evil.example/realtime/v1', REALTIME_KEY: key })).toBeNull();
+    expect(liveLine({ REALTIME_URL: 'ws://abcdefgh.supabase.co/realtime/v1', REALTIME_KEY: key })).toBeNull();
+    expect(liveLine({ REALTIME_URL: url })).toBeNull();
+    expect(liveLine({})).toBeNull();
+
+    fakeDb({ rooms: [{ code: 'ABC234', host_token: 'host-secret', host_name: 'V', current: null, queue: [], requests: [], position: 0, playing: false, updated_at: 'x' }] });
+    const withLine = (await (await get('code=ABC234', { ...DB_ENV, REALTIME_URL: url, REALTIME_KEY: key })).json()) as { live?: unknown };
+    expect(withLine.live).toEqual({ url, key });
+    const without = (await (await get('code=ABC234')).json()) as { live?: unknown };
+    expect(without.live).toBeUndefined();
+    const made = (await (await post({ action: 'create', hostName: 'V' }, { ...DB_ENV, REALTIME_URL: url, REALTIME_KEY: key })).json()) as { live?: unknown };
+    expect(made.live).toEqual({ url, key });
   });
 
   it('a guest request goes through room_request; a missing room is 404; reactions only from the allowed set', async () => {

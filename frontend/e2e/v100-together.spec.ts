@@ -18,6 +18,12 @@ import { latestNotesFingerprint } from '../src/constants/changelog';
  *
  * 1.12.11 — both sides keep the server's clock, the host says at which server
  * moment each position was read, and a guest has a fine-tune for its speaker.
+ *
+ * 1.13 — the live line: with a stand-in for Supabase Realtime (the Phoenix
+ * channel protocol over a routed WebSocket) the host's pause reaches the
+ * guest while the host's push to the server is still on its way, chat lines
+ * and "typing" show as they happen, reactions rise over the whole screen on
+ * any page, and the pill can be dragged out of the way.
  */
 const SECONDS = 240;
 /** Four minutes of silent 8 kHz mono WAV: real, seekable audio. */
@@ -62,23 +68,31 @@ function roomSong(raw: unknown): Record<string, unknown> | null {
 const roomQueue = (raw: unknown): unknown[] =>
   (Array.isArray(raw) ? (raw as Array<{ song?: unknown; by?: unknown }>) : []).map((t) => ({ song: roomSong(t.song), by: t.by ?? null })).filter((t) => t.song);
 
-interface Room { host_name: string; song: unknown; position: number; playing: boolean; updated_at: string; queue: unknown[]; requests: Array<{ song: { id: string }; by: string }> }
-function roomServer() {
+interface Room { host_name: string; song: unknown; position: number; playing: boolean; updated_at: string; queue: unknown[]; requests: Array<{ song: { id: string }; by: string }>; messages: Array<{ by: string; text: string; at: string; id?: string }> }
+/** Where the stand-in live line is (what /api/room's `live` names). */
+const LINE = { url: 'wss://e2e.supabase.co/realtime/v1', key: 'sb_publishable_e2e' };
+function roomServer(opts: { line?: boolean; pushDelayMs?: number } = {}) {
   const rooms = new Map<string, Room>();
   const members = new Map<string, Map<string, number>>();
+  /** 1.13 — the phones on the room's live line: what one says, the others hear. */
+  const sockets = new Set<{ send(data: string): void }>();
   return {
     rooms,
+    line: opts.line === true,
+    /** How long a host push takes to reach this server (ms): the live line must not wait for it. */
+    pushDelayMs: opts.pushDelayMs ?? 0,
+    sockets,
     handle(method: string, url: URL, body: Record<string, unknown> | null): unknown {
       if (method === 'GET') {
         const code = url.searchParams.get('code') ?? '';
         const r = rooms.get(code) ?? null;
         const live = [...(members.get(code)?.values() ?? [])].filter((t) => Date.now() - t < 12_000).length;
-        return { room: r, memberCount: live, reactions: [], now: Date.now(), took: 0 };
+        return { room: r, memberCount: live, reactions: [], now: Date.now(), took: 0, ...(opts.line ? { live: LINE } : {}) };
       }
       const code = String(body?.code ?? '');
       switch (body?.action) {
         case 'create': {
-          rooms.set('ABC123', { host_name: String(body.hostName ?? ''), song: roomSong(body.song), position: 0, playing: false, updated_at: new Date().toISOString(), queue: [], requests: [] });
+          rooms.set('ABC123', { host_name: String(body.hostName ?? ''), song: roomSong(body.song), position: 0, playing: false, updated_at: new Date().toISOString(), queue: [], requests: [], messages: [] });
           return { code: 'ABC123', hostToken: 'tok' };
         }
         case 'update': {
@@ -101,6 +115,13 @@ function roomServer() {
         case 'heartbeat': {
           if (!members.has(code)) members.set(code, new Map());
           members.get(code)!.set(String(body.deviceId), Date.now());
+          return { ok: true };
+        }
+        case 'say': {
+          const r = rooms.get(code);
+          if (!r) return { __status: 404 };
+          const id = typeof body.id === 'string' ? body.id : undefined;
+          if (!id || !r.messages.some((m) => m.id === id)) r.messages.push({ by: String(body.name ?? ''), text: String(body.text ?? ''), at: new Date().toISOString(), ...(id ? { id } : {}) });
           return { ok: true };
         }
         case 'end':
@@ -155,6 +176,8 @@ async function open(browser: Browser, base: string, server: ReturnType<typeof ro
     }
     if (url.pathname === '/api/room') {
       const body = req.method() === 'POST' ? (JSON.parse(req.postData() ?? 'null') as Record<string, unknown>) : null;
+      // A host push that is slow to arrive: the server knows nothing of it meanwhile.
+      if (body?.action === 'update' && server.pushDelayMs) await new Promise((r) => setTimeout(r, server.pushDelayMs));
       const out = server.handle(req.method(), url, body) as { __status?: number };
       return route.fulfill({ status: out.__status ?? 200, json: out });
     }
@@ -168,6 +191,20 @@ async function open(browser: Browser, base: string, server: ReturnType<typeof ro
     if (url.pathname.startsWith('/api/')) return route.fulfill({ json: {} });
     return route.continue();
   });
+  // 1.13 — the live line: Supabase Realtime's channel protocol, as much of it
+  // as the app speaks. A join and a heartbeat are answered; a broadcast is
+  // handed to every OTHER phone on the line (the app joins with self: false).
+  if (server.line) {
+    await page.routeWebSocket(/e2e\.supabase\.co\/realtime\/v1\/websocket/, (ws) => {
+      server.sockets.add(ws);
+      ws.onClose(() => void server.sockets.delete(ws));
+      ws.onMessage((raw) => {
+        const m = JSON.parse(String(raw)) as { topic: string; event: string; payload: unknown; ref: string };
+        if (m.event === 'phx_join' || m.event === 'heartbeat') ws.send(JSON.stringify({ topic: m.topic, event: 'phx_reply', payload: { status: 'ok', response: {} }, ref: m.ref }));
+        else if (m.event === 'broadcast') for (const other of server.sockets) if (other !== ws) other.send(JSON.stringify({ topic: m.topic, event: 'broadcast', payload: m.payload, ref: null }));
+      });
+    });
+  }
   return page;
 }
 
@@ -280,6 +317,151 @@ test('a guest follows the host across pages, in sync, and its request is playabl
 
   await host.context().close();
   await guest.context().close();
+});
+
+test('with the live line, a pause, a chat line, "typing" and a reaction reach the guest as they happen', async ({ browser, baseURL }) => {
+  const base = baseURL!;
+  // Every host push takes 3 s to reach the server: by polling alone the guest
+  // could not hear of a pause before then.
+  const server = roomServer({ line: true, pushDelayMs: 3000 });
+  const host = await open(browser, base, server, 'Asha', [appSong(base, 'a', 'Song A'), appSong(base, 'b', 'Song B')]);
+  const guest = await open(browser, base, server, 'Ravi', []);
+
+  await host.goto('/together');
+  await host.getByRole('button', { name: 'Start a session' }).click();
+  await expect(host.locator('.vx-lt-code')).toHaveText('ABC123');
+  await host.getByRole('button', { name: /^Play$/ }).first().click();
+  await expect.poll(async () => (await audioState(host))?.paused, { timeout: 10_000 }).toBe(false);
+  await expect.poll(() => server.rooms.get('ABC123')?.playing ?? false, { timeout: 15_000 }).toBe(true);
+
+  await guest.goto('/together?code=ABC123');
+  await expect(guest.locator('.vx-lt-status')).toBeVisible({ timeout: 10_000 });
+  await startListeningIfAsked(guest);
+  await expect.poll(async () => (await audioState(guest))?.paused, { timeout: 15_000 }).toBe(false);
+  // Both are on the line: the room says so.
+  await expect(host.locator('.vx-lt-instant')).toBeVisible({ timeout: 10_000 });
+  await expect(guest.locator('.vx-lt-instant')).toBeVisible({ timeout: 10_000 });
+  await expect.poll(() => gap(host, guest), { timeout: 25_000, intervals: [500] }).toBeLessThan(0.15);
+
+  // The host pauses. The server will not know for 3 s; the guest stops now,
+  // where the host stopped…
+  await host.getByRole('button', { name: /^Pause$/ }).first().click();
+  await expect.poll(async () => (await audioState(guest))?.paused, { timeout: 1500, intervals: [50] }).toBe(true);
+  expect(server.rooms.get('ABC123')?.playing).toBe(true);
+  await expect.poll(() => gap(host, guest), { timeout: 2000, intervals: [100] }).toBeLessThan(0.1);
+  // …and the polls that still say "playing" meanwhile do not start it again.
+  await guest.waitForTimeout(2500);
+  expect((await audioState(guest))?.paused).toBe(true);
+  // Play again: the guest is back with the host at once.
+  await expect.poll(() => server.rooms.get('ABC123')?.playing, { timeout: 10_000 }).toBe(false);
+  await host.getByRole('button', { name: /^Play$/ }).first().click();
+  await expect.poll(async () => (await audioState(guest))?.paused, { timeout: 1500, intervals: [50] }).toBe(false);
+  await expect.poll(() => gap(host, guest), { timeout: 25_000, intervals: [500] }).toBeLessThan(0.1);
+
+  // Chat. The guest sees that the host is typing, then the line: once, also
+  // after the server has listed it; the host's own line is on its right.
+  const hostChat = host.getByRole('textbox', { name: 'Chat message' });
+  await hostChat.pressSequentially('hello ravi', { delay: 20 });
+  await expect(guest.locator('.vx-lt-typing')).toContainText('Asha is typing', { timeout: 2000 });
+  await host.getByRole('button', { name: 'Send' }).click();
+  await expect(host.locator('.vx-lt-msg[data-mine] .vx-lt-bubble')).toHaveText('hello ravi');
+  await expect(guest.locator('.vx-lt-msg:not([data-mine]) .vx-lt-bubble')).toHaveText('hello ravi', { timeout: 2000 });
+  await expect(guest.locator('.vx-lt-msg').first()).toContainText('Asha');
+  await expect(guest.locator('.vx-lt-typing')).toHaveText('');
+  await guest.getByRole('textbox', { name: 'Chat message' }).fill('hi asha');
+  await guest.getByRole('textbox', { name: 'Chat message' }).press('Enter');
+  await expect(host.locator('.vx-lt-msg:not([data-mine]) .vx-lt-bubble')).toHaveText('hi asha', { timeout: 2000 });
+  // Two polls later each screen still shows each line once, and whose it is.
+  await host.waitForTimeout(4500);
+  await expect(host.locator('.vx-lt-bubble')).toHaveText(['hello ravi', 'hi asha']);
+  await expect(guest.locator('.vx-lt-bubble')).toHaveText(['hello ravi', 'hi asha']);
+  await expect(host.locator('.vx-lt-msg[data-mine] .vx-lt-bubble')).toHaveText('hello ravi');
+  await expect(guest.locator('.vx-lt-msg[data-mine] .vx-lt-bubble')).toHaveText('hi asha');
+
+  // A reaction rises over the whole screen on the guest too, with who sent
+  // it, and fills the room's energy on both.
+  await host.getByRole('button', { name: 'React 🔥' }).click();
+  await expect(guest.locator('.vx-lt-sky .vx-lt-fly-by')).toHaveText('Asha', { timeout: 2000 });
+  await expect(guest.getByRole('meter', { name: 'Room energy' })).toHaveAttribute('aria-valuenow', /^[1-9]/);
+  const sky = await guest.locator('.vx-lt-sky').boundingBox();
+  const view = guest.viewportSize()!;
+  expect(sky?.width).toBe(view.width);
+  expect(sky?.height).toBe(view.height);
+  // …and on any other page of the app.
+  await guest.getByRole('link', { name: /^Search$/ }).first().click();
+  await expect(guest.locator('.vx-lt-pill')).toBeVisible();
+  await host.getByRole('button', { name: 'React ❤️' }).click();
+  await expect(guest.locator('.vx-lt-sky .vx-lt-fly').first()).toBeVisible({ timeout: 2000 });
+
+  // Ten reactions together fill the bar: the room goes off on both screens.
+  for (let i = 0; i < 10; i += 1) await host.getByRole('button', { name: 'React 🎉' }).click();
+  await expect(guest.locator('.vx-lt-burst')).toBeVisible({ timeout: 3000 });
+  await expect(host.locator('.vx-lt-burst')).toBeVisible();
+
+  await host.context().close();
+  await guest.context().close();
+});
+
+test('the Listen Together pill can be dragged out of the way, stays there, and a tap still opens the room', async ({ browser, baseURL }) => {
+  const base = baseURL!;
+  const server = roomServer();
+  const host = await open(browser, base, server, 'Asha', [appSong(base, 'a', 'Song A')]);
+  await host.goto('/together');
+  await host.getByRole('button', { name: 'Start a session' }).click();
+  await expect(host.locator('.vx-lt-code')).toHaveText('ABC123');
+  await host.getByRole('link', { name: /^Search$/ }).first().click();
+  const pill = host.locator('.vx-lt-pill');
+  await expect(pill).toContainText('Hosting');
+  // The pill sits above the player, which takes a moment to reach its height.
+  const settled = async () => {
+    let a = await pill.boundingBox();
+    for (;;) {
+      await host.waitForTimeout(200);
+      const b = await pill.boundingBox();
+      if (a && b && Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5) return b;
+      a = b;
+    }
+  };
+  const start = await settled();
+
+  // Drag it to the top left.
+  await host.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+  await host.mouse.down();
+  await host.mouse.move(400, 300, { steps: 8 });
+  await host.mouse.move(120 + start.width / 2, 140 + start.height / 2, { steps: 8 });
+  await host.mouse.up();
+  const moved = (await pill.boundingBox())!;
+  expect(Math.abs(moved.x - 120)).toBeLessThan(4);
+  expect(Math.abs(moved.y - 140)).toBeLessThan(4);
+  // Letting go is not a tap: the listener is still on Search.
+  await host.waitForTimeout(400);
+  expect(new URL(host.url()).pathname).toBe('/search');
+
+  // It cannot be dragged off the screen.
+  await host.mouse.move(moved.x + moved.width / 2, moved.y + moved.height / 2);
+  await host.mouse.down();
+  await host.mouse.move(-400, -400, { steps: 6 });
+  await host.mouse.up();
+  const edge = (await pill.boundingBox())!;
+  expect(edge.x).toBeGreaterThanOrEqual(0);
+  expect(edge.y).toBeGreaterThanOrEqual(0);
+
+  // It is where it was left after a reload, and on a smaller window it is still on screen.
+  await host.reload();
+  await expect(pill).toContainText('Hosting');
+  const kept = (await pill.boundingBox())!;
+  expect(Math.abs(kept.x - edge.x)).toBeLessThan(4);
+  expect(Math.abs(kept.y - edge.y)).toBeLessThan(4);
+  await host.setViewportSize({ width: 390, height: 780 });
+  const small = (await pill.boundingBox())!;
+  expect(small.x).toBeGreaterThanOrEqual(0);
+  expect(small.x + small.width).toBeLessThanOrEqual(390);
+  await host.setViewportSize({ width: 1280, height: 860 });
+
+  // A tap still opens the room.
+  await pill.click();
+  await expect(host).toHaveURL(/\/together$/);
+  await host.context().close();
 });
 
 test('a host who reloads the tab is still hosting', async ({ browser, baseURL }) => {

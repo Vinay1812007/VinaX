@@ -1598,31 +1598,6 @@ html.reduce-motion *::after {
   [data-line] { transition: opacity 0.2s ease !important; transform: none !important; filter: none !important; }
 }
 
-/* Package D11 — Listen Together floating reactions. Rises + fades when motion
-   is welcome; a gentle in-place fade when the listener prefers reduced motion. */
-.vx-react {
-  position: absolute;
-  bottom: 10px;
-  font-size: 26px;
-  opacity: 0;
-  will-change: transform, opacity;
-}
-@media (prefers-reduced-motion: no-preference) {
-  .vx-react { animation: vx-react-float 2.4s ease-out forwards; }
-  @keyframes vx-react-float {
-    0% { opacity: 0; transform: translateY(0) scale(0.7); }
-    12% { opacity: 1; }
-    100% { opacity: 0; transform: translateY(-150px) scale(1.15); }
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .vx-react { animation: vx-react-fade 2.4s ease-out forwards; }
-  @keyframes vx-react-fade {
-    0% { opacity: 0.9; }
-    100% { opacity: 0; }
-  }
-}
-
 /* ============================================================================
    High-contrast preference (delta audit P3-33) — strengthen the two places
    the Living Glass aesthetic runs closest to the wire: hairline borders and

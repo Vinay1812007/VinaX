@@ -5,7 +5,9 @@ import { ArtistAvatar } from '@/features/stats/artwork';
 import { useCurrentSong } from '@/store/playerStore';
 import { REACTION_EMOJI } from '@/services/together';
 import { useTogether } from '@/services/together/session';
-import { addSong, getTrimMs, joinSession, leaveSession, react, say, setTrimMs, startHosting, tapToListen, TRIM_MAX_MS, voteToSkip } from '@/features/together/engine';
+import { addSong, getTrimMs, joinSession, leaveSession, react, setTrimMs, startHosting, tapToListen, TRIM_MAX_MS, voteToSkip } from '@/features/together/engine';
+import { Chat } from '@/features/together/Chat';
+import { ENERGY_FULL, useRoom } from '@/features/together/room';
 import { JoinRoom } from '@/features/together/JoinRoom';
 import { OpenInApp } from '@/features/together/OpenInApp';
 import { useInviteQr } from '@/features/together/useInviteQr';
@@ -167,11 +169,35 @@ function SyncBadge(): ReactNode {
               : Math.abs(drift) < 0.1
                 ? 'Live · in sync'
                 : 'Live · catching up…';
+  // 1.13 — the live line is up: what the host does is heard here at once.
+  const online = useRoom((s) => s.online);
   return (
     <p className="vx-lt-status" data-status={status} role="status" data-tour="lt-status">
       <span className="vx-lt-dot" aria-hidden />
       {text}
+      {online && status === 'live' && <span className="vx-lt-instant">Instant</span>}
     </p>
+  );
+}
+
+/**
+ * 1.13 — the room's energy. Every reaction anyone sends fills it a little and
+ * it fades when the room goes quiet; fill it together and the whole room goes
+ * off: everyone's emoji, across every screen, at the same moment.
+ */
+function Energy(): ReactNode {
+  const energy = useRoom((s) => s.energy);
+  const bursting = useRoom((s) => s.bursting);
+  return (
+    <div className="vx-lt-energy" data-full={bursting ? 'true' : undefined}>
+      <div className="vx-lt-energy-top">
+        <span className="vx-lt-kicker">Room energy</span>
+        <span className="vx-lt-energy-hint">{bursting ? 'The room went off!' : energy > 0 ? 'Keep them coming' : 'React together to set the room off'}</span>
+      </div>
+      <div className="vx-lt-energy-bar" role="meter" aria-label="Room energy" aria-valuemin={0} aria-valuemax={ENERGY_FULL} aria-valuenow={bursting ? ENERGY_FULL : energy}>
+        <i style={{ width: `${bursting ? 100 : (energy / ENERGY_FULL) * 100}%` }} />
+      </div>
+    </div>
   );
 }
 
@@ -271,15 +297,11 @@ function Live(): ReactNode {
   const code = useTogether((s) => s.code);
   const members = useTogether((s) => s.members);
   const names = useTogether((s) => s.names);
-  const messages = useTogether((s) => s.messages);
   const skipVotes = useTogether((s) => s.skipVotes);
   const played = useTogether((s) => s.played);
   const listenerCount = useTogether((s) => s.listenerCount);
   const hostName = useTogether((s) => s.hostName);
-  const [chat, setChat] = useState('');
   const roomToured = useTutorialStore((s) => s.done.includes('together-room'));
-  const chatEnd = useRef<HTMLLIElement>(null);
-  useEffect(() => { chatEnd.current?.scrollIntoView({ block: 'nearest' }); }, [messages.length]);
   const saveSession = () => {
     if (!played.length) { toast('Nothing has played yet'); return; }
     const lib = useLibraryStore.getState();
@@ -289,7 +311,6 @@ function Live(): ReactNode {
     toast(`Saved ${played.length} song${played.length === 1 ? '' : 's'} as a playlist`);
   };
   const queue = useTogether((s) => s.queue);
-  const floats = useTogether((s) => s.floats);
   const needsTap = useTogether((s) => s.needsTap);
   const hostSong = useTogether((s) => s.hostSong);
   const unplayable = useTogether((s) => s.unplayable);
@@ -310,11 +331,6 @@ function Live(): ReactNode {
   return (
     <div className="vx-sec is-narrow vx-lt is-live">
       <section className="vx-lt-room" aria-label="Room" style={art ? { ['--lt-art' as string]: `url("${art}")` } : undefined}>
-        <div aria-hidden className="vx-lt-floats">
-          {floats.map((f) => (
-            <span key={f.id} className="vx-react" style={{ left: `${f.left}%` }}>{f.e}</span>
-          ))}
-        </div>
         <SyncBadge />
         <div className="vx-lt-room-main">
           {current ? (
@@ -368,6 +384,7 @@ function Live(): ReactNode {
             ⏭{skipVotes > 0 && <span className="vx-react-count">{skipVotes}</span>}
           </button>
         </div>
+        <Energy />
       </section>
 
       {/* 1.12.12 — a tour of this room's real controls, offered until it has been taken. */}
@@ -378,21 +395,8 @@ function Live(): ReactNode {
         </button>
       </div>
 
-      {/* 15.0 — the room's chat: forty lines, everyone sees them on their next poll. */}
-      <section className="vx-lt-block" aria-labelledby="vx-lt-chat">
-        <h2 id="vx-lt-chat" className="vx-lt-h2">Chat</h2>
-        <ul className="vx-lt-chat" aria-live="polite">
-          {messages.length === 0 && <li className="vx-lt-foot">Say hello — everyone in the room sees it.</li>}
-          {messages.map((m, i) => (
-            <li key={`${m.at}-${i}`} className="vx-lt-line"><b>{m.by}</b> {m.text}</li>
-          ))}
-          <li ref={chatEnd} aria-hidden />
-        </ul>
-        <form className="vx-lt-chat-form" data-tour="lt-chat" onSubmit={(e) => { e.preventDefault(); const t = chat.trim(); if (!t) return; setChat(''); void say(t).then((ok) => { if (!ok) toast('Could not send that'); }); }}>
-          <input value={chat} onChange={(e) => setChat(e.target.value)} maxLength={200} placeholder="Say something" aria-label="Chat message" className="vx-lt-code-input is-chat" />
-          <button type="submit" className="vx-sec-pill" disabled={!chat.trim()}>Send</button>
-        </form>
-      </section>
+      {/* 15.0 — the room's chat. 1.13: instant, with who is typing (features/together/Chat). */}
+      <Chat />
 
       <AddSong label={mode === 'host' ? 'Add to the queue' : 'Add a song for everyone'} />
 

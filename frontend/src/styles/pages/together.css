@@ -165,7 +165,6 @@ html.light .vx-lt-room::before {
     linear-gradient(180deg, rgb(var(--ink-950) / 0.6), rgb(var(--ink-950) / 0.94) 70%),
     var(--lt-art, radial-gradient(400px 260px at 20% 0%, rgb(var(--ember-500) / 0.18), transparent 70%)) center / cover;
 }
-.vx-lt-floats { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
 
 .vx-lt-status {
   display: inline-flex;
@@ -246,7 +245,27 @@ html.reduce-motion .vx-lt-tap { animation: none; }
   z-index: 45;
   max-width: calc(100vw - 32px);
   transform: translateX(-50%);
+  /* 1.13 — it can be dragged anywhere (TogetherController useMovable). */
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
+/* Where it was dragged to: --pill-x / --pill-y are 0…1 across and down the
+   screen. The translate takes the same share of the pill's own size back, so
+   0 is against one edge, 1 against the other, and it never leaves the screen
+   however the window is resized. */
+.vx-lt-pill[data-moved] {
+  left: calc(8px + (100vw - 16px) * var(--pill-x));
+  top: calc(8px + (100vh - 16px) * var(--pill-y));
+  top: calc(8px + (100dvh - 16px) * var(--pill-y));
+  right: auto;
+  bottom: auto;
+  transform: translate(calc(-100% * var(--pill-x)), calc(-100% * var(--pill-y)));
+}
+.vx-lt-pill[data-dragging] { cursor: grabbing; z-index: 95; }
+.vx-lt-pill[data-dragging] > * { transform: scale(1.05); box-shadow: inset 0 0 0 1px var(--glass-border-strong), 0 22px 40px -14px rgb(0 0 0 / 0.7); }
 @media (min-width: 768px) {
   .vx-lt-pill { left: auto; right: 24px; bottom: calc(var(--vx-player-h, 76px) + 28px); transform: none; }
 }
@@ -297,11 +316,137 @@ html.reduce-motion .vx-lt-pill { animation: none; }
 .vx-lt-reacts .vx-react-btn { width: 44px; height: 44px; font-size: 19px; }
 @media (min-width: 420px) { .vx-lt-reacts .vx-react-btn { width: 48px; height: 48px; font-size: 20px; } }
 
-/* 15.0 — chat, vote-to-skip and the session's songs. */
-.vx-lt-chat { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; padding: 4px 0; }
-.vx-lt-line { font-size: 14px; line-height: 1.4; color: rgb(var(--ink-200)); overflow-wrap: anywhere; }
-.vx-lt-line b { color: rgb(var(--ember-400)); font-weight: 700; margin-right: 4px; }
-.vx-lt-chat-form { display: flex; gap: 8px; margin-top: 10px; }
+/* 15.0 — chat, vote-to-skip and the session's songs.
+   1.13 — the chat is a panel of bubbles: other people's on the left under
+   their name, yours on the right; only the panel scrolls. */
+.vx-lt-chatbox { padding: 14px; border-radius: var(--vx-radius-panel); background: var(--lt-card); box-shadow: inset 0 0 0 1px var(--lt-line); }
+.vx-lt-chat {
+  display: flex;
+  flex-direction: column;
+  height: clamp(180px, 38vh, 340px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px 4px 6px;
+  scrollbar-width: thin;
+}
+.vx-lt-chat-empty { margin: auto; color: rgb(var(--ink-400)); font-size: 14px; text-align: center; }
+.vx-lt-msg { display: flex; flex-direction: column; align-items: flex-start; max-width: 84%; margin-top: 12px; }
+.vx-lt-msg:first-child { margin-top: auto; }
+.vx-lt-msg[data-joined] { margin-top: 3px; }
+.vx-lt-msg[data-mine] { align-self: flex-end; align-items: flex-end; }
+.vx-lt-msg-by { margin: 0 0 4px 12px; color: rgb(var(--ember-400)); font-size: 12px; font-weight: 750; }
+.vx-lt-bubble {
+  padding: 8px 14px;
+  border-radius: 18px;
+  background: rgb(var(--ink-100) / 0.08);
+  color: rgb(var(--ink-100));
+  font-size: 15px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.vx-lt-msg[data-mine] .vx-lt-bubble { background: rgb(var(--ember-500)); color: var(--vx-on-accent); }
+.vx-lt-msg[data-state='sending'] .vx-lt-bubble { opacity: 0.7; }
+.vx-lt-msg[data-state='failed'] .vx-lt-bubble { opacity: 0.6; }
+.vx-lt-msg-meta { margin: 4px 10px 0; color: rgb(var(--ink-400)); font-size: 11px; font-variant-numeric: tabular-nums; }
+.vx-lt-msg-retry { min-height: 36px; padding: 0 10px; color: rgb(var(--tide-400)); font-size: 12.5px; font-weight: 750; }
+@media (prefers-reduced-motion: no-preference) {
+  .vx-lt-msg { animation: vx-lt-msg-in 180ms var(--ease-calm) both; }
+}
+html.reduce-motion .vx-lt-msg { animation: none; }
+@keyframes vx-lt-msg-in { from { opacity: 0; translate: 0 6px; } to { opacity: 1; translate: 0 0; } }
+/* Who is typing. The line keeps its height, so the field never jumps. */
+.vx-lt-typing { display: flex; align-items: center; gap: 8px; min-height: 24px; padding-left: 8px; color: rgb(var(--ink-300)); font-size: 12.5px; font-weight: 650; }
+.vx-lt-typing-dots { display: inline-flex; gap: 3px; }
+.vx-lt-typing-dots i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: 0.5; }
+@media (prefers-reduced-motion: no-preference) {
+  .vx-lt-typing-dots i { animation: vx-lt-typing 1.1s ease-in-out infinite; }
+  .vx-lt-typing-dots i:nth-child(2) { animation-delay: 0.15s; }
+  .vx-lt-typing-dots i:nth-child(3) { animation-delay: 0.3s; }
+}
+html.reduce-motion .vx-lt-typing-dots i { animation: none; }
+@keyframes vx-lt-typing { 0%, 60%, 100% { opacity: 0.35; translate: 0 0; } 30% { opacity: 1; translate: 0 -3px; } }
+.vx-lt-chat-form { display: flex; gap: 8px; margin-top: 4px; }
+.vx-lt-send {
+  min-height: 52px;
+  padding: 0 20px;
+  border-radius: 14px;
+  background: rgb(var(--ember-500));
+  color: var(--vx-on-accent);
+  font-size: 15px;
+  font-weight: 800;
+  transition: opacity 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+}
+.vx-lt-send:active { transform: scale(0.97); }
+.vx-lt-send:disabled { opacity: 0.45; pointer-events: none; }
+
+/* 1.13 — "Instant": the live line is up. */
+.vx-lt-instant { padding: 2px 8px; border-radius: 9999px; background: rgb(var(--tide-500) / 0.22); font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+
+/* 1.13 — the room's energy: reactions fill it, a full bar sets the room off. */
+.vx-lt-energy { margin-top: 18px; }
+.vx-lt-energy-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; }
+.vx-lt-energy-hint { color: rgb(var(--ink-300)); font-size: 12.5px; }
+.vx-lt-energy-bar { height: 8px; margin-top: 8px; overflow: hidden; border-radius: 9999px; background: rgb(var(--ink-100) / 0.1); }
+.vx-lt-energy-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, rgb(var(--ember-500)), rgb(var(--tide-500))); transition: width 380ms var(--ease-calm); }
+html.reduce-motion .vx-lt-energy-bar i { transition: none; }
+
+/* 1.13 — reactions rise over the whole screen (portalled to <body>). */
+.vx-lt-sky { position: fixed; inset: 0; z-index: 85; overflow: hidden; pointer-events: none; }
+.vx-lt-fly {
+  position: absolute;
+  /* Reduced motion: each appears where it is and fades. */
+  bottom: calc(42vh + var(--lean, 0px) * 4);
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  line-height: 1;
+  opacity: 0;
+  animation: vx-lt-fade both;
+  will-change: transform, opacity;
+}
+.vx-lt-fly-by {
+  max-width: 132px;
+  padding: 3px 9px;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: rgb(0 0 0 / 0.6);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@keyframes vx-lt-fade { 0% { opacity: 0; } 15%, 70% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: no-preference) {
+  html:not(.reduce-motion) .vx-lt-fly { bottom: -96px; animation-name: vx-lt-fly; animation-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1); }
+}
+@keyframes vx-lt-fly {
+  0% { opacity: 0; transform: translate3d(0, 0, 0) scale(0.6) rotate(0deg); }
+  8% { opacity: 1; }
+  72% { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(var(--lean, 0px), calc(-100vh - 96px), 0) scale(1.15) rotate(10deg); }
+}
+/* The room went off. */
+.vx-lt-burst {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  max-width: calc(100vw - 32px);
+  padding: 12px 22px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, rgb(var(--ember-500)), rgb(var(--tide-500)));
+  box-shadow: 0 18px 44px -16px rgb(var(--ember-500) / 0.9);
+  color: #fff;
+  font-family: var(--vx-font-display);
+  font-size: clamp(16px, 4.4vw, 22px);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  text-align: center;
+  translate: -50% 0;
+  animation: vx-lt-burst 3.6s var(--ease-calm) both;
+}
+@keyframes vx-lt-burst { 0% { opacity: 0; scale: 0.8; } 8% { opacity: 1; scale: 1.04; } 14% { scale: 1; } 85% { opacity: 1; } 100% { opacity: 0; scale: 0.98; } }
+html.reduce-motion .vx-lt-burst { animation-name: vx-lt-fade; }
 .vx-lt-code-input.is-chat { flex: 1; letter-spacing: 0; text-transform: none; font-family: inherit; font-size: 15px; text-align: left; }
 .vx-react-btn.is-skip { position: relative; font-size: 18px; }
 .vx-react-count { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: rgb(var(--ember-500)); color: var(--vx-on-accent); font-size: 11px; font-weight: 800; line-height: 18px; }
