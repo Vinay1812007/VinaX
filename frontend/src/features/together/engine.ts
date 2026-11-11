@@ -62,8 +62,9 @@ import {
   type RoomTrack,
 } from '@/services/together';
 import { useTogether } from '@/services/together/session';
-import { usePlayerStore } from '@/store/playerStore';
+import { setRoomAsk, usePlayerStore } from '@/store/playerStore';
 import { toast } from '@/store/toastStore';
+import { bestImage } from '@/utils/images';
 import type { Song } from '@/types';
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal, setLocal } from '@/services/storage/local';
@@ -423,7 +424,8 @@ function runHost(code: string): () => void {
     }
     requestedBy.set(song.id, who);
     usePlayerStore.getState().enqueue(song);
-    toast(`${who} added “${song.title}”`);
+    // The song is in Up next; the host can also bring it on now.
+    toast(`${who} asked for “${song.title}”`, { image: bestImage(song.images, 100), duration: 8000, action: { label: 'Play now', onClick: () => playNow(song.id) } });
   };
 
   const poll = async (): Promise<void> => {
@@ -590,7 +592,8 @@ function inSong(seconds: number, duration: number): number {
 /** Guest: start `song` where the host is, and note the start so its landing is measured. */
 function startInPlace(song: Song): void {
   const at = startPosition(song.id);
-  usePlayerStore.getState().playSong(song, { startAt: at });
+  // `room`: this play is the room's, not a song the listener tapped (see ask()).
+  usePlayerStore.getState().playSong(song, { startAt: at, room: true });
   trackStartedAt = performance.now();
   landing = at > 0 && clock.isPlaying ? { lead: startLead, at: trackStartedAt } : null;
 }
@@ -657,6 +660,9 @@ function runGuest(code: string): () => void {
   const nudge = new RateNudge();
   const player = usePlayerStore.getState();
   player.setFollowMode(true);
+  // A song tapped or queued anywhere in the app is asked of the host.
+  asked.clear();
+  setRoomAsk((song) => void ask(song));
 
   // Fine sync: between polls the host's playhead is projected locally, so the
   // guest can be compared with it several times a second.
@@ -878,6 +884,7 @@ function runGuest(code: string): () => void {
     window.clearInterval(iv);
     window.clearInterval(fineIv);
     window.removeEventListener('pagehide', onHide);
+    setRoomAsk(null);
     dropLine();
     // Back to the listener's own playback speed.
     audioEngine.setRate(usePlayerStore.getState().rate || 1);
@@ -988,13 +995,47 @@ export function leaveSession(): void {
 
 /** Guest asks for a song; host just queues it. Returns a message for a toast. */
 export async function addSong(song: Song): Promise<string> {
-  const { mode, code } = useTogether.getState();
+  const { mode, code, hostName } = useTogether.getState();
   if (mode === 'host') {
     usePlayerStore.getState().enqueue(song);
     return `Added “${song.title}” for everyone`;
   }
+  asked.set(song.id, Date.now());
   const ok = await requestSong(code, song);
   // The host adds requests when it next reads the room: ask it to read now.
   if (ok) line?.send('poke', {});
-  return ok ? `Sent — “${song.title}” joins the queue in a moment` : `Couldn’t send “${song.title}” — try again`;
+  else asked.delete(song.id);
+  return ok ? `Asked ${hostName ?? 'the host'} for “${song.title}” — it joins Up next in a moment` : `Couldn’t send “${song.title}” — try again`;
+}
+
+/** Guest: the songs asked for lately (id → when), so a second tap does not ask twice. */
+const asked = new Map<string, number>();
+const ASKED_AGAIN_MS = 60_000;
+
+/**
+ * 1.13 — a guest taps (or queues) a song anywhere in the app: Home, Search,
+ * an album. The host picks the music, so the tap becomes a request to the
+ * room; before, the song played here for a second and the room took it away.
+ */
+export async function ask(song: Song): Promise<void> {
+  const st = useTogether.getState();
+  if (st.mode !== 'guest') return;
+  const image = bestImage(song.images, 100);
+  if (st.hostSong?.id === song.id) {
+    toast(`“${song.title}” is playing in the room now`, { image, key: 'lt-ask' });
+    return;
+  }
+  if (st.queue.some((t) => t.song.id === song.id) || Date.now() - (asked.get(song.id) ?? 0) < ASKED_AGAIN_MS) {
+    toast(`“${song.title}” is already on its way in the room`, { image, key: 'lt-ask' });
+    return;
+  }
+  toast(await addSong(song), { image, key: 'lt-ask' });
+}
+
+/** Host: bring a song that is up next on now (a guest's request, say). */
+export function playNow(id: string): void {
+  const st = usePlayerStore.getState();
+  if (useTogether.getState().mode !== 'host') return;
+  const i = st.queue.findIndex((s, n) => n > st.index && s.id === id);
+  if (i > 0) st.playAt(i);
 }

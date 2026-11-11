@@ -5,7 +5,7 @@ import { ArtistAvatar } from '@/features/stats/artwork';
 import { useCurrentSong } from '@/store/playerStore';
 import { REACTION_EMOJI } from '@/services/together';
 import { useTogether } from '@/services/together/session';
-import { addSong, getTrimMs, joinSession, leaveSession, react, setTrimMs, startHosting, tapToListen, TRIM_MAX_MS, voteToSkip } from '@/features/together/engine';
+import { addSong, getTrimMs, joinSession, leaveSession, playNow, react, setTrimMs, startHosting, tapToListen, TRIM_MAX_MS, voteToSkip } from '@/features/together/engine';
 import { Chat } from '@/features/together/Chat';
 import { ENERGY_FULL, useRoom } from '@/features/together/room';
 import { JoinRoom } from '@/features/together/JoinRoom';
@@ -90,7 +90,7 @@ function Intro({ onClose }: { onClose: () => void }): ReactNode {
   );
 }
 
-function AddSong({ label }: { label: string }): ReactNode {
+function AddSong({ label, note }: { label: string; note?: string }): ReactNode {
   const [q, setQ] = useState('');
   const [results, setResults] = useState<Song[]>([]);
   const [sending, setSending] = useState<string | null>(null);
@@ -108,6 +108,7 @@ function AddSong({ label }: { label: string }): ReactNode {
   return (
     <section className="vx-lt-block" aria-label={label}>
       <h2 className="vx-lt-h2">{label}</h2>
+      {note && <p className="vx-lt-note">{note}</p>}
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
@@ -398,7 +399,11 @@ function Live(): ReactNode {
       {/* 15.0 — the room's chat. 1.13: instant, with who is typing (features/together/Chat). */}
       <Chat />
 
-      <AddSong label={mode === 'host' ? 'Add to the queue' : 'Add a song for everyone'} />
+      {/* 1.13 — a guest can also ask from anywhere: any song tapped in the app is sent to the host. */}
+      <AddSong
+        label={mode === 'host' ? 'Add to the queue' : 'Add a song for everyone'}
+        note={mode === 'guest' ? `Ask ${hostName ?? 'the host'} to play a song: search here, or tap any song anywhere in VinaX.` : undefined}
+      />
 
       {queue.length > 0 && (
         <section className="vx-lt-block" aria-label="Up next">
@@ -409,8 +414,14 @@ function Live(): ReactNode {
                 <img src={bestImage(t.song.images, 100)} alt="" className="vx-row-art" loading="lazy" />
                 <span className="vx-row-main">
                   <span className="vx-row-label truncate-1">{t.song.title}</span>
-                  <span className="vx-row-hint truncate-1">{t.by ? `Added by ${t.by}` : t.song.subtitle}</span>
+                  <span className="vx-row-hint truncate-1">{t.by ? `Asked by ${t.by}` : t.song.subtitle}</span>
                 </span>
+                {/* The host can bring any song that is up next (a guest's request, say) on now. */}
+                {mode === 'host' && (
+                  <button type="button" className="vx-sec-pill vx-lt-now" onClick={() => playNow(t.song.id)} aria-label={`Play ${t.song.title} now`}>
+                    Play now
+                  </button>
+                )}
               </li>
             ))}
           </ul>

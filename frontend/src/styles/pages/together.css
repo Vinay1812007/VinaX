@@ -233,6 +233,9 @@ html.reduce-motion .vx-lt-tap { animation: none; }
 .vx-lt-trim-value { min-width: 76px; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 750; font-variant-numeric: tabular-nums; text-align: center; }
 .vx-lt-reacts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 .vx-lt-block { margin-bottom: 40px; }
+/* 1.13 — asking for a song: the line under the heading, and the host's "Play now" on a song that is up next. */
+.vx-lt-block > .vx-lt-note { margin: -6px 0 12px; }
+.vx-lt-now { flex: none; min-height: 36px; padding: 0 14px; font-size: 13px; }
 
 /* ------------------------------------------------------------- the pill */
 /* Floats above the player on every page but /together while a session is

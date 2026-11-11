@@ -92,9 +92,9 @@ export interface PlayerState {
    * the song starts alone and Up Next builds what follows. `keepList` forces
    * the list to become the queue whatever the setting (Queue Builder plans).
    */
-  playQueue(songs: Song[], startIndex?: number, opts?: { keepList?: boolean; asSeed?: boolean; startAt?: number }): void;
+  playQueue(songs: Song[], startIndex?: number, opts?: { keepList?: boolean; asSeed?: boolean; startAt?: number; room?: boolean }): void;
   /** `startAt` (seconds): start part-way in. Listen Together starts a guest where the host is. */
-  playSong(song: Song, opts?: { startAt?: number }): void;
+  playSong(song: Song, opts?: { startAt?: number; room?: boolean }): void;
   /** v6.5.0 — reshape what comes next: keeps what played and the current song, rebuilds the rest for the intent. */
   /** `null` (v7.1.0) drops the active intent and rebuilds what follows without one. */
   tuneQueue(intent: TuneIntent | null): void;
@@ -174,6 +174,17 @@ interface PreviewSnapshot {
   meta: Array<[string, AutoEntryMeta]>;
 }
 let preview: PreviewSnapshot | null = null;
+/**
+ * Listen Together, as a guest: the host picks the music, so a song this
+ * listener taps (or queues) anywhere in the app is ASKED of the host instead
+ * of played here, where the room would take it away a moment later. Set by
+ * the room's engine while this device follows a host; `opts.room` marks the
+ * engine's own plays.
+ */
+let roomAsk: ((song: Song) => void) | null = null;
+export const setRoomAsk = (fn: ((song: Song) => void) | null): void => {
+  roomAsk = fn;
+};
 
 /** V2 — the Up Next engine, loaded once on demand (every caller shares the one import). */
 let nextUpModule: Promise<typeof import('@/services/nextup/engine')> | null = null;
@@ -969,6 +980,7 @@ export const usePlayerStore = create<PlayerState>()(
             toast('Kid mode is on — that song is marked explicit');
             return;
           }
+          if (roomAsk && !opts.room) return roomAsk(seed);
           resetSkipGuard(); // manual play — the user vouches for the sources
           dropPreview();
           finalizePlayback('replaced');
@@ -1003,7 +1015,7 @@ export const usePlayerStore = create<PlayerState>()(
           startTrack(seed, true, { startAt });
         },
 
-        playSong: (song, opts) => get().playQueue([song], 0, opts?.startAt ? { startAt: opts.startAt } : {}),
+        playSong: (song, opts) => get().playQueue([song], 0, { startAt: opts?.startAt || undefined, room: opts?.room }),
 
         tuneQueue: (intent) => {
           if (intent !== null && !isTuneIntent(intent)) return;
@@ -1058,6 +1070,7 @@ export const usePlayerStore = create<PlayerState>()(
             toast('Kid mode is on — that song is marked explicit');
             return;
           }
+          if (roomAsk) return roomAsk(song);
           if (preview) {
             if (queueIntoSnapshot([song], false)) recordQueueAdd(song);
             return;
@@ -1110,6 +1123,7 @@ export const usePlayerStore = create<PlayerState>()(
             toast('Kid mode is on — that song is marked explicit');
             return;
           }
+          if (roomAsk) return roomAsk(song);
           if (preview) {
             if (queueIntoSnapshot([song], true)) recordQueueAdd(song);
             return;

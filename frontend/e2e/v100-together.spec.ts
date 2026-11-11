@@ -284,6 +284,24 @@ test('a guest follows the host across pages, in sync, and its request is playabl
   await guest.getByRole('link', { name: /^Search$/ }).first().click();
   await expect(guest.locator('.vx-lt-pill')).toContainText(/Listening with Asha/);
 
+  // 1.13 — a song the guest taps on another page is ASKED of the host: it
+  // joins the host's queue as a playable song, and the guest's own player
+  // stays on the host's song. (It used to play here for a second, until the
+  // room took it away.)
+  // (The guest is on Search already: "Trending now" lists the catalogue's songs.)
+  await guest.getByRole('button', { name: /^Play Another Pick/ }).first().click();
+  await expect(guest.getByText(/Asked Asha for “Another Pick”/)).toBeVisible({ timeout: 10_000 });
+  await expect
+    .poll(async () => host.evaluate(() => JSON.parse(localStorage.getItem('vinax.player.v1') ?? '{}')?.state?.queue?.map((s: { id: string; audio?: unknown[] }) => `${s.id}:${s.audio?.length ?? 0}`) ?? []), { timeout: 15_000 })
+    .toContain('g2:1');
+  expect((await audioState(guest))?.src ?? '').not.toContain('/t-g2.wav');
+  // The host is told who asked (the song by the catalogue's own name for it)
+  // and can bring it on at once: everyone then hears it.
+  await expect(host.getByText('Ravi asked for “Song g2”')).toBeVisible({ timeout: 10_000 });
+  await host.getByRole('button', { name: 'Play now' }).click();
+  await expect.poll(async () => (await audioState(host))?.src ?? '', { timeout: 10_000 }).toContain('/t-g2.wav');
+  await expect.poll(async () => (await audioState(guest))?.src ?? '', { timeout: 15_000 }).toContain('/t-g2.wav');
+
   // A guest request reaches the host as a full, playable song.
   await guest.goto('/together');
   await guest.getByRole('searchbox', { name: 'Add a song for everyone' }).fill('pick');
