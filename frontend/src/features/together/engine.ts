@@ -21,6 +21,12 @@
  * and plays a few percent faster or slower until they match. Before, a guest
  * within a second of the host was left there, always on the late side.
  *
+ * 1.12.11 — the host keeps the server's clock as well and sends each position
+ * with the server moment it was read at; a guest that pauses or plays with
+ * the host does it in place (a seek while paused is silent); and each device
+ * has a fine-tune (`setTrimMs`) for a speaker that is slow to sound, which no
+ * clock can measure.
+ *
  * The room only NAMES a song (id, title, artwork): the server keeps no stream
  * URLs. So a guest looks the host's song up in the catalogue before playing
  * it, exactly as the host does for a guest's request. Guests used to hand the
@@ -48,16 +54,20 @@ import { useTogether } from '@/services/together/session';
 import { usePlayerStore } from '@/store/playerStore';
 import { toast } from '@/store/toastStore';
 import type { Song } from '@/types';
-import { decideCorrection, HostClock, hostIsAway, RateNudge, ReactionFeed, SEEK_THRESHOLD_S, SeekLead, TRACK_SETTLE_MS } from './sync';
+import { KEYS } from '@/constants/storage-keys';
+import { getLocal, setLocal } from '@/services/storage/local';
+import { decideCorrection, HostClock, hostIsAway, RateNudge, ReactionFeed, SEEK_THRESHOLD_S, SeekLead, ServerClock, TRACK_SETTLE_MS } from './sync';
 
 const HOST_POLL_MS = 4000;
 const GUEST_POLL_MS = 2000;
 /** After a play or a song change, how often the host looks for the audio to be really moving. */
 const HOST_MOVING_CHECK_MS = 250;
+/** …and after this many looks in a row with sound out, it is running at full speed. */
+const HOST_SETTLED_LOOKS = 9;
 /** How often a guest compares its playhead with the host's and trims its speed. */
 const FINE_SYNC_MS = 250;
 /** A freshly started song further off than this (seconds) is put right with one seek. */
-const START_RESEEK_S = 0.35;
+const START_RESEEK_S = 0.25;
 /** After a seek or a play/pause, how long before the playhead is judged again. */
 const CORRECTION_SETTLE_MS = 600;
 
@@ -150,6 +160,9 @@ async function fullSong(stub: Song): Promise<Song | null> {
 
 function runHost(code: string): () => void {
   let alive = true;
+  // The server's clock, from the host's own polls: every push says at which
+  // server moment its position was read.
+  const server = new ServerClock();
   const requestedBy = new Map<string, string>();
   const consumed = new Set<string>();
   const adopting = new Set<string>();
@@ -171,7 +184,10 @@ function runHost(code: string): () => void {
     const s = usePlayerStore.getState();
     const up = upNext();
     useTogether.getState().patch({ queue: up });
-    const r = await updateRoom(code, s.queue[s.index] ?? null, playhead(), s.isPlaying, up, [...consumed]);
+    // The playhead and the moment it was read, taken together.
+    const position = playhead();
+    const read = performance.now();
+    const r = await updateRoom(code, s.queue[s.index] ?? null, position, s.isPlaying, up, [...consumed], server.ready ? server.at(read) : undefined);
     inFlight = false;
     if (!alive) return;
     if (r === 'gone') {
@@ -207,10 +223,10 @@ function runHost(code: string): () => void {
         return;
       }
       moving = audioEngine.isAdvancing() ? moving + 1 : 0;
-      if (moving >= 2) {
-        window.clearInterval(watch);
-        void push();
-      }
+      // Once when sound is out, and once more two seconds in, when the audio
+      // is past its start-up and running at full speed.
+      if (moving === 2 || moving === HOST_SETTLED_LOOKS) void push();
+      if (moving >= HOST_SETTLED_LOOKS) window.clearInterval(watch);
     }, HOST_MOVING_CHECK_MS);
   };
 
@@ -264,6 +280,7 @@ function runHost(code: string): () => void {
     void heartbeat(code);
     const d = await getRoom(code);
     if (!alive || !d) return;
+    server.add(d);
     if (!d.room) {
       toast('This session has ended');
       useTogether.getState().reset();
@@ -328,10 +345,35 @@ let landing: { lead: SeekLead; at: number } | null = null;
 /** A landing measured later than this says nothing about the seek (the host paused meanwhile, say). */
 const LANDING_WINDOW_MS = 8000;
 
+/** The most a device can be fine-tuned either way (ms). */
+export const TRIM_MAX_MS = 500;
+const cleanTrim = (ms: unknown): number => (typeof ms === 'number' && Number.isFinite(ms) ? Math.max(-TRIM_MAX_MS, Math.min(TRIM_MAX_MS, Math.round(ms))) : 0);
+let trimMs = cleanTrim(getLocal<number>(KEYS.togetherTrim, 0));
+
+/**
+ * Fine-tune for THIS device as a guest: how many ms earlier (+) or later (−)
+ * it plays than the host's signal. The sync matches what the two players are
+ * decoding; how long a phone's speaker, or a Bluetooth one, then takes to
+ * sound is different on every device and nothing here can measure it.
+ */
+export function getTrimMs(): number {
+  return trimMs;
+}
+export function setTrimMs(ms: number): number {
+  trimMs = cleanTrim(ms);
+  setLocal(KEYS.togetherTrim, trimMs);
+  return trimMs;
+}
+
+/** Where this guest should be at `at`: the host's playhead, plus this device's fine-tune while it plays. */
+function target(at: number = performance.now()): number {
+  return Math.max(0, clock.positionAt(at) + (clock.isPlaying ? trimMs / 1000 : 0));
+}
+
 /** Where a song that starts loading now should begin, to come in with the host. */
 function startPosition(id: string): number {
   if (!clock.ready || clock.songId !== id) return 0;
-  const at = clock.positionAt() + (clock.isPlaying ? startLead.seconds : 0);
+  const at = target() + (clock.isPlaying ? startLead.seconds : 0);
   return at > 1 ? at : 0;
 }
 
@@ -341,6 +383,14 @@ let fetching: string | null = null;
 let missed: { id: string; at: number } | null = null;
 /** How long before a song that could not be found is looked up again. */
 const MISSED_RETRY_MS = 20_000;
+
+/** Closer than this (seconds), a play or pause needs no seek to be in place. */
+const IN_PLACE_S = 0.08;
+
+/** A seek target kept inside the song. */
+function inSong(seconds: number, duration: number): number {
+  return Math.max(0, duration > 1 ? Math.min(seconds, duration - 0.5) : seconds);
+}
 
 /** Guest: start `song` where the host is, and note the start so its landing is measured. */
 function startInPlace(song: Song): void {
@@ -384,6 +434,8 @@ function runGuest(code: string): () => void {
   let alive = true;
   let misses = 0;
   let ticks = 0;
+  /** The server moment of the newest answer acted on. */
+  let newest = 0;
   // Joining has already read the room once for this code; a session picked
   // up any other way (a reloaded tab) starts from nothing.
   if (clockCode !== code) {
@@ -411,7 +463,7 @@ function runGuest(code: string): () => void {
       audioEngine.setRate(1);
       return;
     }
-    const drift = playhead() - clock.positionAt(now);
+    const drift = playhead() - target(now);
     // The first look after a seek or a start: how late (or early) did it land?
     if (landing) {
       const landed = landing;
@@ -421,8 +473,7 @@ function runGuest(code: string): () => void {
       // least exact, and a stream can be slow to start): one small seek now
       // beats ten seconds of catching up at a different speed.
       if (landed.lead === startLead && Math.abs(drift) > START_RESEEK_S && Math.abs(drift) <= SEEK_THRESHOLD_S * 3) {
-        const target = clock.positionAt(now) + seekLead.seconds;
-        st.seek(Math.max(0, st.duration > 1 ? Math.min(target, st.duration - 0.5) : target));
+        st.seek(inSong(target(now) + seekLead.seconds, st.duration));
         lastCorrection = now;
         landing = { lead: seekLead, at: now };
         nudge.reset();
@@ -445,6 +496,13 @@ function runGuest(code: string): () => void {
       return;
     }
     misses = 0;
+    // On a bad connection an answer can arrive after a later one. Acting on it
+    // would undo the newer state: a guest played on for two seconds after the
+    // host had paused, then stopped again.
+    if (typeof d.now === 'number') {
+      if (d.now < newest) return;
+      newest = d.now;
+    }
     const r = d.room;
     if (!r) {
       toast('The host ended the session');
@@ -473,7 +531,7 @@ function runGuest(code: string): () => void {
     const c = decideCorrection({
       hostSongId: r.song.id,
       hostPlaying: r.playing,
-      expected: clock.positionAt(now),
+      expected: target(now),
       local: {
         songId: local?.id ?? null,
         isPlaying: st.isPlaying,
@@ -492,15 +550,29 @@ function runGuest(code: string): () => void {
         // The room names the song; this device fetches its own stream.
         void loadHostSong(r.song);
         break;
-      case 'play':
+      case 'play': {
+        // The host has been playing since before this poll: start where it is
+        // now (plus the moment a seek takes), not where this device stopped.
+        const at = inSong(target(now) + seekLead.seconds, st.duration);
+        if (Math.abs(playhead() - at) > IN_PLACE_S) {
+          st.seek(at);
+          landing = { lead: seekLead, at: now };
+        }
         if (!st.isPlaying) st.togglePlay();
         lastCorrection = now;
         playAttempts += 1;
         break;
-      case 'pause':
+      }
+      case 'pause': {
         if (st.isPlaying) st.togglePlay();
+        // This device heard of the pause a moment late and played on: step
+        // back to where the host stopped. Silent, since nothing is playing.
+        const at = inSong(target(now), st.duration);
+        if (Math.abs(playhead() - at) > IN_PLACE_S) st.seek(at);
+        landing = null;
         lastCorrection = now;
         break;
+      }
       case 'seek':
         st.seek(c.to);
         lastCorrection = now;

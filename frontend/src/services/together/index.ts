@@ -138,9 +138,17 @@ export type UpdateResult = 'ok' | 'gone' | 'forbidden' | 'error';
  * next one is sent that far ahead.
  */
 const uplink = new Flight();
+/** True once the server has said it honours `at` (1.12.11). Until then, and
+ *  against an older Worker, a push leads by the measured uplink instead. */
+let serverStamps = false;
 
-/** `position` is the host's playhead right now; while playing it is sent as
- *  where the playhead will be when the push lands. */
+/**
+ * `position` is the host's playhead right now. A host that has worked out the
+ * server's clock passes `at`, the server moment (ms) the position was read
+ * at, and the push is exact however long it takes to arrive. Without it (the
+ * first push of a session, an older Worker) a playing position is sent as
+ * where the playhead will be when the push lands.
+ */
 export async function updateRoom(
   code: string,
   song: Song | null,
@@ -148,21 +156,25 @@ export async function updateRoom(
   playing: boolean,
   queue: RoomTrack[] = [],
   consumedIds: string[] = [],
+  at?: number,
 ): Promise<UpdateResult> {
   try {
-    const lands = playing ? position + uplink.ms / 1000 : position;
+    const stamped = serverStamps && typeof at === 'number' && Number.isFinite(at);
+    const lands = playing && !stamped ? position + uplink.ms / 1000 : position;
     const sent = performance.now();
     const res = await fetch(BASE, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'update', code, hostToken: getHostToken(code), song, position: lands, playing, queue, consumedIds }),
+      body: JSON.stringify({ action: 'update', code, hostToken: getHostToken(code), song, position: lands, playing, queue, consumedIds, ...(stamped ? { at } : {}) }),
     });
     if (res.ok) {
       const rtt = performance.now() - sent;
       // A Worker older than 1.12.10 does not say how long it took: then the
       // trip cannot be told from the database's time, and nothing is added.
-      const took = ((await res.json().catch(() => null)) as { took?: unknown } | null)?.took;
+      const answer = (await res.json().catch(() => null)) as { took?: unknown; stamps?: unknown } | null;
+      const took = answer?.took;
       if (typeof took === 'number' && Number.isFinite(took) && took >= 0) uplink.add(Math.max(0, rtt - took) / 2);
+      serverStamps = answer?.stamps === true;
       return 'ok';
     }
     if (res.status === 404) return 'gone';

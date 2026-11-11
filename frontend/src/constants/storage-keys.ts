@@ -57,6 +57,10 @@ export const KEYS = {
   releases: `${STORAGE_PREFIX}.releases.v1`,
   output: `${STORAGE_PREFIX}.output.v1`,
   roomHostTokens: `${STORAGE_PREFIX}.room-host-tokens.v1`,
+  /** 1.12.11 — Listen Together fine-tune: how many ms earlier (+) or later (−)
+   *  THIS device plays as a guest, for a speaker that is slow to sound. Per
+   *  device, so it is in no backup. */
+  togetherTrim: `${STORAGE_PREFIX}.together-trim.v1`,
   /** Last in-app-update install attempt {build, ts} — the dialog reappearing
    *  for the SAME build after an attempt means the install didn't take
    *  (cancelled, or Android's signature-conflict block on legacy installs),

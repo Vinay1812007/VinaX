@@ -24,6 +24,15 @@
  *     (`SeekLead` learns it and aims that far ahead);
  *   - and inside one second the guest was simply left where it was. It now
  *     plays a few percent faster or slower until it matches (`RateNudge`).
+ *
+ * 1.12.11: measured against the live server with phone-like network delay,
+ * a guest still settled 40 to 75 ms off (two phones in one room hear that as
+ * an echo) and took 14 s to come back after the host paused. The host's
+ * guess at each push's trip was the weak point: every push crossed the
+ * network in a different time. Now the host keeps the server's clock too
+ * (`ServerClock`) and sends each position with the server moment it was read
+ * at, so no single message's trip matters. The guest closes to within 4 ms,
+ * a play or pause lands in place, and a gap over 0.45 s is seeked.
  */
 
 export interface PollSnapshot {
@@ -48,28 +57,75 @@ export const CLOCK_SNAP_S = 0.25;
 /** Otherwise a new push moves the estimate half of the way, so one push that
  *  crossed the network slowly cannot yank every guest's playhead about. */
 const PUSH_BLEND = 0.5;
-/** How many polls the server-clock estimate looks back over. */
-const CLOCK_SAMPLES = 8;
+/** After a start, a resume or a seek the host's audio takes a moment to run
+ *  at full speed: this many pushes each replace the one before. */
+const SETTLING_PUSHES = 2;
+/** How many answers the server-clock estimate looks back over (80 s of a
+ *  guest's polls, 160 s of a host's). */
+const CLOCK_SAMPLES = 40;
+
+/** What one answer from the room API says about the server's clock. */
+export interface ClockReading {
+  /** Server clock (ms) when the request arrived. */
+  now?: number;
+  /** How long (ms) the server then spent before it answered. */
+  took?: number;
+  /** The request's round trip (ms), and when the answer landed (performance.now()). */
+  rttMs?: number;
+  receivedAt?: number;
+}
 
 /**
- * Projects the host's playhead between polls.
+ * Which moment on the SERVER's clock is "now" on this device.
  *
- * Two things are estimated apart, because they go wrong in different ways:
+ * Every answer from the room API measures it, off by however lopsided that
+ * request's trip was (and a busy phone only ever makes a trip look longer).
+ * The two clocks do not drift apart in a minute or two, so the answer with
+ * the shortest trip among the recent ones is simply the best measurement,
+ * and a slow one changes nothing.
  *
- *  - Which moment on the SERVER's clock is "now" on this device. Every poll
- *    measures it, off by however lopsided that poll's trip was. The clocks
- *    themselves do not drift in a few seconds, so the poll with the shortest
- *    trip among the last few is simply the best measurement, and a slow poll
- *    changes nothing.
- *  - Where the host's playhead was at a server moment: each host push says
- *    (`position` at `updated_at`). The first push after a song starts or
- *    resumes is sent while the host's own audio is still starting, so the
- *    next one replaces it; after that a push moves the line half way.
+ * The host and every guest each keep one. That is what makes the room exact:
+ * the host says "my playhead was HERE at THIS server moment", a guest asks
+ * "what is the server moment now?", and how long any one message took to
+ * cross the network no longer matters. An error that both phones share (a
+ * mobile network that is slower one way) cancels out.
  */
-export class HostClock {
-  /** Server clock minus this device's performance.now(), ms, with each sample's flight. */
+export class ServerClock {
   private samples: Array<{ theta: number; flight: number }> = [];
   private theta = 0;
+
+  /** False until an answer carrying the server's clock has been read. */
+  get ready(): boolean {
+    return this.samples.length > 0;
+  }
+
+  /** Returns false for an answer with no server clock (a Worker older than 10.0). */
+  add(r: ClockReading, at: number = r.receivedAt ?? performance.now()): boolean {
+    if (typeof r.now !== 'number' || !Number.isFinite(r.now)) return false;
+    const rtt = Math.max(0, r.rttMs ?? 0);
+    // The server's own share of the round trip is not flight time.
+    const took = Math.min(rtt, Math.max(0, typeof r.took === 'number' && Number.isFinite(r.took) ? r.took : 0));
+    const flight = (rtt - took) / 2;
+    this.samples = [...this.samples, { theta: r.now + took + flight - at, flight }].slice(-CLOCK_SAMPLES);
+    this.theta = this.samples.reduce((best, x) => (x.flight < best.flight ? x : best)).theta;
+    return true;
+  }
+
+  /** The server's clock (ms) at `at` (a performance.now() reading). */
+  at(at: number = performance.now()): number {
+    return at + this.theta;
+  }
+}
+
+/**
+ * Projects the host's playhead between polls: the server's clock
+ * (`ServerClock`) and, on it, the line the host's pushes draw. Each push
+ * says (`position` at `updated_at`). The first push after a song starts,
+ * resumes or is seeked is sent while the host's own audio is still starting,
+ * so the next two each replace it; after that a push moves the line half way.
+ */
+export class HostClock {
+  private server = new ServerClock();
   /** The host's playhead (seconds) at server time `anchorAt` (ms). */
   private anchor = 0;
   private anchorAt = 0;
@@ -99,17 +155,10 @@ export class HostClock {
 
   ingest(p: PollSnapshot, at: number = p.receivedAt ?? performance.now()): void {
     const songId = p.songId ?? null;
-    if (typeof p.now === 'number' && Number.isFinite(p.now)) {
+    if (this.server.add(p, at)) {
       this.legacy = false;
-      const rtt = Math.max(0, p.rttMs ?? 0);
-      // The server's own share of the round trip is not flight time.
-      const took = Math.min(rtt, Math.max(0, typeof p.took === 'number' && Number.isFinite(p.took) ? p.took : 0));
-      const flight = (rtt - took) / 2;
-      this.samples = [...this.samples, { theta: p.now + took + flight - at, flight }].slice(-CLOCK_SAMPLES);
-      this.theta = this.samples.reduce((best, x) => (x.flight < best.flight ? x : best)).theta;
-
       const pushed = Date.parse(p.updated_at);
-      const pushedAt = Number.isFinite(pushed) ? pushed : p.now;
+      const pushedAt = Number.isFinite(pushed) ? pushed : (p.now as number);
       const fresh = p.updated_at !== this.stamp;
       const steady = this.pushes > 0 && p.playing && this.playing && songId === this.song;
       if (!steady) {
@@ -120,10 +169,13 @@ export class HostClock {
         // Where the line so far says the host was when this push was stamped.
         const believed = this.anchor + (pushedAt - this.anchorAt) / 1000;
         const off = p.position - believed;
-        const trust = this.pushes === 1 || Math.abs(off) > CLOCK_SNAP_S ? 1 : PUSH_BLEND;
+        const jumped = Math.abs(off) > CLOCK_SNAP_S;
+        const trust = this.pushes <= SETTLING_PUSHES || jumped ? 1 : PUSH_BLEND;
         this.anchor = believed + off * trust;
         this.anchorAt = pushedAt;
-        this.pushes += 1;
+        // The push that reports a seek is, like the first "playing", sent
+        // while the host's audio is still refilling: the next ones replace it.
+        this.pushes = jumped ? 1 : this.pushes + 1;
       }
       this.stamp = p.updated_at;
       this.playing = p.playing;
@@ -144,7 +196,7 @@ export class HostClock {
   /** Host position (seconds) at `at` (a performance.now() reading). */
   positionAt(at: number = performance.now()): number {
     if (this.legacy) return Math.max(0, this.base + (this.playing ? Math.max(0, at - this.baseAt) / 1000 : 0));
-    const elapsed = this.playing ? Math.max(0, at + this.theta - this.anchorAt) / 1000 : 0;
+    const elapsed = this.playing ? Math.max(0, this.server.at(at) - this.anchorAt) / 1000 : 0;
     return Math.max(0, this.anchor + elapsed);
   }
 }
@@ -177,14 +229,15 @@ export class Flight {
   }
 }
 
-/** Start nudging the speed once the guest is this far off (seconds)… */
-export const NUDGE_START_S = 0.06;
+/** Start nudging the speed once the guest is this far off (seconds). Two
+ *  phones in one room are heard as one from about 30 ms apart… */
+export const NUDGE_START_S = 0.012;
 /** …and go back to normal speed once it is this close. */
-export const NUDGE_STOP_S = 0.02;
+export const NUDGE_STOP_S = 0.004;
 /** The most the speed changes: 8 %, which closes 80 ms every second. Pitch is
  *  kept, so it is heard as nothing more than a slightly quicker beat. */
 export const NUDGE_MAX = 0.08;
-const NUDGE_MIN = 0.015;
+const NUDGE_MIN = 0.005;
 /** Speed change per second of drift: full strength from 160 ms off. */
 const NUDGE_GAIN = 0.5;
 /** Further off than this, speeding up is pointless: it is a seek's job. */
@@ -251,10 +304,12 @@ export type Correction =
   | { kind: 'pause'; drift: number | null }
   | { kind: 'seek'; to: number; drift: number };
 
-/** Drift beyond this (seconds) is audible as an echo between two phones. */
-export const SEEK_THRESHOLD_S = 1.0;
-/** A paused host only needs the guest roughly in place. */
-const PAUSED_SEEK_THRESHOLD_S = 2.0;
+/** Drift beyond this (seconds) is put right with a seek; inside it the guest
+ *  changes speed instead (`RateNudge`). It was a full second while a seek
+ *  landed anywhere within half a second; with `SeekLead` it lands close. */
+export const SEEK_THRESHOLD_S = 0.45;
+/** A paused host costs nothing to match exactly: a seek while paused is silent. */
+const PAUSED_SEEK_THRESHOLD_S = 0.15;
 /** Between corrections: a seek makes the guest buffer, and correcting again
  *  mid-buffer is what used to make followers flap. */
 export const CORRECTION_COOLDOWN_MS = 3000;

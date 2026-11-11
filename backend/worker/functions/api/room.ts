@@ -3,7 +3,7 @@
  *
  *   POST { action: 'create', hostName?, song? }           → { code, hostToken }
  *   GET  ?code=…&hostToken=…                               → { room, now, took, memberCount, reactions, members? }
- *   POST { action: 'update', code, hostToken, song, queue, position, playing, consumedIds }   host only → { ok, took }
+ *   POST { action: 'update', code, hostToken, song, queue, position, playing, consumedIds, at? }   host only → { ok, took, stamps }
  *   POST { action: 'request', code, song, by }             a guest asks for a song
  *   POST { action: 'react', code, deviceId, emoji, name }  one live reaction per member
  *   POST { action: 'heartbeat', code, deviceId, name }     presence
@@ -27,6 +27,12 @@
  * then spent on the database (`took`, ms), so a device can tell the network's
  * share of a round trip from the server's. Without it a guest counted the
  * database time as flight and sat a little behind the host.
+ *
+ * 1.12.11: a host that has worked out this server's clock (from those same
+ * answers) sends `at` with a push: the server moment its `position` was read
+ * at. It becomes `updated_at`, so how long that push took to get here no
+ * longer matters. It is accepted only within a few seconds of the push's
+ * arrival; a host that sends none is stamped on arrival as before.
  */
 import { db, dbConfigured, q, type DbEnv } from '../_lib/db';
 import { asObject, clip, jsonResponse } from '../_lib/edge';
@@ -39,7 +45,20 @@ const CORS: Record<string, string> = {
   'access-control-allow-origin': '*',
   'access-control-allow-methods': 'GET, POST, OPTIONS',
   'access-control-allow-headers': 'content-type',
+  // The Android app calls from another origin: without this the browser asks
+  // permission again every five seconds, an extra round trip before a push.
+  'access-control-max-age': '86400',
 };
+/** How far before its arrival a push may say its position was read (ms). */
+const PUSH_AT_MAX_AGE_MS = 5000;
+/** …and how far after: two clocks that agree to a tenth of a second. */
+const PUSH_AT_MAX_AHEAD_MS = 100;
+
+/** The server moment (ms) a host push's position belongs to. */
+export function pushMoment(at: unknown, arrived: number): number {
+  if (typeof at !== 'number' || !Number.isFinite(at)) return arrived;
+  return Math.round(Math.min(arrived + PUSH_AT_MAX_AHEAD_MS, Math.max(arrived - PUSH_AT_MAX_AGE_MS, at)));
+}
 const json = (body: unknown, status = 200): Response => jsonResponse(body, status, CORS);
 
 /**
@@ -276,13 +295,14 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
       requests,
       position: typeof body.position === 'number' && Number.isFinite(body.position) ? body.position : 0,
       playing: body.playing === true,
-      updated_at: now,
+      updated_at: new Date(pushMoment(body.at, arrived)).toISOString(),
       // 15.0 — a new song starts with no skip votes.
       ...(changed ? { skip_votes: [] } : {}),
     });
     // `took`: the host subtracts it from the round trip to learn how long its
     // pushes spend on the way here, and sends the next position that far ahead.
-    return json({ ok: r.ok, took: Math.max(0, Date.now() - arrived) });
+    // `stamps`: this server honours `at`, so the host may rely on it.
+    return json({ ok: r.ok, took: Math.max(0, Date.now() - arrived), stamps: true });
   }
 
   if (action === 'request') {

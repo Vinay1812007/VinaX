@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CLOCK_SNAP_S, CORRECTION_COOLDOWN_MS, decideCorrection, Flight, HostClock, hostIsAway, NUDGE_MAX, NUDGE_START_S, NUDGE_STOP_S, RateNudge, ReactionFeed, SeekLead, type LocalPlayer } from './sync';
+import { CLOCK_SNAP_S, CORRECTION_COOLDOWN_MS, decideCorrection, Flight, HostClock, hostIsAway, NUDGE_MAX, NUDGE_START_S, NUDGE_STOP_S, RateNudge, ReactionFeed, SEEK_THRESHOLD_S, SeekLead, ServerClock, type LocalPlayer } from './sync';
 
 const T0 = Date.parse('2026-10-05T10:00:00.000Z');
 
@@ -56,9 +56,10 @@ describe('HostClock (server-clock projection)', () => {
     // 600 ms round trip, 500 of it on the way back: on its own this reading is 250 ms wrong.
     poll(10, 600, 500);
     expect(c.positionAt(10_000)).toBeCloseTo(20, 5);
-    // Once only slow polls are left to go on, the best of them is used (50 ms out).
-    for (let s = 12; s <= 30; s += 2) poll(s, 600, 100);
-    expect(c.positionAt(30_000)).toBeCloseTo(39.95, 5);
+    // A minute and a half later the quick polls are too old to go on: the
+    // best of the slow ones is used (50 ms out).
+    for (let s = 12; s <= 92; s += 2) poll(s, 600, 100);
+    expect(c.positionAt(92_000)).toBeCloseTo(101.95, 5);
   });
 
   it('the push sent while the host’s own audio was still starting is replaced by the next one', () => {
@@ -79,12 +80,29 @@ describe('HostClock (server-clock projection)', () => {
       c.ingest({ position, playing: true, updated_at: stamp(pushedSec * 1000), now: T0 + sec * 1000, rttMs: 0, receivedAt: sec * 1000, songId: 'a' });
     poll(0, 10, 0);
     poll(2, 12, 2);
-    expect(c.positionAt(2000)).toBeCloseTo(12, 5);
+    poll(4, 14, 4);
+    expect(c.positionAt(4000)).toBeCloseTo(14, 5);
     // This push says 100 ms further on than the line so far (16.1, not 16).
     poll(6, 16.1, 6);
     expect(c.positionAt(6000)).toBeCloseTo(16.05, 5);
     poll(8, 16.1, 6);
     expect(c.positionAt(8000)).toBeCloseTo(18.05, 5);
+  });
+
+  it('the push that reports a seek is sent while the audio refills: the next one replaces it', () => {
+    const stamp = (ms: number) => new Date(T0 + ms).toISOString();
+    const c = new HostClock();
+    const poll = (ms: number, position: number, pushedMs: number) =>
+      c.ingest({ position, playing: true, updated_at: stamp(pushedMs), now: T0 + ms, rttMs: 0, receivedAt: ms, songId: 'a' });
+    poll(0, 10, 0);
+    poll(2000, 12, 2000);
+    poll(4000, 14, 4000);
+    // The host seeks to 80 s at 5 s; sound comes back 60 ms later.
+    poll(6000, 80, 5000);
+    expect(c.positionAt(6000)).toBeCloseTo(81, 5);
+    // 0.5 s on, the host says where the playhead really is: 80.44, not 80.5.
+    poll(8000, 80.44, 5500);
+    expect(c.positionAt(8000)).toBeCloseTo(82.94, 5);
   });
 
   it('a real jump is taken at once: a stall, a seek, a new song, a pause', () => {
@@ -142,10 +160,17 @@ describe('decideCorrection', () => {
   it('loads the host song when ours differs', () => {
     expect(decideCorrection({ ...base, local: playing({ songId: 'b' }) }).kind).toBe('load');
   });
-  it('does nothing inside the threshold', () => {
-    expect(decideCorrection({ ...base, expected: 30.8, local: playing() }).kind).toBe('none');
+  it('does not seek inside the threshold: that gap is closed by speed', () => {
+    expect(decideCorrection({ ...base, expected: 30.3, local: playing() }).kind).toBe('none');
+    expect(decideCorrection({ ...base, expected: 30 + SEEK_THRESHOLD_S + 0.05, local: playing() }).kind).toBe('seek');
+    expect(SEEK_THRESHOLD_S).toBeLessThan(0.6);
   });
-  it('seeks when drift passes a second, and reports the drift', () => {
+  it('a paused host is matched to the spot: a seek while paused is silent', () => {
+    const paused = { ...base, hostPlaying: false, local: playing({ isPlaying: false }) };
+    expect(decideCorrection({ ...paused, expected: 30.1 }).kind).toBe('none');
+    expect(decideCorrection({ ...paused, expected: 30.3 })).toMatchObject({ kind: 'seek', to: 30.3 });
+  });
+  it('seeks when drift passes the threshold, and reports the drift', () => {
     const c = decideCorrection({ ...base, expected: 32, local: playing() });
     expect(c).toEqual({ kind: 'seek', to: 32, drift: -2 });
   });
@@ -180,6 +205,41 @@ describe('decideCorrection', () => {
   });
 });
 
+describe('ServerClock (what moment is it on the server?)', () => {
+  it('is not ready until an answer carries the server clock', () => {
+    const c = new ServerClock();
+    expect(c.ready).toBe(false);
+    expect(c.add({ rttMs: 40, receivedAt: 0 })).toBe(false);
+    expect(c.ready).toBe(false);
+    expect(c.add({ now: T0, took: 0, rttMs: 40, receivedAt: 1000 })).toBe(true);
+    expect(c.ready).toBe(true);
+  });
+
+  it('reads the server moment for any moment on this device', () => {
+    const c = new ServerClock();
+    // Asked at 880, answered at 1000: 120 ms round trip, 80 of it the server's.
+    c.add({ now: T0, took: 80, rttMs: 120, receivedAt: 1000 });
+    // Arrived at T0, answered 80 ms later, 20 ms of flight back.
+    expect(c.at(1000)).toBeCloseTo(T0 + 100, 5);
+    expect(c.at(1500)).toBeCloseTo(T0 + 600, 5);
+    // The moment a position was read, a little before it is sent.
+    expect(c.at(940)).toBeCloseTo(T0 + 40, 5);
+  });
+
+  it('a host and a guest that both keep it agree, whatever each message took', () => {
+    // The same server clock seen from two devices with different local clocks.
+    const host = new ServerClock();
+    const guest = new ServerClock();
+    host.add({ now: T0, took: 200, rttMs: 260, receivedAt: 5000 }); // 30 ms each way
+    guest.add({ now: T0 + 1000, took: 250, rttMs: 430, receivedAt: 90_000 }); // 90 ms each way
+    // The host reads its playhead (60 s) at its 5200; that is server T0 + 430.
+    const stamp = host.at(5200);
+    expect(stamp).toBeCloseTo(T0 + 430, 5);
+    // The guest, at its 91_000 (server T0 + 2340), places the host 1.91 s further on.
+    expect(60 + (guest.at(91_000) - stamp) / 1000).toBeCloseTo(61.91, 5);
+  });
+});
+
 describe('RateNudge (fine sync inside the seek threshold)', () => {
   it('plays faster when behind the host and slower when ahead', () => {
     expect(new RateNudge().next(-0.4)).toBeCloseTo(1 + NUDGE_MAX, 5);
@@ -196,9 +256,13 @@ describe('RateNudge (fine sync inside the seek threshold)', () => {
     const n = new RateNudge();
     expect(n.next(-0.2)).toBeGreaterThan(1);
     // Under the start line but not yet at the stop line: still closing.
-    expect(n.next(-(NUDGE_START_S - 0.02))).toBeGreaterThan(1);
-    expect(n.next(-(NUDGE_STOP_S - 0.005))).toBe(1);
-    expect(n.next(-(NUDGE_START_S - 0.02))).toBe(1);
+    const between = (NUDGE_START_S + NUDGE_STOP_S) / 2;
+    expect(n.next(-between)).toBeGreaterThan(1);
+    expect(n.next(-NUDGE_STOP_S / 2)).toBe(1);
+    expect(n.next(-between)).toBe(1);
+    // Two phones in one room are heard as one only inside about 30 ms.
+    expect(NUDGE_START_S).toBeLessThanOrEqual(0.015);
+    expect(NUDGE_STOP_S).toBeLessThanOrEqual(0.005);
   });
   it('closes half a second in a few seconds without ever passing the limit', () => {
     const n = new RateNudge();
@@ -211,7 +275,7 @@ describe('RateNudge (fine sync inside the seek threshold)', () => {
       ticks += 1;
     }
     expect(Math.abs(drift)).toBeLessThanOrEqual(NUDGE_STOP_S);
-    expect(ticks * 0.25).toBeLessThan(12);
+    expect(ticks * 0.25).toBeLessThan(14);
     expect(n.next(drift)).toBe(1);
   });
   it('leaves a gap of several seconds to a seek', () => {

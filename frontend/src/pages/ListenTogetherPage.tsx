@@ -5,7 +5,7 @@ import { ArtistAvatar } from '@/features/stats/artwork';
 import { useCurrentSong } from '@/store/playerStore';
 import { REACTION_EMOJI } from '@/services/together';
 import { useTogether } from '@/services/together/session';
-import { addSong, joinSession, leaveSession, react, say, startHosting, tapToListen, voteToSkip } from '@/features/together/engine';
+import { addSong, getTrimMs, joinSession, leaveSession, react, say, setTrimMs, startHosting, tapToListen, TRIM_MAX_MS, voteToSkip } from '@/features/together/engine';
 import { JoinRoom } from '@/features/together/JoinRoom';
 import { OpenInApp } from '@/features/together/OpenInApp';
 import { useInviteQr } from '@/features/together/useInviteQr';
@@ -18,6 +18,46 @@ import { toast } from '@/store/toastStore';
 import { PlusIcon, UsersIcon } from '@/components/Icons';
 import '@/styles/pages/secondary.css';
 import '@/styles/pages/together.css';
+
+/**
+ * 1.12.11 — a guest's fine-tune. The sync lines up what the two players are
+ * playing; how long each phone's speaker (or a Bluetooth one) then takes to
+ * sound differs from device to device and cannot be measured from here. So
+ * each device can be set a little earlier or later by ear, once; it is kept.
+ */
+const TRIM_STEP_MS = 10;
+function FineTune(): ReactNode {
+  const [ms, setMs] = useState(getTrimMs);
+  const move = (by: number) => setMs(setTrimMs(ms + by));
+  return (
+    <div className="vx-lt-trim" role="group" aria-label="Fine-tune this phone">
+      <div className="min-w-0">
+        <p className="vx-lt-kicker">Fine-tune this phone</p>
+        <p className="vx-lt-trim-hint">
+          {ms === 0
+            ? 'If this phone sounds late next to the host, tap Earlier. If it sounds early, tap Later.'
+            : ms > 0
+              ? `This phone plays ${ms} ms earlier. Kept for next time.`
+              : `This phone plays ${-ms} ms later. Kept for next time.`}
+        </p>
+      </div>
+      <div className="vx-lt-trim-row">
+        <button type="button" className="vx-sec-pill" onClick={() => move(-TRIM_STEP_MS)} disabled={ms <= -TRIM_MAX_MS} aria-label={`Play this phone ${TRIM_STEP_MS} milliseconds later`}>
+          Later
+        </button>
+        <output className="vx-lt-trim-value" aria-live="polite">{ms > 0 ? `+${ms}` : ms} ms</output>
+        <button type="button" className="vx-sec-pill" onClick={() => move(TRIM_STEP_MS)} disabled={ms >= TRIM_MAX_MS} aria-label={`Play this phone ${TRIM_STEP_MS} milliseconds earlier`}>
+          Earlier
+        </button>
+        {ms !== 0 && (
+          <button type="button" className="vx-sec-pill" onClick={() => setMs(setTrimMs(0))}>
+            Reset
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function AddSong({ label }: { label: string }): ReactNode {
   const [q, setQ] = useState('');
@@ -94,7 +134,7 @@ function SyncBadge(): ReactNode {
             ? 'Live · you’re hosting'
             : drift === null
               ? 'Live · syncing…'
-              : Math.abs(drift) < 0.6
+              : Math.abs(drift) < 0.1
                 ? 'Live · in sync'
                 : 'Live · catching up…';
   return (
@@ -256,6 +296,7 @@ function Live(): ReactNode {
           </div>
           {qr && <img src={qr} alt={`QR code to join room ${code}`} className="vx-lt-qr" />}
         </div>
+        {mode === 'guest' && <FineTune />}
         {mode === 'host' && (
           <div className="vx-lt-actions">
             <button

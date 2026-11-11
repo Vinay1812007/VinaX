@@ -21,16 +21,16 @@ describe('updateRoom: a push says where the playhead will be when it lands', () 
   });
 
   /** A server `flightMs` away each way that spends `tookMs` on its database. */
-  const server = (flightMs: number, tookMs: number, sayTook = true) =>
+  const server = (flightMs: number, tookMs: number, sayTook = true, stamps = false) =>
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body: string }) => {
       sent.push(JSON.parse(init.body) as { position: number; playing: boolean });
       await new Promise((r) => setTimeout(r, flightMs * 2 + tookMs));
-      return new Response(JSON.stringify(sayTook ? { ok: true, took: tookMs } : { ok: true }), { status: 200 });
+      return new Response(JSON.stringify(sayTook ? { ok: true, took: tookMs, ...(stamps ? { stamps: true } : {}) } : { ok: true }), { status: 200 });
     }));
 
-  const push = async (position: number, playing: boolean) => {
+  const push = async (position: number, playing: boolean, at?: number) => {
     const { updateRoom } = await import('./index');
-    const p = updateRoom('ABC123', null, position, playing);
+    const p = updateRoom('ABC123', null, position, playing, [], [], at);
     await vi.advanceTimersByTimeAsync(5000);
     return p;
   };
@@ -49,6 +49,23 @@ describe('updateRoom: a push says where the playhead will be when it lands', () 
     await push(10, true);
     await push(20, false);
     expect(sent[1].position).toBe(20);
+  });
+
+  it('once the server says it honours it, a push carries the server moment its position was read at, as it is', async () => {
+    server(120, 300, true, true);
+    await push(10, true, 1_800_000_000_000);
+    // Not yet known to be honoured: sent the old way, without the field.
+    expect('at' in sent[0]).toBe(false);
+    await push(20, true, 1_800_000_000_123);
+    expect(sent[1]).toMatchObject({ position: 20, at: 1_800_000_000_123 });
+  });
+
+  it('against a server that does not honour it, the push keeps leading by the measured trip', async () => {
+    server(120, 300);
+    await push(10, true, 1_800_000_000_000);
+    await push(20, true, 1_800_000_000_123);
+    expect('at' in sent[1]).toBe(false);
+    expect(sent[1].position).toBeCloseTo(20.12, 3);
   });
 
   it('adds nothing against a server that does not say how long it took', async () => {

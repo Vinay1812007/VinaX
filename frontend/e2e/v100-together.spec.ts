@@ -15,6 +15,9 @@ import { latestNotesFingerprint } from '../src/constants/changelog';
  * 1.12.10 — fine sync: a guest starts where the host is, and then closes the
  * last fraction of a second by playing slightly faster or slower. Before, a
  * guest within a second of the host was left there ("a little slow").
+ *
+ * 1.12.11 — both sides keep the server's clock, the host says at which server
+ * moment each position was read, and a guest has a fine-tune for its speaker.
  */
 const SECONDS = 240;
 /** Four minutes of silent 8 kHz mono WAV: real, seekable audio. */
@@ -82,9 +85,11 @@ function roomServer() {
           const r = rooms.get(code);
           if (!r) return { __status: 404 };
           const consumed = (body.consumedIds as string[]) ?? [];
-          Object.assign(r, { song: roomSong(body.song), position: body.position, playing: body.playing, queue: roomQueue(body.queue), updated_at: new Date().toISOString() });
+          // 1.12.11: a host that knows the server's clock says when its position was read.
+          const at = typeof body.at === 'number' ? Math.min(Date.now() + 100, Math.max(Date.now() - 5000, body.at)) : Date.now();
+          Object.assign(r, { song: roomSong(body.song), position: body.position, playing: body.playing, queue: roomQueue(body.queue), updated_at: new Date(Math.round(at)).toISOString() });
           r.requests = r.requests.filter((t) => !consumed.includes(t.song.id));
-          return { ok: true, took: 0 };
+          return { ok: true, took: 0, stamps: true };
         }
         case 'request': {
           const r = rooms.get(code);
@@ -221,7 +226,7 @@ test('a guest follows the host across pages, in sync, and its request is playabl
   expect((await audioState(guest))?.t ?? 0).toBeGreaterThan(55);
   // …and then closes the last fraction of a second: the two players end up
   // together, not "the host a little ahead".
-  await expect.poll(() => gap(host, guest), { timeout: 25_000, intervals: [500] }).toBeLessThan(0.2);
+  await expect.poll(() => gap(host, guest), { timeout: 25_000, intervals: [500] }).toBeLessThan(0.08);
 
   // Knock the guest 20 s out of step (a stall, a stray tap on the seek bar):
   // the follower must pull it back within a second of the host.
@@ -232,7 +237,7 @@ test('a guest follows the host across pages, in sync, and its request is playabl
   });
   await expect.poll(() => gap(host, guest), { timeout: 15_000, intervals: [1000] }).toBeLessThan(1.0);
   // The seek gets it close; the fine sync finishes the job.
-  await expect.poll(() => gap(host, guest), { timeout: 25_000, intervals: [500] }).toBeLessThan(0.2);
+  await expect.poll(() => gap(host, guest), { timeout: 25_000, intervals: [500] }).toBeLessThan(0.08);
 
   // The host skips from another page; the guest follows.
   await host.getByRole('button', { name: /^Next/ }).first().click();
@@ -249,6 +254,24 @@ test('a guest follows the host across pages, in sync, and its request is playabl
   await expect
     .poll(async () => host.evaluate(() => JSON.parse(localStorage.getItem('vinax.player.v1') ?? '{}')?.state?.queue?.map((s: { id: string; audio?: unknown[] }) => `${s.id}:${s.audio?.length ?? 0}`) ?? []), { timeout: 15_000 })
     .toContain('g1:1');
+
+  // 1.12.11 — fine-tune: this phone's speaker is slow to sound, so the guest
+  // sets it 100 ms earlier and is held that far ahead of the host's signal;
+  // Reset brings it back onto it.
+  await startListeningIfAsked(guest);
+  const ahead = async (): Promise<number> => {
+    const [h, g] = await Promise.all([audioState(host), audioState(guest)]);
+    return h && g && !g.paused ? g.t - h.t : -99;
+  };
+  const tune = guest.getByRole('group', { name: 'Fine-tune this phone' });
+  for (let i = 0; i < 10; i += 1) await tune.getByRole('button', { name: /earlier$/ }).click();
+  await expect(tune).toContainText('+100 ms');
+  await expect.poll(ahead, { timeout: 25_000, intervals: [500] }).toBeGreaterThan(0.06);
+  await expect.poll(ahead, { timeout: 10_000, intervals: [500] }).toBeLessThan(0.14);
+  expect(await guest.evaluate(() => localStorage.getItem('vinax.together-trim.v1'))).toBe('100');
+  await tune.getByRole('button', { name: 'Reset' }).click();
+  await expect(tune).toContainText('0 ms');
+  await expect.poll(() => gap(host, guest), { timeout: 25_000, intervals: [500] }).toBeLessThan(0.08);
 
   // Ending the session tells the guest.
   await host.goto('/together');

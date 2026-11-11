@@ -5,7 +5,7 @@
  * without a database both verbs answer 503 not_configured.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { onRequestGet, onRequestOptions, onRequestPost, REACTION_EMOJI } from '../functions/api/room';
+import { onRequestGet, onRequestOptions, onRequestPost, pushMoment, REACTION_EMOJI } from '../functions/api/room';
 import { DB_ENV, fakeDb } from './helpers/fakeDb';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -79,13 +79,37 @@ describe('/api/room', () => {
     expect((await post({ action: 'update', code: 'NOPE00', hostToken: 'host-secret' })).status).toBe(404);
     const ok = await post({ action: 'update', code: 'ABC234', hostToken: 'host-secret', song: { id: 's9', title: 'Nine' }, queue: [{ song: { id: 'q1' }, by: null }], position: 40, playing: true, consumedIds: ['s2'] });
     // The host learns how long the server spent, to tell its own network delay.
-    expect(await ok.json()).toEqual({ ok: true, took: expect.any(Number) });
+    expect(await ok.json()).toEqual({ ok: true, took: expect.any(Number), stamps: true });
+    // No `at`: the push is stamped when it arrives.
+    expect(Math.abs(Date.parse(String(fake.rows('rooms')[0].updated_at)) - Date.now())).toBeLessThan(2000);
     const row = fake.rows('rooms')[0];
     expect(row.requests).toEqual([{ song: { id: 's3' }, by: 'G' }]);
     expect(row.playing).toBe(true);
     expect((row.current as { id: string }).id).toBe('s9');
     expect(await (await post({ action: 'end', code: 'ABC234', hostToken: 'host-secret' })).json()).toEqual({ ok: true });
     expect(fake.rows('rooms')).toHaveLength(0);
+  });
+
+  it('a host that knows the server clock says WHEN its position was read, and that becomes the room clock', async () => {
+    const fake = fakeDb({ rooms: [{ code: 'ABC234', host_token: 'host-secret', host_name: 'V', current: { id: 's1' }, queue: [], requests: [], position: 0, playing: true, updated_at: 'x' }] });
+    // Read 180 ms before the push arrived: the trip no longer counts as music played.
+    const read = Date.now() - 180;
+    await post({ action: 'update', code: 'ABC234', hostToken: 'host-secret', song: { id: 's1' }, position: 61.25, playing: true, at: read });
+    const row = fake.rows('rooms')[0];
+    expect(row.position).toBe(61.25);
+    expect(Date.parse(String(row.updated_at))).toBe(read);
+  });
+
+  it('accepts that moment only near the push’s arrival', () => {
+    const arrived = 1_800_000_000_000;
+    expect(pushMoment(arrived - 180, arrived)).toBe(arrived - 180);
+    expect(pushMoment(arrived - 180.4, arrived)).toBe(arrived - 180);
+    // Not from long ago, not from the future, and never anything that is not a time.
+    expect(pushMoment(arrived - 60_000, arrived)).toBe(arrived - 5000);
+    expect(pushMoment(arrived + 60_000, arrived)).toBe(arrived + 100);
+    expect(pushMoment('yesterday', arrived)).toBe(arrived);
+    expect(pushMoment(Number.NaN, arrived)).toBe(arrived);
+    expect(pushMoment(undefined, arrived)).toBe(arrived);
   });
 
   it('a chat line is kept without moving the room clock that followers measure the playhead from', async () => {
