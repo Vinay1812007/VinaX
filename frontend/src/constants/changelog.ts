@@ -8,6 +8,8 @@ export interface ChangeEntry {
 export interface VersionInfo {
   title?: string;
   changes: ChangeEntry[];
+  /** A guided tour (features/tutorials) the What's New sheet offers with this card. */
+  tour?: string;
 }
 
 /**

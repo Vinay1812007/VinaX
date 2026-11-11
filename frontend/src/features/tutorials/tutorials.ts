@@ -1,6 +1,7 @@
 import { searchSongs } from '@/services/api';
 import { usePlayerStore } from '@/store/playerStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useTogether } from '@/services/together/session';
 import { toast } from '@/store/toastStore';
 
 /**
@@ -26,6 +27,16 @@ import { toast } from '@/store/toastStore';
  * festival themes. A step whose anchor
  * is missing is skipped by the runner, and tutorials.test.ts fails when a
  * `data-tour` id or an aria-label a selector names is no longer in the source.
+ *
+ * 1.12.12 — Listen Together gets an introduction and two tours. "Listen
+ * Together" says what it is and walks hosting and the three ways in (code, QR,
+ * invite link) on the idle page. "Inside a room" runs in a LIVE room and
+ * points at its real controls; the steps that belong to the other role (Share
+ * invite for a host, Fine-tune for a guest) say so through `when` and are
+ * skipped at once. A tour that cannot run right now says why through `needs`.
+ * Every step of both takes `reveal`: a room is a long page on a phone, and the
+ * listener starts the tour from a button halfway down it, so even the status
+ * line at the top can be off screen when its step comes.
  */
 export interface TutorialStep {
   title: string;
@@ -42,6 +53,8 @@ export interface TutorialStep {
   tip?: string;
   /** Runs when the step is left in any direction (closes what `action` opened). */
   leave?: () => void;
+  /** False when this step is not for this listener right now (a host-only control): skipped at once, with no wait for its anchor. */
+  when?: () => boolean;
 }
 
 export interface Tutorial {
@@ -52,6 +65,8 @@ export interface Tutorial {
   emoji: string;
   /** True when the walkthrough starts real playback. */
   playsMusic?: boolean;
+  /** Why this tour cannot run right now (it needs a live room); null when it can. */
+  needs?: () => string | null;
   steps: TutorialStep[];
 }
 
@@ -87,6 +102,9 @@ const reveal = (selector: string) => async (): Promise<void> => {
   document.querySelector(selector)?.scrollIntoView({ block: 'center', inline: 'nearest' });
   await wait(150);
 };
+
+/** The Listen Together page shows its Host and Join cards only outside a room. */
+const idle = (): boolean => useTogether.getState().mode === 'idle';
 
 const PLAYER = '[data-tour="player"]';
 const SEARCH = '[data-tour="search-input"]';
@@ -127,15 +145,39 @@ export const TUTORIALS: Tutorial[] = [
   {
     id: 'listen-together',
     title: 'Listen Together',
-    blurb: 'Host a session or join with a code, and play the same song on every phone.',
+    blurb: 'What it is, how to host a room, and the three ways a friend gets in.',
     minutes: 2,
     emoji: '🎧',
     steps: [
-      { route: '/together', target: 'section[aria-labelledby="vx-lt-start"] .vx-lt-cta', title: 'Host a session', body: 'Start a session to get a room code, a QR and an invite link. Then play as usual, from any page.', placement: 'bottom' },
-      { route: '/together', target: '#vx-lt-code', title: 'Join with a code', body: 'Type the code your host shared, or open their invite link. Your player then follows the host’s.', placement: 'bottom' },
-      { title: 'The Live pill', body: 'While a session runs, a Live pill sits on every other page. Tap it to return to the room.' },
-      { title: 'Tap to start listening', body: 'If your browser holds back sound, the pill says Tap to start listening. One tap puts you in step.' },
-      { title: 'Songs and reactions', body: 'Guests add songs for everyone and the host’s queue plays them. Reactions show on every screen in the room.', tip: 'End for everyone closes the room. Leave session takes only you out.' },
+      { route: '/together', title: 'Meet Listen Together', body: 'One song, at the same second, on every phone in the room. It is free and runs in a browser, with no app to install.', tip: 'About a minute. Nothing starts until you tap it yourself.' },
+      { route: '/together', target: 'section[aria-labelledby="vx-lt-start"] .vx-lt-cta', action: reveal('section[aria-labelledby="vx-lt-start"] .vx-lt-cta'), when: idle, title: 'Host a session', body: 'Start a session to get a room code, a QR and an invite link. Then play as usual, from any page.', placement: 'bottom' },
+      { route: '/together', target: '.vx-lt-steps', action: reveal('.vx-lt-steps'), when: idle, title: 'Bring your friends', body: 'Share the invite link, let them scan the QR, or read out the code. Everyone who joins hears exactly what you play.', placement: 'bottom' },
+      { route: '/together', target: '#vx-lt-code', action: reveal('#vx-lt-code'), when: idle, title: 'Join with a code', body: 'Type the code your host shared and tap Join. Your player then follows the host’s.', placement: 'bottom' },
+      { route: '/together', target: '.vx-lt-scan-btn', action: reveal('.vx-lt-scan-btn'), when: idle, title: 'Or scan the QR', body: 'This opens the camera inside VinaX and joins when it reads the host’s QR. The camera is on only while the scanner is open.', placement: 'top' },
+      { title: 'A link joins by itself', body: 'Open a host’s invite link and you are in the room, with no code to type.' },
+      { title: 'Tap to start listening', body: 'Browsers do not start sound by themselves. If this button shows after you join, one tap puts you in step.' },
+      { title: 'From the player too', body: 'The full-screen player has a Together tab after Credits. It starts a room with the song that is playing.' },
+      { title: 'The Live pill', body: 'While a room is live, a pill sits on every other page. Tap it to return to the room.' },
+      { title: 'Inside the room', body: 'Chat, reactions, song requests and skip votes are in the room. Tap Show me around there for a tour of them.' },
+    ],
+  },
+  {
+    id: 'together-room',
+    title: 'Inside a room',
+    blurb: 'The room code, reactions, chat, adding songs and the fine-tune. Runs in a live Listen Together room.',
+    minutes: 1,
+    emoji: '👥',
+    needs: () => (idle() ? 'Start or join a room first. This tour runs inside it.' : null),
+    steps: [
+      { route: '/together', target: '[data-tour="lt-status"]', action: reveal('[data-tour="lt-status"]'), title: 'You are live', body: 'This line is the room’s state: live, in sync, catching up or reconnecting. A guest sees In sync once the two players match.', placement: 'bottom' },
+      { route: '/together', target: '[data-tour="lt-code"]', action: reveal('[data-tour="lt-code"]'), title: 'Room code and QR', body: 'Friends type this code, or scan the QR with VinaX or their phone’s camera. Anyone in the room can show it.', placement: 'bottom' },
+      { route: '/together', target: '[data-tour="lt-invite"]', action: reveal('[data-tour="lt-invite"]'), when: () => useTogether.getState().mode === 'host', title: 'Share the invite', body: 'Share invite sends a link that joins by itself. Copy code is for reading it out or pasting it.', placement: 'bottom' },
+      { route: '/together', target: '[aria-label="Fine-tune this phone"]', action: reveal('[aria-label="Fine-tune this phone"]'), when: () => useTogether.getState().mode === 'guest', title: 'Fine-tune this phone', body: 'If this phone sounds late next to the host’s, tap Earlier. If it sounds early, tap Later.', tip: 'A Bluetooth speaker usually needs a little. It is kept for next time.', placement: 'bottom' },
+      { route: '/together', target: '[aria-label="React to the music"]', action: reveal('[aria-label="React to the music"]'), title: 'React and skip', body: 'An emoji floats on every screen in the room. The last button skips: the host skips at once, and guests vote.', tip: 'When more than half the room votes, the song moves on.', placement: 'top' },
+      { route: '/together', target: '[data-tour="lt-chat"]', action: reveal('[data-tour="lt-chat"]'), title: 'Chat', body: 'Type a line and everyone in the room sees it.', placement: 'top' },
+      { route: '/together', target: '[data-tour="lt-add"]', action: reveal('[data-tour="lt-add"]'), title: 'Add a song', body: 'Search here and tap a song to add it for everyone. It joins Up next and the host’s player plays it.', placement: 'top' },
+      { route: '/together', target: '#vx-lt-people', action: reveal('#vx-lt-people'), title: 'Who is listening', body: 'The host plays, pauses, seeks and skips. Every other phone follows by itself, on any page.', tip: 'A Live pill on other pages leads back here.', placement: 'top' },
+      { route: '/together', target: '[data-tour="lt-leave"]', action: reveal('[data-tour="lt-leave"]'), title: 'End or leave', body: 'A host’s End for everyone closes the room. A guest’s Leave session takes only that guest out.', tip: 'After a song or two, Save this session as a playlist shows just above.', placement: 'top' },
     ],
   },
   {

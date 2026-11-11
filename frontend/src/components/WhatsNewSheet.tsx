@@ -9,6 +9,7 @@ import { DISPLAY_VERSION } from '@/constants/version';
 // win from the "Living Glass" consolidation).
 import type { VersionInfo, ChangeEntry } from '@/constants/changelog';
 import { Sheet, SheetHeader } from './Sheet';
+import { useTutorialStore } from '@/store/tutorialStore';
 
 const TYPE_LABEL: Record<ChangeEntry['type'], string> = { new: 'New', improved: 'Improved', fixed: 'Fixed' };
 
@@ -95,9 +96,27 @@ export function WhatsNewSheet() {
         <StructuredNotes changes={notes.changes} />
       </div>
 
-      <button type="button" onClick={dismiss} className="mt-6 w-full sm:w-auto sm:self-end sm:px-8 min-h-[48px] rounded-full btn-primary shrink-0">
-        Let&rsquo;s go
-      </button>
+      {/* 1.12.12 — a release that introduces a feature can offer its guided tour.
+          "Let's go" stays first in the markup: it takes the sheet's opening
+          focus, so Enter closes the sheet as it always has. */}
+      <div className="mt-6 flex flex-col gap-2 sm:flex-row-reverse sm:justify-start shrink-0">
+        <button type="button" onClick={dismiss} className="w-full sm:w-auto sm:px-8 min-h-[48px] rounded-full btn-primary">
+          Let&rsquo;s go
+        </button>
+        {notes.tour && (
+          <button
+            type="button"
+            onClick={() => {
+              const tour = notes.tour;
+              dismiss();
+              if (tour) useTutorialStore.getState().start(tour);
+            }}
+            className="w-full sm:w-auto sm:px-6 min-h-[48px] rounded-full btn-secondary"
+          >
+            Take the tour
+          </button>
+        )}
+      </div>
     </Sheet>
   );
 }

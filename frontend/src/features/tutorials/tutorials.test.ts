@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { TUTORIALS, tutorialById } from './tutorials';
+import { CHANGELOG_V2 } from '@/constants/changelog';
 
 /** Every non-test source file except the tour definitions themselves. */
 function sources(dir: string, out: string[] = []): string[] {
@@ -18,11 +19,24 @@ const steps = TUTORIALS.flatMap((t) => t.steps.map((s, i) => ({ where: `${t.id} 
 describe('guided tours', () => {
   it('covers the 11.0 additions and keeps the older tours', () => {
     expect(TUTORIALS.map((t) => t.id)).toEqual([
-      'first-song', 'find-anything', 'listen-together', 'app-look', 'festival-themes', 'make-it-yours', 'save-organise',
+      'first-song', 'find-anything', 'listen-together', 'together-room', 'app-look', 'festival-themes', 'make-it-yours', 'save-organise',
     ]);
     expect(new Set(TUTORIALS.map((t) => t.id)).size).toBe(TUTORIALS.length);
     expect(tutorialById('app-look')?.title).toBe('Change the app’s look');
     expect(tutorialById('nope')).toBeNull();
+  });
+
+  it('the room tour says why it cannot run outside a room, and the others always can', () => {
+    expect(tutorialById('together-room')?.needs?.()).toMatch(/^Start or join a room first/);
+    for (const t of TUTORIALS) if (t.id !== 'together-room') expect(t.needs, t.id).toBeUndefined();
+  });
+
+  it('a tour a What’s New card offers exists and can always run', () => {
+    for (const [version, card] of Object.entries(CHANGELOG_V2)) {
+      if (!card.tour) continue;
+      expect(tutorialById(card.tour), `${version}: tour ${card.tour}`).not.toBeNull();
+      expect(tutorialById(card.tour)?.needs, `${version}: ${card.tour} needs something first`).toBeUndefined();
+    }
   });
 
   it.each(steps)('$where: a title of at most 5 words and one or two plain sentences', (s) => {

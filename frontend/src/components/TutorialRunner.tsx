@@ -17,6 +17,9 @@ import { scrollBehavior } from '@/utils/motion';
  * mini player), the card is placed from its measured height, a step whose
  * anchor is missing is skipped instead of pointing at nothing, each step is
  * announced through a live region, and focus returns to the opener on close.
+ *
+ * 1.12.12 — a step can say it is not for this listener (`when`): it is passed
+ * over at once, where a missing anchor is only noticed after ANCHOR_WAIT_MS.
  */
 interface Rect { top: number; left: number; width: number; height: number }
 
@@ -101,6 +104,19 @@ export default function TutorialRunner() {
     setRect(null);
     let cancelled = false;
     const live = () => !cancelled && id === runId.current;
+    // A step that is not for this listener (a host-only control, seen by a
+    // guest) is passed over at once, before anything is shown for it.
+    let mine = true;
+    try {
+      mine = current.when?.() ?? true;
+    } catch {
+      /* a failed check shows the step */
+    }
+    const skipTo = step + dir.current;
+    if (!mine && skipTo >= 0 && skipTo < total) {
+      go(skipTo);
+      return;
+    }
     (async () => {
       if (current.route && window.location.pathname !== current.route) {
         await router.navigate(current.route);

@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { bumpVersion, cardMessage, directiveOf, directiveOfMerge, entryFromMessage, insertChangelogEntry, levelOf, updatePackageJson, updateVersionTs } from '../../scripts/auto-release.mjs';
+import { bumpVersion, cardMessage, directiveOf, directiveOfMerge, entryFromMessage, insertChangelogEntry, levelOf, tourOf, updatePackageJson, updateVersionTs } from '../../scripts/auto-release.mjs';
 import { CHANGELOG_V2 } from '../constants/changelog';
 import { LATEST_VERSION } from '../constants/version';
 
@@ -79,6 +79,27 @@ describe('entryFromMessage', () => {
     const long = entryFromMessage(`Title\n\n- ${'word '.repeat(80)}`).changes[0].text;
     expect(long.length).toBeLessThanOrEqual(240);
     expect(long.endsWith('…')).toBe(true);
+  });
+});
+
+describe('a card can offer a guided tour', () => {
+  it('reads a body line that is exactly "tour: <id>", never prose or the subject', () => {
+    expect(tourOf('Meet Listen Together\n\n- A new tour.\n\ntour: listen-together\n')).toBe('listen-together');
+    expect(tourOf('Meet Listen Together\n\n  Tour: Listen-Together  ')).toBe('listen-together');
+    expect(tourOf('tour: listen-together\n\n- A new tour.')).toBeNull();
+    expect(tourOf('Title\n\nThe line `tour: listen-together` adds a button.')).toBeNull();
+    expect(tourOf('Title\n\n- tour: listen-together')).toBeNull();
+    expect(tourOf('Title\n\ntour: two words')).toBeNull();
+  });
+
+  it('carries it on the card and writes it into changelog.ts, and leaves other cards as they were', () => {
+    const e = entryFromMessage('Meet Listen Together\n\n- A new guided tour of rooms.\n\ntour: listen-together');
+    expect(e).toEqual({ title: 'Meet Listen Together', changes: [{ type: 'new', text: 'A new guided tour of rooms.' }], tour: 'listen-together' });
+    expect('tour' in entryFromMessage('Tidy the queue')).toBe(false);
+    const fixture = 'export const CHANGELOG_V2: Record<string, VersionInfo> = {\n  \'1.0.0\': {\n    changes: [],\n  },\n};\n';
+    const out = insertChangelogEntry(fixture, '1.0.1', e);
+    expect(out).toContain("    ],\n    tour: 'listen-together',\n  },\n");
+    expect(insertChangelogEntry(fixture, '1.0.1', { title: 'x', changes: [] })).not.toContain('tour:');
   });
 });
 

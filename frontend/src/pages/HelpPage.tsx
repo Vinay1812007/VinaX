@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { PageHeader } from '@/components/PageHeader';
 import { SectionHeader } from '@/components/SectionHeader';
@@ -48,7 +48,14 @@ export default function HelpPage() {
   const clientCfg = useClientConfig();
   usePageTitle('Help & Feedback');
   const openTour = useUiStore((s) => s.openTour);
-  const startTutorial = useTutorialStore((s) => s.start);
+  const navigate = useNavigate();
+  const startTour = useTutorialStore((s) => s.start);
+  // A tour that needs something first (a live room) says so instead of pointing at nothing.
+  const startTutorial = (id: string) => {
+    const why = TUTORIALS.find((t) => t.id === id)?.needs?.();
+    if (why) toast(why, { action: { label: 'Open Listen Together', onClick: () => navigate('/together') } });
+    else startTour(id);
+  };
   const done = useTutorialStore((s) => s.done);
   const [query, setQuery] = useState('');
   const [type, setType] = useState<'bug' | 'idea' | 'other'>('bug');

@@ -61,6 +61,8 @@ export const KEYS = {
    *  THIS device plays as a guest, for a speaker that is slow to sound. Per
    *  device, so it is in no backup. */
   togetherTrim: `${STORAGE_PREFIX}.together-trim.v1`,
+  /** 1.12.12 — "Not now" on the Listen Together page's tour introduction. */
+  togetherIntro: `${STORAGE_PREFIX}.together-intro.v1`,
   /** Last in-app-update install attempt {build, ts} — the dialog reappearing
    *  for the SAME build after an attempt means the install didn't take
    *  (cancelled, or Android's signature-conflict block on legacy installs),

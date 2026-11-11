@@ -13,21 +13,25 @@
  *      derived from the top CHANGELOG_V2 entry — updating the changelog
  *      alone flips the fingerprint and re-arms the sheet.
  */
-import { render, cleanup, screen, waitFor } from '@testing-library/react';
+import { render, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const CURRENT_FINGERPRINT = '3.8.0#deadbeef';
 
 vi.mock('@/constants/version', () => ({ LATEST_VERSION: '3.8.0', DISPLAY_VERSION: 'VinaX V1' }));
+/** Set by a test whose release card offers a guided tour. */
+const card: { tour?: string } = {};
 vi.mock('@/constants/changelog', () => ({
   latestNotes: () => ({
     title: 'A calmer, quieter VinaX',
     changes: [{ type: 'improved', text: 'Redesigned surfaces' }],
+    ...card,
   }),
   latestNotesFingerprint: () => CURRENT_FINGERPRINT,
 }));
 
 import { WhatsNewSheet } from './WhatsNewSheet';
+import { useTutorialStore } from '@/store/tutorialStore';
 
 const KEY_LAST = 'vinax.last-seen-version';
 const KEY_ONBOARDED = 'vinax.onboarded.v1';
@@ -37,6 +41,8 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  delete card.tour;
+  useTutorialStore.getState().stop();
 });
 
 describe('WhatsNewSheet — when it opens', () => {
@@ -84,5 +90,28 @@ describe('WhatsNewSheet — when it opens', () => {
     await waitFor(() => {
       expect(document.body.textContent ?? '').not.toMatch(/What['’]s new/);
     });
+  });
+});
+
+describe('WhatsNewSheet — a card that offers a tour', () => {
+  it('has no tour button on an ordinary card', async () => {
+    window.localStorage.setItem(KEY_ONBOARDED, 'true');
+    render(<WhatsNewSheet />);
+    expect(await screen.findByText(/What['’]s new/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Take the tour' })).toBeNull();
+  });
+
+  it('“Take the tour” closes the sheet for good and starts that tour', async () => {
+    card.tour = 'listen-together';
+    window.localStorage.setItem(KEY_ONBOARDED, 'true');
+    render(<WhatsNewSheet />);
+    // “Let’s go” comes first, so the sheet's opening focus (and Enter) is still "close".
+    const tourButton = await screen.findByRole('button', { name: 'Take the tour' });
+    const go = screen.getByRole('button', { name: /Let.s go/ });
+    expect(go.compareDocumentPosition(tourButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(tourButton);
+    expect(useTutorialStore.getState().activeId).toBe('listen-together');
+    expect(JSON.parse(window.localStorage.getItem(KEY_LAST) ?? 'null')).toBe(CURRENT_FINGERPRINT);
+    await waitFor(() => expect(document.body.textContent ?? '').not.toMatch(/What['’]s new/));
   });
 });

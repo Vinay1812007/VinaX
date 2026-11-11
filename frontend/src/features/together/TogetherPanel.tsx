@@ -4,6 +4,7 @@ import { UsersIcon } from '@/components/Icons';
 import { useCurrentSong } from '@/store/playerStore';
 import { useTogether } from '@/services/together/session';
 import { toast } from '@/store/toastStore';
+import { useTutorialStore } from '@/store/tutorialStore';
 import { shareLink } from '@/utils/share';
 import { leaveSession, startHosting } from './engine';
 import { JoinRoom } from './JoinRoom';
@@ -56,6 +57,10 @@ export default function TogetherPanel(): ReactNode {
         </button>
         <p className="vx-ltp-or">or join a friend’s room</p>
         <JoinRoom inputId="vx-ltp-code" disabled={starting} />
+        {/* 1.12.12 — the tour runs on the Listen Together page, on its real buttons. */}
+        <button type="button" className="vx-ltp-how" onClick={() => useTutorialStore.getState().start('listen-together')}>
+          New to this? See how it works
+        </button>
         <OpenInApp />
       </div>
     );

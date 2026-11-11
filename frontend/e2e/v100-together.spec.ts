@@ -294,3 +294,139 @@ test('a host who reloads the tab is still hosting', async ({ browser, baseURL })
   await expect(host.getByRole('button', { name: 'End for everyone' })).toBeVisible();
   await host.context().close();
 });
+
+/**
+ * 1.12.12 — the Listen Together tours, walked in a real browser. Every step
+ * that names a control must be spotlighted on it (never a card centred over
+ * nothing), with the spotlight and the card both on screen and the card not
+ * lying on the control. A step whose control this role does not have is
+ * skipped by the runner, so the titles a walk collects are the role's own.
+ */
+interface TourStep { title: string; anchor: string | null }
+async function walkTour(p: Page): Promise<TourStep[]> {
+  const tour = p.locator('.vx-tut');
+  const seen: TourStep[] = [];
+  for (let i = 0; i < 24; i += 1) {
+    // A step with a missing anchor waits 2.5 s before it is skipped.
+    await expect(tour).toHaveAttribute('data-ready', 'true', { timeout: 12_000 });
+    const anchor = await tour.getAttribute('data-anchor');
+    const title = await tour.locator('h2').innerText();
+    const view = p.viewportSize()!;
+    let card = (await tour.locator('.vx-tut-card').boundingBox())!;
+    expect(card.y, `${title}: card top`).toBeGreaterThanOrEqual(0);
+    expect(card.y + card.height, `${title}: card bottom`).toBeLessThanOrEqual(view.height + 1);
+    expect(card.x, `${title}: card left`).toBeGreaterThanOrEqual(0);
+    expect(card.x + card.width, `${title}: card right`).toBeLessThanOrEqual(view.width + 1);
+    if (anchor !== 'none') {
+      await expect(tour, `${title}: spotlight`).toHaveAttribute('data-anchor', 'found');
+      // The spotlight glides to its control (and follows a page still scrolling): measure it at rest.
+      let spot = (await tour.locator('.vx-tut-spot').boundingBox())!;
+      for (let n = 0; n < 20; n += 1) {
+        await p.waitForTimeout(150);
+        const now = (await tour.locator('.vx-tut-spot').boundingBox())!;
+        const still = Math.abs(now.y - spot.y) < 0.5 && Math.abs(now.x - spot.x) < 0.5 && Math.abs(now.height - spot.height) < 0.5;
+        spot = now;
+        if (still) break;
+      }
+      card = (await tour.locator('.vx-tut-card').boundingBox())!;
+      expect(spot.y, `${title}: spotlight top`).toBeGreaterThanOrEqual(-1);
+      expect(spot.y + spot.height, `${title}: spotlight bottom`).toBeLessThanOrEqual(view.height + 1);
+      const apart = card.y >= spot.y + spot.height - 1 || card.y + card.height <= spot.y + 1;
+      expect(apart, `${title}: the card lies on its control`).toBe(true);
+    }
+    seen.push({ title, anchor });
+    const done = tour.getByRole('button', { name: 'Done' });
+    if (await done.isVisible()) {
+      await done.click();
+      await expect(tour).toHaveCount(0);
+      return seen;
+    }
+    const step = await tour.getAttribute('data-step');
+    await tour.getByRole('button', { name: 'Next' }).click();
+    await expect(tour).not.toHaveAttribute('data-step', step ?? '');
+  }
+  throw new Error('the tour never reached Done');
+}
+const titles = (steps: TourStep[]): string[] => steps.map((s) => s.title);
+
+for (const size of [{ name: 'a computer', width: 1280, height: 860 }, { name: 'a phone', width: 390, height: 844 }]) {
+  test(`the Listen Together tour introduces the page and points at its real buttons, on ${size.name}`, async ({ browser, baseURL }) => {
+    const base = baseURL!;
+    const page = await open(browser, base, roomServer(), 'Asha', []);
+    await page.setViewportSize({ width: size.width, height: size.height });
+    await page.goto('/together');
+
+    // A first visit is offered the tour.
+    const intro = page.getByRole('region', { name: 'Take the one-minute tour' });
+    await expect(intro).toBeVisible();
+    await intro.getByRole('button', { name: 'Show me how' }).click();
+
+    const steps = await walkTour(page);
+    expect(titles(steps)).toEqual([
+      'Meet Listen Together', 'Host a session', 'Bring your friends', 'Join with a code', 'Or scan the QR',
+      'A link joins by itself', 'Tap to start listening', 'From the player too', 'The Live pill', 'Inside the room',
+    ]);
+    expect(steps.slice(1, 5).map((s) => s.anchor)).toEqual(['found', 'found', 'found', 'found']);
+    // Nothing was started by the tour, and it is not offered again.
+    await expect(page.getByRole('button', { name: 'Start a session' })).toBeVisible();
+    await expect(intro).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Replay the tour' })).toBeVisible();
+    await page.context().close();
+  });
+}
+
+test('“Not now” puts the tour offer away for good, and the room tour asks for a room first', async ({ browser, baseURL }) => {
+  const base = baseURL!;
+  const server = roomServer();
+  const page = await open(browser, base, server, 'Asha', []);
+  await page.goto('/together');
+  const intro = page.getByRole('region', { name: 'Take the one-minute tour' });
+  await intro.getByRole('button', { name: 'Not now' }).click();
+  await expect(intro).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'How it works' })).toBeVisible();
+  await expect(intro).toHaveCount(0);
+
+  // The room tour needs a room: from Help it says so instead of pointing at nothing.
+  await page.goto('/help');
+  await page.getByRole('button', { name: /Inside a room/ }).click();
+  await expect(page.getByText('Start or join a room first. This tour runs inside it.')).toBeVisible();
+  await expect(page.locator('.vx-tut')).toHaveCount(0);
+  await page.context().close();
+});
+
+for (const size of [{ name: 'a computer', width: 1280, height: 860 }, { name: 'a phone', width: 390, height: 844 }]) {
+  test(`“Show me around” tours a live room for the host and for a guest, on ${size.name}`, async ({ browser, baseURL }) => {
+    const base = baseURL!;
+    const server = roomServer();
+    const host = await open(browser, base, server, 'Asha', [appSong(base, 'a', 'Song A'), appSong(base, 'b', 'Song B')]);
+    const guest = await open(browser, base, server, 'Ravi', []);
+    await host.setViewportSize({ width: size.width, height: size.height });
+    await guest.setViewportSize({ width: size.width, height: size.height });
+
+    await host.goto('/together');
+    await host.getByRole('button', { name: 'Start a session' }).click();
+    await expect(host.locator('.vx-lt-code')).toHaveText('ABC123');
+    await host.getByRole('button', { name: 'Show me around' }).click();
+    const asHost = await walkTour(host);
+    // A host has Share invite and no fine-tune.
+    expect(titles(asHost)).toEqual(['You are live', 'Room code and QR', 'Share the invite', 'React and skip', 'Chat', 'Add a song', 'Who is listening', 'End or leave']);
+    expect(asHost.every((s) => s.anchor === 'found')).toBe(true);
+    // The tour ended nothing, and is now a quiet replay button.
+    await expect(host.locator('.vx-lt-code')).toHaveText('ABC123');
+    await expect(host.getByRole('button', { name: 'Replay the room tour' })).toBeVisible();
+
+    await guest.goto('/together?code=ABC123');
+    await expect(guest.locator('.vx-lt-status')).toBeVisible({ timeout: 10_000 });
+    await startListeningIfAsked(guest);
+    await guest.getByRole('button', { name: 'Show me around' }).click();
+    const asGuest = await walkTour(guest);
+    // A guest has the fine-tune and no Share invite.
+    expect(titles(asGuest)).toEqual(['You are live', 'Room code and QR', 'Fine-tune this phone', 'React and skip', 'Chat', 'Add a song', 'Who is listening', 'End or leave']);
+    expect(asGuest.every((s) => s.anchor === 'found')).toBe(true);
+    await expect(guest.getByRole('button', { name: 'Leave session' })).toBeVisible();
+
+    await host.context().close();
+    await guest.context().close();
+  });
+}

@@ -25,6 +25,10 @@
  * these markers (the first automatic release was skipped by its own
  * documentation), so prose never counts.
  *
+ * A body line that is exactly "tour: <id>" (a tour id from
+ * src/features/tutorials/tutorials.ts) puts a "Take the tour" button on the
+ * card, for a release that introduces something a tour explains.
+ *
  * Exports are pure so they can be unit-tested (src/__tests__/autoRelease.test.ts).
  */
 import { execFileSync } from 'node:child_process';
@@ -130,7 +134,17 @@ export function entryFromMessage(message) {
     const prose = body.map(cleanLine).find((l) => l.length > 24 && !trailer.test(l) && !/^#/.test(l));
     changes = [{ type: typeOf(prose ?? title, fallback), text: clip(prose ?? title) }];
   }
-  return { title: clip(title.charAt(0).toUpperCase() + title.slice(1), 90, false), changes };
+  const tour = tourOf(message);
+  return { title: clip(title.charAt(0).toUpperCase() + title.slice(1), 90, false), changes, ...(tour ? { tour } : {}) };
+}
+
+/** The guided tour a message offers with its card: a body line that is exactly "tour: <id>". */
+export function tourOf(message) {
+  for (const l of message.replace(/\r/g, '').split('\n').slice(1)) {
+    const m = /^\s*tour:\s*([a-z][a-z0-9-]{1,40})\s*$/i.exec(l);
+    if (m) return m[1].toLowerCase();
+  }
+  return null;
 }
 
 /** Trim to `max` characters on a word boundary; a sentence gets its full stop. */
@@ -156,6 +170,7 @@ export function insertChangelogEntry(source, version, entry) {
     '    changes: [',
     ...entry.changes.map((c) => `      { type: '${c.type}', text: ${q(c.text)} },`),
     '    ],',
+    ...(entry.tour ? [`    tour: ${q(entry.tour)},`] : []),
     '  },',
     '',
   ].join('\n');

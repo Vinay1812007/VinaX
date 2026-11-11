@@ -12,7 +12,16 @@ vi.mock('@/features/tutorials/tutorials', () => {
       { title: 'Three', body: 'Third.' },
     ],
   };
-  return { tutorialById: (id: string | null) => (id === 't' ? T : null) };
+  // A tour with a step that is not for this listener.
+  const W = {
+    id: 'w', title: 'Role tour', blurb: '', minutes: 1, emoji: '',
+    steps: [
+      { title: 'One', body: 'First.' },
+      { title: 'Host only', body: 'Never shown.', target: '[data-tour="not-there"]', when: () => false },
+      { title: 'Three', body: 'Third.', when: () => true },
+    ],
+  };
+  return { tutorialById: (id: string | null) => (id === 't' ? T : id === 'w' ? W : null) };
 });
 
 import TutorialRunner from './TutorialRunner';
@@ -42,6 +51,21 @@ describe('TutorialRunner', () => {
     key('ArrowLeft'); // going back skips it the other way
     await waitFor(() => expect(useTutorialStore.getState().step).toBe(0), { timeout: 5000 });
   }, 15000);
+
+  it('a step that is not for this listener is passed over at once, in both directions', async () => {
+    act(() => useTutorialStore.getState().start('w'));
+    render(<TutorialRunner />);
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Step 1 of 3. One. First.'));
+    const before = Date.now();
+    key('ArrowRight');
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Step 3 of 3. Three. Third.'));
+    // No 2.5 s wait for an anchor that was never going to be there.
+    expect(Date.now() - before).toBeLessThan(1000);
+    expect(screen.queryByText('Never shown.')).toBeNull();
+    key('ArrowLeft');
+    await waitFor(() => expect(useTutorialStore.getState().step).toBe(0));
+    expect(Date.now() - before).toBeLessThan(2000);
+  });
 
   it('Enter on Back is Back, Tab stays in the card, Done records the tour', async () => {
     act(() => { useTutorialStore.getState().start('t'); useTutorialStore.getState().go(2); });

@@ -15,6 +15,9 @@ import { bestImage } from '@/utils/images';
 import type { Song } from '@/types';
 import { shareLink } from '@/utils/share';
 import { toast } from '@/store/toastStore';
+import { useTutorialStore } from '@/store/tutorialStore';
+import { KEYS } from '@/constants/storage-keys';
+import { getLocal, setLocal } from '@/services/storage/local';
 import { PlusIcon, UsersIcon } from '@/components/Icons';
 import '@/styles/pages/secondary.css';
 import '@/styles/pages/together.css';
@@ -59,6 +62,32 @@ function FineTune(): ReactNode {
   );
 }
 
+/** Starts a guided tour (the runner and its steps are a lazy chunk). */
+const startTour = (id: string) => useTutorialStore.getState().start(id);
+
+/**
+ * 1.12.12 — the introduction a first-time visitor gets: what the tour is and
+ * a way into it. It leaves for good once the tour has been finished or "Not
+ * now" was tapped; from then on the hero has a small "How it works" button.
+ * Not shown to someone arriving through an invite link: they are on their way
+ * into a room.
+ */
+function Intro({ onClose }: { onClose: () => void }): ReactNode {
+  return (
+    <section className="vx-lt-intro" aria-labelledby="vx-lt-intro">
+      <div className="min-w-0">
+        <p className="vx-lt-kicker">New here?</p>
+        <h2 id="vx-lt-intro" className="vx-lt-h2">Take the one-minute tour</h2>
+        <p className="vx-lt-intro-text">It points at the real buttons: how to host a room, how friends get in, and how to join one.</p>
+      </div>
+      <div className="vx-lt-intro-row">
+        <button type="button" className="vx-lt-cta is-sm" onClick={() => startTour('listen-together')}>Show me how</button>
+        <button type="button" className="vx-sec-pill" onClick={onClose}>Not now</button>
+      </div>
+    </section>
+  );
+}
+
 function AddSong({ label }: { label: string }): ReactNode {
   const [q, setQ] = useState('');
   const [results, setResults] = useState<Song[]>([]);
@@ -82,6 +111,7 @@ function AddSong({ label }: { label: string }): ReactNode {
         onChange={(e) => setQ(e.target.value)}
         placeholder="Search a song for everyone"
         aria-label={label}
+        data-tour="lt-add"
         type="search"
         className="vx-sec-field"
       />
@@ -138,7 +168,7 @@ function SyncBadge(): ReactNode {
                 ? 'Live · in sync'
                 : 'Live · catching up…';
   return (
-    <p className="vx-lt-status" data-status={status} role="status">
+    <p className="vx-lt-status" data-status={status} role="status" data-tour="lt-status">
       <span className="vx-lt-dot" aria-hidden />
       {text}
     </p>
@@ -150,6 +180,13 @@ function Idle(): ReactNode {
   const current = useCurrentSong();
   const [linkCode] = useState(() => (params.get('code') ?? '').toUpperCase());
   const [busy, setBusy] = useState<'host' | 'join' | null>(null);
+  const toured = useTutorialStore((s) => s.done.includes('listen-together'));
+  const [introClosed, setIntroClosed] = useState(() => getLocal<boolean>(KEYS.togetherIntro, false));
+  const offerTour = !toured && !introClosed && !linkCode;
+  const closeIntro = () => {
+    setLocal(KEYS.togetherIntro, true);
+    setIntroClosed(true);
+  };
 
   const join = async (code: string): Promise<void> => {
     setBusy('join');
@@ -179,7 +216,15 @@ function Idle(): ReactNode {
         </span>
         <h1 className="vx-lt-title">Listen together</h1>
         <p className="vx-lt-lede">The same song, at the same second, on every phone in the room. Free — no app needed.</p>
+        {/* One way into the tour at a time: the introduction below, or this button once it is gone. */}
+        {!offerTour && (
+          <button type="button" className="vx-sec-pill vx-lt-how" onClick={() => startTour('listen-together')}>
+            {toured ? 'Replay the tour' : 'How it works'}
+          </button>
+        )}
       </header>
+
+      {offerTour && <Intro onClose={closeIntro} />}
 
       <div className="vx-lt-cards">
         <section className="vx-lt-card is-host" aria-labelledby="vx-lt-start">
@@ -232,6 +277,7 @@ function Live(): ReactNode {
   const listenerCount = useTogether((s) => s.listenerCount);
   const hostName = useTogether((s) => s.hostName);
   const [chat, setChat] = useState('');
+  const roomToured = useTutorialStore((s) => s.done.includes('together-room'));
   const chatEnd = useRef<HTMLLIElement>(null);
   useEffect(() => { chatEnd.current?.scrollIntoView({ block: 'nearest' }); }, [messages.length]);
   const saveSession = () => {
@@ -289,7 +335,7 @@ function Live(): ReactNode {
           </button>
         )}
 
-        <div className="vx-lt-code-row">
+        <div className="vx-lt-code-row" data-tour="lt-code">
           <div>
             <p className="vx-lt-kicker">Room code</p>
             <p className="vx-lt-code">{code}</p>
@@ -298,7 +344,7 @@ function Live(): ReactNode {
         </div>
         {mode === 'guest' && <FineTune />}
         {mode === 'host' && (
-          <div className="vx-lt-actions">
+          <div className="vx-lt-actions" data-tour="lt-invite">
             <button
               type="button"
               onClick={() => void shareLink(inviteLink, 'Listen with me on VinaX').then((r) => toast(r === 'copied' ? 'Invite copied' : 'Invite shared'))}
@@ -324,6 +370,14 @@ function Live(): ReactNode {
         </div>
       </section>
 
+      {/* 1.12.12 — a tour of this room's real controls, offered until it has been taken. */}
+      <div className="vx-lt-around" data-new={roomToured ? undefined : 'true'}>
+        {!roomToured && <p className="vx-lt-around-text">First time in a room? A one-minute tour points at everything here. The music keeps playing.</p>}
+        <button type="button" className="vx-sec-pill" onClick={() => startTour('together-room')}>
+          {roomToured ? 'Replay the room tour' : 'Show me around'}
+        </button>
+      </div>
+
       {/* 15.0 — the room's chat: forty lines, everyone sees them on their next poll. */}
       <section className="vx-lt-block" aria-labelledby="vx-lt-chat">
         <h2 id="vx-lt-chat" className="vx-lt-h2">Chat</h2>
@@ -334,7 +388,7 @@ function Live(): ReactNode {
           ))}
           <li ref={chatEnd} aria-hidden />
         </ul>
-        <form className="vx-lt-chat-form" onSubmit={(e) => { e.preventDefault(); const t = chat.trim(); if (!t) return; setChat(''); void say(t).then((ok) => { if (!ok) toast('Could not send that'); }); }}>
+        <form className="vx-lt-chat-form" data-tour="lt-chat" onSubmit={(e) => { e.preventDefault(); const t = chat.trim(); if (!t) return; setChat(''); void say(t).then((ok) => { if (!ok) toast('Could not send that'); }); }}>
           <input value={chat} onChange={(e) => setChat(e.target.value)} maxLength={200} placeholder="Say something" aria-label="Chat message" className="vx-lt-code-input is-chat" />
           <button type="submit" className="vx-sec-pill" disabled={!chat.trim()}>Send</button>
         </form>
@@ -388,7 +442,7 @@ function Live(): ReactNode {
 
       {mode === 'guest' && <OpenInApp code={code} />}
 
-      <button type="button" onClick={leaveSession} className="vx-sec-pill is-danger">
+      <button type="button" onClick={leaveSession} className="vx-sec-pill is-danger" data-tour="lt-leave">
         {mode === 'host' ? 'End for everyone' : 'Leave session'}
       </button>
     </div>
