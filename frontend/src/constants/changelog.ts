@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.0': {
+    title: 'Listen Together is instant, and guests can ask for any song',
+    changes: [
+      { type: 'improved', text: 'Play, pause, seek and next song now reach every phone in the room at once, not a couple of seconds later.' },
+      { type: 'improved', text: 'Chat is rebuilt: your line shows as you send it, you can see who is typing, and each person\'s lines are easy to tell apart.' },
+      { type: 'new', text: 'Reactions rise over the whole screen on every phone, and reacting together fills the new Room energy bar until the whole room goes off.' },
+      { type: 'new', text: 'New: in a friend\'s room, tap any song anywhere in VinaX to ask the host for it. The host sees who asked and can play it now.' },
+    ],
+  },
   '1.12.12': {
     title: 'New guided tours for Listen Together: how to host, how to join, and what is in a room',
     changes: [
