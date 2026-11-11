@@ -16,6 +16,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.12.11': {
+    title: 'Listen Together is tight now: host and guest within a couple of hundredths of a second,…',
+    changes: [
+      { type: 'fixed', text: 'Listen Together: the two phones now stay within a couple of hundredths of a second of each other; the guest no longer sits a little ahead of or behind the host.' },
+      { type: 'improved', text: 'When the host pauses, plays or seeks, the guest is back in step in about 3 seconds (it used to take up to 14).' },
+      { type: 'new', text: 'New in a room you joined: Fine-tune this phone. If your phone still sounds early or late next to the host\'s (a Bluetooth speaker always does), tap Earlier or Later; it is remembered.' },
+      { type: 'fixed', text: 'Fixed: on a weak connection a guest could play on for two seconds after the host had paused.' },
+    ],
+  },
   '1.12.10': {
     title: 'Listen Together plays in step: the guest no longer runs a little behind the host',
     changes: [
