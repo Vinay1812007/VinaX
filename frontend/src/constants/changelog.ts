@@ -18,6 +18,16 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.12.12': {
+    title: 'New guided tours for Listen Together: how to host, how to join, and what is in a room',
+    changes: [
+      { type: 'new', text: 'New: a one-minute tour of Listen Together. It points at the real buttons and shows how to host a room and the three ways a friend gets in: a code, the QR or an invite link.' },
+      { type: 'new', text: 'New in a room: Show me around. A second tour points at the room code, reactions and skip votes, chat, adding songs and, for a guest, Fine-tune this phone. The music keeps playing.' },
+      { type: 'improved', text: 'The Listen Together page offers the tour on your first visit, and the Together tab of the player links to it. Both tours are also in Help › Live tutorials.' },
+      { type: 'improved', text: 'Help\'s Listen Together guide now covers the chat, skip votes, the fine-tune and saving a session as a playlist.' },
+    ],
+    tour: 'listen-together',
+  },
   '1.12.11': {
     title: 'Listen Together is tight now: host and guest within a couple of hundredths of a second,…',
     changes: [
