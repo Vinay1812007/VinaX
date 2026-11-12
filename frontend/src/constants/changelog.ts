@@ -18,6 +18,13 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.8': {
+    title: 'VinaX AI answers quickly again: Auto starts with models that work',
+    changes: [
+      { type: 'fixed', text: 'Auto no longer waits about 12 seconds on a model that does not answer before moving on.' },
+      { type: 'improved', text: 'Models from the approved list that are not answering right now are hidden from the menu until they work again.' },
+    ],
+  },
   '1.13.7': {
     title: 'VinaX AI uses only the approved free models',
     changes: [
