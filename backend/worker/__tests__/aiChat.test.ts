@@ -598,13 +598,13 @@ describe('thinking levels', () => {
   const metaOf = (events: Array<{ event: string; data: Record<string, unknown> }>) => events.find((e) => e.event === 'meta')!.data as { thinking: { choice: string; level: string; used: string }; route?: { task: string; complexity: string } };
   const anyAnswer: Upstream = (url) => (url.includes('generativelanguage') ? geminiSse('ok') : sseResponse(openAiSse('ok')));
 
-  it('Auto thinking judges a short fact question simple; the ladder’s first model has no switch, so it answers at Standard', async () => {
+  it('Auto thinking answers a short fact question at Fast (GPT-OSS reasoning_effort low) and says why', async () => {
     const { sent } = capture(() => sseResponse(openAiSse('Paris.')));
     const events = await readEvents(await post(ask('What is the capital of France?')));
     await settle();
-    expect(sent[0].url).toContain('nvidia.com');
-    expect(sent[0].body).not.toHaveProperty('reasoning_effort');
-    expect(metaOf(events)).toMatchObject({ thinking: { choice: 'auto', level: 'fast', used: 'standard' }, route: { task: 'Conversation', complexity: 'simple' } });
+    expect(sent[0].url).toContain('groq.com');
+    expect(sent[0].body).toMatchObject({ reasoning_effort: 'low', include_reasoning: true });
+    expect(metaOf(events)).toMatchObject({ thinking: { choice: 'auto', level: 'fast', used: 'fast' }, route: { task: 'Conversation', complexity: 'simple' } });
   });
 
   it('Fast on GPT-OSS sends reasoning_effort low', async () => {
@@ -634,12 +634,12 @@ describe('thinking levels', () => {
     expect(metaOf(events).thinking).toEqual({ choice: 'max', level: 'max', used: 'extended' });
   });
 
-  it('Maximum on Gemini 3 (picked) asks at high with twice the output room and the review prompt', async () => {
+  it('Maximum on Gemini 3 (picked) asks at high with more output room and the review prompt', async () => {
     const { sent } = capture(anyAnswer);
-    const events = await readEvents(await post(ask('Tell me about raga Yaman', { mode: 'model', model: 'gemini:gemini-3.6-flash', thinking: 'max' })));
+    const events = await readEvents(await post(ask('Tell me about raga Yaman', { mode: 'model', model: 'gemini:gemini-3.1-flash-lite', thinking: 'max' })));
     await settle();
-    expect(sent[0].url).toContain('gemini-3.6-flash');
-    expect(sent[0].body.generationConfig).toMatchObject({ maxOutputTokens: 65_536, thinkingConfig: { thinkingLevel: 'high' } });
+    expect(sent[0].url).toContain('gemini-3.1-flash-lite');
+    expect(sent[0].body.generationConfig).toMatchObject({ maxOutputTokens: 32_768, thinkingConfig: { thinkingLevel: 'high' } });
     expect(JSON.stringify(sent[0].body.systemInstruction)).toContain('review the draft');
     expect(metaOf(events).thinking).toEqual({ choice: 'max', level: 'max', used: 'max' });
   });
@@ -663,7 +663,7 @@ describe('thinking levels', () => {
 
   it('a model with no switch is asked unchanged at Standard', async () => {
     const { sent } = capture(() => sseResponse(openAiSse('ok')));
-    const events = await readEvents(await post(ask('Tell me about raga Yaman', { mode: 'model', model: 'nvidia:deepseek-ai/deepseek-v4.1-flash', thinking: 'fast' })));
+    const events = await readEvents(await post(ask('Tell me about raga Yaman', { mode: 'model', model: 'nvidia:nvidia/nemotron-3.5-lightning-30b-a3b', thinking: 'fast' })));
     await settle();
     expect(sent[0].body).not.toHaveProperty('reasoning_effort');
     expect(metaOf(events).thinking).toEqual({ choice: 'fast', level: 'fast', used: 'standard' });

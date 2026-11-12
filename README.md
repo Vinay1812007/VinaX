@@ -1048,7 +1048,7 @@ Inside the ladder, `preferFit` (`router.ts`) puts first the models that can see 
 
 | Model | Fast | Standard | Extended | Maximum |
 | --- | --- | --- | --- | --- |
-| Gemini 3 (`thinkingConfig.thinkingLevel`) | `minimal` | `low` | `high` | `high` + 65,536 output tokens (thinking counts against output; a 400 about the output limit is asked again at 32,768) |
+| Gemini 3 (`thinkingConfig.thinkingLevel`) | `minimal` | `low` | `high` | `high` + 65,536 output tokens, 32,768 on Flash Lite (thinking counts against output; a 400 about the output limit is asked again at 32,768) |
 | GPT-OSS on Groq (`reasoning_effort`) | `low` | `medium` | `high` | - |
 | OpenRouter reasoning models (OpenRouter's `reasoning.effort`) | `low` | model default | `high` | - |
 | Other models with `highParams` | - | yes | `highParams` | - |

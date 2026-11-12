@@ -62,6 +62,7 @@ describe('params per level', () => {
     expect(specAtLevel(GEMINI, 'extended').params).toMatchObject({ thinkingConfig: { thinkingLevel: 'high' } });
     expect(specAtLevel(GEMINI, 'extended').maxOutput).toBe(GEMINI.maxOutput);
     expect(specAtLevel(GEMINI, 'max').maxOutput).toBe(MAX_THINKING_OUTPUT);
+    expect(specAtLevel(LITE, 'max').maxOutput).toBe(32_768);
   });
 
   it('Groq GPT-OSS: reasoning_effort low / medium / high, keeping include_reasoning', () => {

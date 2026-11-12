@@ -5,7 +5,8 @@
  *
  * A level is only offered where the provider has a real switch for it:
  *   - Gemini 3 (`thinkingConfig.thinkingLevel`): Fast = minimal, Standard =
- *     low, Extended = high, Maximum = high with twice the output room
+ *     low, Extended = high, Maximum = high with more output room (65,536
+ *     tokens; 32,768 on the small Flash Lite models)
  *     (Gemini counts thinking against `maxOutputTokens`, so more room is more
  *     thinking before the answer is cut off).
  *   - GPT-OSS on Groq (`reasoning_effort`): Fast = low, Standard = medium,
@@ -27,8 +28,9 @@ export type ThinkingChoice = 'auto' | ThinkingLevel;
 export const THINKING_LEVELS: readonly ThinkingLevel[] = ['fast', 'standard', 'extended', 'max'];
 export const THINKING_NAMES: Record<ThinkingLevel, string> = { fast: 'Fast', standard: 'Standard', extended: 'Extended', max: 'Maximum' };
 
-/** Output room at Maximum on Gemini 3 (the 3.x Flash models' published ceiling). */
+/** Output room at Maximum on Gemini 3 (the 3.x Flash models' published ceiling); half that on the fast-tier Lite models. */
 export const MAX_THINKING_OUTPUT = 65_536;
+export const MAX_THINKING_OUTPUT_LITE = 32_768;
 
 interface Profile {
   /** Supported levels, lowest first; always includes 'standard'. */
@@ -41,12 +43,12 @@ interface Profile {
 
 const geminiLevel = (thinkingLevel: string) => ({ thinkingConfig: { includeThoughts: true, thinkingLevel } });
 
-export function thinkingProfile(spec: Pick<ModelSpec, 'provider' | 'upstream' | 'flags' | 'highParams' | 'maxOutput'>): Profile {
+export function thinkingProfile(spec: Pick<ModelSpec, 'provider' | 'upstream' | 'flags' | 'highParams' | 'maxOutput' | 'tier'>): Profile {
   if (spec.provider === 'gemini' && /^gemini-3/.test(spec.upstream) && spec.flags.reasoning) {
     return {
       levels: ['fast', 'standard', 'extended', 'max'],
       params: { fast: geminiLevel('minimal'), standard: geminiLevel('low'), extended: geminiLevel('high'), max: geminiLevel('high') },
-      output: { max: Math.max(spec.maxOutput, MAX_THINKING_OUTPUT) },
+      output: { max: Math.max(spec.maxOutput, spec.tier === 'fast' ? MAX_THINKING_OUTPUT_LITE : MAX_THINKING_OUTPUT) },
     };
   }
   if (spec.provider === 'groq' && /gpt-oss/.test(spec.upstream)) {
