@@ -18,6 +18,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.5': {
+    title: 'VinaX AI finishes big pages and apps instead of stopping halfway',
+    changes: [
+      { type: 'improved', text: 'When a reply runs out of room in the middle of a page, app or chart, VinaX AI carries on by itself (up to three times) until it is finished, so the preview works.' },
+      { type: 'improved', text: 'The bigger models can write twice as much in one go, and long replies get more time.' },
+      { type: 'improved', text: 'If something is still cut off, the preview panel says so and points to Continue, instead of showing a page stuck loading.' },
+    ],
+  },
   '1.13.4': {
     title: 'VinaX AI previews draw components written for shadcn/ui however they import it',
     changes: [
