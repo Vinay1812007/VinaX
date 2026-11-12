@@ -18,6 +18,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.10': {
+    title: 'VinaX AI starts answering in about a second',
+    changes: [
+      { type: 'improved', text: 'Auto now reaches a model that answers at once (Nemotron 3.5 Bolt) when the first choice is busy, instead of one that thinks for 8-10 seconds first.' },
+      { type: 'new', text: 'New chats and every message start the model sooner: less waiting on the database before the reply begins.' },
+      { type: 'improved', text: 'Hard questions still go to the models that think longer, with their thinking shown as it happens.' },
+    ],
+  },
   '1.13.9': {
     title: 'VinaX AI has Claude models in the model menu',
     changes: [
