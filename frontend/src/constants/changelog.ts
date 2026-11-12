@@ -18,6 +18,13 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.11': {
+    title: 'VinaX AI\'s paused models show as Paused in the console, and you can test them',
+    changes: [
+      { type: 'improved', text: 'The console\'s Health → VinaX AI table now marks the approved models that failed the live check as "Paused", instead of a plain "Off".' },
+      { type: 'improved', text: 'Its Test button works on them, so you can see when one answers again before switching it back on.' },
+    ],
+  },
   '1.13.10': {
     title: 'VinaX AI starts answering in about a second',
     changes: [
