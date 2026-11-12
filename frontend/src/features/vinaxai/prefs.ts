@@ -44,6 +44,8 @@ export interface ChatPrefs {
   liveLanguage: string;
   /** Live voice shows what each side says. */
   liveCaptions: boolean;
+  /** Live voice listens only while the orb is held (Hold to talk), instead of hands-free. */
+  liveHold: boolean;
 }
 
 export type ReplyStyle = 'normal' | 'concise' | 'explanatory' | 'formal' | 'learning';
@@ -51,7 +53,7 @@ export const REPLY_STYLES: readonly ReplyStyle[] = ['normal', 'concise', 'explan
 export const PERSONAL_MAX = Object.freeze({ name: 40, about: 1_500, instructions: 1_500 });
 
 const DEFAULTS: ChatPrefs = {
-  liveLanguage: deviceLanguage(), liveCaptions: true,
+  liveLanguage: deviceLanguage(), liveCaptions: true, liveHold: false,
   model: 'auto', webSearch: 'auto', extendedThinking: false, sidebarCollapsed: false, voice: 'troy', liveVoice: 'Kore', liveModel: 'auto', micId: '',
   artifacts: true, inlinePreviews: true, personalName: '', personalAbout: '', personalInstructions: '', style: 'normal', liveSearch: true, liveSpeaker: true,
 };
@@ -83,6 +85,7 @@ function load(): ChatPrefs {
       liveSpeaker: raw.liveSpeaker !== false,
       liveLanguage: typeof raw.liveLanguage === 'string' && LANGUAGE.test(raw.liveLanguage) ? raw.liveLanguage : DEFAULTS.liveLanguage,
       liveCaptions: raw.liveCaptions !== false,
+      liveHold: raw.liveHold === true,
     };
   } catch {
     return DEFAULTS;

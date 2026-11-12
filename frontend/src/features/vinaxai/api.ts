@@ -237,6 +237,8 @@ export interface LiveTokenReply {
   search?: boolean;
   /** The setup carries the speed settings (quick end of turn, quick thinking). */
   tuned?: boolean;
+  /** Hold to talk: no voice activity detection, the page marks each turn (activityStart / activityEnd). */
+  hold?: boolean;
   expiresAt: string;
 }
 
@@ -254,6 +256,8 @@ export interface LiveTokenOptions {
   language?: string;
   /** Without the speed settings (the model refused them). */
   lean?: boolean;
+  /** Hold to talk instead of hands-free. */
+  hold?: boolean;
   personal?: { name?: string; about?: string; instructions?: string; style?: string };
   conversationId?: string | null;
   incognito?: boolean;

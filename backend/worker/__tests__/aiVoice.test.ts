@@ -488,6 +488,17 @@ describe('POST /api/ai/live-token', () => {
     expect((bodies[1].body.bidiGenerateContentSetup as Record<string, unknown>).tools).toEqual([{ googleSearch: {} }]);
   });
 
+  it('Hold to talk: hold is asked for, set up and said back', async () => {
+    seed();
+    upstream = (url) => (url.endsWith('/v1beta/auth_tokens') ? json({ name: 'tok' }) : new Response('', { status: 500 }));
+    const held = await (await ask({ hold: true })).json();
+    expect(held.hold).toBe(true);
+    expect(held.setup.realtimeInputConfig).toEqual({ automaticActivityDetection: { disabled: true } });
+    const free = await (await ask({})).json();
+    expect(free.hold).toBe(false);
+    expect(free.setup.realtimeInputConfig.automaticActivityDetection.disabled).toBeUndefined();
+  });
+
   it('asked for web search: the setup gets the search tool and the search prompt', async () => {
     seed();
     upstream = (url) => (url.endsWith('/v1beta/auth_tokens') ? json({ name: 'tok' }) : new Response('', { status: 500 }));
@@ -620,6 +631,20 @@ describe('POST /api/ai/live-transcript', () => {
   });
 });
 
+describe('Hold to talk', () => {
+  it('turns voice activity detection off, tuned or lean, and the locked token carries it', () => {
+    for (const tuned of [true, false]) {
+      const setup = liveSetup('gemini-3.8-live', 'Kore', 'prompt', false, tuned, [], true);
+      expect(setup.realtimeInputConfig).toEqual({ automaticActivityDetection: { disabled: true } });
+      const bodies = tokenBodies(setup, Date.parse('2026-10-31T10:00:00Z'));
+      expect((bodies[0].body.liveConnectConstraints as { config: Record<string, unknown> }).config.realtimeInputConfig).toEqual({ automaticActivityDetection: { disabled: true } });
+    }
+    // Hands-free keeps Gemini's quick end of turn.
+    expect(liveSetup('gemini-3.8-live', 'Kore', 'prompt', false, true).realtimeInputConfig).toEqual({ automaticActivityDetection: { endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH', silenceDurationMs: 500 } });
+    expect(liveSetup('gemini-3.8-live', 'Kore', 'prompt', false, false).realtimeInputConfig).toBeUndefined();
+  });
+});
+
 describe('the voice prompt and the model list', () => {
   it('the Live prompt is spoken-style and names the model', () => {
     const p = voicePrompt({ now: new Date('2026-10-31T10:00:00Z'), timezone: 'UTC', locale: 'en', firstName: null, modelName: 'Gemini 3.8 Live', providerName: 'Google' });
@@ -627,6 +652,17 @@ describe('the voice prompt and the model list', () => {
     expect(p).toContain("User's first name: not known");
     expect(p).not.toMatch(/\{\{/);
     expect(VOICE_PROMPT).toContain('No Markdown');
+  });
+
+  it('talks like a voice assistant: one idea at a time, waits when asked, ignores voices not meant for it', () => {
+    for (const p of [VOICE_PROMPT, VOICE_SEARCH_PROMPT]) {
+      expect(p).toContain('say one idea at a time');
+      expect(p).toContain('say how many there are first');
+      expect(p).toContain('Let your tone follow the moment');
+      expect(p).toContain('just say "sure" and wait');
+      expect(p).toContain("don't repeat their question back");
+      expect(p).toContain("isn't a question for you: don't answer it");
+    }
   });
 
   it('the Live prompt answers anything, not only music', () => {

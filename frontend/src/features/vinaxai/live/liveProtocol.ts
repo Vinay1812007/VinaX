@@ -5,6 +5,8 @@
  *   page → Gemini   { setup }  (from POST /api/ai/live-token, sent first)
  *                   { realtimeInput: { audio: { data: <base64 PCM>, mimeType: "audio/pcm;rate=16000" } } }
  *                   { realtimeInput: { audioStreamEnd: true } }   (mic muted)
+ *                   { realtimeInput: { activityStart: {} } } / { realtimeInput: { activityEnd: {} } }
+ *                                    (Hold to talk: press and release; Gemini's own detection is off)
  *   Gemini → page   { setupComplete }
  *                   { serverContent: { modelTurn: { parts: [{ inlineData: { data } }] },
  *                                      inputTranscription: { text }, outputTranscription: { text },
@@ -163,6 +165,9 @@ export function levelOf(samples: Float32Array): number {
 
 export const audioMessage = (pcm: Uint8Array): string => JSON.stringify({ realtimeInput: { audio: { data: bytesToBase64(pcm), mimeType: INPUT_MIME } } });
 export const streamEndMessage = (): string => JSON.stringify({ realtimeInput: { audioStreamEnd: true } });
+/** Hold to talk: the listener pressed (a turn starts, and cuts VinaX AI off) and released (the turn is over). */
+export const activityStartMessage = (): string => JSON.stringify({ realtimeInput: { activityStart: {} } });
+export const activityEndMessage = (): string => JSON.stringify({ realtimeInput: { activityEnd: {} } });
 
 export type LiveEvent =
   | { type: 'ready' }

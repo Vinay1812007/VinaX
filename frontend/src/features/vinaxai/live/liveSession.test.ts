@@ -456,3 +456,130 @@ describe('Live voice in a noisy room', () => {
     s.stop();
   });
 });
+
+describe('Live voice: Hold to talk', () => {
+  beforeEach(() => { h.cap.native = false; h.cap.plugin = false; localStorage.clear(); });
+  const sentKinds = (ws: FakeWS): string[] => ws.sent.map((d) => Object.keys((JSON.parse(d) as { realtimeInput?: Record<string, unknown>; setup?: unknown }).realtimeInput ?? { setup: 1 })[0]);
+  const held = async (): Promise<{ s: LiveSession; ws: FakeWS; holds: boolean[]; mic: (level: number) => void }> => {
+    h.liveToken.mockImplementation(async () => ({ token: 't', url: 'wss://live.example/ws', setup: { model: 'models/m' }, model: { id: 'm', name: 'M' }, search: false, hold: true }));
+    const holds: boolean[] = [];
+    const s = new LiveSession({ thinking: false, voice: 'Kore', hold: true }, { ...callbacks(), onHold: (x) => holds.push(x) });
+    const started = s.start();
+    const ws = await sessionReady(s);
+    await started;
+    return { s, ws, holds, mic: (level) => FakeTap.last!.port.onmessage!({ data: new Float32Array(4096).fill(level) }) };
+  };
+
+  it('asks for hold; sends the mic only while held, marked by activityStart and activityEnd', async () => {
+    const { s, ws, holds, mic } = await held();
+    expect(h.liveToken.mock.calls[0][0]).toMatchObject({ hold: true });
+    expect(s.hold).toBe(true);
+    mic(0.2);
+    expect(sentKinds(ws)).toEqual(['setup']);
+    s.pressTalk();
+    // Held, even a quiet voice goes as it is (no noise gate: the release ends the turn).
+    mic(0.0003);
+    expect(sentSamples(ws).some((x) => x !== 0)).toBe(true);
+    s.releaseTalk();
+    mic(0.2);
+    expect(sentKinds(ws)).toEqual(['setup', 'activityStart', 'audio', 'activityEnd']);
+    expect(holds).toEqual([true, false]);
+    s.stop();
+  });
+
+  it('pressing while VinaX AI talks cuts it off; its next reply plays', async () => {
+    const { s, ws } = await held();
+    const played = vi.spyOn(FakeCtx.made[0], 'createBufferSource');
+    ws.say({ serverContent: { modelTurn: { parts: [{ inlineData: { data: voiceChunk() } }] } } });
+    s.pressTalk();
+    ws.say({ serverContent: { modelTurn: { parts: [{ inlineData: { data: voiceChunk() } }] } } });
+    expect(played).toHaveBeenCalledTimes(1);
+    ws.say({ serverContent: { interrupted: true } });
+    s.releaseTalk();
+    ws.say({ serverContent: { modelTurn: { parts: [{ inlineData: { data: voiceChunk() } }] } } });
+    expect(played).toHaveBeenCalledTimes(2);
+    s.stop();
+  });
+
+  it('hands-free ignores press and release; switching to hold reconnects with it', async () => {
+    const s = new LiveSession({ thinking: false, voice: 'Kore' }, callbacks());
+    void s.start();
+    const ws = await sessionReady(s);
+    s.pressTalk();
+    s.releaseTalk();
+    expect(sentKinds(ws).filter((k) => k.startsWith('activity'))).toEqual([]);
+    s.setOptions({ hold: true });
+    await sessionReady(s, 2);
+    expect(h.liveToken.mock.calls[1][0]).toMatchObject({ hold: true });
+    s.stop();
+  });
+
+  it('tapping to interrupt a reply that has fully arrived does not drop the next one', async () => {
+    const s = new LiveSession({ thinking: false, voice: 'Kore' }, callbacks());
+    void s.start();
+    const ws = await sessionReady(s);
+    await vi.waitFor(() => expect(FakeTap.last).not.toBeNull());
+    const played = vi.spyOn(FakeCtx.made[0], 'createBufferSource');
+    ws.say({ serverContent: { modelTurn: { parts: [{ inlineData: { data: voiceChunk() } }] } } });
+    ws.say({ serverContent: { turnComplete: true } });
+    s.interrupt();
+    ws.say({ serverContent: { modelTurn: { parts: [{ inlineData: { data: voiceChunk() } }] } } });
+    expect(played).toHaveBeenCalledTimes(2);
+    s.stop();
+  });
+});
+
+describe('Live voice: a model that won’t start is skipped next time', () => {
+  beforeEach(() => { h.cap.native = false; h.cap.plugin = false; localStorage.clear(); });
+  const tokenFor = (id: string, search = false) => ({ token: 't', url: 'wss://live.example/ws', setup: { model: `models/${id}` }, model: { id, name: id }, search });
+  const refuse = async (n: number, code: number) => {
+    await vi.waitFor(() => expect(FakeWS.all.length).toBe(n));
+    await vi.waitFor(() => expect(FakeWS.all[n - 1].readyState).toBe(1));
+    FakeWS.all[n - 1].readyState = 3;
+    FakeWS.all[n - 1].onclose?.({ code });
+  };
+
+  it('a refused model is remembered and skipped from the start of the next session; one that starts is forgotten', async () => {
+    h.liveToken.mockImplementationOnce(async () => tokenFor('slow-think')).mockImplementation(async () => tokenFor('m'));
+    const a = new LiveSession({ thinking: true, voice: 'Kore' }, callbacks());
+    void a.start();
+    await refuse(1, 1011);
+    await sessionReady(a, 2);
+    expect(h.liveToken.mock.calls[1][0].skip).toEqual(['slow-think']);
+    a.stop();
+
+    const b = new LiveSession({ thinking: true, voice: 'Kore' }, callbacks());
+    void b.start();
+    await sessionReady(b, 3);
+    expect(h.liveToken.mock.calls[2][0].skip).toEqual(['slow-think']);
+    b.stop();
+  });
+
+  it('a timeout or a refusal with search on is not remembered', async () => {
+    h.liveToken.mockImplementationOnce(async () => tokenFor('x', true)).mockImplementation(async () => tokenFor('m'));
+    const a = new LiveSession({ thinking: false, voice: 'Kore', search: true }, callbacks());
+    void a.start();
+    await refuse(1, 1011);
+    await sessionReady(a, 2);
+    a.stop();
+    const b = new LiveSession({ thinking: false, voice: 'Kore' }, callbacks());
+    void b.start();
+    await sessionReady(b, 3);
+    expect(h.liveToken.mock.calls[2][0].skip).toEqual([]);
+    b.stop();
+  });
+
+  it('when the remembered models were all that was left, every model is tried again', async () => {
+    localStorage.setItem('vinax.live.noStart.v1', JSON.stringify({ only: Date.now() + 60_000 }));
+    h.liveToken.mockRejectedValueOnce(Object.assign(new Error('x'), { code: 'voice_unavailable' })).mockImplementation(async () => tokenFor('only'));
+    const cb = callbacks();
+    const s = new LiveSession({ thinking: false, voice: 'Kore' }, cb);
+    void s.start();
+    await sessionReady(s);
+    expect(h.liveToken.mock.calls[0][0].skip).toEqual(['only']);
+    expect(h.liveToken.mock.calls[1][0].skip).toEqual([]);
+    expect(cb.ends).toEqual([]);
+    expect(localStorage.getItem('vinax.live.noStart.v1')).toBeNull();
+    s.stop();
+  });
+});
