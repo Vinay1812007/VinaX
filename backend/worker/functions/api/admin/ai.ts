@@ -31,7 +31,7 @@ import { PROVIDER_NAMES, PROVIDERS, providerConfigured } from '../../_lib/ai/ada
 import { aiSettings, pickerRegistryFor, sanitizeAiSettings } from '../../_lib/ai/config';
 import { discoveredModels, discoverySnapshot } from '../../_lib/ai/discovery';
 import { clearRest, coolingUntil, cooldownSnapshot } from '../../_lib/ai/cooldown';
-import { MODELS, UTILITY_MODELS, ladderModels, modelById } from '../../_lib/ai/models';
+import { isApproved, MODELS, UTILITY_MODELS, ladderModels, modelById } from '../../_lib/ai/models';
 import { runChat } from '../../_lib/ai/router';
 import { dailyLimit, GROUNDING_DAILY_LIMIT, providerOf, searchConfigured } from '../../_lib/ai/search';
 import { voiceAvailability, voiceRestSnapshot } from '../../_lib/ai/voice';
@@ -138,13 +138,14 @@ export const onRequestPost = async (ctx: { request: Request; env: Env }): Promis
   const read = await readJsonCapped<{ model?: unknown } | null>(request, 4 * 1024);
   if (!read.ok) return badRequest();
   const id = read.value && typeof read.value === 'object' ? read.value.model : null;
-  // A curated model, or one found in its provider's current list (switched off or not: the owner may test it).
+  // A curated model, or one found in its provider's current list (switched off or not: the owner may test it);
+  // approved models only (models.ts APPROVED_MODELS), like everywhere else.
   let spec = modelById(MODELS, id);
   if (!spec && typeof id === 'string') {
     const settings = dbConfigured(env) ? await aiSettings(env) : sanitizeAiSettings(null);
     spec = settings.discover === false ? null : modelById(await discoveredModels(env, settings.discover), id);
   }
-  if (!spec) return badRequest('unknown_model');
+  if (!spec || !isApproved(spec.id)) return badRequest('unknown_model');
   if (!providerConfigured(env, spec.provider)) return adminJson({ model: spec.id, ok: false, ms: 0, firstTokenMs: null, kind: 'not_configured', status: null });
   const r = await probeModel(env, spec);
   console.log(JSON.stringify({ route: 'admin-ai-probe', model: spec.id, provider: spec.provider, ok: r.ok, ms: r.ms, kind: r.kind ?? null }));

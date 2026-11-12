@@ -12,7 +12,7 @@ import {
   openRouterFreeEntries, parseGemini, parseGroq, parseNvidia, parseOpenRouter, parseWorkersAi, prettyName, toSpec, type FoundModel, type ProviderState,
 } from '../functions/_lib/ai/discovery';
 import { pickerRegistryFor, sanitizeAiSettings } from '../functions/_lib/ai/config';
-import { MODELS } from '../functions/_lib/ai/models';
+import { APPROVED_MODELS, MODELS } from '../functions/_lib/ai/models';
 import { artifactsOffered, promptFor } from '../functions/_lib/ai/prompt';
 import { onRequestGet as modelsGet } from '../functions/api/ai/models';
 import { onRequestPost as chatPost } from '../functions/api/ai/chat';
@@ -28,6 +28,20 @@ import type { AiEnv, ProviderId } from '../functions/_lib/ai/types';
 const list = (name: string): unknown => JSON.parse(fixture(`models/${name}`));
 const ids = (found: FoundModel[]): string[] => found.map((f) => f.upstream);
 const NOW = Date.UTC(2026, 10, 3, 12, 0);
+
+/**
+ * Found models reach the picker only when the owner approved their id
+ * (models.ts APPROVED_MODELS). The tests of the discovery machinery approve
+ * the fixture ids they use for their run, and take them out again.
+ */
+async function withApproved(extra: readonly string[], run: () => Promise<void>): Promise<void> {
+  const approved = APPROVED_MODELS as Set<string>;
+  const added = extra.filter((id) => !approved.has(id));
+  for (const id of added) approved.add(id);
+  try { await run(); } finally {
+    for (const id of added) approved.delete(id);
+  }
+}
 
 beforeEach(() => {
   _resetDiscovery();
@@ -140,16 +154,18 @@ describe('registry entries', () => {
     for (const curated of MODELS) expect(all).not.toContain(curated.id);
     expect(all).not.toContain('groq:openai/gpt-oss-120b');
     expect(all).not.toContain('gemini:gemini-3.6-flash');
-    expect(all).not.toContain('cloudflare:@cf/meta/llama-3.3-70b-instruct-fp8-fast');
     expect(all).not.toContain('cloudflare:@cf/openai/gpt-oss-120b');
-    expect(all).toContain('gemini:gemini-3.8-flash');
-    // No longer curated (dropped on 2026-11-12), so the list may offer it again.
+    expect(all).not.toContain('gemini:gemini-3.8-flash');
+    expect(all).not.toContain('cloudflare:@cf/qwen/qwen3-30b-a3b-fp8');
+    // No longer curated (dropped on 2026-11-12), so the list may offer it again (the allowlist still keeps it out of the picker).
     expect(all).toContain('gemini:gemini-2.5-flash');
-    expect(all).toContain('cloudflare:@cf/qwen/qwen3-30b-a3b-fp8');
+    expect(all).toContain('cloudflare:@cf/meta/llama-3.3-70b-instruct-fp8-fast');
     const names = [...MODELS.map((m) => m.name), ...specs.map((s) => s.name)].map((n) => n.toLowerCase());
     expect(new Set(names).size).toBe(names.length);
     // "Llama 3.3 70B" is curated (Workers AI): the found one says where it is.
-    expect(specs.find((s) => s.id === 'nvidia:meta/llama-3.3-70b-instruct')?.name).toBe('Llama 3.3 70B (NVIDIA)');
+    // "Gemma 4 26B" is curated (Workers AI): a found one by that name says where it is.
+    const clash = discoveredSpecs({ nvidia: st([{ upstream: 'google/gemma-4-26b-a4b', name: 'Gemma 4 26B' }]) });
+    expect(clash[0].name).toBe('Gemma 4 26B (NVIDIA)');
     expect(specs.every((s) => s.discovered && s.group?.startsWith('more-'))).toBe(true);
   });
 });
@@ -238,11 +254,38 @@ describe('caching and failure', () => {
     expect(await discoveryStates(KEYED, { openrouter: false }, { now: NOW, fetchers: f })).not.toHaveProperty('openrouter');
     expect(calls.openrouter).toBeUndefined();
     const s = sanitizeAiSettings({ discover: true, models: { 'groq:llama-3.1-8b-instant': { enabled: false } } });
-    const reg = await pickerRegistryFor(KEYED, s, { now: NOW, fetchers: f });
-    expect(reg.map((m) => m.id)).not.toContain('groq:llama-3.1-8b-instant');
-    expect(reg.map((m) => m.id)).toContain('gemini:gemini-3.8-flash');
-    expect(reg.slice(0, MODELS.length - 2).every((m) => !m.discovered)).toBe(true);
-    expect(await pickerRegistryFor(KEYED, sanitizeAiSettings({ discover: false }), { now: NOW, fetchers: f })).toHaveLength(MODELS.length);
+    // These fake lists name none of the curated OpenRouter models, so all nine leave the picker.
+    const curated = MODELS.filter((m) => m.provider !== 'openrouter').length;
+    await withApproved(['groq:llama-3.1-8b-instant', 'nvidia:meta/llama-3.3-70b-instruct'], async () => {
+      const reg = await pickerRegistryFor(KEYED, s, { now: NOW, fetchers: f });
+      expect(reg.map((m) => m.id)).not.toContain('groq:llama-3.1-8b-instant');
+      expect(reg.slice(0, curated).every((m) => !m.discovered)).toBe(true);
+    });
+    expect(await pickerRegistryFor(KEYED, sanitizeAiSettings({ discover: false }), { now: NOW, fetchers: f })).toHaveLength(curated);
+  });
+
+  it('found models never reach the picker unless approved', async () => {
+    const { f } = fetchers();
+    const reg = await pickerRegistryFor(KEYED, sanitizeAiSettings({ discover: true }), { now: NOW, fetchers: f });
+    expect(reg.filter((m) => m.discovered)).toEqual([]);
+    expect(reg.every((m) => APPROVED_MODELS.has(m.id))).toBe(true);
+  });
+
+  it('a curated OpenRouter model its current list no longer has leaves the picker without a word; an unknown list keeps them all', async () => {
+    const env = { OPENROUTER_API_KEY: 'or_x' } as AiEnv;
+    const s = sanitizeAiSettings({});
+    const orIds = MODELS.filter((m) => m.provider === 'openrouter').map((m) => m.upstream);
+    // Never heard from OpenRouter, and the list is slow: nothing waits and every curated one stays.
+    let release: (v: FoundModel[]) => void = () => undefined;
+    const slow = { ...fetchers().f, openrouter: () => new Promise<FoundModel[]>((r) => { release = r; }) };
+    const first = await pickerRegistryFor(env, s, { now: NOW, fetchers: slow });
+    expect(first.filter((m) => m.provider === 'openrouter').map((m) => m.upstream)).toEqual(orIds);
+    release(orIds.filter((u) => u !== 'liquid/lfm-2.5-2.6b:free').map((upstream) => ({ upstream, name: upstream })));
+    await new Promise((r) => setTimeout(r, 0));
+    const next = await pickerRegistryFor(env, s, { now: NOW + 1, fetchers: slow });
+    expect(next.filter((m) => m.provider === 'openrouter').map((m) => m.upstream)).toEqual(orIds.filter((u) => u !== 'liquid/lfm-2.5-2.6b:free'));
+    // Discovery stays off: no OpenRouter model joins the picker that way.
+    expect(next.some((m) => m.discovered)).toBe(false);
   });
 });
 
@@ -288,8 +331,11 @@ async function chat(model: string): Promise<Response> {
   });
 }
 
+/** The free Groq chat models in the fixture list. */
+const GROQ_FOUND = ['groq:meta-llama/llama-4-scout-17b-16e-instruct', 'groq:llama-3.1-8b-instant', 'groq:gemma2-9b-it', 'groq:moonshotai/kimi-k2-instruct-0905'];
+
 describe('GET /api/ai/models', () => {
-  it('lists the curated models, then Groq’s other free chat models in their own group', async () => {
+  it('lists the curated models, then Groq’s other free chat models in their own group', () => withApproved(GROQ_FOUND, async () => {
     seed(groqWorld());
     const body = await getPicker();
     expect(body.groups).toContain('more-groq');
@@ -300,6 +346,13 @@ describe('GET /api/ai/models', () => {
     expect(body.models.findIndex((m) => m.group === 'more-groq')).toBeGreaterThan(body.models.findIndex((m) => m.id === 'groq:openai/gpt-oss-120b'));
     expect(body.models.filter((m) => m.id === 'groq:openai/gpt-oss-120b')).toHaveLength(1);
     expect(JSON.stringify(body)).not.toMatch(/gsk_test|api\.groq\.com/);
+  }));
+
+  it('without the owner’s approval no found model is listed, even with discover on', async () => {
+    seed(groqWorld());
+    const body = await getPicker();
+    expect(body.models.some((m) => m.group.startsWith('more-'))).toBe(false);
+    expect(body.models.every((m) => APPROVED_MODELS.has(m.id))).toBe(true);
   });
 
   it('a failing list leaves the curated picker exactly as it was', async () => {
@@ -322,7 +375,7 @@ describe('GET /api/ai/models', () => {
 describe('POST /api/ai/chat with a found model', () => {
   beforeEach(() => { chatCalls.length = 0; });
 
-  it('a found id streams through the provider’s adapter with its upstream id', async () => {
+  it('a found id streams through the provider’s adapter with its upstream id', () => withApproved(GROQ_FOUND, async () => {
     seed(groqWorld());
     const res = await chat('groq:llama-3.1-8b-instant');
     expect(res.status).toBe(200);
@@ -330,6 +383,14 @@ describe('POST /api/ai/chat with a found model', () => {
     expect(events.find((e) => e.event === 'meta')?.data.model).toMatchObject({ id: 'groq:llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant', provider: 'Groq' });
     expect(events.filter((e) => e.event === 'text').map((e) => e.data.delta).join('')).toBe('Hello there.');
     expect(chatCalls).toEqual([{ url: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.1-8b-instant' }]);
+  }));
+
+  it('a found model the owner has not approved is refused before any request', async () => {
+    seed(groqWorld());
+    const res = await chat('groq:llama-3.1-8b-instant');
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'unknown_model' });
+    expect(chatCalls).toEqual([]);
   });
 
   it('an id that is not in the current list never goes upstream', async () => {
@@ -360,18 +421,21 @@ describe('the console', () => {
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  it('lists found models after the curated ones, with what each provider’s list gave', async () => {
+  it('lists found models after the curated ones, with what each provider’s list gave', () => withApproved(GROQ_FOUND, async () => {
     seed(groqWorld());
     const body = await (await adminGet({ request: adminReq(), env: ENV as never })).json() as { models: Array<{ id: string; discovered?: boolean; ownerEnabled: boolean }>; discovery: { enabled: unknown; providers: Array<{ provider: string; ok: boolean; count: number }> } };
     expect(body.models.slice(0, MODELS.length).every((m) => !m.discovered)).toBe(true);
     expect(body.models.find((m) => m.id === 'groq:gemma2-9b-it')).toMatchObject({ discovered: true, ownerEnabled: true });
     expect(body.discovery).toMatchObject({ enabled: true, providers: [{ provider: 'groq', ok: true, count: 5 }] });
-  });
+  }));
 
-  it('probes a found model, and refuses an unknown id', async () => {
+  it('probes an approved found model, and refuses an unknown or unapproved id', async () => {
     seed(groqWorld());
-    const ok = await (await adminPost({ request: adminReq({ model: 'groq:gemma2-9b-it' }), env: ENV as never })).json() as { ok: boolean; model: string };
-    expect(ok).toMatchObject({ ok: true, model: 'groq:gemma2-9b-it' });
+    expect((await adminPost({ request: adminReq({ model: 'groq:gemma2-9b-it' }), env: ENV as never })).status).toBe(400);
+    await withApproved(GROQ_FOUND, async () => {
+      const ok = await (await adminPost({ request: adminReq({ model: 'groq:gemma2-9b-it' }), env: ENV as never })).json() as { ok: boolean; model: string };
+      expect(ok).toMatchObject({ ok: true, model: 'groq:gemma2-9b-it' });
+    });
     expect((await adminPost({ request: adminReq({ model: 'groq:made-up' }), env: ENV as never })).status).toBe(400);
   });
 });

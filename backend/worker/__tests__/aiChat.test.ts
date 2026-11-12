@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FIRST_EVENT_MS, FIRST_EVENT_SLOW_MS, PARSE_MAX_CHARS, firstEventMsFor, onRequestPost, tailStop } from '../functions/api/ai/chat';
-import { LADDERS, MODELS, modelById } from '../functions/_lib/ai/models';
+import { APPROVED_MODELS, LADDERS, MODELS, modelById } from '../functions/_lib/ai/models';
 import type { ModelSpec } from '../functions/_lib/ai/types';
 import { issueSession } from '../functions/_lib/googleAuth';
 import { resetSettingsMemo } from '../functions/_lib/settings';
@@ -125,7 +125,7 @@ describe('a new conversation', () => {
     expect(names.indexOf('thinking')).toBeLessThan(names.indexOf('text'));
     expect(names.at(-1)).toBe('done');
     const meta = events[0].data as { conversationId: string; userMessageId: string; assistantMessageId: string; model: { id: string; name: string; provider: string } };
-    expect(meta.model).toEqual({ id: 'groq:openai/gpt-oss-120b', name: 'GPT-OSS 120B', provider: 'Groq' });
+    expect(meta.model).toEqual({ id: 'nvidia:deepseek-ai/deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash', provider: 'NVIDIA' });
     expect(events.filter((e) => e.event === 'text').map((e) => e.data.delta).join('')).toBe('Yaman is an evening raga.');
     expect(events.at(-1)?.data).toEqual({ stopReason: 'end', saved: true, usage: { input: 5, output: 3 } });
 
@@ -133,7 +133,7 @@ describe('a new conversation', () => {
     expect(conv).toMatchObject({ id: meta.conversationId, account_id: '1001', title: 'Raga Yaman explained', active_leaf_id: meta.assistantMessageId });
     const msgs = fake.rows('ai_messages');
     expect(msgs.map((m) => m.role)).toEqual(['user', 'assistant']);
-    expect(msgs[1]).toMatchObject({ id: meta.assistantMessageId, parent_id: meta.userMessageId, thinking: 'Think about ragas.', model_id: 'groq:openai/gpt-oss-120b', provider: 'groq', stop_reason: 'end' });
+    expect(msgs[1]).toMatchObject({ id: meta.assistantMessageId, parent_id: meta.userMessageId, thinking: 'Think about ragas.', model_id: 'nvidia:deepseek-ai/deepseek-v4.1-flash', provider: 'nvidia', stop_reason: 'end' });
     expect(typeof msgs[1].thinking_ms).toBe('number');
   });
 
@@ -223,15 +223,15 @@ describe('an existing conversation', () => {
 
 describe('failover and failures', () => {
   it('Auto fails over before the first token and announces the new model', async () => {
-    const fake = seed({}, (url) => url.includes('groq.com')
+    const fake = seed({}, (_url, init) => String(init?.body ?? '').includes('deepseek-ai/deepseek-v4.1-flash')
       ? new Response('{"error":{"message":"Rate limit reached"}}', { status: 429, headers: { 'retry-after': '20' } })
       : sseResponse(openAiSse('From NVIDIA.')));
     const events = await readEvents(await post(ask('Tell me about raga Yaman')));
     await settle();
     const metas = events.filter((e) => e.event === 'meta').map((e) => (e.data.model as { id: string }).id);
-    expect(metas).toEqual(['groq:openai/gpt-oss-120b', 'nvidia:nvidia/nemotron-3-ultra-550b-a55b']);
+    expect(metas).toEqual(['nvidia:deepseek-ai/deepseek-v4.1-flash', 'nvidia:nvidia/nemotron-3.5-bolt-e4b']);
     expect(events.at(-1)?.data).toMatchObject({ stopReason: 'end' });
-    expect(fake.rows('ai_messages')[1]).toMatchObject({ model_id: 'nvidia:nvidia/nemotron-3-ultra-550b-a55b', provider: 'nvidia' });
+    expect(fake.rows('ai_messages')[1]).toMatchObject({ model_id: 'nvidia:nvidia/nemotron-3.5-bolt-e4b', provider: 'nvidia' });
   });
 
   it('a picked model is never swapped: error with alternatives, nothing saved for the reply', async () => {
@@ -353,14 +353,14 @@ describe('failover and failures', () => {
   });
 
   it('an error frame before any text fails over in Auto', async () => {
-    const fake = seed({}, (url) => (url.includes('groq.com')
+    const fake = seed({}, (_url, init) => (String(init?.body ?? '').includes('deepseek-ai/deepseek-v4.1-flash')
       ? sseResponse('data: {"error":{"code":429,"message":"rate limited"}}\n\n')
       : sseResponse(openAiSse('From NVIDIA.'))));
     const events = await readEvents(await post(ask('Tell me about raga Yaman')));
     await settle();
-    expect(events.filter((e) => e.event === 'meta').map((e) => (e.data.model as { id: string }).id)).toEqual(['groq:openai/gpt-oss-120b', 'nvidia:nvidia/nemotron-3-ultra-550b-a55b']);
+    expect(events.filter((e) => e.event === 'meta').map((e) => (e.data.model as { id: string }).id)).toEqual(['nvidia:deepseek-ai/deepseek-v4.1-flash', 'nvidia:nvidia/nemotron-3.5-bolt-e4b']);
     expect(events.filter((e) => e.event === 'text').map((e) => e.data.delta).join('')).toBe('From NVIDIA.');
-    expect(fake.rows('ai_messages').find((m) => m.role === 'assistant')).toMatchObject({ model_id: 'nvidia:nvidia/nemotron-3-ultra-550b-a55b' });
+    expect(fake.rows('ai_messages').find((m) => m.role === 'assistant')).toMatchObject({ model_id: 'nvidia:nvidia/nemotron-3.5-bolt-e4b' });
   });
 });
 
@@ -467,11 +467,14 @@ describe('web search', () => {
     const grounder: ModelSpec = { ...base, id: GROUNDER_ID, upstream: 'test-grounded', name: 'Test Grounded', group: null, flags: { ...base.flags, grounding: true } };
     const models = MODELS as ModelSpec[];
     const ladders = LADDERS as Record<string, readonly string[]>;
+    const approved = APPROVED_MODELS as Set<string>;
     const before = ladders.grounded;
     models.push(grounder);
+    approved.add(GROUNDER_ID);
     ladders.grounded = [GROUNDER_ID];
     try { await run(); } finally {
       models.splice(models.indexOf(grounder), 1);
+      approved.delete(GROUNDER_ID);
       ladders.grounded = before;
     }
   }

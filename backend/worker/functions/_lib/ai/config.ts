@@ -17,8 +17,8 @@
  */
 import { setting } from '../settings';
 import type { DbEnv } from '../db';
-import { applyOverrides, modelById, MODELS } from './models';
-import { DISCOVERY_PROVIDERS, discoveredModels, type DiscoverOptions } from './discovery';
+import { applyOverrides, isApproved, modelById, MODELS } from './models';
+import { DISCOVERY_PROVIDERS, discoveredModels, openRouterListed, type DiscoverOptions } from './discovery';
 import type { AiEnv, ModelSpec, ProviderId } from './types';
 
 export interface AiSettings {
@@ -115,17 +115,22 @@ export async function aiSettings(env: DbEnv): Promise<AiSettings> {
 /** May this account use VinaX AI now? */
 export const aiOpenFor = (s: AiSettings, accountId: string | null): boolean => s.enabled || (!!accountId && s.testers.includes(accountId));
 
-/** The curated registry after the owner's model overrides (Auto's ladders, the music and backstage tasks). */
-export const registryFor = (s: AiSettings): ModelSpec[] => applyOverrides(MODELS, s.models);
+/** The curated registry after the owner's model overrides (Auto's ladders, the music and backstage tasks); approved models only. */
+export const registryFor = (s: AiSettings): ModelSpec[] => applyOverrides(MODELS.filter((spec) => isApproved(spec.id)), s.models);
 
 /**
  * The picker's registry: the curated models, then the free models found in
- * the providers' lists (discovery.ts), after the owner's switches. Any
- * discovery failure leaves the curated registry as it is.
+ * the providers' lists (discovery.ts), after the owner's switches, and only
+ * the approved ones (models.ts `APPROVED_MODELS`). OpenRouter's free models
+ * come and go: one its current list no longer has is left out without a
+ * word (the list is read in the background, so this never waits for it; an
+ * unknown list keeps them all). Any discovery failure leaves the curated
+ * registry as it is.
  */
 export async function pickerRegistryFor(env: AiEnv, s: AiSettings, o: DiscoverOptions = {}): Promise<ModelSpec[]> {
-  const found = s.discover === false ? [] : await discoveredModels(env, s.discover, o);
-  return applyOverrides([...MODELS, ...found], s.models);
+  const [found, listed] = await Promise.all([s.discover === false ? [] : discoveredModels(env, s.discover, o), openRouterListed(env, o)]);
+  const offered = (spec: ModelSpec): boolean => isApproved(spec.id) && (spec.provider !== 'openrouter' || !listed || listed.has(spec.upstream));
+  return applyOverrides([...MODELS, ...found].filter(offered), s.models);
 }
 
 /**
@@ -139,6 +144,6 @@ export async function foundModelFor(env: AiEnv, s: AiSettings, id: unknown, o: O
   const p = id.slice(0, id.indexOf(':')) as ProviderId;
   if (!DISCOVERY_PROVIDERS.includes(p)) return null;
   const found = await discoveredModels(env, s.discover, { ...o, only: [p] });
-  const spec = modelById(applyOverrides(found, s.models), id);
+  const spec = modelById(applyOverrides(found.filter((f) => isApproved(f.id)), s.models), id);
   return spec?.discovered ? spec : null;
 }

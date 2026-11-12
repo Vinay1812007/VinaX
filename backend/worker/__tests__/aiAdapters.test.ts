@@ -68,14 +68,14 @@ describe('OpenAI-compatible adapters', () => {
 
   it('NVIDIA: reasoning_content is thinking', async () => {
     stubFetch(() => sseResponse(fixture('nvidia-reasoning-content.sse')));
-    const events = await collect(nvidia, ENV, req('nvidia:nvidia/nemotron-3-ultra-550b-a55b'));
+    const events = await collect(nvidia, ENV, req('nvidia:z-ai/glm-5.3-flash'));
     expect(joined(events, 'thinking')).toBe('Thinking about it.');
     expect(joined(events, 'text')).toBe('Hello there.');
   });
 
   it('a think-only stream is an empty answer (the router fails over)', async () => {
     stubFetch(() => sseResponse(fixture('nvidia-think-only.sse')));
-    await expect(collect(nvidia, ENV, req('nvidia:nvidia/nemotron-3-ultra-550b-a55b'))).rejects.toMatchObject({ kind: 'empty' });
+    await expect(collect(nvidia, ENV, req('nvidia:deepseek-ai/deepseek-v4.1-flash'))).rejects.toMatchObject({ kind: 'empty' });
   });
 
   it('OpenRouter: sends its attribution headers; a mid-stream daily-limit error is a quota failure', async () => {
@@ -98,8 +98,8 @@ describe('OpenAI-compatible adapters', () => {
   });
 
   it('models without a system role get the system text in the first user turn', () => {
-    const noSystem = { ...spec('groq:allam-2-7b'), flags: { ...spec('groq:allam-2-7b').flags, systemRole: false } };
-    const body = requestBody({ ...req('groq:allam-2-7b'), model: noSystem }) as { messages: Array<{ role: string; content: string }> };
+    const noSystem = { ...spec('openrouter:google/gemma-4-31b-it:free'), flags: { ...spec('openrouter:google/gemma-4-31b-it:free').flags, systemRole: false } };
+    const body = requestBody({ ...req('openrouter:google/gemma-4-31b-it:free'), model: noSystem }) as { messages: Array<{ role: string; content: string }> };
     expect(body.messages).toEqual([{ role: 'user', content: 'SYSTEM\n\n---\n\nhi' }]);
   });
 });
@@ -148,7 +148,7 @@ describe('Workers AI adapter', () => {
 
   it('streams `response` frames as text', async () => {
     const seen: Array<Record<string, unknown>> = [];
-    const events = await collect(workersAi, env(async (_m, input) => { seen.push(input); return streamOf(fixture('workersai.sse'), 4); }), req('cloudflare:@cf/meta/llama-3.3-70b-instruct-fp8-fast'));
+    const events = await collect(workersAi, env(async (_m, input) => { seen.push(input); return streamOf(fixture('workersai.sse'), 4); }), req('cloudflare:@cf/meta/llama-4-scout-17b-16e-instruct'));
     expect(joined(events, 'text')).toBe('Hello from the edge.');
     expect(events.at(-2)).toEqual({ type: 'usage', input: 10, output: 5 });
     expect(seen[0]).toMatchObject({ stream: true, messages: [{ role: 'system', content: 'SYSTEM' }, { role: 'user', content: 'hi' }] });
@@ -159,11 +159,11 @@ describe('Workers AI adapter', () => {
     expect(workersAiError(new Error('AiError: 4006: you have used up your daily free allocation of 10,000 neurons'), now)).toMatchObject({ kind: 'quota', untilMs: nextUtcMidnight(now) });
     expect(nextUtcMidnight(now)).toBe(Date.UTC(2026, 9, 31));
     expect(workersAiError(new Error('AiError: 5007: No such model @cf/x'), now)).toMatchObject({ kind: 'gone', untilMs: now + 86_400_000 });
-    await expect(collect(workersAi, env(async () => { throw new Error('4006: neurons'); }), req('cloudflare:@cf/meta/llama-3.3-70b-instruct-fp8-fast'))).rejects.toMatchObject({ kind: 'quota' });
+    await expect(collect(workersAi, env(async () => { throw new Error('4006: neurons'); }), req('cloudflare:@cf/meta/llama-4-scout-17b-16e-instruct'))).rejects.toMatchObject({ kind: 'quota' });
   });
 
   it('is not configured without the binding', async () => {
-    await expect(collect(workersAi, {}, req('cloudflare:@cf/meta/llama-3.3-70b-instruct-fp8-fast'))).rejects.toBeInstanceOf(ProviderError);
+    await expect(collect(workersAi, {}, req('cloudflare:@cf/meta/llama-4-scout-17b-16e-instruct'))).rejects.toBeInstanceOf(ProviderError);
   });
 });
 

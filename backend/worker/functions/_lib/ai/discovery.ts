@@ -529,6 +529,21 @@ export async function discoveredModels(env: AiEnv, discover: unknown, o: Discove
   }
 }
 
+/**
+ * The free model ids OpenRouter lists now, whatever the owner's `discover`
+ * switch says, or null while its list is not known (or it has no key). It
+ * never waits: a first request starts the read in the background
+ * (`waitUntil`) and later ones use it. A failing list keeps the last good one.
+ */
+export async function openRouterListed(env: AiEnv, o: DiscoverOptions = {}): Promise<Set<string> | null> {
+  try {
+    const st = (await discoveryStates(env, true, { ...o, only: ['openrouter'], waitMs: 0 })).openrouter;
+    return st && st.models.length ? new Set(st.models.map((f) => f.upstream)) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** A found model by registry id, from what this instance already knows (no request): reply labels. */
 export function knownDiscovered(id: string): ModelSpec | null {
   const p = id.split(':')[0] as ProviderId;

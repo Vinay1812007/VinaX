@@ -489,7 +489,7 @@ npx wrangler secret put NVIDIA_API_KEY --config worker/wrangler.toml      # NVID
 npx wrangler secret put SEARCH_API_KEY --config worker/wrangler.toml      # Tavily/Serper web search for models that cannot ground
 ```
 
-Web search needs nothing more when Gemini is set (free Google Search grounding, 450 searches/day). Optional plain vars: `SEARCH_API_PROVIDER` (`tavily` default or `serper`), `SEARCH_DAILY_LIMIT` (default 100; `0` switches the search API off). Workers AI needs no secret (`[ai] binding = "AI"`; free pool about 10,000 neurons/day for the account). Voice needs no more keys (dictation/Read aloud with Groq or Gemini; Live voice needs Gemini). Groq's Read aloud voice (Orpheus) may need its terms accepted once in the Groq console.
+Web search needs `SEARCH_API_KEY`: no approved Gemini model has free Google Search grounding (the grounding code stays for one that does, 450 searches/day). Optional plain vars: `SEARCH_API_PROVIDER` (`tavily` default or `serper`), `SEARCH_DAILY_LIMIT` (default 100; `0` switches the search API off). Workers AI needs no secret (`[ai] binding = "AI"`; free pool about 10,000 neurons/day for the account). Voice needs no more keys (dictation/Read aloud with Groq or Gemini; Live voice needs Gemini). Groq's Read aloud voice (Orpheus) may need its terms accepted once in the Groq console.
 
 Check keys in the console (**API Keys Status**, **AI Assistant**) and, before switching the chat on, run `npm run ai:probe` locally with the same keys in `backend/worker/.dev.vars` (add `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` to probe Workers AI; `-- --voice-only` checks voice models, Live token and handshake). Apply the schema first, or chat, share and every `/api/personal/*` route answer `503 unavailable` for lack of tables and web search stays off.
 
@@ -560,7 +560,7 @@ Unused leftovers (read by nothing, deletable): older `VINAX_..._API_KEY` names, 
 | `EMAIL_FROM` (default `VinaX <notifications@vinaxmusic.online>`), `EMAIL_REPLY_TO` (default `support@vinaxmusic.online`) | var | Account emails; sender must be on the verified domain |
 | `HANDOFF` | KV binding | Device-transfer ciphertext (10-minute TTL), IndexNow last URL list (`indexnow:urls`), generated-song jobs/audio under `gen:` when no `GENERATED_AUDIO` binding |
 | `GENERATED_AUDIO` | optional KV binding | Generated-song storage (24 h) |
-| `AI` | Workers AI binding | Last-resort chat models, music ladder fallback, default embedding model |
+| `AI` | Workers AI binding | Chat models picked by hand (never in a ladder), default embedding model |
 | `RATE_LIMIT_10/30/60/300`, `ADMIN_AUTH_FAILS` | rate-limit bindings | Requests per 60 s per key; admin wrong-token budget 15/60 s |
 
 ### Frontend build variables (public)
@@ -1000,51 +1000,47 @@ Every provider call goes through the Worker; no key, upstream host or raw upstre
 
 | Secret / binding | Provider | Used for |
 | --- | --- | --- |
-| `GROQ_API_KEY` | Groq (OpenAI-compatible) | GPT-OSS 120B (Auto's first choice), ALLaM; dictation (Whisper); Read aloud (Orpheus) |
-| `GEMINI_API_KEY` | Google Gemini (`streamGenerateContent?alt=sse`, key in `x-goog-api-key`) | Images, PDFs, long threads, grounding, Live voice, dictation/Read aloud fallbacks, song generation, optional embeddings |
+| `GROQ_API_KEY` | Groq (OpenAI-compatible) | GPT-OSS 120B (code ladder first); dictation (Whisper); Read aloud (Orpheus) |
+| `GEMINI_API_KEY` | Google Gemini (`streamGenerateContent?alt=sse`, key in `x-goog-api-key`) | Gemini 3.1 Flash Lite (long ladder, titles), Gemini 3.6/3.8 Flash and Gemma 4 (picked by hand), Live voice, dictation/Read aloud fallbacks, song generation, optional embeddings |
 | `OPENROUTER_API_KEY` | OpenRouter | `:free` code models and mirrors (`HTTP-Referer: https://www.vinaxmusic.online`, `X-Title: VinaX AI`) |
-| `NVIDIA_API_KEY` | NVIDIA NIM | Reasoning and vision models |
-| `AI` binding | Cloudflare Workers AI | Last resort in the default ladder; embeddings |
+| `NVIDIA_API_KEY` | NVIDIA NIM | DeepSeek V4.1 Flash (Auto default) and most ladders: reasoning, vision, fast and music |
+| `AI` binding | Cloudflare Workers AI | Picked-by-hand chat models only (never in a ladder); embeddings |
 | `SEARCH_API_KEY`, vars `SEARCH_API_PROVIDER`, `SEARCH_DAILY_LIMIT` | Tavily or Serper | Web search for models that cannot ground |
 
 Any one is enough. With none, `/api/ai/*` answers `503 ai_not_configured` and the page says "VinaX AI is unavailable right now".
 
 ### The registry
 
-`backend/worker/functions/_lib/ai/models.ts` is the only place that names a model id. Each entry: id `<provider>:<upstream id>`, display name, picker group (`fast`, `balanced`, `smart`, `vision`, `code`, `more`, `cloudflare`, or none for web-search-only), tier, flags (`vision`, `pdf`, `grounding`, `reasoning`, `artifacts`, `systemRole`, `thinkFormat`), `maxContextChars`, `maxOutput`, extra `params` (+ `highParams` for Extended thinking), `firstEventMs`. Curated groups (owner's latency run, 2026-10-31):
+`backend/worker/functions/_lib/ai/models.ts` is the only place that names a model id. Each entry: id `<provider>:<upstream id>`, display name, picker group (`fast`, `balanced`, `smart`, `vision`, `code`, `more`, `cloudflare`, or none for web-search-only), tier, flags (`vision`, `pdf`, `grounding`, `reasoning`, `artifacts`, `systemRole`, `thinkFormat`), `maxContextChars`, `maxOutput`, extra `params` (+ `highParams` for Extended thinking), `firstEventMs`.
 
-| Group | Models |
+**Approved models only (owner's list, 2026-11-12).** `APPROVED_MODELS` in `models.ts` is the allowlist: `registryFor`, `pickerRegistryFor` and `foundModelFor` (`_lib/ai/config.ts`) and the console probe drop anything else, so `GET /api/ai/models`, every ladder and a picked id (`400 unknown_model`) use only these 33 models, and found models (discovery) never join unless their id is added there. A test checks that `MODELS` is exactly the list. NVIDIA and Workers AI ids were matched against each provider's live list that day; Groq and Gemini ids are the owner's (no key on the build machine to list them).
+
+| Provider (free tier) | Approved models |
 | --- | --- |
-| Fast | Nemotron 3.5 Bolt (NVIDIA), Llama 3.1 8B (Workers AI), Gemini 3.1 Flash Lite (+ Preview), LFM 2.5 2.6B, ERNIE 5.5 Flash Preview (OpenRouter `:free`) |
-| Balanced | **GPT-OSS 120B** (Groq; Auto default), Nemotron 3 Ultra 550B (NVIDIA), GPT-OSS 120B and Nemotron 3 120B (Workers AI), Nemotron 3.5 Lightning (NVIDIA, OpenRouter) |
-| Smart | Gemini 3.6 Flash, Mistral Large 4 (NVIDIA), Nemotron 3 Ultra (OpenRouter), GLM 4.7 Flash and DeepSeek R1 Distill 32B (Workers AI, slower) |
-| Vision | Nemotron 3.5 Super VL (NVIDIA, OpenRouter), Nemotron 3 Nano Omni (NVIDIA, OpenRouter); every Gemini model sees images too |
-| Code | North Mini Code (OpenRouter `:free`), Laguna XS 2.1 (NVIDIA), GPT-OSS 20B (Workers AI) |
-| More models | Dots 3 Note Preview, Flint 1.0, LFM 3 1.7B (OpenRouter `:free`), ALLaM 2 7B (Groq; Arabic/English), Ising Calibration 1.5 31B, Gemini Robotics ER 2 Preview, MiniMax M3.1 Flash (NVIDIA, slow) |
-| Cloudflare | Llama 3.3 70B, Llama 4 Scout, SEA-LION 4 27B, Gemma 4 26B, Granite 4.0 Micro (Workers AI) |
+| NVIDIA (about 40 requests/min per model) | DeepSeek V4.1 Flash (`deepseek-ai/deepseek-v4.1-flash`), Nemotron 3.5 Lightning, GLM 5.3 Flash (`z-ai/glm-5.3-flash`), MiniMax M3.1 Flash, Nemotron 3.5 Super VL, Gemma 4 31B (`google/gemma-4-31b-it`), Mistral Large 4 (`mistralai/mistral-large-4-1t-a52b`), Nemotron 3.5 Bolt |
+| Workers AI (10,000 neurons/day for the account; picked by hand only) | GLM 5.3 Flash, DeepSeek V4.1 Flash (`-1017`), GPT-OSS 120B, Qwen 3.8 27B, Gemma 4 26B, Nemotron 3 120B, Llama 4 Scout, Qwen 3 30B (`qwen3-30b-a3b-fp8`), GPT-OSS 20B, GLM 4.7 Flash |
+| Groq (30/min, 1,000/day, 200K tokens/day per model) | GPT-OSS 120B; voice only: `whisper-large-v3-turbo`, `canopylabs/orpheus-v1-english` (voice.ts) |
+| Gemini | Gemini 3.1 Flash Lite (500/day), Gemini 3.8 Flash and 3.6 Flash (about 20/day: picked by hand only), Gemma 4 31B and 26B (no system instruction or thinking config: `systemRole: false`, 30,000 characters of history) |
+| OpenRouter (`:free`, about 20/min, small daily cap) | Nemotron 3.5 Super VL, Nemotron 3.5 Lightning, Gemma 4 31B and 26B, Nemotron 3 Ultra 550B, Nemotron 3 Nano Omni, Dots 3 Note Preview, North Mini Code, LFM 2.5 2.6B |
 
-**Only models that answered (2026-11-12).** Every picker model (146 then, curated and found) was asked "17 × 23" and a two-sentence question through the live chat; what was rate-limited all day, timed out, gone at its provider or not a chat model was dropped: Qwen 3.8 27B and GPT-OSS 20B (Groq; spent by the title, memory and music tasks), Gemini 3.5 Flash Lite, Flash Lite latest, 3.5 Flash and 3 Flash Preview, GPT-OSS 20B (NVIDIA), Llama 3.2 90B Vision, Step 5 Preview, Laguna S/XS 2.1 (OpenRouter), Muse Glimmer 30B, Riva Translate 4B (translates every message), and Gemini 2.5 Flash/Flash-Lite (web search grounding; 2.5 Pro is gone at Google). Re-run that check before adding a model back. Gemini 3 models think at `thinkingLevel: "low"` (high with Extended thinking; 3.6 Flash took 14 s for two sentences at its default); a 400 that names thinking is asked once more with only `includeThoughts`.
+Left out on purpose: models that failed the 2026-11-12 live check (Groq Qwen 3.8 27B and GPT-OSS 20B, Gemini 3.5 Flash Lite, GPT-OSS 20B and Llama 3.2 90B Vision on NVIDIA), two the providers did not list (Kimi K3.1 Pro on NVIDIA, Xing 4.0 29B on OpenRouter), and Kimi K2.6, GLM 5.3 and DeepSeek V4 Pro on Workers AI (paid billing). No Llama or MiniMax model is used on Groq. **OpenRouter's `:free` models rotate:** `pickerRegistryFor` reads OpenRouter's list in the background whatever `discover` says (`openRouterListed`, same six-hour cache; it never waits for it) and leaves out, without a word, a curated OpenRouter model the list no longer has; while the list is unknown all of them stay. Voice models (`voice.ts`) and `UTILITY_MODELS` are not chat models and are not on the list.
 
-Not in the picker: `UTILITY_MODELS` (guards, embeddings, parsers, AQA) are never in a picker or ladder (the console lists them read-only); voice models are in `voice.ts`. A registry entry may still set `firstEventMs` for a model slow to start (none does now). The picker has a search box (name, provider, description, group; Enter picks the first match). Groq models keep short history (`maxContextChars` 30,000); a long thread goes to the long ladder.
+Picker groups: Fast (Nemotron 3.5 Bolt, Gemini 3.1 Flash Lite, LFM 2.5 2.6B); Balanced (DeepSeek V4.1 Flash, GPT-OSS 120B, GLM 5.3 Flash, Nemotron 3.5 Lightning and its OpenRouter copy, GPT-OSS 120B and Nemotron 3 120B on Workers AI); Smart (Mistral Large 4, Gemini 3.8 Flash, Gemini 3.6 Flash, Nemotron 3 Ultra on OpenRouter, GLM 4.7 Flash); Vision (Nemotron 3.5 Super VL on NVIDIA and OpenRouter, Nemotron 3 Nano Omni); Code (North Mini Code, GPT-OSS 20B on Workers AI); More (MiniMax M3.1 Flash, the Gemma 4 models, Dots 3 Note Preview); Cloudflare (the other Workers AI models).
 
-**Found models** (`_lib/ai/discovery.ts`), **off unless the owner sets `discover: true`** (on 2026-11-12, 70 of the 109 found models were gone at their provider and most others failed): every other free chat model each provider lists joins the picker automatically (groups `more-<provider>`: More from Groq, Gemini, OpenRouter, NVIDIA, Cloudflare), within six hours of being listed, with no deploy. Lists: Groq `GET .../openai/v1/models` (every `active`); OpenRouter `GET .../api/v1/models` (id ends `:free` or both prices `"0"`, text output, not `openrouter/*` routers); Gemini `GET .../v1beta/models?pageSize=1000` (up to three pages; `generateContent`; Gemma gets `systemRole: false`); NVIDIA `GET .../v1/models` (32,000 characters of history assumed); Workers AI `env.AI.models({ task: "Text Generation" })` (not past deprecation). Filtered by id (no speech, embeddings, rerankers, guards, parsers, image/video makers, AQA, computer use, deep research; strict character set; at most 300 a provider; curated/utility/ladder/voice-only ids left out; a clashing name gets its service in brackets). Each becomes a `discovered: true` entry (about three characters a token, answer room taken off, at most 8,192 output tokens and a quarter of the window; caps Groq 30,000, Gemini 600,000, OpenRouter/NVIDIA 100,000, Workers AI 60,000 characters). Cached six hours in the instance and `caches.default` (`https://vinax-ai-discovery.internal/v1/<provider>`); stale lists answer at once while refreshed in the background; a failing list keeps the last good one and retries in 15 minutes; discovery never rests a model or changes the curated registry. The chat accepts a picked id only when curated or in the provider's current found list and not switched off (`foundModelFor`; else `400 unknown_model`). A found Gemini model with no free allowance answers 429, rests six hours, shows busy. Found models never appear in an Auto ladder, the music ladder or the Retry menu.
-
-**The probe:** `npm run ai:probe` in `backend/` (`scripts/ai-probe.mjs`, owner's own keys, never CI; reads `worker/.dev.vars`; Workers AI over REST also needs `CLOUDFLARE_ACCOUNT_ID`/`CLOUDFLARE_API_TOKEN`): per registry model one streamed request (plus one image for `vision`), prints time to first token, streaming, where reasoning arrives (`field|tags|parts|none`), whether the system message was followed, image read, limits; then voice (Whisper/Gemini transcription on a test tone, Orpheus/Gemini TTS incl. which voice field Gemini accepts, which Live token body Google accepts, a real Live handshake). Options `--only <text>`, `--no-image`, `--voice-only`, `--no-voice`. Prints no secret, writes nothing; use its table to set registry flags.
-
-### Auto and failover
+**The 2026-11-12 live check.** Every picker model (146 then, curated and found) was asked "17 × 23" and a two-sentence question through the live chat; what was rate-limited all day, timed out, gone at its provider or not a chat model was dropped. Re-run that check before adding a model back; the models new to the approved list (DeepSeek V4.1 Flash, GLM 5.3 Flash, the Gemma 4 models, Gemini 3.8 Flash, the new Workers AI models) were not in it. Gemini 3 models think at `thinkingLevel: "low"` (high with Extended thinking; 3.6 Flash took 14 s for two sentences at its default); a 400 that names thinking is asked once more with only `includeThoughts`.
 
 `pickLadder` (`_lib/ai/router.ts`) uses cheap checks, never a model call:
 
 | Signal | Ladder |
 | --- | --- |
-| Image in one of the last three questions | vision: Gemini 3.6 Flash -> Nemotron 3.5 Super VL -> Nemotron 3 Nano Omni -> Gemini 3.1 Flash Lite -> Super VL (OpenRouter) |
-| PDF in the thread, or > 150,000 characters (files' text counted) | long: Gemini 3.6 Flash -> Gemini 3.1 Flash Lite -> Nemotron 3 Ultra -> GPT-OSS 120B (Workers AI) |
-| Extended thinking on | deep: Gemini 3.6 Flash -> Nemotron 3 Ultra -> Nemotron 3.5 Lightning -> Mistral Large 4 -> GPT-OSS 120B, high reasoning |
-| Code cues | code: GPT-OSS 120B -> Nemotron 3 Ultra -> GPT-OSS 120B (Workers AI) -> Gemini 3.6 Flash -> North Mini Code |
-| Short small talk (< 6 words, no question) | fast: Nemotron 3.5 Bolt -> Llama 3.1 8B (Workers AI) -> Gemini 3.1 Flash Lite |
-| Anything else | default: GPT-OSS 120B -> Nemotron 3 Ultra -> GPT-OSS 120B (Workers AI) -> Nemotron 3 Nano Omni -> Gemini 3.6 Flash -> Llama 3.3 70B (Workers AI) |
+| Image in one of the last three questions | vision: Nemotron 3.5 Super VL -> Super VL (OpenRouter) -> Gemini 3.1 Flash Lite |
+| PDF in the thread, or > 150,000 characters (files' text counted) | long: Gemini 3.1 Flash Lite -> DeepSeek V4.1 Flash -> Mistral Large 4 |
+| Extended thinking on | deep: Mistral Large 4 -> DeepSeek V4.1 Flash -> GPT-OSS 120B, high reasoning |
+| Code cues | code: GPT-OSS 120B (Groq) -> DeepSeek V4.1 Flash -> North Mini Code |
+| Short small talk (< 6 words, no question) | fast: Nemotron 3.5 Lightning -> Nemotron 3.5 Bolt -> Gemini 3.1 Flash Lite |
+| Anything else | default: DeepSeek V4.1 Flash -> Nemotron 3.5 Bolt -> GPT-OSS 120B (Groq) -> Gemini 3.1 Flash Lite |
 
-Models whose provider has no key are left out; an empty ladder falls back to default, then any configured picker model.
+No ladder uses Workers AI (its daily pool is shared by the whole account) or Gemini 3.6/3.8 Flash (about 20 messages a day each). Models whose provider has no key are left out; an empty ladder falls back to default, then any configured picker model.
 
 - **When to move on:** before the first answer-text token reaches the page - no first event within 12 s (25 s for deep or a picked model), network error, 429/5xx/404/410/401/402/403/other 4xx, an empty stream or only reasoning. Whole-reply budget 360 s (480 s for deep or a picked model), room for a long page or app. After the first token no failover: an `error` event, `stopReason: 'error'`, partial text kept. A picked model is never swapped; its failure reports up to two `alternatives`. When failover changes the model `meta` is sent again and the label under the reply names the model that answered. With pass-through (the page's default) the switch can happen only until the model's first `data:` line: refusals, timeouts and an opening error frame still move on, but a stream that then sends only reasoning or breaks off ends as an `error` (`empty_reply`, or a timeout/network one) for the page to retry.
 - **Cooldowns** (`_lib/ai/cooldown.ts`, per-isolate memory; resting models skipped; if all rest, all tried; a new rest never shortens a longer one): 429 -> `retry-after`, 1 min if none, max 10 min; 429 saying a daily/free allowance is spent -> until reset, else 6 h (max 24); Workers AI 4006 (daily neuron pool) -> every Workers AI model until 00:00 UTC; 404/410 -> 1 h; Workers AI 5007 -> 24 h; 401/402 -> whole provider 10 min; 403 -> that model 10 min; 5xx -> 30 s; timeout, network error, other 4xx, empty answer -> no rest. When a provider is down its models rest after the first failure and Auto answers from the next; if all fail the page shows "VinaX AI is busy right now. Try again in a moment." with Retry.
@@ -1071,7 +1067,7 @@ Built in order: (1) the full prompt for every model whose window is >= 24,000 ch
 | Event | Data |
 | --- | --- |
 | `meta` | `{ conversationId, userMessageId, assistantMessageId, model: { id, name, provider }, wire, continued? }`; again after failover |
-| `title` | `{ title }` (cut from the first message, up to six words, then a generated 2-6-word title from the `title` ladder: Gemini 3.1 Flash Lite (`thinkingLevel: "minimal"`), then Llama 3.1 8B (Workers AI), then Nemotron 3.5 Bolt; end of reply waits up to 1.5 s) |
+| `title` | `{ title }` (cut from the first message, up to six words, then a generated 2-6-word title from the `title` ladder: Gemini 3.1 Flash Lite (`thinkingLevel: "minimal"`), then Nemotron 3.5 Bolt, then Gemma 4 31B (NVIDIA); end of reply waits up to 1.5 s) |
 | (no name) | the provider's own `data:` lines, untouched (pass-through, below) |
 | `thinking`, `text` | `{ delta }`, only for a page that does not send `passthrough: true` |
 | `error` | `{ code, message, retryable, alternatives? }`: `model_busy`, `model_timeout`, `model_unavailable`, `empty_reply`, `all_busy` |
@@ -1178,7 +1174,7 @@ Placement: inside `SiteGate > AuthGate > AppLayout`; AppLayout hides side nav, t
 Music routes share `_lib/ai/music.ts`: the owner's switches, one gate, the `music` ladder and a strict JSON reader. Each route answers a short JSON task with a deadline, and the device keeps its own result whenever the answer is late, malformed or missing. With no AI secrets every route answers `503 ai_not_configured` and the device stops asking for ten minutes.
 
 - **Gate (`musicGate`):** per-address bucket, session, account `RATE_LIMIT_30` tier, a configured provider, the owner's switches, at least one `music`-ladder model with a key -> `429 rate_limited`, `401 signed_out`, `503 ai_not_configured | ai_disabled`.
-- **`music` ladder:** Llama 3.1 8B (Workers AI) -> Nemotron 3.5 Bolt (NVIDIA) -> Gemini 3.1 Flash Lite; deadlines 1.2-2.5 s; a model not started within 60% of the deadline is replaced; reasoning off, temperature 0.2; same cooldowns; the owner's per-model switches apply.
+- **`music` ladder:** Nemotron 3.5 Bolt (NVIDIA) -> Gemini 3.1 Flash Lite -> MiniMax M3.1 Flash (NVIDIA; slow, so it rarely beats the deadline); deadlines 1.2-2.5 s; a model not started within 60% of the deadline is replaced; reasoning off, temperature 0.2; same cooldowns; the owner's per-model switches apply.
 - **`askJson`/`extractJson`:** the device's summary goes in as material inside `<input>`; the first JSON object is read (fences, reasoning tags, chatter ignored); each route re-validates against its own input.
 - **`ai-music` setting:** `{ "enabled": true, "rerank": true, "home": true, "dj": true, "playlist": true, "lyrics": true, "generate": { "enabled": false, "dailyQuota": 5 } }`; `enabled: false` is the kill switch; the others are on unless `false`. Logs carry route, whether it answered, model and counts, never summary or answer.
 

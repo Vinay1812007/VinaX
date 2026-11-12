@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { _resetCooldowns, AUTH_MS, coolingUntil, GONE_MS, isCooling, noteFailure, QUOTA_DEFAULT_MS, RATE_MAX_MS, restFor, UPSTREAM_MS } from '../functions/_lib/ai/cooldown';
 import { ProviderError } from '../functions/_lib/ai/errors';
-import { applyOverrides, LADDERS, ladderModels, MODELS, modelById, PICKER_GROUPS, UTILITY_MODELS } from '../functions/_lib/ai/models';
+import { applyOverrides, APPROVED_MODELS, LADDERS, ladderModels, MODELS, modelById, PICKER_GROUPS, UTILITY_MODELS } from '../functions/_lib/ai/models';
 import { humanReason, isSmallTalk, pickLadder, runChat, type RouterEvent } from '../functions/_lib/ai/router';
 import type { Adapter, ModelSpec, ProviderEvent, ProviderId } from '../functions/_lib/ai/types';
 
@@ -33,10 +33,22 @@ describe('pickLadder', () => {
     expect(isSmallTalk('thanks but can you write the whole essay again in a formal tone')).toBe(false);
   });
 
-  it('every ladder entry is a registry model; Auto defaults to GPT-OSS 120B and keeps Cloudflare last', () => {
+  it('every ladder entry is a registry model; Auto defaults to DeepSeek V4.1 Flash; no ladder uses Workers AI or the two Gemini Flash models', () => {
     for (const ids of Object.values(LADDERS)) for (const id of ids) expect(modelById(MODELS, id), id).not.toBeNull();
-    expect(LADDERS.default[0]).toBe('groq:openai/gpt-oss-120b');
-    expect(LADDERS.default.at(-1)).toMatch(/^cloudflare:/);
+    expect(LADDERS.default[0]).toBe('nvidia:deepseek-ai/deepseek-v4.1-flash');
+    const all = Object.values(LADDERS).flat();
+    expect(all.filter((id) => id.startsWith('cloudflare:'))).toEqual([]);
+    expect(all.filter((id) => /^gemini:gemini-3\.[68]-flash$/.test(id))).toEqual([]);
+  });
+
+  it('the registry is exactly the approved list, with no duplicates', () => {
+    expect(new Set(MODELS.map((m) => m.id))).toEqual(APPROVED_MODELS);
+    expect(MODELS).toHaveLength(APPROVED_MODELS.size);
+    expect(MODELS.filter((m) => m.provider === 'groq').map((m) => m.upstream)).toEqual(['openai/gpt-oss-120b']);
+    // Never: paid on Workers AI, failed the 2026-11-12 check, or not listed by the provider.
+    for (const id of ['cloudflare:@cf/moonshotai/kimi-k2.6', 'cloudflare:@cf/zai-org/glm-5.3', 'cloudflare:@cf/deepseek-ai/deepseek-v4-pro-0813', 'groq:qwen/qwen3.8-27b', 'groq:openai/gpt-oss-20b', 'gemini:gemini-3.5-flash-lite', 'nvidia:openai/gpt-oss-20b', 'nvidia:meta/llama-3.2-90b-vision-instruct']) {
+      expect(APPROVED_MODELS.has(id), id).toBe(false);
+    }
   });
 
   it('the vision ladder only has models that can see', () => {
@@ -44,10 +56,10 @@ describe('pickLadder', () => {
   });
 
   it('owner overrides switch models off everywhere and reorder within a group', () => {
-    const reg = applyOverrides(MODELS, { 'groq:openai/gpt-oss-120b': { enabled: false }, 'cloudflare:@cf/meta/llama-3.1-8b-instruct-fast': { order: -1 }, junk: 5 });
-    expect(modelById(reg, 'groq:openai/gpt-oss-120b')).toBeNull();
-    expect(ladderModels(reg, 'default')[0].id).toBe('nvidia:nvidia/nemotron-3-ultra-550b-a55b');
-    expect(reg.filter((m) => m.group === 'fast').map((m) => m.id).slice(0, 2)).toEqual(['cloudflare:@cf/meta/llama-3.1-8b-instruct-fast', 'nvidia:nvidia/nemotron-3.5-bolt-e4b']);
+    const reg = applyOverrides(MODELS, { 'nvidia:deepseek-ai/deepseek-v4.1-flash': { enabled: false }, 'openrouter:liquid/lfm-2.5-2.6b:free': { order: -1 }, junk: 5 });
+    expect(modelById(reg, 'nvidia:deepseek-ai/deepseek-v4.1-flash')).toBeNull();
+    expect(ladderModels(reg, 'default')[0].id).toBe('nvidia:nvidia/nemotron-3.5-bolt-e4b');
+    expect(reg.filter((m) => m.group === 'fast').map((m) => m.id).slice(0, 2)).toEqual(['openrouter:liquid/lfm-2.5-2.6b:free', 'nvidia:nvidia/nemotron-3.5-bolt-e4b']);
     expect(reg.findIndex((m) => m.group === 'fast')).toBe(0);
     expect(applyOverrides(MODELS, 'nonsense')).toHaveLength(MODELS.length);
   });
@@ -90,8 +102,8 @@ describe('cooldowns', () => {
   });
 
   it('a 401 rests every model of that provider; a new rest never shortens a longer one', () => {
-    noteFailure(spec('groq:openai/gpt-oss-120b'), new ProviderError('auth'), now);
-    expect(isCooling(spec('groq:allam-2-7b'), now + 1)).toBe(true);
+    noteFailure(spec('nvidia:deepseek-ai/deepseek-v4.1-flash'), new ProviderError('auth'), now);
+    expect(isCooling(spec('nvidia:nvidia/nemotron-3.5-bolt-e4b'), now + 1)).toBe(true);
     expect(isCooling(spec('gemini:gemini-3.6-flash'), now + 1)).toBe(false);
     const m = spec('gemini:gemini-3.6-flash');
     noteFailure(m, new ProviderError('quota'), now);
@@ -100,8 +112,8 @@ describe('cooldowns', () => {
   });
 
   it('a spent Workers AI pool rests every Workers AI model', () => {
-    noteFailure(spec('cloudflare:@cf/meta/llama-3.3-70b-instruct-fp8-fast'), new ProviderError('quota', { untilMs: now + 60_000 }), now);
-    expect(isCooling(spec('cloudflare:@cf/meta/llama-3.1-8b-instruct-fast'), now + 1)).toBe(true);
+    noteFailure(spec('cloudflare:@cf/meta/llama-4-scout-17b-16e-instruct'), new ProviderError('quota', { untilMs: now + 60_000 }), now);
+    expect(isCooling(spec('cloudflare:@cf/openai/gpt-oss-20b'), now + 1)).toBe(true);
   });
 });
 

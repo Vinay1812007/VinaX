@@ -11,7 +11,8 @@ import { wireMessages } from '../functions/_lib/ai/wire';
 const vars: PromptVars = { now: new Date(Date.UTC(2026, 9, 30, 13, 5)), timezone: 'Asia/Kolkata', locale: 'en-IN', firstName: 'Asha', modelName: 'GPT-OSS 120B', providerName: 'Groq' };
 const full = modelById(MODELS, 'groq:openai/gpt-oss-120b')!;
 const fast = modelById(MODELS, 'nvidia:nvidia/nemotron-3.5-bolt-e4b')!;
-const tiny = modelById(MODELS, 'groq:allam-2-7b')!;
+// No approved model has a window this small any more (ALLaM 2 7B had 8,000 characters).
+const tiny = { ...full, maxContextChars: 8_000, maxOutput: 1_024, tier: 'fast' as const };
 
 describe('buildSystemPrompt', () => {
   it('full prompt', () => {
@@ -35,8 +36,7 @@ describe('buildSystemPrompt', () => {
     const chatModels = MODELS.filter((m) => m.group && m.group !== 'more' && m.maxOutput >= 4_096);
     expect(chatModels.filter((m) => !artifactsOffered(m)).map((m) => m.id)).toEqual([]);
     expect(fast.tier).toBe('fast');
-    expect(artifactsOffered(modelById(MODELS, 'nvidia:nvidia/ising-calibration-1.5-31b')!)).toBe(false);
-    expect(artifactsOffered(modelById(MODELS, 'gemini:gemini-robotics-er-2-preview')!)).toBe(false);
+    expect(artifactsOffered({ ...full, flags: { ...full.flags, artifacts: false } })).toBe(false);
     expect(COMPACT_PROMPT.length).toBeLessThan(1_000);
   });
 

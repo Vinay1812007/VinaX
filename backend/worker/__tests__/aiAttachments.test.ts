@@ -192,13 +192,14 @@ describe('files in a chat', () => {
   it('an image goes to Auto\'s vision ladder as an image part, and the message keeps the file\'s details', async () => {
     let geminiBody: { contents: Array<{ parts: Array<Record<string, unknown>> }> } | null = null;
     upstream = (url, init) => {
-      if (url.includes('gemini-3.6-flash')) { geminiBody = JSON.parse(String(init?.body)); return sseResponse('data: {"candidates":[{"content":{"parts":[{"text":"A red square."}]},"finishReason":"STOP"}]}\n\n'); }
+      // The vision ladder: Nemotron 3.5 Super VL (NVIDIA) fails here, so Gemini 3.1 Flash Lite answers.
+      if (url.includes('gemini-3.1-flash-lite')) { geminiBody = JSON.parse(String(init?.body)); return sseResponse('data: {"candidates":[{"content":{"parts":[{"text":"A red square."}]},"finishReason":"STOP"}]}\n\n'); }
       return new Response('{}', { status: 500 });
     };
     const fake = seed({ ai_attachments: [att({ id: IMG, kind: 'image', mime: 'image/png', name: 'red.png', storage_path: '1001/new/red', size: PNG.length })] });
     storage.objects.set('1001/new/red', { bytes: PNG, mime: 'image/png', length: null });
     const { events } = await send({ content: [{ type: 'attachment', id: IMG }, { type: 'text', text: 'What is this?' }] });
-    expect((events[0].data.model as { id: string }).id).toBe('gemini:gemini-3.6-flash');
+    expect((events.filter((e) => e.event === 'meta').at(-1)!.data.model as { id: string }).id).toBe('gemini:gemini-3.1-flash-lite');
     const parts = geminiBody!.contents.at(-1)!.parts;
     expect(parts).toContainEqual({ inline_data: { mime_type: 'image/png', data: toBase64(PNG) } });
     expect(parts.at(-1)).toEqual({ text: 'What is this?' });
@@ -244,7 +245,7 @@ describe('files in a chat', () => {
     const fake = seed({ ai_attachments: [att({ id: PDFID, kind: 'pdf', mime: 'application/pdf', name: 'paper.pdf', size: PDF.length, storage_path: '1001/new/paper', extracted_text: 'text' })] });
     storage.objects.set('1001/new/paper', { bytes: PDF, mime: 'application/pdf', length: null });
     const { events } = await send({ content: [{ type: 'attachment', id: PDFID }, { type: 'text', text: 'What is this?' }] });
-    expect((events[0].data.model as { id: string }).id).toBe('gemini:gemini-3.6-flash'); // the long ladder
+    expect((events[0].data.model as { id: string }).id).toBe('gemini:gemini-3.1-flash-lite'); // the long ladder
     expect(geminiBody!.contents.at(-1)!.parts[0]).toEqual({ file_data: { mime_type: 'application/pdf', file_uri: 'https://generativelanguage.googleapis.com/v1beta/files/abc' } });
     expect(fake.rows('ai_attachments')[0]).toMatchObject({ gemini_uri: 'https://generativelanguage.googleapis.com/v1beta/files/abc' });
     expect(calls.filter((c) => c.includes('upload'))).toHaveLength(2);
