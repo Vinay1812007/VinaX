@@ -299,6 +299,7 @@ export function noticeFor(code: string): string {
     case 'too_long': return 'That message is too long to send.';
     case 'conversation_full': return 'This chat is full. Start a new chat to keep going.';
     case 'not_found': return 'This chat isn’t available any more.';
+    case 'model_locked': return 'Claude isn’t open to this account. Pick another model or Auto.';
     case 'network': return 'You seem to be offline. Check your connection and try again.';
     default: return 'Something went wrong sending that. Try again.';
   }

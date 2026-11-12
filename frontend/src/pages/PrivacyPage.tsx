@@ -153,7 +153,7 @@ export default function PrivacyPage() {
         <p>
           VinaX AI, the chat assistant at /vinaxai, is the one exception, and only when you use it. What you type in
           it is sent through VinaX&rsquo;s server to an AI provider to write the reply: Groq, Google (Gemini),
-          OpenRouter, NVIDIA or Cloudflare Workers AI, depending on the model. When a reply searches the web, the search
+          OpenRouter, NVIDIA, Cloudflare Workers AI or Anthropic (Claude), depending on the model. When a reply searches the web, the search
           words go to Google (through Gemini) or to the search service Tavily or Serper. VinaX AI never sees your listening
           history. What you write in its Personalisation settings stays on your device and is sent with each message so
           the reply can use it; it isn&rsquo;t saved with your chats. Your chats, and any files you add to them, are stored with your Google account so they follow you to

@@ -2,7 +2,8 @@
  * VinaX AI — the model picker in the composer: Auto first, then the curated
  * groups, then the free models the server found in each provider's own list
  * ("More from …"), each model with a one-line description and badges. Models that
- * cannot answer now are shown greyed with the reason. A long list gets a
+ * cannot answer now are shown greyed with the reason; Claude models this
+ * account may not use are shown locked. A long list gets a
  * search box above it (name, provider or description); ↓ moves into the list.
  * Filter chips narrow the list by capability (Recommended, Fast, Reasoning,
  * Code, Vision, Long context), from what the Worker says each model has.
@@ -13,7 +14,7 @@ import { ChevronDownSmallIcon } from './icons';
 import type { ModelKind, PickerModel } from './types';
 
 export const GROUP_LABELS: Record<PickerModel['group'], string> = {
-  fast: 'Fast', balanced: 'Balanced', smart: 'Smart', vision: 'Vision', code: 'Code', more: 'More models', cloudflare: 'Cloudflare',
+  fast: 'Fast', balanced: 'Balanced', smart: 'Smart', vision: 'Vision', code: 'Code', claude: 'Claude', more: 'More models', cloudflare: 'Cloudflare',
   'more-groq': 'More from Groq', 'more-gemini': 'More from Gemini', 'more-openrouter': 'More from OpenRouter',
   'more-nvidia': 'More from NVIDIA', 'more-cloudflare': 'More from Cloudflare',
 };
@@ -21,10 +22,11 @@ export const GROUP_LABELS: Record<PickerModel['group'], string> = {
 /** More models than this and the picker gets a search box. */
 export const SEARCH_FROM = 12;
 
-const REASONS: Record<NonNullable<PickerModel['reason']>, string> = { busy: 'Busy right now', not_configured: 'Not available' };
+const REASONS: Record<NonNullable<PickerModel['reason']>, string> = { busy: 'Busy right now', not_configured: 'Not available', locked: 'Locked: Claude is not open to this account' };
 
 export function badgesOf(m: PickerModel): string[] {
   const out: string[] = [];
+  if (m.locked) out.push('Locked');
   if (m.flags.vision) out.push('Vision');
   if (m.flags.pdf) out.push('PDF');
   if (m.flags.web) out.push('Web');

@@ -6,6 +6,7 @@
  * personal engine's composer and playlist builder, usable by anything that
  * needs a structured answer. Every failure is a null, never a throw.
  */
+import { isLockedModel } from './claudeAccess';
 import { aiSettings, registryFor } from './config';
 import { ladderModels, type LadderName } from './models';
 import { providerConfigured } from './adapters';
@@ -33,7 +34,8 @@ export async function candidatesFor(env: AiEnv, ladder: LadderName = 'default'):
   const picked = ladderModels(registry, ladder);
   if (picked.length) return picked;
   const fallback = ladderModels(registry, 'default');
-  return fallback.length ? fallback : registry.filter((spec) => spec.group !== null);
+  // Never Claude (claudeAccess.ts): these backstage tasks run for everyone.
+  return fallback.length ? fallback : registry.filter((spec) => spec.group !== null && !isLockedModel(spec));
 }
 
 export async function completeText(env: AiEnv, o: CompleteOptions): Promise<Completion | null> {

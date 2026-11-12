@@ -9,6 +9,8 @@
  *   openai      `choices[0].delta.reasoning | reasoning_content | content` (Groq, OpenRouter, NVIDIA)
  *   gemini      `candidates[0].content.parts[]`, `thought: true` for reasoning
  *   workers-ai  `response` or `choices[0].delta.content`, `reasoning_content`
+ *   anthropic   Claude's Messages API events: `content_block_delta` whose
+ *               delta is `text_delta` (`text`, answer) or `thinking_delta` (`thinking`)
  *
  * Reasoning can also come as `<think>…</think>` at the start of the answer
  * text, split across chunks anywhere; the splitter holds back what could
@@ -18,7 +20,7 @@
  */
 import type { StreamEvent } from './types';
 
-export type WireFormat = 'openai' | 'gemini' | 'workers-ai';
+export type WireFormat = 'openai' | 'gemini' | 'workers-ai' | 'anthropic';
 
 const OPEN = '<think>';
 const CLOSE = '</think>';
@@ -121,7 +123,14 @@ export class WireReader {
     const out: Delta[] = [];
     const think = (t: string): void => { if (t) out.push(...this.split.reasoning(t)); };
     const text = (t: string): void => { if (t) out.push(...this.split.push(t)); };
-    if (this.wire === 'gemini') {
+    if (this.wire === 'anthropic') {
+      // message_start, ping, content_block_start/stop, message_delta and message_stop carry no text.
+      if (j.type === 'content_block_delta') {
+        const delta = j.delta as { type?: unknown; text?: unknown; thinking?: unknown } | undefined;
+        if (delta?.type === 'thinking_delta') think(str(delta.thinking));
+        else if (delta?.type === 'text_delta') text(str(delta.text));
+      }
+    } else if (this.wire === 'gemini') {
       const cand = (j.candidates as Array<{ content?: { parts?: Array<{ text?: unknown; thought?: unknown }> } }> | undefined)?.[0];
       for (const part of cand?.content?.parts ?? []) {
         if (part.thought === true) think(str(part.text));
@@ -146,4 +155,4 @@ export class WireReader {
   }
 }
 
-export const wireOf = (v: unknown): WireFormat => (v === 'gemini' || v === 'workers-ai' ? v : 'openai');
+export const wireOf = (v: unknown): WireFormat => (v === 'gemini' || v === 'workers-ai' || v === 'anthropic' ? v : 'openai');

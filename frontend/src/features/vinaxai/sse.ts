@@ -3,6 +3,10 @@
  * blank line, delivered in chunks that can end anywhere (even mid-character).
  * Blocks without an event name are the provider's own lines, passed through
  * by the Worker: each `data:` line comes out as a `raw` event for wire.ts.
+ * Claude's lines (Anthropic's Messages API) carry their own event names
+ * (`message_start`, `content_block_delta`, …, and `error`) and repeat the
+ * name as `type` in the data: those are the provider's too. The Worker's
+ * own events never carry a `type` equal to their name.
  */
 import type { StreamEvent } from './types';
 
@@ -47,10 +51,14 @@ function parseBlock(block: string): ChatStreamItem[] {
   }
   if (!data.length) return [];
   if (event === null) return data.map((d): RawLine => ({ event: 'raw', data: d }));
-  if (!KNOWN.has(event)) return [];
+  let parsed: unknown;
   try {
-    return [{ event, data: JSON.parse(data.join('\n')) } as StreamEvent];
+    parsed = JSON.parse(data.join('\n'));
   } catch {
     return [];
   }
+  // Claude's own line: its data names its event.
+  if (parsed && typeof parsed === 'object' && (parsed as { type?: unknown }).type === event) return data.map((d): RawLine => ({ event: 'raw', data: d }));
+  if (!KNOWN.has(event)) return [];
+  return [{ event, data: parsed } as StreamEvent];
 }

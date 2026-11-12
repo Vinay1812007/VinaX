@@ -137,7 +137,7 @@ function fakeAdapters(scripts: Record<string, Script>, calls: string[]): Record<
       }
     },
   };
-  return { groq: adapter, gemini: adapter, openrouter: adapter, nvidia: adapter, cloudflare: adapter };
+  return { groq: adapter, gemini: adapter, openrouter: adapter, nvidia: adapter, cloudflare: adapter, anthropic: adapter };
 }
 
 async function run(candidates: string[], scripts: Record<string, Script>, opts: { picked?: boolean; signal?: AbortSignal; firstEventMs?: number } = {}) {

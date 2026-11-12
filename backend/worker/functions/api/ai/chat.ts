@@ -42,6 +42,7 @@
  *   cost almost nothing (passthrough.ts).
  *   → 400 bad_request | bad_attachment | too_many_images | model_cannot_see_images · 409 too_many_files
  *   → 400 bad_request · 401 signed_out · 404 not_found · 409 conversation_full · 413 too_large
+ *   → 400 unknown_model · 403 model_locked (Claude, for an account not in claudeAccess.ts)
  *   → 429 rate_limited · 503 ai_not_configured | ai_disabled | unavailable
  *
  * The listener's message is saved before streaming; the reply is saved when
@@ -63,6 +64,7 @@ import {
 import { fileSignals, materialize, newMemo, toTurns } from '../../_lib/ai/materialize';
 import { ADAPTERS, anyProviderConfigured, PROVIDER_NAMES, providerConfigured } from '../../_lib/ai/adapters';
 import { aiOpenFor, aiSettings, foundModelFor, LIMIT_RANGES, registryFor } from '../../_lib/ai/config';
+import { claudeAllowed, isLockedModel } from '../../_lib/ai/claudeAccess';
 import { isCooling, noteFailure } from '../../_lib/ai/cooldown';
 import { fallbackTitle, latestLeaf, pathTo, textOf, trimHistory, typedText } from '../../_lib/ai/history';
 import { ladderModels, modelById, type LadderName } from '../../_lib/ai/models';
@@ -115,7 +117,7 @@ export const PARSE_MAX_CHARS = 1_000_000;
 
 /** How a reply too large to parse ended, from its last lines: the length limit, or its own end. */
 export function tailStop(raw: string): 'length' | 'end' {
-  return /"finish_reason"\s*:\s*"length"|"finishReason"\s*:\s*"MAX_TOKENS"/.test(raw.slice(-20_000)) ? 'length' : 'end';
+  return /"finish_reason"\s*:\s*"length"|"finishReason"\s*:\s*"MAX_TOKENS"|"stop_reason"\s*:\s*"max_tokens"/.test(raw.slice(-20_000)) ? 'length' : 'end';
 }
 
 /** How long the end of a first reply waits for its generated title. */
@@ -251,6 +253,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     // A curated model, or a free one found in its provider's current list (never an arbitrary id).
     const spec = modelById(registry, body.model) ?? (await foundModelFor(env, settings, body.model, { waitUntil: ctx.waitUntil }));
     if (!spec || spec.group === null || !providerConfigured(env, spec.provider)) return json({ error: 'unknown_model' }, 400);
+    // Claude: only the accounts in claudeAccess.ts (the picker shows it locked to everyone else).
+    if (isLockedModel(spec) && !(await claudeAllowed(env, sub))) return json({ error: 'model_locked' }, 403);
     candidates = [spec];
   } else candidates = [];
 
@@ -384,7 +388,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     ladder = pickLadder({ text: latestText, threadChars: threadSize, hasImages: signals.hasImages, hasPdf: signals.hasPdf || longKnowledge(project), extendedThinking: deep });
     candidates = ladderModels(registry, ladder);
     if (!candidates.length) candidates = ladderModels(registry, 'default');
-    if (!candidates.length) candidates = registry.filter((spec) => spec.group !== null);
+    // Never Claude (claudeAccess.ts): it is paid, and only some accounts may use it.
+    if (!candidates.length) candidates = registry.filter((spec) => spec.group !== null && !isLockedModel(spec));
     if (!candidates.length) return json({ error: 'ai_not_configured' }, 503);
     // Capabilities first (sees the images, holds the thread), then models that have the wanted level.
     candidates = preferLevel(preferFit(candidates, { hasImages: signals.hasImages, threadChars: threadSize }), wanted);
@@ -468,7 +473,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     };
   };
   const alternativesFor = (failed: ModelSpec): Array<{ id: string; name: string; provider: string }> =>
-    registry.filter((spec) => spec.group !== null && spec.id !== failed.id && !isCooling(spec)).slice(0, 2).map(modelInfo);
+    registry.filter((spec) => spec.group !== null && spec.id !== failed.id && !isLockedModel(spec) && !isCooling(spec)).slice(0, 2).map(modelInfo);
 
   const abort = new AbortController();
   const assistantId = continuing?.id ?? crypto.randomUUID();

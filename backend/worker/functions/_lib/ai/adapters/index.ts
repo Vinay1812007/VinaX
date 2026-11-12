@@ -1,10 +1,11 @@
 /** VinaX AI — the adapter for each provider, and whether its key is set. */
+import { anthropic } from './anthropic';
 import { gemini } from './gemini';
 import { groq, nvidia, openrouter } from './openaiCompat';
 import { workersAi } from './workersAi';
 import type { AiEnv, ProviderId, WireAdapter } from '../types';
 
-export const ADAPTERS: Readonly<Record<ProviderId, WireAdapter>> = { groq, gemini, openrouter, nvidia, cloudflare: workersAi };
+export const ADAPTERS: Readonly<Record<ProviderId, WireAdapter>> = { groq, gemini, openrouter, nvidia, cloudflare: workersAi, anthropic };
 
 export const PROVIDER_NAMES: Readonly<Record<ProviderId, string>> = {
   groq: 'Groq',
@@ -12,9 +13,10 @@ export const PROVIDER_NAMES: Readonly<Record<ProviderId, string>> = {
   openrouter: 'OpenRouter',
   nvidia: 'NVIDIA',
   cloudflare: 'Cloudflare',
+  anthropic: 'Anthropic',
 };
 
-export const PROVIDERS: readonly ProviderId[] = ['groq', 'gemini', 'openrouter', 'nvidia', 'cloudflare'];
+export const PROVIDERS: readonly ProviderId[] = ['groq', 'gemini', 'openrouter', 'nvidia', 'cloudflare', 'anthropic'];
 
 const set = (v: unknown): boolean => typeof v === 'string' && v.trim().length > 0;
 
@@ -25,6 +27,7 @@ export function providerConfigured(env: AiEnv, provider: ProviderId): boolean {
     case 'openrouter': return set(env.OPENROUTER_API_KEY);
     case 'nvidia': return set(env.NVIDIA_API_KEY);
     case 'cloudflare': return !!env.AI && typeof env.AI.run === 'function';
+    case 'anthropic': return set(env.ANTHROPIC_API_KEY);
   }
 }
 

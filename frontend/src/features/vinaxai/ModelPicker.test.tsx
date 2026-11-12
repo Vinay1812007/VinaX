@@ -31,6 +31,20 @@ describe('<ModelPicker />', () => {
     expect(vl.textContent).toContain('Vision');
   });
 
+  it('a locked Claude model is shown in its own group with a Locked badge and cannot be chosen', () => {
+    const onChange = vi.fn();
+    const claude = m('anthropic:claude-opus-5-5', 'Claude Opus 5.5', 'claude', { provider: 'Anthropic', available: false, reason: 'locked', locked: true });
+    render(<ModelPicker models={[...MODELS, claude]} value="auto" onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Model: Auto' }));
+    expect(screen.getByText('Claude', { selector: '.vx-ai-pop-head' })).toBeTruthy();
+    const opt = screen.getAllByRole('option').find((o) => o.textContent?.includes('Claude Opus 5.5'))!;
+    expect(opt.getAttribute('aria-disabled')).toBe('true');
+    expect(opt.textContent).toContain('Locked: Claude is not open to this account');
+    expect(badgesOf(claude)[0]).toBe('Locked');
+    fireEvent.click(opt);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it('a disabled model cannot be chosen; an available one can', () => {
     const onChange = vi.fn();
     render(<ModelPicker models={MODELS} value="auto" onChange={onChange} />);

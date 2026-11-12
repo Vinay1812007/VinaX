@@ -13,6 +13,9 @@
  *     Extended = high. No level above high, so no Maximum.
  *   - OpenRouter reasoning models (OpenRouter's own `reasoning.effort`):
  *     Fast = low, Standard = the model's default, Extended = high.
+ *   - Claude (`output_config.effort`, with adaptive thinking): Fast = low,
+ *     Standard = medium, Extended = high, Maximum = max with twice the
+ *     output room (thinking counts against `max_tokens`).
  *   - Any other model with `highParams`: Standard and Extended.
  *   - Everything else (NVIDIA, Workers AI, models without a switch):
  *     Standard only. Asking such a model for another level answers at
@@ -49,6 +52,14 @@ export function thinkingProfile(spec: Pick<ModelSpec, 'provider' | 'upstream' | 
       levels: ['fast', 'standard', 'extended', 'max'],
       params: { fast: geminiLevel('minimal'), standard: geminiLevel('low'), extended: geminiLevel('high'), max: geminiLevel('high') },
       output: { max: Math.max(spec.maxOutput, spec.tier === 'fast' ? MAX_THINKING_OUTPUT_LITE : MAX_THINKING_OUTPUT) },
+    };
+  }
+  if (spec.provider === 'anthropic') {
+    const effort = (e: string) => ({ output_config: { effort: e } });
+    return {
+      levels: ['fast', 'standard', 'extended', 'max'],
+      params: { fast: effort('low'), standard: effort('medium'), extended: effort('high'), max: effort('max') },
+      output: { max: Math.max(spec.maxOutput, MAX_THINKING_OUTPUT) },
     };
   }
   if (spec.provider === 'groq' && /gpt-oss/.test(spec.upstream)) {

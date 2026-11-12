@@ -8,12 +8,14 @@ export interface ModelLabel {
 
 export interface PickerModel extends ModelLabel {
   /** The curated groups, then `more-<provider>`: free models found in that provider's own list. */
-  group: 'fast' | 'balanced' | 'smart' | 'vision' | 'code' | 'more' | 'cloudflare'
+  group: 'fast' | 'balanced' | 'smart' | 'vision' | 'code' | 'more' | 'cloudflare' | 'claude'
     | 'more-groq' | 'more-gemini' | 'more-openrouter' | 'more-nvidia' | 'more-cloudflare';
   description: string;
   flags: { vision: boolean; web: boolean; thinking: boolean; code: boolean; pdf?: boolean };
   available: boolean;
-  reason?: 'not_configured' | 'busy';
+  /** 'locked': Claude, which this account may not use (the Worker's claudeAccess.ts). */
+  reason?: 'not_configured' | 'busy' | 'locked';
+  locked?: boolean;
   /** Thinking levels with a real provider switch on this model (always includes 'standard'). */
   thinkingLevels?: ThinkingLevel[];
   /** Capability filters in the picker. */

@@ -40,6 +40,22 @@ describe('WireReader', () => {
     expect(joined(evs, 'thinking')).toBe('hm');
   });
 
+  it('anthropic: thinking_delta is thinking, text_delta is text; the other events and errors add nothing', () => {
+    const d = (delta: Record<string, unknown>) => ({ type: 'content_block_delta', index: 0, delta });
+    const evs = read(new WireReader('anthropic'), [
+      { type: 'message_start', message: { usage: { input_tokens: 3 } } },
+      { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } },
+      d({ type: 'thinking_delta', thinking: 'Greet ' }), d({ type: 'thinking_delta', thinking: 'back.' }), d({ type: 'signature_delta', signature: 'sig' }),
+      { type: 'ping' },
+      d({ type: 'text_delta', text: 'Namaste ' }), d({ type: 'text_delta', text: 'ji.' }),
+      { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 4 } },
+      { type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } },
+      { type: 'message_stop' },
+    ]);
+    expect(joined(evs, 'thinking')).toBe('Greet back.');
+    expect(joined(evs, 'text')).toBe('Namaste ji.');
+  });
+
   it('keeps at most THINK_MAX characters of reasoning', () => {
     const evs = read(new WireReader('openai'), [oa({ reasoning: 'x'.repeat(THINK_MAX + 50) }), oa({ reasoning: 'more' })]);
     expect(joined(evs, 'thinking')).toHaveLength(THINK_MAX);
@@ -47,6 +63,7 @@ describe('WireReader', () => {
 
   it('wireOf falls back to openai', () => {
     expect(wireOf('gemini')).toBe('gemini');
+    expect(wireOf('anthropic')).toBe('anthropic');
     expect(wireOf(undefined)).toBe('openai');
     expect(wireOf('evil')).toBe('openai');
   });

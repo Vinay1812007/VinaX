@@ -6,7 +6,8 @@
 import type { AuthEnv } from '../googleAuth';
 import type { DbEnv } from '../db';
 
-export type ProviderId = 'groq' | 'gemini' | 'openrouter' | 'nvidia' | 'cloudflare';
+/** `anthropic` (Claude) is paid and locked to the accounts in claudeAccess.ts. */
+export type ProviderId = 'groq' | 'gemini' | 'openrouter' | 'nvidia' | 'cloudflare' | 'anthropic';
 
 /** Where a model's reasoning arrives: a separate delta field, <think> tags in the text, Gemini thought parts, or nowhere. */
 export type ThinkFormat = 'field' | 'tags' | 'parts' | 'none';
@@ -29,7 +30,7 @@ export interface ModelFlags {
  * slow-to-start models; `more-<provider>` holds the free models found in that
  * provider's own list (discovery.ts).
  */
-export type ModelGroup = 'fast' | 'balanced' | 'smart' | 'vision' | 'code' | 'more' | 'cloudflare'
+export type ModelGroup = 'fast' | 'balanced' | 'smart' | 'vision' | 'code' | 'more' | 'cloudflare' | 'claude'
   | 'more-groq' | 'more-gemini' | 'more-openrouter' | 'more-nvidia' | 'more-cloudflare';
 
 export interface ModelSpec {
@@ -132,6 +133,8 @@ export interface AiKeysEnv {
   GEMINI_API_KEY?: string;
   OPENROUTER_API_KEY?: string;
   NVIDIA_API_KEY?: string;
+  /** Claude (Anthropic Messages API); only the accounts in claudeAccess.ts may use it. */
+  ANTHROPIC_API_KEY?: string;
   AI?: WorkersAiBinding;
   SEARCH_API_KEY?: string;
   SEARCH_API_PROVIDER?: string;
@@ -146,10 +149,10 @@ export interface Adapter {
 
 /**
  * How a provider's raw stream is written, for the page that reads it
- * (`data:` lines of OpenAI-style chunks, Gemini's candidates, or Workers AI's
- * `response` frames).
+ * (`data:` lines of OpenAI-style chunks, Gemini's candidates, Workers AI's
+ * `response` frames, or Anthropic's Messages API events).
  */
-export type WireFormat = 'openai' | 'gemini' | 'workers-ai';
+export type WireFormat = 'openai' | 'gemini' | 'workers-ai' | 'anthropic';
 
 /**
  * An adapter in two halves, so the chat can hand the provider's bytes to the

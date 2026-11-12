@@ -49,7 +49,7 @@ const STYLES: Array<{ value: ReplyStyle; label: string }> = [
 ];
 
 const GROUP_LABEL: Record<string, string> = {
-  fast: 'Fast', balanced: 'Balanced', smart: 'Smart', vision: 'Vision', code: 'Code', cloudflare: 'Cloudflare', more: 'More models',
+  fast: 'Fast', balanced: 'Balanced', smart: 'Smart', vision: 'Vision', code: 'Code', claude: 'Claude', cloudflare: 'Cloudflare', more: 'More models',
   'more-groq': 'More from Groq', 'more-gemini': 'More from Gemini', 'more-openrouter': 'More from OpenRouter',
   'more-nvidia': 'More from NVIDIA', 'more-cloudflare': 'More from Cloudflare',
 };
@@ -173,7 +173,7 @@ export function SettingsPanel({ models, groups, voice, search, section, onClose 
                     <optgroup key={g} label={GROUP_LABEL[g] ?? cap(g)}>
                       {list.map((m) => (
                         <option key={m.id} value={m.id} disabled={!m.available}>
-                          {m.name} · {m.provider}{m.available ? '' : m.reason === 'busy' ? ' (busy)' : ' (unavailable)'}
+                          {m.name} · {m.provider}{m.available ? '' : m.reason === 'busy' ? ' (busy)' : m.reason === 'locked' ? ' (locked)' : ' (unavailable)'}
                         </option>
                       ))}
                     </optgroup>

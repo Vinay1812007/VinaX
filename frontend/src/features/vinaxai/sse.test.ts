@@ -23,6 +23,20 @@ describe('SseParser', () => {
     expect(p.end()).toEqual([{ event: 'done', data: { stopReason: 'end' } }]);
   });
 
+  it('Claude\'s named lines (their data repeats the event as `type`) are raw lines; the Worker\'s own error is not', () => {
+    const p = new SseParser();
+    const delta = '{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hi"}}';
+    const claudeError = '{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}';
+    const out = p.push(`event: meta\ndata: {"wire":"anthropic"}\n\nevent: message_start\ndata: {"type":"message_start","message":{}}\n\nevent: content_block_delta\ndata: ${delta}\n\nevent: error\ndata: ${claudeError}\n\nevent: error\ndata: {"code":"model_unavailable","message":"x"}\n\n`);
+    expect(out).toEqual([
+      { event: 'meta', data: { wire: 'anthropic' } },
+      { event: 'raw', data: '{"type":"message_start","message":{}}' },
+      { event: 'raw', data: delta },
+      { event: 'raw', data: claudeError },
+      { event: 'error', data: { code: 'model_unavailable', message: 'x' } },
+    ]);
+  });
+
   it('gives each data line of an unnamed block as a raw line (the provider\'s own, passed through)', () => {
     const p = new SseParser();
     const out = [...p.push('event: meta\ndata: {"wire":"gemini"}\n\ndata: {"a":1}\r\n\r\ndata: [DONE]\n\n: keep-alive\n\n'), ...p.push('event: done\ndata: {"stopReason":"end"}\n\n')];

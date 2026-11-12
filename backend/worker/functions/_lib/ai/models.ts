@@ -137,9 +137,40 @@ export const APPROVED_MODELS: ReadonlySet<string> = new Set([
   'openrouter:dots-studio/dots-3-note-preview:free',
   'openrouter:cohere/north-mini-code:free',
   'openrouter:liquid/lfm-2.5-2.6b:free',
+  // Anthropic Claude (paid, the owner's key): picked by hand only, never in a ladder, and only
+  // for the accounts in claudeAccess.ts; everyone else sees these locked in the picker.
+  'anthropic:claude-opus-5-5',
+  'anthropic:claude-sonnet-5-5',
+  'anthropic:claude-haiku-5-5',
+  'anthropic:claude-fable-5-2',
 ]);
 
 export const isApproved = (id: string): boolean => APPROVED_MODELS.has(id);
+
+/**
+ * Claude (Anthropic Messages API, adapters/anthropic.ts). Adaptive thinking,
+ * shown as a summary; how hard it thinks is `output_config.effort`, which
+ * thinking.ts sets per level (Standard = medium). `fallbacks: "default"`:
+ * a request a safety classifier declines is answered by the model Anthropic
+ * recommends for it (Haiku has no server-side fallback). Each thread is
+ * capped like Gemini's (about 150K tokens; the models hold 1M) because the
+ * owner pays per token; 32,768 tokens of answer and thinking per reply, and a
+ * longer page carries on with the page's Continue.
+ */
+const CLAUDE_CTX = 600_000;
+const claudeThink = { thinking: { type: 'adaptive', display: 'summarized' }, output_config: { effort: 'medium' } };
+const claude = (upstream: string, name: string, description: string, extra: Partial<Omit<ModelSpec, 'flags'>> & { fallback?: boolean } = {}): ModelSpec => {
+  const { fallback = true, ...rest } = extra;
+  return m('anthropic', upstream, name, 'claude', {
+    description,
+    maxContextChars: CLAUDE_CTX,
+    maxOutput: 32_768,
+    params: { ...claudeThink, ...(fallback ? { fallbacks: 'default' } : {}) },
+    offParams: { output_config: { effort: 'low' } },
+    ...rest,
+    flags: { vision: true, reasoning: true, artifacts: true, thinkFormat: 'field' },
+  });
+};
 
 // Gemma on the Gemini API takes no system instruction and no thinking
 // config, and its free tier counts few tokens a minute: a short history.
@@ -245,6 +276,12 @@ export const MODELS: readonly ModelSpec[] = [
   m('openrouter', 'dots-studio/dots-3-note-preview:free', 'Dots 3 Note Preview', 'more', {
     description: 'Preview chat model from dots', maxContextChars: OPENROUTER_CTX, flags: { reasoning: true, thinkFormat: 'field' },
   }),
+  // ---- Claude (Anthropic; picked by hand only, locked to the accounts in claudeAccess.ts)
+  claude('claude-opus-5-5', 'Claude Opus 5.5', 'Anthropic’s Opus: deep reasoning, code and long work'),
+  claude('claude-sonnet-5-5', 'Claude Sonnet 5.5', 'Quick and capable for everyday work and code'),
+  claude('claude-haiku-5-5', 'Claude Haiku 5.5', 'The quickest Claude', { fallback: false }),
+  // No firstEventMs: message_start comes before Claude thinks, so the first line is quick even on Fable's long turns.
+  claude('claude-fable-5-2', 'Claude Fable 5.2', 'Anthropic’s most capable model (slower, costs more)'),
   // ---- Cloudflare Workers AI (picked by hand only)
   m('cloudflare', '@cf/zai-org/glm-5.3-flash', 'GLM 5.3 Flash (Cloudflare)', 'cloudflare', {
     description: 'Quick GLM on the edge network', maxContextChars: CF_CTX, maxOutput: 8_192,
@@ -339,7 +376,7 @@ export const LADDERS: Readonly<Record<LadderName, readonly string[]>> = {
 
 /** The curated groups, then one group per provider for the free models found in its list (discovery.ts). */
 export const PICKER_GROUPS: readonly ModelGroup[] = [
-  'fast', 'balanced', 'smart', 'vision', 'code', 'more', 'cloudflare',
+  'fast', 'balanced', 'smart', 'vision', 'code', 'claude', 'more', 'cloudflare',
   'more-groq', 'more-gemini', 'more-openrouter', 'more-nvidia', 'more-cloudflare',
 ];
 

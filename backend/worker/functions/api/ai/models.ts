@@ -5,7 +5,8 @@
  *            description, flags: { vision, web, thinking, code, pdf }, available, reason?,
  *            thinkingLevels: ["fast" | "standard" | "extended" | "max"],   // levels with a real provider switch (thinking.ts)
  *            kinds: ["fast" | "reasoning" | "code" | "vision" | "long"],    // capability filters in the picker
- *            contextTokens, outputTokens, recommended? }],              // about: the registry's character limits / 4
+ *            contextTokens, outputTokens, recommended?,                 // about: the registry's character limits / 4
+ *            locked? }],          // true: Claude, which this account may not use (claudeAccess.ts); reason "locked"
  *            autoThinking: [...],   // the thinking levels Auto can give with the models in its ladders
  *            voice: { dictation, readAloud, live, liveSearch, voices: [...], liveVoices: [...], liveModels: [{ id, name }], liveLanguages: [{ code, name, native }] },
  *            limits: { imagesPerMessage, filesPerMessage, filesPerChat, pdfMB, pdfPages, textMB } }
@@ -18,7 +19,10 @@
  * Public (a session, when sent, only decides `enabled` for testers). It
  * never names upstream hosts or keys. `available` is false when the
  * provider's key is not set ('not_configured') or the model is resting
- * after a failure ('busy').
+ * after a failure ('busy'). Claude models (provider Anthropic) are listed for
+ * everyone but locked (`available: false, reason: 'locked', locked: true`)
+ * unless the session's account is one of claudeAccess.ts's; a locked model
+ * never says whether the key is set.
  *
  * The curated models come first, then the free models found in each
  * provider's own list (`more-<provider>` groups, _lib/ai/discovery.ts),
@@ -32,6 +36,7 @@ import { dbConfigured } from '../../_lib/db';
 import { anyProviderConfigured, PROVIDER_NAMES, providerConfigured } from '../../_lib/ai/adapters';
 import { aiOpenFor, aiSettings, pickerRegistryFor, registryFor, sanitizeAiSettings } from '../../_lib/ai/config';
 import { isCooling } from '../../_lib/ai/cooldown';
+import { claudeAllowed, isLockedModel } from '../../_lib/ai/claudeAccess';
 import { LADDERS, ladderModels, PICKER_GROUPS } from '../../_lib/ai/models';
 import { autoLevels, levelsOf } from '../../_lib/ai/thinking';
 import type { ModelSpec } from '../../_lib/ai/types';
@@ -68,10 +73,13 @@ export const onRequestGet = async (ctx: { request: Request; env: AiEnv; waitUnti
   const sub = token ? await readSession(env, token) : null;
   const now = Date.now();
   const picker = await pickerRegistryFor(env, settings, { waitUntil: ctx.waitUntil });
+  // Read the account only when a locked model is listed.
+  const mayUseLocked = picker.some(isLockedModel) && dbConfigured(env) ? await claudeAllowed(env, sub) : false;
   const recommended = recommendedIds();
   const models = picker
     .filter((spec) => spec.group !== null)
     .map((spec) => {
+      const locked = isLockedModel(spec) && !mayUseLocked;
       const configured = providerConfigured(env, spec.provider);
       const busy = configured && isCooling(spec, now);
       return {
@@ -86,8 +94,8 @@ export const onRequestGet = async (ctx: { request: Request; env: AiEnv; waitUnti
         contextTokens: Math.round(spec.maxContextChars / 4),
         outputTokens: spec.maxOutput,
         ...(recommended.has(spec.id) ? { recommended: true } : {}),
-        available: configured && !busy,
-        ...(!configured ? { reason: 'not_configured' } : busy ? { reason: 'busy' } : {}),
+        available: !locked && configured && !busy,
+        ...(locked ? { reason: 'locked', locked: true } : !configured ? { reason: 'not_configured' } : busy ? { reason: 'busy' } : {}),
       };
     });
   // Web search is offered when the owner allows it and something can search: the search API or free grounding.

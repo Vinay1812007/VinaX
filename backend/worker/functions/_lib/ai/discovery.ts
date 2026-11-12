@@ -51,10 +51,12 @@ export const DISCOVERY_WAIT_MS = 3_000;
 /** At most this many found models per provider. */
 export const MAX_FOUND_PER_PROVIDER = 300;
 
+/** Providers whose own model lists are read. Claude (anthropic) is curated only: never discovered. */
+export type DiscoveryProviderId = Exclude<ProviderId, 'anthropic'>;
 export const DISCOVERY_PROVIDERS: readonly ProviderId[] = ['groq', 'gemini', 'openrouter', 'nvidia', 'cloudflare'];
 
 /** The picker group each provider's found models go in. */
-export const DISCOVERY_GROUPS: Readonly<Record<ProviderId, ModelGroup>> = {
+export const DISCOVERY_GROUPS: Readonly<Record<DiscoveryProviderId, ModelGroup>> = {
   groq: 'more-groq', gemini: 'more-gemini', openrouter: 'more-openrouter', nvidia: 'more-nvidia', cloudflare: 'more-cloudflare',
 };
 
@@ -262,7 +264,7 @@ export function parseWorkersAi(list: unknown, now = Date.now()): FoundModel[] {
 // ---------------------------------------------------------------- registry entries
 
 /** Most history each provider's found models keep (characters), like the curated ones. */
-const CONTEXT_CAP: Readonly<Record<ProviderId, number>> = { groq: 30_000, gemini: 600_000, openrouter: 100_000, nvidia: 100_000, cloudflare: 60_000 };
+const CONTEXT_CAP: Readonly<Record<DiscoveryProviderId, number>> = { groq: 30_000, gemini: 600_000, openrouter: 100_000, nvidia: 100_000, cloudflare: 60_000 };
 /** When the list gives no window (NVIDIA): enough for the full prompt, small enough for most models. */
 const CONTEXT_UNKNOWN = 32_000;
 const OUTPUT_DEFAULT = 4_096;
@@ -278,7 +280,8 @@ export function toSpec(provider: ProviderId, f: FoundModel): ModelSpec {
   let maxOutput = Math.min(OUTPUT_MAX, Math.max(512, f.maxOutput ?? OUTPUT_DEFAULT));
   if (ctx) maxOutput = Math.min(maxOutput, Math.max(512, Math.floor(ctx / 4)));
   // About three characters a token, leaving room for the answer.
-  const maxContextChars = ctx ? Math.max(4_000, Math.min(CONTEXT_CAP[provider], (ctx - maxOutput) * 3)) : Math.min(CONTEXT_CAP[provider], CONTEXT_UNKNOWN);
+  const cap = CONTEXT_CAP[provider as DiscoveryProviderId] ?? CONTEXT_UNKNOWN;
+  const maxContextChars = ctx ? Math.max(4_000, Math.min(cap, (ctx - maxOutput) * 3)) : Math.min(cap, CONTEXT_UNKNOWN);
   const thinkFormat: ModelFlags['thinkFormat'] = provider === 'gemini' ? (f.thinking ? 'parts' : 'none') : f.reasoning ? (provider === 'openrouter' ? 'field' : 'tags') : 'none';
   const description = [f.vendor, ctx ? `${fmtTokens(ctx)} context` : null].filter(Boolean).join(' · ') || 'Free model';
   return {
@@ -286,7 +289,7 @@ export function toSpec(provider: ProviderId, f: FoundModel): ModelSpec {
     provider,
     upstream: f.upstream,
     name: f.name,
-    group: DISCOVERY_GROUPS[provider],
+    group: DISCOVERY_GROUPS[provider as DiscoveryProviderId] ?? 'more',
     tier: 'full',
     description,
     maxContextChars,
@@ -366,7 +369,7 @@ async function getJson(url: string, headers: Record<string, string>, signal: Abo
 
 const bearer = (key: string | undefined): Record<string, string> => ({ authorization: `Bearer ${key?.trim() ?? ''}` });
 
-export const FETCHERS: Readonly<Record<ProviderId, Fetcher>> = {
+export const FETCHERS: Readonly<Record<DiscoveryProviderId, Fetcher>> = {
   groq: async (env, signal) => parseGroq(await getJson('https://api.groq.com/openai/v1/models', bearer(env.GROQ_API_KEY), signal)),
   openrouter: async (env, signal) => {
     const res = await fetch('https://openrouter.ai/api/v1/models', {
@@ -437,7 +440,7 @@ async function toEdge(p: ProviderId, st: ProviderState): Promise<void> {
 }
 
 /** Read one provider's list (edge cache first) and remember it; a failure keeps the last good list. Never throws. */
-async function refresh(env: AiEnv, p: ProviderId, now: number, fetchers: Readonly<Record<ProviderId, Fetcher>>): Promise<ProviderState> {
+async function refresh(env: AiEnv, p: ProviderId, now: number, fetchers: Readonly<Record<DiscoveryProviderId, Fetcher>>): Promise<ProviderState> {
   const prev = memo.get(p);
   const cached = await fromEdge(p, now);
   if (cached) {
@@ -448,7 +451,9 @@ async function refresh(env: AiEnv, p: ProviderId, now: number, fetchers: Readonl
   const timer = setTimeout(() => ac.abort(), DISCOVERY_FETCH_MS);
   let st: ProviderState;
   try {
-    const models = (await fetchers[p](env, ac.signal)).slice(0, MAX_FOUND_PER_PROVIDER);
+    const fetcher = fetchers[p as DiscoveryProviderId];
+    if (!fetcher) throw new Error('not_discovered');
+    const models = (await fetcher(env, ac.signal)).slice(0, MAX_FOUND_PER_PROVIDER);
     if (!models.length) throw new Error('empty');
     st = { at: now, ok: true, models, error: null, fetchedAt: now };
     await toEdge(p, st);
@@ -472,7 +477,7 @@ export interface DiscoverOptions {
   waitUntil?: (p: Promise<unknown>) => void;
   /** How long to wait for a provider with nothing known yet. */
   waitMs?: number;
-  fetchers?: Readonly<Record<ProviderId, Fetcher>>;
+  fetchers?: Readonly<Record<DiscoveryProviderId, Fetcher>>;
 }
 
 /** Which providers the owner lets discovery use: `discover: false` (all off) or `{ "<provider>": false }`. */
