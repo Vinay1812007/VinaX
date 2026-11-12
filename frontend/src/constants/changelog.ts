@@ -18,6 +18,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.14': {
+    title: 'VinaX AI has Claude Haiku 4.5 next to Claude Haiku 5.5',
+    changes: [
+      { type: 'improved', text: 'The Claude group in the model menu now has Claude Haiku 5.5 and Claude Haiku 4.5.' },
+      { type: 'improved', text: 'Claude Haiku 4.5 thinks as hard as the Thinking menu asks: no thinking at Fast, longer thinking at Standard, Extended and Maximum.' },
+      { type: 'improved', text: 'Claude stays open to the owner\'s account only.' },
+    ],
+  },
   '1.13.13': {
     title: 'VinaX AI no longer has Cowork',
     changes: [
