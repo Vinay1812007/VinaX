@@ -365,7 +365,9 @@
               { key: 'group', label: 'In the model menu', render: function (m) { return m.discovered ? h('span', 'Yes', ui.muted(' · found automatically')) : m.group ? 'Yes' : ui.muted('Only for automatic choice'); } },
               { key: 'ownerEnabled', label: 'Switched on', render: function (m) {
                 // Paused: on the approved list but failed the live check, so offered nowhere until it is moved back (models.ts PAUSED_MODELS).
-                if (m.paused) return h('span', ui.pill('Paused', 'warn'), ui.muted(' · failed the live check; Test shows if it works again'));
+                if (m.paused) return h('span', ui.pill('Paused', 'warn'), ui.muted(' · failed the live check; the daily model check (or Test) brings it back once it answers'));
+                // Back: paused, but its latest daily check passed, so it is in the model menu again (picked by hand only).
+                if (m.revived && m.ownerEnabled) return h('span', ui.pill('Back', 'ok'), ui.muted(' · passed the daily model check; picked by hand only, never in Auto'));
                 return m.ownerEnabled ? ui.pill('On', 'ok') : ui.pill('Off');
               } },
               { key: 'restingUntil', label: 'Ready?', render: function (m) {
