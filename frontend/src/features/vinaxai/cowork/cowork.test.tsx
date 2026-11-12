@@ -17,9 +17,9 @@ const { CoworkView } = await import('./CoworkView');
 const SID = 'sesn_011Task';
 const INFO = {
   allowed: true, configured: true, ready: false,
-  models: [{ id: 'claude-opus-5-5', name: 'Claude Opus 5.5', description: 'Best for most tasks' }, { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5', description: 'Quicker' }],
+  models: [{ id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5', description: 'Quick and low-cost' }],
   efforts: ['low', 'medium', 'high', 'xhigh', 'max'], defaultEffort: 'high', budgetCents: 500, minBudgetCents: 50, maxBudgetCents: 20000, maxUploadBytes: 31457280,
-  tasks: [{ id: 'sesn_011Old', title: 'Old report', status: 'idle', createdAt: '2026-11-11T10:00:00Z', updatedAt: null, costCents: 120, budgetCents: 500, model: 'claude-opus-5-5' }],
+  tasks: [{ id: 'sesn_011Old', title: 'Old report', status: 'idle', createdAt: '2026-11-11T10:00:00Z', updatedAt: null, costCents: 120, budgetCents: 500, model: 'claude-haiku-5-5' }],
 };
 /** A JSON request body, or null. */
 function parse(raw: unknown): unknown {
@@ -74,8 +74,8 @@ describe('<CoworkView />', () => {
       const r = route(c);
       if (r === '/' && c.method === 'GET') return reply(INFO);
       if (r === '/setup') return reply({ ok: true, created: true, updated: false });
-      if (r === '/' && c.method === 'POST') return reply({ task: { id: SID, title: 'Make a playlist report', status: 'idle', createdAt: null, updatedAt: null, costCents: 0, budgetCents: 300, model: 'claude-sonnet-5-5' } });
-      if (r === `/tasks/${SID}`) return reply({ task: { id: SID, title: 'Make a playlist report', status: 'idle', createdAt: null, updatedAt: null, costCents: 0, budgetCents: 300, model: 'claude-sonnet-5-5' } });
+      if (r === '/' && c.method === 'POST') return reply({ task: { id: SID, title: 'Make a playlist report', status: 'idle', createdAt: null, updatedAt: null, costCents: 0, budgetCents: 300, model: 'claude-haiku-5-5' } });
+      if (r === `/tasks/${SID}`) return reply({ task: { id: SID, title: 'Make a playlist report', status: 'idle', createdAt: null, updatedAt: null, costCents: 0, budgetCents: 300, model: 'claude-haiku-5-5' } });
       if (r === `/tasks/${SID}/stream`) return sse([{ type: 'session.status_running', id: 'sevt_r' }, { type: 'agent.message', id: 'sevt_m', content: [{ type: 'text', text: 'On it: first I will list the songs.' }] }]);
       if (r === `/tasks/${SID}/events` && c.method === 'GET') return reply({ data: [], next_page: null });
       if (r === `/tasks/${SID}/events`) return reply({ ok: true });
@@ -84,13 +84,14 @@ describe('<CoworkView />', () => {
     });
     expect(await screen.findByText('Old report')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Task'), { target: { value: 'Make a playlist report\nwith charts' } });
-    fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'claude-sonnet-5-5' } });
+    expect((screen.getByLabelText('Model') as HTMLSelectElement).value).toBe('claude-haiku-5-5');
+    fireEvent.change(screen.getByLabelText('Effort'), { target: { value: 'medium' } });
     fireEvent.change(screen.getByLabelText('Spend cap (USD)'), { target: { value: '3' } });
     fireEvent.click(screen.getByRole('button', { name: 'Start task' }));
     expect(await screen.findByText('On it: first I will list the songs.')).toBeTruthy();
     await waitFor(() => expect(calls.some((c) => route(c) === `/tasks/${SID}/events` && c.method === 'POST')).toBe(true));
     const create = calls.find((c) => route(c) === '/' && c.method === 'POST')!;
-    expect(create.body).toEqual({ title: 'Make a playlist report', model: 'claude-sonnet-5-5', effort: 'high', budgetCents: 300, files: [] });
+    expect(create.body).toEqual({ title: 'Make a playlist report', model: 'claude-haiku-5-5', effort: 'medium', budgetCents: 300, files: [] });
     const order = calls.map((c) => `${c.method} ${route(c)}`);
     expect(order.indexOf('POST /setup')).toBeLessThan(order.indexOf('POST /'));
     expect(order.indexOf(`GET /tasks/${SID}/stream`)).toBeLessThan(order.indexOf(`POST /tasks/${SID}/events`));
@@ -102,7 +103,7 @@ describe('<CoworkView />', () => {
     const calls = mount(`/vinaxai/cowork/${SID}`, (c) => {
       const r = route(c);
       if (r === '/' && c.method === 'GET') return reply({ ...INFO, ready: true });
-      if (r === `/tasks/${SID}`) return reply({ task: { id: SID, title: 'Fresh', status: 'idle', createdAt: null, updatedAt: null, costCents: 0, budgetCents: 500, model: 'claude-opus-5-5' } });
+      if (r === `/tasks/${SID}`) return reply({ task: { id: SID, title: 'Fresh', status: 'idle', createdAt: null, updatedAt: null, costCents: 0, budgetCents: 500, model: 'claude-haiku-5-5' } });
       // A real stream stays open; this one never sends anything.
       if (r === `/tasks/${SID}/stream`) return new Response(new ReadableStream({ start() { /* open, silent */ } }), { headers: { 'content-type': 'text/event-stream' } });
       if (r === `/tasks/${SID}/events` && c.method === 'GET') return reply({ data: [], next_page: null });
@@ -125,7 +126,7 @@ describe('<CoworkView />', () => {
     const calls = mount(`/vinaxai/cowork/${SID}`, (c) => {
       const r = route(c);
       if (r === '/' && c.method === 'GET') return reply({ ...INFO, ready: true });
-      if (r === `/tasks/${SID}`) return reply({ task: { id: SID, title: 'Clean up', status: 'idle', createdAt: null, updatedAt: null, costCents: 12, budgetCents: 500, model: 'claude-opus-5-5' } });
+      if (r === `/tasks/${SID}`) return reply({ task: { id: SID, title: 'Clean up', status: 'idle', createdAt: null, updatedAt: null, costCents: 12, budgetCents: 500, model: 'claude-haiku-5-5' } });
       if (r === `/tasks/${SID}/stream`) return sse([]);
       if (r === `/tasks/${SID}/events` && c.method === 'GET') {
         return reply({

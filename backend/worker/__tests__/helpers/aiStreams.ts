@@ -38,7 +38,7 @@ export function openAiSse(answer: string, opts: { reasoning?: string; finish?: s
 /** Anthropic Messages API SSE for an answer (one text delta per word), with optional thinking. */
 export function anthropicSse(answer: string, opts: { thinking?: string; stop?: string; input?: number; output?: number } = {}): string {
   const ev = (type: string, data: Record<string, unknown>) => `event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`;
-  let out = ev('message_start', { message: { id: 'msg_1', type: 'message', role: 'assistant', model: 'claude-opus-5-5', content: [], usage: { input_tokens: opts.input ?? 12, output_tokens: 1 } } });
+  let out = ev('message_start', { message: { id: 'msg_1', type: 'message', role: 'assistant', model: 'claude-haiku-5-5', content: [], usage: { input_tokens: opts.input ?? 12, output_tokens: 1 } } });
   let i = 0;
   if (opts.thinking) {
     out += ev('content_block_start', { index: i, content_block: { type: 'thinking', thinking: '' } });

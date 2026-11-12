@@ -138,11 +138,9 @@ export const APPROVED_MODELS: ReadonlySet<string> = new Set([
   'openrouter:cohere/north-mini-code:free',
   'openrouter:liquid/lfm-2.5-2.6b:free',
   // Anthropic Claude (paid, the owner's key): picked by hand only, never in a ladder, and only
-  // for the accounts in claudeAccess.ts; everyone else sees these locked in the picker.
-  'anthropic:claude-opus-5-5',
-  'anthropic:claude-sonnet-5-5',
+  // for the accounts in claudeAccess.ts; everyone else sees it locked in the picker. Haiku only
+  // (the owner's choice, 2026-11-12: the cheapest Claude); Opus, Sonnet and Fable were taken out.
   'anthropic:claude-haiku-5-5',
-  'anthropic:claude-fable-5-2',
 ]);
 
 export const isApproved = (id: string): boolean => APPROVED_MODELS.has(id);
@@ -150,17 +148,19 @@ export const isApproved = (id: string): boolean => APPROVED_MODELS.has(id);
 /**
  * Claude (Anthropic Messages API, adapters/anthropic.ts). Adaptive thinking,
  * shown as a summary; how hard it thinks is `output_config.effort`, which
- * thinking.ts sets per level (Standard = medium). `fallbacks: "default"`:
- * a request a safety classifier declines is answered by the model Anthropic
- * recommends for it (Haiku has no server-side fallback). Each thread is
- * capped like Gemini's (about 150K tokens; the models hold 1M) because the
- * owner pays per token; 32,768 tokens of answer and thinking per reply, and a
- * longer page carries on with the page's Continue.
+ * thinking.ts sets per level (Standard = medium). `fallback: true` would
+ * send `fallbacks: "default"` (a request a safety classifier declines is
+ * answered by the model Anthropic recommends); Haiku has no server-side
+ * fallback, so it stays off. Each thread is capped at 340,000 characters
+ * (about 85K tokens, with the system prompt under 100K; the model holds 1M):
+ * Haiku 5.5 costs five times as much per token once a prompt passes 100K
+ * tokens, and the owner pays per token. 32,768 tokens of answer and thinking
+ * per reply; a longer page carries on with the page's Continue.
  */
-const CLAUDE_CTX = 600_000;
+const CLAUDE_CTX = 340_000;
 const claudeThink = { thinking: { type: 'adaptive', display: 'summarized' }, output_config: { effort: 'medium' } };
 const claude = (upstream: string, name: string, description: string, extra: Partial<Omit<ModelSpec, 'flags'>> & { fallback?: boolean } = {}): ModelSpec => {
-  const { fallback = true, ...rest } = extra;
+  const { fallback = false, ...rest } = extra;
   return m('anthropic', upstream, name, 'claude', {
     description,
     maxContextChars: CLAUDE_CTX,
@@ -276,12 +276,8 @@ export const MODELS: readonly ModelSpec[] = [
   m('openrouter', 'dots-studio/dots-3-note-preview:free', 'Dots 3 Note Preview', 'more', {
     description: 'Preview chat model from dots', maxContextChars: OPENROUTER_CTX, flags: { reasoning: true, thinkFormat: 'field' },
   }),
-  // ---- Claude (Anthropic; picked by hand only, locked to the accounts in claudeAccess.ts)
-  claude('claude-opus-5-5', 'Claude Opus 5.5', 'Anthropic’s Opus: deep reasoning, code and long work'),
-  claude('claude-sonnet-5-5', 'Claude Sonnet 5.5', 'Quick and capable for everyday work and code'),
-  claude('claude-haiku-5-5', 'Claude Haiku 5.5', 'The quickest Claude', { fallback: false }),
-  // No firstEventMs: message_start comes before Claude thinks, so the first line is quick even on Fable's long turns.
-  claude('claude-fable-5-2', 'Claude Fable 5.2', 'Anthropic’s most capable model (slower, costs more)'),
+  // ---- Claude (Anthropic; picked by hand only, locked to the accounts in claudeAccess.ts). Haiku only.
+  claude('claude-haiku-5-5', 'Claude Haiku 5.5', 'Anthropic’s quick Claude: sees images, thinks when it helps'),
   // ---- Cloudflare Workers AI (picked by hand only)
   m('cloudflare', '@cf/zai-org/glm-5.3-flash', 'GLM 5.3 Flash (Cloudflare)', 'cloudflare', {
     description: 'Quick GLM on the edge network', maxContextChars: CF_CTX, maxOutput: 8_192,

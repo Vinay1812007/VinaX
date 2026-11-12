@@ -28,12 +28,13 @@ export const MA_BETA = 'managed-agents-2026-04-01';
 export const COWORK_SETTING_KEY = 'vinax-cowork';
 export const COWORK_APP = 'vinax-cowork';
 
-/** The models a task may run on (ids are Anthropic's); the first is the agent's own. */
+/**
+ * The models a task may run on (ids are Anthropic's); the first is the
+ * agent's own. Haiku only (the owner's choice, 2026-11-12: the cheapest
+ * Claude); add an entry here to offer another model per task.
+ */
 export const COWORK_MODELS: ReadonlyArray<{ id: string; name: string; description: string }> = [
-  { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', description: 'Best for most tasks' },
-  { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5', description: 'Quicker and cheaper' },
-  { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5', description: 'Quickest, for small jobs' },
-  { id: 'claude-fable-5-2', name: 'Claude Fable 5.2', description: 'Most capable, costs the most' },
+  { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5', description: 'Quick and low-cost' },
 ];
 export const COWORK_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 export type CoworkEffort = (typeof COWORK_EFFORTS)[number];

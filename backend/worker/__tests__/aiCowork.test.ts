@@ -45,7 +45,7 @@ function anthropic(url: string, init?: RequestInit): Response {
   if (method === 'POST' && path.startsWith('/environments/')) return jsonRes({ id: 'env_011Workspace' });
   if (method === 'POST' && path === '/sessions') {
     const b = body as Record<string, unknown>;
-    const s = { id: SID, type: 'session', status: 'idle', title: b.title, metadata: b.metadata, budget: b.budget, agent: { model: { id: 'claude-opus-5-5' } }, usage: { list_cost: { amount: '0', currency: 'USD' } }, created_at: '2026-11-12T10:00:00Z' };
+    const s = { id: SID, type: 'session', status: 'idle', title: b.title, metadata: b.metadata, budget: b.budget, agent: { model: { id: 'claude-haiku-5-5' } }, usage: { list_cost: { amount: '0', currency: 'USD' } }, created_at: '2026-11-12T10:00:00Z' };
     sessions[SID] = s;
     return jsonRes(s);
   }
@@ -148,7 +148,7 @@ describe('setup', () => {
       expect(c.headers['anthropic-beta']).toBe(MA_BETA);
     }
     const agent = sent[1].body as typeof AGENT_DEFINITION;
-    expect(agent.model).toEqual({ id: 'claude-opus-5-5', effort: 'high' });
+    expect(agent.model).toEqual({ id: 'claude-haiku-5-5', effort: 'high' });
     expect(agent.tools[0]).toMatchObject({ type: 'agent_toolset_20260401', default_config: { permission_policy: { type: 'auto' } } });
     expect(agent.skills.map((s) => s.skill_id)).toEqual(['docx', 'xlsx', 'pptx', 'pdf']);
     expect(fake.rows('settings').find((s) => s.key === COWORK_SETTING_KEY)?.value).toMatchObject({ agentId: 'agent_011Cowork', environmentId: 'env_011Workspace', hash: definitionHash() });
@@ -173,14 +173,14 @@ describe('setup', () => {
 });
 
 describe('a task', () => {
-  it('starts idle with a spend cap, the Cowork tag, the account and mounted files; another model is a session override', async () => {
+  it('starts idle with a spend cap, the Cowork tag, the account and mounted files; another effort is a session override', async () => {
     seed(READY);
-    const r = await postCowork(ctxOf(await req('POST', '', { body: { title: '  Research   songs ', model: 'claude-sonnet-5-5', effort: 'medium', budgetCents: 250, files: [{ id: 'file_011Upload', name: 'notes.pdf' }, { id: 'file_011Second', name: 'notes.pdf' }] } })));
+    const r = await postCowork(ctxOf(await req('POST', '', { body: { title: '  Research   songs ', model: 'claude-haiku-5-5', effort: 'medium', budgetCents: 250, files: [{ id: 'file_011Upload', name: 'notes.pdf' }, { id: 'file_011Second', name: 'notes.pdf' }] } })));
     expect(r.status).toBe(200);
     const { task } = (await r.json()) as { task: Record<string, unknown> };
-    expect(task).toMatchObject({ id: SID, title: 'Research songs', status: 'idle', budgetCents: 250, model: 'claude-sonnet-5-5' });
+    expect(task).toMatchObject({ id: SID, title: 'Research songs', status: 'idle', budgetCents: 250, model: 'claude-haiku-5-5' });
     const create = sent.find((c) => c.path === '/sessions')!.body as Record<string, unknown>;
-    expect(create.agent).toEqual({ type: 'agent_with_overrides', id: 'agent_011Cowork', version: 1, model: { id: 'claude-sonnet-5-5', effort: 'medium' } });
+    expect(create.agent).toEqual({ type: 'agent_with_overrides', id: 'agent_011Cowork', version: 1, model: { id: 'claude-haiku-5-5', effort: 'medium' } });
     expect(create.environment_id).toBe('env_011Workspace');
     expect(create.budget).toEqual({ type: 'limit', max_list_cost: { amount: '250', currency: 'USD' } });
     expect(create.metadata).toEqual({ app: 'vinax-cowork', account: '1001', effort: 'medium' });
@@ -193,7 +193,8 @@ describe('a task', () => {
 
   it('the default model and effort use the agent as it is, and the cap is clamped', async () => {
     seed(READY);
-    await postCowork(ctxOf(await req('POST', '', { body: { title: 'x', model: 'gpt-5', effort: 'ultra', budgetCents: 1 } })));
+    // Opus is no longer offered (Haiku only): asking for it runs on the agent's own Haiku.
+    await postCowork(ctxOf(await req('POST', '', { body: { title: 'x', model: 'claude-opus-5-5', effort: 'ultra', budgetCents: 1 } })));
     const create = sent.find((c) => c.path === '/sessions')!.body as Record<string, unknown>;
     expect(create.agent).toEqual({ type: 'agent', id: 'agent_011Cowork', version: 1 });
     expect((create.budget as { max_list_cost: { amount: string } }).max_list_cost.amount).toBe('50');

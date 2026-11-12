@@ -10,11 +10,11 @@ import { latestNotesFingerprint } from '../src/constants/changelog';
 const SID = 'sesn_011Task';
 const INFO = {
   allowed: true, configured: true, ready: true,
-  models: [{ id: 'claude-opus-5-5', name: 'Claude Opus 5.5', description: 'Best for most tasks' }, { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5', description: 'Quicker and cheaper' }],
+  models: [{ id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5', description: 'Quick and low-cost' }],
   efforts: ['low', 'medium', 'high', 'xhigh', 'max'], defaultEffort: 'high', budgetCents: 500, minBudgetCents: 50, maxBudgetCents: 20000, maxUploadBytes: 31457280,
-  tasks: [{ id: SID, title: 'Telugu hits 2026 spreadsheet', status: 'idle', createdAt: '2026-11-12T09:00:00Z', updatedAt: '2026-11-12T09:20:00Z', costCents: 84, budgetCents: 500, model: 'claude-opus-5-5' }],
+  tasks: [{ id: SID, title: 'Telugu hits 2026 spreadsheet', status: 'idle', createdAt: '2026-11-12T09:00:00Z', updatedAt: '2026-11-12T09:20:00Z', costCents: 84, budgetCents: 500, model: 'claude-haiku-5-5' }],
 };
-const TASK = { id: SID, title: 'Telugu hits 2026 spreadsheet', status: 'idle', createdAt: '2026-11-12T09:00:00Z', updatedAt: null, costCents: 84, budgetCents: 500, model: 'claude-opus-5-5' };
+const TASK = { id: SID, title: 'Telugu hits 2026 spreadsheet', status: 'idle', createdAt: '2026-11-12T09:00:00Z', updatedAt: null, costCents: 84, budgetCents: 500, model: 'claude-haiku-5-5' };
 const HISTORY = [
   { type: 'user.message', id: 'sevt_u', processed_at: 'x', content: [{ type: 'text', text: 'Research the top 10 Telugu songs of 2026 and make a spreadsheet with streams and composers.' }] },
   { type: 'session.status_running', id: 'sevt_r' },
@@ -81,7 +81,7 @@ test('the new-task form and the task list fit a phone', async ({ page }) => {
   await page.goto('/vinaxai/cowork');
   await expect(page.getByRole('heading', { name: 'What should Claude work on?' })).toBeVisible();
   await expect(page.getByRole('link', { name: /Telugu hits 2026 spreadsheet/ })).toBeVisible();
-  await expect(page.getByLabel('Model')).toHaveValue('claude-opus-5-5');
+  await expect(page.getByLabel('Model')).toHaveValue('claude-haiku-5-5');
   await noSideScroll(page);
   await shot(page, 'cowork-home');
 });

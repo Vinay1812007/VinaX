@@ -21,8 +21,9 @@ import type { AiEnv, ChatRequest, ModelSpec, ProviderEvent } from '../functions/
 import { DB_ENV, fakeDb } from './helpers/fakeDb';
 import { anthropicSse, openAiSse, readEvents, sseResponse } from './helpers/aiStreams';
 
-const OPUS = 'anthropic:claude-opus-5-5';
-const CLAUDE_IDS = ['anthropic:claude-opus-5-5', 'anthropic:claude-sonnet-5-5', 'anthropic:claude-haiku-5-5', 'anthropic:claude-fable-5-2'];
+const HAIKU = 'anthropic:claude-haiku-5-5';
+/** Haiku only (the owner's choice, 2026-11-12). */
+const CLAUDE_IDS = [HAIKU];
 const OWNER = 'sirimillavinay56@gmail.com';
 const spec = (id: string): ModelSpec => modelById(MODELS, id)!;
 const req = (id: string, over: Partial<ChatRequest> = {}): ChatRequest => ({
@@ -50,7 +51,9 @@ function stubFetch(res: () => Response) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('the registry', () => {
-  it('has the four Claude models, approved, in their own group, never in a ladder', () => {
+  it('has Claude Haiku 5.5 only, approved, in its own group, never in a ladder', () => {
+    expect(MODELS.filter((m) => m.provider === 'anthropic').map((m) => m.id)).toEqual(CLAUDE_IDS);
+    expect([...APPROVED_MODELS].filter((id) => id.startsWith('anthropic:'))).toEqual(CLAUDE_IDS);
     for (const id of CLAUDE_IDS) {
       expect(APPROVED_MODELS.has(id), id).toBe(true);
       expect(spec(id).group).toBe('claude');
@@ -69,18 +72,18 @@ describe('the registry', () => {
 
   it('every Claude model has all four thinking levels, each a real effort', () => {
     for (const id of CLAUDE_IDS) expect(levelsOf(spec(id))).toEqual(['fast', 'standard', 'extended', 'max']);
-    const effort = (level: 'fast' | 'standard' | 'extended' | 'max') => (anthropicBody(req(OPUS, { model: specAtLevel(spec(OPUS), level) })).output_config as { effort: string }).effort;
+    const effort = (level: 'fast' | 'standard' | 'extended' | 'max') => (anthropicBody(req(HAIKU, { model: specAtLevel(spec(HAIKU), level) })).output_config as { effort: string }).effort;
     expect([effort('fast'), effort('standard'), effort('extended'), effort('max')]).toEqual(['low', 'medium', 'high', 'max']);
-    expect(specAtLevel(spec(OPUS), 'max').maxOutput).toBe(65_536);
+    expect(specAtLevel(spec(HAIKU), 'max').maxOutput).toBe(65_536);
     // The level's effort replaces the default; adaptive thinking stays.
-    expect(anthropicBody(req(OPUS, { model: specAtLevel(spec(OPUS), 'extended') })).thinking).toEqual({ type: 'adaptive', display: 'summarized' });
+    expect(anthropicBody(req(HAIKU, { model: specAtLevel(spec(HAIKU), 'extended') })).thinking).toEqual({ type: 'adaptive', display: 'summarized' });
   });
 });
 
 describe('the Claude adapter', () => {
   it('sends the native Messages API request: key header, version, system on top, images first, no temperature', async () => {
     const calls = stubFetch(() => sseResponse(anthropicSse('Hello there.')));
-    const r = req(OPUS, {
+    const r = req(HAIKU, {
       temperature: 0.4,
       messages: [
         { role: 'user', text: 'What is this?', images: [{ mime: 'image/png', data: 'iVBOR' }] },
@@ -93,10 +96,12 @@ describe('the Claude adapter', () => {
     const h = calls[0].init.headers as Record<string, string>;
     expect(h['x-api-key']).toBe('sk-ant-test');
     expect(h['anthropic-version']).toBe('2023-06-01');
-    expect(h['anthropic-beta']).toBe(FALLBACK_BETA);
+    // Haiku has no server-side fallback, so no beta header and no `fallbacks`.
+    expect(h['anthropic-beta']).toBeUndefined();
     expect(h.authorization).toBeUndefined();
     const body = JSON.parse(String(calls[0].init.body));
-    expect(body).toMatchObject({ model: 'claude-opus-5-5', system: 'SYSTEM', stream: true, max_tokens: 4_096, fallbacks: 'default', thinking: { type: 'adaptive', display: 'summarized' }, output_config: { effort: 'medium' } });
+    expect(body).toMatchObject({ model: 'claude-haiku-5-5', system: 'SYSTEM', stream: true, max_tokens: 4_096, thinking: { type: 'adaptive', display: 'summarized' }, output_config: { effort: 'medium' } });
+    expect(body).not.toHaveProperty('fallbacks');
     expect(body).not.toHaveProperty('temperature');
     expect(body.messages[0].content).toEqual([
       { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBOR' } },
@@ -105,17 +110,18 @@ describe('the Claude adapter', () => {
     expect(body.messages[1]).toEqual({ role: 'assistant', content: [{ type: 'text', text: 'A cat.' }] });
   });
 
-  it('Haiku has no server-side fallback, so no beta header', async () => {
+  it('a model given `fallbacks` (none now) gets the server-side fallback beta header', async () => {
     const calls = stubFetch(() => sseResponse(anthropicSse('Hi.')));
-    await collect(req('anthropic:claude-haiku-5-5'));
-    expect((calls[0].init.headers as Record<string, string>)['anthropic-beta']).toBeUndefined();
-    expect(JSON.parse(String(calls[0].init.body))).not.toHaveProperty('fallbacks');
+    const withFallback = { ...spec(HAIKU), params: { ...spec(HAIKU).params, fallbacks: 'default' } };
+    await collect(req(HAIKU, { model: withFallback }));
+    expect((calls[0].init.headers as Record<string, string>)['anthropic-beta']).toBe(FALLBACK_BETA);
+    expect(JSON.parse(String(calls[0].init.body)).fallbacks).toBe('default');
   });
 
   it('reads thinking and text deltas however the bytes are cut, with usage and the stop reason', async () => {
     for (const size of [1, 5, 64, 10_000]) {
       stubFetch(() => sseResponse(anthropicSse('Yaman is an evening raga.', { thinking: 'Recall Hindustani ragas.', input: 30, output: 11 }), size));
-      const events = await collect(req(OPUS));
+      const events = await collect(req(HAIKU));
       expect(joined(events, 'thinking'), `size ${size}`).toBe('Recall Hindustani ragas.');
       expect(joined(events, 'text'), `size ${size}`).toBe('Yaman is an evening raga.');
       expect(events.slice(-2)).toEqual([{ type: 'usage', input: 30, output: 11 }, { type: 'end', reason: 'stop' }]);
@@ -124,31 +130,31 @@ describe('the Claude adapter', () => {
 
   it('max_tokens is a length stop; a refusal is a content filter, even with no text', async () => {
     stubFetch(() => sseResponse(anthropicSse('Partial', { stop: 'max_tokens' })));
-    expect((await collect(req(OPUS))).at(-1)).toEqual({ type: 'end', reason: 'length' });
+    expect((await collect(req(HAIKU))).at(-1)).toEqual({ type: 'end', reason: 'length' });
     stubFetch(() => sseResponse(anthropicSse('', { stop: 'refusal' })));
-    expect(await collect(req(OPUS))).toEqual([{ type: 'end', reason: 'content_filter' }]);
+    expect(await collect(req(HAIKU))).toEqual([{ type: 'end', reason: 'content_filter' }]);
   });
 
   it('a stream with no answer text is empty', async () => {
     stubFetch(() => sseResponse(anthropicSse('', { thinking: 'Hmm.' })));
-    await expect(collect(req(OPUS))).rejects.toMatchObject({ kind: 'empty' });
+    await expect(collect(req(HAIKU))).rejects.toMatchObject({ kind: 'empty' });
   });
 
   it('classifies HTTP failures and mid-stream error events', async () => {
     stubFetch(() => new Response(JSON.stringify({ type: 'error', error: { type: 'rate_limit_error', message: 'slow down' } }), { status: 429, headers: { 'retry-after': '12' } }));
-    await expect(collect(req(OPUS))).rejects.toMatchObject({ kind: 'rate', retryAfterMs: 12_000 });
+    await expect(collect(req(HAIKU))).rejects.toMatchObject({ kind: 'rate', retryAfterMs: 12_000 });
     stubFetch(() => new Response('{}', { status: 401 }));
-    await expect(collect(req(OPUS))).rejects.toMatchObject({ kind: 'auth' });
+    await expect(collect(req(HAIKU))).rejects.toMatchObject({ kind: 'auth' });
     const overloaded = `event: message_start\ndata: ${JSON.stringify({ type: 'message_start', message: { usage: { input_tokens: 3 } } })}\n\nevent: error\ndata: ${JSON.stringify({ type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } })}\n\n`;
     stubFetch(() => sseResponse(overloaded));
-    const err = await collect(req(OPUS)).catch((e: unknown) => e);
+    const err = await collect(req(HAIKU)).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ProviderError);
     expect(err).toMatchObject({ kind: 'upstream', status: 529 });
   });
 
   it('without a key it never calls out', async () => {
     const calls = stubFetch(() => sseResponse(anthropicSse('x')));
-    await expect(collect(req(OPUS), {})).rejects.toMatchObject({ kind: 'not_configured' });
+    await expect(collect(req(HAIKU), {})).rejects.toMatchObject({ kind: 'not_configured' });
     expect(calls).toHaveLength(0);
   });
 
@@ -228,7 +234,7 @@ describe('the lock', () => {
 
   it('the chat refuses Claude to anyone else, before calling Anthropic', async () => {
     const fake = seed();
-    const res = await chat('2002', { mode: 'model', model: OPUS });
+    const res = await chat('2002', { mode: 'model', model: HAIKU });
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: 'model_locked' });
     expect(fake.calls.some((c) => c.table === 'ai_messages')).toBe(false);
@@ -237,20 +243,20 @@ describe('the lock', () => {
 
   it('the owner gets Claude’s own stream through, read as wire "anthropic", and the reply is saved', async () => {
     const fake = seed();
-    const res = await chat('1001', { mode: 'model', model: OPUS, thinking: 'extended' });
+    const res = await chat('1001', { mode: 'model', model: HAIKU, thinking: 'extended' });
     expect(res.status).toBe(200);
     const events = await readEvents(res);
     await settle();
     const meta = events.find((e) => e.event === 'meta')!.data as { wire: string; model: { id: string; provider: string }; thinking: { used: string } };
     expect(meta.wire).toBe('anthropic');
-    expect(meta.model).toMatchObject({ id: OPUS, provider: 'Anthropic' });
+    expect(meta.model).toMatchObject({ id: HAIKU, provider: 'Anthropic' });
     expect(meta.thinking.used).toBe('extended');
     expect(events.filter((e) => e.event === 'text').map((e) => e.data.delta).join('')).toBe('Namaste from Claude.');
     expect(events.filter((e) => e.event === 'thinking').map((e) => e.data.delta).join('')).toBe('Greet back.');
     const sent = (vi.mocked(fetch).mock.calls as Array<[string, RequestInit]>).find(([u]) => String(u).startsWith(ANTHROPIC_URL))!;
     expect(JSON.parse(String(sent[1].body)).output_config).toEqual({ effort: 'high' });
     const saved = fake.rows('ai_messages').find((r) => r.role === 'assistant')!;
-    expect(saved).toMatchObject({ model_id: OPUS, provider: 'anthropic', thinking: 'Greet back.' });
+    expect(saved).toMatchObject({ model_id: HAIKU, provider: 'anthropic', thinking: 'Greet back.' });
     expect(saved.content).toEqual([{ type: 'text', text: 'Namaste from Claude.' }]);
   });
 
