@@ -22,8 +22,9 @@ import { DB_ENV, fakeDb } from './helpers/fakeDb';
 import { anthropicSse, openAiSse, readEvents, sseResponse } from './helpers/aiStreams';
 
 const HAIKU = 'anthropic:claude-haiku-5-5';
-/** Haiku only (the owner's choice, 2026-11-12). */
-const CLAUDE_IDS = [HAIKU];
+const HAIKU_45 = 'anthropic:claude-haiku-4-5';
+/** Haiku only (the owner's choice, 2026-11-12); Claude 3.5 Haiku and 3 Haiku are retired at Anthropic. */
+const CLAUDE_IDS = [HAIKU, HAIKU_45];
 const OWNER = 'sirimillavinay56@gmail.com';
 const spec = (id: string): ModelSpec => modelById(MODELS, id)!;
 const req = (id: string, over: Partial<ChatRequest> = {}): ChatRequest => ({
@@ -51,7 +52,7 @@ function stubFetch(res: () => Response) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('the registry', () => {
-  it('has Claude Haiku 5.5 only, approved, in its own group, never in a ladder', () => {
+  it('has Claude Haiku 5.5 and 4.5 only, approved, in their own group, never in a ladder', () => {
     expect(MODELS.filter((m) => m.provider === 'anthropic').map((m) => m.id)).toEqual(CLAUDE_IDS);
     expect([...APPROVED_MODELS].filter((id) => id.startsWith('anthropic:'))).toEqual(CLAUDE_IDS);
     for (const id of CLAUDE_IDS) {
@@ -70,13 +71,43 @@ describe('the registry', () => {
     expect(ADAPTERS.anthropic.wire).toBe('anthropic');
   });
 
-  it('every Claude model has all four thinking levels, each a real effort', () => {
+  it('every Claude model has all four thinking levels; on Haiku 5.5 each is a real effort', () => {
     for (const id of CLAUDE_IDS) expect(levelsOf(spec(id))).toEqual(['fast', 'standard', 'extended', 'max']);
     const effort = (level: 'fast' | 'standard' | 'extended' | 'max') => (anthropicBody(req(HAIKU, { model: specAtLevel(spec(HAIKU), level) })).output_config as { effort: string }).effort;
     expect([effort('fast'), effort('standard'), effort('extended'), effort('max')]).toEqual(['low', 'medium', 'high', 'max']);
     expect(specAtLevel(spec(HAIKU), 'max').maxOutput).toBe(65_536);
     // The level's effort replaces the default; adaptive thinking stays.
     expect(anthropicBody(req(HAIKU, { model: specAtLevel(spec(HAIKU), 'extended') })).thinking).toEqual({ type: 'adaptive', display: 'summarized' });
+  });
+
+  it('Haiku 4.5 thinks by token budget (no effort): none at Fast, then 4K, 16K and 32K under max_tokens', () => {
+    const at = (level: 'fast' | 'standard' | 'extended' | 'max') => {
+      const model = specAtLevel(spec(HAIKU_45), level);
+      return anthropicBody(req(HAIKU_45, { model, maxOutputTokens: model.maxOutput }));
+    };
+    const fast = at('fast');
+    expect(fast).not.toHaveProperty('thinking');
+    expect(fast).not.toHaveProperty('output_config');
+    expect(fast).toMatchObject({ model: 'claude-haiku-4-5', max_tokens: 32_768 });
+    expect(at('standard')).toMatchObject({ thinking: { type: 'enabled', budget_tokens: 4_096 }, max_tokens: 32_768 });
+    expect(at('extended')).toMatchObject({ thinking: { type: 'enabled', budget_tokens: 16_384 }, max_tokens: 32_768 });
+    expect(at('max')).toMatchObject({ thinking: { type: 'enabled', budget_tokens: 32_768 }, max_tokens: 64_000 });
+    for (const level of ['standard', 'extended', 'max'] as const) {
+      const b = at(level) as { thinking: { budget_tokens: number }; max_tokens: number };
+      expect(b.thinking.budget_tokens, level).toBeLessThan(b.max_tokens);
+      expect(b).not.toHaveProperty('output_config');
+    }
+  });
+
+  it('a small reply keeps its room: the budget fits under max_tokens, or thinking is left out', () => {
+    const extended = specAtLevel(spec(HAIKU_45), 'extended');
+    // Asked for 2,000 tokens: the budget goes on top, under the model's ceiling.
+    expect(anthropicBody(req(HAIKU_45, { model: extended, maxOutputTokens: 2_000 }))).toMatchObject({ max_tokens: 18_384, thinking: { type: 'enabled', budget_tokens: 16_384 } });
+    // A ceiling with no room for a budget of at least 1,024: no thinking at all.
+    const tight = { ...extended, maxOutput: 1_500 };
+    const body = anthropicBody(req(HAIKU_45, { model: tight, maxOutputTokens: 1_500 }));
+    expect(body).not.toHaveProperty('thinking');
+    expect(body.max_tokens).toBe(1_500);
   });
 });
 

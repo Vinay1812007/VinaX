@@ -138,9 +138,11 @@ export const APPROVED_MODELS: ReadonlySet<string> = new Set([
   'openrouter:cohere/north-mini-code:free',
   'openrouter:liquid/lfm-2.5-2.6b:free',
   // Anthropic Claude (paid, the owner's key): picked by hand only, never in a ladder, and only
-  // for the accounts in claudeAccess.ts; everyone else sees it locked in the picker. Haiku only
-  // (the owner's choice, 2026-11-12: the cheapest Claude); Opus, Sonnet and Fable were taken out.
+  // for the accounts in claudeAccess.ts; everyone else sees them locked in the picker. Haiku only
+  // (the owner's choice, 2026-11-12); Opus, Sonnet and Fable were taken out. Claude 3.5 Haiku and
+  // Claude 3 Haiku are not here: Anthropic retired them on 2026-02-19 and 2026-04-20.
   'anthropic:claude-haiku-5-5',
+  'anthropic:claude-haiku-4-5',
 ]);
 
 export const isApproved = (id: string): boolean => APPROVED_MODELS.has(id);
@@ -278,6 +280,9 @@ export const MODELS: readonly ModelSpec[] = [
   }),
   // ---- Claude (Anthropic; picked by hand only, locked to the accounts in claudeAccess.ts). Haiku only.
   claude('claude-haiku-5-5', 'Claude Haiku 5.5', 'Anthropic’s quick Claude: sees images, thinks when it helps'),
+  // The previous Haiku: 200K context, 64K output, thinking by token budget (thinking.ts), no effort.
+  // Fast is its default (no thinking); the Thinking menu turns thinking on.
+  claude('claude-haiku-4-5', 'Claude Haiku 4.5', 'The previous Haiku: quick, sees images', { params: {}, offParams: {} }),
   // ---- Cloudflare Workers AI (picked by hand only)
   m('cloudflare', '@cf/zai-org/glm-5.3-flash', 'GLM 5.3 Flash (Cloudflare)', 'cloudflare', {
     description: 'Quick GLM on the edge network', maxContextChars: CF_CTX, maxOutput: 8_192,

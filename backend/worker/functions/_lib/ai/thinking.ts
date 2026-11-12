@@ -16,6 +16,9 @@
  *   - Claude (`output_config.effort`, with adaptive thinking): Fast = low,
  *     Standard = medium, Extended = high, Maximum = max with twice the
  *     output room (thinking counts against `max_tokens`).
+ *   - Claude Haiku 4.5 (no effort; `thinking.budget_tokens`): Fast = no
+ *     thinking, Standard = 4,096, Extended = 16,384, Maximum = 32,768 with
+ *     its full 64,000 tokens of output.
  *   - Any other model with `highParams`: Standard and Extended.
  *   - Everything else (NVIDIA, Workers AI, models without a switch):
  *     Standard only. Asking such a model for another level answers at
@@ -30,6 +33,9 @@ export type ThinkingLevel = 'fast' | 'standard' | 'extended' | 'max';
 export type ThinkingChoice = 'auto' | ThinkingLevel;
 export const THINKING_LEVELS: readonly ThinkingLevel[] = ['fast', 'standard', 'extended', 'max'];
 export const THINKING_NAMES: Record<ThinkingLevel, string> = { fast: 'Fast', standard: 'Standard', extended: 'Extended', max: 'Maximum' };
+
+/** Claude Haiku 4.5's output ceiling (thinking counts against it). */
+export const HAIKU_45_MAX_OUTPUT = 64_000;
 
 /** Output room at Maximum on Gemini 3 (the 3.x Flash models' published ceiling); half that on the fast-tier Lite models. */
 export const MAX_THINKING_OUTPUT = 65_536;
@@ -52,6 +58,16 @@ export function thinkingProfile(spec: Pick<ModelSpec, 'provider' | 'upstream' | 
       levels: ['fast', 'standard', 'extended', 'max'],
       params: { fast: geminiLevel('minimal'), standard: geminiLevel('low'), extended: geminiLevel('high'), max: geminiLevel('high') },
       output: { max: Math.max(spec.maxOutput, spec.tier === 'fast' ? MAX_THINKING_OUTPUT_LITE : MAX_THINKING_OUTPUT) },
+    };
+  }
+  // Claude Haiku 4.5 has no effort parameter: thinking is a token budget (at least 1,024, below max_tokens).
+  if (spec.provider === 'anthropic' && /^claude-haiku-4-5/.test(spec.upstream)) {
+    const budget = (n: number) => ({ thinking: { type: 'enabled', budget_tokens: n } });
+    return {
+      levels: ['fast', 'standard', 'extended', 'max'],
+      // Fast: no thinking (the model's own params carry none).
+      params: { standard: budget(4_096), extended: budget(16_384), max: budget(32_768) },
+      output: { max: HAIKU_45_MAX_OUTPUT },
     };
   }
   if (spec.provider === 'anthropic') {

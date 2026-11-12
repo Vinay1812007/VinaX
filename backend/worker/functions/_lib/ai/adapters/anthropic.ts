@@ -10,7 +10,9 @@
  * wire 'anthropic').
  *
  * Request: `system` is a top-level field; images go as base64 `image`
- * blocks before the text. Thinking is adaptive (Claude decides how much),
+ * blocks before the text. Claude Haiku 4.5 thinks by token budget
+ * (`thinking: { type: "enabled", budget_tokens }`, kept under max_tokens);
+ * the newer models' thinking is adaptive (Claude decides how much),
  * shown as a summary (`display: "summarized"`; the default "omitted" would
  * look like a long pause). How hard it thinks is `output_config.effort`,
  * set per thinking level in thinking.ts. No `temperature`: the current
@@ -65,9 +67,19 @@ export function anthropicBody(req: ChatRequest): Record<string, unknown> {
     ...(req.reasoning === 'high' ? req.model.highParams ?? {} : {}),
     ...(req.reasoning === 'off' ? req.model.offParams ?? {} : {}),
   };
+  let maxTokens = Math.min(req.maxOutputTokens, req.model.maxOutput);
+  // A thinking budget (Claude Haiku 4.5) must be at least 1,024 and below max_tokens:
+  // the answer keeps the room it was asked for, the budget fits under the model's ceiling, else no thinking.
+  const thinking = merged.thinking as { type?: unknown; budget_tokens?: unknown } | undefined;
+  if (thinking?.type === 'enabled' && typeof thinking.budget_tokens === 'number') {
+    maxTokens = Math.min(req.model.maxOutput, thinking.budget_tokens + Math.max(1_024, maxTokens));
+    const budget = Math.min(thinking.budget_tokens, maxTokens - 1_024);
+    if (budget >= 1_024) merged.thinking = { type: 'enabled', budget_tokens: budget };
+    else delete merged.thinking;
+  }
   return {
     model: req.model.upstream,
-    max_tokens: Math.min(req.maxOutputTokens, req.model.maxOutput),
+    max_tokens: maxTokens,
     ...(system ? { system } : {}),
     messages: messages.map((msg) => ({
       role: msg.role,
