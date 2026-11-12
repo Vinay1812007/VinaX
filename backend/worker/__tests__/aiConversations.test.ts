@@ -125,7 +125,7 @@ describe('the Worker routes PATCH and DELETE to their handlers', () => {
 describe('GET /api/ai/models', () => {
   it('lists picker models with availability, never hosts or keys; enabled follows the switch', async () => {
     fakeDb({ settings: [{ key: 'vinax-ai', value: { enabled: false, testers: ['1001'] }, updated_at: 'x', updated_by: 'owner' }] });
-    noteFailure(modelById(MODELS, 'groq:openai/gpt-oss-20b')!, new ProviderError('rate'));
+    noteFailure(modelById(MODELS, 'groq:allam-2-7b')!, new ProviderError('rate'));
     const env = { ...ENV, GROQ_API_KEY: 'gsk_test' };
     const anon = (await (await modelsGet({ request: await req('/api/ai/models', { sub: null }), env })).json()) as { enabled: boolean; configured: boolean; models: Array<{ id: string; group: string; available: boolean; reason?: string; provider: string }> };
     expect(anon.enabled).toBe(false);
@@ -133,8 +133,8 @@ describe('GET /api/ai/models', () => {
     expect(anon.models.every((m) => m.group)).toBe(true);
     const by = Object.fromEntries(anon.models.map((m) => [m.id, m]));
     expect(by['groq:openai/gpt-oss-120b']).toMatchObject({ available: true, provider: 'Groq' });
-    expect(by['groq:openai/gpt-oss-20b']).toMatchObject({ available: false, reason: 'busy' });
-    expect(by['gemini:gemini-3.5-flash']).toMatchObject({ available: false, reason: 'not_configured' });
+    expect(by['groq:allam-2-7b']).toMatchObject({ available: false, reason: 'busy' });
+    expect(by['gemini:gemini-3.6-flash']).toMatchObject({ available: false, reason: 'not_configured' });
     expect(JSON.stringify(anon)).not.toMatch(/gsk_test|api\.groq\.com|failover/);
     resetSettingsMemo();
     const tester = (await (await modelsGet({ request: await req('/api/ai/models'), env })).json()) as { enabled: boolean };

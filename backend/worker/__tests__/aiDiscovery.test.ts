@@ -139,10 +139,13 @@ describe('registry entries', () => {
     const all = specs.map((s) => s.id);
     for (const curated of MODELS) expect(all).not.toContain(curated.id);
     expect(all).not.toContain('groq:openai/gpt-oss-120b');
-    expect(all).not.toContain('gemini:gemini-2.5-flash');
+    expect(all).not.toContain('gemini:gemini-3.6-flash');
     expect(all).not.toContain('cloudflare:@cf/meta/llama-3.3-70b-instruct-fp8-fast');
+    expect(all).not.toContain('cloudflare:@cf/openai/gpt-oss-120b');
     expect(all).toContain('gemini:gemini-3.8-flash');
-    expect(all).toContain('cloudflare:@cf/openai/gpt-oss-120b');
+    // No longer curated (dropped on 2026-11-12), so the list may offer it again.
+    expect(all).toContain('gemini:gemini-2.5-flash');
+    expect(all).toContain('cloudflare:@cf/qwen/qwen3-30b-a3b-fp8');
     const names = [...MODELS.map((m) => m.name), ...specs.map((s) => s.name)].map((n) => n.toLowerCase());
     expect(new Set(names).size).toBe(names.length);
     // "Llama 3.3 70B" is curated (Workers AI): the found one says where it is.
@@ -226,7 +229,11 @@ describe('caching and failure', () => {
     expect(discoveryAllowed({ groq: false }, 'gemini')).toBe(true);
     expect(sanitizeAiSettings({ discover: false }).discover).toBe(false);
     expect(sanitizeAiSettings({ discover: { openrouter: false, nope: false, groq: 'no' } }).discover).toEqual({ openrouter: false });
-    expect(sanitizeAiSettings({}).discover).toBe(true);
+    // Off unless the owner switches it on.
+    expect(sanitizeAiSettings({}).discover).toBe(false);
+    for (const junk of [null, 'yes', 1, ['groq']]) expect(sanitizeAiSettings({ discover: junk }).discover, String(junk)).toBe(false);
+    expect(sanitizeAiSettings({ discover: true }).discover).toBe(true);
+    expect(sanitizeAiSettings({ discover: {} }).discover).toBe(true);
     const { calls, f } = fetchers();
     expect(await discoveryStates(KEYED, { openrouter: false }, { now: NOW, fetchers: f })).not.toHaveProperty('openrouter');
     expect(calls.openrouter).toBeUndefined();
@@ -256,7 +263,8 @@ const groqWorld = (listOk = true): Upstream => (url, init) => {
   }
   return new Response('nope', { status: 404 });
 };
-const seed = (upstream: Upstream, setting: unknown = { enabled: true }) => fakeDb({
+/** Discovery is off by default, so these route tests switch it on unless they say otherwise. */
+const seed = (upstream: Upstream, setting: unknown = { enabled: true, discover: true }) => fakeDb({
   accounts: [{ id: '1001', name: 'Asha' }],
   settings: [{ key: 'vinax-ai', value: setting, updated_at: 'x', updated_by: 'owner' }],
 }, upstream);
@@ -301,9 +309,13 @@ describe('GET /api/ai/models', () => {
     expect(broken.models).toHaveLength(MODELS.filter((m) => m.group !== null).length);
   });
 
-  it('the owner’s discover: false hides them', async () => {
+  it('the owner’s discover: false hides them, and so does a setting that never mentions discover', async () => {
     seed(groqWorld(), { enabled: true, discover: false });
     expect((await getPicker()).models.some((m) => m.group === 'more-groq')).toBe(false);
+    _resetDiscovery();
+    resetSettingsMemo();
+    seed(groqWorld(), { enabled: true });
+    expect((await getPicker()).models.some((m) => m.group.startsWith('more-'))).toBe(false);
   });
 });
 
@@ -331,7 +343,7 @@ describe('POST /api/ai/chat with a found model', () => {
   });
 
   it('a found model the owner switched off is refused, and so is every found model with discover off', async () => {
-    seed(groqWorld(), { enabled: true, models: { 'groq:llama-3.1-8b-instant': { enabled: false } } });
+    seed(groqWorld(), { enabled: true, discover: true, models: { 'groq:llama-3.1-8b-instant': { enabled: false } } });
     expect((await chat('groq:llama-3.1-8b-instant')).status).toBe(400);
     _resetDiscovery();
     resetSettingsMemo();

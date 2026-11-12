@@ -10,7 +10,7 @@ import { wireMessages } from '../functions/_lib/ai/wire';
 
 const vars: PromptVars = { now: new Date(Date.UTC(2026, 9, 30, 13, 5)), timezone: 'Asia/Kolkata', locale: 'en-IN', firstName: 'Asha', modelName: 'GPT-OSS 120B', providerName: 'Groq' };
 const full = modelById(MODELS, 'groq:openai/gpt-oss-120b')!;
-const fast = modelById(MODELS, 'groq:qwen/qwen3.8-27b')!;
+const fast = modelById(MODELS, 'nvidia:nvidia/nemotron-3.5-bolt-e4b')!;
 const tiny = modelById(MODELS, 'groq:allam-2-7b')!;
 
 describe('buildSystemPrompt', () => {
@@ -25,7 +25,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('every model with room gets the full prompt and artifacts, fast ones included; specialists never get artifacts', () => {
-    const p = buildSystemPrompt({ spec: fast, vars: { ...vars, modelName: 'Qwen 3.8 27B' }, artifacts: true });
+    const p = buildSystemPrompt({ spec: fast, vars: { ...vars, modelName: 'Nemotron 3.5 Bolt' }, artifacts: true });
     expect(p.startsWith(FULL_PROMPT.slice(0, 40))).toBe(true);
     expect(p).toContain(ARTIFACTS_BLOCK);
     for (const m of MODELS) {
@@ -34,7 +34,9 @@ describe('buildSystemPrompt', () => {
     }
     const chatModels = MODELS.filter((m) => m.group && m.group !== 'more' && m.maxOutput >= 4_096);
     expect(chatModels.filter((m) => !artifactsOffered(m)).map((m) => m.id)).toEqual([]);
-    expect(artifactsOffered(modelById(MODELS, 'nvidia:nvidia/riva-translate-4b-instruct-v2')!)).toBe(false);
+    expect(fast.tier).toBe('fast');
+    expect(artifactsOffered(modelById(MODELS, 'nvidia:nvidia/ising-calibration-1.5-31b')!)).toBe(false);
+    expect(artifactsOffered(modelById(MODELS, 'gemini:gemini-robotics-er-2-preview')!)).toBe(false);
     expect(COMPACT_PROMPT.length).toBeLessThan(1_000);
   });
 

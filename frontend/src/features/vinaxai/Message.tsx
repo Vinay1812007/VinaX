@@ -6,7 +6,7 @@
  * cut off, and the model that answered. Messages with more than one version
  * get a ‹ 2 / 3 › switcher.
  */
-import { memo, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Markdown } from './Markdown';
 import { copyText } from './CodeBlock';
 import { siblingsOf } from './chatState';
@@ -18,24 +18,72 @@ import { ArtifactCard } from './ArtifactPanel';
 import { parseArtifacts, runsInSandbox, type Artifact } from './artifacts';
 import { InlinePreview } from './InlinePreview';
 import { usePrefs } from './prefs';
-import { ChevronDownSmallIcon, ChevronIcon, ContinueIcon, CopyIcon, PencilIcon, RetryIcon, SpeakerIcon, StopIcon } from './icons';
+import { ChevronDownSmallIcon, ChevronIcon, ContinueIcon, CopyIcon, PencilIcon, RetryIcon, SpeakerIcon, StopIcon, ThinkIcon } from './icons';
 import { readAloud, stopReading, useReadAloud } from './readAloud';
 import { isFoundModel, type ChatMessage, type PickerModel } from './types';
 
 export const thoughtLabel = (ms: number | null): string => (ms == null ? 'Thought process' : `Thought for ${Math.max(1, Math.round(ms / 1000))}s`);
 
-export function ThinkingFold({ message, live }: { message: ChatMessage; live: boolean }): ReactNode {
-  const [open, setOpen] = useState(false);
-  const stillThinking = live && !message.text;
-  if (!message.thinking) return null;
-  const expanded = stillThinking || open;
+/** Seconds since this reply started, ticking while it is still thinking. */
+function useElapsed(running: boolean): number {
+  const [start] = useState(() => Date.now());
+  const [now, setNow] = useState(start);
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(t);
+  }, [running]);
+  return Math.max(0, Math.round((now - start) / 1_000));
+}
+
+/**
+ * The reasoning, folded above the answer the way Claude shows it: from the
+ * moment the question is sent a "Thinking…" header with a live timer; the
+ * reasoning streams into a short scrolling box (it follows the newest line
+ * unless the listener scrolls up); once the answer starts it folds to
+ * "Thought for 12s", and opens again on a tap. The listener can fold or
+ * open it at any time, also while it is still thinking.
+ */
+export function ThinkingFold({ message, live, waiting = false }: { message: ChatMessage; live: boolean; waiting?: boolean }): ReactNode {
+  const [choice, setChoice] = useState<boolean | null>(null);
+  const stillThinking = live && !message.text && !message.error;
+  const elapsed = useElapsed(stillThinking);
+  const body = useRef<HTMLDivElement>(null);
+  const follow = useRef(true);
+  const thinking = message.thinking;
+  const expanded = (choice ?? stillThinking) && !!thinking;
+  useLayoutEffect(() => {
+    const el = body.current;
+    if (el && stillThinking && follow.current) el.scrollTop = el.scrollHeight;
+  }, [thinking, stillThinking, expanded]);
+  if (!thinking && !(stillThinking && waiting)) return null;
+  const label = stillThinking ? 'Thinking' : thoughtLabel(message.thinkingMs);
   return (
-    <div className={`vx-ai-think${expanded ? ' is-open' : ''}`}>
-      <button type="button" className="vx-ai-think-toggle" aria-expanded={expanded} onClick={() => setOpen((o) => !o)} disabled={stillThinking}>
-        <span className={stillThinking ? 'vx-ai-shimmer' : undefined}>{stillThinking ? 'Thinking…' : thoughtLabel(message.thinkingMs)}</span>
-        {!stillThinking && <ChevronIcon className="vx-ai-think-chev w-3.5 h-3.5" />}
+    <div className={`vx-ai-think${expanded ? ' is-open' : ''}${stillThinking ? ' is-live' : ''}`}>
+      <button
+        type="button"
+        className="vx-ai-think-toggle"
+        aria-expanded={thinking ? expanded : undefined}
+        onClick={() => { if (thinking) setChoice(!expanded); }}
+        aria-label={stillThinking ? `Thinking, ${elapsed} seconds` : undefined}
+      >
+        <ThinkIcon className={`vx-ai-think-icon w-4 h-4${stillThinking ? ' vx-ai-pulse' : ''}`} />
+        <span className={stillThinking ? 'vx-ai-shimmer' : undefined}>{label}{stillThinking ? '…' : ''}</span>
+        {stillThinking && elapsed > 0 && <span className="vx-ai-think-time">{elapsed}s</span>}
+        {thinking && <ChevronDownSmallIcon className="vx-ai-think-chev w-4 h-4" />}
       </button>
-      {expanded && <div className="vx-ai-think-body">{message.thinking}</div>}
+      {expanded && (
+        <div
+          ref={body}
+          className={`vx-ai-think-body${stillThinking ? ' is-streaming' : ''}`}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+          }}
+        >
+          <Markdown text={thinking} />
+        </div>
+      )}
     </div>
   );
 }
@@ -211,8 +259,8 @@ export function AssistantMessage({ message, live, models, onRetry, onContinue, v
     <div className="vx-ai-turn vx-ai-turn-reply" data-message-id={message.id} aria-busy={live || undefined}>
       <h2 className="sr-only">VinaX AI said</h2>
       {live && !text && message.status && <SearchStatusLine status={message.status} />}
-      <ThinkingFold message={message} live={live} />
-      {waiting && <span className="vx-ai-pending" role="status" aria-label="VinaX AI is writing"><i /><i /><i /></span>}
+      <ThinkingFold message={message} live={live} waiting={waiting} />
+      {waiting && <span className="sr-only" role="status">VinaX AI is thinking</span>}
       {text && (text.includes('<artifact')
         ? parseArtifacts(text).map((seg, i) => (seg.kind === 'text'
           ? <Markdown key={i} text={seg.text} sources={message.sources?.items} />

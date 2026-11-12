@@ -44,10 +44,10 @@ describe('pickLadder', () => {
   });
 
   it('owner overrides switch models off everywhere and reorder within a group', () => {
-    const reg = applyOverrides(MODELS, { 'groq:openai/gpt-oss-120b': { enabled: false }, 'groq:openai/gpt-oss-20b': { order: -1 }, junk: 5 });
+    const reg = applyOverrides(MODELS, { 'groq:openai/gpt-oss-120b': { enabled: false }, 'cloudflare:@cf/meta/llama-3.1-8b-instruct-fast': { order: -1 }, junk: 5 });
     expect(modelById(reg, 'groq:openai/gpt-oss-120b')).toBeNull();
-    expect(ladderModels(reg, 'default')[0].id).toBe('gemini:gemini-3.5-flash');
-    expect(reg.filter((m) => m.group === 'fast').map((m) => m.id).slice(0, 2)).toEqual(['groq:openai/gpt-oss-20b', 'groq:qwen/qwen3.8-27b']);
+    expect(ladderModels(reg, 'default')[0].id).toBe('nvidia:nvidia/nemotron-3-ultra-550b-a55b');
+    expect(reg.filter((m) => m.group === 'fast').map((m) => m.id).slice(0, 2)).toEqual(['cloudflare:@cf/meta/llama-3.1-8b-instruct-fast', 'nvidia:nvidia/nemotron-3.5-bolt-e4b']);
     expect(reg.findIndex((m) => m.group === 'fast')).toBe(0);
     expect(applyOverrides(MODELS, 'nonsense')).toHaveLength(MODELS.length);
   });
@@ -60,10 +60,9 @@ describe('pickLadder', () => {
     for (const m of picker) expect(PICKER_GROUPS, m.id).toContain(m.group);
   });
 
-  it('slow-to-start models wait longer when picked and are never in an Auto ladder', () => {
-    const slow = MODELS.filter((m) => m.firstEventMs);
-    expect(slow.map((m) => m.upstream).sort()).toEqual(['meta/llama-3.2-90b-vision-instruct', 'meta/muse-glimmer-30b', 'nvidia/nemotron-3.5-bolt-e4b']);
-    for (const ids of Object.values(LADDERS)) for (const m of slow) expect(ids, m.id).not.toContain(m.id);
+  it('no curated model is slow to start any more (none needs its own first-event wait)', () => {
+    // Every model that kept its place after the 2026-11-12 check answers inside the normal wait.
+    expect(MODELS.filter((m) => m.firstEventMs).map((m) => m.id)).toEqual([]);
   });
 
   it('utility models (guards, embeddings, parsers, AQA) never reach the picker or a ladder', () => {
@@ -92,9 +91,9 @@ describe('cooldowns', () => {
 
   it('a 401 rests every model of that provider; a new rest never shortens a longer one', () => {
     noteFailure(spec('groq:openai/gpt-oss-120b'), new ProviderError('auth'), now);
-    expect(isCooling(spec('groq:qwen/qwen3.8-27b'), now + 1)).toBe(true);
-    expect(isCooling(spec('gemini:gemini-3.5-flash'), now + 1)).toBe(false);
-    const m = spec('gemini:gemini-3.5-flash');
+    expect(isCooling(spec('groq:allam-2-7b'), now + 1)).toBe(true);
+    expect(isCooling(spec('gemini:gemini-3.6-flash'), now + 1)).toBe(false);
+    const m = spec('gemini:gemini-3.6-flash');
     noteFailure(m, new ProviderError('quota'), now);
     noteFailure(m, new ProviderError('upstream'), now);
     expect(coolingUntil(m, now)).toBe(now + QUOTA_DEFAULT_MS);
@@ -139,7 +138,7 @@ async function run(candidates: string[], scripts: Record<string, Script>, opts: 
 }
 
 const A = 'groq:openai/gpt-oss-120b';
-const B = 'gemini:gemini-3.5-flash';
+const B = 'gemini:gemini-3.6-flash';
 const C = 'nvidia:nvidia/nemotron-3.5-lightning-30b-a3b';
 const ok = (text: string): Script => [{ type: 'text', delta: text }, { type: 'end', reason: 'stop' }];
 
@@ -207,6 +206,6 @@ describe('runChat', () => {
 
   it('gives human reasons, never provider text', () => {
     expect(humanReason(new ProviderError('rate'), spec(A))).toBe('GPT-OSS 120B is busy right now.');
-    expect(humanReason(new ProviderError('timeout'), spec(B))).toBe('Gemini 3.5 Flash took too long to answer.');
+    expect(humanReason(new ProviderError('timeout'), spec(B))).toBe('Gemini 3.6 Flash took too long to answer.');
   });
 });

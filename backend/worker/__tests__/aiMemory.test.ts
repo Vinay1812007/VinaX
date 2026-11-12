@@ -63,15 +63,19 @@ interface Seen { chat: Array<{ messages: Array<{ role: string; content: string }
 
 function seed(tables: Record<string, Array<Record<string, unknown>>> = {}, opts: { learnAnswer?: string; setting?: unknown } = {}): { fake: FakeDb; seen: Seen } {
   const seen: Seen = { chat: [], learn: [] };
-  const upstream: Upstream = (_url, init) => {
-    if (isTitle(init)) return sseResponse(openAiSse('Raga talk'));
+  // The title and learning models start with Gemini (the title ladder), so each answer comes back in the asked provider's shape.
+  const answer = (url: string, text: string) => (url.includes('generativelanguage')
+    ? sseResponse(`data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text }] }, finishReason: 'STOP' }] })}\n\n`)
+    : sseResponse(openAiSse(text)));
+  const upstream: Upstream = (url, init) => {
+    if (isTitle(init)) return answer(url, 'Raga talk');
     const body = JSON.parse(String(init?.body ?? '{}'));
     if (isLearn(init)) {
       seen.learn.push(body);
-      return sseResponse(openAiSse(opts.learnAnswer ?? '{"add": [], "remove": []}'));
+      return answer(url, opts.learnAnswer ?? '{"add": [], "remove": []}');
     }
     seen.chat.push(body);
-    return sseResponse(openAiSse('Sure, noted.'));
+    return answer(url, 'Sure, noted.');
   };
   const fake = fakeDb({
     accounts: [{ id: '1001', name: 'Asha Rao' }, { id: '2002', name: 'Bo' }],

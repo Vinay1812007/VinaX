@@ -29,8 +29,13 @@ export interface OpenedModel {
   wire: WireFormat;
   /** The provider's bytes from the first one, for the page. */
   live: ReadableStream<Uint8Array>;
-  /** The same bytes as text once the reply has ended; rejects if it broke off. */
-  whole: Promise<string>;
+  /**
+   * The same bytes as text; call it once the page's copy has been handed on
+   * (rejects if the reply broke off). Reading this copy alongside the page's
+   * held the page's back: workerd's tee then passed the bytes on in 64 KB
+   * blocks, so a reply reached the page in one lump at the end.
+   */
+  whole(): Promise<string>;
   /** When the model's first bytes arrived. */
   firstAt: number;
   /** Ends the provider request (Stop, a page that went away, the time budget). */
@@ -115,16 +120,18 @@ export async function openModel(env: AiEnv, o: OpenOptions): Promise<OpenResult>
     };
     let live: ReadableStream<Uint8Array> | null = null;
     let probe: ReadableStream<Uint8Array> | null = null;
+    let save: ReadableStream<Uint8Array> | null = null;
     try {
       const body = await abortable(adapter.open(env, { ...req, signal: ac.signal }), ac.signal);
       // Three copies of one body: the page's, one to look at the first line,
       // and one read whole at the end (a stream that was read from cannot be).
       let rest: ReadableStream<Uint8Array>;
       [live, rest] = body.tee();
-      let save: ReadableStream<Uint8Array>;
       [probe, save] = rest.tee();
-      const whole = new Response(save).text();
-      whole.catch(() => undefined);
+      // Read only when asked (after the page's copy): the tee keeps the bytes meanwhile.
+      const kept = save;
+      let read: Promise<string> | null = null;
+      const whole = (): Promise<string> => (read ??= new Response(kept).text());
       // Wait for the first real line, then check it is not an error.
       const reader = probe.getReader();
       const head: Uint8Array[] = [];
@@ -151,6 +158,7 @@ export async function openModel(env: AiEnv, o: OpenOptions): Promise<OpenResult>
       ac.abort();
       void live?.cancel().catch(() => undefined);
       void probe?.cancel().catch(() => undefined);
+      void save?.cancel().catch(() => undefined);
       if (o.signal.aborted) return aborted();
       const err = e instanceof ProviderError ? e : asProviderError(e, ac.signal);
       noteFailure(spec, err, now());

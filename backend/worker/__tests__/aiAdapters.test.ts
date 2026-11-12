@@ -98,8 +98,8 @@ describe('OpenAI-compatible adapters', () => {
   });
 
   it('models without a system role get the system text in the first user turn', () => {
-    const noSystem = { ...spec('groq:openai/gpt-oss-20b'), flags: { ...spec('groq:openai/gpt-oss-20b').flags, systemRole: false } };
-    const body = requestBody({ ...req('groq:openai/gpt-oss-20b'), model: noSystem }) as { messages: Array<{ role: string; content: string }> };
+    const noSystem = { ...spec('groq:allam-2-7b'), flags: { ...spec('groq:allam-2-7b').flags, systemRole: false } };
+    const body = requestBody({ ...req('groq:allam-2-7b'), model: noSystem }) as { messages: Array<{ role: string; content: string }> };
     expect(body.messages).toEqual([{ role: 'user', content: 'SYSTEM\n\n---\n\nhi' }]);
   });
 });
@@ -107,11 +107,11 @@ describe('OpenAI-compatible adapters', () => {
 describe('Gemini adapter', () => {
   it('thought parts are thinking; the key goes in a header, never the URL', async () => {
     const calls = stubFetch(() => sseResponse(fixture('gemini-thoughts.sse'), 5));
-    const events = await collect(gemini, ENV, req('gemini:gemini-3.5-flash'));
+    const events = await collect(gemini, ENV, req('gemini:gemini-3.6-flash'));
     expect(joined(events, 'thinking')).toBe('**Weighing the question** The user wants a short answer.');
     expect(joined(events, 'text')).toBe('A raga is a melodic framework.');
     expect(events.at(-2)).toEqual({ type: 'usage', input: 120, output: 39 });
-    expect(calls[0].url).toBe('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:streamGenerateContent?alt=sse');
+    expect(calls[0].url).toBe('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:streamGenerateContent?alt=sse');
     expect(calls[0].url).not.toContain('gem_test');
     expect((calls[0].init.headers as Record<string, string>)['x-goog-api-key']).toBe('gem_test');
   });
@@ -121,11 +121,25 @@ describe('Gemini adapter', () => {
     expect(body.systemInstruction).toEqual({ parts: [{ text: 'SYSTEM' }] });
     expect(body.contents.map((c) => c.role)).toEqual(['user', 'model', 'user']);
     expect(body.generationConfig.thinkingConfig).toEqual({ includeThoughts: true, thinkingLevel: 'high' });
+    const plain = geminiBody(req('gemini:gemini-3.6-flash')) as { generationConfig: { thinkingConfig: unknown } };
+    expect(plain.generationConfig.thinkingConfig).toEqual({ includeThoughts: true, thinkingLevel: 'low' });
+  });
+
+  it('a 400 about the thinking level asks once more with plain thinking', async () => {
+    let n = 0;
+    const calls = stubFetch(() => (n++ === 0
+      ? new Response('{"error":{"code":400,"message":"Thinking level is not supported for this model."}}', { status: 400 })
+      : sseResponse(fixture('gemini-thoughts.sse'), 5)));
+    const events = await collect(gemini, ENV, req('gemini:gemini-3.6-flash'));
+    expect(joined(events, 'text')).toBe('A raga is a melodic framework.');
+    expect(calls).toHaveLength(2);
+    expect(JSON.parse(String(calls[0].init.body)).generationConfig.thinkingConfig).toEqual({ includeThoughts: true, thinkingLevel: 'low' });
+    expect(JSON.parse(String(calls[1].init.body)).generationConfig.thinkingConfig).toEqual({ includeThoughts: true });
   });
 
   it('a free-tier daily quota 429 is a quota failure', async () => {
     stubFetch(() => new Response(fixture('gemini-429.json'), { status: 429 }));
-    await expect(collect(gemini, ENV, req('gemini:gemini-3.5-flash'))).rejects.toMatchObject({ kind: 'quota', retryAfterMs: 37_000 });
+    await expect(collect(gemini, ENV, req('gemini:gemini-3.6-flash'))).rejects.toMatchObject({ kind: 'quota', retryAfterMs: 37_000 });
   });
 });
 

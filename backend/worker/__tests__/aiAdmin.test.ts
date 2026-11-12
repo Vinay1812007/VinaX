@@ -65,7 +65,8 @@ describe('GET /api/admin/ai', () => {
     expect(body.models.find((m: { id: string }) => m.id === GROQ).ownerEnabled).toBe(false);
     expect(body.models).toHaveLength(MODELS.length);
     expect(body.search.api).toMatchObject({ configured: true, provider: 'tavily', usedToday: 3 });
-    expect(body.search.grounding).toMatchObject({ configured: true, dailyLimit: 450, usedToday: 12 });
+    // No model grounds since 2026-11-12 (the grounded ladder is empty), so grounding shows as not set up even with a Gemini key.
+    expect(body.search.grounding).toMatchObject({ configured: false, dailyLimit: 450, usedToday: 12 });
     expect(body.voice).toMatchObject({ dictation: true, readAloud: true, live: true });
     expect(body.voice.resting.map((r: { model: string }) => r.model)).toEqual(['canopylabs/orpheus-v1-english']);
     expect(body.utility).toHaveLength(UTILITY_MODELS.length);

@@ -61,7 +61,11 @@ export function groundingEvent(g: GroundingMetadata): Extract<ProviderEvent, { t
 /** Registry ids carry no `models/` prefix; strip it if one slips in. */
 export const geminiModelId = (upstream: string): string => upstream.replace(/^models\//, '');
 
-export function geminiBody(req: ChatRequest, grounding = req.webSearch && req.model.flags.grounding): Record<string, unknown> {
+/**
+ * `plainThinking`: the thinking switches without a level or budget (only
+ * `includeThoughts`), for a model that refused them.
+ */
+export function geminiBody(req: ChatRequest, grounding = req.webSearch && req.model.flags.grounding, plainThinking = false): Record<string, unknown> {
   const { system, messages } = wireMessages(req.model, req.system, req.messages);
   const merged = {
     ...(req.model.params ?? {}),
@@ -70,7 +74,11 @@ export function geminiBody(req: ChatRequest, grounding = req.webSearch && req.mo
   } as { thinkingConfig?: Record<string, unknown> };
   const generationConfig: Record<string, unknown> = { maxOutputTokens: Math.min(req.maxOutputTokens, req.model.maxOutput) };
   if (req.temperature != null) generationConfig.temperature = req.temperature;
-  if (merged.thinkingConfig) generationConfig.thinkingConfig = merged.thinkingConfig;
+  if (merged.thinkingConfig) {
+    const tc = merged.thinkingConfig;
+    if (!plainThinking) generationConfig.thinkingConfig = tc;
+    else if (tc.includeThoughts === true) generationConfig.thinkingConfig = { includeThoughts: true };
+  }
   return {
     ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
     contents: messages.map((msg) => ({
@@ -97,19 +105,21 @@ const finish = (r: string | undefined): 'stop' | 'length' | 'content_filter' | n
 async function openGemini(env: AiEnv, req: ChatRequest): Promise<ReadableStream<Uint8Array>> {
   const key = env.GEMINI_API_KEY?.trim();
   if (!key) throw new ProviderError('not_configured');
-  const call = (grounding: boolean) => fetch(`${BASE}/${encodeURIComponent(geminiModelId(req.model.upstream))}:streamGenerateContent?alt=sse`, {
+  const call = (grounding: boolean, plainThinking = false) => fetch(`${BASE}/${encodeURIComponent(geminiModelId(req.model.upstream))}:streamGenerateContent?alt=sse`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify(geminiBody(req, grounding)),
+    body: JSON.stringify(geminiBody(req, grounding, plainThinking)),
     signal: req.signal,
   });
   const grounding = req.webSearch && req.model.flags.grounding;
   let res = await call(grounding);
-  if (!res.ok && grounding && (res.status === 400 || res.status === 429)) {
+  if (!res.ok && (res.status === 400 || (grounding && res.status === 429))) {
+    const body = await errorText(res);
     // Grounding itself refused (its own quota, or not offered for this key):
     // ask once more without it rather than failing the model.
-    const body = await errorText(res);
-    if (/ground|search/i.test(body)) res = await call(false);
+    if (grounding && /ground|search/i.test(body)) res = await call(false);
+    // A thinking level or budget this model does not take: once more with the model's own default.
+    else if (res.status === 400 && /thinking/i.test(body)) res = await call(grounding, true);
     else throw classifyHttp(res.status, res.headers, body);
   }
   if (!res.ok) throw classifyHttp(res.status, res.headers, await errorText(res));

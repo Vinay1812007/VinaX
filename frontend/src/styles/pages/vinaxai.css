@@ -135,33 +135,53 @@
 }
 .vx-ai-turn-reply { min-width: 0; }
 
-/* Thinking fold */
-.vx-ai-think { margin-bottom: 10px; }
+/* Thinking fold: a small card above the answer (Claude-style) */
+.vx-ai-think {
+  margin-bottom: 12px;
+  max-width: 100%;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--vx-radius-card);
+  background: rgb(var(--ink-850) / 0.7);
+  overflow: hidden;
+}
+.vx-ai-think:not(.is-open) { display: inline-block; }
 .vx-ai-think-toggle {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 4px;
-  min-height: 32px;
-  padding: 2px 6px 2px 0;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 12px;
   font-size: 0.875rem;
-  color: rgb(var(--ink-400));
+  text-align: left;
+  color: rgb(var(--ink-300));
 }
-.vx-ai-think-toggle:hover:not(:disabled) { color: rgb(var(--ink-200)); }
-.vx-ai-think-toggle:disabled { cursor: default; }
-.vx-ai-think-chev { transition: transform var(--vx-motion-fast) ease; }
-.vx-ai-think.is-open .vx-ai-think-chev { transform: rotate(90deg); }
+.vx-ai-think-toggle:hover { color: rgb(var(--ink-100)); }
+.vx-ai-think-icon { flex: none; opacity: 0.85; }
+.vx-ai-think.is-live .vx-ai-think-icon { color: rgb(var(--ember-400)); opacity: 1; }
+.vx-ai-think-time { color: rgb(var(--ink-500)); font-variant-numeric: tabular-nums; }
+.vx-ai-think-chev { flex: none; margin-left: auto; transition: transform var(--vx-motion-fast) ease; }
+.vx-ai-think.is-open .vx-ai-think-chev { transform: rotate(180deg); }
 .vx-ai-think-body {
-  margin-top: 6px;
-  padding: 2px 0 2px 14px;
-  border-left: 2px solid var(--glass-border);
+  padding: 4px 14px 12px;
+  border-top: 1px solid var(--glass-border);
   color: rgb(var(--ink-400));
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   line-height: 1.6;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
-  max-height: 320px;
+  max-height: 420px;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
+/* While it streams: a short window that follows the newest line, faded at the top. */
+.vx-ai-think-body.is-streaming {
+  max-height: 168px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 28px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 28px);
+}
+.vx-ai-think-body .vx-ai-md { font-size: inherit; color: inherit; }
+.vx-ai-think-body .vx-ai-md > :first-child { margin-top: 8px; }
+.vx-ai-think-body .vx-ai-md :is(h1, h2, h3, h4) { font-size: 0.875rem; color: rgb(var(--ink-300)); }
 .vx-ai-shimmer {
   background: linear-gradient(90deg, rgb(var(--ink-400)) 0%, rgb(var(--ink-100)) 50%, rgb(var(--ink-400)) 100%);
   background-size: 200% 100%;

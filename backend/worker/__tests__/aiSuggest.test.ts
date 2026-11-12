@@ -17,7 +17,7 @@ import { _resetCooldowns } from '../functions/_lib/ai/cooldown';
 import { DB_ENV, fakeDb } from './helpers/fakeDb';
 import { openAiSse, sseResponse } from './helpers/aiStreams';
 
-const ENV = { GOOGLE_CLIENT_ID: 'x.apps.googleusercontent.com', AUTH_SECRET: 'auth-secret', GROQ_API_KEY: 'gsk-test', ...DB_ENV };
+const ENV = { GOOGLE_CLIENT_ID: 'x.apps.googleusercontent.com', AUTH_SECRET: 'auth-secret', NVIDIA_API_KEY: 'nv-test', ...DB_ENV };
 const TASTE = { languages: ['telugu'], artists: ['Sid Sriram'], moods: ['romantic'], energyByHour: [0.2, 0.5, 0.6, 0.4], discovery: 'balanced', skipStreak: 0, hour: 21, weekday: 5 };
 let ip = 0;
 

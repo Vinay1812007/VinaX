@@ -14,7 +14,7 @@ import { _resetCooldowns } from '../functions/_lib/ai/cooldown';
 import { DB_ENV, fakeDb } from './helpers/fakeDb';
 import { openAiSse, sseResponse } from './helpers/aiStreams';
 
-const ENV = { GOOGLE_CLIENT_ID: 'x.apps.googleusercontent.com', AUTH_SECRET: 'auth-secret', GROQ_API_KEY: 'gsk-test', ...DB_ENV };
+const ENV = { GOOGLE_CLIENT_ID: 'x.apps.googleusercontent.com', AUTH_SECRET: 'auth-secret', NVIDIA_API_KEY: 'nv-test', ...DB_ENV };
 const ALLOWED = ['quick', 'personal', 'discovery', 'charts', 'moods', 'loved', 'feed', 'rightnow'];
 const BODY = {
   generation: 7,

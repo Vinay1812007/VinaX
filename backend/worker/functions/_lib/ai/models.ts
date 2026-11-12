@@ -44,8 +44,13 @@ const GROQ_CTX = 30_000;
 const GEMINI_CTX = 600_000;
 const NVIDIA_CTX = 100_000;
 const OPENROUTER_CTX = 100_000;
+const CF_CTX = 60_000;
 
 const geminiThink = { thinkingConfig: { includeThoughts: true } };
+// Gemini 3 thinks at its highest level unless told otherwise (14 s for two
+// sentences on 3.6 Flash, 2026-11-12): low by default, high for Extended
+// thinking. A model that refuses a level is asked again without it (adapter).
+const gemini3Think = { thinkingConfig: { includeThoughts: true, thinkingLevel: 'low' } };
 const geminiThinkHigh = { thinkingConfig: { includeThoughts: true, thinkingLevel: 'high' } };
 const gemini = (upstream: string, name: string, group: ModelGroup | null, tier: 'fast' | 'full' = 'full', description = '', extra: Partial<Omit<ModelSpec, 'flags'>> & { grounding?: boolean; flags?: Partial<ModelFlags> } = {}): ModelSpec => {
   const { grounding, flags, ...rest } = extra;
@@ -54,37 +59,42 @@ const gemini = (upstream: string, name: string, group: ModelGroup | null, tier: 
     description,
     maxContextChars: GEMINI_CTX,
     maxOutput: tier === 'fast' ? 8_192 : 16_384,
-    params: geminiThink,
+    params: /^gemini-3/.test(upstream) ? gemini3Think : geminiThink,
     highParams: geminiThinkHigh,
     ...rest,
     flags: { vision: true, pdf: true, reasoning: true, artifacts: true, thinkFormat: 'parts', grounding: grounding === true, ...flags },
   });
 };
 
-// Gemini 2.5 takes a thinking budget, not a level.
-const gemini25High = { thinkingConfig: { includeThoughts: true, thinkingBudget: 16_384 } };
-const gemini25Off = { thinkingConfig: { thinkingBudget: 0 } };
-
-/** Models that took 30–45 s to start in the owner's probe: picked or probed, they get this long. */
-const SLOW_START_MS = 60_000;
-
+/**
+ * Only models that answered in the owner's full check on 2026-11-12 (every
+ * picker model asked "17 × 23" and a two-sentence question through the live
+ * chat). Dropped then: anything rate-limited all day (Groq Qwen 3.8 27B and
+ * GPT-OSS 20B, Gemini 3.5 Flash Lite and Flash Lite latest), timing out
+ * (GPT-OSS 20B on NVIDIA, Llama 3.2 90B Vision, Step 5 Preview, Gemini 3
+ * Flash Preview, Gemini 3.5 Flash), gone from its provider (Laguna S/XS 2.1
+ * on OpenRouter, Muse Glimmer 30B) or not a chat model (Riva Translate
+ * answers every message by translating it). Re-run the check before adding
+ * one back.
+ */
 export const MODELS: readonly ModelSpec[] = [
   // ---- Fast
-  m('groq', 'qwen/qwen3.8-27b', 'Qwen 3.8 27B', 'fast', {
-    tier: 'fast', description: 'Quickest replies for everyday questions', maxContextChars: GROQ_CTX, maxOutput: 4_096,
-    params: { reasoning_format: 'parsed' }, offParams: { reasoning_effort: 'none' }, flags: { reasoning: true, thinkFormat: 'field' },
+  m('nvidia', 'nvidia/nemotron-3.5-bolt-e4b', 'Nemotron 3.5 Bolt', 'fast', {
+    tier: 'fast', description: 'Quickest replies for everyday questions', maxContextChars: NVIDIA_CTX, maxOutput: 4_096,
+    flags: { reasoning: true, thinkFormat: 'tags' },
   }),
-  m('groq', 'openai/gpt-oss-20b', 'GPT-OSS 20B', 'fast', {
-    tier: 'fast', description: 'Fast, light reasoning', maxContextChars: GROQ_CTX, maxOutput: 4_096,
-    params: { include_reasoning: true, reasoning_effort: 'low' }, highParams: { reasoning_effort: 'high' },
-    flags: { reasoning: true, thinkFormat: 'field' },
+  m('cloudflare', '@cf/meta/llama-3.1-8b-instruct-fast', 'Llama 3.1 8B', 'fast', {
+    tier: 'fast', description: 'Small and quick, on the edge network', maxContextChars: 24_000, maxOutput: 2_048,
   }),
-  gemini('gemini-3.5-flash-lite', 'Gemini 3.5 Flash Lite', 'fast', 'fast', 'Quick Gemini that sees images'),
-  gemini('gemini-3.1-flash-lite', 'Gemini 3.1 Flash Lite', 'fast', 'fast', 'Light and quick, sees images'),
+  // Titles and memory notes ask with reasoning off: the least thinking this model allows.
+  gemini('gemini-3.1-flash-lite', 'Gemini 3.1 Flash Lite', 'fast', 'fast', 'Light and quick, sees images', { offParams: { thinkingConfig: { thinkingLevel: 'minimal' } } }),
   gemini('gemini-3.1-flash-lite-preview', 'Gemini 3.1 Flash Lite Preview', 'fast', 'fast', 'Preview build of 3.1 Flash Lite'),
-  gemini('gemini-flash-lite-latest', 'Gemini Flash Lite (latest)', 'fast', 'fast', 'Google’s newest Flash Lite'),
   m('openrouter', 'liquid/lfm-2.5-2.6b:free', 'LFM 2.5 2.6B', 'fast', {
     tier: 'fast', description: 'Tiny and quick, from Liquid AI', maxContextChars: 30_000, maxOutput: 4_096,
+    flags: { reasoning: true, thinkFormat: 'field' },
+  }),
+  m('openrouter', 'baidu/ernie-5.5-flash-preview:free', 'ERNIE 5.5 Flash Preview', 'fast', {
+    tier: 'fast', description: 'Quick answers from Baidu', maxContextChars: OPENROUTER_CTX,
   }),
   // ---- Balanced
   m('groq', 'openai/gpt-oss-120b', 'GPT-OSS 120B', 'balanced', {
@@ -92,31 +102,42 @@ export const MODELS: readonly ModelSpec[] = [
     params: { include_reasoning: true, reasoning_effort: 'medium' }, highParams: { reasoning_effort: 'high' },
     flags: { reasoning: true, artifacts: true, thinkFormat: 'field' },
   }),
-  gemini('gemini-3.5-flash', 'Gemini 3.5 Flash', 'balanced', 'full', 'Sees images and reads long documents'),
-  gemini('gemini-3-flash-preview', 'Gemini 3 Flash Preview', 'balanced', 'full', 'Earlier Gemini 3 Flash, images and documents'),
+  m('nvidia', 'nvidia/nemotron-3-ultra-550b-a55b', 'Nemotron 3 Ultra 550B', 'balanced', {
+    description: 'Big, careful and quick to answer', maxContextChars: NVIDIA_CTX,
+    flags: { reasoning: true, artifacts: true, thinkFormat: 'tags' },
+  }),
+  m('cloudflare', '@cf/openai/gpt-oss-120b', 'GPT-OSS 120B (Cloudflare)', 'balanced', {
+    description: 'GPT-OSS 120B with a longer memory', maxContextChars: CF_CTX, maxOutput: 8_192,
+    flags: { reasoning: true, artifacts: true, thinkFormat: 'field' },
+  }),
+  m('cloudflare', '@cf/nvidia/nemotron-3-120b-a12b', 'Nemotron 3 120B', 'balanced', {
+    description: 'Capable reasoning on the edge network', maxContextChars: CF_CTX, maxOutput: 8_192,
+    flags: { reasoning: true, artifacts: true, thinkFormat: 'field' },
+  }),
   m('nvidia', 'nvidia/nemotron-3.5-lightning-30b-a3b', 'Nemotron 3.5 Lightning', 'balanced', {
-    description: 'Quick, capable reasoning', maxContextChars: NVIDIA_CTX,
+    description: 'Thinks things through before answering', maxContextChars: NVIDIA_CTX,
     flags: { reasoning: true, artifacts: true, thinkFormat: 'tags' },
   }),
   m('openrouter', 'nvidia/nemotron-3.5-lightning:free', 'Nemotron 3.5 Lightning (OpenRouter)', 'balanced', {
     description: 'The same model through OpenRouter', maxContextChars: OPENROUTER_CTX,
     flags: { reasoning: true, artifacts: true, thinkFormat: 'field' },
   }),
-  m('nvidia', 'openai/gpt-oss-20b', 'GPT-OSS 20B (NVIDIA)', 'balanced', {
-    description: 'GPT-OSS 20B with a longer memory', maxContextChars: NVIDIA_CTX, flags: { reasoning: true, thinkFormat: 'field' },
-  }),
   // ---- Smart
   gemini('gemini-3.6-flash', 'Gemini 3.6 Flash', 'smart', 'full', 'Careful answers, images and long documents'),
-  m('nvidia', 'nvidia/nemotron-3-ultra-550b-a55b', 'Nemotron 3 Ultra 550B', 'smart', {
-    description: 'Deep reasoning for hard problems (slower)', maxContextChars: NVIDIA_CTX,
-    flags: { reasoning: true, artifacts: true, thinkFormat: 'tags' },
-  }),
-  m('openrouter', 'nvidia/nemotron-3-ultra-550b-a55b:free', 'Nemotron 3 Ultra 550B (OpenRouter)', 'smart', {
-    description: 'The same model through OpenRouter', maxContextChars: OPENROUTER_CTX,
+  m('nvidia', 'mistralai/mistral-large-4-1t-a52b', 'Mistral Large 4', 'smart', {
+    description: 'Mistral’s largest model, strong at writing', maxContextChars: NVIDIA_CTX,
     flags: { reasoning: true, artifacts: true, thinkFormat: 'field' },
   }),
-  m('nvidia', 'stepfun-ai/step-5-preview', 'Step 5 Preview', 'smart', {
-    description: 'Thorough reasoning (slowest)', maxContextChars: NVIDIA_CTX,
+  m('openrouter', 'nvidia/nemotron-3-ultra-550b-a55b:free', 'Nemotron 3 Ultra 550B (OpenRouter)', 'smart', {
+    description: 'Nemotron 3 Ultra through OpenRouter', maxContextChars: OPENROUTER_CTX,
+    flags: { reasoning: true, artifacts: true, thinkFormat: 'field' },
+  }),
+  m('cloudflare', '@cf/zai-org/glm-4.7-flash', 'GLM 4.7 Flash', 'smart', {
+    description: 'Reasons step by step (slower)', maxContextChars: CF_CTX, maxOutput: 8_192,
+    flags: { reasoning: true, artifacts: true, thinkFormat: 'field' },
+  }),
+  m('cloudflare', '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b', 'DeepSeek R1 Distill 32B', 'smart', {
+    description: 'Shows its full reasoning (slower)', maxContextChars: CF_CTX, maxOutput: 8_192,
     flags: { reasoning: true, artifacts: true, thinkFormat: 'tags' },
   }),
   // ---- Vision
@@ -136,59 +157,60 @@ export const MODELS: readonly ModelSpec[] = [
     description: 'The same model through OpenRouter', maxContextChars: OPENROUTER_CTX,
     flags: { vision: true, reasoning: true, thinkFormat: 'field' },
   }),
-  m('nvidia', 'meta/llama-3.2-90b-vision-instruct', 'Llama 3.2 90B Vision', 'vision', {
-    description: 'Meta’s vision model (slow to start)', maxContextChars: NVIDIA_CTX, maxOutput: 4_096,
-    firstEventMs: SLOW_START_MS, flags: { vision: true },
-  }),
   // ---- Code
   m('openrouter', 'cohere/north-mini-code:free', 'North Mini Code', 'code', {
-    description: 'Tuned for writing and fixing code', maxContextChars: OPENROUTER_CTX, flags: { artifacts: true },
+    description: 'Tuned for writing and fixing code', maxContextChars: OPENROUTER_CTX,
+    flags: { reasoning: true, artifacts: true, thinkFormat: 'field' },
   }),
-  m('openrouter', 'poolside/laguna-s-2.1:free', 'Laguna S 2.1', 'code', {
-    description: 'Code-focused, good with whole files', maxContextChars: OPENROUTER_CTX, flags: { artifacts: true },
+  m('nvidia', 'poolside/laguna-xs-2.1', 'Laguna XS 2.1', 'code', {
+    description: 'Quick, code-focused, good with whole files', maxContextChars: NVIDIA_CTX, flags: { artifacts: true },
   }),
-  m('openrouter', 'poolside/laguna-xs-2.1:free', 'Laguna XS 2.1', 'code', {
-    description: 'Smaller, quicker Laguna for code', maxContextChars: OPENROUTER_CTX, flags: { artifacts: true },
+  m('cloudflare', '@cf/openai/gpt-oss-20b', 'GPT-OSS 20B (Cloudflare)', 'code', {
+    description: 'Light reasoning for everyday code', maxContextChars: CF_CTX, maxOutput: 8_192,
+    flags: { reasoning: true, artifacts: true, thinkFormat: 'field' },
   }),
-  m('nvidia', 'poolside/laguna-xs-2.1', 'Laguna XS 2.1 (NVIDIA)', 'code', {
-    description: 'The same model on NVIDIA', maxContextChars: NVIDIA_CTX, flags: { artifacts: true },
-  }),
-  // ---- More models: niche, specialist or slow to start (never in a ladder)
+  // ---- More models: niche or specialist (never in a ladder)
   m('openrouter', 'dots-studio/dots-3-note-preview:free', 'Dots 3 Note Preview', 'more', {
-    description: 'Preview chat model from dots', maxContextChars: OPENROUTER_CTX,
+    description: 'Preview chat model from dots', maxContextChars: OPENROUTER_CTX, flags: { reasoning: true, thinkFormat: 'field' },
+  }),
+  m('openrouter', 'recursive/flint-v1.0:free', 'Flint 1.0', 'more', {
+    description: 'Chat model from Recursive', maxContextChars: OPENROUTER_CTX, flags: { reasoning: true, thinkFormat: 'field' },
+  }),
+  m('openrouter', 'liquid/lfm-3-1.7b:free', 'LFM 3 1.7B', 'more', {
+    tier: 'fast', description: 'Tiny model from Liquid AI', maxContextChars: 30_000, maxOutput: 4_096, flags: { reasoning: true, thinkFormat: 'field' },
   }),
   m('groq', 'allam-2-7b', 'ALLaM 2 7B', 'more', {
     // ALLaM's whole window is 4,096 tokens: a short history and a short answer.
     tier: 'fast', description: 'Arabic and English', maxContextChars: 8_000, maxOutput: 1_024,
   }),
-  m('nvidia', 'nvidia/riva-translate-4b-instruct-v2', 'Riva Translate 4B', 'more', {
-    tier: 'fast', description: 'Translates text between languages', maxContextChars: 20_000, maxOutput: 4_096, flags: { artifacts: false },
-  }),
   m('nvidia', 'nvidia/ising-calibration-1.5-31b', 'Ising Calibration 1.5 31B', 'more', {
     description: 'Specialist NVIDIA model', maxContextChars: NVIDIA_CTX, flags: { artifacts: false },
   }),
   gemini('gemini-robotics-er-2-preview', 'Gemini Robotics ER 2 Preview', 'more', 'full', 'Spatial reasoning over images', { flags: { pdf: false, artifacts: false } }),
-  m('nvidia', 'meta/muse-glimmer-30b', 'Muse Glimmer 30B', 'more', {
-    description: 'Meta model (slow to start)', maxContextChars: NVIDIA_CTX, maxOutput: 4_096, firstEventMs: SLOW_START_MS,
+  m('nvidia', 'minimaxai/minimax-m3.1-flash', 'MiniMax M3.1 Flash', 'more', {
+    description: 'Long, thorough answers (slow)', maxContextChars: NVIDIA_CTX,
   }),
-  m('nvidia', 'nvidia/nemotron-3.5-bolt-e4b', 'Nemotron 3.5 Bolt', 'more', {
-    description: 'Small Nemotron (slow to start)', maxContextChars: NVIDIA_CTX, maxOutput: 4_096, firstEventMs: SLOW_START_MS,
-    flags: { reasoning: true, thinkFormat: 'tags' },
-  }),
-  // ---- Cloudflare (chosen from the public Workers AI list; confirm with the probe)
+  // ---- Cloudflare Workers AI
   m('cloudflare', '@cf/meta/llama-3.3-70b-instruct-fp8-fast', 'Llama 3.3 70B', 'cloudflare', {
-    description: 'Runs on the edge network', maxContextChars: 60_000, maxOutput: 4_096, unconfirmed: true,
+    description: 'Runs on the edge network', maxContextChars: CF_CTX, maxOutput: 4_096,
   }),
-  m('cloudflare', '@cf/meta/llama-3.1-8b-instruct-fast', 'Llama 3.1 8B', 'cloudflare', {
-    tier: 'fast', description: 'Small and quick, on the edge network', maxContextChars: 24_000, maxOutput: 2_048, unconfirmed: true,
+  m('cloudflare', '@cf/meta/llama-4-scout-17b-16e-instruct', 'Llama 4 Scout', 'cloudflare', {
+    description: 'Meta’s Llama 4, quick and capable', maxContextChars: CF_CTX, maxOutput: 4_096,
+  }),
+  m('cloudflare', '@cf/aisingapore/gemma-sea-lion-v4-27b-it', 'SEA-LION 4 27B', 'cloudflare', {
+    description: 'Strong in Southeast Asian languages', maxContextChars: CF_CTX, maxOutput: 4_096,
+  }),
+  m('cloudflare', '@cf/google/gemma-4-26b-a4b-it', 'Gemma 4 26B', 'cloudflare', {
+    description: 'Google’s open model, thinks first (slower)', maxContextChars: CF_CTX, maxOutput: 4_096,
+    flags: { reasoning: true, thinkFormat: 'field' },
+  }),
+  m('cloudflare', '@cf/ibm-granite/granite-4.0-h-micro', 'Granite 4.0 Micro', 'cloudflare', {
+    tier: 'fast', description: 'Small IBM model', maxContextChars: CF_CTX, maxOutput: 4_096,
   }),
 
-  // ---- Web search only (the `grounded` ladder; never in the picker): Google's
-  // pricing page (checked 2026-10-31) gives free Search grounding on the free
-  // tier to these two alone, 500 grounded requests a day shared between them.
-  // Every Gemini 3.x model says "Not available" there.
-  gemini('gemini-2.5-flash', 'Gemini 2.5 Flash', null, 'full', 'Answers with Google Search', { grounding: true, highParams: gemini25High }),
-  gemini('gemini-2.5-flash-lite', 'Gemini 2.5 Flash-Lite', null, 'fast', 'Answers with Google Search', { grounding: true, highParams: gemini25High, offParams: gemini25Off }),
+  // Web search only (the `grounded` ladder) held Gemini 2.5 Flash and 2.5 Flash-Lite, the
+  // two with free Google Search grounding. Both failed every request on 2026-11-12 (2.5 Pro
+  // is gone at Google), so web search now goes through the search API for every model.
 ];
 
 /**
@@ -231,23 +253,24 @@ export type LadderName = 'vision' | 'long' | 'deep' | 'code' | 'fast' | 'default
 
 /** Auto's ladders, best first (README.md (VinaX AI) "Auto"). */
 export const LADDERS: Readonly<Record<LadderName, readonly string[]>> = {
-  vision: ['gemini:gemini-3.6-flash', 'gemini:gemini-3.5-flash', 'nvidia:nvidia/nemotron-3.5-super-vl-120b-a12b', 'openrouter:nvidia/nemotron-3.5-super-vl:free'],
-  long: ['gemini:gemini-3.6-flash', 'gemini:gemini-3.5-flash', 'gemini:gemini-3-flash-preview', 'groq:openai/gpt-oss-120b'],
-  deep: ['gemini:gemini-3.6-flash', 'nvidia:nvidia/nemotron-3-ultra-550b-a55b', 'openrouter:nvidia/nemotron-3-ultra-550b-a55b:free', 'groq:openai/gpt-oss-120b'],
-  code: ['groq:openai/gpt-oss-120b', 'gemini:gemini-3.6-flash', 'openrouter:cohere/north-mini-code:free', 'openrouter:poolside/laguna-s-2.1:free'],
-  fast: ['groq:qwen/qwen3.8-27b', 'groq:openai/gpt-oss-20b', 'gemini:gemini-3.5-flash-lite'],
+  vision: ['gemini:gemini-3.6-flash', 'nvidia:nvidia/nemotron-3.5-super-vl-120b-a12b', 'nvidia:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', 'gemini:gemini-3.1-flash-lite', 'openrouter:nvidia/nemotron-3.5-super-vl:free'],
+  long: ['gemini:gemini-3.6-flash', 'gemini:gemini-3.1-flash-lite', 'nvidia:nvidia/nemotron-3-ultra-550b-a55b', 'cloudflare:@cf/openai/gpt-oss-120b'],
+  deep: ['gemini:gemini-3.6-flash', 'nvidia:nvidia/nemotron-3-ultra-550b-a55b', 'nvidia:nvidia/nemotron-3.5-lightning-30b-a3b', 'nvidia:mistralai/mistral-large-4-1t-a52b', 'groq:openai/gpt-oss-120b'],
+  code: ['groq:openai/gpt-oss-120b', 'nvidia:nvidia/nemotron-3-ultra-550b-a55b', 'cloudflare:@cf/openai/gpt-oss-120b', 'gemini:gemini-3.6-flash', 'openrouter:cohere/north-mini-code:free'],
+  fast: ['nvidia:nvidia/nemotron-3.5-bolt-e4b', 'cloudflare:@cf/meta/llama-3.1-8b-instruct-fast', 'gemini:gemini-3.1-flash-lite'],
+  /** Quick first answers that show their thinking: Groq, then NVIDIA, then the edge network. */
   default: [
-    'groq:openai/gpt-oss-120b', 'gemini:gemini-3.5-flash', 'nvidia:nvidia/nemotron-3.5-lightning-30b-a3b',
-    'openrouter:nvidia/nemotron-3.5-lightning:free', 'nvidia:openai/gpt-oss-20b', 'cloudflare:@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+    'groq:openai/gpt-oss-120b', 'nvidia:nvidia/nemotron-3-ultra-550b-a55b', 'cloudflare:@cf/openai/gpt-oss-120b',
+    'nvidia:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', 'gemini:gemini-3.6-flash', 'cloudflare:@cf/meta/llama-3.3-70b-instruct-fp8-fast',
   ],
-  title: ['groq:qwen/qwen3.8-27b', 'gemini:gemini-3.5-flash-lite'],
+  title: ['gemini:gemini-3.1-flash-lite', 'cloudflare:@cf/meta/llama-3.1-8b-instruct-fast', 'nvidia:nvidia/nemotron-3.5-bolt-e4b'],
   /**
    * The music routes' short JSON tasks (POST /api/ai/rerank, /api/ai/home-layout):
    * the quickest models first, because each answer has a deadline of 1.5–2.5 s.
    */
-  music: ['groq:openai/gpt-oss-20b', 'groq:qwen/qwen3.8-27b', 'gemini:gemini-3.5-flash-lite', 'cloudflare:@cf/meta/llama-3.1-8b-instruct-fast'],
-  /** Put first in Auto's ladder when a reply searches the web: free Google Search grounding. */
-  grounded: ['gemini:gemini-2.5-flash', 'gemini:gemini-2.5-flash-lite'],
+  music: ['cloudflare:@cf/meta/llama-3.1-8b-instruct-fast', 'nvidia:nvidia/nemotron-3.5-bolt-e4b', 'gemini:gemini-3.1-flash-lite'],
+  /** Put first in Auto's ladder when a reply searches the web: free Google Search grounding (none work now; see above). */
+  grounded: [],
 };
 
 /** The curated groups, then one group per provider for the free models found in its list (discovery.ts). */

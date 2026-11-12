@@ -9,7 +9,7 @@
  *     limits: { messagesPerMinute, imagesPerMessage, filesPerMessage, filesPerChat,
  *               pdfMB, pdfPages, textMB, searchesPerDay },   // see LIMIT_RANGES
  *     models: { "<model id>": { enabled, order } },
- *     discover: true,             // free models found in the providers' lists join the picker;
+ *     discover: true,             // off by default; true = free models found in the providers' lists join the picker;
  *                                 // false = none, { "<provider>": false } = not that provider's
  *     dailyLimit: 25 }            // messages per person per day (UTC); missing = no limit
  *
@@ -96,9 +96,14 @@ export function sanitizeAiSettings(raw: unknown): AiSettings {
 
 const DISCOVER_KEYS: readonly ProviderId[] = ['groq', 'gemini', 'openrouter', 'nvidia', 'cloudflare'];
 
+/**
+ * Off unless the owner switches it on (`true`, or an object naming providers
+ * to leave out): on 2026-11-12 70 of the 109 models found this way were gone
+ * at their provider and most others were rate-limited or timed out.
+ */
 function sanitizeDiscover(raw: unknown): AiSettings['discover'] {
-  if (raw === false) return false;
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return true;
+  if (raw === true) return true;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
   const off = DISCOVER_KEYS.filter((p) => (raw as Record<string, unknown>)[p] === false);
   return off.length ? Object.fromEntries(off.map((p) => [p, false])) as Partial<Record<ProviderId, false>> : true;
 }

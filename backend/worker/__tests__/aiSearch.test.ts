@@ -7,8 +7,8 @@ import {
   _resetSearch, applyMarkers, buildQuery, dailyLimit, hasRecencyCue, placeMarkers, searchWeb, toSources, topicOf, wantsSearch,
 } from '../functions/_lib/ai/search';
 import { gemini, geminiBody, groundingEvent } from '../functions/_lib/ai/adapters/gemini';
-import { MODELS, modelById } from '../functions/_lib/ai/models';
-import type { AiEnv, ChatRequest, ProviderEvent } from '../functions/_lib/ai/types';
+import { LADDERS, MODELS, modelById } from '../functions/_lib/ai/models';
+import type { AiEnv, ChatRequest, ModelSpec, ProviderEvent } from '../functions/_lib/ai/types';
 import { DB_ENV, fakeDb, type FakeDb } from './helpers/fakeDb';
 import { fixture, sseResponse } from './helpers/aiStreams';
 
@@ -142,15 +142,20 @@ describe('searchWeb', () => {
 });
 
 describe('grounding', () => {
+  // No curated model grounds since 2026-11-12 (the two 2.5 Flash models failed every
+  // request); the mechanism stays, so these tests use a grounding-capable Gemini spec.
+  const base = modelById(MODELS, 'gemini:gemini-3.1-flash-lite')!;
+  const grounder: ModelSpec = { ...base, id: 'gemini:test-grounded', upstream: 'test-grounded', group: null, flags: { ...base.flags, grounding: true } };
   const req = (over: Partial<ChatRequest> = {}): ChatRequest => ({
-    model: modelById(MODELS, 'gemini:gemini-2.5-flash')!, system: 'S', messages: [{ role: 'user', text: 'who won' }], maxOutputTokens: 100,
+    model: grounder, system: 'S', messages: [{ role: 'user', text: 'who won' }], maxOutputTokens: 100,
     reasoning: 'default', webSearch: true, signal: new AbortController().signal, ...over,
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('only the 2.5 Flash models ground; Gemini 3.x does not (not free on the free tier)', () => {
+  it('no curated model grounds (web search goes through the search API); a grounding model asks for Google Search only when searching', () => {
     const grounded = MODELS.filter((m) => m.flags.grounding).map((m) => m.id);
-    expect(grounded).toEqual(['gemini:gemini-2.5-flash', 'gemini:gemini-2.5-flash-lite']);
+    expect(grounded).toEqual([]);
+    expect(LADDERS.grounded).toEqual([]);
     expect(geminiBody(req())).toMatchObject({ tools: [{ googleSearch: {} }] });
     expect(geminiBody(req({ model: modelById(MODELS, 'gemini:gemini-3.6-flash')! }))).not.toHaveProperty('tools');
     expect(geminiBody(req({ webSearch: false }))).not.toHaveProperty('tools');

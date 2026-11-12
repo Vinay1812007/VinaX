@@ -14,7 +14,7 @@ import { _resetCooldowns } from '../functions/_lib/ai/cooldown';
 import { DB_ENV, fakeDb } from './helpers/fakeDb';
 import { openAiSse, sseResponse } from './helpers/aiStreams';
 
-const ENV = { GOOGLE_CLIENT_ID: 'x.apps.googleusercontent.com', AUTH_SECRET: 'auth-secret', GROQ_API_KEY: 'gsk-test', ...DB_ENV };
+const ENV = { GOOGLE_CLIENT_ID: 'x.apps.googleusercontent.com', AUTH_SECRET: 'auth-secret', NVIDIA_API_KEY: 'nv-test', ...DB_ENV };
 let ip = 0;
 
 const CANDIDATES = Array.from({ length: 6 }, (_, i) => ({ key: `c${i}`, language: 'telugu', mood: i % 2 ? 'chill' : 'energetic', energy: i / 6, genre: 'film', leadArtist: `Singer ${i}` }));
@@ -53,7 +53,7 @@ describe('POST /api/ai/rerank', () => {
     expect(res.status).toBe(200);
     const out = (await res.json()) as { order: Array<{ key: string; reason: string }>; model: string };
     expect(out.order).toEqual([{ key: 'c3', reason: 'Keeps the chill going' }, { key: 'c1', reason: 'A singer you play' }]);
-    expect(out.model).toMatch(/^groq:/);
+    expect(out.model).toMatch(/^nvidia:/);
     // The model got the summary and the candidates as material, and nothing else.
     const prompt = JSON.stringify(sent[0]);
     expect(prompt).toContain('Singer 1');
@@ -80,7 +80,7 @@ describe('POST /api/ai/rerank', () => {
   it('needs a session, a provider and the owner’s switch', async () => {
     upstreamAnswers('{"order":["c1"]}');
     expect((await call(BODY, { sub: null })).status).toBe(401);
-    expect((await call(BODY, { env: { ...ENV, GROQ_API_KEY: '' } })).status).toBe(503);
+    expect((await call(BODY, { env: { ...ENV, NVIDIA_API_KEY: '' } })).status).toBe(503);
     upstreamAnswers('{"order":["c1"]}', { rerank: false });
     resetSettingsMemo();
     const off = await call(BODY);

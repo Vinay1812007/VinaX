@@ -73,7 +73,7 @@ import { collect, openModel, textBody } from '../../_lib/ai/passthrough';
 import { sseFrame } from '../../_lib/ai/sse';
 import { artifactsOf } from '../../_lib/ai/artifacts';
 import { getProject, knowledgeFor, loadProjectContext, longKnowledge, withKnowledge } from '../../_lib/ai/projects';
-import { learnCandidates, learnFromChat, markIncognito, memoryBlock, memoryFor, shouldLearn } from '../../_lib/ai/memory';
+import { learnCandidates, learnFromChat, markIncognito, memoryBlock, memoryFor, NO_MEMORY, shouldLearn } from '../../_lib/ai/memory';
 import {
   createConversation, getConversation, insertMessage, isUuid, listMessages, MAX_MESSAGES, updateConversation, updateMessage,
   type ConversationRow, type MessageRow,
@@ -207,10 +207,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   // The owner's daily message limit per person (vinax-ai.dailyLimit). The
   // shared ai_take_daily counter refuses once the day's count is reached;
   // an unreadable counter lets the message through rather than lock people out.
-  if (settings.dailyLimit) {
-    const took = await db.rpc<boolean>(env, 'ai_take_daily', { p_kind: `msg:${sub}`, p_limit: settings.dailyLimit });
-    if (took.ok && took.value !== true) return json({ error: 'daily_limit', limit: settings.dailyLimit }, 429);
-  }
+  // Counted while the conversation loads; answered before anything is written.
+  const dailyJob = settings.dailyLimit ? db.rpc<boolean>(env, 'ai_take_daily', { p_kind: `msg:${sub}`, p_limit: settings.dailyLimit }) : null;
   const mode = body.mode === 'model' ? 'model' : 'auto';
   /** The page reads the provider's own lines (vinaxai/wire.ts); older pages get named text events. */
   const passthrough = body.passthrough === true;
@@ -234,21 +232,31 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   } else candidates = [];
 
   // The conversation and the message tree.
+  // The listener's name for the prompt, read while the rest is checked (it never blocks a refusal).
+  const accountJob = accountOf(env, sub).catch(() => ({ ok: false as const }));
   let conv: ConversationRow | null = null;
   let rows: MessageRow[] = [];
   if (isUuid(body.conversationId)) {
-    const c = await getConversation(env, sub, body.conversationId);
+    // Both at once; the messages are used only once the conversation is known to be this account's.
+    const [c, m] = await Promise.all([getConversation(env, sub, body.conversationId), listMessages(env, body.conversationId)]);
     if (!c.ok) return json({ error: 'unavailable' }, 503);
     if (!c.value) return json({ error: 'not_found' }, 404);
     conv = c.value;
-    const m = await listMessages(env, conv.id);
     if (!m.ok) return json({ error: 'unavailable' }, 503);
     rows = m.rows;
+  }
+  if (dailyJob) {
+    const took = await dailyJob;
+    if (took.ok && took.value !== true) return json({ error: 'daily_limit', limit: settings.dailyLimit }, 429);
   }
 
   let userMsg: MessageRow;
   /** A new message (not a retry or a Continue). */
   let fresh = false;
+  /** The new question's save, run while the model starts; the reply is saved only once it is in. */
+  let userSaved: Promise<boolean> = Promise.resolve(true);
+  /** This request made the conversation. */
+  let created = false;
   /** The cut-off reply being continued, if this is a Continue. */
   let continuing: MessageRow | null = null;
   if (isUuid(continueFrom)) {
@@ -306,7 +314,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       if (!made.ok) return made.code === '23503' ? json({ error: 'signed_out' }, 401) : json({ error: 'unavailable' }, 503);
       if (!made.rows[0]) return json({ error: 'unavailable' }, 503);
       conv = made.rows[0];
-      if (body.incognito === true) await markIncognito(env, sub, conv.id);
+      created = true;
     }
     const unlinked = newFiles.filter((a) => !a.conversation_id).map((a) => a.id);
     if (unlinked.length) {
@@ -315,8 +323,12 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     }
     // Files first, as the page shows them above the text.
     const row = { id: crypto.randomUUID(), conversation_id: conv.id, parent_id: parentId, role: 'user' as const, content: [...newFiles.map(attachmentPart), ...content.parts], created_at: new Date().toISOString() };
-    const saved = await insertMessage(env, row);
-    if (!saved.ok) return json({ error: 'unavailable' }, 503);
+    const convId = conv.id;
+    const markFirst = created && body.incognito === true;
+    userSaved = (async () => {
+      if (markFirst) await markIncognito(env, sub, convId);
+      return (await insertMessage(env, row)).ok;
+    })().catch(() => false);
     userMsg = { thinking: null, thinking_ms: null, sources: null, artifacts: null, model_id: null, provider: null, stop_reason: null, usage: null, ...row };
     fresh = true;
     rows = [...rows, userMsg];
@@ -333,6 +345,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     if (r.ok) for (const a of r.rows) fileRows.set(a.id, a);
   }
   const signals = fileSignals(turns, fileRows);
+  // Memory is read while the project loads and the search allowance is taken.
+  const memoryJob = memoryFor(env, sub, conversation.id, body.incognito === true).catch(() => NO_MEMORY);
   // The chat's project (its instructions and knowledge), when it has one.
   const project = await loadProjectContext(env, sub, conversation.project_id);
   const threadSize = (project?.chars ?? 0) + turns.reduce((n, t) => n + t.text.length + t.files.reduce((m, id) => m + (fileRows.get(id)?.extracted_text?.length ?? 0), 0), 0);
@@ -363,7 +377,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     }
   }
 
-  const [account, memory] = await Promise.all([accountOf(env, sub), memoryFor(env, sub, conversation.id, body.incognito === true)]);
+  const [account, memory] = await Promise.all([accountJob, memoryJob]);
   const memoryText = memoryBlock(memory, latestText);
   // Learning runs after a new message (not a retry or a Continue) on its turn.
   const learnNow = memory.learn && fresh && shouldLearn(pathRows.filter((r) => r.role === 'user').length, latestText);
@@ -530,7 +544,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
           relayed = { text: '', thinking: '' };
         }
         let raw: string | null = null;
-        try { raw = await opened.whole; } catch { raw = null; }
+        try { raw = await opened.whole(); } catch { raw = null; }
         opened.finish();
         if (raw === null) {
           // The reply broke off (time budget, network, Stop): the page keeps what it saw
@@ -572,7 +586,13 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     if (abort.signal.aborted) stop = 'aborted';
     // Give the title a moment to arrive in this stream; it is saved whenever it comes.
     if (titleJob && open) await Promise.race([titleJob, new Promise((r) => setTimeout(r, TITLE_WAIT_MS))]);
-    const savedReply = complete && (!abort.signal.aborted || !passthrough) && text.trim().length > 0;
+    // The question was saved while the model answered; without it the reply has nowhere to hang.
+    const userOk = await userSaved;
+    if (!userOk && stop !== 'error' && !abort.signal.aborted) {
+      stop = 'error';
+      send('error', { code: 'model_unavailable', message: 'VinaX AI couldn’t save this chat just now. Try again.', retryable: true });
+    }
+    const savedReply = userOk && complete && (!abort.signal.aborted || !passthrough) && text.trim().length > 0;
     send('done', { stopReason: stop, saved: savedReply || !!continuing, ...(usage ? { usage } : {}) });
     await chain;
     if (open) {
@@ -605,7 +625,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     }
     await updateConversation(env, sub, conversation.id, {
       updated_at: new Date().toISOString(),
-      active_leaf_id: savedReply || continuing ? assistantId : userMsg.id,
+      ...(userOk ? { active_leaf_id: savedReply || continuing ? assistantId : userMsg.id } : {}),
       model_pref: mode === 'model' ? model.id : 'auto',
     });
     if (titleJob) await titleJob;

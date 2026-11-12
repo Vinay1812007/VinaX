@@ -45,7 +45,21 @@
     babel: CDN + 'babel-standalone/7.26.10/babel.min.js',
     mermaid: CDN + 'mermaid/11.12.0/mermaid.min.js',
     tailwind: 'https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3/dist/index.global.js',
-    lucide: 'https://cdn.jsdelivr.net/npm/lucide@1.57.0/dist/umd/lucide.min.js'
+    lucide: 'https://cdn.jsdelivr.net/npm/lucide@1.57.0/dist/umd/lucide.min.js',
+    // Loaded only when a component imports them (the same set Claude's artifacts offer).
+    d3: CDN + 'd3/7.9.0/d3.min.js',
+    three: CDN + 'three.js/r128/three.min.js',
+    chartjs: CDN + 'Chart.js/4.4.1/chart.umd.min.js',
+    plotly: CDN + 'plotly.js/2.34.0/plotly.min.js',
+    lodash: CDN + 'lodash.js/4.17.21/lodash.min.js',
+    mathjs: CDN + 'mathjs/13.2.0/math.min.js',
+    papaparse: CDN + 'PapaParse/5.4.1/papaparse.min.js'
+  };
+  /** Import name -> the library it needs (a shim module is made from its global). */
+  var OPTIONAL = {
+    d3: 'd3', three: 'three', 'chart.js': 'chartjs', 'chart.js/auto': 'chartjs', 'react-chartjs-2': 'chartjs',
+    'plotly.js': 'plotly', 'plotly.js-dist': 'plotly', 'plotly.js-dist-min': 'plotly', 'react-plotly.js': 'plotly',
+    lodash: 'lodash', 'lodash-es': 'lodash', mathjs: 'mathjs', papaparse: 'papaparse'
   };
   var root = document.getElementById('root');
   var parentOrigin = null;
@@ -81,6 +95,21 @@
     post({ type: 'error', message: String(err && err.message || err).slice(0, 500) });
   }
 
+  /**
+   * Pages often load a library from jsDelivr or unpkg, which this page's
+   * policy does not allow: the common ones are pointed at the same library on
+   * cdnjs instead (any other such script still fails, and says so).
+   */
+  var CDNJS_FOR = {
+    'chart.js': LIBS.chartjs, d3: LIBS.d3, 'plotly.js': LIBS.plotly, 'plotly.js-dist': LIBS.plotly, 'plotly.js-dist-min': LIBS.plotly,
+    three: LIBS.three, lodash: LIBS.lodash, mathjs: LIBS.mathjs, papaparse: LIBS.papaparse, mermaid: LIBS.mermaid,
+    react: LIBS.react, 'react-dom': LIBS.reactDom, '@babel/standalone': LIBS.babel, recharts: LIBS.recharts
+  };
+  function cdnjsScripts(html) {
+    return String(html).replace(/(<script\b[^>]*\bsrc\s*=\s*["'])(https?:\/\/(?:cdn\.jsdelivr\.net\/npm|unpkg\.com)\/((?:@[\w.-]+\/)?[\w.-]+)(?:@[^/"']*)?[^"']*)(["'])/gi,
+      function (all, open, url, pkg, close) { return CDNJS_FOR[pkg.toLowerCase()] ? open + CDNJS_FOR[pkg.toLowerCase()] + close : all; });
+  }
+
   function renderHtml(content) {
     // A nested frame keeps this page (and its message listener) alive and
     // gives the artifact a blank document of its own.
@@ -88,7 +117,7 @@
     f.className = 'frame';
     f.setAttribute('sandbox', 'allow-scripts allow-modals allow-forms allow-popups');
     f.setAttribute('title', 'HTML preview');
-    f.srcdoc = content;
+    f.srcdoc = cdnjsScripts(content);
     root.appendChild(f);
   }
 
@@ -230,11 +259,148 @@
     } });
   }
 
+  /** Every module name the component imports or requires. */
+  function importsOf(src) {
+    var out = [];
+    var re = /(?:\bfrom\s*|\bimport\s*|\brequire\s*\(\s*)['"]([^'"]+)['"]/g;
+    var m;
+    while ((m = re.exec(src))) if (out.indexOf(m[1]) < 0) out.push(m[1]);
+    return out;
+  }
+
+  /** A module object from a library global: its members, plus itself as the default. */
+  function asModule(lib) {
+    var mod = Object.assign({}, lib);
+    mod.default = lib;
+    mod.__esModule = true;
+    return mod;
+  }
+
+  /** react-chartjs-2's chart components, drawn with Chart.js on a canvas. */
+  function reactChartjs(React) {
+    var Chart = window.Chart;
+    function make(type) {
+      var C = React.forwardRef(function (props, ref) {
+        var canvas = React.useRef(null);
+        var chart = React.useRef(null);
+        React.useEffect(function () {
+          if (!canvas.current) return undefined;
+          chart.current = new Chart(canvas.current, { type: props.type || type, data: props.data, options: props.options, plugins: props.plugins });
+          if (typeof ref === 'function') ref(chart.current); else if (ref) ref.current = chart.current;
+          return function () { chart.current && chart.current.destroy(); chart.current = null; };
+        }, [props.data, props.options, props.type]);
+        var rest = { ref: canvas, role: 'img', width: props.width, height: props.height, className: props.className, style: props.style };
+        return React.createElement('canvas', rest);
+      });
+      C.displayName = type;
+      return C;
+    }
+    return { __esModule: true, Chart: make('bar'), Bar: make('bar'), Line: make('line'), Pie: make('pie'), Doughnut: make('doughnut'),
+      Radar: make('radar'), PolarArea: make('polarArea'), Scatter: make('scatter'), Bubble: make('bubble') };
+  }
+
+  /** react-plotly.js's Plot component. */
+  function reactPlotly(React) {
+    var Plot = function (props) {
+      var box = React.useRef(null);
+      React.useEffect(function () {
+        if (!box.current) return undefined;
+        var el = box.current;
+        window.Plotly.react(el, props.data || [], Object.assign({ autosize: true }, props.layout), Object.assign({ responsive: true, displaylogo: false }, props.config));
+        return function () { window.Plotly.purge(el); };
+      }, [props.data, props.layout, props.config]);
+      return React.createElement('div', { ref: box, className: props.className, style: Object.assign({ width: '100%', minHeight: 300 }, props.style) });
+    };
+    return { __esModule: true, default: Plot };
+  }
+
+  /**
+   * shadcn/ui's common components (`@/components/ui/...`), as plain Tailwind
+   * versions, so components written for it still render.
+   */
+  function shadcn(React) {
+    var h = React.createElement;
+    var cx = function () { return Array.prototype.filter.call(arguments, Boolean).join(' '); };
+    var el = function (tag, base, name) {
+      var C = React.forwardRef(function (p, ref) {
+        var props = Object.assign({}, p, { ref: ref, className: cx(base, p.className) });
+        delete props.asChild; delete props.variant; delete props.size;
+        return h(tag, props);
+      });
+      C.displayName = name;
+      return C;
+    };
+    var BTN = { default: 'bg-zinc-900 text-white hover:bg-zinc-800', destructive: 'bg-red-600 text-white hover:bg-red-500', outline: 'border border-zinc-300 bg-transparent hover:bg-zinc-100', secondary: 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200', ghost: 'hover:bg-zinc-100', link: 'underline-offset-4 hover:underline' };
+    var SIZE = { default: 'h-9 px-4 py-2', sm: 'h-8 px-3 text-xs', lg: 'h-10 px-8', icon: 'h-9 w-9' };
+    var Button = React.forwardRef(function (p, ref) {
+      var props = Object.assign({}, p, { ref: ref, className: cx('inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50', BTN[p.variant || 'default'], SIZE[p.size || 'default'], p.className) });
+      delete props.asChild; delete props.variant; delete props.size;
+      return h('button', props);
+    });
+    var TabsCtx = React.createContext({ value: '', set: function () {} });
+    var Tabs = function (p) {
+      var st = React.useState(p.defaultValue || '');
+      var value = p.value != null ? p.value : st[0];
+      var set = function (v) { st[1](v); if (p.onValueChange) p.onValueChange(v); };
+      return h(TabsCtx.Provider, { value: { value: value, set: set } }, h('div', { className: p.className }, p.children));
+    };
+    var TabsTrigger = function (p) {
+      var c = React.useContext(TabsCtx);
+      var on = c.value === p.value;
+      return h('button', { type: 'button', role: 'tab', 'aria-selected': on, onClick: function () { c.set(p.value); },
+        className: cx('inline-flex items-center justify-center rounded px-3 py-1 text-sm font-medium', on ? 'bg-white text-zinc-900 shadow' : 'text-zinc-500', p.className) }, p.children);
+    };
+    var TabsContent = function (p) {
+      var c = React.useContext(TabsCtx);
+      return c.value === p.value ? h('div', { role: 'tabpanel', className: cx('mt-2', p.className) }, p.children) : null;
+    };
+    var Progress = function (p) {
+      return h('div', { className: cx('relative h-2 w-full overflow-hidden rounded-full bg-zinc-200', p.className) },
+        h('div', { className: 'h-full bg-zinc-900 transition-all', style: { width: Math.max(0, Math.min(100, p.value || 0)) + '%' } }));
+    };
+    var Slider = function (p) {
+      var v = (p.value || p.defaultValue || [0])[0];
+      var st = React.useState(v);
+      var cur = p.value ? p.value[0] : st[0];
+      return h('input', { type: 'range', min: p.min || 0, max: p.max != null ? p.max : 100, step: p.step || 1, value: cur, className: cx('w-full', p.className),
+        onChange: function (e) { var n = Number(e.target.value); st[1](n); if (p.onValueChange) p.onValueChange([n]); } });
+    };
+    var Switch = function (p) {
+      var st = React.useState(!!p.defaultChecked);
+      var on = p.checked != null ? p.checked : st[0];
+      return h('button', { type: 'button', role: 'switch', 'aria-checked': on, onClick: function () { st[1](!on); if (p.onCheckedChange) p.onCheckedChange(!on); },
+        className: cx('inline-flex h-5 w-9 items-center rounded-full transition-colors', on ? 'bg-zinc-900' : 'bg-zinc-300', p.className) },
+        h('span', { className: cx('block h-4 w-4 rounded-full bg-white shadow transition-transform', on ? 'translate-x-4' : 'translate-x-0.5') }));
+    };
+    var ui = {
+      Card: el('div', 'rounded-xl border border-zinc-200 bg-white text-zinc-900 shadow-sm', 'Card'),
+      CardHeader: el('div', 'flex flex-col gap-1.5 p-6', 'CardHeader'),
+      CardTitle: el('h3', 'font-semibold leading-none tracking-tight', 'CardTitle'),
+      CardDescription: el('p', 'text-sm text-zinc-500', 'CardDescription'),
+      CardContent: el('div', 'p-6 pt-0', 'CardContent'),
+      CardFooter: el('div', 'flex items-center p-6 pt-0', 'CardFooter'),
+      Button: Button,
+      Input: el('input', 'flex h-9 w-full rounded-md border border-zinc-300 bg-transparent px-3 py-1 text-sm', 'Input'),
+      Textarea: el('textarea', 'flex min-h-[60px] w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-sm', 'Textarea'),
+      Label: el('label', 'text-sm font-medium leading-none', 'Label'),
+      Badge: el('span', 'inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold', 'Badge'),
+      Separator: el('div', 'h-px w-full bg-zinc-200', 'Separator'),
+      Alert: el('div', 'relative w-full rounded-lg border px-4 py-3 text-sm', 'Alert'),
+      AlertTitle: el('h5', 'mb-1 font-medium leading-none', 'AlertTitle'),
+      AlertDescription: el('div', 'text-sm', 'AlertDescription'),
+      Tabs: Tabs, TabsList: el('div', 'inline-flex h-9 items-center rounded-lg bg-zinc-100 p-1', 'TabsList'), TabsTrigger: TabsTrigger, TabsContent: TabsContent,
+      Progress: Progress, Slider: Slider, Switch: Switch
+    };
+    ui.__esModule = true;
+    return ui;
+  }
+
   async function renderReact(content) {
     await load(LIBS.react);
     await load(LIBS.reactDom);
     await load(LIBS.propTypes);
-    await Promise.all([load(LIBS.babel), load(LIBS.recharts), load(LIBS.tailwind), load(LIBS.lucide)]);
+    var wanted = importsOf(content).map(function (n) { return OPTIONAL[n]; }).filter(Boolean);
+    await Promise.all([load(LIBS.babel), load(LIBS.recharts), load(LIBS.tailwind), load(LIBS.lucide)].concat(wanted.map(function (k) { return load(LIBS[k]); })));
     var code = window.Babel.transform(content, {
       presets: [['react', { runtime: 'classic' }]],
       plugins: ['transform-modules-commonjs'],
@@ -248,10 +414,40 @@
       recharts: window.Recharts,
       'lucide-react': lucideReact(React)
     };
+    if (window.d3) modules.d3 = asModule(window.d3);
+    if (window.THREE) modules.three = asModule(window.THREE);
+    if (window.Chart) {
+      // The UMD build registers every chart part already: registering again is a no-op, and a
+      // part this build does not name (undefined) is skipped instead of throwing.
+      var Chart = window.Chart;
+      if (!Chart.__vx) {
+        var register = Chart.register.bind(Chart);
+        Chart.register = function () { return register.apply(null, Array.prototype.filter.call(arguments, Boolean)); };
+        Chart.__vx = true;
+      }
+      modules['chart.js'] = new Proxy({}, { get: function (_t, name) {
+        if (name === '__esModule') return true;
+        if (name === 'default' || name === 'Chart') return Chart;
+        if (name === 'registerables') return [];
+        return Chart[name];
+      } });
+      modules['chart.js/auto'] = modules['chart.js'];
+      modules['react-chartjs-2'] = reactChartjs(React);
+    }
+    if (window.Plotly) {
+      modules['plotly.js'] = modules['plotly.js-dist'] = modules['plotly.js-dist-min'] = asModule(window.Plotly);
+      modules['react-plotly.js'] = reactPlotly(React);
+    }
+    if (window._) modules.lodash = modules['lodash-es'] = asModule(window._);
+    if (window.math) modules.mathjs = asModule(window.math);
+    if (window.Papa) modules.papaparse = asModule(window.Papa);
+    var ui = null;
     var module = { exports: {} };
     var require = function (name) {
       if (Object.prototype.hasOwnProperty.call(modules, name)) return modules[name];
-      throw new Error('"' + name + '" is not available in previews. React, lucide-react and recharts are.');
+      // shadcn/ui: "@/components/ui/card", "components/ui/button", ...
+      if (/(^|\/)components\/ui\//.test(name)) return (ui = ui || shadcn(React));
+      throw new Error('"' + name + '" is not available in previews. React, recharts, lucide-react, d3, three, chart.js, react-chartjs-2, plotly, lodash, mathjs, papaparse and shadcn/ui are.');
     };
     // eslint-disable-next-line no-new-func
     new Function('require', 'module', 'exports', 'React', code)(require, module, module.exports, React);
