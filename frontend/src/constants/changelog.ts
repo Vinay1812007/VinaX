@@ -18,6 +18,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.3': {
+    title: 'VinaX AI previews load three.js from an exact version',
+    changes: [
+      { type: 'improved', text: 'The runner\'s three.js address used the r128 tag, which the sandbox check (cspArtifacts.test.ts) rejects: every library must name an exact version. 0.149.0 is the same browser build with a numbered address.' },
+    ],
+  },
   '1.13.2': {
     title: 'VinaX AI streams replies as they are written, thinks like Claude, and uses only models…',
     changes: [
