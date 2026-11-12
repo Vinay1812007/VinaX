@@ -18,6 +18,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.9': {
+    title: 'VinaX AI has Claude models in the model menu',
+    changes: [
+      { type: 'new', text: 'The model menu has a new Claude group: Claude Opus 5.5, Sonnet 5.5, Haiku 5.5 and Fable 5.2.' },
+      { type: 'improved', text: 'Claude is open only to the owner\'s account for now; everyone else sees it locked.' },
+      { type: 'improved', text: 'Claude thinks as hard as the Thinking menu asks, from Fast to Maximum, and shows its reasoning above the reply.' },
+    ],
+  },
   '1.13.8': {
     title: 'VinaX AI answers quickly again: Auto starts with models that work',
     changes: [
