@@ -372,6 +372,22 @@
         className: cx('inline-flex h-5 w-9 items-center rounded-full transition-colors', on ? 'bg-zinc-900' : 'bg-zinc-300', p.className) },
         h('span', { className: cx('block h-4 w-4 rounded-full bg-white shadow transition-transform', on ? 'translate-x-4' : 'translate-x-0.5') }));
     };
+    var Checkbox = function (p) {
+      var st = React.useState(!!p.defaultChecked);
+      var on = p.checked != null ? !!p.checked : st[0];
+      return h('input', { type: 'checkbox', id: p.id, checked: on, disabled: p.disabled, className: cx('h-4 w-4 rounded border-zinc-300', p.className),
+        onChange: function (e) { st[1](e.target.checked); if (p.onCheckedChange) p.onCheckedChange(e.target.checked); if (p.onChange) p.onChange(e); } });
+    };
+    /** Not a shadcn component, but models often import one: a heading or paragraph by `variant`. */
+    var TYPE = { h1: ['h1', 'text-3xl font-bold tracking-tight'], h2: ['h2', 'text-2xl font-semibold tracking-tight'], h3: ['h3', 'text-xl font-semibold'], h4: ['h4', 'text-lg font-semibold'],
+      h5: ['h5', 'font-semibold'], h6: ['h6', 'font-semibold'], p: ['p', 'leading-7'], lead: ['p', 'text-lg text-zinc-500'], large: ['div', 'text-lg font-semibold'],
+      small: ['small', 'text-sm font-medium'], muted: ['p', 'text-sm text-zinc-500'], body1: ['p', 'leading-7'], body2: ['p', 'text-sm'], caption: ['span', 'text-xs text-zinc-500'] };
+    var Typography = function (p) {
+      var t = TYPE[p.variant] || TYPE.p;
+      var props = Object.assign({}, p, { className: cx(t[1], p.className) });
+      delete props.variant; delete props.as;
+      return h(p.as || t[0], props);
+    };
     var ui = {
       Card: el('div', 'rounded-xl border border-zinc-200 bg-white text-zinc-900 shadow-sm', 'Card'),
       CardHeader: el('div', 'flex flex-col gap-1.5 p-6', 'CardHeader'),
@@ -389,7 +405,15 @@
       AlertTitle: el('h5', 'mb-1 font-medium leading-none', 'AlertTitle'),
       AlertDescription: el('div', 'text-sm', 'AlertDescription'),
       Tabs: Tabs, TabsList: el('div', 'inline-flex h-9 items-center rounded-lg bg-zinc-100 p-1', 'TabsList'), TabsTrigger: TabsTrigger, TabsContent: TabsContent,
-      Progress: Progress, Slider: Slider, Switch: Switch
+      Progress: Progress, Slider: Slider, Switch: Switch,
+      Checkbox: Checkbox, Typography: Typography,
+      Table: el('table', 'w-full caption-bottom text-sm', 'Table'),
+      TableHeader: el('thead', 'border-b', 'TableHeader'),
+      TableBody: el('tbody', '', 'TableBody'),
+      TableRow: el('tr', 'border-b border-zinc-200', 'TableRow'),
+      TableHead: el('th', 'h-10 px-2 text-left align-middle font-medium text-zinc-500', 'TableHead'),
+      TableCell: el('td', 'p-2 align-middle', 'TableCell'),
+      TableCaption: el('caption', 'mt-4 text-sm text-zinc-500', 'TableCaption')
     };
     ui.__esModule = true;
     return ui;
@@ -445,8 +469,8 @@
     var module = { exports: {} };
     var require = function (name) {
       if (Object.prototype.hasOwnProperty.call(modules, name)) return modules[name];
-      // shadcn/ui: "@/components/ui/card", "components/ui/button", ...
-      if (/(^|\/)components\/ui\//.test(name)) return (ui = ui || shadcn(React));
+      // shadcn/ui: "@/components/ui/card", "components/ui/button", "@shadcn/ui", "shadcn/ui", ...
+      if (/(^|\/)components\/ui(\/|$)|^@?shadcn(\/ui)?(\/|$)/.test(name)) return (ui = ui || shadcn(React));
       throw new Error('"' + name + '" is not available in previews. React, recharts, lucide-react, d3, three, chart.js, react-chartjs-2, plotly, lodash, mathjs, papaparse and shadcn/ui are.');
     };
     // eslint-disable-next-line no-new-func
