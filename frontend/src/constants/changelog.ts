@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.2': {
+    title: 'VinaX AI streams replies as they are written, thinks like Claude, and uses only models…',
+    changes: [
+      { type: 'improved', text: 'Replies appear word by word again instead of all at once at the end, so answers start showing in a second or two.' },
+      { type: 'improved', text: '"Thinking… 4s" shows the moment you send; the reasoning streams into a small box you can fold or open any time, then folds to "Thought for 12s".' },
+      { type: 'improved', text: 'Only models that answered in a full check of all 146 are offered; Auto now tries quick, reliable models first (GPT-OSS 120B, Nemotron 3 Ultra, then Cloudflare and Gemini).' },
+      { type: 'improved', text: 'Gemini thinks less by default, so its answers come much sooner (Extended thinking still thinks hard).' },
+    ],
+  },
   '1.13.1': {
     title: 'VinaX AI finishes long answers instead of cutting them off',
     changes: [
