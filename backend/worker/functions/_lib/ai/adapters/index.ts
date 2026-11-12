@@ -2,9 +2,9 @@
 import { gemini } from './gemini';
 import { groq, nvidia, openrouter } from './openaiCompat';
 import { workersAi } from './workersAi';
-import type { Adapter, AiEnv, ProviderId } from '../types';
+import type { AiEnv, ProviderId, WireAdapter } from '../types';
 
-export const ADAPTERS: Readonly<Record<ProviderId, Adapter>> = { groq, gemini, openrouter, nvidia, cloudflare: workersAi };
+export const ADAPTERS: Readonly<Record<ProviderId, WireAdapter>> = { groq, gemini, openrouter, nvidia, cloudflare: workersAi };
 
 export const PROVIDER_NAMES: Readonly<Record<ProviderId, string>> = {
   groq: 'Groq',

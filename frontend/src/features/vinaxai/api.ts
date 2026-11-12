@@ -5,7 +5,8 @@
  */
 import { currentAccount } from '@/services/auth/google';
 import { isNativePlatform } from '@/services/native';
-import { SseParser } from './sse';
+import { SseParser, type ChatStreamItem } from './sse';
+import { WireReader, wireOf } from './wire';
 import type { ConversationSummary, GalleryArtifact, GalleryItem, MemoryItem, MemoryPrefs, MemoryState, ModelsResponse, Project, ProjectDetail, ServerConversation, ServerMessage, SharedChat, ShareSummary, StreamEvent } from './types';
 import { setFileLimits } from './files';
 
@@ -190,6 +191,8 @@ export interface ChatRequestBody {
   projectId?: string;
   /** An incognito chat: no memory is read or written. */
   incognito?: boolean;
+  /** Read the provider's own lines (wire.ts); always sent by this page. */
+  passthrough?: boolean;
 }
 
 // ---------- voice (phase 6) ----------
@@ -302,7 +305,7 @@ export function noticeFor(code: string): string {
 export async function streamChat(body: ChatRequestBody, onEvent: (ev: StreamEvent) => void, signal: AbortSignal): Promise<void> {
   let res: Response;
   try {
-    res = await fetch(`${AI_BASE}/chat`, { method: 'POST', headers: { ...headers(true), accept: 'text/event-stream' }, body: JSON.stringify(body), signal });
+    res = await fetch(`${AI_BASE}/chat`, { method: 'POST', headers: { ...headers(true), accept: 'text/event-stream' }, body: JSON.stringify({ ...body, passthrough: true }), signal });
   } catch (e) {
     if (signal.aborted) throw e;
     throw new AiError(0, 'network');
@@ -312,11 +315,45 @@ export async function streamChat(body: ChatRequestBody, onEvent: (ev: StreamEven
     throw new AiError(res.status, typeof err.error === 'string' ? err.error : `http_${res.status}`);
   }
   const parser = new SseParser();
+  // The provider's own lines arrive between the Worker's events (wire.ts).
+  let wire = new WireReader('openai');
+  let inRaw = false;
+  const handle = (items: ChatStreamItem[]): void => {
+    for (const ev of items) {
+      if (ev.event === 'raw') {
+        inRaw = true;
+        for (const d of wire.push(ev.data)) onEvent(d);
+        continue;
+      }
+      if (inRaw) {
+        inRaw = false;
+        for (const d of wire.end()) onEvent(d);
+      }
+      if (ev.event === 'meta') wire = new WireReader(wireOf(ev.data.wire));
+      onEvent(ev);
+    }
+  };
   const reader = res.body.getReader();
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    for (const ev of parser.push(value)) onEvent(ev);
+    handle(parser.push(value));
   }
-  for (const ev of parser.end()) onEvent(ev);
+  handle(parser.end());
+  if (inRaw) for (const d of wire.end()) onEvent(d);
+}
+
+/** What the page saw of a reply that did not end on its own (POST /api/ai/keep). */
+export interface KeepBody {
+  conversationId: string;
+  userMessageId: string;
+  assistantMessageId: string;
+  text: string;
+  thinking?: string;
+  model?: string;
+  stopReason: 'aborted' | 'error';
+}
+
+export function keepReply(body: KeepBody): Promise<{ ok: boolean; saved: boolean }> {
+  return call<{ ok: boolean; saved: boolean }>('/keep', { method: 'POST', body: JSON.stringify(body) });
 }

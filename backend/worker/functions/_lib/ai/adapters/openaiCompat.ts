@@ -13,7 +13,7 @@ import { classifyHttp, errorText, ProviderError } from '../errors';
 import { parseJson, sseData } from '../sse';
 import { ThinkSplitter } from '../think';
 import { wireMessages } from '../wire';
-import type { Adapter, AiEnv, ChatRequest, ProviderEvent } from '../types';
+import type { AiEnv, ChatRequest, ProviderEvent, WireAdapter } from '../types';
 
 export interface OpenAiCompatOptions {
   url: string;
@@ -53,42 +53,54 @@ export function requestBody(req: ChatRequest): Record<string, unknown> {
 const finish = (r: string | null | undefined): 'stop' | 'length' | 'content_filter' | null =>
   !r ? null : r === 'length' ? 'length' : r === 'content_filter' ? 'content_filter' : 'stop';
 
-export function openAiCompatAdapter(opts: OpenAiCompatOptions): Adapter {
+/** Reads an OpenAI-style SSE body into events. */
+export async function* parseOpenAiStream(body: ReadableStream<Uint8Array> | null, signal?: AbortSignal): AsyncGenerator<ProviderEvent> {
+  const split = new ThinkSplitter();
+  let reason: 'stop' | 'length' | 'content_filter' = 'stop';
+  let usage: { input: number; output: number } | null = null;
+  for await (const data of sseData(body, signal)) {
+    const j = parseJson<Chunk>(data);
+    if (!j) continue;
+    if (j.error) {
+      const code = Number(j.error.code);
+      throw classifyHttp(Number.isFinite(code) && code >= 400 ? code : 502, null, String(j.error.message ?? ''));
+    }
+    const choice = j.choices?.[0];
+    const delta = choice?.delta;
+    const thought = delta?.reasoning ?? delta?.reasoning_content;
+    if (thought) yield* split.reasoning(thought);
+    if (delta?.content) yield* split.push(delta.content);
+    const f = finish(choice?.finish_reason);
+    if (f) reason = f;
+    const u = j.usage ?? j.x_groq?.usage;
+    if (u) usage = { input: u.prompt_tokens ?? 0, output: u.completion_tokens ?? 0 };
+  }
+  yield* split.end();
+  if (!split.sawText) throw new ProviderError('empty');
+  if (usage) yield { type: 'usage', ...usage };
+  yield { type: 'end', reason };
+}
+
+export function openAiCompatAdapter(opts: OpenAiCompatOptions): WireAdapter {
+  const open = async (env: AiEnv, req: ChatRequest): Promise<ReadableStream<Uint8Array>> => {
+    const key = opts.key(env)?.trim();
+    if (!key) throw new ProviderError('not_configured');
+    const res = await fetch(opts.url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'text/event-stream', authorization: `Bearer ${key}`, ...opts.headers },
+      body: JSON.stringify(requestBody(req)),
+      signal: req.signal,
+    });
+    if (!res.ok) throw classifyHttp(res.status, res.headers, await errorText(res));
+    if (!res.body) throw new ProviderError('empty');
+    return res.body;
+  };
   return {
+    wire: 'openai',
+    open,
+    parse: parseOpenAiStream,
     async *stream(env: AiEnv, req: ChatRequest): AsyncGenerator<ProviderEvent> {
-      const key = opts.key(env)?.trim();
-      if (!key) throw new ProviderError('not_configured');
-      const res = await fetch(opts.url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'text/event-stream', authorization: `Bearer ${key}`, ...opts.headers },
-        body: JSON.stringify(requestBody(req)),
-        signal: req.signal,
-      });
-      if (!res.ok) throw classifyHttp(res.status, res.headers, await errorText(res));
-      const split = new ThinkSplitter();
-      let reason: 'stop' | 'length' | 'content_filter' = 'stop';
-      let usage: { input: number; output: number } | null = null;
-      for await (const data of sseData(res.body, req.signal)) {
-        const j = parseJson<Chunk>(data);
-        if (!j) continue;
-        if (j.error) {
-          const code = Number(j.error.code);
-          throw classifyHttp(Number.isFinite(code) && code >= 400 ? code : 502, null, String(j.error.message ?? ''));
-        }
-        const choice = j.choices?.[0];
-        const delta = choice?.delta;
-        const thought = delta?.reasoning ?? delta?.reasoning_content;
-        if (thought) yield* split.reasoning(thought);
-        if (delta?.content) yield* split.push(delta.content);
-        const f = finish(choice?.finish_reason);
-        if (f) reason = f;
-        const u = j.usage ?? j.x_groq?.usage;
-        if (u) usage = { input: u.prompt_tokens ?? 0, output: u.completion_tokens ?? 0 };
-      }
-      yield* split.end();
-      if (!split.sawText) throw new ProviderError('empty');
-      if (usage) yield { type: 'usage', ...usage };
-      yield { type: 'end', reason };
+      yield* parseOpenAiStream(await open(env, req), req.signal);
     },
   };
 }

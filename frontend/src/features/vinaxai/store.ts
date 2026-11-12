@@ -6,8 +6,8 @@
  */
 import { create } from 'zustand';
 import { queryClient } from '@/services/queryClient';
-import { AiError, noticeFor, patchConversation, streamChat, type ChatRequestBody } from './api';
-import { chatReducer, initialChat, leafUnder, parentForNext, type ChatAction, type ChatState } from './chatState';
+import { AiError, keepReply, noticeFor, patchConversation, streamChat, type ChatRequestBody } from './api';
+import { chatReducer, initialChat, leafUnder, parentForNext, unansweredQuestion, type ChatAction, type ChatState } from './chatState';
 import { personalOf, usePrefs } from './prefs';
 import type { FileRef, StreamEvent } from './types';
 
@@ -63,15 +63,58 @@ function requestBase(choice?: ModelChoice): Pick<ChatRequestBody, 'mode' | 'mode
 /** `beforeStart`: nothing was saved, so the page puts the text back in the composer. */
 export type RunOutcome = { ok: true } | { ok: false; code: string; beforeStart: boolean };
 
-async function run(body: ChatRequestBody): Promise<RunOutcome> {
+type Meta = Extract<StreamEvent, { event: 'meta' }>['data'];
+
+/**
+ * The Worker passes the model's bytes straight through, so a reply that did
+ * not end on its own (Stop, a stream that broke off) is only whole here: the
+ * page saves what it showed (POST /api/ai/keep). A Continue is left out (its
+ * text joins a reply the server already has).
+ */
+function keepSeen(meta: Meta | null, stopReason: 'aborted' | 'error'): void {
+  if (!meta || meta.continued) return;
+  const reply = useChatStore.getState().messages[meta.assistantMessageId];
+  if (!reply || !reply.text.trim()) return;
+  void keepReply({
+    conversationId: meta.conversationId, userMessageId: meta.userMessageId, assistantMessageId: meta.assistantMessageId,
+    text: reply.text, ...(reply.thinking ? { thinking: reply.thinking } : {}), model: meta.model.id, stopReason,
+  }).then(refreshList).catch(() => undefined);
+}
+
+/** No answer text arrived for this reply (only reasoning, or nothing). */
+const noAnswerYet = (meta: Meta | null): boolean => {
+  const reply = meta ? useChatStore.getState().messages[meta.assistantMessageId] : undefined;
+  return !reply?.text.trim();
+};
+
+async function run(body: ChatRequestBody, attempt = 0): Promise<RunOutcome> {
   inflight?.abort();
   const ctl = new AbortController();
   inflight = ctl;
-  let sawMeta = false;
-  let sawDone = false;
+  let meta: Meta | null = null;
+  let done: Extract<StreamEvent, { event: 'done' }>['data'] | null = null;
   const failAfterStart = (code: string): void => {
     enqueue({ event: 'error', data: { code, message: code === 'network' ? 'The connection dropped before the reply finished.' : noticeFor(code), retryable: true } });
     enqueue({ event: 'done', data: { stopReason: 'error' } });
+  };
+  /**
+   * The stream broke off after it began. Before any answer text, ask once
+   * more by itself (the same question, a fresh reply); otherwise show the
+   * error and keep the text that arrived.
+   */
+  const brokeOff = (code: string): Promise<RunOutcome> | RunOutcome => {
+    const m = meta;
+    if (m && attempt === 0 && !body.continueFrom && noAnswerYet(m)) {
+      dispatch({ type: 'stopped' });
+      dispatch({ type: 'retry', userId: m.userMessageId, now: new Date().toISOString() });
+      const again: ChatRequestBody = { ...body, conversationId: m.conversationId, parentMessageId: m.userMessageId, content: [] };
+      delete again.projectId;
+      if (inflight === ctl) inflight = null;
+      return run(again, attempt + 1);
+    }
+    failAfterStart(code);
+    keepSeen(m, 'error');
+    return { ok: false, code, beforeStart: false };
   };
   // Stop must work at once, even while the request is still waiting for an
   // answer (a stalled network may never settle the aborted fetch).
@@ -81,29 +124,32 @@ async function run(body: ChatRequestBody): Promise<RunOutcome> {
     await Promise.race([
       streamChat(body, (ev) => {
         if (ctl.signal.aborted) return; // late events after Stop are ignored
-        if (ev.event === 'meta') sawMeta = true;
-        if (ev.event === 'done') sawDone = true;
+        if (ev.event === 'meta') meta = ev.data;
+        if (ev.event === 'done') done = ev.data;
         enqueue(ev);
       }, ctl.signal),
       stopped,
     ]);
     flush();
-    if (!sawDone) {
-      if (sawMeta) failAfterStart('network');
-      else dispatch({ type: 'fail', code: 'network', message: noticeFor('network') });
-      return { ok: false, code: 'network', beforeStart: !sawMeta };
+    const finished = done as Extract<StreamEvent, { event: 'done' }>['data'] | null;
+    if (!finished) {
+      if (meta) return await brokeOff('network');
+      dispatch({ type: 'fail', code: 'network', message: noticeFor('network') });
+      return { ok: false, code: 'network', beforeStart: true };
     }
+    if (finished.saved === false) keepSeen(meta, finished.stopReason === 'aborted' ? 'aborted' : 'error');
     return { ok: true };
   } catch (e) {
     flush();
     if (ctl.signal.aborted) {
       dispatch({ type: 'stopped' });
-      return sawMeta ? { ok: true } : { ok: false, code: 'aborted', beforeStart: true };
+      if (meta && !done) keepSeen(meta, 'aborted');
+      return meta ? { ok: true } : { ok: false, code: 'aborted', beforeStart: true };
     }
     const code = e instanceof AiError ? e.code : 'network';
-    if (sawMeta) failAfterStart(code);
-    else dispatch({ type: 'fail', code, message: noticeFor(code) });
-    return { ok: false, code, beforeStart: !sawMeta };
+    if (meta) return await brokeOff(code);
+    dispatch({ type: 'fail', code, message: noticeFor(code) });
+    return { ok: false, code, beforeStart: true };
   } finally {
     if (inflight === ctl) inflight = null;
   }
@@ -118,6 +164,9 @@ export function sendMessage(text: string, opts: { parentId?: string | null; file
   const s = useChatStore.getState();
   const files = opts.files ?? [];
   if (s.streaming || (!text.trim() && !files.length)) return Promise.resolve({ ok: true });
+  // The same question again right after it went unanswered: a new answer to it, not a second copy.
+  const unanswered = opts.parentId === undefined && !files.length ? unansweredQuestion(s) : null;
+  if (unanswered && unanswered.text.trim() === text.trim()) return retryReply(unanswered.id);
   const parent = opts.parentId !== undefined ? opts.parentId : parentForNext(s);
   dispatch({ type: 'send', text, parentId: parent, now: new Date().toISOString(), files, projectId: opts.projectId });
   // A new chat starts in the project it was sent from.
@@ -156,7 +205,7 @@ export function selectBranch(messageId: string): void {
   if (s.conversationId && !s.messages[leaf].local) void patchConversation(s.conversationId, { activeLeafId: leaf }).catch(() => undefined);
 }
 
-/** Stop the reply being written (the server keeps what was written so far). */
+/** Stop the reply being written (what was written so far is kept: keepSeen). */
 export function stopReply(): void {
   inflight?.abort();
 }

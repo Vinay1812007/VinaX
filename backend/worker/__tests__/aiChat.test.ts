@@ -53,7 +53,7 @@ async function post(body: unknown, opts: { sub?: string | null; env?: Record<str
 }
 
 const settle = async () => { await Promise.all(pending); pending = []; };
-const ask = (text: string, extra: Record<string, unknown> = {}) => ({ conversationId: null, content: [{ type: 'text', text }], mode: 'auto', timezone: 'Asia/Kolkata', locale: 'en-IN', ...extra });
+const ask = (text: string, extra: Record<string, unknown> = {}) => ({ conversationId: null, content: [{ type: 'text', text }], mode: 'auto', timezone: 'Asia/Kolkata', locale: 'en-IN', passthrough: true, ...extra });
 
 const existing = () => ({
   ai_conversations: [{ id: CONV, account_id: '1001', title: 'Ragas', starred: false, model_pref: 'auto', active_leaf_id: A1, created_at: '2026-10-30T10:00:00Z', updated_at: '2026-10-30T10:00:00Z', deleted_at: null }],
@@ -88,7 +88,9 @@ describe('gates', () => {
   it('503 ai_disabled while the switch is off (also when the setting is missing), except for testers', async () => {
     seed({}, groqOk, { enabled: false, testers: ['2002'] });
     expect(await (await post(ask('hi'))).json()).toEqual({ error: 'ai_disabled' });
-    expect((await post(ask('hi'), { sub: '2002' })).status).toBe(200);
+    const tester = await post(ask('hi'), { sub: '2002' });
+    expect(tester.status).toBe(200);
+    await tester.text();
     await settle();
     resetSettingsMemo();
     seed({}, groqOk, null); // no setting at all
@@ -120,7 +122,7 @@ describe('a new conversation', () => {
     const meta = events[0].data as { conversationId: string; userMessageId: string; assistantMessageId: string; model: { id: string; name: string; provider: string } };
     expect(meta.model).toEqual({ id: 'groq:openai/gpt-oss-120b', name: 'GPT-OSS 120B', provider: 'Groq' });
     expect(events.filter((e) => e.event === 'text').map((e) => e.data.delta).join('')).toBe('Yaman is an evening raga.');
-    expect(events.at(-1)?.data).toEqual({ stopReason: 'end', usage: { input: 5, output: 3 } });
+    expect(events.at(-1)?.data).toEqual({ stopReason: 'end', saved: true, usage: { input: 5, output: 3 } });
 
     const conv = fake.rows('ai_conversations')[0];
     expect(conv).toMatchObject({ id: meta.conversationId, account_id: '1001', title: 'Raga Yaman explained', active_leaf_id: meta.assistantMessageId });
@@ -237,7 +239,7 @@ describe('failover and failures', () => {
     expect(err.alternatives.length).toBeGreaterThan(0);
     expect(err.alternatives.length).toBeLessThanOrEqual(2);
     expect(err.alternatives.map((a) => a.id)).not.toContain('groq:openai/gpt-oss-120b');
-    expect(events.at(-1)?.data).toEqual({ stopReason: 'error' });
+    expect(events.at(-1)?.data).toEqual({ stopReason: 'error', saved: false });
     expect(fake.rows('ai_messages').map((m) => m.role)).toEqual(['user']);
     expect(JSON.stringify(events)).not.toMatch(/groq\.com|gsk_test/);
   });
@@ -257,7 +259,63 @@ describe('failover and failures', () => {
     expect(events.find((e) => e.event === 'error')?.data).toMatchObject({ code: 'all_busy', retryable: true });
   });
 
-  it('a stopped reply is saved with its partial text and stopReason aborted', async () => {
+  it('Stop (the page cancels the stream) stops the model; the page keeps what it saw (POST /api/ai/keep)', async () => {
+    const enc = new TextEncoder();
+    let upstreamAborted = false;
+    const fake = seed({}, (_url, init) => new Response(new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(enc.encode('data: {"choices":[{"delta":{"content":"Half an ans"}}]}\n\n'));
+        init?.signal?.addEventListener('abort', () => { upstreamAborted = true; c.error(new Error('aborted')); });
+      },
+    }), { status: 200 }));
+    const res = await post(ask('Tell me about raga Yaman'));
+    const reader = res.body!.getReader();
+    let seen = '';
+    while (!seen.includes('Half an ans')) seen += new TextDecoder().decode((await reader.read()).value);
+    await reader.cancel();
+    await settle();
+    expect(upstreamAborted).toBe(true);
+    expect(fake.rows('ai_messages').filter((m) => m.role === 'assistant')).toEqual([]);
+  });
+
+  it('passes the provider\'s bytes through untouched between its own events', async () => {
+    seed();
+    const raw = await (await post(ask('Tell me about raga Yaman'))).text();
+    expect(raw).toContain(openAiSse('Yaman is an evening raga.', { reasoning: 'Think about ragas.' }));
+    expect(raw.indexOf('event: meta')).toBeLessThan(raw.indexOf('data: {"choices"'));
+    expect(raw.lastIndexOf('event: done')).toBeGreaterThan(raw.lastIndexOf('data: [DONE]'));
+    expect(raw).toContain('"wire":"openai"');
+  });
+
+  it('a reply that breaks off mid-stream ends with an error and is left for the page to keep', async () => {
+    const enc = new TextEncoder();
+    const fake = seed({}, () => new Response(new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(enc.encode('data: {"choices":[{"delta":{"content":"Half an ans"}}]}\n\n'));
+        setTimeout(() => c.error(new Error('reset')), 5);
+      },
+    }), { status: 200 }));
+    const events = await readEvents(await post(ask('Tell me about raga Yaman')));
+    await settle();
+    expect(events.filter((e) => e.event === 'text').map((e) => e.data.delta).join('')).toBe('Half an ans');
+    expect(events.find((e) => e.event === 'error')?.data).toMatchObject({ retryable: true });
+    expect(events.at(-1)).toMatchObject({ event: 'done', data: { stopReason: 'error', saved: false } });
+    expect(fake.rows('ai_messages').filter((m) => m.role === 'assistant')).toEqual([]);
+  });
+
+  it('an older page (no passthrough) gets named thinking and text events, and nothing raw', async () => {
+    const fake = seed();
+    const res = await post(ask('Tell me about raga Yaman', { passthrough: undefined }));
+    const raw = await res.clone().text();
+    expect(raw).not.toContain('data: {"choices"');
+    const events = await readEvents(res);
+    await settle();
+    expect(events.map((e) => e.event).filter((n) => n === 'thinking' || n === 'text').length).toBeGreaterThan(1);
+    expect(events.filter((e) => e.event === 'text').map((e) => e.data.delta).join('')).toBe('Yaman is an evening raga.');
+    expect(fake.rows('ai_messages')[1]).toMatchObject({ role: 'assistant', content: [{ type: 'text', text: 'Yaman is an evening raga.' }], stop_reason: 'end' });
+  });
+
+  it('an older page that stops a reply still has its partial text saved here, as aborted', async () => {
     const enc = new TextEncoder();
     const fake = seed({}, (_url, init) => new Response(new ReadableStream<Uint8Array>({
       start(c) {
@@ -265,14 +323,24 @@ describe('failover and failures', () => {
         init?.signal?.addEventListener('abort', () => c.error(new Error('aborted')));
       },
     }), { status: 200 }));
-    const res = await post(ask('Tell me about raga Yaman'));
+    const res = await post(ask('Tell me about raga Yaman', { passthrough: undefined }));
     const reader = res.body!.getReader();
     let seen = '';
     while (!seen.includes('event: text')) seen += new TextDecoder().decode((await reader.read()).value);
     await reader.cancel();
     await settle();
-    const reply = fake.rows('ai_messages').find((m) => m.role === 'assistant');
-    expect(reply).toMatchObject({ stop_reason: 'aborted', content: [{ type: 'text', text: 'Half an ans' }] });
+    expect(fake.rows('ai_messages').find((m) => m.role === 'assistant')).toMatchObject({ stop_reason: 'aborted', content: [{ type: 'text', text: 'Half an ans' }] });
+  });
+
+  it('an error frame before any text fails over in Auto', async () => {
+    const fake = seed({}, (url) => (url.includes('groq.com')
+      ? sseResponse('data: {"error":{"code":429,"message":"rate limited"}}\n\n')
+      : sseResponse('data: {"candidates":[{"content":{"parts":[{"text":"From Gemini."}]},"finishReason":"STOP"}]}\n\n')));
+    const events = await readEvents(await post(ask('Tell me about raga Yaman')));
+    await settle();
+    expect(events.filter((e) => e.event === 'meta').map((e) => (e.data.model as { id: string }).id)).toEqual(['groq:openai/gpt-oss-120b', 'gemini:gemini-3.5-flash']);
+    expect(events.filter((e) => e.event === 'text').map((e) => e.data.delta).join('')).toBe('From Gemini.');
+    expect(fake.rows('ai_messages').find((m) => m.role === 'assistant')).toMatchObject({ model_id: 'gemini:gemini-3.5-flash' });
   });
 });
 

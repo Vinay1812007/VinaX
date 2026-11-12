@@ -11,7 +11,7 @@ import { nextUtcMidnight, ProviderError } from '../errors';
 import { parseJson, sseData } from '../sse';
 import { ThinkSplitter } from '../think';
 import { wireMessages } from '../wire';
-import type { Adapter, AiEnv, ChatRequest, ProviderEvent } from '../types';
+import type { AiEnv, ChatRequest, ProviderEvent, WireAdapter } from '../types';
 
 const DAY_MS = 24 * 60 * 60_000;
 
@@ -32,39 +32,51 @@ interface Frame {
   usage?: { prompt_tokens?: number; completion_tokens?: number };
 }
 
-export const workersAi: Adapter = {
+async function openWorkersAi(env: AiEnv, req: ChatRequest): Promise<ReadableStream<Uint8Array>> {
+  if (!env.AI || typeof env.AI.run !== 'function') throw new ProviderError('not_configured');
+  const { system, messages } = wireMessages(req.model, req.system, req.messages);
+  const wire = [...(system ? [{ role: 'system', content: system }] : []), ...messages.map((msg) => ({ role: msg.role, content: msg.text }))];
+  let out: unknown;
+  try {
+    out = await env.AI.run(req.model.upstream, { messages: wire, stream: true, max_tokens: Math.min(req.maxOutputTokens, req.model.maxOutput) });
+  } catch (e) {
+    throw workersAiError(e);
+  }
+  if (!(out instanceof ReadableStream)) throw new ProviderError('upstream', { status: 502 });
+  return out as ReadableStream<Uint8Array>;
+}
+
+/** Reads the binding's SSE body into events. */
+export async function* parseWorkersAiStream(body: ReadableStream<Uint8Array> | null, signal?: AbortSignal): AsyncGenerator<ProviderEvent> {
+  const split = new ThinkSplitter();
+  let usage: { input: number; output: number } | null = null;
+  let reason: 'stop' | 'length' = 'stop';
+  try {
+    for await (const data of sseData(body, signal)) {
+      const j = parseJson<Frame>(data);
+      if (!j) continue;
+      const thought = j.reasoning_content ?? j.choices?.[0]?.delta?.reasoning_content;
+      if (thought) yield* split.reasoning(thought);
+      const text = j.response ?? j.choices?.[0]?.delta?.content;
+      if (text) yield* split.push(text);
+      if (j.choices?.[0]?.finish_reason === 'length') reason = 'length';
+      if (j.usage) usage = { input: j.usage.prompt_tokens ?? 0, output: j.usage.completion_tokens ?? 0 };
+    }
+  } catch (e) {
+    if (e instanceof ProviderError || signal?.aborted) throw e;
+    throw workersAiError(e);
+  }
+  yield* split.end();
+  if (!split.sawText) throw new ProviderError('empty');
+  if (usage) yield { type: 'usage', ...usage };
+  yield { type: 'end', reason };
+}
+
+export const workersAi: WireAdapter = {
+  wire: 'workers-ai',
+  open: openWorkersAi,
+  parse: parseWorkersAiStream,
   async *stream(env: AiEnv, req: ChatRequest): AsyncGenerator<ProviderEvent> {
-    if (!env.AI || typeof env.AI.run !== 'function') throw new ProviderError('not_configured');
-    const { system, messages } = wireMessages(req.model, req.system, req.messages);
-    const wire = [...(system ? [{ role: 'system', content: system }] : []), ...messages.map((msg) => ({ role: msg.role, content: msg.text }))];
-    let out: unknown;
-    try {
-      out = await env.AI.run(req.model.upstream, { messages: wire, stream: true, max_tokens: Math.min(req.maxOutputTokens, req.model.maxOutput) });
-    } catch (e) {
-      throw workersAiError(e);
-    }
-    if (!(out instanceof ReadableStream)) throw new ProviderError('upstream', { status: 502 });
-    const split = new ThinkSplitter();
-    let usage: { input: number; output: number } | null = null;
-    let reason: 'stop' | 'length' = 'stop';
-    try {
-      for await (const data of sseData(out as ReadableStream<Uint8Array>, req.signal)) {
-        const j = parseJson<Frame>(data);
-        if (!j) continue;
-        const thought = j.reasoning_content ?? j.choices?.[0]?.delta?.reasoning_content;
-        if (thought) yield* split.reasoning(thought);
-        const text = j.response ?? j.choices?.[0]?.delta?.content;
-        if (text) yield* split.push(text);
-        if (j.choices?.[0]?.finish_reason === 'length') reason = 'length';
-        if (j.usage) usage = { input: j.usage.prompt_tokens ?? 0, output: j.usage.completion_tokens ?? 0 };
-      }
-    } catch (e) {
-      if (e instanceof ProviderError || req.signal.aborted) throw e;
-      throw workersAiError(e);
-    }
-    yield* split.end();
-    if (!split.sawText) throw new ProviderError('empty');
-    if (usage) yield { type: 'usage', ...usage };
-    yield { type: 'end', reason };
+    yield* parseWorkersAiStream(await openWorkersAi(env, req), req.signal);
   },
 };

@@ -143,3 +143,22 @@ export type AiEnv = AuthEnv & DbEnv & AiKeysEnv & { TELEMETRY_PEPPER?: string };
 export interface Adapter {
   stream(env: AiEnv, req: ChatRequest): AsyncGenerator<ProviderEvent>;
 }
+
+/**
+ * How a provider's raw stream is written, for the page that reads it
+ * (`data:` lines of OpenAI-style chunks, Gemini's candidates, or Workers AI's
+ * `response` frames).
+ */
+export type WireFormat = 'openai' | 'gemini' | 'workers-ai';
+
+/**
+ * An adapter in two halves, so the chat can hand the provider's bytes to the
+ * page untouched (POST /api/ai/chat, "Pass-through"): `open` starts the
+ * request and answers the raw SSE body (a refusal throws a ProviderError);
+ * `parse` reads such a body into events. `stream` is the two together.
+ */
+export interface WireAdapter extends Adapter {
+  wire: WireFormat;
+  open(env: AiEnv, req: ChatRequest): Promise<ReadableStream<Uint8Array>>;
+  parse(body: ReadableStream<Uint8Array> | null, signal?: AbortSignal): AsyncGenerator<ProviderEvent>;
+}

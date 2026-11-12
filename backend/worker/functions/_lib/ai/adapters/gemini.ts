@@ -11,7 +11,7 @@ import { classifyHttp, errorText, ProviderError } from '../errors';
 import { parseJson, sseData } from '../sse';
 import { ThinkSplitter } from '../think';
 import { wireMessages } from '../wire';
-import type { Adapter, AiEnv, ChatRequest, GroundingSupport, ProviderEvent, Source } from '../types';
+import type { AiEnv, ChatRequest, GroundingSupport, ProviderEvent, Source, WireAdapter } from '../types';
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
@@ -94,58 +94,71 @@ const finish = (r: string | undefined): 'stop' | 'length' | 'content_filter' | n
   return 'stop';
 };
 
-export const gemini: Adapter = {
+async function openGemini(env: AiEnv, req: ChatRequest): Promise<ReadableStream<Uint8Array>> {
+  const key = env.GEMINI_API_KEY?.trim();
+  if (!key) throw new ProviderError('not_configured');
+  const call = (grounding: boolean) => fetch(`${BASE}/${encodeURIComponent(geminiModelId(req.model.upstream))}:streamGenerateContent?alt=sse`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify(geminiBody(req, grounding)),
+    signal: req.signal,
+  });
+  const grounding = req.webSearch && req.model.flags.grounding;
+  let res = await call(grounding);
+  if (!res.ok && grounding && (res.status === 400 || res.status === 429)) {
+    // Grounding itself refused (its own quota, or not offered for this key):
+    // ask once more without it rather than failing the model.
+    const body = await errorText(res);
+    if (/ground|search/i.test(body)) res = await call(false);
+    else throw classifyHttp(res.status, res.headers, body);
+  }
+  if (!res.ok) throw classifyHttp(res.status, res.headers, await errorText(res));
+  if (!res.body) throw new ProviderError('empty');
+  return res.body;
+}
+
+/** Reads Gemini's SSE body (alt=sse) into events. */
+export async function* parseGeminiStream(body: ReadableStream<Uint8Array> | null, signal?: AbortSignal): AsyncGenerator<ProviderEvent> {
+  let grounded: Extract<ProviderEvent, { type: 'sources' }> | null = null;
+  const split = new ThinkSplitter();
+  let reason: 'stop' | 'length' | 'content_filter' = 'stop';
+  let usage: { input: number; output: number } | null = null;
+  for await (const data of sseData(body, signal)) {
+    const j = parseJson<Chunk>(data);
+    if (!j) continue;
+    if (j.error) throw classifyHttp(Number(j.error.code) || 502, null, String(j.error.message ?? ''));
+    if (j.promptFeedback?.blockReason) reason = 'content_filter';
+    const cand = j.candidates?.[0];
+    for (const part of cand?.content?.parts ?? []) {
+      if (!part.text) continue;
+      if (part.thought === true) yield* split.reasoning(part.text);
+      else yield* split.push(part.text);
+    }
+    const f = finish(cand?.finishReason);
+    if (f) reason = f;
+    if (cand?.groundingMetadata) grounded = groundingEvent(cand.groundingMetadata) ?? grounded;
+    const u = j.usageMetadata;
+    if (u) usage = { input: u.promptTokenCount ?? 0, output: (u.candidatesTokenCount ?? 0) + (u.thoughtsTokenCount ?? 0) };
+  }
+  yield* split.end();
+  if (!split.sawText) {
+    // A blocked prompt is an answer of its own kind, not a broken model.
+    if (reason === 'content_filter') {
+      yield { type: 'end', reason };
+      return;
+    }
+    throw new ProviderError('empty');
+  }
+  if (grounded) yield grounded;
+  if (usage) yield { type: 'usage', ...usage };
+  yield { type: 'end', reason };
+}
+
+export const gemini: WireAdapter = {
+  wire: 'gemini',
+  open: openGemini,
+  parse: parseGeminiStream,
   async *stream(env: AiEnv, req: ChatRequest): AsyncGenerator<ProviderEvent> {
-    const key = env.GEMINI_API_KEY?.trim();
-    if (!key) throw new ProviderError('not_configured');
-    const call = (grounding: boolean) => fetch(`${BASE}/${encodeURIComponent(geminiModelId(req.model.upstream))}:streamGenerateContent?alt=sse`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify(geminiBody(req, grounding)),
-      signal: req.signal,
-    });
-    const grounding = req.webSearch && req.model.flags.grounding;
-    let res = await call(grounding);
-    if (!res.ok && grounding && (res.status === 400 || res.status === 429)) {
-      // Grounding itself refused (its own quota, or not offered for this key):
-      // ask once more without it rather than failing the model.
-      const body = await errorText(res);
-      if (/ground|search/i.test(body)) res = await call(false);
-      else throw classifyHttp(res.status, res.headers, body);
-    }
-    if (!res.ok) throw classifyHttp(res.status, res.headers, await errorText(res));
-    let grounded: Extract<ProviderEvent, { type: 'sources' }> | null = null;
-    const split = new ThinkSplitter();
-    let reason: 'stop' | 'length' | 'content_filter' = 'stop';
-    let usage: { input: number; output: number } | null = null;
-    for await (const data of sseData(res.body, req.signal)) {
-      const j = parseJson<Chunk>(data);
-      if (!j) continue;
-      if (j.error) throw classifyHttp(Number(j.error.code) || 502, null, String(j.error.message ?? ''));
-      if (j.promptFeedback?.blockReason) reason = 'content_filter';
-      const cand = j.candidates?.[0];
-      for (const part of cand?.content?.parts ?? []) {
-        if (!part.text) continue;
-        if (part.thought === true) yield* split.reasoning(part.text);
-        else yield* split.push(part.text);
-      }
-      const f = finish(cand?.finishReason);
-      if (f) reason = f;
-      if (cand?.groundingMetadata) grounded = groundingEvent(cand.groundingMetadata) ?? grounded;
-      const u = j.usageMetadata;
-      if (u) usage = { input: u.promptTokenCount ?? 0, output: (u.candidatesTokenCount ?? 0) + (u.thoughtsTokenCount ?? 0) };
-    }
-    yield* split.end();
-    if (!split.sawText) {
-      // A blocked prompt is an answer of its own kind, not a broken model.
-      if (reason === 'content_filter') {
-        yield { type: 'end', reason };
-        return;
-      }
-      throw new ProviderError('empty');
-    }
-    if (grounded) yield grounded;
-    if (usage) yield { type: 'usage', ...usage };
-    yield { type: 'end', reason };
+    yield* parseGeminiStream(await openGemini(env, req), req.signal);
   },
 };

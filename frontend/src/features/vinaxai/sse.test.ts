@@ -22,4 +22,15 @@ describe('SseParser', () => {
     expect(p.push('event: done\ndata: {"stopReason":"end"}')).toEqual([]);
     expect(p.end()).toEqual([{ event: 'done', data: { stopReason: 'end' } }]);
   });
+
+  it('gives each data line of an unnamed block as a raw line (the provider\'s own, passed through)', () => {
+    const p = new SseParser();
+    const out = [...p.push('event: meta\ndata: {"wire":"gemini"}\n\ndata: {"a":1}\r\n\r\ndata: [DONE]\n\n: keep-alive\n\n'), ...p.push('event: done\ndata: {"stopReason":"end"}\n\n')];
+    expect(out).toEqual([
+      { event: 'meta', data: { wire: 'gemini' } },
+      { event: 'raw', data: '{"a":1}' },
+      { event: 'raw', data: '[DONE]' },
+      { event: 'done', data: { stopReason: 'end' } },
+    ]);
+  });
 });

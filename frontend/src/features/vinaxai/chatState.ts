@@ -115,6 +115,17 @@ export function parentForNext(state: ChatState): string | null {
   return leaf?.id ?? null;
 }
 
+/**
+ * The question at the end of the branch on screen that has no answer (its
+ * reply failed and was never saved), or null.
+ */
+export function unansweredQuestion(state: ChatState): ChatMessage | null {
+  const leaf = state.leafId ? state.messages[state.leafId] : null;
+  if (!leaf) return null;
+  const q = leaf.role === 'assistant' && leaf.local && !leaf.text.trim() ? state.messages[leaf.parentId ?? ''] : leaf;
+  return q && q.role === 'user' && !q.local ? q : null;
+}
+
 function rename(messages: Record<string, ChatMessage>, from: string, to: string): Record<string, ChatMessage> {
   if (from === to || !messages[from]) return messages;
   const out: Record<string, ChatMessage> = {};

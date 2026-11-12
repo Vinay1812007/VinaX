@@ -176,14 +176,16 @@ export interface MemoryState {
 
 /** The named events of the chat stream. */
 export type StreamEvent =
-  | { event: 'meta'; data: { conversationId: string; userMessageId: string; assistantMessageId: string; model: ModelLabel; continued?: boolean } }
+  /** `wire`: how the provider's own lines in the stream are written (wire.ts). */
+  | { event: 'meta'; data: { conversationId: string; userMessageId: string; assistantMessageId: string; model: ModelLabel; continued?: boolean; wire?: string } }
   | { event: 'title'; data: { title: string } }
   | { event: 'thinking'; data: { delta: string } }
   | { event: 'text'; data: { delta: string } }
   | { event: 'status'; data: SearchStatus }
   | { event: 'sources'; data: SourcesInfo & { markers?: Marker[] } }
   | { event: 'error'; data: ReplyError }
-  | { event: 'done'; data: { stopReason: StopReason; usage?: { input: number; output: number } } };
+  /** `saved` false: the Worker did not save the reply, so the page keeps what it saw (POST /api/ai/keep). */
+  | { event: 'done'; data: { stopReason: StopReason; usage?: { input: number; output: number }; saved?: boolean } };
 
 // ---------- shared chats ----------
 

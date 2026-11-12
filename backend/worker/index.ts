@@ -69,6 +69,7 @@ import * as m_api_auth_google from './functions/api/auth/google';
 import * as m_api_auth_me from './functions/api/auth/me';
 import * as m_api_account_data from './functions/api/account/data';
 import * as m_api_ai_chat from './functions/api/ai/chat';
+import * as m_api_ai_keep from './functions/api/ai/keep';
 import * as m_api_ai_models from './functions/api/ai/models';
 import * as m_api_personal_events from './functions/api/personal/events';
 import * as m_api_personal_home from './functions/api/personal/home';
@@ -214,6 +215,7 @@ const EXACT: Record<string, Mod> = {
   '/api/auth/me': m_api_auth_me,
   '/api/account/data': m_api_account_data,
   '/api/ai/chat': m_api_ai_chat,
+  '/api/ai/keep': m_api_ai_keep,
   '/api/ai/models': m_api_ai_models,
   '/api/ai/conversations': m_api_ai_conversations,
   '/api/ai/export': m_api_ai_export,

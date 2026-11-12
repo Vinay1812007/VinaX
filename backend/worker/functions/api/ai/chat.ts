@@ -13,7 +13,8 @@
  *     extendedThinking?, webSearch?, artifacts? (default true), timezone?, locale?,
  *     personal?: { name?, about?, instructions?, style? },    // VinaX AI settings → Personalisation; used for this reply only, never stored
  *     projectId?: uuid,                   // a new conversation starts in this project (its instructions and files join every reply)
- *     incognito?: true }                   // a chat that never reads or writes memory; kept on a new chat (memory.ts)
+ *     incognito?: true,                    // a chat that never reads or writes memory; kept on a new chat (memory.ts)
+ *     passthrough?: true }                 // the page reads the provider's own lines (below); without it, named text events
  *
  *   → 200 text/event-stream, named events, one JSON object per data line:
  *       meta     { conversationId, userMessageId, assistantMessageId, model: { id, name, provider }, continued? }
@@ -23,16 +24,26 @@
  *       sources  { items: [{ n, url, title, site, snippet? }], via: "grounding" | "search", queries?, entryPointHtml?, markers? }
  *                (search: before the text, the model cites [n] itself; grounding: after the text,
  *                 with `markers` [{ at, ns }] saying where [n] goes in it)
- *       thinking { delta }
- *       text     { delta }
+ *       thinking { delta }   (without `passthrough` only)
+ *       text     { delta }   (without `passthrough` only)
  *       error    { code, message, retryable, alternatives? }
- *       done     { stopReason: end | length | aborted | error, usage? }
+ *       done     { stopReason: end | length | aborted | error, usage?, saved }
+ *
+ *   Pass-through (`passthrough: true`): between the opening events and the
+ *   closing ones (error, sources, done) come the provider's own `data:` lines,
+ *   untouched and without an event name; `meta.wire` says how they are
+ *   written and the page reads the text out of them (frontend vinaxai/wire.ts).
+ *   Relaying them token by token cost about a second of CPU for a long reply
+ *   and the free plan's 10 ms limit cut such replies off; bytes handed on
+ *   cost almost nothing (passthrough.ts).
  *   → 400 bad_request | bad_attachment | too_many_images | model_cannot_see_images · 409 too_many_files
  *   → 400 bad_request · 401 signed_out · 404 not_found · 409 conversation_full · 413 too_large
  *   → 429 rate_limited · 503 ai_not_configured | ai_disabled | unavailable
  *
  * The listener's message is saved before streaming; the reply is saved when
- * it ends (also after a disconnect, with the partial text and 'aborted').
+ * it ends. One that did not end on its own (Stop, a broken stream) is only
+ * whole on the page, which saves it (POST /api/ai/keep; `done.saved` false);
+ * without pass-through the relayed text is saved here as before.
  * A continued reply is appended to the message it continues.
  * Logs carry route, model, provider, latency, status and token counts, never
  * message text. See README.md (VinaX AI).
@@ -46,9 +57,9 @@ import {
   attachmentPart, loadAttachments, type AttachmentRow,
 } from '../../_lib/ai/attachments';
 import { fileSignals, materialize, newMemo, toTurns } from '../../_lib/ai/materialize';
-import { anyProviderConfigured, PROVIDER_NAMES, providerConfigured } from '../../_lib/ai/adapters';
+import { ADAPTERS, anyProviderConfigured, PROVIDER_NAMES, providerConfigured } from '../../_lib/ai/adapters';
 import { aiOpenFor, aiSettings, foundModelFor, LIMIT_RANGES, registryFor } from '../../_lib/ai/config';
-import { isCooling } from '../../_lib/ai/cooldown';
+import { isCooling, noteFailure } from '../../_lib/ai/cooldown';
 import { fallbackTitle, latestLeaf, pathTo, textOf, trimHistory, typedText } from '../../_lib/ai/history';
 import { ladderModels, modelById, type LadderName } from '../../_lib/ai/models';
 import { generateTitle } from '../../_lib/ai/title';
@@ -57,7 +68,8 @@ import {
   applyMarkers, buildQuery, GROUNDING_DAILY_LIMIT, placeMarkers, searchMode, searchWeb, takeDaily, topicOf, wantsSearch,
   type Marker, type SearchResult,
 } from '../../_lib/ai/search';
-import { humanReason, pickLadder, runChat, type RunOptions } from '../../_lib/ai/router';
+import { humanReason, pickLadder, type RunOptions } from '../../_lib/ai/router';
+import { collect, openModel, textBody } from '../../_lib/ai/passthrough';
 import { sseFrame } from '../../_lib/ai/sse';
 import { artifactsOf } from '../../_lib/ai/artifacts';
 import { getProject, knowledgeFor, loadProjectContext, longKnowledge, withKnowledge } from '../../_lib/ai/projects';
@@ -66,7 +78,7 @@ import {
   createConversation, getConversation, insertMessage, isUuid, listMessages, MAX_MESSAGES, updateConversation, updateMessage,
   type ConversationRow, type MessageRow,
 } from '../../_lib/ai/store';
-import type { ProviderError } from '../../_lib/ai/errors';
+import { ProviderError } from '../../_lib/ai/errors';
 import type { AiEnv, MessagePart, ModelSpec, Source } from '../../_lib/ai/types';
 
 /** Files travel separately (POST /api/ai/attachments, by id), so a chat body is only text. */
@@ -108,6 +120,7 @@ interface ChatBody {
   personal?: unknown;
   projectId?: unknown;
   incognito?: unknown;
+  passthrough?: unknown;
 }
 
 interface Ctx {
@@ -155,6 +168,18 @@ const errorCode = (err: ProviderError, exhausted: boolean): string => {
   }
 };
 
+const enc = new TextEncoder();
+
+/**
+ * The response body: the platform's native pipe on Workers (bytes piped
+ * into it never wake this code; a page that goes away fails the pipe), a
+ * plain TransformStream elsewhere (tests), which says so through `onCancel`.
+ */
+function makePipe(onCancel: () => void): { readable: ReadableStream<Uint8Array>; writable: WritableStream<Uint8Array> } {
+  const Native = (globalThis as { IdentityTransformStream?: new () => { readable: ReadableStream<Uint8Array>; writable: WritableStream<Uint8Array> } }).IdentityTransformStream;
+  return Native ? new Native() : new TransformStream<Uint8Array, Uint8Array>({ cancel: onCancel } as Transformer<Uint8Array, Uint8Array>);
+}
+
 const modelInfo = (spec: ModelSpec): { id: string; name: string; provider: string } => ({ id: spec.id, name: spec.name, provider: PROVIDER_NAMES[spec.provider] });
 
 export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
@@ -187,6 +212,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     if (took.ok && took.value !== true) return json({ error: 'daily_limit', limit: settings.dailyLimit }, 429);
   }
   const mode = body.mode === 'model' ? 'model' : 'auto';
+  /** The page reads the provider's own lines (vinaxai/wire.ts); older pages get named text events. */
+  const passthrough = body.passthrough === true;
   const extendedThinking = body.extendedThinking === true;
   const parentRaw = body.parentMessageId;
   if (body.conversationId != null && !isUuid(body.conversationId)) return json({ error: 'not_found' }, 404);
@@ -391,15 +418,28 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   const abort = new AbortController();
   const assistantId = continuing?.id ?? crypto.randomUUID();
   const titleCandidates = ladderModels(registry, 'title');
+
+  // Pass-through (passthrough.ts): our own events, then the provider's bytes
+  // untouched, then our closing events, all on one native stream so the bytes
+  // in the middle cost no CPU here.
+  const pipe = makePipe(() => gone());
+  const out = pipe.writable;
+  let writer: WritableStreamDefaultWriter<Uint8Array> | null = out.getWriter();
+  let chain: Promise<void> = Promise.resolve();
   let open = true;
-  let controller!: ReadableStreamDefaultController<Uint8Array>;
-  const stream = new ReadableStream<Uint8Array>({
-    start(c) { controller = c; },
-    cancel() { open = false; abort.abort(); },
-  });
+  /** Frames sent while the provider's bytes flow wait for the end. */
+  let held: Uint8Array[] | null = null;
+  const gone = (): void => { open = false; abort.abort(); };
+  const write = (bytes: Uint8Array): void => {
+    const w = writer;
+    if (!w || !open) return;
+    chain = chain.then(() => w.write(bytes)).catch(gone);
+  };
   const send = (event: string, data: unknown): void => {
     if (!open) return;
-    try { controller.enqueue(sseFrame(event, data)); } catch { open = false; }
+    const frame = sseFrame(event, data);
+    if (held) held.push(frame);
+    else write(frame);
   };
 
   const pump = async (): Promise<void> => {
@@ -407,12 +447,13 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     let model = candidates[0];
     let text = '';
     let thinking = '';
-    let thinkStart: number | null = null;
     let thinkMs: number | null = null;
     let usage: { input: number; output: number } | null = null;
     let stop: StopReason = 'end';
     let markers: Marker[] = [];
-    const metaOf = (m: ModelSpec) => ({ conversationId: conversation.id, userMessageId: userMsg.id, assistantMessageId: assistantId, model: modelInfo(m), ...(continuing ? { continued: true } : {}) });
+    /** The reply's text is whole on this side, so this request saves it (the page keeps what it saw otherwise). */
+    let complete = false;
+    const metaOf = (m: ModelSpec) => ({ conversationId: conversation.id, userMessageId: userMsg.id, assistantMessageId: assistantId, model: modelInfo(m), wire: ADAPTERS[m.provider].wire, ...(continuing ? { continued: true } : {}) });
     send('meta', metaOf(model));
     // A new conversation gets a generated title, written in parallel with the reply.
     let titleJob: Promise<void> | null = null;
@@ -425,47 +466,103 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       }).catch(() => undefined);
     }
     if (grounding) send('status', { step: 'searching', query });
+    const failed = (err: ProviderError, spec: ModelSpec | null, partial: boolean): void => {
+      stop = 'error';
+      const exhausted = mode === 'auto' && !partial && spec === null;
+      send('error', {
+        code: errorCode(err, exhausted),
+        message: exhausted ? 'VinaX AI is busy right now. Try again in a moment.' : humanReason(err, spec),
+        retryable: true,
+        ...(mode === 'model' && !partial ? { alternatives: alternativesFor(model) } : {}),
+      });
+    };
     try {
-      for await (const ev of runChat(env, {
+      const started_ = await openModel(env, {
         candidates, picked: mode === 'model', build, signal: abort.signal,
         firstEventMs: firstEventMsFor(slow, mode === 'model' ? candidates[0] ?? null : null),
         budgetMs: slow ? REPLY_BUDGET_SLOW_MS : REPLY_BUDGET_MS,
-      })) {
-        if (ev.type === 'model') {
-          if (ev.spec.id !== model.id) {
-            model = ev.spec;
-            thinking = '';
-            thinkStart = null;
-            send('meta', metaOf(model));
+      });
+      if (!started_.ok) {
+        if (!abort.signal.aborted) failed(started_.error, mode === 'auto' ? null : started_.spec, false);
+      } else {
+        const opened = started_.opened;
+        if (opened.spec.id !== model.id) {
+          model = opened.spec;
+          send('meta', metaOf(model));
+        }
+        let broke = false;
+        /** What a page without pass-through was sent (kept if the reply breaks off). */
+        let relayed = { text: '', thinking: '' };
+        if (!passthrough) {
+          // An older page reads only named events: relay them one by one (the old, CPU-hungry way).
+          try {
+            for await (const ev of ADAPTERS[model.provider].parse(opened.live)) {
+              if (!open) break;
+              if (ev.type === 'thinking') { relayed.thinking += ev.delta; send('thinking', { delta: ev.delta }); }
+              else if (ev.type === 'text') { relayed.text += ev.delta; send('text', { delta: ev.delta }); }
+            }
+          } catch {
+            broke = true;
           }
-        } else if (ev.type === 'sources') {
-          // Grounding: the sources arrive with the end of the answer.
-          markers = placeMarkers(text, ev.supports ?? []);
-          searched = { items: ev.items, via: 'grounding', queries: ev.queries, ...(ev.entryPointHtml ? { entryPointHtml: ev.entryPointHtml } : {}) };
-          searchLog = { via: 'grounding', count: ev.items.length };
-          send('status', { step: 'searched', count: ev.items.length, sites: sitesOf(ev.items) });
-          send('sources', { ...searched, markers });
-        } else if (ev.type === 'thinking') {
-          thinkStart ??= Date.now();
-          thinking += ev.delta;
-          send('thinking', { delta: ev.delta });
-        } else if (ev.type === 'text') {
-          if (thinkStart != null && thinkMs == null) thinkMs = Date.now() - thinkStart;
-          text += ev.delta;
-          send('text', { delta: ev.delta });
-        } else if (ev.type === 'usage') {
-          usage = { input: ev.input, output: ev.output };
-        } else if (ev.type === 'end') {
-          stop = ev.reason === 'length' ? 'length' : 'end';
-        } else if (ev.type === 'failed') {
-          stop = 'error';
-          const exhausted = mode === 'auto' && !ev.partial;
-          send('error', {
-            code: errorCode(ev.error, exhausted),
-            message: exhausted ? 'VinaX AI is busy right now. Try again in a moment.' : humanReason(ev.error, ev.spec),
-            retryable: true,
-            ...(mode === 'model' && !ev.partial ? { alternatives: alternativesFor(model) } : {}),
-          });
+          await chain;
+          if (!open) opened.abort();
+        } else {
+          // Hand the provider's bytes over; frames from now on wait for the end.
+          await chain;
+          held = [];
+          writer?.releaseLock();
+          writer = null;
+          if (open) {
+            try {
+              await opened.live.pipeTo(out, { preventClose: true, preventAbort: true });
+            } catch {
+              broke = true;
+            }
+          } else void opened.live.cancel().catch(() => undefined);
+          // A page that went away (Stop) cancels the pipe: stop the model too.
+          try { writer = out.getWriter(); } catch { gone(); }
+          const later = held;
+          held = null;
+          write(enc.encode('\n\n'));
+          for (const f of later) write(f);
+          await chain;
+          if (!open) opened.abort();
+          relayed = { text: '', thinking: '' };
+        }
+        let raw: string | null = null;
+        try { raw = await opened.whole; } catch { raw = null; }
+        opened.finish();
+        if (raw === null) {
+          // The reply broke off (time budget, network, Stop): the page keeps what it saw
+          // (an older page cannot, so its relayed text is saved here).
+          if (!abort.signal.aborted) failed(broke ? new ProviderError('network') : new ProviderError('timeout'), model, true);
+          if (relayed.text.trim()) {
+            ({ text, thinking } = relayed);
+            complete = true;
+          }
+        } else {
+          const parsed = await collect(ADAPTERS[model.provider].parse(textBody(raw)));
+          for (const ev of parsed.events) {
+            if (ev.type === 'thinking') thinking += ev.delta;
+            else if (ev.type === 'text') text += ev.delta;
+            else if (ev.type === 'usage') usage = { input: ev.input, output: ev.output };
+            else if (ev.type === 'end') stop = ev.reason === 'length' ? 'length' : 'end';
+            else if (ev.type === 'sources') {
+              // Grounding: the sources arrive with the end of the answer.
+              markers = placeMarkers(text, ev.supports ?? []);
+              searched = { items: ev.items, via: 'grounding', queries: ev.queries, ...(ev.entryPointHtml ? { entryPointHtml: ev.entryPointHtml } : {}) };
+              searchLog = { via: 'grounding', count: ev.items.length };
+              send('status', { step: 'searched', count: ev.items.length, sites: sitesOf(ev.items) });
+              send('sources', { ...searched, markers });
+            }
+          }
+          if (parsed.error) {
+            noteFailure(model, parsed.error);
+            failed(parsed.error, model, text.trim().length > 0);
+          }
+          complete = true;
+          // Time spent reasoning, shared out by length (the bytes passed by without a clock).
+          if (thinking) thinkMs = Math.round((Date.now() - opened.firstAt) * (thinking.length / Math.max(1, thinking.length + text.length)));
         }
       }
     } catch {
@@ -473,17 +570,17 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       send('error', { code: 'model_unavailable', message: 'VinaX AI couldn’t answer just now.', retryable: true });
     }
     if (abort.signal.aborted) stop = 'aborted';
-    if (thinkStart != null && thinkMs == null) thinkMs = Date.now() - thinkStart;
     // Give the title a moment to arrive in this stream; it is saved whenever it comes.
     if (titleJob && open) await Promise.race([titleJob, new Promise((r) => setTimeout(r, TITLE_WAIT_MS))]);
-    send('done', { stopReason: stop, ...(usage ? { usage } : {}) });
+    const savedReply = complete && (!abort.signal.aborted || !passthrough) && text.trim().length > 0;
+    send('done', { stopReason: stop, saved: savedReply || !!continuing, ...(usage ? { usage } : {}) });
+    await chain;
     if (open) {
       open = false;
-      try { controller.close(); } catch { /* the reader is gone */ }
+      try { await writer?.close(); } catch { /* the reader is gone */ }
     }
 
-    // Save the reply (also a partial or stopped one) and move the active leaf.
-    const savedReply = text.trim().length > 0;
+    // Save the reply and move the active leaf (a broken-off or stopped one is kept by the page: POST /api/ai/keep).
     const finalText = markers.length ? applyMarkers(text, markers) : text;
     if (continuing) {
       // Continue: the new text joins the reply it continues.
@@ -522,5 +619,5 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
 
   const job = pump().catch(() => undefined);
   if (ctx.waitUntil) ctx.waitUntil(job);
-  return new Response(stream, { status: 200, headers: SSE_HEADERS });
+  return new Response(pipe.readable, { status: 200, headers: SSE_HEADERS });
 };

@@ -69,6 +69,98 @@ describe('the chat controller', () => {
   });
 });
 
+describe('pass-through streams (the provider\'s own lines)', () => {
+  const META = { conversationId: 'c1', userMessageId: 'u1', assistantMessageId: 'a1', model: { id: 'nvidia:x', name: 'X', provider: 'NVIDIA' }, wire: 'openai' };
+  const line = (delta: Record<string, unknown>) => `data: ${JSON.stringify({ choices: [{ index: 0, delta }] })}\n\n`;
+  type Call = { url: string; body: Record<string, unknown> };
+  const stub = (answers: string[]): Call[] => {
+    const calls: Call[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      calls.push({ url, body: JSON.parse(String(init.body)) as Record<string, unknown> });
+      if (url.endsWith('/keep')) return new Response(JSON.stringify({ ok: true, saved: true }), { status: 200 });
+      return new Response(answers.shift() ?? '', { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    }));
+    return calls;
+  };
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  it('reads thinking and text out of the raw lines and asks for pass-through', async () => {
+    const calls = stub([sse([['meta', META]]) + line({ reasoning_content: 'Plan.' }) + line({ content: 'Kafka ' }) + line({ content: 'rocks.' }) + 'data: [DONE]\n\n\n\n' + sse([['done', { stopReason: 'end', saved: true }]])]);
+    await expect(sendMessage('Explain Kafka')).resolves.toEqual({ ok: true });
+    expect(useChatStore.getState().messages.a1).toMatchObject({ text: 'Kafka rocks.', thinking: 'Plan.', stopReason: 'end' });
+    expect(calls[0].body.passthrough).toBe(true);
+    expect(calls.some((c) => c.url.endsWith('/keep'))).toBe(false);
+  });
+
+  it('a stream cut off before any answer text asks once more by itself, for the same question', async () => {
+    const calls = stub([
+      sse([['meta', META]]) + line({ reasoning_content: 'Thinking hard' }),
+      sse([['meta', { ...META, assistantMessageId: 'a2' }]]) + line({ content: 'Second try.' }) + sse([['done', { stopReason: 'end', saved: true }]]),
+    ]);
+    await expect(sendMessage('Explain Kafka')).resolves.toEqual({ ok: true });
+    const chats = calls.filter((c) => c.url.endsWith('/chat'));
+    expect(chats).toHaveLength(2);
+    expect(chats[1].body).toMatchObject({ conversationId: 'c1', parentMessageId: 'u1', content: [] });
+    const s = useChatStore.getState();
+    expect(s.messages.a2).toMatchObject({ text: 'Second try.', stopReason: 'end' });
+    expect(s.messages.a1).toBeUndefined();
+    expect(Object.values(s.messages).filter((m) => m.role === 'user')).toHaveLength(1);
+  });
+
+  it('asks again only once: a second cut-off shows the error', async () => {
+    const cut = sse([['meta', META]]) + line({ reasoning_content: 'Thinking' });
+    const calls = stub([cut, cut]);
+    await expect(sendMessage('Explain Kafka')).resolves.toMatchObject({ ok: false, beforeStart: false });
+    expect(calls.filter((c) => c.url.endsWith('/chat'))).toHaveLength(2);
+    expect(useChatStore.getState().messages.a1?.error).toMatchObject({ message: 'The connection dropped before the reply finished.' });
+  });
+
+  it('a stream cut off after some text keeps it on screen and saves it (POST /api/ai/keep)', async () => {
+    const calls = stub([sse([['meta', META]]) + line({ content: 'Half an ans' })]);
+    await expect(sendMessage('Explain Kafka')).resolves.toMatchObject({ ok: false });
+    await settle();
+    expect(useChatStore.getState().messages.a1).toMatchObject({ text: 'Half an ans', stopReason: 'error' });
+    const keep = calls.find((c) => c.url.endsWith('/keep'));
+    expect(keep?.body).toEqual({ conversationId: 'c1', userMessageId: 'u1', assistantMessageId: 'a1', text: 'Half an ans', model: 'nvidia:x', stopReason: 'error' });
+  });
+
+  it('done with saved false (the Worker could not save it) keeps the text too', async () => {
+    const calls = stub([sse([['meta', META]]) + line({ content: 'Partial' }) + sse([['error', { code: 'model_timeout', message: 'X took too long to answer.', retryable: true }], ['done', { stopReason: 'error', saved: false }]])]);
+    await sendMessage('Explain Kafka');
+    await settle();
+    expect(calls.find((c) => c.url.endsWith('/keep'))?.body).toMatchObject({ assistantMessageId: 'a1', text: 'Partial', stopReason: 'error' });
+  });
+
+  it('Stop after some text saves what was shown, as aborted', async () => {
+    const enc = new TextEncoder();
+    const calls: Call[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      calls.push({ url, body: JSON.parse(String(init.body)) as Record<string, unknown> });
+      if (url.endsWith('/keep')) return new Response('{"ok":true,"saved":true}', { status: 200 });
+      return new Response(new ReadableStream<Uint8Array>({
+        start(c) {
+          c.enqueue(enc.encode(sse([['meta', META]]) + line({ content: 'So far' })));
+          init.signal?.addEventListener('abort', () => c.error(new DOMException('Stopped', 'AbortError')));
+        },
+      }), { status: 200 });
+    }));
+    const pending = sendMessage('Explain Kafka');
+    for (let i = 0; i < 50 && !useChatStore.getState().messages.a1?.text; i++) await new Promise((r) => setTimeout(r, 5));
+    stopReply();
+    await pending;
+    await settle();
+    expect(calls.find((c) => c.url.endsWith('/keep'))?.body).toMatchObject({ text: 'So far', stopReason: 'aborted' });
+  });
+
+  it('sending the same question again after it went unanswered asks for a new answer, not a second copy', async () => {
+    const calls = stub([sse([['meta', { ...META, assistantMessageId: 'a9' }]]) + line({ content: 'Answer.' }) + sse([['done', { stopReason: 'end', saved: true }]])]);
+    useChatStore.setState({ conversationId: 'c1', messages: { u1: { id: 'u1', parentId: null, role: 'user', text: 'Explain Kafka', thinking: '', thinkingMs: null, model: null, stopReason: null, error: null, createdAt: '1' } }, leafId: 'u1' });
+    await sendMessage(' Explain Kafka ');
+    expect(calls[0].body).toMatchObject({ conversationId: 'c1', parentMessageId: 'u1', content: [] });
+    expect(Object.values(useChatStore.getState().messages).filter((m) => m.role === 'user')).toHaveLength(1);
+  });
+});
+
 describe('what the controller asks for', () => {
   const ok = sse([['meta', { conversationId: 'c1', userMessageId: 'u1', assistantMessageId: 'a2', model: { id: 'm', name: 'M', provider: 'P' } }], ['text', { delta: 'x' }], ['done', { stopReason: 'end' }]]);
   const bodies: Array<Record<string, unknown>> = [];

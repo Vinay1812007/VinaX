@@ -35,14 +35,57 @@ export function openAiSse(answer: string, opts: { reasoning?: string; finish?: s
   return frames.map((f) => `data: ${f}\n\n`).join('') + 'data: [DONE]\n\n';
 }
 
-/** Read a VinaX SSE response into [event, data] pairs. */
+/**
+ * Read a VinaX SSE response into [event, data] pairs. The provider's own
+ * lines (pass-through, no event name) become `thinking` / `text` events the
+ * way the page reads them (frontend vinaxai/wire.ts), by the `wire` in meta.
+ */
 export async function readEvents(res: Response): Promise<Array<{ event: string; data: Record<string, unknown> }>> {
-  const text = await res.text();
+  const text = (await res.text()).replace(/\r\n/g, '\n');
   const out: Array<{ event: string; data: Record<string, unknown> }> = [];
+  let wire = 'openai';
+  let inThink = false;
+  const push = (event: 'thinking' | 'text', delta: unknown): void => {
+    if (typeof delta !== 'string' || !delta) return;
+    if (event === 'text') {
+      // <think> tags at the start of the answer are reasoning.
+      let d = delta;
+      if (d.includes('<think>')) { inThink = true; d = d.replace('<think>', ''); }
+      if (inThink) {
+        const close = d.indexOf('</think>');
+        if (close < 0) { out.push({ event: 'thinking', data: { delta: d } }); return; }
+        if (close > 0) out.push({ event: 'thinking', data: { delta: d.slice(0, close) } });
+        inThink = false;
+        d = d.slice(close + 8).replace(/^\s+/, '');
+        if (!d) return;
+      }
+      out.push({ event: 'text', data: { delta: d } });
+    } else out.push({ event, data: { delta } });
+  };
   for (const block of text.split('\n\n')) {
     const ev = /^event: (.+)$/m.exec(block)?.[1];
-    const data = /^data: (.+)$/m.exec(block)?.[1];
-    if (ev && data) out.push({ event: ev, data: JSON.parse(data) as Record<string, unknown> });
+    const data = /^data: ?(.+)$/m.exec(block)?.[1];
+    if (!data) continue;
+    if (ev) {
+      const parsed = JSON.parse(data) as Record<string, unknown>;
+      if (ev === 'meta' && typeof parsed.wire === 'string') wire = parsed.wire;
+      out.push({ event: ev, data: parsed });
+      continue;
+    }
+    if (data.trim() === '[DONE]') continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a provider chunk of any shape
+    let j: any;
+    try { j = JSON.parse(data); } catch { continue; }
+    if (wire === 'gemini') {
+      for (const part of j.candidates?.[0]?.content?.parts ?? []) push(part.thought === true ? 'thinking' : 'text', part.text);
+    } else if (wire === 'workers-ai') {
+      push('thinking', j.reasoning_content ?? j.choices?.[0]?.delta?.reasoning_content);
+      push('text', j.response ?? j.choices?.[0]?.delta?.content);
+    } else {
+      const d = j.choices?.[0]?.delta;
+      push('thinking', d?.reasoning ?? d?.reasoning_content);
+      push('text', d?.content);
+    }
   }
   return out;
 }
