@@ -28,9 +28,12 @@ describe('the sandbox site', () => {
     expect(sandbox).toMatch(/frame-ancestors https:\/\/www\.vinaxmusic\.online http:\/\/localhost:\*/);
     expect(sandbox).toMatch(/default-src 'none'/);
   });
-  it('listens only to VinaX (and localhost for development)', () => {
+  it('listens only to VinaX (and localhost for development): the page framing it, or the tab that opened it', () => {
     expect(runner).toContain("var ALLOWED = /^(https:\\/\\/www\\.vinaxmusic\\.online|https?:\\/\\/localhost(:\\d+)?)$/;");
-    expect(runner).toContain('e.source !== window.parent');
+    expect(runner).toContain('var host = window.parent !== window ? window.parent : window.opener;');
+    expect(runner).toContain('e.source !== host || !ALLOWED.test(e.origin)');
+    // Opened in a tab of its own, the link back to VinaX is cut before an artifact runs.
+    expect(runner).toContain('window.opener = null');
   });
   it('loads its libraries only from pinned versions its CSP allows', () => {
     const urls = [...runner.matchAll(/'(https:\/\/[^']+)'/g)].map((m) => m[1]).filter((u) => u !== 'https://cdnjs.cloudflare.com/ajax/libs/').concat([...runner.matchAll(/CDN \+ '([^']+)'/g)].map((m) => `https://cdnjs.cloudflare.com/ajax/libs/${m[1]}`));

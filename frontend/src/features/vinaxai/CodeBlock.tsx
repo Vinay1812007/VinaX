@@ -24,17 +24,21 @@ export async function copyText(text: string, what = 'Copied'): Promise<void> {
 }
 
 export function CodeBlock({ code, lang }: { code: string; lang: string }): ReactNode {
-  const [html, setHtml] = useState<string | null>(() => highlighter?.(code, lang) ?? null);
+  // Colours are worked out for one text; while that text keeps growing
+  // (a reply being written) the plain, current text shows instead, so the
+  // code on screen is never an older copy.
+  const [lit, setLit] = useState<{ code: string; lang: string; html: string | null }>(() => ({ code, lang, html: highlighter?.(code, lang) ?? null }));
   useEffect(() => {
     let live = true;
     // Wait for a pause in streaming before (re)highlighting.
     const t = setTimeout(() => {
       void loadHighlighter()
-        .then((h) => { if (live) setHtml(h ? h(code, lang) : null); })
+        .then((h) => { if (live) setLit({ code, lang, html: h ? h(code, lang) : null }); })
         .catch(() => undefined);
     }, highlighter ? 120 : 0);
     return () => { live = false; clearTimeout(t); };
   }, [code, lang]);
+  const html = lit.code === code && lit.lang === lang ? lit.html : null;
   return (
     <div className="vx-ai-code">
       <div className="vx-ai-code-bar">

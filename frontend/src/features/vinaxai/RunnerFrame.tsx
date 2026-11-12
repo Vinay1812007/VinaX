@@ -7,11 +7,35 @@
  * says so and Code, Copy and Download still work.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { toast } from '@/store/toastStore';
 import type { ArtifactType } from './artifacts';
 
 export const SANDBOX_ORIGIN: string = (import.meta.env.VITE_AI_SANDBOX_ORIGIN as string | undefined) || 'https://sandbox.vinaxmusic.online';
 /** How long the runner has to say it is ready. */
 export const READY_MS = 8_000;
+
+/**
+ * Open an artifact in a tab of its own, on the sandbox's origin (never this
+ * app's): the runner page opens, says it is ready, gets the artifact by
+ * postMessage, then cuts its link back to this tab before running it.
+ */
+export function openInNewTab(kind: ArtifactType, content: string, title: string): void {
+  const tab = window.open(`${SANDBOX_ORIGIN}/`, '_blank');
+  if (!tab) {
+    toast('Allow pop-ups for VinaX to open it in a new tab');
+    return;
+  }
+  const done = (): void => { window.removeEventListener('message', onMessage); clearTimeout(timer); };
+  const onMessage = (e: MessageEvent): void => {
+    if (e.source !== tab) return;
+    const d = e.data as { source?: string; type?: string } | null;
+    if (!d || d.source !== 'vinax-runner' || d.type !== 'ready') return;
+    done();
+    tab.postMessage({ type: 'render', kind, content, title, theme: theme() }, SANDBOX_ORIGIN);
+  };
+  window.addEventListener('message', onMessage);
+  const timer = setTimeout(done, 30_000);
+}
 
 const theme = (): 'dark' | 'light' => (document.documentElement.classList.contains('light') ? 'light' : 'dark');
 

@@ -8,10 +8,10 @@ import { useEffect, useRef, type KeyboardEvent, type PointerEvent, type ReactNod
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import { CodeBlock, copyText } from './CodeBlock';
 import { Markdown } from './Markdown';
-import { RunnerFrame } from './RunnerFrame';
+import { openInNewTab, RunnerFrame } from './RunnerFrame';
 import { codeLanguage, downloadName, hasPreview, runsInSandbox, type Artifact } from './artifacts';
 import { usePanel } from './artifactStore';
-import { ChevronIcon, CloseIcon, CopyIcon, DownloadIcon } from './icons';
+import { ChevronIcon, CloseIcon, CopyIcon, DownloadIcon, OpenExternalIcon } from './icons';
 
 const TYPE_LABEL: Record<Artifact['type'], string> = { code: 'Code', html: 'HTML', svg: 'SVG', mermaid: 'Diagram', markdown: 'Document', react: 'React' };
 
@@ -41,7 +41,18 @@ export function ArtifactPanel({ versions, live, sheet, onFix, from, onOpenChat }
   const { open, tab, width, setTab, setVersion, setWidth, close } = usePanel();
   useDismissOnBack(sheet && !!open, close);
   const root = useRef<HTMLElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  /** While it is written, the code follows its newest line, unless the listener scrolled up to read. */
+  const follow = useRef(true);
   useEffect(() => { if (sheet) root.current?.querySelector<HTMLElement>('button')?.focus(); }, [sheet]);
+  const current = open && versions.length ? versions[open.version == null ? versions.length - 1 : Math.min(open.version, versions.length - 1)] : null;
+  const isWriting = !!current && live && current === versions[versions.length - 1] && current.artifact.incomplete;
+  const content = current?.artifact.content;
+  useEffect(() => {
+    const el = body.current;
+    if (el && isWriting && follow.current) el.scrollTop = el.scrollHeight;
+  }, [content, isWriting]);
+  useEffect(() => { if (!isWriting) follow.current = true; }, [isWriting]);
   if (!open || !versions.length) return null;
   const index = open.version == null ? versions.length - 1 : Math.min(open.version, versions.length - 1);
   const a = versions[index].artifact;
@@ -117,6 +128,11 @@ export function ArtifactPanel({ versions, live, sheet, onFix, from, onOpenChat }
                 Open chat
               </button>
             )}
+            {runsInSandbox(a.type) && (
+              <button type="button" className="vx-ai-act" onClick={() => openInNewTab(a.type, a.content, a.title)} aria-label="Open in new tab" title="Open in new tab" disabled={writing}>
+                <OpenExternalIcon className="w-4 h-4" />
+              </button>
+            )}
             <button type="button" className="vx-ai-act" onClick={() => void copyText(a.content, 'Artifact copied')} aria-label="Copy artifact" title="Copy">
               <CopyIcon className="w-4 h-4" />
             </button>
@@ -133,7 +149,16 @@ export function ArtifactPanel({ versions, live, sheet, onFix, from, onOpenChat }
             This was cut off before it finished, so the preview may not work. Press <strong>Continue</strong> under the reply to finish it.
           </p>
         )}
-        <div className="vx-ai-artifact-body" role={previewable ? 'tabpanel' : undefined}>
+        <div
+          ref={body}
+          className="vx-ai-artifact-body"
+          role={previewable ? 'tabpanel' : undefined}
+          onScroll={(e) => {
+            if (!writing) return;
+            const el = e.currentTarget;
+            follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+          }}
+        >
           {showing === 'preview'
             ? runsInSandbox(a.type)
               ? <RunnerFrame kind={a.type} content={a.content} title={a.title} onFix={onFix && !live ? (error) => onFix(a, error) : undefined} />

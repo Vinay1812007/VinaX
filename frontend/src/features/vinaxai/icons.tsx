@@ -31,6 +31,7 @@ export const CloseIcon = ({ className }: P) => (<svg {...base(className)}><path 
 export const GlobeSmallIcon = ({ className }: P) => (<svg {...base(className)}><circle cx="12" cy="12" r="8.5" /><path d="M3.5 12h17M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5s-1.2 6.1-3.6 8.5c-2.4-2.4-3.6-5.2-3.6-8.5S9.6 5.9 12 3.5z" /></svg>);
 export const FileIcon = ({ className }: P) => (<svg {...base(className)}><path d="M14 3.5H7.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8z" /><path d="M14 3.5V8h4.5M9 13h6M9 16.5h4" /></svg>);
 export const PaperclipIcon = ({ className }: P) => (<svg {...base(className)}><path d="m20 11.5-8 8a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.7 17a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6" /></svg>);
+export const OpenExternalIcon = ({ className }: P) => (<svg {...base(className)}><path d="M13.5 4.5h6v6M19.5 4.5 11 13M17.5 13.5v4a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2h4" /></svg>);
 export const DownloadIcon = ({ className }: P) => (<svg {...base(className)}><path d="M12 4.5v11M7 11l5 5 5-5M5 19.5h14" /></svg>);
 export const MicIcon = ({ className }: P) => (<svg {...base(className)}><rect x="9" y="3.5" width="6" height="11" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5" /></svg>);
 export const MicOffIcon = ({ className }: P) => (<svg {...base(className)}><path d="M15 9.5V6.5a3 3 0 0 0-5.6-1.5M9 9v2.5a3 3 0 0 0 4.6 2.5M5.5 11.5a6.5 6.5 0 0 0 10.4 5.2M18.5 11.5a6.4 6.4 0 0 1-.6 2.7M12 18v2.5M4 4l16 16" /></svg>);

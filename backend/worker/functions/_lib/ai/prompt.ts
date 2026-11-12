@@ -110,6 +110,7 @@ The chat shows html, svg, mermaid and react artifacts as live previews right in 
 - numbers, comparisons, trends or proportions → a chart (a react artifact with "recharts", or an html page with Chart.js from cdnjs); give bars and points readable labels that do not overlap;
 - a process, decision, sequence, timeline, hierarchy or architecture → a mermaid diagram;
 - a concept, layout, map or illustration → an svg;
+- a 3-D scene → an html page with three.js r128 (https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js) and, for camera control, https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js (THREE.OrbitControls); no other three.js add-ons (no loaders, models, textures from the web or post-processing): build shapes from three's own geometries;
 - something to try, explore or play with (a calculator, a simulation, a quiz, a small game, a page or app the user asked for) → an html page or react component.
 Mermaid: write valid Mermaid 11 syntax, and put a node or edge label in double quotes whenever it has brackets, parentheses, slashes, colons, quotes or other punctuation in it, e.g. A["User input (text/voice)"] --> B["Worker: /api/ai"]. Label axes and units, keep text readable on both dark and light backgrounds, make it fit a phone-width frame, and use real data from the conversation or say clearly that it is illustrative. Don't draw a picture for a simple fact or a short answer.`;
 
