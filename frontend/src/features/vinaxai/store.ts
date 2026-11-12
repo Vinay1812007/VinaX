@@ -67,19 +67,22 @@ export type RunOutcome = { ok: true } | { ok: false; code: string; beforeStart: 
 type Meta = Extract<StreamEvent, { event: 'meta' }>['data'];
 
 /**
- * The Worker passes the model's bytes straight through, so a reply that did
- * not end on its own (Stop, a stream that broke off) is only whole here: the
- * page saves what it showed (POST /api/ai/keep). A Continue is left out (its
- * text joins a reply the server already has).
+ * The Worker passes the model's bytes straight through, so a reply it did
+ * not save is only whole here: one that did not end on its own (Stop, a
+ * stream that broke off), or one too large for it to read again
+ * (`done.saved: false`). The page saves what it showed (POST /api/ai/keep);
+ * for a Continue, the whole reply (the saved part plus what followed).
+ * Resolves true when it was saved.
  */
-function keepSeen(meta: Meta | null, stopReason: 'aborted' | 'error'): void {
-  if (!meta || meta.continued) return;
+function keepSeen(meta: Meta | null, stopReason: 'aborted' | 'error' | 'end' | 'length'): Promise<boolean> {
+  if (!meta) return Promise.resolve(false);
   const reply = useChatStore.getState().messages[meta.assistantMessageId];
-  if (!reply || !reply.text.trim()) return;
-  void keepReply({
+  if (!reply || !reply.text.trim()) return Promise.resolve(false);
+  return keepReply({
     conversationId: meta.conversationId, userMessageId: meta.userMessageId, assistantMessageId: meta.assistantMessageId,
     text: reply.text, ...(reply.thinking ? { thinking: reply.thinking } : {}), model: meta.model.id, stopReason,
-  }).then(refreshList).catch(() => undefined);
+    ...(meta.continued ? { continued: true } : {}),
+  }).then((r) => { refreshList(); return r.saved === true; }).catch(() => false);
 }
 
 /** No answer text arrived for this reply (only reasoning, or nothing). */
@@ -127,7 +130,7 @@ async function run(body: ChatRequestBody, attempt = 0, autoLeft = AUTO_CONTINUES
       return run(again, attempt + 1, autoLeft);
     }
     failAfterStart(code);
-    keepSeen(m, 'error');
+    void keepSeen(m, 'error');
     return { ok: false, code, beforeStart: false };
   };
   // Stop must work at once, even while the request is still waiting for an
@@ -151,9 +154,10 @@ async function run(body: ChatRequestBody, attempt = 0, autoLeft = AUTO_CONTINUES
       dispatch({ type: 'fail', code: 'network', message: noticeFor('network') });
       return { ok: false, code: 'network', beforeStart: true };
     }
-    if (finished.saved === false) keepSeen(meta, finished.stopReason === 'aborted' ? 'aborted' : 'error');
     const m = meta as Meta | null;
-    if (finished.stopReason === 'length' && finished.saved !== false && m && autoLeft > 0 && cutInsideArtifact(m.assistantMessageId)) {
+    // Not saved by the Worker: save it from here (and before a Continue, which needs it saved).
+    const kept = finished.saved === false ? await keepSeen(m, finished.stopReason) : true;
+    if (finished.stopReason === 'length' && kept && m && autoLeft > 0 && cutInsideArtifact(m.assistantMessageId)) {
       if (inflight === ctl) inflight = null;
       return continueFrom(m.assistantMessageId, autoLeft - 1);
     }
@@ -162,7 +166,7 @@ async function run(body: ChatRequestBody, attempt = 0, autoLeft = AUTO_CONTINUES
     flush();
     if (ctl.signal.aborted) {
       dispatch({ type: 'stopped' });
-      if (meta && !done) keepSeen(meta, 'aborted');
+      if (meta && !done) void keepSeen(meta, 'aborted');
       return meta ? { ok: true } : { ok: false, code: 'aborted', beforeStart: true };
     }
     const code = e instanceof AiError ? e.code : 'network';

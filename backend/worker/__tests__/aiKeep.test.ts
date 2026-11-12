@@ -63,4 +63,27 @@ describe('POST /api/ai/keep', () => {
     await keep(body({ model: 'evil:model', stopReason: 'aborted' }));
     expect(fake.rows('ai_messages').find((m) => m.id === A1)).toMatchObject({ model_id: null, provider: null, stop_reason: 'aborted' });
   });
+
+  it('saves a reply that ended but was too large for the chat to read again, with how it ended', async () => {
+    const fake = seed();
+    await keep(body({ stopReason: 'length' }));
+    expect(fake.rows('ai_messages').find((m) => m.id === A1)).toMatchObject({ stop_reason: 'length' });
+    await keep(body({ assistantMessageId: A2, stopReason: 'end' }));
+    expect(fake.rows('ai_messages').find((m) => m.id === A2)).toMatchObject({ stop_reason: 'end' });
+  });
+
+  it('a Continue saves the whole reply over the saved part, only when it carries that part on', async () => {
+    const fake = seed();
+    await keep(body({ text: '<artifact id="a" type="html" title="A"><html>', thinking: 'Plan it.', stopReason: 'length' }));
+    const whole = '<artifact id="a" type="html" title="A"><html><body>Hi</body></html>\n</artifact>';
+    expect(await (await keep(body({ text: whole, thinking: 'Plan it.\n\nThen finish.', stopReason: 'end', continued: true }))).json()).toEqual({ ok: true, saved: true });
+    const reply = fake.rows('ai_messages').find((m) => m.id === A1);
+    expect(reply).toMatchObject({ content: [{ type: 'text', text: whole }], thinking: 'Plan it.\n\nThen finish.', stop_reason: 'end' });
+    expect((reply?.artifacts as Array<{ id: string }>)[0]).toMatchObject({ id: 'a' });
+    // Not a carry-on of what is saved (or nothing new): left alone.
+    expect(await (await keep(body({ text: 'Something else entirely, and longer than before', continued: true }))).json()).toEqual({ ok: true, saved: false });
+    expect(fake.rows('ai_messages').find((m) => m.id === A1)?.content).toEqual([{ type: 'text', text: whole }]);
+    // A Continue of a reply that is not saved at all.
+    expect((await keep(body({ assistantMessageId: A2, continued: true }))).status).toBe(404);
+  });
 });

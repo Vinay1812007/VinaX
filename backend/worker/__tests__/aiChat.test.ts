@@ -5,7 +5,7 @@
  * reply being saved, and the order of the SSE events.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FIRST_EVENT_MS, FIRST_EVENT_SLOW_MS, firstEventMsFor, onRequestPost } from '../functions/api/ai/chat';
+import { FIRST_EVENT_MS, FIRST_EVENT_SLOW_MS, PARSE_MAX_CHARS, firstEventMsFor, onRequestPost, tailStop } from '../functions/api/ai/chat';
 import { LADDERS, MODELS, modelById } from '../functions/_lib/ai/models';
 import type { ModelSpec } from '../functions/_lib/ai/types';
 import { issueSession } from '../functions/_lib/googleAuth';
@@ -361,6 +361,30 @@ describe('failover and failures', () => {
     expect(events.filter((e) => e.event === 'meta').map((e) => (e.data.model as { id: string }).id)).toEqual(['groq:openai/gpt-oss-120b', 'nvidia:nvidia/nemotron-3-ultra-550b-a55b']);
     expect(events.filter((e) => e.event === 'text').map((e) => e.data.delta).join('')).toBe('From NVIDIA.');
     expect(fake.rows('ai_messages').find((m) => m.role === 'assistant')).toMatchObject({ model_id: 'nvidia:nvidia/nemotron-3-ultra-550b-a55b' });
+  });
+});
+
+describe('a reply too large to read again', () => {
+  it('ends with saved false and how it ended, for the page to save; nothing is parsed or saved here', async () => {
+    const piece = 'x'.repeat(50_000);
+    const lines = Array.from({ length: Math.ceil(PARSE_MAX_CHARS / 50_000) + 2 }, () => `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: piece } }] })}\n\n`);
+    lines.push(`data: ${JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: 'length' }] })}\n\n`, 'data: [DONE]\n\n');
+    // One network chunk per line, as a provider sends them.
+    const chunked = () => new Response(new ReadableStream<Uint8Array>({ start(c) { for (const l of lines) c.enqueue(new TextEncoder().encode(l)); c.close(); } }), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    const fake = seed({}, chunked);
+    // Read as plain text: the event reader is slow on megabytes of lines.
+    const raw = await (await post(ask('Build a huge page'))).text();
+    await settle();
+    const done = raw.slice(raw.lastIndexOf('event: done'));
+    expect(JSON.parse(done.slice(done.indexOf('data: ') + 6).split('\n')[0])).toEqual({ stopReason: 'length', saved: false });
+    expect(raw.includes('event: error')).toBe(false);
+    expect(fake.rows('ai_messages').map((m) => m.role)).toEqual(['user']);
+  });
+
+  it('tailStop reads the length limit from the last lines of either wire', () => {
+    expect(tailStop('data: {"choices":[{"delta":{},"finish_reason":"length"}]}')).toBe('length');
+    expect(tailStop('data: {"candidates":[{"finishReason":"MAX_TOKENS"}]}')).toBe('length');
+    expect(tailStop('data: {"choices":[{"delta":{},"finish_reason":"stop"}]}')).toBe('end');
   });
 });
 

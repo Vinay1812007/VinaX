@@ -351,7 +351,10 @@ export interface KeepBody {
   text: string;
   thinking?: string;
   model?: string;
-  stopReason: 'aborted' | 'error';
+  /** end / length: the reply ended, but the Worker could not save it (too large to read again). */
+  stopReason: 'aborted' | 'error' | 'end' | 'length';
+  /** A Continue: `text` is the whole reply, the part already saved plus what followed. */
+  continued?: boolean;
 }
 
 export function keepReply(body: KeepBody): Promise<{ ok: boolean; saved: boolean }> {

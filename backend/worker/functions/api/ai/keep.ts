@@ -1,10 +1,13 @@
 /**
- * VinaX AI — POST /api/ai/keep: save the part of a reply the page saw when
- * the reply did not end on its own (Stop, or a stream that broke off).
+ * VinaX AI — POST /api/ai/keep: save a reply as the page saw it, when the
+ * chat could not: it did not end on its own (Stop, or a stream that broke
+ * off), or it ended but was too large for the chat to read again
+ * (`done.saved: false`, chat.ts PARSE_MAX_CHARS).
  *
  *   Authorization: Bearer <session>
  *   { conversationId, userMessageId, assistantMessageId,   // from the reply's meta event
- *     text, thinking?, model?: "<registry id>", stopReason: "aborted" | "error" }
+ *     text, thinking?, model?: "<registry id>", stopReason: "aborted" | "error" | "end" | "length",
+ *     continued?: true }   // a Continue: `text` is the whole reply, the saved one plus what followed
  *   → 200 { ok: true, saved: boolean }   (saved false: the reply was already saved, or there was no text)
  *   → 400 bad_request · 401 signed_out · 404 not_found · 413 too_long · 429 rate_limited · 503 unavailable
  *
@@ -21,7 +24,8 @@ import { dbConfigured } from '../../_lib/db';
 import { MODELS, modelById } from '../../_lib/ai/models';
 import { artifactsOf } from '../../_lib/ai/artifacts';
 import { THINK_MAX } from '../../_lib/ai/think';
-import { getConversation, insertMessage, isUuid, listMessages, updateConversation } from '../../_lib/ai/store';
+import { getConversation, insertMessage, isUuid, listMessages, updateConversation, updateMessage } from '../../_lib/ai/store';
+import { textOf } from '../../_lib/ai/history';
 import { MAX_TEXT_CHARS, onRequestOptions as chatOptions } from './chat';
 import type { AiEnv } from '../../_lib/ai/types';
 
@@ -47,7 +51,7 @@ export const onRequestPost = async ({ request, env }: Ctx): Promise<Response> =>
   if (b.text.length > MAX_TEXT_CHARS) return json({ error: 'too_long' }, 413);
   const text = b.text;
   const thinking = typeof b.thinking === 'string' && b.thinking ? b.thinking.slice(0, THINK_MAX) : null;
-  const stopReason = b.stopReason === 'error' ? 'error' : 'aborted';
+  const stopReason = b.stopReason === 'error' || b.stopReason === 'end' || b.stopReason === 'length' ? b.stopReason : 'aborted';
   const spec = modelById(MODELS, b.model);
 
   const conv = await getConversation(env, sub, conversationId);
@@ -56,10 +60,28 @@ export const onRequestPost = async ({ request, env }: Ctx): Promise<Response> =>
   const rows = await listMessages(env, conversationId);
   if (!rows.ok) return json({ error: 'unavailable' }, 503);
   if (!rows.rows.some((r) => r.id === userMessageId && r.role === 'user')) return json({ error: 'not_found' }, 404);
-  // Already saved (the reply ended on the server after all), or nothing to keep.
-  if (rows.rows.some((r) => r.id === assistantMessageId) || !text.trim()) return json({ ok: true, saved: false });
-
   const found = artifactsOf(text);
+  const existing = rows.rows.find((r) => r.id === assistantMessageId);
+  if (b.continued === true) {
+    // A Continue the chat could not save: the whole reply replaces the saved one, which it must start with.
+    if (!existing || existing.role !== 'assistant' || existing.parent_id !== userMessageId) return json({ error: 'not_found' }, 404);
+    const before = textOf(existing.content);
+    if (text.length <= before.length || !text.startsWith(before)) return json({ ok: true, saved: false });
+    const updated = await updateMessage(env, conversationId, assistantMessageId, {
+      content: [{ type: 'text', text }],
+      artifacts: found.length ? found : null,
+      // The page's reasoning may already hold the saved part; never write it twice.
+      thinking: (thinking && existing.thinking && thinking.startsWith(existing.thinking) ? thinking : [existing.thinking, thinking].filter(Boolean).join('\n\n')).slice(0, THINK_MAX) || null,
+      ...(spec ? { model_id: spec.id, provider: spec.provider } : {}),
+      stop_reason: stopReason,
+    });
+    if (!updated.ok) return json({ error: 'unavailable' }, 503);
+    await updateConversation(env, sub, conversationId, { updated_at: new Date().toISOString(), active_leaf_id: assistantMessageId });
+    return json({ ok: true, saved: true });
+  }
+  // Already saved (the reply ended on the server after all), or nothing to keep.
+  if (existing || !text.trim()) return json({ ok: true, saved: false });
+
   const saved = await insertMessage(env, {
     id: assistantMessageId, conversation_id: conversationId, parent_id: userMessageId, role: 'assistant',
     content: [{ type: 'text', text }], thinking, thinking_ms: null, sources: null,

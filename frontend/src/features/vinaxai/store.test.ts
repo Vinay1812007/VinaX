@@ -91,6 +91,27 @@ describe('a reply cut off inside an artifact', () => {
     expect(useChatStore.getState().messages.a1.text).toContain('</artifact>');
   });
 
+  it('a reply too big for the Worker to save is saved from the page first, then carried on; the Continue is saved whole', async () => {
+    const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const replies = [
+      sse([['meta', meta], ['text', { delta: '<artifact id="app" type="html" title="App"><html>' }], ['done', { stopReason: 'length', saved: false }]]),
+      sse([['meta', { ...meta, continued: true }], ['text', { delta: '<body>Hi</body></html>\n</artifact>' }], ['done', { stopReason: 'end', saved: false }]]),
+    ];
+    let chat = 0;
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      calls.push({ url, body: JSON.parse(String(init.body)) as Record<string, unknown> });
+      if (url.endsWith('/keep')) return new Response(JSON.stringify({ ok: true, saved: true }), { status: 200 });
+      return new Response(replies[chat++], { status: 200 });
+    }));
+    await sendMessage('Build an app');
+    expect(calls.map((c) => c.url.split('/').pop())).toEqual(['chat', 'keep', 'chat', 'keep']);
+    expect(calls[1].body).toMatchObject({ assistantMessageId: 'a1', stopReason: 'length', text: '<artifact id="app" type="html" title="App"><html>' });
+    expect(calls[1].body.continued).toBeUndefined();
+    expect(calls[2].body).toMatchObject({ continueFrom: 'a1' });
+    expect(calls[3].body).toMatchObject({ assistantMessageId: 'a1', stopReason: 'end', continued: true });
+    expect(String(calls[3].body.text)).toContain('</artifact>');
+  });
+
   it('stops after three tries, and never for a cut-off reply with no open artifact', async () => {
     const cut = sse([['meta', meta], ['text', { delta: '<artifact id="app" type="html" title="App"><html>' }], ['done', { stopReason: 'length', saved: true }]]);
     const bodies = stub([cut]);

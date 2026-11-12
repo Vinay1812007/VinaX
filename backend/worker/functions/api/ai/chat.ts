@@ -98,6 +98,21 @@ export const REPLY_BUDGET_SLOW_MS = 480_000;
 export function firstEventMsFor(slow: boolean, picked: ModelSpec | null): number {
   return Math.max(slow ? FIRST_EVENT_SLOW_MS : FIRST_EVENT_MS, picked?.firstEventMs ?? 0);
 }
+/**
+ * A finished reply larger than this (the provider's raw lines) is not read
+ * again here to be saved: parsing it costs more CPU than the free plan
+ * allows (about 8 ms a megabyte; a 16K-token NVIDIA reply is about 5 MB of
+ * lines, 40 ms, and Cloudflare cut it off before the closing events,
+ * 2026-11-12). The page, which already has
+ * the text, saves it instead (POST /api/ai/keep), told by `saved: false`.
+ */
+export const PARSE_MAX_CHARS = 1_000_000;
+
+/** How a reply too large to parse ended, from its last lines: the length limit, or its own end. */
+export function tailStop(raw: string): 'length' | 'end' {
+  return /"finish_reason"\s*:\s*"length"|"finishReason"\s*:\s*"MAX_TOKENS"/.test(raw.slice(-20_000)) ? 'length' : 'end';
+}
+
 /** How long the end of a first reply waits for its generated title. */
 export const TITLE_WAIT_MS = 1_500;
 
@@ -468,6 +483,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     let markers: Marker[] = [];
     /** The reply's text is whole on this side, so this request saves it (the page keeps what it saw otherwise). */
     let complete = false;
+    /** The reply ended but was too large to read again here: the page saves it (`saved: false`). */
+    let tooBig = false;
     const metaOf = (m: ModelSpec) => ({ conversationId: conversation.id, userMessageId: userMsg.id, assistantMessageId: assistantId, model: modelInfo(m), wire: ADAPTERS[m.provider].wire, ...(continuing ? { continued: true } : {}) });
     send('meta', metaOf(model));
     // A new conversation gets a generated title, written in parallel with the reply.
@@ -555,6 +572,10 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
             ({ text, thinking } = relayed);
             complete = true;
           }
+        } else if (passthrough && raw.length > PARSE_MAX_CHARS) {
+          // Too big to read again within the CPU allowance: the page saves what it showed.
+          stop = tailStop(raw);
+          tooBig = true;
         } else {
           const parsed = await collect(ADAPTERS[model.provider].parse(textBody(raw)));
           for (const ev of parsed.events) {
@@ -594,7 +615,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       send('error', { code: 'model_unavailable', message: 'VinaX AI couldn’t save this chat just now. Try again.', retryable: true });
     }
     const savedReply = userOk && complete && (!abort.signal.aborted || !passthrough) && text.trim().length > 0;
-    send('done', { stopReason: stop, saved: savedReply || !!continuing, ...(usage ? { usage } : {}) });
+    send('done', { stopReason: stop, saved: savedReply || (!!continuing && !tooBig), ...(usage ? { usage } : {}) });
     await chain;
     if (open) {
       open = false;
