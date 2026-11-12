@@ -10,6 +10,7 @@
  *                                          // empty + parentMessageId of a user message = retry
  *     continueFrom?: uuid,                 // an assistant message that was cut off: write on from where it stopped
  *     mode: "auto" | "model", model?: "<registry id>",
+ *     thinking?: "auto" | "fast" | "standard" | "extended" | "max",   // thinking.ts; the older extendedThinking: true = "extended"
  *     extendedThinking?, webSearch?, artifacts? (default true), timezone?, locale?,
  *     personal?: { name?, about?, instructions?, style? },    // VinaX AI settings → Personalisation; used for this reply only, never stored
  *     projectId?: uuid,                   // a new conversation starts in this project (its instructions and files join every reply)
@@ -17,10 +18,13 @@
  *     passthrough?: true }                 // the page reads the provider's own lines (below); without it, named text events
  *
  *   → 200 text/event-stream, named events, one JSON object per data line:
- *       meta     { conversationId, userMessageId, assistantMessageId, model: { id, name, provider }, continued? }
+ *       meta     { conversationId, userMessageId, assistantMessageId, model: { id, name, provider }, continued?,
+ *                  thinking: { choice, level, used },   // the composer's choice, the level wanted, the level this model answers at
+ *                  route?: { task, complexity } }        // Auto: what kind of message it judged this to be
  *                (sent again when a failover changes the model; the page then clears any reasoning shown)
  *       title    { title }      (new conversations: a generated 2–6 word title, when it arrives in time)
  *       status   { step: "searching", query } · { step: "searched", count, sites }
+ *       progress { step: "reading", count, names }   (the reply reads the thread's files or the project's; older pages ignore it)
  *       sources  { items: [{ n, url, title, site, snippet? }], via: "grounding" | "search", queries?, entryPointHtml?, markers? }
  *                (search: before the text, the model cites [n] itself; grounding: after the text,
  *                 with `markers` [{ at, ns }] saying where [n] goes in it)
@@ -68,7 +72,8 @@ import {
   applyMarkers, buildQuery, GROUNDING_DAILY_LIMIT, placeMarkers, searchMode, searchWeb, takeDaily, topicOf, wantsSearch,
   type Marker, type SearchResult,
 } from '../../_lib/ai/search';
-import { humanReason, pickLadder, type RunOptions } from '../../_lib/ai/router';
+import { humanReason, pickLadder, preferFit, type RunOptions } from '../../_lib/ai/router';
+import { assessTask, autoLevel, parseThinking, preferLevel, resolveLevel, specAtLevel, TASK_NAMES, type ThinkingLevel } from '../../_lib/ai/thinking';
 import { collect, openModel, textBody } from '../../_lib/ai/passthrough';
 import { sseFrame } from '../../_lib/ai/sse';
 import { artifactsOf } from '../../_lib/ai/artifacts';
@@ -131,6 +136,7 @@ interface ChatBody {
   webSearch?: unknown;
   artifacts?: unknown;
   extendedThinking?: unknown;
+  thinking?: unknown;
   timezone?: unknown;
   locale?: unknown;
   personal?: unknown;
@@ -228,7 +234,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   const mode = body.mode === 'model' ? 'model' : 'auto';
   /** The page reads the provider's own lines (vinaxai/wire.ts); older pages get named text events. */
   const passthrough = body.passthrough === true;
-  const extendedThinking = body.extendedThinking === true;
+  /** The composer's Thinking choice; Auto judges each message (thinking.ts). */
+  const thinkingChoice = parseThinking(body.thinking, body.extendedThinking);
   const parentRaw = body.parentMessageId;
   if (body.conversationId != null && !isUuid(body.conversationId)) return json({ error: 'not_found' }, 404);
   if (parentRaw != null && parentRaw !== 'root' && !isUuid(parentRaw)) return json({ error: 'bad_request' }, 400);
@@ -367,13 +374,20 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   const project = await loadProjectContext(env, sub, conversation.project_id);
   const threadSize = (project?.chars ?? 0) + turns.reduce((n, t) => n + t.text.length + t.files.reduce((m, id) => m + (fileRows.get(id)?.extracted_text?.length ?? 0), 0), 0);
   const latestText = typedText(userMsg.content);
+  // How hard this message looks, and the thinking level it gets (Auto) or was given.
+  const task = assessTask({ text: latestText, hasImages: signals.hasImages, hasPdf: signals.hasPdf });
+  const wanted: ThinkingLevel = thinkingChoice === 'auto' ? autoLevel(task) : thinkingChoice;
 
   if (mode === 'auto') {
-    ladder = pickLadder({ text: latestText, threadChars: threadSize, hasImages: signals.hasImages, hasPdf: signals.hasPdf || longKnowledge(project), extendedThinking });
+    // Hard questions go to the deep ladder, except code, whose own ladder already reasons well.
+    const deep = wanted === 'extended' || wanted === 'max' ? thinkingChoice !== 'auto' || task.kind !== 'code' : false;
+    ladder = pickLadder({ text: latestText, threadChars: threadSize, hasImages: signals.hasImages, hasPdf: signals.hasPdf || longKnowledge(project), extendedThinking: deep });
     candidates = ladderModels(registry, ladder);
     if (!candidates.length) candidates = ladderModels(registry, 'default');
     if (!candidates.length) candidates = registry.filter((spec) => spec.group !== null);
     if (!candidates.length) return json({ error: 'ai_not_configured' }, 503);
+    // Capabilities first (sees the images, holds the thread), then models that have the wanted level.
+    candidates = preferLevel(preferFit(candidates, { hasImages: signals.hasImages, threadChars: threadSize }), wanted);
   }
 
   // Web search: at most one per turn, never for a Continue.
@@ -404,7 +418,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     firstName: firstNameOf(account.ok ? account.value?.name : null),
   };
   const personal = sanitizePersonal(body.personal);
-  const slow = ladder === 'deep' || mode === 'model';
+  const slow = ladder === 'deep' || mode === 'model' || wanted === 'extended' || wanted === 'max';
   // The search API runs once, and only if a model that cannot search itself answers.
   let apiSearch: Promise<SearchResult> | null = null;
   let searched: { items: Source[]; via: 'grounding' | 'search'; queries: string[]; entryPointHtml?: string } | null = null;
@@ -422,7 +436,14 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     return r;
   })());
   const memo = newMemo();
+  // What the reply reads, said once before the model starts (a real step, not a guess at its thinking).
+  const readNames = [...fileRows.values(), ...(project?.files ?? [])].map((a) => a.name).filter(Boolean);
+  let saidReading = false;
   const build: RunOptions['build'] = async (spec) => {
+    if (!saidReading && readNames.length) {
+      saidReading = true;
+      send('progress', { step: 'reading', count: readNames.length, names: readNames.slice(0, 3) });
+    }
     const ground = grounding && spec.flags.grounding;
     let search: SearchBlock | null = null;
     if (doSearch && query && !ground) {
@@ -431,14 +452,18 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     }
     // Artifacts go to every model with room for them (prompt.ts) unless the page turned them off.
     const knowledge = project ? await knowledgeFor(env, spec, project, memo) : null;
-    const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: body.artifacts !== false, search, personal, owner: settings.instructions, project: knowledge?.prompt ?? null, memory: memoryText });
+    // The nearest level this model has, sent through its own switch (thinking.ts).
+    const level = resolveLevel(spec, wanted);
+    const asked = specAtLevel(spec, level);
+    const system = buildSystemPrompt({ spec, vars: { ...vars, modelName: spec.name, providerName: PROVIDER_NAMES[spec.provider] }, artifacts: body.artifacts !== false, search, personal, owner: settings.instructions, project: knowledge?.prompt ?? null, memory: memoryText, thinking: level });
     const messages = withKnowledge(await materialize(env, turns, spec, fileRows, memo), knowledge);
     return {
-      model: spec,
+      model: asked,
       system,
       messages: trimHistory(messages, Math.max(4_000, spec.maxContextChars - system.length)),
-      maxOutputTokens: spec.maxOutput,
-      reasoning: extendedThinking ? 'high' : 'default',
+      maxOutputTokens: asked.maxOutput,
+      // The level's fields are already in `asked.params`.
+      reasoning: 'default',
       webSearch: ground,
     };
   };
@@ -485,7 +510,12 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     let complete = false;
     /** The reply ended but was too large to read again here: the page saves it (`saved: false`). */
     let tooBig = false;
-    const metaOf = (m: ModelSpec) => ({ conversationId: conversation.id, userMessageId: userMsg.id, assistantMessageId: assistantId, model: modelInfo(m), wire: ADAPTERS[m.provider].wire, ...(continuing ? { continued: true } : {}) });
+    const metaOf = (m: ModelSpec) => ({
+      conversationId: conversation.id, userMessageId: userMsg.id, assistantMessageId: assistantId, model: modelInfo(m), wire: ADAPTERS[m.provider].wire,
+      thinking: { choice: thinkingChoice, level: wanted, used: resolveLevel(m, wanted) },
+      ...(mode === 'auto' ? { route: { task: TASK_NAMES[task.kind], complexity: task.complexity } } : {}),
+      ...(continuing ? { continued: true } : {}),
+    });
     send('meta', metaOf(model));
     // A new conversation gets a generated title, written in parallel with the reply.
     let titleJob: Promise<void> | null = null;
@@ -651,7 +681,7 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       model_pref: mode === 'model' ? model.id : 'auto',
     });
     if (titleJob) await titleJob;
-    console.log(JSON.stringify({ route: 'ai-chat', continued: !!continuing, search: searchLog, model: model.id, provider: model.provider, ladder, ms: Date.now() - started, status: stop, input: usage?.input ?? null, output: usage?.output ?? null }));
+    console.log(JSON.stringify({ route: 'ai-chat', continued: !!continuing, search: searchLog, model: model.id, provider: model.provider, ladder, thinking: resolveLevel(model, wanted), task: task.kind, complexity: task.complexity, ms: Date.now() - started, status: stop, input: usage?.input ?? null, output: usage?.output ?? null }));
     // Memory: learn from this turn once the reply is saved (this whole job runs under waitUntil).
     if (learnNow && savedReply && (stop === 'end' || stop === 'length')) {
       const path = [...pathRows.map((r) => ({ role: r.role, text: typedText(r.content) })), { role: 'assistant' as const, text: finalText }];

@@ -11,9 +11,31 @@ export interface PickerModel extends ModelLabel {
   group: 'fast' | 'balanced' | 'smart' | 'vision' | 'code' | 'more' | 'cloudflare'
     | 'more-groq' | 'more-gemini' | 'more-openrouter' | 'more-nvidia' | 'more-cloudflare';
   description: string;
-  flags: { vision: boolean; web: boolean; thinking: boolean; code: boolean };
+  flags: { vision: boolean; web: boolean; thinking: boolean; code: boolean; pdf?: boolean };
   available: boolean;
   reason?: 'not_configured' | 'busy';
+  /** Thinking levels with a real provider switch on this model (always includes 'standard'). */
+  thinkingLevels?: ThinkingLevel[];
+  /** Capability filters in the picker. */
+  kinds?: ModelKind[];
+  /** About how much the model holds and writes (tokens). */
+  contextTokens?: number;
+  outputTokens?: number;
+  /** One of Auto's first choices. */
+  recommended?: boolean;
+}
+
+export type ThinkingLevel = 'fast' | 'standard' | 'extended' | 'max';
+/** The composer's Thinking choice: Auto judges each message. */
+export type ThinkingChoice = 'auto' | ThinkingLevel;
+export const THINKING_CHOICES: readonly ThinkingChoice[] = ['auto', 'fast', 'standard', 'extended', 'max'];
+export type ModelKind = 'fast' | 'reasoning' | 'code' | 'vision' | 'long';
+
+/** How a reply was routed and how hard its model was asked to think (the stream's meta). */
+export interface ReplyRoute {
+  thinking?: { choice: ThinkingChoice; level: ThinkingLevel; used: ThinkingLevel };
+  /** Auto only: the kind of message it judged this to be. */
+  route?: { task: string; complexity: 'simple' | 'normal' | 'hard' };
 }
 
 /** A free model found in its provider's list (not curated): kept out of short menus such as Retry. */
@@ -28,6 +50,8 @@ export interface ModelsResponse {
   models: PickerModel[];
   /** Voice features that have a provider key, and the voices to offer (phase 6). */
   voice?: VoiceInfo;
+  /** The thinking levels Auto can give with the models in its ladders. */
+  autoThinking?: ThinkingLevel[];
   /** The owner's file limits (counts, MB and pages). */
   limits?: Partial<Record<'imagesPerMessage' | 'filesPerMessage' | 'filesPerChat' | 'pdfMB' | 'pdfPages' | 'textMB', number>>;
 }
@@ -73,6 +97,9 @@ export interface Marker {
   ns: number[];
 }
 
+/** A real step the Worker takes before the model answers (not a guess at the model's thinking). */
+export interface ReplyProgress { step: 'reading'; count: number; names: string[] }
+
 export type SearchStatus = { step: 'searching'; query: string } | { step: 'searched'; count: number; sites: string[] };
 
 export interface ReplyError {
@@ -104,11 +131,15 @@ export interface ChatMessage {
   /** How long the model reasoned, once its answer began (ms). */
   thinkingMs: number | null;
   model: ModelLabel | null;
+  /** This session only: the thinking level and Auto's routing for this reply. */
+  routing?: ReplyRoute;
   stopReason: StopReason | null;
   error: ReplyError | null;
   sources?: SourcesInfo | null;
   /** While the reply is written: what the web search is doing. */
   status?: SearchStatus | null;
+  /** While the reply is written: the files it is reading. */
+  progress?: ReplyProgress | null;
   createdAt: string;
   /** Only on this device so far (not yet confirmed by the server). */
   local?: boolean;
@@ -177,11 +208,12 @@ export interface MemoryState {
 /** The named events of the chat stream. */
 export type StreamEvent =
   /** `wire`: how the provider's own lines in the stream are written (wire.ts). */
-  | { event: 'meta'; data: { conversationId: string; userMessageId: string; assistantMessageId: string; model: ModelLabel; continued?: boolean; wire?: string } }
+  | { event: 'meta'; data: { conversationId: string; userMessageId: string; assistantMessageId: string; model: ModelLabel; continued?: boolean; wire?: string } & ReplyRoute }
   | { event: 'title'; data: { title: string } }
   | { event: 'thinking'; data: { delta: string } }
   | { event: 'text'; data: { delta: string } }
   | { event: 'status'; data: SearchStatus }
+  | { event: 'progress'; data: ReplyProgress }
   | { event: 'sources'; data: SourcesInfo & { markers?: Marker[] } }
   | { event: 'error'; data: ReplyError }
   /** `saved` false: the Worker did not save the reply, so the page keeps what it saw (POST /api/ai/keep). */

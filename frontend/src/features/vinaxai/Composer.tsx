@@ -1,7 +1,8 @@
 /**
  * VinaX AI — the composer: a rounded card with an auto-growing text area.
  * Enter sends, Shift+Enter adds a line; Send becomes Stop while a reply is
- * being written. The mic dictates into the text (never sends by itself);
+ * being written. Beside the + menu sits the Thinking menu (Auto, Fast,
+ * Standard, Extended, Maximum). The mic dictates into the text (never sends by itself);
  * with nothing typed, the Live voice button stands where Send goes.
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef, type ClipboardEvent, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
@@ -9,7 +10,8 @@ import { ACCEPT } from './files';
 import { ArrowUpIcon, CheckIcon, CloseIcon, MicIcon, StopIcon, WaveIcon } from './icons';
 import { ModelPicker } from './ModelPicker';
 import { PlusMenu, type WebSearch } from './PlusMenu';
-import type { PickerModel } from './types';
+import { ThinkingPicker } from './ThinkingPicker';
+import type { PickerModel, ThinkingChoice, ThinkingLevel } from './types';
 import type { Dictation } from './useVoiceDictation';
 
 interface Props {
@@ -24,8 +26,10 @@ interface Props {
   models?: PickerModel[];
   model?: string;
   onModel?(id: string): void;
-  thinking?: boolean;
-  onThinking?(v: boolean): void;
+  thinking?: ThinkingChoice;
+  onThinking?(v: ThinkingChoice): void;
+  /** The levels Auto can give. */
+  autoThinking?: ThinkingLevel[];
   /** Present when web search is offered. */
   search?: { value: WebSearch; onChange(v: WebSearch): void };
   /** Files: the tray shown above the text, and new files picked, pasted or dropped. */
@@ -71,7 +75,7 @@ function RecordingBar({ d }: { d: Dictation }): ReactNode {
   );
 }
 
-export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ value, onChange, onSend, onStop, streaming, disabled, placeholder, models, model, onModel, thinking, onThinking, search, tray, onFiles, hasFiles, sendBlocked, dictation, onLive, onSettings }, ref): ReactNode {
+export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ value, onChange, onSend, onStop, streaming, disabled, placeholder, models, model, onModel, thinking, onThinking, autoThinking, search, tray, onFiles, hasFiles, sendBlocked, dictation, onLive, onSettings }, ref): ReactNode {
   const area = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   useImperativeHandle(ref, () => ({
@@ -149,9 +153,18 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
       {dictation && dictating ? <RecordingBar d={dictation} /> : (
       <div className="vx-ai-composer-row">
         <div className="vx-ai-composer-tools">
-          {onThinking && <PlusMenu thinking={!!thinking} onThinking={onThinking} search={search} onAddFiles={onFiles ? () => picker.current?.click() : undefined} onSettings={onSettings} />}
+          <PlusMenu search={search} onAddFiles={onFiles ? () => picker.current?.click() : undefined} onSettings={onSettings} />
+          {onThinking && (
+            <ThinkingPicker
+              value={thinking ?? 'auto'}
+              onChange={onThinking}
+              model={model && model !== 'auto' ? models?.find((m) => m.id === model) ?? null : null}
+              models={models ?? []}
+              autoLevels={autoThinking}
+              disabled={disabled}
+            />
+          )}
           {search?.value === 'on' && <span className="vx-ai-pill">Web search</span>}
-          {thinking && <span className="vx-ai-pill">Extended thinking</span>}
         </div>
         {models && onModel ? <ModelPicker models={models} value={model ?? 'auto'} onChange={onModel} /> : <span className="vx-ai-composer-mode">Auto</span>}
         {dictation?.supported && !streaming && (

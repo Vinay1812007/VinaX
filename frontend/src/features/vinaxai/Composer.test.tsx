@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Composer } from './Composer';
+import type { PickerModel } from './types';
 
 afterEach(cleanup);
 
@@ -58,24 +59,37 @@ describe('<Composer />', () => {
   });
 });
 
-describe('<Composer /> + menu', () => {
-  it('toggles Extended thinking and shows it on the composer', () => {
+describe('<Composer /> thinking', () => {
+  const models: PickerModel[] = [
+    { id: 'g', name: 'Gemini', provider: 'Gemini', group: 'smart', description: '', flags: { vision: true, web: false, thinking: true, code: false }, available: true, thinkingLevels: ['fast', 'standard', 'extended', 'max'] },
+    { id: 'n', name: 'Nemotron', provider: 'NVIDIA', group: 'balanced', description: '', flags: { vision: false, web: false, thinking: true, code: false }, available: true, thinkingLevels: ['standard'] },
+  ];
+  it('picks a level from the Thinking menu; the + menu no longer holds it', () => {
     const onThinking = vi.fn();
-    const { rerender } = render(<Composer value="" onChange={vi.fn()} onSend={vi.fn()} onStop={vi.fn()} streaming={false} thinking={false} onThinking={onThinking} />);
+    render(<Composer value="" onChange={vi.fn()} onSend={vi.fn()} onStop={vi.fn()} streaming={false} thinking="auto" onThinking={onThinking} models={models} model="auto" onModel={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
-    const item = screen.getByRole('menuitemcheckbox', { name: /Extended thinking/ });
-    expect(item.getAttribute('aria-checked')).toBe('false');
-    fireEvent.click(item);
-    expect(onThinking).toHaveBeenCalledWith(true);
-    rerender(<Composer value="" onChange={vi.fn()} onSend={vi.fn()} onStop={vi.fn()} streaming={false} thinking onThinking={onThinking} />);
-    expect(screen.getAllByText('Extended thinking').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('menuitemcheckbox', { name: /Extended thinking/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^Thinking: Auto/ }));
+    const items = screen.getAllByRole('menuitemradio');
+    expect(items).toHaveLength(5);
+    expect(items[0].getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /Maximum/ }));
+    expect(onThinking).toHaveBeenCalledWith('max');
+  });
+
+  it('says when the picked model answers at a nearer level', () => {
+    render(<Composer value="" onChange={vi.fn()} onSend={vi.fn()} onStop={vi.fn()} streaming={false} thinking="max" onThinking={vi.fn()} models={models} model="n" onModel={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Thinking: Maximum (Nemotron uses Standard)' })).toBeTruthy();
+    cleanup();
+    render(<Composer value="" onChange={vi.fn()} onSend={vi.fn()} onStop={vi.fn()} streaming={false} thinking="max" onThinking={vi.fn()} models={models} model="g" onModel={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Thinking: Maximum' })).toBeTruthy();
   });
 });
 
 describe('<Composer /> web search', () => {
   it('offers Auto / On / Off when search is available, and shows when it is on', () => {
     const onChange = vi.fn();
-    const props = { value: '', onChange: vi.fn(), onSend: vi.fn(), onStop: vi.fn(), streaming: false, thinking: false, onThinking: vi.fn() };
+    const props = { value: '', onChange: vi.fn(), onSend: vi.fn(), onStop: vi.fn(), streaming: false, thinking: 'auto' as const, onThinking: vi.fn() };
     const { rerender } = render(<Composer {...props} search={{ value: 'auto', onChange }} />);
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     const radios = screen.getAllByRole('menuitemradio');
@@ -92,7 +106,7 @@ describe('<Composer /> web search', () => {
 });
 
 describe('<Composer /> files', () => {
-  const props = { value: '', onChange: vi.fn(), onSend: vi.fn(), onStop: vi.fn(), streaming: false, thinking: false, onThinking: vi.fn() };
+  const props = { value: '', onChange: vi.fn(), onSend: vi.fn(), onStop: vi.fn(), streaming: false, thinking: 'auto' as const, onThinking: vi.fn() };
   it('files alone can be sent; sending waits while files are being added or a model cannot see them', () => {
     const { rerender } = render(<Composer {...props} onFiles={vi.fn()} hasFiles />);
     expect(screen.getByRole('button', { name: 'Send message' })).toHaveProperty('disabled', false);

@@ -1,6 +1,6 @@
 /**
  * VinaX AI — this device's chat preferences: the model picked in the
- * composer ('auto' or a registry id), Extended thinking, whether the
+ * composer ('auto' or a registry id), the Thinking choice, whether the
  * desktop sidebar is collapsed, the voices for Read aloud and Live, the
  * Live model, language and captions, web search in Live voice, the microphone, and the Personalisation
  * and Features choices in VinaX AI's settings (sent with each message, never
@@ -10,6 +10,7 @@
  */
 import { create } from 'zustand';
 import { deviceLanguage } from './live/liveOptions';
+import { THINKING_CHOICES, type ThinkingChoice } from './types';
 
 export const PREFS_KEY = 'vinax.vxai.prefs.v1';
 
@@ -17,7 +18,8 @@ export interface ChatPrefs {
   model: string;
   /** Web search: 'auto' searches when a message is about something current. */
   webSearch: 'auto' | 'on' | 'off';
-  extendedThinking: boolean;
+  /** Thinking: Auto (judged per message), or a fixed level; also the default for new chats. */
+  thinking: ThinkingChoice;
   sidebarCollapsed: boolean;
   /** Read aloud voice (Groq Orpheus id); the server checks it against its list. */
   voice: string;
@@ -54,7 +56,7 @@ export const PERSONAL_MAX = Object.freeze({ name: 40, about: 1_500, instructions
 
 const DEFAULTS: ChatPrefs = {
   liveLanguage: deviceLanguage(), liveCaptions: true, liveHold: false,
-  model: 'auto', webSearch: 'auto', extendedThinking: false, sidebarCollapsed: false, voice: 'troy', liveVoice: 'Kore', liveModel: 'auto', micId: '',
+  model: 'auto', webSearch: 'auto', thinking: 'auto', sidebarCollapsed: false, voice: 'troy', liveVoice: 'Kore', liveModel: 'auto', micId: '',
   artifacts: true, inlinePreviews: true, personalName: '', personalAbout: '', personalInstructions: '', style: 'normal', liveSearch: true, liveSpeaker: true,
 };
 const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.slice(0, max) : '');
@@ -69,7 +71,8 @@ function load(): ChatPrefs {
     return {
       model: typeof raw.model === 'string' && raw.model.length < 200 ? raw.model : 'auto',
       webSearch: raw.webSearch === 'on' || raw.webSearch === 'off' ? raw.webSearch : 'auto',
-      extendedThinking: raw.extendedThinking === true,
+      // The older on/off Extended thinking switch becomes the Extended level.
+      thinking: THINKING_CHOICES.includes(raw.thinking as ThinkingChoice) ? (raw.thinking as ThinkingChoice) : (raw as { extendedThinking?: unknown }).extendedThinking === true ? 'extended' : 'auto',
       sidebarCollapsed: raw.sidebarCollapsed === true,
       voice: typeof raw.voice === 'string' && VOICE_ID.test(raw.voice) ? raw.voice : DEFAULTS.voice,
       liveVoice: typeof raw.liveVoice === 'string' && VOICE_ID.test(raw.liveVoice) ? raw.liveVoice : DEFAULTS.liveVoice,

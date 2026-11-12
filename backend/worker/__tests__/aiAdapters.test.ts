@@ -125,6 +125,19 @@ describe('Gemini adapter', () => {
     expect(plain.generationConfig.thinkingConfig).toEqual({ includeThoughts: true, thinkingLevel: 'low' });
   });
 
+  it('a 400 about too much output room (Maximum thinking) asks once more with the usual room', async () => {
+    let n = 0;
+    const calls = stubFetch(() => (n++ === 0
+      ? new Response('{"error":{"code":400,"message":"The requested max_output_tokens is larger than the model supports."}}', { status: 400 })
+      : sseResponse(fixture('gemini-thoughts.sse'), 5)));
+    const big = { ...spec('gemini:gemini-3.6-flash'), maxOutput: 65_536 };
+    const events = await collect(gemini, ENV, req('gemini:gemini-3.6-flash', { model: big, maxOutputTokens: 65_536 }));
+    expect(joined(events, 'text')).toBe('A raga is a melodic framework.');
+    expect(calls).toHaveLength(2);
+    expect(JSON.parse(String(calls[0].init.body)).generationConfig.maxOutputTokens).toBe(65_536);
+    expect(JSON.parse(String(calls[1].init.body)).generationConfig.maxOutputTokens).toBe(32_768);
+  });
+
   it('a 400 about the thinking level asks once more with plain thinking', async () => {
     let n = 0;
     const calls = stubFetch(() => (n++ === 0

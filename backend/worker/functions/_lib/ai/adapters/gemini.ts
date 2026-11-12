@@ -102,13 +102,16 @@ const finish = (r: string | undefined): 'stop' | 'length' | 'content_filter' | n
   return 'stop';
 };
 
+/** The output room Gemini models take everywhere (the registry's usual `maxOutput`). */
+export const OUTPUT_FALLBACK = 32_768;
+
 async function openGemini(env: AiEnv, req: ChatRequest): Promise<ReadableStream<Uint8Array>> {
   const key = env.GEMINI_API_KEY?.trim();
   if (!key) throw new ProviderError('not_configured');
-  const call = (grounding: boolean, plainThinking = false) => fetch(`${BASE}/${encodeURIComponent(geminiModelId(req.model.upstream))}:streamGenerateContent?alt=sse`, {
+  const call = (grounding: boolean, plainThinking = false, output?: number) => fetch(`${BASE}/${encodeURIComponent(geminiModelId(req.model.upstream))}:streamGenerateContent?alt=sse`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify(geminiBody(req, grounding, plainThinking)),
+    body: JSON.stringify(geminiBody(output ? { ...req, maxOutputTokens: output } : req, grounding, plainThinking)),
     signal: req.signal,
   });
   const grounding = req.webSearch && req.model.flags.grounding;
@@ -120,6 +123,8 @@ async function openGemini(env: AiEnv, req: ChatRequest): Promise<ReadableStream<
     if (grounding && /ground|search/i.test(body)) res = await call(false);
     // A thinking level or budget this model does not take: once more with the model's own default.
     else if (res.status === 400 && /thinking/i.test(body)) res = await call(grounding, true);
+    // Maximum thinking asked for more output room than this model takes: once more with its usual room.
+    else if (res.status === 400 && req.maxOutputTokens > OUTPUT_FALLBACK && /max_?output_?tokens|output token/i.test(body)) res = await call(grounding, false, OUTPUT_FALLBACK);
     else throw classifyHttp(res.status, res.headers, body);
   }
   if (!res.ok) throw classifyHttp(res.status, res.headers, await errorText(res));

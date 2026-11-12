@@ -587,3 +587,85 @@ describe('web search', () => {
     expect(events.at(-1)?.data).toMatchObject({ stopReason: 'end' });
   });
 });
+
+describe('thinking levels', () => {
+  /** The chat request bodies sent upstream (titles excluded), with the url each went to. */
+  const capture = (answer: Upstream = groqOk) => {
+    const sent: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const fake = seed({}, (url, init) => { sent.push({ url, body: JSON.parse(String(init?.body ?? '{}')) }); return answer(url, init); });
+    return { fake, sent };
+  };
+  const metaOf = (events: Array<{ event: string; data: Record<string, unknown> }>) => events.find((e) => e.event === 'meta')!.data as { thinking: { choice: string; level: string; used: string }; route?: { task: string; complexity: string } };
+  const anyAnswer: Upstream = (url) => (url.includes('generativelanguage') ? geminiSse('ok') : sseResponse(openAiSse('ok')));
+
+  it('Auto thinking judges a short fact question simple; the ladder’s first model has no switch, so it answers at Standard', async () => {
+    const { sent } = capture(() => sseResponse(openAiSse('Paris.')));
+    const events = await readEvents(await post(ask('What is the capital of France?')));
+    await settle();
+    expect(sent[0].url).toContain('nvidia.com');
+    expect(sent[0].body).not.toHaveProperty('reasoning_effort');
+    expect(metaOf(events)).toMatchObject({ thinking: { choice: 'auto', level: 'fast', used: 'standard' }, route: { task: 'Conversation', complexity: 'simple' } });
+  });
+
+  it('Fast on GPT-OSS sends reasoning_effort low', async () => {
+    const { sent } = capture();
+    const events = await readEvents(await post(ask('What is the capital of France?', { mode: 'model', model: 'groq:openai/gpt-oss-120b', thinking: 'fast' })));
+    await settle();
+    expect(sent[0].body).toMatchObject({ reasoning_effort: 'low', include_reasoning: true });
+    expect(metaOf(events).thinking).toEqual({ choice: 'fast', level: 'fast', used: 'fast' });
+  });
+
+  it('a hard maths question in Auto thinks at Extended on a model with a real switch, with the careful-mode prompt', async () => {
+    const { sent } = capture(anyAnswer);
+    const events = await readEvents(await post(ask('Solve for x: 3x^2 + 2x - 5 = 0 and show the working')));
+    await settle();
+    expect(sent[0].url).toContain('groq.com');
+    expect(sent[0].body).toMatchObject({ reasoning_effort: 'high' });
+    expect(JSON.stringify(sent[0].body.messages)).toContain('Careful mode');
+    expect(metaOf(events)).toMatchObject({ thinking: { choice: 'auto', level: 'extended', used: 'extended' }, route: { task: 'Maths', complexity: 'hard' } });
+  });
+
+  it('Maximum in Auto: no Auto model has it, so the best one answers at Extended and says so', async () => {
+    const { sent } = capture(anyAnswer);
+    const events = await readEvents(await post(ask('Tell me about raga Yaman', { thinking: 'max' })));
+    await settle();
+    expect(sent[0].url).toContain('groq.com');
+    expect(sent[0].body).toMatchObject({ reasoning_effort: 'high' });
+    expect(metaOf(events).thinking).toEqual({ choice: 'max', level: 'max', used: 'extended' });
+  });
+
+  it('Maximum on Gemini 3 (picked) asks at high with twice the output room and the review prompt', async () => {
+    const { sent } = capture(anyAnswer);
+    const events = await readEvents(await post(ask('Tell me about raga Yaman', { mode: 'model', model: 'gemini:gemini-3.6-flash', thinking: 'max' })));
+    await settle();
+    expect(sent[0].url).toContain('gemini-3.6-flash');
+    expect(sent[0].body.generationConfig).toMatchObject({ maxOutputTokens: 65_536, thinkingConfig: { thinkingLevel: 'high' } });
+    expect(JSON.stringify(sent[0].body.systemInstruction)).toContain('review the draft');
+    expect(metaOf(events).thinking).toEqual({ choice: 'max', level: 'max', used: 'max' });
+  });
+
+  it('a picked model without Maximum answers at its nearest level and the page is told', async () => {
+    const { sent } = capture();
+    const events = await readEvents(await post(ask('Tell me about raga Yaman', { mode: 'model', model: 'groq:openai/gpt-oss-120b', thinking: 'max' })));
+    await settle();
+    expect(sent[0].body).toMatchObject({ reasoning_effort: 'high' });
+    expect(metaOf(events).thinking).toEqual({ choice: 'max', level: 'max', used: 'extended' });
+    expect(metaOf(events).route).toBeUndefined();
+  });
+
+  it('older pages: extendedThinking true still means Extended', async () => {
+    const { sent } = capture();
+    const events = await readEvents(await post(ask('Tell me about raga Yaman', { mode: 'model', model: 'groq:openai/gpt-oss-120b', extendedThinking: true })));
+    await settle();
+    expect(sent[0].body).toMatchObject({ reasoning_effort: 'high' });
+    expect(metaOf(events).thinking.choice).toBe('extended');
+  });
+
+  it('a model with no switch is asked unchanged at Standard', async () => {
+    const { sent } = capture(() => sseResponse(openAiSse('ok')));
+    const events = await readEvents(await post(ask('Tell me about raga Yaman', { mode: 'model', model: 'nvidia:deepseek-ai/deepseek-v4.1-flash', thinking: 'fast' })));
+    await settle();
+    expect(sent[0].body).not.toHaveProperty('reasoning_effort');
+    expect(metaOf(events).thinking).toEqual({ choice: 'fast', level: 'fast', used: 'standard' });
+  });
+});

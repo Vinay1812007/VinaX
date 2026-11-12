@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { Markdown, safeUrl } from './Markdown';
 
 afterEach(cleanup);
@@ -57,5 +57,27 @@ describe('<Markdown />: model output is untrusted', () => {
     expect(safeUrl('JavaScript:alert(1)')).toBe('');
     expect(safeUrl('vbscript:x')).toBe('');
     expect(safeUrl('//evil.example')).toBe('');
+  });
+});
+
+describe('code blocks: Download, Wrap, line numbers', () => {
+  it('names the download for its language; numbers blocks of five lines or more, but not while wrapped', async () => {
+    const { fileNameFor } = await import('./CodeBlock');
+    expect(fileNameFor('Python')).toBe('snippet.py');
+    expect(fileNameFor('tsx')).toBe('snippet.tsx');
+    expect(fileNameFor('dockerfile')).toBe('Dockerfile');
+    expect(fileNameFor('')).toBe('snippet.txt');
+    const short = html('```js\nconst a = 1;\n```');
+    expect(short.querySelector('.vx-ai-code-gutter')).toBeNull();
+    expect(short.querySelector('button[aria-label="Download snippet.js"]')).not.toBeNull();
+    cleanup();
+    const long = html('```js\na\nb\nc\nd\ne\nf\n```');
+    expect(long.querySelector('.vx-ai-code-gutter')?.textContent).toBe('1\n2\n3\n4\n5\n6');
+    const wrap = long.querySelector<HTMLButtonElement>('button[aria-label="Wrap long lines"]')!;
+    fireEvent.click(wrap);
+    expect(wrap.getAttribute('aria-pressed')).toBe('true');
+    expect(long.querySelector('.vx-ai-code-gutter')).toBeNull();
+    expect(long.querySelector('.vx-ai-code.is-wrapped')).not.toBeNull();
+    await waitFor(() => expect(long.querySelector('code.hljs')).not.toBeNull());
   });
 });

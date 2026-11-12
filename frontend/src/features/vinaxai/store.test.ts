@@ -5,7 +5,7 @@ import { usePrefs } from './prefs';
 
 beforeEach(() => {
   resetChat();
-  usePrefs.setState({ model: 'auto', extendedThinking: false, webSearch: 'auto', artifacts: true, personalName: '', personalAbout: '', personalInstructions: '', style: 'normal' });
+  usePrefs.setState({ model: 'auto', thinking: 'auto', webSearch: 'auto', artifacts: true, personalName: '', personalAbout: '', personalInstructions: '', style: 'normal' });
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -225,10 +225,10 @@ describe('what the controller asks for', () => {
     useChatStore.setState({ conversationId: 'c1', messages: { u1: { id: 'u1', parentId: null, role: 'user', text: 'q', thinking: '', thinkingMs: null, model: null, stopReason: null, error: null, createdAt: '1' }, a1: { id: 'a1', parentId: 'u1', role: 'assistant', text: 'cut', thinking: '', thinkingMs: null, model: null, stopReason: 'length', error: null, createdAt: '2' } }, leafId: 'a1' });
   });
 
-  it('the composer model and Extended thinking go with every message', async () => {
-    usePrefs.setState({ model: 'groq:openai/gpt-oss-120b', extendedThinking: true, webSearch: 'on' });
+  it('the composer model and Thinking level go with every message (with extendedThinking for an older Worker)', async () => {
+    usePrefs.setState({ model: 'groq:openai/gpt-oss-120b', thinking: 'max', webSearch: 'on' });
     await sendMessage('hello');
-    expect(bodies[0]).toMatchObject({ conversationId: 'c1', parentMessageId: 'a1', mode: 'model', model: 'groq:openai/gpt-oss-120b', extendedThinking: true, webSearch: 'on' });
+    expect(bodies[0]).toMatchObject({ conversationId: 'c1', parentMessageId: 'a1', mode: 'model', model: 'groq:openai/gpt-oss-120b', thinking: 'max', extendedThinking: true, webSearch: 'on' });
   });
 
   it('files go first in the content; a message may be files alone', async () => {

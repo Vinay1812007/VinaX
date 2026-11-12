@@ -264,7 +264,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       const ev = action.ev;
       switch (ev.event) {
         case 'meta': {
-          const { conversationId, userMessageId, assistantMessageId, model } = ev.data;
+          const { conversationId, userMessageId, assistantMessageId, model, thinking: level, route } = ev.data;
+          const routing = level || route ? { ...(level ? { thinking: level } : {}), ...(route ? { route } : {}) } : undefined;
           let messages = rename(state.messages, LOCAL_USER, userMessageId);
           let replyId = state.replyId;
           if (replyId === LOCAL_REPLY) {
@@ -278,7 +279,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
             // A failover changed the model: what the first one was thinking no longer applies.
             const switched = !!reply.model && reply.model.id !== model.id;
             if (switched) thinkingStartedAt = null;
-            messages = { ...messages, [reply.id]: { ...reply, model, ...(switched ? { thinking: '', thinkingMs: null } : {}) } };
+            messages = { ...messages, [reply.id]: { ...reply, model, ...(routing ? { routing } : {}), ...(switched ? { thinking: '', thinkingMs: null } : {}) } };
           }
           return { ...state, conversationId, messages, replyId, leafId: state.leafId === LOCAL_REPLY ? replyId : state.leafId, thinkingStartedAt };
         }
@@ -295,6 +296,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           }));
         case 'status':
           return patchReply(state, () => ({ status: ev.data }));
+        case 'progress':
+          return patchReply(state, () => ({ progress: ev.data }));
         case 'sources': {
           const { markers, ...sources } = ev.data;
           return patchReply(state, (m) => ({ sources, ...(markers?.length ? { text: applyMarkers(m.text, markers) } : {}) }));

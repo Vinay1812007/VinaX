@@ -208,6 +208,17 @@ describe('files in a chat', () => {
     expect(fake.rows('ai_attachments')[0].conversation_id).toBe(msg.conversation_id);
   });
 
+  it('says which file the reply is reading before the model starts (progress event)', async () => {
+    upstream = (url) => (url.includes('generativelanguage') ? sseResponse('data: {"candidates":[{"content":{"parts":[{"text":"A red square."}]},"finishReason":"STOP"}]}\n\n') : new Response('{}', { status: 500 }));
+    seed({ ai_attachments: [att({ id: IMG, kind: 'image', mime: 'image/png', name: 'red.png', storage_path: '1001/new/red', size: PNG.length })] });
+    storage.objects.set('1001/new/red', { bytes: PNG, mime: 'image/png', length: null });
+    const { events } = await send({ content: [{ type: 'attachment', id: IMG }, { type: 'text', text: 'What is this?' }], passthrough: true });
+    const names = events.map((e) => e.event);
+    expect(events.find((e) => e.event === 'progress')?.data).toEqual({ step: 'reading', count: 1, names: ['red.png'] });
+    expect(names.indexOf('progress')).toBeLessThan(names.indexOf('done'));
+    expect(names.filter((n) => n === 'progress')).toHaveLength(1);
+  });
+
   it('a picked model that cannot see is refused an image; more than ten images (the default) are refused', async () => {
     const imageId = (i: number) => `777777${String(i).padStart(2, '0')}-7777-4777-8777-777777777777`;
     seed({ ai_attachments: Array.from({ length: 11 }, (_, i) => att({ id: imageId(i), kind: 'image', mime: 'image/png' })) });

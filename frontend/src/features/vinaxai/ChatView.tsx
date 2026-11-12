@@ -348,8 +348,9 @@ export function ChatView(): ReactNode {
       models={pickerModels}
       model={prefs.model}
       onModel={(m) => prefs.set({ model: m })}
-      thinking={prefs.extendedThinking}
-      onThinking={(v) => prefs.set({ extendedThinking: v })}
+      thinking={prefs.thinking}
+      onThinking={(v) => prefs.set({ thinking: v })}
+      autoThinking={models.data?.autoThinking}
       search={models.data?.search ? { value: prefs.webSearch, onChange: (v) => prefs.set({ webSearch: v }) } : undefined}
       tray={<PendingChips files={tray.files} onRemove={tray.remove} />}
       onFiles={(fs) => tray.add(fs)}
@@ -577,7 +578,7 @@ export function ChatView(): ReactNode {
       {liveOpen && (
         <Suspense fallback={<div className="vx-ai-live" role="status" aria-label="Opening Live voice" />}>
           <LiveView
-            conversationId={conversationId} parentMessageId={leafId} thinking={prefs.extendedThinking} voice={prefs.liveVoice} model={prefs.liveModel} micId={prefs.micId}
+            conversationId={conversationId} parentMessageId={leafId} thinking={prefs.thinking === 'extended' || prefs.thinking === 'max'} voice={prefs.liveVoice} model={prefs.liveModel} micId={prefs.micId}
             searchAllowed={!!voice?.liveSearch} search={!!voice?.liveSearch && prefs.liveSearch}
             voiceInfo={voice} context={chatContext(thread)} incognito={incognito} onClose={closeLive}
           />

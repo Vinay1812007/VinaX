@@ -2,7 +2,11 @@
  * VinaX AI — GET /api/ai/models: what the model picker offers.
  *
  *   → 200 { enabled, configured, search, groups: [...], models: [{ id, name, provider, group,
- *            description, flags: { vision, web, thinking, code }, available, reason? }],
+ *            description, flags: { vision, web, thinking, code, pdf }, available, reason?,
+ *            thinkingLevels: ["fast" | "standard" | "extended" | "max"],   // levels with a real provider switch (thinking.ts)
+ *            kinds: ["fast" | "reasoning" | "code" | "vision" | "long"],    // capability filters in the picker
+ *            contextTokens, outputTokens, recommended? }],              // about: the registry's character limits / 4
+ *            autoThinking: [...],   // the thinking levels Auto can give with the models in its ladders
  *            voice: { dictation, readAloud, live, liveSearch, voices: [...], liveVoices: [...], liveModels: [{ id, name }], liveLanguages: [{ code, name, native }] },
  *            limits: { imagesPerMessage, filesPerMessage, filesPerChat, pdfMB, pdfPages, textMB } }
  *
@@ -28,11 +32,30 @@ import { dbConfigured } from '../../_lib/db';
 import { anyProviderConfigured, PROVIDER_NAMES, providerConfigured } from '../../_lib/ai/adapters';
 import { aiOpenFor, aiSettings, pickerRegistryFor, registryFor, sanitizeAiSettings } from '../../_lib/ai/config';
 import { isCooling } from '../../_lib/ai/cooldown';
-import { ladderModels, PICKER_GROUPS } from '../../_lib/ai/models';
+import { LADDERS, ladderModels, PICKER_GROUPS } from '../../_lib/ai/models';
+import { autoLevels, levelsOf } from '../../_lib/ai/thinking';
+import type { ModelSpec } from '../../_lib/ai/types';
 import { searchConfigured } from '../../_lib/ai/search';
 import { ALL_LIVE_MODELS, LIVE_VOICES, READ_VOICES, voiceAvailability } from '../../_lib/ai/voice';
 import type { AiEnv } from '../../_lib/ai/types';
 import { LIVE_LANGUAGES } from '../../_lib/ai/prompt';
+
+/** A model's capability filters, from its flags, group, limits and Auto's ladders. */
+export function kindsOf(spec: ModelSpec): Array<'fast' | 'reasoning' | 'code' | 'vision' | 'long'> {
+  const out: Array<'fast' | 'reasoning' | 'code' | 'vision' | 'long'> = [];
+  if (spec.group === 'fast' || spec.tier === 'fast') out.push('fast');
+  if (spec.flags.reasoning) out.push('reasoning');
+  if (spec.group === 'code' || LADDERS.code.includes(spec.id)) out.push('code');
+  if (spec.flags.vision) out.push('vision');
+  if (spec.maxContextChars >= LONG_CONTEXT_CHARS) out.push('long');
+  return out;
+}
+
+/** "Long context" in the picker: room for a long PDF or a whole codebase file set. */
+export const LONG_CONTEXT_CHARS = 300_000;
+
+/** Auto's first choices: the head of each chat ladder. */
+export const recommendedIds = (): Set<string> => new Set((['default', 'code', 'deep', 'vision', 'fast'] as const).map((l) => LADDERS[l][0]).filter(Boolean));
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: { ...CORS, 'access-control-allow-methods': 'GET, OPTIONS' } });
 
@@ -45,6 +68,7 @@ export const onRequestGet = async (ctx: { request: Request; env: AiEnv; waitUnti
   const sub = token ? await readSession(env, token) : null;
   const now = Date.now();
   const picker = await pickerRegistryFor(env, settings, { waitUntil: ctx.waitUntil });
+  const recommended = recommendedIds();
   const models = picker
     .filter((spec) => spec.group !== null)
     .map((spec) => {
@@ -56,7 +80,12 @@ export const onRequestGet = async (ctx: { request: Request; env: AiEnv; waitUnti
         provider: PROVIDER_NAMES[spec.provider],
         group: spec.group,
         description: spec.description,
-        flags: { vision: spec.flags.vision, web: spec.flags.grounding, thinking: spec.flags.reasoning, code: spec.group === 'code' },
+        flags: { vision: spec.flags.vision, web: spec.flags.grounding, thinking: spec.flags.reasoning, code: spec.group === 'code', pdf: spec.flags.pdf },
+        thinkingLevels: levelsOf(spec),
+        kinds: kindsOf(spec),
+        contextTokens: Math.round(spec.maxContextChars / 4),
+        outputTokens: spec.maxOutput,
+        ...(recommended.has(spec.id) ? { recommended: true } : {}),
         available: configured && !busy,
         ...(!configured ? { reason: 'not_configured' } : busy ? { reason: 'busy' } : {}),
       };
@@ -69,5 +98,6 @@ export const onRequestGet = async (ctx: { request: Request; env: AiEnv; waitUnti
   // The owner's file limits, so the page checks files against the same numbers (searchesPerDay and the rate stay server-side).
   const { imagesPerMessage, filesPerMessage, filesPerChat, pdfMB, pdfPages, textMB } = settings.limits;
   const limits = { imagesPerMessage, filesPerMessage, filesPerChat, pdfMB, pdfPages, textMB };
-  return json({ enabled: aiOpenFor(settings, sub), configured: anyProviderConfigured(env), search: settings.search && canSearch, groups: PICKER_GROUPS, models, voice, limits });
+  const chatLadders = (['default', 'code', 'deep', 'vision', 'long', 'fast'] as const).flatMap((l) => ladderModels(registry, l)).filter((spec) => providerConfigured(env, spec.provider));
+  return json({ enabled: aiOpenFor(settings, sub), configured: anyProviderConfigured(env), search: settings.search && canSearch, groups: PICKER_GROUPS, models, voice, limits, autoThinking: autoLevels(chatLadders) });
 };

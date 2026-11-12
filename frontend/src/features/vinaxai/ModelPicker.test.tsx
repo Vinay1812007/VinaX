@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { ModelPicker } from './ModelPicker';
+import { badgesOf, contextLabel, ModelPicker } from './ModelPicker';
 import { isFoundModel, type PickerModel } from './types';
 
 afterEach(cleanup);
@@ -130,5 +130,34 @@ describe('free models found in the providers’ lists', () => {
     expect(isFoundModel({ group: 'more-nvidia' })).toBe(true);
     expect(isFoundModel({ group: 'more' })).toBe(false);
     expect(isFoundModel({ group: 'cloudflare' })).toBe(false);
+  });
+});
+
+describe('capability filters', () => {
+  const caps: PickerModel[] = [
+    { id: 'a', name: 'Quick', provider: 'NVIDIA', group: 'fast', description: 'fast one', flags: { vision: false, web: false, thinking: false, code: false }, available: true, kinds: ['fast'], thinkingLevels: ['standard'], contextTokens: 25_000 },
+    { id: 'b', name: 'Seer', provider: 'Gemini', group: 'smart', description: 'sees', flags: { vision: true, web: false, thinking: true, code: false, pdf: true }, available: true, kinds: ['reasoning', 'vision', 'long'], thinkingLevels: ['fast', 'standard', 'extended', 'max'], contextTokens: 150_000, recommended: true },
+  ];
+  it('chips narrow the list by capability; context and thinking show on each model', () => {
+    render(<ModelPicker models={caps} value="auto" onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Model: Auto' }));
+    const group = screen.getByRole('group', { name: 'Filter models' });
+    // Only filters some model has: no Code chip here.
+    expect([...group.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['All', 'Recommended', 'Fast', 'Reasoning', 'Vision', 'Long context']);
+    expect(screen.getByRole('option', { name: /Seer/ }).textContent).toContain('150K context');
+    expect(screen.getByRole('option', { name: /Seer/ }).textContent).toContain('Max thinking');
+    fireEvent.click(screen.getByRole('button', { name: 'Vision' }));
+    expect(screen.queryByRole('option', { name: /Quick/ })).toBeNull();
+    expect(screen.queryByRole('option', { name: /^Auto/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Fast' }));
+    expect(screen.getByRole('option', { name: /Quick/ })).toBeTruthy();
+    expect(screen.queryByRole('option', { name: /Seer/ })).toBeNull();
+  });
+
+  it('contextLabel and badgesOf', () => {
+    expect(contextLabel(1_048_576)).toBe('1M context');
+    expect(contextLabel(7_500)).toBe('8K context');
+    expect(contextLabel(undefined)).toBeNull();
+    expect(badgesOf(caps[1])).toEqual(['Vision', 'PDF', 'Max thinking']);
   });
 });

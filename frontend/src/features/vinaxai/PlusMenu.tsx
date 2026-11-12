@@ -1,11 +1,12 @@
 /**
  * VinaX AI — the composer's + menu: Add photos and files, Web search (Auto,
- * On, Off) when it is offered, Extended thinking, and Settings (the VinaX
- * AI settings panel: model, voice, microphone).
+ * On, Off) when it is offered, and Settings (the VinaX AI settings panel:
+ * model, thinking, voice, microphone). Thinking has its own menu
+ * (ThinkingPicker.tsx).
  */
 import { useRef, useState, type ReactNode } from 'react';
 import { moveFocus, useDismiss } from './useDismiss';
-import { GlobeSmallIcon, PaperclipIcon, PlusSmallIcon, SettingsIcon, ThinkIcon } from './icons';
+import { GlobeSmallIcon, PaperclipIcon, PlusSmallIcon, SettingsIcon } from './icons';
 
 export type WebSearch = 'auto' | 'on' | 'off';
 const SEARCH_CHOICES: Array<{ value: WebSearch; label: string; note: string }> = [
@@ -15,8 +16,6 @@ const SEARCH_CHOICES: Array<{ value: WebSearch; label: string; note: string }> =
 ];
 
 interface Props {
-  thinking: boolean;
-  onThinking(v: boolean): void;
   /** Present when web search is offered. */
   search?: { value: WebSearch; onChange(v: WebSearch): void };
   /** Open the file picker. */
@@ -26,7 +25,7 @@ interface Props {
   disabled?: boolean;
 }
 
-export function PlusMenu({ thinking, onThinking, search, onAddFiles, onSettings, disabled }: Props): ReactNode {
+export function PlusMenu({ search, onAddFiles, onSettings, disabled }: Props): ReactNode {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -40,7 +39,7 @@ export function PlusMenu({ thinking, onThinking, search, onAddFiles, onSettings,
       <button
         ref={button}
         type="button"
-        className={`vx-ai-icon-btn${thinking || search?.value === 'on' ? ' is-on' : ''}`}
+        className={`vx-ai-icon-btn${search?.value === 'on' ? ' is-on' : ''}`}
         aria-label="More options"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -100,21 +99,6 @@ export function PlusMenu({ thinking, onThinking, search, onAddFiles, onSettings,
               ))}
             </div>
           )}
-          <div
-            role="menuitemcheckbox"
-            aria-checked={thinking}
-            tabIndex={-1}
-            className="vx-ai-menu-item"
-            onClick={() => onThinking(!thinking)}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onThinking(!thinking); } }}
-          >
-            <ThinkIcon className="w-4 h-4" />
-            <span className="vx-ai-menu-text">
-              <span>Extended thinking</span>
-              <span className="vx-ai-opt-sub">Thinks longer before answering hard questions</span>
-            </span>
-            <span className={`vx-ai-switch${thinking ? ' is-on' : ''}`} aria-hidden />
-          </div>
           {onSettings && (
             <div
               role="menuitem"
@@ -126,7 +110,7 @@ export function PlusMenu({ thinking, onThinking, search, onAddFiles, onSettings,
               <SettingsIcon className="w-4 h-4" />
               <span className="vx-ai-menu-text">
                 <span>Settings</span>
-                <span className="vx-ai-opt-sub">Model, voices and microphone</span>
+                <span className="vx-ai-opt-sub">Model, thinking, voices and microphone</span>
               </span>
             </div>
           )}

@@ -26,7 +26,7 @@ const META = ['meta', { conversationId: 'c1', userMessageId: 'u1', assistantMess
 
 beforeEach(() => {
   resetChat();
-  usePrefs.setState({ model: 'auto', extendedThinking: false, webSearch: 'auto', artifacts: true, personalName: '', personalAbout: '', personalInstructions: '', style: 'normal' });
+  usePrefs.setState({ model: 'auto', thinking: 'auto', webSearch: 'auto', artifacts: true, personalName: '', personalAbout: '', personalInstructions: '', style: 'normal' });
 });
 afterEach(() => {
   cleanup();

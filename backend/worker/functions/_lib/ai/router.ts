@@ -48,6 +48,25 @@ export function pickLadder(s: LadderSignals): LadderName {
   return 'default';
 }
 
+export interface Needs {
+  hasImages: boolean;
+  /** Characters the thread needs (turns, files, project knowledge). */
+  threadChars: number;
+}
+
+/**
+ * Capability order inside a ladder: models that can see the images and hold
+ * the whole thread go first, in their ladder order; the rest stay behind
+ * them as failover (a thread too long for a model is trimmed, never refused).
+ * A model that cannot see is dropped when there are images and some model can.
+ */
+export function preferFit(candidates: readonly ModelSpec[], n: Needs): ModelSpec[] {
+  let list = candidates.slice();
+  if (n.hasImages && list.some((c) => c.flags.vision)) list = list.filter((c) => c.flags.vision);
+  const fits = list.filter((c) => c.maxContextChars >= n.threadChars);
+  return [...fits, ...list.filter((c) => !fits.includes(c))];
+}
+
 /** Candidates in the order to try: resting ones are skipped, unless every one is resting. */
 export function orderByRest(candidates: readonly ModelSpec[], now = Date.now()): ModelSpec[] {
   const awake = candidates.filter((spec) => !isCooling(spec, now));

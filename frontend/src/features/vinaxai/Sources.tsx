@@ -5,7 +5,7 @@
  * a sandboxed frame (a condition of the free service).
  */
 import { useRef, useState, type ReactNode } from 'react';
-import type { SearchStatus, Source, SourcesInfo } from './types';
+import type { ReplyProgress, SearchStatus, Source, SourcesInfo } from './types';
 
 const monogram = (site: string): string => (site.replace(/^www\./, '')[0] ?? '?').toUpperCase();
 
@@ -83,6 +83,22 @@ export function statusText(s: SearchStatus): string {
   if (s.step === 'searching') return `Searching the web for “${s.query.length > 80 ? `${s.query.slice(0, 77)}…` : s.query}”`;
   if (!s.count) return 'No useful results; answering without them';
   return `Found ${s.count} result${s.count === 1 ? '' : 's'}${s.sites.length ? ` · ${s.sites.slice(0, 3).join(', ')}` : ''}`;
+}
+
+/** "Reading report.pdf and 2 more files" while the reply reads its files. */
+export function progressText(p: ReplyProgress): string {
+  const [first] = p.names;
+  if (!first) return p.count === 1 ? 'Reading a file' : `Reading ${p.count} files`;
+  const rest = p.count - 1;
+  return rest > 0 ? `Reading ${first} and ${rest} more file${rest === 1 ? '' : 's'}` : `Reading ${first}`;
+}
+
+export function ProgressLine({ progress }: { progress: ReplyProgress }): ReactNode {
+  return (
+    <p className="vx-ai-status" role="status">
+      <span className="vx-ai-shimmer">{progressText(progress)}…</span>
+    </p>
+  );
 }
 
 export function SearchStatusLine({ status }: { status: SearchStatus }): ReactNode {

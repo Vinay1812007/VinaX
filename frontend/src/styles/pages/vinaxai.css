@@ -316,6 +316,19 @@
 .vx-ai-code-lang { text-transform: lowercase; }
 .vx-ai-code-copy { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 8px; border-radius: var(--vx-radius-control); }
 .vx-ai-code-copy:hover { background: rgb(var(--ink-800)); color: rgb(var(--ink-100)); }
+.vx-ai-code-tools { display: inline-flex; align-items: center; gap: 2px; }
+.vx-ai-code-copy[aria-pressed='true'] { color: rgb(var(--ember-300)); background: rgb(var(--ember-500) / 0.12); }
+.vx-ai-code-copy:focus-visible { outline: 2px solid rgb(var(--ember-400)); outline-offset: 1px; }
+/* Line numbers sit in their own column with the code's own font and line height, so they line up. */
+.vx-ai-code-body { display: flex; align-items: stretch; min-width: 0; }
+.vx-ai-code-body > pre { flex: 1; min-width: 0; }
+.vx-ai-code-gutter {
+  flex: none; padding: 12px 10px 12px 12px; white-space: pre; text-align: right; user-select: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.8125rem; line-height: 1.6;
+  color: rgb(var(--ink-500)); border-right: 1px solid var(--glass-border); font-variant-numeric: tabular-nums;
+}
+.vx-ai-code.is-numbered pre { padding-left: 12px; }
+.vx-ai-code.is-wrapped code { white-space: pre-wrap; overflow-wrap: anywhere; }
 .vx-ai-code pre { margin: 0; padding: 12px 14px; overflow-x: auto; }
 .vx-ai-code code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -562,6 +575,41 @@
 .vx-ai-picker-search::placeholder { color: rgb(var(--ink-400)); }
 .vx-ai-picker-search:focus { outline: none; border-bottom-color: rgb(var(--ember-400)); }
 .vx-ai-picker-empty { margin: 10px; font-size: 0.8125rem; color: rgb(var(--ink-400)); }
+/* Capability filters: one row of chips that scrolls sideways on a phone. */
+.vx-ai-picker-filters { display: flex; gap: 6px; padding: 6px 8px 8px; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+.vx-ai-picker-filters::-webkit-scrollbar { display: none; }
+.vx-ai-filter {
+  flex: none; min-height: 30px; padding: 0 10px; border-radius: 999px; font-size: 0.75rem; white-space: nowrap;
+  border: 1px solid var(--glass-border); color: rgb(var(--ink-300)); background: transparent;
+}
+.vx-ai-filter:hover { color: rgb(var(--ink-100)); background: rgb(var(--ink-800)); }
+.vx-ai-filter.is-on { background: rgb(var(--ember-500) / 0.16); border-color: rgb(var(--ember-500) / 0.5); color: rgb(var(--ember-300)); }
+.vx-ai-filter:focus-visible { outline: 2px solid rgb(var(--ember-400)); outline-offset: 1px; }
+
+/* The Thinking menu beside the + button. */
+.vx-ai-thinkpick { position: relative; min-width: 0; flex-shrink: 1 !important; }
+.vx-ai-thinkpick-btn {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 34px; max-width: 100%; padding: 0 8px;
+  border-radius: var(--vx-radius-control); font-size: 0.8125rem; color: rgb(var(--ink-300));
+}
+.vx-ai-thinkpick-btn:hover { background: rgb(var(--ink-800)); color: rgb(var(--ink-100)); }
+.vx-ai-thinkpick-btn.is-on { color: rgb(var(--ember-300)); background: rgb(var(--ember-500) / 0.12); }
+.vx-ai-thinkpick-btn:focus-visible { outline: 2px solid rgb(var(--ember-400)); outline-offset: 1px; }
+.vx-ai-thinkpick-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.vx-ai-thinkpick-dot { width: 6px; height: 6px; border-radius: 50%; background: rgb(var(--ink-400)); flex: none; }
+.vx-ai-thinkpick-menu { bottom: calc(100% + 6px); left: 0; min-width: 280px; max-width: calc(100vw - 32px); }
+.vx-ai-thinkpick-note { color: rgb(var(--ember-300)); }
+@media (max-width: 400px) {
+  /* Narrow phones: the icon and the level's first letters are enough. */
+  .vx-ai-thinkpick-btn { padding: 0 6px; }
+  .vx-ai-thinkpick-label { max-width: 56px; }
+}
+
+/* A reply's footer: model, thinking level, Auto's judgement, time. */
+.vx-ai-route { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; }
+.vx-ai-route .vx-ai-model { overflow-wrap: anywhere; }
+.vx-ai-time { font-size: 0.75rem; color: rgb(var(--ink-400)); font-variant-numeric: tabular-nums; }
+.vx-ai-route-note { flex-basis: 100%; margin-left: 8px; font-size: 0.75rem; color: rgb(var(--ember-300)); }
 @media (max-width: 640px) {
   /* On a phone the menu opens from the message box's right edge, the full width it can have, never off-screen. */
   .vx-ai-composer { position: relative; }
@@ -691,6 +739,8 @@
 .vx-ai-tabs button:disabled { opacity: 0.45; }
 .vx-ai-artifact-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
 .vx-ai-artifact-body > .vx-ai-code { margin: 0; border: 0; border-radius: 0; flex: 1; }
+.vx-ai-artifact-body > .vx-ai-code { display: flex; flex-direction: column; }
+.vx-ai-artifact-body > .vx-ai-code .vx-ai-code-body { flex: 1; }
 .vx-ai-artifact-body > .vx-ai-code pre { min-height: 100%; }
 .vx-ai-artifact-doc { padding: 20px 24px; }
 .vx-ai-runner { position: relative; flex: 1; display: flex; flex-direction: column; min-height: 320px; }

@@ -180,6 +180,9 @@ export interface ChatRequestBody {
   content: Array<{ type: 'text'; text: string } | { type: 'attachment'; id: string }>;
   mode: 'auto' | 'model';
   model?: string;
+  /** Thinking: Auto or a level (the Worker's thinking.ts). */
+  thinking?: 'auto' | 'fast' | 'standard' | 'extended' | 'max';
+  /** The same for an older Worker: true for Extended and Maximum. */
   extendedThinking?: boolean;
   webSearch?: 'auto' | 'on' | 'off';
   artifacts?: boolean;

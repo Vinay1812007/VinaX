@@ -1,7 +1,7 @@
 /**
  * VinaX AI on a phone-sized screen, against the built app with /api/ai/*
  * answered by the test: the model menu opens fully on screen, the
- * "Extended thinking" label never runs under the model button, the
+ * Thinking menu opens on screen and its button never runs under the model button, the
  * "can't see images" notice keeps its buttons whole, and the header's
  * settings button is the only button there (no theme button to mistake it for).
  */
@@ -44,9 +44,8 @@ const shot = (page: Page, name: string) => (process.env.VX_SHOTS ? page.screensh
 test('the model menu opens fully on a phone screen', async ({ page }) => {
   await setup(page);
   await page.goto('/vinaxai');
-  await page.getByRole('button', { name: 'More options' }).click();
-  await page.getByRole('menuitemcheckbox', { name: /Extended thinking/ }).click();
-  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /^Thinking: / }).click();
+  await page.getByRole('menuitemradio', { name: /Maximum/ }).click();
   await page.getByRole('button', { name: /^Model: / }).click();
   const list = page.getByRole('listbox', { name: 'Choose a model' });
   await expect(list).toBeVisible();
@@ -56,15 +55,19 @@ test('the model menu opens fully on a phone screen', async ({ page }) => {
   expect(box.x + box.width).toBeLessThanOrEqual(360);
 });
 
-test('the Extended thinking label stays clear of the model button', async ({ page }) => {
+test('the Thinking menu opens on screen and its button stays clear of the model button', async ({ page }) => {
   await setup(page);
   await page.goto('/vinaxai');
-  await page.getByRole('button', { name: 'More options' }).click();
-  await page.getByRole('menuitemcheckbox', { name: /Extended thinking/ }).click();
-  await page.keyboard.press('Escape');
-  const pill = page.locator('.vx-ai-pill', { hasText: 'Extended thinking' });
-  await expect(pill).toBeVisible();
-  await shot(page, 'thinking-pill');
+  await page.getByRole('button', { name: /^Thinking: Auto/ }).click();
+  const menu = page.getByRole('menu', { name: 'Thinking' });
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('menuitemradio')).toHaveCount(5);
+  const m = (await menu.boundingBox())!;
+  expect(m.x).toBeGreaterThanOrEqual(0);
+  expect(m.x + m.width).toBeLessThanOrEqual(360);
+  await menu.getByRole('menuitemradio', { name: /Extended/ }).click();
+  await expect(page.getByRole('button', { name: /^Thinking: Extended/ })).toBeVisible();
+  await shot(page, 'thinking-menu');
   const tools = (await page.locator('.vx-ai-composer-tools').boundingBox())!;
   const model = (await page.getByRole('button', { name: /^Model: / }).boundingBox())!;
   expect(tools.x + tools.width).toBeLessThanOrEqual(model.x + 1);

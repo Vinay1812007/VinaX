@@ -138,6 +138,12 @@ describe('GET /api/ai/models', () => {
     expect(new Set(anon.models.map((m) => m.id))).toEqual(APPROVED_MODELS);
     for (const id of PAUSED_MODELS) expect(by[id], id).toBeUndefined();
     expect(by['gemini:gemini-3.1-flash-lite']).toMatchObject({ available: false, reason: 'not_configured' });
+    // Capabilities for the picker: real thinking levels, filters, context room.
+    expect(by['groq:openai/gpt-oss-120b']).toMatchObject({ thinkingLevels: ['fast', 'standard', 'extended'], kinds: expect.arrayContaining(['reasoning', 'code']), contextTokens: 7_500, recommended: true });
+    expect(by['gemini:gemini-3.1-flash-lite']).toMatchObject({ thinkingLevels: ['fast', 'standard', 'extended', 'max'], kinds: expect.arrayContaining(['vision', 'long', 'reasoning']), flags: expect.objectContaining({ pdf: true }) });
+    expect(by['nvidia:nvidia/nemotron-3.5-bolt-e4b']).toMatchObject({ thinkingLevels: ['standard'], kinds: expect.arrayContaining(['fast']) });
+    // Only Groq has a key here: Auto can think at Extended (GPT-OSS) but has no Maximum.
+    expect((anon as unknown as { autoThinking: string[] }).autoThinking).toEqual(['fast', 'standard', 'extended']);
     expect(JSON.stringify(anon)).not.toMatch(/gsk_test|api\.groq\.com|failover/);
     resetSettingsMemo();
     const tester = (await (await modelsGet({ request: await req('/api/ai/models'), env })).json()) as { enabled: boolean };

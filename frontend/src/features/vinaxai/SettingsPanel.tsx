@@ -8,7 +8,7 @@
  *                    reply style (sent with each message, never stored)
  *   Memory  what VinaX AI remembers across chats, kept with the account:
  *           Use memory, Learn from my chats, each note, add, forget all
- *   Chat    the model new messages use, Extended thinking, Web search
+ *   Chat    the model new messages use, Thinking (Auto or a level), Web search
  *   Voice   the microphone (with a test meter), the Read aloud voice, the
  *           Live voice, the Live model and web search in Live voice
  *   Chats   export every chat; the artifacts gallery; the shared links (open, copy, stop sharing);
@@ -27,7 +27,8 @@ import { voiceLabel } from './live/liveOptions';
 import { SharedLinks } from './SharedLinks';
 import { MemorySettings } from './MemorySettings';
 import { ArtifactsIcon, CloseIcon, DownloadIcon, MicIcon } from './icons';
-import type { PickerModel, VoiceInfo } from './types';
+import { THINKING_CHOICES, type PickerModel, type ThinkingChoice, type VoiceInfo } from './types';
+import { THINKING_LABELS, THINKING_NOTES } from './ThinkingPicker';
 import type { WebSearch } from './PlusMenu';
 
 export type SettingsSection = 'general' | 'personal' | 'memory' | 'chat' | 'voice' | 'chats';
@@ -180,19 +181,11 @@ export function SettingsPanel({ models, groups, voice, search, section, onClose 
                 })}
               </select>
             </Field>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={prefs.extendedThinking}
-              className="vx-ai-setting-switch"
-              onClick={() => prefs.set({ extendedThinking: !prefs.extendedThinking })}
-            >
-              <span className="vx-ai-menu-text">
-                <span>Extended thinking</span>
-                <span className="vx-ai-opt-sub">Thinks longer before answering hard questions</span>
-              </span>
-              <span className={`vx-ai-switch${prefs.extendedThinking ? ' is-on' : ''}`} aria-hidden />
-            </button>
+            <Field id="thinking" label="Thinking">
+              <select id="vx-ai-set-thinking" value={prefs.thinking} onChange={(e) => prefs.set({ thinking: e.target.value as ThinkingChoice })}>
+                {THINKING_CHOICES.map((c) => <option key={c} value={c}>{THINKING_LABELS[c]} — {THINKING_NOTES[c]}</option>)}
+              </select>
+            </Field>
             {search && (
               <Field id="search" label="Web search">
                 <select id="vx-ai-set-search" value={prefs.webSearch} onChange={(e) => prefs.set({ webSearch: e.target.value as WebSearch })}>

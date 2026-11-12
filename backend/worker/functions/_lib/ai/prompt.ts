@@ -449,7 +449,20 @@ export function projectBlock(p: ProjectPrompt, room: number): string {
   return out.join('\n\n');
 }
 
-export function buildSystemPrompt(opts: { spec: ModelSpec; vars: PromptVars; artifacts: boolean; search?: SearchBlock | null; personal?: Personal | null; owner?: string | null; project?: ProjectPrompt | null; memory?: string | null }): string {
+/**
+ * How hard to work, by the reply's thinking level (thinking.ts). Fast and
+ * Standard add nothing to the prompt beyond the level's own provider switch;
+ * Extended and Maximum ask for a checked answer. The reasoning itself stays
+ * in the model's thinking channel; the reply shows only the key steps.
+ */
+export const THINKING_BLOCKS: Partial<Record<'fast' | 'standard' | 'extended' | 'max', string>> = {
+  extended: `# Careful mode
+The user asked for careful thinking. Work the problem through before answering: break it into parts, check each calculation and each piece of code for mistakes, consider edge cases, and say which assumptions you made. In the reply give the answer first, then only the key steps someone needs to follow or check it.`,
+  max: `# Maximum care
+The user asked for your most careful work. Work the problem through before answering: break it into parts, consider more than one approach where it matters, check each calculation and each piece of code for mistakes, and consider edge cases. Before you finish, review the draft against every part of the question and fix anything wrong or missing; if something cannot be known or verified, say so plainly. In the reply give the answer first, then the key steps, assumptions and checks someone needs to trust it.`,
+};
+
+export function buildSystemPrompt(opts: { spec: ModelSpec; vars: PromptVars; artifacts: boolean; search?: SearchBlock | null; personal?: Personal | null; owner?: string | null; project?: ProjectPrompt | null; memory?: string | null; thinking?: 'fast' | 'standard' | 'extended' | 'max' }): string {
   const vars = opts.personal?.name ? { ...opts.vars, firstName: opts.personal.name } : opts.vars;
   const parts = [fill(promptFor(opts.spec) === 'full' ? FULL_PROMPT : COMPACT_PROMPT, vars)];
   const owner = ownerBlock(opts.owner);
@@ -460,6 +473,8 @@ export function buildSystemPrompt(opts: { spec: ModelSpec; vars: PromptVars; art
   const personal = personalBlock(opts.personal);
   if (personal) tail.push(personal);
   if (opts.search && opts.search.sources.length) tail.push(searchResultsBlock(opts.search), CITATION_RULES);
+  const careful = opts.thinking ? THINKING_BLOCKS[opts.thinking] : undefined;
+  if (careful) tail.push(careful);
   if (opts.project) {
     const used = [...parts, ...tail].join('\n\n').length;
     parts.push(projectBlock(opts.project, Math.floor(opts.spec.maxContextChars * KNOWLEDGE_SHARE) - used));

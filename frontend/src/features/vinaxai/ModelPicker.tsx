@@ -4,11 +4,13 @@
  * ("More from …"), each model with a one-line description and badges. Models that
  * cannot answer now are shown greyed with the reason. A long list gets a
  * search box above it (name, provider or description); ↓ moves into the list.
+ * Filter chips narrow the list by capability (Recommended, Fast, Reasoning,
+ * Code, Vision, Long context), from what the Worker says each model has.
  */
 import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { moveFocus, useDismiss } from './useDismiss';
 import { ChevronDownSmallIcon } from './icons';
-import type { PickerModel } from './types';
+import type { ModelKind, PickerModel } from './types';
 
 export const GROUP_LABELS: Record<PickerModel['group'], string> = {
   fast: 'Fast', balanced: 'Balanced', smart: 'Smart', vision: 'Vision', code: 'Code', more: 'More models', cloudflare: 'Cloudflare',
@@ -24,10 +26,32 @@ const REASONS: Record<NonNullable<PickerModel['reason']>, string> = { busy: 'Bus
 export function badgesOf(m: PickerModel): string[] {
   const out: string[] = [];
   if (m.flags.vision) out.push('Vision');
+  if (m.flags.pdf) out.push('PDF');
   if (m.flags.web) out.push('Web');
-  if (m.flags.thinking) out.push('Thinking');
+  if (m.thinkingLevels?.includes('max')) out.push('Max thinking');
+  else if (m.thinkingLevels?.includes('extended')) out.push('Extended thinking');
+  else if (m.flags.thinking) out.push('Thinking');
   if (m.flags.code) out.push('Code');
   return out;
+}
+
+export type PickerFilter = 'all' | 'recommended' | ModelKind;
+export const FILTER_LABELS: Record<PickerFilter, string> = {
+  all: 'All', recommended: 'Recommended', fast: 'Fast', reasoning: 'Reasoning', code: 'Code', vision: 'Vision', long: 'Long context',
+};
+const FILTERS: readonly PickerFilter[] = ['all', 'recommended', 'fast', 'reasoning', 'code', 'vision', 'long'];
+
+/** Models in a capability filter. */
+export function filterModels(models: PickerModel[], f: PickerFilter): PickerModel[] {
+  if (f === 'all') return models;
+  if (f === 'recommended') return models.filter((m) => m.recommended);
+  return models.filter((m) => m.kinds?.includes(f));
+}
+
+/** "128K context" from a token count. */
+export function contextLabel(tokens: number | undefined): string | null {
+  if (!tokens || tokens < 1_000) return null;
+  return tokens >= 1_000_000 ? `${(tokens / 1_000_000).toFixed(1).replace(/\.0$/, '')}M context` : `${Math.round(tokens / 1_000)}K context`;
 }
 
 /** Models whose name, provider or description has every word of the query. */
@@ -50,6 +74,7 @@ interface Props {
 export function ModelPicker({ models, value, onChange, disabled }: Props): ReactNode {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<PickerFilter>('all');
   const button = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -58,13 +83,16 @@ export function ModelPicker({ models, value, onChange, disabled }: Props): React
   const close = (focus = true) => {
     setOpen(false);
     setQuery('');
+    setFilter('all');
     if (focus) button.current?.focus();
   };
   useDismiss(open, () => close(false), [button, pop]);
   const current = models.find((m) => m.id === value);
   const label = value === 'auto' || !current ? 'Auto' : current.name;
   const searchable = models.length > SEARCH_FROM;
-  const shown = matchModels(models, query);
+  // Only filters some model has (an older Worker sends no capabilities: no chips).
+  const filters = FILTERS.filter((f) => f === 'all' || filterModels(models, f).length > 0);
+  const shown = filterModels(matchModels(models, query), filter);
   const groups = [...new Set(shown.map((m) => m.group))];
 
   const choose = (m: string, enabled: boolean) => {
@@ -152,17 +180,26 @@ export function ModelPicker({ models, value, onChange, disabled }: Props): React
               }}
             />
           )}
+          {filters.length > 1 && (
+            <div className="vx-ai-picker-filters" role="group" aria-label="Filter models">
+              {filters.map((f) => (
+                <button key={f} type="button" className={`vx-ai-filter${filter === f ? ' is-on' : ''}`} aria-pressed={filter === f} onClick={() => setFilter(f)}>
+                  {FILTER_LABELS[f]}
+                </button>
+              ))}
+            </div>
+          )}
           <div ref={list} id={`${id}-list`} role="listbox" aria-label="Choose a model" className="vx-ai-picker-options" onKeyDown={onListKey}>
-            {!query.trim() && option('auto', 'Auto', 'Picks a model for each message, and moves on if one is busy', [], true)}
+            {!query.trim() && filter === 'all' && option('auto', 'Auto', 'Picks a model for each message, and moves on if one is busy', [], true)}
             {groups.map((g) => (
               <div key={g} role="group" aria-labelledby={`${id}-${g}`}>
                 <div id={`${id}-${g}`} className="vx-ai-pop-head">{GROUP_LABELS[g] ?? g}</div>
                 {shown.filter((m) => m.group === g).map((m) =>
-                  option(m.id, m.name, `${m.description}${m.description ? ' · ' : ''}${m.provider}`, badgesOf(m), m.available, m.available ? undefined : REASONS[m.reason ?? 'not_configured']),
+                  option(m.id, m.name, [m.description, m.provider, contextLabel(m.contextTokens)].filter(Boolean).join(' · '), badgesOf(m), m.available, m.available ? undefined : REASONS[m.reason ?? 'not_configured']),
                 )}
               </div>
             ))}
-            {!shown.length && <p className="vx-ai-picker-empty" role="status">No model matches “{query.trim()}”.</p>}
+            {!shown.length && <p className="vx-ai-picker-empty" role="status">{query.trim() ? <>No model matches “{query.trim()}”.</> : 'No model in this filter right now.'}</p>}
           </div>
         </div>
       )}

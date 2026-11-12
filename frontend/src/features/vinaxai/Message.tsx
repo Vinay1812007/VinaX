@@ -12,7 +12,7 @@ import { copyText } from './CodeBlock';
 import { siblingsOf } from './chatState';
 import { selectBranch, useChatStore, type ModelChoice } from './store';
 import { moveFocus, useDismiss } from './useDismiss';
-import { SearchStatusLine, SourcesRow } from './Sources';
+import { ProgressLine, SearchStatusLine, SourcesRow } from './Sources';
 import { MessageFiles } from './FileChips';
 import { ArtifactCard } from './ArtifactPanel';
 import { parseArtifacts, runsInSandbox, type Artifact } from './artifacts';
@@ -21,6 +21,7 @@ import { usePrefs } from './prefs';
 import { ChevronDownSmallIcon, ChevronIcon, ContinueIcon, CopyIcon, PencilIcon, RetryIcon, SpeakerIcon, StopIcon, ThinkIcon } from './icons';
 import { readAloud, stopReading, useReadAloud } from './readAloud';
 import { isFoundModel, type ChatMessage, type PickerModel } from './types';
+import { THINKING_LABELS } from './ThinkingPicker';
 
 export const thoughtLabel = (ms: number | null): string => (ms == null ? 'Thought process' : `Thought for ${Math.max(1, Math.round(ms / 1000))}s`);
 
@@ -250,15 +251,52 @@ function ReadAloudButton({ id, text }: { id: string; text: string }): ReactNode 
   );
 }
 
+/** "14:05" (or the date too when it was not today), for the footer. */
+export function timeLabel(iso: string, now = new Date()): string | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const sameDay = d.toDateString() === now.toDateString();
+  try {
+    return sameDay
+      ? d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+      : d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The footer's account of how the reply was made: the model, the thinking
+ * level it answered at (when not Standard), what Auto judged the message to
+ * be, and a note when the level asked for was not on that model.
+ */
+export function RouteInfo({ message }: { message: ChatMessage }): ReactNode {
+  const { model, routing, createdAt } = message;
+  const when = timeLabel(createdAt);
+  const t = routing?.thinking;
+  const level = t && t.used !== 'standard' ? `${THINKING_LABELS[t.used]} thinking` : null;
+  // Only for a level the listener chose: under Auto thinking the level is VinaX AI's own call.
+  const fellBack = t && t.choice !== 'auto' && t.used !== t.level && model ? `${THINKING_LABELS[t.level]} thinking isn’t available on ${model.name}, so it used ${THINKING_LABELS[t.used]}.` : null;
+  const auto = routing?.route ? `Auto: ${routing.route.task}${routing.route.complexity === 'hard' ? ', hard' : routing.route.complexity === 'simple' ? ', simple' : ''}` : null;
+  return (
+    <span className="vx-ai-route">
+      {model && <span className="vx-ai-model">{[`${model.name} · ${model.provider}`, level, auto].filter(Boolean).join(' · ')}</span>}
+      {when && <time className="vx-ai-time" dateTime={createdAt} title={new Date(createdAt).toLocaleString()}>{when}</time>}
+      {fellBack && <span className="vx-ai-route-note">{fellBack}</span>}
+    </span>
+  );
+}
+
 export function AssistantMessage({ message, live, models, onRetry, onContinue, versionOf, onOpenArtifact, onFixArtifact, canReadAloud }: ReplyProps): ReactNode {
   const { text, error, stopReason, model } = message;
-  const waiting = live && !text && !message.thinking && !error && !message.status;
+  const waiting = live && !text && !message.thinking && !error && !message.status && !message.progress;
   const cutOff = !live && !!text && (stopReason === 'length' || stopReason === 'error');
   const previews = usePrefs((p) => p.inlinePreviews && p.artifacts);
   return (
     <div className="vx-ai-turn vx-ai-turn-reply" data-message-id={message.id} aria-busy={live || undefined}>
       <h2 className="sr-only">VinaX AI said</h2>
       {live && !text && message.status && <SearchStatusLine status={message.status} />}
+      {live && !text && !message.thinking && !message.status && message.progress && <ProgressLine progress={message.progress} />}
       <ThinkingFold message={message} live={live} waiting={waiting} />
       {waiting && <span className="sr-only" role="status">VinaX AI is thinking</span>}
       {text && (text.includes('<artifact')
@@ -317,7 +355,7 @@ export function AssistantMessage({ message, live, models, onRetry, onContinue, v
               <ContinueIcon className="w-4 h-4" /> Continue
             </button>
           )}
-          {model && <span className="vx-ai-model">{model.name} · {model.provider}</span>}
+          <RouteInfo message={message} />
         </div>
       )}
     </div>
