@@ -18,6 +18,13 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.6': {
+    title: 'VinaX AI no longer drops very long replies at the very end',
+    changes: [
+      { type: 'fixed', text: 'Long pages and apps no longer end with "The connection dropped before the reply finished" just as they finish.' },
+      { type: 'fixed', text: 'A long reply that is continued, or stopped, is saved whole, including the part after Continue.' },
+    ],
+  },
   '1.13.5': {
     title: 'VinaX AI finishes big pages and apps instead of stopping halfway',
     changes: [
