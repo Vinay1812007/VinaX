@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { continueReply, resetChat, retryReply, sendMessage, stopReply, useChatStore } from './store';
+import { AUTO_CONTINUES, continueReply, resetChat, retryReply, sendMessage, stopReply, useChatStore } from './store';
 import { usePrefs } from './prefs';
 
 beforeEach(() => {
@@ -66,6 +66,40 @@ describe('the chat controller', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(body, { status: 200 })));
     await expect(sendMessage('Hi')).resolves.toMatchObject({ ok: false, beforeStart: false });
     expect(useChatStore.getState().messages.a1).toMatchObject({ text: 'Half', stopReason: 'error', error: { retryable: true } });
+  });
+});
+
+describe('a reply cut off inside an artifact', () => {
+  const meta = { conversationId: 'c1', userMessageId: 'u1', assistantMessageId: 'a1', model: { id: 'm', name: 'M', provider: 'P' } };
+  const stub = (replies: string[]): Array<Record<string, unknown>> => {
+    const bodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', vi.fn(async (_u: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+      return new Response(replies[Math.min(bodies.length - 1, replies.length - 1)], { status: 200 });
+    }));
+    return bodies;
+  };
+
+  it('carries on by itself until the artifact is finished', async () => {
+    const bodies = stub([
+      sse([['meta', meta], ['text', { delta: 'Here it is.\n<artifact id="app" type="html" title="App"><html><body>' }], ['done', { stopReason: 'length', saved: true }]]),
+      sse([['meta', { ...meta, continued: true }], ['text', { delta: '<p>Hi</p></body></html>\n</artifact>\nDone.' }], ['done', { stopReason: 'end', saved: true }]]),
+    ]);
+    await expect(sendMessage('Build an app')).resolves.toEqual({ ok: true });
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1]).toMatchObject({ conversationId: 'c1', continueFrom: 'a1', content: [] });
+    expect(useChatStore.getState().messages.a1.text).toContain('</artifact>');
+  });
+
+  it('stops after three tries, and never for a cut-off reply with no open artifact', async () => {
+    const cut = sse([['meta', meta], ['text', { delta: '<artifact id="app" type="html" title="App"><html>' }], ['done', { stopReason: 'length', saved: true }]]);
+    const bodies = stub([cut]);
+    await sendMessage('Build an app');
+    expect(bodies).toHaveLength(1 + AUTO_CONTINUES);
+    resetChat();
+    const plain = stub([sse([['meta', meta], ['text', { delta: 'A long essay…' }], ['done', { stopReason: 'length', saved: true }]])]);
+    await sendMessage('Write an essay');
+    expect(plain).toHaveLength(1);
   });
 });
 

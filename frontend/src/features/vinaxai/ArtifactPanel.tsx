@@ -128,6 +128,11 @@ export function ArtifactPanel({ versions, live, sheet, onFix, from, onOpenChat }
             </button>
           </div>
         </header>
+        {!live && a.incomplete && (
+          <p className="vx-ai-artifact-cut" role="status">
+            This was cut off before it finished, so the preview may not work. Press <strong>Continue</strong> under the reply to finish it.
+          </p>
+        )}
         <div className="vx-ai-artifact-body" role={previewable ? 'tabpanel' : undefined}>
           {showing === 'preview'
             ? runsInSandbox(a.type)

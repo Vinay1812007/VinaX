@@ -45,6 +45,14 @@ const GEMINI_CTX = 600_000;
 const NVIDIA_CTX = 100_000;
 const OPENROUTER_CTX = 100_000;
 const CF_CTX = 60_000;
+/**
+ * Answer room for the big NVIDIA and OpenRouter models (they take 64K or more):
+ * a whole page or app fits, and a longer one is carried on by the page's
+ * automatic Continue. Groq stays at 8,192 (its free tier counts tokens per
+ * minute); much more per reply risks the free plan's CPU limit when the
+ * Worker reads the finished reply to save it.
+ */
+const LONG_OUT = 16_384;
 
 const geminiThink = { thinkingConfig: { includeThoughts: true } };
 // Gemini 3 thinks at its highest level unless told otherwise (14 s for two
@@ -58,7 +66,7 @@ const gemini = (upstream: string, name: string, group: ModelGroup | null, tier: 
     tier,
     description,
     maxContextChars: GEMINI_CTX,
-    maxOutput: tier === 'fast' ? 8_192 : 16_384,
+    maxOutput: tier === 'fast' ? 16_384 : 32_768,
     params: /^gemini-3/.test(upstream) ? gemini3Think : geminiThink,
     highParams: geminiThinkHigh,
     ...rest,
@@ -103,7 +111,7 @@ export const MODELS: readonly ModelSpec[] = [
     flags: { reasoning: true, artifacts: true, thinkFormat: 'field' },
   }),
   m('nvidia', 'nvidia/nemotron-3-ultra-550b-a55b', 'Nemotron 3 Ultra 550B', 'balanced', {
-    description: 'Big, careful and quick to answer', maxContextChars: NVIDIA_CTX,
+    description: 'Big, careful and quick to answer', maxContextChars: NVIDIA_CTX, maxOutput: LONG_OUT,
     flags: { reasoning: true, artifacts: true, thinkFormat: 'tags' },
   }),
   m('cloudflare', '@cf/openai/gpt-oss-120b', 'GPT-OSS 120B (Cloudflare)', 'balanced', {
@@ -115,21 +123,21 @@ export const MODELS: readonly ModelSpec[] = [
     flags: { reasoning: true, artifacts: true, thinkFormat: 'field' },
   }),
   m('nvidia', 'nvidia/nemotron-3.5-lightning-30b-a3b', 'Nemotron 3.5 Lightning', 'balanced', {
-    description: 'Thinks things through before answering', maxContextChars: NVIDIA_CTX,
+    description: 'Thinks things through before answering', maxContextChars: NVIDIA_CTX, maxOutput: LONG_OUT,
     flags: { reasoning: true, artifacts: true, thinkFormat: 'tags' },
   }),
   m('openrouter', 'nvidia/nemotron-3.5-lightning:free', 'Nemotron 3.5 Lightning (OpenRouter)', 'balanced', {
-    description: 'The same model through OpenRouter', maxContextChars: OPENROUTER_CTX,
+    description: 'The same model through OpenRouter', maxContextChars: OPENROUTER_CTX, maxOutput: LONG_OUT,
     flags: { reasoning: true, artifacts: true, thinkFormat: 'field' },
   }),
   // ---- Smart
   gemini('gemini-3.6-flash', 'Gemini 3.6 Flash', 'smart', 'full', 'Careful answers, images and long documents'),
   m('nvidia', 'mistralai/mistral-large-4-1t-a52b', 'Mistral Large 4', 'smart', {
-    description: 'Mistral’s largest model, strong at writing', maxContextChars: NVIDIA_CTX,
+    description: 'Mistral’s largest model, strong at writing', maxContextChars: NVIDIA_CTX, maxOutput: LONG_OUT,
     flags: { reasoning: true, artifacts: true, thinkFormat: 'field' },
   }),
   m('openrouter', 'nvidia/nemotron-3-ultra-550b-a55b:free', 'Nemotron 3 Ultra 550B (OpenRouter)', 'smart', {
-    description: 'Nemotron 3 Ultra through OpenRouter', maxContextChars: OPENROUTER_CTX,
+    description: 'Nemotron 3 Ultra through OpenRouter', maxContextChars: OPENROUTER_CTX, maxOutput: LONG_OUT,
     flags: { reasoning: true, artifacts: true, thinkFormat: 'field' },
   }),
   m('cloudflare', '@cf/zai-org/glm-4.7-flash', 'GLM 4.7 Flash', 'smart', {
@@ -142,24 +150,24 @@ export const MODELS: readonly ModelSpec[] = [
   }),
   // ---- Vision
   m('nvidia', 'nvidia/nemotron-3.5-super-vl-120b-a12b', 'Nemotron 3.5 Super VL', 'vision', {
-    description: 'Reads images and screenshots', maxContextChars: NVIDIA_CTX,
+    description: 'Reads images and screenshots', maxContextChars: NVIDIA_CTX, maxOutput: LONG_OUT,
     flags: { vision: true, reasoning: true, thinkFormat: 'tags' },
   }),
   m('openrouter', 'nvidia/nemotron-3.5-super-vl:free', 'Nemotron 3.5 Super VL (OpenRouter)', 'vision', {
-    description: 'The same model through OpenRouter', maxContextChars: OPENROUTER_CTX,
+    description: 'The same model through OpenRouter', maxContextChars: OPENROUTER_CTX, maxOutput: LONG_OUT,
     flags: { vision: true, reasoning: true, thinkFormat: 'field' },
   }),
   m('nvidia', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', 'Nemotron 3 Nano Omni', 'vision', {
-    description: 'Small model that sees images and reasons', maxContextChars: NVIDIA_CTX,
+    description: 'Small model that sees images and reasons', maxContextChars: NVIDIA_CTX, maxOutput: LONG_OUT,
     flags: { vision: true, reasoning: true, thinkFormat: 'tags' },
   }),
   m('openrouter', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', 'Nemotron 3 Nano Omni (OpenRouter)', 'vision', {
-    description: 'The same model through OpenRouter', maxContextChars: OPENROUTER_CTX,
+    description: 'The same model through OpenRouter', maxContextChars: OPENROUTER_CTX, maxOutput: LONG_OUT,
     flags: { vision: true, reasoning: true, thinkFormat: 'field' },
   }),
   // ---- Code
   m('openrouter', 'cohere/north-mini-code:free', 'North Mini Code', 'code', {
-    description: 'Tuned for writing and fixing code', maxContextChars: OPENROUTER_CTX,
+    description: 'Tuned for writing and fixing code', maxContextChars: OPENROUTER_CTX, maxOutput: LONG_OUT,
     flags: { reasoning: true, artifacts: true, thinkFormat: 'field' },
   }),
   m('nvidia', 'poolside/laguna-xs-2.1', 'Laguna XS 2.1', 'code', {

@@ -86,8 +86,9 @@ export const MAX_BODY_BYTES = 2_000_000;
 export const MAX_TEXT_CHARS = 400_000;
 export const FIRST_EVENT_MS = 12_000;
 export const FIRST_EVENT_SLOW_MS = 25_000;
-export const REPLY_BUDGET_MS = 120_000;
-export const REPLY_BUDGET_SLOW_MS = 240_000;
+/** Room for a long page or app (16K tokens at ~60 a second, after thinking). */
+export const REPLY_BUDGET_MS = 360_000;
+export const REPLY_BUDGET_SLOW_MS = 480_000;
 
 /**
  * How long to wait for the first event: longer for the deep ladder and a

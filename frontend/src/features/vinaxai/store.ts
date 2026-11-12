@@ -9,6 +9,7 @@ import { queryClient } from '@/services/queryClient';
 import { AiError, keepReply, noticeFor, patchConversation, streamChat, type ChatRequestBody } from './api';
 import { chatReducer, initialChat, leafUnder, parentForNext, unansweredQuestion, type ChatAction, type ChatState } from './chatState';
 import { personalOf, usePrefs } from './prefs';
+import { parseArtifacts } from './artifacts';
 import type { FileRef, StreamEvent } from './types';
 
 interface Store extends ChatState {
@@ -87,7 +88,20 @@ const noAnswerYet = (meta: Meta | null): boolean => {
   return !reply?.text.trim();
 };
 
-async function run(body: ChatRequestBody, attempt = 0): Promise<RunOutcome> {
+/**
+ * A reply that stopped at the model's length limit in the middle of an
+ * artifact (a page, app or chart) carries on by itself this many times, so
+ * the artifact is finished instead of left half-written.
+ */
+export const AUTO_CONTINUES = 3;
+
+/** The reply stopped inside an artifact that is still open. */
+const cutInsideArtifact = (id: string): boolean => {
+  const text = useChatStore.getState().messages[id]?.text ?? '';
+  return text.includes('<artifact') && parseArtifacts(text).some((seg) => seg.kind === 'artifact' && seg.artifact.incomplete);
+};
+
+async function run(body: ChatRequestBody, attempt = 0, autoLeft = AUTO_CONTINUES): Promise<RunOutcome> {
   inflight?.abort();
   const ctl = new AbortController();
   inflight = ctl;
@@ -110,7 +124,7 @@ async function run(body: ChatRequestBody, attempt = 0): Promise<RunOutcome> {
       const again: ChatRequestBody = { ...body, conversationId: m.conversationId, parentMessageId: m.userMessageId, content: [] };
       delete again.projectId;
       if (inflight === ctl) inflight = null;
-      return run(again, attempt + 1);
+      return run(again, attempt + 1, autoLeft);
     }
     failAfterStart(code);
     keepSeen(m, 'error');
@@ -138,6 +152,11 @@ async function run(body: ChatRequestBody, attempt = 0): Promise<RunOutcome> {
       return { ok: false, code: 'network', beforeStart: true };
     }
     if (finished.saved === false) keepSeen(meta, finished.stopReason === 'aborted' ? 'aborted' : 'error');
+    const m = meta as Meta | null;
+    if (finished.stopReason === 'length' && finished.saved !== false && m && autoLeft > 0 && cutInsideArtifact(m.assistantMessageId)) {
+      if (inflight === ctl) inflight = null;
+      return continueFrom(m.assistantMessageId, autoLeft - 1);
+    }
     return { ok: true };
   } catch (e) {
     flush();
@@ -190,10 +209,14 @@ export function retryReply(userId: string, choice?: ModelChoice): Promise<RunOut
 
 /** Carry on a reply that was cut off; the new text joins it. */
 export function continueReply(messageId: string): Promise<RunOutcome> {
+  return continueFrom(messageId, AUTO_CONTINUES);
+}
+
+function continueFrom(messageId: string, autoLeft: number): Promise<RunOutcome> {
   const s = useChatStore.getState();
   if (s.streaming || !s.conversationId || !s.messages[messageId]) return Promise.resolve({ ok: true });
   dispatch({ type: 'continue', messageId });
-  return run({ ...requestBase(), conversationId: s.conversationId, continueFrom: messageId, content: [] });
+  return run({ ...requestBase(), conversationId: s.conversationId, continueFrom: messageId, content: [] }, 0, autoLeft);
 }
 
 /** Show the branch through `messageId` (the ‹ 2 / 3 › switcher) and remember it for the next visit. */

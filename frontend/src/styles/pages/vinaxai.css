@@ -1422,3 +1422,14 @@ html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) .vx-ai-
   .vx-ai-live-btn.is-on { background: rgb(var(--ink-100)); }
   .vx-ai-live-btn.is-end { background: var(--vx-danger); }
 }
+
+/* An artifact cut off at the length limit: said above its preview. */
+.vx-ai-artifact-cut {
+  margin: 0;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--glass-border);
+  background: rgb(var(--ember-500) / 0.1);
+  color: rgb(var(--ink-200));
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
