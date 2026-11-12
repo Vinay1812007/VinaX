@@ -14,7 +14,7 @@
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useAccount } from '@/components/useAccount';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -22,6 +22,7 @@ import { haptic } from '@/services/native';
 import { AiError, getConversation, getModels, listProjects, PROJECTS_KEY } from './api';
 import { pathTo } from './chatState';
 import { chatContext } from './live/liveOptions';
+import { useLiveCall } from './live/liveCall';
 import { Composer, type ComposerHandle } from './Composer';
 import { AssistantMessage, UserMessage } from './Message';
 import { NowPlayingPill } from './NowPlayingPill';
@@ -43,7 +44,6 @@ import { PaneSkeleton } from './Skeleton';
 import { ShareDialog } from './ShareDialog';
 
 /** Live voice loads only when someone opens it. */
-const LiveView = lazy(() => import('./live/LiveView'));
 /** Projects load only when a project page opens. */
 const ProjectsArea = lazy(() => import('./Projects'));
 
@@ -185,7 +185,6 @@ export function ChatView(): ReactNode {
 
   const [draft, setDraft] = useState('');
   const composer = useRef<ComposerHandle>(null);
-  const qc = useQueryClient();
 
   // Voice: dictation into the draft, Read aloud, Live voice and its settings.
   const voice = models.data?.voice;
@@ -194,7 +193,6 @@ export function ChatView(): ReactNode {
     requestAnimationFrame(() => composer.current?.focus());
   });
   const readNotice = useReadAloud((s) => s.notice);
-  const [liveOpen, setLiveOpen] = useState(false);
   const [settings, setSettings] = useState<SettingsSection | null>(null);
   const [sharing, setSharing] = useState(false);
   // Share is offered for a saved chat with messages.
@@ -202,19 +200,16 @@ export function ChatView(): ReactNode {
   useEffect(() => { setSharing(false); }, [conversationId]);
   useEffect(() => () => stopReading(), []);
   useEffect(() => { stopReading(); }, [conversationId]);
+  // Live voice is app-wide (live/liveCall.ts): it goes on while the listener browses, and LiveHost
+  // (AppLayout) reloads the chat it was saved into when it ends.
   const openLive = () => {
     stopReading();
     if (streaming) stopReply();
-    setLiveOpen(true);
-  };
-  const closeLive = (savedTo: string | null) => {
-    setLiveOpen(false);
-    if (!savedTo) return;
-    void qc.invalidateQueries({ queryKey: ['vinaxai', 'conversations'] });
-    // Reload the chat so the spoken turns show in the thread (not from a cached copy of it).
-    qc.removeQueries({ queryKey: ['vinaxai', 'conversation', savedTo] });
-    resetChat();
-    navigate(`/vinaxai/c/${savedTo}`, { replace: !!id && id === savedTo });
+    useLiveCall.getState().open({
+      conversationId, parentMessageId: leafId, thinking: prefs.thinking === 'extended' || prefs.thinking === 'max', voice: prefs.liveVoice, model: prefs.liveModel, micId: prefs.micId,
+      searchAllowed: !!voice?.liveSearch, search: !!voice?.liveSearch && prefs.liveSearch,
+      voiceInfo: voice, context: chatContext(thread), incognito,
+    });
   };
   const stick = useRef(true);
   // Files in this chat so far, against the 20-per-chat limit.
@@ -575,15 +570,6 @@ export function ChatView(): ReactNode {
         />
       )}
       {sharing && conversationId && <ShareDialog conversationId={conversationId} title={title} onClose={() => setSharing(false)} />}
-      {liveOpen && (
-        <Suspense fallback={<div className="vx-ai-live" role="status" aria-label="Opening Live voice" />}>
-          <LiveView
-            conversationId={conversationId} parentMessageId={leafId} thinking={prefs.thinking === 'extended' || prefs.thinking === 'max'} voice={prefs.liveVoice} model={prefs.liveModel} micId={prefs.micId}
-            searchAllowed={!!voice?.liveSearch} search={!!voice?.liveSearch && prefs.liveSearch}
-            voiceInfo={voice} context={chatContext(thread)} incognito={incognito} onClose={closeLive}
-          />
-        </Suspense>
-      )}
     </div>
   );
 }

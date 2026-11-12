@@ -912,6 +912,19 @@
 }
 .vx-ai-live-orb.is-connecting { opacity: 0.7; filter: saturate(0.6) brightness(0.85); animation: vx-ai-breathe 1.6s ease-in-out infinite; }
 .vx-ai-live-orb.is-muted, .vx-ai-live-orb.is-ended { opacity: 0.35; transform: scale(0.9); box-shadow: none; filter: grayscale(1); }
+.vx-ai-live-preview { position: relative; width: min(240px, 60vw); aspect-ratio: 4 / 3; border-radius: 16px; overflow: hidden; background: rgb(0 0 0 / 0.6); box-shadow: 0 6px 24px rgb(0 0 0 / 0.35); }
+.vx-ai-live-preview video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vx-ai-live-preview .vx-ai-icon-btn { position: absolute; right: 6px; bottom: 6px; background: rgb(0 0 0 / 0.55); color: #fff; }
+/* Live voice in the background: a small bar above the player while the listener browses. */
+.vx-ai-live-mini { position: fixed; z-index: 45; left: 50%; transform: translateX(-50%); bottom: calc(var(--player-safe-offset, 72px) + 12px); display: flex; align-items: center; gap: 6px; max-width: calc(100vw - 32px); padding: 6px 8px 6px 6px; border-radius: 999px; background: rgb(var(--surface-900, 24 24 27) / 0.96); color: rgb(var(--ink-50, 250 250 250)); box-shadow: 0 8px 28px rgb(0 0 0 / 0.35); border: 1px solid rgb(255 255 255 / 0.08); backdrop-filter: blur(12px); }
+@media (min-width: 768px) { .vx-ai-live-mini { bottom: calc(var(--player-safe-offset, 88px) + 16px); } }
+.vx-ai-live-mini-main { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 2px 8px 2px 2px; border: 0; background: none; color: inherit; cursor: pointer; text-align: left; border-radius: 999px; }
+.vx-ai-live-mini-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.vx-ai-live-mini-title { font-size: 0.8125rem; font-weight: 600; }
+.vx-ai-live-mini-status { font-size: 0.75rem; opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 44vw; }
+.vx-ai-live-orb.is-mini { width: 36px; height: 36px; flex: none; }
+.vx-ai-live-mini-end { flex: none; padding: 7px 14px; border: 0; border-radius: 999px; background: #e5484d; color: #fff; font-weight: 600; font-size: 0.8125rem; cursor: pointer; }
+.vx-ai-live-mini-end:disabled { opacity: 0.6; cursor: default; }
 .vx-ai-live-hint { margin: -10px 0 0; font-size: 0.8125rem; color: rgb(var(--ink-400)); }
 @keyframes vx-ai-breathe { 50% { transform: scale(0.98); } }
 .vx-ai-live-status { margin: 0; font-size: 1rem; font-weight: 600; color: rgb(var(--ink-200)); }

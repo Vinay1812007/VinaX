@@ -420,8 +420,8 @@ export interface LiveSetup {
   contextWindowCompression: { slidingWindow: Record<string, never> };
   /** When the listener has finished speaking (Live API voice activity detection). */
   realtimeInputConfig?: { automaticActivityDetection: { endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH'; silenceDurationMs: number } };
-  /** Web search: the model's own search tool (Live API `tools`, checked 2026-11-02). */
-  tools?: Array<{ googleSearch: Record<string, never> }>;
+  /** Web search: the model's own search tool (Live API `tools`, checked 2026-11-02); music: LIVE_MUSIC_TOOLS. */
+  tools?: Array<{ googleSearch: Record<string, never> } | { functionDeclarations: readonly LiveFunction[] }>;
 }
 
 /**
@@ -443,12 +443,37 @@ export function quickThinking(model: string): { thinkingBudget: number } | { thi
   return null;
 }
 
+export interface LiveFunction {
+  name: string;
+  description: string;
+  parameters?: { type: 'object'; properties: Record<string, { type: 'string'; description: string }>; required: string[] };
+}
+
+/**
+ * Music control in Live voice: Gemini calls these and the page runs them in
+ * VinaX's own player (frontend live/musicTools.ts), then sends the result
+ * back as a toolResponse. Names and arguments are kept in step there.
+ */
+export const LIVE_MUSIC_TOOLS: readonly LiveFunction[] = [
+  {
+    name: 'play_music',
+    description: 'Search VinaX for music and play the best match now: a song, an artist, an album, a mood or a genre. Returns what started playing, or that nothing was found.',
+    parameters: { type: 'object', properties: { query: { type: 'string', description: 'What to play, in a few words, e.g. "Yaman flute", "AR Rahman", "calm lo-fi", "Shape of You".' } }, required: ['query'] },
+  },
+  { name: 'pause_music', description: 'Pause the music that is playing.' },
+  { name: 'resume_music', description: 'Carry on playing the paused song.' },
+  { name: 'next_song', description: 'Skip to the next song in the queue.' },
+  { name: 'previous_song', description: 'Go back to the previous song (or the start of this one).' },
+  { name: 'now_playing', description: 'Say which song is loaded, by whom, and whether it is playing.' },
+];
+
 /**
  * The first message of a Live session. `tuned` adds the speed settings
  * (quick end of turn, quick thinking); the page asks again without them
  * when a model refuses the setup (an invalid-argument close).
  */
-export function liveSetup(model: string, voice: string, prompt: string, search = false, tuned = false, heard: readonly string[] = []): LiveSetup {
+export function liveSetup(model: string, voice: string, prompt: string, search = false, tuned = false, heard: readonly string[] = [], music = false): LiveSetup {
+  const tools = [...(search ? [{ googleSearch: {} }] : []), ...(music ? [{ functionDeclarations: LIVE_MUSIC_TOOLS }] : [])];
   const thinking = tuned ? quickThinking(model) : null;
   return {
     model: `models/${model}`,
@@ -463,7 +488,7 @@ export function liveSetup(model: string, voice: string, prompt: string, search =
     outputAudioTranscription: {},
     contextWindowCompression: { slidingWindow: {} },
     ...(tuned ? { realtimeInputConfig: { automaticActivityDetection: { endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH' as const, silenceDurationMs: LIVE_SILENCE_MS } } } : {}),
-    ...(search ? { tools: [{ googleSearch: {} }] } : {}),
+    ...(tools.length ? { tools } : {}),
   };
 }
 

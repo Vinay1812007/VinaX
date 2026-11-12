@@ -10,6 +10,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { MobileBackBar } from '@/components/MobileBackBar';
 import { PlayerBar } from '@/components/PlayerBar';
 import { Toasts } from '@/components/Toasts';
+import { useLiveCall } from '@/features/vinaxai/live/liveCall';
 import { NowPlayingAnnouncer } from '@/components/NowPlayingAnnouncer';
 const NextUpCard = lazy(() => import('@/components/NextUpCard').then(m => ({ default: m.NextUpCard })));
 const NowPlayingRail = lazy(() => import('@/components/NowPlayingRail').then(m => ({ default: m.NowPlayingRail })));
@@ -112,6 +113,8 @@ const RecsDebugPanel = lazy(() => import('@/features/recommendation/RecsDebugPan
 // 10.0 — Listen Together runs app-wide while a session is live (see
 // services/together/session.ts); the engine and its pill load only then.
 const TogetherController = lazy(() => import('@/features/together/TogetherController'));
+// VinaX AI Live voice, app-wide so a call goes on while the listener browses (features/vinaxai/live/liveCall.ts).
+const LiveHost = lazy(() => import('@/features/vinaxai/live/LiveHost'));
 // Read once: the debug view is opt-in (?debug=recs / localStorage flag) or a dev build.
 const recsDebugWanted = recsDebugEnabled();
 
@@ -188,6 +191,7 @@ export function AppLayout() {
   const { pathname } = location;
   // VinaX AI is full screen too: its own header, no app chrome (the player keeps playing).
   const isChat = pathname === '/vinaxai' || pathname.startsWith('/vinaxai/');
+  const liveOn = useLiveCall((s) => !!s.call);
   const isFullScreenPlayer = pathname === '/now-playing' || isChat;
   useKeyboardShortcuts();
 
@@ -557,6 +561,11 @@ export function AppLayout() {
         </PlayerErrorBoundary>
       </div>
       <Toasts />
+      {liveOn && (
+        <Suspense fallback={<div className="vx-ai-live" role="status" aria-label="Opening Live voice" />}>
+          <LiveHost />
+        </Suspense>
+      )}
       <PlayerErrorBoundary silent>
         <NowPlayingAnnouncer />
         {hasTrack && !isChat && <Suspense fallback={null}><NextUpCard /></Suspense>}

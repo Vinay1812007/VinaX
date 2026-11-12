@@ -529,3 +529,49 @@ describe('Live voice: a model that won’t start is skipped next time', () => {
     s.stop();
   });
 });
+
+describe('Live voice: music control and showing things', () => {
+  beforeEach(() => { h.cap.native = false; h.cap.plugin = false; localStorage.clear(); });
+  const kinds = (ws: FakeWS): string[] => ws.sent.map((d) => { const m = JSON.parse(d) as Record<string, Record<string, unknown>>; return m.realtimeInput ? Object.keys(m.realtimeInput)[0] : Object.keys(m)[0]; });
+
+  it('asks for music control; runs a tool call and answers it on the same socket', async () => {
+    h.liveToken.mockImplementation(async () => ({ token: 't', url: 'wss://live.example/ws', setup: { model: 'models/m' }, model: { id: 'm', name: 'M' }, search: false, music: true }));
+    const onTool = vi.fn(async () => ({ ok: true, playing: { title: 'Kun Faya Kun', artist: 'A.R. Rahman' } }));
+    const s = new LiveSession({ thinking: false, voice: 'Kore', music: true }, { ...callbacks(), onTool });
+    void s.start();
+    const ws = await sessionReady(s);
+    expect(h.liveToken.mock.calls[0][0]).toMatchObject({ music: true });
+    expect(s.music).toBe(true);
+    ws.say({ toolCall: { functionCalls: [{ id: 'c1', name: 'play_music', args: { query: 'sufi' } }] } });
+    await vi.waitFor(() => expect(kinds(ws)).toContain('toolResponse'));
+    expect(onTool).toHaveBeenCalledWith({ id: 'c1', name: 'play_music', args: { query: 'sufi' } });
+    const reply = JSON.parse(ws.sent[ws.sent.length - 1]) as { toolResponse: { functionResponses: unknown[] } };
+    expect(reply.toolResponse.functionResponses).toEqual([{ id: 'c1', name: 'play_music', response: { ok: true, playing: { title: 'Kun Faya Kun', artist: 'A.R. Rahman' } } }]);
+    s.stop();
+  });
+
+  it('a tool call Gemini cancels gets no answer', async () => {
+    let finish!: (v: Record<string, unknown>) => void;
+    const onTool = vi.fn(() => new Promise<Record<string, unknown>>((r) => { finish = r; }));
+    const s = new LiveSession({ thinking: false, voice: 'Kore', music: true }, { ...callbacks(), onTool });
+    void s.start();
+    const ws = await sessionReady(s);
+    ws.say({ toolCall: { functionCalls: [{ id: 'c2', name: 'next_song', args: {} }] } });
+    ws.say({ toolCallCancellation: { ids: ['c2'] } });
+    finish({ ok: true });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(kinds(ws)).not.toContain('toolResponse');
+    s.stop();
+  });
+
+  it('sendFrame passes a picture on as a video frame, only once connected', async () => {
+    const s = new LiveSession({ thinking: false, voice: 'Kore' }, callbacks());
+    expect(s.sendFrame('abc')).toBe(false);
+    void s.start();
+    const ws = await sessionReady(s);
+    expect(s.sendFrame('abc')).toBe(true);
+    expect(JSON.parse(ws.sent[ws.sent.length - 1])).toEqual({ realtimeInput: { video: { data: 'abc', mimeType: 'image/jpeg' } } });
+    s.stop();
+    expect(s.sendFrame('abc')).toBe(false);
+  });
+});

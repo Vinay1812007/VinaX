@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
   setOptions: vi.fn(),
   state: 'listening',
   setSpeaker: vi.fn(async (on: boolean) => (on ? 'speaker' : 'earpiece')),
+  muted: [] as boolean[],
 }));
 
 vi.mock('@capacitor/core', () => ({
@@ -45,7 +46,8 @@ vi.mock('./liveSession', () => ({
       return r;
     };
     stop() { /* */ }
-    setMuted() { /* */ }
+    setMuted(m: boolean) { h.muted.push(m); }
+    sendFrame() { return true; }
     async setSearch() { /* */ }
     async switchMic() { /* */ }
   },
@@ -53,6 +55,7 @@ vi.mock('./liveSession', () => ({
 
 import LiveView from './LiveView';
 import { PREFS_KEY, usePrefs } from '../prefs';
+import { usePlayerStore } from '@/store/playerStore';
 
 const view = () => render(<LiveView conversationId={null} parentMessageId={null} thinking={false} voice="Kore" model="auto" micId="" onClose={() => undefined} />);
 
@@ -144,5 +147,41 @@ describe('Live voice: model, voice and language pickers, captions', () => {
     fireEvent.click(cc);
     expect(usePrefs.getState().liveCaptions).toBe(false);
     expect(screen.getByRole('button', { name: 'Captions' }).getAttribute('aria-pressed')).toBe('false');
+  });
+});
+
+describe('Live voice: in the background, with music, and showing things', () => {
+  beforeEach(() => { h.cap.native = false; h.muted.length = 0; act(() => { usePlayerStore.setState({ isPlaying: false }); }); });
+
+  it('the arrow sends the call to the background; the small bar opens it again or ends it', async () => {
+    const onMinimize = vi.fn();
+    const onExpand = vi.fn();
+    const onClose = vi.fn();
+    const r = render(<LiveView conversationId={null} parentMessageId={null} thinking={false} voice="Kore" model="auto" micId="" onClose={onClose} onMinimize={onMinimize} onExpand={onExpand} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Keep talking while you browse' }));
+    expect(onMinimize).toHaveBeenCalled();
+    r.rerender(<LiveView conversationId={null} parentMessageId={null} thinking={false} voice="Kore" model="auto" micId="" onClose={onClose} onMinimize={onMinimize} onExpand={onExpand} minimized />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('region', { name: 'Live voice' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Open Live voice' }));
+    expect(onExpand).toHaveBeenCalled();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'End' })); });
+    expect(onClose).toHaveBeenCalledWith(null);
+  });
+
+  it('music starting mutes the mic; it stopping unmutes it; asks for music control', async () => {
+    view();
+    expect(h.opts).toMatchObject({ music: true });
+    await act(async () => { usePlayerStore.setState({ isPlaying: true }); });
+    expect(screen.getByRole('status').textContent).toBe('Muted while music plays');
+    expect(h.muted).toEqual([true]);
+    await act(async () => { usePlayerStore.setState({ isPlaying: false }); });
+    expect(h.muted).toEqual([true, false]);
+  });
+
+  it('offers the camera and a photo (screen sharing only where the browser has it)', async () => {
+    view();
+    expect(await screen.findByRole('button', { name: 'Show a photo' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Share screen' })).toBeNull();
   });
 });

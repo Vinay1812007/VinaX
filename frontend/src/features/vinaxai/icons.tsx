@@ -36,6 +36,10 @@ export const DownloadIcon = ({ className }: P) => (<svg {...base(className)}><pa
 export const MicIcon = ({ className }: P) => (<svg {...base(className)}><rect x="9" y="3.5" width="6" height="11" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5" /></svg>);
 export const MicOffIcon = ({ className }: P) => (<svg {...base(className)}><path d="M15 9.5V6.5a3 3 0 0 0-5.6-1.5M9 9v2.5a3 3 0 0 0 4.6 2.5M5.5 11.5a6.5 6.5 0 0 0 10.4 5.2M18.5 11.5a6.4 6.4 0 0 1-.6 2.7M12 18v2.5M4 4l16 16" /></svg>);
 export const WaveIcon = ({ className }: P) => (<svg {...base(className)}><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4" /></svg>);
+export const VideoIcon = ({ className }: P) => (<svg {...base(className)}><rect x="3" y="6.5" width="12.5" height="11" rx="2.5" /><path d="m15.5 10.5 5-3v9l-5-3" /></svg>);
+export const ScreenIcon = ({ className }: P) => (<svg {...base(className)}><rect x="3" y="4.5" width="18" height="12" rx="2" /><path d="M8.5 20h7M12 16.5V20M12 13.5V8M9.5 10.5 12 8l2.5 2.5" /></svg>);
+export const FlipIcon = ({ className }: P) => (<svg {...base(className)}><path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.7 5.6L4 15.5M4 20v-4.5h4.5" /></svg>);
+export const MinimizeIcon = ({ className }: P) => (<svg {...base(className)}><path d="m6 9.5 6 6 6-6" /></svg>);
 export const CaptionsIcon = ({ className }: P) => (<svg {...base(className)}><rect x="3.5" y="5.5" width="17" height="13" rx="2.5" /><path d="M10.5 10.2a2.2 2.2 0 1 0 0 3.6M16.5 10.2a2.2 2.2 0 1 0 0 3.6" /></svg>);
 export const SpeakerIcon = ({ className }: P) => (<svg {...base(className)}><path d="M4.5 9.5h3l4.5-4v13l-4.5-4h-3zM15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" /></svg>);
 export const CheckIcon = ({ className }: P) => (<svg {...base(className)}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>);

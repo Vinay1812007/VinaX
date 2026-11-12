@@ -489,6 +489,35 @@ describe('POST /api/ai/live-token', () => {
     expect((bodies[1].body.bidiGenerateContentSetup as Record<string, unknown>).tools).toEqual([{ googleSearch: {} }]);
   });
 
+  it('music control: the setup carries the music tools and the prompt says it can play; a lean setup drops them', async () => {
+    seed();
+    upstream = (url) => (url.endsWith('/v1beta/auth_tokens') ? json({ name: 'tok' }) : new Response('', { status: 500 }));
+    const body = await (await ask({ music: true, search: true })).json();
+    expect(body.music).toBe(true);
+    const names = body.setup.tools.flatMap((t: { functionDeclarations?: Array<{ name: string }> }) => t.functionDeclarations?.map((f) => f.name) ?? []);
+    expect(names).toEqual(['play_music', 'pause_music', 'resume_music', 'next_song', 'previous_song', 'now_playing']);
+    expect(body.setup.tools).toContainEqual({ googleSearch: {} });
+    const text = body.setup.systemInstruction.parts[0].text as string;
+    expect(text).toContain('You can play, pause, resume and skip music');
+    expect(text).not.toContain("can't play, pause or change the music");
+    expect(text).toContain('You have Google Search');
+    const locked = JSON.parse(String(seen.find((x) => x.url.endsWith('/auth_tokens'))!.init!.body)).liveConnectConstraints.config.tools;
+    expect(locked).toEqual(body.setup.tools);
+    const lean = await (await ask({ music: true, lean: true })).json();
+    expect(lean.music).toBe(false);
+    expect(lean.setup.tools).toBeUndefined();
+    expect(lean.setup.systemInstruction.parts[0].text).toContain("can't play, pause or change the music or search the web");
+  });
+
+  it('music without search keeps "can\'t search the web"; every Live prompt says when it can see', () => {
+    const vars = { now: new Date('2026-10-31T10:00:00Z'), timezone: 'UTC', locale: 'en', firstName: null, modelName: 'Gemini 3.8 Live', providerName: 'Google' };
+    const p = voicePrompt(vars, false, 'auto', true);
+    expect(p).toContain("You can't search the web in Live voice");
+    expect(p).toContain('You can play, pause, resume and skip music');
+    for (const q of [p, voicePrompt(vars), voicePrompt(vars, true)]) expect(q).toContain('only while they share their camera, their screen or a photo');
+    expect(liveSetup('gemini-3.8-live', 'Kore', 'p', false, true, [], true).tools).toEqual([{ functionDeclarations: expect.any(Array) }]);
+  });
+
   it('asked for web search: the setup gets the search tool and the search prompt', async () => {
     seed();
     upstream = (url) => (url.endsWith('/v1beta/auth_tokens') ? json({ name: 'tok' }) : new Response('', { status: 500 }));
@@ -497,7 +526,7 @@ describe('POST /api/ai/live-token', () => {
     expect(body.model.id).toBe('gemini-2.5-flash-native-audio-latest');
     expect(body.setup.tools).toEqual([{ googleSearch: {} }]);
     expect(body.setup.systemInstruction.parts[0].text).toContain('You have Google Search');
-    expect(body.setup.systemInstruction.parts[0].text).not.toContain('search the web or see');
+    expect(body.setup.systemInstruction.parts[0].text).not.toContain('or search the web in Live voice');
     expect(JSON.parse(String(seen[0].init!.body)).liveConnectConstraints.config.tools).toEqual([{ googleSearch: {} }]);
   });
 
@@ -534,7 +563,7 @@ describe('POST /api/ai/live-token', () => {
       const body = await (await ask(asked)).json();
       expect(body.search).toBe(false);
       expect(body.setup.tools).toBeUndefined();
-      expect(body.setup.systemInstruction.parts[0].text).toContain("search the web or see the user's screen");
+      expect(body.setup.systemInstruction.parts[0].text).toContain("or search the web in Live voice");
       expect(JSON.parse(String(seen[0].init!.body)).liveConnectConstraints.config.tools).toBeUndefined();
     }
   });
@@ -711,10 +740,10 @@ describe('the voice prompt and the model list', () => {
     expect(p).toContain("Never say you can't look things up");
     expect(p).toContain("Say briefly that you're checking");
     expect(p).toContain('by its site name');
-    expect(p).toContain("can't play, pause or change the music or see the user's screen");
-    expect(p).not.toContain('search the web or see');
+    expect(p).toContain("can't play, pause or change the music in Live voice");
+    expect(p).not.toContain('or search the web in Live voice');
     expect(voicePrompt(vars)).toBe(voicePrompt(vars, false));
-    expect(voicePrompt(vars)).toContain("search the web or see the user's screen");
+    expect(voicePrompt(vars)).toContain("can't play, pause or change the music or search the web");
   });
 
   it('GET /api/ai/models says which voice features work and lists the voices', async () => {

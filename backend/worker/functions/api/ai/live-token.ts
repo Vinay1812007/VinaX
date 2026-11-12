@@ -10,12 +10,13 @@
  *     recap?: [{ role, text }],  // what was said before a reconnect (the latest 20 turns are kept)
  *     context?: [{ role, text }],// the typed chat Live voice was opened from (the latest 12 turns are kept)
  *     language?: "auto" | "<code>", // hold replies to one language (prompt.ts LIVE_LANGUAGES)
- *     lean?: true,               // without the speed settings (the model refused them)
+ *     lean?: true,               // without the speed settings (the model refused them), and without music control
+ *     music?: true,              // music control: the setup carries LIVE_MUSIC_TOOLS (the page runs them in its player)
  *     personal?: { name?, about?, instructions?, style? }, // VinaX AI settings → Personalisation, never stored
  *     conversationId?, incognito?, // whose memory applies (none in an incognito chat)
  *     voice?: "<Gemini voice>", timezone?, locale? }
  *
- *   → 200 { token, url, setup, model: { id, name }, search, tuned, expiresAt }
+ *   → 200 { token, url, setup, model: { id, name }, search, tuned, music, expiresAt }
  *         `setup` is the first message the page sends on the socket; the
  *         token is locked to it where Google allows that. `search` says
  *         whether the setup carries the search tool; `tuned` whether it
@@ -67,6 +68,8 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
   const candidates = liveCandidates(body.thinking === true, skip, Date.now(), body.model, search);
   if (!candidates.length) return voiceFailure([]);
   const tuned = body.lean !== true;
+  // A lean setup is the fallback for a model that refused the setup: the music tools go too.
+  const music = body.music === true && tuned;
   const heard = transcriptionLanguages(body.language, safeLocale(body.locale));
   const personal = sanitizePersonal(body.personal);
   const conversationId = typeof body.conversationId === 'string' && UUID.test(body.conversationId) ? body.conversationId : null;
@@ -96,13 +99,13 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
       firstName: personal?.name || accountName,
       modelName: model.name,
       providerName: 'Google',
-    }, search, body.language);
+    }, search, body.language, music);
     const prompt = [spoken, ...extra].join('\n\n');
-    const setup = liveSetup(model.id, voice, prompt, search, tuned, heard);
+    const setup = liveSetup(model.id, voice, prompt, search, tuned, heard, music);
     try {
       const t = await mintLiveToken(env, setup);
-      console.log(JSON.stringify({ route: 'ai-live-token', provider: 'gemini', model: model.id, shape: t.shape, search, tuned, ok: true }));
-      return json({ token: t.token, url: LIVE_WS_URL, setup, model, search, tuned, expiresAt: t.expiresAt });
+      console.log(JSON.stringify({ route: 'ai-live-token', provider: 'gemini', model: model.id, shape: t.shape, search, tuned, music, ok: true }));
+      return json({ token: t.token, url: LIVE_WS_URL, setup, model, search, tuned, music, expiresAt: t.expiresAt });
     } catch (e) {
       const err = asProviderError(e);
       kinds.push(err.kind);

@@ -27,6 +27,11 @@
  * its voice stops and the rest of that reply is dropped.
 
  *
+ * Music control (`music`): the setup carries the music tools (voice.ts);
+ * a `toolCall` is run in VinaX's player (musicTools.ts) and answered with a
+ * `toolResponse`, unless Gemini cancelled it meanwhile. Seeing: `sendFrame`
+ * passes a camera, screen or photo picture on as a video frame.
+ *
  * A model Gemini refuses is remembered on the device for 12 hours
  * (noStart.ts) and skipped when Live voice opens; if that leaves nothing,
  * every model is tried again.
@@ -50,8 +55,9 @@ import { liveToken, type LiveTokenOptions, type LiveTokenReply } from '../api';
 import { closeMic, hasSignal, loudness, micLabelOf, micSource, newAudioContext, openMic, rmsOf } from '../mic';
 import { base64ToBytes, pcm16 } from '../speechStream';
 import { isNativePlatform } from '@/services/native';
-import { audioMessage, EchoGuard, floatTo16, NoiseGate, OUTPUT_RATE, parseServerMessage, Resampler, streamEndMessage, Transcript, type LiveEvent } from './liveProtocol';
+import { toolResponseMessage, videoMessage, type ToolCall, audioMessage, EchoGuard, floatTo16, NoiseGate, OUTPUT_RATE, parseServerMessage, Resampler, streamEndMessage, Transcript, type LiveEvent } from './liveProtocol';
 import { forgetNoStart, noStartModels, rememberNoStart } from './noStart';
+import { runMusicTool } from './musicTools';
 import { audioRouteAvailable, setSpeaker, startAudioRoute, stopAudioRoute, type AudioRoute } from './audioRoute';
 import type { SourcesInfo } from '../types';
 import tapUrl from './micTap.worklet.js?url';
@@ -70,6 +76,8 @@ export interface LiveCallbacks {
   onMic?(mic: { label: string; silent: boolean }): void;
   /** Where the voice plays in the Android app (null: the app cannot switch it). */
   onRoute?(route: AudioRoute | null): void;
+  /** Gemini asked the page to run a tool (music control); the default runs it in VinaX's player. */
+  onTool?(call: ToolCall): Promise<Record<string, unknown>>;
   /** Fires once. `error` is a code for voiceNotice / micNotice when it failed. */
   onEnd(reason: LiveEndReason, error?: string): void;
 }
@@ -100,6 +108,8 @@ export interface LiveOptions {
   speaker?: boolean;
   /** 'auto' or a language code the replies are held to. */
   language?: string;
+  /** Music control: Gemini may play, pause and skip in VinaX's player. */
+  music?: boolean;
   /** The typed chat Live voice was opened from (its latest turns). */
   context?: LiveTokenOptions['context'];
   personal?: LiveTokenOptions['personal'];
@@ -154,6 +164,10 @@ export class LiveSession {
   private cutOff = false;
   /** A reply has started arriving and Gemini hasn't finished (or been interrupted in) it. */
   private turnOpen = false;
+  /** This session has music control (the token said so). */
+  music = false;
+  /** Tool calls Gemini cancelled: their results are not sent. */
+  private readonly cancelled = new Set<string>();
   private readonly opts: LiveOptions;
 
   constructor(opts: LiveOptions, private readonly cb: LiveCallbacks) {
@@ -266,6 +280,7 @@ export class LiveSession {
           ...(o.conversationId ? { conversationId: o.conversationId } : {}),
           ...(o.incognito ? { incognito: true } : {}),
           ...(lean ? { lean: true } : {}),
+          ...(o.music ? { music: true } : {}),
         });
       } catch (e) {
         // Perhaps only the skipped models were left: try every model once more.
@@ -276,6 +291,7 @@ export class LiveSession {
       if (this.ended) return false;
       this.model = token.model;
       this.search = token.search === true;
+      this.music = token.music === true;
       const closed = await this.connect(token);
       if (closed === null) { forgetNoStart(token.model.id); this.asked = asked; return true; }
       // A refused setup may be the speed settings: the same model without them.
@@ -511,6 +527,8 @@ export class LiveSession {
       case 'searching': this.transcript.searching(); this.cb.onWeb?.(this.transcript.web()); break;
       case 'sources': this.transcript.found(ev); this.cb.onWeb?.(this.transcript.web()); break;
       case 'goAway': this.finish('time'); break;
+      case 'toolCall': void this.runTools(ev.calls); break;
+      case 'toolCancel': for (const id of ev.ids) this.cancelled.add(id); break;
       default: break;
     }
   }
@@ -548,6 +566,27 @@ export class LiveSession {
     this.playing.clear();
     this.nextAt = 0;
     if (!this.ended) this.setState('listening');
+  }
+
+  /** Run what Gemini asked for, then tell it what came of it (on the socket that asked). */
+  private async runTools(calls: readonly ToolCall[]): Promise<void> {
+    const ws = this.ws;
+    const run = this.cb.onTool ?? ((c: ToolCall) => runMusicTool(c.name, c.args));
+    const responses = await Promise.all(calls.map(async (c) => {
+      const timeout = new Promise<Record<string, unknown>>((r) => setTimeout(() => r({ ok: false, error: 'That took too long.' }), 8_000));
+      const response = await Promise.race([run(c).catch(() => ({ ok: false, error: 'That did not work.' })), timeout]);
+      return { id: c.id, name: c.name, response };
+    }));
+    const wanted = responses.filter((r) => !this.cancelled.has(r.id));
+    if (this.ended || !wanted.length || ws !== this.ws || ws?.readyState !== WebSocket.OPEN) return;
+    ws.send(toolResponseMessage(wanted));
+  }
+
+  /** A picture from the camera, the screen or a photo, for Gemini to see (liveVideo.ts). */
+  sendFrame(jpegBase64: string): boolean {
+    if (this.ended || !this.ready || this.ws?.readyState !== WebSocket.OPEN) return false;
+    this.ws.send(videoMessage(jpegBase64));
+    return true;
   }
 
   /** The listener tapped to cut VinaX AI off: its voice stops now and the rest of this reply is dropped. */

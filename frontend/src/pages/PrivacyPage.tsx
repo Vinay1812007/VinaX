@@ -168,6 +168,9 @@ export default function PrivacyPage() {
           sends your microphone straight to Google Gemini while it is open, and what you both say is saved in that chat
           like typed messages. When a call with two or more questions ends, its text is also sent once to one of VinaX
           AI&rsquo;s AI providers (usually Google Gemini) to write a short summary, saved in the chat after the call.
+          If you show Live voice your camera, your screen or a photo, those pictures go to Google Gemini too while you share
+          them (about one a second) and are not stored. When you ask Live voice to play or skip music, it only uses VinaX&rsquo;s
+          own player.
           With web search on in Live voice, Google Gemini may use what you ask as Google searches to
           answer; you can switch it off in VinaX AI&rsquo;s Settings or with the globe button in Live voice.
         </p>

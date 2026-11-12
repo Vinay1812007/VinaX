@@ -5,7 +5,11 @@
  *   page → Gemini   { setup }  (from POST /api/ai/live-token, sent first)
  *                   { realtimeInput: { audio: { data: <base64 PCM>, mimeType: "audio/pcm;rate=16000" } } }
  *                   { realtimeInput: { audioStreamEnd: true } }   (mic muted)
+ *                   { realtimeInput: { video: { data: <base64 JPEG>, mimeType: "image/jpeg" } } }
+ *                                    (the camera, the screen or a photo, about one frame a second)
+ *                   { toolResponse: { functionResponses: [{ id, name, response }] } }   (music control)
  *   Gemini → page   { setupComplete }
+ *                   { toolCall: { functionCalls: [{ id, name, args }] } } · { toolCallCancellation: { ids } }
  *                   { serverContent: { modelTurn: { parts: [{ inlineData: { data } }] },
  *                                      inputTranscription: { text }, outputTranscription: { text },
  *                                      interrupted, turnComplete,
@@ -163,6 +167,13 @@ export function levelOf(samples: Float32Array): number {
 
 export const audioMessage = (pcm: Uint8Array): string => JSON.stringify({ realtimeInput: { audio: { data: bytesToBase64(pcm), mimeType: INPUT_MIME } } });
 export const streamEndMessage = (): string => JSON.stringify({ realtimeInput: { audioStreamEnd: true } });
+/** One picture from the camera, the screen or a photo (Gemini Live takes them as video frames). */
+export const videoMessage = (jpegBase64: string): string => JSON.stringify({ realtimeInput: { video: { data: jpegBase64, mimeType: 'image/jpeg' } } });
+/** The page ran a tool Gemini called: what came of it. */
+export const toolResponseMessage = (responses: ReadonlyArray<{ id: string; name: string; response: Record<string, unknown> }>): string =>
+  JSON.stringify({ toolResponse: { functionResponses: responses } });
+
+export interface ToolCall { id: string; name: string; args: Record<string, unknown> }
 
 export type LiveEvent =
   | { type: 'ready' }
@@ -175,7 +186,11 @@ export type LiveEvent =
   /** The model is searching the web. */
   | { type: 'searching' }
   /** What a search found (links are the search's own redirects; titles are site names). */
-  | { type: 'sources'; items: Array<{ url: string; title: string }>; queries: string[]; entryPointHtml?: string };
+  | { type: 'sources'; items: Array<{ url: string; title: string }>; queries: string[]; entryPointHtml?: string }
+  /** Gemini wants the page to run tools (music control). */
+  | { type: 'toolCall'; calls: ToolCall[] }
+  /** Gemini no longer wants these (the listener talked over it). */
+  | { type: 'toolCancel'; ids: string[] };
 
 const MAX_SOURCES = 10;
 
@@ -232,6 +247,18 @@ export function parseServerMessage(raw: string): LiveEvent[] {
     if (sc.interrupted === true) out.push({ type: 'interrupted' });
     if (sc.turnComplete === true) out.push({ type: 'turnComplete' });
   }
+  const tc = (m.toolCall as { functionCalls?: unknown } | undefined)?.functionCalls;
+  if (Array.isArray(tc)) {
+    const calls = tc.slice(0, 5).flatMap((c): ToolCall[] => {
+      const id = (c as { id?: unknown })?.id;
+      const name = (c as { name?: unknown })?.name;
+      const args = (c as { args?: unknown })?.args;
+      return typeof id === 'string' && typeof name === 'string' ? [{ id, name, args: args && typeof args === 'object' && !Array.isArray(args) ? (args as Record<string, unknown>) : {} }] : [];
+    });
+    if (calls.length) out.push({ type: 'toolCall', calls });
+  }
+  const cancelled = (m.toolCallCancellation as { ids?: unknown } | undefined)?.ids;
+  if (Array.isArray(cancelled)) out.push({ type: 'toolCancel', ids: cancelled.filter((x): x is string => typeof x === 'string') });
   if ('goAway' in m) out.push({ type: 'goAway' });
   return out;
 }

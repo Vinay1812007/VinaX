@@ -240,6 +240,8 @@ export interface LiveTokenReply {
   search?: boolean;
   /** The setup carries the speed settings (quick end of turn, quick thinking). */
   tuned?: boolean;
+  /** The setup carries the music tools (live/musicTools.ts runs them). */
+  music?: boolean;
   expiresAt: string;
 }
 
@@ -257,6 +259,8 @@ export interface LiveTokenOptions {
   language?: string;
   /** Without the speed settings (the model refused them). */
   lean?: boolean;
+  /** Music control: Gemini may play, pause and skip in VinaX's player. */
+  music?: boolean;
   personal?: { name?: string; about?: string; instructions?: string; style?: string };
   conversationId?: string | null;
   incognito?: boolean;
