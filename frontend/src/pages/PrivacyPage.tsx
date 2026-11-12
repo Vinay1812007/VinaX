@@ -166,7 +166,9 @@ export default function PrivacyPage() {
           Google Gemini) to turn it into text, which lands in the message box for you to check; Read aloud sends a
           reply&rsquo;s words to Groq or Google Gemini to speak them. Neither recording nor speech is stored. Live voice
           sends your microphone straight to Google Gemini while it is open, and what you both say is saved in that chat
-          like typed messages. With web search on in Live voice, Google Gemini may use what you ask as Google searches to
+          like typed messages. When a call with two or more questions ends, its text is also sent once to one of VinaX
+          AI&rsquo;s AI providers (usually Google Gemini) to write a short summary, saved in the chat after the call.
+          With web search on in Live voice, Google Gemini may use what you ask as Google searches to
           answer; you can switch it off in VinaX AI&rsquo;s Settings or with the globe button in Live voice.
         </p>
         <p>

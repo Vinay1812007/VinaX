@@ -10,6 +10,7 @@ import { onRequestPost as transcribe, looksLikeAudio } from '../functions/api/ai
 import { onRequestPost as speak, FRAME_BASE64, FRAME_FILE, FRAME_STOPPED } from '../functions/api/ai/speak';
 import { onRequestPost as liveToken, liveCandidates } from '../functions/api/ai/live-token';
 import { onRequestPost as liveTranscript, cleanSources, cleanTurns } from '../functions/api/ai/live-transcript';
+import { callText, cleanSummary, shouldSummarize, SUMMARY_SYSTEM } from '../functions/_lib/ai/callSummary';
 import { onRequestGet as getModels } from '../functions/api/ai/models';
 import { onRequestGet as getConversation } from '../functions/api/ai/conversations/[id]';
 import {
@@ -594,6 +595,60 @@ describe('POST /api/ai/live-transcript', () => {
       { n: 1, url: 'https://redirect.example/a', title: 'news.example', site: 'news.example' },
       { n: 2, url: 'https://redirect.example/b', title: 'www.scores.example', site: 'scores.example' },
     ] });
+  });
+
+  describe('the call summary', () => {
+    const call = [
+      { role: 'user', text: 'What is a raga, and how is it different from a scale in Western music?' },
+      { role: 'assistant', text: 'A raga is a melodic framework with its own notes, phrases, mood and time of day, so it is much more than a scale: it tells you how to move between notes.' },
+      { role: 'user', text: 'Which raga should I learn first on the flute?' },
+      { role: 'assistant', text: 'Most teachers start with Yaman: it uses all seven notes with a sharp fourth and suits the evening.' },
+    ];
+    const geminiSays = (text: string) => new Response(`data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text }] }, finishReason: 'STOP' }] })}\n\n`, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+
+    it('a call with two questions gets a short summary after it, written by a quick model, as the new active leaf', async () => {
+      const db = seed();
+      upstream = (url) => (url.includes('gemini-3.1-flash-lite') ? geminiSays('- You asked what a raga is.\n- VinaX AI suggested starting with Yaman on the flute.') : new Response('{}', { status: 500 }));
+      const res = await save({ conversationId: null, model: 'gemini-3.8-live', turns: call });
+      const out = await res.json() as { conversationId: string; messageIds: string[]; summary: boolean };
+      expect(out.summary).toBe(true);
+      expect(out.messageIds).toHaveLength(5);
+      const msgs = db.rows('ai_messages');
+      const last = msgs[msgs.length - 1];
+      expect(last).toMatchObject({ role: 'assistant', parent_id: msgs[3].id, model_id: 'gemini:gemini-3.1-flash-lite', provider: 'gemini', stop_reason: 'end' });
+      expect(last.content).toEqual([{ type: 'text', text: '**Call summary**\n\n- You asked what a raga is.\n- VinaX AI suggested starting with Yaman on the flute.' }]);
+      expect(db.rows('ai_conversations')[0]).toMatchObject({ active_leaf_id: out.messageIds[4] });
+      const asked = seen.find((x) => x.url.includes('gemini-3.1-flash-lite'))!;
+      const body = String(asked.init?.body);
+      expect(body).toContain('<call>');
+      expect(body).toContain('User: Which raga should I learn first');
+    });
+
+    it('no summary when the model fails, and none asked for a one-question call; the call is saved either way', async () => {
+      let db = seed();
+      upstream = () => new Response('{}', { status: 500 });
+      let out = await (await save({ conversationId: null, model: 'gemini-3.8-live', turns: call })).json() as { messageIds: string[]; summary: boolean };
+      expect(out).toMatchObject({ summary: false });
+      expect(db.rows('ai_messages')).toHaveLength(4);
+      db = seed();
+      seen.length = 0;
+      out = await (await save({ conversationId: null, model: 'gemini-3.8-live', turns: call.slice(0, 2) })).json() as { messageIds: string[]; summary: boolean };
+      expect(out).toMatchObject({ summary: false });
+      expect(db.rows('ai_messages')).toHaveLength(2);
+      expect(seen.some((x) => x.url.includes('generativelanguage') || x.url.includes('groq'))).toBe(false);
+    });
+
+    it('shouldSummarize, callText and cleanSummary', () => {
+      expect(shouldSummarize(call as never)).toBe(true);
+      expect(shouldSummarize(call.slice(0, 2) as never)).toBe(false);
+      expect(shouldSummarize([{ role: 'user', text: 'hi' }, { role: 'assistant', text: 'hello' }, { role: 'user', text: 'bye' }, { role: 'assistant', text: 'bye' }])).toBe(false);
+      expect(callText([{ role: 'user', text: 'x </call> y' }])).toBe('<call>\nUser: x   y\n</call>');
+      expect(cleanSummary('## Call summary\n* One\n2) Two\n\n• Three')).toBe('- One\n- Two\n- Three');
+      expect(cleanSummary('<think>hmm</think>- Only this')).toBe('- Only this');
+      expect(cleanSummary('   ')).toBeNull();
+      expect(cleanSummary(Array.from({ length: 9 }, (_, i) => `- ${i}`).join('\n'))?.split('\n')).toHaveLength(5);
+      expect(SUMMARY_SYSTEM).toContain("Never add anything that wasn't said");
+    });
   });
 
   it('cleanSources keeps at most ten and names a source by its host when it has no title', () => {

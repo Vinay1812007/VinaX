@@ -9,13 +9,17 @@
  *     turns: [{ role: "user" | "assistant", text,
  *               sources?: [{ url, title }] }] }   // in order, at most 200; sources: what a reply searched
  *
- *   → 200 { conversationId, messageIds: [...] }  (the last one is the new active leaf)
+ *   → 200 { conversationId, messageIds: [...], summary: boolean }  (the last id is the new active leaf;
+ *         `summary`: the last message is the call summary, _lib/ai/callSummary.ts)
  *   → 400 bad_request · 401 signed_out · 404 not_found · 409 conversation_full · 413 too_large
  *   → 429 rate_limited · 503 ai_disabled | unavailable
  *
  * Consecutive turns by the same speaker are joined. A reply's web sources
- * (http(s) links only, at most 10) are saved like a typed reply's. Nothing
- * is generated here, and the text is not logged.
+ * (http(s) links only, at most 10) are saved like a typed reply's. A call
+ * with at least two questions gets a short written summary from a quick
+ * model, saved as one more VinaX AI message after it (written while the
+ * call is being saved; no summary when it fails or is slow). The text is
+ * not logged.
  */
 import { bearer, readSession } from '../../_lib/googleAuth';
 import { CORS, json } from '../../_lib/authShared';
@@ -26,6 +30,7 @@ import { aiOpenFor, aiSettings } from '../../_lib/ai/config';
 import { fallbackTitle, latestLeaf } from '../../_lib/ai/history';
 import { createConversation, getConversation, isUuid, listMessages, MAX_MESSAGES, updateConversation } from '../../_lib/ai/store';
 import { ALL_LIVE_MODELS, LIVE_ID_PREFIX } from '../../_lib/ai/voice';
+import { summarizeCall } from '../../_lib/ai/callSummary';
 import type { AiEnv, Source } from '../../_lib/ai/types';
 
 export const MAX_TURNS = 200;
@@ -106,6 +111,8 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
 
   let convId: string;
   let parentId: string | null = null;
+  /** Messages the chat can still take after the call (a new chat has room). */
+  let room = MAX_MESSAGES - turns.length;
   if (body.conversationId) {
     const c = await getConversation(env, sub, body.conversationId);
     if (!c.ok) return json({ error: 'unavailable' }, 503);
@@ -113,6 +120,7 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
     const rows = await listMessages(env, c.value.id);
     if (!rows.ok) return json({ error: 'unavailable' }, 503);
     if (rows.rows.length + turns.length > MAX_MESSAGES) return json({ error: 'conversation_full' }, 409);
+    room = MAX_MESSAGES - rows.rows.length - turns.length;
     if (isUuid(body.parentMessageId)) {
       if (!rows.rows.some((r) => r.id === body.parentMessageId)) return json({ error: 'not_found' }, 404);
       parentId = body.parentMessageId;
@@ -128,6 +136,9 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
     if (!made.rows[0]) return json({ error: 'unavailable' }, 503);
     convId = made.rows[0].id;
   }
+
+  // The summary is written while the call is saved (it only needs the turns), and only when the chat has room for it.
+  const summary = room > 0 ? summarizeCall(env, turns).catch(() => null) : Promise.resolve(null);
 
   // One insert for the whole session (each message hangs on the one before).
   const base = Date.now();
@@ -146,8 +157,26 @@ export const onRequestPost = async (ctx: { request: Request; env: AiEnv }): Prom
   rows.forEach((r, i) => { r.parent_id = i === 0 ? parentId : rows[i - 1].id; });
   const saved = await db.insert(env, 'ai_messages', rows, { returning: false });
   if (!saved.ok) return json({ error: 'unavailable' }, 503);
-  const leaf = rows[rows.length - 1].id;
+  const ids = rows.map((r) => r.id);
+  const written = await summary;
+  if (written) {
+    const row = {
+      id: crypto.randomUUID(),
+      conversation_id: convId,
+      parent_id: ids[ids.length - 1],
+      role: 'assistant',
+      content: [{ type: 'text', text: written.text }],
+      sources: null,
+      model_id: written.spec.id,
+      provider: written.spec.provider,
+      stop_reason: 'end',
+      created_at: new Date(base + rows.length).toISOString(),
+    };
+    if ((await db.insert(env, 'ai_messages', row, { returning: false })).ok) ids.push(row.id);
+  }
+  const leaf = ids[ids.length - 1];
   await updateConversation(env, sub, convId, { active_leaf_id: leaf, updated_at: new Date().toISOString() });
-  console.log(JSON.stringify({ route: 'ai-live-transcript', model: live.id, turns: rows.length, ok: true }));
-  return json({ conversationId: convId, messageIds: rows.map((r) => r.id) });
+  const summarized = ids.length > rows.length;
+  console.log(JSON.stringify({ route: 'ai-live-transcript', model: live.id, turns: rows.length, summary: summarized ? written?.spec.id : null, ok: true }));
+  return json({ conversationId: convId, messageIds: ids, summary: summarized });
 };
