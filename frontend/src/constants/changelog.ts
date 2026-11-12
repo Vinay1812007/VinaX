@@ -18,6 +18,13 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.13': {
+    title: 'VinaX AI no longer has Cowork',
+    changes: [
+      { type: 'fixed', text: 'Cowork is gone from VinaX AI: no Cowork page and no Cowork link in the sidebar.' },
+      { type: 'fixed', text: 'Claude Haiku 5.5 stays in the model menu for the owner\'s account.' },
+    ],
+  },
   '1.13.12': {
     title: 'The console shows a paused VinaX AI model that passed its daily check as Back',
     changes: [
