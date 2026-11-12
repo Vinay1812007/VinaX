@@ -23,6 +23,12 @@ describe('VinaX AI routes', () => {
     expect(leaf('/vinaxai/artifacts')?.path).toBe('vinaxai/artifacts');
   });
 
+  it('/vinaxai/cowork and /vinaxai/cowork/:taskId are Cowork', () => {
+    expect(leaf('/vinaxai/cowork')?.path).toBe('vinaxai/cowork');
+    expect(leaf('/vinaxai/cowork/sesn_011abc')?.path).toBe('vinaxai/cowork/:taskId');
+    expect(leaf('/vinaxai/cowork/sesn_011abc')?.element).toEqual(leaf('/vinaxai/cowork')?.element);
+  });
+
   it('/vinaxai/projects and /vinaxai/project/:projectId are the chat page too', () => {
     expect(leaf('/vinaxai/projects')?.path).toBe('vinaxai/projects');
     expect(leaf('/vinaxai/project/abc')?.path).toBe('vinaxai/project/:projectId');

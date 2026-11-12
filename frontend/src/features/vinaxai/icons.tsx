@@ -44,6 +44,8 @@ export const ShareIcon = ({ className }: P) => (<svg {...base(className)}><path 
 export const FolderIcon = ({ className }: P) => (<svg {...base(className)}><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg>);
 export const LinkIcon = ({ className }: P) => (<svg {...base(className)}><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></svg>);
 // The artifacts gallery and its kinds.
+/** Cowork: a checklist with a spark (Claude doing the steps). */
+export const CoworkIcon = ({ className }: P) => (<svg {...base(className)}><rect x="3.5" y="4.5" width="12" height="15" rx="2" /><path d="m6.5 9 1.2 1.2L10 8M6.5 14.5l1.2 1.2 2.3-2.2M12 9h1M12 14.5h1M19 3.5c.3 1.6 1 2.3 2.5 2.5-1.5.2-2.2.9-2.5 2.5-.3-1.6-1-2.3-2.5-2.5 1.5-.2 2.2-.9 2.5-2.5z" /></svg>);
 export const ArtifactsIcon = ({ className }: P) => (<svg {...base(className)}><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></svg>);
 export const CodeIcon = ({ className }: P) => (<svg {...base(className)}><path d="m8.5 7.5-5 4.5 5 4.5M15.5 7.5l5 4.5-5 4.5M13.5 5l-3 14" /></svg>);
 export const PageIcon = ({ className }: P) => (<svg {...base(className)}><rect x="3.5" y="4.5" width="17" height="15" rx="2" /><path d="M3.5 8.5h17M6.5 6.5h.01M9 6.5h.01" /></svg>);

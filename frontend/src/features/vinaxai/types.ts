@@ -54,6 +54,8 @@ export interface ModelsResponse {
   voice?: VoiceInfo;
   /** The thinking levels Auto can give with the models in its ladders. */
   autoThinking?: ThinkingLevel[];
+  /** Cowork (/vinaxai/cowork): open to this account (Claude's accounts only), and the Anthropic key is set. */
+  cowork?: { allowed: boolean; configured: boolean };
   /** The owner's file limits (counts, MB and pages). */
   limits?: Partial<Record<'imagesPerMessage' | 'filesPerMessage' | 'filesPerChat' | 'pdfMB' | 'pdfPages' | 'textMB', number>>;
 }
