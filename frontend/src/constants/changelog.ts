@@ -18,6 +18,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.12': {
+    title: 'The console shows a paused VinaX AI model that passed its daily check as Back',
+    changes: [
+      { type: 'improved', text: 'Health → VinaX AI\'s "Switched on" column marks a paused model whose.' },
+    ],
+  },
   '1.13.11': {
     title: 'VinaX AI\'s paused models show as Paused in the console, and you can test them',
     changes: [
