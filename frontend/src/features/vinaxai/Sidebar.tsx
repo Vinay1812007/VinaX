@@ -7,16 +7,16 @@
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useAccount } from '@/components/useAccount';
 import { toast } from '@/store/toastStore';
-import { deleteConversation, getModels, listConversations, patchConversation } from './api';
+import { deleteConversation, listConversations, patchConversation } from './api';
 import { ConfirmDialog } from './ConfirmDialog';
 import { groupConversations } from './sidebarGroups';
 import { ListSkeleton } from './Skeleton';
 import { resetChat, useChatStore } from './store';
 import { moveFocus, useDismiss } from './useDismiss';
-import { ArrowLeftIcon, ArtifactsIcon, CloseIcon, CoworkIcon, DotsIcon, FolderIcon, NewChatIcon, PencilIcon, SearchSmallIcon, SidebarIcon, StarIcon, TrashIcon } from './icons';
+import { ArrowLeftIcon, ArtifactsIcon, CloseIcon, DotsIcon, FolderIcon, NewChatIcon, PencilIcon, SearchSmallIcon, SidebarIcon, StarIcon, TrashIcon } from './icons';
 import type { ConversationSummary } from './types';
 
 export const LIST_KEY = ['vinaxai', 'conversations'] as const;
@@ -126,8 +126,6 @@ interface Props {
 
 export function Sidebar({ onNavigate, onNewChat, onCollapse, drawer, onSettings }: Props): ReactNode {
   const account = useAccount();
-  // The same query the chat makes (cached): it says whether Cowork is open to this account.
-  const models = useQuery({ queryKey: ['vinaxai', 'models', account?.session ?? ''], queryFn: getModels, staleTime: 60_000, retry: 1 });
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
@@ -186,12 +184,6 @@ export function Sidebar({ onNavigate, onNewChat, onCollapse, drawer, onSettings 
       <NavLink to="/vinaxai/artifacts" end className={({ isActive }) => `vx-ai-side-new vx-ai-side-nav${isActive ? ' is-active' : ''}`} onClick={onNavigate}>
         <ArtifactsIcon className="w-5 h-5" />
         <span>Artifacts</span>
-      </NavLink>
-      <NavLink to="/vinaxai/cowork" className={({ isActive }) => `vx-ai-side-new vx-ai-side-nav${isActive ? ' is-active' : ''}`} onClick={onNavigate}>
-        <CoworkIcon className="w-5 h-5" />
-        <span>Cowork</span>
-        {/* Claude's accounts only (the Worker's claudeAccess.ts); the page says so too. */}
-        {models.data && !models.data.cowork?.allowed && <span className="vx-ai-badge vx-ai-side-badge">Locked</span>}
       </NavLink>
       <div className="vx-ai-side-search">
         <SearchSmallIcon className="w-4 h-4" />

@@ -7,8 +7,7 @@
  *            kinds: ["fast" | "reasoning" | "code" | "vision" | "long"],    // capability filters in the picker
  *            contextTokens, outputTokens, recommended?,                 // about: the registry's character limits / 4
  *            locked? }],          // true: Claude, which this account may not use (claudeAccess.ts); reason "locked"
- *            autoThinking: [...],
- *            cowork: { allowed, configured },   // Cowork (/vinaxai/cowork): open to this account; the Anthropic key is set   // the thinking levels Auto can give with the models in its ladders
+ *            autoThinking: [...],   // the thinking levels Auto can give with the models in its ladders
  *            voice: { dictation, readAloud, live, liveSearch, voices: [...], liveVoices: [...], liveModels: [{ id, name }], liveLanguages: [{ code, name, native }] },
  *            limits: { imagesPerMessage, filesPerMessage, filesPerChat, pdfMB, pdfPages, textMB } }
  *
@@ -74,8 +73,8 @@ export const onRequestGet = async (ctx: { request: Request; env: AiEnv; waitUnti
   const sub = token ? await readSession(env, token) : null;
   const now = Date.now();
   const picker = await pickerRegistryFor(env, settings, { waitUntil: ctx.waitUntil });
-  // Claude and Cowork: only the accounts in claudeAccess.ts (one account read, signed in only).
-  const mayUseLocked = sub && dbConfigured(env) ? await claudeAllowed(env, sub) : false;
+  // Read the account only when a locked model is listed.
+  const mayUseLocked = picker.some(isLockedModel) && dbConfigured(env) ? await claudeAllowed(env, sub) : false;
   const recommended = recommendedIds();
   const models = picker
     .filter((spec) => spec.group !== null)
@@ -108,5 +107,5 @@ export const onRequestGet = async (ctx: { request: Request; env: AiEnv; waitUnti
   const { imagesPerMessage, filesPerMessage, filesPerChat, pdfMB, pdfPages, textMB } = settings.limits;
   const limits = { imagesPerMessage, filesPerMessage, filesPerChat, pdfMB, pdfPages, textMB };
   const chatLadders = (['default', 'code', 'deep', 'vision', 'long', 'fast'] as const).flatMap((l) => ladderModels(registry, l)).filter((spec) => providerConfigured(env, spec.provider));
-  return json({ enabled: aiOpenFor(settings, sub), configured: anyProviderConfigured(env), search: settings.search && canSearch, groups: PICKER_GROUPS, models, voice, limits, autoThinking: autoLevels(chatLadders), cowork: { allowed: mayUseLocked, configured: mayUseLocked && providerConfigured(env, 'anthropic') } });
+  return json({ enabled: aiOpenFor(settings, sub), configured: anyProviderConfigured(env), search: settings.search && canSearch, groups: PICKER_GROUPS, models, voice, limits, autoThinking: autoLevels(chatLadders) });
 };

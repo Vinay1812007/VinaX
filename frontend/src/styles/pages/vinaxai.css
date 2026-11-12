@@ -1051,8 +1051,6 @@ div.vx-ai-gallery-note p { margin: 0; }
 }
 /* -------------------------------------------------------------- projects */
 .vx-ai-side-new.is-active { background: rgb(var(--ink-800)); }
-/* Cowork's "Locked" tag in the sidebar (Claude's accounts only). */
-.vx-ai-side-badge { margin-left: auto; font-weight: 500; }
 .vx-ai-proj-chip {
   display: inline-flex; align-items: center; gap: 5px; align-self: center; min-width: 0; max-width: 40%; min-height: 28px; padding: 0 10px;
   border-radius: var(--radius-pill, 999px); border: 1px solid var(--glass-border); background: rgb(var(--ink-850));

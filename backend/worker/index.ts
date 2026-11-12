@@ -93,8 +93,6 @@ import * as m_api_ai_generate_song from './functions/api/ai/generate-song';
 import * as m_api_ai_generate_song_id from './functions/api/ai/generate-song/[id]';
 import * as m_api_ai_generate_song_audio from './functions/api/ai/generate-song/[id]-audio';
 import * as m_api_ai_conversation_id from './functions/api/ai/conversations/[id]';
-import * as m_api_ai_cowork from './functions/api/ai/cowork';
-import * as m_api_ai_cowork_path from './functions/api/ai/cowork/[path]';
 import * as m_api_ai_shares from './functions/api/ai/shares';
 import * as m_api_ai_artifacts from './functions/api/ai/artifacts';
 import * as m_api_ai_artifact_id from './functions/api/ai/artifacts/[id]';
@@ -220,7 +218,6 @@ const EXACT: Record<string, Mod> = {
   '/api/ai/keep': m_api_ai_keep,
   '/api/ai/models': m_api_ai_models,
   '/api/ai/conversations': m_api_ai_conversations,
-  '/api/ai/cowork': m_api_ai_cowork,
   '/api/ai/export': m_api_ai_export,
   '/api/ai/attachments': m_api_ai_attachments,
   '/api/ai/transcribe': m_api_ai_transcribe,
@@ -282,8 +279,6 @@ const DYNAMIC: Array<{ re: RegExp; mod: Mod; key: string }> = [
   { re: /^\/api\/profile\/([^/]+)\/?$/, mod: m_api_profile_handle, key: 'handle' },
   { re: /^\/api\/shared-playlist\/([^/]+)\/?$/, mod: m_api_shared_playlist_id, key: 'id' },
   { re: /^\/api\/ai\/conversations\/([^/]+)\/?$/, mod: m_api_ai_conversation_id, key: 'id' },
-  // Cowork's task routes: the whole rest of the path ("tasks/<id>/stream", "files/<id>", …).
-  { re: /^\/api\/ai\/cowork\/(.+?)\/?$/, mod: m_api_ai_cowork_path, key: 'path' },
   { re: /^\/api\/ai\/attachments\/([^/]+)\/?$/, mod: m_api_ai_attachment_id, key: 'id' },
   { re: /^\/api\/ai\/generate-song\/([^/]+)\/audio\/?$/, mod: m_api_ai_generate_song_audio, key: 'id' },
   { re: /^\/api\/ai\/generate-song\/([^/]+)\/?$/, mod: m_api_ai_generate_song_id, key: 'id' },
