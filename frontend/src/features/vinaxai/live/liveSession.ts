@@ -25,11 +25,7 @@
  *
  * `interrupt` (tapping the orb) cuts VinaX AI off without saying anything:
  * its voice stops and the rest of that reply is dropped.
- *
- * Hold to talk (`hold`): Gemini's voice activity detection is off (voice.ts),
- * the mic is sent only while the orb is held, and `pressTalk` / `releaseTalk`
- * send `activityStart` / `activityEnd`, so voices nearby and room noise never
- * start or stretch a turn. Pressing while VinaX AI talks cuts it off.
+
  *
  * A model Gemini refuses is remembered on the device for 12 hours
  * (noStart.ts) and skipped when Live voice opens; if that leaves nothing,
@@ -54,7 +50,7 @@ import { liveToken, type LiveTokenOptions, type LiveTokenReply } from '../api';
 import { closeMic, hasSignal, loudness, micLabelOf, micSource, newAudioContext, openMic, rmsOf } from '../mic';
 import { base64ToBytes, pcm16 } from '../speechStream';
 import { isNativePlatform } from '@/services/native';
-import { activityEndMessage, activityStartMessage, audioMessage, EchoGuard, floatTo16, NoiseGate, OUTPUT_RATE, parseServerMessage, Resampler, streamEndMessage, Transcript, type LiveEvent } from './liveProtocol';
+import { audioMessage, EchoGuard, floatTo16, NoiseGate, OUTPUT_RATE, parseServerMessage, Resampler, streamEndMessage, Transcript, type LiveEvent } from './liveProtocol';
 import { forgetNoStart, noStartModels, rememberNoStart } from './noStart';
 import { audioRouteAvailable, setSpeaker, startAudioRoute, stopAudioRoute, type AudioRoute } from './audioRoute';
 import type { SourcesInfo } from '../types';
@@ -74,8 +70,6 @@ export interface LiveCallbacks {
   onMic?(mic: { label: string; silent: boolean }): void;
   /** Where the voice plays in the Android app (null: the app cannot switch it). */
   onRoute?(route: AudioRoute | null): void;
-  /** Hold to talk: the listener is holding (the mic is being sent), or let go. */
-  onHold?(holding: boolean): void;
   /** Fires once. `error` is a code for voiceNotice / micNotice when it failed. */
   onEnd(reason: LiveEndReason, error?: string): void;
 }
@@ -106,8 +100,6 @@ export interface LiveOptions {
   speaker?: boolean;
   /** 'auto' or a language code the replies are held to. */
   language?: string;
-  /** Hold to talk instead of hands-free. */
-  hold?: boolean;
   /** The typed chat Live voice was opened from (its latest turns). */
   context?: LiveTokenOptions['context'];
   personal?: LiveTokenOptions['personal'];
@@ -116,7 +108,7 @@ export interface LiveOptions {
 }
 
 /** What a session was asked for (a switch differs from it). */
-interface Asked { model: string; voice: string; language: string; hold: boolean }
+interface Asked { model: string; voice: string; language: string }
 
 export class LiveSession {
   readonly transcript = new Transcript();
@@ -162,9 +154,6 @@ export class LiveSession {
   private cutOff = false;
   /** A reply has started arriving and Gemini hasn't finished (or been interrupted in) it. */
   private turnOpen = false;
-  /** This session is Hold to talk (the token said so), and the orb is held now. */
-  hold = false;
-  private holding = false;
   private readonly opts: LiveOptions;
 
   constructor(opts: LiveOptions, private readonly cb: LiveCallbacks) {
@@ -173,7 +162,7 @@ export class LiveSession {
   }
 
   private wanted(): Asked {
-    return { model: this.opts.model || 'auto', voice: this.opts.voice, language: this.opts.language || 'auto', hold: this.opts.hold === true };
+    return { model: this.opts.model || 'auto', voice: this.opts.voice, language: this.opts.language || 'auto' };
   }
 
   /** The mic in use now. */
@@ -277,7 +266,6 @@ export class LiveSession {
           ...(o.conversationId ? { conversationId: o.conversationId } : {}),
           ...(o.incognito ? { incognito: true } : {}),
           ...(lean ? { lean: true } : {}),
-          ...(asked.hold ? { hold: true } : {}),
         });
       } catch (e) {
         // Perhaps only the skipped models were left: try every model once more.
@@ -288,10 +276,8 @@ export class LiveSession {
       if (this.ended) return false;
       this.model = token.model;
       this.search = token.search === true;
-      this.hold = token.hold === true;
-      this.releaseTalk();
       const closed = await this.connect(token);
-      if (closed === null) { forgetNoStart(token.model.id); this.asked = { ...asked, hold: this.hold }; return true; }
+      if (closed === null) { forgetNoStart(token.model.id); this.asked = asked; return true; }
       // A refused setup may be the speed settings: the same model without them.
       if (token.tuned && !lean && closed === INVALID_SETUP) { lean = true; continue; }
       lean = false;
@@ -319,7 +305,7 @@ export class LiveSession {
    * Switch the model, the voice or the language: like search, this
    * reconnects; while it is still connecting, it is applied once ready.
    */
-  setOptions(patch: { model?: string; voice?: string; language?: string; hold?: boolean }): void {
+  setOptions(patch: { model?: string; voice?: string; language?: string }): void {
     Object.assign(this.opts, patch);
     this.applySwitch();
   }
@@ -328,7 +314,7 @@ export class LiveSession {
   private applySwitch(): void {
     if (this.ended || this.reconnecting || !this.ready || !this.asked) return;
     const now = this.wanted();
-    if (now.model === this.asked.model && now.voice === this.asked.voice && now.language === this.asked.language && now.hold === this.asked.hold) return;
+    if (now.model === this.asked.model && now.voice === this.asked.voice && now.language === this.asked.language) return;
     void this.reconnect('failed');
   }
 
@@ -412,13 +398,10 @@ export class LiveSession {
     const resampler = new Resampler(inCtx.sampleRate);
     this.tap.port.onmessage = (e: MessageEvent<Float32Array>) => {
       if (this.ended || this.muted || !this.ready || this.ws?.readyState !== WebSocket.OPEN) return;
-      // Hold to talk: only while the orb is held.
-      if (this.hold && !this.holding) return;
       const now = performance.now();
       const pcm = resampler.push(e.data);
       const guarded = this.echoGuarded() ? this.guard.filter(pcm, this.voicePlaying(), now) : pcm;
-      // The noise gate is for Gemini's own end-of-turn detection; held, the release ends the turn.
-      this.ws.send(audioMessage(floatTo16(this.hold ? guarded : this.gate.filter(guarded, now))));
+      this.ws.send(audioMessage(floatTo16(this.gate.filter(guarded, now))));
     };
     this.micMeter = inCtx.createAnalyser();
     this.micMeter.fftSize = 1024;
@@ -575,25 +558,7 @@ export class LiveSession {
     this.silence();
   }
 
-  /** Hold to talk: the listener pressed the orb. VinaX AI stops talking and listens until they let go. */
-  pressTalk(): void {
-    if (this.ended || !this.hold || this.holding || this.muted || !this.ready || this.ws?.readyState !== WebSocket.OPEN) return;
-    this.holding = true;
-    if (this.state === 'speaking') { this.cutOff = this.turnOpen; this.silence(); }
-    this.ws.send(activityStartMessage());
-    this.cb.onHold?.(true);
-  }
-
-  /** Hold to talk: the listener let go, so their turn is over and VinaX AI answers. */
-  releaseTalk(): void {
-    if (!this.holding) return;
-    this.holding = false;
-    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(activityEndMessage());
-    this.cb.onHold?.(false);
-  }
-
   setMuted(muted: boolean): void {
-    if (muted) this.releaseTalk();
     this.muted = muted;
     // Silence while muted proves nothing about the mic.
     if (!muted) this.listenSince = performance.now();
@@ -613,7 +578,6 @@ export class LiveSession {
 
   private finish(reason: LiveEndReason, error?: string): void {
     if (this.ended) return;
-    this.releaseTalk();
     this.ended = true;
     this.state = 'ended';
     this.silence();

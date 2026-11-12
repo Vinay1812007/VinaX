@@ -8,8 +8,6 @@
  * The model, the voice and the language can be switched here at any time,
  * even while it connects (it reconnects and carries on). Tapping the orb
  * cuts VinaX AI off; the captions button hides or shows what is said.
- * Hold to talk (the hand button, remembered): it listens only while the orb
- * is held (press, talk, let go), for noisy rooms and voices nearby.
  * Loaded on demand, only when someone opens it.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -18,7 +16,7 @@ import { saveLiveTranscript, voiceNotice } from '../api';
 import { cleanMicLabel, listMics, micNotice, silentMicNotice, type MicDevice, type MicProblem } from '../mic';
 import { personalOf, usePrefs } from '../prefs';
 import { holdMusic } from '../musicHold';
-import { CaptionsIcon, CloseIcon, GlobeSmallIcon, HoldIcon, MicIcon, MicOffIcon, SpeakerIcon } from '../icons';
+import { CaptionsIcon, CloseIcon, GlobeSmallIcon, MicIcon, MicOffIcon, SpeakerIcon } from '../icons';
 import { isNativePlatform } from '@/services/native';
 import { audioRouteAvailable, type AudioRoute } from './audioRoute';
 import { SourcesRow } from '../Sources';
@@ -67,10 +65,6 @@ function endMessage(reason: LiveEndReason, error?: string): string | null {
 
 export default function LiveView({ conversationId, parentMessageId, thinking, voice, model, micId, searchAllowed = false, search: searchAtStart = false, voiceInfo, context, incognito = false, onClose }: Props): ReactNode {
   const captionsOn = usePrefs((p) => p.liveCaptions);
-  /** Hold to talk as the listener wants it; `held`: the orb is held now. */
-  const holdWanted = usePrefs((p) => p.liveHold);
-  const [hold, setHold] = useState(holdWanted);
-  const [held, setHeld] = useState(false);
   /** What the pickers show: the listener's choices, applied to the session as they change. */
   const [pick, setPick] = useState(() => ({ model, voice, language: usePrefs.getState().liveLanguage }));
   const [state, setState] = useState<LiveState>('connecting');
@@ -125,13 +119,13 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
     const prefs = usePrefs.getState();
     const s = new LiveSession({
       thinking, voice: pick.voice, model: pick.model, micId, search: searchAtStart, speaker: prefs.liveSpeaker,
-      language: pick.language, hold: prefs.liveHold, context, personal: personalOf(prefs), conversationId, incognito,
+      language: pick.language, context, personal: personalOf(prefs), conversationId, incognito,
     }, {
       onState: (st) => {
         setState(st);
         if (s.model) setModelName(s.model.name);
         // The session may have started without search (a model that refused it).
-        if (st === 'listening') { setSearch(s.search); setHold(s.hold); }
+        if (st === 'listening') setSearch(s.search);
       },
       onCaptions: setCaptions,
       onWeb: setWeb,
@@ -140,7 +134,6 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
         if (m.silent) void listMics().then(setMics);
       },
       onRoute: setRoute,
-      onHold: setHeld,
       onLevel: (level) => {
         orb.current?.style.setProperty('--vx-live-level', String(level));
       },
@@ -180,19 +173,6 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
   const voices = voiceInfo?.liveVoices ?? [];
   const languages = voiceInfo?.liveLanguages ?? [];
 
-  /** Hands-free or Hold to talk: remembered, and the call reconnects with it. */
-  const toggleHold = () => {
-    const on = !hold;
-    setHold(on);
-    if (on && muted) { setMuted(false); session.current?.setMuted(false); }
-    usePrefs.getState().set({ liveHold: on });
-    session.current?.setOptions({ hold: on });
-  };
-
-  /** Hold to talk: the orb is the button. */
-  const pressOrb = () => session.current?.pressTalk();
-  const letGo = () => session.current?.releaseTalk();
-
   const toggleSearch = () => {
     const on = !search;
     setSearch(on);
@@ -226,14 +206,7 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
       setMicError('That microphone couldn’t be opened. Try another one.');
     }
   };
-  const holding = hold && !ended && state !== 'connecting';
-  const status = ended ? 'Live voice ended'
-    : muted ? 'Muted'
-      : web.searching && state !== 'connecting' ? 'Searching the web…'
-        : holding && held ? 'Listening… let go when you’re done'
-          : holding && state === 'listening' ? 'Hold the orb to talk'
-            : STATUS[state];
-  const orbState = ended ? 'ended' : muted ? 'muted' : holding && state === 'listening' && !held ? 'waiting' : state;
+  const status = ended ? 'Live voice ended' : muted ? 'Muted' : web.searching && state !== 'connecting' ? 'Searching the web…' : STATUS[state];
   return (
     <div
       className="vx-ai-live"
@@ -288,29 +261,6 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
         </div>
       )}
       <div className="vx-ai-live-stage">
-        {holding ? (
-          <button
-            type="button"
-            className="vx-ai-live-orb-btn is-hold"
-            aria-label="Hold while you talk"
-            aria-pressed={held}
-            title="Hold while you talk, let go to hear the answer"
-            onPointerDown={(e) => { if (e.button > 0) return; e.preventDefault(); e.currentTarget.setPointerCapture?.(e.pointerId); pressOrb(); }}
-            onPointerUp={letGo}
-            onPointerCancel={letGo}
-            onLostPointerCapture={letGo}
-            onKeyDown={(e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); pressOrb(); } }}
-            onKeyUp={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); letGo(); } }}
-            onBlur={letGo}
-            onContextMenu={(e) => e.preventDefault()}
-          >
-            <span ref={orb} className={`vx-ai-live-orb is-${held ? 'listening' : orbState}`} aria-hidden>
-              <span className="vx-ai-live-orb-colors" />
-              <span className="vx-ai-live-orb-swirl" />
-              <span className="vx-ai-live-orb-shine" />
-            </span>
-          </button>
-        ) : (
         <button
           type="button"
           className="vx-ai-live-orb-btn"
@@ -319,15 +269,14 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
           aria-label="Stop VinaX AI talking"
           title={state === 'speaking' ? 'Tap to stop VinaX AI talking' : undefined}
         >
-          <span ref={orb} className={`vx-ai-live-orb is-${orbState}`} aria-hidden>
+          <span ref={orb} className={`vx-ai-live-orb is-${ended ? 'ended' : muted ? 'muted' : state}`} aria-hidden>
             <span className="vx-ai-live-orb-colors" />
             <span className="vx-ai-live-orb-swirl" />
             <span className="vx-ai-live-orb-shine" />
           </span>
         </button>
-        )}
         <p className="vx-ai-live-status" role="status">{status}</p>
-        {!ended && state === 'speaking' && !muted && <p className="vx-ai-live-hint">{holding ? 'Hold the orb to cut in' : 'Tap the orb or start talking to cut in'}</p>}
+        {!ended && state === 'speaking' && !muted && <p className="vx-ai-live-hint">Tap the orb or start talking to cut in</p>}
         {ended?.message && <p className="vx-ai-live-note" role="alert">{ended.message}</p>}
         {!ended && mic?.silent && <p className="vx-ai-live-note" role="alert">{silentMicNotice(mic.label, 'Pick another microphone below.')}</p>}
         {!ended && mic && (
@@ -353,22 +302,9 @@ export default function LiveView({ conversationId, parentMessageId, thinking, vo
         {web.sources && <div className="vx-ai-live-sources"><SourcesRow sources={web.sources} /></div>}
       </div>
       <div className="vx-ai-live-controls">
-        {!ended && !hold && (
+        {!ended && (
           <button type="button" className={`vx-ai-live-btn${muted ? ' is-on' : ''}`} onClick={toggleMute} aria-pressed={muted} aria-label={muted ? 'Unmute microphone' : 'Mute microphone'}>
             {muted ? <MicOffIcon className="w-6 h-6" /> : <MicIcon className="w-6 h-6" />}
-          </button>
-        )}
-        {!ended && (
-          <button
-            type="button"
-            className={`vx-ai-live-btn${hold ? ' is-on' : ''}`}
-            onClick={toggleHold}
-            disabled={state === 'connecting'}
-            aria-pressed={hold}
-            aria-label="Hold to talk"
-            title={hold ? 'Hold to talk is on: it listens only while you hold the orb' : 'Hands-free: it listens all the time. Turn on Hold to talk for noisy places'}
-          >
-            <HoldIcon className="w-6 h-6" />
           </button>
         )}
         {!ended && searchAllowed && (

@@ -418,12 +418,8 @@ export interface LiveSetup {
   inputAudioTranscription: { languageCodes?: string[] };
   outputAudioTranscription: Record<string, never>;
   contextWindowCompression: { slidingWindow: Record<string, never> };
-  /**
-   * When the listener has finished speaking (Live API voice activity
-   * detection), or `disabled` for Hold to talk: the page then marks each
-   * turn itself with `activityStart` / `activityEnd`.
-   */
-  realtimeInputConfig?: { automaticActivityDetection: { endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH'; silenceDurationMs: number } | { disabled: true } };
+  /** When the listener has finished speaking (Live API voice activity detection). */
+  realtimeInputConfig?: { automaticActivityDetection: { endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH'; silenceDurationMs: number } };
   /** Web search: the model's own search tool (Live API `tools`, checked 2026-11-02). */
   tools?: Array<{ googleSearch: Record<string, never> }>;
 }
@@ -450,12 +446,9 @@ export function quickThinking(model: string): { thinkingBudget: number } | { thi
 /**
  * The first message of a Live session. `tuned` adds the speed settings
  * (quick end of turn, quick thinking); the page asks again without them
- * when a model refuses the setup (an invalid-argument close). `hold`
- * (Hold to talk) turns Gemini's voice activity detection off, tuned or not:
- * the listener's press and release mark each turn, so voices nearby and room
- * noise never start or stretch one.
+ * when a model refuses the setup (an invalid-argument close).
  */
-export function liveSetup(model: string, voice: string, prompt: string, search = false, tuned = false, heard: readonly string[] = [], hold = false): LiveSetup {
+export function liveSetup(model: string, voice: string, prompt: string, search = false, tuned = false, heard: readonly string[] = []): LiveSetup {
   const thinking = tuned ? quickThinking(model) : null;
   return {
     model: `models/${model}`,
@@ -469,9 +462,7 @@ export function liveSetup(model: string, voice: string, prompt: string, search =
     inputAudioTranscription: tuned && heard.length ? { languageCodes: [...heard] } : {},
     outputAudioTranscription: {},
     contextWindowCompression: { slidingWindow: {} },
-    ...(hold
-      ? { realtimeInputConfig: { automaticActivityDetection: { disabled: true as const } } }
-      : tuned ? { realtimeInputConfig: { automaticActivityDetection: { endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH' as const, silenceDurationMs: LIVE_SILENCE_MS } } } : {}),
+    ...(tuned ? { realtimeInputConfig: { automaticActivityDetection: { endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH' as const, silenceDurationMs: LIVE_SILENCE_MS } } } : {}),
     ...(search ? { tools: [{ googleSearch: {} }] } : {}),
   };
 }

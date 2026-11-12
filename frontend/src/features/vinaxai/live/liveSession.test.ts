@@ -457,62 +457,8 @@ describe('Live voice in a noisy room', () => {
   });
 });
 
-describe('Live voice: Hold to talk', () => {
+describe('Live voice: cutting in', () => {
   beforeEach(() => { h.cap.native = false; h.cap.plugin = false; localStorage.clear(); });
-  const sentKinds = (ws: FakeWS): string[] => ws.sent.map((d) => Object.keys((JSON.parse(d) as { realtimeInput?: Record<string, unknown>; setup?: unknown }).realtimeInput ?? { setup: 1 })[0]);
-  const held = async (): Promise<{ s: LiveSession; ws: FakeWS; holds: boolean[]; mic: (level: number) => void }> => {
-    h.liveToken.mockImplementation(async () => ({ token: 't', url: 'wss://live.example/ws', setup: { model: 'models/m' }, model: { id: 'm', name: 'M' }, search: false, hold: true }));
-    const holds: boolean[] = [];
-    const s = new LiveSession({ thinking: false, voice: 'Kore', hold: true }, { ...callbacks(), onHold: (x) => holds.push(x) });
-    const started = s.start();
-    const ws = await sessionReady(s);
-    await started;
-    return { s, ws, holds, mic: (level) => FakeTap.last!.port.onmessage!({ data: new Float32Array(4096).fill(level) }) };
-  };
-
-  it('asks for hold; sends the mic only while held, marked by activityStart and activityEnd', async () => {
-    const { s, ws, holds, mic } = await held();
-    expect(h.liveToken.mock.calls[0][0]).toMatchObject({ hold: true });
-    expect(s.hold).toBe(true);
-    mic(0.2);
-    expect(sentKinds(ws)).toEqual(['setup']);
-    s.pressTalk();
-    // Held, even a quiet voice goes as it is (no noise gate: the release ends the turn).
-    mic(0.0003);
-    expect(sentSamples(ws).some((x) => x !== 0)).toBe(true);
-    s.releaseTalk();
-    mic(0.2);
-    expect(sentKinds(ws)).toEqual(['setup', 'activityStart', 'audio', 'activityEnd']);
-    expect(holds).toEqual([true, false]);
-    s.stop();
-  });
-
-  it('pressing while VinaX AI talks cuts it off; its next reply plays', async () => {
-    const { s, ws } = await held();
-    const played = vi.spyOn(FakeCtx.made[0], 'createBufferSource');
-    ws.say({ serverContent: { modelTurn: { parts: [{ inlineData: { data: voiceChunk() } }] } } });
-    s.pressTalk();
-    ws.say({ serverContent: { modelTurn: { parts: [{ inlineData: { data: voiceChunk() } }] } } });
-    expect(played).toHaveBeenCalledTimes(1);
-    ws.say({ serverContent: { interrupted: true } });
-    s.releaseTalk();
-    ws.say({ serverContent: { modelTurn: { parts: [{ inlineData: { data: voiceChunk() } }] } } });
-    expect(played).toHaveBeenCalledTimes(2);
-    s.stop();
-  });
-
-  it('hands-free ignores press and release; switching to hold reconnects with it', async () => {
-    const s = new LiveSession({ thinking: false, voice: 'Kore' }, callbacks());
-    void s.start();
-    const ws = await sessionReady(s);
-    s.pressTalk();
-    s.releaseTalk();
-    expect(sentKinds(ws).filter((k) => k.startsWith('activity'))).toEqual([]);
-    s.setOptions({ hold: true });
-    await sessionReady(s, 2);
-    expect(h.liveToken.mock.calls[1][0]).toMatchObject({ hold: true });
-    s.stop();
-  });
 
   it('tapping to interrupt a reply that has fully arrived does not drop the next one', async () => {
     const s = new LiveSession({ thinking: false, voice: 'Kore' }, callbacks());

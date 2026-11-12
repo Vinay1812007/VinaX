@@ -488,17 +488,6 @@ describe('POST /api/ai/live-token', () => {
     expect((bodies[1].body.bidiGenerateContentSetup as Record<string, unknown>).tools).toEqual([{ googleSearch: {} }]);
   });
 
-  it('Hold to talk: hold is asked for, set up and said back', async () => {
-    seed();
-    upstream = (url) => (url.endsWith('/v1beta/auth_tokens') ? json({ name: 'tok' }) : new Response('', { status: 500 }));
-    const held = await (await ask({ hold: true })).json();
-    expect(held.hold).toBe(true);
-    expect(held.setup.realtimeInputConfig).toEqual({ automaticActivityDetection: { disabled: true } });
-    const free = await (await ask({})).json();
-    expect(free.hold).toBe(false);
-    expect(free.setup.realtimeInputConfig.automaticActivityDetection.disabled).toBeUndefined();
-  });
-
   it('asked for web search: the setup gets the search tool and the search prompt', async () => {
     seed();
     upstream = (url) => (url.endsWith('/v1beta/auth_tokens') ? json({ name: 'tok' }) : new Response('', { status: 500 }));
@@ -628,20 +617,6 @@ describe('POST /api/ai/live-transcript', () => {
     const res = await getConversation({ request: await req(`/api/ai/conversations/${CONV}`), env: ENV, params: { id: CONV } } as never);
     const body = await res.json() as { messages: Array<{ model: unknown }> };
     expect(body.messages[0].model).toEqual({ id: 'gemini-live:gemini-3.8-live', name: 'Gemini 3.8 Live', provider: 'Google Gemini' });
-  });
-});
-
-describe('Hold to talk', () => {
-  it('turns voice activity detection off, tuned or lean, and the locked token carries it', () => {
-    for (const tuned of [true, false]) {
-      const setup = liveSetup('gemini-3.8-live', 'Kore', 'prompt', false, tuned, [], true);
-      expect(setup.realtimeInputConfig).toEqual({ automaticActivityDetection: { disabled: true } });
-      const bodies = tokenBodies(setup, Date.parse('2026-10-31T10:00:00Z'));
-      expect((bodies[0].body.liveConnectConstraints as { config: Record<string, unknown> }).config.realtimeInputConfig).toEqual({ automaticActivityDetection: { disabled: true } });
-    }
-    // Hands-free keeps Gemini's quick end of turn.
-    expect(liveSetup('gemini-3.8-live', 'Kore', 'prompt', false, true).realtimeInputConfig).toEqual({ automaticActivityDetection: { endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH', silenceDurationMs: 500 } });
-    expect(liveSetup('gemini-3.8-live', 'Kore', 'prompt', false, false).realtimeInputConfig).toBeUndefined();
   });
 });
 

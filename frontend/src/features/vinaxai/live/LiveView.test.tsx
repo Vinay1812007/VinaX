@@ -14,8 +14,6 @@ const h = vi.hoisted(() => ({
   setOptions: vi.fn(),
   state: 'listening',
   setSpeaker: vi.fn(async (on: boolean) => (on ? 'speaker' : 'earpiece')),
-  press: vi.fn(),
-  release: vi.fn(),
 }));
 
 vi.mock('@capacitor/core', () => ({
@@ -33,13 +31,9 @@ vi.mock('./liveSession', () => ({
     transcript = { turns: () => [] };
     model = null;
     search = false;
-    hold = false;
-    constructor(opts: { speaker?: boolean; hold?: boolean }, private readonly cb: { onRoute?(r: string | null): void; onState(s: string): void; onHold?(x: boolean): void }) {
+    constructor(opts: { speaker?: boolean }, private readonly cb: { onRoute?(r: string | null): void; onState(s: string): void }) {
       h.opts = opts;
-      this.hold = opts.hold === true;
     }
-    pressTalk = () => { h.press(); this.cb.onHold?.(true); };
-    releaseTalk = () => { h.release(); this.cb.onHold?.(false); };
     setOptions = h.setOptions;
     async start() {
       this.cb.onState(h.state);
@@ -150,38 +144,5 @@ describe('Live voice: model, voice and language pickers, captions', () => {
     fireEvent.click(cc);
     expect(usePrefs.getState().liveCaptions).toBe(false);
     expect(screen.getByRole('button', { name: 'Captions' }).getAttribute('aria-pressed')).toBe('false');
-  });
-});
-
-describe('Live voice: Hold to talk', () => {
-  beforeEach(() => { h.cap.native = false; h.press.mockClear(); h.release.mockClear(); });
-
-  it('hands-free by default; the hand button switches to Hold to talk, remembered, and the call reconnects with it', async () => {
-    view();
-    const toggle = await screen.findByRole('button', { name: 'Hold to talk' });
-    expect(toggle.getAttribute('aria-pressed')).toBe('false');
-    expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeTruthy();
-    await act(async () => { fireEvent.click(toggle); });
-    expect(usePrefs.getState().liveHold).toBe(true);
-    expect(h.setOptions).toHaveBeenCalledWith({ hold: true });
-    expect(screen.queryByRole('button', { name: 'Mute microphone' })).toBeNull();
-  });
-
-  it('with Hold to talk on, holding the orb listens and letting go sends', async () => {
-    usePrefs.getState().set({ liveHold: true });
-    view();
-    expect(h.opts).toMatchObject({ hold: true });
-    const orb = await screen.findByRole('button', { name: 'Hold while you talk' });
-    expect(screen.getByRole('status').textContent).toBe('Hold the orb to talk');
-    await act(async () => { fireEvent.pointerDown(orb, { button: 0, pointerId: 1 }); });
-    expect(h.press).toHaveBeenCalledTimes(1);
-    expect(orb.getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getByRole('status').textContent).toBe('Listening… let go when you’re done');
-    await act(async () => { fireEvent.pointerUp(orb, { pointerId: 1 }); });
-    expect(h.release).toHaveBeenCalled();
-    expect(orb.getAttribute('aria-pressed')).toBe('false');
-    // The keyboard: Space held down and let go.
-    await act(async () => { fireEvent.keyDown(orb, { key: ' ' }); fireEvent.keyUp(orb, { key: ' ' }); });
-    expect(h.press).toHaveBeenCalledTimes(2);
   });
 });
