@@ -696,11 +696,14 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
         model_id: model.id, provider: model.provider, stop_reason: stop, usage,
       });
     }
-    await updateConversation(env, sub, conversation.id, {
-      updated_at: new Date().toISOString(),
-      ...(userOk ? { active_leaf_id: savedReply || continuing ? assistantId : userMsg.id } : {}),
-      model_pref: mode === 'model' ? model.id : 'auto',
-    });
+    // Nothing to move when the question (or a new chat's row) never got in.
+    if (userOk) {
+      await updateConversation(env, sub, conversation.id, {
+        updated_at: new Date().toISOString(),
+        active_leaf_id: savedReply || continuing ? assistantId : userMsg.id,
+        model_pref: mode === 'model' ? model.id : 'auto',
+      });
+    }
     if (titleJob) await titleJob;
     console.log(JSON.stringify({ route: 'ai-chat', continued: !!continuing, search: searchLog, model: model.id, provider: model.provider, ladder, thinking: resolveLevel(model, wanted), task: task.kind, complexity: task.complexity, ms: Date.now() - started, status: stop, input: usage?.input ?? null, output: usage?.output ?? null }));
     // Memory: learn from this turn once the reply is saved (this whole job runs under waitUntil).

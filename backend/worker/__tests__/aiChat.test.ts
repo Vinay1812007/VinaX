@@ -274,6 +274,20 @@ describe('failover and failures', () => {
     expect(fake.rows('ai_conversations')[0].active_leaf_id ?? null).toBeNull();
   });
 
+  it('a new chat is saved while the model answers; if its row cannot be written, nothing else is and the page is told', async () => {
+    const fake = seed();
+    fake.answer('ai_conversations', (call) => (call.method === 'POST' ? new Response('{"message":"down"}', { status: 503 }) : Response.json([])));
+    const events = await readEvents(await post(ask('Tell me about raga Yaman')));
+    await settle();
+    // The model was not held up by the conversation's row…
+    expect(events.filter((e) => e.event === 'text').map((e) => e.data.delta).join('')).toBe('Yaman is an evening raga.');
+    // …but without it, neither the question, the reply nor the title is written.
+    expect(events.find((e) => e.event === 'error')?.data).toMatchObject({ code: 'model_unavailable', retryable: true });
+    expect(events.at(-1)?.data).toMatchObject({ stopReason: 'error', saved: false });
+    expect(fake.calls.filter((c) => c.table === 'ai_messages' && c.method === 'POST')).toHaveLength(0);
+    expect(fake.calls.filter((c) => c.table === 'ai_conversations' && c.method === 'PATCH')).toHaveLength(0);
+  });
+
   it('when every Auto model fails, says VinaX AI is busy', async () => {
     seed({}, () => new Response('{}', { status: 500 }));
     const events = await readEvents(await post(ask('Tell me about raga Yaman')));

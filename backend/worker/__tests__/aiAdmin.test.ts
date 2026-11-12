@@ -65,7 +65,7 @@ describe('GET /api/admin/ai', () => {
     expect(body.models.find((m: { id: string }) => m.id === GROQ).ownerEnabled).toBe(false);
     expect(body.models).toHaveLength(MODELS.length);
     // A paused model is still listed for the owner, never as switched on.
-    for (const id of PAUSED_MODELS) expect(body.models.find((m: { id: string }) => m.id === id), id).toMatchObject({ ownerEnabled: false });
+    for (const id of PAUSED_MODELS) expect(body.models.find((m: { id: string }) => m.id === id), id).toMatchObject({ ownerEnabled: false, paused: true });
     expect(body.search.api).toMatchObject({ configured: true, provider: 'tavily', usedToday: 3 });
     // No model grounds since 2026-11-12 (the grounded ladder is empty), so grounding shows as not set up even with a Gemini key.
     expect(body.search.grounding).toMatchObject({ configured: false, dailyLimit: 450, usedToday: 12 });
@@ -105,6 +105,8 @@ describe('POST /api/admin/ai (the probe)', () => {
     expect(await res.json()).toMatchObject({ ok: false, kind: 'not_configured' });
     expect(db.other).toHaveLength(0);
     expect((await onRequestPost({ request: req({ body: { model: 'nope' } }), env: ENV })).status).toBe(400);
+    // A paused model can still be tested (to see when it answers again): here it has no key, so it is reported, not refused.
+    expect(await (await onRequestPost({ request: req({ body: { model: [...PAUSED_MODELS].find((id) => id.startsWith('nvidia:')) } }), env: ENV })).json()).toMatchObject({ ok: false, kind: 'not_configured' });
     expect((await onRequestPost({ request: req({ body: { model: GROQ }, token: null }), env: ENV })).status).toBe(401);
   });
 });

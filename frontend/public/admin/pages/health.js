@@ -363,7 +363,11 @@
             columns: [
               { key: 'name', label: 'Model', always: true, render: function (m) { return h('div', h('div.cell-main', m.name), h('div.cell-sub', m.provider)); } },
               { key: 'group', label: 'In the model menu', render: function (m) { return m.discovered ? h('span', 'Yes', ui.muted(' · found automatically')) : m.group ? 'Yes' : ui.muted('Only for automatic choice'); } },
-              { key: 'ownerEnabled', label: 'Switched on', render: function (m) { return m.ownerEnabled ? ui.pill('On', 'ok') : ui.pill('Off'); } },
+              { key: 'ownerEnabled', label: 'Switched on', render: function (m) {
+                // Paused: on the approved list but failed the live check, so offered nowhere until it is moved back (models.ts PAUSED_MODELS).
+                if (m.paused) return h('span', ui.pill('Paused', 'warn'), ui.muted(' · failed the live check; Test shows if it works again'));
+                return m.ownerEnabled ? ui.pill('On', 'ok') : ui.pill('Off');
+              } },
               { key: 'restingUntil', label: 'Ready?', render: function (m) {
                 if (!m.configured) return ui.muted('No key');
                 if (m.restingUntil) return h('span', ui.pill(reason(m.restKind), 'warn'), ' ', until(m.restingUntil));
