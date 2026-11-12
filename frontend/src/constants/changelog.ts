@@ -18,6 +18,13 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.4': {
+    title: 'VinaX AI previews draw components written for shadcn/ui however they import it',
+    changes: [
+      { type: 'improved', text: 'Charts and apps that import "@shadcn/ui" or "shadcn/ui" (not only "@/components/ui/...") now preview instead of failing.' },
+      { type: 'improved', text: 'Typography, Checkbox and table components are available too.' },
+    ],
+  },
   '1.13.3': {
     title: 'VinaX AI previews load three.js from an exact version',
     changes: [
