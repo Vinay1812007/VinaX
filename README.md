@@ -987,7 +987,8 @@ The chat assistant at `/vinaxai` (page `frontend/src/pages/VinaXAIPage.tsx` -> `
 ```text
 VinaXAIPage (lazy, full screen inside AppLayout)
   features/vinaxai/store.ts -- POST /api/ai/chat (Bearer session) --> functions/api/ai/chat.ts
-        session, rate limit, kill switch, body cap; conversation tree and daily count read together; the question
+        session, rate limit, kill switch, body cap; conversation tree, daily count, memory and account read together
+        from the start (each Supabase round trip is 300-500 ms); a new chat's row and the question
         saved while the model starts (the reply is saved only if it was; else an `error` and `saved: false`);
         system prompt (_lib/ai/prompt.ts); Auto ladder or the picked model (_lib/ai/router.ts)
         -> _lib/ai/adapters/* -> provider (Groq, Gemini, OpenRouter, NVIDIA, Workers AI)
@@ -1041,11 +1042,11 @@ Picker groups: Fast (Nemotron 3.5 Bolt, Gemini 3.1 Flash Lite, LFM 2.5 2.6B); Ba
 | Signal | Ladder |
 | --- | --- |
 | Image in one of the last three questions | vision: Nemotron 3.5 Super VL -> Super VL (OpenRouter) -> Gemini 3.1 Flash Lite |
-| PDF in the thread, or > 150,000 characters (files' text counted) | long: Gemini 3.1 Flash Lite -> Mistral Large 4 -> Nemotron 3 Ultra (OpenRouter) |
-| Thinking Extended or Maximum, or Auto judged the message hard (not code) | deep: Mistral Large 4 -> Nemotron 3 Ultra (OpenRouter) -> Nemotron 3.5 Lightning -> GPT-OSS 120B, high reasoning |
-| Code cues | code: GPT-OSS 120B (Groq) -> North Mini Code -> Mistral Large 4 |
-| Short small talk (< 6 words, no question) | fast: Nemotron 3.5 Lightning -> Nemotron 3.5 Bolt -> Gemini 3.1 Flash Lite |
-| Anything else | default: GPT-OSS 120B (Groq) -> Nemotron 3.5 Lightning -> Mistral Large 4 -> Nemotron 3 Ultra (OpenRouter) -> Nemotron 3.5 Bolt -> Gemini 3.1 Flash Lite |
+| PDF in the thread, or > 150,000 characters (files' text counted) | long: Gemini 3.1 Flash Lite -> Nemotron 3 Ultra (OpenRouter) -> Mistral Large 4 |
+| Thinking Extended or Maximum, or Auto judged the message hard (not code) | deep: GPT-OSS 120B (Groq) -> Nemotron 3 Ultra (OpenRouter) -> Gemini 3.1 Flash Lite -> Nemotron 3.5 Lightning -> Mistral Large 4, high reasoning |
+| Code cues | code: GPT-OSS 120B (Groq) -> North Mini Code -> Nemotron 3 Ultra (OpenRouter) -> Nemotron 3.5 Bolt |
+| Short small talk (< 6 words, no question) | fast: Nemotron 3.5 Bolt -> GPT-OSS 120B (Groq) -> Gemini 3.1 Flash Lite |
+| Anything else | default: GPT-OSS 120B (Groq) -> Nemotron 3.5 Bolt -> Gemini 3.1 Flash Lite -> Nemotron 3 Ultra (OpenRouter) -> Nemotron 3.5 Lightning -> Mistral Large 4. Ordered by time to the first word, measured live on 2026-11-12 (server time included): GPT-OSS 120B ~0.9 s when its per-minute allowance lasts, Bolt 0.9 s, Flash Lite ~2 s, Ultra 2.7 s; Lightning thinks 8-10 s first and Mistral Large 4 timed out at 60 s |
 
 No ladder uses Workers AI (its daily pool is shared by the whole account) or Gemini 3.6/3.8 Flash (about 20 messages a day each). Models whose provider has no key are left out; an empty ladder falls back to default, then any configured picker model.
 

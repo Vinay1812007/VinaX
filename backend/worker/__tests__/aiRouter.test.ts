@@ -61,7 +61,7 @@ describe('pickLadder', () => {
   it('owner overrides switch models off everywhere and reorder within a group', () => {
     const reg = applyOverrides(MODELS, { 'groq:openai/gpt-oss-120b': { enabled: false }, 'openrouter:liquid/lfm-2.5-2.6b:free': { order: -1 }, junk: 5 });
     expect(modelById(reg, 'groq:openai/gpt-oss-120b')).toBeNull();
-    expect(ladderModels(reg, 'default')[0].id).toBe('nvidia:nvidia/nemotron-3.5-lightning-30b-a3b');
+    expect(ladderModels(reg, 'default')[0].id).toBe('nvidia:nvidia/nemotron-3.5-bolt-e4b');
     expect(reg.filter((m) => m.group === 'fast').map((m) => m.id).slice(0, 2)).toEqual(['openrouter:liquid/lfm-2.5-2.6b:free', 'nvidia:nvidia/nemotron-3.5-bolt-e4b']);
     expect(reg.findIndex((m) => m.group === 'fast')).toBe(0);
     expect(applyOverrides(MODELS, 'nonsense')).toHaveLength(MODELS.length);

@@ -261,6 +261,9 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   // The conversation and the message tree.
   // The listener's name for the prompt, read while the rest is checked (it never blocks a refusal).
   const accountJob = accountOf(env, sub).catch(() => ({ ok: false as const }));
+  // Memory too, from the start: each database round trip from here is 300-500 ms
+  // before the model is even asked (2026-11-12), so nothing that can wait is waited for.
+  const memoryJob = memoryFor(env, sub, isUuid(body.conversationId) ? body.conversationId : null, body.incognito === true).catch(() => NO_MEMORY);
   let conv: ConversationRow | null = null;
   let rows: MessageRow[] = [];
   if (isUuid(body.conversationId)) {
@@ -284,6 +287,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
   let userSaved: Promise<boolean> = Promise.resolve(true);
   /** This request made the conversation. */
   let created = false;
+  /** The new conversation's row, written in the background (true once it is in). */
+  let creating: Promise<boolean> | null = null;
   /** The cut-off reply being continued, if this is a Continue. */
   let continuing: MessageRow | null = null;
   if (isUuid(continueFrom)) {
@@ -336,11 +341,21 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
         if (!p.value) return json({ error: 'not_found' }, 404);
         projectId = p.value.id;
       }
-      const made = await createConversation(env, { id: crypto.randomUUID(), account_id: sub, title: fallbackTitle(content.text || newFiles.map((a) => a.name).join(', ')), model_pref: mode === 'model' ? candidates[0].id : 'auto', project_id: projectId });
-      // 23503: the account row is gone (deleted elsewhere), so the session no longer stands.
-      if (!made.ok) return made.code === '23503' ? json({ error: 'signed_out' }, 401) : json({ error: 'unavailable' }, 503);
-      if (!made.rows[0]) return json({ error: 'unavailable' }, 503);
-      conv = made.rows[0];
+      const fresh_ = { id: crypto.randomUUID(), account_id: sub, title: fallbackTitle(content.text || newFiles.map((a) => a.name).join(', ')), model_pref: mode === 'model' ? candidates[0].id : 'auto', project_id: projectId };
+      if (newFiles.length) {
+        // Files are linked to the conversation below, so it must exist first.
+        const made = await createConversation(env, fresh_);
+        // 23503: the account row is gone (deleted elsewhere), so the session no longer stands.
+        if (!made.ok) return made.code === '23503' ? json({ error: 'signed_out' }, 401) : json({ error: 'unavailable' }, 503);
+        if (!made.rows[0]) return json({ error: 'unavailable' }, 503);
+        conv = made.rows[0];
+      } else {
+        // Made while the model starts (one round trip less before the first word); the
+        // question and the reply are saved only once it is in (userSaved).
+        const now = new Date().toISOString();
+        conv = { ...fresh_, starred: false, active_leaf_id: null, created_at: now, updated_at: now, deleted_at: null };
+        creating = createConversation(env, fresh_).then((made) => made.ok && !!made.rows[0]).catch(() => false);
+      }
       created = true;
     }
     const unlinked = newFiles.filter((a) => !a.conversation_id).map((a) => a.id);
@@ -352,7 +367,9 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     const row = { id: crypto.randomUUID(), conversation_id: conv.id, parent_id: parentId, role: 'user' as const, content: [...newFiles.map(attachmentPart), ...content.parts], created_at: new Date().toISOString() };
     const convId = conv.id;
     const markFirst = created && body.incognito === true;
+    const made = creating;
     userSaved = (async () => {
+      if (made && !(await made)) return false;
       if (markFirst) await markIncognito(env, sub, convId);
       return (await insertMessage(env, row)).ok;
     })().catch(() => false);
@@ -372,8 +389,6 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
     if (r.ok) for (const a of r.rows) fileRows.set(a.id, a);
   }
   const signals = fileSignals(turns, fileRows);
-  // Memory is read while the project loads and the search allowance is taken.
-  const memoryJob = memoryFor(env, sub, conversation.id, body.incognito === true).catch(() => NO_MEMORY);
   // The chat's project (its instructions and knowledge), when it has one.
   const project = await loadProjectContext(env, sub, conversation.project_id);
   const threadSize = (project?.chars ?? 0) + turns.reduce((n, t) => n + t.text.length + t.files.reduce((m, id) => m + (fileRows.get(id)?.extracted_text?.length ?? 0), 0), 0);
@@ -529,7 +544,8 @@ export const onRequestPost = async (ctx: Ctx): Promise<Response> => {
       titleJob = generateTitle(env, titleCandidates, textOf(userMsg.content)).then(async (title) => {
         if (!title || title === conversation.title) return;
         send('title', { title });
-        await updateConversation(env, sub, conversation.id, { title });
+        // The new conversation's row may still be on its way.
+        if (await userSaved) await updateConversation(env, sub, conversation.id, { title });
       }).catch(() => undefined);
     }
     if (grounding) send('status', { step: 'searching', query });

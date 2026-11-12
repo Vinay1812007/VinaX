@@ -358,12 +358,21 @@ export type LadderName = 'vision' | 'long' | 'deep' | 'code' | 'fast' | 'default
  */
 export const LADDERS: Readonly<Record<LadderName, readonly string[]>> = {
   vision: ['nvidia:nvidia/nemotron-3.5-super-vl-120b-a12b', 'openrouter:nvidia/nemotron-3.5-super-vl:free', 'gemini:gemini-3.1-flash-lite'],
-  long: ['gemini:gemini-3.1-flash-lite', 'nvidia:mistralai/mistral-large-4-1t-a52b', 'openrouter:nvidia/nemotron-3-ultra-550b-a55b:free'],
-  deep: ['nvidia:mistralai/mistral-large-4-1t-a52b', 'openrouter:nvidia/nemotron-3-ultra-550b-a55b:free', 'nvidia:nvidia/nemotron-3.5-lightning-30b-a3b', 'groq:openai/gpt-oss-120b'],
-  code: ['groq:openai/gpt-oss-120b', 'openrouter:cohere/north-mini-code:free', 'nvidia:mistralai/mistral-large-4-1t-a52b'],
-  fast: ['nvidia:nvidia/nemotron-3.5-lightning-30b-a3b', 'nvidia:nvidia/nemotron-3.5-bolt-e4b', 'gemini:gemini-3.1-flash-lite'],
-  /** The quickest that answered on 2026-11-12: GPT-OSS 120B (0.9 s), Nemotron 3.5 Lightning (1.6 s), Mistral Large 4, then the rest. */
-  default: ['groq:openai/gpt-oss-120b', 'nvidia:nvidia/nemotron-3.5-lightning-30b-a3b', 'nvidia:mistralai/mistral-large-4-1t-a52b', 'openrouter:nvidia/nemotron-3-ultra-550b-a55b:free', 'nvidia:nvidia/nemotron-3.5-bolt-e4b', 'gemini:gemini-3.1-flash-lite'],
+  long: ['gemini:gemini-3.1-flash-lite', 'openrouter:nvidia/nemotron-3-ultra-550b-a55b:free', 'nvidia:mistralai/mistral-large-4-1t-a52b'],
+  deep: ['groq:openai/gpt-oss-120b', 'openrouter:nvidia/nemotron-3-ultra-550b-a55b:free', 'gemini:gemini-3.1-flash-lite', 'nvidia:nvidia/nemotron-3.5-lightning-30b-a3b', 'nvidia:mistralai/mistral-large-4-1t-a52b'],
+  code: ['groq:openai/gpt-oss-120b', 'openrouter:cohere/north-mini-code:free', 'openrouter:nvidia/nemotron-3-ultra-550b-a55b:free', 'nvidia:nvidia/nemotron-3.5-bolt-e4b'],
+  fast: ['nvidia:nvidia/nemotron-3.5-bolt-e4b', 'groq:openai/gpt-oss-120b', 'gemini:gemini-3.1-flash-lite'],
+  /**
+   * First word in about a second (live, 2026-11-12, "explain in two sentences",
+   * the server's own 0.5-1 s included): GPT-OSS 120B on Groq ~0.9 s when its
+   * per-minute allowance lasts (busy often: a 429 costs ~0.4 s and rests it),
+   * then Nemotron 3.5 Bolt 0.9 s (no thinking, NVIDIA's generous limits),
+   * Gemini 3.1 Flash Lite ~2 s, Nemotron 3 Ultra 2.7 s. Nemotron 3.5
+   * Lightning thinks 8-10 s first and Mistral Large 4 timed out at 60 s, so
+   * they are last. A hard question still goes to the models that can think
+   * longer first (thinking.ts preferLevel).
+   */
+  default: ['groq:openai/gpt-oss-120b', 'nvidia:nvidia/nemotron-3.5-bolt-e4b', 'gemini:gemini-3.1-flash-lite', 'openrouter:nvidia/nemotron-3-ultra-550b-a55b:free', 'nvidia:nvidia/nemotron-3.5-lightning-30b-a3b', 'nvidia:mistralai/mistral-large-4-1t-a52b'],
   title: ['gemini:gemini-3.1-flash-lite', 'nvidia:nvidia/nemotron-3.5-bolt-e4b'],
   /**
    * The music routes' short JSON tasks (POST /api/ai/rerank, /api/ai/home-layout):

@@ -40,7 +40,7 @@ describe('completeText', () => {
     });
     const r = await completeText(ENV, { system: 's', user: 'u' });
     expect(r?.text).toBe('From the second.');
-    expect(r?.spec?.id).toBe('nvidia:nvidia/nemotron-3.5-lightning-30b-a3b');
+    expect(r?.spec?.id).toBe('nvidia:nvidia/nemotron-3.5-bolt-e4b');
     expect(calls).toBeGreaterThanOrEqual(2);
   });
 

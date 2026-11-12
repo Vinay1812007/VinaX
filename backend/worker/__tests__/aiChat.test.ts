@@ -231,9 +231,9 @@ describe('failover and failures', () => {
     const events = await readEvents(await post(ask('Tell me about raga Yaman')));
     await settle();
     const metas = events.filter((e) => e.event === 'meta').map((e) => (e.data.model as { id: string }).id);
-    expect(metas).toEqual(['groq:openai/gpt-oss-120b', 'nvidia:nvidia/nemotron-3.5-lightning-30b-a3b']);
+    expect(metas).toEqual(['groq:openai/gpt-oss-120b', 'nvidia:nvidia/nemotron-3.5-bolt-e4b']);
     expect(events.at(-1)?.data).toMatchObject({ stopReason: 'end' });
-    expect(fake.rows('ai_messages')[1]).toMatchObject({ model_id: 'nvidia:nvidia/nemotron-3.5-lightning-30b-a3b', provider: 'nvidia' });
+    expect(fake.rows('ai_messages')[1]).toMatchObject({ model_id: 'nvidia:nvidia/nemotron-3.5-bolt-e4b', provider: 'nvidia' });
   });
 
   it('a picked model is never swapped: error with alternatives, nothing saved for the reply', async () => {
@@ -360,9 +360,9 @@ describe('failover and failures', () => {
       : sseResponse(openAiSse('From NVIDIA.'))));
     const events = await readEvents(await post(ask('Tell me about raga Yaman')));
     await settle();
-    expect(events.filter((e) => e.event === 'meta').map((e) => (e.data.model as { id: string }).id)).toEqual(['groq:openai/gpt-oss-120b', 'nvidia:nvidia/nemotron-3.5-lightning-30b-a3b']);
+    expect(events.filter((e) => e.event === 'meta').map((e) => (e.data.model as { id: string }).id)).toEqual(['groq:openai/gpt-oss-120b', 'nvidia:nvidia/nemotron-3.5-bolt-e4b']);
     expect(events.filter((e) => e.event === 'text').map((e) => e.data.delta).join('')).toBe('From NVIDIA.');
-    expect(fake.rows('ai_messages').find((m) => m.role === 'assistant')).toMatchObject({ model_id: 'nvidia:nvidia/nemotron-3.5-lightning-30b-a3b' });
+    expect(fake.rows('ai_messages').find((m) => m.role === 'assistant')).toMatchObject({ model_id: 'nvidia:nvidia/nemotron-3.5-bolt-e4b' });
   });
 });
 
