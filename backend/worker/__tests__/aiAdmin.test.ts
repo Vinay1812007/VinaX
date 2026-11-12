@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { onRequestGet, onRequestPost } from '../functions/api/admin/ai';
 import { _resetCooldowns, isCooling, noteFailure } from '../functions/_lib/ai/cooldown';
 import { ProviderError } from '../functions/_lib/ai/errors';
-import { MODELS, modelById, UTILITY_MODELS } from '../functions/_lib/ai/models';
+import { MODELS, modelById, PAUSED_MODELS, UTILITY_MODELS } from '../functions/_lib/ai/models';
 import { _resetVoiceRests, noteVoiceFailure } from '../functions/_lib/ai/voice';
 import { resetSettingsMemo } from '../functions/_lib/settings';
 import { _resetRateLimitsForTests } from '../functions/_lib/ratelimit';
@@ -47,7 +47,7 @@ describe('GET /api/admin/ai', () => {
       settings: [{ key: 'vinax-ai', value: { enabled: false, testers: ['1001'], search: true, models: { [GROQ]: { enabled: false } } }, updated_at: 'x', updated_by: 'owner' }],
       ai_daily_usage: [{ day: today, kind: 'grounding', count: 12 }, { day: today, kind: 'search', count: 3 }],
     });
-    noteFailure(modelById(MODELS, 'gemini:gemini-3.6-flash')!, new ProviderError('rate', { status: 429, retryAfterMs: 30_000 }));
+    noteFailure(modelById(MODELS, 'gemini:gemini-3.1-flash-lite')!, new ProviderError('rate', { status: 429, retryAfterMs: 30_000 }));
     noteVoiceFailure('canopylabs/orpheus-v1-english', new ProviderError('quota', { status: 429 }));
     const res = await onRequestGet({ request: req(), env: ENV });
     expect(res.status).toBe(200);
@@ -59,11 +59,13 @@ describe('GET /api/admin/ai', () => {
     expect(byId.groq).toMatchObject({ name: 'Groq', configured: true, lastError: null });
     expect(byId.nvidia.configured).toBe(false);
     expect(byId.gemini.lastError).toMatchObject({ kind: 'rate', status: 429 });
-    const gem = body.models.find((m: { id: string }) => m.id === 'gemini:gemini-3.6-flash');
+    const gem = body.models.find((m: { id: string }) => m.id === 'gemini:gemini-3.1-flash-lite');
     expect(gem).toMatchObject({ configured: true, restKind: 'rate', ownerEnabled: true });
     expect(Date.parse(gem.restingUntil)).toBeGreaterThan(Date.now());
     expect(body.models.find((m: { id: string }) => m.id === GROQ).ownerEnabled).toBe(false);
     expect(body.models).toHaveLength(MODELS.length);
+    // A paused model is still listed for the owner, never as switched on.
+    for (const id of PAUSED_MODELS) expect(body.models.find((m: { id: string }) => m.id === id), id).toMatchObject({ ownerEnabled: false });
     expect(body.search.api).toMatchObject({ configured: true, provider: 'tavily', usedToday: 3 });
     // No model grounds since 2026-11-12 (the grounded ladder is empty), so grounding shows as not set up even with a Gemini key.
     expect(body.search.grounding).toMatchObject({ configured: false, dailyLimit: 450, usedToday: 12 });

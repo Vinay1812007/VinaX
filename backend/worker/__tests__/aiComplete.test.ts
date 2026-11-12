@@ -28,19 +28,19 @@ describe('completeText', () => {
     seed(() => sseResponse(openAiSse('The answer is 42.')));
     const r = await completeText(ENV, { system: 'Answer.', user: 'What?' });
     expect(r?.text).toBe('The answer is 42.');
-    expect(r?.spec?.id).toBe('nvidia:deepseek-ai/deepseek-v4.1-flash');
+    expect(r?.spec?.id).toBe('groq:openai/gpt-oss-120b');
   });
 
   it('falls over to the next model when the first fails before any text', async () => {
     let calls = 0;
     seed((url) => {
       calls += 1;
-      if (url.includes('nvidia')) return new Response('{"error":"down"}', { status: 503 });
+      if (url.includes('groq')) return new Response('{"error":"down"}', { status: 503 });
       return sseResponse(openAiSse('From the second.'));
     });
     const r = await completeText(ENV, { system: 's', user: 'u' });
     expect(r?.text).toBe('From the second.');
-    expect(r?.spec?.provider).toBe('groq');
+    expect(r?.spec?.id).toBe('nvidia:nvidia/nemotron-3.5-lightning-30b-a3b');
     expect(calls).toBeGreaterThanOrEqual(2);
   });
 
@@ -100,7 +100,7 @@ describe('composeHome', () => {
     const r = await composeHome(ENV, shelves, ctx);
     expect(r.composed).toBe(true);
     expect(r.greeting).toBe('Good evening, Asha');
-    expect(r.model).toMatch(/^nvidia:/);
+    expect(r.model).toBe('groq:openai/gpt-oss-120b');
     expect(r.shelves.map((s) => s.key)).toEqual(['themed:late-evening', 'discover', 'made-for-you', 'trending']);
     expect(r.shelves[1].title).toBe('New for you');
     expect(r.shelves[0].songs.map((s) => s.id)).toEqual(['m0', 'd0', 't0', 'm1', 'd1', 't1', 'm2']);

@@ -145,7 +145,7 @@ describe('the project block', () => {
     expect(p).toContain('[document: b.txt (left out: the project\'s files are too long for this model)]');
     expect(p).toContain('Be brief.');
     // A long-window model takes all of it.
-    const long = modelById(MODELS, 'gemini:gemini-3.6-flash')!;
+    const long = modelById(MODELS, 'gemini:gemini-3.1-flash-lite')!;
     const q = buildSystemPrompt({ spec: long, vars, artifacts: true, project: { name: 'Big', instructions: null, documents: docs, notes: [] } });
     expect(q).toContain(big);
     expect(q).toContain('<document name="b.txt">\nsmall\n</document>');
@@ -318,7 +318,7 @@ describe('chats in a project', () => {
     };
     seed({ ai_conversations: [conv(C1, '1001', { project_id: P1 })], ai_attachments: [file(F1, { kind: 'image', mime: 'image/png', name: 'chart.png', extracted_text: null, storage_path: 'kb/chart' })] });
     storage.objects.set('kb/chart', { bytes: PNG, mime: 'image/png', length: null });
-    await send({ conversationId: C1, mode: 'model', model: 'gemini:gemini-3.6-flash', content: [{ type: 'text', text: 'Read the chart' }] });
+    await send({ conversationId: C1, mode: 'model', model: 'gemini:gemini-3.1-flash-lite', content: [{ type: 'text', text: 'Read the chart' }] });
     const parts = geminiBody!.contents.at(-1)!.parts;
     expect(parts.some((p) => 'inline_data' in p)).toBe(true);
     expect(JSON.stringify(geminiBody)).toContain('[image: chart.png (attached to the user\'s latest message)]');

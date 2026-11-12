@@ -254,8 +254,8 @@ describe('caching and failure', () => {
     expect(await discoveryStates(KEYED, { openrouter: false }, { now: NOW, fetchers: f })).not.toHaveProperty('openrouter');
     expect(calls.openrouter).toBeUndefined();
     const s = sanitizeAiSettings({ discover: true, models: { 'groq:llama-3.1-8b-instant': { enabled: false } } });
-    // These fake lists name none of the curated OpenRouter models, so all nine leave the picker.
-    const curated = MODELS.filter((m) => m.provider !== 'openrouter').length;
+    // These fake lists name none of the curated OpenRouter models, so all of them leave the picker (paused models never were in it).
+    const curated = MODELS.filter((m) => APPROVED_MODELS.has(m.id) && m.provider !== 'openrouter').length;
     await withApproved(['groq:llama-3.1-8b-instant', 'nvidia:meta/llama-3.3-70b-instruct'], async () => {
       const reg = await pickerRegistryFor(KEYED, s, { now: NOW, fetchers: f });
       expect(reg.map((m) => m.id)).not.toContain('groq:llama-3.1-8b-instant');
@@ -274,7 +274,7 @@ describe('caching and failure', () => {
   it('a curated OpenRouter model its current list no longer has leaves the picker without a word; an unknown list keeps them all', async () => {
     const env = { OPENROUTER_API_KEY: 'or_x' } as AiEnv;
     const s = sanitizeAiSettings({});
-    const orIds = MODELS.filter((m) => m.provider === 'openrouter').map((m) => m.upstream);
+    const orIds = MODELS.filter((m) => m.provider === 'openrouter' && APPROVED_MODELS.has(m.id)).map((m) => m.upstream);
     // Never heard from OpenRouter, and the list is slow: nothing waits and every curated one stays.
     let release: (v: FoundModel[]) => void = () => undefined;
     const slow = { ...fetchers().f, openrouter: () => new Promise<FoundModel[]>((r) => { release = r; }) };
@@ -359,7 +359,7 @@ describe('GET /api/ai/models', () => {
     seed(groqWorld(false));
     const broken = await getPicker();
     expect(broken.models.some((m) => m.group.startsWith('more-'))).toBe(false);
-    expect(broken.models).toHaveLength(MODELS.filter((m) => m.group !== null).length);
+    expect(broken.models).toHaveLength(MODELS.filter((m) => m.group !== null && APPROVED_MODELS.has(m.id)).length);
   });
 
   it('the owner’s discover: false hides them, and so does a setting that never mentions discover', async () => {

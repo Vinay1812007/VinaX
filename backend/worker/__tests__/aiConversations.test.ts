@@ -14,7 +14,7 @@ import { resetSettingsMemo } from '../functions/_lib/settings';
 import { _resetRateLimitsForTests } from '../functions/_lib/ratelimit';
 import { _resetCooldowns, noteFailure } from '../functions/_lib/ai/cooldown';
 import { ProviderError } from '../functions/_lib/ai/errors';
-import { APPROVED_MODELS, MODELS, modelById } from '../functions/_lib/ai/models';
+import { APPROVED_MODELS, MODELS, modelById, PAUSED_MODELS } from '../functions/_lib/ai/models';
 import { DB_ENV, fakeDb } from './helpers/fakeDb';
 
 const ENV = { GOOGLE_CLIENT_ID: 'x.apps.googleusercontent.com', AUTH_SECRET: 'auth-secret', ...DB_ENV };
@@ -125,7 +125,7 @@ describe('the Worker routes PATCH and DELETE to their handlers', () => {
 describe('GET /api/ai/models', () => {
   it('lists picker models with availability, never hosts or keys; enabled follows the switch', async () => {
     fakeDb({ settings: [{ key: 'vinax-ai', value: { enabled: false, testers: ['1001'] }, updated_at: 'x', updated_by: 'owner' }] });
-    noteFailure(modelById(MODELS, 'nvidia:deepseek-ai/deepseek-v4.1-flash')!, new ProviderError('rate'));
+    noteFailure(modelById(MODELS, 'nvidia:nvidia/nemotron-3.5-lightning-30b-a3b')!, new ProviderError('rate'));
     const env = { ...ENV, GROQ_API_KEY: 'gsk_test', NVIDIA_API_KEY: 'nv_test' };
     const anon = (await (await modelsGet({ request: await req('/api/ai/models', { sub: null }), env })).json()) as { enabled: boolean; configured: boolean; models: Array<{ id: string; group: string; available: boolean; reason?: string; provider: string }> };
     expect(anon.enabled).toBe(false);
@@ -133,10 +133,11 @@ describe('GET /api/ai/models', () => {
     expect(anon.models.every((m) => m.group)).toBe(true);
     const by = Object.fromEntries(anon.models.map((m) => [m.id, m]));
     expect(by['groq:openai/gpt-oss-120b']).toMatchObject({ available: true, provider: 'Groq' });
-    expect(by['nvidia:deepseek-ai/deepseek-v4.1-flash']).toMatchObject({ available: false, reason: 'busy' });
-    // Only the owner's approved models, every one of them.
+    expect(by['nvidia:nvidia/nemotron-3.5-lightning-30b-a3b']).toMatchObject({ available: false, reason: 'busy' });
+    // Only the owner's approved models, every one of them; never a paused one.
     expect(new Set(anon.models.map((m) => m.id))).toEqual(APPROVED_MODELS);
-    expect(by['gemini:gemini-3.6-flash']).toMatchObject({ available: false, reason: 'not_configured' });
+    for (const id of PAUSED_MODELS) expect(by[id], id).toBeUndefined();
+    expect(by['gemini:gemini-3.1-flash-lite']).toMatchObject({ available: false, reason: 'not_configured' });
     expect(JSON.stringify(anon)).not.toMatch(/gsk_test|api\.groq\.com|failover/);
     resetSettingsMemo();
     const tester = (await (await modelsGet({ request: await req('/api/ai/models'), env })).json()) as { enabled: boolean };

@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { _resetCooldowns, AUTH_MS, coolingUntil, GONE_MS, isCooling, noteFailure, QUOTA_DEFAULT_MS, RATE_MAX_MS, restFor, UPSTREAM_MS } from '../functions/_lib/ai/cooldown';
 import { ProviderError } from '../functions/_lib/ai/errors';
-import { applyOverrides, APPROVED_MODELS, LADDERS, ladderModels, MODELS, modelById, PICKER_GROUPS, UTILITY_MODELS } from '../functions/_lib/ai/models';
+import { applyOverrides, APPROVED_MODELS, LADDERS, PAUSED_MODELS, ladderModels, MODELS, modelById, PICKER_GROUPS, UTILITY_MODELS } from '../functions/_lib/ai/models';
 import { humanReason, isSmallTalk, pickLadder, runChat, type RouterEvent } from '../functions/_lib/ai/router';
 import type { Adapter, ModelSpec, ProviderEvent, ProviderId } from '../functions/_lib/ai/types';
 
@@ -33,17 +33,20 @@ describe('pickLadder', () => {
     expect(isSmallTalk('thanks but can you write the whole essay again in a formal tone')).toBe(false);
   });
 
-  it('every ladder entry is a registry model; Auto defaults to DeepSeek V4.1 Flash; no ladder uses Workers AI or the two Gemini Flash models', () => {
+  it('every ladder entry is an approved registry model; Auto defaults to GPT-OSS 120B on Groq; no ladder uses Workers AI, the two Gemini Flash models or a paused model', () => {
     for (const ids of Object.values(LADDERS)) for (const id of ids) expect(modelById(MODELS, id), id).not.toBeNull();
-    expect(LADDERS.default[0]).toBe('nvidia:deepseek-ai/deepseek-v4.1-flash');
+    expect(LADDERS.default[0]).toBe('groq:openai/gpt-oss-120b');
     const all = Object.values(LADDERS).flat();
+    expect(all.filter((id) => PAUSED_MODELS.has(id))).toEqual([]);
+    expect(all.filter((id) => !APPROVED_MODELS.has(id))).toEqual([]);
     expect(all.filter((id) => id.startsWith('cloudflare:'))).toEqual([]);
     expect(all.filter((id) => /^gemini:gemini-3\.[68]-flash$/.test(id))).toEqual([]);
   });
 
-  it('the registry is exactly the approved list, with no duplicates', () => {
-    expect(new Set(MODELS.map((m) => m.id))).toEqual(APPROVED_MODELS);
-    expect(MODELS).toHaveLength(APPROVED_MODELS.size);
+  it('the registry is exactly the approved list plus the paused one, with no duplicates', () => {
+    expect([...PAUSED_MODELS].filter((id) => APPROVED_MODELS.has(id))).toEqual([]);
+    expect(new Set(MODELS.map((m) => m.id))).toEqual(new Set([...APPROVED_MODELS, ...PAUSED_MODELS]));
+    expect(MODELS).toHaveLength(APPROVED_MODELS.size + PAUSED_MODELS.size);
     expect(MODELS.filter((m) => m.provider === 'groq').map((m) => m.upstream)).toEqual(['openai/gpt-oss-120b']);
     // Never: paid on Workers AI, failed the 2026-11-12 check, or not listed by the provider.
     for (const id of ['cloudflare:@cf/moonshotai/kimi-k2.6', 'cloudflare:@cf/zai-org/glm-5.3', 'cloudflare:@cf/deepseek-ai/deepseek-v4-pro-0813', 'groq:qwen/qwen3.8-27b', 'groq:openai/gpt-oss-20b', 'gemini:gemini-3.5-flash-lite', 'nvidia:openai/gpt-oss-20b', 'nvidia:meta/llama-3.2-90b-vision-instruct']) {
@@ -56,9 +59,9 @@ describe('pickLadder', () => {
   });
 
   it('owner overrides switch models off everywhere and reorder within a group', () => {
-    const reg = applyOverrides(MODELS, { 'nvidia:deepseek-ai/deepseek-v4.1-flash': { enabled: false }, 'openrouter:liquid/lfm-2.5-2.6b:free': { order: -1 }, junk: 5 });
-    expect(modelById(reg, 'nvidia:deepseek-ai/deepseek-v4.1-flash')).toBeNull();
-    expect(ladderModels(reg, 'default')[0].id).toBe('nvidia:nvidia/nemotron-3.5-bolt-e4b');
+    const reg = applyOverrides(MODELS, { 'groq:openai/gpt-oss-120b': { enabled: false }, 'openrouter:liquid/lfm-2.5-2.6b:free': { order: -1 }, junk: 5 });
+    expect(modelById(reg, 'groq:openai/gpt-oss-120b')).toBeNull();
+    expect(ladderModels(reg, 'default')[0].id).toBe('nvidia:nvidia/nemotron-3.5-lightning-30b-a3b');
     expect(reg.filter((m) => m.group === 'fast').map((m) => m.id).slice(0, 2)).toEqual(['openrouter:liquid/lfm-2.5-2.6b:free', 'nvidia:nvidia/nemotron-3.5-bolt-e4b']);
     expect(reg.findIndex((m) => m.group === 'fast')).toBe(0);
     expect(applyOverrides(MODELS, 'nonsense')).toHaveLength(MODELS.length);

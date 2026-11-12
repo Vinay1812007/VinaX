@@ -87,19 +87,36 @@ const gemini = (upstream: string, name: string, group: ModelGroup | null, tier: 
  * GLM 5.3 or DeepSeek V4 Pro on Workers AI (paid billing). Voice models
  * (voice.ts) and UTILITY_MODELS are not chat models and are not on this list.
  */
-export const APPROVED_MODELS: ReadonlySet<string> = new Set([
-  // NVIDIA (free, about 40 requests a minute per model)
+/**
+ * Approved but paused: each failed the owner's live check of the approved
+ * list on 2026-11-12 after it went live (timed out at 25 s, or answered with
+ * an error: gone, not on the free tier, or busy all day), so none is offered
+ * or put in a ladder. DeepSeek V4.1 Flash was Auto's first choice and timed
+ * out in three checks that day: every Auto message waited 12 s for it. Move
+ * an id back into APPROVED_MODELS once it answers again.
+ */
+export const PAUSED_MODELS: ReadonlySet<string> = new Set([
   'nvidia:deepseek-ai/deepseek-v4.1-flash',
-  'nvidia:nvidia/nemotron-3.5-lightning-30b-a3b',
   'nvidia:z-ai/glm-5.3-flash',
   'nvidia:minimaxai/minimax-m3.1-flash',
-  'nvidia:nvidia/nemotron-3.5-super-vl-120b-a12b',
   'nvidia:google/gemma-4-31b-it',
+  'cloudflare:@cf/zai-org/glm-5.3-flash',
+  'cloudflare:@cf/deepseek-ai/deepseek-v4.1-flash-1017',
+  'gemini:gemini-3.8-flash',
+  'gemini:gemini-3.6-flash',
+  'gemini:gemma-4-31b-it',
+  'gemini:gemma-4-26b-a4b-it',
+  'openrouter:google/gemma-4-31b-it:free',
+  'openrouter:google/gemma-4-26b-a4b-it:free',
+]);
+
+export const APPROVED_MODELS: ReadonlySet<string> = new Set([
+  // NVIDIA (free, about 40 requests a minute per model)
+  'nvidia:nvidia/nemotron-3.5-lightning-30b-a3b',
+  'nvidia:nvidia/nemotron-3.5-super-vl-120b-a12b',
   'nvidia:mistralai/mistral-large-4-1t-a52b',
   'nvidia:nvidia/nemotron-3.5-bolt-e4b',
   // Cloudflare Workers AI (10,000 neurons a day for the account): picked by hand only, never in a ladder
-  'cloudflare:@cf/zai-org/glm-5.3-flash',
-  'cloudflare:@cf/deepseek-ai/deepseek-v4.1-flash-1017',
   'cloudflare:@cf/openai/gpt-oss-120b',
   'cloudflare:@cf/qwen/qwen3.8-27b',
   'cloudflare:@cf/google/gemma-4-26b-a4b-it',
@@ -112,15 +129,9 @@ export const APPROVED_MODELS: ReadonlySet<string> = new Set([
   'groq:openai/gpt-oss-120b',
   // Google Gemini (free tier)
   'gemini:gemini-3.1-flash-lite',
-  'gemini:gemini-3.8-flash',
-  'gemini:gemini-3.6-flash',
-  'gemini:gemma-4-31b-it',
-  'gemini:gemma-4-26b-a4b-it',
   // OpenRouter (:free models rotate; one OpenRouter stops listing leaves the picker, see config.ts)
   'openrouter:nvidia/nemotron-3.5-super-vl:free',
   'openrouter:nvidia/nemotron-3.5-lightning:free',
-  'openrouter:google/gemma-4-31b-it:free',
-  'openrouter:google/gemma-4-26b-a4b-it:free',
   'openrouter:nvidia/nemotron-3-ultra-550b-a55b:free',
   'openrouter:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
   'openrouter:dots-studio/dots-3-note-preview:free',
@@ -310,17 +321,18 @@ export type LadderName = 'vision' | 'long' | 'deep' | 'code' | 'fast' | 'default
  */
 export const LADDERS: Readonly<Record<LadderName, readonly string[]>> = {
   vision: ['nvidia:nvidia/nemotron-3.5-super-vl-120b-a12b', 'openrouter:nvidia/nemotron-3.5-super-vl:free', 'gemini:gemini-3.1-flash-lite'],
-  long: ['gemini:gemini-3.1-flash-lite', 'nvidia:deepseek-ai/deepseek-v4.1-flash', 'nvidia:mistralai/mistral-large-4-1t-a52b'],
-  deep: ['nvidia:mistralai/mistral-large-4-1t-a52b', 'nvidia:deepseek-ai/deepseek-v4.1-flash', 'groq:openai/gpt-oss-120b'],
-  code: ['groq:openai/gpt-oss-120b', 'nvidia:deepseek-ai/deepseek-v4.1-flash', 'openrouter:cohere/north-mini-code:free'],
+  long: ['gemini:gemini-3.1-flash-lite', 'nvidia:mistralai/mistral-large-4-1t-a52b', 'openrouter:nvidia/nemotron-3-ultra-550b-a55b:free'],
+  deep: ['nvidia:mistralai/mistral-large-4-1t-a52b', 'openrouter:nvidia/nemotron-3-ultra-550b-a55b:free', 'nvidia:nvidia/nemotron-3.5-lightning-30b-a3b', 'groq:openai/gpt-oss-120b'],
+  code: ['groq:openai/gpt-oss-120b', 'openrouter:cohere/north-mini-code:free', 'nvidia:mistralai/mistral-large-4-1t-a52b'],
   fast: ['nvidia:nvidia/nemotron-3.5-lightning-30b-a3b', 'nvidia:nvidia/nemotron-3.5-bolt-e4b', 'gemini:gemini-3.1-flash-lite'],
-  default: ['nvidia:deepseek-ai/deepseek-v4.1-flash', 'nvidia:nvidia/nemotron-3.5-bolt-e4b', 'groq:openai/gpt-oss-120b', 'gemini:gemini-3.1-flash-lite'],
-  title: ['gemini:gemini-3.1-flash-lite', 'nvidia:nvidia/nemotron-3.5-bolt-e4b', 'nvidia:google/gemma-4-31b-it'],
+  /** The quickest that answered on 2026-11-12: GPT-OSS 120B (0.9 s), Nemotron 3.5 Lightning (1.6 s), Mistral Large 4, then the rest. */
+  default: ['groq:openai/gpt-oss-120b', 'nvidia:nvidia/nemotron-3.5-lightning-30b-a3b', 'nvidia:mistralai/mistral-large-4-1t-a52b', 'openrouter:nvidia/nemotron-3-ultra-550b-a55b:free', 'nvidia:nvidia/nemotron-3.5-bolt-e4b', 'gemini:gemini-3.1-flash-lite'],
+  title: ['gemini:gemini-3.1-flash-lite', 'nvidia:nvidia/nemotron-3.5-bolt-e4b'],
   /**
    * The music routes' short JSON tasks (POST /api/ai/rerank, /api/ai/home-layout):
    * the quickest models first, because each answer has a deadline of 1.5–2.5 s.
    */
-  music: ['nvidia:nvidia/nemotron-3.5-bolt-e4b', 'gemini:gemini-3.1-flash-lite', 'nvidia:minimaxai/minimax-m3.1-flash'],
+  music: ['nvidia:nvidia/nemotron-3.5-bolt-e4b', 'gemini:gemini-3.1-flash-lite'],
   /** Put first in Auto's ladder when a reply searches the web: free Google Search grounding (none work now; see above). */
   grounded: [],
 };
