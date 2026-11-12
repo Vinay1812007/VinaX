@@ -18,6 +18,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.7': {
+    title: 'VinaX AI uses only the approved free models',
+    changes: [
+      { type: 'improved', text: 'The model menu, every Auto ladder, a picked model and the console probe.' },
+    ],
+  },
   '1.13.6': {
     title: 'VinaX AI no longer drops very long replies at the very end',
     changes: [
