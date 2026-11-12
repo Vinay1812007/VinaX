@@ -17,7 +17,7 @@
  */
 import { setting } from '../settings';
 import type { DbEnv } from '../db';
-import { applyOverrides, isApproved, modelById, MODELS } from './models';
+import { applyOverrides, isApproved, modelById, MODELS, PAUSED_MODELS } from './models';
 import { DISCOVERY_PROVIDERS, discoveredModels, openRouterListed, type DiscoverOptions } from './discovery';
 import type { AiEnv, ModelSpec, ProviderId } from './types';
 
@@ -33,6 +33,8 @@ export interface AiSettings {
   limits: AiLimits;
   /** Found free models in the picker: true (all), false (none), or the providers switched off. */
   discover: boolean | Partial<Record<ProviderId, false>>;
+  /** Paused models whose latest daily check passed (modelCheck.ts): in the model menu again, never in a ladder. */
+  revived: string[];
 }
 
 /** The owner's limits for VinaX AI; each is clamped to its range, and a missing or bad value is the default. */
@@ -85,13 +87,29 @@ function cleanInstructions(raw: unknown): string {
 }
 
 export const AI_SETTING_KEY = 'vinax-ai';
+/** Written by the daily check of the paused models (modelCheck.ts). */
+export const MODEL_CHECK_KEY = 'ai-model-check';
 
-export function sanitizeAiSettings(raw: unknown): AiSettings {
+/** How long a passed check keeps a paused model in the menu: a check that stopped running never keeps one there. */
+export const REVIVED_FOR_MS = 48 * 60 * 60_000;
+
+/** The paused models the latest `ai-model-check` passed, within the last two days. */
+export function revivedFrom(raw: unknown, now = Date.now()): string[] {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+  return Object.entries(raw as Record<string, unknown>).filter(([id, v]) => {
+    if (!PAUSED_MODELS.has(id) || !v || typeof v !== 'object') return false;
+    const c = v as { ok?: unknown; at?: unknown };
+    const at = typeof c.at === 'string' ? Date.parse(c.at) : NaN;
+    return c.ok === true && Number.isFinite(at) && now - at < REVIVED_FOR_MS && at <= now + 60_000;
+  }).map(([id]) => id);
+}
+
+export function sanitizeAiSettings(raw: unknown, check: unknown = null, now = Date.now()): AiSettings {
   const v = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const testers = Array.isArray(v.testers) ? v.testers.filter((t): t is string => typeof t === 'string' && t.length > 0 && t.length < 100).slice(0, 50) : [];
   const models = v.models && typeof v.models === 'object' && !Array.isArray(v.models) ? (v.models as Record<string, unknown>) : {};
   const lim = typeof v.dailyLimit === 'number' && Number.isFinite(v.dailyLimit) && v.dailyLimit >= 1 ? Math.min(10_000, Math.floor(v.dailyLimit)) : null;
-  return { enabled: v.enabled === true, testers, search: v.search !== false, models, instructions: cleanInstructions(v.instructions), limits: sanitizeLimits(v.limits), dailyLimit: lim, discover: sanitizeDiscover(v.discover) };
+  return { enabled: v.enabled === true, testers, search: v.search !== false, models, instructions: cleanInstructions(v.instructions), limits: sanitizeLimits(v.limits), dailyLimit: lim, discover: sanitizeDiscover(v.discover), revived: revivedFrom(check, now) };
 }
 
 const DISCOVER_KEYS: readonly ProviderId[] = ['groq', 'gemini', 'openrouter', 'nvidia', 'cloudflare'];
@@ -109,14 +127,18 @@ function sanitizeDiscover(raw: unknown): AiSettings['discover'] {
 }
 
 export async function aiSettings(env: DbEnv): Promise<AiSettings> {
-  return sanitizeAiSettings(await setting(env, AI_SETTING_KEY));
+  const [raw, check] = await Promise.all([setting(env, AI_SETTING_KEY), setting(env, MODEL_CHECK_KEY)]);
+  return sanitizeAiSettings(raw, check);
 }
 
 /** May this account use VinaX AI now? */
 export const aiOpenFor = (s: AiSettings, accountId: string | null): boolean => s.enabled || (!!accountId && s.testers.includes(accountId));
 
 /** The curated registry after the owner's model overrides (Auto's ladders, the music and backstage tasks); approved models only. */
-export const registryFor = (s: AiSettings): ModelSpec[] => applyOverrides(MODELS.filter((spec) => isApproved(spec.id)), s.models);
+export const registryFor = (s: AiSettings): ModelSpec[] => applyOverrides(MODELS.filter((spec) => offeredId(s, spec.id)), s.models);
+
+/** Approved, or paused but answering again (the daily check). */
+const offeredId = (s: AiSettings, id: string): boolean => isApproved(id) || s.revived.includes(id);
 
 /**
  * The picker's registry: the curated models, then the free models found in
@@ -129,7 +151,7 @@ export const registryFor = (s: AiSettings): ModelSpec[] => applyOverrides(MODELS
  */
 export async function pickerRegistryFor(env: AiEnv, s: AiSettings, o: DiscoverOptions = {}): Promise<ModelSpec[]> {
   const [found, listed] = await Promise.all([s.discover === false ? [] : discoveredModels(env, s.discover, o), openRouterListed(env, o)]);
-  const offered = (spec: ModelSpec): boolean => isApproved(spec.id) && (spec.provider !== 'openrouter' || !listed || listed.has(spec.upstream));
+  const offered = (spec: ModelSpec): boolean => offeredId(s, spec.id) && (spec.provider !== 'openrouter' || !listed || listed.has(spec.upstream));
   return applyOverrides([...MODELS, ...found].filter(offered), s.models);
 }
 

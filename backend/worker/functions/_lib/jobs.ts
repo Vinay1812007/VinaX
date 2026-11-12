@@ -18,6 +18,8 @@
  *                                           in the sitemaps (_lib/indexnow.ts)
  *   weekly-summary           hourly         Monday from 9 AM India time: last week's numbers emailed to
  *                                           the owner, once a week (_lib/weeklySummary.ts)
+ *   ai-model-check           daily          one tiny request to each paused VinaX AI model; one that answers
+ *                                           within 12 s is back in the model menu (_lib/ai/modelCheck.ts)
  *   outreach                 hourly         the automatic notifications that are due: the Sunday-evening
  *                                           weekly recap, win-back nudges, new releases (_lib/outreach.ts)
  *
@@ -39,8 +41,9 @@ import { runAlerts } from './alerts';
 import { runIndexNow, type IndexNowEnv } from './indexnow';
 import { runWeeklySummary } from './weeklySummary';
 import { runOutreach } from './outreach';
+import { runModelCheck } from './ai/modelCheck';
 
-export type JobId = 'status-tick' | 'housekeeping' | 'personal-embed' | 'alerts' | 'scheduled-notifications' | 'indexnow' | 'weekly-summary' | 'outreach';
+export type JobId = 'status-tick' | 'housekeeping' | 'personal-embed' | 'alerts' | 'scheduled-notifications' | 'indexnow' | 'weekly-summary' | 'outreach' | 'ai-model-check';
 
 export interface JobSpec {
   id: JobId;
@@ -63,6 +66,7 @@ export const JOBS: readonly JobSpec[] = [
   { id: 'indexnow', label: 'Search engine updates', about: 'Tells Bing and the other IndexNow search engines about new pages on the website, so they are found sooner.', every: 360, choices: [180, 360, 720, 1440] },
   { id: 'weekly-summary', label: 'Weekly summary email', about: 'Every Monday from 9 AM India time, emails the owner last week’s numbers: listening, active and new people, top songs, At risk, errors. Sends once a week; switch the email itself in Notification Rules.', every: 60, choices: [30, 60] },
   { id: 'outreach', label: 'Automatic notifications', about: 'Sends the automatic notifications that are due: the Sunday-evening weekly recap, win-back nudges to regular listeners who went quiet, and new releases from each person’s favourite artists. Each kind has its own switch in Notification Rules; quiet hours and the per-person cap apply.', every: 60, choices: [30, 60, 180] },
+  { id: 'ai-model-check', label: 'VinaX AI model check', about: 'Once a day, sends one tiny message to each paused VinaX AI model. One that answers quickly is back in the model menu (picked by hand only, never in Auto); one that fails stays paused.', every: 1440, choices: [720, 1440] },
 ] as const;
 
 /** The owner's choices for one job, after checking them. */
@@ -229,6 +233,7 @@ export async function runJob(env: DbEnv, job: JobId, now = Date.now()): Promise<
             : job === 'indexnow' ? await runIndexNow(env as IndexNowEnv)
             : job === 'weekly-summary' ? await runWeeklySummary(env as never, now)
             : job === 'outreach' ? await runOutreach(env as never, now)
+            : job === 'ai-model-check' ? await runModelCheck(env as never, now)
             : await housekeeping(env, now);
   } catch (e) {
     ok = false;

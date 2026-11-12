@@ -80,8 +80,9 @@ export const onRequestGet = async (ctx: { request: Request; env: Env; waitUntil?
       restingUntil: until > now ? new Date(until).toISOString() : null,
       restKind: until > now ? own?.kind ?? null : null,
       ...(spec.discovered ? { discovered: true } : {}),
-      // Approved but paused after failing the live check (models.ts): offered nowhere, but the owner can test it.
-      ...(PAUSED_MODELS.has(spec.id) ? { paused: true } : {}),
+      // Approved but paused after failing the live check (models.ts): offered nowhere, but the owner can test it;
+      // `revived`: its latest daily check passed, so it is in the model menu again (modelCheck.ts).
+      ...(PAUSED_MODELS.has(spec.id) ? (settings.revived.includes(spec.id) ? { revived: true } : { paused: true }) : {}),
     };
   });
   const used = await usedToday(env);

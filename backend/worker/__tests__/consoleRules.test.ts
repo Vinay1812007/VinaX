@@ -126,8 +126,8 @@ describe('scheduler', () => {
     const out = await runScheduled(DB, T);
     expect(out).toEqual([]);
     const reads = calls.filter((c) => c.url.pathname.endsWith('/job_runs') && c.method === 'GET');
-    expect(reads.length).toBe(JOBS.length); // one per job (eight with the weekly summary and the automatic notifications)
-    expect(JOBS.length).toBe(8);
+    expect(reads.length).toBe(JOBS.length); // one per job (nine with the weekly summary, the automatic notifications and the VinaX AI model check)
+    expect(JOBS.length).toBe(9);
     for (const r of reads) {
       expect(r.url.searchParams.get('job')).toMatch(/^eq\./);
       expect(r.url.searchParams.get('limit')).toBe('1');
