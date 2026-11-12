@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.1': {
+    title: 'VinaX AI finishes long answers instead of cutting them off',
+    changes: [
+      { type: 'improved', text: 'Long answers, above all from models that think first (like Nemotron), now finish instead of stopping with "The connection dropped before the reply finished".' },
+      { type: 'improved', text: 'If a reply drops before it starts answering, VinaX AI asks again by itself.' },
+      { type: 'improved', text: 'When you stop a reply, or one gets cut off, the text you already saw is kept in the chat.' },
+      { type: 'fixed', text: 'Sending the same question again after it went unanswered no longer adds a second copy of it.' },
+    ],
+  },
   '1.13.0': {
     title: 'Listen Together is instant, and guests can ask for any song',
     changes: [
