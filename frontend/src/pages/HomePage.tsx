@@ -35,7 +35,7 @@ import { useRegion } from '@/features/location/useRegion';
 import { useExperiment } from '@/features/experiments/useExperiment';
 import { EXP_HOME_SHELF_ORDER, homeShelfOrder } from '@/features/experiments/homeShelfOrder';
 import { useRecommendations } from '@/features/recommendations/useRecommendations';
-import { HomeHero } from '@/features/home/HomeHero';
+import { HomeHero, JumpBackIn } from '@/features/home/HomeHero';
 import { HomeFeatures, HomeWelcome } from '@/features/home/HomeWelcome';
 import { ListeningGuide } from '@/features/home/ListeningGuide';
 import { FlowEntryCard } from '@/features/flow/FlowEntryCard';
@@ -119,7 +119,8 @@ const BLOCK_EXTRAS: Partial<Record<HomeSection, () => ReactNode>> = {
 };
 
 // Default order honours the home-shelf-order experiment (personal <-> discovery).
-const HOME_BLOCK_KEYS: HomeSection[] = ['quick', 'personal', 'discovery', 'charts', 'seasonal', 'moods', 'genres', 'artists', 'albums', 'daypicks', 'loved', 'feed'];
+// 2.0 — the catalogue first, the way a music app opens: charts and new albums right after the shortcuts.
+const HOME_BLOCK_KEYS: HomeSection[] = ['quick', 'charts', 'albums', 'personal', 'discovery', 'seasonal', 'moods', 'genres', 'artists', 'daypicks', 'loved', 'feed'];
 /**
  * 9.0.0 — progressive disclosure: the first PRIMARY_BLOCKS visible blocks
  * (by default the shortcuts, For you, Designed for you and Fresh
@@ -137,8 +138,8 @@ const CATALOGUE_ROWS_AFTER = 3;
 function CatalogueRowsBand() {
   return (
     <>
-      <DeferredBlock render={() => <CityHotRow />} />
       <DeferredBlock render={() => <RadioStationsRow />} />
+      <DeferredBlock render={() => <CityHotRow />} />
       <DeferredBlock render={() => <ArtistStationsRow />} />
       <DeferredBlock render={() => <PodcastsRow />} />
     </>
@@ -472,7 +473,7 @@ function SignedInHome() {
           </TopBarActions>
           <NotificationSheet open={notifOpen} onClose={() => setNotifOpen(false)} />
 
-          {/* JioSaavn-style top: a short greeting, then Trending now; the hero, chips and cards follow it. */}
+          {/* 2.0 — the top of Home: a short greeting, the language chips, Jump back in, Trending now, then your mix. */}
           {firstVisit ? (
             ownerGreeting && <p className="vxh-greet-note">{ownerGreeting}</p>
           ) : (
@@ -486,23 +487,19 @@ function SignedInHome() {
             </header>
           )}
 
+          <BrowseChips className="vxh-chips vxh-topchips" railLangs={railLangs} />
+          <JumpBackIn recent={continueListening} onResume={(index) => playQueue(continueListening, index)} />
           <TrendingNowRow songs={trendingNow.data} loading={trendingNow.isLoading} />
 
           <HomeHero
             design={design}
             songs={heroSongs}
-            recent={continueListening}
             lead={firstVisit ? <HomeWelcome name={userName} onStart={startListening} ready={heroSongs.length > 0} /> : undefined}
             onPlay={() => heroSongs.length && playQueue(heroSongs, 0)}
-            onResume={(index) => playQueue(continueListening, index)}
             onRadio={() => navigate('/radio')}
             onSurprise={surprise}
           />
-          <BrowseChips className="vxh-chips vxh-topchips" railLangs={railLangs} />
           {firstVisit && <HomeFeatures />}
-          <FriendsListening />
-          <ListeningGuide />
-          <FlowEntryCard />
           {/* V2 1.4 — the personal engine's page first (nothing when signed out, switched off or the model is new). */}
           {engineFirst && <Suspense fallback={null}><PersonalHome generation={generation} /></Suspense>}
 
@@ -515,6 +512,11 @@ function SignedInHome() {
             // 1.4 — the AI is being asked (at most 2.5 s): placeholders, then one layout for the whole visit.
             <div aria-busy="true" aria-label="Building your Home"><ShelfSkeleton /><ShelfSkeleton /></div>
           )}
+
+          {/* 2.0 — friends, the listening guide and Flow follow the music instead of leading it. */}
+          <FriendsListening />
+          <ListeningGuide />
+          <FlowEntryCard />
 
           <section className="vxh-explore" aria-labelledby={`${exploreRegion}-title`}>
             <div className="vxh-explore-head">

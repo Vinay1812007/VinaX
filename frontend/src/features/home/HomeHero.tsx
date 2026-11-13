@@ -48,13 +48,11 @@ function mixLine(songs: Song[]): string | null {
  * `.vx-hero` and the "Play your Aura Mix" label are load-bearing for the
  * browser tests and the guided tour.
  */
-export function HomeHero({ design, songs, recent, lead, onPlay, onResume, onRadio, onSurprise }: {
+export function HomeHero({ design, songs, lead, onPlay, onRadio, onSurprise }: {
   design: HomeDesign;
   songs: Song[];
-  recent: Song[];
   lead?: ReactNode;
   onPlay: () => void;
-  onResume: (index: number) => void;
   onRadio: () => void;
   onSurprise: () => void;
 }) {
@@ -86,21 +84,28 @@ export function HomeHero({ design, songs, recent, lead, onPlay, onResume, onRadi
           </div>
         </div>
       </section>
-
-      {recent.length > 0 && (
-        <section className="vxh-jump" aria-label="Jump back in">
-          <div className="vxh-head"><h2>Jump back in</h2><Link className="vx-section-link" to="/history">History</Link></div>
-          <div className="vxh-tiles">
-            {recent.slice(0, 8).map((song, index) => (
-              <button key={song.id} type="button" className={`vxh-tile${index >= 6 ? ' is-wide-only' : ''}`} onClick={() => onResume(index)} aria-label={`Play ${song.title}`}>
-                <img src={bestImage(song.images, 150)} srcSet={artSrcSet(song.images, 150)} sizes="56px" alt="" width={56} height={56} loading="lazy" decoding="async" onError={onArtError} />
-                <span className="vxh-tile-text"><span className="vxh-tile-title">{song.title}</span><span className="vxh-tile-sub">{song.subtitle}</span></span>
-                <span className="vxh-disc" aria-hidden><PlayIcon /></span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
     </div>
+  );
+}
+
+/**
+ * 2.0 — Jump back in: the songs the listener played last, as compact tiles.
+ * Home shows it right under the language chips (it used to sit under the mix).
+ */
+export function JumpBackIn({ recent, onResume }: { recent: Song[]; onResume: (index: number) => void }) {
+  if (!recent.length) return null;
+  return (
+    <section className="vxh-jump" aria-label="Jump back in">
+      <div className="vxh-head"><h2>Jump back in</h2><Link className="vx-section-link" to="/history">History</Link></div>
+      <div className="vxh-tiles">
+        {recent.slice(0, 8).map((song, index) => (
+          <button key={song.id} type="button" className={`vxh-tile${index >= 6 ? ' is-wide-only' : ''}`} onClick={() => onResume(index)} aria-label={`Play ${song.title}`}>
+            <img src={bestImage(song.images, 150)} srcSet={artSrcSet(song.images, 150)} sizes="56px" alt="" width={56} height={56} loading="lazy" decoding="async" onError={onArtError} />
+            <span className="vxh-tile-text"><span className="vxh-tile-title">{song.title}</span><span className="vxh-tile-sub">{song.subtitle}</span></span>
+            <span className="vxh-disc" aria-hidden><PlayIcon /></span>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
