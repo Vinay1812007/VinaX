@@ -41,7 +41,7 @@ export const DEFAULT_REPLY_TO = 'support@vinaxmusic.online';
 export const SITE = 'https://www.vinaxmusic.online';
 export const CONSOLE = 'https://admin.vinaxmusic.online/admin/';
 
-export type EmailKind = 'welcome' | 'newSignIn' | 'adminInvite' | 'weeklySummary' | 'test';
+export type EmailKind = 'welcome' | 'newSignIn' | 'adminInvite' | 'weeklySummary' | 'test' | 'code';
 export const EMAIL_KINDS: readonly Exclude<EmailKind, 'test'>[] = ['welcome', 'newSignIn', 'adminInvite', 'weeklySummary'];
 /** The VinaX mark the emails carry (hosted, so every mail app shows the same logo). */
 export const LOGO_URL = `${SITE}/icons/icon-192.png`;
@@ -84,7 +84,7 @@ export const emailConfigured = (env: EmailEnv): boolean => !!env.RESEND_API_KEY?
 /** May this kind of email go out now? Needs the key, and the setting not switched off. */
 export async function emailAllowed(env: EmailEnv, kind: EmailKind): Promise<boolean> {
   if (!emailConfigured(env)) return false;
-  if (kind === 'test') return true;
+  if (kind === 'test' || kind === 'code') return true;
   const s = emailSettingsOf(await setting(env, 'email'));
   return s.enabled && s[kind];
 }
@@ -271,7 +271,7 @@ export function layout({ title, lines, button, footer, kicker }: Layout): string
 }
 
 const SUPPORT = 'support@vinaxmusic.online';
-const ACCOUNT_FOOTER = `You get this because you signed in to <a href="${SITE}" style="color:#a899ad">VinaX</a> with this Google account. Questions? Reply to this email or write to ${SUPPORT}.`;
+const ACCOUNT_FOOTER = `You get this because this address has a <a href="${SITE}" style="color:#a899ad">VinaX</a> account. Questions? Reply to this email or write to ${SUPPORT}.`;
 
 const firstName = (name: string | null | undefined): string | null => {
   const n = (name ?? '').trim().split(/\s+/)[0];
@@ -329,12 +329,38 @@ export function newSignInEmail(to: string, name: string | null, facts: SignInFac
         `${hi ? `Hi ${escapeHtml(hi)}, your` : 'Your'} VinaX account ${what}.`,
         ...f.html,
         'If this was you, there&rsquo;s nothing to do.',
-        'If it wasn&rsquo;t, secure your Google account (VinaX signs in only with Google), then reply to this email and we&rsquo;ll sign that device out.',
+        'If it wasn&rsquo;t, change your VinaX password (Settings &rsaquo; Account, or &ldquo;Forgot password?&rdquo; on the sign-in screen) and secure your Google account if you sign in with Google, then reply to this email and we&rsquo;ll sign that device out.',
       ],
       button: { label: 'Check your Google account', href: 'https://myaccount.google.com/notifications' },
       footer: ACCOUNT_FOOTER,
     }),
-    text: `Your VinaX account ${what.replace('&rsquo;', "'")}.\n\n${f.text.join('\n')}\n\nIf this was you, there's nothing to do.\nIf it wasn't, secure your Google account (https://myaccount.google.com/notifications), then reply to this email and we'll sign that device out.`,
+    text: `Your VinaX account ${what.replace('&rsquo;', "'")}.\n\n${f.text.join('\n')}\n\nIf this was you, there's nothing to do.\nIf it wasn't, change your VinaX password (Settings > Account, or "Forgot password?" on the sign-in screen) and secure your Google account if you sign in with Google (https://myaccount.google.com/notifications), then reply to this email and we'll sign that device out.`,
+  };
+}
+
+/**
+ * Schema 20 — the 6-digit code for email sign-up or a forgotten password.
+ * Sent straight away (not through the owner's on/off switches: without it
+ * nobody can sign up with email).
+ */
+export function codeEmail(to: string, code: string, reset: boolean): Email {
+  const title = reset ? 'Your VinaX password code' : 'Your VinaX sign-up code';
+  const why = reset ? 'Someone asked to set a new password for the VinaX account on this address.' : 'Someone is creating a VinaX account with this address.';
+  return {
+    kind: 'code',
+    to,
+    subject: `${code} is your VinaX code`,
+    html: layout({
+      kicker: 'Your account',
+      title,
+      lines: [
+        `${why} Enter this code in VinaX to carry on:`,
+        `<span style="display:inline-block;background:${C.box};border:1px solid ${C.cardBorder};border-radius:12px;padding:12px 20px;font-size:28px;font-weight:800;letter-spacing:.3em;color:${C.title}">${escapeHtml(code)}</span>`,
+        'It works for 15 minutes. If this wasn&rsquo;t you, ignore this email: nothing changes without the code.',
+      ],
+      footer: `You get this because someone typed this address into <a href="${SITE}" style="color:#a899ad">VinaX</a>. Questions? Reply to this email or write to ${SUPPORT}.`,
+    }),
+    text: `${title}\n\n${why} Enter this code in VinaX to carry on:\n\n${code}\n\nIt works for 15 minutes. If this wasn't you, ignore this email: nothing changes without the code.`,
   };
 }
 

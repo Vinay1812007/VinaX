@@ -27,7 +27,7 @@ async function readInstalledVersion(): Promise<void> {
 
 /** The project's public web OAuth client id (not a secret). */
 export const GOOGLE_WEB_CLIENT_ID = '152181244509-biv1p3bge1endo5pd8qpc1ormhb4a75l.apps.googleusercontent.com';
-const ORIGIN = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
+export const ORIGIN = isNativePlatform() ? 'https://www.vinaxmusic.online' : '';
 const GIS_SRC = 'https://accounts.google.com/gsi/client';
 
 export interface AccountUser {
@@ -35,10 +35,16 @@ export interface AccountUser {
   email: string | null;
   picture: string | null;
   username: string | null;
+  /** Schema 20: the account can also sign in with its email and a password. */
+  hasPassword?: boolean;
 }
+/** How this device signed in. */
+export type SignInVia = 'google' | 'password' | 'email';
 export interface Account {
   session: string;
   user: AccountUser;
+  /** Missing on accounts signed in before email sign-in existed: those were Google. */
+  via?: SignInVia;
 }
 
 const listeners = new Set<(a: Account | null) => void>();
@@ -54,7 +60,7 @@ export function onAccountChange(cb: (a: Account | null) => void): () => void {
   return () => listeners.delete(cb);
 }
 
-function setAccount(a: Account | null): void {
+export function setAccount(a: Account | null): void {
   if (a) setLocal(KEYS.account, a);
   else removeLocal(KEYS.account);
   for (const cb of listeners) cb(a);
@@ -64,8 +70,8 @@ function setAccount(a: Account | null): void {
 export type SignInResult = 'ok' | 'cancelled' | 'refused' | 'offline' | 'unavailable' | 'check_failed';
 
 /** The security check's token for one sign-in: undefined when none is needed, null when it failed. */
-type HumanCheck = () => Promise<string | null | undefined>;
-const turnstileCheck: HumanCheck = () => import('./turnstile').then((m) => m.turnstileToken(ORIGIN, 'app-signin')).catch(() => null);
+export type HumanCheck = () => Promise<string | null | undefined>;
+export const turnstileCheck: HumanCheck = () => import('./turnstile').then((m) => m.turnstileToken(ORIGIN, 'app-signin')).catch(() => null);
 
 /** Show Cloudflare's security check under a sign-in button; false when it is off. */
 export const mountSignInCheck = (el: HTMLElement): Promise<(() => void) | false> =>
@@ -79,10 +85,7 @@ export async function exchangeGoogleToken(credential: string, fetchImpl: typeof 
     const res = await fetchImpl(`${ORIGIN}/api/auth/google`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      // V2 1.0.1 — the install id too: a browser that signs in before it has
-      // ever reported usage has no signed id yet, and without it the console
-      // listed the person twice (the account, and a "Device only" row).
-      body: JSON.stringify({ credential, ...(turnstile ? { turnstile } : {}), signed_device_id: getLocal<string>(KEYS.signedDeviceId, '') || undefined, deviceId: installId(), ...(isNativePlatform() ? (await readInstalledVersion(), clientFacts()) : clientFacts()) }),
+      body: JSON.stringify({ credential, ...(turnstile ? { turnstile } : {}), ...(await deviceFacts()) }),
     });
     if (res.status === 401) return 'refused';
     if (res.status === 403) {
@@ -90,29 +93,45 @@ export async function exchangeGoogleToken(credential: string, fetchImpl: typeof 
       if (e?.error === 'human_check') return 'check_failed';
     }
     if (!res.ok) return 'unavailable';
-    const j = (await res.json()) as { session?: unknown; user?: AccountUser; returning?: unknown; hasData?: unknown; signed_device_id_next?: unknown };
-    if (typeof j.session !== 'string' || !j.user) return 'unavailable';
-    // The device's signed id, issued with the link: usage reports from now on are this same row.
-    if (typeof j.signed_device_id_next === 'string' && !getLocal<string>(KEYS.signedDeviceId, '')) setLocal(KEYS.signedDeviceId, j.signed_device_id_next);
-    // V2 — a Google account that signed in before is not a new listener: no
-    // welcome, and its synced library and settings come back first. Marked
-    // BEFORE the account is set, so the welcome never opens for it and its
-    // answers can never overwrite the account's real settings.
-    const returning = j.returning === true || j.hasData === true;
-    if (returning) setLocal(KEYS.onboarded, true);
-    if (j.user.username) setLocal(KEYS.userHandle, j.user.username);
-    if (j.user.name && !getLocal<string>(KEYS.userName, '')) setLocal(KEYS.userName, j.user.name);
-    setAccount({ session: j.session, user: j.user });
-    if (returning) {
-      const first = (j.user.name ?? '').split(' ')[0];
-      void import('@/store/toastStore')
-        .then((m) => m.toast(j.hasData === true ? `Welcome back${first ? `, ${first}` : ''} — bringing back your library…` : `Welcome back${first ? `, ${first}` : ''}`))
-        .catch(() => undefined);
-    }
-    return 'ok';
+    return acceptSignIn(await res.json(), 'google');
   } catch {
     return typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'unavailable';
   }
+}
+
+/**
+ * What every sign-in sends besides its proof. V2 1.0.1 — the install id too:
+ * a browser that signs in before it has ever reported usage has no signed id
+ * yet, and without it the console listed the person twice (the account, and
+ * a "Device only" row).
+ */
+export async function deviceFacts(): Promise<Record<string, unknown>> {
+  if (isNativePlatform()) await readInstalledVersion();
+  return { signed_device_id: getLocal<string>(KEYS.signedDeviceId, '') || undefined, deviceId: installId(), ...clientFacts() };
+}
+
+/** Schema 20 — the server's sign-in answer (Google, password or email code) → the account on this device. */
+export function acceptSignIn(body: unknown, via: SignInVia): SignInResult {
+  const j = (body ?? {}) as { session?: unknown; user?: AccountUser; returning?: unknown; hasData?: unknown; signed_device_id_next?: unknown };
+  if (typeof j.session !== 'string' || !j.user) return 'unavailable';
+  // The device's signed id, issued with the link: usage reports from now on are this same row.
+  if (typeof j.signed_device_id_next === 'string' && !getLocal<string>(KEYS.signedDeviceId, '')) setLocal(KEYS.signedDeviceId, j.signed_device_id_next);
+  // V2 — a Google account that signed in before is not a new listener: no
+  // welcome, and its synced library and settings come back first. Marked
+  // BEFORE the account is set, so the welcome never opens for it and its
+  // answers can never overwrite the account's real settings.
+  const returning = j.returning === true || j.hasData === true;
+  if (returning) setLocal(KEYS.onboarded, true);
+  if (j.user.username) setLocal(KEYS.userHandle, j.user.username);
+  if (j.user.name && !getLocal<string>(KEYS.userName, '')) setLocal(KEYS.userName, j.user.name);
+  setAccount({ session: j.session, user: j.user, via });
+  if (returning) {
+    const first = (j.user.name ?? '').split(' ')[0];
+    void import('@/store/toastStore')
+      .then((m) => m.toast(j.hasData === true ? `Welcome back${first ? `, ${first}` : ''} — bringing back your library…` : `Welcome back${first ? `, ${first}` : ''}`))
+      .catch(() => undefined);
+  }
+  return 'ok';
 }
 
 // ------------------------------------------------------------------ Android
@@ -260,7 +279,7 @@ export function validateSession(fetchImpl: typeof fetch = fetch): Promise<boolea
         const latest = currentAccount();
         if (j.user && latest && latest.session === a.session) {
           const user: AccountUser = { ...latest.user, ...j.user, picture: j.user.picture ?? latest.user.picture };
-          if (JSON.stringify(user) !== JSON.stringify(latest.user)) setAccount({ session: a.session, user });
+          if (JSON.stringify(user) !== JSON.stringify(latest.user)) setAccount({ ...latest, user });
         }
       }
     } catch {

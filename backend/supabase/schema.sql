@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 19
+-- VinaX database · schema version 20
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -35,7 +35,9 @@
 --  version 17 adds weekly_summary for the owner's Monday email;
 --  version 18 adds outreach and the outreach_* functions for the automatic
 --  notifications: weekly recap, win-back, new releases;
---  version 19 adds song_reactions and song_reaction_counts / stats_reactions)
+--  version 19 adds song_reactions and song_reaction_counts / stats_reactions;
+--  version 20 adds account_passwords and email_codes, section 2c, for email
+--  and password sign-in)
 --  12. security
 -- =============================================================================
 
@@ -164,6 +166,68 @@ update listeners l set account_id = a.id
          where lower(btrim(b.name)) = lower(btrim(l.display_name))
            and coalesce(b.city, '') = coalesce(l.city, '')
            and abs(extract(epoch from (l.first_seen - b.created_at))) < 900) = 1;
+
+-- ------------------------------------ 2c. passwords and email codes (v20) --
+-- A listener may sign in with an email and a password as well as Google: a
+-- Google account can set a password in Settings, and a new listener can sign
+-- up with an email address (proved by a 6-digit code). Email-only accounts
+-- get an id of `em` + 24 hex characters; Google accounts keep Google's id.
+-- The hash lives in its own table so no `select *` on accounts can carry it.
+-- bcrypt runs here (pgcrypto), not in the Worker, whose CPU budget is tiny.
+create extension if not exists pgcrypto with schema extensions;
+
+create table if not exists account_passwords (
+  account_id  text primary key references accounts (id) on delete cascade,
+  hash        text not null,
+  set_at      timestamptz not null default now()
+);
+comment on table account_passwords is 'bcrypt hashes for email + password sign-in, one per account. Written and checked only by account_set_password / account_check_password.';
+
+-- One pending code per email address: sign-up, or a forgotten password. The
+-- Worker stores a keyed SHA-256 of the code, never the code; five wrong
+-- tries or fifteen minutes and it is gone.
+create table if not exists email_codes (
+  email       text primary key,
+  code_hash   text not null,
+  tries       integer not null default 0,
+  sent_at     timestamptz not null default now(),
+  expires_at  timestamptz not null,
+  constraint email_codes_email_shape check (email = lower(email))
+);
+comment on table email_codes is 'Pending 6-digit email codes (sign-up and password reset), hashed. Expired rows are deleted by housekeeping.';
+
+-- Set (or replace) an account's password. False when the account is gone.
+create or replace function account_set_password(p_account text, p_password text) returns boolean
+language plpgsql set search_path = public, pg_temp as $$
+begin
+  if p_password is null or octet_length(p_password) < 8 or octet_length(p_password) > 72 then
+    raise exception 'bad_password' using errcode = '22023';
+  end if;
+  if not exists (select 1 from accounts where id = p_account) then return false; end if;
+  insert into account_passwords (account_id, hash, set_at)
+    values (p_account, extensions.crypt(p_password, extensions.gen_salt('bf', 10)), now())
+    on conflict (account_id) do update set hash = excluded.hash, set_at = excluded.set_at;
+  return true;
+end $$;
+
+-- The account an email + password belongs to, or null. With p_account set,
+-- checks that account's password instead (changing it in Settings).
+create or replace function account_check_password(p_email text default null, p_password text default null, p_account text default null) returns text
+language sql stable set search_path = public, pg_temp as $$
+  select a.id
+  from accounts a join account_passwords p on p.account_id = a.id
+  where (case when p_account is not null then a.id = p_account else lower(btrim(a.email)) = lower(btrim(p_email)) end)
+    and p_password is not null
+    and p.hash = extensions.crypt(p_password, p.hash)
+  order by p.set_at desc
+  limit 1;
+$$;
+
+-- Does this account have a password? (Settings shows "Set" or "Change".)
+create or replace function account_has_password(p_account text) returns boolean
+language sql stable set search_path = public, pg_temp as $$
+  select exists (select 1 from account_passwords where account_id = p_account);
+$$;
 
 -- The signed-in listener's synced copy of their library and settings — the
 -- app's own backup-file JSON. `version` rises by one on every write; a write
@@ -3108,7 +3172,7 @@ begin
     'admins', 'error_status',
     'ai_conversations', 'ai_messages', 'ai_attachments', 'ai_daily_usage', 'ai_shares', 'ai_projects', 'ai_memories', 'ai_memory_prefs',
     'personal_songs', 'personal_events', 'personal_taste', 'personal_exposure', 'personal_pages', 'personal_colisten',
-    'owner_notes', 'outreach', 'song_reactions']
+    'owner_notes', 'outreach', 'song_reactions', 'account_passwords', 'email_codes']
   loop
     execute format('alter table public.%I enable row level security', t);
     execute format('alter table public.%I force row level security', t);
@@ -3136,7 +3200,8 @@ begin
                         'personal_erase', 'personal_purge', 'personal_stats',
                         'profile_extras', 'owner_tags',
                         '_outreach_people', 'outreach_recap', 'outreach_winback', 'outreach_release_people', 'outreach_summary',
-                        'song_reaction_counts', 'stats_reactions')
+                        'song_reaction_counts', 'stats_reactions',
+                        'account_set_password', 'account_check_password', 'account_has_password')
   loop
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);
     execute format('grant execute on function %s to service_role', r.sig);
@@ -3150,7 +3215,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 19, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 19, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 20, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 20, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 19 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 20 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;

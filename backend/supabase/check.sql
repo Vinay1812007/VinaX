@@ -766,7 +766,33 @@ begin
   assert jsonb_array_length(v -> 'byDay') >= 1 and jsonb_array_length(v -> 'byEmoji') = 3, 'stats_reactions: by day and by emoji';
   assert not has_table_privilege('anon', 'public.song_reactions', 'select'), 'anon cannot read song reactions';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 19, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 20, 'meta.schema.version';
+  -- v20: email + password sign-in. bcrypt in the database, the hash in its own locked table.
+  insert into accounts (id, email, name) values ('check_pw', 'Pw@Example.com', 'Pw');
+  assert account_set_password('check_nobody', 'long-enough') = false, 'account_set_password: no account';
+  assert account_has_password('check_pw') = false, 'account_has_password: none yet';
+  assert account_set_password('check_pw', 'sitar-strings') = true, 'account_set_password: set';
+  assert (select hash like '$2a$10$%' from account_passwords where account_id = 'check_pw'), 'account_passwords: bcrypt hash, never the password';
+  assert account_has_password('check_pw'), 'account_has_password: set';
+  assert account_check_password(' pw@example.com', 'sitar-strings') = 'check_pw', 'account_check_password: email any case';
+  assert account_check_password('pw@example.com', 'wrong-one') is null, 'account_check_password: wrong password';
+  assert account_check_password(null, 'sitar-strings', 'check_pw') = 'check_pw', 'account_check_password: by account';
+  begin
+    perform account_set_password('check_pw', 'short');
+    assert false, 'account_set_password: short password refused';
+  exception when invalid_parameter_value then null;
+  end;
+  insert into email_codes (email, code_hash, expires_at) values ('pw@example.com', 'x', now() + interval '15 minutes');
+  begin
+    insert into email_codes (email, code_hash, expires_at) values ('Pw@Example.com', 'x', now());
+    assert false, 'email_codes: lower-case addresses only';
+  exception when check_violation then null;
+  end;
+  assert not has_table_privilege('anon', 'public.account_passwords', 'select'), 'anon cannot read password hashes';
+  assert not has_table_privilege('anon', 'public.email_codes', 'select'), 'anon cannot read email codes';
+  assert not has_function_privilege('anon', 'public.account_check_password(text, text, text)', 'execute'), 'anon cannot check passwords';
+  delete from accounts where id = 'check_pw';
+  assert not exists (select 1 from account_passwords where account_id = 'check_pw'), 'account_passwords: deleted with the account';
   -- v12: sign-in history is locked like every table and goes with its account.
   assert (select relforcerowsecurity from pg_class where relname = 'sign_ins'), 'sign_ins: row level security forced';
   assert not has_table_privilege('anon', 'public.sign_ins', 'select'), 'anon cannot read sign-in history';

@@ -471,7 +471,7 @@ npm run deploy           # wrangler deploy --config worker/wrangler.toml
 ### Database - once per project
 
 1. Create the hosted project (Supabase; any region).
-2. In the SQL editor paste `backend/supabase/schema.sql` and run it (schema version 19; idempotent; re-running never deletes data). On Supabase it also creates the private Storage bucket `ai-attachments` and the public bucket `console-media`; no dashboard step needed.
+2. In the SQL editor paste `backend/supabase/schema.sql` and run it (schema version 20; idempotent; re-running never deletes data). On Supabase it also creates the private Storage bucket `ai-attachments` and the public bucket `console-media`; no dashboard step needed.
 3. From `backend/`: `npx wrangler secret put SUPABASE_URL --config worker/wrangler.toml` and `npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml`.
 4. Open the console's **Database** page: schema version, every table with its size, job runs once the Cron Trigger has fired.
 
@@ -576,6 +576,10 @@ Unused leftovers (read by nothing, deletable): older `VINAX_..._API_KEY` names, 
 
 Runs on the push project **VinaX Music** (`vinax-music`). The Worker verifies Google's ID token itself (`_lib/googleAuth.ts`) and issues its own 30-day session. Requires `GOOGLE_CLIENT_ID` (var) and `AUTH_SECRET`. Authorised JavaScript origins on the web client: `https://www.vinaxmusic.online`, `https://vinaxmusic.online`, `https://vinax.pages.dev`, `http://localhost:5173`, plus `https://admin.vinaxmusic.online` for the console; a new domain must be added or the button refuses to load. The `accounts` row is written at sign-in and refreshed on the session check at most every 10 minutes. Without database secrets sign-in still works (`stored: false`) and sync answers `503 unavailable`. Android needs the app's SHA-1 on the Android app in the push project.
 
+### Email and password sign-in
+
+Schema 20. Next to Google, "Continue with email" on every sign-in button (`components/EmailSignIn.tsx`, loaded on tap) signs in with an email and a password, creates an account with an email address, or resets a forgotten password; Settings > Account > **Password** sets one on a Google account (or changes it, with the current one). Creating an account and resetting are the same two steps: `POST /api/auth/email/code { email, turnstile? }` mails a 6-digit code through Resend (`codeEmail`, sent even when the owner turned other emails off; 15 minutes, 5 wrong tries, one per address per minute; same answer whether or not the address has an account), then `POST /api/auth/email/verify { email, code, password, name? }` proves the address and either makes a new account (`em` + 24 hex) or sets the password of the account that already has the address (a Google one too), and signs in. `POST /api/auth/email/login { email, password, turnstile? }` signs in (`401 wrong_password` for any mismatch); `GET/POST /api/auth/password` is the Settings row (`403 wrong_password` without the right `current`). Passwords are 8-72 bytes, hashed with bcrypt inside Postgres (pgcrypto, ~60 ms) because the free-plan Worker has ~10 ms CPU per request. A Google sign-in whose token says the address is verified lands in an email account with the same address instead of making a second one. All of them share `_lib/signIn.ts` (blocked check, session, device link, `sign_ins`, welcome / sign-in alert), answer with `method` (`google | password | email`) and `user.hasPassword`; `/api/auth/me` returns `hasPassword` too. Needs the database and `RESEND_API_KEY` (else `503 not_configured`; the form says to use Google).
+
 ### Cloudflare Turnstile (sign-in security check)
 
 Every sign-in (app Google sign-in on web/Android, console Google sign-in, console recovery password) can carry a Turnstile check; off until the Worker has both keys. Dashboard > Turnstile > Add widget, hostnames `vinaxmusic.online`, mode Managed. Site key -> `TURNSTILE_SITE_KEY` var (public); secret key -> `npx wrangler secret put TURNSTILE_SECRET_KEY --config worker/wrangler.toml` (replace an old key from the retired username check). `GET /api/auth/google` and `GET /api/admin/session` then name the site key. The Worker verifies each token with Siteverify (`_lib/turnstile.ts`): success, action (`app-signin` or `console-signin`), hostname under `vinaxmusic.online`. If Siteverify is unreachable Google sign-in proceeds and the recovery password is refused. With Turnstile on, the recovery password is exchanged once (with a passed check) at `POST /api/admin/session { password, turnstile }` for a 12-hour session. Android needs two WebView settings (third-party cookies; iframes may navigate in place) that `scripts/patch-android.js` writes into `MainActivity` (`allowSignInCheck`); an older APK fails the check and needs updating. Failures log `turnstile failed` with error codes.
@@ -676,7 +680,7 @@ Artwork is served straight from the catalogue CDN in pre-sized variants. `/img` 
 
 ## Database
 
-One server database, designed from a clean sheet in 14.0: the whole schema is one file, `backend/supabase/schema.sql` (current **schema version 19**, written into `meta.schema` as `{ version, appliedAt }`); plain table names; a small typed data layer in the Worker; row-level security enabled **and forced** on every table with no policy, so the public anon key reads and writes nothing; all functions are `security invoker`, executable by the service role only. The app and console never talk to the database directly.
+One server database, designed from a clean sheet in 14.0: the whole schema is one file, `backend/supabase/schema.sql` (current **schema version 20**, written into `meta.schema` as `{ version, appliedAt }`); plain table names; a small typed data layer in the Worker; row-level security enabled **and forced** on every table with no policy, so the public anon key reads and writes nothing; all functions are `security invoker`, executable by the service role only. The app and console never talk to the database directly.
 
 ### Setting it up and upgrading
 
@@ -714,6 +718,7 @@ backend/supabase/ci.sh apply "$SUPABASE_DB_URL"                                 
 | 17 | `weekly_summary(p_to)` for the Monday email |
 | 18 | `outreach` table and `outreach_*` functions (recap, win-back, release) |
 | 19 | `song_reactions` (fire, love, sad, dance, wow), `song_reaction_counts()`, `stats_reactions()` |
+| 20 | Email + password sign-in: `account_passwords` (bcrypt via pgcrypto), `email_codes`, `account_set_password()`, `account_check_password()`, `account_has_password()` |
 
 Until a version is applied the Worker degrades (e.g. retries listener writes without the newest columns on `PGRST204`; sign-ins simply not recorded before 12).
 
@@ -723,8 +728,10 @@ Until a version is applied the Worker degrades (e.g. retries listener writes wit
 | --- | --- | --- |
 | `meta` | fact | `schema` -> `{ version, appliedAt }` |
 | `listeners` | opted-in device | display name, handle (unique, lower-case), platform, os/browser/device fields, app version, edge geo, what is playing, first/last seen, `signed_out_at` |
-| `accounts` | Google sign-in | Google subject id, email, name, picture, linked `listener_id`, sign-in platform/version/geo, created/last seen, `blocked_at` |
-| `sign_ins` | Google sign-in (12) | account, time, IP, browser, platform/version, geo, `signup`, `new_device`; 90 days; cascades with account |
+| `accounts` | signed-in person | Google subject id (or `em` + 24 hex for an email sign-up, 20), email, name, picture, linked `listener_id`, sign-in platform/version/geo, created/last seen, `blocked_at` |
+| `account_passwords` | account with a password (20) | bcrypt `hash` (cost 10), `set_at`; written and checked only by the `account_*password` functions; cascades with account |
+| `email_codes` | pending email code (20) | lower-case `email`, keyed SHA-256 `code_hash`, `tries` (<= 5), `sent_at`, `expires_at` (15 min); expired rows dropped hourly |
+| `sign_ins` | sign-in (12) | account, time, IP, browser, platform/version, geo, `signup`, `new_device`; 90 days; cascades with account |
 | `account_backups` | account | backup JSON `payload`, `version`, `bytes` (<= 2 MB); deleted with the account |
 | `profiles`, `follows`, `shared_playlists` | account | opt-in public profile (unique case-insensitive handle, `public`, `bio`, `summary`, `now_playing`, `share_now`); follow edges (no self-follow); shared playlists (<= 500 songs, `collab_token`, `version`) |
 | `events` | consented usage event | `kind` (play, pause, heartbeat, open, error, search, skip, favorite, share, rec_served, ...), song facts, language, platform, geo, error info, `meta` (<= 2 KB), `verified` |
@@ -769,6 +776,7 @@ View `directory` merges `listeners` and `accounts` into one row per person. Ever
 | `GET/POST /api/room` | Rooms/members; host token authorises `update`/`end` |
 | `POST /api/push/subscribe`, `fcm-register`, `unsubscribe` | `push_devices` (Bearer session links the device to the account) |
 | `POST /api/auth/google`, `GET/POST /api/auth/me` | `accounts` (+ `sign_ins`); `delete: true` removes the account |
+| `POST /api/auth/email/code`, `/verify`, `/login`; `GET/POST /api/auth/password` | `email_codes`, `account_passwords` via `account_*password()` (20) |
 | `GET/PUT /api/account/data` | `account_backups` with optimistic versions: `200`, `204`, `409 { version, updatedAt, backup }` |
 | `GET/PUT/DELETE /api/profile`, `GET /api/profile/<handle>`, `GET/POST /api/follow` | Profiles and follows |
 | `GET/POST/DELETE /api/shared-playlist`, `.../<id>` | Shared playlists; collaborator writes need the invite token; stale owner writes `409 { playlist }` |

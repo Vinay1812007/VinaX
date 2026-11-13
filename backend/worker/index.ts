@@ -67,6 +67,10 @@ import * as m_api_handoff from './functions/api/handoff';
 import * as m_api_recommendations from './functions/api/recommendations';
 import * as m_api_auth_google from './functions/api/auth/google';
 import * as m_api_auth_me from './functions/api/auth/me';
+import * as m_api_auth_password from './functions/api/auth/password';
+import * as m_api_auth_email_code from './functions/api/auth/email/code';
+import * as m_api_auth_email_verify from './functions/api/auth/email/verify';
+import * as m_api_auth_email_login from './functions/api/auth/email/login';
 import * as m_api_account_data from './functions/api/account/data';
 import * as m_api_ai_chat from './functions/api/ai/chat';
 import * as m_api_ai_keep from './functions/api/ai/keep';
@@ -213,6 +217,10 @@ const EXACT: Record<string, Mod> = {
   '/api/recommendations': m_api_recommendations,
   '/api/auth/google': m_api_auth_google,
   '/api/auth/me': m_api_auth_me,
+  '/api/auth/password': m_api_auth_password,
+  '/api/auth/email/code': m_api_auth_email_code,
+  '/api/auth/email/verify': m_api_auth_email_verify,
+  '/api/auth/email/login': m_api_auth_email_login,
   '/api/account/data': m_api_account_data,
   '/api/ai/chat': m_api_ai_chat,
   '/api/ai/keep': m_api_ai_keep,

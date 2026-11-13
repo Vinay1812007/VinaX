@@ -27,7 +27,7 @@ describe('Google sign-in', () => {
     const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('/api/auth/google');
     expect(JSON.parse(String(init.body))).toEqual({ credential: 'google.id.token', signed_device_id: 'signed.device', deviceId: expect.any(String), platform: 'web', appVersion: expect.any(String) });
-    expect(currentAccount()).toEqual({ session: 'vx1.payload.sig', user: USER });
+    expect(currentAccount()).toEqual({ session: 'vx1.payload.sig', user: USER, via: 'google' });
     expect(getLocal(KEYS.userHandle, '')).toBe('vinay');
     expect(getLocal(KEYS.userName, '')).toBe('A Listener');
     expect(seen).toEqual(['a@example.com']);

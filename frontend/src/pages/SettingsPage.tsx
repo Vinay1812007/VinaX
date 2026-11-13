@@ -88,6 +88,7 @@ import {
 } from '@/components/Icons';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { GoogleSignIn, useAccount } from '@/components/GoogleSignIn';
+import { PasswordRow } from '@/features/settings/PasswordRow';
 import { onSyncStatus, syncNow, syncStatus, type SyncStatus } from '@/services/account/sync';
 import { deleteAccount } from '@/services/auth/google';
 import '@/styles/pages/settings.css';
@@ -308,9 +309,10 @@ function AccountRow() {
           : sync === 'error'
             ? 'Could not sync just now — VinaX will try again.'
             : 'Your library, history, taste and settings follow your account.';
-  const note = account ? `Signed in with Google${handle ? ` · @${handle}` : ''}. ${syncLine}` : 'Sign in with Google to use VinaX.';
+  const via = !account || !account.via || account.via === 'google' ? 'Google' : 'email';
+  const note = account ? `Signed in with ${via}${handle ? ` · @${handle}` : ''}. ${syncLine}` : 'Sign in with Google or your email to use VinaX.';
   return (
-    <Row label="Account" note={note} keywords="sign in google login account username" stack>
+    <Row label="Account" note={note} keywords="sign in google email password login account username" stack>
       <GoogleSignIn />
       {account && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -622,6 +624,7 @@ export default function SettingsPage() {
 
           <Section title="Profile" id="profile" lede="Your Google account, what syncs with it, and what VinaX has learned about you.">
             <AccountRow />
+            <PasswordRow />
             <LinkRow to="/languages" label="Music languages" note="The languages Home, charts, radio and search lean on." keywords="language pick choose content hindi telugu tamil english punjabi" />
             <ClearRecentSearchesRow />
             <ProfileSettings />

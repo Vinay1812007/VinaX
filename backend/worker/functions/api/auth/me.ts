@@ -1,6 +1,6 @@
 /**
  * GET /api/auth/me   (Authorization: Bearer <session>, x-vinax-device?)
- *   → 200 { user }               the account as the database has it
+ *   → 200 { user }               the account as the database has it (schema 20: with `hasPassword`)
  *   → 200 { ok: true }           no database on this Worker: the session alone stands
  *   → 401 { error: 'signed_out' } bad session, or the account row is gone (deleted)
  *   → 401 { error: 'signed_out', reason: 'blocked' }      the owner blocked this person
@@ -22,6 +22,7 @@ import { rateLimitAsync } from '../../_lib/ratelimit';
 import { db, dbConfigured, q, type DbEnv } from '../../_lib/db';
 import { DEVICE_HEADER, verifiedIdentity, type IdentityEnv } from '../../_lib/identity';
 import { accountFacts, accountOf, CORS, handleOf, json, linkDevice, publicUser, type AccountRow } from '../../_lib/authShared';
+import { hasPassword } from '../../_lib/signIn';
 
 type Env = AuthEnv & DbEnv & IdentityEnv;
 
@@ -74,7 +75,8 @@ export const onRequestGet = async (ctx: { request: Request; env: Env; waitUntil?
   const touch = touchAccount(request, env, row).catch(() => false);
   if (ctx.waitUntil) ctx.waitUntil(touch);
   else await touch;
-  return json({ user: publicUser(row, await handleOf(env, row.listener_id)) });
+  const [handle, password] = await Promise.all([handleOf(env, row.listener_id), hasPassword(env, row.id)]);
+  return json({ user: { ...publicUser(row, handle), hasPassword: password } });
 };
 
 export const onRequestPost = async (ctx: { request: Request; env: Env }): Promise<Response> => {

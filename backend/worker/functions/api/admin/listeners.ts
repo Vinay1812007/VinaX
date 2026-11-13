@@ -46,7 +46,8 @@ import { db, q } from '../../_lib/db';
 import { clip, intIn, PLATFORMS } from '../../_lib/edge';
 
 const ID_RE = /^[a-z]_[a-f0-9]{16,64}$/;
-const SUB_RE = /^\d{1,40}$/;
+/** A Google account id, or (schema 20) an email account's `em…` id. */
+const SUB_RE = /^(?:\d{1,40}|em[a-f0-9]{24})$/;
 /** Schema 15: an owner tag — lower case letters, digits, spaces and dashes, 1–24 characters. */
 const TAG_RE = /^[a-z0-9][a-z0-9 _-]{0,23}$/;
 const MAX_TAGS = 12;

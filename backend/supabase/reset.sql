@@ -20,7 +20,8 @@ begin
       and (p.proname like 'stats\_%' or p.proname in ('_days', 'ai_usage_since', 'listener_profile', 'delete_listener',
            'room_request', 'room_sweep', 'purge_events', 'retire_push_devices', 'uptime_tick', 'uptime_report',
            'table_stats', 'table_counts', 'ai_conversation_search', 'ai_artifact_list', 'ai_export', 'ai_take_daily',
-           'signed_devices', '_ist_today', '_error_shape', 'admin_users', 'admin_user_filters', 'user_profile', 'purge_kind', 'notification_opened')
+           'signed_devices', '_ist_today', '_error_shape', 'admin_users', 'admin_user_filters', 'user_profile', 'purge_kind', 'notification_opened',
+           'account_set_password', 'account_check_password', 'account_has_password')
            or p.proname like 'personal\_%')
   loop
     execute format('drop function if exists %s cascade', r.sig);
@@ -34,7 +35,7 @@ drop table if exists
   job_runs, uptime_latest, uptime_days, audit_log, experiments, settings_history, settings,
   notifications, push_devices, room_members, rooms, blocked_content, feedback, ai_calls, events,
   shared_chats, shared_playlists, follows, profiles,
-  sign_ins, account_backups, accounts, listeners, meta
+  email_codes, account_passwords, sign_ins, account_backups, accounts, listeners, meta
 cascade;
 
 select 'VinaX database reset — now run schema.sql' as done;

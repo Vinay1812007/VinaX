@@ -194,6 +194,9 @@ async function housekeeping(env: DbEnv, now = Date.now()): Promise<Record<string
   // Sign-in history (schema 12) keeps 90 days. Not fatal before the update.
   const signIns = await db.remove(env, 'sign_ins', q().lt('at', since(90 * DAY_MS)));
   out.signInsPruned = signIns.ok ? 'done' : `failed: ${signIns.error}`;
+  // Email codes (schema 20) live fifteen minutes; drop the ones nobody used. Not fatal before the update.
+  const codes = await db.remove(env, 'email_codes', q().lt('expires_at', new Date(now).toISOString()));
+  out.emailCodesPruned = codes.ok ? 'done' : `failed: ${codes.error}`;
   // The job log keeps 30 days (the two 5-minute jobs, scheduled notifications and Smart Alerts, add 288 rows a day each).
   const pruned = await db.remove(env, 'job_runs', q().lt('started_at', since(30 * DAY_MS)));
   out.jobRunsPruned = pruned.ok ? 'done' : `failed: ${pruned.error}`;

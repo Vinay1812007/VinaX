@@ -7,12 +7,18 @@
  *
  * Brand rule: this button is the one place VinaX shows another company's name
  * and logo — sign-in buttons must follow the provider's own branding.
+ *
+ * Schema 20 — "Continue with email" under it opens the email form
+ * (EmailSignIn, loaded on that tap): email + password, a new account by
+ * email, or a forgotten password.
  */
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { currentAccount, mountSignInCheck, renderGoogleButton, signInNative, signOut, type Account, type SignInResult } from '@/services/auth/google';
 import { isNativePlatform } from '@/services/native';
 import { toast } from '@/store/toastStore';
 import '@/styles/signin.css';
+
+const EmailSignIn = lazy(() => import('./EmailSignIn'));
 
 /** Google's four-colour "G", from Google's sign-in branding kit (Android button only). */
 function GoogleG(): ReactNode {
@@ -45,6 +51,7 @@ export function GoogleSignIn({ onSignedIn, theme = 'dark' }: { onSignedIn?: (a: 
   // Bumped by "Try again" to redraw the button after Google’s script failed to load.
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
   const native = isNativePlatform();
   const onSignedInRef = useRef(onSignedIn);
   onSignedInRef.current = onSignedIn;
@@ -81,6 +88,19 @@ export function GoogleSignIn({ onSignedIn, theme = 'dark' }: { onSignedIn?: (a: 
     };
   }, [account]);
   const check = <div ref={checkRef} className={`vx-turnstile-slot${checkShown ? ' is-on' : ''}`} />;
+  const email = emailOpen ? (
+    <Suspense fallback={<p className="vx-email-note">Loading…</p>}>
+      <EmailSignIn onSignedIn={() => { setEmailOpen(false); settle('ok'); }} onClose={() => setEmailOpen(false)} />
+    </Suspense>
+  ) : (
+    <>
+      <span className="vx-or" aria-hidden="true">or</span>
+      <button type="button" className="vx-email-open" onClick={() => setEmailOpen(true)}>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="2" /><path d="M4 7l8 6 8-6" /></svg>
+        <span>Continue with email</span>
+      </button>
+    </>
+  );
 
   // Web: Google's own button, drawn into the slot by Google's script.
   useEffect(() => {
@@ -136,6 +156,7 @@ export function GoogleSignIn({ onSignedIn, theme = 'dark' }: { onSignedIn?: (a: 
           <span>{busy ? 'Signing in…' : 'Sign in with Google'}</span>
         </button>
         {check}
+        {email}
       </div>
     );
   }
@@ -152,6 +173,7 @@ export function GoogleSignIn({ onSignedIn, theme = 'dark' }: { onSignedIn?: (a: 
         </div>
       )}
       {check}
+      {email}
     </div>
   );
 }

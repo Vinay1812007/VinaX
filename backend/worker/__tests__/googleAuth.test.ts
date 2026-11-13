@@ -90,7 +90,7 @@ describe('POST /api/auth/google and /api/auth/me', () => {
     const res = await onRequestPost({ request: post({ credential: await token(good()), signed_device_id: 'forged.value' }), env: ENV });
     expect(res.status).toBe(200);
     const out = (await res.json()) as { session: string; stored: boolean; user: Record<string, unknown> };
-    expect(out.user).toEqual({ name: 'A Listener', email: 'listener@example.com', picture: 'https://lh3.example/p.jpg', username: null });
+    expect(out.user).toEqual({ name: 'A Listener', email: 'listener@example.com', picture: 'https://lh3.example/p.jpg', username: null, hasPassword: false });
     expect(out.stored).toBe(false);
     // Only Google's key endpoint is ever called.
     expect(calls.every((c) => c.url.startsWith('https://www.googleapis.com/'))).toBe(true);
@@ -200,7 +200,7 @@ describe('14.0 — sign-in with the database', () => {
     const s = (await issueSession(DB, '42'))!;
     const r = await me.onRequestGet({ request: new Request('https://example.test/api/auth/me', { headers: { authorization: `Bearer ${s}`, 'cf-ipcountry': 'IN' } }), env: DB });
     expect(r.status).toBe(200);
-    expect(await r.json()).toEqual({ user: { name: 'N', email: 'e@x', picture: null, username: null } });
+    expect(await r.json()).toEqual({ user: { name: 'N', email: 'e@x', picture: null, username: null, hasPassword: false } });
     // The stale last_seen was refreshed (awaited: no waitUntil in the test).
     expect(fake.rows('accounts')[0].last_seen).not.toBe('2026-01-01T00:00:00Z');
     expect(fake.rows('accounts')[0].country).toBe('IN');

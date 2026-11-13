@@ -111,7 +111,8 @@ export interface DeviceRow {
 }
 
 const DAY = 86_400_000;
-const ACCOUNT_RE = /^\d{1,40}$/;
+/** A Google account id, or (schema 20) an email account's `em…` id. */
+const ACCOUNT_RE = /^(?:\d{1,40}|em[a-f0-9]{24})$/;
 const LANG_NAMES: Record<string, string> = { te: 'Telugu', hi: 'Hindi', ta: 'Tamil', kn: 'Kannada', ml: 'Malayalam', en: 'English', pa: 'Punjabi', bn: 'Bengali', mr: 'Marathi', gu: 'Gujarati', ur: 'Urdu' };
 const ACTIVITY_LABEL: Record<Exclude<PushActivity, null>, string> = {
   today: 'Active today', active7: 'Active in last 7 days', active30: 'Active in last 30 days', quiet: 'Quiet 7–14 days',

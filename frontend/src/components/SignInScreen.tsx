@@ -215,8 +215,8 @@ export default function SignInScreen(): ReactNode {
           </h1>
           <p className="vx-signin-lede">
             {forChat
-              ? 'Sign in with your Google account to chat with VinaX AI, the assistant built into VinaX. Your chats are saved with your account.'
-              : 'Sign in with your Google account to start listening. Your library, playlists, history and taste follow you to every device.'}
+              ? 'Sign in with Google or your email to chat with VinaX AI, the assistant built into VinaX. Your chats are saved with your account.'
+              : 'Sign in with Google or your email to start listening. Your library, playlists, history and taste follow you to every device.'}
           </p>
           <div className="vx-signin-button">
             <GoogleSignIn />

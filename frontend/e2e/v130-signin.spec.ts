@@ -12,7 +12,7 @@ test('signed out, every personal page is the sign-in screen; the legal pages sta
   for (const path of ['/library', '/settings', '/favorites']) {
     await page.goto(`${path}?e2e-signed-out`);
     await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toBeVisible();
-    await expect(page.getByText('Sign in with your Google account to start listening.', { exact: false })).toBeVisible();
+    await expect(page.getByText('Sign in with Google or your email to start listening.', { exact: false })).toBeVisible();
     // No app navigation (the sign-in page's own Browse links aside, 13.5.0).
     await expect(page.locator('nav:not(.vx-signin-browse)')).toHaveCount(0);
   }

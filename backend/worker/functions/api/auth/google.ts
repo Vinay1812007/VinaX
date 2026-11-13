@@ -39,21 +39,41 @@
  * app, geo, first sign-in / new device), kept 90 days, shown on the user's
  * profile in the console. Best effort: before the database update it fails
  * quietly and the sign-in still works.
+ *
+ * Schema 20: everything after the token check lives in _lib/signIn.ts, shared
+ * with email + password sign-in. A Google account whose address matches an
+ * account made with email sign-up signs in to THAT account when the token says
+ * the address is verified (Google proved it, and so did the email code), so
+ * nobody ends up with two.
  */
-import { clientIds, issueSession, verifyGoogleIdToken, type AuthEnv } from '../../_lib/googleAuth';
+import { clientIds, verifyGoogleIdToken, type AuthEnv } from '../../_lib/googleAuth';
 import { readJsonCapped } from '../../_lib/body';
 import { rateLimitAsync } from '../../_lib/ratelimit';
-import { db, dbConfigured, q, type DbEnv } from '../../_lib/db';
-import { DEVICE_HEADER, resolveIdentity, verifiedIdentity, type IdentityEnv } from '../../_lib/identity';
-import { accountFacts, accountOf, CORS, handleOf, json, linkDevice, publicUser } from '../../_lib/authShared';
+import { db, dbConfigured, like, q, type DbEnv } from '../../_lib/db';
+import type { IdentityEnv } from '../../_lib/identity';
+import { CORS, json } from '../../_lib/authShared';
 import { turnstileSiteKey, verifyTurnstile, type TurnstileEnv } from '../../_lib/turnstile';
-import { newSignInEmail, requestFacts, sendLater, welcomeEmail, type EmailEnv } from '../../_lib/email';
+import type { EmailEnv } from '../../_lib/email';
+import { finishSignIn } from '../../_lib/signIn';
 
 type Env = AuthEnv & DbEnv & IdentityEnv & TurnstileEnv & EmailEnv;
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: CORS });
 /** What the sign-in screen needs before it shows the Google button. */
 export const onRequestGet = async (ctx: { env: Env }): Promise<Response> => json({ turnstileSiteKey: turnstileSiteKey(ctx.env) });
+
+/**
+ * The account a Google sign-in lands in: Google's own id, unless no account
+ * has that id yet and an email-sign-up account (`em…`) has the same address.
+ */
+async function accountIdFor(env: Env, sub: string, email: string | null, verified: boolean): Promise<string> {
+  // Only an address Google says it checked may join an existing account.
+  if (!email || !verified || !dbConfigured(env)) return sub;
+  const own = await db.one<{ id: string }>(env, 'accounts', q().eq('id', sub).select('id'));
+  if (!own.ok || own.value) return sub;
+  const byEmail = await db.one<{ id: string }>(env, 'accounts', q().ilike('email', like(email)).ilike('id', 'em*').select('id').limit(1));
+  return byEmail.ok && byEmail.value ? byEmail.value.id : sub;
+}
 
 export const onRequestPost = async (ctx: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = ctx;
@@ -69,89 +89,6 @@ export const onRequestPost = async (ctx: { request: Request; env: Env; waitUntil
   if (human === 'missing' || human === 'failed') return json({ error: 'human_check' }, 403);
   const profile = await verifyGoogleIdToken(env, body.credential);
   if (!profile) return json({ error: 'invalid_token' }, 401);
-  if (dbConfigured(env)) {
-    // Console rebuild — a person the owner blocked cannot sign in again.
-    const blocked = await db.one<{ blocked_at: string | null }>(env, 'accounts', q().eq('id', profile.sub).select('blocked_at'));
-    if (blocked.ok && blocked.value?.blocked_at) return json({ error: 'blocked' }, 403);
-  }
-  const session = await issueSession(env, profile.sub);
-  if (!session) return json({ error: 'not_configured' }, 503);
-
-  let stored = false;
-  let username: string | null = null;
-  let returning = false;
-  let hasData = false;
-  let issued: string | null = null;
-  if (dbConfigured(env)) {
-    const existing = await accountOf(env, profile.sub);
-    const prior = existing.ok ? existing.value : null;
-    returning = !!prior;
-    if (prior) {
-      const backup = await db.one<{ account_id: string }>(env, 'account_backups', q().eq('account_id', profile.sub).select('account_id'));
-      hasData = backup.ok && !!backup.value;
-    }
-    // A PROVED device id links; so does the install id of a device that has
-    // not reported yet (its row id is derived from a uuid only it knows).
-    // A forged signed id links nothing.
-    const proved = await verifiedIdentity(env, typeof body.signed_device_id === 'string' ? body.signed_device_id : request.headers.get(DEVICE_HEADER));
-    let fromInstall: string | null = null;
-    if (!proved && typeof body.deviceId === 'string') {
-      const identity = await resolveIdentity(env, { deviceId: body.deviceId });
-      if (identity?.source === 'install') {
-        fromInstall = identity.id;
-        issued = identity.issued;
-      }
-    }
-    const thisDevice = proved ?? fromInstall;
-    const listenerId = thisDevice ?? prior?.listener_id ?? null;
-    // Was this device already this account's? Read before the link below.
-    let newDevice = false;
-    if (prior && thisDevice && thisDevice !== prior.listener_id) {
-      const dev = await db.one<{ account_id: string | null }>(env, 'listeners', q().eq('id', thisDevice).select('account_id'));
-      newDevice = dev.ok && dev.value?.account_id !== profile.sub;
-    }
-    const now = new Date().toISOString();
-    const facts = accountFacts(request, body);
-    const row = {
-      id: profile.sub,
-      email: profile.email,
-      email_verified: profile.emailVerified,
-      name: profile.name,
-      picture: profile.picture,
-      listener_id: listenerId,
-      last_seen: now,
-      ...facts,
-    };
-    const written = await db.upsert(env, 'accounts', row, 'id');
-    stored = written.ok;
-    if (!written.ok) console.warn(`[auth] account not stored (${written.error}${written.status ? ` ${written.status}` : ''}${written.code ? ` ${written.code}` : ''})`);
-    else if (thisDevice) {
-      await linkDevice(env, thisDevice, profile.sub);
-      // Signing in again on a device the owner signed out makes it count again.
-      await db.update(env, 'listeners', q().eq('id', thisDevice).not('signed_out_at', 'is', 'null'), { signed_out_at: null });
-    }
-    username = await handleOf(env, listenerId);
-    const where = { ...facts, ...requestFacts(request) };
-    if (written.ok) {
-      const record = db.insert(env, 'sign_ins', {
-        account_id: profile.sub, at: now, ip: where.ip, browser: where.browser, platform: facts.platform, app_version: facts.app_version,
-        country: facts.country, region: facts.region, city: facts.city, new_device: newDevice, signup: existing.ok && !prior,
-      }).then((r) => { if (!r.ok) console.warn(`[auth] sign-in not recorded (${r.error}${r.status ? ` ${r.status}` : ''})`); });
-      if (ctx.waitUntil) ctx.waitUntil(record);
-      else await record;
-    }
-    // 1.12 — the address Google puts in the ID token is the account's own, so
-    // the emails go to it whether or not the token says `email_verified`
-    // (some Android sign-ins, and Workspace accounts, carry no such claim;
-    // those listeners never got a welcome or a sign-in alert).
-    if (written.ok && profile.email) {
-      if (!profile.emailVerified) console.warn(`[auth] ${facts.platform} sign-in with an unverified email claim; emails still sent`);
-      if (existing.ok && !prior) void sendLater(env, ctx.waitUntil, 'welcome', () => ({ ...welcomeEmail(profile.email!, profile.name, where), idempotencyKey: `welcome/${profile.sub}` }));
-      // One alert per sign-in; the minute in the key only stops a retried request mailing twice.
-      else if (prior) void sendLater(env, ctx.waitUntil, 'newSignIn', () => ({ ...newSignInEmail(profile.email!, profile.name, where, newDevice), idempotencyKey: `signin/${profile.sub}/${thisDevice ?? 'unknown'}/${Math.floor(Date.now() / 60_000)}` }));
-    } else if (!written.ok || !profile.email) {
-      console.warn(`[auth] no email sent: ${!written.ok ? 'account not stored' : 'token carries no email'} (${facts.platform})`);
-    }
-  }
-  return json({ session, stored, returning, hasData, user: publicUser(profile, username), ...(issued ? { signed_device_id_next: issued } : {}) });
+  const id = await accountIdFor(env, profile.sub, profile.email, profile.emailVerified);
+  return finishSignIn(ctx, { id, email: profile.email, emailVerified: profile.emailVerified, name: profile.name, picture: profile.picture }, body, 'google');
 };

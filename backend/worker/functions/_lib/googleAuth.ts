@@ -122,7 +122,7 @@ export async function verifyGoogleIdToken(env: AuthEnv, token: unknown, now = Da
 
 // ------------------------------------------------------------------ VinaX sessions
 
-const sessionSecret = (env: AuthEnv): string | null => env.AUTH_SECRET?.trim() || env.DEVICE_ID_SECRET?.trim() || env.TELEMETRY_PEPPER?.trim() || null;
+export const sessionSecret = (env: AuthEnv): string | null => env.AUTH_SECRET?.trim() || env.DEVICE_ID_SECRET?.trim() || env.TELEMETRY_PEPPER?.trim() || null;
 
 async function hmac(secret: string, text: string): Promise<string> {
   const enc = new TextEncoder();
