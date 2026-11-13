@@ -11,7 +11,7 @@
    ========================================================================= */
 
 /* ----------------------------------------------------------------- colour */
-html[data-template='verse']:not([class*='fest-']) {
+html[data-template='verse']:root {
   --ink-950: 9 9 11;
   --ink-900: 20 20 24;
   --ink-850: 26 26 32;
@@ -26,7 +26,7 @@ html[data-template='verse']:not([class*='fest-']) {
   --vx-mesh-ember: 0.2;
   --vx-mesh-tide: 0.08;
 }
-html.light[data-template='verse']:not([class*='fest-']) {
+html.light[data-template='verse']:root {
   --ink-950: 255 255 255;
   --ink-900: 247 246 249;
   --ink-850: 240 238 243;
@@ -40,7 +40,7 @@ html.light[data-template='verse']:not([class*='fest-']) {
   --ink-100: 14 12 20;
   --art: 160 150 170;
 }
-html[data-template='verse']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+html[data-template='verse']:root:is(:not([data-accent]), [data-accent='crimson']) {
   --ember-600: 220 50 85;
   --ember-500: 255 77 109;
   --ember-400: 255 128 150;
@@ -50,7 +50,7 @@ html[data-template='verse']:not([class*='fest-']):is(:not([data-accent]), [data-
   --vx-on-accent: #1f0509;
   --art: 255 77 109;
 }
-html.light[data-template='verse']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+html.light[data-template='verse']:root:is(:not([data-accent]), [data-accent='crimson']) {
   --ember-600: 150 16 48;
   --ember-500: 196 30 66;
   --ember-400: 176 24 58;
@@ -95,12 +95,12 @@ html[data-template='verse'] {
 
 /* ------------------------------------------------------------------ shell */
 /* The playing artwork bleeds over the canvas from the top. */
-html[data-template='verse']:not([class*='fest-']) .vx-shell {
+html[data-template='verse']:root .vx-shell {
   background:
     radial-gradient(90% 60% at 50% 0%, rgb(var(--art) / 0.34), transparent 70%),
     rgb(var(--ink-950));
 }
-html[data-template='verse']:not([class*='fest-']) .vx-workspace {
+html[data-template='verse']:root .vx-workspace {
   background:
     radial-gradient(900px 420px at 50% -160px, rgb(var(--art) / 0.3), transparent 72%) local,
     radial-gradient(700px 320px at 100% 10%, rgb(var(--ember-500) / 0.14), transparent 70%) local,
@@ -157,8 +157,8 @@ html[data-template='verse'] :is(.vx-play-fab, .vx-np-play, .card-play) { backgro
 html[data-template='verse'] :is(.btn-primary, .btn-premium) { background: linear-gradient(120deg, rgb(var(--ember-500)), rgb(var(--tide-500))); color: var(--vx-on-accent); font-weight: 800; }
 
 /* Now Playing: lyrics first, the artwork blurred to the edges behind. */
-html[data-template='verse']:not([class*='fest-']) .vx-np-bg-art { opacity: 0.9; filter: blur(70px) saturate(1.4); }
-html[data-template='verse']:not([class*='fest-']) .vx-np-bg-scrim:not(.is-canvas) { background: linear-gradient(180deg, rgb(var(--ink-950) / 0.2), rgb(var(--ink-950) / 0.7)); }
+html[data-template='verse']:root .vx-np-bg-art { opacity: 0.9; filter: blur(70px) saturate(1.4); }
+html[data-template='verse']:root .vx-np-bg-scrim:not(.is-canvas) { background: linear-gradient(180deg, rgb(var(--ink-950) / 0.2), rgb(var(--ink-950) / 0.7)); }
 html[data-template='verse'] .vx-np-art-img { box-shadow: 0 24px 60px -22px rgb(0 0 0 / 0.8); }
 html[data-template='verse'] .vx-np-play { width: 68px; height: 68px; }
 html[data-template='verse'] .vx-np-title { font-family: var(--vx-font-display); font-weight: 800; letter-spacing: -0.01em; }
@@ -184,10 +184,10 @@ html[data-template='verse'] .vx-np-tabs [role='tab'][aria-selected='true'] { bac
     border-radius: 22px;
   }
   html[data-template='verse'] .vx-home .vxh-hero-art { display: none; }
-  html[data-template='verse']:not([class*='fest-']) .vx-home .vxh-hero-wash { inset: 0; width: 100%; height: 100%; filter: saturate(1.2); opacity: 1; }
-  html[data-template='verse']:not([class*='fest-']) .vx-home .vxh-hero::before { background: linear-gradient(180deg, rgb(var(--ink-950) / 0.1) 20%, rgb(var(--ink-950) / 0.88)); }
+  html[data-template='verse']:root .vx-home .vxh-hero-wash { inset: 0; width: 100%; height: 100%; filter: saturate(1.2); opacity: 1; }
+  html[data-template='verse']:root .vx-home .vxh-hero::before { background: linear-gradient(180deg, rgb(var(--ink-950) / 0.1) 20%, rgb(var(--ink-950) / 0.88)); }
   /* Light: the words are dark, so the white has to reach the top of the pane. */
-  html.light[data-template='verse']:not([class*='fest-']) .vx-home .vxh-hero::before { background: linear-gradient(180deg, rgb(var(--ink-950) / 0.55), rgb(var(--ink-950) / 0.92) 70%); }
+  html.light[data-template='verse']:root .vx-home .vxh-hero::before { background: linear-gradient(180deg, rgb(var(--ink-950) / 0.55), rgb(var(--ink-950) / 0.92) 70%); }
   html[data-template='verse'] .vx-home .vxh-hero-title { font-size: 30px; line-height: 1.02; }
   html[data-template='verse'] .vx-home .vxh-hero-desc { margin-top: 6px; font-family: var(--vx-font-display); font-size: 16px; font-weight: 700; line-height: 1.3; color: rgb(var(--ink-100)); }
   html[data-template='verse'] .vx-home .vxh-hero-actions { margin-top: 12px; }

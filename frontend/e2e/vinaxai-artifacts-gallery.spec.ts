@@ -87,7 +87,6 @@ async function setup(page: Page, opts: { theme?: 'dark' | 'light'; many?: number
     const url = new URL(req.url());
     if (url.origin === SANDBOX) return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', headers: { 'content-security-policy': RUNNER_CSP }, body: RUNNER });
     if (!url.origin.startsWith('http://localhost')) return route.abort();
-    if (url.pathname === '/api/appconfig' && url.searchParams.get('key') === 'festival') return route.fulfill({ json: { festival: { mode: 'off' } } });
     const p = url.pathname;
     if (p === '/api/ai/models') return route.fulfill({ json: MODELS });
     if (p === '/api/ai/conversations') return route.fulfill({ json: { items: [TREE.conversation], nextCursor: null } });

@@ -6,7 +6,7 @@ async function setup(page: Page, theme: string) {
     // Set once so a reload exercises persistence instead of resetting state.
     if (localStorage.getItem('studio-test-seeded')) return;
     localStorage.setItem('studio-test-seeded', '1');
-    localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme, pinnedLanguages: ['telugu'], festivalSkins: false }, version: 2 }));
+    localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme, pinnedLanguages: ['telugu'] }, version: 2 }));
     localStorage.setItem('vinax.onboarded.v1', 'true');
     localStorage.setItem('vinax.user-name', JSON.stringify('Alex'));
     localStorage.setItem('vinax.user-handle', JSON.stringify('alex'));

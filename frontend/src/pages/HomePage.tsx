@@ -1,7 +1,6 @@
 import { Fragment, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { greetingLine } from '@/services/appRules';
 import { FriendsListening } from '@/features/social/FriendsListening';
-import { FestivalBannerSlot } from '@/features/home/FestivalBannerSlot';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import '@/styles/pages/home.css';
@@ -26,7 +25,6 @@ import { recordServed, songKey } from '@/services/recommendation/songIdentity';
 import { HOME_DESIGN_KEY, loadHomeDesign, validateHomeDesign, type HomeDesign, type HomeSection } from '@/services/recommendation/homeDesign';
 import { loadProfile } from '@/services/personalization/storage';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
-import { activeFestivalMusic } from '@/services/recommendation/festival';
 import { getLocal } from '@/services/storage/local';
 import { KEYS } from '@/constants/storage-keys';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
@@ -287,7 +285,6 @@ function SignedInHome() {
       daysSinceLastListen: lastTs ? (Date.now() - lastTs) / 86_400_000 : Infinity,
       topLanguage: topLanguages(profile, 1)[0]?.id ?? null,
       topArtist: topArtists(profile, 1)[0]?.affinity.name ?? null,
-      festivalId: activeFestivalMusic(now)?.id ?? null,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- day-stable inputs
   }, [userName, historyEntries.length]);
@@ -476,7 +473,6 @@ function SignedInHome() {
             <IconButton label="Toggle theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}</IconButton>
             <IconButton label="Notifications" onClick={() => setNotifOpen(true)}><BellIcon className="w-5 h-5" /></IconButton>
           </TopBarActions>
-          <FestivalBannerSlot />
           <NotificationSheet open={notifOpen} onClose={() => setNotifOpen(false)} />
 
           {/* JioSaavn-style top: a short greeting, then Trending now; the hero, chips and cards follow it. */}

@@ -8,7 +8,7 @@ import { defineConfig } from '@playwright/test';
  * run first (CI does).
  *
  * Specs import `test`/`expect` from `e2e/support/test.ts`, which adds the
- * signed-in test account and the festival-greeting dismissal to every context.
+ * signed-in test account to every context.
  *
  *   npm run e2e            smoke script + the full suite
  *   npm run e2e:ui         interactive UI mode (watch, time-travel, pick tests)

@@ -23,8 +23,8 @@ import { toast } from '@/store/toastStore';
  * `reveal` (below).
  *
  * 11.0 rewrite — every tour re-walked against the six app styles; a title is
- * at most 5 words and a body one or two sentences. New tours: the app's look,
- * festival themes. A step whose anchor
+ * at most 5 words and a body one or two sentences. New tour: the app's look.
+ * A step whose anchor
  * is missing is skipped by the runner, and tutorials.test.ts fails when a
  * `data-tour` id or an aria-label a selector names is no longer in the source.
  *
@@ -191,18 +191,6 @@ export const TUTORIALS: Tutorial[] = [
       { route: '/settings', title: 'Try another one', body: 'Tap any style and the app changes at once. Your music, library and settings stay as they are.', tip: 'Lumen, Verdant, Monsoon, Harbour, Verse and Onyx.' },
       { route: '/settings', target: '[aria-label="Custom accent colour"]', title: 'Accent colour', body: 'Choose one of the preset accents, or pick any colour here and VinaX builds the palette from it.', action: reveal('[aria-label="Custom accent colour"]'), placement: 'bottom' },
       { route: '/settings', target: '[aria-label="Glass effect intensity"]', title: 'Frosted glass', body: 'This slider sets how see-through the bars, menus and sheets are. Slide toward Solid for plain panels.', action: reveal('[aria-label="Glass effect intensity"]'), placement: 'bottom' },
-    ],
-  },
-  {
-    id: 'festival-themes',
-    title: 'Festival themes',
-    blurb: 'What festival days change, how to preview one now, and how to turn them off.',
-    minutes: 1,
-    emoji: '🪔',
-    steps: [
-      { route: '/settings', target: '[aria-label="Festival themes"]', title: 'Festival themes', body: 'On a festival day the app takes that festival’s colours and greeting. Turn this off to keep one look all year.', action: reveal('[aria-label="Festival themes"]'), placement: 'bottom' },
-      { route: '/settings', target: 'select[aria-label="Preview a festival"]', title: 'Preview a festival', body: 'Choose any festival here to see its look now. It lasts until you stop it or reload.', action: reveal('select[aria-label="Preview a festival"]'), placement: 'bottom' },
-      { route: '/settings', title: 'Stop the preview', body: 'Open the same list and choose Stop preview. Your app style returns as you left it.' },
     ],
   },
   {

@@ -7,7 +7,7 @@
  *    the DEVICE font — on Android phones with a theme font, VinaX rendered in
  *    the listener's novelty font. The face belongs on <body>.
  * 2. A flat style's opaque materials actually win in the light theme. The
- *    light glass rule in base.css is `html.light[data-template]:not([class*='fest-'])`
+ *    light glass rule in base.css is `html.light[data-template]:root`
  *    — specificity (0,3,1) — and a plain `html.light[data-template='pulse']`
  *    (0,2,1) lost to it, shipping see-through bars with no blur.
  *
@@ -78,7 +78,7 @@ describe('flat styles stay opaque in the light theme', () => {
     for (const id of ['verdant', 'harbour', 'onyx']) {
       const css = read(`src/styles/templates/${id}.css`);
       // The selector also opens the style's colour block: find the one that sets the materials.
-      const blocks = [...css.matchAll(new RegExp(`html\\.light\\[data-template='${id}'\\]:not\\(\\[class\\*='fest-'\\]\\)\\s*\\{([^}]*)\\}`, 'g'))].map((m) => m[1]);
+      const blocks = [...css.matchAll(new RegExp(`html\\.light\\[data-template='${id}'\\]:root\\s*\\{([^}]*)\\}`, 'g'))].map((m) => m[1]);
       const block = blocks.find((b) => b.includes('--vx-mat-')) ?? '';
       for (const mat of ['thin', 'regular', 'chrome', 'thick']) expect(block, `${id} --vx-mat-${mat}`).toMatch(new RegExp(`--vx-mat-${mat}:\\s*rgb\\(var\\(--ink-950\\)\\);`));
     }

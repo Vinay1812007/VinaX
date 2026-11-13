@@ -9,7 +9,7 @@ const HI: Record<string, string> = {
   'Background blur': 'पृष्ठभूमि धुंधलापन', 'Backup Center': 'बैकअप केंद्र', 'Clear favorites': 'पसंदीदा हटाएँ', 'Clear history': 'इतिहास हटाएँ',
   'Clear queue': 'क़तार खाली करें', Crossfade: 'क्रॉसफ़ेड', 'Crossfade length': 'क्रॉसफ़ेड अवधि', 'Daily listening goal': 'रोज़ सुनने का लक्ष्य',
   'Data saver': 'डेटा सेवर', Density: 'घनत्व', 'Display size': 'डिस्प्ले आकार', 'Download quality': 'डाउनलोड गुणवत्ता', 'Dynamic theme': 'डायनामिक थीम',
-  'Festival themes': 'त्योहार थीम', 'Gentle wake': 'धीरे से जगाएँ', 'Glass effect': 'ग्लास इफ़ेक्ट', Haptics: 'हैप्टिक्स', 'High contrast': 'उच्च कंट्रास्ट',
+  'Gentle wake': 'धीरे से जगाएँ', 'Glass effect': 'ग्लास इफ़ेक्ट', Haptics: 'हैप्टिक्स', 'High contrast': 'उच्च कंट्रास्ट',
   'Keep screen on in player': 'प्लेयर में स्क्रीन चालू रखें', 'Lock screen lyrics': 'लॉक स्क्रीन पर बोल', 'Lyrics script': 'बोल की लिपि', 'Lyrics size': 'बोल का आकार',
   'Minutes a week': 'हर हफ़्ते मिनट', 'New artists a week': 'हर हफ़्ते नए कलाकार', 'New-music alerts': 'नए गानों की सूचना', 'Push notifications': 'पुश सूचनाएँ',
   'Reduce motion': 'मोशन कम करें', 'Reset app state': 'ऐप रीसेट करें', 'Resume playback': 'जहाँ छोड़ा था वहीं से', 'Smart downloads': 'स्मार्ट डाउनलोड', Theme: 'थीम',

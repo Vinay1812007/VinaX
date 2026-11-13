@@ -129,7 +129,7 @@
      styles/tokens.css, not these). ember = the accent, Marigold orange by
      default: play buttons, focus rings, active state, progress. tide = its
      partner, Rose pink: live accents and the one gradient (ember → tide).
-     Accent, app-style and festival selectors override both at runtime. */
+     Accent and app-style selectors override both at runtime. */
   --ember-600: 236 132 20;
   --ember-500: 255 164 46;
   --ember-400: 255 192 102;
@@ -1653,9 +1653,6 @@ body > iframe:not([src]) {
 html.boot-still *, html.boot-still *::before, html.boot-still *::after {
   transition-property: none !important;
 }
-
-/* Festival skins (accent, canvas, ribbon, backdrop, flag, greeting card) are
-   generated into src/styles/festivals.css: run `npm run gen:festivals`. */
 
 
 

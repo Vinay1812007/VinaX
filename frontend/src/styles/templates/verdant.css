@@ -12,7 +12,7 @@
    ========================================================================= */
 
 /* ----------------------------------------------------------------- colour */
-html[data-template='verdant']:not([class*='fest-']) {
+html[data-template='verdant']:root {
   --ink-950: 0 0 0;
   --ink-900: 18 18 18;
   --ink-850: 24 24 24;
@@ -25,7 +25,7 @@ html[data-template='verdant']:not([class*='fest-']) {
   --ink-200: 230 230 230;
   --ink-100: 255 255 255;
 }
-html.light[data-template='verdant']:not([class*='fest-']) {
+html.light[data-template='verdant']:root {
   --ink-950: 255 255 255;
   --ink-900: 246 246 246;
   --ink-850: 238 238 238;
@@ -39,7 +39,7 @@ html.light[data-template='verdant']:not([class*='fest-']) {
   --ink-100: 0 0 0;
   --art: 140 140 140;
 }
-html[data-template='verdant']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+html[data-template='verdant']:root:is(:not([data-accent]), [data-accent='crimson']) {
   --ember-600: 26 170 85;
   --ember-500: 34 211 106;
   --ember-400: 90 230 140;
@@ -49,7 +49,7 @@ html[data-template='verdant']:not([class*='fest-']):is(:not([data-accent]), [dat
   --vx-on-accent: #07140b;
   --art: 80 80 80;
 }
-html.light[data-template='verdant']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+html.light[data-template='verdant']:root:is(:not([data-accent]), [data-accent='crimson']) {
   --ember-600: 12 96 48;
   --ember-500: 17 122 62;
   --ember-400: 14 108 54;
@@ -95,8 +95,8 @@ html[data-template='verdant'] {
   --transition-fast: 110ms var(--ease-calm);
   --transition-normal: 150ms var(--ease-calm);
 }
-/* Flat: opaque materials whatever colours are on (a festival skin repaints
-   the inks; a see-through bar with no blur would let page text through). */
+/* Flat: opaque materials whatever colours are on (a see-through bar with no
+   blur would let page text through). */
 html[data-template='verdant'] {
   --vx-mat-thin: rgb(var(--ink-950));
   --vx-mat-regular: rgb(var(--ink-850));
@@ -105,11 +105,9 @@ html[data-template='verdant'] {
   --vx-mat-specular: transparent;
   --vx-mat-art: 0;
 }
-/* 13.2 — the light glass rule in base.css has specificity (0,3,1); the
-   second selector matches it and wins by order, the first covers a festival
-   skin where that rule stands down. */
-html.light[data-template='verdant'],
-html.light[data-template='verdant']:not([class*='fest-']) {
+/* 13.2 — the light glass rule in base.css has specificity (0,3,1); this
+   selector matches it and wins by order. */
+html.light[data-template='verdant']:root {
   --vx-mat-thin: rgb(var(--ink-950));
   --vx-mat-regular: rgb(var(--ink-950));
   --vx-mat-chrome: rgb(var(--ink-950));
@@ -124,14 +122,14 @@ html[data-template='verdant'] :is(.vx-mat-thin, .vx-mat-regular, .vx-mat-chrome,
 }
 
 /* ------------------------------------------------------------------ shell */
-html[data-template='verdant']:not([class*='fest-']) .vx-shell { background: rgb(var(--ink-950)); }
+html[data-template='verdant']:root .vx-shell { background: rgb(var(--ink-950)); }
 /* The page opens on a wash of the playing artwork's colour, then the grey. */
-html[data-template='verdant']:not([class*='fest-']) .vx-workspace {
+html[data-template='verdant']:root .vx-workspace {
   background:
     linear-gradient(180deg, rgb(var(--art) / 0.4), rgb(var(--art) / 0.12) 200px, transparent 420px) local,
     rgb(var(--ink-900));
 }
-html.light[data-template='verdant']:not([class*='fest-']) .vx-workspace {
+html.light[data-template='verdant']:root .vx-workspace {
   background:
     linear-gradient(180deg, rgb(var(--art) / 0.24), rgb(var(--art) / 0.08) 200px, transparent 420px) local,
     rgb(var(--ink-900));
@@ -166,7 +164,7 @@ html[data-template='verdant'] :is(.vx-dock-active, .vx-dock-active:hover) { colo
 html[data-template='verdant'] .vx-dock-item { gap: 2px; min-height: 56px; font-size: 10px; font-weight: 500; color: rgb(var(--ink-400)); }
 
 /* Mini player: a small bar tinted with the artwork, floating above the tabs. */
-html[data-template='verdant']:not([class*='fest-']) .np-mini {
+html[data-template='verdant']:root .np-mini {
   --mat-tint: none;
   background-color: color-mix(in srgb, rgb(var(--art)) 42%, rgb(var(--ink-800)));
   box-shadow: none;
@@ -208,9 +206,9 @@ html[data-template='verdant'] .vxh-hero { border-radius: 8px; box-shadow: none; 
 html[data-template='verdant'] :is(.btn-primary, .btn-secondary, .btn-premium) { font-weight: 700; }
 
 /* Now Playing: the artwork's colour falling to the canvas, not a photo. */
-html[data-template='verdant']:not([class*='fest-']) .vx-np-bg-art { display: none; }
-html[data-template='verdant']:not([class*='fest-']) .vx-np-bg-wash { background: linear-gradient(180deg, color-mix(in srgb, var(--np-warm, rgb(var(--art))) 70%, rgb(var(--ink-900))), rgb(var(--ink-900)) 82%); }
-html[data-template='verdant']:not([class*='fest-']) .vx-np-bg-scrim:not(.is-canvas) { background: none; }
+html[data-template='verdant']:root .vx-np-bg-art { display: none; }
+html[data-template='verdant']:root .vx-np-bg-wash { background: linear-gradient(180deg, color-mix(in srgb, var(--np-warm, rgb(var(--art))) 70%, rgb(var(--ink-900))), rgb(var(--ink-900)) 82%); }
+html[data-template='verdant']:root .vx-np-bg-scrim:not(.is-canvas) { background: none; }
 html[data-template='verdant'] .vx-np-art-img { box-shadow: 0 18px 44px -18px rgb(0 0 0 / 0.7); }
 html[data-template='verdant'] .vx-np-title { font-weight: 700; letter-spacing: -0.01em; }
 html[data-template='verdant'] .vx-np-artist { color: rgb(var(--ink-400)); font-weight: 500; }

@@ -70,8 +70,6 @@ const LibraryPage = lazy(() => import('@/pages/LibraryPage'));
 const FavoritesPage = lazy(() => import('@/pages/FavoritesPage'));
 const ListenLaterPage = lazy(() => import('@/pages/ListenLaterPage'));
 const FollowingPage = lazy(() => import('@/pages/FollowingPage'));
-// 1.12 — Festivals: today's festival, a live countdown, every look.
-const FestivalsPage = lazy(() => import('@/pages/FestivalsPage'));
 const HistoryPage = lazy(() => import('@/pages/HistoryPage'));
 const QueuePage = lazy(() => import('@/pages/QueuePage'));
 const NowPlayingPage = lazy(() => import('@/pages/NowPlayingPage'));
@@ -190,7 +188,8 @@ export const router = createBrowserRouter([
       { path: 'flow', element: <FlowPage /> },
       { path: 'now-playing', element: <NowPlayingPage /> },
       { path: 'languages', element: <LanguagesPage /> },
-      { path: 'festivals', element: <FestivalsPage /> },
+      // The Festivals page is retired; old links land on Explore.
+      { path: 'festivals', element: <Navigate to="/explore" replace /> },
       ...HUB_LANGUAGES.map((l) => ({ path: `${l}-songs`, element: <LanguageHubPage language={l} /> })),
       // Mood x language landing pages (SEO category layer) — 72 routes.
       ...HUB_LANGUAGES.flatMap((l) =>

@@ -61,7 +61,6 @@ async function setup(page: Page, opts: { theme?: 'dark' | 'light'; withProject?:
     const req = route.request();
     const url = new URL(req.url());
     if (!url.origin.startsWith('http://localhost')) return route.abort();
-    if (url.pathname === '/api/appconfig' && url.searchParams.get('key') === 'festival') return route.fulfill({ json: { festival: { mode: 'off' } } });
     const p = url.pathname;
     const m = req.method();
     if (p === '/api/ai/models') return route.fulfill({ json: MODELS });

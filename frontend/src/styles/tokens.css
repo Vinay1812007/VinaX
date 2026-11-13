@@ -4,10 +4,10 @@
    Two layers:
      1. Palette channels ("r g b" triplets) in styles/index.css: --ink-*,
         --ember-*, --tide-*, --art. Themes (html.light / .amoled), accents
-        (html[data-accent]), app styles (html[data-template]) and festival
-        skins (html.fest-*) swap THESE — nothing else.
+        (html[data-accent]) and app styles (html[data-template]) swap THESE
+        — nothing else.
      2. This file: what a colour, size or curve is FOR. Components read only
-        these names, so every theme, accent, style and festival reaches every
+        these names, so every theme, accent and style reaches every
         component without a per-component override.
 
    Rule for new code: never a raw hex, a raw radius or a raw duration in a
@@ -32,7 +32,7 @@
   --text-4: rgb(var(--ink-500)); /* captions, counts, hints */
   --text-on-accent: var(--vx-on-accent);
 
-  /* ---- Accent — the listener's colour (accent picker, app style, festival). */
+  /* ---- Accent — the listener's colour (accent picker, app style). */
   --accent: rgb(var(--ember-500));
   --accent-hover: rgb(var(--ember-400));
   --accent-strong: rgb(var(--ember-600));

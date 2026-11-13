@@ -13,12 +13,14 @@
    2. the tokens that are derived from the ink scale (glass fills, solid
       surfaces), re-derived so a template only has to state its inks;
    3. the switches that must keep winning over any template: AMOLED (true
-      black), high contrast, and a festival skin.
+      black) and high contrast.
 
    The contract (asserted in src/constants/templates.test.ts):
-   - a template's COLOURS (tokens and canvas paint) stand down while a
-     festival skin is on — every colour block carries
-     `:not([class*='fest-'])`; its layout, shape, type and motion stay;
+   - a template's COLOUR blocks (tokens and canvas paint) carry `:root` on
+     the html selector. It always matches; it is there for its weight, so
+     these blocks keep their place in the cascade against the theme, accent
+     and page rules. Take it off one block and that block loses to rules it
+     beats today;
    - a template's accent applies only while the listener has not picked one
      (no data-accent, or the default 'crimson');
    - every template has a dark and a light look; text and accent tiers clear
@@ -122,7 +124,7 @@ html[data-template] {
 }
 
 /* Derived from the inks, so a template states its inks once. */
-html[data-template]:not([class*='fest-']) {
+html[data-template]:root {
   --glass-bg: rgb(var(--ink-850) / var(--glass-alpha));
   --glass-bg-strong: rgb(var(--ink-800) / var(--glass-alpha));
   --glass-bg-muted: rgb(var(--ink-900) / var(--glass-alpha));
@@ -133,7 +135,7 @@ html[data-template]:not([class*='fest-']) {
   --aura-violet: var(--ember-500);
   --aura-cyan: var(--tide-500);
 }
-html.light[data-template]:not([class*='fest-']) {
+html.light[data-template]:root {
   --glass-bg: rgb(var(--ink-950) / var(--glass-alpha));
   --glass-bg-strong: rgb(var(--ink-950) / var(--glass-alpha));
   --glass-bg-muted: rgb(var(--ink-900) / var(--glass-alpha));
@@ -157,7 +159,7 @@ html.light[data-template]:not([class*='fest-']) {
   --vx-art-shadow: 0 10px 24px -14px rgb(var(--ink-100) / 0.35);
   --vx-deck-shadow: 0 16px 36px -18px rgb(var(--ink-100) / 0.35);
 }
-html.light[data-template]:not([class*='fest-']) body { background-color: rgb(var(--ink-900)); }
+html.light[data-template]:root body { background-color: rgb(var(--ink-900)); }
 
 /* -------------------------------------- 13.2 — the bottom chrome is readable */
 /* The mini player and the phone tab bar hold the controls a listener uses
@@ -185,7 +187,7 @@ html.light:is([data-template='lumen'], [data-template='monsoon'], [data-template
    AA (4.5:1) still holds — asserted per style in constants/templates.test.ts.
    The glass comes from the lights behind, the saturation and the blur, not
    from thinner frost. */
-html.light[data-template]:not([class*='fest-']) {
+html.light[data-template]:root {
   --vx-mat-thin: rgb(var(--ink-950) / calc(var(--glass-alpha) * 0.5));
   --vx-mat-regular: rgb(var(--ink-950) / clamp(0.4, calc(var(--glass-alpha) - 0.25), 0.85));
   --vx-mat-chrome: rgb(var(--ink-950) / clamp(0.8, calc(var(--glass-alpha) + 0.02), 0.94));
@@ -209,11 +211,11 @@ html.light[data-template]:not([class*='fest-']) {
 /* The three lights behind the panes: accent low left, second colour top
    right, the playing artwork top left. Painted once on the shell; the panes'
    frost reads them. */
-html.light[data-template]:not([class*='fest-']) .vx-shell {
+html.light[data-template]:root .vx-shell {
   position: relative;
   isolation: isolate;
 }
-html.light[data-template]:not([class*='fest-']) .vx-shell::before {
+html.light[data-template]:root .vx-shell::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -226,7 +228,7 @@ html.light[data-template]:not([class*='fest-']) .vx-shell::before {
     radial-gradient(40% 40% at 70% 70%, rgb(var(--ember-300) / 0.14), transparent 70%);
 }
 /* The workspace sheet is frost over the lights, not a solid page. */
-html.light[data-template]:not([class*='fest-']) .vx-workspace {
+html.light[data-template]:root .vx-workspace {
   background:
     radial-gradient(820px 320px at 12% -140px, rgb(var(--ember-500) / var(--vx-mesh-ember)), transparent 70%) local,
     radial-gradient(700px 300px at 92% -140px, rgb(var(--tide-500) / var(--vx-mesh-tide)), transparent 70%) local,
@@ -234,15 +236,15 @@ html.light[data-template]:not([class*='fest-']) .vx-workspace {
 }
 /* Cards and tiles: translucent white with a lit edge; no blur on scrolling
    content (that is the one rule of the material system). */
-html.light[data-template]:not([class*='fest-']) :is(.vxh-tile, .vxh-card, .vxh-shortcut, .vxh-disclose, .glass-card, .glass-panel, .vx-lt-card, .vx-help-tile, .vx-panel) {
+html.light[data-template]:root :is(.vxh-tile, .vxh-card, .vxh-shortcut, .vxh-disclose, .glass-card, .glass-panel, .vx-lt-card, .vx-help-tile, .vx-panel) {
   background: rgb(var(--ink-950) / 0.62);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), inset 0 0 0 1px rgb(var(--ink-100) / 0.06);
 }
-html.light[data-template]:not([class*='fest-']) :is(.vxh-tile, .vxh-card, .vxh-shortcut):hover { background: rgb(var(--ink-950) / 0.86); }
-html.light[data-template]:not([class*='fest-']) .vxh-hero { background: rgb(var(--ink-950) / 0.6); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), inset 0 0 0 1px rgb(var(--ink-100) / 0.06), 0 24px 60px -36px rgb(var(--ink-100) / 0.3); }
-html.light[data-template]:not([class*='fest-']) .vx-library { background: rgb(var(--ink-950) / 0.5); }
-html.light[data-template]:not([class*='fest-']) .vx-settings { --set-card: rgb(var(--ink-950) / 0.66); }
-html.light[data-template]:not([class*='fest-']) :is(.glass-input, .glass-search, .vx-set-input) { background: rgb(var(--ink-950) / 0.7); }
+html.light[data-template]:root :is(.vxh-tile, .vxh-card, .vxh-shortcut):hover { background: rgb(var(--ink-950) / 0.86); }
+html.light[data-template]:root .vxh-hero { background: rgb(var(--ink-950) / 0.6); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), inset 0 0 0 1px rgb(var(--ink-100) / 0.06), 0 24px 60px -36px rgb(var(--ink-100) / 0.3); }
+html.light[data-template]:root .vx-library { background: rgb(var(--ink-950) / 0.5); }
+html.light[data-template]:root .vx-settings { --set-card: rgb(var(--ink-950) / 0.66); }
+html.light[data-template]:root :is(.glass-input, .glass-search, .vx-set-input) { background: rgb(var(--ink-950) / 0.7); }
 /* Prefers-reduced-transparency and no-backdrop-filter fallbacks in index.css
    still force solid surfaces; nothing here outranks them. */
 
@@ -270,7 +272,7 @@ html.amoled[data-template]:not(#_) {
   --vx-mat-art: 0;
 }
 html.amoled[data-template]:not(#_) .vx-shell { background: #000; }
-html.amoled[data-template]:not(#_):not([class*='fest-']) .vx-workspace {
+html.amoled[data-template]:not(#_):root .vx-workspace {
   background: radial-gradient(900px 320px at 30% -160px, rgb(var(--ember-500) / 0.1), transparent 70%) local, #000;
 }
 html.hc[data-template]:not(#_) { --ink-300: 230 230 230; --ink-400: 205 205 205; --ink-500: 170 170 170; --glass-alpha: 0.98; }
@@ -283,7 +285,7 @@ html[data-template] body { font-family: var(--tpl-font-body); }
 html[data-template] .vx-media-art { border-radius: var(--tpl-r-art); }
 html[data-template] .vx-media-art.is-artist { border-radius: 50%; }
 html[data-template] :is(.vx-track-art, .vx-lib-art:not(.rounded-full), .vx-pb-art, .np-mini-thumb, .np-mini-thumb img) { border-radius: var(--tpl-r-art-sm); }
-html[data-template] :is(.vx-nav-link, .vx-library-title, .vx-section-link, .vx-chip-idle, .vx-chip-on, .vxh-chip, .vxh-pill, .vxh-mini, .btn-primary, .btn-secondary, .btn-premium) { border-radius: var(--tpl-r-control); }
+html[data-template] :is(.vx-nav-link, .vx-library-title, .vx-section-link, .vx-chip-idle, .vx-chip-on, .vxh-chip, .vxh-pill, .btn-primary, .btn-secondary, .btn-premium) { border-radius: var(--tpl-r-control); }
 html[data-template] :is(.vx-play-fab, .vx-np-play) { border-radius: var(--tpl-r-play); }
 html[data-template] :is(.card-play, .np-play-desktop, .np-mini .np-mini-play, .vx-np-play.is-compact) { border-radius: var(--tpl-r-play-sm); }
 html[data-template] :is(.vx-track-row, .vx-lib-row) { border-radius: var(--tpl-r-row); }

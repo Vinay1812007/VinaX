@@ -390,13 +390,6 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext, frame: 
   const year = song.year ? Number(song.year) : null;
   if (year && year >= frame.year - 1) add('fresh', W.freshness);
 
-  // Package A10 — festival/season boost: during a festival window, lift songs in
-  // its languages or mood a touch. Off-season the field is absent and this is skipped.
-  if (ctx.festival) {
-    if (ctx.festival.languages && song.language && ctx.festival.languages.includes(song.language)) add('festival', 0.14, ctx.festival.id);
-    if (ctx.festival.moods && ctx.festival.moods.includes(cp.mood)) add('festival', 0.1 * conf.mood, ctx.festival.id);
-  }
-
   // Repetition guard: heavily demote very recently played songs.
   if (profile.recentSongIds.includes(song.id)) add('history', -0.5);
 

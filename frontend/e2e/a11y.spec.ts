@@ -1,7 +1,7 @@
 /**
  * Accessibility gate: axe-core (@axe-core/playwright) scans the app's main
  * pages in the dark and the light theme, on desktop and on a phone, plus the
- * sign-in screen, the festival greeting and the erase-everything dialog.
+ * sign-in screen and the erase-everything dialog.
  *
  * Any WCAG 2.0 / 2.1 / 2.2 level A or AA violation fails the test, whatever
  * axe's impact rating. The full axe result for each scan is attached to the
@@ -12,10 +12,9 @@
  * about focus order or what a screen reader actually says. Those still need a
  * person. This gate keeps the mechanical regressions out.
  *
- * Deterministic: everything off localhost is aborted, /api answers `{}`, the
- * festival calendar is switched off (one forced-festival scan covers the
- * greeting) and motion is reduced so no scan lands mid-animation, when text
- * is still at partial opacity.
+ * Deterministic: everything off localhost is aborted, /api answers `{}` and
+ * motion is reduced so no scan lands mid-animation, when text is still at
+ * partial opacity.
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page, type Locator } from './support/test';
@@ -27,7 +26,7 @@ test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
 type Theme = 'dark' | 'light';
 
-async function seed(page: Page, theme: Theme, festival: { mode: 'off' } | { mode: 'force'; id: string } = { mode: 'off' }) {
+async function seed(page: Page, theme: Theme) {
   await page.addInitScript(
     ([t, fp]) => {
       localStorage.setItem(
@@ -45,9 +44,6 @@ async function seed(page: Page, theme: Theme, festival: { mode: 'off' } | { mode
   await page.route('**/*', (route) => {
     const url = new URL(route.request().url());
     if (!url.origin.startsWith('http://localhost')) return route.abort();
-    if (url.pathname === '/api/appconfig' && url.searchParams.get('key') === 'festival') {
-      return route.fulfill({ json: { festival } });
-    }
     // VinaX AI's page needs its model list to show the chat (not its "unavailable" state).
     if (url.pathname === '/api/ai/models') return route.fulfill({ json: { enabled: true, configured: true, groups: [], models: [] } });
     if (url.pathname.startsWith('/api/')) return route.fulfill({ json: {} });
@@ -125,16 +121,6 @@ test('the sign-in pages have no WCAG A/AA violations', async ({ page }) => {
     await settle(page, page.getByRole('heading', { name: h1, level: 1 }));
     expect(await scan(page, `sign-in ${path}`)).toEqual([]);
   }
-});
-
-test.describe('the festival greeting', () => {
-  test.use({ dismissFestivalGreeting: false });
-  test('has no WCAG A/AA violations', async ({ page }) => {
-    await seed(page, 'dark', { mode: 'force', id: 'diwali' });
-    await page.goto('/');
-    await settle(page, page.locator('.fest-card[role="dialog"]'));
-    expect(await scan(page, 'festival greeting')).toEqual([]);
-  });
 });
 
 test('the erase-everything dialog is a real modal with no WCAG A/AA violations', async ({ page }) => {

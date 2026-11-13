@@ -1,7 +1,6 @@
 import { useDiscoveryStore } from '@/store/discoveryStore';
 import { loadProfile } from '@/services/personalization/storage';
 import { getMoodPin, getSessionVector } from '@/services/personalization/session';
-import { activeFestivalMusic } from './festival';
 import { buildSessionRecommendationProfile, buildUserRecommendationProfile } from './profiles';
 import { useSettingsStore, resolvedRegion, resolveDiscoveryMode } from '@/store/settingsStore';
 import { getSessionIntent } from '@/services/personalization/sessionIntent';
@@ -39,7 +38,6 @@ export function getRecommendationContext(seedSong: Song | null = null, surface: 
     sessionEnergy: sv.size >= 2 ? sv.energy : undefined,
     sessionLanguage: sv.size >= 2 ? sv.language : undefined,
     sessionSize: sv.size,
-    festival: activeFestivalMusic(),
     explore: discoveryMode === 'discover',
     discoveryMode,
     sessionIntent: getSessionIntent(),

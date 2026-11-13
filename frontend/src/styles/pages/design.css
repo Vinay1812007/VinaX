@@ -1,7 +1,6 @@
 /* ============================================================================
    /design — the design system v2 style guide (pages/DesignPage.tsx).
-   Layout for the guide itself; the festival takeover it previews is the
-   real, generated one (public/fest/<class>.css).
+   Layout for the guide itself.
    ========================================================================= */
 
 .vx-ds {
@@ -250,44 +249,3 @@ html.light .vx-ds-full-bg { opacity: 0.35; }
 ::view-transition-group(vx-ds-title) { animation-duration: var(--dur-slow); animation-timing-function: var(--ease-spring); }
 ::view-transition-old(root),
 ::view-transition-new(root) { animation-duration: var(--dur-base); }
-
-/* ---- Festival section ---------------------------------------------------- */
-.vx-ds-fest-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--space-3); }
-.vx-ds-fest-card { display: grid; gap: 4px; font: inherit; }
-.vx-ds-fest-card strong { color: var(--text-1); }
-.vx-ds-fest-card > span:last-child { font-size: var(--type-meta); color: var(--text-3); }
-.vx-ds-fest-card[aria-pressed='true'] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.vx-ds-fest-swatch { display: block; height: 40px; margin-bottom: var(--space-2); border-radius: var(--radius-md); background: linear-gradient(120deg, rgb(19 14 22), rgb(255 164 46), rgb(255 99 132)); }
-.vx-ds-fest-card[data-fest='diwali'] .vx-ds-fest-swatch { background: linear-gradient(120deg, rgb(28 10 30), rgb(252 196 52), rgb(244 98 42)); }
-.vx-ds-fest-card[data-fest='christmas'] .vx-ds-fest-swatch { background: linear-gradient(120deg, rgb(8 26 20), rgb(220 38 64), rgb(234 196 96)); }
-.vx-ds-fest-demo { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-6); margin-top: var(--space-6); padding: var(--space-8); border-radius: var(--radius-2xl); background: var(--surface-2); border: 1px solid var(--line-1); }
-.vx-ds-mark { position: relative; flex: none; width: 72px; height: 72px; }
-.vx-ds-mark img { width: 72px; height: 72px; border-radius: 20px; }
-.vx-ds-mark-ornament { position: absolute; inset: -10px -12px auto auto; width: 30px; height: 30px; background: var(--fest-ornament, none) no-repeat center / contain; }
-.vx-ds-fest-title { margin: var(--space-2) 0 0; font-family: var(--font-display); font-size: var(--type-display); font-weight: 800; letter-spacing: var(--tracking-display); line-height: var(--leading-tight); color: var(--text-1); }
-.vx-ds-fest-copy { max-width: 52ch; margin: var(--space-3) 0 0; line-height: var(--leading-body); }
-
-/* ============================================================================
-   FESTIVAL TAKEOVER on this page. The palettes are generated per festival
-   (public/fest/<class>.css, scripts/festivals-gen-core.mjs) and the shared
-   rules live in festivals.css; this page only adds its own headings and
-   demo mark to the takeover.
-   ========================================================================= */
-
-/* Headings take the festival's two colours. */
-html.vx-takeover .vx-ds-hero h1,
-html.vx-takeover .vx-ds-fest-title {
-  background: linear-gradient(100deg, rgb(var(--ember-400)), rgb(var(--tide-500)) 70%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-html.vx-takeover.light .vx-ds-hero h1,
-html.vx-takeover.light .vx-ds-fest-title {
-  background-image: linear-gradient(100deg, rgb(var(--ember-500)), rgb(var(--tide-500)) 70%);
-}
-/* The mark wears the ornament with a small settle. */
-html.vx-takeover .vx-ds-mark-ornament { animation: vx-ds-ornament var(--dur-page) var(--ease-bounce) both; }
-@keyframes vx-ds-ornament { from { opacity: 0; transform: translateY(-6px) rotate(-12deg) scale(0.6); } }
-/* The demo panel picks up a wash of the festival colour. */
-html.vx-takeover .vx-ds-fest-demo { background: linear-gradient(140deg, rgb(var(--ember-500) / 0.12), transparent 50%), var(--surface-2); }

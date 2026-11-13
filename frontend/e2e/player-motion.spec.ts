@@ -16,7 +16,7 @@ async function seed(page: Page, baseURL: string, reduce = false) {
   const queue = [0, 1, 2, 3].map((i) => song(baseURL, i));
   await page.addInitScript(
     ([fp, q, r]) => {
-      localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'], festivalSkins: false, reduceMotion: r }, version: 3 }));
+      localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'], reduceMotion: r }, version: 3 }));
       localStorage.setItem('vinax.onboarded.v1', 'true');
       localStorage.setItem('vinax.analytics-consent', 'true');
       localStorage.setItem('vinax.last-seen-version', JSON.stringify(fp));

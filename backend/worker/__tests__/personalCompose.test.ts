@@ -100,9 +100,9 @@ describe('applyComposition', () => {
 
   it('writes a prompt the model can read, with the pool ids', () => {
     const taste = emptyTaste(NOW);
-    const prompt = composePrompt(base, [...pool.values()], { taste, firstName: 'Asha', hour: 21, dow: 6, festival: 'diwali' });
+    const prompt = composePrompt(base, [...pool.values()], { taste, firstName: 'Asha', hour: 21, dow: 6 });
     expect(prompt).toContain('name: Asha');
-    expect(prompt).toContain('hour 21:00, Saturday, festival: diwali');
+    expect(prompt).toContain('<moment>hour 21:00, Saturday</moment>');
     expect(prompt).toContain('- key: made-for-you');
     expect(prompt).toContain('a1|Song a1 — Artist a|telugu|2024');
   });

@@ -60,19 +60,15 @@ describe('client config bundle', () => {
   });
 });
 
-describe('14.0 — banners, festival, flags and site mode', () => {
+describe('14.0 — banners, flags and site mode', () => {
   it('banners inside their dates with safe fields, at most 10', async () => {
-    const { activeBanners, publicFestival, publicSiteMode } = await import('../functions/_lib/clientConfig');
+    const { activeBanners, publicSiteMode } = await import('../functions/_lib/clientConfig');
     const now = new Date('2026-10-24T10:00:00Z');
     const many = Array.from({ length: 14 }, (_, i) => ({ title: `B${i}` }));
     expect(activeBanners(many, now)).toHaveLength(10);
     expect(activeBanners([{ title: 'Soon', start: '2026-11-01' }, { title: 'Gone', end: '2026-10-01' }, { title: 'Now', start: '2026-10-01', end: '2026-10-31', linkType: 'bogus', linkId: 'x', img: 'http://insecure/x.png' }], now))
       .toEqual([{ title: 'Now', start: '2026-10-01', end: '2026-10-31' }]);
     expect(activeBanners('nope', now)).toEqual([]);
-    expect(publicFestival({ mode: 'force', id: 'Diwali' })).toEqual({ mode: 'force', id: 'diwali' });
-    expect(publicFestival({ mode: 'force' })).toBeNull();
-    expect(publicFestival({ mode: 'off' })).toEqual({ mode: 'off' });
-    expect(publicFestival({ mode: 'party' })).toBeNull();
     expect(publicSiteMode({}, now)).toEqual({ mode: 'live' });
     expect(publicSiteMode({ 'site-mode': { mode: 'maintenance', note: 'x' } }, now)).toEqual({ mode: 'maintenance', note: 'x' });
     expect(publicSiteMode({ 'site-mode': { mode: 'live' }, 'maintenance-window': { start: '2026-10-24T09:00:00Z', end: '2026-10-24T11:00:00Z' } }, now)).toEqual({ mode: 'maintenance' });

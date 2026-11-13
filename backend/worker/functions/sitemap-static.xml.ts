@@ -23,7 +23,6 @@ const ROUTES: Array<[path: string, changefreq: string, priority: string]> = [
   ['/podcasts', 'weekly', '0.6'],
   ['/radio', 'weekly', '0.7'],
   ['/videos', 'weekly', '0.6'],
-  ['/festivals', 'daily', '0.7'],
   ['/download', 'weekly', '0.9'],
   ['/about', 'monthly', '0.4'],
   ['/help', 'monthly', '0.4'],

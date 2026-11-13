@@ -28,7 +28,6 @@ async function setup(page: Page, reply: string): Promise<Array<Record<string, un
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
     if (!url.origin.startsWith('http://localhost')) return route.abort();
-    if (url.pathname === '/api/appconfig' && url.searchParams.get('key') === 'festival') return route.fulfill({ json: { festival: { mode: 'off' } } });
     if (url.pathname === '/api/ai/models') return route.fulfill({ json: { enabled: true, configured: true, search: true, groups: ['balanced'], models: [{ ...MODEL, group: 'balanced', description: '', flags: { vision: false, web: false, thinking: true, code: false }, available: true }] } });
     if (url.pathname === '/api/ai/conversations') return route.fulfill({ json: { items: [], nextCursor: null } });
     if (url.pathname === '/api/ai/chat') {

@@ -36,7 +36,7 @@ async function seed(page: Page, baseURL: string, theme: 'dark' | 'light' | 'amol
     ({ songs, theme, fp, now, long }) => {
       if (localStorage.getItem('v90-seeded')) return;
       localStorage.setItem('v90-seeded', '1');
-      localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme, pinnedLanguages: ['telugu'], festivalSkins: false }, version: 3 }));
+      localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme, pinnedLanguages: ['telugu'] }, version: 3 }));
       localStorage.setItem('vinax.library.v1', JSON.stringify({
         state: {
           favorites: [songs[0], songs[2], songs[3]],

@@ -1,7 +1,7 @@
 /**
  * The composed Home (Authorization: Bearer <session>).
  *
- *   GET /api/personal/home?hour=&dow=&mode=&fresh=1&festival=
+ *   GET /api/personal/home?hour=&dow=&mode=&fresh=1
  *     → 200 { generatedAt, expiresAt, greeting, shelves: [{ key, title, reason, songs }], model, tasteVersion, cached }
  *     → 204                                   the model knows too little for a page yet (the device shows its own Home)
  *   401 signed_out · 503 unavailable · 503 personal_disabled
@@ -23,9 +23,7 @@ export const onRequestGet = async (ctx: { request: Request; env: PersonalEnv; wa
   let fresh = url.searchParams.get('fresh') === '1';
   if (fresh && (await bindingAllows(ctx.env, 'RATE_LIMIT_10', `personal-home-fresh|account|${g.sub}`)) === false) fresh = false;
   const { hour, dow } = localTime({ hour: url.searchParams.get('hour'), dow: url.searchParams.get('dow') });
-  const festivalRaw = url.searchParams.get('festival');
-  const festival = festivalRaw && /^[a-z0-9-]{2,40}$/.test(festivalRaw) ? festivalRaw : null;
-  const r = await buildHome(ctx.env, g.sub, { fresh, hour, dow, mode: modeOf(url.searchParams.get('mode')), firstName: () => firstName(ctx.env, g.sub), festival, waitUntil: ctx.waitUntil, config: g.config });
+  const r = await buildHome(ctx.env, g.sub, { fresh, hour, dow, mode: modeOf(url.searchParams.get('mode')), firstName: () => firstName(ctx.env, g.sub), waitUntil: ctx.waitUntil, config: g.config });
   if ('fail' in r) {
     if (r.fail === 'empty') return new Response(null, { status: 204, headers: PERSONAL_CORS });
     return json({ error: 'unavailable' }, 503);

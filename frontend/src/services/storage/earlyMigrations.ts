@@ -10,6 +10,10 @@
  * 1.3: VinaX has no AI features any more, so what they kept on the device —
  * chat history, saved prompts, model and voice choices, AI caches, the song
  * vectors database — is erased once, on the first launch of this build.
+ *
+ * Festival themes were removed too: the marker their greeting card kept
+ * ("seen this year") is erased the same way. Their switches drop out of the
+ * saved settings on their own (settingsStore takes only known keys).
  */
 const OLD_PREFIX = 'tarang.';
 const NEW_PREFIX = 'vinax.';
@@ -89,6 +93,11 @@ try {
     if (k && isRetiredAiKey(k)) retired.push(k);
   }
   for (const k of retired) storage.removeItem(k);
+} catch {
+  /* storage unavailable — nothing to erase */
+}
+try {
+  window.localStorage.removeItem('vinax.festival-splash');
 } catch {
   /* storage unavailable — nothing to erase */
 }

@@ -1,4 +1,4 @@
-/* App Settings › Home Screen — banners, festival look, greeting, the top
+/* App Settings › Home Screen — banners, greeting, the top
  * message bar, the order of Home sections and the pop-up announcement.
  * Each section edits one stored setting through VX.settingsPage (kit/settings.js).
  * Stored shapes and who reads them: README.md (Owner console) → "Home Screen". */
@@ -208,88 +208,6 @@
     }
   };
 
-  /* ---------------------------------------------------------- festival */
-
-  var FESTS = arr(window.VX_FESTIVALS);
-  var festName = function (id) { var f = FESTS.filter(function (x) { return x.id === id; })[0]; return f ? f.name : id; };
-  var CHOICES = [
-    { value: 'none', label: 'None (no festival look)' }, { value: 'diwali', label: 'Diwali' }, { value: 'sankranti', label: 'Sankranti' },
-    { value: 'ugadi', label: 'Ugadi' }, { value: 'holi', label: 'Holi' }, { value: 'eid', label: 'Eid' }, { value: 'christmas', label: 'Christmas' },
-    { value: 'newyear', label: 'New Year' }, { value: 'custom', label: 'Custom (any festival, your colour)' }
-  ];
-  var festivalSection = {
-    key: 'festival', title: 'Festival Theme',
-    desc: 'Dress the app up for a festival. Without a choice here, the app follows its own festival calendar.',
-    fromValue: function (v) {
-      v = obj(v);
-      var id = v.id || '';
-      var choice = v.mode === 'off' ? 'none' : v.mode === 'force' ? (v.color || !CHOICES.some(function (c) { return c.value === id; }) ? 'custom' : id) : 'diwali';
-      return { choice: choice, customId: id || (FESTS[0] && FESTS[0].id) || 'diwali', color: v.color || '#f2a33a', start: fromIsoDay(v.start), end: fromIsoDay(v.end), enabled: v.enabled !== false, auto: !v.mode || v.mode === 'auto' };
-    },
-    toValue: function (m) {
-      if (m.auto) return null;
-      var o = m.choice === 'none' ? { mode: 'off' } : { mode: 'force', id: m.choice === 'custom' ? m.customId : m.choice };
-      if (m.choice === 'custom') o.color = m.color;
-      if (m.start) o.start = dayStart(m.start);
-      if (m.end) o.end = dayEnd(m.end);
-      if (!m.enabled) o.enabled = false;
-      return o;
-    },
-    validate: function (m) { return m.start && m.end && m.end < m.start ? 'The end date is before the start date.' : null; },
-    describe: function (v) {
-      v = obj(v);
-      if (!v.mode) return 'Follows the app’s festival calendar';
-      var what = v.mode === 'off' ? 'No festival look' : festName(v.id) + ' look' + (v.color ? ' in your colour' : '');
-      return what + (v.start || v.end ? ', ' + datesText(fromIsoDay(v.start), fromIsoDay(v.end)) : '') + (v.enabled === false ? ' (switched off)' : '');
-    },
-    render: function (m, set) {
-      var custom = h('div.form-row');
-      function drawCustom() {
-        VX.mount(custom, m.choice === 'custom' && !m.auto ? [
-          ui.dropdown('Festival', FESTS.map(function (f) { return { value: f.id, label: f.name }; }), m.customId, function (v) { m.customId = v; set(m); }),
-          ui.colorPicker('Colour', m.color, function (c) { m.color = c; set(m); })
-        ] : null);
-      }
-      var body = h('div.form-col');
-      function draw() {
-        VX.mount(body,
-          ui.radios('What the app shows', [
-            { value: 'auto', label: 'Follow the festival calendar', hint: 'The app picks the festival by date (built-in).' },
-            { value: 'choose', label: 'Choose the look myself' }
-          ], m.auto ? 'auto' : 'choose', function (v) { m.auto = v === 'auto'; set(m); draw(); }),
-          m.auto ? null : [
-            ui.dropdown('Festival look', CHOICES, m.choice, function (v) { m.choice = v; set(m); drawCustom(); }),
-            custom,
-            ui.dateRange({ start: m.start, end: m.end }, function (v) { m.start = v.start; m.end = v.end; set(m); }),
-            ui.switchRow('Turn on', 'Off goes back to the festival calendar without losing your choice.', m.enabled, function (on) { m.enabled = on; set(m); })
-          ]);
-        drawCustom();
-      }
-      draw();
-      return body;
-    },
-    preview: function (m) {
-      var id = m.choice === 'custom' ? m.customId : m.choice;
-      var f = FESTS.filter(function (x) { return x.id === id; })[0];
-      if (m.auto) return h('p.muted.small', 'The app follows its calendar.');
-      if (m.choice === 'none' || !f) return ui.phone([h('div.pv-title', 'Good evening'), h('p.pv-muted', 'No festival look.')], { small: true });
-      var accent = m.choice === 'custom' ? m.color : f.accent;
-      // UI rebuild Phase 6 — the app repaints fully during a festival (unless a
-      // listener turns "Full festival look" off), so the preview does too.
-      var tk = f.takeover || {};
-      var heading = 'linear-gradient(100deg, ' + accent + ', ' + (tk.partner || accent) + ' 75%)';
-      return ui.phone([
-        h('div', { style: { background: tk.surface || f.canvas, color: tk.ink || '#fff', 'border-radius': '14px', padding: '14px', display: 'grid', gap: '8px' } }, [
-          f.image ? h('img', { src: f.image, alt: '', width: 28, height: 28 }) : null,
-          h('div.pv-title', { style: { 'background-image': heading, '-webkit-background-clip': 'text', 'background-clip': 'text', color: 'transparent' } }, f.greeting || f.name),
-          h('div.pv-chip', { style: { background: accent } }, 'Play'),
-          h('div', { style: { height: '3px', 'border-radius': '3px', background: 'linear-gradient(90deg, ' + (tk.partner || accent) + ', ' + accent + ')' } }),
-          h('p.pv-muted', { style: { color: tk.muted || '' } }, f.fx || '')
-        ])
-      ], { small: true, label: 'Preview of the festival look' });
-    }
-  };
-
   /* ---------------------------------------------------------- greeting */
 
   var PARTS = [['morning', 'Morning (5 am – noon)'], ['afternoon', 'Afternoon (noon – 5 pm)'], ['evening', 'Evening (5 – 9 pm)'], ['night', 'Night (9 pm – 5 am)']];
@@ -483,7 +401,7 @@
 
   VX.settingsPage({
     id: 'app-settings/home-screen', title: 'Home Screen', icon: 'layout', order: 1,
-    desc: 'What people see on the Home screen of the app: banners, the festival look, the greeting, messages and the order of sections.',
-    sections: [bannersSection, festivalSection, greetingSection, broadcastSection, layoutSection, announcementSection]
+    desc: 'What people see on the Home screen of the app: banners, the greeting, messages and the order of sections.',
+    sections: [bannersSection, greetingSection, broadcastSection, layoutSection, announcementSection]
   });
 })();

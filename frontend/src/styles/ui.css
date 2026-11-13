@@ -1,6 +1,6 @@
 /* ============================================================================
    Design system v2 — primitives (src/components/ui/*). Every value is a token
-   from styles/tokens.css, so themes, accents, app styles and festivals all
+   from styles/tokens.css, so themes, accents and app styles all
    reach these without overrides. Imported by the primitives themselves: the
    rules ship with the first chunk that uses one.
    ========================================================================= */

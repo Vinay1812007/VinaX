@@ -10,7 +10,6 @@ import './styles/tokens.css';
 import './styles/shell.css';
 import './styles/features.css';
 import './styles/templates/index.css';
-import './styles/festivals.css';
 import { captureServerPage } from './services/seo/serverPage';
 import { initI18n } from './i18n';
 import { reloadPage } from './utils/pageReload';

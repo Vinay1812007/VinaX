@@ -11,7 +11,7 @@ const TE: Record<string, string> = {
   'Background blur': 'నేపథ్య బ్లర్', 'Backup Center': 'బ్యాకప్ కేంద్రం', 'Clear favorites': 'ఇష్టమైనవి తొలగించు', 'Clear history': 'చరిత్ర తొలగించు',
   'Clear queue': 'క్యూ ఖాళీ చేయి', Crossfade: 'క్రాస్‌ఫేడ్', 'Crossfade length': 'క్రాస్‌ఫేడ్ నిడివి', 'Daily listening goal': 'రోజువారీ వినే లక్ష్యం',
   'Data saver': 'డేటా సేవర్', Density: 'దట్టత', 'Display size': 'డిస్‌ప్లే పరిమాణం', 'Download quality': 'డౌన్‌లోడ్ నాణ్యత', 'Dynamic theme': 'డైనమిక్ థీమ్',
-  'Festival themes': 'పండుగ థీమ్‌లు', 'Gentle wake': 'మెల్లగా మేల్కొలుపు', 'Glass effect': 'గ్లాస్ ఎఫెక్ట్', Haptics: 'హ్యాప్టిక్స్', 'High contrast': 'అధిక కాంట్రాస్ట్',
+  'Gentle wake': 'మెల్లగా మేల్కొలుపు', 'Glass effect': 'గ్లాస్ ఎఫెక్ట్', Haptics: 'హ్యాప్టిక్స్', 'High contrast': 'అధిక కాంట్రాస్ట్',
   'Keep screen on in player': 'ప్లేయర్‌లో స్క్రీన్ ఆన్‌లో ఉంచు', 'Lock screen lyrics': 'లాక్ స్క్రీన్ సాహిత్యం', 'Lyrics script': 'సాహిత్య లిపి', 'Lyrics size': 'సాహిత్య పరిమాణం',
   'Minutes a week': 'వారానికి నిమిషాలు', 'New artists a week': 'వారానికి కొత్త కళాకారులు', 'New-music alerts': 'కొత్త పాటల హెచ్చరికలు', 'Push notifications': 'పుష్ నోటిఫికేషన్‌లు',
   'Reduce motion': 'కదలిక తగ్గించు', 'Reset app state': 'యాప్ స్థితి రీసెట్', 'Resume playback': 'ఆగిన చోటు నుంచి', 'Smart downloads': 'స్మార్ట్ డౌన్‌లోడ్‌లు', Theme: 'థీమ్',

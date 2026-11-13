@@ -8,7 +8,7 @@
  * 14.0 — values come from the `settings` table (one key, one JSON value,
  * written from the owner console); the vocabulary is SETTING_KEYS in
  * _lib/settings.ts. Besides the client bundle this file sanitises the other
- * public config answers: banners, the festival override, flags and site mode.
+ * public config answers: banners, flags and site mode.
  */
 import type { ExperimentVariant } from './experiments';
 
@@ -399,32 +399,6 @@ export function publicFlags(value: unknown): Record<string, boolean> {
     if (/^[a-zA-Z][a-zA-Z0-9_-]{0,39}$/.test(k) && typeof v === 'boolean') out[k] = v;
     if (Object.keys(out).length >= 50) break;
   }
-  return out;
-}
-
-export interface FestivalOverride {
-  mode: 'auto' | 'off' | 'force';
-  id?: string;
-  /** Console rebuild: the owner's own accent colour for a forced festival, "#rrggbb". */
-  color?: string;
-}
-
-/**
- * The festival skin override the app reads: `force` skins the app with the
- * named festival now, `off` suppresses skins, `auto` (or null) keeps the
- * calendar. An optional start/end window bounds a `force`.
- */
-export function publicFestival(value: unknown, now = new Date()): FestivalOverride | null {
-  const f = obj(value);
-  if (!f || f.enabled === false) return null;
-  const mode = str(f.mode, 8);
-  if (mode !== 'auto' && mode !== 'off' && mode !== 'force') return null;
-  if (!inWindow(f.start, f.end, now)) return null;
-  const id = str(f.id, 40).toLowerCase();
-  if (mode === 'force' && !SLUG.test(id)) return null;
-  const color = str(f.color, 7).toLowerCase();
-  const out: FestivalOverride = SLUG.test(id) ? { mode, id } : { mode };
-  if (mode === 'force' && /^#[0-9a-f]{6}$/.test(color)) out.color = color;
   return out;
 }
 

@@ -119,7 +119,6 @@ export interface HomeOptions {
   mode?: TasteMode | null;
   /** Read only when a page is built (not for a cache hit). */
   firstName?: () => Promise<string | null>;
-  festival?: string | null;
   waitUntil?: WaitUntil;
   now?: number;
   config?: PersonalConfig;
@@ -154,7 +153,7 @@ export async function buildHome(env: PersonalEnv, accountId: string, o: HomeOpti
   }
 
   const firstName = config.composer && o.firstName ? await o.firstName().catch(() => null) : null;
-  const ctx: ComposeContext = { taste, firstName, hour, dow: typeof o.dow === 'number' ? o.dow : null, festival: o.festival ?? null };
+  const ctx: ComposeContext = { taste, firstName, hour, dow: typeof o.dow === 'number' ? o.dow : null };
   // The composer's whole budget, across models and the repair turn, not per model.
   const composed = config.composer
     ? await composeHome(env, shelves, ctx, AbortSignal.timeout(COMPOSE_BUDGET_MS))

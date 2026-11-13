@@ -80,7 +80,7 @@ const TOUR: TourSlide[] = [
     icon: <SparkleIcon className="w-7 h-7" />,
     title: 'Change it any time',
     lines: [
-      'Settings → Appearance holds the app style, theme, accent colour and festival themes.',
+      'Settings → Appearance holds the app style, theme and accent colour.',
       'Customise Home, at the end of Home, reorders or hides its shelves.',
     ],
   },

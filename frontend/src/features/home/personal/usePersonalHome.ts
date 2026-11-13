@@ -10,7 +10,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useAccount } from '@/components/useAccount';
 import { useSettingsStore } from '@/store/settingsStore';
 import { fetchPersonalHome, personalEnabled } from '@/services/personal/api';
-import { activeFestivalMusic } from '@/services/recommendation/festival';
 import { toSong } from '@/services/personal/types';
 import type { PersonalHomePage, PersonalShelf } from '@/services/personal/types';
 import type { Song } from '@/types';
@@ -39,7 +38,7 @@ export function usePersonalHome(generation: number): { view: PersonalHomeView | 
     retry: 0,
     queryFn: async ({ signal }) => {
       try {
-        const page = await fetchPersonalHome({ fresh, mode, festival: activeFestivalMusic(new Date())?.id ?? null, signal });
+        const page = await fetchPersonalHome({ fresh, mode, signal });
         if (!page) return null;
         return { page, shelves: page.shelves.map((s) => ({ ...s, items: s.songs.map(toSong) })) } satisfies PersonalHomeView;
       } catch {

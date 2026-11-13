@@ -25,22 +25,11 @@ export interface SettingsState {
   /**
    * 11.0 — the app style: palette, type, shapes, navigation and mini-player
    * layout, card treatment and motion (styles/templates/<id>.css). The accent
-   * picker still wins over a style's own accent, and a festival skin repaints
-   * the colours of any style while it is on.
+   * picker still wins over a style's own accent.
    */
   template: TemplateId;
   /** v5.12.0 — daily listening goal in minutes (0 = off). */
   dailyGoalMinutes: number;
-  /** 5.14.0 — festival skins (accent, canvas, glow, splash). Off = the plain theme all year. */
-  festivalSkins: boolean;
-  /** UI rebuild Phase 6 — the full festival takeover (every surface, text step, partner colour, the mark). Off = accent and backdrop only. */
-  festivalTakeover: boolean;
-  /** 1.12 — the live festival effects (fireworks, confetti, petals…) behind the app and on taps. */
-  festivalFx: boolean;
-  /** 1.12 — festive sounds with the celebrations (pops, fireworks, a chime). Off by default. */
-  festivalSound: boolean;
-  /** 1.12 — a festival look kept on by hand (its id), or null for the calendar. */
-  festivalPin: string | null;
   /** v5.17.0 — custom accent hex when `accent === 'custom'`. */
   accentCustom: string | null;
   /** v5.17.0 — display size: text and controls scale. */
@@ -159,10 +148,6 @@ export interface SettingsState {
 
   setTheme(theme: 'dark' | 'light' | 'system' | 'amoled' | 'auto'): void;
   setDailyGoalMinutes(n: number): void;
-  setFestivalSkins(v: boolean): void;
-  setFestivalFx(v: boolean): void;
-  setFestivalSound(v: boolean): void;
-  setFestivalPin(id: string | null): void;
   setAccentCustom(hex: string | null): void;
   setUiScale(v: 'sm' | 'md' | 'lg'): void;
   setDataSaver(v: boolean): void;
@@ -238,11 +223,6 @@ const defaults = {
   accent: 'crimson',
   template: DEFAULT_TEMPLATE as TemplateId,
   dailyGoalMinutes: 0,
-  festivalSkins: true,
-  festivalTakeover: true,
-  festivalFx: true,
-  festivalSound: false,
-  festivalPin: null as string | null,
   accentCustom: null,
   uiScale: 'md' as const,
   dataSaver: false,
@@ -384,10 +364,6 @@ export const useSettingsStore = create<SettingsState>()(
       ...defaults,
       setTheme: (theme) => set({ theme }),
       setDailyGoalMinutes: (n) => set({ dailyGoalMinutes: Math.max(0, Math.min(600, Math.round(n))) }),
-      setFestivalSkins: (festivalSkins) => set({ festivalSkins }),
-      setFestivalFx: (festivalFx) => set({ festivalFx }),
-      setFestivalSound: (festivalSound) => set({ festivalSound }),
-      setFestivalPin: (festivalPin) => set({ festivalPin: festivalPin || null }),
       setAccentCustom: (accentCustom) => set({ accentCustom, accent: accentCustom ? 'custom' : 'crimson' }),
       setUiScale: (uiScale) => set({ uiScale }),
       // Data saver also drops the stream to the lightest quality; turning it

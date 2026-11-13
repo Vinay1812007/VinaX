@@ -25,14 +25,11 @@ const ms = (s: string) => (s.match(/\b\d{2,4}ms\b/g) ?? []).length;
 
 /** [raw hex colours, raw ms durations] per stylesheet, measured 2026-11-13. */
 const BASELINE: Record<string, [number, number]> = {
-  'dussehra-scene.css': [37, 0],
   'features.css': [0, 2],
-  'festivals.css': [15, 0],
   'index.css': [13, 9],
   'overlays.css': [5, 8],
   'pages/browse.css': [4, 1],
   'pages/design.css': [19, 1],
-  'pages/festivals.css': [4, 1],
   'pages/home.css': [2, 1],
   'pages/language-picker.css': [0, 1],
   'pages/library.css': [3, 2],

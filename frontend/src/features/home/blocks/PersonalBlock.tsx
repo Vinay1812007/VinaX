@@ -18,7 +18,6 @@ import { localDateKey, pickDailyFavorite, useBecauseYouLiked } from '../useBecau
 import { SongOfTheDayCard, StreakCard } from '../DailyCards';
 import { DiscoverFiveCard } from '../DiscoverFive';
 import { useReleaseStore } from '@/features/releases/releaseWatch';
-import { FestivalLookaheadCard } from '../FestivalLookaheadCard';
 import { YourPlaylistsShelf } from '../YourPlaylists';
 import { useContinueListening } from '../useHomeShelves';
 import { useYourArtists } from '../useYourArtists';
@@ -150,7 +149,6 @@ function MorePersonal({ mixes }: { mixes: Mix[] }) {
         <StreakCard entries={historyEntries} />
         <SongOfTheDayCard favorites={favorites} entries={historyEntries} />
         <DiscoverFiveCard entries={historyEntries} favorites={favorites} />
-        <FestivalLookaheadCard />
       </div>
       {freshReleases.length > 0 && <SongShelf title="New from your artists" explanation="Fresh songs from artists you saved" songs={dedupe(lens(freshReleases, 'personal'))} />}
       {memories && <SongShelf title="On this day" explanation={`You were playing these ${memories.label.toLowerCase()}`} songs={lens(memories.songs, 'resume')} seeAllTo="/history" />}

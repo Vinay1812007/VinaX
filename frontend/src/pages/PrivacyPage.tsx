@@ -62,7 +62,7 @@ export default function PrivacyPage() {
           artists, album, language, year) is computed with an AI model so that similar songs sit near each other;
           this is about the song, never about you. And the page Home shows and the playlists you ask for are arranged
           by one of the AI models VinaX AI also uses, which is given a few plain lines about your taste
-          (&ldquo;listens mostly to Telugu, top artists&hellip;&rdquo;), the hour, the day, the festival if one is on,
+          (&ldquo;listens mostly to Telugu, top artists&hellip;&rdquo;), the hour, the day,
           your first name, and the candidate songs &mdash; never your event history. Which AI providers can be involved is listed in the AI
           section below. Switching the engine off stops the reporting at once and Home goes back to the on-device
           engine; <b>Erase my taste model</b> in the same place removes everything the engine holds about your account,

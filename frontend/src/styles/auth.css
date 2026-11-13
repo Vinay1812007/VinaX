@@ -2,8 +2,8 @@
    card in the middle of the screen, the VinaX mark above it, small links
    below. Loaded with those pages only.
    UI rebuild Phase 9: shapes, motion, focus and colours read the design
-   tokens (styles/tokens.css), so the pages follow every theme, app style and
-   festival; the main action is the app's accent button, like <Button>. */
+   tokens (styles/tokens.css), so the pages follow every theme and app style;
+   the main action is the app's accent button, like <Button>. */
 .vx-auth {
   min-height: 100dvh;
   display: flex;

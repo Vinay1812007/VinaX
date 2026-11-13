@@ -1,6 +1,6 @@
 /**
  * 11.0 — the app-style contract. Reads the REAL stylesheets (no fixtures):
- * every style has its blocks, stands down for a festival skin, yields to a
+ * every style has its blocks, keeps its colour blocks' weight, yields to a
  * chosen accent, keeps its text and accent tiers readable in both themes,
  * and paints the same page canvas the pre-paint script stamps.
  */
@@ -65,7 +65,8 @@ function splitSelectors(group: string): string[] {
   return out.filter(Boolean);
 }
 
-const NOT_FEST = ":not([class*='fest-'])";
+/** Every colour block carries this on the html selector, for its weight in the cascade (styles/templates/base.css). */
+const WEIGHT = ':root';
 const DEFAULT_ACCENT = ":is(:not([data-accent]), [data-accent='crimson'])";
 const rootDark = tokensOf(base, ':root');
 const rootLight = { ...rootDark, ...tokensOf(base, 'html.light') };
@@ -73,8 +74,8 @@ const rootLight = { ...rootDark, ...tokensOf(base, 'html.light') };
 /** The tokens a style resolves to with the default accent, per theme. */
 function resolved(id: string): { dark: Record<string, RGB>; light: Record<string, RGB>; onDark: string; onLight: string } {
   const css = tplCss(id);
-  const sel = `html[data-template='${id}']${NOT_FEST}`;
-  const selLight = `html.light[data-template='${id}']${NOT_FEST}`;
+  const sel = `html[data-template='${id}']${WEIGHT}`;
+  const selLight = `html.light[data-template='${id}']${WEIGHT}`;
   const dark = { ...rootDark, ...tokensOf(css, sel), ...tokensOf(css, `${sel}${DEFAULT_ACCENT}`) };
   const light = { ...rootLight, ...tokensOf(css, sel), ...tokensOf(css, selLight), ...tokensOf(css, `${sel}${DEFAULT_ACCENT}`), ...tokensOf(css, `${selLight}${DEFAULT_ACCENT}`) };
   return {
@@ -121,13 +122,14 @@ describe.each(TEMPLATE_IDS.map((id) => [id]))('app style %s: stylesheet contract
     }
   });
 
-  it('gives up its colours while a festival skin is on', () => {
-    // Any declaration of an ink / accent token, or a shell canvas paint, must sit in a :not(fest) block.
+  it('keeps the weight of its colour blocks', () => {
+    // Any declaration of an ink / accent token, or a shell canvas paint, must sit in a block
+    // that carries `:root`: without it the block loses to theme and page rules it beats today.
     const blocks = [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)];
     for (const [, sel, body] of blocks) {
       const setsColourToken = /--(ink|ember|tide)-\d+\s*:/.test(body);
       const paintsCanvas = /\.(vx-shell|vx-workspace)\s*$/.test(sel.trim()) && /background/.test(body);
-      if (setsColourToken || paintsCanvas) expect(sel, `${id}: "${sel.trim()}" must stand down for festivals`).toContain(NOT_FEST);
+      if (setsColourToken || paintsCanvas) expect(sel, `${id}: "${sel.trim()}" must carry ${WEIGHT}`).toContain(WEIGHT);
     }
   });
 

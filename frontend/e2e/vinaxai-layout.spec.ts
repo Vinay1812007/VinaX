@@ -28,7 +28,6 @@ async function setup(page: Page): Promise<void> {
     const r = route.request();
     const url = new URL(r.url());
     if (!url.origin.startsWith('http://localhost')) return route.abort();
-    if (url.pathname === '/api/appconfig' && url.searchParams.get('key') === 'festival') return route.fulfill({ json: { festival: { mode: 'off' } } });
     if (url.pathname === '/api/ai/models') return route.fulfill({ json: MODELS });
     if (url.pathname === '/api/ai/conversations') return route.fulfill({ json: { items: [], nextCursor: null } });
     if (url.pathname === '/api/ai/attachments' && r.method() === 'POST') {

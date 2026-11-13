@@ -1,6 +1,6 @@
 /**
  * 14.0 — the public routes that read the new database: config from the
- * `settings` table (client bundle, banners, festival, flags, site mode,
+ * `settings` table (client bundle, banners, flags, site mode,
  * announcements), the blocklist, the active experiments, feedback, and the
  * push registrations. Each also answers its default shape without a database.
  */
@@ -31,21 +31,20 @@ describe('/api/appconfig', () => {
     fakeDb({ settings: [
       row('greeting', { text: 'Happy Diwali!' }),
       row('banners', [{ id: 'b1', title: 'New in Telugu', linkType: 'playlist', linkId: 'p1', img: 'https://i/b.jpg' }, { title: '' }, { title: 'Old', end: '2020-01-01' }]),
-      row('festival', { mode: 'force', id: 'Diwali' }),
-      row('flags', { festivalBar: false, 'bad name': true, count: 3 }),
+      row('flags', { promoBar: false, 'bad name': true, count: 3 }),
     ] });
     const client = (await (await appconfig.onRequestGet({ request: req('/api/appconfig?key=client'), env: ENV })).json()) as { greeting: unknown };
     expect(client.greeting).toEqual({ text: 'Happy Diwali!' });
     expect(await (await appconfig.onRequestGet({ request: req('/api/appconfig?key=banners'), env: ENV })).json()).toEqual({ banners: [{ id: 'b1', title: 'New in Telugu', linkType: 'playlist', linkId: 'p1', img: 'https://i/b.jpg' }] });
-    expect(await (await appconfig.onRequestGet({ request: req('/api/appconfig?key=festival'), env: ENV })).json()).toEqual({ festival: { mode: 'force', id: 'diwali' } });
-    expect(await (await appconfig.onRequestGet({ request: req('/api/appconfig?key=flags'), env: ENV })).json()).toEqual({ flags: { festivalBar: false } });
+    // The festival key is retired: an older app that still asks gets the unknown-key answer.
+    expect((await appconfig.onRequestGet({ request: req('/api/appconfig?key=festival'), env: ENV })).status).toBe(400);
+    expect(await (await appconfig.onRequestGet({ request: req('/api/appconfig?key=flags'), env: ENV })).json()).toEqual({ flags: { promoBar: false } });
     expect((await appconfig.onRequestGet({ request: req('/api/appconfig?key=nope'), env: ENV })).status).toBe(400);
     vi.unstubAllGlobals();
     resetSettingsMemo();
     const spy = vi.fn();
     vi.stubGlobal('fetch', spy);
     expect(await (await appconfig.onRequestGet({ request: req('/api/appconfig?key=banners'), env: {} })).json()).toEqual({ banners: [] });
-    expect(await (await appconfig.onRequestGet({ request: req('/api/appconfig?key=festival'), env: {} })).json()).toEqual({ festival: null });
     expect(spy).not.toHaveBeenCalled();
   });
 

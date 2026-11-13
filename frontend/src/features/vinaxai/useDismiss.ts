@@ -15,7 +15,7 @@ export function useDismiss(open: boolean, close: () => void, inside: Array<RefOb
     if (!open) return;
     // Escape closes this popover only when the key was meant for it: focus is
     // inside it (or nowhere in particular). Another overlay that opened on
-    // top, such as the festival greeting, keeps its own Escape.
+    // top keeps its own Escape.
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       const t = e.target as Node | null;

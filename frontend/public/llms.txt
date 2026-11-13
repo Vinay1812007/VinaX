@@ -16,7 +16,6 @@
 - [Movies](https://www.vinaxmusic.online/movies): Film soundtracks
 - [Moods](https://www.vinaxmusic.online/moods): Music by mood
 - [Videos](https://www.vinaxmusic.online/videos): Music videos
-- [Festivals](https://www.vinaxmusic.online/festivals): Today's festival, a live countdown to the next, every festival's look and its songs
 - [Made For You](https://www.vinaxmusic.online/made-for-you): Personal mixes from your listening
 - [Your Week](https://www.vinaxmusic.online/weekly): A personalised weekly mix, new every Monday (signed in)
 - [VinaX AI](https://www.vinaxmusic.online/vinaxai): The chat assistant for signed-in listeners
@@ -48,7 +47,6 @@ Each language also has mood pages at /{language}-{mood}-songs for romantic, sad,
 - One "Music languages" button in the top bar changes Home, charts, radio and search together.
 - Five reactions under every song; follow artists and see their new songs first on the Following page; share playlists as public pages; Listen Together rooms with a link, QR code or room code.
 - Appearance: six app styles (Lumen, Verdant, Monsoon, Harbour, Verse, Onyx), dark, light, true-black, system or automatic themes, any accent colour, and an app language of English, Telugu, Hindi or Tamil.
-- Festivals: on each of 43 Indian and international festivals the whole app takes that festival's colours and live effects (fireworks, diyas, colour powder, kites, lanterns, snow, confetti), shows a greeting once and offers its songs; /festivals has today's festival, a live countdown and the calendar; Settings can preview any festival, pin one, or turn themes, animations and sounds off.
 - Android app: background playback, lock-screen and headset controls, home-screen widgets, offline downloads, push notifications and in-app updates. On an iPhone, Add to Home Screen keeps music playing with the screen off.
 - Back up the library and settings to one file, restore it, or move to a new device with a one-time code.
 - Ideas & bugs: the lightbulb in the top bar opens a popup to suggest a feature or report a bug; it names your device for you.

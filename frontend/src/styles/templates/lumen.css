@@ -11,7 +11,7 @@
    ========================================================================= */
 
 /* ----------------------------------------------------------------- colour */
-html[data-template='lumen']:not([class*='fest-']) {
+html[data-template='lumen']:root {
   --ink-950: 0 0 0;
   --ink-900: 15 15 17;
   --ink-850: 24 24 27;
@@ -26,7 +26,7 @@ html[data-template='lumen']:not([class*='fest-']) {
   --vx-mesh-ember: 0.06;
   --vx-mesh-tide: 0.03;
 }
-html.light[data-template='lumen']:not([class*='fest-']) {
+html.light[data-template='lumen']:root {
   --ink-950: 255 255 255;
   --ink-900: 245 245 247;
   --ink-850: 238 238 241;
@@ -40,7 +40,7 @@ html.light[data-template='lumen']:not([class*='fest-']) {
   --ink-100: 12 12 16;
   --art: 150 150 158;
 }
-html[data-template='lumen']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+html[data-template='lumen']:root:is(:not([data-accent]), [data-accent='crimson']) {
   --ember-600: 190 20 48;
   --ember-500: 224 36 63;
   --ember-400: 255 106 128;
@@ -50,7 +50,7 @@ html[data-template='lumen']:not([class*='fest-']):is(:not([data-accent]), [data-
   --vx-on-accent: #fff;
   --art: 224 36 63;
 }
-html.light[data-template='lumen']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+html.light[data-template='lumen']:root:is(:not([data-accent]), [data-accent='crimson']) {
   --ember-600: 160 16 40;
   --ember-500: 209 32 58;
   --ember-400: 180 22 48;
@@ -93,11 +93,11 @@ html[data-template='lumen'] {
 }
 
 /* ------------------------------------------------------------------ shell */
-html[data-template='lumen']:not([class*='fest-']) .vx-shell { background: rgb(var(--ink-950)); }
-html[data-template='lumen']:not([class*='fest-']) .vx-workspace { background: rgb(var(--ink-900)); }
-html.light[data-template='lumen']:not([class*='fest-']) .vx-shell { background: rgb(var(--ink-950)); }
-html.light[data-template='lumen']:not([class*='fest-']) .vx-workspace { background: rgb(var(--ink-950)); }
-html.light[data-template='lumen']:not([class*='fest-']) .vx-shell::before { opacity: 0.35; }
+html[data-template='lumen']:root .vx-shell { background: rgb(var(--ink-950)); }
+html[data-template='lumen']:root .vx-workspace { background: rgb(var(--ink-900)); }
+html.light[data-template='lumen']:root .vx-shell { background: rgb(var(--ink-950)); }
+html.light[data-template='lumen']:root .vx-workspace { background: rgb(var(--ink-950)); }
+html.light[data-template='lumen']:root .vx-shell::before { opacity: 0.35; }
 html[data-template='lumen'] .vx-sidebar { box-shadow: inset -1px 0 0 var(--vx-border); }
 @media (min-width: 768px) {
   html[data-template='lumen'] .vx-sidebar { margin: 0; border-radius: 0; max-height: 100dvh; }

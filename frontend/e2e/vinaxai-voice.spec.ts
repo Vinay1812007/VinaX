@@ -60,7 +60,6 @@ async function setup(page: Page, opts: { voice?: typeof VOICE | null; csp?: bool
       const res = await route.fetch();
       return route.fulfill({ response: res, headers: { ...res.headers(), 'content-security-policy': APP_CSP } });
     }
-    if (url.pathname === '/api/appconfig' && url.searchParams.get('key') === 'festival') return route.fulfill({ json: { festival: { mode: 'off' } } });
     if (url.pathname === '/api/ai/models') {
       return route.fulfill({ json: { enabled: true, configured: true, groups: ['balanced'], models: [{ ...MODEL, group: 'balanced', description: '', flags: { vision: false, web: false, thinking: true, code: false }, available: true }], ...(opts.voice === null ? {} : { voice: opts.voice ?? VOICE }) } });
     }

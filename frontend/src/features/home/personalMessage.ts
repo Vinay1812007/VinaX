@@ -1,6 +1,5 @@
 import { greetingName } from '@/utils/greetingName';
 import { languageLabel } from '@/constants/languages';
-import { festivalById } from '@/constants/festivals';
 
 /**
  * Personalized home message — a different greeting for every listener, every
@@ -9,7 +8,7 @@ import { festivalById } from '@/constants/festivals';
  *
  * Pure and injectable: the page gathers the signals, this ranks which
  * message matters most right now. Priority runs from "rare and personal"
- * (festival, comeback, streak) down to a deterministic daily rotation so the
+ * (comeback, streak) down to a deterministic daily rotation so the
  * default greeting still changes day to day — but never mid-session.
  */
 export interface MessageInput {
@@ -24,7 +23,6 @@ export interface MessageInput {
   daysSinceLastListen: number; // Infinity when never
   topLanguage: string | null; // profile language id, e.g. 'telugu'
   topArtist: string | null; // display name
-  festivalId: string | null; // e.g. 'diwali'
 }
 
 export interface PersonalMessage {
@@ -55,16 +53,7 @@ export function personalMessage(i: MessageInput): PersonalMessage {
   const name = greetingName(i.name);
   const lang = i.topLanguage ? languageLabel(i.topLanguage) : null;
 
-  // 1 · Festival days beat everything — they're rare and shared.
-  const fest = festivalById(i.festivalId);
-  if (fest) {
-    return {
-      title: `${fest.greeting}${name ? `, ${name}` : ''}!`,
-      subtitle: 'Festival specials are on your home today.',
-    };
-  }
-
-  // 2 · First open ever — set expectations honestly.
+  // 1 · First open ever — set expectations honestly.
   if (i.totalPlays === 0) {
     return {
       title: `Welcome${name ? `, ${name}` : ''}`,
@@ -72,7 +61,7 @@ export function personalMessage(i: MessageInput): PersonalMessage {
     };
   }
 
-  // 3 · Coming back after a real gap.
+  // 2 · Coming back after a real gap.
   if (Number.isFinite(i.daysSinceLastListen) && i.daysSinceLastListen >= 7) {
     return {
       title: `Welcome back${name ? `, ${name}` : ''}`,
@@ -82,7 +71,7 @@ export function personalMessage(i: MessageInput): PersonalMessage {
     };
   }
 
-  // 4 · An active streak is worth celebrating (3+ days).
+  // 3 · An active streak is worth celebrating (3+ days).
   if (i.streakDays >= 3) {
     return {
       title: `Day ${i.streakDays} streak${name ? `, ${name}` : ''} 🔥`,
@@ -90,7 +79,7 @@ export function personalMessage(i: MessageInput): PersonalMessage {
     };
   }
 
-  // 5 · Friday/Saturday evening has its own energy.
+  // 4 · Friday/Saturday evening has its own energy.
   if ((i.dayOfWeek === 5 || i.dayOfWeek === 6) && i.hour >= 18 && i.hour < 23) {
     return {
       title: `${i.dayOfWeek === 5 ? 'Friday' : 'Saturday'} night${name ? `, ${name}` : ''}`,
@@ -98,7 +87,7 @@ export function personalMessage(i: MessageInput): PersonalMessage {
     };
   }
 
-  // 6 · Deep late night gets calm, not confetti.
+  // 5 · Deep late night gets calm, not confetti.
   if (i.hour >= 23 || i.hour < 5) {
     return {
       title: dayPartTitle(i.hour, name),
@@ -106,7 +95,7 @@ export function personalMessage(i: MessageInput): PersonalMessage {
     };
   }
 
-  // 7 · A heavy listening week deserves a nod.
+  // 6 · A heavy listening week deserves a nod.
   if (i.weekMinutes >= 180) {
     return {
       title: dayPartTitle(i.hour, name),
@@ -114,7 +103,7 @@ export function personalMessage(i: MessageInput): PersonalMessage {
     };
   }
 
-  // 8 · Default: deterministic daily rotation, personal where the profile
+  // 7 · Default: deterministic daily rotation, personal where the profile
   //     allows. Same message all day; different tomorrow; different per user.
   const pool: string[] = [
     lang ? `Your ${lang} favorites are waiting.` : 'Your favorites are waiting.',

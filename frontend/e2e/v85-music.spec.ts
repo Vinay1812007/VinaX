@@ -20,7 +20,7 @@ const mk = (base: string, id: string, title: string, artist: string, year = '202
 async function seedStorage(page: Page, extra: { favorites?: Song[]; entries?: unknown[]; profile?: unknown } = {}): Promise<void> {
   await page.addInitScript(
     ({ favorites, entries, profile, fp }) => {
-      localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'], festivalSkins: false }, version: 3 }));
+      localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'] }, version: 3 }));
       localStorage.setItem('vinax.library.v1', JSON.stringify({ state: { favorites, saved: [], collections: [], hiddenSongIds: [], later: [], hiddenArtists: [], trash: [] }, version: 0 }));
       localStorage.setItem('vinax.history.v1', JSON.stringify({ state: { entries }, version: 0 }));
       if (profile) localStorage.setItem('vinax.profile.v1', JSON.stringify(profile));

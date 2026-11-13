@@ -34,7 +34,7 @@ function ctxAt(hour: number, opts: Partial<RecommendationContext> = {}): Recomme
     salt: 0, profile, hour, region: null,
     pinnedLanguages: ['telugu'], mutedLanguages: [],
     intensity: 0.7, favorites: [], history: [], sessionSize: 0,
-    festival: null, explore: false,
+    explore: false,
     ...opts,
   };
 }

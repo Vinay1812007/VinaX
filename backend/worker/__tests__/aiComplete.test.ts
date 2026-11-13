@@ -87,7 +87,7 @@ describe('composeHome', () => {
   const rec = (id: string): SongRecord => ({ id, title: `Song ${id}`, artist: `Artist ${id[0]}`, artistId: null, artists: [], album: null, albumId: null, language: 'telugu', year: 2024, duration: 200, image: null, facets: {} });
   const shelf = (key: string, n: number): Shelf => ({ key, title: key, reason: `why ${key}`, songs: Array.from({ length: n }, (_, i) => rec(`${key[0]}${i}`)) });
   const shelves = [shelf('made-for-you', 20), shelf('discover', 12), shelf('trending', 8)];
-  const ctx = { taste: emptyTaste(), firstName: 'Asha', hour: 21, dow: 6, festival: null };
+  const ctx = { taste: emptyTaste(), firstName: 'Asha', hour: 21, dow: 6 };
 
   it('applies the model\'s page: order, names, a greeting and a themed shelf from the pool', async () => {
     seed(() => sseResponse(openAiSse(JSON.stringify({

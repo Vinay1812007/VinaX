@@ -2,9 +2,9 @@
  * /design — the design system v2 style guide (pages/DesignPage.tsx).
  *
  * It is the approval gate of the UI rebuild, so it must render every
- * primitive, pass axe in both themes, stay out of search, preview a festival
- * takeover across the whole app, and give the listener's own look back the
- * moment they leave.
+ * primitive, pass axe in both themes, stay out of search, preview a theme
+ * across the whole app, and give the listener's own look back the moment they
+ * leave.
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './support/test';
@@ -28,8 +28,6 @@ async function seed(page: Page, theme: 'dark' | 'light' = 'dark') {
   await page.route('**/*', (route) => {
     const url = new URL(route.request().url());
     if (!url.origin.startsWith('http://localhost')) return route.abort();
-    // The real calendar would put today's festival skin on; the guide starts from none.
-    if (url.pathname === '/api/appconfig' && url.searchParams.get('key') === 'festival') return route.fulfill({ json: { festival: { mode: 'off' } } });
     if (url.pathname.startsWith('/api/')) return route.fulfill({ json: {} });
     return route.continue();
   });
@@ -43,7 +41,7 @@ async function open(page: Page) {
 test('renders every section, stays out of search', async ({ page }) => {
   await seed(page);
   await open(page);
-  for (const name of ['Colour', 'Type', 'Space, shape and depth', 'Motion', 'Components', 'Player', 'Festival takeover']) {
+  for (const name of ['Colour', 'Type', 'Space, shape and depth', 'Motion', 'Components', 'Player']) {
     await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
   }
   await expect(page.locator('meta[name="robots"][content*="noindex"]')).toHaveCount(1);
@@ -62,7 +60,7 @@ for (const theme of ['dark', 'light'] as const) {
   });
 }
 
-test('previews a theme and a festival takeover, then gives the listener their own look back', async ({ page }) => {
+test('previews a theme, then gives the listener their own look back', async ({ page }) => {
   await seed(page);
   await open(page);
   const html = page.locator('html');
@@ -71,26 +69,9 @@ test('previews a theme and a festival takeover, then gives the listener their ow
   await bar.getByRole('tablist', { name: 'Theme' }).getByRole('tab', { name: 'Light' }).click();
   await expect(html).toHaveClass(/\blight\b/);
 
-  await bar.getByRole('tablist', { name: 'Festival' }).getByRole('tab', { name: 'Diwali' }).click();
-  await expect(html).toHaveClass(/\bfest-diwali\b/);
-  await expect(html).toHaveClass(/\bvx-takeover\b/);
-  // The preview runs the real takeover: that festival's generated palette loads.
-  await expect(page.locator('link#vx-fest-css')).toHaveAttribute('href', '/fest/fest-diwali.css');
-  const ink = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--ink-900').trim());
-  await expect.poll(ink).not.toBe('250 245 237'); // not the plain light canvas
-  await bar.getByRole('tablist', { name: 'Theme' }).getByRole('tab', { name: 'Dark' }).click();
-  await expect.poll(ink).not.toBe('19 14 22'); // not the plain dark canvas
-  // Any of the festivals, from the bar.
-  await bar.getByLabel('Any festival').selectOption('christmas');
-  await expect(page.locator('link#vx-fest-css')).toHaveAttribute('href', '/fest/fest-christmas.css');
-  await bar.getByLabel('Any festival').selectOption('diwali');
-
-  // Leaving puts back the saved look: dark, no takeover, no previewed festival.
+  // Leaving puts back the saved look: dark, as the listener had it.
   await page.getByRole('link', { name: 'Home' }).first().click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(html).not.toHaveClass(/\bvx-takeover\b/);
-  await expect(html).not.toHaveClass(/\bfest-diwali\b/);
-  await expect(page.locator('link#vx-fest-css')).toHaveCount(0);
   await expect(html).not.toHaveClass(/\blight\b/);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('vinax.settings.v1') ?? '{}').state?.theme);
   expect(saved).toBe('dark');

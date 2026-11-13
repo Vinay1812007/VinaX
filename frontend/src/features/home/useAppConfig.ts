@@ -34,35 +34,6 @@ export function useBanners() {
   });
 }
 
-export interface FestivalOverrideConfig {
-  mode?: 'auto' | 'off' | 'force';
-  id?: string;
-  /** Console rebuild: the owner's own accent colour for a forced festival ("#rrggbb"). */
-  color?: string;
-}
-
-/**
- * Festival theme override published from the admin Festival Themes panel.
- * null / 'auto' keeps the built-in calendar; 'force' skins the app with the
- * chosen festival immediately; 'off' suppresses skins even inside a window.
- */
-export function useFestivalOverride() {
-  return useQuery({
-    queryKey: ['festival-override'],
-    // 11.7.2 — re-check when the listener comes back (the app-wide default is off).
-    refetchOnWindowFocus: true,
-    staleTime: 5 * 60_000,
-    gcTime: 30 * 60_000,
-    retry: 1,
-    queryFn: async (): Promise<FestivalOverrideConfig | null> => {
-      const r = await fetch(`${BASE}/api/appconfig?key=festival`);
-      if (!r.ok) return null;
-      const j = (await r.json()) as { festival?: FestivalOverrideConfig | null };
-      return j.festival && typeof j.festival === 'object' ? j.festival : null;
-    },
-  });
-}
-
 /**
  * v5.13.0 — feature flags published from the admin console (Settings →
  * Feature Flags). Every flag is ON unless the admin switched it off, so a

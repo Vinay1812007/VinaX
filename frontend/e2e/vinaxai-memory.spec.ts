@@ -46,7 +46,6 @@ async function setup(page: Page, opts: { theme?: 'dark' | 'light' | 'amoled'; te
     const req = route.request();
     const url = new URL(req.url());
     if (!url.origin.startsWith('http://localhost')) return route.abort();
-    if (url.pathname === '/api/appconfig' && url.searchParams.get('key') === 'festival') return route.fulfill({ json: { festival: { mode: 'off' } } });
     const p = url.pathname;
     if (p === '/api/ai/models') return route.fulfill({ json: MODELS });
     if (p === '/api/ai/conversations') return route.fulfill({ json: { items: [], nextCursor: null } });

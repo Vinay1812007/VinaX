@@ -147,8 +147,7 @@ test('home, stats, history, explore, library, collection, search, settings rende
 
   // 9.0 — Home opens with the Aura Mix; the daily cards sit behind "More from your listening".
   await visit(page, '/', /aura mix|jump back in/i);
-  // Home's blocks mount as they near the screen, and a festival day's banner
-  // pushes them further down: step down the page as a listener would.
+  // Home's blocks mount as they near the screen: step down the page as a listener would.
   const more = page.getByRole('button', { name: /More from your listening/i });
   for (let i = 0; i < 24 && (await more.count()) === 0; i += 1) {
     await page.evaluate(() => document.querySelector('#main-content')?.scrollBy(0, 400));

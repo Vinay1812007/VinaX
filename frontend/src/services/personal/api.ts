@@ -59,7 +59,7 @@ async function call<T>(path: string, init: RequestInit & { timeoutMs?: number; f
   }
 }
 
-export interface HomeQuery { fresh?: boolean; mode?: string; festival?: string | null; signal?: AbortSignal; fetchImpl?: typeof fetch }
+export interface HomeQuery { fresh?: boolean; mode?: string; signal?: AbortSignal; fetchImpl?: typeof fetch }
 
 /** The composed Home, or null when the model knows too little for one yet. */
 export async function fetchPersonalHome(q: HomeQuery = {}): Promise<PersonalHomePage | null> {
@@ -67,7 +67,6 @@ export async function fetchPersonalHome(q: HomeQuery = {}): Promise<PersonalHome
   const params = new URLSearchParams({ hour: String(hour), dow: String(dow) });
   if (q.fresh) params.set('fresh', '1');
   if (q.mode) params.set('mode', q.mode);
-  if (q.festival) params.set('festival', q.festival);
   const r = await call<unknown>(`/home?${params}`, { signal: q.signal, fetchImpl: q.fetchImpl });
   if (r.status === 204) return null;
   const page = personalHomeOf(r.body);

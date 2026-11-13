@@ -4,7 +4,7 @@
  * older values working.
  */
 import { describe, expect, it } from 'vitest';
-import { activeBanners, publicBroadcast, publicClientConfig, publicFestival, publicGreeting, publicVersionPolicy } from '../functions/_lib/clientConfig';
+import { activeBanners, publicBroadcast, publicClientConfig, publicGreeting, publicVersionPolicy } from '../functions/_lib/clientConfig';
 import { publicAnnouncement } from '../functions/api/announcements';
 import { sanitizeAiSettings } from '../functions/_lib/ai/config';
 
@@ -57,14 +57,6 @@ describe('banners', () => {
       { title: 'Bad page' },
       { title: 'Song', linkType: 'song', linkId: 's1' },
     ]);
-  });
-});
-
-describe('festival', () => {
-  it('passes a custom colour for a forced festival only; off switch = no override', () => {
-    expect(publicFestival({ mode: 'force', id: 'diwali', color: '#FF8800' }, NOW)).toEqual({ mode: 'force', id: 'diwali', color: '#ff8800' });
-    expect(publicFestival({ mode: 'off', color: '#ff8800' }, NOW)).toEqual({ mode: 'off' });
-    expect(publicFestival({ mode: 'force', id: 'diwali', enabled: false }, NOW)).toBeNull();
   });
 });
 

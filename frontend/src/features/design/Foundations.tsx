@@ -74,7 +74,7 @@ const STATUS = [
   ['--info', 'Info'],
 ] as const;
 
-/** Re-measures whenever `version` changes (theme, accent, style or festival preview). */
+/** Re-measures whenever `version` changes (theme, accent or style preview). */
 function useMeasured(version: string) {
   const ref = useRef<HTMLDivElement>(null);
   const [ratios, setRatios] = useState<Record<string, string>>({});
@@ -99,7 +99,7 @@ function useMeasured(version: string) {
 export function ColorSection({ version }: { version: string }) {
   const { ref, ratios } = useMeasured(version);
   return (
-    <Section id="colour" title="Colour" lead="Semantic tokens over palette channels. Theme, accent, app style and festival swap the channels; every component follows.">
+    <Section id="colour" title="Colour" lead="Semantic tokens over palette channels. Theme, accent and app style swap the channels; every component follows.">
       <Sub title="Surfaces">
         <div className="vx-ds-swatches">
           {SURFACES.map(([t, name]) => (

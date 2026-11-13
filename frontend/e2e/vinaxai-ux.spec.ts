@@ -69,8 +69,6 @@ async function setup(page: Page, opts: { theme?: 'dark' | 'light'; template?: st
     const req = route.request();
     const url = new URL(req.url());
     if (!url.origin.startsWith('http://localhost')) return route.abort();
-    // The festival calendar is switched off so its greeting never lands mid-test.
-    if (url.pathname === '/api/appconfig' && url.searchParams.get('key') === 'festival') return route.fulfill({ json: { festival: { mode: 'off' } } });
     const p = url.pathname;
     if (p === '/api/ai/models') return route.fulfill({ json: MODELS });
     if (p === '/api/ai/chat') {

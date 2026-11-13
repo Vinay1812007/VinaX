@@ -24,7 +24,6 @@ export interface SettingSpec {
 
 export const SETTING_KEYS: readonly SettingSpec[] = [
   { key: 'banners', group: 'Home & promotion', title: 'Banners & offers', note: 'Cards at the top of Home (at most 10 live): [{ id, title, subtitle, img, linkType: song | album | playlist | artist | charts | page, linkId, start, end, enabled }]. Off or outside its dates = not shown.', shape: 'array' },
-  { key: 'festival', group: 'Home & promotion', title: 'Festival theme', note: 'Festival look: { mode: auto | off | force, id, color, start, end, enabled }. off = no festival look; force = that festival now, with an optional own colour.', shape: 'object' },
   { key: 'greeting', group: 'Home & promotion', title: 'Home greeting', note: 'A line under the Home title: { enabled, morning, afternoon, evening, night, withName, start, end } (older apps read { text }).', shape: 'object' },
   { key: 'broadcast', group: 'Home & promotion', title: 'Broadcast bar', note: 'The message bar at the top of the app: { id, text, link, style: info | success | warning | urgent, dismissible, start, end, enabled }. A new id shows it again to everyone.', shape: 'object' },
   { key: 'home-layout', group: 'Home & promotion', title: 'Home layout', note: 'Home sections: { title, description, order: [section], hidden: [section] } (at most 12 hidden, so one always stays).', shape: 'object' },

@@ -19,17 +19,11 @@ function base(over: Partial<MessageInput> = {}): MessageInput {
     daysSinceLastListen: 0.5,
     topLanguage: 'telugu',
     topArtist: 'Sid Sriram',
-    festivalId: null,
     ...over,
   };
 }
 
 describe('personalMessage priorities', () => {
-  it('festival beats everything', () => {
-    const m = personalMessage(base({ festivalId: 'diwali', streakDays: 9, totalPlays: 0 }));
-    expect(m.title).toBe('Happy Diwali, Sekhar!');
-  });
-
   it('a brand-new listener gets the honest welcome', () => {
     const m = personalMessage(base({ totalPlays: 0 }));
     expect(m.title).toBe('Welcome, Sekhar');

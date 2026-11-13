@@ -37,7 +37,7 @@ async function seed(page: Page, baseURL: string, neverRepeat = true): Promise<{ 
   ];
   await page.addInitScript(
     ({ entries, fp, neverRepeat }) => {
-      localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'], festivalSkins: false, autoplay: true, neverRepeat }, version: 5 }));
+      localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'], autoplay: true, neverRepeat }, version: 5 }));
       localStorage.setItem('vinax.history.v1', JSON.stringify({ state: { entries }, version: 0 }));
       localStorage.setItem('vinax.onboarded.v1', 'true');
       localStorage.setItem('vinax.user-name', JSON.stringify('Tester'));

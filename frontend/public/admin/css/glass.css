@@ -207,7 +207,7 @@ select.input option { background: var(--surface-solid); color: var(--text); }
 .kpi::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(160deg, rgb(255 255 255 / 0.06), transparent 40%); }
 html.light .kpi::after { background: linear-gradient(160deg, rgb(255 255 255 / 0.5), transparent 45%); }
 .card-head h3 { letter-spacing: -0.005em; }
-.attention-item, .history > li, .editor-row, .preview-box, .fest-preview, .radios.cards .radio, .sort-row, .chip, .item-head { background: var(--surface-2); }
+.attention-item, .history > li, .editor-row, .preview-box, .radios.cards .radio, .sort-row, .chip, .item-head { background: var(--surface-2); }
 .json, code.mono { background: var(--surface-2); }
 
 /* ------------------------------------------------------------- feedback */

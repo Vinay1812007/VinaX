@@ -190,13 +190,6 @@ test('13.4.0: the avatar opens profile and app settings, and Sign out signs out'
   const whatsNew = page.getByRole('button', { name: 'Let’s go' });
   await page.waitForTimeout(1500);
   if (await whatsNew.isVisible()) await whatsNew.click();
-  // A festival-day greeting opens ~1.2 s after boot; the harness closes it
-  // with Escape, which would also close this menu — let it come and go first.
-  await page.waitForTimeout(1800);
-  if (await page.locator('.fest-splash').count()) {
-    await page.keyboard.press('Escape');
-    await expect(page.locator('.fest-splash')).toHaveCount(0);
-  }
   await page.getByRole('button', { name: /profile and settings/ }).click();
   const menu = page.getByRole('menu', { name: 'Profile and settings' });
   await expect(menu).toBeVisible();

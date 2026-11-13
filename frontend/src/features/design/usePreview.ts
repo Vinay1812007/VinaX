@@ -1,16 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useSettingsStore } from '@/store/settingsStore';
 import { applyThemeClasses, normalizeTemplate, resolveTheme, type ResolvedTheme, type TemplateId } from '@/utils/theme';
-import { useFestivalPreview } from '@/features/festival/festivalPreview';
-
-/** 'none' or any festival id (constants/festivals.ts). */
-export type PreviewFestival = string;
 
 export interface PreviewState {
   theme: ResolvedTheme;
   template: TemplateId;
   accent: string;
-  festival: PreviewFestival;
   reduceMotion: boolean;
 }
 
@@ -21,7 +16,6 @@ function fromSettings(): PreviewState {
     theme: resolveTheme(s.theme, dark),
     template: normalizeTemplate(s.template),
     accent: s.accent,
-    festival: 'none',
     reduceMotion: s.reduceMotion,
   };
 }
@@ -40,7 +34,6 @@ function restore(): void {
     void import('@/utils/accentRamp').then((m) => m.applyCustomAccent(s.accentCustom, own.theme === 'light')).catch(() => undefined);
   }
   root.classList.toggle('reduce-motion', s.reduceMotion);
-  useFestivalPreview.getState().setId(null);
 }
 
 /**
@@ -58,9 +51,6 @@ export function usePreview(): [PreviewState, (patch: Partial<PreviewState>) => v
     // A custom accent lives in inline properties, which would beat every named one.
     if (state.accent !== 'custom') ACCENT_PROPS.forEach((p) => root.style.removeProperty(p));
     root.classList.toggle('reduce-motion', state.reduceMotion);
-    // The festival preview drives the real takeover (FestiveSplash links
-    // public/fest/<class>.css), exactly as a listener would see it.
-    useFestivalPreview.getState().setId(state.festival === 'none' ? null : state.festival);
   }, [state]);
 
   useEffect(() => restore, []);

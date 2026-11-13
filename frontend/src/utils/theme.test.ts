@@ -3,13 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { applyThemeClasses, normalizeTemplate, resolveTheme } from './theme';
 
-// Festival skins (html.fest-*) are deliberate, CLASS-SCOPED accent overrides
-// active only inside their calendar windows — strip those blocks so this test
-// keeps pinning the year-round base cascade, not a seasonal costume (4.17.3).
-const css = readFileSync('src/styles/index.css', 'utf8').replace(
-  /html\.fest-[\w.-]*\s*\{[^}]*\}/g,
-  '',
-);
+const css = readFileSync('src/styles/index.css', 'utf8');
 
 /** Last definition wins the cascade — assert the v3.8 MODERN MINIMAL era is
  *  what ships. Multiple :root blocks stack in this file (three previous

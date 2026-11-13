@@ -77,8 +77,6 @@ export function explainReasons(reasons: ReasonComponent[]): string {
       return top.detail ? `On ${top.detail} right now` : 'On a public chart right now';
     case 'fresh':
       return 'A recent release';
-    case 'festival':
-      return 'For the festival season';
     case 'dial':
       return top.weight < 0 ? 'Held back by your taste dials' : 'Nudged up by your taste dials';
     case 'popularity':

@@ -43,7 +43,7 @@ export const HOME_BLOCKS: Readonly<Record<string, string>> = {
   personal: 'Made for you: daily mixes built from their own taste.',
   discovery: 'Fresh discoveries: trending songs and new releases in their languages.',
   charts: 'Charts and chart playlists.',
-  seasonal: 'Seasonal and festival listening.',
+  seasonal: 'Seasonal listening.',
   moods: 'Mood shelves.',
   genres: 'Genre shelves, their top genres first.',
   artists: 'Artists they play, and artists like them.',

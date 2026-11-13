@@ -21,7 +21,6 @@ export interface ComposeContext {
   /** Local time words the device sent: hour 0–23 and day 0–6 (Sunday = 0), or null. */
   hour: number | null;
   dow: number | null;
-  festival: string | null;
 }
 
 export interface ComposedShelf { key: string; title: string; reason: string; songIds?: string[]; from?: string[] }
@@ -31,7 +30,7 @@ export const COMPOSE_SYSTEM = `You arrange the Home page of a music app for one 
 - Order the shelves, strongest first. Keep the ones that matter now; the engine appends any you leave out.
 - Rename each shelf in warm, plain words, as a friend who knows their taste would, in English unless the listener's languages suggest otherwise. Titles are at most 6 words. Reasons are one short honest line that says why this shelf exists, never flattery.
 - You may merge two shelves into one: {"key": "merge", "from": [key, key], "title", "reason"}.
-- You may add ONE themed shelf for the moment (the hour, the day, the season, a festival, a mood you see in their taste): {"key": "themed:<slug>", "title", "reason", "songIds": [8 to 20 ids FROM THE POOL ONLY]}.
+- You may add ONE themed shelf for the moment (the hour, the day, the season, a mood you see in their taste): {"key": "themed:<slug>", "title", "reason", "songIds": [8 to 20 ids FROM THE POOL ONLY]}.
 - Never invent songs, ids or facts. Never mention the listener's data in numbers. No emoji. No brand names.
 Answer with exactly one JSON object: {"greeting": string | null, "shelves": [{"key", "title", "reason", "songIds"?, "from"?}]}. The greeting is one short line (at most 60 characters) or null.`;
 
@@ -44,7 +43,6 @@ export function composePrompt(shelves: readonly Shelf[], pool: readonly SongReco
   const when: string[] = [];
   if (ctx.hour !== null) when.push(`hour ${ctx.hour}:00`);
   if (ctx.dow !== null) when.push(DAYS[ctx.dow] ?? '');
-  if (ctx.festival) when.push(`festival: ${ctx.festival}`);
   parts.push(`<listener>\nname: ${ctx.firstName ?? 'unknown'}\n${ctx.taste.summary.lines.join('\n') || 'No listening yet.'}\n</listener>`);
   parts.push(`<moment>${when.filter(Boolean).join(', ') || 'unknown'}</moment>`);
   parts.push(`<shelves>\n${shelves.map((s) => `- key: ${s.key}\n  title: ${s.title}\n  reason: ${s.reason}\n  songs: ${s.songs.slice(0, 6).map((x) => `${x.title} — ${x.artist}`).join('; ')}`).join('\n')}\n</shelves>`);

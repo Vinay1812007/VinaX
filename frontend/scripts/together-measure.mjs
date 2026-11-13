@@ -79,13 +79,13 @@ async function open(browser, who, latency) {
     localStorage.setItem('vinax.user-name', JSON.stringify(who));
     localStorage.setItem('vinax.user-handle', JSON.stringify(who.toLowerCase()));
     localStorage.setItem('vinax.analytics-consent', 'false');
-    if (!localStorage.getItem('vinax.settings.v1')) localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', festivalSkins: false, autoplay: false }, version: 3 }));
+    if (!localStorage.getItem('vinax.settings.v1')) localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', autoplay: false }, version: 3 }));
     const orig = HTMLMediaElement.prototype.play;
     HTMLMediaElement.prototype.play = function () { if (!this.muted) window.__audio = this; return orig.call(this); };
   }, { who });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.log(`[${who}] pageerror ${e.message}`));
-  await page.addLocatorHandler(page.locator('[data-vx-overlay="true"], .fest-splash').first(), async () => { await page.keyboard.press('Escape'); await page.waitForTimeout(300); }).catch(() => {});
+  await page.addLocatorHandler(page.locator('[data-vx-overlay="true"]').first(), async () => { await page.keyboard.press('Escape'); await page.waitForTimeout(300); }).catch(() => {});
   await page.route('**/*', async (route) => {
     const req = route.request();
     const url = new URL(req.url());

@@ -46,8 +46,6 @@ import { SoftMuteList } from '@/features/personalization/SoftMuteList';
 import { ACCENT_OPTIONS } from '@/constants/accents';
 import { TemplatePicker } from '@/features/settings/TemplatePicker';
 import { templateOption } from '@/constants/templates';
-import { FESTIVALS, activeFestival, nextFestival } from '@/constants/festivals';
-import { useFestivalPreview } from '@/features/festival/festivalPreview';
 import { applyGlassLevel } from '@/utils/theme';
 import { COUNTRIES, REGIONS } from '@/constants/regions';
 import { KEYS } from '@/constants/storage-keys';
@@ -421,7 +419,6 @@ function PersonalEngineRow() {
   );
 }
 
-/** 5.14.0 — festival skins switch with a live "today / next" line. */
 /** VinaX AI: download every chat (signed in only). The export code ships with the chat, not with Settings. */
 function AiChatsExportRow() {
   const account = useAccount();
@@ -439,64 +436,6 @@ function AiChatsExportRow() {
         Export
       </RowButton>
     </Row>
-  );
-}
-
-function FestivalRow() {
-  const on = useSettingsStore((x) => x.festivalSkins);
-  const setOn = useSettingsStore((x) => x.setFestivalSkins);
-  const takeover = useSettingsStore((x) => x.festivalTakeover);
-  const fx = useSettingsStore((x) => x.festivalFx);
-  const setFx = useSettingsStore((x) => x.setFestivalFx);
-  const sound = useSettingsStore((x) => x.festivalSound);
-  const setSound = useSettingsStore((x) => x.setFestivalSound);
-  const pin = useSettingsStore((x) => x.festivalPin);
-  const setPin = useSettingsStore((x) => x.setFestivalPin);
-  const previewId = useFestivalPreview((x) => x.id);
-  const setPreviewId = useFestivalPreview((x) => x.setId);
-  const today = activeFestival();
-  const next = nextFestival();
-  const line = today
-    ? `${today.name} is on now`
-    : next
-      ? `Next: ${next.festival.name} in ${next.inDays} day${next.inDays === 1 ? '' : 's'}`
-      : 'No festival on the calendar';
-  return (
-    <>
-      <Row label="Festival themes" note={`${line}.`} keywords="every festival brings its own look accent background glow greeting">
-        <Toggle on={on} onChange={setOn} label="Festival themes" />
-      </Row>
-      <Row label="Full festival look" note="Repaints the whole app in the festival's colours: backgrounds, text, the player and the VinaX mark. Off keeps only the festival accent and backdrop." keywords="festival takeover full look colours whole app repaint">
-        <Toggle on={takeover} onChange={(v) => useSettingsStore.setState({ festivalTakeover: v })} label="Full festival look" disabled={!on} />
-      </Row>
-      <Row label="Festival animations" note="Live fireworks, confetti, petals, kites, lanterns and snow behind the app, and a burst when you tap the festival banner." keywords="festival fireworks confetti particles animation live effects">
-        <Toggle on={fx} onChange={setFx} label="Festival animations" disabled={!on} />
-      </Row>
-      <Row label="Festival sounds" note="A pop with confetti and a boom with fireworks. Quiet, short, and never over the music by much." keywords="festival sound pop fireworks chime audio">
-        <Toggle on={sound} onChange={setSound} label="Festival sounds" disabled={!on} />
-      </Row>
-      <Row label="Festival look" note="Automatic follows the calendar. Pin a festival to keep its look on every day." keywords="festival manual pin choose theme automatic calendar">
-        <select aria-label="Festival look" value={pin ?? ''} onChange={(e) => setPin(e.target.value || null)} className="vx-set-select" disabled={!on}>
-          <option value="">Automatic</option>
-          {FESTIVALS.map((f) => (
-            <option key={f.id} value={f.id}>{f.name}</option>
-          ))}
-        </select>
-      </Row>
-      <Row label="Preview a festival" note="See any festival look now. Lasts until you stop it or reload. The Festivals page has every look with its dates." keywords="festival preview try skin diwali holi christmas eid">
-        <select
-          aria-label="Preview a festival"
-          value={previewId ?? ''}
-          onChange={(e) => setPreviewId(e.target.value || null)}
-          className="vx-set-select"
-        >
-          <option value="">{previewId ? 'Stop preview' : 'Off'}</option>
-          {FESTIVALS.map((f) => (
-            <option key={f.id} value={f.id}>{f.name}</option>
-          ))}
-        </select>
-      </Row>
-    </>
   );
 }
 
@@ -657,7 +596,6 @@ export default function SettingsPage() {
                 ]}
               />
             </Row>
-            <FestivalRow />
             <Group title="Colour">
               <Block label="Accent color" note="Play buttons, progress, focus and everything you have chosen. The first swatch is the app style’s own colour." keywords="colour highlight buttons links player marigold copper style">
                 <AccentSwatches value={s.accent} onChange={s.setAccent} template={s.template} />

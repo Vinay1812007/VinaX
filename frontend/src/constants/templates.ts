@@ -15,8 +15,7 @@
  * their replacements in utils/theme.ts (LEGACY_TEMPLATES).
  *
  * A template sets a default accent; the accent picker still wins when the
- * listener has chosen one, and a festival skin repaints the colours of any
- * template while it is on (the layout stays).
+ * listener has chosen one.
  */
 import { DEFAULT_TEMPLATE, TEMPLATE_CANVAS, normalizeTemplate, type TemplateId } from '@/utils/theme';
 

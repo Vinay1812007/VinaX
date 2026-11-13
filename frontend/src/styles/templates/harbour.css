@@ -12,7 +12,7 @@
    ========================================================================= */
 
 /* ----------------------------------------------------------------- colour */
-html[data-template='harbour']:not([class*='fest-']) {
+html[data-template='harbour']:root {
   --ink-950: 6 11 16;
   --ink-900: 14 23 32;
   --ink-850: 18 29 40;
@@ -27,7 +27,7 @@ html[data-template='harbour']:not([class*='fest-']) {
   --vx-mesh-ember: 0.1;
   --vx-mesh-tide: 0.06;
 }
-html.light[data-template='harbour']:not([class*='fest-']) {
+html.light[data-template='harbour']:root {
   --ink-950: 255 255 255;
   --ink-900: 242 245 248;
   --ink-850: 234 238 243;
@@ -41,7 +41,7 @@ html.light[data-template='harbour']:not([class*='fest-']) {
   --ink-100: 8 16 26;
   --art: 130 150 170;
 }
-html[data-template='harbour']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+html[data-template='harbour']:root:is(:not([data-accent]), [data-accent='crimson']) {
   --ember-600: 24 160 172;
   --ember-500: 37 199 213;
   --ember-400: 110 220 230;
@@ -51,7 +51,7 @@ html[data-template='harbour']:not([class*='fest-']):is(:not([data-accent]), [dat
   --vx-on-accent: #021418;
   --art: 37 199 213;
 }
-html.light[data-template='harbour']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+html.light[data-template='harbour']:root:is(:not([data-accent]), [data-accent='crimson']) {
   --ember-600: 4 92 100;
   --ember-500: 7 112 122;
   --ember-400: 6 98 108;
@@ -107,8 +107,7 @@ html[data-template='harbour'] {
   --vx-mat-art: 0;
 }
 /* 13.2 — the light glass rule in base.css is (0,3,1); match it and win by order. */
-html.light[data-template='harbour'],
-html.light[data-template='harbour']:not([class*='fest-']) {
+html.light[data-template='harbour']:root {
   --vx-mat-thin: rgb(var(--ink-950));
   --vx-mat-regular: rgb(var(--ink-950));
   --vx-mat-chrome: rgb(var(--ink-950));
@@ -120,9 +119,9 @@ html[data-template='harbour'] :is(.vx-mat-thin, .vx-mat-regular, .vx-mat-chrome,
 }
 
 /* ------------------------------------------------------------------ shell */
-html[data-template='harbour']:not([class*='fest-']) .vx-shell { background: rgb(var(--ink-950)); }
+html[data-template='harbour']:root .vx-shell { background: rgb(var(--ink-950)); }
 /* A faint light from the playing artwork at the top; navy below. */
-html[data-template='harbour']:not([class*='fest-']) .vx-workspace {
+html[data-template='harbour']:root .vx-workspace {
   background:
     radial-gradient(1200px 300px at 50% -140px, rgb(var(--art) / 0.28), transparent 70%) local,
     rgb(var(--ink-900));
@@ -202,7 +201,7 @@ html[data-template='harbour'] .vx-np-tabs [role='tab'] { border-radius: 0; }
 html[data-template='harbour'] .vx-np-tabs [role='tab'][aria-selected='true'] { background: transparent; color: rgb(var(--ember-400)); box-shadow: inset 0 -2px 0 rgb(var(--ember-500)); }
 
 /* Now Playing: the artwork blurred behind a navy scrim; square picture. */
-html[data-template='harbour']:not([class*='fest-']) .vx-np-bg-wash { background: linear-gradient(180deg, rgb(var(--ink-950) / 0.35), rgb(var(--ink-950) / 0.92) 70%); }
+html[data-template='harbour']:root .vx-np-bg-wash { background: linear-gradient(180deg, rgb(var(--ink-950) / 0.35), rgb(var(--ink-950) / 0.92) 70%); }
 html[data-template='harbour'] .vx-np-art-img { box-shadow: 0 16px 40px -18px rgb(0 0 0 / 0.8); }
 html[data-template='harbour'] .vx-np-play { width: 64px; height: 64px; }
 html[data-template='harbour'] .vx-np-title { font-weight: 800; letter-spacing: -0.01em; }

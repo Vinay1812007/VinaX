@@ -134,29 +134,6 @@ describe('exploration budget (A4)', () => {
   });
 });
 
-describe('festival boost (A10)', () => {
-  it('lifts a song in the festival language during its window', () => {
-    const s = song({ id: 'm', language: 'malayalam', playCount: 1000 });
-    const withFest = scoreCandidate(cand(s), ctx({ festival: { id: 'onam', languages: ['malayalam'] } }));
-    const noFest = scoreCandidate(cand(s), ctx());
-    expect(withFest.score).toBeGreaterThan(noFest.score);
-  });
-
-  it('lifts a devotional-mood song for a devotional festival', () => {
-    const s = song({ id: 'b', title: 'Krishna Bhajan', language: 'hindi', playCount: 1000 });
-    const withFest = scoreCandidate(cand(s), ctx({ festival: { id: 'diwali', moods: ['devotional'] } }));
-    const noFest = scoreCandidate(cand(s), ctx());
-    expect(withFest.score).toBeGreaterThan(noFest.score);
-  });
-
-  it('is a no-op off-season (festival null)', () => {
-    const s = song({ id: 'x', language: 'telugu', playCount: 1000 });
-    const off = scoreCandidate(cand(s), ctx({ festival: null }));
-    const plain = scoreCandidate(cand(s), ctx());
-    expect(off.score).toBeCloseTo(plain.score, 10);
-  });
-});
-
 describe('rankCandidates', () => {
   it('dedupes by song id and drops non-positive (muted) scores', () => {
     const out = rankCandidates(

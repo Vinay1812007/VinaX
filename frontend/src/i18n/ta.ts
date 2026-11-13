@@ -9,7 +9,7 @@ const TA: Record<string, string> = {
   'Background blur': 'பின்னணி மங்கல்', 'Backup Center': 'காப்பு மையம்', 'Clear favorites': 'பிடித்தவற்றை அழி', 'Clear history': 'வரலாற்றை அழி',
   'Clear queue': 'வரிசையை காலி செய்', Crossfade: 'கிராஸ்ஃபேட்', 'Crossfade length': 'கிராஸ்ஃபேட் நீளம்', 'Daily listening goal': 'தினசரி கேட்கும் இலக்கு',
   'Data saver': 'டேட்டா சேமிப்பு', Density: 'அடர்த்தி', 'Display size': 'திரை அளவு', 'Download quality': 'பதிவிறக்கத் தரம்', 'Dynamic theme': 'மாறும் தீம்',
-  'Festival themes': 'பண்டிகை தீம்கள்', 'Gentle wake': 'மெதுவாக எழுப்பு', 'Glass effect': 'கண்ணாடி விளைவு', Haptics: 'அதிர்வு', 'High contrast': 'அதிக மாறுபாடு',
+  'Gentle wake': 'மெதுவாக எழுப்பு', 'Glass effect': 'கண்ணாடி விளைவு', Haptics: 'அதிர்வு', 'High contrast': 'அதிக மாறுபாடு',
   'Keep screen on in player': 'பிளேயரில் திரையை ஒளிரவிடு', 'Lock screen lyrics': 'பூட்டுத் திரையில் வரிகள்', 'Lyrics script': 'வரிகளின் எழுத்து', 'Lyrics size': 'வரிகளின் அளவு',
   'Minutes a week': 'வாரத்திற்கு நிமிடங்கள்', 'New artists a week': 'வாரத்திற்கு புதிய கலைஞர்கள்', 'New-music alerts': 'புதிய பாடல் அறிவிப்புகள்', 'Push notifications': 'புஷ் அறிவிப்புகள்',
   'Reduce motion': 'அசைவைக் குறை', 'Reset app state': 'செயலியை மீட்டமை', 'Resume playback': 'நிறுத்திய இடத்திலிருந்து', 'Smart downloads': 'ஸ்மார்ட் பதிவிறக்கங்கள்', Theme: 'தீம்',

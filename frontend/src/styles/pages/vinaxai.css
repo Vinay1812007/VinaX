@@ -1162,8 +1162,8 @@ div.vx-ai-gallery-note p { margin: 0; }
    ========================================================================== */
 :root {
   /* Design system v2 (UI rebuild Phase 8): VinaX AI reads the app's own
-     tokens (styles/tokens.css), so it follows every theme, app style and
-     festival like the rest of VinaX. The --vx-ai-* names stay as aliases. */
+     tokens (styles/tokens.css), so it follows every theme and app style
+     like the rest of VinaX. The --vx-ai-* names stay as aliases. */
   --vx-ai-ease: var(--ease-standard);
   --vx-ai-lift: var(--elev-3);
   --vx-ai-lift-sm: var(--elev-2);

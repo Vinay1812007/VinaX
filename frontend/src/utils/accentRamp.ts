@@ -1,8 +1,7 @@
 /**
  * v5.17.0 — custom accent colour. From one hex the app derives the same
  * 300/400/500/600 ramps the built-in accents use (dark UI + an AA-safe light
- * UI), and applies them as inline variables on <html>. Mirrors the festival
- * generator's colour math (scripts/festivals-gen-core.mjs).
+ * UI), and applies them as inline variables on <html>.
  */
 function hexToRgb(hex: string): [number, number, number] | null {
   const h = hex.replace('#', '').trim();

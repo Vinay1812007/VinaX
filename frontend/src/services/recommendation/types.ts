@@ -1,6 +1,5 @@
 import type { HistoryEntry, RegionInfo, Song } from '@/types';
 import type { Mood } from './mood';
-import type { FestivalMusic } from './festival';
 import type { TasteProfile } from '@/services/personalization/profile';
 import type { UserRecommendationProfile, SessionRecommendationProfile } from './profiles';
 import type { DiscoveryMode } from '@/store/settingsStore';
@@ -164,8 +163,6 @@ export type ReasonKind =
   | 'chart'
   /** 7.2.0 — a release from this year or last. */
   | 'fresh'
-  /** 7.2.0 — an active festival's languages or moods. */
-  | 'festival'
   /** 7.2.0 — the listener's taste dials. */
   | 'dial'
   /** 8.2.0 — close to what the listener loves and plays (the on-device taste vector, ./vectors.ts). */
@@ -249,9 +246,6 @@ export interface RecommendationContext {
   /** Package A1 — window size; the scorer weights the vector lightly until
    *  a few songs have played this session (avoids over-reacting to 1 track). */
   sessionSize?: number;
-  /** Package A10 — active festival's music-boost descriptor (languages/moods to
-   *  lift during its window), or null/undefined off-season. */
-  festival?: FestivalMusic | null;
   /** Package A4 — explore mode (Settings, default off): adds a ~15% discovery
    *  slot of trending-in-unheard-languages picks to the taste-generic shelves. */
   explore?: boolean;

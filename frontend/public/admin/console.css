@@ -491,9 +491,6 @@ textarea.input.code { font: 12.5px/1.5 var(--font-mono); min-height: 220px; resi
 .inline-label { display: inline-flex; align-items: center; gap: 6px; }
 .sub-settings { display: grid; gap: 14px; padding: 4px 0 0 18px; border-left: 2px solid var(--border); transition: opacity .15s; }
 .sub-settings.dim { opacity: .5; }
-.fest-preview { display: flex; gap: 12px; align-items: stretch; padding: 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); }
-.fest-ribbon { width: 10px; border-radius: var(--radius-pill); flex: none; }
-.fest-text { display: grid; gap: 2px; }
 .weight-list { display: grid; border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; }
 .weight-row { display: grid; grid-template-columns: 150px minmax(120px, 1fr) 96px auto; gap: 12px; align-items: center; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--border); }
 .weight-row:last-child { border-bottom: 0; }

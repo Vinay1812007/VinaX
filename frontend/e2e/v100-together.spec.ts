@@ -144,7 +144,7 @@ async function open(browser: Browser, base: string, server: ReturnType<typeof ro
       localStorage.setItem('vinax.user-handle', JSON.stringify(who.toLowerCase()));
       localStorage.setItem('vinax.analytics-consent', 'false');
       localStorage.setItem('vinax.last-seen-version', JSON.stringify(fp));
-      localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', festivalSkins: false, autoplay: false }, version: 3 }));
+      localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', autoplay: false }, version: 3 }));
       if (queue.length) localStorage.setItem('vinax.player.v1', JSON.stringify({ state: { queue, index: 0 }, version: 1 }));
       // Keep a handle on the engine's <audio> (it is never in the DOM).
       const w = window as unknown as { __audio?: HTMLMediaElement };

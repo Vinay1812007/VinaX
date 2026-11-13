@@ -4,9 +4,6 @@ import { searchSongs } from '@/services/api';
 import { rankSongs } from '@/features/search/useSearch';
 import { useRegion } from '@/features/location/useRegion';
 import { dailyBucket } from './dailyRotation';
-import { activeFestival, type Festival } from '@/constants/festivals';
-import { festivalShortName } from './festivalLookahead';
-import { festivalVisual } from '@/constants/festivalVisuals';
 
 const STALE = 4 * 60 * 60_000;
 
@@ -22,31 +19,18 @@ interface Season {
  * caller renders nothing at all.
  *
  * Priority when multiple could apply: most-specific event wins.
- * - A festival that is ON today → that festival's own songs
  * - Dec       → Christmas
  * - Feb       → Valentine's
- * - Oct–Nov   → Festival Specials
  * - Jul–Sep IN → Monsoon Melodies
  * - Jun–Aug   → Summer Hits
  * - Fri–Sun ≥17h → Weekend Party (fallback)
- *
- * The festival comes first because the month is only ever a guess at one. On
- * Diwali the month rule offered "Festival Specials" and the generic query
- * `festival celebration songs` while the app was already wearing Diwali's
- * skin, greeting the listener by name and offering Diwali songs everywhere
- * else. Home now agrees with the rest of the app.
  */
-export function pickSeason(now: Date, country: string | null | undefined, festival: Festival | null = null): Season | null {
-  if (festival) {
-    const short = festivalShortName(festival.name);
-    return { id: `fest-${festival.id}`, title: `${short} Songs`, query: festivalVisual(festival.id).query };
-  }
+export function pickSeason(now: Date, country: string | null | undefined): Season | null {
   const m = now.getUTCMonth(); // 0=Jan
   const dow = now.getUTCDay(); // 0=Sun,5=Fri,6=Sat
   const h = now.getUTCHours();
   if (m === 11) return { id: 'christmas', title: 'Christmas Songs', query: 'christmas holiday songs' };
   if (m === 1) return { id: 'valentine', title: "Valentine's Playlist", query: 'valentine love songs' };
-  if (m === 9 || m === 10) return { id: 'festival', title: 'Festival Specials', query: 'festival celebration songs' };
   if (country === 'IN' && m >= 6 && m <= 8) {
     return { id: 'monsoon', title: 'Monsoon Melodies', query: 'monsoon rain hindi songs' };
   }
@@ -66,9 +50,7 @@ export interface SeasonalShelfResult {
 export function useSeasonalShelf(): SeasonalShelfResult {
   const region = useRegion();
   const now = new Date();
-  // activeFestival reads the LOCAL date, the same one the skin and the
-  // greeting are chosen from, so the shelf turns over with them.
-  const season = pickSeason(now, region?.country, activeFestival(now));
+  const season = pickSeason(now, region?.country);
   const bucket = dailyBucket();
   const query = useQuery<Song[]>({
     queryKey: ['seasonal', season?.id ?? 'none', bucket],

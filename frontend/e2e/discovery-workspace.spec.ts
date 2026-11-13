@@ -22,7 +22,7 @@ async function setup(page: Page, theme: string) {
       localStorage.setItem(
         'vinax.settings.v1',
         JSON.stringify({
-          state: { theme, pinnedLanguages: ['telugu'], festivalSkins: false },
+          state: { theme, pinnedLanguages: ['telugu'] },
           version: 2,
         }),
       );

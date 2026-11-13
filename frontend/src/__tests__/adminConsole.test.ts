@@ -57,7 +57,6 @@ beforeAll(() => {
   };
   run(read('core.js'), 'core.js');
   for (const f of KIT) run(read(f), f);
-  run(read('festivals.js'), 'festivals.js');
   for (const f of pageFiles) run(read(`pages/${f}`), f);
   (w.VX as { me: unknown }).me = { email: 'owner@example.com', role: 'owner', via: 'google' };
   VX = w.VX as VXType;

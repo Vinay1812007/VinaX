@@ -43,9 +43,8 @@ import { initAlarm } from '@/services/alarm';
 const ShortcutsModal = lazy(() => import('@/components/ShortcutsModal').then((m) => ({ default: m.ShortcutsModal })));
 // Android-app only, so loaded on demand: never part of a browser's first load.
 const UpdateDialog = lazy(() => import('@/components/UpdateDialog').then((m) => ({ default: m.UpdateDialog })));
-// Boot overlays (festival splash, What's-New sheet) render at most once per
-// day/release — lazy chunks, not first-load bytes (161KB budget, zero slack).
-const FestiveSplash = lazy(() => import('@/components/FestiveSplash').then((m) => ({ default: m.FestiveSplash })));
+// The What's-New sheet renders at most once per release — a lazy chunk, not
+// first-load bytes (161KB budget, zero slack).
 const WhatsNewSheet = lazy(() => import('@/components/WhatsNewSheet').then((m) => ({ default: m.WhatsNewSheet })));
 // 13.9 — the sign-in sheet for a visitor browsing signed out; fetched the first time it opens.
 const SignInPrompt = lazy(() => import('@/components/SignInPrompt'));
@@ -596,7 +595,6 @@ export function AppLayout() {
         </Suspense>
       )}
       <Suspense fallback={null}>
-        <FestiveSplash />
         <WhatsNewSheet />
       </Suspense>
       {signInOpen && (

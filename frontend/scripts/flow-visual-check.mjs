@@ -26,7 +26,7 @@ try {
       localStorage.setItem('vinax.onboarded.v1','true');
       localStorage.setItem('vinax.user-handle',JSON.stringify('flow_test'));
       localStorage.setItem('vinax.user-name',JSON.stringify('Vinay'));
-      localStorage.setItem('vinax.settings.v1',JSON.stringify({state:{theme,highContrast:label === 'large-contrast',accent:'crimson',reduceMotion:true,festivalSkins:false,pinnedLanguages:['telugu','hindi','tamil']},version:3}));
+      localStorage.setItem('vinax.settings.v1',JSON.stringify({state:{theme,highContrast:label === 'large-contrast',accent:'crimson',reduceMotion:true,pinnedLanguages:['telugu','hindi','tamil']},version:3}));
       localStorage.setItem('vinax.player.v1',JSON.stringify({state:{queue:songs,index:0,repeat:'off',shuffle:false,volume:.5,muted:true,rate:1},version:1}));
       localStorage.setItem('vinax.library.v1',JSON.stringify({state:{favorites:songs.slice(0,3),saved:[],collections:[],later:[],trash:[],hiddenArtists:[],hiddenSongIds:[]},version:0}));
       localStorage.setItem('vinax.history.v1',JSON.stringify({state:{entries:songs.map(song=>({song,ts:Date.now(),completed:true}))},version:0}));

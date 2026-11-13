@@ -98,7 +98,6 @@ describe('the record', () => {
       profile, history, hour: 14, dayOfWeek: 3, pinnedLanguages: ['telugu'], discoveryMode: 'discover',
       seedSong: makeSong('seed', { title: 'Party Seed', artist: 'Seeder', mood: 'energetic', energy: 0.8, genre: 'dance', dialect: 'coastal' }),
       sessionMood: 'energetic', sessionEnergy: 0.7, sessionLanguage: 'telugu', sessionSize: 6,
-      festival: { id: 'test', languages: ['telugu'], moods: ['energetic'] },
       sessionIntent: deriveIntent([ev(9, 'complete', 'known', 'x1', 0.8), ev(7, 'complete', 'known', 'x2', 0.9), ev(5, 'skip', 'other', 'x3', 0.2), ev(3, 'skip', 'other', 'x4', 0.1), ev(1, 'like', 'known', 'x5', 0.8)], NOW),
       userProfile: buildUserRecommendationProfile(profile, [makeSong('fav', { artist: 'Known', genre: 'dance', energy: 0.7 })], history),
     });

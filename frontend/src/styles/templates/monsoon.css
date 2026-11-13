@@ -13,7 +13,7 @@
    ========================================================================= */
 
 /* ----------------------------------------------------------------- colour */
-html[data-template='monsoon']:not([class*='fest-']) {
+html[data-template='monsoon']:root {
   --ink-950: 17 19 21;
   --ink-900: 27 30 33;
   --ink-850: 33 37 41;
@@ -28,7 +28,7 @@ html[data-template='monsoon']:not([class*='fest-']) {
   --vx-mesh-ember: 0.14;
   --vx-mesh-tide: 0.06;
 }
-html.light[data-template='monsoon']:not([class*='fest-']) {
+html.light[data-template='monsoon']:root {
   --ink-950: 255 255 255;
   --ink-900: 244 246 246;
   --ink-850: 236 240 240;
@@ -42,7 +42,7 @@ html.light[data-template='monsoon']:not([class*='fest-']) {
   --ink-100: 8 16 16;
   --art: 140 156 156;
 }
-html[data-template='monsoon']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+html[data-template='monsoon']:root:is(:not([data-accent]), [data-accent='crimson']) {
   --ember-600: 30 160 136;
   --ember-500: 44 198 168;
   --ember-400: 110 220 196;
@@ -52,7 +52,7 @@ html[data-template='monsoon']:not([class*='fest-']):is(:not([data-accent]), [dat
   --vx-on-accent: #06211b;
   --art: 44 198 168;
 }
-html.light[data-template='monsoon']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+html.light[data-template='monsoon']:root:is(:not([data-accent]), [data-accent='crimson']) {
   --ember-600: 10 100 84;
   --ember-500: 15 125 104;
   --ember-400: 8 100 84;
@@ -101,8 +101,7 @@ html[data-template='monsoon'] {
   --vx-mat-specular: transparent;
   --vx-mat-art: 0;
 }
-html.light[data-template='monsoon'],
-html.light[data-template='monsoon']:not([class*='fest-']) {
+html.light[data-template='monsoon']:root {
   --vx-mat-chrome: rgb(var(--ink-950));
   --vx-mat-thick: rgb(var(--ink-950));
 }
@@ -112,14 +111,14 @@ html[data-template='monsoon'] :is(.vx-mat-chrome, .vx-mat-thick) {
 }
 
 /* ------------------------------------------------------------------ shell */
-html[data-template='monsoon']:not([class*='fest-']) .vx-shell { background: rgb(var(--ink-950)); }
+html[data-template='monsoon']:root .vx-shell { background: rgb(var(--ink-950)); }
 /* The page opens on a teal band that falls into the canvas. */
-html[data-template='monsoon']:not([class*='fest-']) .vx-workspace {
+html[data-template='monsoon']:root .vx-workspace {
   background:
     linear-gradient(180deg, rgb(var(--ember-500) / 0.28), rgb(var(--ember-500) / 0.08) 180px, transparent 300px) local,
     rgb(var(--ink-900));
 }
-html.light[data-template='monsoon']:not([class*='fest-']) .vx-workspace {
+html.light[data-template='monsoon']:root .vx-workspace {
   background:
     linear-gradient(180deg, rgb(var(--ember-500) / 0.18), rgb(var(--ember-500) / 0.05) 180px, transparent 300px) local,
     rgb(var(--ink-900));
@@ -181,7 +180,7 @@ html[data-template='monsoon'] .vxh-hero { border-radius: 10px; }
 html[data-template='monsoon'] :is(.vx-play-fab, .vx-np-play) { box-shadow: 0 10px 24px -12px rgb(var(--ember-600) / 0.8); }
 
 /* Now Playing: the artwork's colour as a wash, a 12px picture, a teal play. */
-html[data-template='monsoon']:not([class*='fest-']) .vx-np-bg-art { opacity: 0.5; }
+html[data-template='monsoon']:root .vx-np-bg-art { opacity: 0.5; }
 html[data-template='monsoon'] .vx-np-art-img { box-shadow: 0 20px 48px -20px rgb(0 0 0 / 0.7); }
 html[data-template='monsoon'] .vx-np-play { width: 64px; height: 64px; }
 html[data-template='monsoon'] .vx-np-title { font-weight: 700; }
