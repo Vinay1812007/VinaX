@@ -404,3 +404,25 @@ for (const theme of ['dark', 'light'] as const) {
     expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).slice(0, 3).join(', ')}`)).toEqual([]);
   });
 }
+
+test('Live voice on a phone: every control fits on screen (UI rebuild Phase 8)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await setup(page);
+  await page.routeWebSocket(/generativelanguage\.googleapis\.com/, (ws) => {
+    ws.onMessage((raw) => {
+      const msg = JSON.parse(String(raw)) as Record<string, unknown>;
+      if (msg.setup) ws.send(JSON.stringify({ setupComplete: {} }));
+    });
+  });
+  await page.goto('/vinaxai');
+  await page.getByRole('button', { name: 'Start Live voice' }).click();
+  const live = page.getByRole('dialog', { name: 'Live voice' });
+  await expect(live.getByRole('button', { name: 'End' })).toBeVisible();
+  const boxes = await live.locator('.vx-ai-live-btn').evaluateAll((els) => els.map((el) => el.getBoundingClientRect()).map((r) => ({ l: r.left, r: r.right, w: r.width })));
+  expect(boxes.length).toBeGreaterThanOrEqual(2);
+  for (const b of boxes) {
+    expect(b.l).toBeGreaterThanOrEqual(0);
+    expect(b.r).toBeLessThanOrEqual(390);
+    expect(b.w).toBeGreaterThanOrEqual(44); // still a full touch target
+  }
+});

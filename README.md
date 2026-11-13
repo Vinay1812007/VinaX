@@ -1450,6 +1450,10 @@ The UI is being rebuilt on one system, phase by phase. Phase 1 adds the base; pa
   - The styles' comments now point at README › App styles; the old `docs/app-styles.md` is gone.
   - All six styles were checked in dark and light with live data. Contrast was already gated per style × theme × accent (`templates.test.ts`) and per festival (`festivalTakeover.test.ts`); festivals take over a style's colours.
   - Tests: `templates.test.ts` (dial → token contract) and `e2e/design-system.spec.ts` (primitives take Harbour's and Onyx's shapes).
+- **VinaX AI and Live voice (Phase 8):**
+  - `vinaxai.css` reads the app's tokens: `--vx-ai-ease` is `--ease-standard`, `--vx-ai-lift` and `--vx-ai-lift-sm` are `--elev-3` and `--elev-2`, timings are `--dur-*`, pills are `--radius-pill`, and Live's End is `--danger-solid`. The AI screens follow every theme, style and festival like the rest of the app; the `--vx-ai-*` names stay as aliases.
+  - Live voice's six controls scale with the viewport, down to 44px, and may wrap; at 390px they used to run off both edges (`e2e/vinaxai-voice.spec.ts`).
+  - The AI dialogs (confirm, share, projects) stay as they are. They already trap focus, close on Escape and Back, and use `alertdialog` semantics, and moving them onto `Dialog` would change their glass for no listener gain.
 - **Festival takeover (Phase 6):** during a festival the whole app repaints, not just the accent.
   - **What it changes.** `npm run gen:festivals` (`scripts/festivals-gen-core.mjs`) writes `public/fest/fest-<id>.css` for all 43 festivals. Each file sets:
     - all eleven `--ink-*` steps, tinted toward the festival's canvas hue, for dark and light;

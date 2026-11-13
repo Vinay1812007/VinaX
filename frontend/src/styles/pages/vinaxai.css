@@ -535,7 +535,7 @@
 .vx-ai-opt-sub { grid-column: 1; font-size: 0.75rem; color: rgb(var(--ink-400)); }
 .vx-ai-badges { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 4px; align-self: center; flex-wrap: wrap; justify-content: flex-end; max-width: 150px; }
 .vx-ai-badge { font-size: 0.6875rem; padding: 1px 6px; border-radius: var(--radius-pill, 999px); border: 1px solid var(--glass-border); color: rgb(var(--ink-300)); }
-.vx-ai-switch { width: 34px; height: 20px; border-radius: 999px; background: rgb(var(--ink-700)); position: relative; flex-shrink: 0; transition: background var(--vx-motion-fast) ease; }
+.vx-ai-switch { width: 34px; height: 20px; border-radius: var(--radius-pill); background: rgb(var(--ink-700)); position: relative; flex-shrink: 0; transition: background var(--vx-motion-fast) ease; }
 .vx-ai-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: rgb(var(--ink-100)); transition: transform var(--vx-motion-fast) ease; }
 .vx-ai-switch.is-on { background: rgb(var(--ember-500)); }
 .vx-ai-switch.is-on::after { transform: translateX(14px); background: var(--vx-on-accent); }
@@ -555,7 +555,7 @@
 .vx-ai-composer-tools .vx-ai-icon-btn { width: 34px; height: 34px; }
 .vx-ai-plus { position: relative; }
 .vx-ai-plus-menu { bottom: calc(100% + 6px); left: 0; min-width: 280px; }
-.vx-ai-pill { font-size: 0.75rem; padding: 3px 8px; border-radius: 999px; background: rgb(var(--ember-500) / 0.14); color: rgb(var(--ember-300)); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.vx-ai-pill { font-size: 0.75rem; padding: 3px 8px; border-radius: var(--radius-pill); background: rgb(var(--ember-500) / 0.14); color: rgb(var(--ember-300)); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .vx-ai-composer-row .vx-ai-send { margin-left: 6px; }
 .vx-ai-picker { position: relative; margin-left: auto; flex: none; }
 .vx-ai-picker-btn {
@@ -579,7 +579,7 @@
 .vx-ai-picker-filters { display: flex; gap: 6px; padding: 6px 8px 8px; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
 .vx-ai-picker-filters::-webkit-scrollbar { display: none; }
 .vx-ai-filter {
-  flex: none; min-height: 30px; padding: 0 10px; border-radius: 999px; font-size: 0.75rem; white-space: nowrap;
+  flex: none; min-height: 30px; padding: 0 10px; border-radius: var(--radius-pill); font-size: 0.75rem; white-space: nowrap;
   border: 1px solid var(--glass-border); color: rgb(var(--ink-300)); background: transparent;
 }
 .vx-ai-filter:hover { color: rgb(var(--ink-100)); background: rgb(var(--ink-800)); }
@@ -658,7 +658,7 @@
 .vx-ai-cite-wrap { position: relative; display: inline-block; margin: 0 3px; vertical-align: super; line-height: 1; }
 .vx-ai-cite {
   display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px;
-  border-radius: 999px; font-size: 0.6875rem; font-weight: 700; text-decoration: none !important;
+  border-radius: var(--radius-pill); font-size: 0.6875rem; font-weight: 700; text-decoration: none !important;
   background: rgb(var(--ink-800)); color: rgb(var(--ink-200)) !important; border: 1px solid var(--glass-border);
 }
 .vx-ai-cite:hover, .vx-ai-cite:focus-visible { background: rgb(var(--ember-500)); color: var(--vx-on-accent) !important; }
@@ -677,7 +677,7 @@
 .vx-ai-sources ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .vx-ai-sources a {
   display: flex; align-items: center; gap: 6px; max-width: 260px; min-height: 32px; padding: 3px 10px 3px 4px;
-  border-radius: 999px; border: 1px solid var(--glass-border); background: rgb(var(--ink-850)); font-size: 0.8125rem; color: rgb(var(--ink-200));
+  border-radius: var(--radius-pill); border: 1px solid var(--glass-border); background: rgb(var(--ink-850)); font-size: 0.8125rem; color: rgb(var(--ink-200));
 }
 .vx-ai-sources a:hover { background: rgb(var(--ink-800)); color: rgb(var(--ink-100)); }
 .vx-ai-mono { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; background: rgb(var(--ink-700)); color: rgb(var(--ink-100)); font-size: 0.6875rem; font-weight: 700; }
@@ -814,7 +814,7 @@
 .vx-ai-field select { width: 100%; }
 .vx-ai-mic-test { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 4px; }
 .vx-ai-mic-live { display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
-.vx-ai-mic-bar { position: relative; flex: 0 0 96px; height: 8px; border-radius: 999px; background: rgb(var(--ink-700)); overflow: hidden; }
+.vx-ai-mic-bar { position: relative; flex: 0 0 96px; height: 8px; border-radius: var(--radius-pill); background: rgb(var(--ink-700)); overflow: hidden; }
 .vx-ai-mic-bar i { position: absolute; inset: 0 auto 0 0; background: rgb(var(--ember-500)); border-radius: inherit; transition: width 80ms linear; }
 .vx-ai-mic-name { font-size: 0.75rem; color: rgb(var(--ink-400)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 @media (prefers-reduced-motion: reduce) { .vx-ai-mic-bar i { transition: none; } }
@@ -860,11 +860,11 @@
 .vx-ai-live-picks { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 4px 0 8px; }
 .vx-ai-live-pick {
   display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 40px; padding: 0 4px 0 12px;
-  border-radius: 999px; border: 1px solid var(--glass-border); background: rgb(var(--ink-100) / 0.06);
+  border-radius: var(--radius-pill); border: 1px solid var(--glass-border); background: rgb(var(--ink-100) / 0.06);
   font-size: 0.8125rem; color: rgb(var(--ink-400));
 }
 .vx-ai-live-pick select {
-  min-width: 0; max-width: min(220px, 52vw); min-height: 38px; padding: 0 8px; border: 0; border-radius: 999px;
+  min-width: 0; max-width: min(220px, 52vw); min-height: 38px; padding: 0 8px; border: 0; border-radius: var(--radius-pill);
   background: transparent; color: rgb(var(--ink-100)); font: inherit; font-weight: 600; text-overflow: ellipsis;
 }
 .vx-ai-live-pick select option { background: rgb(var(--ink-800)); color: rgb(var(--ink-100)); }
@@ -916,14 +916,14 @@
 .vx-ai-live-preview video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .vx-ai-live-preview .vx-ai-icon-btn { position: absolute; right: 6px; bottom: 6px; background: rgb(0 0 0 / 0.55); color: #fff; }
 /* Live voice in the background: a small bar above the player while the listener browses. */
-.vx-ai-live-mini { position: fixed; z-index: 45; left: 50%; transform: translateX(-50%); bottom: calc(var(--player-safe-offset, 72px) + 12px); display: flex; align-items: center; gap: 6px; max-width: calc(100vw - 32px); padding: 6px 8px 6px 6px; border-radius: 999px; background: rgb(var(--surface-900, 24 24 27) / 0.96); color: rgb(var(--ink-50, 250 250 250)); box-shadow: 0 8px 28px rgb(0 0 0 / 0.35); border: 1px solid rgb(255 255 255 / 0.08); backdrop-filter: blur(12px); }
+.vx-ai-live-mini { position: fixed; z-index: 45; left: 50%; transform: translateX(-50%); bottom: calc(var(--player-safe-offset, 72px) + 12px); display: flex; align-items: center; gap: 6px; max-width: calc(100vw - 32px); padding: 6px 8px 6px 6px; border-radius: var(--radius-pill); background: rgb(var(--surface-900, 24 24 27) / 0.96); color: rgb(var(--ink-50, 250 250 250)); box-shadow: 0 8px 28px rgb(0 0 0 / 0.35); border: 1px solid rgb(255 255 255 / 0.08); backdrop-filter: blur(12px); }
 @media (min-width: 768px) { .vx-ai-live-mini { bottom: calc(var(--player-safe-offset, 88px) + 16px); } }
-.vx-ai-live-mini-main { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 2px 8px 2px 2px; border: 0; background: none; color: inherit; cursor: pointer; text-align: left; border-radius: 999px; }
+.vx-ai-live-mini-main { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 2px 8px 2px 2px; border: 0; background: none; color: inherit; cursor: pointer; text-align: left; border-radius: var(--radius-pill); }
 .vx-ai-live-mini-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
 .vx-ai-live-mini-title { font-size: 0.8125rem; font-weight: 600; }
 .vx-ai-live-mini-status { font-size: 0.75rem; opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 44vw; }
 .vx-ai-live-orb.is-mini { width: 36px; height: 36px; flex: none; }
-.vx-ai-live-mini-end { flex: none; padding: 7px 14px; border: 0; border-radius: 999px; background: #e5484d; color: #fff; font-weight: 600; font-size: 0.8125rem; cursor: pointer; }
+.vx-ai-live-mini-end { flex: none; padding: 7px 14px; border: 0; border-radius: var(--radius-pill); background: var(--danger-solid); color: #fff; font-weight: 600; font-size: 0.8125rem; cursor: pointer; }
 .vx-ai-live-mini-end:disabled { opacity: 0.6; cursor: default; }
 .vx-ai-live-hint { margin: -10px 0 0; font-size: 0.8125rem; color: rgb(var(--ink-400)); }
 @keyframes vx-ai-breathe { 50% { transform: scale(0.98); } }
@@ -936,10 +936,13 @@
 .vx-ai-live-sources { width: 100%; max-width: 560px; text-align: left; }
 .vx-ai-live-sources .vx-ai-sources { margin-top: 0; }
 .vx-ai-live-sources .vx-ai-sources ol { max-height: 84px; overflow-y: auto; }
-.vx-ai-live-controls { display: flex; justify-content: center; align-items: center; gap: 16px; padding: 12px 0; }
+/* v2 — six controls (mic, camera, screen, photo, captions, End) must fit a
+   phone: they scale with the viewport down to the 44px touch minimum, and the
+   row may wrap rather than run off the edges (it used to clip both ends at 390px). */
+.vx-ai-live-controls { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: clamp(6px, 2vw, 16px); padding: 12px 0; }
 .vx-ai-live-btn {
-  display: inline-grid; place-items: center; min-width: 64px; height: 64px; padding: 0 22px;
-  border-radius: 999px; background: rgb(var(--ink-800)); color: rgb(var(--ink-100));
+  display: inline-grid; place-items: center; min-width: clamp(44px, 12vw, 64px); height: clamp(44px, 12vw, 64px); padding: 0 clamp(12px, 3.2vw, 22px);
+  border-radius: var(--radius-pill); background: rgb(var(--ink-800)); color: rgb(var(--ink-100));
   font-weight: 700; font-size: 1rem; border: 1px solid var(--glass-border);
 }
 .vx-ai-live-btn.is-on { background: rgb(var(--ink-100)); color: rgb(var(--ink-900)); }
@@ -1158,9 +1161,12 @@ div.vx-ai-gallery-note p { margin: 0; }
    prefers-reduced-motion: no-preference, so nothing here moves otherwise.
    ========================================================================== */
 :root {
-  --vx-ai-ease: var(--ease-calm, cubic-bezier(0.32, 0.72, 0, 1));
-  --vx-ai-lift: 0 1px 2px rgb(0 0 0 / 0.22), 0 18px 44px -14px rgb(0 0 0 / 0.62);
-  --vx-ai-lift-sm: 0 10px 30px -16px rgb(0 0 0 / 0.6);
+  /* Design system v2 (UI rebuild Phase 8): VinaX AI reads the app's own
+     tokens (styles/tokens.css), so it follows every theme, app style and
+     festival like the rest of VinaX. The --vx-ai-* names stay as aliases. */
+  --vx-ai-ease: var(--ease-standard);
+  --vx-ai-lift: var(--elev-3);
+  --vx-ai-lift-sm: var(--elev-2);
   --vx-ai-hover: rgb(var(--ink-100) / 0.07);
   --vx-ai-press: rgb(var(--ink-100) / 0.11);
   --vx-ai-skel: rgb(var(--ink-100) / 0.07);
@@ -1169,8 +1175,6 @@ div.vx-ai-gallery-note p { margin: 0; }
   --vx-ai-glow-b: 0.09;
 }
 html.light {
-  --vx-ai-lift: 0 1px 2px rgb(48 22 34 / 0.06), 0 18px 44px -18px rgb(48 22 34 / 0.24);
-  --vx-ai-lift-sm: 0 10px 28px -16px rgb(48 22 34 / 0.22);
   --vx-ai-skel-hi: rgb(255 255 255 / 0.75);
   --vx-ai-glow-a: 0.07;
   --vx-ai-glow-b: 0.05;
@@ -1316,7 +1320,7 @@ html.light .vx-ai-scrim::before { background: rgb(48 22 34 / 0.3); }
   position: relative;
   display: block;
   height: 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
   background: var(--vx-ai-skel);
 }
@@ -1385,21 +1389,21 @@ html.light .vx-ai-scrim::before { background: rgb(48 22 34 / 0.3); }
   .vx-ai-welcome .vx-ai-empty { animation: vx-ai-rise 480ms var(--vx-ai-ease) backwards; }
   .vx-ai-welcome .vx-ai-starters { animation: vx-ai-rise 480ms var(--vx-ai-ease) 90ms backwards; }
   .vx-ai-welcome .vx-ai-footer { animation: vx-ai-fade 480ms ease 180ms backwards; }
-  .vx-ai-error, .vx-ai-notice, .vx-ai-artifact-card, .vx-ai-sources, .vx-ai-think-body { animation: vx-ai-rise 260ms var(--vx-ai-ease) backwards; }
+  .vx-ai-error, .vx-ai-notice, .vx-ai-artifact-card, .vx-ai-sources, .vx-ai-think-body { animation: vx-ai-rise var(--dur-base) var(--ease-standard) backwards; }
   .vx-ai-actions { animation: vx-ai-fade 240ms ease backwards; }
 
   /* Menus, dialogs, sheets and panels open with a short settle. */
-  .vx-ai-pop { --vx-ai-dy: -6px; transform-origin: top right; animation: vx-ai-pop-in 180ms var(--vx-ai-ease) backwards; }
+  .vx-ai-pop { --vx-ai-dy: -6px; transform-origin: top right; animation: vx-ai-pop-in var(--dur-quick) var(--ease-standard) backwards; }
   .vx-ai-plus-menu, .vx-ai-retry-menu { --vx-ai-dy: 6px; transform-origin: bottom left; }
   .vx-ai-picker-list { --vx-ai-dy: 6px; transform-origin: bottom right; }
   .vx-ai-cite-tip { animation: vx-ai-fade 140ms ease backwards; }
   .vx-ai-scrim::before { animation: vx-ai-fade 200ms ease backwards; }
-  .vx-ai-dialog { animation: vx-ai-dialog-in 240ms var(--vx-ai-ease) backwards; }
-  .vx-ai-settings { animation: vx-ai-sheet-in 300ms var(--vx-ai-ease) backwards; }
-  .vx-ai-artifact { animation: vx-ai-panel-in 280ms var(--vx-ai-ease) backwards; }
+  .vx-ai-dialog { animation: vx-ai-dialog-in var(--dur-base) var(--ease-standard) backwards; }
+  .vx-ai-settings { animation: vx-ai-sheet-in var(--dur-slow) var(--ease-standard) backwards; }
+  .vx-ai-artifact { animation: vx-ai-panel-in var(--dur-slow) var(--ease-standard) backwards; }
   .vx-ai-artifact.is-sheet { animation-name: vx-ai-sheet-up; }
   .vx-ai-live { animation: vx-ai-fade 260ms ease backwards; }
-  .vx-ai-live-stage { animation: vx-ai-dialog-in 360ms var(--vx-ai-ease) 60ms backwards; }
+  .vx-ai-live-stage { animation: vx-ai-dialog-in var(--dur-slow) var(--ease-standard) 60ms backwards; }
   .vx-ai-live-orb::before { transition: opacity 300ms ease; }
   .vx-ai-live-orb:is(.is-connecting, .is-listening, .is-speaking)::before { animation: vx-ai-spin 6s linear infinite; }
   .vx-ai-live-orb.is-speaking::before { animation-duration: 2.4s; }
@@ -1410,18 +1414,18 @@ html.light .vx-ai-scrim::before { background: rgb(48 22 34 / 0.3); }
   .vx-ai-live-orb.is-speaking .vx-ai-live-orb-swirl { animation-duration: 4.5s; }
   .vx-ai-live-orb:is(.is-muted, .is-ended) > span { animation-play-state: paused; }
   .vx-ai-live-orb-btn:not(:disabled):active .vx-ai-live-orb { transform: scale(0.88); }
-  .vx-ai-jump { animation: vx-ai-jump-in 220ms var(--vx-ai-ease) backwards; }
+  .vx-ai-jump { animation: vx-ai-jump-in var(--dur-base) var(--ease-standard) backwards; }
 
   /* Press and hover. */
   :is(.vx-ai-icon-btn, .vx-ai-act, .vx-ai-send, .vx-ai-chip, .vx-ai-picker-btn, .vx-ai-side-new, .vx-ai-np-toggle,
     .vx-ai-code-copy, .vx-ai-live-btn, .vx-ai-back, .vx-ai-new, .vx-ai-row-more, .vx-ai-cite, .vx-ai-tabs button, .vx-ai-jump) {
-    transition: transform 180ms var(--vx-ai-ease), background-color 140ms ease, color 140ms ease, opacity 140ms ease;
+    transition: transform var(--dur-quick) var(--ease-standard), background-color 140ms ease, color 140ms ease, opacity 140ms ease;
   }
   :is(.vx-ai-icon-btn, .vx-ai-act, .vx-ai-send, .vx-ai-np-toggle, .vx-ai-code-copy, .vx-ai-back, .vx-ai-new, .vx-ai-row-more):active:not(:disabled) { transform: scale(0.92); }
   :is(.vx-ai-chip, .vx-ai-picker-btn, .vx-ai-side-new, .vx-ai-live-btn, .vx-ai-tabs button):active:not(:disabled) { transform: scale(0.97); }
   .vx-ai-jump:active { transform: translateX(-50%) scale(0.92); }
   .vx-ai-composer { transition: border-color var(--vx-motion-fast) ease, box-shadow var(--vx-motion-normal) var(--vx-ai-ease); }
-  .vx-ai-artifact-card, .vx-ai-gallery-card, .vx-ai-proj-card { transition: transform 220ms var(--vx-ai-ease), background-color 140ms ease; }
+  .vx-ai-artifact-card, .vx-ai-gallery-card, .vx-ai-proj-card { transition: transform var(--dur-base) var(--ease-standard), background-color 140ms ease; }
   .vx-ai-think-chev { transition: transform var(--vx-motion-normal) var(--vx-ai-ease); }
   @media (hover: hover) and (pointer: fine) {
     .vx-ai-send:not(:disabled):hover { transform: translateY(-1px); }
