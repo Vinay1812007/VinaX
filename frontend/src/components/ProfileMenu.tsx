@@ -14,6 +14,12 @@ import { pushSupported } from '@/services/push';
 import { toast } from '@/store/toastStore';
 import { BellIcon, ClockIcon, PlayIcon, SettingsIcon, ShieldIcon, SparkleIcon, SunIcon, UsersIcon } from './Icons';
 
+/** 2.0 — the owner console, on its own address (its Google sign-in is allowed there). */
+export const ADMIN_CONSOLE_URL = 'https://admin.vinaxmusic.online/admin/';
+export function openAdminConsole(): void {
+  window.open(ADMIN_CONSOLE_URL, '_blank', 'noopener,noreferrer');
+}
+
 type Icon = ComponentType<{ className?: string }>;
 interface Item {
   label: string;
@@ -136,6 +142,27 @@ export default function ProfileMenu({
         {/* Settings shows Notifications only where this device can get them. */}
         {APP_ITEMS.filter((it) => it.label !== 'Notifications' || pushSupported() || isNativePlatform()).map(row)}
       </div>
+      {account?.user.admin && (
+        <div role="group" aria-labelledby="vx-pmenu-admin">
+          <p id="vx-pmenu-admin" className="vx-pmenu-label">
+            Admin
+          </p>
+          {/* 2.0 — admins only: the owner console, which signs in on its own. */}
+          <button
+            type="button"
+            role="menuitem"
+            tabIndex={-1}
+            className="vx-pmenu-item"
+            onClick={() => {
+              onClose(false);
+              openAdminConsole();
+            }}
+          >
+            <ShieldIcon className="w-5 h-5" />
+            <span>Admin dashboard</span>
+          </button>
+        </div>
+      )}
       {account && (
         <button
           type="button"

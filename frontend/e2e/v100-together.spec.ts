@@ -440,13 +440,28 @@ test('the Listen Together pill can be dragged out of the way, stays there, and a
       a = b;
     }
   };
-  const start = await settled();
+  // Press on the pill. Its label and the player under it can still shift it a
+  // few pixels after it looks settled, so where the pointer holds it is read
+  // after the press, from the pill itself (a press does not move it).
+  let grab = { x: 0, y: 0 };
+  for (let attempt = 0; ; attempt += 1) {
+    const at = await settled();
+    const px = at.x + at.width / 2;
+    const py = at.y + at.height / 2;
+    await host.mouse.move(px, py);
+    await host.mouse.down();
+    const held = (await pill.boundingBox())!;
+    if (px >= held.x && px <= held.x + held.width && py >= held.y && py <= held.y + held.height) {
+      grab = { x: px - held.x, y: py - held.y };
+      break;
+    }
+    await host.mouse.up();
+    expect(attempt, 'the pill kept moving under the pointer').toBeLessThan(3);
+  }
 
   // Drag it to the top left.
-  await host.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
-  await host.mouse.down();
   await host.mouse.move(400, 300, { steps: 8 });
-  await host.mouse.move(120 + start.width / 2, 140 + start.height / 2, { steps: 8 });
+  await host.mouse.move(120 + grab.x, 140 + grab.y, { steps: 8 });
   await host.mouse.up();
   const moved = (await pill.boundingBox())!;
   expect(Math.abs(moved.x - 120)).toBeLessThan(4);

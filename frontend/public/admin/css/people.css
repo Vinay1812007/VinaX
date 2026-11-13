@@ -8,6 +8,9 @@
 .dash-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 16px; align-items: start; }
 .dash-w { position: relative; min-width: 0; display: grid; gap: 8px; }
 .dash-w > .card { height: 100%; }
+/* 2.0 — Quick actions: one full-width button per job, the first one filled. */
+.dash-quick { display: grid; gap: 8px; }
+.dash-quick > .btn { justify-content: flex-start; width: 100%; min-height: 44px; }
 .dash-w.size-normal { grid-column: span 1; }
 .dash-w.size-wide { grid-column: span 2; }
 .dash-w.size-full { grid-column: 1 / -1; }

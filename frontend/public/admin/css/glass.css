@@ -11,79 +11,81 @@
    scrolling underneath never show through. */
 
 :root {
-  --bg: #070b14;
-  --bg-2: #0b1222;
+  /* 2.0 — the VinaX colours: plum-black ground, amber accent, pink beside it. */
+  --bg: #0d090f;
+  --bg-2: #130e16;
   /* Panels. `--surface` is the card colour; `--surface-solid` is for sticky
      cells and anything that must hide what scrolls beneath it. */
-  --surface: rgb(18 25 41 / 0.62);
-  --surface-solid: #111a2c;
-  --surface-2: rgb(255 255 255 / 0.05);
-  --surface-3: rgb(255 255 255 / 0.1);
-  --border: rgb(255 255 255 / 0.09);
-  --border-strong: rgb(255 255 255 / 0.17);
-  --text: #eaf0f8;
-  --text-2: #b6c0cf;
-  --text-3: #8e99ab;
+  --surface: rgb(27 20 31 / 0.82);
+  --surface-solid: #1b141f;
+  --surface-2: rgb(251 245 236 / 0.05);
+  --surface-3: rgb(251 245 236 / 0.1);
+  --border: rgb(251 245 236 / 0.09);
+  --border-strong: rgb(251 245 236 / 0.17);
+  --text: #fbf5ec;
+  --text-2: #cbc2cb;
+  --text-3: #b6abb8;
 
-  --accent: #2fd0e6;
-  --accent-2: #4f8dff;
-  --accent-hover: #6adff0;
-  --accent-soft: rgb(47 208 230 / 0.14);
-  --accent-grad: linear-gradient(135deg, #2dd4bf 0%, #22b8e8 45%, #4f7dff 100%);
-  --on-accent: #03141c;
+  --accent: #ffa42e;
+  --accent-2: #ff6384;
+  --accent-hover: #ffc066;
+  --accent-soft: rgb(255 164 46 / 0.14);
+  --accent-grad: linear-gradient(135deg, #ffc066 0%, #ffa42e 45%, #ff6384 100%);
+  --on-accent: #1a0e06;
 
-  --info: #7aa7ff; --info-soft: rgb(122 167 255 / 0.14);
+  --info: #93c5fd; --info-soft: rgb(147 197 253 / 0.14);
 
-  --c1: #2fd0e6; --c2: #7c9cff; --c3: #4cc38a; --c4: #c38ef0; --c5: #f06a8f; --c6: #f2a33a;
+  --c1: #ffa42e; --c2: #7c9cff; --c3: #4cc38a; --c4: #c38ef0; --c5: #ff6384; --c6: #2fd0e6;
 
   --glass-blur: blur(18px) saturate(150%);
   --glass-blur-strong: blur(28px) saturate(160%);
-  --glass-rim: inset 0 1px 0 rgb(255 255 255 / 0.07);
+  --glass-rim: inset 0 1px 0 rgb(255 255 255 / 0.05);
   --shadow: 0 1px 2px rgb(0 0 0 / 0.25), var(--glass-rim);
   --shadow-card: 0 8px 30px rgb(0 0 0 / 0.28), var(--glass-rim);
   --shadow-float: 0 18px 60px rgb(0 0 0 / 0.55), var(--glass-rim);
-  --pop: rgb(17 24 40 / 0.86);
+  --pop: rgb(27 20 31 / 0.94);
 
-  --glow-a: rgb(45 212 191 / 0.30);
-  --glow-b: rgb(59 130 246 / 0.30);
-  --glow-c: rgb(139 92 246 / 0.24);
+  --glow-a: rgb(255 164 46 / 0.12);
+  --glow-b: rgb(255 99 132 / 0.10);
+  --glow-c: rgb(120 70 140 / 0.14);
 
   --r-sm: 8px; --r-md: 12px; --r-lg: 18px;
   --focus: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
 }
 html.light {
-  --bg: #eaf0f7;
-  --bg-2: #f4f7fb;
-  --surface: rgb(255 255 255 / 0.62);
-  --surface-solid: #f7f9fc;
-  --surface-2: rgb(16 34 64 / 0.045);
-  --surface-3: rgb(16 34 64 / 0.085);
-  --border: rgb(16 34 64 / 0.1);
-  --border-strong: rgb(16 34 64 / 0.18);
-  --text: #0e1828;
-  --text-2: #36445a;
-  --text-3: #556278;
+  --bg: #faf5ed;
+  --bg-2: #fffcf7;
+  --surface: rgb(255 252 247 / 0.86);
+  --surface-solid: #fffcf7;
+  --surface-2: rgb(24 14 22 / 0.045);
+  --surface-3: rgb(24 14 22 / 0.085);
+  --border: rgb(24 14 22 / 0.1);
+  --border-strong: rgb(24 14 22 / 0.18);
+  --text: #180e16;
+  --text-2: #4a3c46;
+  --text-3: #5e4f58;
 
-  --accent: #0369a1;
-  --accent-2: #2563eb;
-  --accent-hover: #075985;
-  --accent-soft: rgb(3 105 161 / 0.1);
-  --accent-grad: linear-gradient(135deg, #0d9488 0%, #0284c7 45%, #2563eb 100%);
+  --accent: #a84a04;
+  --accent-2: #c42060;
+  --accent-hover: #803602;
+  --accent-soft: rgb(168 74 4 / 0.1);
+  --accent-grad: linear-gradient(135deg, #c86a10 0%, #a84a04 45%, #c42060 100%);
   --on-accent: #ffffff;
 
   --info: #1d4ed8; --info-soft: rgb(29 78 216 / 0.09);
-  --c1: #0e7490; --c2: #4f46e5; --c3: #1d8a57; --c4: #8a4cc4; --c5: #c43a6a; --c6: #b45309;
+  --c1: #a84a04; --c2: #4f46e5; --c3: #1d8a57; --c4: #8a4cc4; --c5: #c42060; --c6: #0e7490;
 
   --glass-rim: inset 0 1px 0 rgb(255 255 255 / 0.7);
-  --shadow: 0 1px 2px rgb(16 34 64 / 0.06), var(--glass-rim);
-  --shadow-card: 0 8px 30px rgb(16 34 64 / 0.08), var(--glass-rim);
-  --shadow-float: 0 18px 60px rgb(16 34 64 / 0.18), var(--glass-rim);
-  --pop: rgb(255 255 255 / 0.88);
+  --shadow: 0 1px 2px rgb(24 14 22 / 0.06), var(--glass-rim);
+  --shadow-card: 0 8px 30px rgb(24 14 22 / 0.08), var(--glass-rim);
+  --shadow-float: 0 18px 60px rgb(24 14 22 / 0.18), var(--glass-rim);
+  --pop: rgb(255 252 247 / 0.94);
 
-  --glow-a: rgb(45 212 191 / 0.30);
-  --glow-b: rgb(59 130 246 / 0.24);
-  --glow-c: rgb(167 139 250 / 0.24);
+  --glow-a: rgb(255 164 46 / 0.18);
+  --glow-b: rgb(255 99 132 / 0.12);
+  --glow-c: rgb(190 150 110 / 0.16);
 }
+
 
 /* ------------------------------------------------------------ background */
 body { background: var(--bg); }

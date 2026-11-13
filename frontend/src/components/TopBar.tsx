@@ -11,6 +11,8 @@ import { useAccount } from './useAccount';
 import { useUiStore } from '@/store/uiStore';
 
 const ACTIONS_SLOT = 'vx-topbar-actions';
+// Same address as the profile menu's link (ProfileMenu.tsx); a string here keeps that menu out of the first load.
+const ADMIN_CONSOLE_URL = 'https://admin.vinaxmusic.online/admin/';
 // 13.4.0 — the avatar's menu loads the first time it opens.
 const ProfileMenu = lazy(() => import('./ProfileMenu'));
 // The "Music languages" button and its picker: their own chunk, so the app shell stays small.
@@ -113,6 +115,12 @@ export function TopBar({ onCommands }: { onCommands: () => void }) {
         <Suspense fallback={null}>
           <LanguageButton />
         </Suspense>
+        {/* 2.0 — admins only: one click to the owner console (its own sign-in). */}
+        {account?.user.admin && (
+          <a className="vx-topbar-admin hidden md:inline-flex" href={ADMIN_CONSOLE_URL} target="_blank" rel="noopener noreferrer">
+            Admin
+          </a>
+        )}
         <button type="button" className="vx-command-key hidden lg:inline-flex" onClick={onCommands} aria-label="Open command palette, ⌘K" aria-keyshortcuts="Meta+K Control+K"><kbd>⌘</kbd><kbd>K</kbd></button>
         {!account ? (
           <button type="button" className="vx-topbar-signin" onClick={() => openSignIn('account')}>
