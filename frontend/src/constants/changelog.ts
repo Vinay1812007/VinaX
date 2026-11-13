@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.20': {
+    title: 'Festivals now repaint the whole app: every colour, the player and the VinaX mark',
+    changes: [
+      { type: 'improved', text: 'During a festival, all of VinaX takes on its colours: backgrounds, cards, text, the sidebar and the tab bar, in both dark and light, for all 43 festivals.' },
+      { type: 'improved', text: 'Page titles shine in the festival\'s two colours, and the VinaX mark wears the day\'s emblem (a diya for Diwali, a tree for Christmas, a crescent for Eid…).' },
+      { type: 'improved', text: 'The progress line in the player runs in the festival\'s colours.' },
+      { type: 'improved', text: 'It\'s ready from the very first moment the app opens, without flashing the everyday colours first.' },
+    ],
+  },
   '1.13.19': {
     title: 'Charts opens on the music, Discover shows every tile in full, and Settings menus match',
     changes: [
