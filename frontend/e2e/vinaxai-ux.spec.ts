@@ -241,7 +241,7 @@ test('VinaX AI is in the side navigation and the command palette', async ({ page
   await expect(page).toHaveURL(/\/vinaxai$/);
 });
 
-for (const template of ['lumen', 'verdant', 'monsoon', 'harbour', 'verse', 'onyx']) {
+for (const template of ['vinax']) {
   for (const theme of ['dark', 'light'] as const) {
     test(`no WCAG A/AA violations: ${template}, ${theme}`, async ({ page }) => {
       const server = await setup(page, { theme, template });

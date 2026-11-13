@@ -17,7 +17,6 @@ vi.mock('@/services/cast', () => ({
   useCastStore: { getState: () => ({ connected: false }) },
   castInterceptPlayPause: () => false, castInterceptSeek: () => false, castInterceptVolume: () => false, castMime: vi.fn(),
 }));
-vi.mock('@/utils/streak', () => ({ bumpStreak: vi.fn() }));
 const recommendMock = vi.fn(async (): Promise<Song[]> => []);
 vi.mock('@/services/nextup/engine', () => ({
   warmNextUp: () => undefined,

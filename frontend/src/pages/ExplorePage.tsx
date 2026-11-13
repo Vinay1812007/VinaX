@@ -43,7 +43,6 @@ const tiles: Array<{ to: string; label: string; meta: string; tone: number; icon
   { to: '/languages', label: 'Languages', meta: 'In your own script', tone: 2, icon: MusicIcon },
   { to: '/regions', label: 'Regions', meta: 'Local favourites', tone: 4, icon: GlobeIcon },
   { to: '/made-for-you', label: 'Made for you', meta: 'Mixes from your listening', tone: 7, icon: HeartIcon },
-  { to: '/quiz', label: 'Music quiz', meta: 'Guess the song', tone: 11, icon: PlayIcon },
 ];
 
 /** Package D3 — the mood × language matrix. Pick a language, tap a mood cell,

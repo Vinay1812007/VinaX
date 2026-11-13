@@ -119,7 +119,7 @@ export const TUTORIALS: Tutorial[] = [
     playsMusic: true,
     steps: [
       { route: '/', title: 'A tour that plays', body: 'This tour runs inside the app and starts a song in your first language.', tip: 'Leave at any time with Esc or Close.' },
-      { route: '/', target: '.vx-topbar', title: 'Where you are', body: 'The top bar holds this page’s actions. Home, Discover, Search and Library sit in the navigation.', placement: 'bottom' },
+      { route: '/', target: '.vx-topbar', title: 'Where you are', body: 'The top bar holds this page’s actions. Home, Search, Library and VinaX AI sit in the navigation.', placement: 'bottom' },
       { route: '/', target: '[data-tour="hero-play"]', title: 'Your mix', body: 'This button plays a mix built from your languages and listening. Press Next and the tour starts a song.', placement: 'bottom' },
       { target: PLAYER, title: 'The player bar', body: 'Play, pause and skip from here. Tap the artwork or title for the full-screen player.', action: async () => { await playTutorialSong(); await wait(700); }, placement: 'top' },
       { target: `${PLAYER} [aria-label="Add to favorites"], ${PLAYER} [aria-label="Remove from favorites"]`, title: 'Like a song', body: 'The heart adds the song to Liked songs. Your likes shape Home, on this device only.', placement: 'top' },
@@ -183,14 +183,12 @@ export const TUTORIALS: Tutorial[] = [
   {
     id: 'app-look',
     title: 'Change the app’s look',
-    blurb: 'Six app styles, plus theme, accent colour and frosted glass.',
+    blurb: 'Dark, light or black, and your own accent colour.',
     minutes: 1,
     emoji: '🎨',
     steps: [
-      { route: '/settings', target: '[aria-label="App style"] [aria-checked="true"]', title: 'App style', body: 'This is the style in use. Each of the six changes colours, type, shapes, the navigation and the player.', action: reveal('[aria-label="App style"]'), placement: 'bottom' },
-      { route: '/settings', title: 'Try another one', body: 'Tap any style and the app changes at once. Your music, library and settings stay as they are.', tip: 'Lumen, Verdant, Monsoon, Harbour, Verse and Onyx.' },
+      { route: '/settings', target: '[aria-label="Theme"] [aria-checked="true"]', title: 'Theme', body: 'This is the theme in use. Choose Dark, Black or Light, or let it follow your device or the time of day.', action: reveal('[aria-label="Theme"]'), placement: 'bottom' },
       { route: '/settings', target: '[aria-label="Custom accent colour"]', title: 'Accent colour', body: 'Choose one of the preset accents, or pick any colour here and VinaX builds the palette from it.', action: reveal('[aria-label="Custom accent colour"]'), placement: 'bottom' },
-      { route: '/settings', target: '[aria-label="Glass effect intensity"]', title: 'Frosted glass', body: 'This slider sets how see-through the bars, menus and sheets are. Slide toward Solid for plain panels.', action: reveal('[aria-label="Glass effect intensity"]'), placement: 'bottom' },
     ],
   },
   {

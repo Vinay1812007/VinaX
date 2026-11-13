@@ -21,7 +21,6 @@ vi.mock('@/services/cast', () => ({
   useCastStore: { getState: () => ({ connected: false }) },
   castInterceptPlayPause: () => false, castInterceptSeek: () => false, castInterceptVolume: () => false, castMime: vi.fn(),
 }));
-vi.mock('@/utils/streak', () => ({ bumpStreak: vi.fn() }));
 
 const song = (id: string, language = 'telugu'): Song => ({
   kind: 'song', id, title: id, subtitle: 'Artist', artists: [], album: null,

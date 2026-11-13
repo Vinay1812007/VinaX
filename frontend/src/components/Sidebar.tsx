@@ -3,7 +3,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { cn } from '@/utils/cn';
 import { useSettingsStore } from '@/store/settingsStore';
 import { savedPath, useLibraryStore } from '@/store/libraryStore';
-import { BROWSE_NAV, PRIMARY_NAV, type NavItem } from '@/constants/nav';
+import { PRIMARY_NAV, type NavItem } from '@/constants/nav';
 import { bestImage } from '@/utils/images';
 import { useT } from '@/i18n';
 import { BookmarkIcon, ChevronDownIcon, ClockIcon, DownloadIcon, HeartIcon, LibraryIcon, PlusIcon } from './Icons';
@@ -44,6 +44,8 @@ const count = (n: number, one: string): string => `${n} ${one}${n === 1 ? '' : '
  * (styles/shell.css), whatever the collapse setting says.
  * 10.0.0 — Marigold: the wordmark in the display face with a "Free" tag, and
  * the active destination a solid Marigold pill.
+ * 2.0 — a short first list (Home, Discover, Radio, VinaX AI); the browse
+ * lists live on Discover and Search is a field in the top bar.
  */
 export function Sidebar() {
   const collapsed = useSettingsStore((s) => s.sidebarCollapsed);
@@ -98,11 +100,6 @@ export function Sidebar() {
 
       <nav aria-label="Main navigation" className="vx-sidebar-nav">
         <ul>{PRIMARY_NAV.filter((i) => i.to !== '/library').map(navItem)}</ul>
-      </nav>
-      {/* The browse lists, one click away (JioSaavn-style "Browse"). */}
-      <nav aria-label="Browse" className="vx-sidebar-nav is-browse">
-        {!collapsed && <p className="vx-lib-label" aria-hidden>Browse</p>}
-        <ul>{BROWSE_NAV.map(navItem)}</ul>
       </nav>
 
       <section className="vx-library" aria-label="Your library">

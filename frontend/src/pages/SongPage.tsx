@@ -18,7 +18,6 @@ import { formatDuration, formatCount } from '@/utils/format';
 import { languageLabel } from '@/constants/languages';
 import { shareLink } from '@/utils/share';
 import { toast } from '@/store/toastStore';
-import { ReactionBar } from '@/features/reactions/ReactionBar';
 
 
 export default function SongPage() {
@@ -98,12 +97,7 @@ export default function SongPage() {
         }
       />
 
-      {/* 1.12 — everyone's reactions to this song; tap one to leave yours. */}
-      <section className="vx-esection is-first" aria-label="Reactions">
-        <ReactionBar song={song} />
-      </section>
-
-      <section className="vx-esection" aria-label="Similar tracks">
+      <section className="vx-esection is-first" aria-label="Similar tracks">
         <SectionHeader title="Similar tracks" />
         {suggestions.isLoading && <ListSkeleton rows={5} />}
         <div className="vx-tracklist">

@@ -61,7 +61,7 @@ export default function AboutPage() {
           your <Link to="/taste-profile">taste profile</Link>; the Privacy page below lists what leaves your device.
         </p>
         <p>
-          Inside: six app styles that change the whole look, Radio, synced lyrics, Listen Together, offline downloads in the Android app, Drive mode, weekly mixes and a
+          Inside: one look in dark, light and black, Radio, synced lyrics, Listen Together, offline downloads in the Android app, Drive mode, weekly mixes and a
           Ctrl+K command palette. Music streams from independent public catalogues, and VinaX tries another source
           when one is unavailable.
         </p>

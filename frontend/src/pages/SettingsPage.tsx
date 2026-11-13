@@ -44,9 +44,7 @@ import { HomeAiSettings } from '@/features/home/HomeAiSettings';
 import { GenerationSettings } from '@/features/settings/GenerationSettings';
 import { SoftMuteList } from '@/features/personalization/SoftMuteList';
 import { ACCENT_OPTIONS } from '@/constants/accents';
-import { TemplatePicker } from '@/features/settings/TemplatePicker';
 import { templateOption } from '@/constants/templates';
-import { applyGlassLevel } from '@/utils/theme';
 import { COUNTRIES, REGIONS } from '@/constants/regions';
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal, setLocal } from '@/services/storage/local';
@@ -572,13 +570,10 @@ export default function SettingsPage() {
             <ClearRecentSearchesRow />
             <ProfileSettings />
             <LinkRow to="/taste-profile" label="Taste profile" note="The languages, artists and moods VinaX has learned you like." keywords="taste profile likes profile settings" />
-            <LinkRow to="/stats" label="Listening stats" note="Your minutes, top songs and streaks." keywords="stats minutes streak profile" />
+            <LinkRow to="/stats" label="Listening stats" note="Your minutes, top songs and listening calendar." keywords="stats minutes calendar profile" />
           </Section>
 
-          <Section title="Appearance" id="appearance" lede="App style, language, theme, colour and size.">
-            <Block label="App style" note="Six complete looks: colours, type, shapes, the navigation and the player all change. Your music, library and settings stay as they are." keywords="template look design layout skin ui ux lumen verdant monsoon harbour verse onyx aura pulse sangam nocturne marquee vibe redesign appearance">
-              <TemplatePicker value={s.template} onChange={s.setTemplate} />
-            </Block>
+          <Section title="Appearance" id="appearance" lede="Language, theme, colour and size.">
             <Row stack label="App language" keywords="display language interface">
               <Segmented label="App language" value={s.uiLanguage} onChange={s.setUiLanguage} options={UI_LANGS.map((l) => ({ value: l.id, label: l.label }))} />
             </Row>
@@ -597,7 +592,7 @@ export default function SettingsPage() {
               />
             </Row>
             <Group title="Colour">
-              <Block label="Accent color" note="Play buttons, progress, focus and everything you have chosen. The first swatch is the app style’s own colour." keywords="colour highlight buttons links player marigold copper style">
+              <Block label="Accent color" note="Play buttons, progress, focus and everything you have chosen. The first swatch is VinaX’s own amber." keywords="colour highlight buttons links player marigold copper style">
                 <AccentSwatches value={s.accent} onChange={s.setAccent} template={s.template} />
               </Block>
               <Row stack label="Custom accent" note="Any colour. VinaX builds a readable palette from it." keywords="colour color palette hex">
@@ -626,40 +621,6 @@ export default function SettingsPage() {
               </Row>
               <Row label="VinaX logo cursor" note="On a computer, the mouse pointer is the VinaX logo." keywords="mouse pointer cursor logo flash animation">
                 <Toggle on={s.logoCursor} onChange={s.setLogoCursor} label="VinaX logo cursor" />
-              </Row>
-              <Row stack label="Glass effect" note="From solid panels to frosted glass." keywords="transparency see-through classic">
-                <RangeRow from="Solid" to="Glass">
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={5}
-                    value={s.glassLevel}
-                    aria-label="Glass effect intensity"
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      s.setGlassLevel(v);
-                      applyGlassLevel(v, s.glassBlur);
-                    }}
-                  />
-                </RangeRow>
-              </Row>
-              <Row stack label="Background blur" note="From sharp to a soft, hazy backdrop." keywords="glass haze">
-                <RangeRow from="Sharp" to="Hazy">
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={5}
-                    value={s.glassBlur}
-                    aria-label="Background blur intensity"
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      s.setGlassBlur(v);
-                      applyGlassLevel(s.glassLevel, v);
-                    }}
-                  />
-                </RangeRow>
               </Row>
             </Group>
             <Block label="Startup page" note="What opens first." keywords="home search library last where I left off">
@@ -740,23 +701,6 @@ export default function SettingsPage() {
                   value={s.dailyGoalMinutes}
                   onChange={s.setDailyGoalMinutes}
                   options={[0, 15, 30, 60, 120].map((n) => ({ value: n, label: n === 0 ? 'Off' : n >= 60 ? `${n / 60}h` : `${n} min` }))}
-                />
-              </Row>
-              {/* 15.0 — weekly goals with streaks, on the Stats page. */}
-              <Row stack label="Minutes a week" note="A weekly target with a streak of weeks met, on Your VinaX." keywords="weekly goal streak">
-                <Segmented
-                  label="Minutes a week"
-                  value={s.weeklyGoalMinutes}
-                  onChange={s.setWeeklyGoalMinutes}
-                  options={[0, 60, 120, 300, 600].map((n) => ({ value: n, label: n === 0 ? 'Off' : n >= 60 ? `${n / 60}h` : `${n} min` }))}
-                />
-              </Row>
-              <Row stack label="New artists a week" note="Artists you had never played before. A small nudge to roam." keywords="weekly goal discover streak">
-                <Segmented
-                  label="New artists a week"
-                  value={s.weeklyGoalArtists}
-                  onChange={s.setWeeklyGoalArtists}
-                  options={[0, 3, 5, 10].map((n) => ({ value: n, label: n === 0 ? 'Off' : String(n) }))}
                 />
               </Row>
             </Group>

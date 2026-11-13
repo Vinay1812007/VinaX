@@ -1,25 +1,12 @@
 import { NavLink } from 'react-router-dom';
 import { cn } from '@/utils/cn';
-import { CompassIcon, HomeIcon, LibraryIcon, SearchIcon } from './Icons';
+import { DOCK_NAV } from '@/constants/nav';
 import { haptic } from '@/services/native';
 import { useT } from '@/i18n';
 
-interface DockItem {
-  to: string;
-  label: string;
-  icon: typeof HomeIcon;
-}
-
-const items: DockItem[] = [
-  { to: '/', label: 'Home', icon: HomeIcon },
-  { to: '/discover', label: 'Discover', icon: CompassIcon },
-  { to: '/search', label: 'Search', icon: SearchIcon },
-  { to: '/library', label: 'Library', icon: LibraryIcon },
-];
-
-/** 8.0.0 — the phone tab bar: a translucent strip, each tab an icon over its
- *  label. 10.0.0 — the active tab's solid icon sits in a Marigold pill.
- *  10.1.0 — the chrome material: the page scrolls under it, frosted. */
+/** The phone tab bar: each tab an icon over its label. 2.0 — Home, Search,
+ *  Library and VinaX AI (constants/nav.ts DOCK_NAV); a solid bar whose
+ *  active tab is the accent colour. */
 export function BottomNav() {
   const t = useT();
   return (
@@ -30,7 +17,7 @@ export function BottomNav() {
       className="vx-dock vx-mat-chrome md:hidden"
     >
       <ul className="flex items-stretch justify-around px-1">
-        {items.map(({ to, label, icon: Icon }) => (
+        {DOCK_NAV.map(({ to, label, icon: Icon }) => (
           <li key={to} className="min-w-0 flex-1">
             <NavLink
               to={to}

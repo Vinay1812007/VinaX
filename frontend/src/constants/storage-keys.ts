@@ -43,10 +43,6 @@ export const KEYS = {
   weekly: `${STORAGE_PREFIX}.weekly.v1`,
   /** 15.0 — which week's Weekly Mix the smart downloads hold, and its ids. */
   smartDownloads: `${STORAGE_PREFIX}.smart-downloads.v1`,
-  /** 15.0 — the weeks each weekly goal was met (features/stats/goals.ts). */
-  goalLedger: `${STORAGE_PREFIX}.goal-ledger.v1`,
-  /** 1.12 — badges earned (id → day) and the lifetime counters behind them (features/badges). */
-  badges: `${STORAGE_PREFIX}.badges.v1`,
   /** 15.0 — the own public profile and following list (features/social/store.ts). */
   social: `${STORAGE_PREFIX}.social.v1`,
   /** V2 1.4 — the personal engine's outgoing event queue (services/personal/reporter.ts). */

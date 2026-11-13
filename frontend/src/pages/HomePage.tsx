@@ -28,7 +28,6 @@ import { topArtists, topLanguages } from '@/services/personalization/profile';
 import { getLocal } from '@/services/storage/local';
 import { KEYS } from '@/constants/storage-keys';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
-import { getStreak } from '@/utils/streak';
 import { bestImage } from '@/utils/images';
 import { albumPath } from '@/utils/slug';
 import { listeningTotal } from '@/features/stats/listening';
@@ -36,7 +35,7 @@ import { useRegion } from '@/features/location/useRegion';
 import { useExperiment } from '@/features/experiments/useExperiment';
 import { EXP_HOME_SHELF_ORDER, homeShelfOrder } from '@/features/experiments/homeShelfOrder';
 import { useRecommendations } from '@/features/recommendations/useRecommendations';
-import { HomeHero } from '@/features/home/HomeHero';
+import { HomeHero, JumpBackIn } from '@/features/home/HomeHero';
 import { HomeFeatures, HomeWelcome } from '@/features/home/HomeWelcome';
 import { ListeningGuide } from '@/features/home/ListeningGuide';
 import { FlowEntryCard } from '@/features/flow/FlowEntryCard';
@@ -120,7 +119,8 @@ const BLOCK_EXTRAS: Partial<Record<HomeSection, () => ReactNode>> = {
 };
 
 // Default order honours the home-shelf-order experiment (personal <-> discovery).
-const HOME_BLOCK_KEYS: HomeSection[] = ['quick', 'personal', 'discovery', 'charts', 'seasonal', 'moods', 'genres', 'artists', 'albums', 'daypicks', 'loved', 'feed'];
+// 2.0 — the catalogue first, the way a music app opens: charts and new albums right after the shortcuts.
+const HOME_BLOCK_KEYS: HomeSection[] = ['quick', 'charts', 'albums', 'personal', 'discovery', 'seasonal', 'moods', 'genres', 'artists', 'daypicks', 'loved', 'feed'];
 /**
  * 9.0.0 — progressive disclosure: the first PRIMARY_BLOCKS visible blocks
  * (by default the shortcuts, For you, Designed for you and Fresh
@@ -138,8 +138,8 @@ const CATALOGUE_ROWS_AFTER = 3;
 function CatalogueRowsBand() {
   return (
     <>
-      <DeferredBlock render={() => <CityHotRow />} />
       <DeferredBlock render={() => <RadioStationsRow />} />
+      <DeferredBlock render={() => <CityHotRow />} />
       <DeferredBlock render={() => <ArtistStationsRow />} />
       <DeferredBlock render={() => <PodcastsRow />} />
     </>
@@ -281,14 +281,12 @@ function SignedInHome() {
       totalPlays: historyEntries.length,
       weekPlays: historyEntries.filter((e) => e.ts >= weekAgo).length,
       weekMinutes: listeningTotal(historyEntries, weekAgo).minutes,
-      streakDays: getStreak(),
       daysSinceLastListen: lastTs ? (Date.now() - lastTs) / 86_400_000 : Infinity,
       topLanguage: topLanguages(profile, 1)[0]?.id ?? null,
       topArtist: topArtists(profile, 1)[0]?.affinity.name ?? null,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- day-stable inputs
   }, [userName, historyEntries.length]);
-  const streakDays = getStreak();
   const [notifOpen, setNotifOpen] = useState(false);
   // 10.0.0 — nothing played on this device yet: Home opens with the free-music
   // welcome (HomeWelcome) instead of the greeting. Decided once per visit so
@@ -475,38 +473,33 @@ function SignedInHome() {
           </TopBarActions>
           <NotificationSheet open={notifOpen} onClose={() => setNotifOpen(false)} />
 
-          {/* JioSaavn-style top: a short greeting, then Trending now; the hero, chips and cards follow it. */}
+          {/* 2.0 — the top of Home: a short greeting, the language chips, Jump back in, Trending now, then your mix. */}
           {firstVisit ? (
             ownerGreeting && <p className="vxh-greet-note">{ownerGreeting}</p>
           ) : (
             <header className="vxh-greet is-compact">
               <h1>{hello.title}</h1>
-              {(streakDays > 1 || ownerGreeting) && (
+              {ownerGreeting && (
                 <p className="vxh-greet-sub">
-                  {streakDays > 1 && <span className="vxh-streak">{streakDays}-day streak</span>}
-                  {ownerGreeting && <span className="vxh-greet-note">{ownerGreeting}</span>}
+                  <span className="vxh-greet-note">{ownerGreeting}</span>
                 </p>
               )}
             </header>
           )}
 
+          <BrowseChips className="vxh-chips vxh-topchips" railLangs={railLangs} />
+          <JumpBackIn recent={continueListening} onResume={(index) => playQueue(continueListening, index)} />
           <TrendingNowRow songs={trendingNow.data} loading={trendingNow.isLoading} />
 
           <HomeHero
             design={design}
             songs={heroSongs}
-            recent={continueListening}
             lead={firstVisit ? <HomeWelcome name={userName} onStart={startListening} ready={heroSongs.length > 0} /> : undefined}
             onPlay={() => heroSongs.length && playQueue(heroSongs, 0)}
-            onResume={(index) => playQueue(continueListening, index)}
             onRadio={() => navigate('/radio')}
             onSurprise={surprise}
           />
-          <BrowseChips className="vxh-chips vxh-topchips" railLangs={railLangs} />
           {firstVisit && <HomeFeatures />}
-          <FriendsListening />
-          <ListeningGuide />
-          <FlowEntryCard />
           {/* V2 1.4 — the personal engine's page first (nothing when signed out, switched off or the model is new). */}
           {engineFirst && <Suspense fallback={null}><PersonalHome generation={generation} /></Suspense>}
 
@@ -519,6 +512,11 @@ function SignedInHome() {
             // 1.4 — the AI is being asked (at most 2.5 s): placeholders, then one layout for the whole visit.
             <div aria-busy="true" aria-label="Building your Home"><ShelfSkeleton /><ShelfSkeleton /></div>
           )}
+
+          {/* 2.0 — friends, the listening guide and Flow follow the music instead of leading it. */}
+          <FriendsListening />
+          <ListeningGuide />
+          <FlowEntryCard />
 
           <section className="vxh-explore" aria-labelledby={`${exploreRegion}-title`}>
             <div className="vxh-explore-head">

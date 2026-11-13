@@ -32,7 +32,7 @@ export interface NavGroup {
   items: NavItem[];
 }
 
-/** The browse lists, always one click away in the desktop sidebar (Discover's grid on a phone). */
+/** The browse lists (the command palette's Browse group; Discover shows them as lanes). */
 export const BROWSE_NAV: NavItem[] = [
   { to: '/new-releases', label: 'New Releases', icon: SparkleIcon },
   { to: '/charts', label: 'Top Charts', icon: WaveIcon },
@@ -85,14 +85,24 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-/** Persistent navigation is intentionally separate from the complete command catalogue. */
+/**
+ * Persistent navigation, separate from the complete command catalogue above.
+ * 2.0 — the desktop sidebar's first list: Home, Discover (everything to
+ * browse), Radio and VinaX AI. Search is a field in the top bar and Library
+ * heads its own panel in the sidebar.
+ */
 export const PRIMARY_NAV: NavItem[] = [
   { to: '/', label: 'Home', icon: HomeIcon },
-  { to: '/search', label: 'Search', icon: SearchIcon },
   { to: '/discover', label: 'Discover', icon: CompassIcon },
-  // 10.1 — the swipeable song feed (the sidebar list; the phone tab bar keeps its five).
-  { to: '/flow', label: 'Flow', icon: FlowIcon },
-  // The chat assistant (desktop side nav only; the phone tab bar keeps its four).
+  { to: '/radio', label: 'Radio', icon: WaveformIcon },
   { to: '/vinaxai', label: 'VinaX AI', icon: SparkleIcon },
   { to: '/library', label: 'Library', icon: LibraryIcon },
+];
+
+/** 2.0 — the phone tab bar's four: Discover is one tap into Search ("Browse all"). */
+export const DOCK_NAV: NavItem[] = [
+  { to: '/', label: 'Home', icon: HomeIcon },
+  { to: '/search', label: 'Search', icon: SearchIcon },
+  { to: '/library', label: 'Library', icon: LibraryIcon },
+  { to: '/vinaxai', label: 'VinaX AI', icon: SparkleIcon },
 ];

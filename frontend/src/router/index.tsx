@@ -87,8 +87,6 @@ const CacheInfoPage = lazy(() => import('@/pages/CacheInfoPage'));
 const AboutPage = lazy(() => import('@/pages/AboutPage'));
 const HelpPage = lazy(() => import('@/pages/HelpPage'));
 const StatsPage = lazy(() => import('@/pages/StatsPage'));
-const RecapPage = lazy(() => import('@/pages/RecapPage'));
-const RecapStoryPage = lazy(() => import('@/pages/RecapStoryPage'));
 const ProfilePage = lazy(() => import('@/pages/ProfilePage'));
 const SharedPlaylistPage = lazy(() => import('@/pages/SharedPlaylistPage'));
 const OfflinePage = lazy(() => import('@/pages/OfflinePage'));
@@ -96,7 +94,6 @@ const ListenTogetherPage = lazy(() => import('@/pages/ListenTogetherPage'));
 const CollectionPage = lazy(() => import('@/pages/CollectionPage'));
 const SmartCollectionPage = lazy(() => import('@/pages/SmartCollectionPage'));
 const KaraokePage = lazy(() => import('@/pages/KaraokePage'));
-const QuizPage = lazy(() => import('@/pages/QuizPage'));
 const PrivacyPage = lazy(() => import('@/pages/PrivacyPage'));
 const TermsPage = lazy(() => import('@/pages/TermsPage'));
 const ContactPage = lazy(() => import('@/pages/ContactPage'));
@@ -215,8 +212,9 @@ export const router = createBrowserRouter([
       { path: 'dmca', element: <DmcaPage /> },
       { path: 'help', element: <HelpPage /> },
       { path: 'stats', element: <StatsPage /> },
-      { path: 'recap', element: <RecapPage /> },
-      { path: 'recap/story', element: <RecapStoryPage /> },
+      // 2.0 — the year recap and the quiz are gone; their old addresses land somewhere useful.
+      { path: 'recap', element: <Navigate to="/stats" replace /> },
+      { path: 'recap/story', element: <Navigate to="/stats" replace /> },
       { path: 'u/:handle', element: <ProfilePage /> },
       { path: 'p/:id', element: <SharedPlaylistPage /> },
       { path: 'offline', element: <OfflinePage /> },
@@ -224,7 +222,7 @@ export const router = createBrowserRouter([
       { path: 'collection/:id', element: <CollectionPage /> },
       { path: 'smart/:id', element: <SmartCollectionPage /> },
       { path: 'karaoke', element: <KaraokePage /> },
-      { path: 'quiz', element: <QuizPage /> },
+      { path: 'quiz', element: <Navigate to="/discover" replace /> },
       { path: 'download', element: <DownloadPage /> },
       { path: 'drive', element: <DriveModePage /> },
       { path: 'design', element: <DesignPage /> },

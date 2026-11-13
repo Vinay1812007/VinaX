@@ -1,11 +1,5 @@
-/* 11.0 — app styles. The shared layer first, then one file per style; each
-   style's rules only match its own html[data-template] value. Imported by
-   main.tsx after shell.css. 15.0 replaced the six
-   styles (README.md › App styles). */
+/* App style. The shared layer first, then the look itself; its rules only
+   match html[data-template='vinax']. Imported by main.tsx after shell.css.
+   2.0 — VinaX has one look (README.md › App style). */
 @import './base.css';
-@import './lumen.css';
-@import './verdant.css';
-@import './monsoon.css';
-@import './harbour.css';
-@import './verse.css';
-@import './onyx.css';
+@import './vinax.css';

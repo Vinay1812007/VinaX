@@ -59,7 +59,6 @@ export function GuestHome() {
           <h1>Hi there</h1>
         </header>
         <GuestSignInCard />
-        <TrendingNowRow songs={trending.data} loading={trending.isLoading} />
         <nav className="vxh-chips" aria-label="Browse">
           <Link className="vxh-chip" to="/languages">All languages</Link>
           {langs.map((l) => <Link key={l} className="vxh-chip" to={`/${l}-songs`}>{languageLabel(l)}</Link>)}
@@ -67,6 +66,7 @@ export function GuestHome() {
           <Link className="vxh-chip" to="/moods">Moods</Link>
           <Link className="vxh-chip" to="/podcasts">Podcasts</Link>
         </nav>
+        <TrendingNowRow songs={trending.data} loading={trending.isLoading} />
         <ChartsBlock />
         <DeferredBlock render={() => <NewAlbumsRow />} />
         <DeferredBlock render={() => <EditorialRows />} />

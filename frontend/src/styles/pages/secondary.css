@@ -477,31 +477,6 @@ html.light .vx-help-tile:hover { background: rgb(var(--ink-950)); box-shadow: in
 .vx-weekgoal-meter > span { display: block; height: 100%; border-radius: inherit; background: rgb(var(--ember-500)); transition: width 400ms var(--ease-calm); }
 .vx-weekgoal-sub { margin-top: 6px; font-size: 12.5px; font-weight: 500; color: rgb(var(--ink-400)); }
 
-/* Quiz answer options. Right / wrong also carries an outline and a hidden word, not colour alone. */
-.vx-quiz-option {
-  display: block;
-  width: 100%;
-  min-height: 64px;
-  padding: 12px 18px;
-  border-radius: 18px;
-  text-align: left;
-  background: var(--sec-fill);
-  box-shadow: inset 0 0 0 1px transparent;
-  transition: background-color var(--dur-quick) var(--ease-standard), box-shadow var(--dur-quick) var(--ease-standard), opacity var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
-}
-.vx-quiz-option:not(:disabled):hover { background: var(--sec-fill-hover); }
-.vx-quiz-option:not(:disabled):active { transform: scale(0.98); }
-.vx-quiz-option.is-correct { box-shadow: inset 0 0 0 2px var(--vx-success); }
-.vx-quiz-option.is-wrong { box-shadow: inset 0 0 0 2px var(--vx-danger); }
-.vx-quiz-art { position: relative; display: grid; place-items: center; overflow: hidden; width: 200px; height: 200px; border-radius: 28px; box-shadow: var(--vx-art-shadow); background: var(--vx-glow); }
-.vx-quiz-art img { width: 100%; height: 100%; object-fit: cover; }
-.vx-quiz-bars { position: absolute; inset: auto 0 44px; display: flex; align-items: flex-end; justify-content: center; gap: 6px; }
-.vx-quiz-bars i { display: block; width: 6px; height: 28px; border-radius: 3px; background: var(--vx-on-accent); opacity: 0.85; transform-origin: bottom; }
-.vx-quiz-progress { display: flex; gap: 4px; margin-bottom: 20px; }
-.vx-quiz-progress i { flex: 1; height: 4px; border-radius: 2px; background: rgb(var(--ink-100) / 0.12); }
-.vx-quiz-progress i.is-done { background: rgb(var(--ember-500)); }
-.vx-quiz-progress i.is-now { background: rgb(var(--ember-500) / 0.45); }
-
 @media (max-width: 767px) {
   .vx-delta-ctx { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
@@ -512,55 +487,6 @@ html.light .vx-help-tile:hover { background: rgb(var(--ink-950)); box-shadow: in
 }
 html.reduce-motion .vx-sec *, html.reduce-motion .vx-sec *::before, html.reduce-motion .vx-sec *::after, html.reduce-motion .vx-empty-page * { transition: none !important; animation: none !important; }
 
-/* ------------------------------------------------ 15.0 — Wrapped: the story */
-.vx-story { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; justify-content: flex-end; padding: max(20px, var(--safe-top)) max(20px, var(--safe-right)) max(28px, var(--safe-bottom)) max(20px, var(--safe-left)); color: #fff; background: rgb(var(--ink-950)); overflow: hidden; user-select: none; }
-.vx-story.is-ember { background: radial-gradient(120% 80% at 20% 0%, rgb(var(--ember-500) / 0.9), rgb(var(--ember-600) / 0.6) 40%, #120308 100%); }
-.vx-story.is-tide { background: radial-gradient(120% 80% at 80% 0%, rgb(var(--tide-500) / 0.9), rgb(var(--tide-500) / 0.4) 45%, #04101a 100%); }
-.vx-story.is-ink { background: radial-gradient(100% 70% at 50% 100%, rgb(var(--ember-500) / 0.35), transparent 60%), #0b0b0f; }
-.vx-story.is-art { background: #0b0b0f; }
-.vx-story-art { position: absolute; inset: -12%; width: 124%; height: 124%; object-fit: cover; filter: blur(36px) saturate(1.4) brightness(0.55); z-index: 0; }
-.vx-story-bars { position: absolute; top: max(14px, var(--safe-top)); left: 16px; right: 16px; z-index: 3; display: flex; gap: 4px; }
-.vx-story-bars i { position: relative; flex: 1; height: 3px; overflow: hidden; border-radius: 3px; background: rgb(255 255 255 / 0.3); }
-.vx-story-bars i::after { content: ''; position: absolute; inset: 0; width: 0; background: #fff; }
-.vx-story-bars i.is-done::after { width: 100%; }
-.vx-story-bars i.is-live::after { animation: vxStoryBar linear forwards; }
 @keyframes vxStoryBar { from { width: 0; } to { width: 100%; } }
-.vx-story-close { position: absolute; top: max(26px, calc(var(--safe-top) + 12px)); right: 12px; z-index: 4; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; color: #fff; background: rgb(0 0 0 / 0.25); }
-.vx-story-close svg { width: 22px; height: 22px; }
-.vx-story-tap { position: absolute; top: 0; bottom: 0; width: 50%; z-index: 2; background: transparent; }
-.vx-story-tap.is-prev { left: 0; } .vx-story-tap.is-next { right: 0; }
-.vx-story-body { position: relative; z-index: 3; max-width: 640px; pointer-events: none; animation: vxStoryIn 420ms var(--ease-calm) both; }
-.vx-story-body > .vx-story-pill, .vx-story-body > .vx-story-actions { pointer-events: auto; }
 @keyframes vxStoryIn { from { opacity: 0; transform: translateY(18px); } }
-.vx-story-kicker { font-size: 15px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: rgb(255 255 255 / 0.8); }
-.vx-story-big { margin-top: 8px; font-family: var(--vx-font-display); font-size: clamp(64px, 18vw, 140px); font-weight: 800; line-height: 0.95; letter-spacing: -0.04em; }
-.vx-story-title { margin-top: 10px; font-family: var(--vx-font-display); font-size: clamp(30px, 8vw, 56px); font-weight: 800; line-height: 1.05; letter-spacing: -0.03em; text-wrap: balance; }
-.vx-story-text { margin-top: 14px; font-size: 17px; font-weight: 550; line-height: 1.45; color: rgb(255 255 255 / 0.85); max-width: 46ch; }
-.vx-story-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
-.vx-story-pill { display: inline-flex; align-items: center; gap: 8px; min-height: 46px; margin-top: 18px; padding: 0 18px; border-radius: var(--radius-pill); background: rgb(255 255 255 / 0.16); color: #fff; font-size: 15px; font-weight: 700; backdrop-filter: blur(12px); }
-.vx-story-actions .vx-story-pill { margin-top: 0; }
-.vx-story-pill.is-primary { background: #fff; color: #111; }
-@media (prefers-reduced-motion: reduce) { .vx-story-bars i.is-live::after { animation: none; width: 100%; } .vx-story-body { animation: none; } }
-
-
-/* 1.12 — badges on the Stats page and a public profile. A locked badge is dim and grey; progress is a meter under it. */
-.vx-badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
-.vx-badge { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 8px 12px; border-radius: 18px; background: rgb(var(--ink-100) / 0.05); border: 1px solid var(--sec-line); text-align: center; color: rgb(var(--ink-100)); transition: transform var(--dur-quick) var(--ease-standard), background var(--dur-quick) var(--ease-standard); }
-.vx-badge:hover { background: rgb(var(--ink-100) / 0.09); }
-.vx-badge[aria-pressed="true"] { outline: 2px solid hsl(var(--badge-h) 90% 66%); outline-offset: 1px; }
-.vx-badge.is-locked { color: rgb(var(--ink-300)); }
-.vx-badge.is-locked .vx-badge-glyph { filter: grayscale(1); opacity: 0.55; background: rgb(var(--ink-100) / 0.08); border-color: transparent; }
-.vx-badge-glyph { display: grid; place-items: center; width: 56px; height: 56px; border-radius: var(--radius-pill); font-size: 28px; line-height: 1; background: hsl(var(--badge-h) 70% 50% / 0.2); border: 2px solid hsl(var(--badge-h) 90% 66%); }
-.vx-badge-name { font-size: 12.5px; font-weight: 700; line-height: 1.2; }
-.vx-badge-meter { width: 100%; height: 4px; overflow: hidden; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.1); }
-.vx-badge-meter > span { display: block; height: 100%; border-radius: inherit; background: hsl(var(--badge-h) 80% 60%); }
-.vx-badge-detail { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-top: 12px; padding: 14px 16px; border-radius: 16px; background: rgb(var(--ink-100) / 0.05); border: 1px solid var(--sec-line); }
-.vx-badge-detail .vx-badge-glyph { width: 48px; height: 48px; font-size: 24px; flex-shrink: 0; }
-.vx-badge-detail-main { flex: 1 1 200px; min-width: 0; }
-.vx-badge-detail-main h3 { margin: 0; font-size: 16px; font-weight: 750; }
-.vx-badge-detail-main p { margin: 2px 0 0; font-size: 13px; color: rgb(var(--ink-300)); }
-.vx-badge-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.vx-badge-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px 0 6px; border-radius: var(--radius-pill); background: hsl(var(--badge-h) 70% 50% / 0.16); border: 1px solid hsl(var(--badge-h) 80% 60% / 0.5); font-size: 13.5px; font-weight: 650; color: rgb(var(--ink-100)); }
-.vx-badge-chip .vx-badge-glyph { width: 26px; height: 26px; font-size: 14px; border-width: 1px; }
-
 
