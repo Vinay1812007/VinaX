@@ -3,7 +3,7 @@
  * Top songs, Discover, language and mood hubs and the rest of the
  * prerendered set. The page's own text (written by the server for this URL,
  * see services/seo/serverPage.ts) inside the VinaX frame, with a sign-in
- * card: playing, saving and personal picks need a Google account.
+ * card: playing, saving and personal picks need an account.
  *
  * It makes no API calls — the text is already in the HTML — so a visitor or
  * a search engine reading these pages costs the request budget nothing.
@@ -68,7 +68,7 @@ export default function PublicPage({ page }: { page: ServerPage }): ReactNode {
         <aside ref={card} id="vx-public-signin" className="vx-public-signin vx-mat-thick" aria-labelledby="vx-public-signin-title">
           <img src="/icons/icon.svg" alt="" width={48} height={48} className="vx-public-signin-logo" />
           <h2 id="vx-public-signin-title">Listen free on VinaX</h2>
-          <p>Sign in with Google to play these songs, save them to your library and get picks made for you.</p>
+          <p>Sign in with Google or your email to play these songs, save them to your library and get picks made for you.</p>
           <div className="vx-public-signin-button">
             <GoogleSignIn />
           </div>

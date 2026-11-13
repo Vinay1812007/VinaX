@@ -313,7 +313,7 @@ function AccountRow() {
   const note = account ? `Signed in with ${via}${handle ? ` · @${handle}` : ''}. ${syncLine}` : 'Sign in with Google or your email to use VinaX.';
   return (
     <Row label="Account" note={note} keywords="sign in google email password login account username" stack>
-      <GoogleSignIn />
+      <GoogleSignIn emailLinks={false} />
       {account && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <RowButton onClick={() => void syncNow()} disabled={sync === 'syncing'}>

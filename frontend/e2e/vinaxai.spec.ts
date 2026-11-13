@@ -46,10 +46,11 @@ async function setup(page: Page, chat: (route: Route) => Promise<void> | void = 
   return posted;
 }
 
-test('signed out, /vinaxai shows the sign-in screen with a line about VinaX AI, not the chat', async ({ page }) => {
+test('signed out, /vinaxai sends you to sign in with a line about VinaX AI, not the chat', async ({ page }) => {
   await setup(page);
   await page.goto('/vinaxai?e2e-signed-out');
-  await expect(page.getByRole('heading', { name: 'Welcome to VinaX', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in to VinaX', level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/login\?next=%2Fvinaxai/);
   await expect(page.getByText('chat with VinaX AI')).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Message VinaX AI' })).toHaveCount(0);
 });

@@ -1,4 +1,4 @@
-import { lazy } from 'react';
+import { lazy, Suspense } from 'react';
 import { SiteGate } from '@/components/SiteGate';
 import { AuthGate } from '@/components/AuthGate';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
@@ -123,12 +123,25 @@ const VinaXAISharePage = lazy(() => import('@/pages/VinaXAISharePage'));
 const VinaXAIArtifactsPage = lazy(() => import('@/pages/VinaXAIArtifactsPage'));
 // Design system v2 style guide: unlinked, noindex, never precached.
 const DesignPage = lazy(() => import('@/pages/DesignPage'));
+// Sign in, create an account, set a new password: own pages (one chunk), outside the app shell.
+const AuthPage = lazy(() => import('@/pages/auth'));
 
 export const router = createBrowserRouter([
   // The old spelling of the chat address. Case-sensitive on purpose: the
   // router ignores case by default, which would catch /vinaxai itself.
   { path: '/VinaXAI', caseSensitive: true, element: <Navigate to="/vinaxai" replace /> },
   { path: '/VinaXAI/*', caseSensitive: true, element: <Navigate to="/vinaxai" replace /> },
+  ...(['login', 'signup', 'forgot'] as const).map((page) => ({
+    path: page === 'forgot' ? '/forgot-password' : `/${page}`,
+    element: (
+      <SiteGate>
+        <Suspense fallback={<main className="min-h-dvh bg-ink-950" aria-busy="true" />}>
+          <AuthPage page={page} />
+        </Suspense>
+      </SiteGate>
+    ),
+    errorElement: <RouteError />,
+  })),
   {
     path: '/',
     element: (

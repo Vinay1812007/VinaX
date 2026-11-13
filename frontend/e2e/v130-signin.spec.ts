@@ -1,42 +1,130 @@
 /**
- * 13.0 — VinaX needs a Google account. Signed out (?e2e-signed-out keeps the
- * test account away, see support/test.ts), every app page is the
- * sign-in screen; the legal pages stay readable. Signed in, the app opens.
+ * 13.0 — VinaX needs an account. Signed out (?e2e-signed-out keeps the test
+ * account away, see support/test.ts), every personal page sends the visitor
+ * to the sign-in page (/login?next=…, 1.13.16); the legal pages stay
+ * readable. Signed in, the app opens.
+ *
+ * 1.13.16 — sign-in, sign-up and forgot-password are their own pages
+ * (pages/auth): Google's button and the email form on one card, no app
+ * navigation and no marketing panels.
  */
-import { expect, test } from './support/test';
+import { expect, test, type Page } from './support/test';
 
-test('signed out, every personal page is the sign-in screen; the legal pages stay readable', async ({ page }) => {
+const SESSION = { session: 'vx1.e2e.test', user: { name: 'Mail Tester', email: 'mail@example.com', picture: null, username: 'mailtester' } };
+
+/** Answers the email sign-in API like the Worker would (no Resend, no database). */
+async function mockEmailApi(page: Page, calls: string[]): Promise<void> {
+  await page.route('**/api/auth/email/**', async (r) => {
+    const path = new URL(r.request().url()).pathname;
+    const body = (r.request().postDataJSON() ?? {}) as Record<string, string>;
+    calls.push(path);
+    if (path.endsWith('/login')) {
+      return body.password === 'right-password'
+        ? r.fulfill({ json: SESSION })
+        : r.fulfill({ status: 401, json: { error: 'wrong_password' } });
+    }
+    if (path.endsWith('/code')) return r.fulfill({ json: { ok: true } });
+    if (path.endsWith('/verify')) {
+      return body.code === '123456' ? r.fulfill({ json: SESSION }) : r.fulfill({ status: 400, json: { error: 'wrong_code', triesLeft: 4 } });
+    }
+    return r.fulfill({ status: 404, json: {} });
+  });
+}
+
+test('signed out, every personal page sends you to sign in; the legal pages stay readable', async ({ page }) => {
   await page.route('**/accounts.google.com/**', (r) => r.abort());
   // 13.5.0 — published pages (Charts, hubs…) show their own text instead; see below.
   // 13.9 — Search and the song pages open signed out (v139-guest-browse.spec.ts); the personal pages do not (Home opens signed out since 1.11, see v139-guest-browse.spec.ts).
   for (const path of ['/library', '/settings', '/favorites']) {
     await page.goto(`${path}?e2e-signed-out`);
-    await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toBeVisible();
-    await expect(page.getByText('Sign in with Google or your email to start listening.', { exact: false })).toBeVisible();
-    // No app navigation (the sign-in page's own Browse links aside, 13.5.0).
-    await expect(page.locator('nav:not(.vx-signin-browse)')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Sign in to VinaX', level: 1 })).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/login\\?next=${encodeURIComponent(path)}`));
+    // No app navigation: only the page's own footer links.
+    await expect(page.locator('nav:not(.vx-auth-links)')).toHaveCount(0);
+    await expect(page.getByLabel('Email')).toBeVisible();
   }
   await page.goto('/privacy?e2e-signed-out');
   await expect(page.getByRole('heading', { name: 'Your account and what syncs' })).toBeVisible();
   await page.goto('/terms?e2e-signed-out');
-  await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Sign in to VinaX' })).toHaveCount(0);
 });
 
-test('13.3.0: the sign-in screen explains VinaX, and carries no ads', async ({ page }) => {
+test('1.13.16: the sign-in page is one card with Google and email, and carries no ads', async ({ page }) => {
+  await page.route('**/accounts.google.com/**', (r) => r.abort());
+  await page.goto('/login?e2e-signed-out');
+  await expect(page.getByRole('heading', { name: 'Sign in to VinaX', level: 1 })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'Google sign-in couldn’t load' })).toBeVisible();
+  await expect(page.getByLabel('Email')).toBeVisible();
+  await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Forgot password?' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Create an account' })).toHaveAttribute('href', '/signup');
+  await expect(page.getByRole('link', { name: /Explore VinaX first/ })).toBeVisible();
+  // The old marketing screen is gone.
+  for (const name of ['What you get', 'Questions']) await expect(page.getByRole('heading', { name })).toHaveCount(0);
+  await expect(page.locator('script[src*="googlesyndication"], ins.adsbygoogle')).toHaveCount(0);
+});
+
+test('1.13.16: the three pages link to each other and keep next and the typed email', async ({ page }) => {
   await page.route('**/accounts.google.com/**', (r) => r.abort());
   await page.goto('/library?e2e-signed-out');
-  for (const name of ['What you get', 'Free, and how it stays free', 'What signing in shares', 'Questions']) {
-    await expect(page.getByRole('heading', { name, level: 2 })).toBeVisible();
-  }
-  await page.getByText('Does VinaX see my Google password?').click();
-  await expect(page.getByText('Never your password', { exact: false })).toBeVisible();
-  await expect(page.locator('script[src*="googlesyndication"], ins.adsbygoogle')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Sign in and start listening' }).click();
-  // Smooth scroll: wait for the title to come back on screen.
-  await page.waitForFunction(() => {
-    const r = document.getElementById('vx-signin-title')?.getBoundingClientRect();
-    return !!r && r.top >= 0 && r.bottom <= innerHeight;
-  });
+  await page.getByLabel('Email').fill('me@example.com');
+  await page.getByRole('link', { name: 'Forgot password?' }).click();
+  await expect(page).toHaveURL(/\/forgot-password\?next=%2Flibrary.*&email=me%40example.com/);
+  await expect(page.getByRole('heading', { name: 'Set a new password', level: 1 })).toBeVisible();
+  await expect(page.getByLabel('Email')).toHaveValue('me@example.com');
+  await page.getByRole('link', { name: 'Back to sign in' }).click();
+  await page.getByRole('link', { name: 'Create an account' }).click();
+  await expect(page.getByRole('heading', { name: 'Create your VinaX account', level: 1 })).toBeVisible();
+  await expect(page.getByLabel('Email')).toHaveValue('me@example.com');
+  await page.getByRole('link', { name: 'Sign in', exact: true }).click();
+  await expect(page).toHaveURL(/\/login\?next=%2Flibrary/);
+});
+
+test('1.13.16: a wrong password says so, the right one lands on next', async ({ page }) => {
+  await page.route('**/accounts.google.com/**', (r) => r.abort());
+  const calls: string[] = [];
+  await mockEmailApi(page, calls);
+  await page.goto('/login?e2e-signed-out&next=%2Ffavorites');
+  await page.getByLabel('Email').fill('mail@example.com');
+  await page.getByLabel('Password', { exact: true }).fill('wrong-password');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'That email and password don’t match' })).toBeVisible();
+  await expect(page.getByRole('alert').getByRole('link', { name: 'set a password' })).toBeVisible();
+  await page.getByLabel('Password', { exact: true }).fill('right-password');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page).toHaveURL(/\/favorites$/);
+  expect(calls).toEqual(['/api/auth/email/login', '/api/auth/email/login']);
+});
+
+test('1.13.16: sign-up is a code, then a password; resend counts down', async ({ page }) => {
+  await page.route('**/accounts.google.com/**', (r) => r.abort());
+  const calls: string[] = [];
+  await mockEmailApi(page, calls);
+  await page.goto('/signup?e2e-signed-out&next=%2Flibrary');
+  await page.getByLabel('Name').fill('Mail Tester');
+  await page.getByLabel('Email').fill('mail@example.com');
+  await page.getByRole('button', { name: 'Send code' }).click();
+  await expect(page.getByText('We sent a 6-digit code to', { exact: false })).toBeVisible();
+  await expect(page.getByText('The code sets its password', { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Send a new code in \d+ s/ })).toBeDisabled();
+  await page.getByLabel('Code from the email').fill('999999');
+  await page.getByLabel('Choose a password').fill('a-good-password');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: '4 tries left' })).toBeVisible();
+  await page.getByLabel('Code from the email').fill('123456');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page).toHaveURL(/\/library$/);
+  expect(calls).toEqual(['/api/auth/email/code', '/api/auth/email/verify', '/api/auth/email/verify']);
+});
+
+test('1.13.16: next never leaves the site, and a signed-in visit to /login moves on', async ({ page }) => {
+  await page.route('**/accounts.google.com/**', (r) => r.abort());
+  await page.goto('/login?e2e-signed-out&next=%2F%2Fevil.example');
+  await page.getByRole('link', { name: 'Create an account' }).click();
+  await expect(page).toHaveURL(/\/signup$/);
+  // The test account is signed in on this load.
+  await page.goto('/login?next=%2Fsettings');
+  await expect(page).toHaveURL(/\/settings$/);
 });
 
 test('13.3.0: when Google’s script is blocked, the screen says why and Try again redraws the button', async ({ page }) => {
@@ -53,32 +141,16 @@ test('13.3.0: when Google’s script is blocked, the screen says why and Try aga
 
 test('signed in, the app opens with the account in the top bar', async ({ page }) => {
   await page.goto('/settings');
-  // The avatar first, so the app has rendered before the absence check. First-run
-  // onboarding also says "Welcome to VinaX", so look for the sign-in screen itself.
+  // The avatar first, so the app has rendered before the absence check.
   await expect(page.locator('.vx-avatar')).toHaveAttribute('aria-label', /Tester/);
-  await expect(page.locator('main.vx-signin')).toHaveCount(0);
-});
-
-test('13.4.0: the sign-in card has What you get on its left and Free on its right; no "What you get with VinaX" link', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.route('**/accounts.google.com/**', (r) => r.abort());
-  await page.goto('/library?e2e-signed-out');
-  await expect(page.getByText('What you get with VinaX')).toHaveCount(0);
-  const box = async (sel: string) => (await page.locator(sel).boundingBox())!;
-  const card = await box('.vx-signin-card');
-  const left = await box('.vx-signin-side.is-left');
-  const right = await box('.vx-signin-side.is-right');
-  expect(left.x + left.width).toBeLessThanOrEqual(card.x);
-  expect(right.x).toBeGreaterThanOrEqual(card.x + card.width);
-  // All three sit on the first screen.
-  for (const b of [card, left, right]) expect(b.y + b.height).toBeLessThanOrEqual(900);
+  await expect(page.locator('main.vx-auth')).toHaveCount(0);
 });
 
 test('13.4.0: About, Help and Get the app open signed out', async ({ page }) => {
   for (const path of ['/about', '/help', '/download']) {
     await page.goto(`${path}?e2e-signed-out`);
     await expect(page.locator('main').first()).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Sign in to VinaX' })).toHaveCount(0);
   }
 });
 
@@ -108,7 +180,8 @@ test('13.4.0: the avatar opens profile and app settings, and Sign out signs out'
   await expect(page.getByRole('heading', { name: 'Profile', level: 2 })).toBeVisible();
   await page.getByRole('button', { name: /profile and settings/ }).click();
   await page.getByRole('menuitem', { name: 'Sign out' }).click();
-  await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in to VinaX' })).toBeVisible();
+  await expect(page).toHaveURL(/\/login\?next=/);
 });
 
 test('13.5.0: signed out, a published page shows its own text with a sign-in card, and calls no catalogue API', async ({ page }) => {
@@ -122,7 +195,7 @@ test('13.5.0: signed out, a published page shows its own text with a sign-in car
     await page.goto(`${path}?e2e-signed-out`);
     await expect(page.getByRole('heading', { name: h1, level: 1 })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Listen free on VinaX' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Sign in to VinaX' })).toHaveCount(0);
     // The page's own links stay crawlable, in the form the host answers with a 200.
     await expect(page.locator('#vx-public-content a[href="/charts/"]').first()).toBeAttached();
   }
@@ -133,13 +206,13 @@ test('13.5.0: signed out, a published page shows its own text with a sign-in car
   expect(api.filter((p) => p !== '/api/site-mode' && p !== '/api/auth/google')).toEqual([]);
 });
 
-test('13.5.0: the sign-in page links to the published pages', async ({ page }) => {
+test('1.13.16: a published page’s sign-in card links to email sign-in with next', async ({ page }) => {
   await page.route('**/accounts.google.com/**', (r) => r.abort());
-  await page.goto('/library?e2e-signed-out');
-  const browse = page.getByRole('navigation', { name: 'Browse VinaX' });
-  await expect(browse.getByRole('link', { name: 'Top charts' })).toHaveAttribute('href', '/charts/');
-  await browse.getByRole('link', { name: 'Telugu songs' }).click();
-  await expect(page.getByRole('heading', { name: 'Telugu Songs', level: 1 })).toBeVisible();
+  await page.goto('/charts/?e2e-signed-out');
+  const card = page.locator('#vx-public-signin');
+  await expect(card.getByRole('link', { name: 'Create an account' })).toHaveAttribute('href', /^\/signup\?next=%2Fcharts/);
+  await card.getByRole('link', { name: 'Sign in with email' }).click();
+  await expect(page.getByRole('heading', { name: 'Sign in to VinaX', level: 1 })).toBeVisible();
 });
 
 test('13.5.0: signed in, a published page is the full app page', async ({ page }) => {

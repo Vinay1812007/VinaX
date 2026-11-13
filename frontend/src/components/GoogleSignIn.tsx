@@ -8,17 +8,17 @@
  * Brand rule: this button is the one place VinaX shows another company's name
  * and logo — sign-in buttons must follow the provider's own branding.
  *
- * Schema 20 — "Continue with email" under it opens the email form
- * (EmailSignIn, loaded on that tap): email + password, a new account by
- * email, or a forgotten password.
+ * Email sign-in lives on its own pages (/login, /signup, /forgot-password,
+ * pages/auth). Away from them, "Sign in with email · Create an account"
+ * under the button links there with `next` = this page (`emailLinks`).
  */
-import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { authHref } from '@/services/auth/next';
 import { currentAccount, mountSignInCheck, renderGoogleButton, signInNative, signOut, type Account, type SignInResult } from '@/services/auth/google';
 import { isNativePlatform } from '@/services/native';
 import { toast } from '@/store/toastStore';
 import '@/styles/signin.css';
-
-const EmailSignIn = lazy(() => import('./EmailSignIn'));
 
 /** Google's four-colour "G", from Google's sign-in branding kit (Android button only). */
 function GoogleG(): ReactNode {
@@ -44,14 +44,27 @@ export function signInMessage(r: SignInResult): string | null {
 export { useAccount } from './useAccount';
 import { useAccount } from './useAccount';
 
-export function GoogleSignIn({ onSignedIn, theme = 'dark' }: { onSignedIn?: (a: Account) => void; theme?: 'dark' | 'light' }): ReactNode {
+export function GoogleSignIn({
+  onSignedIn,
+  theme = 'dark',
+  emailLinks = true,
+  onLeave,
+}: {
+  onSignedIn?: (a: Account) => void;
+  theme?: 'dark' | 'light';
+  /** Links to the email sign-in and sign-up pages under the button. */
+  emailLinks?: boolean;
+  /** Runs when one of those links is followed (the sign-in sheet closes). */
+  onLeave?: () => void;
+}): ReactNode {
   const account = useAccount();
   const slotRef = useRef<HTMLDivElement>(null);
   const [webFailed, setWebFailed] = useState(false);
   // Bumped by "Try again" to redraw the button after Google’s script failed to load.
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [emailOpen, setEmailOpen] = useState(false);
+  const loc = useLocation();
+  const here = `${loc.pathname}${loc.search}${loc.hash}`;
   const native = isNativePlatform();
   const onSignedInRef = useRef(onSignedIn);
   onSignedInRef.current = onSignedIn;
@@ -88,19 +101,17 @@ export function GoogleSignIn({ onSignedIn, theme = 'dark' }: { onSignedIn?: (a: 
     };
   }, [account]);
   const check = <div ref={checkRef} className={`vx-turnstile-slot${checkShown ? ' is-on' : ''}`} />;
-  const email = emailOpen ? (
-    <Suspense fallback={<p className="vx-email-note">Loading…</p>}>
-      <EmailSignIn onSignedIn={() => { setEmailOpen(false); settle('ok'); }} onClose={() => setEmailOpen(false)} />
-    </Suspense>
-  ) : (
-    <>
-      <span className="vx-or" aria-hidden="true">or</span>
-      <button type="button" className="vx-email-open" onClick={() => setEmailOpen(true)}>
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="2" /><path d="M4 7l8 6 8-6" /></svg>
-        <span>Continue with email</span>
-      </button>
-    </>
-  );
+  const email = emailLinks ? (
+    <p className="vx-email-links">
+      <Link to={authHref('/login', { next: here })} onClick={onLeave}>
+        Sign in with email
+      </Link>
+      <span aria-hidden="true">·</span>
+      <Link to={authHref('/signup', { next: here })} onClick={onLeave}>
+        Create an account
+      </Link>
+    </p>
+  ) : null;
 
   // Web: Google's own button, drawn into the slot by Google's script.
   useEffect(() => {

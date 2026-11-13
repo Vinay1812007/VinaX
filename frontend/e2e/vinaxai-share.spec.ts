@@ -164,7 +164,7 @@ test('the shared page opens signed out: title, label, turns, artifacts, no compo
   await expect(page.getByText(/PDF · not included/)).toBeVisible();
   await expect(page.locator('.vx-ai-md strong', { hasText: 'evening' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Message VinaX AI' })).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toHaveCount(0);
+  await expect(page.locator('main.vx-auth')).toHaveCount(0);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
   await expect(page.getByRole('link', { name: 'Start your own chat' }).first()).toHaveAttribute('href', '/vinaxai');
   await expect(page.getByRole('link', { name: 'Report this chat' })).toHaveAttribute('href', /^mailto:/);

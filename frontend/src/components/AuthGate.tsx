@@ -13,14 +13,15 @@
  * every browse page (Explore, Discover, Charts, Search, songs, albums,
  * artists, videos and the language and mood hubs); tapping play, like or
  * save asks them to sign in right there (services/auth/gate, SignInPrompt).
- * The personal pages (Library, Settings…) stay the sign-in screen; since 1.11
+ * The personal pages (Library, Settings…) send the visitor to /login?next=…
+ * (pages/auth, since 1.13.16; it was a sign-in screen at the same URL); since 1.11
  * Home opens signed out too, as the catalogue-only GuestHome.
  * A direct load of a published URL still shows the cheap published text —
  * search engines and first-time landers cost no catalogue calls — with an
  * "Explore first" way into the live app.
  */
 import { lazy, Suspense, useEffect, type ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { validateSession } from '@/services/auth/google';
 import { guestBrowseChosen, rememberGuestBrowse, setGuestBrowsing } from '@/services/auth/gate';
 import { serverPageFor } from '@/services/seo/serverPage';
@@ -29,8 +30,6 @@ import { MOOD_HUBS } from '@/constants/hubs';
 import { useAccount } from './useAccount';
 import { GetAppSlot } from './GetAppSlot';
 
-// The sign-in screen (and Google's button) loads only when it is needed.
-const SignInScreen = lazy(() => import('./SignInScreen'));
 // 13.5.0 — a published page's own text, for signed-out visitors (and search engines).
 const PublicPage = lazy(() => import('./PublicPage'));
 
@@ -63,7 +62,7 @@ export function browsableSignedOut(path: string): boolean {
 
 export function AuthGate({ children }: { children: ReactNode }): ReactNode {
   const account = useAccount();
-  const { pathname } = useLocation();
+  const { pathname, search, hash } = useLocation();
   // A session the server no longer accepts (expired, account deleted) signs out here.
   // 13.4.0 — keyed on the session string, not the account object: a refreshed
   // name or photo is a new object, and re-checking on each one was a loop.
@@ -91,10 +90,13 @@ export function AuthGate({ children }: { children: ReactNode }): ReactNode {
   }
   // Reached inside the app (a link, not a page load): the live page.
   if (!published && PUBLIC_PATHS.has(path)) return <>{children}</>;
+  // A personal page (Library, Settings…): the sign-in page, then back here.
+  // (The address is built here, not with services/auth/next: this file is in the first load.)
+  if (!published) return <Navigate to={`/login?next=${encodeURIComponent(`${pathname}${search}${hash}`)}`} replace />;
   return (
     <Suspense fallback={<main className="min-h-dvh bg-ink-950" aria-busy="true" />}>
       <GetAppSlot />
-      {published ? <PublicPage page={published} /> : <SignInScreen />}
+      <PublicPage page={published} />
     </Suspense>
   );
 }

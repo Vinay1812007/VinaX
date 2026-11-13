@@ -145,6 +145,14 @@ for (const d of SHELL_404_DIRS) {
   writeFileSync(join(DIST, d, '404.html'), shell404);
 }
 
+// 1.13.16 — the sign-in pages (/login, /signup, /forgot-password) are app
+// pages with no text of their own. Without a file of their own the host's
+// `/* /index.html 200` fallback served them Home's prerendered page and
+// canonical; <page>.html (served at /<page>) is the plain shell, noindex.
+for (const [file, title] of [['login', 'Sign in'], ['signup', 'Create your account'], ['forgot-password', 'Set a new password']]) {
+  writeFileSync(join(DIST, `${file}.html`), shell404.replace('<title>VinaX</title>', `<title>${title} · VinaX</title>`));
+}
+
 // Inline the built stylesheet (4.17.8): the <link rel="stylesheet"> was the
 // last render-blocking request on the critical path (~450 ms on PSI's
 // throttled mobile — Lighthouse "Render-blocking requests" named exactly this

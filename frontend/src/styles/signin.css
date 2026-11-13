@@ -19,133 +19,11 @@ html.light .vx-google-btn { background: #fff; color: #1f1f1f; }
 .vx-account-email { font-size: 12px; color: rgb(var(--ink-400)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vx-account-out { flex: none; min-height: 36px; padding: 0 12px; border-radius: 9999px; font-size: 13px; font-weight: 700; color: rgb(var(--ink-200)); background: rgb(var(--ink-100) / 0.08); }
 
-/* 13.0 — the sign-in screen every route shows until a Google account is signed in. */
-.vx-signin {
-  min-height: 100dvh;
-  padding: 0 16px max(32px, env(safe-area-inset-bottom));
-  background:
-    radial-gradient(60% 50dvh at 20% 10dvh, rgb(var(--vx-accent-rgb, 236 72 153) / 0.22), transparent 70%),
-    radial-gradient(50% 45dvh at 85% 90dvh, rgb(var(--tide-500) / 0.18), transparent 70%),
-    rgb(var(--ink-950));
-  background-repeat: no-repeat;
-}
-/* 13.4.0 — the first screen: the card in the middle, "What you get" on its
-   left and "Free, and how it stays free" on its right (desktop). Narrower,
-   the two panels sit side by side under the card; on a phone they stack. */
-.vx-signin-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  justify-items: center;
-  gap: 20px;
-  padding: max(10dvh, 24px, env(safe-area-inset-top)) 0 48px;
-}
-.vx-signin-side {
-  width: min(560px, 100%);
-  padding: 20px 20px 8px;
-  border-radius: 24px;
-  background: rgb(var(--ink-100) / 0.035);
-  border: 1px solid var(--vx-border);
-}
-.vx-signin-side-title { font-size: 19px; font-weight: 800; letter-spacing: -0.015em; color: rgb(var(--ink-100)); }
-.vx-signin-side-list { margin-top: 12px; display: flex; flex-direction: column; }
-.vx-signin-side-list li { display: flex; align-items: flex-start; gap: 14px; padding: 12px 0; border-top: 1px solid var(--vx-border); }
-.vx-signin-side-list li:first-child { border-top: 0; padding-top: 4px; }
-.vx-signin-side-list li > span:last-child { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.vx-signin-side-list strong { color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; }
-.vx-signin-side-list li > span:last-child > span { color: rgb(var(--ink-300)); font-size: 13.5px; line-height: 1.5; }
-.vx-signin-icon {
-  display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 12px;
-  color: rgb(var(--vx-accent-rgb, 236 72 153));
-  background: rgb(var(--vx-accent-rgb, 236 72 153) / 0.12);
-  box-shadow: inset 0 0 0 1px rgb(var(--vx-accent-rgb, 236 72 153) / 0.22);
-}
-.vx-signin-side.is-right .vx-signin-icon {
-  color: rgb(var(--tide-400, 45 212 191));
-  background: rgb(var(--tide-500, 20 184 166) / 0.12);
-  box-shadow: inset 0 0 0 1px rgb(var(--tide-500, 20 184 166) / 0.24);
-}
-@media (min-width: 900px) {
-  .vx-signin-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); width: min(1100px, 100%); margin: 0 auto; align-items: start; }
-  .vx-signin-card { grid-column: 1 / -1; }
-  .vx-signin-side { width: 100%; height: 100%; }
-}
-@media (min-width: 1240px) {
-  .vx-signin-hero {
-    grid-template-columns: minmax(0, 1fr) minmax(380px, 420px) minmax(0, 1fr);
-    grid-template-areas: 'left card right';
-    align-items: center;
-    width: min(1400px, 100%);
-    min-height: 100dvh;
-    gap: 28px;
-    padding-top: max(24px, env(safe-area-inset-top));
-  }
-  .vx-signin-card { grid-area: card; grid-column: auto; }
-  .vx-signin-side { height: auto; }
-  .vx-signin-side.is-left { grid-area: left; }
-  .vx-signin-side.is-right { grid-area: right; }
-}
-
-.vx-signin-more { width: min(760px, 100%); margin: 0 auto; display: flex; flex-direction: column; gap: 48px; color: rgb(var(--ink-300)); }
-.vx-signin-more section { scroll-margin-top: 24px; }
-.vx-signin-h2 { font-size: clamp(22px, 4.5vw, 26px); font-weight: 800; letter-spacing: -0.02em; color: rgb(var(--ink-100)); }
-.vx-signin-intro { margin-top: 6px; font-size: 15px; line-height: 1.55; }
-.vx-signin-features { margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-.vx-signin-features li,
-.vx-signin-split > div {
-  display: flex; flex-direction: column; gap: 6px; padding: 16px; border-radius: 18px;
-  background: rgb(var(--ink-100) / 0.04); border: 1px solid var(--vx-border);
-}
-.vx-signin-features strong, .vx-signin-split h3 { color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; }
-.vx-signin-features span, .vx-signin-split p { font-size: 14px; line-height: 1.55; }
-.vx-signin-facts { margin-top: 16px; display: flex; flex-direction: column; gap: 12px; font-size: 15px; line-height: 1.55; }
-.vx-signin-facts li { padding-left: 16px; border-left: 2px solid rgb(var(--vx-accent-rgb, 236 72 153) / 0.6); }
-.vx-signin-facts strong { color: rgb(var(--ink-100)); }
-.vx-signin-split { margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-.vx-signin-note { margin-top: 12px; font-size: 14px; }
-/* 13.5.0 — published pages to browse before signing in. */
-.vx-signin-browse { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
-.vx-signin-browse a {
-  display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 9999px;
-  font-size: 14px; font-weight: 600; color: rgb(var(--ink-100));
-  background: rgb(var(--ink-100) / 0.05); border: 1px solid var(--vx-border);
-}
-.vx-signin-browse a:hover, .vx-signin-browse a:focus-visible { background: rgb(var(--ink-100) / 0.1); }
-.vx-signin-faq { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
-.vx-signin-faq details { border-radius: 14px; background: rgb(var(--ink-100) / 0.04); border: 1px solid var(--vx-border); }
-.vx-signin-faq summary {
-  cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  min-height: 48px; padding: 12px 16px; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 600;
-}
-.vx-signin-faq summary::-webkit-details-marker { display: none; }
-.vx-signin-faq summary::after { content: '+'; flex: none; font-size: 20px; font-weight: 400; color: rgb(var(--ink-400)); }
-.vx-signin-faq details[open] summary::after { content: '–'; }
-.vx-signin-faq details p { padding: 0 16px 14px; font-size: 14px; line-height: 1.6; }
-.vx-signin-note a, .vx-signin-faq a, .vx-signin-links a { color: rgb(var(--ink-200)); text-decoration: underline; text-underline-offset: 2px; }
-.vx-signin-end { display: flex; flex-direction: column; align-items: center; gap: 16px; padding-top: 8px; text-align: center; }
-.vx-signin-again {
-  min-height: 48px; padding: 0 24px; border-radius: 9999px; font-size: 15px; font-weight: 700;
-  color: rgb(var(--ink-950)); background: rgb(var(--ink-100));
-}
-.vx-signin-links { font-size: 13px; color: rgb(var(--ink-400)); }
-.vx-signin-card {
-  width: min(420px, 100%);
-  padding: 32px 24px 24px;
-  border-radius: 28px;
-  text-align: center;
-  border: 1px solid var(--vx-border);
-}
-.vx-signin-logo { margin: 0 auto 16px; border-radius: 18px; }
-.vx-signin-title { font-size: clamp(26px, 6vw, 32px); font-weight: 800; letter-spacing: -0.025em; color: rgb(var(--ink-100)); }
-.vx-signin-lede { margin-top: 8px; color: rgb(var(--ink-300)); font-size: 15px; line-height: 1.55; }
-.vx-signin-button { margin-top: 24px; display: flex; justify-content: center; min-height: 44px; }
-.vx-signin-button .vx-google-slot { width: 100%; display: flex; flex-direction: column; align-items: center; }
 /* 13.3.0 — when Google’s script can’t load: the reason and a retry, in place of the button. */
 .vx-google-slot { flex-direction: column; align-items: center; }
 .vx-google-failed { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
 .vx-google-failed p { color: rgb(var(--ink-300)); font-size: 13.5px; line-height: 1.5; }
 .vx-google-failed button { min-height: 44px; padding: 0 20px; border-radius: 9999px; font-size: 14px; font-weight: 700; color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.1); border: 1px solid var(--vx-border); }
-.vx-signin-fine { margin-top: 20px; color: rgb(var(--ink-400)); font-size: 12.5px; line-height: 1.5; }
-.vx-signin-fine a { color: rgb(var(--ink-200)); text-decoration: underline; text-underline-offset: 2px; }
 /* Google draws its button in a frame; without this a dark page shows a white strip around it. */
 .vx-google-web iframe { color-scheme: normal; }
 
@@ -157,8 +35,6 @@ html.light .vx-google-btn { background: #fff; color: #1f1f1f; }
 .vx-signin-prompt-perks li::before { content: ''; position: absolute; left: 2px; top: 7px; width: 6px; height: 6px; border-radius: 9999px; background: rgb(var(--ember-500)); }
 .vx-signin-prompt-fine { margin-top: 16px; font-size: 12px; line-height: 1.5; color: rgb(var(--ink-400)); }
 .vx-signin-prompt-fine a { color: rgb(var(--ink-200)); text-decoration: underline; text-underline-offset: 2px; }
-.vx-signin-explore { display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; min-height: 40px; padding: 0 14px; border-radius: 9999px; font-size: 14px; font-weight: 700; color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.08); }
-.vx-signin-explore:hover { background: rgb(var(--ink-100) / 0.14); }
 
 /* Cloudflare Turnstile: the security check that runs with a sign-in. Empty
    (and so invisible) unless Cloudflare asks for a click. */
@@ -171,14 +47,14 @@ html.light .vx-google-btn { background: #fff; color: #1f1f1f; }
 }
 .vx-turnstile:empty { display: none; }
 
-/* Schema 20 — email sign-in under the Google button (components/EmailSignIn). */
+/* The "Sign in with email · Create an account" links under the Google button
+   away from the sign-in pages, and the Settings password form
+   (features/settings/PasswordRow). The sign-in pages are styles/auth.css. */
+.vx-email-links { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 10px; font-size: 13.5px; color: rgb(var(--ink-400)); }
+.vx-email-links a { min-height: 32px; display: inline-flex; align-items: center; font-weight: 600; color: rgb(var(--ink-200)); text-decoration: underline; text-underline-offset: 2px; }
 .vx-or { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 360px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: rgb(var(--ink-400)); }
 .vx-or::before, .vx-or::after { content: ''; flex: 1; height: 1px; background: var(--vx-border, rgb(var(--ink-100) / 0.12)); }
-.vx-email-open { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; max-width: 360px; height: 44px; padding: 0 16px; border-radius: 9999px; font-size: 14px; font-weight: 600; color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.08); border: 1px solid var(--vx-border, rgb(var(--ink-100) / 0.14)); }
-.vx-email-open:hover { background: rgb(var(--ink-100) / 0.13); }
 .vx-email-form { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 360px; text-align: left; }
-.vx-email-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.vx-email-head h3 { font-size: 16px; font-weight: 800; color: rgb(var(--ink-100)); }
 .vx-email-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: rgb(var(--ink-300)); }
 .vx-email-field input { width: 100%; min-height: 44px; padding: 0 14px; border-radius: 12px; font-size: 15px; font-weight: 400; color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.06); border: 1px solid var(--vx-border, rgb(var(--ink-100) / 0.14)); }
 .vx-email-field input:focus { outline: 2px solid rgb(var(--ember-500)); outline-offset: 1px; }
@@ -187,8 +63,6 @@ html.light .vx-google-btn { background: #fff; color: #1f1f1f; }
 .vx-email-pw .vx-email-link { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); }
 .vx-email-submit { min-height: 46px; border-radius: 9999px; font-size: 15px; font-weight: 700; color: rgb(var(--ink-950)); background: rgb(var(--ink-100)); }
 .vx-email-submit:disabled { opacity: .55; }
-.vx-email-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; }
 .vx-email-link { min-height: 32px; padding: 0 2px; font-size: 13px; font-weight: 600; color: rgb(var(--ink-200)); text-decoration: underline; text-underline-offset: 2px; background: none; }
 .vx-email-link:disabled { opacity: .5; }
-.vx-email-note { font-size: 13px; line-height: 1.5; color: rgb(var(--ink-300)); }
 .vx-email-error { font-size: 13px; line-height: 1.5; color: rgb(var(--rose-400, 251 113 133)); }

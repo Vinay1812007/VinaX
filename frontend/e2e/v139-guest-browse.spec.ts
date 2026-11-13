@@ -34,7 +34,7 @@ test('signed out, Explore, Search and a song page are the live app with a Sign i
     await expect(page.locator('.vx-topbar')).toBeVisible();
     await expect(page.locator('.vx-topbar .vx-topbar-signin')).toHaveText('Sign in');
     await expect(page.locator('.vx-avatar')).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toHaveCount(0);
+    await expect(page.locator('main.vx-auth')).toHaveCount(0);
   }
 });
 
@@ -68,10 +68,10 @@ test('the top bar Sign in button opens the sheet; the sign-in page links to Expl
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Hi there' })).toBeVisible();
   await expect(page.getByRole('complementary', { name: 'Sign in' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toHaveCount(0);
-  // A personal page stays the sign-in screen; its card links into Explore.
+  await expect(page.locator('main.vx-auth')).toHaveCount(0);
+  // A personal page sends you to sign in; that page links into Explore.
   await page.goto('/library');
-  await expect(page.getByRole('heading', { name: 'Welcome to VinaX' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in to VinaX', level: 1 })).toBeVisible();
   await page.getByRole('link', { name: 'Explore VinaX first' }).click();
   await expect(page).toHaveURL(/\/explore/);
   await expect(page.locator('.vx-topbar-signin')).toBeVisible();

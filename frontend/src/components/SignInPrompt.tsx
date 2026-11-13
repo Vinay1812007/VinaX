@@ -1,7 +1,7 @@
 /**
  * 13.9 — the sheet a signed-out visitor meets when they tap play, like or
  * save while browsing: one line on why, the Google button, and the same
- * promises the sign-in screen makes. On sign-in it closes and runs what the
+ * promises the sign-in pages make; under it, links to /login and /signup. On sign-in it closes and runs what the
  * visitor was doing (services/auth/gate). Loaded only when it opens.
  */
 import { Link } from 'react-router-dom';
@@ -30,6 +30,7 @@ export function SignInPrompt() {
             close();
             resume?.();
           }}
+          onLeave={close}
         />
       </div>
       <ul className="vx-signin-prompt-perks">
