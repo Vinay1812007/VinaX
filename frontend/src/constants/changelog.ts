@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.21': {
+    title: 'Live voice fits every phone, and VinaX AI follows your theme and festivals',
+    changes: [
+      { type: 'improved', text: 'Live voice on a phone: the microphone, camera, screen, photo, captions and End buttons all fit on screen (on smaller phones the first and last were cut off).' },
+      { type: 'improved', text: 'VinaX AI\'s menus, panels and shadows now match the rest of the app in every theme, app style and festival.' },
+      { type: 'improved', text: 'The End button on the Live voice bar uses the same red as everywhere else.' },
+      { type: 'improved', text: 'vinaxai.css reads the design system v2 tokens. --vx-ai-ease is now --ease-standard, --vx-ai-lift and --vx-ai-lift-sm are --elev-3 and --elev-2 (the light-theme overrides are gone; the tokens carry them), timings are --dur-*, pills are…' },
+    ],
+  },
   '1.13.20': {
     title: 'Festivals now repaint the whole app: every colour, the player and the VinaX mark',
     changes: [
