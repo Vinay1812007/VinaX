@@ -1443,6 +1443,13 @@ The UI is being rebuilt on one system, phase by phase. Phase 1 adds the base; pa
   - **Legacy `.btn-primary`, `.btn-secondary` and `.btn-premium`** share `<Button>`'s timing, pill radius and spring press (`--press-scale`), so the about 120 call sites behave like the primitive without being rewritten.
   - **Token pass** over `settings`, `radio`, `flow`, `festivals`, `together` and `language-picker.css`.
   - Moving the roughly 20 hand-built dialogs onto `Dialog` is left for the cleanup phase; VinaX AI's dialogs come with Phase 8.
+- **App styles (Phase 7):** each style's dials now feed the v2 tokens, in `templates/base.css`:
+  - `--radius-art`, `--radius-control`, `--radius-tile` and `--radius-input` read `--tpl-r-art-sm`, `--tpl-r-control`, `--tpl-r-tile` and `--tpl-r-input`;
+  - `--press-scale` reads `--tpl-press`, only where motion is allowed.
+  - So `<Button>`, `Tabs`, `Card` and the Settings selects take Harbour's 4px or Onyx's 8px controls without a per-style rule. Defaults are in `tokens.css`.
+  - The styles' comments now point at README › App styles; the old `docs/app-styles.md` is gone.
+  - All six styles were checked in dark and light with live data. Contrast was already gated per style × theme × accent (`templates.test.ts`) and per festival (`festivalTakeover.test.ts`); festivals take over a style's colours.
+  - Tests: `templates.test.ts` (dial → token contract) and `e2e/design-system.spec.ts` (primitives take Harbour's and Onyx's shapes).
 - **Festival takeover (Phase 6):** during a festival the whole app repaints, not just the accent.
   - **What it changes.** `npm run gen:festivals` (`scripts/festivals-gen-core.mjs`) writes `public/fest/fest-<id>.css` for all 43 festivals. Each file sets:
     - all eleven `--ink-*` steps, tinted toward the festival's canvas hue, for dark and light;

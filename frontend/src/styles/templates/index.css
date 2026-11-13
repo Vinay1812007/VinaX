@@ -1,7 +1,7 @@
 /* 11.0 — app styles. The shared layer first, then one file per style; each
    style's rules only match its own html[data-template] value. Imported by
    main.tsx after shell.css and before festivals.css. 15.0 replaced the six
-   styles (docs/app-styles.md). */
+   styles (README.md › App styles). */
 @import './base.css';
 @import './lumen.css';
 @import './verdant.css';

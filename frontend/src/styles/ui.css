@@ -29,7 +29,7 @@
   min-height: var(--btn-h);
   padding-inline: var(--btn-px);
   border: 1px solid transparent;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-control);
   font: inherit;
   font-size: var(--type-body);
   font-weight: 700;
@@ -195,7 +195,7 @@
 /* ---- Tabs: segmented and underline, with a sliding indicator. ----------- */
 .vx-tabs { position: relative; display: inline-flex; gap: 2px; isolation: isolate; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .vx-tabs::-webkit-scrollbar { display: none; }
-.vx-tabs--segmented { padding: 3px; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.07); }
+.vx-tabs--segmented { padding: 3px; border-radius: var(--radius-control); background: rgb(var(--ink-100) / 0.07); }
 .vx-tabs--underline { gap: var(--space-5); border-bottom: 1px solid var(--line-1); }
 .vx-tab {
   position: relative;
@@ -206,7 +206,7 @@
   min-height: 34px;
   padding: 0 14px;
   border: 0;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--text-3);
   font: inherit;
@@ -227,7 +227,7 @@
   pointer-events: none;
   transition: transform var(--dur-slow) var(--ease-spring), width var(--dur-slow) var(--ease-spring);
 }
-.vx-tabs--segmented .vx-tabs-ind { top: 3px; bottom: 3px; border-radius: var(--radius-pill); background: var(--surface-3); box-shadow: var(--elev-1); }
+.vx-tabs--segmented .vx-tabs-ind { top: 3px; bottom: 3px; border-radius: var(--radius-control); background: var(--surface-3); box-shadow: var(--elev-1); }
 html.light .vx-tabs--segmented .vx-tabs-ind { background: rgb(255 255 255); }
 .vx-tabs--underline .vx-tabs-ind { bottom: -1px; height: 2px; border-radius: 2px; background: var(--accent); }
 .vx-tabs[data-ready='false'] .vx-tabs-ind { transition: none; }
@@ -236,7 +236,7 @@ html.light .vx-tabs--segmented .vx-tabs-ind { background: rgb(255 255 255); }
 .vx-card {
   position: relative;
   display: block;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-tile);
   background: var(--surface-2);
   border: 1px solid var(--line-1);
   color: inherit;

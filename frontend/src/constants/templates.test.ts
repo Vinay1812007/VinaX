@@ -210,6 +210,14 @@ describe('app styles: light glass keeps text legible', () => {
 });
 
 describe('app styles: the shared layer', () => {
+  it('feeds every style\'s dials into the design system v2 tokens (Phase 7)', () => {
+    const shared = read('../styles/templates/base.css');
+    for (const pair of ['--radius-art: var(--tpl-r-art-sm);', '--radius-control: var(--tpl-r-control);', '--radius-tile: var(--tpl-r-tile);', '--radius-input: var(--tpl-r-input);']) expect(shared).toContain(pair);
+    // The press depth only where motion is allowed (tokens.css zeroes it otherwise).
+    expect(shared).toMatch(/@media \(prefers-reduced-motion: no-preference\) \{\s*html\[data-template\]:not\(\.reduce-motion\) \{ --press-scale: var\(--tpl-press\); \}/);
+    for (const id of TEMPLATE_IDS) expect(tplCss(id), `${id} states its control radius`).toMatch(/--tpl-r-control:\s*\S+;/);
+  });
+
   const shared = read('../styles/templates/base.css');
   it('keeps AMOLED black and high contrast above every style', () => {
     expect(shared).toContain('html.amoled[data-template]:not(#_) {');

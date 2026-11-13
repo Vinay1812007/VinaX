@@ -4,7 +4,7 @@
    A template is `html[data-template='<id>']` (set before first paint by the
    script in index.html, kept live by utils/theme.ts). Six ship (15.0): lumen
    (the default), verdant, monsoon, harbour, verse, onyx — one file each
-   beside this one; docs/app-styles.md is their design contract. This file is
+   beside this one; README.md › App styles is their design contract. This file is
    what they have in common:
 
    1. the shape, type and motion DIALS (--tpl-*) and the rules that make the
@@ -104,6 +104,21 @@ html[data-template] {
   --tpl-enter: tplRise;
   --tpl-enter-dur: 260ms;
   --tpl-press: 0.96;
+}
+
+/* Design system v2 (UI rebuild Phase 7): each style's dials feed the shared
+   tokens (styles/tokens.css), so the v2 primitives (components/ui) and any
+   page built on the tokens take the style's shapes and press without a
+   per-style rule. The press depth only where motion is allowed: tokens.css
+   sets --press-scale to 1 under either reduced-motion switch. */
+html[data-template] {
+  --radius-art: var(--tpl-r-art-sm);
+  --radius-control: var(--tpl-r-control);
+  --radius-tile: var(--tpl-r-tile);
+  --radius-input: var(--tpl-r-input);
+}
+@media (prefers-reduced-motion: no-preference) {
+  html[data-template]:not(.reduce-motion) { --press-scale: var(--tpl-press); }
 }
 
 /* Derived from the inks, so a template states its inks once. */
