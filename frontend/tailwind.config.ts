@@ -2,7 +2,8 @@ import type { Config } from 'tailwindcss';
 
 /**
  * VinaX design tokens.
- * Dark-first. "Ink" surfaces, indigo "ember" accent, cyan "tide" support.
+ * Dark-first. "Ink" surfaces, the "ember" accent (Marigold by default) and
+ * its "tide" partner (Rose). Semantic tokens live in src/styles/tokens.css.
  * Spacing follows a 4px base grid via Tailwind defaults.
  *
  * NOTE: keep each theme key declared exactly once — a duplicate key in this
@@ -24,6 +25,9 @@ export default {
         card: '0.75rem',
         sheet: '1.25rem',
         pill: '9999px',
+        // Design system v2 (styles/tokens.css).
+        xs: 'var(--radius-xs)',
+        art: 'var(--radius-art)',
       },
       borderColor: {
         // Hairline tokens — always use these instead of border-white/N so
@@ -82,9 +86,27 @@ export default {
         lift: '0 4px 16px -8px rgba(0,0,0,0.45)',
         glow: '0 0 0 1px rgb(var(--ember-500) / 0.25)',
         soft: '0 4px 16px -8px rgba(0,0,0,0.35)',
+        // Design system v2 elevation tiers (styles/tokens.css).
+        'elev-1': 'var(--elev-1)',
+        'elev-2': 'var(--elev-2)',
+        'elev-3': 'var(--elev-3)',
+        'elev-4': 'var(--elev-4)',
       },
       transitionTimingFunction: {
         vinax: 'cubic-bezier(0.22, 1, 0.36, 1)',
+        // Design system v2 motion curves (styles/tokens.css).
+        standard: 'var(--ease-standard)',
+        enter: 'var(--ease-enter)',
+        exit: 'var(--ease-exit)',
+        spring: 'var(--ease-spring)',
+        bounce: 'var(--ease-bounce)',
+      },
+      transitionDuration: {
+        instant: 'var(--dur-instant)',
+        quick: 'var(--dur-quick)',
+        base: 'var(--dur-base)',
+        slow: 'var(--dur-slow)',
+        page: 'var(--dur-page)',
       },
       minHeight: { touch: '44px' },
       minWidth: { touch: '44px' },

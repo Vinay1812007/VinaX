@@ -1,0 +1,340 @@
+/* ============================================================================
+   /design — the design system v2 style guide (pages/DesignPage.tsx).
+   Layout for the guide itself, plus the FESTIVAL TAKEOVER PROTOTYPE at the
+   end: html.vx-takeover.fest-<id> re-pitches every palette channel, so the
+   whole app — not just this page — shows the takeover while it is previewed.
+   Phase 6 of the rebuild generates these packs for all 43 festivals.
+   ========================================================================= */
+
+.vx-ds {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--gutter) var(--space-16);
+  color: var(--text-2);
+}
+.vx-ds code {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.75rem;
+  color: var(--text-4);
+}
+.vx-ds-overline {
+  margin: 0;
+  font-size: var(--type-overline);
+  font-weight: 800;
+  letter-spacing: var(--tracking-overline);
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+
+/* ---- Hero ---------------------------------------------------------------- */
+.vx-ds-hero { padding: var(--space-10) 0 var(--space-8); }
+.vx-ds-hero h1 {
+  margin: var(--space-3) 0 0;
+  max-width: 14ch;
+  font-family: var(--font-display);
+  font-size: var(--type-hero);
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+  color: var(--text-1);
+}
+.vx-ds-hero-lead { max-width: 60ch; margin: var(--space-4) 0 0; font-size: var(--type-body-lg); line-height: var(--leading-body); color: var(--text-2); }
+.vx-ds-nav { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-6); }
+.vx-ds-nav a {
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-2);
+  color: var(--text-2);
+  font-size: var(--type-meta);
+  font-weight: 700;
+  transition: background-color var(--dur-quick) var(--ease-standard), color var(--dur-quick) var(--ease-standard);
+}
+.vx-ds-nav a:hover { background: var(--accent-soft); color: var(--accent-text); border-color: transparent; }
+.vx-ds-nav a:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* ---- Preview bar --------------------------------------------------------- */
+.vx-ds-bar {
+  position: sticky;
+  top: calc(var(--vx-topbar-h) + var(--space-2));
+  z-index: var(--z-sticky);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  margin: 0 0 var(--space-10);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--line-1);
+  box-shadow: var(--elev-3);
+}
+@media (max-width: 767px) {
+  .vx-ds-bar { position: static; }
+}
+.vx-ds-select { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--type-meta); font-weight: 700; color: var(--text-3); }
+.vx-ds-select select {
+  min-height: 34px;
+  padding: 0 28px 0 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-2);
+  background: var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' stroke='%23999' stroke-width='1.6'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E") no-repeat right 11px center;
+  -webkit-appearance: none;
+  appearance: none;
+  color: var(--text-1);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.vx-ds-select select:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.vx-ds-bar-switch { gap: var(--space-3); margin-inline-start: auto; }
+.vx-ds-bar-switch .vx-switch-label { font-size: var(--type-meta); color: var(--text-2); }
+
+/* ---- Sections ------------------------------------------------------------ */
+.vx-ds-section { padding: var(--space-10) 0; border-top: 1px solid var(--line-1); scroll-margin-top: calc(var(--vx-topbar-h) + 96px); }
+.vx-ds-section-head { margin-bottom: var(--space-8); }
+.vx-ds-section-head h2 { margin: 0; font-family: var(--font-display); font-size: var(--type-page); font-weight: 800; letter-spacing: var(--tracking-display); line-height: var(--leading-tight); color: var(--text-1); }
+.vx-ds-section-head p { max-width: 64ch; margin: var(--space-3) 0 0; line-height: var(--leading-body); }
+.vx-ds-sub + .vx-ds-sub { margin-top: var(--space-10); }
+.vx-ds-sub h3 { margin: 0 0 var(--space-4); font-size: var(--type-overline); font-weight: 800; letter-spacing: var(--tracking-overline); text-transform: uppercase; color: var(--text-3); }
+.vx-ds-sub > .vx-btn { margin-top: var(--space-4); }
+.vx-ds-stack { display: grid; gap: var(--space-5); justify-items: start; }
+.vx-ds-two { display: grid; gap: var(--space-4); }
+@media (min-width: 900px) { .vx-ds-two { grid-template-columns: 1fr 1fr; } }
+.vx-ds-row-demo { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.vx-ds-row-demo > code { width: 84px; }
+.vx-ds-grid-rows { display: grid; gap: var(--space-4); }
+
+/* ---- Colour -------------------------------------------------------------- */
+.vx-ds-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-4); }
+.vx-ds-swatch { margin: 0; }
+.vx-ds-swatch--wide { grid-column: span 2; }
+.vx-ds-chip { display: block; height: 72px; border-radius: var(--radius-lg); border: 1px solid var(--line-2); }
+.vx-ds-chip--round { height: 56px; }
+.vx-ds-swatch figcaption, .vx-ds-ink div { display: grid; gap: 2px; margin-top: var(--space-2); }
+.vx-ds-swatch strong, .vx-ds-ink strong { color: var(--text-1); font-size: var(--type-meta); }
+.vx-ds-inks { display: grid; gap: 1px; overflow: hidden; border-radius: var(--radius-lg); border: 1px solid var(--line-1); background: var(--surface-1); }
+.vx-ds-ink { display: grid; grid-template-columns: 64px 1fr auto; align-items: center; gap: var(--space-4); padding: var(--space-3) var(--space-5); background: var(--surface-1); }
+.vx-ds-ink + .vx-ds-ink { border-top: 1px solid var(--line-1); }
+.vx-ds-ink > span:first-child { font-family: var(--font-display); font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; }
+.vx-ds-ink div { margin: 0; }
+.vx-ds-ratio { font-size: var(--type-meta); font-weight: 750; font-variant-numeric: tabular-nums; color: var(--text-2); }
+
+/* ---- Type ---------------------------------------------------------------- */
+.vx-ds-type { display: grid; }
+.vx-ds-type-row { display: grid; gap: var(--space-2); padding: var(--space-4) 0; border-bottom: 1px solid var(--line-1); }
+@media (min-width: 768px) { .vx-ds-type-row { grid-template-columns: 180px 1fr; align-items: baseline; gap: var(--space-6); } }
+.vx-ds-type-meta { display: grid; gap: 2px; }
+.vx-ds-type-meta strong { color: var(--text-1); font-size: var(--type-meta); }
+.vx-ds-type-sample { margin: 0; min-width: 0; overflow-wrap: anywhere; color: var(--text-1); line-height: var(--leading-snug); }
+.vx-ds-face-display { font-family: var(--font-display); font-weight: 800; letter-spacing: var(--tracking-display); line-height: var(--leading-tight); }
+.vx-ds-face-body { font-family: var(--font-body); font-weight: 550; }
+.vx-ds-face-overline { font-weight: 800; letter-spacing: var(--tracking-overline); text-transform: uppercase; color: var(--accent-text); }
+
+/* ---- Shape --------------------------------------------------------------- */
+.vx-ds-space { display: grid; gap: var(--space-2); }
+.vx-ds-space-row { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: var(--space-4); }
+.vx-ds-space-row span { display: block; height: 12px; border-radius: 3px; background: var(--accent); }
+.vx-ds-radii { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: var(--space-4); }
+.vx-ds-radii figure { margin: 0; }
+.vx-ds-radii span { display: block; height: 76px; background: var(--surface-3); border: 1px solid var(--line-2); }
+.vx-ds-radii figcaption, .vx-ds-elev figcaption { margin-top: var(--space-2); }
+.vx-ds-elev { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-6); }
+.vx-ds-elev figure { display: flex; align-items: flex-end; height: 104px; margin: 0; padding: var(--space-3); border-radius: var(--radius-lg); background: var(--surface-2); }
+.vx-ds-materials { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--space-4); padding: var(--space-6); overflow: hidden; border-radius: var(--radius-xl); isolation: isolate; }
+.vx-ds-materials-art {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(40% 70% at 15% 30%, rgb(var(--ember-500)) 0, transparent 70%),
+    radial-gradient(35% 60% at 70% 70%, rgb(var(--tide-500)) 0, transparent 70%),
+    radial-gradient(30% 50% at 90% 10%, rgb(56 189 248) 0, transparent 70%),
+    var(--surface-1);
+}
+.vx-ds-mat { display: grid; gap: 4px; min-height: 120px; align-content: end; padding: var(--space-4); border-radius: var(--radius-lg); }
+.vx-ds-mat strong { color: var(--text-1); }
+.vx-ds-mat span { font-size: var(--type-meta); color: var(--text-2); }
+
+/* ---- Motion -------------------------------------------------------------- */
+.vx-ds-curves { display: grid; gap: var(--space-3); }
+.vx-ds-curve { display: grid; gap: var(--space-2); }
+@media (min-width: 768px) { .vx-ds-curve { grid-template-columns: 260px 1fr; align-items: center; gap: var(--space-6); } }
+.vx-ds-curve-meta { display: grid; grid-template-columns: auto 1fr; gap: 0 var(--space-3); }
+.vx-ds-curve-meta strong { color: var(--text-1); font-size: var(--type-meta); }
+.vx-ds-curve-meta span { font-size: var(--type-meta); color: var(--text-3); }
+.vx-ds-curve-meta code { grid-column: 1 / -1; }
+.vx-ds-track { position: relative; height: 32px; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.06); }
+.vx-ds-track span {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+  transition-property: left;
+  transition-duration: 900ms;
+}
+.vx-ds-curves[data-played='true'] .vx-ds-track span { left: calc(100% - 28px); }
+.vx-ds-durs { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.vx-ds-dur { display: grid; gap: 2px; min-width: 120px; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--surface-2); border: 1px solid var(--line-1); }
+.vx-ds-dur span { color: var(--text-1); font-weight: 750; font-variant-numeric: tabular-nums; }
+.vx-ds-stagger { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+.vx-ds-stagger li { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2); border-radius: var(--radius-md); background: var(--surface-2); color: var(--text-1); font-size: var(--type-meta); font-weight: 700; }
+
+/* ---- Demo artwork (content colours, not UI tokens) ----------------------- */
+.vx-ds-art { display: block; flex: none; width: 44px; height: 44px; border-radius: var(--radius-art); background: linear-gradient(135deg, #f59e0b, #db2777); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08); }
+.vx-ds-art--sm { width: 44px; height: 44px; }
+.vx-ds-art--xl { width: min(100%, 300px); height: auto; aspect-ratio: 1; margin: var(--space-4) auto; border-radius: var(--radius-xl); box-shadow: var(--elev-4); }
+.vx-ds-art--fill { width: 100%; height: auto; aspect-ratio: 1; border-radius: var(--radius-md); }
+.vx-ds-art[data-art='1'] { background: radial-gradient(60% 60% at 30% 30%, #fde68a, transparent 60%), linear-gradient(135deg, #be123c, #7c2d12); }
+.vx-ds-art[data-art='2'] { background: linear-gradient(160deg, #0ea5e9, #312e81); }
+.vx-ds-art[data-art='3'] { background: radial-gradient(70% 70% at 70% 20%, #a3e635, transparent 60%), linear-gradient(135deg, #065f46, #0f172a); }
+.vx-ds-art[data-art='4'] { background: linear-gradient(135deg, #f472b6, #7c3aed); }
+.vx-ds-art[data-art='5'] { background: radial-gradient(50% 50% at 50% 50%, #fef3c7, transparent 70%), linear-gradient(135deg, #f97316, #b91c1c); }
+.vx-ds-art[data-art='0'] { background: linear-gradient(135deg, #64748b, #1e293b); }
+
+/* ---- Components ---------------------------------------------------------- */
+.vx-ds-controls-card { display: grid; gap: var(--space-5); max-width: 520px; }
+.vx-ds-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); }
+.vx-ds-media { display: grid; gap: 2px; padding: var(--space-2); background: transparent; border-color: transparent; font: inherit; }
+.vx-ds-media strong { margin-top: var(--space-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-1); font-size: var(--type-meta); }
+.vx-ds-media > span:last-child { font-size: var(--type-caption); color: var(--text-3); }
+.vx-ds-skel-card { min-height: 120px; }
+.vx-ds-swap { display: grid; }
+.vx-ds-swap > * { grid-area: 1 / 1; transition: opacity var(--dur-base) var(--ease-standard); }
+.vx-ds-swap-skel { display: grid; grid-template-columns: 44px 1fr; gap: 8px var(--space-3); opacity: 0; }
+.vx-ds-sk-art { grid-row: span 2; width: 44px; height: 44px; border-radius: var(--radius-art); }
+.vx-ds-sk-line { height: 12px; border-radius: 6px; }
+.vx-ds-sk-line--short { width: 60%; }
+.vx-ds-swap-real { display: flex; gap: var(--space-3); }
+.vx-ds-swap-real strong { color: var(--text-1); }
+.vx-ds-swap-real p { margin: 4px 0 0; font-size: var(--type-meta); line-height: var(--leading-body); }
+.vx-ds-swap.is-loading .vx-ds-swap-skel { opacity: 1; }
+.vx-ds-swap.is-loading .vx-ds-swap-real { opacity: 0; }
+
+/* ---- Player demo --------------------------------------------------------- */
+.vx-ds-stage { display: grid; place-items: center; min-height: 140px; padding: var(--space-6); border-radius: var(--radius-2xl); background: var(--surface-0); border: 1px solid var(--line-1); }
+.vx-ds-mini {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: min(100%, 520px);
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--line-1);
+  box-shadow: var(--elev-3);
+  overflow: hidden;
+}
+.vx-ds-mini-open { display: flex; flex: 1; min-width: 0; align-items: center; gap: var(--space-3); padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; border-radius: var(--radius-md); }
+.vx-ds-mini-open:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.vx-ds-mini-text { display: grid; min-width: 0; }
+.vx-ds-mini-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-1); font-size: var(--type-body); }
+.vx-ds-mini-text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-3); font-size: var(--type-meta); }
+.vx-ds-mini-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: linear-gradient(90deg, var(--player-seek, var(--accent)) var(--p), transparent var(--p)); }
+.vx-ds-full { position: relative; display: grid; width: min(100%, 420px); padding: var(--space-4) var(--space-5) var(--space-6); overflow: hidden; border-radius: var(--radius-2xl); isolation: isolate; box-shadow: var(--elev-4); }
+.vx-ds-full-bg { position: absolute; inset: -20%; z-index: -1; background: radial-gradient(50% 40% at 40% 30%, #be123c, transparent 70%), radial-gradient(50% 50% at 70% 80%, #7c2d12, transparent 70%), var(--surface-1); filter: blur(40px) saturate(1.2); opacity: 0.9; }
+html.light .vx-ds-full-bg { opacity: 0.35; }
+.vx-ds-full-top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.vx-ds-full-meta { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.vx-ds-full-meta strong { display: block; font-family: var(--font-display); font-size: var(--type-title-lg); font-weight: 800; letter-spacing: var(--tracking-title); color: var(--text-1); }
+.vx-ds-full-meta span { color: var(--text-2); }
+.vx-ds-seek { margin-top: var(--space-4); }
+.vx-ds-seek-slider .vx-slider-head { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.vx-ds-seek-slider input::-webkit-slider-runnable-track { background: linear-gradient(90deg, var(--player-seek, var(--accent)) var(--fill), rgb(var(--ink-100) / 0.18) var(--fill)); }
+.vx-ds-seek-times { display: flex; justify-content: space-between; color: var(--text-3); font-size: var(--type-caption); font-variant-numeric: tabular-nums; }
+.vx-ds-controls { display: flex; align-items: center; justify-content: space-between; margin-top: var(--space-3); }
+/* The shared elements: one name each, present once in the document at a time. */
+.vx-ds-vt-art { view-transition-name: vx-ds-art; }
+.vx-ds-vt-title { view-transition-name: vx-ds-title; }
+::view-transition-group(vx-ds-art),
+::view-transition-group(vx-ds-title) { animation-duration: var(--dur-slow); animation-timing-function: var(--ease-spring); }
+::view-transition-old(root),
+::view-transition-new(root) { animation-duration: var(--dur-base); }
+
+/* ---- Festival section ---------------------------------------------------- */
+.vx-ds-fest-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--space-3); }
+.vx-ds-fest-card { display: grid; gap: 4px; font: inherit; }
+.vx-ds-fest-card strong { color: var(--text-1); }
+.vx-ds-fest-card > span:last-child { font-size: var(--type-meta); color: var(--text-3); }
+.vx-ds-fest-card[aria-pressed='true'] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.vx-ds-fest-swatch { display: block; height: 40px; margin-bottom: var(--space-2); border-radius: var(--radius-md); background: linear-gradient(120deg, rgb(19 14 22), rgb(255 164 46), rgb(255 99 132)); }
+.vx-ds-fest-card[data-fest='diwali'] .vx-ds-fest-swatch { background: linear-gradient(120deg, rgb(28 10 30), rgb(252 196 52), rgb(244 98 42)); }
+.vx-ds-fest-card[data-fest='christmas'] .vx-ds-fest-swatch { background: linear-gradient(120deg, rgb(8 26 20), rgb(220 38 64), rgb(234 196 96)); }
+.vx-ds-fest-demo { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-6); margin-top: var(--space-6); padding: var(--space-8); border-radius: var(--radius-2xl); background: var(--surface-2); border: 1px solid var(--line-1); }
+.vx-ds-mark { position: relative; flex: none; width: 72px; height: 72px; }
+.vx-ds-mark img { width: 72px; height: 72px; border-radius: 20px; }
+.vx-ds-mark-ornament { position: absolute; inset: -10px -12px auto auto; width: 30px; height: 30px; background: var(--fest-ornament, none) no-repeat center / contain; }
+.vx-ds-fest-title { margin: var(--space-2) 0 0; font-family: var(--font-display); font-size: var(--type-display); font-weight: 800; letter-spacing: var(--tracking-display); line-height: var(--leading-tight); color: var(--text-1); }
+.vx-ds-fest-copy { max-width: 52ch; margin: var(--space-3) 0 0; line-height: var(--leading-body); }
+
+/* ============================================================================
+   FESTIVAL TAKEOVER PROTOTYPE (Phase 6 generalises this into the generator).
+   The everyday skin (styles/festivals.css) changes the accent and the
+   backdrop; the takeover re-pitches the WHOLE palette — all eleven surface
+   and text steps, both brand ramps — and adds the player skin, the display
+   treatment and the mark's ornament. Because it works on the palette
+   channels, every page and every app style follows with no per-page rules.
+   ========================================================================= */
+
+/* Diwali — lamp gold over a deep plum night. */
+html.vx-takeover.fest-diwali {
+  --ink-950: 14 6 16; --ink-900: 24 10 26; --ink-850: 34 15 36; --ink-800: 48 22 48; --ink-700: 72 36 66; --ink-600: 112 74 98;
+  --ink-500: 196 160 166; --ink-400: 214 184 182; --ink-300: 232 210 198; --ink-200: 246 232 214; --ink-100: 255 246 228;
+  --ember-600: 226 160 20; --ember-500: 252 196 52; --ember-400: 254 216 110; --ember-300: 255 232 168;
+  --tide-500: 244 98 42; --tide-400: 251 146 92;
+  --vx-on-accent: #2a1204;
+  --line-1: rgb(252 196 52 / 0.1); --line-2: rgb(252 196 52 / 0.18); --line-3: rgb(252 196 52 / 0.3);
+  --player-seek: linear-gradient(90deg, rgb(244 98 42), rgb(252 196 52));
+  --fest-ornament: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3c3 5 5 8 5 11a5 5 0 0 1-10 0c0-3 2-6 5-11z' fill='%23fcc434'/%3E%3Cpath d='M16 9c1.5 2.5 2.4 4 2.4 5.4a2.4 2.4 0 0 1-4.8 0C13.6 13 14.5 11.5 16 9z' fill='%23fff3c4'/%3E%3Cpath d='M5 22h22c-1 4-5 7-11 7S6 26 5 22z' fill='%23f4622a'/%3E%3C/svg%3E");
+}
+html.vx-takeover.fest-diwali.light {
+  --ink-950: 255 252 244; --ink-900: 253 246 232; --ink-850: 249 238 218; --ink-800: 242 226 200; --ink-700: 226 204 172; --ink-600: 164 128 110;
+  --ink-500: 112 72 64; --ink-400: 100 62 56; --ink-300: 80 46 44; --ink-200: 50 24 28; --ink-100: 32 12 20;
+  --ember-600: 112 52 0; --ember-500: 150 72 0; --ember-400: 140 66 0; --ember-300: 168 82 6;
+  --tide-500: 180 52 12; --tide-400: 156 44 10;
+  --vx-on-accent: #fff;
+  --line-1: rgb(112 52 0 / 0.1); --line-2: rgb(112 52 0 / 0.18); --line-3: rgb(112 52 0 / 0.3);
+}
+
+/* Christmas — pine and berry with warm gold. */
+html.vx-takeover.fest-christmas {
+  --ink-950: 5 16 12; --ink-900: 9 24 19; --ink-850: 14 33 26; --ink-800: 22 46 37; --ink-700: 38 68 56; --ink-600: 78 108 94;
+  --ink-500: 156 182 168; --ink-400: 180 202 190; --ink-300: 206 222 212; --ink-200: 232 240 232; --ink-100: 248 250 242;
+  --ember-600: 200 24 52; --ember-500: 232 52 76; --ember-400: 244 112 126; --ember-300: 250 170 176;
+  --tide-500: 234 196 96; --tide-400: 242 216 140;
+  --vx-on-accent: #fff;
+  --line-1: rgb(234 196 96 / 0.09); --line-2: rgb(234 196 96 / 0.16); --line-3: rgb(234 196 96 / 0.28);
+  --player-seek: linear-gradient(90deg, rgb(232 52 76), rgb(234 196 96));
+  --fest-ornament: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M4 20c2-8 7-13 12-13s10 5 12 13z' fill='%23e8344c'/%3E%3Crect x='3' y='19' width='26' height='5' rx='2.5' fill='%23f8faf2'/%3E%3Ccircle cx='16' cy='5' r='3' fill='%23f8faf2'/%3E%3C/svg%3E");
+}
+html.vx-takeover.fest-christmas.light {
+  --ink-950: 250 253 250; --ink-900: 242 248 243; --ink-850: 232 242 235; --ink-800: 218 232 222; --ink-700: 190 210 196; --ink-600: 116 140 126;
+  --ink-500: 58 84 72; --ink-400: 50 74 62; --ink-300: 36 58 48; --ink-200: 18 36 28; --ink-100: 8 22 16;
+  --ember-600: 128 12 32; --ember-500: 168 18 44; --ember-400: 158 16 40; --ember-300: 186 26 54;
+  --tide-500: 120 84 0; --tide-400: 104 72 0;
+  --vx-on-accent: #fff;
+  --line-1: rgb(8 22 16 / 0.08); --line-2: rgb(8 22 16 / 0.15); --line-3: rgb(8 22 16 / 0.26);
+}
+
+/* The black theme keeps true black under any takeover. */
+html.vx-takeover.amoled[class*='fest-'] { --ink-950: 0 0 0; --ink-900: 2 2 3; --ink-850: 9 9 12; --ink-800: 17 18 23; }
+
+/* Headings take the festival's two colours. */
+html.vx-takeover .vx-ds-hero h1,
+html.vx-takeover .vx-ds-fest-title {
+  background: linear-gradient(100deg, rgb(var(--ember-400)), rgb(var(--tide-500)) 70%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+html.vx-takeover.light .vx-ds-hero h1,
+html.vx-takeover.light .vx-ds-fest-title {
+  background-image: linear-gradient(100deg, rgb(var(--ember-500)), rgb(var(--tide-500)) 70%);
+}
+/* The mark wears the ornament with a small settle. */
+html.vx-takeover .vx-ds-mark-ornament { animation: vx-ds-ornament var(--dur-page) var(--ease-bounce) both; }
+@keyframes vx-ds-ornament { from { opacity: 0; transform: translateY(-6px) rotate(-12deg) scale(0.6); } }
+/* The demo panel picks up a wash of the festival colour. */
+html.vx-takeover .vx-ds-fest-demo { background: linear-gradient(140deg, rgb(var(--ember-500) / 0.12), transparent 50%), var(--surface-2); }

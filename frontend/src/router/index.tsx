@@ -121,6 +121,8 @@ const VinaXAIPage = lazy(() => import('@/pages/VinaXAIPage'));
 const VinaXAISharePage = lazy(() => import('@/pages/VinaXAISharePage'));
 // Every artifact the listener's VinaX AI chats made.
 const VinaXAIArtifactsPage = lazy(() => import('@/pages/VinaXAIArtifactsPage'));
+// Design system v2 style guide: unlinked, noindex, never precached.
+const DesignPage = lazy(() => import('@/pages/DesignPage'));
 
 export const router = createBrowserRouter([
   // The old spelling of the chat address. Case-sensitive on purpose: the
@@ -213,6 +215,7 @@ export const router = createBrowserRouter([
       { path: 'quiz', element: <QuizPage /> },
       { path: 'download', element: <DownloadPage /> },
       { path: 'drive', element: <DriveModePage /> },
+      { path: 'design', element: <DesignPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

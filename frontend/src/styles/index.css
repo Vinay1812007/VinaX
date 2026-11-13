@@ -125,11 +125,11 @@
   --ink-200: 234 227 226;
   --ink-100: 251 245 236;
 
-  /* Brand ramps, taken from the VinaX mark. ember = "Iris", the violet of the
-     mark's stroke: play buttons, focus rings, active state, progress.
-     tide = "Lagoon", the mark's cyan: live accents, secondary links,
-     the one restrained gradient (Iris → Lagoon). Accent-theme selectors
-     below override these at runtime. */
+  /* Brand ramps (palette channels — components read the semantic names in
+     styles/tokens.css, not these). ember = the accent, Marigold orange by
+     default: play buttons, focus rings, active state, progress. tide = its
+     partner, Rose pink: live accents and the one gradient (ember → tide).
+     Accent, app-style and festival selectors override both at runtime. */
   --ember-600: 236 132 20;
   --ember-500: 255 164 46;
   --ember-400: 255 192 102;
@@ -150,8 +150,8 @@
   --art-tint-border-alpha: 0.10;
   --art-corner-alpha: 0.13;
 
-  /* Aura palette — used by the home-page hero wash + settings glow. Kept
-     as a small named subset so component code stays readable. */
+  /* Aura palette — the home-page hero wash + settings glow. The names are
+     historical: "violet" is the Marigold accent, "cyan" its Rose partner. */
   --aura-violet: 255 164 46;
   --aura-cyan: 255 99 132;
   --aura-lime: 163 230 53;

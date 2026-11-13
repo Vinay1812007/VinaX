@@ -1,0 +1,345 @@
+/* ============================================================================
+   Design system v2 — primitives (src/components/ui/*). Every value is a token
+   from styles/tokens.css, so themes, accents, app styles and festivals all
+   reach these without overrides. Imported by the primitives themselves: the
+   rules ship with the first chunk that uses one.
+   ========================================================================= */
+
+/* ---- Focus: one ring everywhere. ---------------------------------------- */
+.vx-btn:focus-visible,
+.vx-ibtn:focus-visible,
+.vx-switch:focus-visible,
+.vx-tab:focus-visible,
+.vx-card[data-interactive]:focus-visible,
+.vx-row[data-interactive]:focus-visible,
+.vx-slider input:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ---- Button. ------------------------------------------------------------ */
+.vx-btn {
+  --btn-h: var(--vx-control-h);
+  --btn-px: 18px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--btn-h);
+  padding-inline: var(--btn-px);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: var(--type-body);
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color var(--dur-quick) var(--ease-standard),
+    border-color var(--dur-quick) var(--ease-standard),
+    color var(--dur-quick) var(--ease-standard),
+    box-shadow var(--dur-quick) var(--ease-standard),
+    transform var(--dur-quick) var(--ease-spring);
+}
+.vx-btn:active:not(:disabled) { transform: scale(var(--press-scale)); filter: none; }
+.vx-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.vx-btn > svg { width: 1.15em; height: 1.15em; flex: none; }
+.vx-btn--sm { --btn-h: var(--vx-control-h-sm); --btn-px: 14px; font-size: var(--type-meta); }
+.vx-btn--lg { --btn-h: 48px; --btn-px: 24px; font-size: var(--type-body-lg); }
+.vx-btn--block { width: 100%; }
+/* Touch: the visual box may be 36px, the hit box never under 44px. */
+.vx-btn--sm::after { content: ''; position: absolute; inset: -4px 0; }
+
+.vx-btn--primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+.vx-btn--primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+.vx-btn--secondary { background: transparent; border-color: var(--line-3); color: var(--text-1); font-weight: 650; }
+.vx-btn--secondary:hover:not(:disabled) { background: rgb(var(--ink-100) / 0.06); border-color: rgb(var(--ink-100) / 0.45); }
+.vx-btn--tonal { background: var(--accent-soft); color: var(--accent-text); }
+.vx-btn--tonal:hover:not(:disabled) { background: var(--accent-soft-hover); }
+.vx-btn--ghost { background: transparent; color: var(--text-2); font-weight: 650; }
+.vx-btn--ghost:hover:not(:disabled) { background: rgb(var(--ink-100) / 0.06); color: var(--text-1); }
+/* Danger is tinted, never solid: with a red app style a solid red would read as
+   the main action. The red text and tint still say "destructive" on any accent. */
+.vx-btn--danger { background: color-mix(in srgb, var(--danger-solid) 16%, transparent); color: var(--danger); }
+.vx-btn--danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger-solid) 26%, transparent); }
+
+.vx-btn[aria-busy='true'] { color: transparent; pointer-events: none; }
+.vx-btn[aria-busy='true'] > .vx-spinner { position: absolute; inset: 0; margin: auto; color: var(--btn-ink, currentColor); }
+.vx-btn--primary[aria-busy='true'] > .vx-spinner { color: var(--text-on-accent); }
+.vx-btn--secondary[aria-busy='true'] > .vx-spinner,
+.vx-btn--ghost[aria-busy='true'] > .vx-spinner { color: var(--text-1); }
+.vx-btn--tonal[aria-busy='true'] > .vx-spinner { color: var(--accent-text); }
+.vx-btn--danger[aria-busy='true'] > .vx-spinner { color: var(--danger); }
+
+/* ---- Icon button. ------------------------------------------------------- */
+.vx-ibtn {
+  --ibtn: 40px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--ibtn);
+  height: var(--ibtn);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-quick) var(--ease-standard),
+    color var(--dur-quick) var(--ease-standard),
+    transform var(--dur-quick) var(--ease-spring);
+}
+.vx-ibtn::after { content: ''; position: absolute; inset: min(0px, calc((var(--ibtn) - 44px) / 2)); }
+.vx-ibtn > svg { width: 55%; height: 55%; }
+.vx-ibtn:hover:not(:disabled) { background: rgb(var(--ink-100) / 0.08); color: var(--text-1); }
+.vx-ibtn:active:not(:disabled) { transform: scale(0.92); filter: none; }
+.vx-ibtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.vx-ibtn--sm { --ibtn: 36px; }
+.vx-ibtn--lg { --ibtn: 48px; }
+.vx-ibtn--xl { --ibtn: 64px; }
+.vx-ibtn--tonal { background: rgb(var(--ink-100) / 0.07); color: var(--text-1); }
+.vx-ibtn--solid { background: var(--accent); color: var(--text-on-accent); }
+.vx-ibtn--solid:hover:not(:disabled) { background: var(--accent-hover); color: var(--text-on-accent); }
+.vx-ibtn[aria-pressed='true'] { color: var(--accent-text); }
+.vx-ibtn--solid[aria-pressed='true'] { color: var(--text-on-accent); }
+
+/* ---- Spinner. ----------------------------------------------------------- */
+.vx-spinner {
+  width: 1.1em;
+  height: 1.1em;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: vx-spin 0.7s linear infinite;
+  flex: none;
+}
+@keyframes vx-spin { to { transform: rotate(1turn); } }
+
+/* ---- Switch. ------------------------------------------------------------ */
+.vx-switch-row { display: flex; align-items: center; gap: var(--space-4); justify-content: space-between; cursor: pointer; }
+.vx-switch-row[data-disabled] { cursor: not-allowed; opacity: 0.5; }
+.vx-switch-text { min-width: 0; }
+.vx-switch-label { display: block; color: var(--text-1); font-weight: 650; font-size: var(--type-body); }
+.vx-switch-desc { display: block; margin-top: 2px; color: var(--text-3); font-size: var(--type-meta); line-height: var(--leading-body); }
+.vx-switch {
+  position: relative;
+  flex: none;
+  width: 46px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: rgb(var(--ink-100) / 0.18);
+  cursor: inherit;
+  transition: background-color var(--dur-base) var(--ease-standard);
+}
+.vx-switch::after { content: ''; position: absolute; inset: -8px -2px; }
+.vx-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+  transition: transform var(--dur-slow) var(--ease-spring), width var(--dur-quick) var(--ease-standard);
+}
+.vx-switch[aria-checked='true'] { background: var(--accent); }
+.vx-switch[aria-checked='true'] .vx-switch-thumb { transform: translateX(18px); }
+.vx-switch:active .vx-switch-thumb { width: 26px; }
+.vx-switch[aria-checked='true']:active .vx-switch-thumb { transform: translateX(14px); }
+
+/* ---- Slider. ------------------------------------------------------------ */
+.vx-slider { display: grid; gap: var(--space-2); }
+.vx-slider-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); }
+.vx-slider-label { color: var(--text-1); font-weight: 650; font-size: var(--type-body); }
+.vx-slider-value { color: var(--text-3); font-size: var(--type-meta); font-variant-numeric: tabular-nums; }
+.vx-slider input {
+  --fill: 50%;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  background: transparent;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.vx-slider input::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--accent) var(--fill), rgb(var(--ink-100) / 0.16) var(--fill));
+}
+.vx-slider input::-moz-range-track { height: 6px; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.16); }
+.vx-slider input::-moz-range-progress { height: 6px; border-radius: var(--radius-pill); background: var(--accent); }
+.vx-slider input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
+  transition: transform var(--dur-quick) var(--ease-spring);
+}
+.vx-slider input::-moz-range-thumb { width: 18px; height: 18px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgb(0 0 0 / 0.35); }
+.vx-slider input:active::-webkit-slider-thumb { transform: scale(1.2); }
+
+/* ---- Tabs: segmented and underline, with a sliding indicator. ----------- */
+.vx-tabs { position: relative; display: inline-flex; gap: 2px; isolation: isolate; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.vx-tabs::-webkit-scrollbar { display: none; }
+.vx-tabs--segmented { padding: 3px; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.07); }
+.vx-tabs--underline { gap: var(--space-5); border-bottom: 1px solid var(--line-1); }
+.vx-tab {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-3);
+  font: inherit;
+  font-size: var(--type-meta);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--dur-base) var(--ease-standard);
+}
+.vx-tab:hover { color: var(--text-1); }
+.vx-tab[aria-selected='true'] { color: var(--text-1); }
+.vx-tabs--underline .vx-tab { padding: 0 0 2px; min-height: 40px; border-radius: 0; font-size: var(--type-body); }
+.vx-tab-count { color: var(--text-4); font-weight: 650; font-variant-numeric: tabular-nums; }
+.vx-tabs-ind {
+  position: absolute;
+  z-index: 0;
+  left: 0;
+  pointer-events: none;
+  transition: transform var(--dur-slow) var(--ease-spring), width var(--dur-slow) var(--ease-spring);
+}
+.vx-tabs--segmented .vx-tabs-ind { top: 3px; bottom: 3px; border-radius: var(--radius-pill); background: var(--surface-3); box-shadow: var(--elev-1); }
+html.light .vx-tabs--segmented .vx-tabs-ind { background: rgb(255 255 255); }
+.vx-tabs--underline .vx-tabs-ind { bottom: -1px; height: 2px; border-radius: 2px; background: var(--accent); }
+.vx-tabs[data-ready='false'] .vx-tabs-ind { transition: none; }
+
+/* ---- Card. -------------------------------------------------------------- */
+.vx-card {
+  position: relative;
+  display: block;
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  border: 1px solid var(--line-1);
+  color: inherit;
+  text-align: start;
+}
+.vx-card--pad { padding: var(--space-5); }
+.vx-card--flat { background: transparent; }
+.vx-card--raised { box-shadow: var(--elev-2); border-color: transparent; }
+.vx-card[data-interactive] {
+  cursor: pointer;
+  transition:
+    background-color var(--dur-base) var(--ease-standard),
+    border-color var(--dur-base) var(--ease-standard),
+    transform var(--dur-base) var(--ease-spring),
+    box-shadow var(--dur-base) var(--ease-standard);
+}
+.vx-card[data-interactive]:hover { background: var(--surface-3); border-color: var(--line-2); }
+.vx-card[data-interactive]:active { transform: scale(0.985); filter: none; }
+
+/* ---- List row. ---------------------------------------------------------- */
+.vx-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 56px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+}
+.vx-row[data-interactive] { cursor: pointer; transition: background-color var(--dur-instant) var(--ease-standard); }
+.vx-row[data-interactive]:hover { background: rgb(var(--ink-100) / 0.05); }
+.vx-row[data-interactive]:active { background: rgb(var(--ink-100) / 0.09); filter: none; }
+.vx-row[aria-current='true'] .vx-row-title { color: var(--accent-text); }
+.vx-row-lead { flex: none; display: flex; }
+.vx-row-body { flex: 1; min-width: 0; }
+.vx-row-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-1); font-weight: 650; font-size: var(--type-body); }
+.vx-row-sub { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; color: var(--text-3); font-size: var(--type-meta); }
+.vx-row-trail { flex: none; display: flex; align-items: center; gap: var(--space-1); color: var(--text-3); font-size: var(--type-meta); font-variant-numeric: tabular-nums; }
+
+/* ---- Badge. ------------------------------------------------------------- */
+.vx-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--radius-pill);
+  font-size: var(--type-caption);
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  background: rgb(var(--ink-100) / 0.09);
+  color: var(--text-2);
+}
+.vx-badge--accent { background: var(--accent-soft); color: var(--accent-text); }
+.vx-badge--positive { background: color-mix(in srgb, var(--positive) 16%, transparent); color: var(--positive); }
+.vx-badge--danger { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
+.vx-badge--live { background: var(--danger-solid); color: #fff; }
+.vx-badge--live::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: vx-live 1.6s var(--ease-standard) infinite; }
+@keyframes vx-live { 50% { opacity: 0.35; } }
+
+/* ---- Tooltip. ----------------------------------------------------------- */
+.vx-tip-wrap { position: relative; display: inline-flex; }
+.vx-tip {
+  position: absolute;
+  z-index: var(--z-popover);
+  left: 50%;
+  bottom: calc(100% + 8px);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: rgb(var(--ink-100));
+  color: rgb(var(--ink-950));
+  font-size: var(--type-caption);
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 4px) scale(0.96);
+  transition: opacity var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
+}
+.vx-tip-wrap:hover > .vx-tip,
+.vx-tip-wrap:focus-within > .vx-tip {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+  transition-delay: 350ms;
+}
+.vx-tip-wrap:focus-within > .vx-tip { transition-delay: 0ms; }
+
+/* ---- Dialog (on the Sheet shell). --------------------------------------- */
+.vx-dialog-body { color: var(--text-2); font-size: var(--type-body); line-height: var(--leading-body); }
+.vx-dialog-actions { display: flex; flex-wrap: wrap-reverse; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-6); }
+@media (max-width: 639px) {
+  .vx-dialog-actions > .vx-btn { flex: 1 1 140px; }
+}
+
+/* ---- Reduced motion backstop for the bits the kill switch can't reach. --- */
+@media (prefers-reduced-motion: reduce) {
+  .vx-spinner { animation-duration: 1.6s; }
+  .vx-badge--live::before { animation: none; }
+}
+html.reduce-motion .vx-badge--live::before { animation: none; }

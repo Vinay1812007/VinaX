@@ -1397,6 +1397,25 @@ Flags: `--no-baseline`, `--baseline <commit>` (default `7c4e2f5` can no longer l
 
 ## Design system
 
+### Design system v2 (the 2026-11 rebuild)
+
+The UI is being rebuilt on one system, phase by phase. Phase 1 adds the base; pages move over in later phases, and the older names below keep working until the last phase removes them.
+
+- **Semantic tokens** live in `frontend/src/styles/tokens.css` and are loaded right after `index.css`. They say what a value is *for*. Each one is built on the palette channels (`--ink-*`, `--ember-*`, `--tide-*`), so a theme, accent, style or festival reaches every component without an override.
+  - Colour: `--surface-0..4`, `--text-1..4`, `--accent`, `--accent-text`, `--accent-soft`, `--accent-2`, `--line-1..3`, and `--positive`, `--warning`, `--danger`, `--info`.
+  - Type: `--type-hero` … `--type-overline`. Space: `--space-*`. Shape: `--radius-xs` … `--radius-2xl`, `--radius-pill`. Depth: `--elev-1..4`. Layers: `--z-*`.
+  - Motion: `--dur-instant|quick|base|slow|page` and `--ease-standard|enter|exit|spring|bounce`. The two springs are `linear()` curves, with a cubic fallback where `linear()` is not supported. With reduced motion, from the OS or from Settings, every `--dur-*` becomes 0.
+  - New CSS uses these tokens, never a raw hex, radius or duration.
+- **Motion helpers** are in `src/utils/motion.ts`. `animate(el, keyframes, { duration, easing })` is a WAAPI call driven by the tokens; it returns `null` and does nothing under reduced motion. `withViewTransition(update)` wraps a React update; call `flushSync` inside it. `stagger(i)` gives the delay for item `i` of a reveal.
+- **Primitives** are in `src/components/ui/`: `Button` (primary, secondary, tonal, ghost and a tinted danger), `IconButton`, `Switch`, `Slider`, `Tabs` (segmented or underline, with a sliding indicator and arrow keys), `Card`/`cardClass`, `ListRow`, `Badge`, `Tooltip`, `Dialog` (built on `Sheet`) and `Spinner`. Their styles are in `styles/ui.css`, which loads with the first chunk that uses a primitive.
+- **`/design`** is the living style guide, at `pages/DesignPage.tsx` and `features/design/`.
+  - It shows every token with measured contrast, the type scale, the motion curves, every primitive, the mini-player-to-Now-Playing shared-element move, and a full festival takeover.
+  - Its preview bar (theme, style, accent, festival, reduced motion) changes only `<html>` while the page is open. It never writes settings.
+  - The page is unlinked, `noindex` (meta tag and `_headers`) and on demand (not precached). `e2e/design-system.spec.ts` gates it.
+- **Festival takeover (prototype):** `html.vx-takeover.fest-<id>` re-pitches the whole palette. That covers all eleven ink steps, both brand ramps, the hairlines, a player seek gradient (`--player-seek`) and the mark's ornament (`--fest-ornament`).
+  - For now it is only on `/design` (Diwali and Christmas, in `styles/pages/design.css`). Phase 6 generates it for every festival.
+  - The class is `vx-`, not `fest-`, because `FestiveSplash` removes every `fest-*` class it did not set.
+
 ### How the layers stack
 
 | Layer | Switch on `<html>` | Lives in | May change |

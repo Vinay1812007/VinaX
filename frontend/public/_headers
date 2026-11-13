@@ -84,6 +84,9 @@
 # never for search: the page and its API answer both say noindex.
 /vinaxai/share/*
   X-Robots-Tag: noindex, nofollow
+# The design system style guide (/design) is a working page, never for search.
+/design
+  X-Robots-Tag: noindex, nofollow
 /admin/kit/*
   Cache-Control: no-cache
 /admin/css/*

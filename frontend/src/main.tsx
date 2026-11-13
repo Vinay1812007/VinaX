@@ -5,6 +5,8 @@ import ReactDOM from 'react-dom/client';
 import { Capacitor } from '@capacitor/core';
 import App from './App';
 import './styles/index.css';
+// Design system v2 — the semantic layer every component reads (README.md › Design system).
+import './styles/tokens.css';
 import './styles/shell.css';
 import './styles/features.css';
 import './styles/templates/index.css';

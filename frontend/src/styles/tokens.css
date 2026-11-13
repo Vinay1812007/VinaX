@@ -1,0 +1,170 @@
+/* ============================================================================
+   VinaX design system v2 — semantic tokens.
+
+   Two layers:
+     1. Palette channels ("r g b" triplets) in styles/index.css: --ink-*,
+        --ember-*, --tide-*, --art. Themes (html.light / .amoled), accents
+        (html[data-accent]), app styles (html[data-template]) and festival
+        skins (html.fest-*) swap THESE — nothing else.
+     2. This file: what a colour, size or curve is FOR. Components read only
+        these names, so every theme, accent, style and festival reaches every
+        component without a per-component override.
+
+   Rule for new code: never a raw hex, a raw radius or a raw duration in a
+   component stylesheet — pick a token here, or add one here.
+   The older --vx-* / --radius-* / --transition-* names stay valid while the
+   pages move over (README.md › Design system).
+   ========================================================================= */
+:root {
+  /* ---- Surfaces — back to front. --------------------------------------- */
+  --surface-0: rgb(var(--ink-950)); /* chrome: sidebar, top bar, player deck */
+  --surface-1: rgb(var(--ink-900)); /* the page canvas */
+  --surface-2: rgb(var(--ink-850)); /* cards, panels, inputs */
+  --surface-3: rgb(var(--ink-800)); /* hover, raised controls */
+  --surface-4: rgb(var(--ink-700)); /* pressed, selected */
+  --surface-raised: var(--vx-mat-thick); /* menus, sheets, dialogs */
+  --scrim: rgb(6 3 8 / 0.62);
+
+  /* ---- Text — four steps, every one AA on --surface-1..3. -------------- */
+  --text-1: rgb(var(--ink-100)); /* titles, primary copy */
+  --text-2: rgb(var(--ink-300)); /* body, secondary */
+  --text-3: rgb(var(--ink-400)); /* meta, labels */
+  --text-4: rgb(var(--ink-500)); /* captions, counts, hints */
+  --text-on-accent: var(--vx-on-accent);
+
+  /* ---- Accent — the listener's colour (accent picker, app style, festival). */
+  --accent: rgb(var(--ember-500));
+  --accent-hover: rgb(var(--ember-400));
+  --accent-strong: rgb(var(--ember-600));
+  --accent-text: rgb(var(--ember-400)); /* accent used AS text: AA on surfaces */
+  --accent-soft: rgb(var(--ember-500) / 0.14);
+  --accent-soft-hover: rgb(var(--ember-500) / 0.22);
+  --accent-line: rgb(var(--ember-500) / 0.35);
+  --accent-2: rgb(var(--tide-500)); /* the one partner colour */
+  --accent-gradient: linear-gradient(120deg, rgb(var(--ember-500)), rgb(var(--tide-500)));
+  --focus-ring: 0 0 0 2px var(--surface-1), 0 0 0 4px rgb(var(--ember-400));
+
+  /* ---- Lines (hairlines re-theme; never border-white/N). --------------- */
+  --line-1: rgb(var(--ink-100) / 0.07);
+  --line-2: rgb(var(--ink-100) / 0.13);
+  --line-3: rgb(var(--ink-100) / 0.24);
+
+  /* ---- Status. --------------------------------------------------------- */
+  --positive: var(--vx-success);
+  --danger: var(--vx-danger);
+  --warning: #fcd34d;
+  --info: #93c5fd;
+  --danger-solid: #e11d48;
+
+  /* ---- Type — one scale. Display face for headings, Manrope for the rest. */
+  --font-display: var(--vx-font-display);
+  --font-body: 'Manrope', 'Manrope Fallback', -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, sans-serif;
+  --type-hero: clamp(2.5rem, 5.2vw, 4.25rem);
+  --type-display: var(--vx-type-display);
+  --type-page: var(--vx-type-page);
+  --type-title-lg: var(--vx-type-section); /* section headings, 22px */
+  --type-title: 1.125rem; /* sheet and card-group titles */
+  --type-body-lg: 1.0625rem;
+  --type-body: var(--vx-type-body);
+  --type-meta: var(--vx-type-meta);
+  --type-caption: var(--vx-type-caption);
+  --type-overline: 0.6875rem; /* uppercase labels, tracked out */
+  --leading-tight: 1.1;
+  --leading-snug: 1.3;
+  --leading-body: 1.55;
+  --tracking-display: -0.035em;
+  --tracking-title: -0.02em;
+  --tracking-overline: 0.09em;
+
+  /* ---- Space — 4-point grid (same values as --vx-space-*). ------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --gutter: clamp(16px, 3vw, 32px); /* page side padding */
+
+  /* ---- Shape. sm/md/lg/xl/pill keep their 9.x values; xs and 2xl are new. */
+  --radius-xs: 6px;
+  --radius-2xl: 28px;
+  --radius-art: var(--radius-md); /* artwork thumbnails */
+
+  /* ---- Elevation — a shadow per tier; pair with a --vx-mat-* fill. ----- */
+  --elev-1: 0 1px 2px rgb(0 0 0 / 0.22);
+  --elev-2: 0 2px 6px -1px rgb(0 0 0 / 0.3), 0 8px 20px -10px rgb(0 0 0 / 0.45);
+  --elev-3: 0 6px 16px -6px rgb(0 0 0 / 0.42), 0 18px 40px -16px rgb(0 0 0 / 0.55);
+  --elev-4: 0 24px 64px -12px rgb(0 0 0 / 0.6);
+
+  /* ---- Motion. Durations by job, curves by direction. ------------------ */
+  --dur-instant: 90ms; /* colour and opacity of small controls */
+  --dur-quick: 160ms; /* press, hover, toggles */
+  --dur-base: 240ms; /* menus, chips, tabs, cross-fades */
+  --dur-slow: 360ms; /* sheets, dialogs, shared-element moves */
+  --dur-page: 420ms; /* route changes */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1); /* on-screen moves */
+  --ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1); /* things arriving */
+  --ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15); /* things leaving */
+  /* Springs: a damped spring sampled into linear(). --ease-spring settles
+     with a 2% overshoot (sheets, dialogs, toggles); --ease-bounce overshoots
+     ~10% (likes, celebrations, the play button). */
+  --ease-spring: linear(0, 0.006, 0.025 2.8%, 0.101 6.1%, 0.539 18.9%, 0.721 25.3%, 0.849 31.5%, 0.937 38.1%, 0.968 41.8%, 0.991 45.7%, 1.006 50.1%, 1.015 55%, 1.017 63.9%, 1.001 85.9%, 1);
+  --ease-bounce: linear(0, 0.009, 0.035 2.1%, 0.141 4.4%, 0.723 12.9%, 0.938 16.7%, 1.017 19.4%, 1.067, 1.099 24.3%, 1.108 26%, 1.097, 1.072 31.2%, 0.996 41.4%, 0.985 44.1%, 0.981 46.9%, 0.985 54.1%, 0.998 66.6%, 1);
+  --press-scale: 0.97;
+
+  /* ---- Layers. One stacking scale for the whole app. ------------------- */
+  --z-sticky: 20;
+  --z-nav: 30;
+  --z-player: 40;
+  --z-popover: 50;
+  --z-overlay: 60;
+  --z-sheet: 70;
+  --z-gate: 80;
+  --z-toast: 90;
+}
+
+/* Light canvas: softer, warmer shadows; status colours that clear AA. */
+html.light {
+  --scrim: rgb(24 14 22 / 0.42);
+  --warning: #92400e;
+  --info: #1d4ed8;
+  --danger-solid: #be123c;
+  --elev-1: 0 1px 2px rgb(48 22 34 / 0.08);
+  --elev-2: 0 1px 3px rgb(48 22 34 / 0.06), 0 8px 20px -12px rgb(48 22 34 / 0.18);
+  --elev-3: 0 4px 12px -4px rgb(48 22 34 / 0.1), 0 18px 40px -18px rgb(48 22 34 / 0.24);
+  --elev-4: 0 24px 64px -16px rgb(48 22 34 / 0.3);
+}
+
+/* Browsers without linear() get the nearest cubic curve. */
+@supports not (transition-timing-function: linear(0, 1)) {
+  :root {
+    --ease-spring: var(--ease-enter);
+    --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+}
+
+/* Reduced motion (the OS switch or the in-app one): durations collapse, so
+   code that reads the tokens (utils/motion.ts) agrees with the CSS kill
+   switch in index.css. */
+html.reduce-motion {
+  --dur-instant: 0ms;
+  --dur-quick: 0ms;
+  --dur-base: 0ms;
+  --dur-slow: 0ms;
+  --dur-page: 0ms;
+  --press-scale: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-instant: 0ms;
+    --dur-quick: 0ms;
+    --dur-base: 0ms;
+    --dur-slow: 0ms;
+    --dur-page: 0ms;
+    --press-scale: 1;
+  }
+}
