@@ -82,8 +82,8 @@ export function TopBar({ onCommands }: { onCommands: () => void }) {
       {/* 2.0 — a search field in the bar on wider screens: it opens Search, whose
           own field takes the typing. Not on Search itself (one field, not two). */}
       {showSearch && (
-        <Link to="/search" className="vx-topbar-search hidden md:flex" aria-label="Search songs, albums and artists">
-          <SearchIcon className="w-5 h-5 shrink-0" />
+        <Link to="/search" className="vx-topbar-search hidden md:flex">
+          <SearchIcon className="w-5 h-5 shrink-0" aria-hidden />
           <span>Search songs, albums, artists</span>
         </Link>
       )}
