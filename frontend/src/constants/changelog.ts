@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.16': {
+    title: 'Pages glide into place, and your song\'s artwork grows into Now Playing',
+    changes: [
+      { type: 'improved', text: 'Moving between pages is now one smooth motion: the page you leave fades, and the next one arrives in your app style\'s own way.' },
+      { type: 'improved', text: 'Tap the player and the song\'s artwork grows into Now Playing, and shrinks back when you return.' },
+      { type: 'new', text: 'A new song slides into the player bar; buttons and menu items give a gentle springy press.' },
+      { type: 'improved', text: 'The button for your current page and tab settles into place when you switch.' },
+    ],
+  },
   '1.13.15': {
     title: 'Sign in with your email and a password, not only Google',
     changes: [
