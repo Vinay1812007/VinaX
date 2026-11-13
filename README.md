@@ -1454,6 +1454,11 @@ The UI is being rebuilt on one system, phase by phase. Phase 1 adds the base; pa
   - `vinaxai.css` reads the app's tokens: `--vx-ai-ease` is `--ease-standard`, `--vx-ai-lift` and `--vx-ai-lift-sm` are `--elev-3` and `--elev-2`, timings are `--dur-*`, pills are `--radius-pill`, and Live's End is `--danger-solid`. The AI screens follow every theme, style and festival like the rest of the app; the `--vx-ai-*` names stay as aliases.
   - Live voice's six controls scale with the viewport, down to 44px, and may wrap; at 390px they used to run off both edges (`e2e/vinaxai-voice.spec.ts`).
   - The AI dialogs (confirm, share, projects) stay as they are. They already trap focus, close on Escape and Back, and use `alertdialog` semantics, and moving them onto `Dialog` would change their glass for no listener gain.
+- **Owner console (Phase 10):** `public/admin/css/tokens.css` is generated from the app's `tokens.css`, plus the radius scale in `index.css` (`npm run gen:admin-tokens`, `scripts/admin-tokens-core.mjs`).
+  - It carries the colour-free tokens: space, radii (including `--radius-control`), motion with the springs, elevation in dark and light, layers, and both reduced-motion switches.
+  - `admin/index.html` links it before `console.css`. The console's `--r-sm`, `--r-md`, `--r-lg` and `--ease` read it, its 29 `99px` pills are `--radius-pill`, its buttons press with `--press-scale`, and its switch and phone sidebar move on `--ease-spring`. Its own colours (marigold with the aqua → blue glass) stay.
+  - Screenshots before and after are pixel-identical in dark and light.
+  - `src/__tests__/adminTokens.test.ts` fails if the file drifts from the generator, carries any app colour, or is not linked.
 - **Festival takeover (Phase 6):** during a festival the whole app repaints, not just the accent.
   - **What it changes.** `npm run gen:festivals` (`scripts/festivals-gen-core.mjs`) writes `public/fest/fest-<id>.css` for all 43 festivals. Each file sets:
     - all eleven `--ink-*` steps, tinted toward the festival's canvas hue, for dark and light;

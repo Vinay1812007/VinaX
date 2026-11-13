@@ -27,7 +27,7 @@
 /* Live Now */
 .live-bar { margin-bottom: 14px; align-items: center; }
 .live-dot { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--ok); font-size: 13px; }
-.live-dot .dot { width: 8px; height: 8px; border-radius: 99px; background: var(--ok); animation: live-pulse 1.6s ease-in-out infinite; }
+.live-dot .dot { width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--ok); animation: live-pulse 1.6s ease-in-out infinite; }
 @keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 .page-body .kpis.stats + .card, .page-body > div > .kpis.stats { margin-bottom: 16px; }
 

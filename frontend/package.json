@@ -21,6 +21,7 @@
     "android:debug": "npm run cap:sync && cd android && ./gradlew assembleDebug",
     "test": "vitest run",
     "gen:festivals": "node scripts/gen-festivals.mjs",
+    "gen:admin-tokens": "node scripts/admin-tokens.mjs",
     "e2e": "node scripts/e2e-smoke.mjs && playwright test",
     "e2e:ui": "playwright test --ui",
     "e2e:report": "playwright show-report",

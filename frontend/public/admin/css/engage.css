@@ -39,7 +39,7 @@
 /* Setup checklist */
 .checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .check-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border-radius: var(--r-md); background: var(--surface-2); }
-.check-mark { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 99px; font-weight: 800; flex: none; }
+.check-mark { display: grid; place-items: center; width: 26px; height: 26px; border-radius: var(--radius-pill); font-weight: 800; flex: none; }
 .check-row.ok .check-mark { background: var(--ok-soft); color: var(--ok); }
 .check-row.bad .check-mark { background: var(--bad-soft); color: var(--bad); }
 .check-row.unknown .check-mark { background: var(--surface-3); color: var(--text-2); }
@@ -55,7 +55,7 @@
 .wizard-steps li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--r-md); background: var(--surface-2); color: var(--text-3); font-weight: 600; font-size: 13px; min-width: 0; }
 .wizard-steps li.on { background: var(--accent-soft); color: var(--text); }
 .wizard-steps li.done { color: var(--ok); }
-.wz-num { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 99px; background: var(--surface-3); font-size: 12px; flex: none; }
+.wz-num { display: grid; place-items: center; width: 22px; height: 22px; border-radius: var(--radius-pill); background: var(--surface-3); font-size: 12px; flex: none; }
 .wizard-steps li.on .wz-num { background: var(--accent); color: var(--on-accent); }
 @media (max-width: 560px) { .wizard-steps li span:last-child { display: none; } .wizard-steps li { justify-content: center; } }
 .wizard-body { display: grid; gap: 14px; }

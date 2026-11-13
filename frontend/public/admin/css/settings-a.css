@@ -42,9 +42,9 @@
 .phone-screen .pv-x { color: #8d8c86; margin-left: auto; }
 .phone-screen .pv-bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: #1d1f26; border-left: 3px solid #3b82f6; font-size: 12px; }
 .phone-screen .pv-bar span:first-child { flex: 1; }
-.phone-screen .pv-ribbon { height: 4px; border-radius: 99px; }
-.phone-screen .pv-chip { justify-self: start; padding: 6px 14px; border-radius: 99px; color: #111; font-weight: 700; }
+.phone-screen .pv-ribbon { height: 4px; border-radius: var(--radius-pill); }
+.phone-screen .pv-chip { justify-self: start; padding: 6px 14px; border-radius: var(--radius-pill); color: #111; font-weight: 700; }
 .phone-screen .pv-pop { display: grid; gap: 6px; padding: 14px; border-radius: 16px; background: #262932; box-shadow: 0 10px 30px rgb(0 0 0 / .5); }
 .phone-screen .pv-pop p { color: #c9c7c0; font-size: 12px; }
 .phone-screen .pv-pop-btns { display: flex; justify-content: flex-end; gap: 12px; align-items: center; font-size: 12px; }
-.phone-screen .pv-pop-btns b { padding: 5px 12px; border-radius: 99px; background: #f2a33a; color: #1a1206; }
+.phone-screen .pv-pop-btns b { padding: 5px 12px; border-radius: var(--radius-pill); background: #f2a33a; color: #1a1206; }
