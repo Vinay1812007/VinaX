@@ -9,7 +9,7 @@ import { useState, type FormEvent } from 'react';
 import { useAccount } from '@/components/useAccount';
 import { emailAuthMessage, MIN_PASSWORD, setPassword } from '@/services/auth/email';
 import { toast } from '@/store/toastStore';
-import { Row, RowButton } from './SettingsControls';
+import { Block, Row, RowButton } from './SettingsControls';
 import '@/styles/signin.css';
 
 export function PasswordRow() {
@@ -61,42 +61,46 @@ export function PasswordRow() {
     ? `You can sign in with ${email ?? 'your email'} and your password.`
     : `Set a password to also sign in with ${email ?? 'your email'} and a password, without Google.`;
 
+  const keywords = 'password email login sign in set change';
+  // Closed: a plain row with its button on the right. Open: the form takes the
+  // row's full width under the label (a narrow right-hand column squeezed it).
+  if (!open) {
+    return (
+      <Row label="Password" note={note} keywords={keywords}>
+        <RowButton onClick={() => setOpen(true)}>{has ? 'Change password' : 'Set a password'}</RowButton>
+      </Row>
+    );
+  }
   return (
-    <Row label="Password" note={note} keywords="password email login sign in set change" stack>
-      {!open ? (
+    <Block label="Password" note={note} keywords={keywords}>
+      <form className="vx-email-form" onSubmit={(e) => void submit(e)} noValidate>
+        {/* Lets a password manager file the new password under this address. */}
+        <input type="email" autoComplete="username" value={email ?? ''} readOnly hidden />
+        {has && (
+          <label className="vx-email-field">
+            <span>Current password</span>
+            <input type={show ? 'text' : 'password'} autoComplete="current-password" maxLength={72} value={current} onChange={(e) => setCurrent(e.target.value)} autoFocus />
+          </label>
+        )}
+        <label className="vx-email-field">
+          <span>{has ? 'New password' : 'Password'}</span>
+          <span className="vx-email-pw">
+            <input type={show ? 'text' : 'password'} autoComplete="new-password" minLength={MIN_PASSWORD} maxLength={72} value={next} onChange={(e) => setNext(e.target.value)} placeholder={`At least ${MIN_PASSWORD} characters`} autoFocus={!has} />
+            <button type="button" className="vx-email-link" onClick={() => setShow((v) => !v)} aria-pressed={show}>{show ? 'Hide' : 'Show'}</button>
+          </span>
+        </label>
+        <label className="vx-email-field">
+          <span>Type it again</span>
+          <input type={show ? 'text' : 'password'} autoComplete="new-password" maxLength={72} value={again} onChange={(e) => setAgain(e.target.value)} />
+        </label>
+        {error && <p className="vx-email-error" role="alert">{error}</p>}
         <div className="flex flex-wrap items-center gap-2">
-          <RowButton onClick={() => setOpen(true)}>{has ? 'Change password' : 'Set a password'}</RowButton>
+          <button type="submit" className="vx-email-submit px-5" disabled={busy || !next || !again || (has && !current)}>
+            {busy ? 'Saving…' : has ? 'Change password' : 'Set password'}
+          </button>
+          <RowButton onClick={close}>Cancel</RowButton>
         </div>
-      ) : (
-        <form className="vx-email-form" onSubmit={(e) => void submit(e)} noValidate>
-          {/* Lets a password manager file the new password under this address. */}
-          <input type="email" autoComplete="username" value={email ?? ''} readOnly hidden />
-          {has && (
-            <label className="vx-email-field">
-              <span>Current password</span>
-              <input type={show ? 'text' : 'password'} autoComplete="current-password" maxLength={72} value={current} onChange={(e) => setCurrent(e.target.value)} autoFocus />
-            </label>
-          )}
-          <label className="vx-email-field">
-            <span>{has ? 'New password' : 'Password'}</span>
-            <span className="vx-email-pw">
-              <input type={show ? 'text' : 'password'} autoComplete="new-password" minLength={MIN_PASSWORD} maxLength={72} value={next} onChange={(e) => setNext(e.target.value)} placeholder={`At least ${MIN_PASSWORD} characters`} autoFocus={!has} />
-              <button type="button" className="vx-email-link" onClick={() => setShow((v) => !v)} aria-pressed={show}>{show ? 'Hide' : 'Show'}</button>
-            </span>
-          </label>
-          <label className="vx-email-field">
-            <span>Type it again</span>
-            <input type={show ? 'text' : 'password'} autoComplete="new-password" maxLength={72} value={again} onChange={(e) => setAgain(e.target.value)} />
-          </label>
-          {error && <p className="vx-email-error" role="alert">{error}</p>}
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="submit" className="vx-email-submit px-5" disabled={busy || !next || !again || (has && !current)}>
-              {busy ? 'Saving…' : has ? 'Change password' : 'Set password'}
-            </button>
-            <RowButton onClick={close}>Cancel</RowButton>
-          </div>
-        </form>
-      )}
-    </Row>
+      </form>
+    </Block>
   );
 }
