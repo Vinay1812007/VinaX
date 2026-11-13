@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.19': {
+    title: 'Charts opens on the music, Discover shows every tile in full, and Settings menus match',
+    changes: [
+      { type: 'fixed', text: 'Charts no longer starts with an empty "Public charts" box: it opens straight on the popular list, still labelled as the catalogue\'s list, not a chart.' },
+      { type: 'improved', text: 'Charts rows read like the rest of the app: the song, then the artists and the film, without repeats.' },
+      { type: 'new', text: 'Discover and Search: every browse tile shows its full name and description ("New Releases · Fresh albums and songs" instead of "New Relea…").' },
+      { type: 'improved', text: 'Settings: the drop-down menus (Festival look, Preview a festival and others) are rounded like the other controls, with their own arrow.' },
+    ],
+  },
   '1.13.18': {
     title: 'Song lists say each thing once, and artists without a photo get their initials',
     changes: [
