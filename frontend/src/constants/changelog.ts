@@ -18,6 +18,13 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.26': {
+    title: 'VinaX AI makes playlists you can play',
+    changes: [
+      { type: 'improved', text: 'Ask VinaX AI for a playlist and it answers with a playlist card you can play or save to your library.' },
+      { type: 'new', text: 'The VinaX AI sidebar shows the VinaX logo, a clear New chat button and a "Back to music" link.' },
+    ],
+  },
   '1.13.25': {
     title: 'A new look for VinaX and a simpler way around',
     changes: [
