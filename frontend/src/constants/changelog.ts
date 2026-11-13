@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.27': {
+    title: 'An easier admin dashboard, one click from the app',
+    changes: [
+      { type: 'improved', text: 'The admin dashboard has eight clear sections instead of ten, and a Quick actions card for the jobs you do most.' },
+      { type: 'improved', text: 'The admin dashboard now uses the VinaX colours.' },
+      { type: 'improved', text: 'Admins get an Admin button in the app\'s top bar and an "Admin dashboard" link in the profile menu.' },
+      { type: 'improved', text: 'Song reactions are fully removed, including the Song Reactions page.' },
+    ],
+  },
   '1.13.26': {
     title: 'VinaX AI makes playlists you can play',
     changes: [
