@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.23': {
+    title: 'Sign-in pages match the rest of VinaX, with a clear main button',
+    changes: [
+      { type: 'fixed', text: 'On the sign-in, create account and new-password pages, the main button is now in your accent colour, like every other main button in the app. Before you fill in the form it\'s a softer version of it, instead of a flat grey bar that looked…' },
+      { type: 'improved', text: 'Fields show the same focus ring as the rest of the app, and errors use the same red.' },
+      { type: 'improved', text: 'The sign-in pages and the pages visitors see before signing in follow your theme, app style and festival look like everything else.' },
+      { type: 'improved', text: 'auth.css (/login, /signup, /forgot-password):.' },
+    ],
+  },
   '1.13.22': {
     title: 'Tap play, sign in with your email, and the song plays',
     changes: [
