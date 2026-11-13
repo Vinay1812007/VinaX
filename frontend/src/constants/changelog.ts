@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.18': {
+    title: 'Song lists say each thing once, and artists without a photo get their initials',
+    changes: [
+      { type: 'improved', text: 'Song lists are cleaner: the title, then the artists, then the film or album, without the same name repeated two or three times.' },
+      { type: 'improved', text: '"Song (From "Film")" now shows as the song, with the film beside it.' },
+      { type: 'improved', text: 'Artist pages: the line under the name reads "Singer · 9.5M listeners · 109.4M followers" instead of repeating "Artist" and a raw listener count.' },
+      { type: 'improved', text: 'Artists without a photo show their initials on a colour of their own instead of a placeholder.' },
+    ],
+  },
   '1.13.17': {
     title: 'The player moves with your music: covers ease in, buttons spring, rows arrive in turn',
     changes: [
