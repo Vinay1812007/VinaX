@@ -1,9 +1,7 @@
 /* ============================================================================
    /design — the design system v2 style guide (pages/DesignPage.tsx).
-   Layout for the guide itself, plus the FESTIVAL TAKEOVER PROTOTYPE at the
-   end: html.vx-takeover.fest-<id> re-pitches every palette channel, so the
-   whole app — not just this page — shows the takeover while it is previewed.
-   Phase 6 of the rebuild generates these packs for all 43 festivals.
+   Layout for the guide itself; the festival takeover it previews is the
+   real, generated one (public/fest/<class>.css).
    ========================================================================= */
 
 .vx-ds {
@@ -270,56 +268,11 @@ html.light .vx-ds-full-bg { opacity: 0.35; }
 .vx-ds-fest-copy { max-width: 52ch; margin: var(--space-3) 0 0; line-height: var(--leading-body); }
 
 /* ============================================================================
-   FESTIVAL TAKEOVER PROTOTYPE (Phase 6 generalises this into the generator).
-   The everyday skin (styles/festivals.css) changes the accent and the
-   backdrop; the takeover re-pitches the WHOLE palette — all eleven surface
-   and text steps, both brand ramps — and adds the player skin, the display
-   treatment and the mark's ornament. Because it works on the palette
-   channels, every page and every app style follows with no per-page rules.
+   FESTIVAL TAKEOVER on this page. The palettes are generated per festival
+   (public/fest/<class>.css, scripts/festivals-gen-core.mjs) and the shared
+   rules live in festivals.css; this page only adds its own headings and
+   demo mark to the takeover.
    ========================================================================= */
-
-/* Diwali — lamp gold over a deep plum night. */
-html.vx-takeover.fest-diwali {
-  --ink-950: 14 6 16; --ink-900: 24 10 26; --ink-850: 34 15 36; --ink-800: 48 22 48; --ink-700: 72 36 66; --ink-600: 112 74 98;
-  --ink-500: 196 160 166; --ink-400: 214 184 182; --ink-300: 232 210 198; --ink-200: 246 232 214; --ink-100: 255 246 228;
-  --ember-600: 226 160 20; --ember-500: 252 196 52; --ember-400: 254 216 110; --ember-300: 255 232 168;
-  --tide-500: 244 98 42; --tide-400: 251 146 92;
-  --vx-on-accent: #2a1204;
-  --line-1: rgb(252 196 52 / 0.1); --line-2: rgb(252 196 52 / 0.18); --line-3: rgb(252 196 52 / 0.3);
-  --player-seek: linear-gradient(90deg, rgb(244 98 42), rgb(252 196 52));
-  --fest-ornament: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3c3 5 5 8 5 11a5 5 0 0 1-10 0c0-3 2-6 5-11z' fill='%23fcc434'/%3E%3Cpath d='M16 9c1.5 2.5 2.4 4 2.4 5.4a2.4 2.4 0 0 1-4.8 0C13.6 13 14.5 11.5 16 9z' fill='%23fff3c4'/%3E%3Cpath d='M5 22h22c-1 4-5 7-11 7S6 26 5 22z' fill='%23f4622a'/%3E%3C/svg%3E");
-}
-html.vx-takeover.fest-diwali.light {
-  --ink-950: 255 252 244; --ink-900: 253 246 232; --ink-850: 249 238 218; --ink-800: 242 226 200; --ink-700: 226 204 172; --ink-600: 164 128 110;
-  --ink-500: 112 72 64; --ink-400: 100 62 56; --ink-300: 80 46 44; --ink-200: 50 24 28; --ink-100: 32 12 20;
-  --ember-600: 112 52 0; --ember-500: 150 72 0; --ember-400: 140 66 0; --ember-300: 168 82 6;
-  --tide-500: 180 52 12; --tide-400: 156 44 10;
-  --vx-on-accent: #fff;
-  --line-1: rgb(112 52 0 / 0.1); --line-2: rgb(112 52 0 / 0.18); --line-3: rgb(112 52 0 / 0.3);
-}
-
-/* Christmas — pine and berry with warm gold. */
-html.vx-takeover.fest-christmas {
-  --ink-950: 5 16 12; --ink-900: 9 24 19; --ink-850: 14 33 26; --ink-800: 22 46 37; --ink-700: 38 68 56; --ink-600: 78 108 94;
-  --ink-500: 156 182 168; --ink-400: 180 202 190; --ink-300: 206 222 212; --ink-200: 232 240 232; --ink-100: 248 250 242;
-  --ember-600: 200 24 52; --ember-500: 232 52 76; --ember-400: 244 112 126; --ember-300: 250 170 176;
-  --tide-500: 234 196 96; --tide-400: 242 216 140;
-  --vx-on-accent: #fff;
-  --line-1: rgb(234 196 96 / 0.09); --line-2: rgb(234 196 96 / 0.16); --line-3: rgb(234 196 96 / 0.28);
-  --player-seek: linear-gradient(90deg, rgb(232 52 76), rgb(234 196 96));
-  --fest-ornament: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M4 20c2-8 7-13 12-13s10 5 12 13z' fill='%23e8344c'/%3E%3Crect x='3' y='19' width='26' height='5' rx='2.5' fill='%23f8faf2'/%3E%3Ccircle cx='16' cy='5' r='3' fill='%23f8faf2'/%3E%3C/svg%3E");
-}
-html.vx-takeover.fest-christmas.light {
-  --ink-950: 250 253 250; --ink-900: 242 248 243; --ink-850: 232 242 235; --ink-800: 218 232 222; --ink-700: 190 210 196; --ink-600: 116 140 126;
-  --ink-500: 58 84 72; --ink-400: 50 74 62; --ink-300: 36 58 48; --ink-200: 18 36 28; --ink-100: 8 22 16;
-  --ember-600: 128 12 32; --ember-500: 168 18 44; --ember-400: 158 16 40; --ember-300: 186 26 54;
-  --tide-500: 120 84 0; --tide-400: 104 72 0;
-  --vx-on-accent: #fff;
-  --line-1: rgb(8 22 16 / 0.08); --line-2: rgb(8 22 16 / 0.15); --line-3: rgb(8 22 16 / 0.26);
-}
-
-/* The black theme keeps true black under any takeover. */
-html.vx-takeover.amoled[class*='fest-'] { --ink-950: 0 0 0; --ink-900: 2 2 3; --ink-850: 9 9 12; --ink-800: 17 18 23; }
 
 /* Headings take the festival's two colours. */
 html.vx-takeover .vx-ds-hero h1,

@@ -33,6 +33,8 @@ export interface SettingsState {
   dailyGoalMinutes: number;
   /** 5.14.0 — festival skins (accent, canvas, glow, splash). Off = the plain theme all year. */
   festivalSkins: boolean;
+  /** UI rebuild Phase 6 — the full festival takeover (every surface, text step, partner colour, the mark). Off = accent and backdrop only. */
+  festivalTakeover: boolean;
   /** 1.12 — the live festival effects (fireworks, confetti, petals…) behind the app and on taps. */
   festivalFx: boolean;
   /** 1.12 — festive sounds with the celebrations (pops, fireworks, a chime). Off by default. */
@@ -237,6 +239,7 @@ const defaults = {
   template: DEFAULT_TEMPLATE as TemplateId,
   dailyGoalMinutes: 0,
   festivalSkins: true,
+  festivalTakeover: true,
   festivalFx: true,
   festivalSound: false,
   festivalPin: null as string | null,

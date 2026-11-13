@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { TEMPLATE_OPTIONS } from '@/constants/templates';
 import { ACCENT_OPTIONS } from '@/constants/accents';
+import { FESTIVALS as ALL_FESTIVALS } from '@/constants/festivals';
 import { Tabs, Switch, Card, Button } from '@/components/ui';
 import { usePreview, type PreviewFestival } from '@/features/design/usePreview';
 import { ColorSection, Section, ShapeSection, TypeSection } from '@/features/design/Foundations';
@@ -55,7 +56,7 @@ function FestivalSection({ festival, onPick }: { festival: PreviewFestival; onPi
     <Section
       id="festivals"
       title="Festival takeover"
-      lead="During a festival the whole app changes: canvas, surfaces, accent, partner colour, player skin, headings and the mark. Pick one to see the takeover across this page and the app around it."
+      lead="During a festival the whole app changes: canvas, surfaces, text, accent, partner colour, the player's seek line, headings and the mark. Pick one here, or any of the 43 in the bar above, to see the takeover across this page and the app around it."
     >
       <div className="vx-ds-fest-pick">
         {FESTIVALS.map((f) => (
@@ -73,7 +74,7 @@ function FestivalSection({ festival, onPick }: { festival: PreviewFestival; onPi
         </div>
         <div className="min-w-0">
           <p className="vx-ds-overline">{festival === 'none' ? 'Tonight' : 'Festival special'}</p>
-          <h3 className="vx-ds-fest-title">{festival === 'diwali' ? 'Happy Diwali' : festival === 'christmas' ? 'Merry Christmas' : 'Good evening'}</h3>
+          <h3 className="vx-ds-fest-title">{festival === 'none' ? 'Good evening' : ALL_FESTIVALS.find((f) => f.id === festival)?.greeting ?? 'Happy festival'}</h3>
           <p className="vx-ds-fest-copy">The takeover is colour and CSS only: it costs nothing on first paint, and the moving sky still waits for the first touch.</p>
           <div className="vx-ds-row-demo mt-4">
             <Button>Play the festival mix</Button>
@@ -89,7 +90,7 @@ export default function DesignPage() {
   usePageTitle('Design system');
   useNoIndex();
   const [p, set] = usePreview();
-  const version = `${p.theme}|${p.template}|${p.accent}|${p.festival}`;
+  const version = `${p.theme}|${p.template}|${p.accent}|${p.festival}`; // re-measures contrast after the festival's stylesheet applies
 
   return (
     <div className="vx-ds">
@@ -121,7 +122,14 @@ export default function DesignPage() {
             {p.accent === 'custom' && <option value="custom">Custom</option>}
           </select>
         </label>
-        <Tabs label="Festival" items={FESTIVALS} value={p.festival} onChange={(festival: PreviewFestival) => set({ festival })} />
+        <Tabs label="Festival" items={FESTIVALS} value={FESTIVALS.some((f) => f.id === p.festival) ? p.festival : 'none'} onChange={(festival: PreviewFestival) => set({ festival })} />
+        <label className="vx-ds-select">
+          <span>Any festival</span>
+          <select value={p.festival} onChange={(e) => set({ festival: e.target.value })}>
+            <option value="none">None</option>
+            {ALL_FESTIVALS.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+          </select>
+        </label>
         <Switch className="vx-ds-bar-switch" checked={p.reduceMotion} onChange={(reduceMotion) => set({ reduceMotion })} label="Reduce motion" />
       </div>
 

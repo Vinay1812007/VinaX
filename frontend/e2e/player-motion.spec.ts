@@ -53,8 +53,10 @@ test('Now Playing: the cover eases in on a new song (not on open), panels cross-
   // How many rows Up next holds depends on the queue refill timing; the first one always carries its index.
   expect(await rows.first().evaluate((el) => getComputedStyle(el).getPropertyValue('--i').trim())).toBe('0');
 
-  // Play ⇄ pause: the glyph springs in.
-  expect(await anim(page, '.vx-np-play > svg')).toBe('vx-glyph-in');
+  // Play ⇄ pause: the glyph springs in. Polled: while the (blocked) audio
+  // buffers, the button swaps its glyph for a spinner and back, so a read can
+  // land on a node that was just replaced.
+  await expect.poll(() => anim(page, '.vx-np-play > svg')).toBe('vx-glyph-in');
 });
 
 test('Queue: rows arrive in a stagger', async ({ page, baseURL }) => {

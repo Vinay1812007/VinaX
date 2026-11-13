@@ -2,11 +2,11 @@
 //   src/styles/festivals.css, the FW pre-paint table in index.html (and the
 //   backend shell copy when present), and public/admin/festivals.js.
 // Run: npm run gen:festivals   (src/constants/festivals.test.ts fails on drift)
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { transform } from 'esbuild';
-import { buildCss, buildWindowJs, buildAdminJs, FW_RE } from './festivals-gen-core.mjs';
+import { buildCss, buildWindowJs, buildAdminJs, buildTakeoverFiles, FW_RE } from './festivals-gen-core.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -22,6 +22,8 @@ const { FESTIVAL_VISUALS } = await loadTs('src/constants/festivalVisuals.ts');
 const { emblemSvg } = await loadTs('src/constants/festivalEmblems.ts');
 
 writeFileSync(join(ROOT, 'src/styles/festivals.css'), buildCss(FESTIVALS, FESTIVAL_THEMES));
+mkdirSync(join(ROOT, 'public/fest'), { recursive: true });
+for (const [rel, css] of Object.entries(buildTakeoverFiles(FESTIVALS, FESTIVAL_THEMES, FESTIVAL_VISUALS, emblemSvg))) writeFileSync(join(ROOT, rel), css);
 writeFileSync(join(ROOT, 'public/admin/festivals.js'), buildAdminJs(FESTIVALS, FESTIVAL_THEMES, FESTIVAL_VISUALS, emblemSvg));
 
 const fw = buildWindowJs(FESTIVALS);
@@ -31,4 +33,4 @@ for (const html of [join(ROOT, 'index.html'), join(ROOT, '..', 'backend', 'index
   if (!FW_RE.test(s)) { console.warn(`gen-festivals: no FW table in ${html}`); continue; }
   writeFileSync(html, s.replace(FW_RE, fw));
 }
-console.log(`gen-festivals: ${FESTIVALS.length} festivals → festivals.css, admin/festivals.js, index.html`);
+console.log(`gen-festivals: ${FESTIVALS.length} festivals → festivals.css, public/fest/*.css, admin/festivals.js, index.html`);

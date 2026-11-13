@@ -47,8 +47,8 @@
         // FestiveSplash keeps applied after hydrate. Windows start one day
         // BEFORE the festival (theme-ahead) and are encoded m*100+d.
         // GENERATED from src/constants/festivals.ts by `npm run gen:festivals`.
-        var fd = new Date(), fv = (fd.getMonth() + 1) * 100 + fd.getDate(), fOn = true;
-        try { var fst = JSON.parse(localStorage.getItem('vinax.settings.v1') || '{}').state; if (fst && fst.festivalSkins === false) fOn = false; } catch (e) {}
+        var fd = new Date(), fv = (fd.getMonth() + 1) * 100 + fd.getDate(), fOn = true, fTk = true;
+        try { var fst = JSON.parse(localStorage.getItem('vinax.settings.v1') || '{}').state; if (fst && fst.festivalSkins === false) fOn = false; if (fst && fst.festivalTakeover === false) fTk = false; } catch (e) {}
         var FW = [
           [113, 116, 'sankranti'], [125, 126, 'republic'], [213, 214, 'valentine'], [215, 215, 'shivaratri'], [303, 304, 'holi'], [308, 308, 'womensday'],
           [318, 319, 'ugadi'], [320, 321, 'eid'], [326, 327, 'ramanavami'], [403, 405, 'easter'], [414, 414, 'vishu'], [419, 419, 'akshaya'],
@@ -65,7 +65,20 @@
           [1030, 1030, 'halloween'], [1031, 1031, 'apformation'], [1105, 1105, 'diwali'], [1112, 1112, 'nagula'], [1114, 1114, 'chhath'], [1123, 1123, 'gurunanak'],
           [1218, 1218, 'vaikunta'], [1223, 1223, 'christmas'], [1230, 1230, 'newyear']];
         for (var fi = 0; fOn && fi < FW.length; fi++)
-          if (fv >= FW[fi][0] && fv <= FW[fi][1]) { document.documentElement.classList.add('fest-' + FW[fi][2]); break; }
+          if (fv >= FW[fi][0] && fv <= FW[fi][1]) {
+            document.documentElement.classList.add('fest-' + FW[fi][2]);
+            // Design system v2 — the full takeover: this festival's palette
+            // (public/fest/fest-<id>.css), held before first paint where the
+            // browser supports blocking="render"; FestiveSplash keeps it in step.
+            if (fTk) {
+              document.documentElement.classList.add('vx-takeover');
+              var fl = document.createElement('link');
+              fl.rel = 'stylesheet'; fl.href = '/fest/fest-' + FW[fi][2] + '.css'; fl.id = 'vx-fest-css';
+              fl.setAttribute('blocking', 'render');
+              document.head.appendChild(fl);
+            }
+            break;
+          }
         try {
           var raw = localStorage.getItem('vinax.settings.v1');
           var st = (raw && JSON.parse(raw).state) || {};

@@ -1443,9 +1443,20 @@ The UI is being rebuilt on one system, phase by phase. Phase 1 adds the base; pa
   - **Legacy `.btn-primary`, `.btn-secondary` and `.btn-premium`** share `<Button>`'s timing, pill radius and spring press (`--press-scale`), so the about 120 call sites behave like the primitive without being rewritten.
   - **Token pass** over `settings`, `radio`, `flow`, `festivals`, `together` and `language-picker.css`.
   - Moving the roughly 20 hand-built dialogs onto `Dialog` is left for the cleanup phase; VinaX AI's dialogs come with Phase 8.
-- **Festival takeover (prototype):** `html.vx-takeover.fest-<id>` re-pitches the whole palette. That covers all eleven ink steps, both brand ramps, the hairlines, a player seek gradient (`--player-seek`) and the mark's ornament (`--fest-ornament`).
-  - For now it is only on `/design` (Diwali and Christmas, in `styles/pages/design.css`). Phase 6 generates it for every festival.
-  - The class is `vx-`, not `fest-`, because `FestiveSplash` removes every `fest-*` class it did not set.
+- **Festival takeover (Phase 6):** during a festival the whole app repaints, not just the accent.
+  - **What it changes.** `npm run gen:festivals` (`scripts/festivals-gen-core.mjs`) writes `public/fest/fest-<id>.css` for all 43 festivals. Each file sets:
+    - all eleven `--ink-*` steps, tinted toward the festival's canvas hue, for dark and light;
+    - a partner colour (`--tide-*`), taken from the glow or ribbon colours;
+    - accent-tinted hairlines (`--line-*`);
+    - `--player-seek`, partner → accent;
+    - `--fest-ornament`, the day's emblem as an SVG data URI.
+  - **AA.** Where a deep accent sits under AA on the raised surface (four festivals), the dark `--ember-400` is lifted until it clears.
+  - **Loading.** The pre-paint script in `index.html` adds `html.vx-takeover` and links only today's file, with `blocking="render"` (Chromium) so the first paint is already repainted. `FestiveSplash` keeps the class and the link in step for previews, pins, the owner's override and the setting.
+  - **Shared rules.** These live in `festivals.css` under `html.vx-takeover[class*='fest-']`: page and entity titles take the festival's two colours, the sidebar mark wears the ornament, and Now Playing's seek line and the mini player's progress line run partner → accent.
+  - **Settings › Full festival look** (`festivalTakeover`, on by default) turns the takeover off and leaves the everyday skin.
+  - **Elsewhere.** The owner console's festival preview shows the takeover, and `/design` previews any of the 43.
+  - **Tests.** `festivalTakeover.test.ts` checks the generated files against the generator, and AA for every festival in both themes: text tiers on every surface, the accent as text, and the partner in headings. `e2e/festivals.spec.ts` checks it in the browser, including the setting.
+  - **CSP.** Editing the pre-paint script changes its hash; `node scripts/csp-hashes.mjs` after a build rewrites `public/_headers`.
 
 ### How the layers stack
 

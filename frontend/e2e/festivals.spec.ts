@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { test, expect, type Page } from './support/test';
 import { latestNotesFingerprint } from '../src/constants/changelog';
 
@@ -11,12 +12,12 @@ import { latestNotesFingerprint } from '../src/constants/changelog';
 
 const FESTIVALS = ['diwali', 'christmas', 'holi'] as const;
 
-async function seed(page: Page, theme: 'dark' | 'light'): Promise<void> {
+async function seed(page: Page, theme: 'dark' | 'light', takeover = true): Promise<void> {
   await page.addInitScript(
-    ([t, fp]) => {
+    ([t, fp, tk]) => {
       localStorage.setItem(
         'vinax.settings.v1',
-        JSON.stringify({ state: { theme: t, accent: 'crimson', pinnedLanguages: ['telugu'] }, version: 2 }),
+        JSON.stringify({ state: { theme: t, accent: 'crimson', pinnedLanguages: ['telugu'], festivalTakeover: tk }, version: 2 }),
       );
       localStorage.setItem('vinax.onboarded.v1', 'true');
       localStorage.setItem('vinax.user-name', JSON.stringify('Tester'));
@@ -24,7 +25,7 @@ async function seed(page: Page, theme: 'dark' | 'light'): Promise<void> {
       localStorage.setItem('vinax.analytics-consent', 'false');
       localStorage.setItem('vinax.last-seen-version', JSON.stringify(fp));
     },
-    [theme, latestNotesFingerprint()],
+    [theme, latestNotesFingerprint(), takeover] as const,
   );
 }
 
@@ -93,3 +94,41 @@ for (const theme of ['dark', 'light'] as const) {
     expect(pageErrors).toEqual([]);
   });
 }
+
+/** The value a generated takeover file sets for a variable (public/fest/<class>.css). */
+function takeoverValue(cls: string, theme: 'dark' | 'light', name: string): string {
+  const css = readFileSync(new URL(`../public/fest/${cls}.css`, import.meta.url), 'utf8');
+  const block = css.split(theme === 'light' ? `html.vx-takeover.${cls}.light {` : `html.vx-takeover.${cls} {`)[1].split('}')[0];
+  return new RegExp(`${name}: ([^;]+);`).exec(block)![1].trim();
+}
+
+// UI rebuild Phase 6 — the full takeover repaints every surface and text step.
+for (const theme of ['dark', 'light'] as const) {
+  test(`the full festival takeover repaints the ${theme} theme, and the setting turns it off`, async ({ page }) => {
+    await seed(page, theme);
+    await mockNetwork(page, { id: 'diwali' });
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#main-content');
+    const html = page.locator('html');
+    await expect(html).toHaveClass(/\bfest-diwali\b/, { timeout: 15_000 });
+    await expect(html).toHaveClass(/\bvx-takeover\b/);
+    await expect(page.locator('link#vx-fest-css')).toHaveAttribute('href', '/fest/fest-diwali.css');
+    const want = takeoverValue('fest-diwali', theme, '--ink-100');
+    await expect
+      .poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--ink-100').trim()))
+      .toBe(want);
+    // The mark wears the day's emblem.
+    const ornament = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--fest-ornament'));
+    expect(ornament).toContain('data:image/svg+xml');
+  });
+}
+
+test('Full festival look off: the accent and backdrop stay, the takeover does not load', async ({ page }) => {
+  await seed(page, 'dark', false);
+  await mockNetwork(page, { id: 'diwali' });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('#main-content');
+  await expect(page.locator('html')).toHaveClass(/\bfest-diwali\b/, { timeout: 15_000 });
+  await expect(page.locator('html')).not.toHaveClass(/\bvx-takeover\b/);
+  await expect(page.locator('link#vx-fest-css')).toHaveCount(0);
+});

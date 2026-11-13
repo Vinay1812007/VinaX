@@ -445,6 +445,7 @@ function AiChatsExportRow() {
 function FestivalRow() {
   const on = useSettingsStore((x) => x.festivalSkins);
   const setOn = useSettingsStore((x) => x.setFestivalSkins);
+  const takeover = useSettingsStore((x) => x.festivalTakeover);
   const fx = useSettingsStore((x) => x.festivalFx);
   const setFx = useSettingsStore((x) => x.setFestivalFx);
   const sound = useSettingsStore((x) => x.festivalSound);
@@ -464,6 +465,9 @@ function FestivalRow() {
     <>
       <Row label="Festival themes" note={`${line}.`} keywords="every festival brings its own look accent background glow greeting">
         <Toggle on={on} onChange={setOn} label="Festival themes" />
+      </Row>
+      <Row label="Full festival look" note="Repaints the whole app in the festival's colours: backgrounds, text, the player and the VinaX mark. Off keeps only the festival accent and backdrop." keywords="festival takeover full look colours whole app repaint">
+        <Toggle on={takeover} onChange={(v) => useSettingsStore.setState({ festivalTakeover: v })} label="Full festival look" disabled={!on} />
       </Row>
       <Row label="Festival animations" note="Live fireworks, confetti, petals, kites, lanterns and snow behind the app, and a burst when you tap the festival banner." keywords="festival fireworks confetti particles animation live effects">
         <Toggle on={fx} onChange={setFx} label="Festival animations" disabled={!on} />

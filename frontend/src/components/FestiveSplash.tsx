@@ -278,6 +278,30 @@ export function FestiveSplash() {
     };
   }, [theme]);
 
+  // UI rebuild Phase 6 — the full takeover: html.vx-takeover plus that
+  // festival's palette (public/fest/<class>.css). index.html links it before
+  // first paint for the calendar's festival; this keeps it in step when the
+  // festival changes at run time (preview, pin, the owner's override) or the
+  // listener turns Settings › Full festival look off.
+  const takeover = useSettingsStore((s) => s.festivalTakeover);
+  useEffect(() => {
+    const root = document.documentElement;
+    const href = theme && takeover !== false ? `/fest/${festivalClass(theme.id)}.css` : null;
+    root.classList.toggle('vx-takeover', !!href);
+    let link = document.getElementById('vx-fest-css') as HTMLLinkElement | null;
+    if (!href) {
+      link?.remove();
+      return;
+    }
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.id = 'vx-fest-css';
+      document.head.appendChild(link);
+    }
+    if (link.getAttribute('href') !== href) link.setAttribute('href', href);
+  }, [theme, takeover]);
+
   // Console rebuild — the owner's own colour for a forced festival: the accent ramp
   // (--ember-400/500/600, "r g b") follows it while the skin is on.
   useEffect(() => {

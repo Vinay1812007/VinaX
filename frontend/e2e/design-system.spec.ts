@@ -74,17 +74,23 @@ test('previews a theme and a festival takeover, then gives the listener their ow
   await bar.getByRole('tablist', { name: 'Festival' }).getByRole('tab', { name: 'Diwali' }).click();
   await expect(html).toHaveClass(/\bfest-diwali\b/);
   await expect(html).toHaveClass(/\bvx-takeover\b/);
-  // The takeover re-pitches the palette itself, so every page follows.
-  const ember = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--ember-500').trim());
-  expect(await ember()).toBe('150 72 0');
+  // The preview runs the real takeover: that festival's generated palette loads.
+  await expect(page.locator('link#vx-fest-css')).toHaveAttribute('href', '/fest/fest-diwali.css');
+  const ink = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--ink-900').trim());
+  await expect.poll(ink).not.toBe('250 245 237'); // not the plain light canvas
   await bar.getByRole('tablist', { name: 'Theme' }).getByRole('tab', { name: 'Dark' }).click();
-  expect(await ember()).toBe('252 196 52');
+  await expect.poll(ink).not.toBe('19 14 22'); // not the plain dark canvas
+  // Any of the festivals, from the bar.
+  await bar.getByLabel('Any festival').selectOption('christmas');
+  await expect(page.locator('link#vx-fest-css')).toHaveAttribute('href', '/fest/fest-christmas.css');
+  await bar.getByLabel('Any festival').selectOption('diwali');
 
   // Leaving puts back the saved look: dark, no takeover, no previewed festival.
   await page.getByRole('link', { name: 'Home' }).first().click();
   await expect(page).toHaveURL(/\/$/);
   await expect(html).not.toHaveClass(/\bvx-takeover\b/);
   await expect(html).not.toHaveClass(/\bfest-diwali\b/);
+  await expect(page.locator('link#vx-fest-css')).toHaveCount(0);
   await expect(html).not.toHaveClass(/\blight\b/);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('vinax.settings.v1') ?? '{}').state?.theme);
   expect(saved).toBe('dark');

@@ -3,7 +3,8 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { applyThemeClasses, normalizeTemplate, resolveTheme, type ResolvedTheme, type TemplateId } from '@/utils/theme';
 import { useFestivalPreview } from '@/features/festival/festivalPreview';
 
-export type PreviewFestival = 'none' | 'diwali' | 'christmas';
+/** 'none' or any festival id (constants/festivals.ts). */
+export type PreviewFestival = string;
 
 export interface PreviewState {
   theme: ResolvedTheme;
@@ -12,9 +13,6 @@ export interface PreviewState {
   festival: PreviewFestival;
   reduceMotion: boolean;
 }
-
-/** The festivals the style guide previews as a full takeover (Phase 6 extends this to all of them). */
-export const TAKEOVER_FESTIVALS = ['diwali', 'christmas'] as const;
 
 function fromSettings(): PreviewState {
   const s = useSettingsStore.getState();
@@ -42,7 +40,6 @@ function restore(): void {
     void import('@/utils/accentRamp').then((m) => m.applyCustomAccent(s.accentCustom, own.theme === 'light')).catch(() => undefined);
   }
   root.classList.toggle('reduce-motion', s.reduceMotion);
-  root.classList.remove('vx-takeover');
   useFestivalPreview.getState().setId(null);
 }
 
@@ -61,8 +58,9 @@ export function usePreview(): [PreviewState, (patch: Partial<PreviewState>) => v
     // A custom accent lives in inline properties, which would beat every named one.
     if (state.accent !== 'custom') ACCENT_PROPS.forEach((p) => root.style.removeProperty(p));
     root.classList.toggle('reduce-motion', state.reduceMotion);
+    // The festival preview drives the real takeover (FestiveSplash links
+    // public/fest/<class>.css), exactly as a listener would see it.
     useFestivalPreview.getState().setId(state.festival === 'none' ? null : state.festival);
-    root.classList.toggle('vx-takeover', state.festival !== 'none');
   }, [state]);
 
   useEffect(() => restore, []);

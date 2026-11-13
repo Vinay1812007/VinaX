@@ -274,11 +274,18 @@
       if (m.auto) return h('p.muted.small', 'The app follows its calendar.');
       if (m.choice === 'none' || !f) return ui.phone([h('div.pv-title', 'Good evening'), h('p.pv-muted', 'No festival look.')], { small: true });
       var accent = m.choice === 'custom' ? m.color : f.accent;
+      // UI rebuild Phase 6 — the app repaints fully during a festival (unless a
+      // listener turns "Full festival look" off), so the preview does too.
+      var tk = f.takeover || {};
+      var heading = 'linear-gradient(100deg, ' + accent + ', ' + (tk.partner || accent) + ' 75%)';
       return ui.phone([
-        f.ribbon ? h('div.pv-ribbon', { style: { background: m.choice === 'custom' ? m.color : f.ribbon } }) : null,
-        h('div.pv-title', f.greeting || f.name),
-        h('div.pv-chip', { style: { background: accent } }, 'Play'),
-        h('p.pv-muted', f.fx || '')
+        h('div', { style: { background: tk.surface || f.canvas, color: tk.ink || '#fff', 'border-radius': '14px', padding: '14px', display: 'grid', gap: '8px' } }, [
+          f.image ? h('img', { src: f.image, alt: '', width: 28, height: 28 }) : null,
+          h('div.pv-title', { style: { 'background-image': heading, '-webkit-background-clip': 'text', 'background-clip': 'text', color: 'transparent' } }, f.greeting || f.name),
+          h('div.pv-chip', { style: { background: accent } }, 'Play'),
+          h('div', { style: { height: '3px', 'border-radius': '3px', background: 'linear-gradient(90deg, ' + (tk.partner || accent) + ', ' + accent + ')' } }),
+          h('p.pv-muted', { style: { color: tk.muted || '' } }, f.fx || '')
+        ])
       ], { small: true, label: 'Preview of the festival look' });
     }
   };
