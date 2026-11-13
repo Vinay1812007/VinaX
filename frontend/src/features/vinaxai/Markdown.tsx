@@ -13,6 +13,7 @@ import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import ReactMarkdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CodeBlock } from './CodeBlock';
+import { PlaylistCard } from './PlaylistCard';
 import { escapeCurrency } from './mathText';
 import { remarkCitations } from './citations';
 import { CitationChip } from './Sources';
@@ -103,6 +104,8 @@ const components: Components = {
     const code = (node as HastNode | undefined)?.children?.find((c) => c.tagName === 'code');
     const cls = code?.properties?.className;
     const lang = (Array.isArray(cls) ? cls.map(String) : []).find((c) => c.startsWith('language-'))?.slice(9) ?? '';
+    // 2.0 — a playlist VinaX AI wrote becomes a card you can play or save (PlaylistCard.tsx).
+    if (lang.toLowerCase() === 'vinax-playlist') return <PlaylistCard text={textOf(code)} />;
     return <CodeBlock code={textOf(code).replace(/\n$/, '')} lang={lang.toLowerCase()} />;
   },
   table: ({ children }) => (

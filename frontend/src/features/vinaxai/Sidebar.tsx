@@ -166,7 +166,10 @@ export function Sidebar({ onNavigate, onNewChat, onCollapse, drawer, onSettings 
   return (
     <div className="vx-ai-side-inner">
       <div className="vx-ai-side-head">
-        <span className="vx-ai-side-mark">VinaX AI</span>
+        <Link to="/vinaxai" className="vx-ai-side-mark" onClick={onNavigate}>
+          <img src="/icons/icon.svg" alt="" width={28} height={28} />
+          <span>VinaX AI</span>
+        </Link>
         {onCollapse && (
           <button type="button" className="vx-ai-icon-btn" onClick={onCollapse} aria-label={drawer ? 'Close chats' : 'Close sidebar'} title={drawer ? 'Close chats' : 'Close sidebar'}>
             {drawer ? <CloseIcon className="w-5 h-5" /> : <SidebarIcon className="w-5 h-5" />}
@@ -220,7 +223,7 @@ export function Sidebar({ onNavigate, onNewChat, onCollapse, drawer, onSettings 
         <div className="vx-ai-side-links">
           {onSettings ? <button type="button" className="vx-ai-side-link" onClick={onSettings}>Settings</button> : <Link to="/settings" onClick={onNavigate}>Settings</Link>}
           <Link to="/" onClick={onNavigate} className="vx-ai-side-back">
-            <ArrowLeftIcon className="w-4 h-4" /> Back to VinaX
+            <ArrowLeftIcon className="w-4 h-4" /> Back to music
           </Link>
         </div>
       </div>
