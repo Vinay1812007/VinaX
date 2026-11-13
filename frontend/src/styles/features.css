@@ -144,7 +144,7 @@
 
 /* 1.12 — song reactions: five glyph pills with counts; yours is lit. */
 .vx-reactions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.vx-reaction { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border-radius: 999px; background: rgb(var(--ink-100) / 0.06); border: 1px solid var(--sec-line); color: rgb(var(--ink-200)); font-size: 13.5px; font-weight: 650; transition: transform 160ms var(--ease-calm), background 160ms var(--ease-calm); }
+.vx-reaction { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.06); border: 1px solid var(--sec-line); color: rgb(var(--ink-200)); font-size: 13.5px; font-weight: 650; transition: transform 160ms var(--ease-calm), background 160ms var(--ease-calm); }
 .vx-reaction:hover { background: rgb(var(--ink-100) / 0.1); }
 .vx-reaction:active { transform: scale(0.96); }
 .vx-reaction.is-mine { background: rgb(var(--ember-500) / 0.18); border-color: rgb(var(--ember-500) / 0.6); color: rgb(var(--ink-100)); }

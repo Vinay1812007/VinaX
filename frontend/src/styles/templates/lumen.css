@@ -171,7 +171,7 @@ html[data-template='lumen'] .vx-np-art-img { box-shadow: 0 24px 56px -22px rgb(0
 html[data-template='lumen'] .vx-np-play { background: rgb(var(--ink-100)); color: rgb(var(--ink-950)); box-shadow: none; width: 68px; height: 68px; }
 html[data-template='lumen'] .vx-np-title { font-weight: 700; letter-spacing: -0.02em; }
 html[data-template='lumen'] .vx-np-artist { color: rgb(var(--ink-300)); font-weight: 500; }
-html[data-template='lumen'] .vx-np-tabs [role='tab'] { border-radius: 999px; font-weight: 600; }
+html[data-template='lumen'] .vx-np-tabs [role='tab'] { border-radius: var(--radius-pill); font-weight: 600; }
 
 /* ---------------------------------------------------------- layout identity */
 /* Lumen is EDITORIAL: a plain page with big titles and pictures that speak

@@ -300,8 +300,8 @@ html.light .fest-sky .fest-wm { opacity: 0.1; }
 .fest-p-snow { background: rgb(var(--ink-100)) !important; width: 0.5em; height: 0.5em; }
 .fest-p-petal { border-radius: 80% 0 80% 0; }
 .fest-p-lantern { height: 1.35em; border-radius: 40% 40% 48% 48%; }
-.fest-p-spark { width: 0.22em; border-radius: 999px; }
-.fest-p-ribbon { height: 0.5em; border-radius: 999px 3px 999px 3px; }
+.fest-p-spark { width: 0.22em; border-radius: var(--radius-pill); }
+.fest-p-ribbon { height: 0.5em; border-radius: var(--radius-pill) 3px 999px 3px; }
 .fest-p-leaf, .fest-p-feather { border-radius: 100% 0 100% 0; }
 html.light .fest-particles { opacity: 0.6; }
 /* ---- the day's own set piece ----------------------------------------------
@@ -384,7 +384,7 @@ html.light .fest-card::before { opacity: 0.22; }
 .fest-card h2 { font-family: var(--vx-font-display); font-size: clamp(1.55rem, 6vw, 2rem); font-weight: 700; line-height: 1.15; letter-spacing: -0.01em; color: rgb(var(--ink-100)); animation: festRiseIn 0.6s 0.18s ease-out both; }
 .fest-card p { margin-top: 8px; font-size: 0.95rem; line-height: 1.45; color: rgb(var(--ink-300)); animation: festRiseIn 0.6s 0.26s ease-out both; }
 .fest-actions { display: grid; gap: 6px; margin-top: 20px; animation: festRiseIn 0.6s 0.3s ease-out both; }
-.fest-btn { min-height: 46px; padding: 0 18px; border-radius: 999px; font-weight: 700; font-size: 0.95rem; color: rgb(var(--ink-200)); }
+.fest-btn { min-height: 46px; padding: 0 18px; border-radius: var(--radius-pill); font-weight: 700; font-size: 0.95rem; color: rgb(var(--ink-200)); }
 .fest-btn:focus-visible, .fest-banner button:focus-visible { outline: 2px solid rgb(var(--ember-400)); outline-offset: 2px; }
 .fest-btn-primary { background: rgb(var(--ember-500)); color: var(--vx-on-accent, #111); }
 /* Home greeting strip */
@@ -393,10 +393,10 @@ html.light .fest-card::before { opacity: 0.22; }
 .fest-banner-text { flex: 1; min-width: 0; }
 .fest-banner-text strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--vx-font-display); font-size: 1rem; color: rgb(var(--ink-100)); }
 .fest-banner-text span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8rem; color: rgb(var(--ink-300)); }
-.fest-banner-play { flex: none; min-height: 38px; padding: 0 14px; border-radius: 999px; font-size: 0.82rem; font-weight: 700; background: rgb(var(--ember-500)); color: var(--vx-on-accent, #111); }
+.fest-banner-play { flex: none; min-height: 38px; padding: 0 14px; border-radius: var(--radius-pill); font-size: 0.82rem; font-weight: 700; background: rgb(var(--ember-500)); color: var(--vx-on-accent, #111); }
 /* Phone: two lines at most. Greeting on one line (ellipsis), the action under it. */
 @media (max-width: 479px) { .fest-banner { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 10px; row-gap: 6px; align-items: center; padding: 10px 8px 10px 12px; } .fest-banner .fest-emblem { grid-row: 1 / span 2; width: 44px; height: 44px; } .fest-banner-text { grid-column: 2; grid-row: 1; } .fest-banner-text span { display: none; } /* …unless it carries the day marker of a festival that runs for several days, which is the one thing on that line worth a row. */ .fest-banner[data-day] .fest-banner-text span { display: block; } .fest-banner-text strong { font-size: 0.98rem; } .fest-banner-x { grid-column: 3; grid-row: 1; width: 32px; height: 32px; } .fest-banner-play { grid-column: 2 / span 2; grid-row: 2; justify-self: start; min-height: 34px; padding: 0 14px; } }
-.fest-banner-x { flex: none; width: 36px; height: 36px; border-radius: 999px; font-size: 1.1rem; line-height: 1; color: rgb(var(--ink-300)); }
+.fest-banner-x { flex: none; width: 36px; height: 36px; border-radius: var(--radius-pill); font-size: 1.1rem; line-height: 1; color: rgb(var(--ink-300)); }
 @keyframes festSkyIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes festFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes festCardIn { from { opacity: 0; transform: translateY(14px) scale(0.97); } to { opacity: 1; transform: none; } }

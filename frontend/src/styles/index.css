@@ -1057,7 +1057,7 @@ html.light .theme-ico-sun { transform: translateY(0) rotate(0deg); opacity: 1; }
 .vx-dots i {
   width: 5px;
   height: 5px;
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ember-400));
   display: inline-block;
   animation: vx-bounce 1.2s ease-in-out infinite;
@@ -1089,7 +1089,7 @@ html.light .theme-ico-sun { transform: translateY(0) rotate(0deg); opacity: 1; }
    ========================================================================= */
 .vx-blob {
   position: absolute;
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   will-change: transform;
   pointer-events: none;
 }
@@ -1715,4 +1715,4 @@ input[type='radio']:focus-visible {
   box-shadow: none;
   border-radius: 4px;
 }
-input[type='radio']:focus-visible { border-radius: 9999px; }
+input[type='radio']:focus-visible { border-radius: var(--radius-pill); }

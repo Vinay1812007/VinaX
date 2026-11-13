@@ -1397,82 +1397,73 @@ Flags: `--no-baseline`, `--baseline <commit>` (default `7c4e2f5` can no longer l
 
 ## Design system
 
-### Design system v2 (the 2026-11 rebuild)
+### Design system v2
 
-The UI is being rebuilt on one system, phase by phase. Phase 1 adds the base; pages move over in later phases, and the older names below keep working until the last phase removes them.
+The 2026-11 UI rebuild put every screen on one system: semantic tokens, a small set of primitives, one motion language, and generated festival takeovers. The older names further down (`--vx-*`, `--ink-*`, `.btn-*`) still work, and they read the same tokens.
 
-- **Semantic tokens** live in `frontend/src/styles/tokens.css` and are loaded right after `index.css`. They say what a value is *for*. Each one is built on the palette channels (`--ink-*`, `--ember-*`, `--tide-*`), so a theme, accent, style or festival reaches every component without an override.
+**Tokens** (`frontend/src/styles/tokens.css`, loaded right after `index.css`)
+- Each token says what a value is *for*. Each is built on the palette channels (`--ink-*`, `--ember-*`, `--tide-*`), which themes, accents, app styles and festivals swap. So every component follows all four without an override.
   - Colour: `--surface-0..4`, `--text-1..4`, `--accent`, `--accent-text`, `--accent-soft`, `--accent-2`, `--line-1..3`, and `--positive`, `--warning`, `--danger`, `--info`.
-  - Type: `--type-hero` … `--type-overline`. Space: `--space-*`. Shape: `--radius-xs` … `--radius-2xl`, `--radius-pill`. Depth: `--elev-1..4`. Layers: `--z-*`.
-  - Motion: `--dur-instant|quick|base|slow|page` and `--ease-standard|enter|exit|spring|bounce`. The two springs are `linear()` curves, with a cubic fallback where `linear()` is not supported. With reduced motion, from the OS or from Settings, every `--dur-*` becomes 0.
-  - New CSS uses these tokens, never a raw hex, radius or duration.
-- **Motion helpers** are in `src/utils/motion.ts`. `animate(el, keyframes, { duration, easing })` is a WAAPI call driven by the tokens; it returns `null` and does nothing under reduced motion. `withViewTransition(update)` wraps a React update; call `flushSync` inside it. `stagger(i)` gives the delay for item `i` of a reveal.
-- **Primitives** are in `src/components/ui/`: `Button` (primary, secondary, tonal, ghost and a tinted danger), `IconButton`, `Switch`, `Slider`, `Tabs` (segmented or underline, with a sliding indicator and arrow keys), `Card`/`cardClass`, `ListRow`, `Badge`, `Tooltip`, `Dialog` (built on `Sheet`) and `Spinner`. Their styles are in `styles/ui.css`, which loads with the first chunk that uses a primitive.
-- **`/design`** is the living style guide, at `pages/DesignPage.tsx` and `features/design/`.
-  - It shows every token with measured contrast, the type scale, the motion curves, every primitive, the mini-player-to-Now-Playing shared-element move, and a full festival takeover.
-  - Its preview bar (theme, style, accent, festival, reduced motion) changes only `<html>` while the page is open. It never writes settings.
-  - The page is unlinked, `noindex` (meta tag and `_headers`) and on demand (not precached). `e2e/design-system.spec.ts` gates it.
-- **Page transitions (Phase 2):** `utils/pageTransitions.ts` wraps `router.navigate`, so every link and `useNavigate` page change runs as a View Transition, and Back replays it.
-  - Only the page area moves (`vx-page`). The new page arrives with the app style's own entrance (`--tpl-enter`). The player artwork is a shared element (`vx-np-art`) that grows into Now Playing's artwork.
-  - There is no transition for replace navigations, moves inside one screen (search queries, chat threads), reduced motion, or browsers without the API. Those keep the CSS remount entrance.
-  - Names are set only while a transition runs (`.vx-vt-on` on `<html>`, about 0.9 s). A named element is a backdrop root, and a permanent name stopped the glass player deck from blurring the page.
+  - Type: `--type-hero` … `--type-overline`. Space: `--space-*`.
+  - Shape: `--radius-xs` … `--radius-2xl` and `--radius-pill`, plus `--radius-control`, `--radius-tile`, `--radius-input` and `--radius-art`, which each app style reshapes.
+  - Depth: `--elev-1..4`. Layers: `--z-*`.
+  - Motion: `--dur-instant|quick|base|slow|page`, `--ease-standard|enter|exit|spring|bounce` (the springs are `linear()` curves, with a cubic fallback), `--press-scale` and `--delay-hint`. Under either reduced-motion switch, every `--dur-*` is 0 and `--press-scale` is 1.
+- **The style guard** (`src/__tests__/styleGuard.test.ts`) keeps raw values from creeping back:
+  - no raw `999px` or `9999px` pill anywhere;
+  - `ui.css` stays token-only;
+  - every other stylesheet may only *lose* raw hex colours and raw `ms` durations against a per-file baseline. Lower a baseline when you remove raw values, never raise it; add a token instead.
+
+**Primitives and helpers**
+- `src/components/ui/`: `Button` (primary, secondary, tonal, ghost and a tinted danger), `IconButton`, `Switch`, `Slider`, `Tabs` (segmented or underline, with a sliding indicator and arrow keys), `Card`/`cardClass`, `ListRow`, `Badge`, `Tooltip`, `Dialog` (built on `Sheet`) and `Spinner`. Their styles are in `styles/ui.css`. The legacy `.btn-*` classes share their timing, radius and spring press.
+- `src/utils/motion.ts`:
+  - `animate(el, keyframes, { duration, easing })` is a WAAPI call driven by the tokens; it is `null` under reduced motion.
+  - `withViewTransition(update)` takes an update; put `flushSync` inside it.
+  - `stagger(i)` gives the delay for item `i` of a reveal.
+- `/design` (`pages/DesignPage.tsx`, `features/design/`) is the living style guide.
+  - It shows every token with measured contrast, every primitive, the motion curves, the player's shared-element move, and the festival takeover for any of the 43 festivals.
+  - Its preview bar (theme, style, accent, festival, reduced motion) changes only `<html>` while the page is open.
+  - The page is unlinked, `noindex` and on demand. `e2e/design-system.spec.ts` gates it.
+
+**Motion**
+- **Page changes are View Transitions.** `utils/pageTransitions.ts` wraps `router.navigate`; Back replays the transition.
+  - Only the page area (`vx-page`) moves. It arrives with the app style's own entrance (`--tpl-enter`). The player artwork (`vx-np-art`) grows into Now Playing's.
+  - There is no transition for replace navigations, moves inside one screen (`/search*`, `/vinaxai*`), reduced motion, or browsers without the API.
+  - Names are set only while a transition runs (`.vx-vt-on`). A named element is a backdrop root, so a permanent name would stop the glass chrome blurring.
   - Gated by `e2e/page-transitions.spec.ts`.
-- **Shell (Phase 2):** `shell.css` reads the v2 tokens.
-  - Pills use `--radius-pill`, and timings use `--dur-*` with `--ease-standard` or `--ease-spring`.
-  - There is one focus ring, `--focus-ring`; the hard-coded pink fallback is gone.
-  - Interaction motion: destinations and library rows sink on a spring when pressed, the active sidebar pill settles in, the active tab-bar pill grows out of its icon, and a new song slides into the player deck.
-  - The right-click menu's panel (`ContextMenuPanel.tsx`) loads on the first right-click; only its listener ships in the first load.
-- **Player (Phase 3):** `styles/pages/player.css` reads the v2 tokens (pills, `--dur-*`, `--ease-*`). Its motion:
-  - Play and pause glyphs spring in when they swap. The keyframes and the deck's rule are in `shell.css`, because the deck ships in the first load.
-  - A new cover eases in when the song changes (`SongCanvas` adds `.is-swap`), but not on opening Now Playing, which the shared-element move already animates.
-  - Now Playing's tab panels cross-fade.
-  - Up next and Queue rows arrive in a stagger: the index is in `--i`, capped at 8, and a song added later arrives the same way.
-  - The seek thumb grows while it is held.
-  - None of it runs under reduced motion. `e2e/player-motion.spec.ts` gates it.
-- **Listener pages A (Phase 4):** `tracklist`, `home`, `library`, `browse` and `secondary.css` read the v2 tokens. Fixes:
-  - **Track rows say each thing once.** `SongRow` reads `utils/songLine.ts`: the title loses its "(From …)" tag, the artists sit under it, and the film or album goes in the album column. Where that column is hidden, the album follows the artists after a "·".
-  - **`songLine` handles more catalogue data.** It now also takes the film from an album name that carries the tag, splits "Artists - Album" subtitles, and drops an "artist" that only repeats the album or the title.
-  - **Artist header.** `utils/artistTagline.ts` strips the catalogue's "Artist • 9487361 Listeners" down to a real tagline or nothing, so the meta line reads "Singer · 9.5M listeners · …".
-  - **Artists without a photo** get a monogram (initials on a hue from their name) instead of the wave art; `MediaCard` falls back to it when the photo fails too.
-  - **Browse grid on Search and Discover.** The Charts lane spans two columns again; a `:first-child` rule outranked it and cut off the first destination.
-  - **"Made for you" card on Home** used `--vx-accent-rgb`, which is never defined, so it was always pink. It now follows the accent. `signin.css` and `public.css` still have the same bug; that is Phase 9.
-- **Listener pages B (Phase 5):** the rest of the listener pages were checked against live data.
-  - **Charts.** With no outside chart connected, the "Public charts" section no longer opens the page with an empty box; the catalogue list below it already says "not a live chart". Catalogue rows read through `songLine`, like `SongRow`.
-  - **Discover and Search browse grid.** At six tiles a row, a destination stacks its icon above the words and its line may wrap to two, instead of "New Relea…" and "Fresh albums…".
-  - **Settings selects** (`.vx-set-select`) are pills with their own chevron. A `background` shorthand in `.vx-set-section .vx-set-select` would have erased it; it is now `background-color`.
-  - **Legacy `.btn-primary`, `.btn-secondary` and `.btn-premium`** share `<Button>`'s timing, pill radius and spring press (`--press-scale`), so the about 120 call sites behave like the primitive without being rewritten.
-  - **Token pass** over `settings`, `radio`, `flow`, `festivals`, `together` and `language-picker.css`.
-  - Moving the roughly 20 hand-built dialogs onto `Dialog` is left for the cleanup phase; VinaX AI's dialogs come with Phase 8.
-- **App styles (Phase 7):** each style's dials now feed the v2 tokens, in `templates/base.css`:
-  - `--radius-art`, `--radius-control`, `--radius-tile` and `--radius-input` read `--tpl-r-art-sm`, `--tpl-r-control`, `--tpl-r-tile` and `--tpl-r-input`;
-  - `--press-scale` reads `--tpl-press`, only where motion is allowed.
-  - So `<Button>`, `Tabs`, `Card` and the Settings selects take Harbour's 4px or Onyx's 8px controls without a per-style rule. Defaults are in `tokens.css`.
-  - The styles' comments now point at README › App styles; the old `docs/app-styles.md` is gone.
-  - All six styles were checked in dark and light with live data. Contrast was already gated per style × theme × accent (`templates.test.ts`) and per festival (`festivalTakeover.test.ts`); festivals take over a style's colours.
-  - Tests: `templates.test.ts` (dial → token contract) and `e2e/design-system.spec.ts` (primitives take Harbour's and Onyx's shapes).
-- **VinaX AI and Live voice (Phase 8):**
-  - `vinaxai.css` reads the app's tokens: `--vx-ai-ease` is `--ease-standard`, `--vx-ai-lift` and `--vx-ai-lift-sm` are `--elev-3` and `--elev-2`, timings are `--dur-*`, pills are `--radius-pill`, and Live's End is `--danger-solid`. The AI screens follow every theme, style and festival like the rest of the app; the `--vx-ai-*` names stay as aliases.
-  - Live voice's six controls scale with the viewport, down to 44px, and may wrap; at 390px they used to run off both edges (`e2e/vinaxai-voice.spec.ts`).
-  - The AI dialogs (confirm, share, projects) stay as they are. They already trap focus, close on Escape and Back, and use `alertdialog` semantics, and moving them onto `Dialog` would change their glass for no listener gain.
-- **Owner console (Phase 10):** `public/admin/css/tokens.css` is generated from the app's `tokens.css`, plus the radius scale in `index.css` (`npm run gen:admin-tokens`, `scripts/admin-tokens-core.mjs`).
-  - It carries the colour-free tokens: space, radii (including `--radius-control`), motion with the springs, elevation in dark and light, layers, and both reduced-motion switches.
-  - `admin/index.html` links it before `console.css`. The console's `--r-sm`, `--r-md`, `--r-lg` and `--ease` read it, its 29 `99px` pills are `--radius-pill`, its buttons press with `--press-scale`, and its switch and phone sidebar move on `--ease-spring`. Its own colours (marigold with the aqua → blue glass) stay.
-  - Screenshots before and after are pixel-identical in dark and light.
-  - `src/__tests__/adminTokens.test.ts` fails if the file drifts from the generator, carries any app colour, or is not linked.
-- **Festival takeover (Phase 6):** during a festival the whole app repaints, not just the accent.
-  - **What it changes.** `npm run gen:festivals` (`scripts/festivals-gen-core.mjs`) writes `public/fest/fest-<id>.css` for all 43 festivals. Each file sets:
-    - all eleven `--ink-*` steps, tinted toward the festival's canvas hue, for dark and light;
-    - a partner colour (`--tide-*`), taken from the glow or ribbon colours;
-    - accent-tinted hairlines (`--line-*`);
-    - `--player-seek`, partner → accent;
-    - `--fest-ornament`, the day's emblem as an SVG data URI.
-  - **AA.** Where a deep accent sits under AA on the raised surface (four festivals), the dark `--ember-400` is lifted until it clears.
-  - **Loading.** The pre-paint script in `index.html` adds `html.vx-takeover` and links only today's file, with `blocking="render"` (Chromium) so the first paint is already repainted. `FestiveSplash` keeps the class and the link in step for previews, pins, the owner's override and the setting.
-  - **Shared rules.** These live in `festivals.css` under `html.vx-takeover[class*='fest-']`: page and entity titles take the festival's two colours, the sidebar mark wears the ornament, and Now Playing's seek line and the mini player's progress line run partner → accent.
-  - **Settings › Full festival look** (`festivalTakeover`, on by default) turns the takeover off and leaves the everyday skin.
-  - **Elsewhere.** The owner console's festival preview shows the takeover, and `/design` previews any of the 43.
-  - **Tests.** `festivalTakeover.test.ts` checks the generated files against the generator, and AA for every festival in both themes: text tiers on every surface, the accent as text, and the partner in headings. `e2e/festivals.spec.ts` checks it in the browser, including the setting.
-  - **CSP.** Editing the pre-paint script changes its hash; `node scripts/csp-hashes.mjs` after a build rewrites `public/_headers`.
+- **The chrome.** Destinations and rows press on a spring; the active sidebar and tab-bar pills settle in; a new song slides into the player deck; play and pause glyphs spring in when they swap.
+- **The player.** A new cover eases in (but not on opening Now Playing), its tab panels cross-fade, Up next and Queue rows arrive in a stagger (`--i`, capped at 8), and the seek thumb grows while held (`e2e/player-motion.spec.ts`).
+- **The right-click menu** loads its panel (`ContextMenuPanel.tsx`) on first use; only the listener ships in the first load.
+
+**Content rules for lists** (the catalogue repeats itself)
+- `utils/songLine.ts` gives a song its title, film or album, and artist, each said once:
+  - a "(From …)" tag moves from the title to the album;
+  - a tagged album name gives up its film;
+  - "Artists - Album" subtitles are split;
+  - an "artist" that only repeats the album is dropped.
+- `SongRow`, the chart rows, the queue and Up next all read `songLine`. Where a list has no album column, the album follows the artists after a "·".
+- `utils/artistTagline.ts` reduces "Artist • 9487361 Listeners" to a real tagline or nothing.
+- Artists without a photo get a monogram (initials on a hue from their name) in `MediaCard`.
+
+**Festival takeover**
+- **What the generator writes.** `npm run gen:festivals` (`scripts/festivals-gen-core.mjs`) writes `public/fest/fest-<id>.css` for every festival. Each file holds:
+  - all eleven `--ink-*` steps tinted toward the festival's canvas, in dark and light;
+  - a partner colour (`--tide-*`) and accent hairlines;
+  - `--player-seek` and `--fest-ornament` (the day's emblem);
+  - a dark `--ember-400`, lifted only where it would miss AA.
+- **Loading.** The pre-paint script in `index.html` adds `html.vx-takeover` and links only today's file, with `blocking="render"`. `FestiveSplash` keeps both in step for previews, pins, the owner's override and Settings › Full festival look (`festivalTakeover`).
+- **Shared rules.** These live in `festivals.css` under `html.vx-takeover`: gradient page titles, the ornament on the mark, and the seek line in the festival's colours.
+- **Tests.** `festivalTakeover.test.ts` asserts the generated files and AA for all 43 festivals in both themes. `e2e/festivals.spec.ts` checks it in the browser.
+- **CSP.** Any edit to an inline script in `index.html` changes its CSP hash; run `node scripts/csp-hashes.mjs` after the build to rewrite `public/_headers`.
+
+**App styles, VinaX AI, the console**
+- **App styles.** `templates/base.css` feeds each style's dials into the tokens: `--tpl-r-*` into `--radius-*`, and `--tpl-press` into `--press-scale` where motion is allowed. Primitives take Harbour's 4px or Onyx's 8px controls with no per-style rule.
+- **VinaX AI.** `vinaxai.css` reads the same tokens; `--vx-ai-*` are aliases. Live voice's controls scale down to 44px so all six fit a phone.
+- **The owner console** shares the colour-free tokens through the generated `public/admin/css/tokens.css` (`npm run gen:admin-tokens`, checked by `adminTokens.test.ts`) and keeps its own colours.
+
+**Left as they are, on purpose**
+- **Old names stay.** The `--vx-*` names and the palette channels stay because hundreds of rules read them and they resolve to the same values.
+- **Dialogs stay.** The roughly 20 hand-built dialogs (VinaX AI's among them) already trap focus and close on Escape and Back; they move to `Dialog` when their screens are next reworked.
+- **Sign-in waits.** The sign-in and public pages (`signin.css`, `public.css`, `auth.css`) are Phase 9 of the rebuild and still have raw pills; the style guard lists them as pending.
 
 ### How the layers stack
 

@@ -326,7 +326,7 @@ html.light .vx-tabs--segmented .vx-tabs-ind { background: rgb(255 255 255); }
 .vx-tip-wrap:focus-within > .vx-tip {
   opacity: 1;
   transform: translate(-50%, 0) scale(1);
-  transition-delay: 350ms;
+  transition-delay: var(--delay-hint);
 }
 .vx-tip-wrap:focus-within > .vx-tip { transition-delay: 0ms; }
 

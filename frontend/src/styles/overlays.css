@@ -207,7 +207,7 @@ html.light .vx-menu.is-sheet .vx-menu-head { background: rgb(var(--ink-950) / 0.
 .vx-welcome-steps { flex: none; display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 10px 24px 0; }
 .vx-welcome-count { flex: none; color: rgb(var(--ink-400)); font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .vx-welcome-track { flex: 1 1 auto; display: flex; gap: 4px; }
-.vx-welcome-track span { flex: 1 1 0; height: 3px; border-radius: 999px; background: rgb(var(--ink-100) / 0.16); transition: background-color 0.2s ease; }
+.vx-welcome-track span { flex: 1 1 0; height: 3px; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.16); transition: background-color 0.2s ease; }
 .vx-welcome-track span.is-done { background: rgb(var(--ember-500) / 0.5); }
 .vx-welcome-track span.is-on { background: rgb(var(--ember-500)); }
 .vx-welcome-foot { flex: none; display: flex; gap: 8px; padding: 12px 24px max(16px, var(--safe-bottom)); border-top: 1px solid var(--vx-border); }
@@ -274,7 +274,7 @@ html.reduce-motion .vx-welcome-scrim, html.reduce-motion .vx-welcome-track span 
   right: 20px;
   bottom: 30px;
   padding: 6px 12px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: #1a0e06;
   color: #ffc066;
   font-size: 12.5px;
@@ -325,7 +325,7 @@ html.light .vx-welcome-langs { background: rgb(var(--ink-900)); }
   min-height: 36px;
   padding: 0 14px;
   border: 1px dashed rgb(var(--ink-100) / 0.28);
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   color: rgb(var(--ink-200));
   font-size: 13px;
   font-weight: 600;
@@ -514,11 +514,11 @@ html.light .vx-fb-text { border-color: rgb(var(--ink-900) / 0.14); background: r
 .vx-fb-meta .vx-check { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; color: rgb(var(--ink-300)); cursor: pointer; }
 .vx-fb-meta .vx-check input { width: 16px; height: 16px; accent-color: rgb(var(--ember-500)); }
 .vx-fb-facts { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.vx-fb-facts li { font-size: 11.5px; font-weight: 600; color: rgb(var(--ink-300)); background: rgb(var(--ink-100) / 0.06); border: 1px solid rgb(var(--ink-100) / 0.08); border-radius: 999px; padding: 3px 9px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vx-fb-facts li { font-size: 11.5px; font-weight: 600; color: rgb(var(--ink-300)); background: rgb(var(--ink-100) / 0.06); border: 1px solid rgb(var(--ink-100) / 0.08); border-radius: var(--radius-pill); padding: 3px 9px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 html.light .vx-fb-facts li { background: rgb(var(--ink-900) / 0.05); border-color: rgb(var(--ink-900) / 0.1); }
 .vx-fb-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 16px; }
 .vx-fb-count { margin-right: auto; font-size: 12px; color: rgb(var(--ink-500)); font-variant-numeric: tabular-nums; }
-.vx-fb-btn { min-height: 44px; padding: 0 20px; border-radius: 999px; font-weight: 700; font-size: 14px; }
+.vx-fb-btn { min-height: 44px; padding: 0 20px; border-radius: var(--radius-pill); font-weight: 700; font-size: 14px; }
 .vx-fb-btn.is-quiet { border: 1px solid rgb(var(--ink-100) / 0.14); color: rgb(var(--ink-100)); }
 html.light .vx-fb-btn.is-quiet { border-color: rgb(var(--ink-900) / 0.16); color: rgb(var(--ink-900)); }
 .vx-fb-done { padding: 12px 0 4px; }
