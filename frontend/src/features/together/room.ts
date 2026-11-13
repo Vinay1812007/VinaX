@@ -91,7 +91,7 @@ export interface Float {
 
 /** Reactions that fill the meter: the room goes off when it is full. */
 export const ENERGY_FULL = 10;
-/** One step of energy fades this often (ms). */
+/** One step of energy fades this often (ms), once the room has gone quiet. */
 const ENERGY_FADE_MS = 1500;
 /** After the room goes off, how long before it can again (ms). */
 const BURST_REST_MS = 15_000;
@@ -166,16 +166,19 @@ export const useRoom = create<RoomExtras>((set, get) => {
       return;
     }
     set({ energy });
-    if (!fade) {
-      fade = window.setInterval(() => {
-        const left = Math.max(0, get().energy - 1);
-        set({ energy: left });
-        if (left === 0) {
-          window.clearInterval(fade);
-          fade = 0;
-        }
-      }, ENERGY_FADE_MS);
-    }
+    // The energy fades only once the room goes quiet: each reaction starts
+    // the clock again. (A clock that kept ticking from the first one let a
+    // fade land in the middle of ten quick reactions, so a full room on a
+    // slow phone or a slow line never went off.)
+    window.clearInterval(fade);
+    fade = window.setInterval(() => {
+      const left = Math.max(0, get().energy - 1);
+      set({ energy: left });
+      if (left === 0) {
+        window.clearInterval(fade);
+        fade = 0;
+      }
+    }, ENERGY_FADE_MS);
   };
   /** The emojis the room has used lately, for the burst. */
   let recent: string[] = [];

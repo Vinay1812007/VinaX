@@ -104,4 +104,21 @@ describe('the room’s extras', () => {
     for (let i = 0; i < ENERGY_FULL; i += 1) room.float(['🎉']);
     expect(useRoom.getState().burst).toBe(2);
   });
+
+  it('2.0 — the energy fades only once the room goes quiet, so steady reactions still fill it', () => {
+    vi.advanceTimersByTime(30_000);
+    const room = useRoom.getState();
+    const before = useRoom.getState().burst;
+    // One reaction every 1.4 s: never quiet long enough for a step to fade.
+    for (let i = 0; i < ENERGY_FULL; i += 1) {
+      room.float(['🔥']);
+      if (i < ENERGY_FULL - 1) vi.advanceTimersByTime(1400);
+    }
+    expect(useRoom.getState().burst).toBe(before + 1);
+    // Quiet: it drains a step at a time again.
+    room.float(['❤️']);
+    expect(useRoom.getState().energy).toBe(1);
+    vi.advanceTimersByTime(1600);
+    expect(useRoom.getState().energy).toBe(0);
+  });
 });
