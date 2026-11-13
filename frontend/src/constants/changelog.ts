@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.17': {
+    title: 'The player moves with your music: covers ease in, buttons spring, rows arrive in turn',
+    changes: [
+      { type: 'new', text: 'When the song changes, the new cover eases into Now Playing.' },
+      { type: 'improved', text: 'Play and pause swap with a small spring, in Now Playing, the player bar and the mini player.' },
+      { type: 'new', text: 'Switching between Up next, Lyrics, Credits and Together fades the new panel in.' },
+      { type: 'new', text: 'Up next and your Queue fill in one row after another, and a song you add slides into place.' },
+    ],
+  },
   '1.13.16': {
     title: 'Pages glide into place, and your song\'s artwork grows into Now Playing',
     changes: [

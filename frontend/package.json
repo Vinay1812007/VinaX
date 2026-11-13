@@ -1,7 +1,7 @@
 {
   "name": "vinax",
   "private": true,
-  "version": "1.13.16",
+  "version": "1.13.17",
   "description": "VinaX frontend — music tuned to you. No login. Private by design. (Cloudflare Pages)",
   "type": "module",
   "engines": {
