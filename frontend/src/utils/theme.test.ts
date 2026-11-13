@@ -97,34 +97,29 @@ describe('theme resolution + application', () => {
     expect(resolveTheme('auto', false, 2)).toBe('dark');
   });
 
-  it('11.0 — stamps the app style and its canvas, and keeps the style a caller did not name', () => {
+  it('stamps the app style and its canvas in every theme, whatever style a caller names', () => {
     const root = document.createElement('html');
-    applyThemeClasses('dark', root, 'verdant');
-    expect(root.dataset.template).toBe('verdant');
-    expect(root.style.background).toBe('rgb(18, 18, 18)');
+    applyThemeClasses('dark', root, 'vinax');
+    expect(root.dataset.template).toBe('vinax');
+    expect(root.style.background).toBe('rgb(19, 14, 22)');
     // No style passed (an older call site): whatever is on <html> stays.
     applyThemeClasses('light', root);
-    expect(root.dataset.template).toBe('verdant');
-    expect(root.style.background).toBe('rgb(246, 246, 246)');
-    // AMOLED is black in every style; nonsense falls back to the default.
-    applyThemeClasses('amoled', root, 'verse');
+    expect(root.dataset.template).toBe('vinax');
+    expect(root.style.background).toBe('rgb(250, 245, 237)');
+    // AMOLED is black; nonsense falls back to the one look.
+    applyThemeClasses('amoled', root, 'vinax');
     expect(root.style.background).toBe('rgb(0, 0, 0)');
     applyThemeClasses('dark', root, 'nonsense');
-    expect(root.dataset.template).toBe('lumen');
-    expect(root.style.background).toBe('rgb(15, 15, 17)');
+    expect(root.dataset.template).toBe('vinax');
+    expect(root.style.background).toBe('rgb(19, 14, 22)');
   });
 
-  it('15.0 — a style id from 11.0–14.x lands on the style that replaced it', () => {
-    expect(normalizeTemplate('aura')).toBe('lumen');
-    expect(normalizeTemplate('pulse')).toBe('verdant');
-    expect(normalizeTemplate('sangam')).toBe('monsoon');
-    expect(normalizeTemplate('nocturne')).toBe('harbour');
-    expect(normalizeTemplate('vibe')).toBe('verse');
-    expect(normalizeTemplate('marquee')).toBe('onyx');
+  it('2.0 — every style id an earlier release stored opens in the one look', () => {
+    for (const old of ['lumen', 'verdant', 'monsoon', 'harbour', 'verse', 'onyx', 'aura', 'pulse', 'sangam', 'nocturne', 'vibe', 'marquee']) expect(normalizeTemplate(old)).toBe('vinax');
     const root = document.createElement('html');
     applyThemeClasses('dark', root, 'marquee');
-    expect(root.dataset.template).toBe('onyx');
-    expect(root.style.background).toBe('rgb(3, 3, 3)');
+    expect(root.dataset.template).toBe('vinax');
+    expect(root.style.background).toBe('rgb(19, 14, 22)');
   });
 
   it('applies the right classes to the root element', () => {

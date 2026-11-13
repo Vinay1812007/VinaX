@@ -1,0 +1,194 @@
+/* ============================================================================
+   VinaX — the one look (2.0).
+
+   Deep plum, amber and pink: the colours of the app icon. Solid chrome, no
+   frost: a plum-black sidebar and top bar, the page a shade lighter, and the
+   player a solid bar across the bottom of the window. Titles are Bricolage
+   Grotesque, everything else Manrope. Artwork has a 10px corner, chips and
+   buttons are pills, the play button is a round amber. The destination you
+   are on is an amber wash with amber text. On phones the mini player is a
+   raised card above a solid four-tab bar whose active tab is amber.
+   Design contract: README.md › App style.
+   ========================================================================= */
+
+/* ----------------------------------------------------------------- colour */
+html[data-template='vinax']:root {
+  --ink-950: 13 9 15;
+  --ink-900: 19 14 22;
+  --ink-850: 27 20 31;
+  --ink-800: 37 28 42;
+  --ink-700: 56 44 62;
+  --ink-600: 98 86 104;
+  --ink-500: 160 148 162;
+  --ink-400: 182 171 184;
+  --ink-300: 203 194 203;
+  --ink-200: 234 227 226;
+  --ink-100: 251 245 236;
+  --vx-mesh-ember: 0.06;
+  --vx-mesh-tide: 0.03;
+}
+html.light[data-template='vinax']:root {
+  --ink-950: 255 252 247;
+  --ink-900: 250 245 237;
+  --ink-850: 244 237 227;
+  --ink-800: 236 227 214;
+  --ink-700: 216 205 192;
+  --ink-600: 156 142 138;
+  --ink-500: 104 88 96;
+  --ink-400: 94 79 88;
+  --ink-300: 74 60 70;
+  --ink-200: 42 30 40;
+  --ink-100: 24 14 22;
+  --art: 190 150 110;
+}
+html[data-template='vinax']:root:is(:not([data-accent]), [data-accent='crimson']) {
+  --ember-600: 236 132 20;
+  --ember-500: 255 164 46;
+  --ember-400: 255 192 102;
+  --ember-300: 255 218 158;
+  --tide-500: 255 99 132;
+  --tide-400: 255 145 168;
+  --vx-on-accent: #1a0e06;
+  --art: 255 164 46;
+}
+html.light[data-template='vinax']:root:is(:not([data-accent]), [data-accent='crimson']) {
+  --ember-600: 128 54 2;
+  --ember-500: 168 74 4;
+  --ember-400: 156 68 4;
+  --ember-300: 180 84 8;
+  --tide-500: 196 32 96;
+  --tide-400: 176 24 80;
+  --vx-on-accent: #fff;
+  --art: 190 150 110;
+}
+
+/* ------------------------------------------------------------------ dials */
+html[data-template='vinax'] {
+  --tpl-r-art: 10px;
+  --tpl-r-art-sm: 8px;
+  --tpl-r-control: 999px;
+  --tpl-r-play: 50%;
+  --tpl-r-play-sm: 50%;
+  --tpl-r-row: 10px;
+  --tpl-r-tile: 10px;
+  --tpl-r-input: 12px;
+  --tpl-r-deck: 0px;
+  --tpl-r-mini: 14px;
+  --tpl-r-np-art: 16px;
+  --vx-font-display: 'Bricolage Grotesque', 'Manrope', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --vx-type-section: 1.375rem;
+  --tpl-title-weight: 700;
+  --tpl-title-tracking: -0.02em;
+  --tpl-section-weight: 700;
+  --tpl-section-tracking: -0.02em;
+  --tpl-card-title-weight: 700;
+  --tpl-enter: tplRise;
+  --tpl-enter-dur: 220ms;
+  --tpl-press: 0.97;
+  --vx-radius-panel: 0px;
+  --vx-radius-card: 10px;
+  --vx-deck-gap: 0px;
+  --vx-art-shadow: none;
+  --vx-deck-shadow: none;
+}
+/* Solid: opaque materials whatever colours are on. */
+html[data-template='vinax'] {
+  --vx-mat-thin: rgb(var(--ink-950));
+  --vx-mat-regular: rgb(var(--ink-850));
+  --vx-mat-chrome: rgb(var(--ink-950));
+  --vx-mat-thick: rgb(var(--ink-850));
+  --vx-mat-specular: transparent;
+  --vx-mat-art: 0;
+}
+/* The light rule in base.css is (0,3,1); match it and win by order. */
+html.light[data-template='vinax']:root {
+  --vx-mat-thin: rgb(var(--ink-950));
+  --vx-mat-regular: rgb(var(--ink-950));
+  --vx-mat-chrome: rgb(var(--ink-950));
+  --vx-mat-thick: rgb(var(--ink-950));
+}
+html[data-template='vinax'] :is(.vx-mat-thin, .vx-mat-regular, .vx-mat-chrome, .vx-mat-thick) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* ------------------------------------------------------------------ shell */
+html[data-template='vinax']:root .vx-shell { background: rgb(var(--ink-950)); }
+html[data-template='vinax']:root .vx-workspace { background: rgb(var(--ink-900)); }
+/* Light has no lights behind the panes: plain ivory, like the dark look. */
+html.light[data-template='vinax']:root .vx-shell::before { display: none; }
+html.light[data-template='vinax']:root .vx-workspace { background: rgb(var(--ink-900)); }
+@media (min-width: 768px) {
+  html[data-template='vinax'] .vx-sidebar { margin: 0; max-height: 100dvh; border-radius: 0; box-shadow: inset -1px 0 0 var(--vx-border); }
+  html[data-template='vinax'] .vx-workspace { margin: 0; }
+}
+html[data-template='vinax'] .vx-library { background: transparent; border-radius: 0; margin: 6px 0 0; box-shadow: inset 0 1px 0 var(--vx-border); }
+html.light[data-template='vinax']:root .vx-library { background: transparent; }
+html[data-template='vinax'] .vx-brand { font-family: var(--vx-font-display); font-weight: 700; letter-spacing: -0.02em; }
+html[data-template='vinax'] .vx-nav-link { min-height: 44px; border-radius: 10px; font-weight: 600; color: rgb(var(--ink-300)); }
+html[data-template='vinax'] .vx-nav-link:hover { background: rgb(var(--ink-100) / 0.06); color: rgb(var(--ink-100)); }
+html[data-template='vinax'] :is(.vx-nav-active, .vx-nav-active:hover) { background: rgb(var(--ember-500) / 0.14); color: rgb(var(--ember-400)); box-shadow: none; font-weight: 700; }
+html[data-template='vinax'] :is(.vx-lib-row:hover, .vx-track-row:hover) { background: rgb(var(--ink-100) / 0.06); }
+html[data-template='vinax'] .vx-lib-row.is-active { background: rgb(var(--ember-500) / 0.14); }
+html[data-template='vinax'] .vx-lib-label { color: rgb(var(--ink-500)); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+html[data-template='vinax'] .vx-topbar.is-scrolled { box-shadow: inset 0 -1px 0 var(--vx-border); }
+
+/* Phone tab bar: solid, a hairline on top, the active tab amber. */
+html[data-template='vinax'] .vx-dock { box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='vinax'] .vx-dock-pill { width: 52px; height: 28px; }
+html[data-template='vinax'] .vx-dock-active .vx-dock-pill { background: transparent; color: rgb(var(--ember-400)); }
+html[data-template='vinax'] :is(.vx-dock-active, .vx-dock-active:hover) { color: rgb(var(--ember-400)); font-weight: 700; }
+html[data-template='vinax'] .vx-dock-item { gap: 4px; min-height: 56px; font-size: 11px; font-weight: 700; }
+
+/* Phone mini player: a raised card with an amber progress line. */
+html[data-template='vinax'] .np-mini { --mat-tint: none; background: rgb(var(--ink-800)); box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.1); }
+html[data-template='vinax'] .np-mini-progress { background: rgb(var(--ink-100) / 0.16); }
+html[data-template='vinax'] .np-mini-progress > i { background: rgb(var(--ember-500)); }
+html[data-template='vinax'] .np-mini .np-mini-play { background: rgb(var(--ember-500)); color: var(--vx-on-accent); }
+
+/* Desktop player: a solid bar edge to edge. */
+html[data-template='vinax'] .vx-deck { box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='vinax'] .vx-deck::before,
+html[data-template='vinax'] .vx-deck::after { display: none; }
+html[data-template='vinax'] .np-play-desktop { background: rgb(var(--ember-500)); color: var(--vx-on-accent); box-shadow: none; width: 44px; height: 44px; }
+html[data-template='vinax'] .np-play-desktop:hover { background: rgb(var(--ember-400)); transform: scale(1.05); }
+
+/* ------------------------------------------------------- pages and cards */
+html[data-template='vinax'] .vx-section-link { color: rgb(var(--ember-400)); font-size: 14px; font-weight: 700; padding-inline: 8px; }
+html[data-template='vinax'] .vx-section-link:hover { background: rgb(var(--ember-500) / 0.12); color: rgb(var(--ember-300)); }
+html[data-template='vinax'] .vx-media-title { margin-top: 10px; font-size: 15px; }
+html[data-template='vinax'] :is(.vx-play-fab, .vx-np-play, .card-play) { background: rgb(var(--ember-500)); color: var(--vx-on-accent); box-shadow: none; }
+html[data-template='vinax'] :is(.vx-play-fab, .vx-np-play, .card-play):hover { background: rgb(var(--ember-400)); }
+/* Chips: plum pills with a hairline; the chosen one is ivory. */
+html[data-template='vinax'] :is(.vx-chip-idle, .vxh-chip) { background: rgb(var(--ink-850)); box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.1); color: rgb(var(--ink-300)); font-weight: 600; }
+html[data-template='vinax'] .vx-chip-on { background: rgb(var(--ink-100)); border-color: rgb(var(--ink-100)); color: rgb(var(--ink-900)); font-weight: 700; }
+html[data-template='vinax'] .vx-track-row.is-current { background: rgb(var(--ember-500) / 0.12); }
+html[data-template='vinax'] .vxh-tile { background: rgb(var(--ink-850)); }
+html[data-template='vinax'] .vxh-tile:hover { background: rgb(var(--ink-800)); }
+html.light[data-template='vinax']:root :is(.vxh-tile, .vxh-card, .vxh-shortcut, .vxh-disclose, .glass-card, .glass-panel, .vx-lt-card, .vx-help-tile, .vx-panel) { background: rgb(var(--ink-950)); box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.08); }
+html[data-template='vinax'] .vxh-hero { border-radius: 14px; box-shadow: none; }
+html[data-template='vinax'] :is(.btn-primary, .btn-secondary, .btn-premium) { font-weight: 700; }
+html[data-template='vinax'] .vx-np-tabs [role='tab'][aria-selected='true'] { background: rgb(var(--ink-100)); color: rgb(var(--ink-900)); }
+
+/* Now Playing: the artwork over plain plum, a 64px amber play. */
+html[data-template='vinax']:root .vx-np-bg-wash { background: linear-gradient(180deg, rgb(var(--ink-900) / 0.72), rgb(var(--ink-900) / 0.96) 70%); }
+html[data-template='vinax'] .vx-np-play { width: 64px; height: 64px; }
+html[data-template='vinax'] .vx-np-title { font-family: var(--vx-font-display); font-weight: 700; letter-spacing: -0.02em; }
+html[data-template='vinax'] .vx-np-artist { color: rgb(var(--ink-300)); font-weight: 600; }
+
+/* ---------------------------------------------------------- layout identity */
+/* Home opens on a row of chips under the greeting: the listener's languages,
+   then charts, moods and regions (the same links as the Explore band at the
+   foot of Home, which gives its row up). Jump back in is a grid of compact
+   tiles: two across on a phone, three where there is room. */
+html[data-template='vinax'] .vx-home .vxh-topchips { display: flex; margin-top: -8px; }
+html[data-template='vinax'] .vx-home .vxh-explore .vxh-chips { display: none; }
+html[data-template='vinax'] .vx-home .vxh-tiles,
+html[data-template='vinax'] .vx-home .vxh-jump .vxh-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@container jump (min-width: 760px) {
+  html[data-template='vinax'] .vx-home .vxh-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+}
+html[data-template='vinax'] .vx-home .vxh-tile { min-height: 56px; }
+html[data-template='vinax'] .vx-home .vxh-tile img { width: 56px; height: 56px; margin: 0; border-radius: 8px; }
+html[data-template='vinax'] .vx-home .vxh-tile-title { font-size: 14px; font-weight: 700; }
+html[data-template='vinax'] .vx-home .vxh-hero-kicker { color: rgb(var(--ember-400)); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }

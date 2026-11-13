@@ -284,7 +284,7 @@ export type SettingsData = typeof defaults;
 
 const SETTINGS_ENUMS: Partial<Record<keyof SettingsData, readonly string[]>> = {
   theme: ['dark', 'light', 'system', 'amoled', 'auto'],
-  template: ['lumen', 'verdant', 'monsoon', 'harbour', 'verse', 'onyx'],
+  template: ['vinax'],
   uiScale: ['sm', 'md', 'lg'],
   startPage: ['home', 'search', 'library', 'last'],
   density: ['comfortable', 'compact'],

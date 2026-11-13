@@ -19,7 +19,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const read = (p: string): string => readFileSync(p, 'utf8');
-const STYLES = ['lumen', 'verdant', 'monsoon', 'harbour', 'verse', 'onyx'] as const;
+const STYLES = ['vinax'] as const;
 
 describe('the app text is in the style face, never the device font', () => {
   it('#root sets no font-family; body carries the boot face', () => {
@@ -41,52 +41,42 @@ describe('the app text is in the style face, never the device font', () => {
 });
 
 describe('display faces', () => {
-  const FACES: Record<string, { file: string; licence: string }> = {
-    Inter: { file: 'inter-var.woff2', licence: 'inter-OFL.txt' },
-    Figtree: { file: 'figtree-var.woff2', licence: 'figtree-OFL.txt' },
-    Archivo: { file: 'archivo-var.woff2', licence: 'archivo-OFL.txt' },
-    'Baloo 2': { file: 'baloo2-var.woff2', licence: 'baloo2-OFL.txt' },
-    Roboto: { file: 'roboto-var.woff2', licence: 'roboto-OFL.txt' },
+  const FACES: Record<string, { file: string; licence: string | null }> = {
+    'Bricolage Grotesque': { file: 'bricolage-var.woff2', licence: 'bricolage-OFL.txt' },
+    Manrope: { file: 'manrope-var.woff2', licence: null },
   };
 
-  it('every self-hosted face is declared, shipped and licensed (SIL OFL)', () => {
-    const base = read('src/styles/templates/base.css');
+  it('every self-hosted face is declared and shipped, and the display face is licensed (SIL OFL)', () => {
+    const base = read('src/styles/index.css');
     for (const [family, { file, licence }] of Object.entries(FACES)) {
       expect(base, family).toContain(`font-family: '${family}'`);
       expect(base, family).toContain(`/fonts/${file}`);
       expect(existsSync(`public/fonts/${file}`), file).toBe(true);
-      expect(read(`public/fonts/${licence}`)).toMatch(/SIL OPEN FONT LICENSE/);
+      if (licence) expect(read(`public/fonts/${licence}`)).toMatch(/SIL OPEN FONT LICENSE/);
     }
   });
 
-  it('each style speaks in its own display face', () => {
-    const want: Record<string, string> = { lumen: 'Inter', verdant: 'Figtree', monsoon: 'Manrope', harbour: 'Archivo', verse: 'Baloo 2', onyx: 'Roboto' };
-    for (const [id, face] of Object.entries(want)) {
+  it('the look speaks in Bricolage Grotesque', () => {
+    for (const id of STYLES) {
       const css = read(`src/styles/templates/${id}.css`);
-      expect(/--vx-font-display:\s*'([^']+)'/.exec(css)?.[1], id).toBe(face);
+      expect(/--vx-font-display:\s*'([^']+)'/.exec(css)?.[1], id).toBe('Bricolage Grotesque');
     }
   });
 
-  it('the picker sets every style name in that style face', () => {
-    const css = read('src/styles/pages/settings.css');
-    for (const id of STYLES) expect(css, id).toMatch(new RegExp(`\\.vx-tpl-card\\[data-tpl='${id}'\\] \\.vx-tpl-name \\{[^}]*font-family`));
+  it('no retired face is still declared', () => {
+    const css = read('src/styles/templates/base.css') + read('src/styles/index.css');
+    for (const gone of ['Inter', 'Figtree', 'Archivo', 'Baloo 2']) expect(css, gone).not.toContain(`font-family: '${gone}'`);
   });
 });
 
-describe('flat styles stay opaque in the light theme', () => {
-  it('Verdant, Harbour and Onyx match the light glass rule specificity for all four materials', () => {
-    for (const id of ['verdant', 'harbour', 'onyx']) {
+describe('the solid look stays opaque in the light theme', () => {
+  it('matches the light glass rule specificity for all four materials', () => {
+    for (const id of STYLES) {
       const css = read(`src/styles/templates/${id}.css`);
       // The selector also opens the style's colour block: find the one that sets the materials.
       const blocks = [...css.matchAll(new RegExp(`html\\.light\\[data-template='${id}'\\]:root\\s*\\{([^}]*)\\}`, 'g'))].map((m) => m[1]);
       const block = blocks.find((b) => b.includes('--vx-mat-')) ?? '';
       for (const mat of ['thin', 'regular', 'chrome', 'thick']) expect(block, `${id} --vx-mat-${mat}`).toMatch(new RegExp(`--vx-mat-${mat}:\\s*rgb\\(var\\(--ink-950\\)\\);`));
     }
-  });
-
-  it('the glass styles give the mini player and tab bar a readable floor', () => {
-    const base = read('src/styles/templates/base.css');
-    expect(base).toMatch(/:is\(\.np-mini, \.vx-dock\)\s*\{\s*--vx-mat-chrome: rgb\(var\(--ink-950\) \/ clamp\(0\.9,/);
-    expect(base).toMatch(/html\.light:is\([^)]*\) :is\(\.np-mini, \.vx-dock\)\s*\{\s*--vx-mat-chrome: rgb\(var\(--ink-950\) \/ clamp\(0\.93,/);
   });
 });

@@ -33,7 +33,7 @@ const heading = (name: string) => screen.findByRole('heading', { name });
 
 beforeEach(() => {
   localStorage.clear();
-  useSettingsStore.getState().setTemplate('lumen');
+  useSettingsStore.getState().setTheme('dark');
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ available: true }) })));
 });
 afterEach(() => {
@@ -43,7 +43,7 @@ afterEach(() => {
 });
 
 describe('OnboardingSheet (11.0 welcome)', () => {
-  it('walks name → languages → look → slides, and the look step persists the app style', async () => {
+  it('walks name → languages → look → slides, and the look step persists the theme', async () => {
     mount();
     const dialog = screen.getByRole('dialog');
     expect(dialog.querySelector('.vx-mat-thick')).toBeTruthy();
@@ -83,11 +83,11 @@ describe('OnboardingSheet (11.0 welcome)', () => {
     expect(getLocal<boolean>(KEYS.analyticsConsent, true)).toBe(false);
     expect(useSettingsStore.getState().pinnedLanguages.length).toBeGreaterThan(0);
 
-    const styles = screen.getAllByRole('radio');
-    expect(styles).toHaveLength(6);
-    fireEvent.click(screen.getByRole('radio', { name: /Monsoon/ }));
-    expect(useSettingsStore.getState().template).toBe('monsoon');
-    expect(localStorage.getItem('vinax.settings.v1')).toContain('"template":"monsoon"');
+    const looks = screen.getAllByRole('radio');
+    expect(looks).toHaveLength(4);
+    fireEvent.click(screen.getByRole('radio', { name: /Light/ }));
+    expect(useSettingsStore.getState().theme).toBe('light');
+    expect(localStorage.getItem('vinax.settings.v1')).toContain('"theme":"light"');
     expect(screen.getByRole('button', { name: 'Skip' })).toBeTruthy();
     press('Use this look');
 

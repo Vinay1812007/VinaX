@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { TemplatePicker } from '@/features/settings/TemplatePicker';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { LANGUAGES } from '@/constants/languages';
 import { KEYS } from '@/constants/storage-keys';
@@ -25,9 +24,8 @@ import { useAccount } from './useAccount';
 import { SparkleIcon, PlayIcon, HeartIcon, CompassIcon } from './Icons';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { cn } from '@/utils/cn';
+import { DEFAULT_TEMPLATE, TEMPLATE_CANVAS } from '@/utils/theme';
 import '@/styles/overlays.css';
-// The app-style picker's miniatures are styled in the Settings sheet (this chunk is lazy).
-import '@/styles/pages/settings.css';
 
 /** Small pill for keyboard shortcut hints ("Space", "⌘K", etc). */
 const KEY_CHIP = 'inline-flex items-center min-w-[24px] justify-center px-1.5 py-0.5 rounded-md bg-ink-100/10 text-[11px] font-bold text-ink-200';
@@ -63,7 +61,7 @@ const TOUR: TourSlide[] = [
     icon: <CompassIcon className="w-7 h-7" />,
     title: 'Four places to go',
     lines: [
-      'Home, Discover, Search and Library are always one tap away.',
+      'Home, Search, Library and VinaX AI are always one tap away.',
       'The top bar shows where you are and holds that page’s actions.',
     ],
   },
@@ -80,7 +78,7 @@ const TOUR: TourSlide[] = [
     icon: <SparkleIcon className="w-7 h-7" />,
     title: 'Change it any time',
     lines: [
-      'Settings → Appearance holds the app style, theme and accent colour.',
+      'Settings → Appearance holds the theme and accent colour.',
       'Customise Home, at the end of Home, reorders or hides its shelves.',
     ],
   },
@@ -96,6 +94,14 @@ const TOUR: TourSlide[] = [
 
 /** 11.0 — the welcome is one linear sequence of stages. `t0…` are TOUR slides. */
 type Stage = 'you' | 'langs' | 'look' | 'songs' | `t${number}`;
+/** The look step: the theme, as four choices. The dot is each theme's page
+ *  canvas (TEMPLATE_CANVAS; black for true black, a split for "match my device"). */
+const LOOKS: ReadonlyArray<{ value: 'dark' | 'light' | 'amoled' | 'system'; label: string; dot: string }> = [
+  { value: 'dark', label: 'Dark', dot: TEMPLATE_CANVAS[DEFAULT_TEMPLATE][0] },
+  { value: 'light', label: 'Light', dot: TEMPLATE_CANVAS[DEFAULT_TEMPLATE][1] },
+  { value: 'amoled', label: 'Black', dot: 'rgb(0 0 0)' },
+  { value: 'system', label: 'Match my device', dot: `linear-gradient(90deg, ${TEMPLATE_CANVAS[DEFAULT_TEMPLATE][0]} 50%, ${TEMPLATE_CANVAS[DEFAULT_TEMPLATE][1]} 50%)` },
+];
 const TOUR_STAGES: Stage[] = TOUR.map((_, i) => `t${i}` as Stage);
 
 /**
@@ -130,8 +136,8 @@ export function OnboardingSheet() {
     window.addEventListener('vinax:returning-account', onReturning);
     return () => window.removeEventListener('vinax:returning-account', onReturning);
   }, [stage]);
-  const template = useSettingsStore((st) => st.template);
-  const setTemplate = useSettingsStore((st) => st.setTemplate);
+  const theme = useSettingsStore((st) => st.theme);
+  const setTheme = useSettingsStore((st) => st.setTheme);
   const detected = readBrowserSignals().languages;
   const [picked, setPicked] = useState<string[]>(detected.length ? detected : ['hindi', 'english']);
   // 13.0 — signed in with Google before the welcome: the name starts as the account's.
@@ -473,11 +479,18 @@ export function OnboardingSheet() {
           ) : stage === 'look' ? (
             <>
               {title('Pick your look')}
-              {lede('Each style changes the colours, type, shapes, navigation and player. It applies as you choose, and your music and library stay the same.')}
+              {lede('Dark, light or true black. It applies as you choose, and your music and library stay the same.')}
               <div className="vx-welcome-look">
-                <TemplatePicker value={template} onChange={setTemplate} />
+                <div role="radiogroup" aria-label="Theme" className="vx-welcome-themes">
+                  {LOOKS.map((look) => (
+                    <button key={look.value} type="button" role="radio" aria-checked={theme === look.value} className="vx-welcome-theme" onClick={() => setTheme(look.value)}>
+                      <span className="vx-welcome-theme-dot" style={{ background: look.dot }} aria-hidden />
+                      <span>{look.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-              <p className="vx-welcome-msg">Change it later in Settings → Appearance → App style.</p>
+              <p className="vx-welcome-msg">Change it later in Settings → Appearance → Theme.</p>
             </>
           ) : stage === 'songs' ? (
             <>

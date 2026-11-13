@@ -44,10 +44,11 @@ test('first run walks the welcome: name → languages → look → slides → ap
   await expect(page.getByRole('heading', { name: 'Choose your languages' })).toBeVisible();
   await page.getByRole('button', { name: 'Continue' }).click();
 
-  // The new 11.0 step: six app styles, applied live.
+  // The look step: the theme, applied live.
   await expect(page.getByRole('heading', { name: 'Pick your look' })).toBeVisible();
-  await page.getByRole('radio', { name: /Monsoon/ }).click();
-  await expect(page.locator('html')).toHaveAttribute('data-template', 'monsoon');
+  await page.getByRole('radio', { name: /Light/ }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-template', 'vinax');
+  await expect(page.locator('html')).toHaveClass(/light/);
   await page.getByRole('button', { name: 'Use this look' }).click();
 
   // Catalogue unreachable → the songs step is left out and the slides follow.

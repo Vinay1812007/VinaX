@@ -111,16 +111,10 @@ test('the mini player opens into Now Playing and back', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Open Now Playing' })).toBeVisible();
 });
 
-test('the v2 primitives take each app style\'s shape (Phase 7)', async ({ page }) => {
+test('the v2 primitives take the app style\'s shape (Phase 7)', async ({ page }) => {
   await seed(page);
   await open(page);
-  const style = page.locator('.vx-ds-bar select').first(); // the bar's first select is Style
   const radius = (sel: string) => page.locator(sel).first().evaluate((el) => getComputedStyle(el).borderTopLeftRadius);
-  await style.selectOption('harbour');
-  await expect.poll(() => radius('.vx-btn')).toBe('4px');
-  expect(await radius('.vx-card')).toBe('4px');
-  await style.selectOption('onyx');
-  await expect.poll(() => radius('.vx-btn')).toBe('8px');
-  await style.selectOption('lumen');
-  await expect.poll(() => radius('.vx-btn')).not.toBe('8px');
+  // The look's dials (styles/templates/vinax.css): tiles and cards have a 10px corner.
+  await expect.poll(() => radius('.vx-card')).toBe('10px');
 });

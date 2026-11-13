@@ -39,30 +39,24 @@ it('turns the old explore switch into the three-way discovery mode, and keeps th
   expect(resolveDiscoveryMode({ discoveryMode: 'nonsense', exploreMode: false })).toBe('balanced');
 });
 
-it('11.0 — the app style defaults to Lumen, survives a reload, and never takes an unknown id', async () => {
+it('2.0 — there is one app style: it is the default, survives a reload, and every older id opens in it', async () => {
   useSettingsStore.getState().resetSettings();
-  expect(useSettingsStore.getState().template).toBe('lumen');
-  useSettingsStore.getState().setTemplate('verse');
-  expect(useSettingsStore.getState().template).toBe('verse');
+  expect(useSettingsStore.getState().template).toBe('vinax');
   useSettingsStore.getState().setTemplate('not-a-style');
-  expect(useSettingsStore.getState().template).toBe('lumen');
+  expect(useSettingsStore.getState().template).toBe('vinax');
   // A record from before 11.0 has no style: the default applies.
   localStorage.setItem(KEYS.settings, JSON.stringify({ version: 4, state: { theme: 'light' } }));
   await useSettingsStore.persist.rehydrate();
-  expect(useSettingsStore.getState()).toMatchObject({ theme: 'light', template: 'lumen' });
-  // A stored style comes back; a damaged one is ignored.
-  localStorage.setItem(KEYS.settings, JSON.stringify({ version: 4, state: { template: 'onyx' } }));
-  await useSettingsStore.persist.rehydrate();
-  expect(useSettingsStore.getState().template).toBe('onyx');
-  localStorage.setItem(KEYS.settings, JSON.stringify({ version: 4, state: { template: 'constructor' } }));
-  await useSettingsStore.persist.rehydrate();
-  expect(useSettingsStore.getState().template).toBe('onyx');
-  // 15.0 — a 11.0–14.x id in storage or a backup lands on its replacement.
-  localStorage.setItem(KEYS.settings, JSON.stringify({ version: 4, state: { template: 'pulse' } }));
-  await useSettingsStore.persist.rehydrate();
-  expect(useSettingsStore.getState().template).toBe('verdant');
-  expect(pickSettings({ template: 'marquee' })).toEqual({ template: 'onyx' });
-  expect(pickSettings({ template: 'monsoon' })).toEqual({ template: 'monsoon' });
+  expect(useSettingsStore.getState()).toMatchObject({ theme: 'light', template: 'vinax' });
+  // A style stored by 15.0–1.13, or by 11.0–14.x, comes back as the one look; a damaged one is ignored.
+  for (const stored of ['onyx', 'monsoon', 'pulse', 'marquee', 'constructor']) {
+    localStorage.setItem(KEYS.settings, JSON.stringify({ version: 4, state: { template: stored } }));
+    await useSettingsStore.persist.rehydrate();
+    expect(useSettingsStore.getState().template).toBe('vinax');
+  }
+  expect(pickSettings({ template: 'marquee' })).toEqual({ template: 'vinax' });
+  expect(pickSettings({ template: 'monsoon' })).toEqual({ template: 'vinax' });
+  expect(pickSettings({ template: 'vinax' })).toEqual({ template: 'vinax' });
   expect(pickSettings({ template: 7 })).toEqual({});
   useSettingsStore.getState().resetSettings();
 });

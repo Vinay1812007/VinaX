@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronDownIcon, IdeaIcon } from './Icons';
+import { ChevronDownIcon, IdeaIcon, SearchIcon } from './Icons';
 import { IconButton } from './IconButton';
 import { NAV_GROUPS, PRIMARY_NAV } from '@/constants/nav';
 import { KEYS } from '@/constants/storage-keys';
@@ -29,11 +29,14 @@ const FeedbackSheet = lazy(() => import('./FeedbackSheet'));
  * and Sign out (ProfileMenu).
  * 1.12 — the lightbulb in the bar is "Ideas & bugs": a popup for feature
  * ideas and bug reports that names the device for the listener (FeedbackSheet).
+ * 2.0 — from 768px the bar has a search field (a link to Search) where the
+ * page name was; phones keep the page name and reach Search from the tab bar.
  */
 export function TopBar({ onCommands }: { onCommands: () => void }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const title = [...PRIMARY_NAV, ...NAV_GROUPS.flatMap((g) => g.items)].find((i) => i.to === pathname)?.label ?? 'VinaX';
+  const showSearch = !pathname.startsWith('/search');
   const [scrolled, setScrolled] = useState(false);
   // 10.1 — "is anything under the bar?" comes from an IntersectionObserver on
   // a marker 8px into the page, not a scroll listener: no work per scroll
@@ -76,7 +79,15 @@ export function TopBar({ onCommands }: { onCommands: () => void }) {
         <IconButton size="sm" label="Go forward" onClick={() => navigate(1)} className="vx-topbar-nav"><ChevronDownIcon className="w-5 h-5 -rotate-90" /></IconButton>
       </div>
       <Link to="/" aria-label="VinaX home" className="md:hidden shrink-0"><img src="/icons/icon.svg?v=14" alt="" width={28} height={28} /></Link>
-      <span className="vx-topbar-context">{title}</span>
+      {/* 2.0 — a search field in the bar on wider screens: it opens Search, whose
+          own field takes the typing. Not on Search itself (one field, not two). */}
+      {showSearch && (
+        <Link to="/search" className="vx-topbar-search hidden md:flex" aria-label="Search songs, albums and artists">
+          <SearchIcon className="w-5 h-5 shrink-0" />
+          <span>Search songs, albums, artists</span>
+        </Link>
+      )}
+      <span className={cn('vx-topbar-context', showSearch && 'md:hidden')}>{title}</span>
       <div className="vx-topbar-actions">
         {/* Pages add their own actions here through <TopBarActions>. */}
         <div id={ACTIONS_SLOT} className="contents" />

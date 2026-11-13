@@ -10,38 +10,39 @@ export function resolveTheme(pref: ThemePref, systemPrefersDark: boolean, hour =
 }
 
 // ---------------------------------------------------------------------------
-// 11.0 — app styles ("templates"): html[data-template] swaps palette, type,
-// shape, navigation layout and motion (styles/templates/<id>.css). Only the
-// ids and each style's page canvas live here, in first-load code; names and
-// descriptions are in constants/templates.ts, loaded with Settings.
+// App style ("template"): html[data-template] names the look the stylesheets
+// in styles/templates/ are written for. 2.0 — VinaX has ONE look, `vinax`
+// (deep plum, amber and pink, from the app icon), in dark, light and black.
+// The id, the setting and the pre-paint stamp stay, so a second look can be
+// added the way README.md (Adding an app style) describes.
 // ---------------------------------------------------------------------------
 
-export type TemplateId = 'lumen' | 'verdant' | 'monsoon' | 'harbour' | 'verse' | 'onyx';
-export const DEFAULT_TEMPLATE: TemplateId = 'lumen';
+export type TemplateId = 'vinax';
+export const DEFAULT_TEMPLATE: TemplateId = 'vinax';
 
 /** The page canvas (= the style's --ink-900) per theme: [dark, light]. The
  *  pre-paint script in index.html carries the same table — keep in sync
- *  (asserted in templates.test.ts). AMOLED is black in every style. */
+ *  (asserted in templates.test.ts). AMOLED is black. */
 export const TEMPLATE_CANVAS: Record<TemplateId, readonly [string, string]> = {
-  lumen: ['#0f0f11', '#f5f5f7'],
-  verdant: ['#121212', '#f6f6f6'],
-  monsoon: ['#1b1e21', '#f4f6f6'],
-  harbour: ['#0e1720', '#f2f5f8'],
-  verse: ['#141418', '#f7f6f9'],
-  onyx: ['#030303', '#f9f9f9'],
+  vinax: ['#130e16', '#faf5ed'],
 };
 
-/** 15.0 — the 11.0–14.x styles, each mapped to the 15.0 style that took its
- *  place (README.md (App styles)), so a listener who chose Pulse opens 15.0 in
- *  Verdant rather than in the default. The pre-paint script in index.html
- *  carries the same map. */
+/** 2.0 — every style id an earlier release stored (the six of 15.0–1.13 and
+ *  the six of 11.0–14.x) opens in the one look. Settings and backups that
+ *  carry one of these are rewritten to `vinax` by the settings sanitiser. */
 export const LEGACY_TEMPLATES: Readonly<Record<string, TemplateId>> = {
-  aura: 'lumen',
-  pulse: 'verdant',
-  sangam: 'monsoon',
-  nocturne: 'harbour',
-  vibe: 'verse',
-  marquee: 'onyx',
+  lumen: 'vinax',
+  verdant: 'vinax',
+  monsoon: 'vinax',
+  harbour: 'vinax',
+  verse: 'vinax',
+  onyx: 'vinax',
+  aura: 'vinax',
+  pulse: 'vinax',
+  sangam: 'vinax',
+  nocturne: 'vinax',
+  vibe: 'vinax',
+  marquee: 'vinax',
 };
 
 /** Anything not in the table (an older build's id, damaged storage) → default. */

@@ -176,10 +176,10 @@ test('the shared page opens signed out: title, label, turns, artifacts, no compo
 });
 
 const LOOKS: Array<{ theme: 'dark' | 'light' | 'amoled'; template: string; highContrast?: boolean }> = [
-  ...['lumen', 'verdant', 'monsoon', 'harbour', 'verse', 'onyx'].flatMap((template) => (['dark', 'light'] as const).map((theme) => ({ theme, template }))),
-  { theme: 'amoled', template: 'lumen' },
-  { theme: 'dark', template: 'lumen', highContrast: true },
-  { theme: 'light', template: 'lumen', highContrast: true },
+  ...['vinax'].flatMap((template) => (['dark', 'light'] as const).map((theme) => ({ theme, template }))),
+  { theme: 'amoled', template: 'vinax' },
+  { theme: 'dark', template: 'vinax', highContrast: true },
+  { theme: 'light', template: 'vinax', highContrast: true },
 ];
 for (const look of LOOKS) {
   test(`no WCAG A/AA violations on the shared page: ${look.template}, ${look.theme}${look.highContrast ? ', high contrast' : ''}`, async ({ page }) => {

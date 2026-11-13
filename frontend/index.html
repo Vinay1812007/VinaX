@@ -14,7 +14,7 @@
     <link rel="dns-prefetch" href="https://aac.saavncdn.com" />
     <link rel="dns-prefetch" href="https://lrclib.net" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0f0f11" />
+    <meta name="theme-color" content="#130e16" />
     <meta name="description" content="VinaX — free music streaming for India in 12 languages. One Google sign-in, no subscription." />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="VinaX" />
@@ -69,11 +69,9 @@
           cls.toggle('amoled', pref === 'amoled');
           // 11.0 — the app style before first paint (mirrors TEMPLATE_CANVAS in
           // src/utils/theme.ts: [dark, light] page canvas per style).
-          var TC = { lumen: ['#0f0f11', '#f5f5f7'], verdant: ['#121212', '#f6f6f6'], monsoon: ['#1b1e21', '#f4f6f6'], harbour: ['#0e1720', '#f2f5f8'], verse: ['#141418', '#f7f6f9'], onyx: ['#030303', '#f9f9f9'] };
-          // 15.0 — the 11.0–14.x ids map to their replacements (LEGACY_TEMPLATES in theme.ts).
-          var LG = { aura: 'lumen', pulse: 'verdant', sangam: 'monsoon', nocturne: 'harbour', vibe: 'verse', marquee: 'onyx' };
-          if (LG.hasOwnProperty(st.template)) st.template = LG[st.template];
-          var tpl = TC.hasOwnProperty(st.template) ? st.template : 'lumen';
+          var TC = { vinax: ['#130e16', '#faf5ed'] };
+          // 2.0 — one look: every style id an earlier release stored opens in it.
+          var tpl = TC.hasOwnProperty(st.template) ? st.template : 'vinax';
           document.documentElement.setAttribute('data-template', tpl);
           var bg = pref === 'amoled' ? '#000000' : TC[tpl][dark ? 0 : 1];
           document.documentElement.style.background = bg;
@@ -81,7 +79,7 @@
           var m = document.querySelector('meta[name="theme-color"]');
           if (m) m.setAttribute('content', bg);
         } catch (e) { /* keep the static dark default */ }
-        if (!document.documentElement.getAttribute('data-template')) document.documentElement.setAttribute('data-template', 'lumen');
+        if (!document.documentElement.getAttribute('data-template')) document.documentElement.setAttribute('data-template', 'vinax');
       })();
     </script>
     <script>
@@ -175,7 +173,7 @@
          until React replaces #root. Paint cost is unchanged: everything here
          is inline CSS, so FCP/LCP still land at HTML-parse time. */
       /* 11.0 — the canvas is the app style's (--boot-bg, stamped by the pre-paint script above). */
-      html, body { background: var(--boot-bg, #0f0f11); margin: 0; }
+      html, body { background: var(--boot-bg, #130e16); margin: 0; }
       html.amoled, html.amoled body { background: #000; }
       /* 13.2 — the face is set on BODY, never on #root. #root used to carry a
          system-font stack for the boot splash, and the whole app mounts inside
@@ -198,7 +196,7 @@
          #boot id at mount (the recovery script below reads a missing #boot as
          "mounted"), waits for the reveal to finish, then fades it out. Styles
          key on .vxb, never #boot, so dropping the id keeps every animation. */
-      .vxb { position: fixed; inset: 0; z-index: 2147483600; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: var(--boot-bg, #0f0f11); padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom); }
+      .vxb { position: fixed; inset: 0; z-index: 2147483600; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: var(--boot-bg, #130e16); padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom); }
       html.amoled .vxb { background: #000; }
       html.light .vxb { background: #0f0d12; }
       .vxb.out { animation: vxb-out .35s ease-in forwards; pointer-events: none; }

@@ -1191,7 +1191,7 @@ html.light {
     radial-gradient(60% 38% at 50% 108%, rgb(var(--ember-500) / var(--vx-ai-glow-a)), transparent 75%),
     rgb(var(--ink-900));
 }
-html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) .vx-ai { background: rgb(var(--ink-900)); }
+html:is(.amoled, .hc, [data-template='vinax']) .vx-ai { background: rgb(var(--ink-900)); }
 .vx-ai-dock { background: transparent; }
 
 /* ------------------------------------------------------------ leaf glass */
@@ -1465,11 +1465,11 @@ html.light .vx-ai-scrim::before { background: rgb(48 22 34 / 0.3); }
 /* ------------------------------------------- fallbacks: solid, unblurred */
 /* Flat app styles (Harbour, Onyx), AMOLED and high contrast: their material
    tokens are already opaque; drop the blur and use the solid fills. */
-html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) :is(.vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-settings, .vx-ai-jump, .vx-ai-composer, .vx-ai-side) { --vx-ai-fill: var(--vx-ai-solid); }
-html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) :is(.vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-jump),
-html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) .vx-ai-composer::before,
-html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) .vx-ai-side::before,
-html:is(.amoled, .hc, [data-template='harbour'], [data-template='onyx']) .vx-ai-scrim::before {
+html:is(.amoled, .hc, [data-template='vinax']) :is(.vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-settings, .vx-ai-jump, .vx-ai-composer, .vx-ai-side) { --vx-ai-fill: var(--vx-ai-solid); }
+html:is(.amoled, .hc, [data-template='vinax']) :is(.vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog, .vx-ai-jump),
+html:is(.amoled, .hc, [data-template='vinax']) .vx-ai-composer::before,
+html:is(.amoled, .hc, [data-template='vinax']) .vx-ai-side::before,
+html:is(.amoled, .hc, [data-template='vinax']) .vx-ai-scrim::before {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }

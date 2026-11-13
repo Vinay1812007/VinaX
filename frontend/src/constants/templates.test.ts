@@ -87,16 +87,16 @@ function resolved(id: string): { dark: Record<string, RGB>; light: Record<string
 }
 
 describe('app styles: the list', () => {
-  it('has six styles with unique ids and names, the default among them', () => {
-    expect(TEMPLATE_OPTIONS).toHaveLength(6);
-    expect(new Set(TEMPLATE_IDS).size).toBe(6);
-    expect(new Set(TEMPLATE_OPTIONS.map((t) => t.label)).size).toBe(6);
+  it('has one style, and it is the default', () => {
+    expect(TEMPLATE_OPTIONS).toHaveLength(1);
+    expect(new Set(TEMPLATE_IDS).size).toBe(1);
+    expect(new Set(TEMPLATE_OPTIONS.map((t) => t.label)).size).toBe(1);
     expect(TEMPLATE_IDS).toContain(DEFAULT_TEMPLATE);
     expect(Object.keys(TEMPLATE_CANVAS).sort()).toEqual([...TEMPLATE_IDS].sort());
   });
 
   it('falls back to the default for anything it does not know', () => {
-    for (const bad of [undefined, null, '', 'marigold', 42, {}, 'AURA', 'constructor', '__proto__', 'toString']) expect(normalizeTemplate(bad)).toBe(DEFAULT_TEMPLATE);
+    for (const bad of [undefined, null, '', 'marigold', 42, {}, 'AURA', 'constructor', '__proto__', 'toString', 'lumen', 'onyx', 'pulse']) expect(normalizeTemplate(bad)).toBe(DEFAULT_TEMPLATE);
     for (const id of TEMPLATE_IDS) expect(normalizeTemplate(id)).toBe(id);
     expect(templateOption('nope').id).toBe(DEFAULT_TEMPLATE);
   });

@@ -43,12 +43,7 @@ const BASELINE: Record<string, [number, number]> = {
   'shell.css': [5, 3],
   'signin.css': [5, 0],
   'templates/base.css': [2, 1],
-  'templates/harbour.css': [2, 3],
-  'templates/lumen.css': [2, 1],
-  'templates/monsoon.css': [2, 1],
-  'templates/onyx.css': [2, 3],
-  'templates/verdant.css': [2, 4],
-  'templates/verse.css': [2, 1],
+  'templates/vinax.css': [2, 1],
   'tokens.css': [6, 6],
   'ui.css': [4, 1]
 };
