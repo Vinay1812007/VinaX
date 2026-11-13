@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.15': {
+    title: 'Sign in with your email and a password, not only Google',
+    changes: [
+      { type: 'improved', text: 'Create a VinaX account with just your email address: we email you a 6-digit code and you choose a password.' },
+      { type: 'improved', text: 'Signed up with Google? Set a password in Settings › Account › Password, then sign in with your email and password too.' },
+      { type: 'new', text: 'Forgot your password? Tap "Forgot password?" on the sign-in screen and we email you a code to set a new one.' },
+      { type: 'improved', text: 'Sign-in alert emails now say how to change your password if a sign-in wasn\'t you.' },
+    ],
+  },
   '1.13.14': {
     title: 'VinaX AI has Claude Haiku 4.5 next to Claude Haiku 5.5',
     changes: [
