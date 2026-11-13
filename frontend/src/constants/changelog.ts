@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.25': {
+    title: 'A new look for VinaX and a simpler way around',
+    changes: [
+      { type: 'new', text: 'VinaX has one new look, in the colours of its icon: deep plum, amber and pink, in dark, light and black.' },
+      { type: 'new', text: 'Home opens on the music: your languages, Jump back in, Trending now, then charts, new albums and radio.' },
+      { type: 'improved', text: 'A shorter sidebar (Home, Discover, Radio, VinaX AI), a search field in the top bar, and on phones the tabs Home, Search, Library and VinaX AI.' },
+      { type: 'improved', text: 'Badges, streaks, weekly goals, the quiz, the year recap and song reactions are gone.' },
+    ],
+  },
   '1.13.24': {
     title: 'Festival themes are gone: VinaX keeps your own look all year',
     changes: [
