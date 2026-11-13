@@ -36,10 +36,11 @@ import {
   useChartsTrendingPlaylists,
   useTrendingFeedSongs,
 } from '@/features/home/useCatalogFeeds';
-import type { Album, Playlist } from '@/types';
+import type { Album, Playlist, Song } from '@/types';
 import { CATALOGUE_TRENDING_PROVENANCE } from '@/features/home/useTrendingShelves';
 import { useShelfSafety } from '@/features/home/useShelfSafety';
 import '@/styles/pages/browse.css';
+import { songLine } from '@/utils/songLine';
 import { CATALOGUE_LIST_NOTE, CATALOGUE_LIST_TITLE, movementMarker, provenanceLine, sourceChips, sourceLine, verifiedView } from '@/services/trends/present';
 
 /**
@@ -188,7 +189,10 @@ function VerifiedCharts({ region }: { region: string }) {
     } else if (view.kind === 'unavailable') {
       body = <Notice retry={retry}>Public charts are unavailable right now.</Notice>;
     } else if (view.kind === 'not_connected') {
-      body = <Notice>No public chart is connected yet, so there is nothing verified to show. The lists below are popular songs in the catalogue, not a chart.</Notice>;
+      // v2 — nothing connected: no section at all. The catalogue list below
+      // already says it is "not a live chart", so an empty box leading the
+      // page only repeated that.
+      return null;
     } else {
       const lines = view.sources.map((s) => ({ id: s.id, stale: s.status === 'stale', text: sourceLine(s) })).filter((l) => l.text);
       const status = (
@@ -240,6 +244,17 @@ function VerifiedCharts({ region }: { region: string }) {
       {header}
       {body}
     </section>
+  );
+}
+
+/** A catalogue row's two lines, each saying a thing once (utils/songLine.ts). */
+function ChartRowText({ song }: { song: Song }) {
+  const line = songLine(song);
+  return (
+    <span className="min-w-0 flex-1">
+      <span className="vx-chart-title" title={line.title !== song.title ? song.title : undefined}>{line.title}</span>
+      <span className="vx-chart-sub">{[line.artist, line.album].filter(Boolean).join(' · ')}</span>
+    </span>
   );
 }
 
@@ -349,10 +364,7 @@ export default function ChartsPage() {
                         loading={i < 8 ? undefined : 'lazy'}
                         decoding="async"
                       />
-                      <span className="min-w-0 flex-1">
-                        <span className="vx-chart-title">{s.title}</span>
-                        <span className="vx-chart-sub">{s.subtitle}</span>
-                      </span>
+                      <ChartRowText song={s} />
                       <span className="vx-chart-plays">{fmtPlays(s.playCount)}</span>
                     </button>
                   </li>

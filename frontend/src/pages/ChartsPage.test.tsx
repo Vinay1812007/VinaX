@@ -115,11 +115,14 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ChartsPage', () => {
-  it('without a connected chart, says so and labels the catalogue lists as catalogue lists', async () => {
+  it('without a connected chart, shows no empty chart box and labels the catalogue lists as catalogue lists', async () => {
     fetchVerifiedTrends.mockResolvedValue({ generatedAt: iso(0), sources: [{ ...chartSource, status: 'not_configured', lastSuccessAt: null }, shortVideo, { ...editorialSource, status: 'not_configured', lastSuccessAt: null }], items: [] });
     mount();
-    expect(await screen.findByText(/No public chart is connected yet/)).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Popular in the catalogue' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Popular in the catalogue' })).toBeTruthy();
+    // v2 — nothing connected: no "Public charts" section leading the page with an empty box.
+    // (While it checks, the section shows "Checking public charts…"; once it knows, the section goes.)
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Public charts' })).toBeNull());
+    expect(screen.queryByText(/No public chart is connected yet/)).toBeNull();
     expect(screen.getByText(/not a live chart/)).toBeTruthy();
     expect(screen.getByText('Catalogue One')).toBeTruthy();
     // The disabled short-video source is never presented as a chart.

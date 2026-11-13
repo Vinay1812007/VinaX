@@ -92,12 +92,12 @@ html.light .vx-lt { --lt-card: rgb(var(--ink-950)); }
   min-height: 48px;
   margin-top: auto;
   padding: 0 22px;
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ember-500));
   color: var(--vx-on-accent);
   font-size: 15px;
   font-weight: 800;
-  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm), box-shadow 200ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard);
 }
 .vx-lt-cta:hover { background: rgb(var(--ember-400)); box-shadow: 0 10px 24px -12px rgb(var(--ember-500) / 0.8); }
 .vx-lt-cta:active { transform: scale(0.98); }
@@ -119,7 +119,7 @@ html.light .vx-lt { --lt-card: rgb(var(--ink-950)); }
   letter-spacing: 0.24em;
   text-transform: uppercase;
   font-variant-numeric: tabular-nums;
-  transition: box-shadow 140ms var(--ease-calm);
+  transition: box-shadow var(--dur-quick) var(--ease-standard);
 }
 .vx-lt-code-input::placeholder { color: rgb(var(--ink-600)); }
 .vx-lt-code-input:focus { outline: none; box-shadow: inset 0 0 0 2px rgb(var(--ember-500)); }
@@ -131,7 +131,7 @@ html.light .vx-lt { --lt-card: rgb(var(--ink-950)); }
   color: rgb(var(--ink-900));
   font-size: 15px;
   font-weight: 800;
-  transition: opacity 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+  transition: opacity var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-lt-join:hover { opacity: 0.9; }
 .vx-lt-join:active { transform: scale(0.98); }
@@ -172,7 +172,7 @@ html.light .vx-lt-room::before {
   gap: 10px;
   min-height: 30px;
   padding: 0 12px 0 10px;
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--tide-500) / 0.14);
   color: rgb(var(--tide-400));
   font-size: 12.5px;
@@ -280,7 +280,7 @@ html.reduce-motion .vx-lt-tap { animation: none; }
   min-height: 44px;
   max-width: 100%;
   padding: 0 8px 0 14px;
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ink-800) / 0.92);
   -webkit-backdrop-filter: blur(16px) saturate(1.3);
   backdrop-filter: blur(16px) saturate(1.3);
@@ -288,7 +288,7 @@ html.reduce-motion .vx-lt-tap { animation: none; }
   color: rgb(var(--ink-100));
   font-size: 13.5px;
   font-weight: 700;
-  transition: transform 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
+  transition: transform var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
 html.light .vx-lt-pill-link,
 html.light .vx-lt-pill-tap { background: rgb(var(--ink-950) / 0.94); box-shadow: inset 0 0 0 1px var(--glass-border-strong), 0 12px 26px -14px rgb(48 22 34 / 0.35); }
@@ -299,7 +299,7 @@ html.light .vx-lt-pill-tap { background: rgb(var(--ink-950) / 0.94); box-shadow:
 .vx-lt-pill[data-status='host-away'] .vx-lt-dot { color: rgb(var(--ember-400)); }
 .vx-lt-pill-code {
   padding: 4px 10px;
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ink-100) / 0.08);
   color: rgb(var(--ink-300));
   font-size: 12px;
@@ -353,7 +353,7 @@ html.reduce-motion .vx-lt-pill { animation: none; }
 .vx-lt-msg-meta { margin: 4px 10px 0; color: rgb(var(--ink-400)); font-size: 11px; font-variant-numeric: tabular-nums; }
 .vx-lt-msg-retry { min-height: 36px; padding: 0 10px; color: rgb(var(--tide-400)); font-size: 12.5px; font-weight: 750; }
 @media (prefers-reduced-motion: no-preference) {
-  .vx-lt-msg { animation: vx-lt-msg-in 180ms var(--ease-calm) both; }
+  .vx-lt-msg { animation: vx-lt-msg-in var(--dur-quick) var(--ease-standard) both; }
 }
 html.reduce-motion .vx-lt-msg { animation: none; }
 @keyframes vx-lt-msg-in { from { opacity: 0; translate: 0 6px; } to { opacity: 1; translate: 0 0; } }
@@ -377,19 +377,19 @@ html.reduce-motion .vx-lt-typing-dots i { animation: none; }
   color: var(--vx-on-accent);
   font-size: 15px;
   font-weight: 800;
-  transition: opacity 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+  transition: opacity var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-lt-send:active { transform: scale(0.97); }
 .vx-lt-send:disabled { opacity: 0.45; pointer-events: none; }
 
 /* 1.13 — "Instant": the live line is up. */
-.vx-lt-instant { padding: 2px 8px; border-radius: 9999px; background: rgb(var(--tide-500) / 0.22); font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.vx-lt-instant { padding: 2px 8px; border-radius: var(--radius-pill); background: rgb(var(--tide-500) / 0.22); font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
 
 /* 1.13 — the room's energy: reactions fill it, a full bar sets the room off. */
 .vx-lt-energy { margin-top: 18px; }
 .vx-lt-energy-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; }
 .vx-lt-energy-hint { color: rgb(var(--ink-300)); font-size: 12.5px; }
-.vx-lt-energy-bar { height: 8px; margin-top: 8px; overflow: hidden; border-radius: 9999px; background: rgb(var(--ink-100) / 0.1); }
+.vx-lt-energy-bar { height: 8px; margin-top: 8px; overflow: hidden; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.1); }
 .vx-lt-energy-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, rgb(var(--ember-500)), rgb(var(--tide-500))); transition: width 380ms var(--ease-calm); }
 html.reduce-motion .vx-lt-energy-bar i { transition: none; }
 
@@ -411,7 +411,7 @@ html.reduce-motion .vx-lt-energy-bar i { transition: none; }
   max-width: 132px;
   padding: 3px 9px;
   overflow: hidden;
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   background: rgb(0 0 0 / 0.6);
   color: #fff;
   font-size: 11.5px;
@@ -436,7 +436,7 @@ html.reduce-motion .vx-lt-energy-bar i { transition: none; }
   left: 50%;
   max-width: calc(100vw - 32px);
   padding: 12px 22px;
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   background: linear-gradient(90deg, rgb(var(--ember-500)), rgb(var(--tide-500)));
   box-shadow: 0 18px 44px -16px rgb(var(--ember-500) / 0.9);
   color: #fff;
@@ -452,7 +452,7 @@ html.reduce-motion .vx-lt-energy-bar i { transition: none; }
 html.reduce-motion .vx-lt-burst { animation-name: vx-lt-fade; }
 .vx-lt-code-input.is-chat { flex: 1; letter-spacing: 0; text-transform: none; font-family: inherit; font-size: 15px; text-align: left; }
 .vx-react-btn.is-skip { position: relative; font-size: 18px; }
-.vx-react-count { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: rgb(var(--ember-500)); color: var(--vx-on-accent); font-size: 11px; font-weight: 800; line-height: 18px; }
+.vx-react-count { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--radius-pill); background: rgb(var(--ember-500)); color: var(--vx-on-accent); font-size: 11px; font-weight: 800; line-height: 18px; }
 
 /* ============================================================ 1.13 */
 /* Join: the code field and its button, then "Scan the host's QR". */
@@ -471,7 +471,7 @@ html.reduce-motion .vx-lt-burst { animation-name: vx-lt-fade; }
   color: rgb(var(--ink-100));
   font-size: 14.5px;
   font-weight: 750;
-  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-lt-scan-btn:hover { background: rgb(var(--ink-100) / 0.1); }
 .vx-lt-scan-btn:active { transform: scale(0.98); }
@@ -494,7 +494,7 @@ html.reduce-motion .vx-lt-burst { animation-name: vx-lt-fade; }
   width: 100%;
   min-height: 48px;
   margin-top: 14px;
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ink-100) / 0.08);
   color: rgb(var(--ink-100));
   font-size: 15px;
@@ -513,7 +513,7 @@ html.reduce-motion .vx-lt-burst { animation-name: vx-lt-fade; }
   background: rgb(var(--ember-500) / 0.1);
   box-shadow: inset 0 0 0 1px rgb(var(--ember-500) / 0.28);
   color: rgb(var(--ink-100));
-  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-lt-app:active { transform: scale(0.99); }
 .vx-lt-app img { flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; }
@@ -523,7 +523,7 @@ html.reduce-motion .vx-lt-burst { animation-name: vx-lt-fade; }
 .vx-lt-app-go {
   flex-shrink: 0;
   padding: 8px 16px;
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ember-500));
   color: var(--vx-on-accent);
   font-size: 13px;
@@ -560,12 +560,12 @@ html.reduce-motion .vx-lt-burst { animation-name: vx-lt-fade; }
   align-items: center;
   min-height: 44px;
   padding: 0 18px;
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ink-100) / 0.09);
   color: rgb(var(--ink-100));
   font-size: 14px;
   font-weight: 750;
-  transition: background-color 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-ltp-pill:hover { background: rgb(var(--ink-100) / 0.15); }
 .vx-ltp-pill.is-danger { color: rgb(var(--tide-400)); }

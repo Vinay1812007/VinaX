@@ -56,7 +56,7 @@
   place-items: center;
   width: 44px;
   height: 44px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--vxf-disc);
   color: rgb(var(--ink-100));
   -webkit-backdrop-filter: blur(10px);
@@ -250,7 +250,7 @@ html.light .vx-flow-bg::after {
   min-height: 44px;
   padding: 0 18px;
   border: 1px solid var(--vxf-line);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--vxf-disc);
   color: rgb(var(--ink-100));
   font-size: 14px;
@@ -286,7 +286,7 @@ html.light .vx-flow-bg::after {
 .vx-flow-action > svg {
   box-sizing: content-box;
   padding: 11px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--vxf-disc);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
@@ -339,7 +339,7 @@ html.light .vx-flow-bg::after {
   gap: 8px;
   margin: 0;
   padding: 8px 14px 8px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ink-950) / 0.66);
   font-size: 13px;
   font-weight: 700;

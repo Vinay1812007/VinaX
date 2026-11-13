@@ -63,12 +63,12 @@ html.amoled .vx-settings { --set-card: rgb(var(--ink-850)); --set-inset: rgb(var
   gap: 12px;
   min-height: 44px;
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: rgb(var(--ink-400));
   font-size: 14px;
   font-weight: 650;
   text-align: left;
-  transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
+  transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-set-index-item svg { flex-shrink: 0; width: 18px; height: 18px; }
 .vx-set-index-item:hover { color: rgb(var(--ink-100)); background: var(--vx-hover); }
@@ -91,13 +91,13 @@ html.amoled .vx-settings { --set-card: rgb(var(--ink-850)); --set-inset: rgb(var
   flex-shrink: 0;
   min-height: 36px;
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: rgb(var(--ink-200));
   background: var(--set-fill);
   font-size: 13px;
   font-weight: 650;
   white-space: nowrap;
-  transition: background-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard), color var(--dur-quick) var(--ease-standard);
 }
 .vx-set-jump-item::after { content: ''; position: absolute; inset: -4px 0; }
 .vx-set-jump-item:hover { color: rgb(var(--ink-100)); background: var(--set-fill-hover); }
@@ -110,7 +110,7 @@ html.amoled .vx-settings { --set-card: rgb(var(--ink-850)); --set-inset: rgb(var
   z-index: 20;
   margin: 0 -12px 16px;
   padding: 8px 12px 12px;
-  transition: background-color 200ms var(--ease-calm), box-shadow 200ms var(--ease-calm);
+  transition: background-color var(--dur-base) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard);
 }
 /* Stuck: the same frosted band as the top bar it sits under. */
 .vx-set-search.is-stuck {
@@ -130,7 +130,7 @@ html.amoled .vx-settings { --set-card: rgb(var(--ink-850)); --set-inset: rgb(var
   background: var(--set-raised);
   font-size: 15px;
   font-weight: 500;
-  transition: border-color 140ms var(--ease-calm), box-shadow 140ms var(--ease-calm);
+  transition: border-color var(--dur-quick) var(--ease-standard), box-shadow var(--dur-quick) var(--ease-standard);
 }
 .vx-set-search input::placeholder { color: rgb(var(--ink-400)); }
 .vx-set-search input::-webkit-search-cancel-button { display: none; }
@@ -179,7 +179,7 @@ html.amoled .vx-settings { --set-card: rgb(var(--ink-850)); --set-inset: rgb(var
 .vx-set-section > .vx-set-rows > .vx-set-group:first-child { padding-top: 16px; }
 /* Fields inside a card sit recessed into it. */
 .vx-set-section .vx-set-input,
-.vx-set-section .vx-set-select { background: var(--set-inset); }
+.vx-set-section .vx-set-select { background-color: var(--set-inset); }
 @media (max-width: 767px) {
   .vx-set-section > .vx-set-rows { padding: 2px 16px; border-radius: 18px; }
 }
@@ -252,7 +252,7 @@ html.amoled .vx-settings { --set-card: rgb(var(--ink-850)); --set-inset: rgb(var
   width: calc(100% + 24px);
   padding-inline: 12px;
   border-radius: var(--vx-radius-card);
-  transition: background-color 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-set-rows > .vx-set-row.is-link::before { left: 12px; right: 12px; }
 .vx-set-row.is-link:hover { background: var(--vx-hover); }
@@ -285,10 +285,10 @@ html.amoled .vx-settings { --set-card: rgb(var(--ink-850)); --set-inset: rgb(var
   flex-shrink: 0;
   width: 48px;
   height: 28px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   /* ink-600: the off track keeps a 3:1 edge against the canvas in every theme. */
   background: rgb(var(--ink-600));
-  transition: background-color 180ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-settings [role='switch'][aria-checked='true'] { background: rgb(var(--ember-500)); }
 .vx-settings [role='switch'] > span {
@@ -300,7 +300,7 @@ html.amoled .vx-settings { --set-card: rgb(var(--ink-850)); --set-inset: rgb(var
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
-  transition: transform 180ms var(--ease-calm);
+  transition: transform var(--dur-quick) var(--ease-standard);
 }
 .vx-settings [role='switch'][aria-checked='true'] > span { transform: translateX(20px); }
 .vx-settings [role='switch']:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -312,19 +312,19 @@ html.amoled .vx-settings { --set-card: rgb(var(--ink-850)); --set-inset: rgb(var
   display: inline-flex;
   gap: 2px;
   padding: 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--set-fill);
 }
 .vx-settings .vx-seg-item {
   position: relative;
   min-height: 36px;
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: rgb(var(--ink-300));
   font-size: 13.5px;
   font-weight: 650;
   white-space: nowrap;
-  transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
+  transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-settings .vx-seg-item::after { content: ''; position: absolute; inset: -4px 0; }
 .vx-settings .vx-seg-item:hover { color: rgb(var(--ink-100)); }
@@ -349,7 +349,7 @@ html.light .vx-settings .vx-seg-item[aria-checked='true'] { color: rgb(var(--emb
   text-align: left;
   background: var(--set-fill);
   box-shadow: inset 0 0 0 1px transparent;
-  transition: background-color 140ms var(--ease-calm), box-shadow 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard), box-shadow var(--dur-quick) var(--ease-standard);
 }
 .vx-set-choice:hover { background: var(--set-fill-hover); }
 .vx-set-choice[aria-checked='true'] { background: var(--vx-accent-wash); box-shadow: inset 0 0 0 2px rgb(var(--ember-500)); }
@@ -362,7 +362,7 @@ html.light .vx-settings .vx-seg-item[aria-checked='true'] { color: rgb(var(--emb
   height: 20px;
   border: 2px solid rgb(var(--ink-400));
   border-radius: 50%;
-  transition: border-color 140ms var(--ease-calm), border-width 140ms var(--ease-calm);
+  transition: border-color var(--dur-quick) var(--ease-standard), border-width var(--dur-quick) var(--ease-standard);
 }
 .vx-set-choice[aria-checked='true'] .vx-set-choice-radio { border: 6px solid rgb(var(--ember-500)); background: var(--vx-on-accent); }
 .vx-set-choice-line { display: block; color: rgb(var(--ink-300)); font-size: 13px; font-weight: 500; line-height: 1.45; }
@@ -386,6 +386,22 @@ html.light .vx-settings .vx-seg-item[aria-checked='true'] { color: rgb(var(--emb
   font-weight: 500;
 }
 .vx-set-select { max-width: 200px; cursor: pointer; }
+/* v2 — the select draws its own chevron (the browser's arrow ignored the
+   theme and sat against the edge) and reads as one of the pill controls. */
+.vx-set-select {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 34px;
+  border-radius: var(--radius-pill);
+  font-weight: 650;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='%23a397a6' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.5 1.5 6 6l4.5-4.5'/%3E%3C/svg%3E");
+  background-position: right 14px center;
+  background-size: 12px 8px;
+  background-repeat: no-repeat;
+  transition: border-color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
+}
+.vx-set-select:hover:not(:disabled) { border-color: var(--line-3); }
+.vx-set-select:disabled { opacity: 0.5; cursor: not-allowed; }
 .vx-set-input:focus-visible,
 .vx-set-select:focus-visible { border-color: rgb(var(--ember-500) / 0.7); box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.2); outline: none; }
 .vx-set-color {
@@ -405,13 +421,13 @@ html.light .vx-settings .vx-seg-item[aria-checked='true'] { color: rgb(var(--emb
   flex-shrink: 0;
   min-height: 36px;
   padding: 0 16px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: rgb(var(--ink-100));
   background: var(--set-fill);
   font-size: 13.5px;
   font-weight: 700;
   white-space: nowrap;
-  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-set-btn:hover { background: var(--set-fill-hover); }
 .vx-set-btn:active { transform: scale(0.97); }
@@ -428,7 +444,7 @@ html.light .vx-settings .vx-seg-item[aria-checked='true'] { color: rgb(var(--emb
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  transition: transform 140ms var(--ease-calm), box-shadow 140ms var(--ease-calm);
+  transition: transform var(--dur-quick) var(--ease-standard), box-shadow var(--dur-quick) var(--ease-standard);
 }
 .vx-set-swatch::after { content: ''; position: absolute; inset: -6px; }
 .vx-set-swatch:hover { transform: scale(1.06); }
@@ -513,7 +529,7 @@ html.light .vx-settings .vx-seg-item[aria-checked='true'] { color: rgb(var(--emb
 .vx-settings-erase .vx-sheet-actions { flex-shrink: 0; }
 .vx-erase-list li::before { content: ''; flex-shrink: 0; width: 5px; height: 5px; margin-top: 7px; border-radius: 50%; background: var(--vx-danger); }
 .vx-erase-confirm {
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: rgb(var(--ink-950));
   background: var(--vx-danger);
   font-size: 14px;
@@ -541,7 +557,7 @@ html.reduce-motion .vx-settings *, html.reduce-motion .vx-settings *::before, ht
   background: rgb(var(--ink-100) / 0.04);
   box-shadow: inset 0 0 0 1px var(--vx-border);
   text-align: left;
-  transition: transform 140ms var(--ease-calm), box-shadow 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
+  transition: transform var(--dur-quick) var(--ease-standard), box-shadow var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-tpl-card:hover { background: rgb(var(--ink-100) / 0.07); }
 .vx-tpl-card:active { transform: scale(0.98); }
@@ -627,7 +643,7 @@ html.reduce-motion .vx-settings *, html.reduce-motion .vx-settings *::before, ht
 /* Verse: artwork bleeding over the top, round art, a capsule mini player, a coral bubble tab. */
 .vx-tpl-card[data-tpl='verse'] .vx-tpl-preview { --r-art: 50%; background: radial-gradient(90% 60% at 50% 0%, color-mix(in srgb, var(--tpl-a) 40%, transparent), transparent 70%), var(--tpl-c); }
 .vx-tpl-card[data-tpl='verse'] .vx-tpl-title { width: 60%; height: 12px; border-radius: 6px; }
-.vx-tpl-card[data-tpl='verse'] .vx-tpl-mini { left: 12px; right: 12px; border-radius: 999px; }
+.vx-tpl-card[data-tpl='verse'] .vx-tpl-mini { left: 12px; right: 12px; border-radius: var(--radius-pill); }
 .vx-tpl-card[data-tpl='verse'] .vx-tpl-mini i { border-radius: 50%; }
 .vx-tpl-card[data-tpl='verse'] .vx-tpl-mini b { background: var(--tpl-a); }
 .vx-tpl-card[data-tpl='verse'] .vx-tpl-dock { background: linear-gradient(180deg, transparent, var(--tpl-c)); }
@@ -635,7 +651,7 @@ html.reduce-motion .vx-settings *, html.reduce-motion .vx-settings *::before, ht
 .vx-tpl-card[data-tpl='verse'] .vx-tpl-dock i:nth-child(1) { top: 3px; width: 12px; height: 12px; margin-left: -3px; background: linear-gradient(120deg, var(--tpl-a), var(--tpl-b)); }
 /* Onyx: a chip row, square art, a full-width mini player with a red edge, a black tab bar. */
 .vx-tpl-card[data-tpl='onyx'] .vx-tpl-preview { --r-art: 1px; }
-.vx-tpl-card[data-tpl='onyx'] .vx-tpl-title { width: 26px; height: 9px; border-radius: 999px; box-shadow: 32px 0 0 rgb(255 255 255 / 0.18), 64px 0 0 rgb(255 255 255 / 0.18), 96px 0 0 rgb(255 255 255 / 0.18); }
+.vx-tpl-card[data-tpl='onyx'] .vx-tpl-title { width: 26px; height: 9px; border-radius: var(--radius-pill); box-shadow: 32px 0 0 rgb(255 255 255 / 0.18), 64px 0 0 rgb(255 255 255 / 0.18), 96px 0 0 rgb(255 255 255 / 0.18); }
 .vx-tpl-card[data-tpl='onyx'] .vx-tpl-arts { top: 32px; height: 34px; }
 .vx-tpl-card[data-tpl='onyx'] .vx-tpl-arts i { width: 34px; height: 34px; }
 .vx-tpl-card[data-tpl='onyx'] .vx-tpl-lines { top: 72px; }

@@ -1436,6 +1436,13 @@ The UI is being rebuilt on one system, phase by phase. Phase 1 adds the base; pa
   - **Artists without a photo** get a monogram (initials on a hue from their name) instead of the wave art; `MediaCard` falls back to it when the photo fails too.
   - **Browse grid on Search and Discover.** The Charts lane spans two columns again; a `:first-child` rule outranked it and cut off the first destination.
   - **"Made for you" card on Home** used `--vx-accent-rgb`, which is never defined, so it was always pink. It now follows the accent. `signin.css` and `public.css` still have the same bug; that is Phase 9.
+- **Listener pages B (Phase 5):** the rest of the listener pages were checked against live data.
+  - **Charts.** With no outside chart connected, the "Public charts" section no longer opens the page with an empty box; the catalogue list below it already says "not a live chart". Catalogue rows read through `songLine`, like `SongRow`.
+  - **Discover and Search browse grid.** At six tiles a row, a destination stacks its icon above the words and its line may wrap to two, instead of "New Relea…" and "Fresh albums…".
+  - **Settings selects** (`.vx-set-select`) are pills with their own chevron. A `background` shorthand in `.vx-set-section .vx-set-select` would have erased it; it is now `background-color`.
+  - **Legacy `.btn-primary`, `.btn-secondary` and `.btn-premium`** share `<Button>`'s timing, pill radius and spring press (`--press-scale`), so the about 120 call sites behave like the primitive without being rewritten.
+  - **Token pass** over `settings`, `radio`, `flow`, `festivals`, `together` and `language-picker.css`.
+  - Moving the roughly 20 hand-built dialogs onto `Dialog` is left for the cleanup phase; VinaX AI's dialogs come with Phase 8.
 - **Festival takeover (prototype):** `html.vx-takeover.fest-<id>` re-pitches the whole palette. That covers all eleven ink steps, both brand ramps, the hairlines, a player seek gradient (`--player-seek`) and the mark's ornament (`--fest-ornament`).
   - For now it is only on `/design` (Diwali and Christmas, in `styles/pages/design.css`). Phase 6 generates it for every festival.
   - The class is `vx-`, not `fest-`, because `FestiveSplash` removes every `fest-*` class it did not set.

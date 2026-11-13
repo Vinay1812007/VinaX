@@ -6,14 +6,14 @@ html.light .vxf-live { background: radial-gradient(120% 120% at 0% 0%, color-mix
 @keyframes vxf-shine { 0%, 55% { transform: translateX(-60%); } 100% { transform: translateX(60%); } }
 .vxf-live .fest-emblem { width: 112px; height: 112px; filter: drop-shadow(0 10px 30px color-mix(in srgb, var(--vxf-a) 55%, transparent)); animation: vxf-float 5s ease-in-out infinite; }
 @keyframes vxf-float { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-8px) rotate(2deg); } }
-.vxf-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; background: rgb(var(--ink-100) / 0.08); color: rgb(var(--ink-100)); }
+.vxf-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: var(--radius-pill); font-size: 11.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; background: rgb(var(--ink-100) / 0.08); color: rgb(var(--ink-100)); }
 .vxf-pill.is-live { background: color-mix(in srgb, var(--vxf-a) 24%, transparent); color: var(--vxf-a); }
 .vxf-pill.is-live i { width: 8px; height: 8px; border-radius: 50%; background: var(--vxf-a); box-shadow: 0 0 0 0 color-mix(in srgb, var(--vxf-a) 60%, transparent); animation: vxf-pulse 1.6s ease-out infinite; }
 @keyframes vxf-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--vxf-a) 60%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
 .vxf-live h2 { margin: 10px 0 4px; font-family: var(--vx-font-display); font-size: clamp(1.6rem, 4.5vw, 2.4rem); font-weight: 800; line-height: 1.1; letter-spacing: -0.01em; }
 .vxf-live p { margin: 0; color: rgb(var(--ink-300)); line-height: 1.5; max-width: 60ch; }
 .vxf-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
-.vxf-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 18px; border-radius: 999px; font-weight: 700; font-size: 14px; border: 1px solid rgb(var(--ink-100) / 0.14); color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.05); transition: transform 140ms var(--ease-calm), background-color 140ms var(--ease-calm); }
+.vxf-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 18px; border-radius: var(--radius-pill); font-weight: 700; font-size: 14px; border: 1px solid rgb(var(--ink-100) / 0.14); color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.05); transition: transform var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard); }
 .vxf-btn:hover { transform: translateY(-1px); background: rgb(var(--ink-100) / 0.1); }
 .vxf-btn.is-primary { border-color: transparent; background: linear-gradient(90deg, var(--vxf-a), var(--vxf-b)); color: #1a0f08; }
 html.light .vxf-btn { border-color: rgb(var(--ink-900) / 0.14); color: rgb(var(--ink-900)); background: rgb(var(--ink-900) / 0.04); }
@@ -24,7 +24,7 @@ html.light .vxf-clock > div { background: rgb(var(--ink-900) / 0.05); border-col
 .vxf-clock b { display: block; font-size: 26px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; color: var(--vxf-a); }
 .vxf-clock small { display: block; margin-top: 4px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: rgb(var(--ink-400)); }
 .vxf-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
-.vxf-card { --vxf-a: #ffa42e; --vxf-b: #ff6384; position: relative; overflow: hidden; display: grid; grid-template-columns: 56px 1fr; gap: 12px; align-items: center; padding: 14px; border-radius: 20px; border: 1px solid rgb(var(--ink-100) / 0.09); background: linear-gradient(135deg, color-mix(in srgb, var(--vxf-a) 18%, transparent), rgb(var(--ink-900) / 0.5) 70%); transition: transform 180ms var(--ease-calm), border-color 180ms var(--ease-calm); text-align: left; }
+.vxf-card { --vxf-a: #ffa42e; --vxf-b: #ff6384; position: relative; overflow: hidden; display: grid; grid-template-columns: 56px 1fr; gap: 12px; align-items: center; padding: 14px; border-radius: 20px; border: 1px solid rgb(var(--ink-100) / 0.09); background: linear-gradient(135deg, color-mix(in srgb, var(--vxf-a) 18%, transparent), rgb(var(--ink-900) / 0.5) 70%); transition: transform var(--dur-quick) var(--ease-standard), border-color var(--dur-quick) var(--ease-standard); text-align: left; }
 html.light .vxf-card { background: linear-gradient(135deg, color-mix(in srgb, var(--vxf-a) 16%, transparent), rgb(255 255 255 / 0.75) 70%); }
 .vxf-card:hover { transform: translateY(-3px) rotate(-0.4deg); border-color: color-mix(in srgb, var(--vxf-a) 60%, transparent); }
 .vxf-card::after { content: ''; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 45%, rgb(255 255 255 / 0.12) 50%, transparent 55%); transform: translateX(-120%); transition: transform 600ms ease; pointer-events: none; }
@@ -33,9 +33,9 @@ html.light .vxf-card { background: linear-gradient(135deg, color-mix(in srgb, va
 .vxf-card-name { display: block; font-weight: 800; font-size: 15px; line-height: 1.2; }
 .vxf-card-when { display: block; margin-top: 3px; font-size: 12.5px; color: rgb(var(--ink-300)); }
 .vxf-card-fx { display: block; margin-top: 3px; font-size: 12px; color: var(--vxf-a); }
-.vxf-card-days { display: inline-block; margin-left: 4px; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--vxf-a) 22%, transparent); color: var(--vxf-a); vertical-align: middle; }
+.vxf-card-days { display: inline-block; margin-left: 4px; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--vxf-a) 22%, transparent); color: var(--vxf-a); vertical-align: middle; }
 .vxf-card-tools { grid-column: 1 / -1; display: flex; gap: 8px; }
-.vxf-card-tools button, .vxf-card-tools a { font-size: 12px; font-weight: 700; padding: 6px 10px; border-radius: 999px; border: 1px solid rgb(var(--ink-100) / 0.12); color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.05); text-decoration: none; }
+.vxf-card-tools button, .vxf-card-tools a { font-size: 12px; font-weight: 700; padding: 6px 10px; border-radius: var(--radius-pill); border: 1px solid rgb(var(--ink-100) / 0.12); color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.05); text-decoration: none; }
 .vxf-card-tools button:hover, .vxf-card-tools a:hover { background: rgb(var(--ink-100) / 0.12); }
 .vxf-card-tools .is-on { border-color: var(--vxf-a); color: var(--vxf-a); }
 html.light .vxf-card-tools button, html.light .vxf-card-tools a { border-color: rgb(var(--ink-900) / 0.14); color: rgb(var(--ink-900)); background: rgb(var(--ink-900) / 0.04); }

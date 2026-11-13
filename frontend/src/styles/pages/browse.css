@@ -457,6 +457,12 @@ html.light .vx-browse .bx-tile[aria-pressed='true'] { --bx-wash: 0.32; }
      outranks a plain `.is-lane`, which left Charts one column wide and pushed the
      first destination row onto the end of the lane row, cut off (v2 fix). */
   .vx-browse .bx-dests > :is(.is-lane, .is-lane:first-child) { grid-column: span 2; }
+  /* Six to a row leaves a destination ~170px: the icon goes above the words
+     and the line may wrap to two, instead of cutting "New Releases" to
+     "New Relea…" and "Fresh albums and songs" to "Fresh albums…" (v2). */
+  .vx-browse .bx-dests:not(.is-thirds) .bx-dest { flex-direction: column; align-items: flex-start; gap: 12px; padding: 14px; }
+  .vx-browse .bx-dests:not(.is-thirds) .bx-dest-text { align-self: stretch; }
+  .vx-browse .bx-dests:not(.is-thirds) .bx-dest-meta { display: -webkit-box; white-space: normal; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   /* Rows only (Explore): three to a line. */
   .vx-browse .bx-dests.is-thirds { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }

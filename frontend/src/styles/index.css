@@ -778,10 +778,11 @@ button:active:not(:disabled) { filter: brightness(.96); }
   letter-spacing: -0.005em;
   border: 1px solid rgb(var(--ember-500));
   /* 9.0 — every action is a pill. */
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   white-space: nowrap;
-  transition: transform 140ms var(--ease-calm), background-color 140ms var(--ease-calm),
-    border-color 140ms var(--ease-calm);
+  /* Design system v2: the same timing and spring press as <Button> (components/ui). */
+  transition: transform var(--dur-quick) var(--ease-spring), background-color var(--dur-quick) var(--ease-standard),
+    border-color var(--dur-quick) var(--ease-standard);
 }
 .btn-primary:hover,
 .btn-premium:hover {
@@ -790,7 +791,7 @@ button:active:not(:disabled) { filter: brightness(.96); }
 }
 .btn-primary:active,
 .btn-premium:active {
-  transform: scale(0.98);
+  transform: scale(var(--press-scale));
   background: rgb(var(--ember-500));
 }
 .btn-primary:disabled,
@@ -809,17 +810,17 @@ button:active:not(:disabled) { filter: brightness(.96); }
   color: rgb(var(--ink-100));
   font-weight: 650;
   letter-spacing: -0.005em;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   white-space: nowrap;
-  transition: transform 140ms var(--ease-calm), background-color 140ms var(--ease-calm),
-    border-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
+  transition: transform var(--dur-quick) var(--ease-spring), background-color var(--dur-quick) var(--ease-standard),
+    border-color var(--dur-quick) var(--ease-standard), color var(--dur-quick) var(--ease-standard);
 }
 .btn-secondary:hover {
   background: var(--vx-hover, rgb(var(--ink-100) / 0.06));
   border-color: rgb(var(--ink-100) / 0.5);
   color: rgb(var(--ink-100));
 }
-.btn-secondary:active { transform: scale(0.98); }
+.btn-secondary:active { transform: scale(var(--press-scale)); }
 
 button:disabled,
 .btn-primary:disabled,

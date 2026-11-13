@@ -57,10 +57,10 @@ html.light .vx-langpick { background-color: rgb(255 255 255 / 0.98); }
   padding: 12px 16px 16px;
   background: inherit;
 }
-.vx-langpick-clear { min-height: 40px; padding: 0 14px; border-radius: 999px; font-weight: 700; color: rgb(var(--ink-300)); }
+.vx-langpick-clear { min-height: 40px; padding: 0 14px; border-radius: var(--radius-pill); font-weight: 700; color: rgb(var(--ink-300)); }
 .vx-langpick-clear:hover:not(:disabled) { color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.08); }
 .vx-langpick-clear:disabled { opacity: 0.4; }
-.vx-langpick-update { min-height: 40px; padding: 0 22px; border-radius: 999px; }
+.vx-langpick-update { min-height: 40px; padding: 0 22px; border-radius: var(--radius-pill); }
 .vx-langpick-update:disabled { opacity: 0.5; cursor: default; }
 @media (max-width: 767px) {
   .vx-langpick {
