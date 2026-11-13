@@ -132,11 +132,17 @@ test.describe('console shell', () => {
     await mockConsole(page);
     await signedIn(page);
     await page.goto('/admin/#/dashboard');
+    // The shortcut only works once the console is on screen (app.js ignores
+    // it while the sign-in check is still running): wait for the page first.
+    await expect(page.locator('#pageTitle')).toHaveText('Dashboard');
     await page.keyboard.press('Control+k');
     await expect(page.locator('.palette input')).toBeFocused();
     await page.keyboard.type('notification rules');
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/#\/notification-rules/);
+    // A second press is ignored while the first palette is still closing.
+    await expect(page.locator('.palette')).toHaveCount(0);
+    await expect(page.locator('#pageTitle')).toHaveText('Notification Rules');
     await page.keyboard.press('Control+k');
     await expect(page.locator('.palette input')).toBeFocused();
     await page.keyboard.type('google search');
