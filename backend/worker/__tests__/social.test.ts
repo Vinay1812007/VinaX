@@ -35,7 +35,7 @@ describe('/api/profile', () => {
     const put = await profile.onRequestPut({ request: await req('/api/profile', 'PUT', { handle: 'Asha_01', public: true, bio: 'x'.repeat(400), summary: { topArtists: [{ name: 'Sid Sriram', plays: 12.4 }, { name: '' }], topLanguages: [{ id: 'telugu', pct: 140 }], recentLikes: [{ id: 's1', title: 'T', subtitle: 'A', image: 'i', junk: 'no' }, { nope: 1 }], badges: ['first-note', 'night-owl', 'Bad Id', 7, 'night-owl'] }, nowPlaying: { id: 's2', title: 'Now' }, shareNow: true }), env: ENV });
     expect(put.status).toBe(200);
     const body = (await put.json()) as { profile: Record<string, unknown> };
-    expect(body.profile).toMatchObject({ handle: 'asha_01', name: 'Asha', public: true, topArtists: [{ name: 'Sid Sriram', plays: 12 }], topLanguages: [{ id: 'telugu', pct: 100 }], nowPlaying: { id: 's2', title: 'Now' }, badges: ['first-note', 'night-owl'] });
+    expect(body.profile).toMatchObject({ handle: 'asha_01', name: 'Asha', public: true, topArtists: [{ name: 'Sid Sriram', plays: 12 }], topLanguages: [{ id: 'telugu', pct: 100 }], nowPlaying: { id: 's2', title: 'Now' }, badges: [] });
     expect((body.profile.bio as string).length).toBe(160);
     expect(body.profile.recentLikes).toEqual([{ id: 's1', title: 'T', subtitle: 'A', image: 'i' }]);
     expect(fake.rows('profiles')[0]).toMatchObject({ account_id: 'a1', handle: 'asha_01' });

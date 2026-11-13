@@ -1,6 +1,8 @@
 /**
  * GET /api/auth/me   (Authorization: Bearer <session>, x-vinax-device?)
- *   → 200 { user }               the account as the database has it (schema 20: with `hasPassword`)
+ *   → 200 { user }               the account as the database has it (schema 20: with `hasPassword`;
+ *                                2.0: `admin: true` when its email is on Admins & Roles, so the app
+ *                                can show its Admin link — the console still signs in on its own)
  *   → 200 { ok: true }           no database on this Worker: the session alone stands
  *   → 401 { error: 'signed_out' } bad session, or the account row is gone (deleted)
  *   → 401 { error: 'signed_out', reason: 'blocked' }      the owner blocked this person
@@ -23,8 +25,9 @@ import { db, dbConfigured, q, type DbEnv } from '../../_lib/db';
 import { DEVICE_HEADER, verifiedIdentity, type IdentityEnv } from '../../_lib/identity';
 import { accountFacts, accountOf, CORS, handleOf, json, linkDevice, publicUser, type AccountRow } from '../../_lib/authShared';
 import { hasPassword } from '../../_lib/signIn';
+import { adminRowOf, normEmail, type AdminSessionEnv } from '../../_lib/adminAuth';
 
-type Env = AuthEnv & DbEnv & IdentityEnv;
+type Env = AuthEnv & DbEnv & IdentityEnv & AdminSessionEnv;
 
 /** How stale last_seen may get before a session check refreshes it. */
 export const TOUCH_MS = 10 * 60_000;
@@ -75,8 +78,13 @@ export const onRequestGet = async (ctx: { request: Request; env: Env; waitUntil?
   const touch = touchAccount(request, env, row).catch(() => false);
   if (ctx.waitUntil) ctx.waitUntil(touch);
   else await touch;
-  const [handle, password] = await Promise.all([handleOf(env, row.listener_id), hasPassword(env, row.id)]);
-  return json({ user: { ...publicUser(row, handle), hasPassword: password } });
+  const email = normEmail(row.email);
+  const [handle, password, adminRow] = await Promise.all([
+    handleOf(env, row.listener_id),
+    hasPassword(env, row.id),
+    email ? adminRowOf(env, email).catch(() => null) : Promise.resolve(null),
+  ]);
+  return json({ user: { ...publicUser(row, handle), hasPassword: password, ...(adminRow ? { admin: true } : {}) } });
 };
 
 export const onRequestPost = async (ctx: { request: Request; env: Env }): Promise<Response> => {

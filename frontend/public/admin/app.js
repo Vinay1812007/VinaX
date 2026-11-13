@@ -14,10 +14,11 @@
   var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt, $ = function (id) { return document.getElementById(id); };
 
   /** Sidebar groups, top to bottom, with the icon each shows when the menu is collapsed. */
-  var GROUPS = ['Overview', 'Users', 'Music Stats', 'Audience', 'Search & Library', 'Notifications', 'App Settings', 'App Health', 'Growth & SEO', 'System'];
+  /* 2.0 — eight sections (core.js folds the old group names into these). */
+  var GROUPS = ['Home', 'People', 'Music', 'Notifications', 'App Settings', 'Health', 'Growth', 'System'];
   var GROUP_ICONS = {
-    Overview: 'grid', Users: 'users', 'Music Stats': 'growth', Audience: 'globe', 'Search & Library': 'library',
-    Notifications: 'bell', 'App Settings': 'settings', 'App Health': 'pulse', 'Growth & SEO': 'target', System: 'database'
+    Home: 'grid', People: 'users', Music: 'music', Notifications: 'bell',
+    'App Settings': 'settings', Health: 'pulse', Growth: 'target', System: 'database'
   };
   var THEME_KEY = 'vinax_admin_theme';
   var AUTO_KEY = 'vinax_admin_auto';
@@ -80,7 +81,7 @@
     var light = pref === 'light' || (pref === 'system' && !!(mql && mql.matches));
     document.documentElement.classList.toggle('light', light);
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', light ? '#eaf0f7' : '#070b14');
+    if (meta) meta.setAttribute('content', light ? '#faf5ed' : '#0d090f');
   }
   if (mql && mql.addEventListener) mql.addEventListener('change', function () { if (themePref() === 'system') { applyTheme(); rerender(); } });
   var themeSel = $('themeSel');

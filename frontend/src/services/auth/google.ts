@@ -37,6 +37,8 @@ export interface AccountUser {
   username: string | null;
   /** Schema 20: the account can also sign in with its email and a password. */
   hasPassword?: boolean;
+  /** 2.0 — the account's email is on the console's Admins & Roles (shows the Admin link; the console signs in on its own). */
+  admin?: boolean;
 }
 /** How this device signed in. */
 export type SignInVia = 'google' | 'password' | 'email';
@@ -278,7 +280,8 @@ export function validateSession(fetchImpl: typeof fetch = fetch): Promise<boolea
         const j = (await res.json()) as { user?: AccountUser };
         const latest = currentAccount();
         if (j.user && latest && latest.session === a.session) {
-          const user: AccountUser = { ...latest.user, ...j.user, picture: j.user.picture ?? latest.user.picture };
+          // `admin` follows the server each time: a removed admin loses the link.
+          const user: AccountUser = { ...latest.user, ...j.user, picture: j.user.picture ?? latest.user.picture, admin: j.user.admin === true };
           if (JSON.stringify(user) !== JSON.stringify(latest.user)) setAccount({ ...latest, user });
         }
       }

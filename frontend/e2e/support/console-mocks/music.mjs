@@ -66,16 +66,8 @@ function listening(days) {
   };
 }
 
-// Schema 19 — Song Reactions (GET /api/admin/reactions).
-const reactions = (days) => ({
-  configured: true, days, total: 412, prevTotal: 350, people: 188, songs: 57,
-  byEmoji: [{ emoji: 'fire', n: 160 }, { emoji: 'love', n: 130 }, { emoji: 'dance', n: 62 }, { emoji: 'wow', n: 40 }, { emoji: 'sad', n: 20 }],
-  top: songs.map((s, i) => ({ id: s.id, title: s.title, artist: s.artist, image: s.image, language: ['telugu', 'telugu', 'hindi', 'telugu', 'tamil', 'telugu'][i], total: 120 - i * 15, counts: { fire: 50 - i * 6, love: 40 - i * 5, dance: 20 - i * 3, wow: 7, sad: 3 } })),
-  byDay: Array.from({ length: Math.min(days, 30) }, (_, i) => ({ day: day(Math.min(days, 30) - 1 - i), n: 8 + ((i * 5) % 11) })),
-});
 
 export default {
-  'GET /api/admin/reactions': (url) => reactions(Number(url.searchParams.get('days')) || 30),
   'GET /api/admin/feedback': (url) => {
     const status = url.searchParams.get('status') || 'new';
     const kind = url.searchParams.get('kind');

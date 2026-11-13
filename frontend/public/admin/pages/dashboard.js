@@ -29,8 +29,9 @@
      made wider or narrower, and hidden. The layout is kept in this browser,
      per admin email. Unknown or new cards fall back to the default order. */
   var WIDGETS = [
-    { id: 'attention', title: 'Needs your attention', size: 'full', sizes: ['full', 'wide'] },
     { id: 'today', title: 'Right now and today', size: 'full', sizes: ['full'] },
+    { id: 'attention', title: 'Needs your attention', size: 'wide', sizes: ['full', 'wide'] },
+    { id: 'quick', title: 'Quick actions', size: 'normal', sizes: ['normal', 'wide', 'full'] },
     { id: 'map', title: 'Where people are listening', size: 'full', sizes: ['full', 'wide'] },
     { id: 'usage', title: 'How many people use the app', size: 'full', sizes: ['full'] },
     { id: 'watch', title: 'Things to keep an eye on', size: 'full', sizes: ['full'] },
@@ -163,6 +164,22 @@
     var group = function (title, stats) { return h('div.dash-group', h('h3.subhead.dash-head', title), ui.stats(stats)); };
     return {
       attention: function () { return ui.card({ title: 'Needs your attention', body: ui.attention(attention) }); },
+      // 2.0 — the jobs an admin comes here for, one tap each. Changes are for
+      // editors and owners: a viewer sees only the read-only ones.
+      quick: function () {
+        var actions = [
+          { label: 'Send a notification', icon: 'send', page: 'send-notification', edit: true },
+          { label: 'Edit the home screen', icon: 'layout', page: 'app-settings/home-screen', edit: true },
+          { label: 'Block a song or album', icon: 'lock', page: 'blocked-music', edit: true },
+          { label: 'Turn on maintenance', icon: 'wrench', page: 'app-settings/maintenance', edit: true },
+          { label: 'See app errors', icon: 'alert', page: 'app-errors' },
+          { label: 'Read feedback', icon: 'inbox', page: 'feedback' },
+          { label: 'Invite an admin', icon: 'shield', page: 'admins', owner: true }
+        ].filter(function (a) { return a.owner ? VX.can('owner') : !a.edit || VX.can('edit'); });
+        return ui.card({ title: 'Quick actions', body: h('div.dash-quick', actions.map(function (a, i) {
+          return ui.button(a.label, { kind: i === 0 && a.edit ? 'primary' : 'ghost', icon: a.icon, onClick: go(a.page) });
+        })) });
+      },
       today: function () {
         return group('Right now and today', [
           { label: 'Listening right now', value: fmt.num(k.activeNow), sub: fmt.num(k.playingNow) + ' playing a song', tone: num(k.activeNow) ? 'ok' : null,

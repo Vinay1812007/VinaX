@@ -41,7 +41,6 @@ import * as m_api_admin_content from './functions/api/admin/content';
 import * as m_api_admin_settings from './functions/api/admin/settings';
 import * as m_api_admin_experiments from './functions/api/admin/experiments';
 import * as m_api_admin_push from './functions/api/admin/push';
-import * as m_api_admin_reactions from './functions/api/admin/reactions';
 import * as m_api_admin_notifications from './functions/api/admin/notifications';
 import * as m_api_admin_audit from './functions/api/admin/audit';
 import * as m_api_admin_database from './functions/api/admin/database';
@@ -195,7 +194,6 @@ const EXACT: Record<string, Mod> = {
   '/api/admin/settings': m_api_admin_settings,
   '/api/admin/experiments': m_api_admin_experiments,
   '/api/admin/push': m_api_admin_push,
-  '/api/admin/reactions': m_api_admin_reactions,
   '/api/admin/notifications': m_api_admin_notifications,
   '/api/admin/audit': m_api_admin_audit,
   '/api/admin/database': m_api_admin_database,
