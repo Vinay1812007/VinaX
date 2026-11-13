@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/utils/cn';
 import { artSrcSet, bestImage, derivedVariants, FALLBACK_ART } from '@/utils/images';
@@ -24,6 +24,15 @@ const RECS_DEBUG =
 // fetchpriority=high from this small module budget; every card after them
 // (and every later SPA route, budget already spent) stays lazy as before.
 let eagerBudget = 6;
+
+/** Initials and a hue for an artist with no photo (stable per name). */
+function monogram(name: string): { initials: string; hue: number } {
+  const words = name.replace(/[^\p{L}\p{N}\s]/gu, ' ').trim().split(/\s+/).filter(Boolean);
+  const initials = ((words[0]?.[0] ?? '') + (words.length > 1 ? words[words.length - 1][0] : '')).toUpperCase() || '♪';
+  let h = 0;
+  for (let i = 0; i < name.length; i += 1) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return { initials, hue: h % 360 };
+}
 
 interface Props {
   to: string;
@@ -54,6 +63,10 @@ export function MediaCard({ to, image, images, title, subtitle, round, fluid, on
   // URL rewriting per variant — only redo it when the variants change, not on
   // every favourite/hover re-render of a shelf full of cards.
   const dv = useMemo(() => (images ? derivedVariants(images) : undefined), [images]);
+  // v2 — a person with no photo gets their initials, not the generic wave art.
+  const firstSrc = (dv ? bestImage(dv, 250) : image) || FALLBACK_ART;
+  const [noPhoto, setNoPhoto] = useState(false);
+  const mono = round && (noPhoto || firstSrc === FALLBACK_ART) ? monogram(title) : null;
   return (
     <article
       data-deter-context
@@ -65,6 +78,9 @@ export function MediaCard({ to, image, images, title, subtitle, round, fluid, on
     >
       <div className={cn('vx-media-art', round && 'is-artist')}>
         <Link to={to} tabIndex={-1} aria-hidden="true">
+        {mono ? (
+          <span className="vx-media-monogram" style={{ ['--mono-h' as string]: mono.hue }}>{mono.initials}</span>
+        ) : (
         <img
           /* 4.19.5 image-quality pass: the 4.18.0 flat 150 cap kept PSI happy
              but read SOFT on 2x+ phones (owner report). The CDN also serves
@@ -74,7 +90,7 @@ export function MediaCard({ to, image, images, title, subtitle, round, fluid, on
              and nothing fetches the 46 KB 500 except detail-page heroes.
              Derived URLs are constructed, so onError first retries the
              catalog-published original before giving up to placeholder art. */
-          src={(dv ? bestImage(dv, 250) : image) || FALLBACK_ART}
+          src={firstSrc}
           onError={(e) => {
             const t = e.target as HTMLImageElement;
             t.srcset = ''; // srcset outranks src — must clear it for the fallback to show
@@ -84,7 +100,8 @@ export function MediaCard({ to, image, images, title, subtitle, round, fluid, on
               t.src = original; // derived size missing on CDN — use the real 500
               return;
             }
-            t.src = FALLBACK_ART;
+            if (round) setNoPhoto(true);
+            else t.src = FALLBACK_ART;
           }}
           alt=""
           loading={eager ? 'eager' : 'lazy'}
@@ -102,6 +119,7 @@ export function MediaCard({ to, image, images, title, subtitle, round, fluid, on
           }
           className={cn('w-full aspect-square object-cover', round ? 'rounded-full' : 'rounded-lg')}
         />
+        )}
         </Link>
         {song && (
           <button

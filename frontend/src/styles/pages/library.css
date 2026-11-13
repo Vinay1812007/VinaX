@@ -81,7 +81,7 @@ html.light .vx-ehead-art { box-shadow: 0 18px 40px -20px rgb(48 22 34 / 0.4); }
   min-height: 20px;
   margin-left: 0.25em;
   vertical-align: 0.12em;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ember-500));
   color: var(--vx-on-accent);
 }
@@ -118,7 +118,7 @@ html.light .vx-ehead-art { box-shadow: 0 18px 40px -20px rgb(48 22 34 / 0.4); }
 .vx-ehead-icon.vx-ehead-icon {
   color: rgb(var(--ink-200));
   background: rgb(var(--ink-100) / 0.07);
-  transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+  transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-ehead-icon.vx-ehead-icon:hover { color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.13); }
 .vx-ehead-icon.vx-ehead-icon:active { transform: scale(0.95); }
@@ -134,12 +134,12 @@ html.light .vx-ehead-art { box-shadow: 0 18px 40px -20px rgb(48 22 34 / 0.4); }
   min-height: 40px;
   padding: 0 18px;
   border: 1px solid rgb(var(--ink-100) / 0.26);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: rgb(var(--ink-100));
   font-size: 14px;
   font-weight: 700;
-  transition: border-color 140ms var(--ease-calm), color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+  transition: border-color var(--dur-quick) var(--ease-standard), color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-ehead-pill::after { content: ''; position: absolute; inset: -2px 0; }
 .vx-ehead-pill:hover { border-color: rgb(var(--ink-100) / 0.62); }
@@ -156,7 +156,7 @@ html.light .vx-ehead-art { box-shadow: 0 18px 40px -20px rgb(48 22 34 / 0.4); }
   border-radius: 50%;
   background: rgb(var(--ink-100) / 0.07);
   color: rgb(var(--ink-200));
-  transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+  transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-save-icon > span {
   display: grid;
@@ -199,7 +199,7 @@ html.light .vx-ehead-art { box-shadow: 0 18px 40px -20px rgb(48 22 34 / 0.4); }
   border-radius: var(--vx-radius-card);
   background: rgb(var(--ink-850));
   box-shadow: var(--vx-shadow-overlay);
-  animation: vx-emenu-in 160ms var(--ease-calm) backwards;
+  animation: vx-emenu-in var(--dur-quick) var(--ease-standard) backwards;
 }
 .vx-emenu-panel.is-end { right: 0; left: auto; }
 .vx-emenu-panel.is-up { top: auto; bottom: calc(100% + 6px); }
@@ -273,13 +273,13 @@ html.light .vx-glyph-cover.is-later { background: linear-gradient(150deg, rgb(va
   height: 44px;
   padding: 0 42px 0 42px;
   border: 1px solid var(--vx-border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ink-850));
   color: rgb(var(--ink-100));
   font-size: 14px;
   font-weight: 500;
   outline: none;
-  transition: border-color 140ms var(--ease-calm), background-color 140ms var(--ease-calm), box-shadow 140ms var(--ease-calm);
+  transition: border-color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard), box-shadow var(--dur-quick) var(--ease-standard);
 }
 .vx-lfield.is-plain input { padding-left: 18px; }
 .vx-lfield input::placeholder { color: rgb(var(--ink-400)); }
@@ -306,7 +306,7 @@ html.amoled .vx-lfield input { background: rgb(var(--ink-800)); }
   max-width: 100%;
   padding: 0 38px 0 16px;
   border: 1px solid var(--vx-border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ink-850)) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a094a2' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 15px center;
   color: rgb(var(--ink-100));
   font-size: 13.5px;
@@ -314,7 +314,7 @@ html.amoled .vx-lfield input { background: rgb(var(--ink-800)); }
   text-overflow: ellipsis;
   appearance: none;
   outline: none;
-  transition: background-color 140ms var(--ease-calm), border-color 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard), border-color var(--dur-quick) var(--ease-standard);
 }
 @media (hover: hover) and (pointer: fine) { .vx-lselect:hover { background-color: rgb(var(--ink-800)); } }
 .vx-lselect:focus-visible { border-color: rgb(var(--ember-400)); box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.2); }
@@ -330,13 +330,13 @@ html.amoled .vx-lselect { background-color: rgb(var(--ink-800)); }
   gap: 6px;
   min-height: 36px;
   padding: 0 16px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ink-100) / 0.07);
   color: rgb(var(--ink-100));
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
-  transition: background-color 140ms var(--ease-calm), color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard), color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-quiet-btn::after { content: ''; position: absolute; inset: -4px 0; }
 .vx-quiet-btn:hover { background: rgb(var(--ink-100) / 0.13); }
@@ -403,7 +403,7 @@ html.amoled .vx-strip { background: rgb(var(--ink-800)); }
   height: 36px;
   border-radius: 50%;
   color: rgb(var(--ink-400));
-  transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm), opacity 140ms var(--ease-calm);
+  transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard), opacity var(--dur-quick) var(--ease-standard);
 }
 .vx-row-x::after { content: ''; position: absolute; inset: -4px; }
 .vx-row-x:hover { color: rgb(var(--ink-100)); background: var(--vx-hover); }
@@ -415,17 +415,17 @@ html.amoled .vx-strip { background: rgb(var(--ink-800)); }
   min-height: 32px;
   padding: 0 14px;
   border: 1px solid rgb(var(--ink-100) / 0.22);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: rgb(var(--ink-200));
   font-size: 12.5px;
   font-weight: 700;
-  transition: border-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
+  transition: border-color var(--dur-quick) var(--ease-standard), color var(--dur-quick) var(--ease-standard);
 }
 .vx-row-done::after { content: ''; position: absolute; inset: -6px -2px; }
 .vx-row-done:hover { border-color: rgb(var(--ember-400)); color: rgb(var(--ember-400)); }
 
 /* Collection rows: a SongRow flanked by the list's own controls. */
-.vx-crow { gap: 2px; border-radius: 14px; transition: background-color 140ms var(--ease-calm); }
+.vx-crow { gap: 2px; border-radius: 14px; transition: background-color var(--dur-quick) var(--ease-standard); }
 .vx-crow.is-picked { background: var(--vx-accent-wash); }
 .vx-crow-check { display: grid; place-items: center; flex: 0 0 36px; height: 44px; }
 .vx-crow-dl { display: grid; place-items: center; flex-shrink: 0; width: 24px; color: rgb(var(--ink-400)); }
@@ -446,11 +446,11 @@ html.amoled .vx-strip { background: rgb(var(--ink-800)); }
 .vx-edit-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; max-width: 520px; margin-top: 14px; }
 
 /* Downloads rows: the same rhythm as a track row. */
-.vx-drow { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 0 4px 0 8px; border-radius: 14px; transition: background-color 140ms var(--ease-calm); }
+.vx-drow { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 0 4px 0 8px; border-radius: 14px; transition: background-color var(--dur-quick) var(--ease-standard); }
 .vx-drow:hover { background: var(--vx-hover); }
 .vx-drow.is-picked { background: var(--vx-accent-wash); }
 .vx-drow-art { position: relative; }
-.vx-drow-over { position: absolute; inset: 0; display: grid; place-items: center; background: rgb(0 0 0 / 0.5); color: #fff; opacity: 0; transition: opacity 140ms var(--ease-calm); }
+.vx-drow-over { position: absolute; inset: 0; display: grid; place-items: center; background: rgb(0 0 0 / 0.5); color: #fff; opacity: 0; transition: opacity var(--dur-quick) var(--ease-standard); }
 .vx-drow:hover .vx-drow-over, .vx-drow-art:focus-visible .vx-drow-over { opacity: 1; }
 .vx-drow-text { display: block; flex: 1; min-width: 0; padding: 10px 0; text-align: left; }
 @media (hover: hover) and (pointer: fine) {
@@ -464,7 +464,7 @@ html.amoled .vx-strip { background: rgb(var(--ink-800)); }
 .vx-storage-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; margin-bottom: 10px; }
 .vx-storage-title { color: rgb(var(--ink-100)); font-size: 14px; font-weight: 750; font-variant-numeric: tabular-nums; }
 .vx-storage-note { color: rgb(var(--ink-400)); font-size: 12.5px; font-weight: 500; }
-.vx-storage-bar { height: 6px; overflow: hidden; border-radius: 999px; background: rgb(var(--ink-100) / 0.1); }
+.vx-storage-bar { height: 6px; overflow: hidden; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.1); }
 .vx-storage-bar > i { display: block; height: 100%; border-radius: inherit; background: rgb(var(--ember-500)); }
 
 /* History: search, then the "when" chips and, below them, the language chips. */
@@ -515,7 +515,7 @@ html.amoled .vx-strip { background: rgb(var(--ink-800)); }
   padding: 12px 14px 12px 12px;
   border-radius: var(--vx-radius-card);
   background: rgb(var(--ink-850));
-  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-lp-tile:hover { background: rgb(var(--ink-800)); }
 .vx-lp-tile:active { transform: scale(0.985); }
@@ -530,7 +530,7 @@ html.amoled .vx-lp-tile:hover { background: rgb(var(--ink-700)); }
   border-radius: 14px;
   background: rgb(var(--ink-800));
   color: rgb(var(--ink-200));
-  transition: background-color 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-lp-tile-glyph svg { width: 22px; height: 22px; }
 .vx-lp-tile:hover .vx-lp-tile-glyph.is-plain { background: rgb(var(--ink-700)); }
@@ -563,7 +563,7 @@ html.light .vx-lp-tile-glyph.is-later { background: rgb(var(--tide-500)); color:
   gap: 2px;
   padding: 2px;
   border: 1px solid var(--vx-border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ink-850));
 }
 .vx-lp-view button { color: rgb(var(--ink-300)); }
@@ -597,7 +597,7 @@ html.light .vx-lp-empty { border-color: rgb(var(--ember-500) / 0.32); background
   min-height: 72px;
   padding: 0 4px 0 8px;
   border-radius: var(--vx-radius-card);
-  transition: background-color 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-lp-row:hover, .vx-lp-row:has(.vx-emenu.is-open) { background: var(--vx-hover); }
 .vx-lp-row:has(.vx-emenu.is-open) { z-index: 3; }
@@ -616,7 +616,7 @@ html.light .vx-lp-empty { border-color: rgb(var(--ember-500) / 0.32); background
 .vx-lp-more.vx-lp-more { color: rgb(var(--ink-400)); }
 .vx-lp-more.vx-lp-more:hover, .vx-lp-more.vx-lp-more[aria-expanded='true'] { color: rgb(var(--ink-100)); background: var(--vx-pressed); }
 @media (hover: hover) and (pointer: fine) {
-  .vx-lp-row .vx-lp-more { opacity: 0; transition: opacity 140ms var(--ease-calm); }
+  .vx-lp-row .vx-lp-more { opacity: 0; transition: opacity var(--dur-quick) var(--ease-standard); }
   .vx-lp-row:hover .vx-lp-more, .vx-lp-row:focus-within .vx-lp-more, .vx-lp-row .vx-emenu.is-open .vx-lp-more { opacity: 1; }
 }
 .vx-lp-row.is-trashed .vx-lp-row-art { opacity: 0.55; }
@@ -657,7 +657,7 @@ html.light .vx-lp-empty { border-color: rgb(var(--ember-500) / 0.32); background
   padding: 12px 16px 12px 12px;
   border-radius: var(--vx-radius-card);
   background: rgb(var(--ink-850));
-  transition: background-color 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-lp-smart-card:hover { background: rgb(var(--ink-800)); }
 html.amoled .vx-lp-smart-card { background: rgb(var(--ink-800)); }
@@ -691,7 +691,7 @@ html.amoled .vx-lp-smart-card { background: rgb(var(--ink-800)); }
   border-radius: var(--vx-radius-card);
   color: inherit;
   text-align: left;
-  transition: background-color 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-lp-link:hover { background: var(--vx-hover); }
 .vx-lp-link-glyph { display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 12px; background: rgb(var(--ink-850)); color: rgb(var(--ink-200)); }
@@ -711,12 +711,12 @@ html.amoled .vx-lp-link-glyph { background: rgb(var(--ink-800)); }
   gap: 6px;
   min-height: 36px;
   padding: 0 16px 0 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ember-500));
   color: var(--vx-on-accent);
   font-size: 13px;
   font-weight: 750;
-  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-mix-play::after { content: ''; position: absolute; inset: -4px 0; }
 .vx-mix-play:hover { background: rgb(var(--ember-400)); }

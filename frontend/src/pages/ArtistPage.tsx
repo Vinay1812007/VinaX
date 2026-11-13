@@ -23,10 +23,13 @@ import { CheckIcon, ShuffleIcon } from '@/components/Icons';
 import { Chip } from '@/components/Chip';
 import { ARTIST_SONG_SORTS, compactCount, sortArtistSongs, type ArtistSongSort } from '@/features/artists/sortSongs';
 import { EntityAction, EntityHeader, EntityMenu, EntityMeta, PlayFab } from '@/components/EntityHeader';
+import { artistTagline } from '@/utils/artistTagline';
 import { SectionHeader } from '@/components/SectionHeader';
 import { shuffled } from '@/features/library/sort';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { SaveButton } from '@/components/SaveButton';
+
+
 
 export default function ArtistPage() {
   const { id: rawId } = useParams();
@@ -115,7 +118,7 @@ export default function ArtistPage() {
         meta={
           <EntityMeta
             items={[
-              artist.subtitle && artist.subtitle !== 'Artist' ? artist.subtitle[0].toUpperCase() + artist.subtitle.slice(1) : null,
+              artistTagline(artist.subtitle),
               artist.listeners ? `${compactCount(artist.listeners)} listeners` : null,
               artist.followers ? `${compactCount(artist.followers)} followers` : null,
               artist.albums.length ? `${artist.albums.length} release${artist.albums.length === 1 ? '' : 's'}` : null,

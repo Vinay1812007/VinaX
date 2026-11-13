@@ -26,7 +26,7 @@
   min-height: 60px;
   padding: 0 8px;
   border-radius: 14px;
-  transition: background-color 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-track-row:hover { background: rgb(var(--ink-100) / 0.06); }
 .vx-track-row.is-current {
@@ -109,7 +109,7 @@ html.light .vx-track-row.is-current:hover { background: linear-gradient(90deg, r
   background: rgb(0 0 0 / 0.5);
   color: #fff;
   opacity: 0;
-  transition: opacity 140ms var(--ease-calm);
+  transition: opacity var(--dur-quick) var(--ease-standard);
 }
 .vx-track-art-over svg { width: 18px; height: 18px; }
 .vx-track-row.is-playing .vx-track-art-over { opacity: 1; }
@@ -175,6 +175,10 @@ html.light .vx-track-row.is-current:hover { background: linear-gradient(90deg, r
 }
 @media (min-width: 1536px) { .vx-track-row .vx-track-album { display: block; } }
 @media (min-width: 1024px) { .vx-tracklist .vx-track-row .vx-track-album { display: block; } }
+/* v2 — the album rides after the artists only where its column is hidden. */
+@media (min-width: 1536px) { .vx-track-row .vx-track-sub-album { display: none; } }
+@media (min-width: 1024px) { .vx-tracklist .vx-track-row .vx-track-sub-album { display: none; } }
+.vx-tracklist.no-album .vx-track-sub-album { display: none; }
 
 .vx-track-like, .vx-track-more { display: inline-flex; flex: 0 0 var(--vx-col-btn); justify-content: center; }
 .vx-track-like button, .vx-track-more button { color: rgb(var(--ink-400)); }
@@ -263,10 +267,25 @@ html[data-density='compact'] .vx-track-art { width: 38px; height: 38px; }
   border-radius: 16px;
   background: rgb(var(--ink-850));
   box-shadow: var(--vx-art-shadow);
-  transition: transform 220ms var(--vx-ease-out, var(--ease-calm)), box-shadow 220ms var(--ease-calm);
+  transition: transform 220ms var(--vx-ease-out, var(--ease-calm)), box-shadow var(--dur-base) var(--ease-standard);
 }
-.vx-media-art img { border-radius: inherit; transition: filter 200ms var(--ease-calm); }
+.vx-media-art img { border-radius: inherit; transition: filter var(--dur-base) var(--ease-standard); }
 .vx-media-art.is-artist { border-radius: 50%; }
+/* v2 — an artist with no photo: initials on a tint picked from their name. */
+.vx-media-monogram {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(120% 120% at 30% 20%, hsl(var(--mono-h) 55% 42%), hsl(var(--mono-h) 45% 22%));
+  color: rgb(255 255 255 / 0.92);
+  font-family: var(--font-display);
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+html.light .vx-media-monogram { background: radial-gradient(120% 120% at 30% 20%, hsl(var(--mono-h) 55% 56%), hsl(var(--mono-h) 50% 34%)); }
 /* Hover shine (glass sweep): two sharp slanted white stripes, one wide and one
    thin, sweep across the art once each time the pointer enters, and the edge
    lights up with a thin white rim. Layering: the hover darken filter lifts the
@@ -297,7 +316,7 @@ html[data-density='compact'] .vx-track-art { width: 38px; height: 38px; }
   pointer-events: none;
   box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.5);
   opacity: 0;
-  transition: opacity 200ms var(--ease-calm);
+  transition: opacity var(--dur-base) var(--ease-standard);
 }
 .vx-media-art .vx-card-fav,
 .vx-media-art .card-play { z-index: 2; }
@@ -346,7 +365,7 @@ html[data-density='compact'] .vx-track-art { width: 38px; height: 38px; }
      the screen, the sidebar included, went blank while scrolling. */
   background: rgb(13 9 15 / 0.66);
   color: #fff;
-  transition: opacity 160ms var(--ease-calm), transform 160ms var(--ease-calm), background-color 140ms var(--ease-calm);
+  transition: opacity var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-card-fav::after { content: ''; position: absolute; inset: -6px; }
 .vx-card-fav:hover { background: rgb(13 9 15 / 0.75); }
@@ -371,7 +390,7 @@ html[data-density='compact'] .vx-track-art { width: 38px; height: 38px; }
   box-shadow: 0 10px 22px -8px rgb(0 0 0 / 0.65), 0 6px 18px -6px rgb(var(--ember-500) / 0.45);
   opacity: 0;
   transform: translateY(8px);
-  transition: opacity 180ms var(--ease-calm), transform 180ms var(--ease-calm), background-color 140ms var(--ease-calm);
+  transition: opacity var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
 .card-play svg { width: 22px; height: 22px; margin-left: 2px; }
 .group:hover .card-play, .group:focus-within .card-play { opacity: 1; transform: none; }

@@ -7,6 +7,7 @@ import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { formatDuration } from '@/utils/format';
 import { cn } from '@/utils/cn';
 import { rememberCtxSong } from '@/utils/ctxSongs';
+import { songLine } from '@/utils/songLine';
 import { FavButton } from './FavButton';
 import { TrackMenu } from './TrackMenu';
 import { ClockIcon, PlayIcon } from './Icons';
@@ -69,6 +70,10 @@ function SongRowImpl({ song, songs, index, showArt = true, asSeed = false }: Pro
   rememberCtxSong(song);
 
   const numbered = index != null;
+  // v2 — say each thing once: the title without its "(From …)" tag, the
+  // artists under it, the film or album in the album column (or after the
+  // artists where there is no column; tracklist.css decides which).
+  const line = songLine(song);
   return (
     <div
       onTouchStart={onTouchStart}
@@ -113,13 +118,16 @@ function SongRowImpl({ song, songs, index, showArt = true, asSeed = false }: Pro
         )}
         <span className="vx-track-text">
           <span className="vx-track-title">
-            <span>{song.title}</span>
+            <span title={line.title !== song.title ? song.title : undefined}>{line.title}</span>
             {song.explicit && <span className="vx-explicit" title="Explicit">E</span>}
           </span>
-          <span className="vx-track-sub">{song.subtitle}</span>
+          <span className="vx-track-sub">
+            {line.artist}
+            {line.album && <span className="vx-track-sub-album">{line.artist ? ' · ' : ''}{line.album}</span>}
+          </span>
         </span>
       </button>
-      <span className="vx-track-album">{song.album?.name}</span>
+      <span className="vx-track-album">{line.album ?? song.album?.name}</span>
       <span className="vx-track-like hover-reveal"><FavButton song={song} /></span>
       <span className="vx-track-duration">{song.duration ? formatDuration(song.duration) : ''}</span>
       <span className="vx-track-more hover-reveal"><TrackMenu song={song} /></span>

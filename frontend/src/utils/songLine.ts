@@ -18,13 +18,23 @@ const ALBUM_NOISE = /\s*[([][^)\]]*(original motion picture soundtrack|ost|sound
 const norm = (t: string): string => t.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}\p{M}]+/gu, '');
 
 export function songLine(song: Song): SongLine {
-  const rawAlbum = (song.album?.name ?? '').replace(ALBUM_NOISE, '').trim();
+  const albumFull = (song.album?.name ?? '').replace(ALBUM_NOISE, '').trim();
+  // v2 — the album can carry the tag too: "Mangal Rang (From "Ramayana")".
+  const albumFrom = FROM_TAG.exec(albumFull);
+  const rawAlbum = albumFrom ? albumFull.replace(FROM_TAG, '').trim() : albumFull;
   const from = FROM_TAG.exec(song.title);
+  const film = from?.[1]?.trim() || albumFrom?.[1]?.trim() || null;
+  const baseTitle = song.title.replace(FROM_TAG, '').trim();
   // Prefer the album; a single released under its own title falls back to the "(From …)" film when there is one.
-  const isSelfTitled = !!rawAlbum && norm(rawAlbum) === norm(song.title.replace(FROM_TAG, ''));
-  const album = (isSelfTitled ? from?.[1]?.trim() : rawAlbum) || from?.[1]?.trim() || null;
-  const title = from && album ? song.title.replace(FROM_TAG, '').trim() : song.title;
-  const artist = (song.artists.length ? song.artists.slice(0, 2).map((a) => a.name).join(', ') : song.subtitle).trim();
+  const isSelfTitled = !!rawAlbum && norm(rawAlbum) === norm(baseTitle);
+  const album = (isSelfTitled ? film : rawAlbum) || film || null;
+  const title = from && album ? baseTitle : song.title;
+  // No artist list: the subtitle is often "Artists - Album"; keep the artists,
+  // and nothing at all when what is left only repeats the album or the title.
+  let artist = song.artists.length ? song.artists.slice(0, 2).map((a) => a.name).join(', ') : (song.subtitle ?? '').split(/\s+[-–]\s+/)[0];
+  artist = artist.trim();
+  const a = norm(artist);
+  if (a && [albumFull, rawAlbum, album ?? '', song.title, baseTitle].some((t) => t && norm(t) === a)) artist = '';
   return { title, album, artist };
 }
 

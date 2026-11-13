@@ -1429,6 +1429,13 @@ The UI is being rebuilt on one system, phase by phase. Phase 1 adds the base; pa
   - Up next and Queue rows arrive in a stagger: the index is in `--i`, capped at 8, and a song added later arrives the same way.
   - The seek thumb grows while it is held.
   - None of it runs under reduced motion. `e2e/player-motion.spec.ts` gates it.
+- **Listener pages A (Phase 4):** `tracklist`, `home`, `library`, `browse` and `secondary.css` read the v2 tokens. Fixes:
+  - **Track rows say each thing once.** `SongRow` reads `utils/songLine.ts`: the title loses its "(From …)" tag, the artists sit under it, and the film or album goes in the album column. Where that column is hidden, the album follows the artists after a "·".
+  - **`songLine` handles more catalogue data.** It now also takes the film from an album name that carries the tag, splits "Artists - Album" subtitles, and drops an "artist" that only repeats the album or the title.
+  - **Artist header.** `utils/artistTagline.ts` strips the catalogue's "Artist • 9487361 Listeners" down to a real tagline or nothing, so the meta line reads "Singer · 9.5M listeners · …".
+  - **Artists without a photo** get a monogram (initials on a hue from their name) instead of the wave art; `MediaCard` falls back to it when the photo fails too.
+  - **Browse grid on Search and Discover.** The Charts lane spans two columns again; a `:first-child` rule outranked it and cut off the first destination.
+  - **"Made for you" card on Home** used `--vx-accent-rgb`, which is never defined, so it was always pink. It now follows the accent. `signin.css` and `public.css` still have the same bug; that is Phase 9.
 - **Festival takeover (prototype):** `html.vx-takeover.fest-<id>` re-pitches the whole palette. That covers all eleven ink steps, both brand ramps, the hairlines, a player seek gradient (`--player-seek`) and the mark's ornament (`--fest-ornament`).
   - For now it is only on `/design` (Diwali and Christmas, in `styles/pages/design.css`). Phase 6 generates it for every festival.
   - The class is `vx-`, not `fest-`, because `FestiveSplash` removes every `fest-*` class it did not set.

@@ -61,7 +61,7 @@
   align-items: center;
   gap: 6px;
   padding: 3px 10px 3px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--tide-500) / 0.12);
   color: rgb(var(--tide-400));
   font-size: 12.5px;
@@ -174,12 +174,12 @@ html.light .vx-home .vxh-hero-kicker svg { color: rgb(var(--tide-500)); }
   gap: 8px;
   min-height: 42px;
   padding: 0 18px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ink-100) / 0.1);
   color: rgb(var(--ink-100));
   font-size: 14px;
   font-weight: 700;
-  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-home .vxh-pill::after { content: ''; position: absolute; inset: -2px 0; }
 .vx-home .vxh-pill:hover { background: rgb(var(--ink-100) / 0.16); }
@@ -248,7 +248,7 @@ html.light .vx-home .vxh-hero-kicker svg { color: rgb(var(--tide-500)); }
   border-radius: 14px;
   background: var(--vxh-tile-bg);
   text-align: left;
-  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-home .vxh-tile:hover { background: var(--vxh-tile-hover); }
 .vx-home .vxh-tile:active { transform: scale(0.98); }
@@ -293,7 +293,7 @@ html.light .vx-home .vxh-hero-kicker svg { color: rgb(var(--tide-500)); }
   color: var(--vx-on-accent);
   opacity: 0;
   transform: scale(0.85);
-  transition: opacity 160ms var(--ease-calm), transform 160ms var(--ease-calm);
+  transition: opacity var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-home .vxh-disc svg { width: 14px; height: 14px; margin-left: 2px; }
 .vx-home .vxh-tile:hover .vxh-disc, .vx-home .vxh-tile:focus-visible .vxh-disc { opacity: 1; transform: none; }
@@ -328,7 +328,7 @@ html.light .vx-home .vxh-hero-kicker svg { color: rgb(var(--tide-500)); }
   font-size: 14px;
   font-weight: 700;
   white-space: nowrap;
-  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-home .vxh-shortcut:hover { background: rgb(var(--ink-800)); box-shadow: inset 0 0 0 1px rgb(var(--ember-500) / 0.35); }
 .vx-home .vxh-shortcut:active { transform: scale(0.97); }
@@ -359,7 +359,7 @@ html.light .vx-home .vxh-hero-kicker svg { color: rgb(var(--tide-500)); }
   overflow: hidden;
   border-radius: 16px;
   background: var(--vxh-tile-bg);
-  transition: background-color 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard);
 }
 a.vxh-card:hover { background: var(--vxh-tile-hover); }
 .vx-home .vxh-card-art {
@@ -378,11 +378,11 @@ a.vxh-card:hover { background: var(--vxh-tile-hover); }
 .vx-home .vxh-card-label { display: block; color: rgb(var(--ink-400)); font-size: 12px; font-weight: 700; }
 .vx-home .vxh-card-title { display: block; overflow: hidden; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; line-height: 1.3; white-space: nowrap; text-overflow: ellipsis; }
 .vx-home .vxh-card-sub { display: block; overflow: hidden; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
-.vx-home .vxh-card-meter { display: block; height: 3px; margin-top: 8px; overflow: hidden; border-radius: 9999px; background: rgb(var(--ink-100) / 0.12); }
+.vx-home .vxh-card-meter { display: block; height: 3px; margin-top: 8px; overflow: hidden; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.12); }
 .vx-home .vxh-card-meter > span { display: block; height: 100%; border-radius: inherit; background: rgb(var(--ember-500)); transition: width 400ms var(--ease-calm); }
 .vx-home .vxh-card-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 /* 15.0 — Discover 5: a swipeable card; the dots are the day's five. */
-.vx-home .vxh-d5 { touch-action: pan-y; will-change: transform; transition: transform 200ms var(--ease-calm), box-shadow 200ms var(--ease-calm); }
+.vx-home .vxh-d5 { touch-action: pan-y; will-change: transform; transition: transform var(--dur-base) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard); }
 .vx-home .vxh-d5[data-lean='keep'] { box-shadow: inset 0 0 0 2px rgb(var(--ember-500) / 0.7); }
 .vx-home .vxh-d5[data-lean='skip'] { box-shadow: inset 0 0 0 2px rgb(var(--ink-100) / 0.25); }
 .vx-home .vxh-d5-dots { display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: middle; }
@@ -398,7 +398,7 @@ a.vxh-card:hover { background: var(--vxh-tile-hover); }
   height: 36px;
   border-radius: 12px;
   color: rgb(var(--ink-200));
-  transition: background-color 140ms var(--ease-calm), color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard), color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-home .vxh-round::after { content: ''; position: absolute; inset: -4px; }
 .vx-home .vxh-round:hover { color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.08); }
@@ -415,7 +415,7 @@ a.vxh-card:hover { background: var(--vxh-tile-hover); }
   gap: 6px;
   min-height: 32px;
   padding: 0 12px;
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ink-100) / 0.08);
   color: rgb(var(--ink-100));
   font-size: 12px;
@@ -441,13 +441,13 @@ a.vxh-card:hover { background: var(--vxh-tile-hover); }
   box-shadow: inset 0 0 0 1px var(--vx-border);
   color: rgb(var(--ink-100));
   text-align: left;
-  transition: background-color 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-home .vxh-disclose:hover { background: var(--vx-hover); }
 .vx-home .vxh-disclose-text { display: grid; gap: 2px; min-width: 0; }
 .vx-home .vxh-disclose-text > span:first-child { font-size: 15px; font-weight: 750; }
 .vx-home .vxh-disclose-hint { overflow: hidden; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
-.vx-home .vxh-disclose svg { flex-shrink: 0; color: rgb(var(--ink-300)); transition: transform 180ms var(--ease-calm); }
+.vx-home .vxh-disclose svg { flex-shrink: 0; color: rgb(var(--ink-300)); transition: transform var(--dur-quick) var(--ease-standard); }
 
 /* -------------------------------------------------------- Explore band */
 .vx-home .vxh-explore { margin-top: 8px; padding-top: 28px; border-top: 1px solid var(--vx-border); }
@@ -475,13 +475,13 @@ a.vxh-card:hover { background: var(--vxh-tile-hover); }
   gap: 6px;
   min-height: 36px;
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ink-100) / 0.07);
   color: rgb(var(--ink-100));
   font-size: 13.5px;
   font-weight: 650;
   white-space: nowrap;
-  transition: background-color 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-home .vxh-chip::after { content: ''; position: absolute; inset: -4px 0; }
 .vx-home .vxh-chip:hover { background: rgb(var(--ember-500) / 0.16); }
@@ -509,7 +509,7 @@ a.vxh-card:hover { background: var(--vxh-tile-hover); }
   background: linear-gradient(150deg, rgb(var(--tone)) 0%, rgb(var(--tone) / 0.78) 100%);
   color: #fff;
   text-align: left;
-  transition: transform 160ms var(--ease-calm), filter 160ms var(--ease-calm);
+  transition: transform var(--dur-quick) var(--ease-standard), filter var(--dur-quick) var(--ease-standard);
 }
 .vx-home .vxh-cat:hover { filter: brightness(1.08); }
 .vx-home .vxh-cat:active { transform: scale(0.97); }
@@ -681,7 +681,7 @@ html.light .vx-home .vxh-welcome {
 }
 .vx-home .vxh-welcome-badge {
   padding: 5px 12px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ember-500));
   color: var(--vx-on-accent);
   font-size: 12.5px;
@@ -733,14 +733,14 @@ html.light .vx-home .vxh-welcome {
   gap: 10px;
   min-height: 52px;
   padding: 0 26px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ember-500));
   color: var(--vx-on-accent);
   font-size: 16px;
   font-weight: 800;
   white-space: nowrap;
   box-shadow: 0 14px 30px -14px rgb(var(--ember-600) / 0.95);
-  transition: background-color 160ms var(--ease-calm), transform 160ms var(--ease-calm), box-shadow 160ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard), box-shadow var(--dur-quick) var(--ease-standard);
 }
 .vx-home .vxh-cta svg { width: 20px; height: 20px; }
 .vx-home .vxh-cta:hover { background: rgb(var(--ember-400)); transform: translateY(-1px); }
@@ -786,7 +786,7 @@ html.light .vx-home .vxh-welcome {
   border-radius: 18px;
   background: rgb(var(--ink-850));
   box-shadow: inset 0 0 0 1px var(--vx-border);
-  transition: transform 180ms var(--ease-calm), box-shadow 180ms var(--ease-calm), background-color 180ms var(--ease-calm);
+  transition: transform var(--dur-quick) var(--ease-standard), box-shadow var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
 html.light .vx-home .vxh-feature { background: rgb(var(--ink-950)); }
 .vx-home .vxh-feature:hover {
@@ -856,12 +856,12 @@ html.light .vx-home .vxh-guide { background: rgb(var(--ink-950)); }
   gap: 10px;
   min-height: 44px;
   padding: 0 16px 0 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ink-100) / 0.07);
   color: rgb(var(--ink-100));
   font-size: 14px;
   font-weight: 700;
-  transition: background-color 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-home .vxh-guide-steps > a:hover, .vx-home .vxh-guide-steps > button:hover { background: rgb(var(--ember-500) / 0.16); }
 .vx-home .vxh-guide-steps .is-done { color: rgb(var(--ink-300)); }
@@ -942,7 +942,7 @@ html.light .vx-home .vxh-free-facts li::before {
 
 
 /* 13.0 — "Made for <name>": one tap builds a personal mix. */
-.vxh-madefor { display: flex; align-items: center; gap: 16px; margin: 16px 0; padding: 18px 20px; border-radius: var(--vx-radius-card, 20px); background: linear-gradient(120deg, rgb(var(--vx-accent-rgb, 236 72 153) / 0.20), rgb(var(--tide-500) / 0.12)); border: 1px solid var(--vx-border); }
+.vxh-madefor { display: flex; align-items: center; gap: 16px; margin: 16px 0; padding: 18px 20px; border-radius: var(--vx-radius-card, 20px); background: linear-gradient(120deg, rgb(var(--ember-500) / 0.2), rgb(var(--tide-500) / 0.12)); border: 1px solid var(--vx-border); }
 .vxh-madefor-text { flex: 1; min-width: 0; }
 .vxh-madefor h2 { font-size: 18px; font-weight: 800; color: rgb(var(--ink-50)); }
 .vxh-madefor p { margin-top: 2px; font-size: 13.5px; color: rgb(var(--ink-300)); line-height: 1.45; }
@@ -1001,7 +1001,7 @@ html.light .vx-home .vxh-free-facts li::before {
   gap: 8px;
   min-height: var(--vx-control-h, 42px);
   padding: 0 16px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 14px;
   font-weight: 700;
 }
@@ -1013,7 +1013,7 @@ html.light .vx-home .vxh-free-facts li::before {
 .vx-maker-chip {
   min-height: 36px;
   padding: 0 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 13px;
   color: rgb(var(--ink-200));
   box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.16);
