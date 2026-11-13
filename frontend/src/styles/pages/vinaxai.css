@@ -1500,3 +1500,71 @@ html:is(.amoled, .hc, [data-template='vinax']) .vx-ai-scrim::before {
   font-size: 0.8125rem;
   line-height: 1.5;
 }
+
+/* ======================================================= 2.0 — the VinaX look
+   The logo beside the name in the sidebar, New chat as the one accent row,
+   quieter section labels, and the playlist card VinaX AI writes
+   (PlaylistCard.tsx). Tokens only: the style guard counts raw values here. */
+.vx-ai-side-mark { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; color: var(--text-1); }
+.vx-ai-side-mark img { border-radius: var(--radius-xs); flex-shrink: 0; }
+.vx-ai-side-inner > .vx-ai-side-new:first-of-type { background: var(--accent-soft); color: var(--accent-text); font-weight: 700; }
+.vx-ai-side-inner > .vx-ai-side-new:first-of-type:hover { background: var(--accent-soft-hover); }
+.vx-ai-side-inner > .vx-ai-side-new:first-of-type svg { color: inherit; }
+.vx-ai-side-h { text-transform: uppercase; letter-spacing: var(--tracking-overline); font-size: var(--type-overline); color: var(--text-3); }
+
+.vx-ai-playlist {
+  margin: var(--space-3) 0;
+  border-radius: var(--radius-tile);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  overflow: hidden;
+}
+.vx-ai-playlist-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-4); padding: var(--space-4); }
+.vx-ai-playlist-art {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  border-radius: var(--radius-art);
+  background: var(--accent-gradient);
+  color: var(--text-on-accent);
+}
+.vx-ai-playlist-name { display: flex; flex-direction: column; gap: 2px; flex: 1 1 180px; min-width: 0; }
+.vx-ai-playlist-name strong { font-family: var(--font-display); font-size: var(--type-title); font-weight: 700; letter-spacing: var(--tracking-title); color: var(--text-1); }
+.vx-ai-playlist-name span { font-size: var(--type-meta); color: var(--text-3); }
+.vx-ai-playlist-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.vx-ai-playlist-play,
+.vx-ai-playlist-save {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-pill);
+  font-weight: 700;
+  transition: background var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
+}
+.vx-ai-playlist-play { background: var(--accent); color: var(--text-on-accent); }
+.vx-ai-playlist-play:hover:not(:disabled) { background: var(--accent-hover); }
+.vx-ai-playlist-save { color: var(--text-1); box-shadow: inset 0 0 0 1px var(--line-3); }
+.vx-ai-playlist-save:hover:not(:disabled) { background: var(--surface-3); }
+.vx-ai-playlist-play:active:not(:disabled), .vx-ai-playlist-save:active:not(:disabled) { transform: scale(var(--press-scale)); }
+.vx-ai-playlist-play:disabled, .vx-ai-playlist-save:disabled { opacity: 0.7; cursor: progress; }
+.vx-ai-playlist-play:focus-visible, .vx-ai-playlist-save:focus-visible, .vx-ai-playlist-more:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.vx-ai-playlist-list { list-style: none; margin: 0; padding: 0; }
+.vx-ai-playlist-list li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border-top: 1px solid var(--line-1);
+  font-size: var(--type-body);
+}
+.vx-ai-playlist-n { font-size: var(--type-meta); font-variant-numeric: tabular-nums; color: var(--text-3); }
+.vx-ai-playlist-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--text-1); }
+.vx-ai-playlist-artist { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-meta); color: var(--text-3); }
+.vx-ai-playlist-more { width: 100%; min-height: 44px; border-top: 1px solid var(--line-1); color: var(--accent-text); font-weight: 700; font-size: var(--type-meta); }
+.vx-ai-playlist-more:hover { background: var(--surface-3); }
