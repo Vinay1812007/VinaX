@@ -39,30 +39,30 @@ test.describe('console shell', () => {
     expect(errors).toEqual([]);
   });
 
-  test('the sidebar has ten folding groups; only the current one starts open', async ({ page }) => {
+  test('the sidebar has eight folding sections; only the current one starts open', async ({ page }) => {
     const errors = watchErrors(page);
     await mockConsole(page);
     await signedIn(page);
     await page.goto('/admin/');
     await expect(page).toHaveURL(/#\/dashboard$/);
     const groups = page.locator('.nav-group-toggle');
-    await expect(groups).toHaveText(['Overview', 'Users', 'Music Stats', 'Audience', 'Search & Library', 'Notifications', 'App Settings', 'App Health', 'Growth & SEO', 'System']);
-    // On the Dashboard only Overview is open.
+    await expect(groups).toHaveText(['Home', 'People', 'Music', 'Notifications', 'App Settings', 'Health', 'Growth', 'System']);
+    // On the Dashboard only Home is open.
     await expect(page.locator('.nav-group.open')).toHaveCount(1);
     await expect(page.locator('.nav-group.open .nav-link')).toHaveText(['Dashboard', 'Listening Now', 'Recent Activity', 'Listen Together Rooms', 'Smart Alerts']);
-    await groups.filter({ hasText: 'App Health' }).click();
-    await expect(page.locator('.nav-group[data-group="App Health"] .nav-link')).toHaveText(['App Errors', 'Server Checks', 'Music Sources', 'AI Assistant', 'Recommendations', 'App Versions', 'API Keys Status']);
-    await groups.filter({ hasText: 'App Health' }).click();
-    await expect(page.locator('.nav-group[data-group="App Health"] ul')).toBeHidden();
-    await groups.filter({ hasText: 'Users' }).click();
+    await groups.filter({ hasText: 'Health' }).click();
+    await expect(page.locator('.nav-group[data-group="Health"] .nav-link')).toHaveText(['App Errors', 'Server Checks', 'Music Sources', 'AI Assistant', 'Recommendations', 'App Versions', 'API Keys Status']);
+    await groups.filter({ hasText: 'Health' }).click();
+    await expect(page.locator('.nav-group[data-group="Health"] ul')).toBeHidden();
+    await groups.filter({ hasText: 'People' }).click();
     await page.getByRole('link', { name: 'All Users' }).click();
     await expect(page).toHaveURL(/#\/users/);
-    await expect(page.locator('#crumbs')).toContainText('Users');
+    await expect(page.locator('#crumbs')).toContainText('People');
     await expect(page.locator('#pageTitle')).toHaveText('All Users');
     await expect(page.locator('#pageDesc')).toContainText('Everyone who signed in');
-    // Moving to another group starts fresh: only Users is open now.
+    // Moving to another section starts fresh: only People is open now.
     await expect(page.locator('.nav-group.open')).toHaveCount(1);
-    await expect(page.locator('.nav-group.open')).toHaveAttribute('data-group', 'Users');
+    await expect(page.locator('.nav-group.open')).toHaveAttribute('data-group', 'People');
     await expect(page.locator('#envChip')).toHaveText('Test site');
     expect(errors).toEqual([]);
   });
@@ -80,7 +80,7 @@ test.describe('console shell', () => {
     await page.fill('#navFilter', 'zzzz');
     await expect(page.locator('.nav-empty')).toContainText('No page matches');
     await page.press('#navFilter', 'Escape');
-    await expect(page.locator('.nav-group-toggle')).toHaveCount(10);
+    await expect(page.locator('.nav-group-toggle')).toHaveCount(8);
     expect(errors).toEqual([]);
   });
 
@@ -175,7 +175,7 @@ test.describe('console shell', () => {
     await expect(page.locator('#sidebar')).not.toBeInViewport();
     await page.click('#menuBtn');
     await expect(page.locator('#sidebar')).toBeInViewport();
-    await page.locator('.nav-group-toggle').filter({ hasText: 'Users' }).click();
+    await page.locator('.nav-group-toggle').filter({ hasText: 'People' }).click();
     await page.getByRole('link', { name: 'Feedback' }).click();
     await expect(page).toHaveURL(/#\/feedback/);
     await expect(page.locator('#sidebar')).not.toBeInViewport();

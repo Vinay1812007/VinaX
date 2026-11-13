@@ -78,7 +78,7 @@ const JUNK = /\bundefined\b|\bNaN\b|\[object Object\]/;
 describe('Trending', () => {
   it('is a Music Stats page between Languages and Songs People Skip, following the date range', () => {
     const p = page('trending');
-    expect(p).toMatchObject({ title: 'Trending', group: 'Music Stats', icon: 'flame', range: true });
+    expect(p).toMatchObject({ title: 'Trending', group: 'Music', icon: 'flame', range: true });
     expect(p.order).toBeGreaterThan(page('languages').order);
     expect(p.order).toBeLessThan(page('skipped-songs').order);
   });
@@ -113,9 +113,9 @@ describe('Trending', () => {
 
 describe('Search Insights', () => {
   it('is three pages under Search & Library, and every stat card explains itself', async () => {
-    expect(page('search-overview')).toMatchObject({ group: 'Search & Library', icon: 'search', range: true });
-    expect(page('search-no-results')).toMatchObject({ group: 'Search & Library', range: true });
-    expect(page('search-pins')).toMatchObject({ group: 'Search & Library', icon: 'pin' });
+    expect(page('search-overview')).toMatchObject({ group: 'Music', icon: 'search', range: true });
+    expect(page('search-no-results')).toMatchObject({ group: 'Music', range: true });
+    expect(page('search-pins')).toMatchObject({ group: 'Music', icon: 'pin' });
     for (const tab of ['overview', 'nothing-found', 'pins']) {
       const host = await show(SEARCH[tab]);
       expect(host.textContent, tab).not.toMatch(JUNK);
