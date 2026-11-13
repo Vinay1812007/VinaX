@@ -1422,6 +1422,13 @@ The UI is being rebuilt on one system, phase by phase. Phase 1 adds the base; pa
   - There is one focus ring, `--focus-ring`; the hard-coded pink fallback is gone.
   - Interaction motion: destinations and library rows sink on a spring when pressed, the active sidebar pill settles in, the active tab-bar pill grows out of its icon, and a new song slides into the player deck.
   - The right-click menu's panel (`ContextMenuPanel.tsx`) loads on the first right-click; only its listener ships in the first load.
+- **Player (Phase 3):** `styles/pages/player.css` reads the v2 tokens (pills, `--dur-*`, `--ease-*`). Its motion:
+  - Play and pause glyphs spring in when they swap. The keyframes and the deck's rule are in `shell.css`, because the deck ships in the first load.
+  - A new cover eases in when the song changes (`SongCanvas` adds `.is-swap`), but not on opening Now Playing, which the shared-element move already animates.
+  - Now Playing's tab panels cross-fade.
+  - Up next and Queue rows arrive in a stagger: the index is in `--i`, capped at 8, and a song added later arrives the same way.
+  - The seek thumb grows while it is held.
+  - None of it runs under reduced motion. `e2e/player-motion.spec.ts` gates it.
 - **Festival takeover (prototype):** `html.vx-takeover.fest-<id>` re-pitches the whole palette. That covers all eleven ink steps, both brand ramps, the hairlines, a player seek gradient (`--player-seek`) and the mark's ornament (`--fest-ornament`).
   - For now it is only on `/design` (Diwali and Christmas, in `styles/pages/design.css`). Phase 6 generates it for every festival.
   - The class is `vx-`, not `fest-`, because `FestiveSplash` removes every `fest-*` class it did not set.

@@ -29,7 +29,7 @@ export function UpNextRows({ songs, start, variant }: { songs: Song[]; start: nu
         // this". A song with no reason recorded shows none.
         const why = reasons[s.id];
         return (
-          <li key={`${s.id}-${start + i}`}>
+          <li key={`${s.id}-${start + i}`} style={{ ['--i' as string]: Math.min(i, 8) }}>
             <button type="button" onClick={() => usePlayerStore.getState().playAt(start + i)} className="vx-upnext-row">
               <img
                 src={bestImage(s.images, 150)}

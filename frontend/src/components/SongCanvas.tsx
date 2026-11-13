@@ -287,7 +287,10 @@ export function SongCanvas({
   // Most clips are 16:9; the real ratio replaces this the moment the metadata arrives.
   const [aspect, setAspect] = useState(16 / 9);
   useEffect(() => setAspect(16 / 9), [canvas.src]);
-  const baseClasses = cn('vx-np-art-img', !isPlaying && 'is-paused');
+  // v2 — a new cover eases in when the song changes. Not on the first one:
+  // opening Now Playing already moves the artwork in (shell.css, vx-np-art).
+  const firstArt = useRef(artUrl);
+  const baseClasses = cn('vx-np-art-img', !isPlaying && 'is-paused', artUrl !== firstArt.current && 'is-swap');
   const showVideo = !!canvas.src && !hideToggle;
   // Over the artwork or the clip, so it keeps its own dark chip in every theme (player.css).
   const toggle = canvas.hasVideo && !hideToggle && (
@@ -323,6 +326,7 @@ export function SongCanvas({
       ) : (
         <>
           <img
+            key={artUrl ?? ''}
             src={artUrl ?? FALLBACK_ART}
             onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
             alt=""

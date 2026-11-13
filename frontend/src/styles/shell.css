@@ -605,6 +605,9 @@ html.reduce-motion .vx-pmenu { animation: none; }
 .np-play-desktop::after { content: ''; position: absolute; inset: -1px; }
 .np-play-desktop:hover { transform: scale(1.05); background: rgb(var(--ember-400)); }
 .np-play-desktop:active { transform: scale(0.95); }
+/* v2 — play ⇄ pause: the new glyph springs in (the icons swap, so each mounts fresh). */
+:is(.np-play-desktop, .np-mini-play) > svg { animation: vx-glyph-in var(--dur-base) var(--ease-spring) backwards; }
+@keyframes vx-glyph-in { from { opacity: 0; transform: scale(0.6) rotate(-12deg); } }
 
 /* Phone: the compact player floats above the tab bar — a chrome pane tinted
    with the cover's living colour (--art), strongest behind the artwork. */

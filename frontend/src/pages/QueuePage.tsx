@@ -127,6 +127,7 @@ const QueueRow = memo(function QueueRow({
     <li
       ref={(el) => setRowEl(pos, el)}
       data-row-key={rowKey}
+      style={{ ['--i' as string]: Math.min(pos, 8) }}
       className={`vx-queue-row${dragging ? ' is-dragging' : dropEdge === 'above' ? ' drop-above' : dropEdge === 'below' ? ' drop-below' : ''}`}
     >
       <div className="vx-queue-row-main">

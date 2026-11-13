@@ -12,7 +12,8 @@
      stage size, in Marigold with a warm glow), a Marigold progress line, an
      artwork-tinted canvas warmed towards Marigold, Rose for live and for
      what VinaX picked, and the title in the display face.
-   - Motion 140–220 ms on --ease-calm; none under either reduced-motion
+   - Motion on the design system v2 tokens (--dur-*, --ease-standard /
+     enter / spring; styles/tokens.css); none under either reduced-motion
      switch (the portalled layers carry their own rules at the end).
    ========================================================================= */
 
@@ -85,7 +86,7 @@
     radial-gradient(120% 60% at 50% 0%, color-mix(in srgb, var(--np-warm) 44%, transparent), transparent 72%),
     radial-gradient(70% 42% at 0% 100%, rgb(var(--ember-500) / 0.1), transparent 70%),
     linear-gradient(180deg, color-mix(in srgb, var(--np-warm) 24%, transparent) 0%, rgb(var(--ink-950) / 0.5) 52%, rgb(var(--ink-950) / 0.9) 100%);
-  transition: opacity 200ms var(--ease-calm);
+  transition: opacity var(--dur-base) var(--ease-standard);
 }
 .vx-np-bg-scrim { position: absolute; inset: 0; background: rgb(var(--ink-950) / 0.22); }
 html.light .vx-np-bg-art { opacity: 0.38; filter: blur(90px) saturate(1.15); }
@@ -111,7 +112,7 @@ html.amoled .vx-np-bg-art.is-echo { opacity: 0.28; }
 }
 .vx-np-tools {
   padding: 2px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ink-100) / 0.07);
   box-shadow: inset 0 1px 0 var(--vx-mat-specular), inset 0 0 0 1px var(--vx-mat-hairline);
 }
@@ -134,7 +135,7 @@ html.light .vx-np-top .vx-np-menu button[aria-haspopup='menu']:hover { backgroun
   align-items: center;
   gap: 8px;
   min-height: 56px;
-  transition: opacity 200ms var(--ease-calm);
+  transition: opacity var(--dur-base) var(--ease-standard);
 }
 .vx-np-top > :first-child { justify-self: start; margin-left: -4px; }
 .vx-np-top > :last-child { justify-self: end; margin-right: -4px; }
@@ -152,7 +153,7 @@ html.light .vx-np-top .vx-np-menu button[aria-haspopup='menu']:hover { backgroun
   padding: 2px 12px;
   border-radius: 12px;
   text-align: center;
-  transition: background-color 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard);
 }
 button.vx-np-context:hover { background: var(--vx-hover); }
 .vx-np-context-label {
@@ -188,7 +189,7 @@ button.vx-np-context:hover { background: var(--vx-hover); }
   min-height: calc(100dvh - 56px - max(12px, var(--safe-top)) - 76px - var(--safe-bottom));
   padding-bottom: 8px;
 }
-.vx-np-controls { transition: opacity 200ms var(--ease-calm); }
+.vx-np-controls { transition: opacity var(--dur-base) var(--ease-standard); }
 
 /* ------------------------------------------------------------- artwork */
 .vx-np-art { position: relative; width: var(--np-art); margin: auto; padding: 16px 0 28px; box-sizing: content-box; }
@@ -206,7 +207,7 @@ button.vx-np-context:hover { background: var(--vx-hover); }
   border-radius: 18px;
   background: rgb(var(--ink-950)) center / cover no-repeat;
   box-shadow: 0 32px 72px -24px rgb(0 0 0 / 0.72), 0 12px 28px -14px rgb(0 0 0 / 0.5), inset 0 0 0 1px rgb(255 255 255 / 0.06);
-  transition: scale 220ms var(--ease-calm), box-shadow 220ms var(--ease-calm), aspect-ratio 200ms var(--ease-calm);
+  transition: scale var(--dur-base) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard), aspect-ratio var(--dur-base) var(--ease-standard);
 }
 /* `scale`, not `transform`: no stacking surprise for the chip, and the pane's own swipe transform is left alone. */
 .vx-np-art-video.is-paused { scale: 0.97; box-shadow: 0 20px 44px -22px rgb(0 0 0 / 0.55); }
@@ -223,11 +224,11 @@ html.light .vx-np-art-video { box-shadow: 0 28px 60px -26px rgb(48 22 34 / 0.42)
   border-radius: 22px;
   object-fit: cover;
   box-shadow: 0 32px 72px -24px rgb(0 0 0 / 0.72), 0 12px 28px -14px rgb(0 0 0 / 0.5);
-  transition: transform 220ms var(--ease-calm), box-shadow 220ms var(--ease-calm);
+  transition: transform var(--dur-base) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard);
 }
 .vx-np-art-img.is-paused { transform: scale(0.95); box-shadow: 0 20px 44px -22px rgb(0 0 0 / 0.55); }
 html.light .vx-np-art-img { box-shadow: 0 28px 60px -26px rgb(48 22 34 / 0.42), 0 10px 22px -14px rgb(48 22 34 / 0.26); }
-.vx-np-art-pane { position: relative; user-select: none; transition: transform 220ms var(--vx-ease-out); }
+.vx-np-art-pane { position: relative; user-select: none; transition: transform var(--dur-base) var(--ease-enter); }
 /* 8.1 — swipe the artwork sideways to change the song: it leaves the way the
    finger sent it (from wherever the drag left it) and the next one arrives
    from the other side. Vertical drags are the page's to scroll. */
@@ -266,7 +267,7 @@ html.light .vx-np-art-img { box-shadow: 0 28px 60px -26px rgb(48 22 34 / 0.42), 
   z-index: 1;
   min-height: 32px;
   padding: 0 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(0 0 0 / 0.55);
   color: #fff;
   font-size: 12px;
@@ -301,7 +302,7 @@ html.light .vx-np-art-img { box-shadow: 0 28px 60px -26px rgb(48 22 34 / 0.42), 
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-a.vx-np-artist { transition: color 140ms var(--ease-calm); }
+a.vx-np-artist { transition: color var(--dur-quick) var(--ease-standard); }
 a.vx-np-artist:hover { color: rgb(var(--ink-100)); text-decoration: underline; text-underline-offset: 3px; }
 .vx-np-like { margin-right: -8px; }
 .vx-np-like > button { width: 48px; height: 48px; display: inline-grid; place-items: center; }
@@ -315,7 +316,7 @@ a.vx-np-artist:hover { color: rgb(var(--ink-100)); text-decoration: underline; t
 .vx-np-seek input[type='range'] { display: block; height: 24px; }
 .vx-np-seek input[type='range']::-webkit-slider-runnable-track {
   height: 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: linear-gradient(to right, rgb(var(--ember-500)) var(--fill), rgb(var(--ink-100) / 0.2) var(--fill));
 }
 .vx-np-seek input[type='range']::-webkit-slider-thumb {
@@ -325,10 +326,12 @@ a.vx-np-artist:hover { color: rgb(var(--ink-100)); text-decoration: underline; t
   background: rgb(var(--ember-500));
   box-shadow: 0 0 0 4px rgb(var(--ember-500) / 0.22), 0 2px 6px rgb(0 0 0 / 0.35);
 }
+.vx-np-seek input[type='range']::-webkit-slider-thumb { transition: transform var(--dur-quick) var(--ease-spring), box-shadow var(--dur-quick) var(--ease-standard); }
+.vx-np-seek input[type='range']:active::-webkit-slider-thumb { transform: scale(1.45); box-shadow: 0 0 0 8px rgb(var(--ember-500) / 0.2), 0 2px 8px rgb(0 0 0 / 0.4); }
 .vx-np-seek input[type='range']:hover::-webkit-slider-thumb { transform: scale(1.15); box-shadow: 0 0 0 6px rgb(var(--ember-500) / 0.22), 0 2px 6px rgb(0 0 0 / 0.35); }
 .vx-np-seek input[type='range']:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px rgb(var(--ink-950)), 0 0 0 4px var(--vx-focus); }
-.vx-np-seek input[type='range']::-moz-range-track { height: 4px; border-radius: 999px; background: rgb(var(--ink-100) / 0.2); }
-.vx-np-seek input[type='range']::-moz-range-progress { height: 4px; border-radius: 999px; background: rgb(var(--ember-500)); }
+.vx-np-seek input[type='range']::-moz-range-track { height: 4px; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.2); }
+.vx-np-seek input[type='range']::-moz-range-progress { height: 4px; border-radius: var(--radius-pill); background: rgb(var(--ember-500)); }
 .vx-np-seek input[type='range']::-moz-range-thumb { width: 14px; height: 14px; border: 0; background: rgb(var(--ember-500)); box-shadow: 0 0 0 4px rgb(var(--ember-500) / 0.22); }
 .vx-np-seek input[type='range']:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px rgb(var(--ink-950)), 0 0 0 4px var(--vx-focus); }
 .vx-np-seek .vx-seek-times { margin-top: 2px; }
@@ -361,7 +364,7 @@ a.vx-np-artist:hover { color: rgb(var(--ink-100)); text-decoration: underline; t
   min-width: 15px;
   height: 15px;
   padding: 0 3px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ember-500));
   color: var(--vx-on-accent);
   font-size: 9.5px;
@@ -381,10 +384,10 @@ a.vx-np-artist:hover { color: rgb(var(--ink-100)); text-decoration: underline; t
   background: linear-gradient(180deg, rgb(var(--ember-400)), rgb(var(--ember-500)) 62%);
   color: var(--vx-on-accent);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 16px 36px -14px rgb(var(--ember-600) / 0.85), 0 0 44px -10px rgb(var(--ember-500) / 0.55);
-  transition: transform 160ms var(--ease-calm), filter 160ms var(--ease-calm);
+  transition: transform var(--dur-quick) var(--ease-spring), filter var(--dur-quick) var(--ease-standard);
 }
 .vx-np-play:hover { filter: brightness(1.06); transform: scale(1.04); }
-.vx-np-play:active { transform: scale(0.96); }
+.vx-np-play:active { transform: scale(0.92); }
 .vx-np-play svg { width: 32px; height: 32px; }
 .vx-np-play .vx-np-play-glyph { margin-left: 3px; }
 .vx-np-play.is-compact { width: 64px; height: 64px; border-radius: 21px; }
@@ -410,9 +413,9 @@ html.light .vx-np-play { background: rgb(var(--ember-500)); box-shadow: 0 14px 3
   place-items: center;
   width: 44px;
   height: 44px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: rgb(var(--ink-200));
-  transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
+  transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-np-tools .vx-np-tool:hover { color: rgb(var(--ink-100)); background: var(--vx-hover); }
 .vx-np-tools .vx-np-tool svg { width: 22px; height: 22px; }
@@ -424,7 +427,7 @@ html.light .vx-np-play { background: rgb(var(--ember-500)); box-shadow: 0 14px 3
   bottom: -5px;
   left: 50%;
   padding: 0 5px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ember-500));
   color: var(--vx-on-accent);
   font-size: 10px;
@@ -447,7 +450,7 @@ html.light .vx-np-play { background: rgb(var(--ember-500)); box-shadow: 0 14px 3
 .vx-np-live-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 3px rgb(var(--tide-500) / 0.25); }
 
 /* ------------------------------------------------------ the panel (tabs) */
-.vx-np-panel { padding: 8px 0 32px; transition: opacity 200ms var(--ease-calm); }
+.vx-np-panel { padding: 8px 0 32px; transition: opacity var(--dur-base) var(--ease-standard); }
 @media (max-width: 1023px) {
   /* Tall enough to scroll up to the top: the panel reads like a pulled-up sheet. */
   .vx-np-panel { min-height: calc(100dvh - 16px); scroll-margin-top: max(8px, var(--safe-top)); }
@@ -459,19 +462,19 @@ html.light .vx-np-play { background: rgb(var(--ember-500)); box-shadow: 0 14px 3
   width: fit-content;
   max-width: 100%;
   padding: 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ink-100) / 0.08);
 }
 .vx-np-tabs [role='tab'] {
   position: relative;
   min-height: 36px;
   padding: 0 16px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: rgb(var(--ink-300));
   font-size: 14px;
   font-weight: 700;
   white-space: nowrap;
-  transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
+  transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-np-tabs [role='tab']::after { content: ''; position: absolute; inset: -4px 0; }
 .vx-np-tabs [role='tab']:hover { color: rgb(var(--ink-100)); }
@@ -500,12 +503,12 @@ html.light .vx-np-play { background: rgb(var(--ember-500)); box-shadow: 0 14px 3
   align-items: center;
   min-height: 36px;
   padding: 0 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: rgb(var(--ink-200));
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
-  transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
+  transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-np-link::after { content: ''; position: absolute; inset: -4px 0; }
 /* The narrowest phones: three tabs and the queue link did not fit in 328px,
@@ -536,7 +539,7 @@ html.light .vx-np-play { background: rgb(var(--ember-500)); box-shadow: 0 14px 3
   padding: 8px;
   border-radius: 14px;
   text-align: left;
-  transition: background-color 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-upnext-row:hover { background: var(--vx-hover); }
 .vx-upnext-row:active { background: var(--vx-pressed); }
@@ -565,7 +568,7 @@ html.light .vx-np-play { background: rgb(var(--ember-500)); box-shadow: 0 14px 3
   gap: 4px;
   height: 20px;
   padding: 0 8px 0 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 11.5px;
   font-weight: 700;
   line-height: 1;
@@ -592,12 +595,12 @@ html.light .vx-queue-origin[data-origin='manual'] { background: rgb(var(--ember-
   max-width: 100%;
   min-height: 40px;
   padding: 0 16px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ink-100) / 0.08);
   color: rgb(var(--ink-100));
   font-size: 13.5px;
   font-weight: 650;
-  transition: background-color 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-np-credit::after { content: ''; position: absolute; inset: -2px 0; }
 .vx-np-credit:hover { background: rgb(var(--ink-100) / 0.14); }
@@ -608,7 +611,7 @@ html.light .vx-queue-origin[data-origin='manual'] { background: rgb(var(--ember-
   align-items: center;
   min-height: 26px;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ink-100) / 0.1);
   color: rgb(var(--ink-200));
   font-size: 12px;
@@ -680,7 +683,7 @@ html.light .vx-queue-origin[data-origin='manual'] { background: rgb(var(--ember-
   flex-direction: column;
   isolation: isolate;
   padding: max(12px, var(--safe-top)) max(var(--vx-gutter), var(--safe-right)) max(20px, var(--safe-bottom)) max(var(--vx-gutter), var(--safe-left));
-  animation: vx-np-rise 200ms var(--ease-calm) backwards;
+  animation: vx-np-rise var(--dur-base) var(--ease-standard) backwards;
 }
 .vx-np-immersive-top, .vx-np-immersive-lyrics, .vx-np-immersive-controls { width: 100%; max-width: 760px; margin: 0 auto; }
 .vx-np-immersive-top { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; align-items: center; gap: 8px; min-height: 56px; }
@@ -702,7 +705,7 @@ html.light .vx-queue-origin[data-origin='manual'] { background: rgb(var(--ember-
   background: #000;
   user-select: none;
   touch-action: pan-y;
-  animation: vx-np-fade 200ms var(--ease-calm) backwards;
+  animation: vx-np-fade var(--dur-base) var(--ease-standard) backwards;
 }
 .vx-np-canvas-layer .vx-np-zone { border-radius: 0; }
 .vx-np-canvas-shade { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, transparent, transparent 55%, rgb(0 0 0 / 0.6)); }
@@ -717,7 +720,7 @@ html.light .vx-queue-origin[data-origin='manual'] { background: rgb(var(--ember-
 .vx-np-canvas-title, .vx-np-canvas-artist { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .vx-np-canvas-title { font-size: 18px; font-weight: 750; }
 .vx-np-canvas-artist { margin-top: 2px; font-size: 14px; opacity: 0.74; }
-.vx-np-canvas-progress { height: 3px; margin-top: 12px; overflow: hidden; border-radius: 999px; background: rgb(255 255 255 / 0.25); }
+.vx-np-canvas-progress { height: 3px; margin-top: 12px; overflow: hidden; border-radius: var(--radius-pill); background: rgb(255 255 255 / 0.25); }
 .vx-np-canvas-progress > i { display: block; width: 100%; height: 100%; background: rgb(var(--ember-400)); transform-origin: left; transition: transform 300ms linear; }
 
 /* 13.9 — the full-screen canvas: one gesture surface, a top row (back ·
@@ -736,7 +739,7 @@ html.light .vx-queue-origin[data-origin='manual'] { background: rgb(var(--ember-
   color: #fff;
   background: linear-gradient(180deg, rgb(0 0 0 / 0.55), transparent);
   pointer-events: none;
-  animation: vx-np-fade 220ms var(--ease-calm) backwards;
+  animation: vx-np-fade var(--dur-base) var(--ease-standard) backwards;
 }
 .vx-np-canvas-top > * { pointer-events: auto; }
 .vx-np-canvas-layer .vx-np-canvas-btn { color: #fff; }
@@ -748,7 +751,7 @@ html.light .vx-queue-origin[data-origin='manual'] { background: rgb(var(--ember-
   gap: 6px;
   min-height: 34px;
   padding: 0 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(0 0 0 / 0.55);
   color: #fff;
   font-size: 12px;
@@ -798,12 +801,12 @@ html.light .vx-queue-origin[data-origin='manual'] { background: rgb(var(--ember-
   flex: none;
   width: 52px;
   height: 52px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: #fff;
   background: rgb(255 255 255 / 0.12);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
-  transition: transform 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
+  transition: transform var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-np-canvas-like:hover { background: rgb(255 255 255 / 0.2); }
 .vx-np-canvas-like:active { transform: scale(0.92); }
@@ -861,14 +864,14 @@ html.reduce-motion .vx-np-heart-burst { animation: none; opacity: 1; transform: 
   gap: 6px;
   min-height: 36px;
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ink-100) / 0.08);
   color: rgb(var(--ink-100));
   font-size: 13px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  transition: background-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard), color var(--dur-quick) var(--ease-standard);
 }
 .vx-np-pill::after { content: ''; position: absolute; inset: -4px 0; }
 .vx-np-pill:hover { background: rgb(var(--ink-100) / 0.14); }
@@ -878,7 +881,7 @@ html.reduce-motion .vx-np-heart-burst { animation: none; opacity: 1; transform: 
 /* 15.0 — a plain range in the options sheets (focus sound volume). */
 .vx-np-range { width: min(100%, 260px); accent-color: rgb(var(--ember-500)); }
 .vx-np-pill.is-quiet:hover { color: rgb(var(--ink-100)); background: var(--vx-hover); }
-.vx-np-mark { display: inline-flex; align-items: center; border-radius: 999px; background: rgb(var(--ink-100) / 0.08); }
+.vx-np-mark { display: inline-flex; align-items: center; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.08); }
 .vx-np-mark-time, .vx-np-mark-remove { position: relative; min-height: 36px; font-size: 13px; }
 .vx-np-mark-time::after, .vx-np-mark-remove::after { content: ''; position: absolute; inset: -4px 0; }
 .vx-np-mark-time { padding: 0 6px 0 14px; color: rgb(var(--ink-100)); font-weight: 650; }
@@ -977,11 +980,11 @@ html.amoled .vx-queue-head { background: rgb(var(--ink-900) / 0.94); }
   gap: 6px;
   min-height: 40px;
   padding: 0 18px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 14px;
   font-weight: 700;
   white-space: nowrap;
-  transition: background-color 140ms var(--ease-calm), border-color 140ms var(--ease-calm), opacity 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard), border-color var(--dur-quick) var(--ease-standard), opacity var(--dur-quick) var(--ease-standard);
 }
 .vx-queue-btn::after { content: ''; position: absolute; inset: -2px 0; }
 .vx-queue-btn.is-primary { background: rgb(var(--ember-500)); color: var(--vx-on-accent); }
@@ -1025,12 +1028,12 @@ html.light .vx-queue-now { background: linear-gradient(110deg, rgb(var(--art) / 
   flex-shrink: 0;
   min-height: 36px;
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ink-100) / 0.1);
   color: rgb(var(--ink-100));
   font-size: 13px;
   font-weight: 700;
-  transition: background-color 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-queue-now-open::after { content: ''; position: absolute; inset: -4px 0; }
 .vx-queue-now-open:hover { background: rgb(var(--ink-100) / 0.16); }
@@ -1076,7 +1079,7 @@ html.light .vx-queue-now { background: linear-gradient(110deg, rgb(var(--art) / 
   padding: 6px 8px;
   border-radius: 14px;
   list-style: none;
-  transition: background-color 140ms var(--ease-calm), box-shadow 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard), box-shadow var(--dur-quick) var(--ease-standard);
 }
 .vx-queue-row:hover, .vx-queue-row:focus-within { background: var(--vx-hover); }
 .vx-queue-row.is-dragging { z-index: 10; background: rgb(var(--ink-800)); box-shadow: 0 14px 32px -14px rgb(0 0 0 / 0.6); }
@@ -1113,9 +1116,9 @@ html.light .vx-queue-row.is-dragging { box-shadow: 0 14px 30px -14px rgb(48 22 3
   place-items: center;
   width: 36px;
   height: 36px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: rgb(var(--ink-400));
-  transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm), opacity 140ms var(--ease-calm);
+  transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard), opacity var(--dur-quick) var(--ease-standard);
 }
 .vx-queue-remove:hover { color: rgb(var(--ink-100)); background: var(--vx-pressed); }
 @media (hover: hover) and (pointer: fine) {
@@ -1155,11 +1158,11 @@ html.light .vx-queue-row.is-dragging { box-shadow: 0 14px 30px -14px rgb(48 22 3
   min-height: 32px;
   padding: 0 10px;
   margin-right: -10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: rgb(var(--ink-400));
   font-size: 13px;
   font-weight: 700;
-  transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
+  transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-rail-link::after { content: ''; position: absolute; inset: -6px 0; }
 .vx-rail-link:hover { color: rgb(var(--ink-100)); background: var(--vx-hover); }
@@ -1173,7 +1176,7 @@ html.light .vx-queue-row.is-dragging { box-shadow: 0 14px 30px -14px rgb(48 22 3
   box-shadow: 0 18px 40px -20px rgb(0 0 0 / 0.7);
 }
 html.light .vx-rail-art { box-shadow: 0 16px 32px -20px rgb(48 22 34 / 0.4); }
-.vx-rail-art img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; transition: transform 220ms var(--ease-calm); }
+.vx-rail-art img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; transition: transform var(--dur-base) var(--ease-standard); }
 .vx-rail-art:hover img { transform: scale(1.02); }
 .vx-rail-now { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 16px; }
 .vx-rail-now-text { min-width: 0; }
@@ -1196,7 +1199,7 @@ a.vx-rail-artist:hover { color: rgb(var(--ink-100)); text-decoration: underline;
   border-radius: var(--vx-radius-card);
   background: rgb(var(--art) / 0.22);
   text-align: left;
-  transition: background-color 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-rail-lyrics-card:hover { background: rgb(var(--art) / 0.3); }
 html.light .vx-rail-lyrics-card { background: rgb(var(--art) / 0.16); }
@@ -1221,11 +1224,11 @@ a.vx-lyrics-hero-title:hover { text-decoration: underline; text-underline-offset
   position: relative;
   min-height: 36px;
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: rgb(var(--ink-300));
   font-size: 13px;
   font-weight: 700;
-  transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
+  transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-seg::after { content: ''; position: absolute; inset: -4px 0; }
 .vx-seg:hover { color: rgb(var(--ink-100)); }
@@ -1239,7 +1242,7 @@ a.vx-lyrics-hero-title:hover { text-decoration: underline; text-underline-offset
 .vx-lyrics-meaning { margin-bottom: 20px; padding: 16px; border-radius: var(--vx-radius-card); background: rgb(var(--ink-850)); }
 .vx-lyrics-meaning-title { display: inline-flex; align-items: center; gap: 6px; color: rgb(var(--ink-100)); font-size: 14px; font-weight: 750; }
 .vx-lyrics-meaning-title svg { width: 14px; height: 14px; color: rgb(var(--tide-400)); }
-.vx-lyrics-tag { display: inline-flex; align-items: center; min-height: 24px; padding: 0 10px; border-radius: 999px; background: rgb(var(--ink-100) / 0.08); color: rgb(var(--ink-200)); font-size: 12px; font-weight: 650; }
+.vx-lyrics-tag { display: inline-flex; align-items: center; min-height: 24px; padding: 0 10px; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.08); color: rgb(var(--ink-200)); font-size: 12px; font-weight: 650; }
 .vx-lyrics-page-scroll { max-height: 64vh; }
 .vx-lyrics-page [data-line] { width: calc(100% + 24px); margin: 0 -12px; border-radius: 12px; font-weight: 700; }
 .vx-lyrics-page [data-line].vx-lyric-dim { color: rgb(var(--ink-100) / 0.45); }
@@ -1278,9 +1281,9 @@ a.vx-lyrics-hero-title:hover { text-decoration: underline; text-underline-offset
 .vx-karaoke-close, .vx-drive-close {
   display: inline-grid;
   place-items: center;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: rgb(var(--ink-100));
-  transition: background-color 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-karaoke-close:hover, .vx-drive-close:hover { background: var(--vx-hover); }
 .vx-karaoke-heading { min-width: 0; text-align: center; }
@@ -1296,7 +1299,7 @@ a.vx-lyrics-hero-title:hover { text-decoration: underline; text-underline-offset
 .vx-karaoke-bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
 .vx-karaoke-bar > :first-child { justify-self: start; }
 .vx-karaoke-transport { display: flex; align-items: center; gap: 20px; }
-.vx-karaoke-skip { display: inline-grid; place-items: center; min-width: 44px; min-height: 44px; border-radius: 999px; color: rgb(var(--ink-200)); }
+.vx-karaoke-skip { display: inline-grid; place-items: center; min-width: 44px; min-height: 44px; border-radius: var(--radius-pill); color: rgb(var(--ink-200)); }
 .vx-karaoke-skip:hover { color: rgb(var(--ink-100)); background: var(--vx-hover); }
 .vx-karaoke-skip svg { width: 22px; height: 22px; }
 .vx-karaoke .vx-np-pill { background: rgb(var(--ink-100) / 0.1); }
@@ -1312,7 +1315,7 @@ html.light .vx-drive-art { box-shadow: 0 24px 50px -26px rgb(48 22 34 / 0.4); }
 .vx-drive-transport { display: flex; align-items: center; justify-content: center; gap: 24px; width: 100%; margin-top: 48px; }
 /* 15.0 — the voice button and its one-line status. */
 .vx-drive-voice { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; margin-top: 40px; }
-.vx-drive-mic { display: grid; place-items: center; width: 84px; height: 84px; border-radius: 50%; background: rgb(var(--ink-800)); color: rgb(var(--ink-100)); transition: background-color 160ms var(--ease-calm), transform 120ms var(--ease-calm), box-shadow 160ms var(--ease-calm); }
+.vx-drive-mic { display: grid; place-items: center; width: 84px; height: 84px; border-radius: 50%; background: rgb(var(--ink-800)); color: rgb(var(--ink-100)); transition: background-color var(--dur-quick) var(--ease-standard), transform 120ms var(--ease-calm), box-shadow var(--dur-quick) var(--ease-standard); }
 .vx-drive-mic svg { width: 36px; height: 36px; }
 .vx-drive-mic:active { transform: scale(0.96); }
 .vx-drive-mic.is-live { background: rgb(var(--ember-500)); color: var(--vx-on-accent); box-shadow: 0 0 0 10px rgb(var(--ember-500) / 0.18); }
@@ -1325,7 +1328,7 @@ html.light .vx-drive-art { box-shadow: 0 24px 50px -26px rgb(48 22 34 / 0.4); }
   border-radius: 32px;
   background: rgb(var(--ink-800));
   color: rgb(var(--ink-100));
-  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-drive-skip:active { background: rgb(var(--ink-700)); transform: scale(0.96); }
 .vx-drive-skip svg { width: 44px; height: 44px; }
@@ -1338,7 +1341,7 @@ html.light .vx-drive-art { box-shadow: 0 24px 50px -26px rgb(48 22 34 / 0.4); }
   background: rgb(var(--ember-500));
   color: var(--vx-on-accent);
   box-shadow: 0 20px 44px -18px rgb(var(--ember-600) / 0.85);
-  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-drive-play:hover { background: rgb(var(--ember-400)); }
 .vx-drive-play:active { transform: scale(0.96); }
@@ -1370,7 +1373,7 @@ html.reduce-motion .vx-np-immersive, html.reduce-motion .vx-np-canvas-layer { an
 /* 1.4 — "Generate a song like this" and the "AI generated" label. Tokens only,
    so every app style, theme, accent, festival skin and high contrast paint it;
    the progress fill's only motion stands down under both reduced-motion switches. */
-.vx-ai-badge { display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border-radius: 999px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.02em; color: rgb(var(--ink-100)); box-shadow: inset 0 0 0 1px rgb(var(--ember-500) / 0.7); background: rgb(var(--ember-500) / 0.14); }
+.vx-ai-badge { display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border-radius: var(--radius-pill); font-size: 11.5px; font-weight: 700; letter-spacing: 0.02em; color: rgb(var(--ink-100)); box-shadow: inset 0 0 0 1px rgb(var(--ember-500) / 0.7); background: rgb(var(--ember-500) / 0.14); }
 .vx-np-ai-badge { margin-top: 6px; }
 .vx-np-gen { margin-top: 12px; }
 .vx-np-gen-panel { display: grid; gap: 10px; padding: 14px; border-radius: var(--vx-radius-card); background: rgb(var(--ink-100) / 0.06); box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.1); }
@@ -1383,8 +1386,26 @@ html.reduce-motion .vx-np-immersive, html.reduce-motion .vx-np-canvas-layer { an
 .vx-np-pill.is-primary { background: rgb(var(--ember-500)); color: var(--vx-on-accent); }
 .vx-np-pill.is-primary:hover { background: rgb(var(--ember-400)); }
 .vx-np-gen-progress { display: grid; gap: 6px; font-size: 13px; color: rgb(var(--ink-200)); }
-.vx-np-gen-bar { height: 6px; border-radius: 999px; overflow: hidden; background: rgb(var(--ink-100) / 0.12); }
+.vx-np-gen-bar { height: 6px; border-radius: var(--radius-pill); overflow: hidden; background: rgb(var(--ink-100) / 0.12); }
 .vx-np-gen-bar > span { display: block; height: 100%; border-radius: inherit; background: rgb(var(--ember-500)); transition: width 400ms var(--ease-calm); }
 .vx-np-gen-error { color: rgb(var(--ink-100)); font-size: 13px; font-weight: 650; }
 html.reduce-motion .vx-np-gen-bar > span { transition: none; }
 @media (prefers-reduced-motion: reduce) { .vx-np-gen-bar > span { transition: none; } }
+
+/* ------------------------------------------------- design system v2 motion */
+/* Play ⇄ pause: the new glyph springs in (keyframes and the deck's own rule in shell.css). */
+.vx-np-play > svg { animation: vx-glyph-in var(--dur-base) var(--ease-spring) backwards; }
+/* A new cover eases in when the song changes (SongCanvas adds .is-swap). */
+.vx-np-art-img.is-swap { animation: vx-art-in var(--dur-slow) var(--ease-enter) backwards; }
+@keyframes vx-art-in { from { opacity: 0; transform: scale(0.94); } }
+/* Switching Up next / Lyrics / Credits / Together: the panel cross-fades in,
+   and the selected tab's fill eases between tabs. */
+.vx-np-tabpanel { animation: vx-np-fade var(--dur-base) var(--ease-standard) backwards; }
+.vx-np-tabs [role='tab'] { transition: color var(--dur-base) var(--ease-standard), background-color var(--dur-base) var(--ease-standard); }
+/* Rows arrive in a short stagger (index in --i, capped at 8 in the markup);
+   rows that join later — a new pick, a song you add — arrive the same way. */
+:is(.vx-upnext, .vx-queue-list) > li { animation: vx-np-rise var(--dur-slow) var(--ease-enter) backwards; animation-delay: calc(var(--i, 0) * 28ms); }
+@media (prefers-reduced-motion: reduce) {
+  .vx-np-play > svg, .vx-np-art-img.is-swap, .vx-np-tabpanel, :is(.vx-upnext, .vx-queue-list) > li { animation: none !important; }
+}
+html.reduce-motion :is(.vx-np-play > svg, .vx-np-art-img.is-swap, .vx-np-tabpanel, :is(.vx-upnext, .vx-queue-list) > li) { animation: none !important; }
