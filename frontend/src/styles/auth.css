@@ -9,7 +9,7 @@
   gap: 20px;
   padding: max(40px, 8dvh, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom));
   background:
-    radial-gradient(60% 50dvh at 15% 0, rgb(var(--vx-accent-rgb, 236 72 153) / 0.2), transparent 70%),
+    radial-gradient(60% 50dvh at 15% 0, rgb(var(--ember-500) / 0.2), transparent 70%),
     radial-gradient(50% 45dvh at 90% 100%, rgb(var(--tide-500) / 0.16), transparent 70%),
     rgb(var(--ink-950));
   background-repeat: no-repeat;

@@ -1,10 +1,12 @@
 /**
  * 13.9 — the sheet a signed-out visitor meets when they tap play, like or
  * save while browsing: one line on why, the Google button, and the same
- * promises the sign-in pages make; under it, links to /login and /signup. On sign-in it closes and runs what the
+ * promises the sign-in pages make; under it, links to /login and /signup
+ * (which keep the action and run it after an email sign-in, services/auth/resume). On sign-in it closes and runs what the
  * visitor was doing (services/auth/gate). Loaded only when it opens.
  */
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { keepResume } from '@/services/auth/resume';
 import { useUiStore, type SignInReason } from '@/store/uiStore';
 import { GoogleSignIn } from './GoogleSignIn';
 import { Sheet, SheetHeader } from './Sheet';
@@ -18,6 +20,7 @@ const COPY: Record<SignInReason, { title: string; text: string }> = {
 export function SignInPrompt() {
   const prompt = useUiStore((s) => s.signIn);
   const close = useUiStore((s) => s.closeSignIn);
+  const loc = useLocation();
   if (!prompt) return null;
   const copy = COPY[prompt.reason];
   const resume = prompt.resume;
@@ -30,7 +33,11 @@ export function SignInPrompt() {
             close();
             resume?.();
           }}
-          onLeave={close}
+          onLeave={() => {
+            // Off to /login or /signup: the action runs once they are back here, signed in.
+            if (resume) keepResume(`${loc.pathname}${loc.search}${loc.hash}`, resume);
+            close();
+          }}
         />
       </div>
       <ul className="vx-signin-prompt-perks">

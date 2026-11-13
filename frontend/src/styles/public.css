@@ -4,7 +4,7 @@
   min-height: 100dvh;
   color: rgb(var(--ink-200));
   background:
-    radial-gradient(55% 40dvh at 15% 0, rgb(var(--vx-accent-rgb, 236 72 153) / 0.16), transparent 70%),
+    radial-gradient(55% 40dvh at 15% 0, rgb(var(--ember-500) / 0.16), transparent 70%),
     radial-gradient(45% 40dvh at 95% 100%, rgb(var(--tide-500) / 0.14), transparent 70%),
     rgb(var(--ink-950));
   background-attachment: fixed;
@@ -97,7 +97,7 @@
 .vx-public-signin-button { margin-top: 18px; display: flex; justify-content: center; min-height: 44px; }
 .vx-public-perks { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; text-align: left; font-size: 13.5px; color: rgb(var(--ink-300)); }
 .vx-public-perks li { display: flex; gap: 10px; align-items: baseline; }
-.vx-public-perks li::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--vx-accent-rgb, 236 72 153)); transform: translateY(-1px); }
+.vx-public-perks li::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--ember-500)); transform: translateY(-1px); }
 .vx-public-fine { margin-top: 16px !important; font-size: 12.5px !important; color: rgb(var(--ink-400)) !important; }
 .vx-public-fine a { color: rgb(var(--ink-200)); text-decoration: underline; text-underline-offset: 2px; }
 

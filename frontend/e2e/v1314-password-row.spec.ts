@@ -21,11 +21,11 @@ for (const [name, viewport] of [['computer', { width: 1280, height: 900 }], ['ph
     const block = page.locator('[data-settings-row].is-block', { hasText: 'Password' });
     const form = block.locator('form.vx-email-form');
     await expect(form.getByText('Type it again')).toBeVisible();
+    await expect(block).toBeVisible();
     const [row, box] = await Promise.all([block.boundingBox(), form.boundingBox()]);
     // The form starts at the row's left edge and is as wide as the row allows (max 360 px).
     expect(box!.x - row!.x).toBeLessThan(40);
     expect(box!.width).toBeGreaterThanOrEqual(Math.min(340, row!.width - 40));
-    await block.screenshot({ path: `/private/tmp/claude-501/-Users-cg-it-na-001-Desktop-VinaX/8494a6eb-3b9b-467c-aa3e-954cb1c2d2b1/scratchpad/pw-${name}-open.png` });
     await page.getByRole('button', { name: 'Cancel' }).click();
     await expect(form).toHaveCount(0);
   });

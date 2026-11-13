@@ -145,7 +145,7 @@ for (const d of SHELL_404_DIRS) {
   writeFileSync(join(DIST, d, '404.html'), shell404);
 }
 
-// 1.13.16 — the sign-in pages (/login, /signup, /forgot-password) are app
+// 1.13.22 — the sign-in pages (/login, /signup, /forgot-password) are app
 // pages with no text of their own. Without a file of their own the host's
 // `/* /index.html 200` fallback served them Home's prerendered page and
 // canonical; <page>.html (served at /<page>) is the plain shell, noindex.

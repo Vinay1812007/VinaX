@@ -6,13 +6,14 @@
  * Signed in (already, or the moment a form or Google's button succeeds),
  * the page moves on to `?next=` (services/auth/next).
  */
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { useAccount } from '@/components/useAccount';
 import { GoogleSignIn } from '@/components/GoogleSignIn';
 import { GetAppSlot } from '@/components/GetAppSlot';
 import { rememberGuestBrowse } from '@/services/auth/gate';
 import { authHref, safeNext, type AuthPath } from '@/services/auth/next';
+import { takeResume } from '@/services/auth/resume';
 import '@/styles/auth.css';
 
 /** `next` and the email typed so far, read once from the address. */
@@ -25,6 +26,13 @@ export function useAuthQuery(): { next: string; email: string; setEmail: (v: str
 
 export function AuthShell({ title, lede, next, google = false, children, switcher }: { title: string; lede: string; next: string; google?: boolean; children: ReactNode; switcher: ReactNode }): ReactNode {
   const account = useAccount();
+  // Signed in: back on `next`, finish what the sign-in sheet interrupted (play, like).
+  // Navigate's own effect runs first, so this lands after the page change.
+  useEffect(() => {
+    if (!account) return;
+    const run = takeResume(next);
+    if (run) setTimeout(run, 0);
+  }, [account, next]);
   if (account) return <Navigate to={next} replace />;
   // VinaX AI's address sends here too, with a line about the chat.
   const forChat = /^\/vinaxai(\/|$|\?)/i.test(next);

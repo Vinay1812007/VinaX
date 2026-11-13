@@ -14,7 +14,7 @@
  * artists, videos and the language and mood hubs); tapping play, like or
  * save asks them to sign in right there (services/auth/gate, SignInPrompt).
  * The personal pages (Library, Settings…) send the visitor to /login?next=…
- * (pages/auth, since 1.13.16; it was a sign-in screen at the same URL); since 1.11
+ * (pages/auth, since 1.13.22; it was a sign-in screen at the same URL); since 1.11
  * Home opens signed out too, as the catalogue-only GuestHome.
  * A direct load of a published URL still shows the cheap published text —
  * search engines and first-time landers cost no catalogue calls — with an

@@ -1,10 +1,10 @@
 /**
  * 13.0 — VinaX needs an account. Signed out (?e2e-signed-out keeps the test
  * account away, see support/test.ts), every personal page sends the visitor
- * to the sign-in page (/login?next=…, 1.13.16); the legal pages stay
+ * to the sign-in page (/login?next=…, 1.13.22); the legal pages stay
  * readable. Signed in, the app opens.
  *
- * 1.13.16 — sign-in, sign-up and forgot-password are their own pages
+ * 1.13.22 — sign-in, sign-up and forgot-password are their own pages
  * (pages/auth): Google's button and the email form on one card, no app
  * navigation and no marketing panels.
  */
@@ -49,7 +49,7 @@ test('signed out, every personal page sends you to sign in; the legal pages stay
   await expect(page.getByRole('heading', { name: 'Sign in to VinaX' })).toHaveCount(0);
 });
 
-test('1.13.16: the sign-in page is one card with Google and email, and carries no ads', async ({ page }) => {
+test('1.13.22: the sign-in page is one card with Google and email, and carries no ads', async ({ page }) => {
   await page.route('**/accounts.google.com/**', (r) => r.abort());
   await page.goto('/login?e2e-signed-out');
   await expect(page.getByRole('heading', { name: 'Sign in to VinaX', level: 1 })).toBeVisible();
@@ -64,7 +64,7 @@ test('1.13.16: the sign-in page is one card with Google and email, and carries n
   await expect(page.locator('script[src*="googlesyndication"], ins.adsbygoogle')).toHaveCount(0);
 });
 
-test('1.13.16: the three pages link to each other and keep next and the typed email', async ({ page }) => {
+test('1.13.22: the three pages link to each other and keep next and the typed email', async ({ page }) => {
   await page.route('**/accounts.google.com/**', (r) => r.abort());
   await page.goto('/library?e2e-signed-out');
   await page.getByLabel('Email').fill('me@example.com');
@@ -80,7 +80,7 @@ test('1.13.16: the three pages link to each other and keep next and the typed em
   await expect(page).toHaveURL(/\/login\?next=%2Flibrary/);
 });
 
-test('1.13.16: a wrong password says so, the right one lands on next', async ({ page }) => {
+test('1.13.22: a wrong password says so, the right one lands on next', async ({ page }) => {
   await page.route('**/accounts.google.com/**', (r) => r.abort());
   const calls: string[] = [];
   await mockEmailApi(page, calls);
@@ -96,7 +96,7 @@ test('1.13.16: a wrong password says so, the right one lands on next', async ({ 
   expect(calls).toEqual(['/api/auth/email/login', '/api/auth/email/login']);
 });
 
-test('1.13.16: sign-up is a code, then a password; resend counts down', async ({ page }) => {
+test('1.13.22: sign-up is a code, then a password; resend counts down', async ({ page }) => {
   await page.route('**/accounts.google.com/**', (r) => r.abort());
   const calls: string[] = [];
   await mockEmailApi(page, calls);
@@ -117,7 +117,33 @@ test('1.13.16: sign-up is a code, then a password; resend counts down', async ({
   expect(calls).toEqual(['/api/auth/email/code', '/api/auth/email/verify', '/api/auth/email/verify']);
 });
 
-test('1.13.16: next never leaves the site, and a signed-in visit to /login moves on', async ({ page }) => {
+test('1.13.22: play as a guest, sign in with email from the sheet, and the play goes ahead back on the page', async ({ page }) => {
+  await page.route('**/accounts.google.com/**', (r) => r.abort());
+  await page.addInitScript(() => {
+    try {
+      localStorage.removeItem('vinax.account.v1');
+      sessionStorage.setItem('vinax.guest-browse', '1');
+    } catch {
+      /* storage blocked */
+    }
+  });
+  const calls: string[] = [];
+  await mockEmailApi(page, calls);
+  await page.goto('/explore');
+  await page.getByRole('button', { name: /^Play \d{4}$/ }).click();
+  const sheet = page.getByRole('dialog', { name: 'Sign in to start listening' });
+  await sheet.getByRole('link', { name: 'Sign in with email' }).click();
+  await expect(page).toHaveURL(/\/login\?next=%2Fexplore$/);
+  await expect(page.getByRole('status').filter({ hasText: 'Now playing:' })).toHaveCount(0);
+  await page.getByLabel('Email').fill('mail@example.com');
+  await page.getByLabel('Password', { exact: true }).fill('right-password');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page).toHaveURL(/\/explore$/);
+  // The decade play the sheet interrupted runs now.
+  await expect(page.getByRole('status').filter({ hasText: 'Now playing:' })).toBeVisible();
+});
+
+test('1.13.22: next never leaves the site, and a signed-in visit to /login moves on', async ({ page }) => {
   await page.route('**/accounts.google.com/**', (r) => r.abort());
   await page.goto('/login?e2e-signed-out&next=%2F%2Fevil.example');
   await page.getByRole('link', { name: 'Create an account' }).click();
@@ -206,7 +232,7 @@ test('13.5.0: signed out, a published page shows its own text with a sign-in car
   expect(api.filter((p) => p !== '/api/site-mode' && p !== '/api/auth/google')).toEqual([]);
 });
 
-test('1.13.16: a published page’s sign-in card links to email sign-in with next', async ({ page }) => {
+test('1.13.22: a published page’s sign-in card links to email sign-in with next', async ({ page }) => {
   await page.route('**/accounts.google.com/**', (r) => r.abort());
   await page.goto('/charts/?e2e-signed-out');
   const card = page.locator('#vx-public-signin');
