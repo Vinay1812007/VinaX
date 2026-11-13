@@ -280,8 +280,10 @@ export function validateSession(fetchImpl: typeof fetch = fetch): Promise<boolea
         const j = (await res.json()) as { user?: AccountUser };
         const latest = currentAccount();
         if (j.user && latest && latest.session === a.session) {
-          // `admin` follows the server each time: a removed admin loses the link.
-          const user: AccountUser = { ...latest.user, ...j.user, picture: j.user.picture ?? latest.user.picture, admin: j.user.admin === true };
+          const user: AccountUser = { ...latest.user, ...j.user, picture: j.user.picture ?? latest.user.picture };
+          // `admin` follows the server each time: a removed admin loses the link
+          // (and an account that never was one keeps no `admin` key at all).
+          if (j.user.admin !== true) delete user.admin;
           if (JSON.stringify(user) !== JSON.stringify(latest.user)) setAccount({ ...latest, user });
         }
       }
