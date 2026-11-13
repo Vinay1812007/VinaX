@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.24': {
+    title: 'Festival themes are gone: VinaX keeps your own look all year',
+    changes: [
+      { type: 'improved', text: 'The 43 festival looks are gone, along with the greeting card, the fireworks and confetti, and the festival sounds. VinaX keeps the app style, theme and accent you chose, every day of the year.' },
+      { type: 'improved', text: 'The Festivals page and its countdown are gone from Explore and the menu. Old links to it open Explore.' },
+      { type: 'improved', text: 'Home is the same on every date: the festival strip, the upcoming-festival card and the festival songs shelf are gone, and your recommendations do not lean toward festival music on those days.' },
+      { type: 'improved', text: 'Settings › Appearance loses its six festival rows, and Help loses the Festival themes tour.' },
+    ],
+  },
   '1.13.23': {
     title: 'Sign-in pages match the rest of VinaX, with a clear main button',
     changes: [
