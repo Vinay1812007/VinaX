@@ -550,7 +550,7 @@ export function AppLayout() {
               {/* Search keeps one mount across /search → /search/:q so
                   committing a query doesn't reset filters/scroll (P1-17);
                   every other route remounts for the page-enter animation. */}
-              <div key={pathname.startsWith('/search') ? '/search' : isChat ? '/vinaxai' : pathname} className={isChat ? 'h-full' : coldBoot ? 'vx-cold-boot' : 'animate-fade-up'}>
+              <div key={pathname.startsWith('/search') ? '/search' : isChat ? '/vinaxai' : pathname} className={isChat ? 'h-full' : coldBoot ? 'vx-cold-boot' : 'animate-fade-up vx-route'}>
                 <Outlet />
               </div>
             </Suspense>

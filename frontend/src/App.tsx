@@ -3,6 +3,9 @@ import { RouterProvider } from 'react-router-dom';
 import { router } from './router';
 import { queryClient } from './services/queryClient';
 import { TutorialHost } from './components/TutorialHost';
+import { enablePageTransitions } from './utils/pageTransitions';
+
+enablePageTransitions(router);
 
 export default function App() {
   return (

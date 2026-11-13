@@ -137,6 +137,12 @@ const DIST = 'dist';
 // the top bar and the settings keys for festivals and listening moments. No
 // new first-load feature code beyond those; the next re-base should move the
 // changelog's older cards out of the first load instead.
+// 2026-11-13: that note was wrong. changelog.ts is already its own lazy
+// chunk (~90 KB, loaded with What's New). The headroom came from splitting
+// the right-click menu instead: ContextMenu.tsx keeps only the listener, and
+// the panel (ContextMenuPanel.tsx) is lazy. That saved about 0.9 KB, and the
+// page-transition wrapper (utils/pageTransitions.ts) spent about 0.5 KB of it.
+// The result is 194.4 KB with no re-base.
 const FIRST_LOAD_BUDGET = 195 * 1024; // gzipped
 const CHUNK_BUDGET = 80 * 1024; // gzipped — chunks that ship in the first load
 const LAZY_CHUNK_BUDGET = 160 * 1024; // gzipped — on-demand chunks (routes, features)

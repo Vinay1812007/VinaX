@@ -193,7 +193,7 @@ export function PlayerBar() {
       {/* ---- Desktop: the player deck, three zones ---- */}
       {/* 9.0.0 — a floating, rounded deck tinted from the artwork's left edge. */}
       <div className="hidden lg:block vx-deck-wrap" data-tour="player">
-        <div className="vx-deck vx-mat-chrome">
+        <div className={cn('vx-deck vx-mat-chrome', changed && 'np-changed')}>
         <div className="vx-pb-row">
           <div className="vx-pb-track">
             <button onClick={() => navigate('/now-playing')} aria-label="Open full screen player" className="vx-pb-art group shrink-0">

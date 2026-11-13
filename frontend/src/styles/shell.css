@@ -1,5 +1,8 @@
 /* ============================================================================
    VinaX 10 — "Marigold": the app shell and the shared primitives.
+   Design system v2 (2026-11): radii, timings, curves and focus read the
+   tokens in styles/tokens.css; page changes are View Transitions (end of
+   this file, utils/pageTransitions.ts).
 
    One file for the frame every listener screen sits in (9.0 folded 8.0's
    stage.css and the shell half of flow.css into it). Tokens live only in
@@ -125,7 +128,7 @@ html.amoled .vx-workspace {
   max-height: 100dvh;
   padding-bottom: calc(var(--vx-player-h) + var(--vx-deck-gap) * 2);
   overflow: hidden;
-  transition: width 200ms var(--ease-calm);
+  transition: width var(--dur-slow) var(--ease-standard);
 }
 /* 10.1 — the sidebar is a thin frosted pane on the tinted canvas, its top
    corners rounded to match the workspace sheet beside it. */
@@ -160,14 +163,14 @@ html.amoled .vx-workspace {
   font-weight: 800;
   letter-spacing: -0.04em;
 }
-.vx-brand img { border-radius: 9px; flex-shrink: 0; transition: transform 200ms var(--ease-calm); }
+.vx-brand img { border-radius: 9px; flex-shrink: 0; transition: transform var(--dur-base) var(--ease-standard); }
 .vx-brand:hover img { transform: rotate(-6deg) scale(1.04); }
 /* "Free" beside the wordmark: the promise, always in view on desktop. */
 .vx-brand .vx-brand-free {
   align-self: center;
   margin-left: 2px;
   padding: 3px 8px 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(var(--ember-500) / 0.14);
   color: rgb(var(--ember-400));
   font-family: 'Manrope', system-ui, sans-serif;
@@ -189,12 +192,14 @@ html.amoled .vx-workspace {
   gap: 14px;
   min-height: 46px;
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: rgb(var(--ink-300));
   font-size: 15px;
   font-weight: 650;
-  transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
+  transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-base) var(--ease-standard),
+    box-shadow var(--dur-base) var(--ease-standard), transform var(--dur-quick) var(--ease-spring);
 }
+.vx-nav-link:active { transform: scale(var(--press-scale)); }
 .vx-nav-link:hover { color: rgb(var(--ink-100)); background: var(--vx-hover-warm); }
 /* The active destination is a solid Marigold pill with a deep-brown label. */
 .vx-nav-active, .vx-nav-active:hover {
@@ -204,6 +209,9 @@ html.amoled .vx-workspace {
   box-shadow: 0 8px 20px -12px rgb(var(--ember-600) / 0.9);
 }
 .vx-nav-active svg { color: inherit; }
+/* v2 — the newly active destination settles into its pill. */
+.vx-nav-active { animation: vx-settle var(--dur-slow) var(--ease-spring) backwards; }
+@keyframes vx-settle { from { transform: scale(0.94); } }
 .vx-sidebar.is-collapsed .vx-nav-link,
 .vx-sidebar.is-collapsed .vx-library-title { justify-content: center; padding: 0; }
 @media (min-width: 768px) and (max-width: 1099px) {
@@ -236,7 +244,7 @@ html.light .vx-library { background: rgb(var(--ink-950) / 0.7); }
   min-width: 0;
   min-height: 44px;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: rgb(var(--ink-300));
   font-size: 15px;
   font-weight: 700;
@@ -257,14 +265,15 @@ html.light .vx-library { background: rgb(var(--ink-950) / 0.7); }
   gap: 12px;
   min-height: 56px;
   padding: 6px 8px;
-  border-radius: 14px;
-  transition: background-color 140ms var(--ease-calm);
+  border-radius: var(--radius-lg);
+  transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-spring);
 }
+.vx-lib-row:active { transform: scale(0.985); }
 .vx-lib-row:hover { background: var(--vx-hover-warm); }
 .vx-lib-row.is-active { background: var(--vx-accent-wash); }
 .vx-lib-row.is-active .vx-lib-title { color: rgb(var(--ember-400)); }
 .vx-sidebar.is-collapsed .vx-lib-row { justify-content: center; padding: 6px 0; }
-.vx-lib-art { width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0; object-fit: cover; }
+.vx-lib-art { width: 44px; height: 44px; border-radius: var(--radius-art); flex-shrink: 0; object-fit: cover; }
 .vx-lib-art.rounded-full { border-radius: 50%; }
 .vx-lib-glyph {
   display: grid;
@@ -294,7 +303,7 @@ html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)
   margin: 0 calc(-1 * var(--vx-gutter)) 4px;
   padding: 12px var(--vx-gutter);
   background: transparent;
-  transition: background-color 200ms var(--ease-calm), box-shadow 200ms var(--ease-calm);
+  transition: background-color var(--dur-base) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard);
 }
 /* Clear at the top of the page, so artwork headers run up behind it; the
    chrome material once content scrolls under it (TopBar watches a sentinel
@@ -327,7 +336,7 @@ html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)
   text-overflow: ellipsis;
   opacity: 0;
   transform: translateY(4px);
-  transition: opacity 200ms var(--ease-calm), transform 200ms var(--ease-calm);
+  transition: opacity var(--dur-base) var(--ease-standard), transform var(--dur-base) var(--ease-standard);
 }
 .vx-topbar.is-scrolled .vx-topbar-context { opacity: 1; transform: none; }
 .vx-topbar-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
@@ -337,7 +346,7 @@ html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)
   min-height: 34px;
   margin-right: 4px;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: rgb(var(--ink-400));
   background: rgb(var(--ink-950) / 0.4);
 }
@@ -363,17 +372,17 @@ html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)
   font-size: 14px;
   font-weight: 800;
   box-shadow: 0 0 0 3px rgb(var(--ink-950) / 0.55);
-  transition: transform 140ms var(--ease-calm);
+  transition: transform var(--dur-quick) var(--ease-standard);
 }
 .vx-avatar::after { content: ''; position: absolute; inset: -4px; }
 .vx-avatar:hover { transform: scale(1.05); }
-.vx-avatar.is-open { box-shadow: 0 0 0 2px rgb(var(--ink-950)), 0 0 0 4px rgb(var(--vx-accent-rgb, 236 72 153) / 0.9); }
-.vx-avatar:focus-visible { outline: 2px solid rgb(var(--vx-accent-rgb, 236 72 153)); outline-offset: 3px; }
+.vx-avatar.is-open { box-shadow: 0 0 0 2px rgb(var(--ink-950)), 0 0 0 4px rgb(var(--ember-400)); }
+.vx-avatar:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 /* The "Music languages" button (TopBar → LanguagePicker). */
 .vx-langbtn {
   display: inline-flex; align-items: center; gap: 6px; min-height: 36px; max-width: 220px; padding: 0 10px;
-  border-radius: 999px; color: rgb(var(--ink-100)); background: rgb(var(--ink-950) / 0.4); text-align: left;
+  border-radius: var(--radius-pill); color: rgb(var(--ink-100)); background: rgb(var(--ink-950) / 0.4); text-align: left;
 }
 .vx-langbtn:hover, .vx-langbtn[aria-expanded='true'] { background: rgb(var(--ink-950) / 0.7); }
 .vx-langbtn-text { display: flex; flex-direction: column; min-width: 0; font-size: 12.5px; font-weight: 750; line-height: 1.15; }
@@ -387,21 +396,22 @@ html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)
   gap: 7px;
   min-height: 36px;
   padding: 0 13px 0 10px;
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   border: 1px solid rgb(var(--ink-100) / 0.1);
   background: rgb(var(--ink-100) / 0.05);
   color: rgb(var(--ink-100));
   font-size: 12.5px;
   font-weight: 700;
   white-space: nowrap;
-  transition: transform 140ms var(--ease-calm), background-color 140ms var(--ease-calm), border-color 140ms var(--ease-calm);
+  transition: transform var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard), border-color var(--dur-quick) var(--ease-standard);
 }
 .vx-topbar-feedback-icon { flex-shrink: 0; width: 20px; height: 20px; color: rgb(var(--ember-400)); }
 .vx-topbar-feedback:hover { transform: scale(1.03); border-color: rgb(var(--ember-500) / 0.6); background: rgb(var(--ember-500) / 0.12); }
-.vx-topbar-feedback:focus-visible { outline: 2px solid rgb(var(--vx-accent-rgb, 236 72 153)); outline-offset: 3px; }
+.vx-topbar-feedback:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 /* Phones: a round 36px button like its neighbours, the bulb centred. */
 @media (max-width: 767px) { .vx-topbar-feedback { flex-shrink: 0; justify-content: center; width: 36px; padding: 0; } .vx-topbar-feedback span { display: none; } }
-html.light .vx-topbar-feedback { border-color: rgb(var(--ink-900) / 0.12); background: rgb(var(--ink-900) / 0.05); color: rgb(var(--ink-900)); }
+/* Light: ink-900 is the cream canvas there, so the pill reads the text ink (it was near-invisible). */
+html.light .vx-topbar-feedback { border-color: var(--line-2); background: rgb(var(--ink-100) / 0.04); color: var(--text-1); }
 
 /* 13.9 — a visitor browsing signed out: Sign in where the avatar goes. */
 .vx-topbar-signin {
@@ -410,17 +420,17 @@ html.light .vx-topbar-feedback { border-color: rgb(var(--ink-900) / 0.12); backg
   min-height: 36px;
   margin-left: 4px;
   padding: 0 16px;
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   background: var(--vx-glow);
   color: var(--vx-on-accent);
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.01em;
   box-shadow: 0 0 0 3px rgb(var(--ink-950) / 0.55);
-  transition: transform 140ms var(--ease-calm);
+  transition: transform var(--dur-quick) var(--ease-standard);
 }
 .vx-topbar-signin:hover { transform: scale(1.04); }
-.vx-topbar-signin:focus-visible { outline: 2px solid rgb(var(--vx-accent-rgb, 236 72 153)); outline-offset: 3px; }
+.vx-topbar-signin:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 /* 13.4.0 — the avatar's menu (components/ProfileMenu.tsx): who, profile
    settings, app settings, Sign out. Anchored under the avatar's right edge. */
@@ -437,7 +447,7 @@ html.light .vx-topbar-feedback { border-color: rgb(var(--ink-900) / 0.12); backg
   border-radius: 18px;
   border: 1px solid var(--vx-border);
   background-color: rgb(var(--ink-900) / 0.96);
-  animation: vx-pmenu-in 160ms var(--ease-calm, ease-out);
+  animation: vx-pmenu-in var(--dur-base) var(--ease-enter);
   transform-origin: top right;
 }
 html.light .vx-pmenu { background-color: rgb(255 255 255 / 0.97); }
@@ -458,8 +468,8 @@ html.light .vx-pmenu { background-color: rgb(255 255 255 / 0.97); }
 }
 .vx-pmenu-item > svg { flex: none; color: rgb(var(--ink-300)); }
 .vx-pmenu-item:hover, .vx-pmenu-item:focus-visible { background: rgb(var(--ink-100) / 0.08); }
-.vx-pmenu-item:focus-visible { box-shadow: inset 0 0 0 2px rgb(var(--vx-accent-rgb, 236 72 153) / 0.8); }
-.vx-pmenu-item.is-out { margin-top: 4px; border-top: 1px solid var(--vx-border); border-radius: 0 0 10px 10px; color: rgb(var(--ember-400, 251 113 133)); }
+.vx-pmenu-item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent-text); }
+.vx-pmenu-item.is-out { margin-top: 4px; border-top: 1px solid var(--vx-border); border-radius: 0 0 10px 10px; color: rgb(var(--ember-400)); }
 .vx-pmenu-item.is-out > svg { color: inherit; }
 @media (prefers-reduced-motion: reduce) { .vx-pmenu { animation: none; } }
 html.reduce-motion .vx-pmenu { animation: none; }
@@ -494,10 +504,13 @@ html.reduce-motion .vx-pmenu { animation: none; }
   place-items: center;
   width: 56px;
   height: 30px;
-  border-radius: 999px;
-  transition: background-color 180ms var(--ease-calm), color 180ms var(--ease-calm), transform 140ms var(--ease-calm);
+  border-radius: var(--radius-pill);
+  transition: background-color var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard), transform var(--dur-quick) var(--ease-spring);
 }
-.vx-dock-item:active .vx-dock-pill { transform: scale(0.94); }
+.vx-dock-item:active .vx-dock-pill { transform: scale(0.9); }
+/* v2 — the active tab's pill grows out from its icon. */
+.vx-dock-active .vx-dock-pill { animation: vx-pill-in var(--dur-slow) var(--ease-spring) backwards; }
+@keyframes vx-pill-in { from { transform: scaleX(0.55); opacity: 0.4; } }
 .vx-dock-active, .vx-dock-active:hover { color: rgb(var(--ink-100)); font-weight: 800; }
 .vx-dock-active .vx-dock-pill { background: rgb(var(--ember-500)); color: var(--vx-on-accent); }
 
@@ -509,6 +522,11 @@ html.reduce-motion .vx-pmenu { animation: none; }
   overflow: hidden;
   border-radius: 22px;
 }
+/* v2 — a new song slides in: artwork and titles arrive together. */
+.vx-deck.np-changed .vx-pb-track > * { animation: vx-track-in var(--dur-slow) var(--ease-enter) backwards; }
+.vx-deck.np-changed .vx-pb-track > :nth-child(2) { animation-delay: 40ms; }
+.np-mini.np-changed .np-mini-thumb { animation: vx-track-in var(--dur-slow) var(--ease-enter) backwards; }
+@keyframes vx-track-in { from { opacity: 0; transform: translateX(-8px); } }
 /* A hairline of the brand gradient along the deck's top edge. */
 .vx-deck::after {
   content: '';
@@ -538,7 +556,7 @@ html.reduce-motion .vx-pmenu { animation: none; }
   padding: 8px 14px 8px 10px;
 }
 .vx-pb-track { display: flex; align-items: center; gap: 14px; min-width: 0; }
-.vx-pb-art { position: relative; display: block; overflow: hidden; border-radius: 12px; box-shadow: var(--vx-art-shadow); }
+.vx-pb-art { position: relative; display: block; overflow: hidden; border-radius: var(--radius-art); box-shadow: var(--vx-art-shadow); }
 .vx-pb-art-hint {
   position: absolute;
   inset: 0;
@@ -547,7 +565,7 @@ html.reduce-motion .vx-pmenu { animation: none; }
   background: rgb(0 0 0 / 0.45);
   color: #fff;
   opacity: 0;
-  transition: opacity 140ms var(--ease-calm);
+  transition: opacity var(--dur-quick) var(--ease-standard);
 }
 .vx-pb-art:hover .vx-pb-art-hint, .vx-pb-art:focus-visible .vx-pb-art-hint { opacity: 1; }
 .vx-pb-title { color: rgb(var(--ink-100)); font-size: 14px; font-weight: 700; }
@@ -565,7 +583,7 @@ html.reduce-motion .vx-pmenu { animation: none; }
   height: 36px;
   border-radius: 50%;
   color: rgb(var(--ink-300));
-  transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
+  transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-pb-link::after { content: ''; position: absolute; inset: -4px; }
 .vx-pb-link:hover { color: rgb(var(--ink-100)); background: var(--vx-hover-warm); }
@@ -582,7 +600,7 @@ html.reduce-motion .vx-pmenu { animation: none; }
   background: rgb(var(--ember-500));
   color: var(--vx-on-accent);
   box-shadow: 0 10px 22px -12px rgb(var(--ember-600) / 0.9);
-  transition: transform 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
+  transition: transform var(--dur-quick) var(--ease-spring), background-color var(--dur-quick) var(--ease-standard);
 }
 .np-play-desktop::after { content: ''; position: absolute; inset: -1px; }
 .np-play-desktop:hover { transform: scale(1.05); background: rgb(var(--ember-400)); }
@@ -638,12 +656,12 @@ html.amoled .np-mini { --mat-tint: none; }
   gap: 4px;
   min-height: 34px;
   padding: 0 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: rgb(var(--ink-300));
   font-size: 13px;
   font-weight: 700;
   position: relative;
-  transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
+  transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-section-link::after { content: ''; position: absolute; inset: -5px 0; }
 .vx-section-link:hover { color: rgb(var(--ember-400)); background: var(--vx-hover-warm); }
@@ -697,7 +715,7 @@ html.amoled .np-mini { --mat-tint: none; }
   background: rgb(var(--ember-500));
   color: var(--vx-on-accent);
   box-shadow: 0 12px 28px -12px rgb(var(--ember-600) / 0.9);
-  transition: transform 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
+  transition: transform var(--dur-quick) var(--ease-spring), background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-play-fab:hover { background: rgb(var(--ember-400)); transform: scale(1.04); }
 .vx-play-fab:active { transform: scale(0.96); }
@@ -745,6 +763,8 @@ html[data-density='compact'] .vx-shelf { margin-bottom: 28px; }
   --mat-lift: 0 16px 40px -12px rgb(0 0 0 / 0.55), 0 4px 12px -4px rgb(0 0 0 / 0.3);
   color: rgb(var(--ink-100));
 }
+.vx-pop-in { animation: vx-pop-in var(--dur-base) var(--ease-spring) backwards; }
+@keyframes vx-pop-in { from { opacity: 0; transform: scale(0.94); } }
 html.light .vx-popover { --mat-lift: 0 16px 40px -16px rgb(48 22 34 / 0.3), 0 2px 8px -2px rgb(48 22 34 / 0.12); }
 
 /* 10.1 — snackbars (components/Toasts.tsx) rise above the tab bar and the
@@ -786,7 +806,7 @@ html.light .vx-popover { --mat-lift: 0 16px 40px -16px rgb(48 22 34 / 0.3), 0 2p
   pointer-events: auto;
   touch-action: none;
   user-select: none;
-  animation: vx-snack-in 220ms var(--vx-ease-out) backwards;
+  animation: vx-snack-in var(--dur-slow) var(--ease-spring) backwards;
 }
 html.light .vx-snack {
   --mat-fill: rgb(var(--ink-950) / clamp(0.92, calc(var(--glass-alpha) + 0.16), 0.98));
@@ -795,7 +815,7 @@ html.light .vx-snack {
 html.amoled .vx-snack { --mat-fill: rgb(var(--ink-800)); }
 .vx-snack:has(.vx-snack-art) { padding-left: 6px; }
 .vx-snack:not(:has(.vx-snack-action)) { padding-right: 18px; }
-.vx-snack.is-leaving { pointer-events: none; animation: vx-snack-out 180ms var(--ease-calm) forwards; }
+.vx-snack.is-leaving { pointer-events: none; animation: vx-snack-out var(--dur-quick) var(--ease-standard) forwards; }
 .vx-snack-art {
   flex-shrink: 0;
   width: 36px;
@@ -824,7 +844,7 @@ html.amoled .vx-snack { --mat-fill: rgb(var(--ink-800)); }
   color: rgb(var(--ember-400));
   font-size: 14px;
   font-weight: 800;
-  transition: background-color 160ms var(--ease-calm);
+  transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-snack-action::after { content: ''; position: absolute; inset: -4px 0; }
 .vx-snack-action:hover { background: var(--vx-hover-warm); }
@@ -836,6 +856,33 @@ html.amoled .vx-snack { --mat-fill: rgb(var(--ink-800)); }
 @keyframes vx-snack-out {
   to { opacity: 0; transform: translateY(10px) scale(0.97); }
 }
+
+/* ------------------------------------------------- page transitions (v2) */
+/* utils/pageTransitions.ts runs every page change inside a View Transition
+   and puts .vx-vt on <html> where the browser has the API. Names exist only
+   while one runs (.vx-vt-on): a named element is a backdrop root, so a
+   permanent name would stop the glass chrome blurring what is behind it.
+   Only the page area moves, arriving the app style's way (--tpl-enter,
+   templates/base.css); the chrome sits in the root snapshot, unchanged. The
+   playing artwork is one shared element: the player's thumbnail grows into
+   Now Playing's. */
+html.vx-vt-on .vx-workspace { view-transition-name: vx-page; }
+html.vx-vt-on :is(.vx-pb-art, .np-mini-thumb, .vx-np-art) { view-transition-name: vx-np-art; }
+/* The old remount entrance would play twice inside a transition. */
+html.vx-vt .vx-route.animate-fade-up { animation: none; }
+::view-transition-old(root),
+::view-transition-new(root) { animation-duration: var(--dur-base); }
+::view-transition-group(vx-page) { animation-duration: var(--dur-base); animation-timing-function: var(--ease-standard); }
+::view-transition-old(vx-page) { animation: vx-vt-out var(--dur-quick) var(--ease-exit) both; }
+::view-transition-new(vx-page) { animation: var(--tpl-enter, tplRise) var(--tpl-enter-dur, 260ms) var(--ease-enter) both; }
+::view-transition-group(vx-np-art) { animation-duration: var(--dur-slow); animation-timing-function: var(--ease-spring); }
+@keyframes vx-vt-out { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
+html.reduce-motion::view-transition-group(*),
+html.reduce-motion::view-transition-old(*),
+html.reduce-motion::view-transition-new(*) { animation: none !important; }
 
 /* ---------------------------------------------------------------- motion */
 @media (prefers-reduced-motion: reduce) {
@@ -871,14 +918,14 @@ html.reduce-motion .vx-snack { animation: none !important; transition: none !imp
 .vx-getapp-sub { font-size: 12px; color: rgb(var(--ink-300)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vx-getapp-btn {
   flex: none; display: inline-flex; align-items: center; justify-content: center;
-  min-height: 36px; padding: 0 16px; border-radius: 9999px;
+  min-height: 36px; padding: 0 16px; border-radius: var(--radius-pill);
   font-size: 14px; font-weight: 800; white-space: nowrap;
   color: var(--vx-on-accent); background: rgb(var(--ember-500));
 }
 .vx-getapp-btn:hover { background: rgb(var(--ember-400)); }
-.vx-getapp-btn:focus-visible, .vx-getapp-close:focus-visible { outline: 2px solid rgb(var(--ember-400)); outline-offset: 2px; }
+.vx-getapp-btn:focus-visible, .vx-getapp-close:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .vx-getapp-close {
-  flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 9999px;
+  flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--radius-pill);
   color: rgb(var(--ink-300));
 }
 .vx-getapp-close:hover { color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.08); }
@@ -887,7 +934,7 @@ html.reduce-motion .vx-snack { animation: none !important; transition: none !imp
 .vx-install-steps { display: grid; gap: 12px; margin: 14px 0 0; padding: 0; list-style: none; counter-reset: step; }
 .vx-install-steps li { display: flex; align-items: flex-start; gap: 12px; counter-increment: step; }
 .vx-install-glyph { display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 12px; background: rgb(var(--ink-100) / 0.08); color: rgb(var(--ink-100)); position: relative; }
-.vx-install-glyph::after { content: counter(step); position: absolute; top: -6px; left: -6px; width: 18px; height: 18px; border-radius: 999px; background: rgb(var(--ember-500)); color: #130e16; font-size: 11px; font-weight: 800; display: grid; place-items: center; }
+.vx-install-glyph::after { content: counter(step); position: absolute; top: -6px; left: -6px; width: 18px; height: 18px; border-radius: var(--radius-pill); background: rgb(var(--ember-500)); color: #130e16; font-size: 11px; font-weight: 800; display: grid; place-items: center; }
 .vx-install-text { font-size: 14.5px; line-height: 1.4; color: rgb(var(--ink-200)); padding-top: 8px; }
 .vx-install-text strong { color: rgb(var(--ink-100)); }
 .vx-install-note { margin: 14px 0 0; font-size: 13px; color: rgb(var(--ink-400)); }

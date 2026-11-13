@@ -1412,6 +1412,16 @@ The UI is being rebuilt on one system, phase by phase. Phase 1 adds the base; pa
   - It shows every token with measured contrast, the type scale, the motion curves, every primitive, the mini-player-to-Now-Playing shared-element move, and a full festival takeover.
   - Its preview bar (theme, style, accent, festival, reduced motion) changes only `<html>` while the page is open. It never writes settings.
   - The page is unlinked, `noindex` (meta tag and `_headers`) and on demand (not precached). `e2e/design-system.spec.ts` gates it.
+- **Page transitions (Phase 2):** `utils/pageTransitions.ts` wraps `router.navigate`, so every link and `useNavigate` page change runs as a View Transition, and Back replays it.
+  - Only the page area moves (`vx-page`). The new page arrives with the app style's own entrance (`--tpl-enter`). The player artwork is a shared element (`vx-np-art`) that grows into Now Playing's artwork.
+  - There is no transition for replace navigations, moves inside one screen (search queries, chat threads), reduced motion, or browsers without the API. Those keep the CSS remount entrance.
+  - Names are set only while a transition runs (`.vx-vt-on` on `<html>`, about 0.9 s). A named element is a backdrop root, and a permanent name stopped the glass player deck from blurring the page.
+  - Gated by `e2e/page-transitions.spec.ts`.
+- **Shell (Phase 2):** `shell.css` reads the v2 tokens.
+  - Pills use `--radius-pill`, and timings use `--dur-*` with `--ease-standard` or `--ease-spring`.
+  - There is one focus ring, `--focus-ring`; the hard-coded pink fallback is gone.
+  - Interaction motion: destinations and library rows sink on a spring when pressed, the active sidebar pill settles in, the active tab-bar pill grows out of its icon, and a new song slides into the player deck.
+  - The right-click menu's panel (`ContextMenuPanel.tsx`) loads on the first right-click; only its listener ships in the first load.
 - **Festival takeover (prototype):** `html.vx-takeover.fest-<id>` re-pitches the whole palette. That covers all eleven ink steps, both brand ramps, the hairlines, a player seek gradient (`--player-seek`) and the mark's ornament (`--fest-ornament`).
   - For now it is only on `/design` (Diwali and Christmas, in `styles/pages/design.css`). Phase 6 generates it for every festival.
   - The class is `vx-`, not `fest-`, because `FestiveSplash` removes every `fest-*` class it did not set.
