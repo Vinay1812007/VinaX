@@ -18,6 +18,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.22': {
+    title: 'Tap play, sign in with your email, and the song plays',
+    changes: [
+      { type: 'improved', text: 'Tapped play or like before signing in, then chose "Sign in with email" or "Create an account"? Once you\'re signed in you land back on the page and the song plays (or the like is saved), the same as signing in with Google there.' },
+    ],
+  },
   '1.13.21': {
     title: 'Live voice fits every phone, and VinaX AI follows your theme and festivals',
     changes: [
