@@ -27,7 +27,7 @@ import { songKey } from '@/services/recommendation/songIdentity';
 import { admitSongs } from '@/services/recommendation/admission';
 import { isTuneIntent, randomTune, type TuneIntent } from '@/services/recommendation/tune';
 import { noteSessionEvent } from '@/services/personalization/sessionIntent';
-import { setNowPlayingProbe, useLibraryStore } from '@/store/libraryStore';
+import { setNowPlayingProbe } from '@/store/libraryStore';
 import {
   creditTick,
   emitPlaybackEvent,
@@ -548,12 +548,6 @@ export const usePlayerStore = create<PlayerState>()(
           // really been heard (services/playback/session.ts).
           useHistoryStore.getState().addPlay(song);
           playbackInHistory = true;
-          void import('@/utils/streak').then((m) => m.bumpStreak()).catch(() => undefined);
-          // 1.12 — badges: count the play and announce anything newly earned (a moment later, after the streak).
-          void import('@/features/badges/afterPlay').then((m) => m.afterPlay(() => {
-            const lib = useLibraryStore.getState();
-            return { entries: useHistoryStore.getState().entries, favorites: lib.favorites.length, playlists: lib.collections.length };
-          }, { toast, navigate: toastNavigate })).catch(() => undefined);
           // Android 13+: the playback notification needs this permission.
           void checkNotificationOnFirstPlay(toast);
           scheduleBridgeCheck();

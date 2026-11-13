@@ -77,7 +77,6 @@ function seedDevice(): void {
   set(KEYS.userHandle, 'vinay_k');
   set(KEYS.onboarded, true);
   set(KEYS.alarm, { state: { enabled: true, time: '06:30', action: 'favorites', collectionId: null, fadeIn: true, lastFired: '' }, version: 0 });
-  set('vinax.streak.v1', { count: 4, lastDay: '2026-09-15', best: 9 });
   // Things that must NOT travel:
   set(KEYS.signedDeviceId, 'abc.sig');
   set(KEYS.deviceId, 'uuid-1');
@@ -144,7 +143,6 @@ describe('round trip', () => {
     expect((get('vinax.search.workspace.v1') as { state: { presets: Array<{ name: string }> } }).state.presets[0].name).toBe('Telugu 90s');
     expect(get('vinax.home.design.v1')).toMatchObject({ hidden: ['charts'] });
     expect(get(KEYS.userName)).toBe('Vinay');
-    expect(get('vinax.streak.v1')).toEqual({ count: 4, lastDay: '2026-09-15', best: 9 });
     // Identity is a claim, not a fact: the username is re-confirmed, not written.
     expect(get(KEYS.userHandle)).toBeNull();
     expect(get(KEYS.userHandlePending)).toMatchObject({ username: 'vinay_k', status: 'pending' });
@@ -512,13 +510,12 @@ describe('validated import keeps wrong types out', () => {
 });
 
 describe('merge mode for the categories that used to be replaced', () => {
-  it('extras: streak, offsets, karaoke, sidebar groups and the alarm', () => {
+  it('extras: offsets, karaoke, sidebar groups and the alarm', () => {
     const json = fileWith({
       extras: {
         [KEYS.alarm]: { state: { enabled: false, time: '09:00', action: 'resume', collectionId: null, fadeIn: true, lastFired: '' }, version: 0 },
         [KEYS.lyricsOffset]: { state: { offsets: { s1: 2, s2: -1 } }, version: 0 },
         [KEYS.karaoke]: [{ song: song('k1'), at: 50 }, { song: song('k2'), at: 10 }],
-        'vinax.streak.v1': { count: 2, lastDay: '2026-09-16', best: 30 },
         'vinax.nav.groups.v1': ['Explore', 'Library'],
       },
     });
@@ -530,16 +527,15 @@ describe('merge mode for the categories that used to be replaced', () => {
     expect((get(KEYS.alarm) as { state: { time: string; enabled: boolean } }).state).toMatchObject({ time: '06:30', enabled: true });
     expect((get(KEYS.lyricsOffset) as { state: { offsets: Record<string, number> } }).state.offsets).toEqual({ s1: -3, s2: -1, s9: 1 });
     expect((get(KEYS.karaoke) as Array<{ song: Song; at: number }>).map((k) => [k.song.id, k.at])).toEqual([['k1', 90], ['k3', 20], ['k2', 10]]);
-    // Device streak (4, 2026-09-15, best 9) vs file (2, 2026-09-16, best 30): later day wins, best is the max.
-    expect(get('vinax.streak.v1')).toEqual({ count: 2, lastDay: '2026-09-16', best: 30 });
     expect(get('vinax.nav.groups.v1')).toEqual(['Library', 'You', 'Explore']);
   });
 
-  it('streak: an older file never rolls the device back, and lists are capped', () => {
-    const json = fileWith({ extras: { 'vinax.streak.v1': { count: 50, lastDay: '2026-01-01', best: 50 }, 'vinax.nav.groups.v1': Array.from({ length: 50 }, (_, i) => `g${i}`) } });
+  it('lists are capped, and a streak or badges in an older file are left out (2.0)', () => {
+    const json = fileWith({ extras: { 'vinax.streak.v1': { count: 50, lastDay: '2026-01-01', best: 50 }, 'vinax.badges.v1': { earned: { century: '2026-03-01' }, counters: {} }, 'vinax.nav.groups.v1': Array.from({ length: 50 }, (_, i) => `g${i}`) } });
     set('vinax.nav.groups.v1', ['mine']);
     applyBackup(parseOk(json), { mode: 'merge' });
-    expect(get('vinax.streak.v1')).toEqual({ count: 4, lastDay: '2026-09-15', best: 50 });
+    expect(get('vinax.streak.v1')).toBeNull();
+    expect(get('vinax.badges.v1')).toBeNull();
     const groups = get('vinax.nav.groups.v1') as string[];
     expect(groups).toHaveLength(50);
     expect(groups[0]).toBe('mine');

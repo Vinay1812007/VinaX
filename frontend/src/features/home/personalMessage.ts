@@ -3,12 +3,12 @@ import { languageLabel } from '@/constants/languages';
 
 /**
  * Personalized home message — a different greeting for every listener, every
- * day, computed ENTIRELY on-device from their own name, history, streak and
+ * day, computed ENTIRELY on-device from their own name, history and
  * taste profile (no server, no cohorts, nothing uploaded — the invariant).
  *
  * Pure and injectable: the page gathers the signals, this ranks which
  * message matters most right now. Priority runs from "rare and personal"
- * (comeback, streak) down to a deterministic daily rotation so the
+ * (comeback) down to a deterministic daily rotation so the
  * default greeting still changes day to day — but never mid-session.
  */
 export interface MessageInput {
@@ -19,7 +19,6 @@ export interface MessageInput {
   totalPlays: number; // lifetime local history length
   weekPlays: number;
   weekMinutes: number;
-  streakDays: number;
   daysSinceLastListen: number; // Infinity when never
   topLanguage: string | null; // profile language id, e.g. 'telugu'
   topArtist: string | null; // display name
@@ -68,14 +67,6 @@ export function personalMessage(i: MessageInput): PersonalMessage {
       subtitle: lang
         ? `Fresh ${lang} finds landed while you were away.`
         : 'Fresh finds landed while you were away.',
-    };
-  }
-
-  // 3 · An active streak is worth celebrating (3+ days).
-  if (i.streakDays >= 3) {
-    return {
-      title: `Day ${i.streakDays} streak${name ? `, ${name}` : ''} 🔥`,
-      subtitle: lang ? `${lang} picks are queued to keep it alive.` : 'Today’s picks are queued to keep it alive.',
     };
   }
 

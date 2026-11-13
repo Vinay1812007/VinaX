@@ -13,7 +13,6 @@ import { persist } from 'zustand/middleware';
 import type { Song } from '@/types';
 import { KEYS } from '@/constants/storage-keys';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
-import { getLocal } from '@/services/storage/local';
 import { loadProfile } from '@/services/personalization/storage';
 import { useLibraryStore } from '@/store/libraryStore';
 import { deleteMyProfile, getFollowing, getMyProfile, liteSong, putMyProfile, setFollow, type ProfileWrite, type PublicProfile } from '@/services/social/api';
@@ -42,19 +41,8 @@ export const DIGEST_EVERY_MS = 30 * 60_000;
 export const NOW_EVERY_MS = 3 * 60_000;
 export const REFRESH_EVERY_MS = 5 * 60_000;
 
-/**
- * 1.12 — the badge ids earned, oldest first, read straight from the ledger
- * (features/badges/engine.ts owns it; this store is in the first load, so it
- * does not import the engine).
- */
-export function earnedBadgeIds(): string[] {
-  const raw = getLocal<{ earned?: Record<string, unknown> } | null>(KEYS.badges, null);
-  const earned = raw && typeof raw === 'object' && raw.earned && typeof raw.earned === 'object' ? raw.earned : {};
-  return Object.entries(earned).filter((e): e is [string, string] => typeof e[1] === 'string').sort((a, b) => a[1].localeCompare(b[1])).map(([id]) => id);
-}
-
-/** The digest from the taste profile, favourites and the badges earned (1.12). Pure. */
-export function buildDigest(favorites: Song[], profile = loadProfile(), badges: string[] = earnedBadgeIds()): NonNullable<ProfileWrite['summary']> {
+/** The digest from the taste profile and favourites. Pure. (2.0 — badges are gone, so none are sent.) */
+export function buildDigest(favorites: Song[], profile = loadProfile()): NonNullable<ProfileWrite['summary']> {
   const artists = topArtists(profile, 10).map((a) => ({ name: a.affinity.name, plays: a.affinity.plays }));
   const langs = topLanguages(profile, 3);
   const total = langs.reduce((n, l) => n + Math.max(0, l.affinity.score), 0) || 1;
@@ -62,7 +50,6 @@ export function buildDigest(favorites: Song[], profile = loadProfile(), badges: 
     topArtists: artists,
     topLanguages: langs.map((l) => ({ id: l.id, pct: Math.round((Math.max(0, l.affinity.score) / total) * 100) })),
     recentLikes: favorites.slice(0, 20).map(liteSong),
-    badges: badges.slice(0, 40),
   };
 }
 

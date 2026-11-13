@@ -15,7 +15,6 @@ function base(over: Partial<MessageInput> = {}): MessageInput {
     totalPlays: 40,
     weekPlays: 12,
     weekMinutes: 45,
-    streakDays: 1,
     daysSinceLastListen: 0.5,
     topLanguage: 'telugu',
     topArtist: 'Sid Sriram',
@@ -34,11 +33,6 @@ describe('personalMessage priorities', () => {
     const m = personalMessage(base({ daysSinceLastListen: 9 }));
     expect(m.title).toBe('Welcome back, Sekhar');
     expect(m.subtitle).toContain('Telugu');
-  });
-
-  it('a 3+ day streak is celebrated', () => {
-    const m = personalMessage(base({ streakDays: 5 }));
-    expect(m.title).toContain('Day 5 streak');
   });
 
   it('friday evening gets its own energy; tuesday morning does not', () => {

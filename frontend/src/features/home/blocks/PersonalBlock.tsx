@@ -15,7 +15,7 @@ import type { Mix } from '@/services/recommendation/types';
 import type { Song } from '@/types';
 import { onThisDay } from '../onThisDay';
 import { localDateKey, pickDailyFavorite, useBecauseYouLiked } from '../useBecauseYouLiked';
-import { SongOfTheDayCard, StreakCard } from '../DailyCards';
+import { SongOfTheDayCard } from '../DailyCards';
 import { DiscoverFiveCard } from '../DiscoverFive';
 import { useReleaseStore } from '@/features/releases/releaseWatch';
 import { YourPlaylistsShelf } from '../YourPlaylists';
@@ -146,7 +146,6 @@ function MorePersonal({ mixes }: { mixes: Mix[] }) {
   return (
     <>
       <div className="vxh-daily">
-        <StreakCard entries={historyEntries} />
         <SongOfTheDayCard favorites={favorites} entries={historyEntries} />
         <DiscoverFiveCard entries={historyEntries} favorites={favorites} />
       </div>

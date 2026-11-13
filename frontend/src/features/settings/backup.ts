@@ -1,5 +1,4 @@
 import { KEYS } from '@/constants/storage-keys';
-import { mergeLedgers as mergeBadgeLedgers, sanitizeLedger as sanitizeBadgeLedger } from '@/features/badges/engine';
 import { LATEST_VERSION } from '@/constants/version';
 import { getLocal, setLocal, writeLocalBatch, type StorageFailure } from '@/services/storage/local';
 import { HOME_DESIGN_KEY, validateHomeDesign } from '@/services/recommendation/homeDesign';
@@ -68,9 +67,6 @@ export const MAX_BACKUP_BYTES = 8 * 1024 * 1024;
 
 const SEARCH_WORKSPACE_KEY = 'vinax.search.workspace.v1';
 const BOOKMARKS_KEY = 'vinax.bookmarks.v1';
-const STREAK_KEY = 'vinax.streak.v1';
-/** 1.12 — badges earned and the lifetime counters behind them (features/badges/engine.ts). */
-const BADGES_KEY = KEYS.badges;
 const NAV_GROUPS_KEY = 'vinax.nav.groups.v1';
 export { SMART_COLLECTIONS_KEY };
 
@@ -679,14 +675,12 @@ export const HEARD_IMPORT_KEY = 'vinax.recs.heard.import.v1';
 
 const extrasCategory: BackupCategory = {
   id: 'extras',
-  label: 'Alarm, lyrics, streak, badges & app preferences',
-  description: 'Wake-up alarm, lyric sync offsets, karaoke history, listening streak, badges and sidebar groups.',
+  label: 'Alarm, lyrics & app preferences',
+  description: 'Wake-up alarm, lyric sync offsets, karaoke history and sidebar groups.',
   keys: [
     { key: KEYS.alarm },
     { key: KEYS.lyricsOffset },
     { key: KEYS.karaoke },
-    { key: STREAK_KEY },
-    { key: BADGES_KEY },
     { key: NAV_GROUPS_KEY },
   ],
   sanitize: (values, ctx) => {
@@ -711,12 +705,6 @@ const extrasCategory: BackupCategory = {
       } else if (spec.key === KEYS.karaoke) {
         if (!Array.isArray(v)) return { error: 'Karaoke history is malformed.' };
         out[spec.key] = capped(v.filter(isObj).map((s) => ({ song: sanitizeSong(s.song), at: num(s.at) ?? Date.now() })).filter((s) => s.song), LIST_CAPS.karaoke, 'Karaoke history', ctx);
-      } else if (spec.key === STREAK_KEY) {
-        if (!isObj(v) || num(v.count) === null || typeof v.lastDay !== 'string') return { error: 'Streak data is malformed.' };
-        out[spec.key] = { count: v.count, lastDay: v.lastDay.slice(0, 10), best: num(v.best) ?? v.count };
-      } else if (spec.key === BADGES_KEY) {
-        if (!isObj(v) || !isObj(v.earned)) return { error: 'Badge data is malformed.' };
-        out[spec.key] = sanitizeBadgeLedger(v);
       } else if (spec.key === NAV_GROUPS_KEY) {
         if (!Array.isArray(v)) return { error: 'App preference list is malformed.' };
         out[spec.key] = capped(v.filter((g): g is string => typeof g === 'string').map((g) => g.slice(0, 80)), LIST_CAPS.prefs, 'Sidebar groups', ctx);
@@ -730,17 +718,12 @@ const extrasCategory: BackupCategory = {
     if (alarm) parts.push(alarm.enabled ? `alarm ${String(alarm.time)}` : 'alarm off');
     const offsets = envelope(values[KEYS.lyricsOffset])?.state.offsets;
     if (isObj(offsets) && Object.keys(offsets).length) parts.push(`${Object.keys(offsets).length} lyric offsets`);
-    const streak = values[STREAK_KEY];
-    if (isObj(streak)) parts.push(`streak ${String(streak.count)} (best ${String(streak.best ?? streak.count)})`);
-    const badges = values[BADGES_KEY];
-    if (isObj(badges) && isObj(badges.earned)) parts.push(`${Object.keys(badges.earned).length} badge${Object.keys(badges.earned).length === 1 ? '' : 's'}`);
     return parts.join(' · ') || 'Nothing saved';
   },
   /**
    * Key by key, because these are unrelated things sharing a category:
    * lists are unioned (this device first), per-song offsets keep this
-   * device's value, the streak keeps whichever side is more recent with the
-   * best of both, and the alarm — one deliberate setting — stays as it is
+   * device's value, and the alarm — one deliberate setting — stays as it is
    * here. The text preferences follow the file, like settings do.
    */
   merge: (current, incoming) => {
@@ -756,17 +739,6 @@ const extrasCategory: BackupCategory = {
         .sort((x, y) => y.at - x.at)
         .filter((x) => (seen.has(x.song.id) ? false : (seen.add(x.song.id), true)))
         .slice(0, LIST_CAPS.karaoke);
-    }
-    const a = current[STREAK_KEY];
-    const b = incoming[STREAK_KEY];
-    if (isObj(a) && isObj(b)) {
-      // lastDay is YYYY-MM-DD, so string order is date order.
-      const later = String(b.lastDay) > String(a.lastDay) ? b : a;
-      out[STREAK_KEY] = { count: later.count, lastDay: later.lastDay, best: Math.max(num(a.best) ?? 0, num(b.best) ?? 0, num(a.count) ?? 0, num(b.count) ?? 0) };
-    }
-    if (isObj(current[BADGES_KEY]) && isObj(incoming[BADGES_KEY])) {
-      // Badges add up: a badge keeps its earliest day, each counter the larger side.
-      out[BADGES_KEY] = mergeBadgeLedgers(sanitizeBadgeLedger(current[BADGES_KEY]), sanitizeBadgeLedger(incoming[BADGES_KEY]));
     }
     if (Array.isArray(current[NAV_GROUPS_KEY]) && Array.isArray(incoming[NAV_GROUPS_KEY])) {
       // The ceiling never drops below what this device already holds.

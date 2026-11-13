@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { calendarCells, listeningStreaks, localDayKey } from './calendar';
+import { calendarCells, localDayKey } from './calendar';
 import type { HistoryEntry, Song } from '@/types';
 
 const song = (id: string, duration = 240): Song => ({
@@ -21,11 +21,9 @@ describe('calendarCells (v5.17.0)', () => {
     expect(todayIdx).toBe(84 - 7 + 2); // Wednesday of the last column
     expect(r.cells.slice(todayIdx + 1).every((c) => c.future)).toBe(true);
     expect(r.cells[todayIdx].future).toBe(false);
-    expect(r.currentStreak).toBe(0);
-    expect(r.longestStreak).toBe(0);
   });
 
-  it('buckets minutes relative to the busiest day and counts streaks', () => {
+  it('buckets minutes relative to the busiest day and counts the active days', () => {
     const entries = [
       play(at(2026, 8, 9, 10)), play(at(2026, 8, 9, 11)), play(at(2026, 8, 9, 12)), play(at(2026, 8, 9, 13)), // today 16 min
       play(at(2026, 8, 8)), // yesterday 4 min
@@ -41,14 +39,6 @@ describe('calendarCells (v5.17.0)', () => {
     expect(byKey.get('2026-09-07')?.minutes).toBe(1);
     expect(byKey.get('2026-09-06')?.level).toBe(0);
     expect(r.activeDays).toBe(7);
-    expect(r.currentStreak).toBe(3);
-    expect(r.longestStreak).toBe(4);
-  });
-
-  it('keeps a streak alive when today has no plays yet', () => {
-    const days = new Set(['2026-09-08', '2026-09-07']);
-    expect(listeningStreaks(days, now)).toEqual({ current: 2, longest: 2 });
-    expect(listeningStreaks(new Set(['2026-09-06']), now).current).toBe(0);
   });
 
   it('localDayKey pads month and day', () => {
@@ -58,8 +48,7 @@ describe('calendarCells (v5.17.0)', () => {
 
 /**
  * DST regression. Stepping days by 86 400 000 ms breaks on the 23-hour day
- * of a spring-forward: the grid's first Monday became a Sunday 23:00 and the
- * streak cursor jumped over the short day. The zone is switched through
+ * of a spring-forward: the grid's first Monday became a Sunday 23:00. The zone is switched through
  * process.env.TZ (Node re-reads it on assignment); when a runner ignores the
  * switch the DST-specific cases skip, and the zone-independent invariants
  * below them still hold everywhere.
@@ -83,14 +72,6 @@ describe('calendar across a DST change', () => {
     const first = new Date(r.cells[0].ts);
     expect([first.getDay(), first.getHours()]).toEqual([1, 0]);
     expect(r.cells.findIndex((c) => c.today)).toBe(84 - 7 + 2);
-  });
-
-  it('the streak cursor does not jump over the 23-hour day', (ctx) => {
-    if (!inNewYork()) ctx.skip();
-    const now = at(2026, 2, 10, 9);
-    // 8 Mar is missing: the run is 10 + 9 only. The ms-step skipped 8 Mar and counted 7 Mar too.
-    expect(listeningStreaks(new Set(['2026-03-10', '2026-03-09', '2026-03-07']), now).current).toBe(2);
-    expect(listeningStreaks(new Set(['2026-03-10', '2026-03-09', '2026-03-08', '2026-03-07']), now)).toEqual({ current: 4, longest: 4 });
   });
 
   it('every cell is a distinct consecutive local midnight, in any zone', () => {

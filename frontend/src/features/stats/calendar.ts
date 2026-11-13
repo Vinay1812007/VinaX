@@ -3,7 +3,7 @@ import { creditedSeconds, historyCoverage, type HistoryCoverage } from './listen
 
 /**
  * v5.17.0 — Listening calendar: a 12-week, Monday-first heatmap of minutes per
- * day plus current/longest streaks, computed from on-device history. Pure.
+ * day, computed from on-device history. Pure. (2.0 removed the streak counts.)
  *
  * Cells come back column-major (week by week, Monday→Sunday) so the UI can
  * lay them out with `grid-flow-col grid-rows-7`. Days after "today" in the
@@ -24,8 +24,6 @@ export interface CalendarData {
   cells: CalendarCell[];
   weeks: number;
   maxMinutes: number;
-  currentStreak: number;
-  longestStreak: number;
   /** Days with any listening inside the grid. */
   activeDays: number;
   /** Whether the 150-play history cap cut the 12-week window short. */
@@ -33,8 +31,6 @@ export interface CalendarData {
   /** True when any minute in the grid was estimated rather than measured. */
   estimated: boolean;
 }
-
-const DAY = 86_400_000;
 
 export function localDayKey(ts: number): string {
   const d = new Date(ts);
@@ -71,29 +67,6 @@ export function minutesByDay(entries: HistoryEntry[]): Map<string, number> {
   return out;
 }
 
-/** Current (ending today or yesterday) and longest runs of days with listening. */
-export function listeningStreaks(days: Set<string>, now: number): { current: number; longest: number } {
-  const today = startOfDay(now);
-  let current = 0;
-  let cursor = days.has(localDayKey(today)) ? today : shiftDays(today, -1);
-  while (days.has(localDayKey(cursor))) {
-    current += 1;
-    cursor = shiftDays(cursor, -1);
-  }
-  let longest = 0;
-  const sorted = [...days].sort();
-  let run = 0;
-  let prev: number | null = null;
-  for (const k of sorted) {
-    const [y, m, d] = k.split('-').map(Number);
-    const ts = new Date(y, m - 1, d).getTime();
-    run = prev !== null && Math.round((ts - prev) / DAY) === 1 ? run + 1 : 1;
-    prev = ts;
-    if (run > longest) longest = run;
-  }
-  return { current, longest: Math.max(longest, current) };
-}
-
 export function calendarCells(entries: HistoryEntry[], now = Date.now(), weeks = 12): CalendarData {
   const byDay = minutesByDay(entries);
   const today = startOfDay(now);
@@ -121,16 +94,11 @@ export function calendarCells(entries: HistoryEntry[], now = Date.now(), weeks =
     const r = c.minutes / Math.max(1, maxMinutes);
     c.level = r > 0.75 ? 4 : r > 0.5 ? 3 : r > 0.25 ? 2 : 1;
   }
-  const active = new Set<string>();
-  for (const [k, m] of byDay) if (m > 0) active.add(k);
-  const streaks = listeningStreaks(active, now);
   const estimated = entries.some((e) => typeof e?.ts === 'number' && !!e.song && e.ts >= firstMonday && !creditedSeconds(e).measured);
   return {
     cells,
     weeks,
     maxMinutes,
-    currentStreak: streaks.current,
-    longestStreak: streaks.longest,
     activeDays,
     coverage: historyCoverage(entries, firstMonday),
     estimated,

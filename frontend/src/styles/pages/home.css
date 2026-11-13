@@ -56,18 +56,6 @@
   font-size: 15px;
   font-weight: 500;
 }
-.vx-home .vxh-streak {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px 3px 8px;
-  border-radius: var(--radius-pill);
-  background: rgb(var(--tide-500) / 0.12);
-  color: rgb(var(--tide-400));
-  font-size: 12.5px;
-  font-weight: 700;
-}
-.vx-home .vxh-streak::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .vx-home .vxh-greet-note { margin-top: 6px; color: rgb(var(--ink-400)); font-size: 14px; }
 
 /* ------------------------------------------------------------- opening */
@@ -374,7 +362,6 @@ a.vxh-card:hover { background: var(--vxh-tile-hover); }
   color: rgb(var(--ink-100));
   object-fit: cover;
 }
-.vx-home .vxh-card-art.is-count { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .vx-home .vxh-card-label { display: block; color: rgb(var(--ink-400)); font-size: 12px; font-weight: 700; }
 .vx-home .vxh-card-title { display: block; overflow: hidden; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; line-height: 1.3; white-space: nowrap; text-overflow: ellipsis; }
 .vx-home .vxh-card-sub { display: block; overflow: hidden; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
@@ -920,7 +907,6 @@ html.light .vx-home .vxh-free-facts li::before {
   .vx-home .vxh-cta, .vx-home .vxh-feature, .vx-home .vxh-guide-steps > * { transition: none; }
   .vx-home .vxh-cta:hover, .vx-home .vxh-feature:hover { transform: none; }
 }
-
 
 /* 13.0 — "Made for <name>": one tap builds a personal mix. */
 .vxh-madefor { display: flex; align-items: center; gap: 16px; margin: 16px 0; padding: 18px 20px; border-radius: var(--vx-radius-card, 20px); background: linear-gradient(120deg, rgb(var(--ember-500) / 0.2), rgb(var(--tide-500) / 0.12)); border: 1px solid var(--vx-border); }

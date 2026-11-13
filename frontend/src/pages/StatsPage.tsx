@@ -3,9 +3,7 @@ import { Link } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useHistoryStore } from '@/store/historyStore';
 import { useLibraryStore } from '@/store/libraryStore';
-import { getStreak, getBestStreak } from '@/utils/streak';
 import { GoalRing } from '@/components/GoalRing';
-import { WeekGoals } from '@/components/WeekGoals';
 import { toast } from '@/store/toastStore';
 import { weeklyReport } from '@/features/stats/weeklyReport';
 import { calendarCells } from '@/features/stats/calendar';
@@ -17,8 +15,7 @@ import { coverageNote, formatHours, historyCoverage, listeningTotal, HISTORY_CAP
 import { PageHeader } from '@/components/PageHeader';
 import { SectionHeader } from '@/components/SectionHeader';
 import { SongRow } from '@/components/SongRow';
-import { ChevronRightIcon, ShareIcon, WaveIcon } from '@/components/Icons';
-import { BadgesSection } from '@/features/badges/BadgesSection';
+import { ShareIcon, WaveIcon } from '@/components/Icons';
 import '@/styles/pages/secondary.css';
 
 /** One hue at falling strength: the language split reads as parts of one whole. */
@@ -148,12 +145,7 @@ function ListeningCalendar({ entries }: { entries: HistoryEntry[] }) {
           </div>
         </div>
       </div>
-      <div className="mt-5 flex items-center justify-between gap-3 flex-wrap">
-        <p className="text-[14px] font-medium text-ink-400">
-          Current streak <span className="text-ink-100 font-bold tabular-nums">{cal.currentStreak}</span> day{cal.currentStreak === 1 ? '' : 's'}
-          <span aria-hidden> · </span>
-          Longest <span className="text-ink-100 font-bold tabular-nums">{cal.longestStreak}</span> day{cal.longestStreak === 1 ? '' : 's'}
-        </p>
+      <div className="mt-5 flex items-center justify-end gap-3 flex-wrap">
         <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink-400" aria-hidden>
           Less
           {LEVEL_ALPHA.map((a, i) => (
@@ -208,11 +200,8 @@ export default function StatsPage() {
   const top = useMemo(() => mostPlayed(entries, 5), [entries]);
   const pictures = useMemo(() => artistPictures([...entries.map((e) => e.song), ...favorites]), [entries, favorites]);
 
-  const streak = getStreak();
-  const best = getBestStreak();
-
   const share = (): void => {
-    const text = `My VinaX: ${stats.plays} plays · ${stats.hours} listened · ${streak}-day streak 🎵 vinaxmusic.online`;
+    const text = `My VinaX: ${stats.plays} plays · ${stats.hours} listened 🎵 vinaxmusic.online`;
     if (navigator.share) {
       void navigator.share({ text }).catch(() => undefined);
     } else {
@@ -279,33 +268,13 @@ export default function StatsPage() {
       {/* v5.17.0 — weekly report */}
       <WeeklyReportCard entries={entries} />
 
-      {/* Streak, daily goal (set in Settings) and the year recap. */}
-      <section aria-label="Streak and goal" className="vx-sec-block">
-        <SectionHeader title="Keep it going" />
-        <div className="vx-group">
-          <div className="vx-row">
-            <span className="vx-row-main">
-              <span className="vx-row-label">{streak > 0 ? `${streak}-day streak` : 'No streak yet'}</span>
-              <span className="vx-row-hint">{streak > 0 ? 'Listen today to keep it going' : 'Play a song today to start one'}</span>
-            </span>
-            <span className="vx-row-value">Best {Math.max(best, streak)} day{Math.max(best, streak) === 1 ? '' : 's'}</span>
-          </div>
-          <Link to="/recap" className="vx-row is-link">
-            <span className="vx-row-main">
-              <span className="vx-row-label">Your year in music</span>
-              <span className="vx-row-hint">Your persona, top artists and a share card — or play it as a story</span>
-            </span>
-            <ChevronRightIcon className="vx-row-chev" />
-          </Link>
-        </div>
+      {/* The daily goal (set in Settings). */}
+      <section aria-label="Daily goal" className="vx-sec-block">
+        <SectionHeader title="Daily goal" />
         <div className="vx-stats-goal mt-2">
           <GoalRing />
         </div>
-        <WeekGoals />
       </section>
-
-      {/* 1.12 — badges: earned first, the rest with how close they are */}
-      <BadgesSection />
 
       {/* v5.17.0 — 12-week listening calendar */}
       <ListeningCalendar entries={entries} />

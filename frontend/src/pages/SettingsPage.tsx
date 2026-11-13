@@ -570,7 +570,7 @@ export default function SettingsPage() {
             <ClearRecentSearchesRow />
             <ProfileSettings />
             <LinkRow to="/taste-profile" label="Taste profile" note="The languages, artists and moods VinaX has learned you like." keywords="taste profile likes profile settings" />
-            <LinkRow to="/stats" label="Listening stats" note="Your minutes, top songs and streaks." keywords="stats minutes streak profile" />
+            <LinkRow to="/stats" label="Listening stats" note="Your minutes, top songs and listening calendar." keywords="stats minutes calendar profile" />
           </Section>
 
           <Section title="Appearance" id="appearance" lede="Language, theme, colour and size.">
@@ -701,23 +701,6 @@ export default function SettingsPage() {
                   value={s.dailyGoalMinutes}
                   onChange={s.setDailyGoalMinutes}
                   options={[0, 15, 30, 60, 120].map((n) => ({ value: n, label: n === 0 ? 'Off' : n >= 60 ? `${n / 60}h` : `${n} min` }))}
-                />
-              </Row>
-              {/* 15.0 — weekly goals with streaks, on the Stats page. */}
-              <Row stack label="Minutes a week" note="A weekly target with a streak of weeks met, on Your VinaX." keywords="weekly goal streak">
-                <Segmented
-                  label="Minutes a week"
-                  value={s.weeklyGoalMinutes}
-                  onChange={s.setWeeklyGoalMinutes}
-                  options={[0, 60, 120, 300, 600].map((n) => ({ value: n, label: n === 0 ? 'Off' : n >= 60 ? `${n / 60}h` : `${n} min` }))}
-                />
-              </Row>
-              <Row stack label="New artists a week" note="Artists you had never played before. A small nudge to roam." keywords="weekly goal discover streak">
-                <Segmented
-                  label="New artists a week"
-                  value={s.weeklyGoalArtists}
-                  onChange={s.setWeeklyGoalArtists}
-                  options={[0, 3, 5, 10].map((n) => ({ value: n, label: n === 0 ? 'Off' : String(n) }))}
                 />
               </Row>
             </Group>

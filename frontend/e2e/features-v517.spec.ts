@@ -154,7 +154,7 @@ test('home, stats, history, explore, library, collection, search, settings rende
     await page.waitForTimeout(150);
   }
   await more.click();
-  await expect.poll(() => bodyText(page), { timeout: 10_000 }).toMatch(/streak[\s\S]*song of the day|because you liked/i);
+  await expect.poll(() => bodyText(page), { timeout: 10_000 }).toMatch(/song of the day|because you liked/i);
   // Custom accent, large display scale and high contrast all apply on boot.
   const boot = await page.evaluate(() => ({
     ember: getComputedStyle(document.documentElement).getPropertyValue('--ember-500').trim(),

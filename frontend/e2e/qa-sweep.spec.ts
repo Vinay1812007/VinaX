@@ -18,7 +18,7 @@ const ROUTES = [
   '/now-playing', '/languages', '/explore', '/movies', '/moods', '/regions',
   '/taste-profile', '/settings', '/handoff', '/cache-info', '/about',
   '/privacy', '/terms', '/contact', '/dmca', '/help', '/stats', '/offline',
-  '/together', '/karaoke', '/quiz', '/download', '/drive',
+  '/together', '/karaoke', '/download', '/drive',
   '/hindi-songs', '/telugu-songs',
   '/song/qa1', '/album/qa1', '/artist/qa1', '/playlist/qa1', '/lyrics/qa1',
   '/collection/none', '/no-such-page-404',

@@ -28,7 +28,6 @@ import { topArtists, topLanguages } from '@/services/personalization/profile';
 import { getLocal } from '@/services/storage/local';
 import { KEYS } from '@/constants/storage-keys';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
-import { getStreak } from '@/utils/streak';
 import { bestImage } from '@/utils/images';
 import { albumPath } from '@/utils/slug';
 import { listeningTotal } from '@/features/stats/listening';
@@ -281,14 +280,12 @@ function SignedInHome() {
       totalPlays: historyEntries.length,
       weekPlays: historyEntries.filter((e) => e.ts >= weekAgo).length,
       weekMinutes: listeningTotal(historyEntries, weekAgo).minutes,
-      streakDays: getStreak(),
       daysSinceLastListen: lastTs ? (Date.now() - lastTs) / 86_400_000 : Infinity,
       topLanguage: topLanguages(profile, 1)[0]?.id ?? null,
       topArtist: topArtists(profile, 1)[0]?.affinity.name ?? null,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- day-stable inputs
   }, [userName, historyEntries.length]);
-  const streakDays = getStreak();
   const [notifOpen, setNotifOpen] = useState(false);
   // 10.0.0 — nothing played on this device yet: Home opens with the free-music
   // welcome (HomeWelcome) instead of the greeting. Decided once per visit so
@@ -481,10 +478,9 @@ function SignedInHome() {
           ) : (
             <header className="vxh-greet is-compact">
               <h1>{hello.title}</h1>
-              {(streakDays > 1 || ownerGreeting) && (
+              {ownerGreeting && (
                 <p className="vxh-greet-sub">
-                  {streakDays > 1 && <span className="vxh-streak">{streakDays}-day streak</span>}
-                  {ownerGreeting && <span className="vxh-greet-note">{ownerGreeting}</span>}
+                  <span className="vxh-greet-note">{ownerGreeting}</span>
                 </p>
               )}
             </header>
