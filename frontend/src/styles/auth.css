@@ -1,6 +1,9 @@
 /* The sign-in pages: /login, /signup, /forgot-password (pages/auth). One
    card in the middle of the screen, the VinaX mark above it, small links
-   below. Loaded with those pages only. */
+   below. Loaded with those pages only.
+   UI rebuild Phase 9: shapes, motion, focus and colours read the design
+   tokens (styles/tokens.css), so the pages follow every theme, app style and
+   festival; the main action is the app's accent button, like <Button>. */
 .vx-auth {
   min-height: 100dvh;
   display: flex;
@@ -16,7 +19,7 @@
   color: rgb(var(--ink-300));
 }
 .vx-auth-brand { display: inline-flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; color: rgb(var(--ink-100)); }
-.vx-auth-brand img { border-radius: 12px; }
+.vx-auth-brand img { border-radius: var(--radius-lg); }
 .vx-auth-card {
   width: min(420px, 100%);
   display: flex;
@@ -24,9 +27,9 @@
   align-items: center;
   gap: 16px;
   padding: 28px 24px 24px;
-  border-radius: 24px;
-  border: 1px solid var(--vx-border);
-  box-shadow: 0 24px 60px -24px rgb(0 0 0 / 0.5);
+  border-radius: var(--radius-2xl);
+  border: 1px solid var(--line-1);
+  box-shadow: var(--elev-4);
 }
 @media (max-width: 400px) {
   .vx-auth-card { padding: 24px 18px 20px; }
@@ -41,31 +44,34 @@
 .vx-auth-field em { font-style: normal; font-weight: 400; color: rgb(var(--ink-400)); }
 .vx-auth-label-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .vx-auth-field input {
-  width: 100%; min-height: 46px; padding: 0 14px; border-radius: 12px;
-  font-size: 16px; font-weight: 400; color: rgb(var(--ink-100));
-  background: rgb(var(--ink-100) / 0.06); border: 1px solid var(--vx-border, rgb(var(--ink-100) / 0.14));
-  transition: border-color 0.15s, background-color 0.15s;
+  width: 100%; min-height: 46px; padding: 0 14px; border-radius: var(--radius-input);
+  font-size: 16px; font-weight: 400; color: var(--text-1);
+  background: rgb(var(--ink-100) / 0.06); border: 1px solid var(--line-2);
+  transition: border-color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard), box-shadow var(--dur-quick) var(--ease-standard);
 }
-.vx-auth-field input::placeholder { color: rgb(var(--ink-500, var(--ink-400))); }
-.vx-auth-field input:hover { border-color: rgb(var(--ink-100) / 0.24); }
-.vx-auth-field input:focus { outline: 2px solid rgb(var(--ember-500)); outline-offset: 1px; background: rgb(var(--ink-100) / 0.08); }
+.vx-auth-field input::placeholder { color: var(--text-4); }
+.vx-auth-field input:hover { border-color: var(--line-3); }
+.vx-auth-field input:focus { outline: none; border-color: var(--accent-line); box-shadow: var(--focus-ring); background: rgb(var(--ink-100) / 0.08); }
 .vx-auth-code { font-variant-numeric: tabular-nums; letter-spacing: 0.4em; font-size: 20px !important; text-align: center; }
 .vx-auth-pw { position: relative; display: block; }
 .vx-auth-pw input { padding-right: 68px; }
 .vx-auth-pw .vx-auth-link { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); }
 .vx-auth-hint { margin-top: -4px; font-size: 13px; line-height: 1.5; color: rgb(var(--ink-400)); }
-.vx-auth-sent { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; font-size: 13.5px; line-height: 1.5; background: rgb(var(--ink-100) / 0.05); border: 1px solid var(--vx-border); }
+.vx-auth-sent { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: var(--radius-input); font-size: 13.5px; line-height: 1.5; background: rgb(var(--ink-100) / 0.05); border: 1px solid var(--line-1); }
 .vx-auth-sent strong { color: rgb(var(--ink-100)); overflow-wrap: anywhere; }
 .vx-auth-sent p + p { color: rgb(var(--ink-400)); }
-.vx-auth-error { font-size: 13.5px; line-height: 1.5; color: rgb(var(--rose-400, 251 113 133)); }
+.vx-auth-error { font-size: 13.5px; line-height: 1.5; color: var(--danger); }
 .vx-auth-error a { color: inherit; text-decoration: underline; text-underline-offset: 2px; font-weight: 600; }
 .vx-auth-submit {
-  min-height: 48px; border-radius: 9999px; font-size: 15px; font-weight: 700;
-  color: rgb(var(--ink-950)); background: rgb(var(--ink-100));
-  transition: opacity 0.15s, transform 0.1s;
+  min-height: 48px; border-radius: var(--radius-control); font-size: 15px; font-weight: 750;
+  color: var(--text-on-accent); background: var(--accent);
+  transition: background-color var(--dur-quick) var(--ease-standard), opacity var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-spring);
 }
-.vx-auth-submit:active:not(:disabled) { transform: scale(0.985); }
-.vx-auth-submit:disabled { opacity: 0.5; }
+.vx-auth-submit:hover:not(:disabled) { background: var(--accent-hover); }
+.vx-auth-submit:active:not(:disabled) { transform: scale(var(--press-scale)); filter: none; }
+.vx-auth-submit:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* Not ready yet (empty fields): still the accent, just quieter — a flat grey bar read as broken. */
+.vx-auth-submit:disabled { opacity: 0.45; }
 .vx-auth-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; }
 .vx-auth-link {
   display: inline-flex; align-items: center; min-height: 32px; padding: 0 2px;
@@ -78,7 +84,7 @@
 .vx-auth-switch a { margin-left: 4px; font-weight: 700; color: rgb(var(--ink-100)); text-decoration: underline; text-underline-offset: 3px; }
 .vx-auth-foot { width: min(420px, 100%); margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 12px; padding-top: 12px; text-align: center; font-size: 12.5px; line-height: 1.5; color: rgb(var(--ink-400)); }
 .vx-auth-foot a { color: rgb(var(--ink-200)); text-decoration: underline; text-underline-offset: 2px; }
-.vx-auth-foot .vx-auth-explore { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 16px; border-radius: 9999px; font-size: 14px; font-weight: 700; text-decoration: none; color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.08); }
+.vx-auth-foot .vx-auth-explore { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 16px; border-radius: var(--radius-control); font-size: 14px; font-weight: 700; text-decoration: none; color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.08); }
 .vx-auth-foot .vx-auth-explore:hover { background: rgb(var(--ink-100) / 0.14); }
 @media (prefers-reduced-motion: reduce) {
   .vx-auth-field input, .vx-auth-submit { transition: none; }

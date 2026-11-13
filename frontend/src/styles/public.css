@@ -1,5 +1,6 @@
 /* 13.5.0 — public pages for signed-out visitors (components/PublicPage.tsx):
-   the server's text for the URL, the VinaX bar and a sign-in card. */
+   the server's text for the URL, the VinaX bar and a sign-in card.
+   UI rebuild Phase 9: radii, shadows and hairlines read the design tokens. */
 .vx-public {
   min-height: 100dvh;
   color: rgb(var(--ink-200));
@@ -10,7 +11,7 @@
   background-attachment: fixed;
 }
 .vx-public-skip { position: absolute; left: -9999px; }
-.vx-public-skip:focus { left: 12px; top: 12px; z-index: 50; padding: 8px 14px; border-radius: 9999px; background: rgb(var(--ink-100)); color: rgb(var(--ink-950)); }
+.vx-public-skip:focus { left: 12px; top: 12px; z-index: 50; padding: 8px 14px; border-radius: var(--radius-pill); background: rgb(var(--ink-100)); color: rgb(var(--ink-950)); }
 
 .vx-public-bar {
   position: sticky; top: 0; z-index: 30;
@@ -26,19 +27,19 @@
 .vx-public-nav { display: flex; gap: 4px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .vx-public-nav::-webkit-scrollbar { display: none; }
 .vx-public-nav a {
-  flex: none; padding: 8px 12px; border-radius: 9999px; font-size: 14px; font-weight: 600; color: rgb(var(--ink-300));
+  flex: none; padding: 8px 12px; border-radius: var(--radius-pill); font-size: 14px; font-weight: 600; color: rgb(var(--ink-300));
 }
 .vx-public-nav a:hover, .vx-public-nav a:focus-visible { color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.07); }
 .vx-public-nav a[aria-current='page'] { color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.1); }
 .vx-public-explore {
   margin-left: auto; flex: none; display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px;
-  border-radius: 9999px; font-size: 14px; font-weight: 700; color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.08);
+  border-radius: var(--radius-pill); font-size: 14px; font-weight: 700; color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.08);
 }
 .vx-public-explore:hover, .vx-public-explore:focus-visible { background: rgb(var(--ink-100) / 0.14); }
 .vx-public-explore + .vx-public-cta { margin-left: 8px; }
 .vx-public-cta {
   margin-left: auto; flex: none; display: inline-flex; align-items: center; min-height: 40px; padding: 0 18px;
-  border-radius: 9999px; font-size: 14px; font-weight: 800; color: var(--vx-on-accent, #fff); background: var(--vx-glow, rgb(236 72 153));
+  border-radius: var(--radius-pill); font-size: 14px; font-weight: 800; color: var(--text-on-accent); background: var(--accent-gradient);
 }
 
 .vx-public-body {
@@ -60,11 +61,11 @@
 .vx-public-content strong { color: rgb(var(--ink-100)); }
 .vx-public-content a { color: rgb(var(--ink-100)); text-decoration: underline; text-decoration-color: rgb(var(--ink-100) / 0.3); text-underline-offset: 3px; }
 .vx-public-content a:hover { text-decoration-color: currentColor; }
-.vx-public-content img { width: 200px; height: 200px; object-fit: cover; border-radius: 18px; margin: 8px 0 16px; box-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.6); }
+.vx-public-content img { width: 200px; height: 200px; object-fit: cover; border-radius: var(--radius-xl); margin: 8px 0 16px; box-shadow: var(--elev-3); }
 .vx-public-content ul, .vx-public-content dl { padding-left: 20px; margin: 0 0 12px; color: rgb(var(--ink-300)); }
 .vx-public-content li { margin: 4px 0; }
 /* Details (Singers, Music, Album, Released…) as a label/value table. */
-.vx-public-content dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 24px; padding: 16px 18px; border-radius: 16px; background: rgb(var(--ink-100) / 0.04); border: 1px solid var(--vx-border); max-width: 640px; }
+.vx-public-content dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 24px; padding: 16px 18px; border-radius: var(--radius-tile); background: rgb(var(--ink-100) / 0.04); border: 1px solid var(--line-1); max-width: 640px; }
 .vx-public-content dt { color: rgb(var(--ink-400)); font-size: 14px; }
 .vx-public-content dd { margin: 0; color: rgb(var(--ink-100)); font-size: 14.5px; }
 /* Song lists read as a numbered chart. */
@@ -82,13 +83,13 @@
 /* The server's closing link list becomes a row of chips. */
 .vx-public-content nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--vx-border); }
 .vx-public-content nav a {
-  padding: 7px 12px; border-radius: 9999px; font-size: 13.5px; font-weight: 600; text-decoration: none;
+  padding: 7px 12px; border-radius: var(--radius-pill); font-size: 13.5px; font-weight: 600; text-decoration: none;
   color: rgb(var(--ink-200)); background: rgb(var(--ink-100) / 0.05); border: 1px solid var(--vx-border);
 }
 .vx-public-content nav a:hover { background: rgb(var(--ink-100) / 0.1); }
 
 .vx-public-signin {
-  padding: 24px 22px 20px; border-radius: 26px; text-align: center; border: 1px solid var(--vx-border);
+  padding: 24px 22px 20px; border-radius: var(--radius-2xl); text-align: center; border: 1px solid var(--line-1);
   scroll-margin-top: 88px;
 }
 .vx-public-signin-logo { margin: 0 auto 12px; border-radius: 14px; }
@@ -107,9 +108,9 @@
 
 .vx-public-dock {
   position: fixed; left: 16px; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 40;
-  display: flex; align-items: center; justify-content: center; min-height: 50px; border-radius: 9999px;
-  font-size: 15px; font-weight: 800; color: var(--vx-on-accent, #fff); background: var(--vx-glow, rgb(236 72 153));
-  box-shadow: 0 16px 36px -14px rgb(0 0 0 / 0.7);
+  display: flex; align-items: center; justify-content: center; min-height: 50px; border-radius: var(--radius-pill);
+  font-size: 15px; font-weight: 800; color: var(--text-on-accent); background: var(--accent-gradient);
+  box-shadow: var(--elev-4);
 }
 .vx-public-dock[hidden] { display: none; }
 @media (min-width: 1000px) {

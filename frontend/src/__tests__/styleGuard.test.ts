@@ -43,7 +43,6 @@ const BASELINE: Record<string, [number, number]> = {
   'pages/together.css': [5, 2],
   'pages/tracklist.css': [3, 7],
   'pages/vinaxai.css': [27, 25],
-  'public.css': [2, 0],
   'shell.css': [5, 3],
   'signin.css': [5, 0],
   'templates/base.css': [2, 1],
@@ -56,8 +55,8 @@ const BASELINE: Record<string, [number, number]> = {
   'tokens.css': [6, 6],
   'ui.css': [4, 1]
 };
-/** Sign-in and the public pages belong to UI rebuild Phase 9, which moves them onto the tokens. */
-const PILL_PENDING = new Set(['signin.css', 'public.css', 'auth.css']);
+/** Stylesheets still allowed a raw pill (none since UI rebuild Phase 9 moved sign-in onto the tokens). */
+const PILL_PENDING = new Set<string>();
 
 describe('style guard', () => {
   const all = files(STYLES).map((p) => [relative(STYLES, p), code(p)] as const);

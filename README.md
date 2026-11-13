@@ -1463,7 +1463,11 @@ The 2026-11 UI rebuild put every screen on one system: semantic tokens, a small 
 **Left as they are, on purpose**
 - **Old names stay.** The `--vx-*` names and the palette channels stay because hundreds of rules read them and they resolve to the same values.
 - **Dialogs stay.** The roughly 20 hand-built dialogs (VinaX AI's among them) already trap focus and close on Escape and Back; they move to `Dialog` when their screens are next reworked.
-- **Sign-in waits.** The sign-in and public pages (`signin.css`, `public.css`, `auth.css`) are Phase 9 of the rebuild and still have raw pills; the style guard lists them as pending.
+- **Google's button keeps Google's colours.** In `signin.css` it is Google's branding, the only raw colours left on the sign-in screens.
+
+**Sign-in and public pages**
+- `auth.css` (`/login`, `/signup`, `/forgot-password`), `signin.css` (the email forms, the account row, the sign-in sheet) and `public.css` (the pages signed-out visitors land on) read the tokens: radii, `--elev-*`, hairlines, `--focus-ring`, `--danger` for errors, and the accent gradient for the public calls to action.
+- The main action ("Sign in", "Send code", "Set password") is the app's accent button, like `<Button>`. While the form is empty it is the same accent, quieter; it used to be a flat grey bar.
 
 ### How the layers stack
 

@@ -8,22 +8,22 @@
 /* Cloudflare's security check under the Google button (takes no room until it shows). */
 .vx-turnstile-slot { display: flex; justify-content: center; width: 100%; }
 .vx-turnstile-slot.is-on { min-height: 65px; }
-.vx-google-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; max-width: 360px; height: 44px; padding: 0 16px; border-radius: 9999px; border: 1px solid #747775; background: #131314; color: #e3e3e3; font: 500 14px/1 Roboto, system-ui, sans-serif; }
+.vx-google-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; max-width: 360px; height: 44px; padding: 0 16px; border-radius: var(--radius-pill); border: 1px solid #747775; background: #131314; color: #e3e3e3; font: 500 14px/1 Roboto, system-ui, sans-serif; }
 html.light .vx-google-btn { background: #fff; color: #1f1f1f; }
 .vx-google-btn:disabled { opacity: 0.7; }
-.vx-account { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 420px; padding: 8px 10px; border-radius: 14px; background: var(--vx-surface-2, rgb(var(--ink-900))); }
-.vx-account-pic { width: 32px; height: 32px; flex: none; border-radius: 9999px; object-fit: cover; }
+.vx-account { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 420px; padding: 8px 10px; border-radius: var(--radius-tile); background: var(--vx-surface-2, rgb(var(--ink-900))); }
+.vx-account-pic { width: 32px; height: 32px; flex: none; border-radius: var(--radius-pill); object-fit: cover; }
 .vx-account-pic.is-letter { display: inline-flex; align-items: center; justify-content: center; background: rgb(var(--ink-700)); color: rgb(var(--ink-100)); font-weight: 700; }
 .vx-account-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .vx-account-name { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vx-account-email { font-size: 12px; color: rgb(var(--ink-400)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vx-account-out { flex: none; min-height: 36px; padding: 0 12px; border-radius: 9999px; font-size: 13px; font-weight: 700; color: rgb(var(--ink-200)); background: rgb(var(--ink-100) / 0.08); }
+.vx-account-out { flex: none; min-height: 36px; padding: 0 12px; border-radius: var(--radius-pill); font-size: 13px; font-weight: 700; color: rgb(var(--ink-200)); background: rgb(var(--ink-100) / 0.08); }
 
 /* 13.3.0 — when Google’s script can’t load: the reason and a retry, in place of the button. */
 .vx-google-slot { flex-direction: column; align-items: center; }
 .vx-google-failed { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
 .vx-google-failed p { color: rgb(var(--ink-300)); font-size: 13.5px; line-height: 1.5; }
-.vx-google-failed button { min-height: 44px; padding: 0 20px; border-radius: 9999px; font-size: 14px; font-weight: 700; color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.1); border: 1px solid var(--vx-border); }
+.vx-google-failed button { min-height: 44px; padding: 0 20px; border-radius: var(--radius-pill); font-size: 14px; font-weight: 700; color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.1); border: 1px solid var(--vx-border); }
 /* Google draws its button in a frame; without this a dark page shows a white strip around it. */
 .vx-google-web iframe { color-scheme: normal; }
 
@@ -32,7 +32,7 @@ html.light .vx-google-btn { background: #fff; color: #1f1f1f; }
 .vx-signin-prompt-button { display: flex; justify-content: center; margin-top: 18px; }
 .vx-signin-prompt-perks { display: grid; gap: 6px; margin-top: 18px; padding: 0; list-style: none; font-size: 13px; color: rgb(var(--ink-300)); }
 .vx-signin-prompt-perks li { position: relative; padding-left: 18px; }
-.vx-signin-prompt-perks li::before { content: ''; position: absolute; left: 2px; top: 7px; width: 6px; height: 6px; border-radius: 9999px; background: rgb(var(--ember-500)); }
+.vx-signin-prompt-perks li::before { content: ''; position: absolute; left: 2px; top: 7px; width: 6px; height: 6px; border-radius: var(--radius-pill); background: rgb(var(--ember-500)); }
 .vx-signin-prompt-fine { margin-top: 16px; font-size: 12px; line-height: 1.5; color: rgb(var(--ink-400)); }
 .vx-signin-prompt-fine a { color: rgb(var(--ink-200)); text-decoration: underline; text-underline-offset: 2px; }
 
@@ -56,13 +56,15 @@ html.light .vx-google-btn { background: #fff; color: #1f1f1f; }
 .vx-or::before, .vx-or::after { content: ''; flex: 1; height: 1px; background: var(--vx-border, rgb(var(--ink-100) / 0.12)); }
 .vx-email-form { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 360px; text-align: left; }
 .vx-email-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: rgb(var(--ink-300)); }
-.vx-email-field input { width: 100%; min-height: 44px; padding: 0 14px; border-radius: 12px; font-size: 15px; font-weight: 400; color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.06); border: 1px solid var(--vx-border, rgb(var(--ink-100) / 0.14)); }
-.vx-email-field input:focus { outline: 2px solid rgb(var(--ember-500)); outline-offset: 1px; }
+.vx-email-field input { width: 100%; min-height: 44px; padding: 0 14px; border-radius: var(--radius-input); font-size: 15px; font-weight: 400; color: var(--text-1); background: rgb(var(--ink-100) / 0.06); border: 1px solid var(--line-2); }
+.vx-email-field input:focus { outline: none; border-color: var(--accent-line); box-shadow: var(--focus-ring); }
 .vx-email-pw { position: relative; display: block; }
 .vx-email-pw input { padding-right: 64px; }
 .vx-email-pw .vx-email-link { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); }
-.vx-email-submit { min-height: 46px; border-radius: 9999px; font-size: 15px; font-weight: 700; color: rgb(var(--ink-950)); background: rgb(var(--ink-100)); }
-.vx-email-submit:disabled { opacity: .55; }
+.vx-email-submit { min-height: 46px; border-radius: var(--radius-control); font-size: 15px; font-weight: 750; color: var(--text-on-accent); background: var(--accent); transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-spring); }
+.vx-email-submit:hover:not(:disabled) { background: var(--accent-hover); }
+.vx-email-submit:active:not(:disabled) { transform: scale(var(--press-scale)); filter: none; }
+.vx-email-submit:disabled { opacity: 0.45; }
 .vx-email-link { min-height: 32px; padding: 0 2px; font-size: 13px; font-weight: 600; color: rgb(var(--ink-200)); text-decoration: underline; text-underline-offset: 2px; background: none; }
 .vx-email-link:disabled { opacity: .5; }
-.vx-email-error { font-size: 13px; line-height: 1.5; color: rgb(var(--rose-400, 251 113 133)); }
+.vx-email-error { font-size: 13px; line-height: 1.5; color: var(--danger); }
