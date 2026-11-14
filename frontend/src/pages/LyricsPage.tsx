@@ -91,14 +91,14 @@ export default function LyricsPage() {
           <div className="vx-lyrics-toolbar-group">
             <div className="vx-np-tabs" role="group" aria-label="Lyrics language">
               {([['original', 'Original'], ['romanize', 'Romanized']] as const).map(([m, label]) => (
-                <button key={m} type="button" onClick={() => setMode(m)} aria-pressed={lmode === m} className="vx-seg">
+                <button key={m} type="button" onClick={() => setMode(m)} aria-pressed={lmode === m} className="vx-lyrics-seg">
                   {label}
                 </button>
               ))}
             </div>
             <div className="vx-np-tabs" role="group" aria-label="Lyrics text size">
               {(['sm', 'md', 'lg', 'xl'] as const).map((sz) => (
-                <button key={sz} type="button" onClick={() => setSize(sz)} aria-pressed={size === sz} aria-label={sizeLabel[sz]} title={sizeLabel[sz]} className="vx-seg">
+                <button key={sz} type="button" onClick={() => setSize(sz)} aria-pressed={size === sz} aria-label={sizeLabel[sz]} title={sizeLabel[sz]} className="vx-lyrics-seg">
                   {sz === 'sm' ? 'A' : sz === 'md' ? 'A+' : sz === 'lg' ? 'A++' : 'A+++'}
                 </button>
               ))}

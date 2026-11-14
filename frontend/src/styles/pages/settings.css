@@ -313,16 +313,36 @@ html.amoled .vx-settings { --set-card: rgb(var(--ink-850)); --set-inset: rgb(var
 .vx-settings [role='switch']:hover:not(:disabled) { background: rgb(var(--ink-500)); }
 .vx-settings [role='switch'][aria-checked='true']:hover:not(:disabled) { background: rgb(var(--ember-400)); }
 
-/* ------------------------------------------------------ segmented choices */
+/* ------------------------------------------------------ segmented choices
+   A recessed track; the chosen option sits on a solid accent thumb (the same
+   colour as a switch that is on) that slides between choices. The thumb never
+   takes clicks; the buttons sit above it. */
 .vx-settings .vx-seg {
+  position: relative;
+  isolation: isolate;
   display: inline-flex;
   gap: 2px;
   padding: 4px;
   border-radius: var(--radius-pill);
-  background: var(--set-fill);
+  background: var(--set-inset);
+  box-shadow: inset 0 0 0 1px var(--set-line);
 }
+.vx-settings .vx-seg-thumb {
+  position: absolute;
+  z-index: 0;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  border-radius: var(--radius-pill);
+  background: rgb(var(--ember-500));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25), 0 4px 12px -6px rgb(var(--ember-500) / 0.6);
+  pointer-events: none;
+}
+/* --dur-base is 0 under reduced motion, so the thumb just appears there. */
+.vx-settings .vx-seg-thumb { transition: transform var(--dur-base) var(--ease-standard), width var(--dur-base) var(--ease-standard); }
 .vx-settings .vx-seg-item {
   position: relative;
+  z-index: 1;
   min-height: 36px;
   padding: 0 14px;
   border-radius: var(--radius-pill);
@@ -330,12 +350,16 @@ html.amoled .vx-settings { --set-card: rgb(var(--ink-850)); --set-inset: rgb(var
   font-size: 13.5px;
   font-weight: 650;
   white-space: nowrap;
-  transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
+  cursor: pointer;
+  transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
+/* A taller hit area than the pill, inside the button so it can only ever cover the button. */
 .vx-settings .vx-seg-item::after { content: ''; position: absolute; inset: -4px 0; }
-.vx-settings .vx-seg-item:hover { color: rgb(var(--ink-100)); }
-.vx-settings .vx-seg-item[aria-checked='true'] { color: rgb(var(--ink-100)); background: rgb(var(--ember-500) / 0.26); font-weight: 750; }
-html.light .vx-settings .vx-seg-item[aria-checked='true'] { color: rgb(var(--ember-600)); background: rgb(var(--ember-500) / 0.13); }
+.vx-settings .vx-seg-item:hover:not([aria-checked='true']) { color: rgb(var(--ink-100)); background: var(--set-fill-hover); }
+.vx-settings .vx-seg-item:active { transform: scale(0.96); }
+.vx-settings .vx-seg-item[aria-checked='true'] { color: var(--vx-on-accent); font-weight: 750; }
+/* Before the thumb is measured (or without layout, as in tests), the chosen button paints itself. */
+.vx-settings .vx-seg:not(.has-thumb) .vx-seg-item[aria-checked='true'] { background: rgb(var(--ember-500)); }
 .vx-settings .vx-seg-item:focus-visible { outline-offset: 1px; }
 
 /* ------------------------------------------- choice cards (discovery etc.) */

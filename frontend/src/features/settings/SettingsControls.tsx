@@ -192,7 +192,12 @@ function useRovingChoice<T>(values: T[], value: T, onChange: (v: T) => void) {
   };
 }
 
-/** A small set of mutually exclusive choices as one segmented radio group. */
+/**
+ * A small set of mutually exclusive choices as one segmented radio group.
+ * The chosen option sits on a solid accent thumb that slides to the new
+ * choice (measured from the buttons, re-measured when they resize); until it
+ * is measured, the chosen button paints its own background instead.
+ */
 export function Segmented<T extends string | number>({
   label,
   value,
@@ -205,8 +210,27 @@ export function Segmented<T extends string | number>({
   onChange: (v: T) => void;
 }) {
   const roving = useRovingChoice(options.map((o) => o.value), value, onChange);
+  const group = useRef<HTMLDivElement>(null);
+  const [thumb, setThumb] = useState<{ x: number; w: number } | null>(null);
+  const at = options.findIndex((o) => o.value === value);
+  useLayoutEffect(() => {
+    const el = group.current;
+    if (!el) return;
+    const measure = (): void => {
+      const btn = at < 0 ? null : el.querySelectorAll<HTMLButtonElement>('.vx-seg-item')[at];
+      const w = btn?.offsetWidth ?? 0;
+      const x = btn?.offsetLeft ?? 0;
+      setThumb((prev) => (w === 0 ? null : prev && prev.x === x && prev.w === w ? prev : { x, w }));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [at, options.length]);
   return (
-    <div role="radiogroup" aria-label={label} className="vx-seg">
+    <div ref={group} role="radiogroup" aria-label={label} className={cn('vx-seg', thumb && 'has-thumb')}>
+      {thumb && <span aria-hidden className="vx-seg-thumb" style={{ width: thumb.w, transform: `translateX(${thumb.x}px)` }} />}
       {options.map((o, i) => (
         <button
           key={String(o.value)}

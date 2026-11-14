@@ -1221,7 +1221,9 @@ a.vx-lyrics-hero-title:hover { text-decoration: underline; text-underline-offset
 .vx-lyrics-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .vx-lyrics-toolbar-group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .vx-lyrics-page .vx-np-tabs { background: rgb(var(--ink-850)); }
-.vx-seg {
+/* The Lyrics page's mode and size buttons. Not .vx-seg: that is the Settings
+   segmented group, and this ::after hit pad stretched over every one of them on desktop. */
+.vx-lyrics-seg {
   position: relative;
   min-height: 36px;
   padding: 0 14px;
@@ -1231,9 +1233,9 @@ a.vx-lyrics-hero-title:hover { text-decoration: underline; text-underline-offset
   font-weight: 700;
   transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
-.vx-seg::after { content: ''; position: absolute; inset: -4px 0; }
-.vx-seg:hover { color: rgb(var(--ink-100)); }
-.vx-seg[aria-pressed='true'] { color: rgb(var(--ink-950)); background: rgb(var(--ink-100)); }
+.vx-lyrics-seg::after { content: ''; position: absolute; inset: -4px 0; }
+.vx-lyrics-seg:hover { color: rgb(var(--ink-100)); }
+.vx-lyrics-seg[aria-pressed='true'] { color: rgb(var(--ink-950)); background: rgb(var(--ink-100)); }
 .vx-lyrics-page .vx-np-pill { background: rgb(var(--ink-850)); }
 .vx-lyrics-page .vx-np-pill:hover { background: rgb(var(--ink-800)); }
 .vx-lyrics-sync { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
