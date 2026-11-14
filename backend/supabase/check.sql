@@ -397,6 +397,21 @@ begin
   select jsonb_array_length(requests) into n from rooms where code = 'CHECK1';
   assert n = 1, 'room_request: de-duplicated against the queue';
 
+  -- Version 22: a guest's command for the host, appended atomically.
+  assert room_control('CHECK1', '{"id": "check_c1", "cmd": "pause"}'), 'room_control: appended';
+  assert not room_control('NOPE00', '{"id": "check_c2", "cmd": "pause"}'), 'room_control: unknown room is false';
+  select jsonb_array_length(controls) into n from rooms where code = 'CHECK1';
+  assert n = 1, 'room_control: one command kept';
+  assert (select (controls -> 0) ? 'at' from rooms where code = 'CHECK1'), 'room_control: stamped with the time';
+  update rooms set controls = jsonb_build_array(jsonb_build_object('id', 'check_old', 'cmd', 'play', 'at', now() - interval '5 minutes')) || controls where code = 'CHECK1';
+  perform room_control('CHECK1', jsonb_build_object('id', 'check_k' || g, 'cmd', 'next')) from generate_series(1, 25) g;
+  select jsonb_array_length(controls) into n from rooms where code = 'CHECK1';
+  assert n = 20, 'room_control: keeps the newest 20';
+  assert not exists (select 1 from rooms r, jsonb_array_elements(r.controls) e where r.code = 'CHECK1' and e ->> 'id' = 'check_old'), 'room_control: drops commands older than two minutes';
+  assert (select controls -> 19 ->> 'id' from rooms where code = 'CHECK1') = 'check_k25', 'room_control: newest last';
+  assert exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'room_members' and column_name = 'sync'), 'room_members.sync';
+  assert exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'rooms' and column_name = 'jam'), 'rooms.jam';
+
   v := room_sweep();
   assert (v ->> 'rooms')::int = 0 and (v ->> 'members')::int = 0, 'room_sweep leaves fresh rooms alone';
   n := purge_events(180);
@@ -653,7 +668,7 @@ begin
   assert jsonb_array_length(v -> 'byDay') >= 1 and jsonb_array_length(v -> 'byEmoji') = 3, 'stats_reactions: by day and by emoji';
   assert not has_table_privilege('anon', 'public.song_reactions', 'select'), 'anon cannot read song reactions';
 
-  assert (select (value ->> 'version')::int from meta where key = 'schema') = 21, 'meta.schema.version';
+  assert (select (value ->> 'version')::int from meta where key = 'schema') = 22, 'meta.schema.version';
   -- v20: email + password sign-in. bcrypt in the database, the hash in its own locked table.
   insert into accounts (id, email, name) values ('check_pw', 'Pw@Example.com', 'Pw');
   assert account_set_password('check_nobody', 'long-enough') = false, 'account_set_password: no account';
