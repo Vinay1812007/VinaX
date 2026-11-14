@@ -335,20 +335,6 @@ html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)
   transition: opacity var(--dur-base) var(--ease-standard), transform var(--dur-base) var(--ease-standard);
 }
 .vx-topbar.is-scrolled .vx-topbar-context { opacity: 1; transform: none; }
-/* 2.0 — admins only: a quiet accent pill to the owner console. */
-.vx-topbar-admin {
-  align-items: center;
-  height: 40px;
-  padding: 0 var(--space-4);
-  border-radius: var(--radius-pill);
-  box-shadow: inset 0 0 0 1px var(--accent-line);
-  color: var(--accent-text);
-  font-size: var(--type-meta);
-  font-weight: 700;
-  text-decoration: none;
-}
-.vx-topbar-admin:hover { background: var(--accent-soft); }
-.vx-topbar-admin:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 /* 2.0 — the search field in the bar (768px and wider): a pill that opens
    Search. Display comes from the utility classes on the link (hidden md:flex). */
 .vx-topbar-search {
