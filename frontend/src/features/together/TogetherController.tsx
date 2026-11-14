@@ -144,6 +144,7 @@ export default function TogetherController(): ReactNode {
   const hostName = useTogether((s) => s.hostName);
   const count = useTogether((s) => s.listenerCount);
   const needsTap = useTogether((s) => s.needsTap);
+  const unread = useTogether((s) => s.unread);
   const { pathname } = useLocation();
   const { spot, dragging, bind } = useMovable();
 
@@ -154,6 +155,10 @@ export default function TogetherController(): ReactNode {
 
   if (mode === 'idle') return null;
   if (pathname === '/together') return <Sky />;
+  // 1.14 — the player's Together tab carries the room (live dot, unread count,
+  // chat): the pill would only sit on its Send button. It still comes up there
+  // when the browser is holding a guest's audio for a tap.
+  if (pathname === '/now-playing' && !needsTap) return <Sky />;
 
   const label =
     status === 'reconnecting'
@@ -183,10 +188,21 @@ export default function TogetherController(): ReactNode {
             Tap to start listening
           </button>
         ) : (
-          <Link to="/together" className="vx-lt-pill-link" draggable={false} aria-label={`${label}. Open Listen Together`}>
+          <Link
+            to="/together"
+            className="vx-lt-pill-link"
+            draggable={false}
+            aria-label={`${label}.${unread ? ` ${unread} new ${unread === 1 ? 'message' : 'messages'}.` : ''} Open Listen Together`}
+          >
             <span className="vx-lt-dot" aria-hidden />
             <span className="truncate-1">{label}</span>
             <span className="vx-lt-pill-code">{code}</span>
+            {/* 1.14 — new chat lines since a chat was last on screen. */}
+            {unread > 0 && (
+              <span className="vx-lt-badge" data-testid="lt-unread" aria-hidden>
+                {unread > 9 ? '9+' : unread}
+              </span>
+            )}
           </Link>
         )}
       </div>

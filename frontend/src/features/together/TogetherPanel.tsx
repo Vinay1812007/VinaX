@@ -6,6 +6,7 @@ import { useTogether } from '@/services/together/session';
 import { toast } from '@/store/toastStore';
 import { useTutorialStore } from '@/store/tutorialStore';
 import { shareLink } from '@/utils/share';
+import { Chat } from './Chat';
 import { leaveSession, startHosting } from './engine';
 import { JoinRoom } from './JoinRoom';
 import { OpenInApp } from './OpenInApp';
@@ -95,6 +96,8 @@ export default function TogetherPanel(): ReactNode {
           {mode === 'host' ? 'End for everyone' : 'Leave'}
         </button>
       </div>
+      {/* 1.14 — the room's chat, here too: no need to open the room to talk. */}
+      <Chat compact />
       {mode === 'guest' && <OpenInApp code={code} />}
     </div>
   );

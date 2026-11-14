@@ -485,6 +485,7 @@ html.light .vx-np-play { background: rgb(var(--ember-500)); box-shadow: 0 14px 3
 .vx-np-tab-icon { width: 16px; height: 16px; }
 .vx-np-tabs [role='tab'].is-together:not([aria-selected='true']) { color: rgb(var(--ember-400)); }
 .vx-np-tabs [role='tab'].is-live:not([aria-selected='true']) { color: rgb(var(--tide-400)); }
+.vx-np-tab-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--radius-pill); background: rgb(var(--tide-500)); color: rgb(var(--ink-950)); font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .vx-np-tab-live { width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--tide-400)); box-shadow: 0 0 0 3px rgb(var(--tide-500) / 0.25); }
 /* Four tabs and a link: on a phone the tab strip scrolls sideways before anything is cut off. */
 .vx-np-tabs { min-width: 0; overflow-x: auto; scrollbar-width: none; }

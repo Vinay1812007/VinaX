@@ -147,7 +147,7 @@ vi.mock('@/store/playerStore', () => ({
 }));
 
 import { useTogether } from '@/services/together/session';
-import { addSong, ask, canTakeOut, getTrimMs, joinSession, leaveSession, playNow, react, removeFromRoom, resync, runSession, say, setGuestControl, setOnThisPhone, setTrimMs, takeOut, tapToListen, TRIM_MAX_MS, typing } from './engine';
+import { addSong, ask, canTakeOut, getTrimMs, joinSession, leaveSession, openChat, playNow, react, removeFromRoom, resync, runSession, say, setGuestControl, setOnThisPhone, setTrimMs, takeOut, tapToListen, TRIM_MAX_MS, typing } from './engine';
 import { useRoom } from './room';
 
 const song = (id: string, playable = true) => ({ id, title: `Song ${id}`, subtitle: '', images: [], audio: playable ? [{ quality: '320kbps', url: 'u' }] : [] });
@@ -1109,6 +1109,53 @@ describe('a jam (1.14)', () => {
     setOnThisPhone(true);
     await vi.advanceTimersByTimeAsync(2000);
     expect(player.getState().isPlaying).toBe(true);
+    stop();
+  });
+});
+
+describe('unread chat (1.14)', () => {
+  const line = (id: string, by = 'Ravi', text = 'hi') => ({ id, by, text, at: new Date().toISOString() });
+  const LIVE = { url: 'wss://abcdefgh.supabase.co/realtime/v1', key: 'sb_publishable_test' };
+
+  it('counts new lines from others until a chat is open; what was said before joining, and your own lines, do not count', async () => {
+    api.getRoom.mockResolvedValue({ ...room({ messages: [line('old1aaaa'), line('old2aaaa')] }), live: LIVE });
+    useTogether.getState().begin('guest', 'ABC123');
+    const stop = runSession('guest', 'ABC123');
+    await vi.advanceTimersByTimeAsync(0);
+    // The room's history is not news.
+    expect(useTogether.getState().unread).toBe(0);
+    // A new line in the next poll, and one on the live line.
+    api.getRoom.mockResolvedValue({ ...room({ messages: [line('old1aaaa'), line('old2aaaa'), line('new1aaaa')] }), live: LIVE });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(useTogether.getState().unread).toBe(1);
+    wire.lines[wire.lines.length - 1].hear('chat', { id: 'new2aaaa', by: 'Asha', text: 'hello' });
+    expect(useTogether.getState().unread).toBe(2);
+    // The same line again from the server counts once.
+    api.getRoom.mockResolvedValue({ ...room({ messages: [line('old1aaaa'), line('old2aaaa'), line('new1aaaa'), line('new2aaaa', 'Asha', 'hello')] }), live: LIVE });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(useTogether.getState().unread).toBe(2);
+    // This phone's own line is not unread.
+    await say('me too');
+    expect(useTogether.getState().unread).toBe(2);
+    // A chat opens: all read, and nothing counts while it is open.
+    const close = openChat();
+    expect(useTogether.getState().unread).toBe(0);
+    wire.lines[wire.lines.length - 1].hear('chat', { id: 'new3aaaa', by: 'Asha', text: 'seen' });
+    expect(useTogether.getState().unread).toBe(0);
+    close();
+    wire.lines[wire.lines.length - 1].hear('chat', { id: 'new4aaaa', by: 'Asha', text: 'after' });
+    expect(useTogether.getState().unread).toBe(1);
+    stop();
+  });
+
+  it('the host counts too', async () => {
+    api.getRoom.mockResolvedValue({ ...room({ messages: [] }), me: 'aaaaaaaaaaaa' });
+    useTogether.getState().begin('host', 'ABC123');
+    const stop = runSession('host', 'ABC123');
+    await vi.advanceTimersByTimeAsync(0);
+    api.getRoom.mockResolvedValue({ ...room({ messages: [line('g1aaaaaa')] }), me: 'aaaaaaaaaaaa' });
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(useTogether.getState().unread).toBe(1);
     stop();
   });
 });

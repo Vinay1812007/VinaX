@@ -84,7 +84,7 @@ import { KEYS } from '@/constants/storage-keys';
 import { getLocal, setLocal } from '@/services/storage/local';
 import { decideCorrection, HostClock, hostIsAway, RateNudge, ReactionFeed, SEEK_THRESHOLD_S, SeekLead, ServerClock, TRACK_SETTLE_MS } from './sync';
 import { cleanLive, LiveLine } from './live';
-import { useRoom } from './room';
+import { chatShown, lineKey, noteChat, resetUnread, useRoom } from './room';
 
 const HOST_POLL_MS = 4000;
 const GUEST_POLL_MS = 2000;
@@ -174,6 +174,7 @@ function onLive(event: string, raw: unknown): void {
     const by = text(p.by, 40) || 'Someone';
     if (!LINE_ID.test(id) || !words) return;
     room.setTyping(by, false);
+    unread(noteChat([{ key: id, mine: false }], false));
     if (useTogether.getState().messages.some((m) => m.id === id)) return;
     room.line({ id, by, text: words, at: Date.now(), mine: false, state: 'sent' });
   } else if (event === 'typing') {
@@ -230,6 +231,7 @@ export async function say(words: string, retryId?: string): Promise<boolean> {
   const id = retryId ?? newLineId();
   const by = myName();
   rememberSent(id);
+  noteChat([{ key: id, mine: true }], false);
   if (retryId) room.mark(id, 'sending');
   else room.line({ id, by, text: clean, at: Date.now(), mine: true, state: 'sending' });
   typingStopped();
@@ -591,10 +593,29 @@ function runHost(code: string): () => void {
 /** A phone reads the room for a "look now" at most this often (ms). */
 const POKE_GAP_MS = 700;
 
-/** Drop the chat lines in flight that the server now lists. */
-function chatListed(messages: Array<{ id?: string }> | undefined): void {
-  const ids = new Set((messages ?? []).map((m) => m.id).filter((x): x is string => !!x));
+/** Drop the chat lines in flight that the server now lists; count the new ones from others as unread (1.14). */
+function chatListed(messages: Array<{ id?: string; at: string; by: string; text: string }> | undefined): void {
+  const list = messages ?? [];
+  const ids = new Set(list.map((m) => m.id).filter((x): x is string => !!x));
   if (ids.size) useRoom.getState().listed(ids);
+  const mine = sentLines();
+  unread(noteChat(list.map((m) => ({ key: lineKey(m), mine: !!m.id && mine.has(m.id) })), true));
+}
+
+/** 1.14 — add to the unread count shown on the Live pill and the Together tab. */
+function unread(n: number): void {
+  if (n > 0) useTogether.getState().patch({ unread: Math.min(99, useTogether.getState().unread + n) });
+}
+
+/**
+ * 1.14 — a chat is on screen (the room page or the player's Together tab):
+ * the unread count clears and stays clear while it is. Returns the function
+ * to call when the chat leaves the screen.
+ */
+export function openChat(): () => void {
+  const closed = chatShown();
+  if (useTogether.getState().unread) useTogether.getState().patch({ unread: 0 });
+  return closed;
 }
 
 /** A song as the live line carries it: what a room shows, never a stream. */
@@ -1045,6 +1066,7 @@ export function runSession(mode: 'host' | 'guest', code: string): () => void {
   missed = null;
   typingSaid = 0;
   useRoom.getState().reset();
+  resetUnread();
   // `landing` is left alone: joining may already have started the song, a
   // moment before this engine was mounted, and its landing is still to be measured.
   return mode === 'host' ? runHost(code) : runGuest(code);

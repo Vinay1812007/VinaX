@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTogether } from '@/services/together/session';
 import { toast } from '@/store/toastStore';
-import { say, sentLines, typing } from './engine';
+import { openChat, say, sentLines, typing } from './engine';
 import { chatRows, typingText, useRoom } from './room';
 
 const clock = (at: number | null): string => (at === null ? '' : new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
@@ -14,7 +14,8 @@ const clock = (at: number | null): string => (at === null ? '' : new Date(at).to
  * who is typing; each person's lines are bubbles, yours on the right; and only
  * the chat itself scrolls, and only when you are already at its end.
  */
-export function Chat(): ReactNode {
+export function Chat({ compact = false }: { compact?: boolean } = {}): ReactNode {
+  const headingId = useId();
   const messages = useTogether((s) => s.messages);
   const extra = useRoom((s) => s.extra);
   const typers = useRoom((s) => s.typing);
@@ -24,6 +25,9 @@ export function Chat(): ReactNode {
   const atEnd = useRef(true);
   const rows = useMemo(() => chatRows(messages, extra, sentLines()), [messages, extra]);
   const who = typingText(typers);
+
+  // 1.14 — while the chat is on screen nothing is unread.
+  useEffect(() => openChat(), []);
 
   useEffect(() => {
     const el = list.current;
@@ -41,8 +45,8 @@ export function Chat(): ReactNode {
   };
 
   return (
-    <section className="vx-lt-block" aria-labelledby="vx-lt-chat">
-      <h2 id="vx-lt-chat" className="vx-lt-h2">Chat</h2>
+    <section className={compact ? 'vx-lt-block is-compact' : 'vx-lt-block'} aria-labelledby={headingId}>
+      <h2 id={headingId} className="vx-lt-h2">Chat</h2>
       <div className="vx-lt-chatbox">
         <ul
           ref={list}

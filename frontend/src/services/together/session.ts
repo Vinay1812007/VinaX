@@ -55,6 +55,8 @@ interface TogetherState {
   onThisPhone: boolean;
   /** Guest: whether the host's music is playing (this phone may be quiet as the remote). */
   hostPlaying: boolean;
+  /** 1.14 — chat lines from others that arrived while no chat was on screen (the pill and the Together tab show it). */
+  unread: number;
   begin(mode: Exclude<TogetherMode, 'idle'>, code: string): void;
   patch(p: Partial<Omit<TogetherState, 'begin' | 'patch' | 'reset'>>): void;
   reset(): void;
@@ -105,6 +107,7 @@ const EMPTY = {
   hostH: null as string | null,
   onThisPhone: true,
   hostPlaying: false,
+  unread: 0,
 };
 
 export const useTogether = create<TogetherState>((set) => ({

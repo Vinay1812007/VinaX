@@ -552,6 +552,66 @@ test('a jam: the guest pauses, plays, adds, takes out and skips for everyone; th
   await guest.context().close();
 });
 
+test('new chat lines count up on the pill until the chat is opened, and the player’s Together tab has the chat', async ({ browser, baseURL }) => {
+  const base = baseURL!;
+  const server = roomServer({ line: true, jam: true });
+  const host = await open(browser, base, server, 'Asha', [appSong(base, 'a', 'Song A'), appSong(base, 'b', 'Song B')]);
+  const guest = await open(browser, base, server, 'Ravi', []);
+  await host.goto('/together');
+  await host.getByRole('button', { name: 'Start a session' }).click();
+  await expect(host.locator('.vx-lt-code')).toHaveText('ABC123');
+  await host.getByRole('button', { name: 'Play for everyone' }).click();
+  await guest.goto('/together?code=ABC123');
+  await expect(guest.locator('.vx-lt-status')).toBeVisible({ timeout: 10_000 });
+  await startListeningIfAsked(guest);
+  await expect(guest.locator('.vx-lt-status')).toContainText('Live', { timeout: 15_000 });
+
+  // The guest is browsing elsewhere when the host says something.
+  await guest.getByRole('link', { name: /^Search songs/ }).first().click();
+  const pill = guest.locator('.vx-lt-pill');
+  await expect(pill).toBeVisible();
+  await expect(pill.getByTestId('lt-unread')).toHaveCount(0);
+  const say = async (text: string) => {
+    await host.getByRole('textbox', { name: 'Chat message' }).fill(text);
+    await host.getByRole('button', { name: 'Send' }).click();
+  };
+  await say('first');
+  await expect(pill.getByTestId('lt-unread')).toHaveText('1', { timeout: 10_000 });
+  await say('second');
+  await expect(pill.getByTestId('lt-unread')).toHaveText('2', { timeout: 10_000 });
+  await expect(pill.getByRole('link')).toHaveAttribute('aria-label', /2 new messages/);
+  await guest.screenshot({ path: test.info().outputPath('unread-pill.png') });
+
+  // Opening the room reads them.
+  await pill.getByRole('link').click();
+  await expect(guest.locator('.vx-lt-msg', { hasText: 'second' })).toBeVisible();
+  await guest.getByRole('link', { name: /^Search songs/ }).first().click();
+  await expect(guest.locator('.vx-lt-pill')).toBeVisible();
+  await expect(guest.locator('.vx-lt-pill').getByTestId('lt-unread')).toHaveCount(0);
+
+  // The player's Together tab: the count shows on the tab, and the chat is right there.
+  await say('third');
+  await expect(guest.locator('.vx-lt-pill').getByTestId('lt-unread')).toHaveText('1', { timeout: 10_000 });
+  // In the app (a reload would start the count afresh): the Now playing rail's Full screen.
+  await guest.getByRole('link', { name: /Full screen/ }).first().click();
+  await expect(guest).toHaveURL(/\/now-playing/);
+  const tab = guest.getByRole('tab', { name: 'Together' });
+  await expect(tab.locator('.vx-np-tab-badge')).toHaveText('1', { timeout: 10_000 });
+  await tab.click();
+  const panel = guest.locator('#vx-np-panel-together');
+  await expect(panel.locator('.vx-lt-msg', { hasText: 'third' })).toBeVisible({ timeout: 10_000 });
+  await expect(tab.locator('.vx-np-tab-badge')).toHaveCount(0);
+  // The tab carries the room here: no pill on top of the chat's Send button.
+  await expect(guest.locator('.vx-lt-pill')).toHaveCount(0);
+  await panel.getByRole('textbox', { name: 'Chat message' }).fill('from the player');
+  await panel.getByRole('button', { name: 'Send' }).click();
+  await expect(host.locator('.vx-lt-msg', { hasText: 'from the player' })).toBeVisible({ timeout: 10_000 });
+  await guest.screenshot({ path: test.info().outputPath('unread-tab.png'), fullPage: true });
+
+  await host.context().close();
+  await guest.context().close();
+});
+
 test('the Listen Together pill can be dragged out of the way, stays there, and a tap still opens the room', async ({ browser, baseURL }) => {
   const base = baseURL!;
   const server = roomServer();

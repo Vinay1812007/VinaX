@@ -351,6 +351,20 @@ html.light .vx-lt-pill-tap { background: rgb(var(--ink-950) / 0.94); box-shadow:
   font-weight: 800;
   letter-spacing: 0.12em;
 }
+/* 1.14 — unread chat lines on the pill. */
+.vx-lt-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: rgb(var(--tide-500));
+  color: rgb(var(--ink-950));
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
 .vx-lt-pill-tap { padding-right: 16px; background: rgb(var(--ember-500)); color: var(--vx-on-accent); }
 .vx-lt-pill-tap .vx-lt-dot { color: var(--vx-on-accent); }
 @media (prefers-reduced-motion: no-preference) {
@@ -377,6 +391,9 @@ html.reduce-motion .vx-lt-pill { animation: none; }
   padding: 2px 4px 6px;
   scrollbar-width: thin;
 }
+/* 1.14 — the chat inside the player's Together tab: shorter, it sits under the room card. */
+.vx-lt-block.is-compact { margin: 20px 0 0; }
+.vx-lt-block.is-compact .vx-lt-chat { height: clamp(140px, 26vh, 240px); }
 .vx-lt-chat-empty { margin: auto; color: rgb(var(--ink-400)); font-size: 14px; text-align: center; }
 .vx-lt-msg { display: flex; flex-direction: column; align-items: flex-start; max-width: 84%; margin-top: 12px; }
 .vx-lt-msg:first-child { margin-top: auto; }

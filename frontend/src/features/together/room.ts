@@ -22,6 +22,54 @@ export interface LiveLineMessage {
   state: 'sending' | 'sent' | 'failed';
 }
 
+/**
+ * 1.14 — unread chat. A line from someone else that arrives while no chat is
+ * on screen (the room page, or the player's Together tab) counts, until a
+ * chat opens. What the room already said before this phone joined does not:
+ * the first list from the server is taken as read. Plain functions on module
+ * state, reset with the room.
+ */
+let chatOpen = 0;
+let primed = false;
+const known = new Set<string>();
+
+/** How a line is known: the id its sender gave it, or (older apps) when, who and what. */
+export const lineKey = (m: { id?: string; at: string | number; by: string; text: string }): string => m.id ?? `${m.at}|${m.by}|${m.text}`;
+
+/**
+ * Lines seen (from the server's list, `fromServer`, or the live line).
+ * Returns how many of them are new and someone else's while no chat is open.
+ */
+export function noteChat(lines: Array<{ key: string; mine: boolean }>, fromServer: boolean): number {
+  let fresh = 0;
+  const counting = primed || !fromServer;
+  for (const l of lines) {
+    if (known.has(l.key)) continue;
+    known.add(l.key);
+    if (counting && !l.mine && chatOpen === 0) fresh += 1;
+  }
+  if (fromServer) primed = true;
+  if (known.size > 400) {
+    // Only the newest matter: the room keeps 40 lines.
+    const keep = [...known].slice(-200);
+    known.clear();
+    keep.forEach((k) => known.add(k));
+  }
+  return fresh;
+}
+/** A chat is on screen: everything is read while it stays. Returns the "closed" function. */
+export function chatShown(): () => void {
+  chatOpen += 1;
+  return () => {
+    chatOpen = Math.max(0, chatOpen - 1);
+  };
+}
+export const chatIsOpen = (): boolean => chatOpen > 0;
+export function resetUnread(): void {
+  primed = false;
+  known.clear();
+}
+
 export interface ChatRow {
   key: string;
   by: string;

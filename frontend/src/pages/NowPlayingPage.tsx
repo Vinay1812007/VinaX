@@ -403,6 +403,8 @@ export default function NowPlayingPage() {
   const castDeviceName = useCastStore((s) => s.deviceName);
   // 1.13 — a live room marks the Together tab.
   const togetherLive = useTogether((s) => s.mode !== 'idle');
+  // 1.14 — new chat lines in the room, shown on the tab until a chat is opened.
+  const togetherUnread = useTogether((s) => s.unread);
   const lyrics = useSyncedLyrics(song);
   useEffect(() => {
     if (!tabTouched.current && lyrics.data?.synced) setRightTab('lyrics');
@@ -856,7 +858,13 @@ export default function NowPlayingPage() {
                   >
                     {tab === 'together' && <UsersIcon className="vx-np-tab-icon" />}
                     <span className="vx-np-tab-label">{label}</span>
-                    {tab === 'together' && togetherLive && <span className="vx-np-tab-live" aria-hidden />}
+                    {tab === 'together' && togetherLive && togetherUnread > 0 && rightTab !== 'together' ? (
+                      <span className="vx-np-tab-badge" aria-label={`${togetherUnread} new ${togetherUnread === 1 ? 'message' : 'messages'}`}>
+                        {togetherUnread > 9 ? '9+' : togetherUnread}
+                      </span>
+                    ) : (
+                      tab === 'together' && togetherLive && <span className="vx-np-tab-live" aria-hidden />
+                    )}
                   </button>
                 ))}
               </div>
