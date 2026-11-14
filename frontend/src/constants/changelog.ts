@@ -18,6 +18,16 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.14.0': {
+    title: 'Listen Together works like a jam, and tells you when a phone is out of step',
+    changes: [
+      { type: 'new', text: 'Everyone adds songs straight into one shared queue, with their name on each song, and can take out what they added.' },
+      { type: 'improved', text: 'Guests can play, pause and skip for everyone; the host can keep playback to itself, or remove someone.' },
+      { type: 'improved', text: 'A sync check on each guest\'s phone shows how far it is from the host, with Resync to snap back in step.' },
+      { type: 'improved', text: 'The room says whose VinaX is out of date, and Fine-tune now reaches 2 seconds for slow speakers.' },
+    ],
+    tour: 'together-room',
+  },
   '1.13.28': {
     title: 'The Admin button is gone from the top bar',
     changes: [
