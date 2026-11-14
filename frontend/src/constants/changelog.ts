@@ -26,7 +26,7 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
       { type: 'improved', text: 'A sync check on each guest\'s phone shows how far it is from the host, with Resync to snap back in step.' },
       { type: 'improved', text: 'The room says whose VinaX is out of date, and Fine-tune now reaches 2 seconds for slow speakers.' },
     ],
-    tour: 'together-room',
+    tour: 'listen-together',
   },
   '1.13.28': {
     title: 'The Admin button is gone from the top bar',
