@@ -150,6 +150,26 @@ describe('V2 Up Next — planning', () => {
     }
   });
 
+  it('when the similar songs were all heard lately, it reaches related artists instead of replaying favourites', async () => {
+    const now = Date.now();
+    const seed = song('seed', 'S', { artists: [{ id: 'a-S', name: 'S' }] });
+    const heard = Array.from({ length: 6 }, (_, i) => song(`h${i}`, `H${i}`));
+    useHistoryStore.setState({ entries: heard.map((s, i) => ({ song: s, ts: now - (i + 1) * 3_600_000, completed: true })) });
+    useLibraryStore.setState({ favorites: [song('fav1', 'F1'), song('fav2', 'F2'), song('fav3', 'F3')] });
+    const wide = Array.from({ length: 6 }, (_, i) => song(`w${i}`, `W${i}`));
+    setCatalogueApi({
+      similar: async () => heard,
+      artistTop: async () => [],
+      related: async () => [{ id: 'a-R', name: 'R' }],
+      artistPage: async (_id, page) => (page === 0 ? wide.slice(0, 3) : wide.slice(3)),
+    });
+    startAnchor([seed]);
+    const p = await plan(seed);
+    expect(p.songs.length).toBeGreaterThan(2);
+    expect(p.songs.every((s) => s.id.startsWith('w'))).toBe(true);
+    expect(p.relaxed).toContain('widened-1');
+  });
+
   it('topUp serves more from the same pool, under the same rules', async () => {
     const many = Array.from({ length: 20 }, (_, i) => song(`m${i}`, `Artist ${i}`));
     setCatalogueApi(fakeCatalogue({ seed: many }).api);

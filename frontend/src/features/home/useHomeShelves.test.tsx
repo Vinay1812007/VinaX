@@ -3,6 +3,9 @@
  * 1.3 — Trending and New releases ask the catalogue's feeds first and fall
  * back to the search pools: when the feed rejects, leaves too few songs after
  * the mute filter, or cannot serve one of the pinned languages.
+ *
+ * 1.14.4 — when the feed answers, a rotating search page joins it (the feed
+ * is the same list on every call), and the shelf is ordered per generation.
  */
 import { cleanup, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -57,15 +60,15 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('useTrendingNow', () => {
-  it('uses the trending feed for the pinned languages and skips the search', async () => {
+  it('uses the trending feed for the pinned languages, plus a rotating search page', async () => {
     useSettingsStore.setState({ pinnedLanguages: ['telugu', 'hindi'] });
     const feed = [...songs('te', 5), ...songs('hi', 5, { language: 'hindi' })];
     getTrendingSongs.mockResolvedValue(feed);
     const { result } = renderHook(() => useTrendingNow(), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(ids(result.current.data)).toEqual(ids(feed));
+    expect(ids(result.current.data)).toEqual(expect.arrayContaining(ids(feed)));
     expect(getTrendingSongs.mock.calls[0][0]).toEqual(['telugu', 'hindi']);
-    expect(searchSongsPage).not.toHaveBeenCalled();
+    expect(searchSongsPage).toHaveBeenCalled();
   });
 
   it('falls back to the search pool when the feed rejects', async () => {
@@ -95,13 +98,13 @@ describe('useTrendingNow', () => {
 });
 
 describe('useNewReleases', () => {
-  it('uses the songs half of the new-releases feed', async () => {
+  it('uses the songs half of the new-releases feed, with the search page after it when it fails', async () => {
     const feed = songs('new', 8);
     getNewReleases.mockResolvedValue({ songs: feed, albums: [] });
+    searchSongsPage.mockRejectedValue(new Error('down'));
     const { result } = renderHook(() => useNewReleases(), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(ids(result.current.data)).toEqual(ids(feed));
-    expect(searchSongsPage).not.toHaveBeenCalled();
   });
 
   it('falls back to the search when the feed has no songs', async () => {
@@ -119,15 +122,37 @@ describe('per-language shelves', () => {
     const { result } = renderHook(() => useTrendingForLanguage('tamil'), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(getTrendingSongs.mock.calls[0][0]).toEqual(['tamil']);
-    expect(ids(result.current.data)).toEqual(ids(feed));
-    expect(searchSongs).not.toHaveBeenCalled();
+    expect(ids(result.current.data)).toEqual(expect.arrayContaining(ids(feed)));
   });
 
   it('useNewForLanguage falls back to the search seed when the feed rejects', async () => {
     getNewReleases.mockRejectedValue(new Error('down'));
     const { result } = renderHook(() => useNewForLanguage('telugu'), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(searchSongs).toHaveBeenCalledWith(expect.stringMatching(/telugu/), 20);
+    expect(searchSongsPage).toHaveBeenCalledWith(expect.stringMatching(/telugu/), expect.any(Number), 20);
     expect(ids(result.current.data)).toEqual(ids(songs('search', 8)));
+  });
+});
+
+describe('a new Home generation shows different songs', () => {
+  it('reorders the same feed when the generation moves, and puts songs heard lately at the back', async () => {
+    const { refreshHome } = await import('./homeRefresh');
+    const { useHistoryStore } = await import('@/store/historyStore');
+    const feed = songs('te', 20);
+    getTrendingSongs.mockResolvedValue(feed);
+    searchSongsPage.mockResolvedValue([]);
+    useHistoryStore.setState({ entries: [{ song: feed[0], ts: Date.now() - 60_000, completed: true }] });
+    const first = renderHook(() => useTrendingNow(), { wrapper });
+    await waitFor(() => expect(first.result.current.isSuccess).toBe(true));
+    const a = (first.result.current.data ?? []).map((s) => s.id);
+    expect(a[a.length - 1]).toBe('te0');
+    first.unmount();
+    refreshHome();
+    const second = renderHook(() => useTrendingNow(), { wrapper });
+    await waitFor(() => expect(second.result.current.isSuccess).toBe(true));
+    const b = (second.result.current.data ?? []).map((s) => s.id);
+    expect(b.slice().sort()).toEqual(a.slice().sort());
+    expect(b).not.toEqual(a);
+    useHistoryStore.setState({ entries: [] });
   });
 });

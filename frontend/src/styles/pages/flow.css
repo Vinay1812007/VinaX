@@ -1,12 +1,13 @@
 /* ============================================================================
-   VinaX 10.1 — Flow: the full-screen, swipeable feed of song previews.
+   VinaX 10.1 — Flow: the full-screen, swipeable feed. 1.14.4 — of music
+   videos, like reels (it was song previews).
 
    Imported only by pages/FlowPage.tsx, so it ships in Flow's lazy chunk.
 
-   One card per screen. The song's artwork fills the card twice: blurred and
-   art-tinted as the backdrop, sharp in the middle. Marigold marks the moments
-   that matter (play, a like, the progress line runs Marigold → Rose); every
-   other control is a quiet glass disc. Text sits on an ink scrim in both
+   One reel per screen. The clip sits in the middle, whole, over its own
+   thumbnail blurred and tinted; the title and the action rail sit on an ink
+   scrim along the foot. Marigold marks the moments that matter (a like, the
+   progress line); every other control is a quiet glass disc. Text sits on an ink scrim in both
    themes, so the artwork never decides whether it can be read. Motion is off
    under either reduced-motion switch (the OS setting or html.reduce-motion).
    ========================================================================= */
@@ -135,40 +136,67 @@ html.light .vx-flow-bg::after {
   background: linear-gradient(180deg, rgb(var(--ink-950) / 0.45) 0%, rgb(var(--ink-950) / 0.2) 38%, rgb(var(--ink-950) / 0.9) 100%);
 }
 
-.vx-flow-col {
-  position: relative;
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: 18px;
-  width: min(100%, 520px);
-  height: 100%;
-  padding: calc(var(--safe-top) + 70px) 20px 30px;
-}
-.vx-flow-stage {
+/* --------------------------------------------------------------- the reel */
+.vx-reel-stage {
+  position: absolute;
+  inset: 0;
   display: grid;
   place-items: center;
-  min-height: 0;
-  /* The cover is as big as the space left over, square, in either direction. */
-  container-type: size;
 }
-.vx-flow-art {
-  width: min(100cqw, 100cqh, 400px);
-  aspect-ratio: 1;
-  object-fit: cover;
-  border-radius: 22px;
-  background: rgb(var(--ink-850));
-  box-shadow: 0 28px 64px -18px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.07);
+.vx-reel-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: transparent;
   -webkit-user-drag: none;
 }
-.vx-flow-art.is-empty { box-shadow: none; }
+.vx-reel-video.is-empty { background: rgb(var(--ink-900)); }
+.vx-reel-paused {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  border-radius: var(--radius-pill);
+  background: rgb(var(--ink-950) / 0.5);
+  color: rgb(var(--ink-100));
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+.vx-reel-sound {
+  position: absolute;
+  top: calc(var(--safe-top) + 66px);
+  left: 50%;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: var(--radius-pill);
+  background: rgb(var(--ember-500));
+  color: var(--vx-on-accent);
+  font-size: 14px;
+  font-weight: 800;
+  transform: translateX(-50%);
+  box-shadow: 0 10px 28px -8px rgb(var(--ember-500) / 0.65);
+}
 
-/* ------------------------------------------------- title, lyrics, controls */
-/* Title block and action rail side by side: on a phone the artwork shrinks
-   to make room, so the rail never sits on the cover. */
-.vx-flow-bottom {
+/* ---------------------------------------------- title, controls, the rail */
+/* Title block and action rail side by side along the foot, on a scrim so
+   the clip never decides whether they can be read. */
+.vx-reel-bottom {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
   display: flex;
   align-items: flex-end;
   gap: 10px;
+  padding: 64px 18px 26px;
+  background: linear-gradient(180deg, transparent, rgb(var(--ink-950) / 0.82));
 }
 .vx-flow-meta {
   flex: 1;
@@ -199,54 +227,16 @@ html.light .vx-flow-bg::after {
 .vx-flow-artists a:hover { text-decoration: underline; }
 .vx-flow-album { color: rgb(var(--ink-300)); font-weight: 500; }
 
-.vx-flow-lyrics {
-  display: grid;
-  grid-template-rows: 18px 46px 18px;
-  gap: 4px;
-  margin-top: 14px;
-  padding-left: 12px;
-  border-left: 2px solid rgb(var(--ember-500));
-}
-.vx-flow-lyrics p {
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.vx-flow-lyrics .is-past,
-.vx-flow-lyrics .is-next { color: rgb(var(--ink-300)); font-size: 13px; line-height: 18px; }
-.vx-flow-lyrics .is-now {
-  display: -webkit-box;
-  color: rgb(var(--ink-100));
-  font-size: 17px;
-  font-weight: 750;
-  line-height: 23px;
-  white-space: normal;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
 .vx-flow-controls {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-top: 18px;
 }
-.vx-flow-play {
-  display: grid;
-  flex-shrink: 0;
-  place-items: center;
-  width: 56px;
-  height: 56px;
-  border-radius: 18px;
-  background: rgb(var(--ember-500));
-  color: var(--vx-on-accent);
-  box-shadow: 0 10px 28px -8px rgb(var(--ember-500) / 0.65);
-  transition: transform var(--transition-fast), filter var(--transition-fast);
-}
-.vx-flow-play:hover { filter: brightness(1.08); }
-.vx-flow-play:active { transform: scale(0.94); }
 .vx-flow-full {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   min-height: 44px;
   padding: 0 18px;
   border: 1px solid var(--vxf-line);
@@ -384,9 +374,9 @@ html.light .vx-flow-bg::after {
 
 /* ---------------------------------------------------------------- desktop */
 @media (min-width: 900px) {
-  .vx-flow-col { width: 460px; padding-bottom: 40px; }
-  /* Beside the column, not over it. */
-  .vx-flow-rail { position: absolute; right: -78px; bottom: 40px; margin-right: 0; }
+  .vx-reel-bottom { padding: 80px 32px 36px; }
+  .vx-reel-bottom .vx-flow-meta { max-width: 720px; }
+  .vx-reel-bottom .vx-flow-rail { margin-left: auto; }
   .vx-flow-top { padding-inline: 24px; }
 }
 

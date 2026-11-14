@@ -1,145 +1,119 @@
+import { readFileSync } from 'node:fs';
 import { test, expect, type Page } from './support/test';
 import { latestNotesFingerprint } from '../src/constants/changelog';
 
 /**
- * 10.1 — Flow, the swipeable feed of song previews, in a real browser with
- * real (silent, seekable) audio:
- *   - the card on screen plays, from its hook point (30% in without lyrics);
- *   - ArrowDown moves to the next card, and that one plays;
- *   - a double tap likes the song;
- *   - leaving Flow puts the listener's own queue back, paused.
+ * 1.14.4 — Flow plays music videos, one per screen, like reels, in a real
+ * browser with real (6-second, silent) clips:
+ *   - Flow is in the phone tab bar and in the desktop sidebar;
+ *   - the reel on screen plays; ArrowDown moves on and the next one plays;
+ *   - when a reel ends, the feed moves to the next by itself;
+ *   - a double tap likes the reel's song.
  */
-const SECONDS = 200;
-function silentWav(): Buffer {
-  const samples = 8000 * SECONDS;
-  const b = Buffer.alloc(44 + samples);
-  b.write('RIFF', 0); b.writeUInt32LE(36 + samples, 4); b.write('WAVE', 8); b.write('fmt ', 12);
-  b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(8000, 24);
-  b.writeUInt32LE(8000, 28); b.writeUInt16LE(1, 32); b.writeUInt16LE(8, 34); b.write('data', 36);
-  b.writeUInt32LE(samples, 40); b.fill(128, 44);
-  return b;
-}
-const WAV = silentWav();
+const CLIP = readFileSync(new URL('./support/reel.webm', import.meta.url));
 
-const appSong = (base: string, id: string, title: string) => ({
-  kind: 'song', id, title, subtitle: 'Queue Artist', artists: [{ id: 'qa', name: 'Queue Artist' }], album: { id: 'qal', name: 'Queue Album' },
-  images: [{ quality: '500x500', url: `${base}/icons/icon.svg` }], audio: [{ quality: '160kbps', url: `${base}/t-${id}.wav` }],
-  duration: SECONDS, language: 'telugu', year: '2024', explicit: false, hasLyrics: false, playCount: 1,
-});
-const apiSong = (base: string, i: number) => ({
-  id: `f${i}`, name: `Flow Song ${i}`, type: 'song', year: '2025', language: 'telugu', playCount: 100 + i, duration: SECONDS, explicitContent: false, hasLyrics: false,
-  album: { id: `al${i}`, name: `Album ${i}`, url: '' },
-  artists: { primary: [{ id: `ar${i}`, name: `Singer ${i}`, role: 'singer', image: [], type: 'artist', url: '' }] },
+const apiSong = (base: string, id: string) => ({
+  id, name: `Song ${id}`, type: 'song', year: '2025', language: 'telugu', playCount: 100, duration: 200, explicitContent: false, hasLyrics: false,
+  album: { id: `al-${id}`, name: `Album ${id}`, url: '' },
+  artists: { primary: [{ id: `ar-${id}`, name: `Singer ${id}`, role: 'singer', image: [], type: 'artist', url: '' }] },
   image: [{ quality: '500x500', url: `${base}/icons/icon.svg` }],
-  downloadUrl: [{ quality: '160kbps', url: `${base}/t-f${i}.wav` }],
+  downloadUrl: [{ quality: '160kbps', url: `${base}/t-${id}.wav` }],
 });
 
-const audioState = (p: Page) =>
-  p.evaluate(() => {
-    const a = (window as unknown as { __audio?: HTMLMediaElement }).__audio;
-    return a ? { src: a.currentSrc || a.src, t: a.currentTime, paused: a.paused } : null;
-  });
+let counter = 0;
+const apiVideo = (base: string) => {
+  const n = counter++;
+  return {
+    id: `v${n}`, name: `Reel Song ${n} (Lyric Video)`, type: 'video', language: 'Telugu', year: '2025', duration: 6,
+    thumbnail: `${base}/icons/icon.svg`, previewUrl: `${base}/reel-v${n}.webm`, streamUrl: `${base}/full-v${n}.webm`,
+    songIds: [`song${n}`], artists: { primary: [{ id: `ar${n}`, name: `Singer ${n}` }] },
+  };
+};
 
-test('Flow previews the card on screen, moves on, likes on a double tap and gives the queue back', async ({ browser, baseURL }) => {
-  const base = baseURL!;
-  const ctx = await browser.newContext({ baseURL: base, viewport: { width: 390, height: 844 } });
-  const page = await ctx.newPage();
-  const queue = [appSong(base, 'q1', 'My Queue One'), appSong(base, 'q2', 'My Queue Two')];
-  await page.addInitScript(
-    ({ queue, fp }) => {
-      if (sessionStorage.getItem('flow-e2e-seeded')) return;
-      sessionStorage.setItem('flow-e2e-seeded', '1');
-      localStorage.setItem('vinax.onboarded.v1', 'true');
-      localStorage.setItem('vinax.user-name', JSON.stringify('Asha'));
-      localStorage.setItem('vinax.user-handle', JSON.stringify('asha'));
-      localStorage.setItem('vinax.analytics-consent', 'false');
-      localStorage.setItem('vinax.last-seen-version', JSON.stringify(fp));
-      localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'] }, version: 3 }));
-      localStorage.setItem('vinax.player.v1', JSON.stringify({ state: { queue, index: 0 }, version: 1 }));
-      // Keep a handle on the engine's <audio> (it is never in the DOM).
-      const w = window as unknown as { __audio?: HTMLMediaElement };
-      const orig = HTMLMediaElement.prototype.play;
-      HTMLMediaElement.prototype.play = function (this: HTMLMediaElement) {
-        w.__audio = this;
-        return orig.call(this);
-      };
-    },
-    { queue, fp: latestNotesFingerprint() },
-  );
+async function setup(page: Page, base: string): Promise<void> {
+  await page.addInitScript((fp) => {
+    if (sessionStorage.getItem('flow-e2e-seeded')) return;
+    sessionStorage.setItem('flow-e2e-seeded', '1');
+    localStorage.setItem('vinax.onboarded.v1', 'true');
+    localStorage.setItem('vinax.user-name', JSON.stringify('Asha'));
+    localStorage.setItem('vinax.analytics-consent', 'false');
+    localStorage.setItem('vinax.last-seen-version', JSON.stringify(fp));
+    localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'] }, version: 3 }));
+  }, latestNotesFingerprint());
   await page.route('**/*', async (route) => {
     const req = route.request();
     const url = new URL(req.url());
-    if (!url.origin.startsWith('http://localhost')) return route.abort();
-    if (/^\/t-.*\.wav$/.test(url.pathname)) {
+    if (!url.origin.startsWith('http://localhost') && !url.origin.startsWith('http://127.0.0.1')) return route.abort();
+    if (/^\/full-v\d+\.webm$/.test(url.pathname)) return route.fulfill({ status: 404, body: '' });
+    if (/^\/reel-v\d+\.webm$/.test(url.pathname)) {
       const m = /bytes=(\d+)-(\d*)/.exec(req.headers()['range'] ?? '');
-      if (!m) return route.fulfill({ body: WAV, contentType: 'audio/wav', headers: { 'accept-ranges': 'bytes' } });
+      if (!m) return route.fulfill({ body: CLIP, contentType: 'video/webm', headers: { 'accept-ranges': 'bytes' } });
       const start = Number(m[1]);
-      const end = m[2] ? Math.min(Number(m[2]), WAV.length - 1) : WAV.length - 1;
-      return route.fulfill({
-        status: 206,
-        body: WAV.subarray(start, end + 1),
-        contentType: 'audio/wav',
-        headers: { 'accept-ranges': 'bytes', 'content-range': `bytes ${start}-${end}/${WAV.length}` },
-      });
+      const end = m[2] ? Math.min(Number(m[2]), CLIP.length - 1) : CLIP.length - 1;
+      return route.fulfill({ status: 206, body: CLIP.subarray(start, end + 1), contentType: 'video/webm', headers: { 'accept-ranges': 'bytes', 'content-range': `bytes ${start}-${end}/${CLIP.length}` } });
     }
-    const cat = Array.from({ length: 10 }, (_, i) => apiSong(base, i));
-    if (url.pathname.startsWith('/api/cat/search/songs')) return route.fulfill({ json: { data: { results: cat } } });
-    if (url.pathname.startsWith('/api/cat/songs')) return route.fulfill({ json: { data: cat.slice(0, 4) } });
-    if (url.pathname.startsWith('/api/cat/search')) {
-      return route.fulfill({ json: { data: { songs: { results: cat }, albums: { results: [] }, artists: { results: [] }, playlists: { results: [] } } } });
-    }
+    if (url.pathname.startsWith('/api/cat/videos')) return route.fulfill({ json: { data: { results: Array.from({ length: 4 }, () => apiVideo(base)) } } });
+    const songId = /^\/api\/cat\/songs\/([^/?]+)$/.exec(url.pathname)?.[1];
+    if (songId) return route.fulfill({ json: { data: [apiSong(base, decodeURIComponent(songId))] } });
     if (url.pathname.startsWith('/api/')) return route.fulfill({ json: {} });
     return route.continue();
   });
+}
 
-  // In through the entry card on Home (a real tap, as a listener would).
+const reelState = (p: Page, i: number) =>
+  p.evaluate((i) => {
+    const v = document.querySelector<HTMLVideoElement>(`.vx-flow-card[data-flow-index="${i}"] video`);
+    return v ? { src: v.currentSrc || v.src, paused: v.paused, t: v.currentTime } : null;
+  }, i);
+
+test('Flow is a reels feed of music videos, reached from the phone tab bar', async ({ browser, baseURL }) => {
+  const base = baseURL!;
+  const ctx = await browser.newContext({ baseURL: base, viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage();
+  await setup(page, base);
+
   await page.goto('/');
-  const entry = page.locator('a[href="/flow"]').filter({ hasText: 'Swipe through' }).first();
-  await entry.scrollIntoViewIfNeeded();
-  await entry.click();
-  await expect(page.locator('.vx-flow-card').first()).toBeVisible();
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Flow' }).click();
+  await expect(page).toHaveURL(/\/flow$/);
+  await expect(page.locator('.vx-reel').first()).toBeVisible();
   await expect(page.locator('.vx-flow-hint')).toBeVisible();
 
-  // The first card plays, from its hook (30% of 200 s without lyrics).
-  await expect.poll(async () => (await audioState(page))?.paused, { timeout: 15_000 }).toBe(false);
-  const first = (await audioState(page))!;
-  expect(first.src).toMatch(/\/t-f\d+\.wav$/);
-  await expect.poll(async () => (await audioState(page))?.t ?? 0, { timeout: 10_000 }).toBeGreaterThan(55);
-  await expect(page.getByRole('button', { name: 'Pause' }).first()).toBeVisible();
+  // The first reel plays its preview clip (the full stream 404s, so it is never needed first).
+  await expect.poll(async () => (await reelState(page, 0))?.paused, { timeout: 15_000 }).toBe(false);
+  expect((await reelState(page, 0))!.src).toMatch(/\/reel-v\d+\.webm$/);
 
-  // ArrowDown: the next card settles and plays its own song.
+  // ArrowDown: the next reel plays, the first one stops.
   await page.keyboard.press('ArrowDown');
-  await expect.poll(async () => (await audioState(page))?.src ?? '', { timeout: 15_000 }).not.toBe(first.src);
-  await expect.poll(async () => (await audioState(page))?.paused, { timeout: 15_000 }).toBe(false);
-  const second = (await audioState(page))!;
-  expect(second.src).toMatch(/\/t-f\d+\.wav$/);
+  await expect.poll(async () => (await reelState(page, 1))?.paused, { timeout: 15_000 }).toBe(false);
+  await expect.poll(async () => (await reelState(page, 0))?.paused ?? true).toBe(true);
 
-  // A double tap on the card likes the song.
-  const card = page.locator('.vx-flow-card').nth(1);
+  // A double tap likes the reel's song.
+  const card = page.locator('.vx-flow-card[data-flow-index="1"]');
   const box = (await card.boundingBox())!;
-  await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height * 0.3);
-  await expect(card.locator('.vx-flow-rail button[aria-pressed]').first()).toHaveAttribute('aria-pressed', 'true');
-  await expect.poll(async () => page.evaluate(() => (JSON.parse(localStorage.getItem('vinax.library.v1') ?? '{}')?.state?.favorites ?? []).length)).toBe(1);
+  await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height * 0.35);
+  await expect.poll(async () => page.evaluate(() => (JSON.parse(localStorage.getItem('vinax.library.v1') ?? '{}')?.state?.favorites ?? []).length), { timeout: 10_000 }).toBe(1);
+  await expect(card.getByRole('button', { name: /is in your favorites/ })).toHaveAttribute('aria-pressed', 'true');
 
-  // The ~30 s preview window closes (60 s → 90 s) and the feed moves on by itself.
+  // When the reel ends, the feed moves on by itself.
   await page.evaluate(() => {
-    const a = (window as unknown as { __audio?: HTMLMediaElement }).__audio;
-    if (a) a.currentTime = 89;
+    const v = document.querySelector<HTMLVideoElement>('.vx-flow-card[data-flow-index="1"] video');
+    if (v) v.currentTime = Math.max(0, (v.duration || 6) - 0.2);
   });
-  await expect.poll(async () => (await audioState(page))?.src ?? '', { timeout: 15_000 }).not.toBe(second.src);
-  await expect.poll(async () => (await audioState(page))?.paused, { timeout: 15_000 }).toBe(false);
+  await expect.poll(async () => (await reelState(page, 2))?.paused, { timeout: 15_000 }).toBe(false);
 
-  // While previewing, a reload would still find the listener's own queue.
-  await expect
-    .poll(async () => page.evaluate(() => (JSON.parse(localStorage.getItem('vinax.player.v1') ?? '{}')?.state?.queue ?? []).map((s: { id: string }) => s.id)))
-    .toEqual(['q1', 'q2']);
-
-  // Leaving Flow: the queue that was there comes back, paused.
   await page.getByRole('button', { name: 'Close Flow' }).click();
   await expect(page.locator('.vx-flow')).toHaveCount(0);
-  await expect.poll(async () => (await audioState(page))?.src ?? '', { timeout: 10_000 }).toContain('/t-q1.wav');
-  expect((await audioState(page))?.paused).toBe(true);
-  await expect.poll(async () => page.evaluate(() => (JSON.parse(localStorage.getItem('vinax.player.v1') ?? '{}')?.state?.queue ?? []).map((s: { id: string }) => s.id))).toEqual(['q1', 'q2']);
+  await ctx.close();
+});
 
+test('Flow is in the desktop sidebar', async ({ browser, baseURL }) => {
+  const base = baseURL!;
+  const ctx = await browser.newContext({ baseURL: base, viewport: { width: 1280, height: 800 } });
+  const page = await ctx.newPage();
+  await setup(page, base);
+  await page.goto('/');
+  await page.locator('nav.vx-sidebar-nav').getByRole('link', { name: 'Flow' }).click();
+  await expect(page.locator('.vx-reel').first()).toBeVisible();
+  await expect.poll(async () => (await reelState(page, 0))?.paused, { timeout: 15_000 }).toBe(false);
   await ctx.close();
 });

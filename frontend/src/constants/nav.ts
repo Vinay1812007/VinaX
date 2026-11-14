@@ -88,21 +88,24 @@ export const NAV_GROUPS: NavGroup[] = [
 /**
  * Persistent navigation, separate from the complete command catalogue above.
  * 2.0 — the desktop sidebar's first list: Home, Discover (everything to
- * browse), Radio and VinaX AI. Search is a field in the top bar and Library
- * heads its own panel in the sidebar.
+ * browse), Radio, Flow and VinaX AI. Search is a field in the top bar and
+ * Library heads its own panel in the sidebar. 1.14.4 — Flow (music videos,
+ * one per screen) joined the list.
  */
 export const PRIMARY_NAV: NavItem[] = [
   { to: '/', label: 'Home', icon: HomeIcon },
   { to: '/discover', label: 'Discover', icon: CompassIcon },
   { to: '/radio', label: 'Radio', icon: WaveformIcon },
+  { to: '/flow', label: 'Flow', icon: FlowIcon },
   { to: '/vinaxai', label: 'VinaX AI', icon: SparkleIcon },
   { to: '/library', label: 'Library', icon: LibraryIcon },
 ];
 
-/** 2.0 — the phone tab bar's four: Discover is one tap into Search ("Browse all"). */
+/** 2.0 — the phone tab bar: Discover is one tap into Search ("Browse all"). 1.14.4 — Flow in the middle. */
 export const DOCK_NAV: NavItem[] = [
   { to: '/', label: 'Home', icon: HomeIcon },
   { to: '/search', label: 'Search', icon: SearchIcon },
+  { to: '/flow', label: 'Flow', icon: FlowIcon },
   { to: '/library', label: 'Library', icon: LibraryIcon },
   { to: '/vinaxai', label: 'VinaX AI', icon: SparkleIcon },
 ];

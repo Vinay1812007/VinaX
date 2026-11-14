@@ -38,13 +38,14 @@ describe('1.12 — listening moments', () => {
 });
 
 describe('V2 Up Next rules — what may be picked', () => {
-  it('no song comes back within 72 hours of playing; a liked one may after 18', () => {
+  it('no song comes back within 72 hours of playing; a liked one may after 48', () => {
     const s = song('x', 'A');
     expect(rejectReason(s, filter({ playedAt: new Map([[key(s), NOW - 10 * HOUR]]) }))).toBe('played-recently');
     expect(rejectReason(s, filter({ playedAt: new Map([[key(s), NOW - 73 * HOUR]]) }))).toBeNull();
     const liked = filter({ likedIds: new Set(['x']) });
     expect(rejectReason(s, { ...liked, playedAt: new Map([[key(s), NOW - 10 * HOUR]]) })).toBe('played-recently');
-    expect(rejectReason(s, { ...liked, playedAt: new Map([[key(s), NOW - 20 * HOUR]]) })).toBeNull();
+    expect(rejectReason(s, { ...liked, playedAt: new Map([[key(s), NOW - 30 * HOUR]]) })).toBe('played-recently');
+    expect(rejectReason(s, { ...liked, playedAt: new Map([[key(s), NOW - 50 * HOUR]]) })).toBeNull();
   });
 
   it('a song queued automatically and never reached waits a day', () => {

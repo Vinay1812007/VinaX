@@ -352,7 +352,11 @@ function refill(p: Pool, env: Env, deadlineMs: number, signal?: AbortSignal, fre
     const s = [...(env.ctx.favorites ?? []), ...env.anchor.seeds.map((x) => x.song)].find((x) => leadOf(x) === lead && x.artists?.[0]?.id);
     if (s) pulled.push({ id: s.artists[0].id, name: s.artists[0].name });
   }
-  const lookups = planLookups({ anchor: env.anchor, favorites: env.ctx.favorites ?? [], pulledArtists: pulled, rotation: rotation++, tuneQuery: env.tuneQuery, api, signal });
+  const round = rotation++;
+  const lookups = planLookups({ anchor: env.anchor, favorites: env.ctx.favorites ?? [], pulledArtists: pulled, rotation: round, tuneQuery: env.tuneQuery, api, signal });
+  // 1.14.4 — every other refill also looks past the anchor's own similar
+  // songs (related artists, deeper pages), so a long session keeps finding new music.
+  if (round % 2 === 1) lookups.push(...planWideLookups({ anchor: env.anchor, languages: env.languages, tier: 1, rotation: round, api, signal }));
   if (env.tuneQuery) p.asked.add(env.tuneQuery);
   // One lookup adds at most this many: a single huge answer can never push out what the other lookups (a new like) just brought.
   const merge = (f: Fetched): void => {
@@ -459,7 +463,9 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   if (!limit || signal?.aborted) return empty(null);
 
   const { pool: p, moved } = poolFor(anchor, t0);
-  if (!p.items.size) seedPoolLocally(p, env);
+  // 1.14.4 — the liked songs and repeat plays are NOT put in the pool up
+  // front any more: they outscored every new song, so Up Next kept serving
+  // the same favourites. They are the last fallback below (never a stall).
   const queued = { ids: new Set(options.excludeIds ?? []), keys: new Set(options.excludeKeys ?? []) };
   prune(p, filterFor(env, queued));
   // The listener just steered — a like or an add (the anchor moved), or a new
@@ -502,7 +508,10 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   // languages. Heard songs stay out at every step.
   const listenerLanguages = [...new Set([...env.languages, ...ctx.pinnedLanguages.map((l) => l.toLowerCase()), ...topLanguages(ctx.profile, 3).map((l) => l.id.toLowerCase())])].filter((l) => l && l !== 'unknown' && !ctx.mutedLanguages.includes(l));
   let widenedTo = 0;
-  if (env.heard && result.songs.length < limit) {
+  // 1.14.4 — every listener gets this, not only Never repeat: before, an
+  // anchor whose similar songs were all heard fell straight back to the liked
+  // songs and a shorter cooldown, and the same songs came round again.
+  if (result.songs.length < limit) {
     const wideDeadline = Math.min(2_500, Math.max(1_000, options.deadlineMs ?? NEXTUP_DEADLINE_MS));
     for (const tier of [1, 2] as const) {
       if (result.songs.length >= limit || signal?.aborted) break;
@@ -594,6 +603,5 @@ export function warmNextUp(seed: Song, ctx: RecommendationContext): void {
   const anchor = readAnchor(seed, now, ctx.history?.[0]?.ts ?? 0);
   const env = buildEnv(seed, ctx, anchor, {}, now);
   const { pool: p, moved } = poolFor(anchor, now);
-  if (!p.items.size) seedPoolLocally(p, env);
   if (moved || p.items.size < POOL_LOW_WATER * 3) void refill(p, env, NEXTUP_DEADLINE_MS * 2);
 }

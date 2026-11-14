@@ -202,8 +202,8 @@ export interface FilterContext {
 
 /** No song comes back automatically within three days of playing... */
 export const PLAYED_COOLDOWN_MS = 72 * 3_600_000;
-/** ...except a liked one, which may return after 18 hours. */
-export const LIKED_COOLDOWN_MS = 18 * 3_600_000;
+/** ...except a liked one, which may return after two days (1.14.4: was 18 hours, and favourites came back every day). */
+export const LIKED_COOLDOWN_MS = 48 * 3_600_000;
 /** A song queued automatically and never reached is held back for a day. */
 export const SERVED_COOLDOWN_MS = 24 * 3_600_000;
 

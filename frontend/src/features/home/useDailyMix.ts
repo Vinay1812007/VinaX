@@ -10,6 +10,8 @@ import { topArtists, topLanguages } from '@/services/personalization/profile';
 import { useSettingsStore } from '@/store/settingsStore';
 import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import { languageLabel } from '@/constants/languages';
+import { useHomeGeneration } from './homeRefresh';
+import { metLately } from './freshRotation';
 
 function todaySeed(): string {
   const d = new Date();
@@ -30,15 +32,21 @@ function seededPick<T>(arr: T[], seed: string, n: number): T[] {
 }
 
 /**
- * "VinaX Daily" — one personalized mix that refreshes each morning. Built
- * from your top artists and languages (local taste profile), with a daily
- * seed so it's stable through the day. Built on the device.
+ * "VinaX Daily" — one personalized mix built from your top artists and
+ * languages (local taste profile), on the device.
+ *
+ * 1.14.4 — it follows the Home generation (a refresh, or a visit after half
+ * an hour: ./homeRefresh.ts) instead of the calendar day, reads one of five
+ * pages instead of three, and puts songs heard, queued or shown lately at the
+ * back. Before, it was the same mix all day and much the same the next.
+ * It still never changes while the listener is on Home.
  */
 export function useDailyMix() {
   const pinned = useSettingsStore((s) => s.pinnedLanguages);
   const round = useDiscoveryStore((s) => s.round);
   const muted = useSettingsStore((s) => s.mutedLanguages);
-  const seed = `${todaySeed()}-${round}`;
+  const gen = useHomeGeneration();
+  const seed = `${todaySeed()}-${round}-${gen}`;
   return useQuery({
     queryKey: ['vinax-daily', seed, pinned, muted],
     staleTime: 6 * 60 * 60_000,
@@ -50,7 +58,7 @@ export function useDailyMix() {
         (l) => `${languageLabel(l).toLowerCase()} hits`,
       );
       const queries = seededPick([...artists, ...langSeeds], seed, 5);
-      const page = 1 + (Math.abs([...seed].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0)) % 3);
+      const page = 1 + (Math.abs([...seed].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0)) % 5);
       const batches = await Promise.allSettled(queries.map((q) => searchSongsPage(q, page, 8)));
       const seen = new Set<string>();
       const pool: Song[] = [];
@@ -66,7 +74,9 @@ export function useDailyMix() {
       const lib = useLibraryStore.getState();
       const ranked = rankSongs(freshSongs(pool, { excludeKeys: servedKeySet(), muted, blocked: (s) => isSongBlocked(s, lib) }));
       const onLang = pinned.length ? ranked.filter((x) => x.language != null && pinned.includes(x.language)) : ranked;
-      return seededPick(onLang, seed + 'x', 20);
+      const met = metLately();
+      const shuffled = seededPick(onLang, seed + 'x', onLang.length);
+      return [...shuffled.filter((x) => !met(x)), ...shuffled.filter(met)].slice(0, 20);
     },
   });
 }

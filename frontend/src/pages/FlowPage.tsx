@@ -1,62 +1,78 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import type { Song } from '@/types';
+import type { Video } from '@/services/api/videos';
+import { getSong } from '@/services/api';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { usePlayerStore } from '@/store/playerStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { toast } from '@/store/toastStore';
 import { useTogether } from '@/services/together/session';
-import { useSyncedLyrics } from '@/features/lyrics/useSyncedLyrics';
-import { FlowCard } from '@/features/flow/FlowCard';
-import { FlowEndless, useFlowFeed } from '@/features/flow/useFlowFeed';
-import { createShownRecorder } from '@/features/flow/feed';
-import { hookPoint, previewEnd } from '@/features/flow/hookPoint';
-import { ChevronDownIcon, XIcon } from '@/components/Icons';
+import { ReelCard } from '@/features/flow/ReelCard';
+import { useFlowReels } from '@/features/flow/useFlowReels';
+import { markSeen } from '@/features/flow/reels';
+import { ChevronDownIcon, VolumeIcon, XIcon } from '@/components/Icons';
 import { shareLink } from '@/utils/share';
-import { songPath } from '@/utils/slug';
 import { reducedMotion } from '@/utils/motion';
 import '@/styles/pages/flow.css';
 
 /** The first-run "Swipe up" hint, shown once per device. */
 export const FLOW_HINT_KEY = 'vinax.flow.hint.v1';
-/** A card is "on screen" once this much of it shows. */
+/** Flow's sound choice, kept for the next visit. */
+export const FLOW_MUTED_KEY = 'vinax.flow.muted.v1';
+/** A reel is "on screen" once this much of it shows. */
 const VISIBLE_RATIO = 0.6;
-/** How long a card has to stay on screen before it counts as settled (and plays). */
-const SETTLE_MS = 220;
-/** How long a settled card waits for its lyrics before starting at the 30% mark instead. */
-const LYRICS_WAIT_MS = 900;
+/** A reel on screen this long counts as watched (it goes after unseen ones next visit). */
+const SEEN_MS = 3_000;
 /** Load more when the listener is this close to the end. */
 const NEAR_END = 4;
 
-function hintSeen(): boolean {
+function readFlag(key: string, fallback: boolean): boolean {
   try {
-    return window.localStorage.getItem(FLOW_HINT_KEY) === '1';
+    const v = window.localStorage.getItem(key);
+    return v == null ? fallback : v === '1';
   } catch {
-    return true; // no storage: never nag
+    return fallback;
   }
 }
-function markHintSeen(): void {
+function writeFlag(key: string, on: boolean): void {
   try {
-    window.localStorage.setItem(FLOW_HINT_KEY, '1');
+    window.localStorage.setItem(key, on ? '1' : '0');
   } catch {
-    /* the hint simply shows again next time */
+    /* the choice lasts for this visit */
   }
 }
 
+/** The song behind a video, from the catalogue (one request per song, shared by every action). */
+const songCache = new Map<string, Promise<Song>>();
+function songFor(video: Video): Promise<Song> {
+  const id = video.songIds[0];
+  if (!id) return Promise.reject(new Error('no song'));
+  let p = songCache.get(id);
+  if (!p) {
+    p = getSong(id);
+    songCache.set(id, p);
+    p.catch(() => songCache.delete(id));
+  }
+  return p;
+}
+
 /**
- * 10.1 "Flow" — a full-screen, swipeable feed of song previews.
+ * 1.14.4 "Flow" — music videos, one per screen, like reels.
  *
- * One card per screen (vertical scroll-snap, native momentum on phones;
- * wheel, ↑/↓, PageUp/PageDown and j/k on a keyboard). The card that settles
- * plays a preview from its hook (the first chorus line when synced lyrics
- * show one, else 30% in) for about 30 seconds, then the feed moves on.
+ * Vertical scroll-snap with native momentum on phones; the wheel, ↑/↓,
+ * PageUp/PageDown and j/k with a keyboard; M switches the sound. The reel on
+ * screen plays from the start, with sound when the browser allows it (else
+ * muted, with a "Tap for sound" button), and when it ends the feed moves to
+ * the next one. The reel after it loads in the background.
  *
- * Playback runs in the player's PREVIEW mode: the listener's queue is set
- * aside when Flow starts and comes back, paused where it was, when they
- * leave. "Play full song" and "Add to queue" hand a song to that real queue;
- * nothing is auto-extended or learned from a preview. In a Listen Together
- * session Flow never takes over the music.
+ * The music steps aside while a reel plays (it pauses, and stays where it
+ * was). "Play the song" hands the video's song to the music player. In a
+ * Listen Together session Flow never touches the music: reels play muted
+ * unless the listener turns the sound on themselves.
+ *
+ * Before 1.14.4 Flow was a feed of 30-second song previews.
  */
 export default function FlowPage() {
   usePageTitle('Flow');
@@ -65,43 +81,28 @@ export default function FlowPage() {
   const inSession = useTogether((s) => s.mode !== 'idle');
   const following = usePlayerStore((s) => s.followMode);
   const locked = inSession || following;
-  const { songs, starting, onEndless } = useFlowFeed();
+  const { reels, loading, done, more } = useFlowReels();
   const [reduceMotion] = useState(reducedMotion);
   const [active, setActive] = useState(0);
-  const [settled, setSettled] = useState<number | null>(null);
-  /** Previews start on their own until the listener plays a full song (then they ask). */
-  const [autoPreview, setAutoPreview] = useState(true);
-  const [win, setWin] = useState<{ id: string; start: number; end: number } | null>(null);
+  const [muted, setMuted] = useState(() => locked || readFlag(FLOW_MUTED_KEY, false));
+  const [blocked, setBlocked] = useState(false);
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
-  const [showHint, setShowHint] = useState(() => !hintSeen());
-  const [lyricsWaitOver, setLyricsWaitOver] = useState(false);
+  const [showHint, setShowHint] = useState(() => !readFlag(FLOW_HINT_KEY, false));
   const [announce, setAnnounce] = useState('');
   const feedRef = useRef<HTMLDivElement>(null);
-  const startedFor = useRef<string | null>(null);
-  const windowDone = useRef(false);
-  const recordShown = useMemo(() => createShownRecorder(), []);
-  const songsRef = useRef(songs);
-  songsRef.current = songs;
+  const reelsRef = useRef(reels);
+  reelsRef.current = reels;
   const activeRef = useRef(active);
   activeRef.current = active;
 
-  const activeSong = songs[active] ?? null;
-  const settledSong = settled != null ? songs[settled] ?? null : null;
-  const lyrics = useSyncedLyrics(activeSong);
-  // The next card's lyrics load while this one plays, so its hook is ready when it settles.
-  useSyncedLyrics(songs[active + 1] ?? null);
-
-  // Leaving Flow gives the listener their own queue back, paused where it was.
-  useEffect(() => () => usePlayerStore.getState().exitPreview(), []);
-
   useEffect(() => {
-    if (showHint) markHintSeen();
+    if (showHint) writeFlag(FLOW_HINT_KEY, true);
   }, [showHint]);
   useEffect(() => {
     if (active > 0) setShowHint(false);
   }, [active]);
 
-  /* ---------------------------------------------------------- which card */
+  /* ---------------------------------------------------------- which reel */
   useEffect(() => {
     const root = feedRef.current;
     if (!root || typeof IntersectionObserver === 'undefined') return;
@@ -117,115 +118,89 @@ export default function FlowPage() {
     );
     root.querySelectorAll('[data-flow-index]').forEach((el) => io.observe(el));
     return () => io.disconnect();
-  }, [songs.length]);
+  }, [reels.length]);
 
+  const activeId = reels[active]?.id ?? null;
   useEffect(() => {
-    const t = window.setTimeout(() => setSettled(active), SETTLE_MS);
+    if (!activeId) return;
+    const t = window.setTimeout(() => markSeen(activeId), SEEN_MS);
     return () => window.clearTimeout(t);
-  }, [active]);
+  }, [activeId]);
 
+  const nearEnd = reels.length - active <= NEAR_END;
   useEffect(() => {
-    setLyricsWaitOver(false);
-    const t = window.setTimeout(() => setLyricsWaitOver(true), LYRICS_WAIT_MS);
-    return () => window.clearTimeout(t);
-  }, [settledSong?.id]);
-
-  /* ------------------------------------------------------------ playback */
-  const startPreview = useCallback((song: Song, lines: Parameters<typeof hookPoint>[1]) => {
-    const player = usePlayerStore.getState();
-    if (!player.enterPreview()) return;
-    const start = hookPoint(song.duration, lines);
-    startedFor.current = song.id;
-    windowDone.current = false;
-    setWin({ id: song.id, start, end: previewEnd(start, song.duration) });
-    player.previewSong(song, start);
-  }, []);
-
-  const lyricsReady = lyrics.isFetched || lyrics.isError || lyricsWaitOver;
-  const syncedLines = lyrics.data?.synced ?? null;
-  useEffect(() => {
-    if (!settledSong || settled !== active) return;
-    // The ledger's contract: an impression is a card that settled on screen.
-    recordShown(settledSong);
-    if (locked || !autoPreview || startedFor.current === settledSong.id || failed.has(settledSong.id)) return;
-    if (!lyricsReady) return;
-    startPreview(settledSong, syncedLines);
-  }, [settledSong, settled, active, locked, autoPreview, failed, lyricsReady, syncedLines, recordShown, startPreview]);
+    if (nearEnd && !done) void more();
+  }, [nearEnd, done, more, reels.length]);
 
   const scrollToCard = useCallback((index: number) => {
     const root = feedRef.current;
-    const count = songsRef.current.length;
+    const count = reelsRef.current.length;
     if (!root || !count) return;
     const target = Math.min(count - 1, Math.max(0, index));
     root.scrollTo({ top: target * root.clientHeight, behavior: reduceMotion ? 'auto' : 'smooth' });
   }, [reduceMotion]);
   const go = useCallback((delta: number) => scrollToCard(activeRef.current + delta), [scrollToCard]);
 
-  // The preview window: when it closes (or the song ends, or cannot play), the feed moves on —
-  // unless the listener asked for less motion, in which case the song simply pauses.
-  useEffect(
-    () =>
-      usePlayerStore.subscribe((s, prev) => {
-        if (!s.previewMode || !win) return;
-        const current = s.queue[s.index];
-        if (current?.id !== win.id || windowDone.current) return;
-        if (s.previewError === win.id) {
-          windowDone.current = true;
-          setFailed((f) => new Set(f).add(win.id));
-          if (!reduceMotion) window.setTimeout(() => go(1), 600);
-          return;
-        }
-        const pastWindow = s.currentTime >= win.end - 0.25 && s.currentTime > prev.currentTime;
-        const songEnded = prev.isPlaying && !s.isPlaying && s.duration > 0 && s.currentTime >= s.duration - 1;
-        if (!pastWindow && !songEnded) return;
-        windowDone.current = true;
-        if (reduceMotion) {
-          if (s.isPlaying) s.togglePlay();
-          return;
-        }
-        if (activeRef.current < songsRef.current.length - 1) go(1);
-        else if (s.isPlaying) s.togglePlay();
-      }),
-    [win, go, reduceMotion],
-  );
+  /* ------------------------------------------------------------ playback */
+  const onPlaying = useCallback(() => {
+    if (locked) return;
+    // The music steps aside while a reel plays.
+    const st = usePlayerStore.getState();
+    if (st.isPlaying) st.togglePlay();
+  }, [locked]);
+  const onEnded = useCallback((v: Video) => {
+    if (reelsRef.current[activeRef.current]?.id === v.id) go(1);
+  }, [go]);
+  const onFailed = useCallback((v: Video) => {
+    setFailed((f) => new Set(f).add(v.id));
+    if (!reduceMotion && reelsRef.current[activeRef.current]?.id === v.id) window.setTimeout(() => go(1), 600);
+  }, [go, reduceMotion]);
+  const onAutoplayBlocked = useCallback(() => {
+    setMuted(true);
+    setBlocked(true);
+  }, []);
+  const toggleMute = useCallback(() => {
+    setBlocked(false);
+    setMuted((m) => {
+      writeFlag(FLOW_MUTED_KEY, !m);
+      return !m;
+    });
+  }, []);
 
   /* ------------------------------------------------------------- actions */
-  const linesRef = useRef<{ id: string | null; lines: typeof syncedLines }>({ id: null, lines: null });
-  linesRef.current = { id: activeSong?.id ?? null, lines: syncedLines };
-  const onTogglePlay = useCallback((song: Song) => {
-    if (locked) return;
-    const player = usePlayerStore.getState();
-    const lines = linesRef.current.id === song.id ? linesRef.current.lines : null;
-    if (player.queue[player.index]?.id === song.id) {
-      if (player.previewMode && windowDone.current && !player.isPlaying) {
-        // A finished preview plays its window again.
-        startPreview(song, lines);
-        return;
-      }
-      player.togglePlay();
-      return;
-    }
-    setAutoPreview(true);
-    startPreview(song, lines);
-  }, [locked, startPreview]);
-
-  const onPlayFull = useCallback((song: Song) => {
-    setAutoPreview(false);
-    usePlayerStore.getState().commitPreview(song);
-    toast(`Playing ${song.title}`);
+  const onLike = useCallback((v: Video) => {
+    if (!v.songIds.length) return;
+    void songFor(v).then(
+      (song) => {
+        const lib = useLibraryStore.getState();
+        if (!lib.isFavorite(song.id)) lib.toggleFavorite(song);
+        setAnnounce(`Liked ${song.title}`);
+      },
+      () => toast('Could not like this song right now'),
+    );
   }, []);
-  const onAddToQueue = useCallback((song: Song) => usePlayerStore.getState().enqueue(song), []);
-  const onShare = useCallback((song: Song) => {
-    void shareLink(songPath(song), song.title).then((r) => r === 'copied' && toast('Link copied'));
-  }, []);
-  const onMoreLikeThis = useCallback((song: Song) => {
-    usePlayerStore.getState().startRadio(song);
-    navigate('/now-playing');
+  const onPlaySong = useCallback((v: Video) => {
+    void songFor(v).then(
+      (song) => {
+        feedRef.current?.querySelectorAll('video').forEach((el) => el.pause());
+        usePlayerStore.getState().playSong(song);
+        toast(`Playing ${song.title}`);
+        navigate('/now-playing');
+      },
+      () => toast('Could not load the song right now'),
+    );
   }, [navigate]);
-  const onLike = useCallback((song: Song) => {
-    const lib = useLibraryStore.getState();
-    if (!lib.isFavorite(song.id)) lib.toggleFavorite(song);
-    setAnnounce(`Liked ${song.title}`);
+  const onAddToQueue = useCallback((v: Video) => {
+    void songFor(v).then(
+      (song) => {
+        usePlayerStore.getState().enqueue(song);
+        toast(`Added ${song.title} to the queue`);
+      },
+      () => toast('Could not add this song right now'),
+    );
+  }, []);
+  const onShare = useCallback((v: Video) => {
+    void shareLink(`/video/${v.id}`, v.title).then((r) => r === 'copied' && toast('Link copied'));
   }, []);
 
   const close = useCallback(() => {
@@ -252,13 +227,21 @@ export default function FlowPage() {
         case 'k':
           go(-1);
           break;
+        case 'm':
+          toggleMute();
+          break;
         case 'Escape':
           close();
           break;
-        case ' ':
+        case ' ': {
           if (t?.closest('button, a')) return; // the focused control takes its own Space
-          if (activeSong) onTogglePlay(activeSong);
+          const el = feedRef.current?.querySelector<HTMLVideoElement>(`[data-flow-index="${activeRef.current}"] video`);
+          if (el) {
+            if (el.paused) void el.play().catch(() => undefined);
+            else el.pause();
+          }
           break;
+        }
         default:
           handled = false;
       }
@@ -269,12 +252,12 @@ export default function FlowPage() {
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [go, close, activeSong, onTogglePlay]);
+  }, [go, close, toggleMute]);
 
   useEffect(() => {
     const root = feedRef.current;
     if (!root) return;
-    // One card per wheel gesture: a trackpad flick sends dozens of events with momentum.
+    // One reel per wheel gesture: a trackpad flick sends dozens of events with momentum.
     let lockedUntil = 0;
     let lastEvent = 0;
     const onWheel = (e: WheelEvent): void => {
@@ -292,8 +275,7 @@ export default function FlowPage() {
     return () => root.removeEventListener('wheel', onWheel);
   }, [go]);
 
-  const nearEnd = !starting && songs.length - active <= NEAR_END;
-  const total = songs.length;
+  const total = reels.length;
 
   const layer = (
     <div className="vx-flow" role="region" aria-label="Flow">
@@ -303,55 +285,60 @@ export default function FlowPage() {
         </button>
         <h1 className="vx-flow-name">Flow</h1>
         <div className="vx-flow-step">
-          <button type="button" className="vx-flow-icon" aria-label="Previous song" disabled={active === 0} onClick={() => go(-1)}>
+          <button type="button" className="vx-flow-icon" aria-label="Previous video" disabled={active === 0} onClick={() => go(-1)}>
             <ChevronDownIcon className="w-5 h-5 rotate-180" />
           </button>
-          <button type="button" className="vx-flow-icon" aria-label="Next song" disabled={active >= total - 1} onClick={() => go(1)}>
+          <button type="button" className="vx-flow-icon" aria-label="Next video" disabled={active >= total - 1} onClick={() => go(1)}>
             <ChevronDownIcon className="w-5 h-5" />
           </button>
         </div>
       </header>
       {locked && (
         <p className="vx-flow-notice" role="status">
-          You're in a Listen Together session, so Flow won't change what's playing. Browse here and add songs to the queue — <Link to="/together">open the session</Link>.
+          You're in a Listen Together session, so Flow won't change what's playing and videos start muted. <Link to="/together">Open the session</Link>.
         </p>
       )}
+      {blocked && muted && total > 0 && (
+        <button type="button" className="vx-reel-sound" onClick={toggleMute}>
+          <VolumeIcon className="w-5 h-5" muted /> Tap for sound
+        </button>
+      )}
       <div ref={feedRef} className="vx-flow-feed">
-        {songs.map((song, i) => (
-          <FlowCard
-            key={song.id}
-            song={song}
+        {reels.map((v, i) => (
+          <ReelCard
+            key={v.id}
+            video={v}
             index={i}
             total={total}
+            active={i === active && !failed.has(v.id)}
+            next={i === active + 1}
             near={Math.abs(i - active) <= 2}
-            active={i === active}
-            window={win && win.id === song.id && i === active ? win : null}
-            lines={i === active ? syncedLines : null}
-            failed={failed.has(song.id)}
-            locked={locked}
+            muted={muted}
             reduceMotion={reduceMotion}
             hint={showHint && i === 0 && active === 0}
-            onTogglePlay={onTogglePlay}
-            onPlayFull={onPlayFull}
+            onAutoplayBlocked={onAutoplayBlocked}
+            onPlaying={onPlaying}
+            onEnded={onEnded}
+            onFailed={onFailed}
+            onToggleMute={toggleMute}
+            onLike={onLike}
+            onPlaySong={onPlaySong}
             onAddToQueue={onAddToQueue}
             onShare={onShare}
-            onMoreLikeThis={onMoreLikeThis}
-            onLike={onLike}
           />
         ))}
         {total === 0 && (
           <div className="vx-flow-card vx-flow-empty">
-            {starting || nearEnd ? (
-              <p role="status">Finding songs for you…</p>
+            {loading || !done ? (
+              <p role="status">Finding videos for you…</p>
             ) : (
               <p role="status">
-                Nothing to show right now. Check your connection, or <Link to="/discover">browse Discover</Link>.
+                No videos to show right now. Check your connection, or <Link to="/videos">browse Videos</Link>.
               </p>
             )}
           </div>
         )}
       </div>
-      {nearEnd && <FlowEndless need={nearEnd} onSongs={onEndless} />}
       <p className="sr-only" aria-live="polite">{announce}</p>
     </div>
   );

@@ -5,8 +5,8 @@ import { haptic } from '@/services/native';
 import { useT } from '@/i18n';
 
 /** The phone tab bar: each tab an icon over its label. 2.0 — Home, Search,
- *  Library and VinaX AI (constants/nav.ts DOCK_NAV); a solid bar whose
- *  active tab is the accent colour. */
+ *  Library and VinaX AI; 1.14.4 — Flow in the middle (constants/nav.ts
+ *  DOCK_NAV); a solid bar whose active tab is the accent colour. */
 export function BottomNav() {
   const t = useT();
   return (

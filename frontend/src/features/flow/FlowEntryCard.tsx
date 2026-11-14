@@ -3,7 +3,7 @@ import { FlowIcon } from '@/components/Icons';
 import { cn } from '@/utils/cn';
 
 /**
- * 10.1 — the way into Flow from Home and Discover: one quiet card. Utility
+ * 10.1 — the way into Flow (1.14.4: music videos, like reels) from Home and Discover: one quiet card. Utility
  * classes only, so it adds nothing to those pages' stylesheets (Flow's own
  * styles ship with the Flow page).
  */
@@ -29,7 +29,7 @@ export function FlowEntryCard({ className }: { className?: string }) {
         <span className="block text-ink-100 font-bold text-[17px] leading-tight" style={{ fontFamily: 'var(--vx-font-display)' }}>
           Flow
         </span>
-        <span className="block text-ink-300 text-sm leading-snug mt-0.5">Swipe through songs picked for you. Each one starts at its best part.</span>
+        <span className="block text-ink-300 text-sm leading-snug mt-0.5">Swipe through music videos, one after another, like reels.</span>
       </span>
       <span className="shrink-0 rounded-full px-4 py-2 text-sm font-bold bg-ember-500 text-[var(--vx-on-accent)] group-hover:brightness-110">Start</span>
     </Link>

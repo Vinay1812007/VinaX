@@ -7,6 +7,7 @@ import { useHistoryStore } from '@/store/historyStore';
 import type { Song } from '@/types';
 import { HOME_TTL_MS, homeGeneration, useHomeGeneration } from './homeRefresh';
 import { feedLanguages, homeBundle, trendingBundle } from './useCatalogFeeds';
+import { metLately, rotateFresh } from './freshRotation';
 
 /**
  * 1.3 — Trending and New releases ask the catalogue's own feeds first
@@ -43,33 +44,45 @@ export async function feedPool(
   }
 }
 
-/** The feed first, the search when the feed has nothing to give. */
-async function feedOrSearch(fetchFeed: FeedSongs, langs: string[], muted: string[], search: () => Promise<Song[]>, signal?: AbortSignal): Promise<Song[]> {
-  const fromFeed = await feedPool(fetchFeed, langs, muted, signal);
-  if (fromFeed) return fromFeed;
+/**
+ * 1.14.4 — the feed AND a search page that rotates with the Home generation,
+ * in one generation's order (./freshRotation.ts). Before, the feed alone was
+ * shown whenever it answered, and it answers the same list on every call, so
+ * these shelves never changed. The search fails quietly while the feed
+ * answered; with no feed it is the whole shelf, as before.
+ */
+async function feedAndSearch(fetchFeed: FeedSongs, langs: string[], muted: string[], search: () => Promise<Song[]>, salt: number, signal?: AbortSignal): Promise<Song[]> {
+  const [fromFeed, fromSearch] = await Promise.all([feedPool(fetchFeed, langs, muted, signal), search().then((r) => ({ ok: true as const, r }), (e: unknown) => ({ ok: false as const, e }))]);
   if (signal?.aborted) throw new Error('cancelled');
-  return search();
+  if (!fromFeed && !fromSearch.ok) throw fromSearch.e;
+  return rotateFresh([...(fromFeed ?? []), ...(fromSearch.ok ? fromSearch.r : [])], salt, metLately());
 }
 
 // Shelves cache the list AS RANKED, and the ranking reads the muted / pinned
 // languages and kid mode — so `rankKey` is part of every key below.
 export function useTrendingForLanguage(language: string) {
   const rankKey = useRankSettingsKey();
+  const { gen, salt } = useRotation();
   return useQuery({
-    queryKey: ['trending', language, rankKey],
+    queryKey: ['trending', language, gen, rankKey],
     queryFn: ({ signal }) =>
-      feedOrSearch(trendingFeed, [language], [], async () => rankSongs(await searchSongs(trendingSeed(language), 20)), signal),
-    staleTime: 15 * 60_000,
+      feedAndSearch(trendingFeed, [language], [], async () => rankSongs(await searchSongsPage(trendingSeed(language, salt), 1 + (salt % 3), 20)), salt, signal),
+    staleTime: HOME_TTL_MS,
+    gcTime: 2 * HOME_TTL_MS,
+    placeholderData: keepPreviousData,
   });
 }
 
 export function useNewForLanguage(language: string) {
   const rankKey = useRankSettingsKey();
+  const { gen, salt } = useRotation();
   return useQuery({
-    queryKey: ['new-releases-lang', language, rankKey],
+    queryKey: ['new-releases-lang', language, gen, rankKey],
     queryFn: ({ signal }) =>
-      feedOrSearch(newReleasesFeed, [language], [], async () => rankSongs(await searchSongs(newReleasesSeed(language), 20)), signal),
-    staleTime: 15 * 60_000,
+      feedAndSearch(newReleasesFeed, [language], [], async () => rankSongs(await searchSongsPage(newReleasesSeed(language, salt), 1 + (salt % 3), 20)), salt, signal),
+    staleTime: HOME_TTL_MS,
+    gcTime: 2 * HOME_TTL_MS,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -134,7 +147,7 @@ export function useTrendingNow() {
   const rankKey = useRankSettingsKey();
   return useQuery({
     queryKey: ['trending-now', langs, muted, gen, rankKey],
-    queryFn: ({ signal }) => feedOrSearch(trendingFeed, langs, muted, () => multiLangPool(langs, trendingSeed, salt, muted), signal),
+    queryFn: ({ signal }) => feedAndSearch(trendingFeed, langs, muted, () => multiLangPool(langs, trendingSeed, salt, muted), salt, signal),
     staleTime: HOME_TTL_MS,
     gcTime: 2 * HOME_TTL_MS,
     placeholderData: keepPreviousData,
@@ -150,7 +163,7 @@ export function useNewReleases() {
   const rankKey = useRankSettingsKey();
   return useQuery({
     queryKey: ['new-releases', langs, muted, gen, rankKey],
-    queryFn: ({ signal }) => feedOrSearch(newReleasesFeed, langs, muted, () => multiLangPool(langs, newReleasesSeed, salt, muted), signal),
+    queryFn: ({ signal }) => feedAndSearch(newReleasesFeed, langs, muted, () => multiLangPool(langs, newReleasesSeed, salt, muted), salt, signal),
     staleTime: HOME_TTL_MS,
     gcTime: 2 * HOME_TTL_MS,
     placeholderData: keepPreviousData,
@@ -166,7 +179,7 @@ export function usePopular() {
   const rankKey = useRankSettingsKey();
   return useQuery({
     queryKey: ['popular', langs, muted, gen, rankKey],
-    queryFn: () => multiLangPool(langs, popularSeed, salt, muted),
+    queryFn: async () => rotateFresh(await multiLangPool(langs, popularSeed, salt, muted), salt, metLately()),
     staleTime: HOME_TTL_MS,
     gcTime: 2 * HOME_TTL_MS,
     placeholderData: keepPreviousData,
