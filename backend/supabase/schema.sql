@@ -1,5 +1,5 @@
 -- =============================================================================
--- VinaX database · schema version 21
+-- VinaX database · schema version 22
 --
 -- The whole database in one file. Open the Supabase dashboard, SQL Editor,
 -- paste this file, Run. Every statement is idempotent, so re-running it is
@@ -41,7 +41,10 @@
 --  version 21 stops creating the personal engine's tables and functions
 --  (section 9b, versions 7–9): VinaX Music has no AI any more. schema.sql
 --  never deletes data, so remove-personal.sql drops what an older version
---  made, run once by hand)
+--  made, run once by hand);
+--  version 22 makes Listen Together a jam: rooms gain `jam` (guests may
+--  control playback, who the host is, who was removed) and `controls`
+--  (guests' play, pause, skip, add and remove), and room_control adds one)
 --  12. security
 -- =============================================================================
 
@@ -374,12 +377,17 @@ create table if not exists rooms (
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),
   messages    jsonb not null default '[]'::jsonb,        -- 15.0: a short chat (≤ 40 lines: {by, text, at})
-  skip_votes  jsonb not null default '[]'::jsonb         -- 15.0: member ids voting to skip the current song
+  skip_votes  jsonb not null default '[]'::jsonb,        -- 15.0: member ids voting to skip the current song
+  jam         jsonb not null default '{}'::jsonb,        -- v22: {guestControl, host (handle), removed (member ids)}
+  controls    jsonb not null default '[]'::jsonb         -- v22: guests' commands for the host (≤ 20, newest)
 );
 create index if not exists rooms_updated_idx on rooms (updated_at desc);
 -- A database made before 15.0 gains the two columns in place.
 alter table rooms add column if not exists messages jsonb not null default '[]'::jsonb;
 alter table rooms add column if not exists skip_votes jsonb not null default '[]'::jsonb;
+-- Version 22: the jam settings and the guests' commands.
+alter table rooms add column if not exists jam jsonb not null default '{}'::jsonb;
+alter table rooms add column if not exists controls jsonb not null default '[]'::jsonb;
 
 create table if not exists room_members (
   room_code    text not null references rooms (code) on delete cascade,
@@ -2251,6 +2259,31 @@ begin
 end;
 $$;
 
+-- Listen Together (version 22): a guest's command for the host (play, pause,
+-- next, prev, add, remove), appended atomically so two guests at once never
+-- lose one; the newest 20 are kept and anything older than two minutes goes.
+-- The host's app reads them and acts; the Worker checked who sent it.
+-- Returns false when the room does not exist.
+create or replace function room_control(p_code text, p_cmd jsonb) returns boolean
+language plpgsql set search_path = public, pg_temp as $$
+declare
+  v_controls jsonb;
+begin
+  select controls into v_controls from rooms where code = p_code for update;
+  if not found then return false; end if;
+  v_controls := (select coalesce(jsonb_agg(e order by i), '[]'::jsonb)
+                 from jsonb_array_elements(coalesce(v_controls, '[]'::jsonb)) with ordinality t(e, i)
+                 where (e ->> 'at')::timestamptz > now() - interval '2 minutes');
+  v_controls := v_controls || jsonb_build_array(p_cmd || jsonb_build_object('at', now()));
+  if jsonb_array_length(v_controls) > 20 then
+    v_controls := (select coalesce(jsonb_agg(e order by i), '[]'::jsonb)
+                   from (select e, i from jsonb_array_elements(v_controls) with ordinality t(e, i) order by i desc limit 20) s);
+  end if;
+  update rooms set controls = v_controls where code = p_code;
+  return true;
+end;
+$$;
+
 -- Rooms nobody touched for six hours, members not seen for a day.
 create or replace function room_sweep() returns jsonb
 language plpgsql set search_path = public, pg_temp as $$
@@ -2667,7 +2700,7 @@ begin
     where n.nspname = 'public'
       and p.proname in ('_days', 'signed_devices', '_ist_today', '_error_shape', 'admin_users', 'admin_user_filters', 'user_profile', 'purge_kind', 'notification_opened', 'stats_overview', 'stats_timeline', 'stats_music', 'stats_geo', 'stats_platforms',
                         'stats_engagement', 'stats_retention', '_device_key', 'listen_time', '_listen_spans', '_window_start', 'stats_top_listeners', 'stats_at_risk', 'stats_listening', 'stats_funnel', 'stats_skips', 'stats_errors', 'stats_trending', 'stats_searches',
-                        'listener_profile', 'delete_listener', 'room_request', 'room_sweep',
+                        'listener_profile', 'delete_listener', 'room_request', 'room_control', 'room_sweep',
                         'purge_events', 'retire_push_devices', 'uptime_tick', 'uptime_report', 'table_stats', 'table_counts',
                         'ai_conversation_search', 'ai_artifact_list', 'ai_export', 'ai_take_daily',
                         'profile_extras', 'owner_tags',
@@ -2687,7 +2720,7 @@ alter default privileges in schema public revoke all on functions from anon, aut
 
 -- ------------------------------------------------------------- version --
 insert into meta (key, value, updated_at)
-  values ('schema', jsonb_build_object('version', 21, 'appliedAt', now()), now())
-  on conflict (key) do update set value = jsonb_build_object('version', 21, 'appliedAt', now()), updated_at = now();
+  values ('schema', jsonb_build_object('version', 22, 'appliedAt', now()), now())
+  on conflict (key) do update set value = jsonb_build_object('version', 22, 'appliedAt', now()), updated_at = now();
 
-select 'VinaX schema version 21 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;
+select 'VinaX schema version 22 applied' as done, (select count(*) from pg_tables where schemaname = 'public') as tables;

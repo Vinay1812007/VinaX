@@ -237,6 +237,44 @@ html.reduce-motion .vx-lt-tap { animation: none; }
 .vx-lt-block > .vx-lt-note { margin: -6px 0 12px; }
 .vx-lt-now { flex: none; min-height: 36px; padding: 0 14px; font-size: 13px; }
 
+/* 1.14 — the jam. Play, pause and skip for everyone, the room's settings,
+   who added a song, and the host's "remove" on a person. */
+.vx-lt-transport { display: grid; gap: 8px; justify-items: center; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--lt-line); }
+.vx-lt-transport-row { display: flex; align-items: center; gap: 18px; }
+.vx-lt-tbtn {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-pill);
+  background: rgb(var(--ink-100) / 0.08);
+  color: rgb(var(--ink-100));
+  transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
+}
+.vx-lt-tbtn:hover { background: rgb(var(--ink-100) / 0.14); }
+.vx-lt-tbtn:active { transform: scale(0.94); }
+.vx-lt-tbtn.is-main { width: 60px; height: 60px; background: rgb(var(--ember-500)); color: var(--vx-on-accent); }
+.vx-lt-tbtn.is-main:hover { background: rgb(var(--ember-400)); }
+.vx-lt-tbtn:disabled { opacity: 0.4; pointer-events: none; }
+.vx-lt-transport-hint { color: rgb(var(--ink-300)); font-size: 13px; text-align: center; }
+.vx-lt-switch { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--lt-line); }
+.vx-lt-added { display: inline-flex; flex: none; align-items: center; gap: 6px; max-width: 30%; color: rgb(var(--ink-300)); font-size: 12.5px; font-weight: 650; }
+.vx-lt-x {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  color: rgb(var(--ink-300));
+  transition: background-color var(--dur-quick) var(--ease-standard), color var(--dur-quick) var(--ease-standard);
+}
+.vx-lt-x:hover { background: rgb(var(--ink-100) / 0.08); color: rgb(var(--ink-100)); }
+.vx-person .vx-lt-x, .vx-lt-person-ask { margin-left: auto; }
+.vx-lt-person-ask { display: inline-flex; gap: 6px; }
+.vx-lt-tag { flex: none; padding: 2px 8px; border-radius: var(--radius-pill); background: rgb(var(--ember-500) / 0.16); color: var(--accent-text); font-size: 11.5px; font-weight: 750; }
+.vx-lt-tag.is-you { background: rgb(var(--ink-100) / 0.08); color: rgb(var(--ink-300)); }
+
 /* ------------------------------------------------------------- the pill */
 /* Floats above the player on every page but /together while a session is
    live: one tap back to the room, or "Tap to start listening" when the

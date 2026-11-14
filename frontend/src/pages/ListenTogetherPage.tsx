@@ -2,10 +2,28 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { ArtistAvatar } from '@/features/stats/artwork';
-import { useCurrentSong } from '@/store/playerStore';
+import { useCurrentSong, usePlayerStore } from '@/store/playerStore';
 import { REACTION_EMOJI } from '@/services/together';
 import { useTogether } from '@/services/together/session';
-import { addSong, getTrimMs, joinSession, leaveSession, playNow, react, setTrimMs, startHosting, tapToListen, TRIM_MAX_MS, voteToSkip } from '@/features/together/engine';
+import {
+  addSong,
+  canTakeOut,
+  control,
+  getTrimMs,
+  joinSession,
+  leaveSession,
+  playNow,
+  react,
+  removeFromRoom,
+  setGuestControl,
+  setOnThisPhone,
+  setTrimMs,
+  startHosting,
+  takeOut,
+  tapToListen,
+  TRIM_MAX_MS,
+  voteToSkip,
+} from '@/features/together/engine';
 import { Chat } from '@/features/together/Chat';
 import { ENERGY_FULL, useRoom } from '@/features/together/room';
 import { JoinRoom } from '@/features/together/JoinRoom';
@@ -20,7 +38,8 @@ import { toast } from '@/store/toastStore';
 import { useTutorialStore } from '@/store/tutorialStore';
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal, setLocal } from '@/services/storage/local';
-import { PlusIcon, UsersIcon } from '@/components/Icons';
+import { NextIcon, PauseIcon, PlayIcon, PlusIcon, PrevIcon, UsersIcon, XIcon } from '@/components/Icons';
+import { Switch } from '@/components/ui/Switch';
 import '@/styles/pages/secondary.css';
 import '@/styles/pages/together.css';
 
@@ -152,6 +171,145 @@ function AddSong({ label, note }: { label: string; note?: string }): ReactNode {
   );
 }
 
+/**
+ * 1.14 — the jam's play, pause and skip, in the room. The host's buttons work
+ * the player; a guest's go to the room and the host's app does them for
+ * everyone, unless the host has kept playback to itself.
+ */
+function Transport(): ReactNode {
+  const mode = useTogether((s) => s.mode);
+  const guestControl = useTogether((s) => s.guestControl);
+  const hostPlaying = useTogether((s) => s.hostPlaying);
+  const hostName = useTogether((s) => s.hostName);
+  const localPlaying = usePlayerStore((s) => s.isPlaying);
+  const host = mode === 'host';
+  const playing = host ? localPlaying : hostPlaying;
+  const can = host || guestControl;
+  const run = (cmd: 'toggle' | 'next' | 'prev'): void => {
+    if (!host) return control(cmd);
+    const p = usePlayerStore.getState();
+    if (cmd === 'toggle') p.togglePlay();
+    else if (cmd === 'next') p.next(true);
+    else p.prev();
+  };
+  return (
+    <div className="vx-lt-transport" role="group" aria-label="Playback for everyone" data-locked={can ? undefined : 'true'}>
+      <div className="vx-lt-transport-row">
+        <button type="button" className="vx-lt-tbtn" onClick={() => run('prev')} disabled={!can} aria-label="Previous song">
+          <PrevIcon className="w-5 h-5" />
+        </button>
+        <button type="button" className="vx-lt-tbtn is-main" onClick={() => run('toggle')} disabled={!can} aria-label={playing ? 'Pause for everyone' : 'Play for everyone'}>
+          {playing ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6" />}
+        </button>
+        <button type="button" className="vx-lt-tbtn" onClick={() => run('next')} disabled={!can} aria-label="Next song">
+          <NextIcon className="w-5 h-5" />
+        </button>
+      </div>
+      <p className="vx-lt-transport-hint">
+        {host
+          ? guestControl
+            ? 'Everyone in the room can play, pause and skip.'
+            : 'Only you can play, pause and skip.'
+          : guestControl
+            ? 'Play, pause and skip for everyone.'
+            : `${hostName ?? 'The host'} controls playback. Add songs and vote to skip.`}
+      </p>
+    </div>
+  );
+}
+
+/** 1.14 — the room's settings: the host's "guests can control playback", a guest's "play on this phone". */
+function JamSettings(): ReactNode {
+  const mode = useTogether((s) => s.mode);
+  const guestControl = useTogether((s) => s.guestControl);
+  const onThisPhone = useTogether((s) => s.onThisPhone);
+  const hostName = useTogether((s) => s.hostName);
+  if (mode === 'host') {
+    return (
+      <Switch
+        className="vx-lt-switch"
+        checked={guestControl}
+        onChange={setGuestControl}
+        label="Guests can control playback"
+        description="Let everyone play, pause and skip. Anyone can always add songs."
+      />
+    );
+  }
+  return (
+    <Switch
+      className="vx-lt-switch"
+      checked={onThisPhone}
+      onChange={setOnThisPhone}
+      label="Play on this phone"
+      description={onThisPhone ? 'Turn off when you are in the same room: only the host’s speaker plays, and this phone is the remote.' : `Only ${hostName ?? 'the host'}’s speaker is playing. This phone is the remote.`}
+    />
+  );
+}
+
+/** 1.14 — who is here: the host, you, and (for the host) a way to remove someone. */
+function People(): ReactNode {
+  const mode = useTogether((s) => s.mode);
+  const people = useTogether((s) => s.people);
+  const names = useTogether((s) => s.names);
+  const members = useTogether((s) => s.members);
+  const me = useTogether((s) => s.me);
+  const hostH = useTogether((s) => s.hostH);
+  const listenerCount = useTogether((s) => s.listenerCount);
+  const [confirm, setConfirm] = useState<string | null>(null);
+  const count = Math.max(listenerCount, people.length, members.length, names.length, 1);
+  // The host first, then you, then everyone else.
+  const rank = (h: string): number => (h === hostH ? 0 : h === me ? 1 : 2);
+  const list = [...people].sort((a, b) => rank(a.h) - rank(b.h));
+  // A server older than 1.14 lists names only.
+  const plain = !list.length ? (names.length ? names : mode === 'host' ? (members.length ? members : ['You']) : []) : [];
+  return (
+    <section className="vx-lt-block" aria-labelledby="vx-lt-people">
+      <h2 id="vx-lt-people" className="vx-lt-h2 tabular-nums">{count} in this session</h2>
+      {list.length > 0 && (
+        <ul className="vx-people">
+          {list.map((p) => (
+            <li key={p.h} className="vx-person">
+              <ArtistAvatar name={p.name} size={36} />
+              <span className="min-w-0 truncate-1">{p.name}</span>
+              {p.h === hostH && <span className="vx-lt-tag">Host</span>}
+              {p.h === me && p.h !== hostH && <span className="vx-lt-tag is-you">You</span>}
+              {mode === 'host' && p.h !== me && (
+                confirm === p.h ? (
+                  <span className="vx-lt-person-ask">
+                    <button type="button" className="vx-sec-pill is-danger vx-lt-now" onClick={() => { setConfirm(null); void removeFromRoom(p.h, p.name); }}>
+                      Remove
+                    </button>
+                    <button type="button" className="vx-sec-pill vx-lt-now" onClick={() => setConfirm(null)}>Keep</button>
+                  </span>
+                ) : (
+                  <button type="button" className="vx-lt-x" onClick={() => setConfirm(p.h)} aria-label={`Remove ${p.name} from the session`}>
+                    <XIcon className="w-4 h-4" />
+                  </button>
+                )
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {plain.length > 0 && (
+        <ul className="vx-people">
+          {plain.map((m, i) => (
+            <li key={`${m}-${i}`} className="vx-person">
+              <ArtistAvatar name={m} size={36} />
+              {m}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="vx-lt-foot">
+        {mode === 'host'
+          ? 'Everyone hears what plays here, from any page you are on. Leave and the session ends for everyone.'
+          : 'Your player follows the room by itself, even while you browse other pages.'}
+      </p>
+    </section>
+  );
+}
+
 function SyncBadge(): ReactNode {
   const mode = useTogether((s) => s.mode);
   const status = useTogether((s) => s.status);
@@ -256,11 +414,11 @@ function Idle(): ReactNode {
       <div className="vx-lt-cards">
         <section className="vx-lt-card is-host" aria-labelledby="vx-lt-start">
           <h2 id="vx-lt-start" className="vx-lt-h2">Host a session</h2>
-          <p className="vx-lt-note">You pick the music. Everyone who joins hears exactly what you play.</p>
+          <p className="vx-lt-note">One shared queue for everyone. Friends add songs and can play, pause and skip — you decide.</p>
           <ol className="vx-lt-steps">
             <li>Start — you get a room code and a QR</li>
             <li>Share the link or let friends scan</li>
-            <li>Play as usual, from any page</li>
+            <li>Everyone adds songs; everyone hears the same second</li>
           </ol>
           <button
             type="button"
@@ -284,7 +442,7 @@ function Idle(): ReactNode {
           <label className="vx-label" htmlFor="vx-lt-code">Room code</label>
           {/* 1.13 — type the code or scan the host's QR without leaving VinaX. */}
           <JoinRoom initialCode={linkCode} disabled={busy !== null} />
-          <p className="vx-lt-foot">Your player follows the host. Songs you add join the shared queue.</p>
+          <p className="vx-lt-foot">Your player follows the room. Songs you add go straight into the shared queue.</p>
         </section>
       </div>
       {/* 1.13 — on an Android phone's browser: carry on in the app. */}
@@ -296,12 +454,11 @@ function Idle(): ReactNode {
 function Live(): ReactNode {
   const mode = useTogether((s) => s.mode);
   const code = useTogether((s) => s.code);
-  const members = useTogether((s) => s.members);
-  const names = useTogether((s) => s.names);
   const skipVotes = useTogether((s) => s.skipVotes);
+  const guestControl = useTogether((s) => s.guestControl);
   const played = useTogether((s) => s.played);
-  const listenerCount = useTogether((s) => s.listenerCount);
   const hostName = useTogether((s) => s.hostName);
+  const me = useTogether((s) => s.me);
   const roomToured = useTutorialStore((s) => s.done.includes('together-room'));
   const saveSession = () => {
     if (!played.length) { toast('Nothing has played yet'); return; }
@@ -328,7 +485,6 @@ function Live(): ReactNode {
   const qr = useInviteQr(code);
 
   const art = current ? bestImage(current.images, 500) : '';
-  const people = members.length ? members : ['You'];
   return (
     <div className="vx-sec is-narrow vx-lt is-live">
       <section className="vx-lt-room" aria-label="Room" style={art ? { ['--lt-art' as string]: `url("${art}")` } : undefined}>
@@ -340,11 +496,14 @@ function Live(): ReactNode {
             <span className="vx-lt-art is-empty" aria-hidden><UsersIcon className="w-8 h-8" /></span>
           )}
           <div className="min-w-0">
-            <p className="vx-lt-kicker">{mode === 'host' ? 'Everyone hears' : `Playing with ${hostName ?? 'the host'}`}</p>
+            <p className="vx-lt-kicker">{mode === 'host' ? 'Your session · everyone hears' : `${hostName ?? 'The host'}’s session`}</p>
             <p className="vx-lt-song truncate-1">{current?.title ?? (mode === 'host' ? 'Play anything to start' : 'Waiting for the host…')}</p>
             {current && <p className="vx-lt-artist truncate-1">{missing ? 'Not available on this device — the next song will play' : current.subtitle}</p>}
           </div>
         </div>
+
+        <Transport />
+        <JamSettings />
 
         {needsTap && (
           <button type="button" className="vx-lt-cta vx-lt-tap" onClick={tapToListen}>
@@ -380,10 +539,12 @@ function Live(): ReactNode {
               {e}
             </button>
           ))}
-          {/* 15.0 — vote to skip: the host skips outright; guests vote, and the song moves on past half the room. */}
-          <button type="button" onClick={() => void voteToSkip()} className="vx-react-btn is-skip" aria-label={mode === 'host' ? 'Skip this song' : 'Vote to skip this song'} title={mode === 'host' ? 'Skip' : 'Vote to skip'}>
-            ⏭{skipVotes > 0 && <span className="vx-react-count">{skipVotes}</span>}
-          </button>
+          {/* 15.0 — vote to skip, while the host keeps playback to itself (1.14: otherwise the transport above skips). */}
+          {mode === 'guest' && !guestControl && (
+            <button type="button" onClick={() => void voteToSkip()} className="vx-react-btn is-skip" aria-label="Vote to skip this song" title="Vote to skip">
+              ⏭{skipVotes > 0 && <span className="vx-react-count">{skipVotes}</span>}
+            </button>
+          )}
         </div>
         <Energy />
       </section>
@@ -401,8 +562,8 @@ function Live(): ReactNode {
 
       {/* 1.13 — a guest can also ask from anywhere: any song tapped in the app is sent to the host. */}
       <AddSong
-        label={mode === 'host' ? 'Add to the queue' : 'Add a song for everyone'}
-        note={mode === 'guest' ? `Ask ${hostName ?? 'the host'} to play a song: search here, or tap any song anywhere in VinaX.` : undefined}
+        label="Add to the queue"
+        note={mode === 'guest' ? 'Songs you add go straight into everyone’s queue: search here, or tap any song anywhere in VinaX.' : 'Anyone in the session can add songs. They play after what is up next.'}
       />
 
       {queue.length > 0 && (
@@ -414,12 +575,24 @@ function Live(): ReactNode {
                 <img src={bestImage(t.song.images, 100)} alt="" className="vx-row-art" loading="lazy" />
                 <span className="vx-row-main">
                   <span className="vx-row-label truncate-1">{t.song.title}</span>
-                  <span className="vx-row-hint truncate-1">{t.by ? `Asked by ${t.by}` : t.song.subtitle}</span>
+                  <span className="vx-row-hint truncate-1">{t.song.subtitle}</span>
                 </span>
-                {/* The host can bring any song that is up next (a guest's request, say) on now. */}
+                {/* 1.14 — who added it, as in a jam. */}
+                {t.by && (
+                  <span className="vx-lt-added" title={`Added by ${t.by}`}>
+                    <ArtistAvatar name={t.by} size={22} />
+                    <span className="truncate-1">{t.h && t.h === me ? 'You' : t.by}</span>
+                  </span>
+                )}
+                {/* The host can bring any song that is up next (a guest's, say) on now. */}
                 {mode === 'host' && (
                   <button type="button" className="vx-sec-pill vx-lt-now" onClick={() => playNow(t.song.id)} aria-label={`Play ${t.song.title} now`}>
                     Play now
+                  </button>
+                )}
+                {canTakeOut(t) && (
+                  <button type="button" className="vx-lt-x" onClick={() => takeOut(t)} aria-label={`Take ${t.song.title} out of the queue`}>
+                    <XIcon className="w-4 h-4" />
                   </button>
                 )}
               </li>
@@ -428,25 +601,7 @@ function Live(): ReactNode {
         </section>
       )}
 
-      <section className="vx-lt-block" aria-labelledby="vx-lt-people">
-        <h2 id="vx-lt-people" className="vx-lt-h2 tabular-nums">{Math.max(listenerCount, members.length, names.length, 1)} listening</h2>
-        {/* 15.0 — everyone sees the names members chose to give the room. */}
-        {(names.length > 0 || mode === 'host') && (
-          <ul className="vx-people">
-            {(names.length ? names : people).map((m, i) => (
-              <li key={`${m}-${i}`} className="vx-person">
-                <ArtistAvatar name={m} size={36} />
-                {m}
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="vx-lt-foot">
-          {mode === 'host'
-            ? 'Play, pause, seek and skip as usual — from any page. Everyone follows you.'
-            : 'The host controls playback; your player follows by itself, even while you browse other pages.'}
-        </p>
-      </section>
+      <People />
 
       {played.length > 0 && (
         <section className="vx-lt-block" aria-labelledby="vx-lt-history">

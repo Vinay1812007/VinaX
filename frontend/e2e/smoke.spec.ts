@@ -172,7 +172,7 @@ test('invite link joins as guest without crashing (M-SRV-2 contract)', async ({ 
   await page.goto('/together?code=ABCDEF');
   // The guest poll runs every 2s — survive several ticks.
   await page.waitForTimeout(5000);
-  await expect(page.getByText('2 listening')).toBeVisible();
+  await expect(page.getByText('2 in this session')).toBeVisible();
   await expect(page.getByText('Something hit a wrong note')).not.toBeVisible();
   expect(crashes).toEqual([]);
 });

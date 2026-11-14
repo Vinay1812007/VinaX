@@ -12,6 +12,19 @@
  *   15.0:
  *   POST { action: 'say', code, deviceId, name, text, id? } a chat line (≤ 200 chars, the room keeps 40)
  *   POST { action: 'skip', code, deviceId, songId }        vote to skip the current song (one per member)
+ *   1.14 (schema 22) — a jam:
+ *   GET  …&member=deviceId                                 also → { me, removed, people: [{ h, name }] }
+ *   POST { action: 'control', code, deviceId, name, id, cmd, song?, songId? }
+ *        a guest plays, pauses, skips (next / prev), adds or removes a song.
+ *        play / pause / next / prev only while the host lets guests control
+ *        playback; the host's app carries every command out (it owns the music).
+ *   POST { action: 'kick', code, hostToken, who }          host only: remove someone (by handle)
+ *   `update` also takes `guestControl` and the host's `deviceId` (so everyone
+ *   can tell which person is the host).
+ *
+ * A member is shown to the room by a HANDLE, never by device id: the first 12
+ * hex of SHA-256(code:deviceId). The device id is what heartbeats and votes
+ * are counted by, so handing it to others would let them speak as that member.
  *
  * The 6-character code is the JOIN credential (anyone with it may watch and
  * request). The host token, returned exactly once at create, authorises
@@ -104,6 +117,8 @@ const ROOM_RL: Record<string, { capacity: number; refillPerMinute: number }> = {
   end: { capacity: 20, refillPerMinute: 20 },
   say: { capacity: 30, refillPerMinute: 30 },
   skip: { capacity: 20, refillPerMinute: 20 },
+  control: { capacity: 60, refillPerMinute: 60 },
+  kick: { capacity: 20, refillPerMinute: 20 },
   GET: { capacity: 200, refillPerMinute: 200 },
 };
 export const CHAT_MAX = 40;
@@ -117,6 +132,29 @@ const REACTION_WINDOW_MS = 8_000;
 const PRESENCE_MS = 12_000;
 const QUEUE_MAX = 12;
 const MEMBER_ID_MAX = 64;
+/** The commands a guest may send the host. */
+export const CONTROL_CMDS: readonly string[] = ['play', 'pause', 'next', 'prev', 'add', 'remove'];
+/** …of which these move the music, and need the host's "guests can control playback". */
+const PLAYBACK_CMDS: readonly string[] = ['play', 'pause', 'next', 'prev'];
+const REMOVED_MAX = 100;
+
+/** How the room shows a member: never the device id itself (see the header). */
+export async function memberHandle(code: string, memberId: string): Promise<string> {
+  const d = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${code}:${memberId}`)));
+  return Array.from(d.slice(0, 6), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+const HANDLE = /^[0-9a-f]{12}$/;
+
+interface Jam {
+  /** Guests may play, pause and skip. On unless the host turned it off. */
+  guestControl?: boolean;
+  /** The host's handle. */
+  host?: string;
+  /** Member ids the host removed: they are not counted, shown or heard. */
+  removed?: string[];
+}
+const jamOf = (r: RoomRow): Jam => (r.jam && typeof r.jam === 'object' && !Array.isArray(r.jam) ? (r.jam as Jam) : {});
+const removedOf = (r: RoomRow): Set<string> => new Set(Array.isArray(jamOf(r).removed) ? jamOf(r).removed : []);
 
 interface RoomRow {
   code: string;
@@ -130,8 +168,11 @@ interface RoomRow {
   updated_at: string;
   messages?: Array<{ by: string; text: string; at: string; id?: string }>;
   skip_votes?: string[];
+  jam?: unknown;
+  controls?: unknown;
 }
-interface Track { song: unknown; by: string | null }
+/** `h`: the handle of the guest who added it (they may take it out again). */
+interface Track { song: unknown; by: string | null; h?: string | null }
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: CORS });
 
@@ -186,7 +227,8 @@ function trackList(raw: unknown, cap: number): Track[] {
   for (const t of raw.slice(0, cap)) {
     const o = asObject(t);
     const song = cleanSong(o?.song);
-    if (song) out.push({ song, by: clip(o?.by, 40) });
+    const h = typeof o?.h === 'string' && HANDLE.test(o.h) ? o.h : null;
+    if (song) out.push({ song, by: clip(o?.by, 40), ...(h ? { h } : {}) });
   }
   return out;
 }
@@ -195,6 +237,7 @@ const songId = (t: Track): string => String((asObject(t.song)?.id as unknown) ??
 
 /** The room as the app sees it (host_token never leaves). */
 function publicRoom(r: RoomRow) {
+  const jam = jamOf(r);
   return {
     host_name: r.host_name,
     song: r.current ?? null,
@@ -206,6 +249,9 @@ function publicRoom(r: RoomRow) {
     // 15.0 — the chat and the skip votes for the current song.
     messages: Array.isArray(r.messages) ? r.messages.slice(-CHAT_MAX) : [],
     skipVotes: Array.isArray(r.skip_votes) ? r.skip_votes.length : 0,
+    // 1.14 — the jam: may guests play, pause and skip, and which person is the host.
+    guestControl: jam.guestControl !== false,
+    hostH: typeof jam.host === 'string' && HANDLE.test(jam.host) ? jam.host : null,
   };
 }
 
@@ -223,6 +269,16 @@ async function requireHost(env: Env, code: string, provided: string | null): Pro
   return { room: r.room };
 }
 
+/** What a host push changes in the jam's settings (nothing it did not send). */
+async function jamUpdate(code: string, room: RoomRow, body: Record<string, unknown>): Promise<{ jam?: Jam }> {
+  const jam = jamOf(room);
+  const next: Jam = { ...jam };
+  if (typeof body.guestControl === 'boolean') next.guestControl = body.guestControl;
+  const device = memberOf(body.deviceId);
+  if (device) next.host = await memberHandle(code, device);
+  return next.guestControl === jam.guestControl && next.host === jam.host ? {} : { jam: next };
+}
+
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
   const limited = rateLimit(request, 'room-get', ROOM_RL.GET, env);
@@ -232,6 +288,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const code = codeOf(url.searchParams.get('code'));
   if (!code) return json({ error: 'bad_request' }, 400);
   const hostToken = clip(url.searchParams.get('hostToken'), 64);
+  const asker = memberOf(url.searchParams.get('member'));
 
   const now = Date.now();
   const [room, members] = await Promise.all([
@@ -241,15 +298,18 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     ),
   ]);
   if (!room.ok) return json({ error: 'unavailable' }, 503);
-  const present = members.ok ? members.rows.filter((m) => Date.parse(m.last_seen) >= now - PRESENCE_MS) : [];
+  // 1.14 — someone the host removed is not counted, shown or heard.
+  const removed = room.room ? removedOf(room.room) : new Set<string>();
+  const present = members.ok ? members.rows.filter((m) => Date.parse(m.last_seen) >= now - PRESENCE_MS && !removed.has(m.member_id)) : [];
   const reactSince = now - REACTION_WINDOW_MS;
   const reactions = (members.ok ? members.rows : [])
+    .filter((m) => !removed.has(m.member_id))
     .filter((m) => m.reaction && m.reacted_at && REACTION_EMOJI.includes(m.reaction) && Date.parse(m.reacted_at) >= reactSince)
     .map((m) => ({ e: m.reaction as string, at: m.reacted_at as string }));
   const hostAuthorized = !!(room.room && hostToken && safeEqual(hostToken, room.room.host_token));
   // 15.0 — a skip vote counts only while its member is here.
   if (room.room && Array.isArray(room.room.skip_votes)) {
-    const here = new Set((members.ok ? members.rows : []).filter((m) => Date.parse(m.last_seen) >= now - PRESENCE_MS).map((m) => m.member_id));
+    const here = new Set((members.ok ? members.rows : []).filter((m) => Date.parse(m.last_seen) >= now - PRESENCE_MS && !removed.has(m.member_id)).map((m) => m.member_id));
     room.room.skip_votes = room.room.skip_votes.filter((id) => here.has(id));
   }
   // A mistyped code and an ended room both read `room: null` — the app shows "session ended".
@@ -267,6 +327,15 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const names = present.map((m) => m.name).filter((n): n is string => !!n);
   body.names = names;
   if (hostAuthorized) body.members = names;
+  // 1.14 — who is here, by handle, so the room can say who added a song and
+  // the host can remove someone; and who the asker is in that list.
+  body.people = await Promise.all(present.map(async (m) => ({ h: await memberHandle(code, m.member_id), name: m.name ?? 'Listener' })));
+  if (asker && room.room) {
+    body.me = await memberHandle(code, asker);
+    if (removed.has(asker)) body.removed = true;
+  }
+  // The guests' commands are for the host's app only.
+  if (hostAuthorized && room.room) body.controls = Array.isArray(room.room.controls) ? room.room.controls : [];
   const live = liveLine(env);
   if (live) body.live = live;
   return json(body);
@@ -329,6 +398,8 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
       updated_at: new Date(pushMoment(body.at, arrived)).toISOString(),
       // 15.0 — a new song starts with no skip votes.
       ...(changed ? { skip_votes: [] } : {}),
+      // 1.14 — the jam's settings, as the host's app last said them.
+      ...(await jamUpdate(code, host.room, body)),
     });
     // `took`: the host subtracts it from the round trip to learn how long its
     // pushes spend on the way here, and sends the next position that far ahead.
@@ -346,6 +417,55 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   }
 
   const memberId = memberOf(body.deviceId);
+
+  if (action === 'control') {
+    const cmd = clip(body.cmd, 8) ?? '';
+    const id = clip(body.id, 24) ?? '';
+    if (!memberId || !CONTROL_CMDS.includes(cmd) || !/^[A-Za-z0-9_-]{6,24}$/.test(id)) return json({ error: 'bad_request' }, 400);
+    const song = cmd === 'add' ? cleanSong(body.song) : null;
+    const forSong = clip(body.songId, 64);
+    if (cmd === 'add' && !song) return json({ error: 'bad_song' }, 400);
+    if (cmd === 'remove' && !forSong) return json({ error: 'bad_request' }, 400);
+    const r = await readRoom(env, code);
+    if (!r.ok) return json({ error: 'unavailable' }, 503);
+    if (!r.room) return json({ error: 'not_found' }, 404);
+    if (removedOf(r.room).has(memberId)) return json({ error: 'removed' }, 403);
+    if (PLAYBACK_CMDS.includes(cmd) && jamOf(r.room).guestControl === false) return json({ error: 'no_control' }, 403);
+    const h = await memberHandle(code, memberId);
+    const command = {
+      id,
+      cmd,
+      h,
+      by: clip(body.name, 40) ?? 'Someone',
+      ...(song ? { song: { id: song.id, title: song.title ?? '', subtitle: song.subtitle ?? '', image: song.image ?? '' } } : {}),
+      ...(forSong ? { songId: forSong } : {}),
+    };
+    const w = await db.rpc<boolean>(env, 'room_control', { p_code: code, p_cmd: command });
+    if (!w.ok) return json({ error: w.error === 'not_found' ? 'needs_migration' : 'unavailable' }, 503);
+    if (w.value !== true) return json({ error: 'not_found' }, 404);
+    // Sending a command is being here.
+    void db.upsert(env, 'room_members', { room_code: code, member_id: memberId, name: clip(body.name, 60), last_seen: now }, 'room_code,member_id');
+    return json({ ok: true });
+  }
+
+  if (action === 'kick') {
+    const host = await requireHost(env, code, clip(body.hostToken, 64));
+    if ('fail' in host) return host.fail;
+    const who = clip(body.who, 12) ?? '';
+    if (!HANDLE.test(who)) return json({ error: 'bad_request' }, 400);
+    const rows = await db.select<{ member_id: string }>(env, 'room_members', q().eq('room_code', code).select('member_id').limit(200));
+    if (!rows.ok) return json({ error: 'unavailable' }, 503);
+    const hit: string[] = [];
+    for (const m of rows.rows) if ((await memberHandle(code, m.member_id)) === who) hit.push(m.member_id);
+    if (!hit.length) return json({ error: 'not_member' }, 404);
+    const jam = jamOf(host.room);
+    // The host cannot remove itself.
+    if (jam.host === who) return json({ error: 'bad_request' }, 400);
+    const removed = [...new Set([...(jam.removed ?? []), ...hit])].slice(-REMOVED_MAX);
+    const w = await db.update(env, 'rooms', q().eq('code', code), { jam: { ...jam, removed } });
+    for (const id of hit) void db.remove(env, 'room_members', q().eq('room_code', code).eq('member_id', id));
+    return json({ ok: w.ok });
+  }
 
   if (action === 'react') {
     const emoji = clip(body.emoji, 8);
@@ -370,6 +490,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     const r = await readRoom(env, code);
     if (!r.ok) return json({ error: 'unavailable' }, 503);
     if (!r.room) return json({ error: 'not_found' }, 404);
+    if (removedOf(r.room).has(memberId)) return json({ error: 'removed' }, 403);
     // 1.13: the sender names each line (`id`), so a phone that already showed
     // it from the live line knows this stored copy is the same one.
     const id = clip(body.id, 24);
@@ -392,6 +513,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     const r = await readRoom(env, code);
     if (!r.ok) return json({ error: 'unavailable' }, 503);
     if (!r.room) return json({ error: 'not_found' }, 404);
+    if (removedOf(r.room).has(memberId)) return json({ error: 'removed' }, 403);
     // A vote names the song it is for, so a late vote never counts against the next one.
     const forSong = clip(body.songId, 64);
     const current = String(asObject(r.room.current)?.id ?? '');

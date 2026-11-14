@@ -99,7 +99,8 @@ export interface PlayerState {
   /** `null` (v7.1.0) drops the active intent and rebuilds what follows without one. */
   tuneQueue(intent: TuneIntent | null): void;
   playAt(index: number): void;
-  enqueue(song: Song): void;
+  /** `quiet` (1.14): no "Added to queue" snackbar; Listen Together says who added it instead. */
+  enqueue(song: Song, opts?: { quiet?: boolean }): void;
   enqueueNext(song: Song): void;
   enqueueAll(songs: Song[]): void;
   removeAt(index: number): void;
@@ -184,6 +185,33 @@ let preview: PreviewSnapshot | null = null;
 let roomAsk: ((song: Song) => void) | null = null;
 export const setRoomAsk = (fn: ((song: Song) => void) | null): void => {
   roomAsk = fn;
+};
+
+/**
+ * 1.14 — Listen Together is a jam: a guest's play / pause / next / previous
+ * (the player's buttons, the lock screen, the keyboard) goes to the room,
+ * and the host's app does it for everyone. Set by the room's engine while
+ * this device follows a host; the engine's own plays run inside `asRoom`.
+ */
+export type RoomCmd = 'toggle' | 'next' | 'prev';
+let roomControl: ((cmd: RoomCmd) => void) | null = null;
+let roomOwn = 0;
+export const setRoomControl = (fn: ((cmd: RoomCmd) => void) | null): void => {
+  roomControl = fn;
+};
+/** The room engine's own play / pause: not a listener's tap, so not sent to the room. */
+export function asRoom<T>(fn: () => T): T {
+  roomOwn += 1;
+  try {
+    return fn();
+  } finally {
+    roomOwn -= 1;
+  }
+}
+const toRoom = (cmd: RoomCmd): boolean => {
+  if (!roomControl || roomOwn) return false;
+  roomControl(cmd);
+  return true;
 };
 
 /** V2 — the Up Next engine, loaded once on demand (every caller shares the one import). */
@@ -1059,7 +1087,7 @@ export const usePlayerStore = create<PlayerState>()(
           startTrack(queue[index], true, { from });
         },
 
-        enqueue: (song) => {
+        enqueue: (song, opts) => {
           if (song.explicit && kidModeOn()) {
             toast('Kid mode is on — that song is marked explicit');
             return;
@@ -1087,7 +1115,7 @@ export const usePlayerStore = create<PlayerState>()(
           set({ queue: [...queue.slice(0, at), song, ...queue.slice(at)] });
           if (firstAuto >= 0) preloadUpcoming();
           // 10.1 — the snackbar shows which song went in, and opens the queue.
-          toast('Added to queue', { image: bestImage(song.images, 50), action: { label: 'View', onClick: () => toastNavigate('/queue') } });
+          if (!opts?.quiet) toast('Added to queue', { image: bestImage(song.images, 50), action: { label: 'View', onClick: () => toastNavigate('/queue') } });
           if (queue.length === 0) get().playQueue([song]);
         },
 
@@ -1226,6 +1254,7 @@ export const usePlayerStore = create<PlayerState>()(
         },
 
         togglePlay: () => {
+          if (toRoom('toggle')) return;
           transition += 1;
           const { isPlaying, queue, index } = get();
           const song = queue[index];
@@ -1249,6 +1278,7 @@ export const usePlayerStore = create<PlayerState>()(
         },
 
         next: (manual = false) => {
+          if (manual && toRoom('next')) return;
           const { queue, index, shuffle, repeat } = get();
           if (!queue.length || preview) return; // Flow moves its own feed
           if (manual) haptic('light');
@@ -1417,6 +1447,7 @@ export const usePlayerStore = create<PlayerState>()(
         },
 
         prev: () => {
+          if (toRoom('prev')) return;
           transition += 1;
           const { queue, index, currentTime } = get();
           if (!queue.length) return;

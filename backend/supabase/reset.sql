@@ -18,7 +18,7 @@ begin
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
       and (p.proname like 'stats\_%' or p.proname in ('_days', 'ai_usage_since', 'listener_profile', 'delete_listener',
-           'room_request', 'room_sweep', 'purge_events', 'retire_push_devices', 'uptime_tick', 'uptime_report',
+           'room_request', 'room_control', 'room_sweep', 'purge_events', 'retire_push_devices', 'uptime_tick', 'uptime_report',
            'table_stats', 'table_counts', 'ai_conversation_search', 'ai_artifact_list', 'ai_export', 'ai_take_daily',
            'signed_devices', '_ist_today', '_error_shape', 'admin_users', 'admin_user_filters', 'user_profile', 'purge_kind', 'notification_opened',
            'account_set_password', 'account_check_password', 'account_has_password')

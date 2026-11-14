@@ -5,7 +5,7 @@
  * without a database both verbs answer 503 not_configured.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { liveLine, onRequestGet, onRequestOptions, onRequestPost, pushMoment, REACTION_EMOJI } from '../functions/api/room';
+import { liveLine, memberHandle, onRequestGet, onRequestOptions, onRequestPost, pushMoment, REACTION_EMOJI } from '../functions/api/room';
 import { DB_ENV, fakeDb } from './helpers/fakeDb';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -56,7 +56,7 @@ describe('/api/room', () => {
       ],
     });
     const guest = (await (await get('code=abc234')).json()) as Record<string, unknown>;
-    expect(guest.room).toEqual({ host_name: 'Vinay', song: { id: 's1', title: 'Orbit' }, queue: [], requests: [{ song: { id: 's2' }, by: 'Guest' }], position: 12.5, playing: true, updated_at: now, messages: [], skipVotes: 0 });
+    expect(guest.room).toEqual({ host_name: 'Vinay', song: { id: 's1', title: 'Orbit' }, queue: [], requests: [{ song: { id: 's2' }, by: 'Guest' }], position: 12.5, playing: true, updated_at: now, messages: [], skipVotes: 0, guestControl: true, hostH: null });
     expect(guest.memberCount).toBe(1);
     expect(guest.reactions).toEqual([{ e: '🔥', at: now }]);
     expect(typeof guest.now).toBe('number');
@@ -168,5 +168,88 @@ describe('/api/room', () => {
     expect(await (await post({ action: 'leave', code: 'ABC234', deviceId: 'g1' })).json()).toEqual({ ok: true });
     expect(fake.rows('room_members')).toHaveLength(0);
     expect((await post({ action: 'dance', code: 'ABC234' })).status).toBe(400);
+  });
+});
+
+describe('/api/room as a jam (schema 22)', () => {
+  const fresh = () => new Date().toISOString();
+  const room = (extra: Record<string, unknown> = {}) => ({ code: 'ABC234', host_token: 'host-secret', host_name: 'V', current: { id: 's1' }, queue: [], requests: [], position: 0, playing: true, updated_at: 'x', messages: [], skip_votes: [], jam: {}, controls: [], ...extra });
+  const members = () => [
+    { room_code: 'ABC234', member_id: 'host-dev', name: 'V', last_seen: fresh(), reaction: null, reacted_at: null },
+    { room_code: 'ABC234', member_id: 'g1', name: 'Asha', last_seen: fresh(), reaction: null, reacted_at: null },
+  ];
+  const ok = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+
+  it('a member is shown by a handle, never by device id, and learns its own', async () => {
+    fakeDb({ rooms: [room()], room_members: members() });
+    const h = await memberHandle('ABC234', 'g1');
+    expect(h).toMatch(/^[0-9a-f]{12}$/);
+    expect(h).not.toBe(await memberHandle('ZZZ999', 'g1'));
+    const out = (await (await get('code=ABC234&member=g1')).json()) as { me: string; people: Array<{ h: string; name: string }>; controls?: unknown };
+    expect(out.me).toBe(h);
+    expect(out.people).toContainEqual({ h, name: 'Asha' });
+    expect(JSON.stringify(out)).not.toContain('host-dev');
+    // The guests' commands are for the host's app only.
+    expect(out.controls).toBeUndefined();
+  });
+
+  it('the host push says whether guests may control playback and who the host is', async () => {
+    const fake = fakeDb({ rooms: [room()], room_members: members() });
+    await post({ action: 'update', code: 'ABC234', hostToken: 'host-secret', song: { id: 's1' }, position: 1, playing: true, guestControl: false, deviceId: 'host-dev' });
+    expect(fake.rows('rooms')[0].jam).toEqual({ guestControl: false, host: await memberHandle('ABC234', 'host-dev') });
+    const out = (await (await get('code=ABC234')).json()) as { room: { guestControl: boolean; hostH: string } };
+    expect(out.room).toMatchObject({ guestControl: false, hostH: await memberHandle('ABC234', 'host-dev') });
+  });
+
+  it('a guest command goes through room_control with the sender’s handle; playback commands need guest control', async () => {
+    const fake = fakeDb({ rooms: [room()], room_members: members() });
+    const sent: unknown[] = [];
+    fake.answer('rpc/room_control', (c) => {
+      sent.push((c.body as { p_cmd: unknown }).p_cmd);
+      return ok(true);
+    });
+    expect(await (await post({ action: 'control', code: 'ABC234', deviceId: 'g1', name: 'Asha', id: 'abcdef123', cmd: 'pause' })).json()).toEqual({ ok: true });
+    expect(await (await post({ action: 'control', code: 'ABC234', deviceId: 'g1', name: 'Asha', id: 'abcdef124', cmd: 'add', song: { id: 's7', title: 'Seven', evil: 1 } })).json()).toEqual({ ok: true });
+    const h = await memberHandle('ABC234', 'g1');
+    expect(sent[0]).toEqual({ id: 'abcdef123', cmd: 'pause', h, by: 'Asha' });
+    expect(sent[1]).toEqual({ id: 'abcdef124', cmd: 'add', h, by: 'Asha', song: { id: 's7', title: 'Seven', subtitle: '', image: '' } });
+    expect((await post({ action: 'control', code: 'ABC234', deviceId: 'g1', id: 'abcdef125', cmd: 'shutdown' })).status).toBe(400);
+    expect((await post({ action: 'control', code: 'ABC234', deviceId: 'g1', id: 'abcdef126', cmd: 'remove' })).status).toBe(400);
+    expect((await post({ action: 'control', code: 'ZZZ999', deviceId: 'g1', id: 'abcdef127', cmd: 'play' })).status).toBe(404);
+    // The host turned guest control off: adding still works, playing does not.
+    fake.rows('rooms')[0].jam = { guestControl: false };
+    expect((await post({ action: 'control', code: 'ABC234', deviceId: 'g1', id: 'abcdef128', cmd: 'next' })).status).toBe(403);
+    expect((await post({ action: 'control', code: 'ABC234', deviceId: 'g1', id: 'abcdef129', cmd: 'add', song: { id: 's8' } })).status).toBe(200);
+    // The host's poll carries them.
+    fake.rows('rooms')[0].controls = sent;
+    const host = (await (await get('code=ABC234&hostToken=host-secret')).json()) as { controls: unknown[] };
+    expect(host.controls).toHaveLength(3);
+  });
+
+  it('the host removes someone: they are no longer shown, counted or heard, and are told', async () => {
+    const fake = fakeDb({ rooms: [room({ jam: { host: await memberHandle('ABC234', 'host-dev') } })], room_members: members() });
+    fake.answer('rpc/room_control', () => ok(true));
+    const h = await memberHandle('ABC234', 'g1');
+    expect((await post({ action: 'kick', code: 'ABC234', hostToken: 'wrong', who: h })).status).toBe(403);
+    expect((await post({ action: 'kick', code: 'ABC234', hostToken: 'host-secret', who: 'not-a-handle' })).status).toBe(400);
+    // The host cannot remove itself.
+    expect((await post({ action: 'kick', code: 'ABC234', hostToken: 'host-secret', who: await memberHandle('ABC234', 'host-dev') })).status).toBe(400);
+    expect(await (await post({ action: 'kick', code: 'ABC234', hostToken: 'host-secret', who: h })).json()).toEqual({ ok: true });
+    expect((fake.rows('rooms')[0].jam as { removed: string[] }).removed).toEqual(['g1']);
+    // A heartbeat after that brings the row back, but not the person.
+    await post({ action: 'heartbeat', code: 'ABC234', deviceId: 'g1', name: 'Asha' });
+    const out = (await (await get('code=ABC234&member=g1')).json()) as { removed?: boolean; memberCount: number; people: Array<{ name: string }> };
+    expect(out.removed).toBe(true);
+    expect(out.memberCount).toBe(1);
+    expect(out.people.map((p) => p.name)).toEqual(['V']);
+    expect((await post({ action: 'control', code: 'ABC234', deviceId: 'g1', id: 'abcdef130', cmd: 'play' })).status).toBe(403);
+    expect((await post({ action: 'say', code: 'ABC234', deviceId: 'g1', name: 'Asha', text: 'hi' })).status).toBe(403);
+  });
+
+  it('a queued song keeps the handle of the guest who added it, and nothing that is not one', async () => {
+    const fake = fakeDb({ rooms: [room()] });
+    const h = await memberHandle('ABC234', 'g1');
+    await post({ action: 'update', code: 'ABC234', hostToken: 'host-secret', song: { id: 's1' }, position: 1, playing: true, queue: [{ song: { id: 'q1' }, by: 'Asha', h }, { song: { id: 'q2' }, by: 'X', h: 'g1' }] });
+    expect(fake.rows('rooms')[0].queue).toEqual([{ song: { id: 'q1' }, by: 'Asha', h }, { song: { id: 'q2' }, by: 'X' }]);
   });
 });

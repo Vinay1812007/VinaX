@@ -15,6 +15,8 @@ const api = vi.hoisted(() => ({
   voteSkip: vi.fn(async () => 1),
   myName: vi.fn(() => 'Me'),
   updateRoom: vi.fn(async (..._a: unknown[]): Promise<string> => 'ok'),
+  sendControl: vi.fn(async (..._a: unknown[]): Promise<string> => 'ok'),
+  removePerson: vi.fn(async (..._a: unknown[]) => true),
   getSong: vi.fn(),
   toast: vi.fn(),
 }));
@@ -37,6 +39,10 @@ const player = vi.hoisted(() => {
     enqueue: (s: { id: string }) => void;
     playAt: (i: number) => void;
     setFollowMode: (v: boolean) => void;
+    next: (manual?: boolean) => void;
+    prev: () => void;
+    removeAt: (i: number) => void;
+    rate: number;
   };
   let state: S;
   const subs = new Set<(s: S) => void>();
@@ -60,6 +66,10 @@ const player = vi.hoisted(() => {
       enqueue: (s: { id: string }) => set({ queue: [...state.queue, s] }),
       playAt: (i: number) => set({ index: i, currentTime: 0 }),
       setFollowMode: (v: boolean) => set({ followMode: v }),
+      next: () => set({ index: Math.min(state.index + 1, state.queue.length - 1), currentTime: 0 }),
+      prev: () => set({ index: Math.max(0, state.index - 1), currentTime: 0 }),
+      removeAt: (i: number) => set({ queue: state.queue.filter((_, n) => n !== i) }),
+      rate: 1,
     };
   };
   reset();
@@ -124,16 +134,20 @@ vi.mock('@/services/audio/engine', () => ({
 vi.mock('@/services/api', () => ({ getSong: api.getSong }));
 vi.mock('@/store/toastStore', () => ({ toast: api.toast }));
 // What the player was told to do with a song a guest taps elsewhere in the app.
-const asks = vi.hoisted(() => ({ fn: null as ((s: unknown) => void) | null }));
+const asks = vi.hoisted(() => ({ fn: null as ((s: unknown) => void) | null, control: null as ((cmd: string) => void) | null }));
 vi.mock('@/store/playerStore', () => ({
   usePlayerStore: { getState: player.getState, subscribe: player.subscribe },
   setRoomAsk: (fn: ((s: unknown) => void) | null) => {
     asks.fn = fn;
   },
+  setRoomControl: (fn: ((cmd: string) => void) | null) => {
+    asks.control = fn;
+  },
+  asRoom: (fn: () => unknown) => fn(),
 }));
 
 import { useTogether } from '@/services/together/session';
-import { addSong, ask, getTrimMs, joinSession, leaveSession, playNow, react, runSession, say, setTrimMs, tapToListen, TRIM_MAX_MS, typing } from './engine';
+import { addSong, ask, canTakeOut, getTrimMs, joinSession, leaveSession, playNow, react, removeFromRoom, runSession, say, setGuestControl, setOnThisPhone, setTrimMs, takeOut, tapToListen, TRIM_MAX_MS, typing } from './engine';
 import { useRoom } from './room';
 
 const song = (id: string, playable = true) => ({ id, title: `Song ${id}`, subtitle: '', images: [], audio: playable ? [{ quality: '320kbps', url: 'u' }] : [] });
@@ -156,6 +170,8 @@ beforeEach(() => {
   // mockClear keeps implementations: restore the defaults a test may override.
   api.updateRoom.mockResolvedValue('ok');
   api.requestSong.mockResolvedValue(true);
+  api.sendControl.mockResolvedValue('ok');
+  api.removePerson.mockResolvedValue(true);
   audio.songId = null;
   audio.position = () => null;
   audio.advancing = true;
@@ -463,7 +479,7 @@ describe('guest', () => {
   it('a song request reports failure honestly', async () => {
     useTogether.getState().begin('guest', 'ABC123');
     api.requestSong.mockResolvedValueOnce(false);
-    expect(await addSong(song('x') as never)).toMatch(/Couldn’t send/);
+    expect(await addSong(song('x') as never)).toMatch(/Couldn’t add/);
   });
 
   it('a song tapped anywhere in the app is asked of the host, once', async () => {
@@ -486,7 +502,7 @@ describe('guest', () => {
     await ask(song('h1') as never);
     await ask(song('q1') as never);
     expect(api.requestSong).toHaveBeenCalledTimes(1);
-    expect(lastToast()).toMatch(/already on its way/);
+    expect(lastToast()).toMatch(/already in the room’s queue/);
     // A request the server refused can be asked again.
     api.requestSong.mockResolvedValueOnce(false);
     await ask(song('y') as never);
@@ -511,7 +527,7 @@ describe('host', () => {
     expect(api.getSong).toHaveBeenCalledWith('g1');
     expect(player.getState().queue.map((s) => s.id)).toEqual(['g1']);
     // The host is told who asked, and can bring the song on at once.
-    const told = api.toast.mock.calls.find(([m]) => m === 'Ravi asked for “Song g1”');
+    const told = api.toast.mock.calls.find(([m]) => m === 'Ravi added “Song g1”');
     expect(told?.[1]?.action?.label).toBe('Play now');
     // The next poll repeats the request (until the server drops it): no double add.
     await vi.advanceTimersByTimeAsync(4000);
@@ -895,5 +911,169 @@ describe('1.13 — the live line', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(api.getRoom.mock.calls.length).toBe(polls + 1);
     stopHost();
+  });
+});
+
+describe('a jam (1.14)', () => {
+  const lastPush = () => api.updateRoom.mock.calls[api.updateRoom.mock.calls.length - 1];
+  const H = 'aaaaaaaaaaaa';
+  const G = 'bbbbbbbbbbbb';
+  const jamRoom = (over: Record<string, unknown> = {}, extra: Record<string, unknown> = {}) => ({ ...room({ hostH: H, guestControl: true, ...over }), people: [{ h: H, name: 'Asha' }, { h: G, name: 'Ravi' }], me: G, ...extra });
+  const cmd = (c: Record<string, unknown>) => ({ h: G, by: 'Ravi', at: new Date().toISOString(), ...c });
+
+  it('the host carries out a guest’s pause and skip once, says who did it, and ignores a stale one', async () => {
+    player.set({ queue: [song('a'), song('b'), song('c')], index: 0, isPlaying: true });
+    const old = new Date(Date.now() - 60_000).toISOString();
+    api.getRoom.mockResolvedValue({ ...room(), me: H, controls: [cmd({ id: 'c1aaaa', cmd: 'pause' }), cmd({ id: 'c2aaaa', cmd: 'next', at: old })] });
+    useTogether.getState().begin('host', 'ABC123');
+    const stop = runSession('host', 'ABC123');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(player.getState().isPlaying).toBe(false);
+    expect(player.getState().index).toBe(0);
+    expect(api.toast).toHaveBeenCalledWith('Ravi paused', expect.anything());
+    // The next poll lists the same command again: it is not done twice.
+    player.set({ isPlaying: true });
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(player.getState().isPlaying).toBe(true);
+    // The host says it is a jam host: every push carries the setting.
+    expect(lastPush()?.[7]).toEqual({ guestControl: true });
+    stop();
+  });
+
+  it('with guest control off the host does not move the music for a guest, but still takes their songs', async () => {
+    player.set({ queue: [song('a')], index: 0, isPlaying: true });
+    api.getSong.mockResolvedValue(song('n1'));
+    api.getRoom.mockResolvedValue({ ...room(), me: H, controls: [cmd({ id: 'c3aaaa', cmd: 'pause' }), cmd({ id: 'c4aaaa', cmd: 'add', song: { id: 'n1', title: 'New' } })] });
+    useTogether.getState().begin('host', 'ABC123');
+    setGuestControl(false);
+    const stop = runSession('host', 'ABC123');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(player.getState().isPlaying).toBe(true);
+    expect(player.getState().queue.map((s) => s.id)).toEqual(['a', 'n1']);
+    // Up next says who added it, by handle, so they can take it out again.
+    expect(lastPush()?.[4]).toEqual([{ song: song('n1'), by: 'Ravi', h: G }]);
+    expect(lastPush()?.[7]).toEqual({ guestControl: false });
+    stop();
+  });
+
+  it('a guest takes out only a song they added; the host any', async () => {
+    player.set({ queue: [song('a'), song('mine'), song('theirs')], index: 0, isPlaying: true });
+    api.getSong.mockImplementation(async (id: string) => song(id));
+    api.getRoom.mockResolvedValue({ ...room(), me: H, controls: [cmd({ id: 'c5aaaa', cmd: 'add', song: { id: 'mine2', title: 'M' } })] });
+    useTogether.getState().begin('host', 'ABC123');
+    const stop = runSession('host', 'ABC123');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(player.getState().queue.map((s) => s.id)).toEqual(['a', 'mine', 'theirs', 'mine2']);
+    // Ravi asks to take out a song he did not add, then his own.
+    api.getRoom.mockResolvedValue({ ...room(), me: H, controls: [cmd({ id: 'c6aaaa', cmd: 'remove', songId: 'theirs' }), cmd({ id: 'c7aaaa', cmd: 'remove', songId: 'mine2' })] });
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(player.getState().queue.map((s) => s.id)).toEqual(['a', 'mine', 'theirs']);
+    // The host takes out anything.
+    expect(canTakeOut({ song: song('theirs') as never, by: null })).toBe(true);
+    takeOut({ song: song('theirs') as never, by: null });
+    expect(player.getState().queue.map((s) => s.id)).toEqual(['a', 'mine']);
+    stop();
+  });
+
+  it('a guest’s play / pause / skip goes to the room, and the host is told to look now', async () => {
+    api.getRoom.mockResolvedValue({ ...jamRoom(), live: { url: 'wss://abcdefgh.supabase.co/realtime/v1', key: 'sb_publishable_test' } });
+    api.getSong.mockResolvedValue(song('h1'));
+    useTogether.getState().begin('guest', 'ABC123');
+    const stop = runSession('guest', 'ABC123');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(useTogether.getState()).toMatchObject({ guestControl: true, hostH: H, me: G, hostPlaying: true });
+    expect(asks.control).toBeTypeOf('function');
+    asks.control?.('toggle');
+    await vi.advanceTimersByTimeAsync(0);
+    // The host is playing: a toggle is a pause for everyone.
+    expect(api.sendControl).toHaveBeenCalledWith('ABC123', expect.any(String), 'pause');
+    expect(wire.lines[wire.lines.length - 1]?.sent.some((m) => m[0] === 'poke')).toBe(true);
+    asks.control?.('next');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(api.sendControl).toHaveBeenLastCalledWith('ABC123', expect.any(String), 'next');
+    stop();
+  });
+
+  it('a guest whose phone is out of step taps play: this phone starts, the room is not paused', async () => {
+    api.getRoom.mockResolvedValue(jamRoom());
+    api.getSong.mockResolvedValue(song('h1'));
+    useTogether.getState().begin('guest', 'ABC123');
+    const stop = runSession('guest', 'ABC123');
+    await vi.advanceTimersByTimeAsync(0);
+    // The browser held the audio: the host plays, this phone does not.
+    player.set({ isPlaying: false });
+    asks.control?.('toggle');
+    expect(api.sendControl).not.toHaveBeenCalled();
+    expect(player.getState().isPlaying).toBe(true);
+    stop();
+  });
+
+  it('with guest control off a guest’s button sends nothing and says who is in charge', async () => {
+    api.getRoom.mockResolvedValue(jamRoom({ guestControl: false }));
+    useTogether.getState().begin('guest', 'ABC123');
+    const stop = runSession('guest', 'ABC123');
+    await vi.advanceTimersByTimeAsync(0);
+    asks.control?.('toggle');
+    expect(api.sendControl).not.toHaveBeenCalled();
+    expect(lastToast()).toMatch(/Asha is in charge of playback/);
+    stop();
+  });
+
+  it('a guest’s song goes straight into a jam host’s queue; an older host still gets a request', async () => {
+    api.getRoom.mockResolvedValue(jamRoom());
+    useTogether.getState().begin('guest', 'ABC123');
+    let stop = runSession('guest', 'ABC123');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await addSong(song('x') as never)).toBe('Added “Song x” to the queue');
+    expect(api.sendControl).toHaveBeenCalledWith('ABC123', expect.any(String), 'add', { song: expect.objectContaining({ id: 'x' }) });
+    expect(api.requestSong).not.toHaveBeenCalled();
+    stop();
+    // A host app from before 1.14 names no handle.
+    api.getRoom.mockResolvedValue(room());
+    useTogether.getState().begin('guest', 'ABC123');
+    stop = runSession('guest', 'ABC123');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(useTogether.getState().guestControl).toBe(false);
+    await addSong(song('y') as never);
+    expect(api.requestSong).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it('a guest the host removed leaves the session and is told', async () => {
+    api.getRoom.mockResolvedValue(jamRoom({}, { removed: true }));
+    useTogether.getState().begin('guest', 'ABC123');
+    const stop = runSession('guest', 'ABC123');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(useTogether.getState().mode).toBe('idle');
+    expect(lastToast()).toMatch(/Asha removed you/);
+    stop();
+  });
+
+  it('the host removes someone, never itself', async () => {
+    useTogether.getState().begin('host', 'ABC123');
+    useTogether.getState().patch({ me: H, people: [{ h: H, name: 'Asha' }, { h: G, name: 'Ravi' }] });
+    await removeFromRoom(H, 'Asha');
+    expect(api.removePerson).not.toHaveBeenCalled();
+    await removeFromRoom(G, 'Ravi');
+    expect(api.removePerson).toHaveBeenCalledWith('ABC123', G);
+    expect(useTogether.getState().people.map((p) => p.name)).toEqual(['Asha']);
+  });
+
+  it('“play on this phone” off: only the host’s speaker plays and this phone stays quiet as the remote', async () => {
+    api.getRoom.mockResolvedValue(jamRoom());
+    api.getSong.mockResolvedValue(song('h1'));
+    useTogether.getState().begin('guest', 'ABC123');
+    const stop = runSession('guest', 'ABC123');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(player.getState().isPlaying).toBe(true);
+    setOnThisPhone(false);
+    expect(player.getState().isPlaying).toBe(false);
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(player.getState().isPlaying).toBe(false);
+    // Back on (from a tap): the host's song plays here again.
+    setOnThisPhone(true);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(player.getState().isPlaying).toBe(true);
+    stop();
   });
 });

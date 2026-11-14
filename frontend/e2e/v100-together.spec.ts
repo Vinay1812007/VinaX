@@ -66,14 +66,23 @@ function roomSong(raw: unknown): Record<string, unknown> | null {
   return out;
 }
 const roomQueue = (raw: unknown): unknown[] =>
-  (Array.isArray(raw) ? (raw as Array<{ song?: unknown; by?: unknown }>) : []).map((t) => ({ song: roomSong(t.song), by: t.by ?? null })).filter((t) => t.song);
+  (Array.isArray(raw) ? (raw as Array<{ song?: unknown; by?: unknown; h?: unknown }>) : []).map((t) => ({ song: roomSong(t.song), by: t.by ?? null, ...(typeof t.h === 'string' ? { h: t.h } : {}) })).filter((t) => t.song);
+/** 1.14 — how the room shows a member (the real server: 12 hex of SHA-256(code:deviceId)). */
+const handleOf = (id: string): string => {
+  let x = 0;
+  for (const c of id) x = (x * 31 + c.charCodeAt(0)) >>> 0;
+  return x.toString(16).padStart(12, '0').slice(-12);
+};
 
 interface Room { host_name: string; song: unknown; position: number; playing: boolean; updated_at: string; queue: unknown[]; requests: Array<{ song: { id: string }; by: string }>; messages: Array<{ by: string; text: string; at: string; id?: string }> }
 /** Where the stand-in live line is (what /api/room's `live` names). */
 const LINE = { url: 'wss://e2e.supabase.co/realtime/v1', key: 'sb_publishable_e2e' };
-function roomServer(opts: { line?: boolean; pushDelayMs?: number } = {}) {
+function roomServer(opts: { line?: boolean; pushDelayMs?: number; jam?: boolean } = {}) {
   const rooms = new Map<string, Room>();
   const members = new Map<string, Map<string, number>>();
+  /** 1.14 — the jam (only with `jam`, so the other tests keep a pre-1.14 server): names, settings, commands, who was removed. */
+  const names = new Map<string, string>();
+  const jam = { guestControl: true, host: null as string | null, controls: [] as Array<Record<string, unknown>>, removed: new Set<string>() };
   /** 1.13 — the phones on the room's live line: what one says, the others hear. */
   const sockets = new Set<{ send(data: string): void }>();
   return {
@@ -86,8 +95,19 @@ function roomServer(opts: { line?: boolean; pushDelayMs?: number } = {}) {
       if (method === 'GET') {
         const code = url.searchParams.get('code') ?? '';
         const r = rooms.get(code) ?? null;
-        const live = [...(members.get(code)?.values() ?? [])].filter((t) => Date.now() - t < 12_000).length;
-        return { room: r, memberCount: live, reactions: [], now: Date.now(), took: 0, ...(opts.line ? { live: LINE } : {}) };
+        const here = [...(members.get(code)?.entries() ?? [])].filter(([id, t]) => Date.now() - t < 12_000 && !jam.removed.has(id)).map(([id]) => id);
+        const live = here.length;
+        const base = { room: r, memberCount: live, reactions: [], now: Date.now(), took: 0, ...(opts.line ? { live: LINE } : {}) };
+        if (!opts.jam || !r) return base;
+        const member = url.searchParams.get('member') ?? '';
+        return {
+          ...base,
+          room: { ...r, guestControl: jam.guestControl, hostH: jam.host },
+          people: here.map((id) => ({ h: handleOf(id), name: names.get(id) ?? 'Listener' })),
+          me: handleOf(member),
+          ...(jam.removed.has(member) ? { removed: true } : {}),
+          ...(url.searchParams.get('hostToken') === 'tok' ? { controls: jam.controls } : {}),
+        };
       }
       const code = String(body?.code ?? '');
       switch (body?.action) {
@@ -102,6 +122,8 @@ function roomServer(opts: { line?: boolean; pushDelayMs?: number } = {}) {
           // 1.12.11: a host that knows the server's clock says when its position was read.
           const at = typeof body.at === 'number' ? Math.min(Date.now() + 100, Math.max(Date.now() - 5000, body.at)) : Date.now();
           Object.assign(r, { song: roomSong(body.song), position: body.position, playing: body.playing, queue: roomQueue(body.queue), updated_at: new Date(Math.round(at)).toISOString() });
+          if (opts.jam && typeof body.guestControl === 'boolean') jam.guestControl = body.guestControl;
+          if (opts.jam && typeof body.deviceId === 'string') jam.host = handleOf(body.deviceId);
           r.requests = r.requests.filter((t) => !consumed.includes(t.song.id));
           return { ok: true, took: 0, stamps: true };
         }
@@ -115,6 +137,22 @@ function roomServer(opts: { line?: boolean; pushDelayMs?: number } = {}) {
         case 'heartbeat': {
           if (!members.has(code)) members.set(code, new Map());
           members.get(code)!.set(String(body.deviceId), Date.now());
+          names.set(String(body.deviceId), String(body.name ?? ''));
+          return { ok: true };
+        }
+        case 'control': {
+          const id = String(body.deviceId);
+          if (!opts.jam || !rooms.has(code)) return { __status: 404 };
+          if (jam.removed.has(id)) return { __status: 403, error: 'removed' };
+          if (['play', 'pause', 'next', 'prev'].includes(String(body.cmd)) && !jam.guestControl) return { __status: 403, error: 'no_control' };
+          const song = body.song as { id: string; title?: string } | undefined;
+          jam.controls.push({ id: body.id, cmd: body.cmd, h: handleOf(id), by: String(body.name ?? ''), at: new Date().toISOString(), ...(song ? { song: { id: song.id, title: song.title ?? '' } } : {}), ...(body.songId ? { songId: body.songId } : {}) });
+          return { ok: true };
+        }
+        case 'kick': {
+          const who = [...(members.get(code)?.keys() ?? [])].find((id) => handleOf(id) === body.who);
+          if (!who) return { __status: 404 };
+          jam.removed.add(who);
           return { ok: true };
         }
         case 'say': {
@@ -297,14 +335,14 @@ test('a guest follows the host across pages, in sync, and its request is playabl
   expect((await audioState(guest))?.src ?? '').not.toContain('/t-g2.wav');
   // The host is told who asked (the song by the catalogue's own name for it)
   // and can bring it on at once: everyone then hears it.
-  await expect(host.getByText('Ravi asked for “Song g2”')).toBeVisible({ timeout: 10_000 });
+  await expect(host.getByText('Ravi added “Song g2”')).toBeVisible({ timeout: 10_000 });
   await host.getByRole('button', { name: 'Play now' }).click();
   await expect.poll(async () => (await audioState(host))?.src ?? '', { timeout: 10_000 }).toContain('/t-g2.wav');
   await expect.poll(async () => (await audioState(guest))?.src ?? '', { timeout: 15_000 }).toContain('/t-g2.wav');
 
   // A guest request reaches the host as a full, playable song.
   await guest.goto('/together');
-  await guest.getByRole('searchbox', { name: 'Add a song for everyone' }).fill('pick');
+  await guest.getByRole('searchbox', { name: 'Add to the queue' }).fill('pick');
   await guest.getByRole('button', { name: 'Add Guest Pick' }).click();
   await expect
     .poll(async () => host.evaluate(() => JSON.parse(localStorage.getItem('vinax.player.v1') ?? '{}')?.state?.queue?.map((s: { id: string; audio?: unknown[] }) => `${s.id}:${s.audio?.length ?? 0}`) ?? []), { timeout: 15_000 })
@@ -415,6 +453,74 @@ test('with the live line, a pause, a chat line, "typing" and a reaction reach th
   for (let i = 0; i < 10; i += 1) await host.getByRole('button', { name: 'React 🎉' }).click();
   await expect(guest.locator('.vx-lt-burst')).toBeVisible({ timeout: 3000 });
   await expect(host.locator('.vx-lt-burst')).toBeVisible();
+
+  await host.context().close();
+  await guest.context().close();
+});
+
+test('a jam: the guest pauses, plays, adds, takes out and skips for everyone; the host keeps control or removes them', async ({ browser, baseURL }) => {
+  const base = baseURL!;
+  const server = roomServer({ jam: true });
+  const host = await open(browser, base, server, 'Asha', [appSong(base, 'a', 'Song A'), appSong(base, 'b', 'Song B')]);
+  const guest = await open(browser, base, server, 'Ravi', []);
+  const hostQueue = () => host.evaluate(() => JSON.parse(localStorage.getItem('vinax.player.v1') ?? '{}')?.state?.queue?.map((s: { id: string }) => s.id) ?? []);
+
+  await host.goto('/together');
+  await host.getByRole('button', { name: 'Start a session' }).click();
+  await expect(host.locator('.vx-lt-code')).toHaveText('ABC123');
+  await host.getByRole('button', { name: 'Play for everyone' }).click();
+  await expect.poll(async () => (await audioState(host))?.paused, { timeout: 10_000 }).toBe(false);
+
+  await guest.goto('/together?code=ABC123');
+  await expect(guest.locator('.vx-lt-status')).toBeVisible({ timeout: 10_000 });
+  await startListeningIfAsked(guest);
+  await expect.poll(async () => (await audioState(guest))?.paused, { timeout: 15_000 }).toBe(false);
+
+  // Everyone sees who is here, with the host marked.
+  const people = guest.locator('section[aria-labelledby="vx-lt-people"]');
+  await expect(people).toContainText('Asha', { timeout: 10_000 });
+  await expect(people.locator('.vx-lt-tag').first()).toHaveText('Host');
+
+  // The guest pauses the room: the HOST's music stops, and so does the guest's.
+  await guest.getByRole('button', { name: 'Pause for everyone' }).click();
+  await expect.poll(async () => (await audioState(host))?.paused, { timeout: 10_000 }).toBe(true);
+  await expect.poll(async () => (await audioState(guest))?.paused, { timeout: 10_000 }).toBe(true);
+  await expect(host.getByText('Ravi paused')).toBeVisible();
+  await guest.getByRole('button', { name: 'Play for everyone' }).click();
+  await expect.poll(async () => (await audioState(host))?.paused, { timeout: 10_000 }).toBe(false);
+
+  // A song the guest adds goes straight into the queue, with their name on it…
+  await guest.getByRole('searchbox', { name: 'Add to the queue' }).fill('pick');
+  await guest.getByRole('button', { name: 'Add Guest Pick' }).click();
+  await expect(guest.getByText('Added “Guest Pick” to the queue')).toBeVisible({ timeout: 10_000 });
+  await expect.poll(hostQueue, { timeout: 15_000 }).toContain('g1');
+  const hostRow = host.locator('section[aria-label="Up next"] li', { hasText: 'Song g1' });
+  await expect(hostRow.locator('.vx-lt-added .truncate-1')).toHaveText('Ravi', { timeout: 10_000 });
+  const guestRow = guest.locator('section[aria-label="Up next"] li', { hasText: 'Song g1' });
+  await expect(guestRow.locator('.vx-lt-added .truncate-1')).toHaveText('You', { timeout: 10_000 });
+  await guest.screenshot({ path: test.info().outputPath('jam-guest.png'), fullPage: true });
+  await host.screenshot({ path: test.info().outputPath('jam-host.png'), fullPage: true });
+  // …and they can take it out again; a song they did not add has no cross.
+  await expect(guest.locator('section[aria-label="Up next"] li', { hasText: 'Song B' }).getByRole('button', { name: /out of the queue/ })).toHaveCount(0);
+  await guestRow.getByRole('button', { name: 'Take Song g1 out of the queue' }).click();
+  await expect.poll(hostQueue, { timeout: 15_000 }).not.toContain('g1');
+
+  // The guest skips for everyone.
+  await guest.getByRole('button', { name: 'Next song' }).click();
+  await expect.poll(async () => (await audioState(host))?.src ?? '', { timeout: 10_000 }).toContain('/t-b.wav');
+  await expect.poll(async () => (await audioState(guest))?.src ?? '', { timeout: 15_000 }).toContain('/t-b.wav');
+
+  // The host keeps playback to itself: the guest's buttons go quiet and a vote to skip comes back.
+  await host.getByRole('switch', { name: 'Guests can control playback' }).click();
+  await expect(guest.getByRole('button', { name: /for everyone$/ })).toBeDisabled({ timeout: 10_000 });
+  await expect(guest.getByRole('button', { name: 'Vote to skip this song' })).toBeVisible();
+
+  // The host removes the guest: they are out, and told.
+  await host.getByRole('button', { name: 'Remove Ravi from the session' }).click();
+  await host.getByRole('button', { name: 'Remove', exact: true }).click();
+  await expect(guest.getByText('Asha removed you from this session')).toBeVisible({ timeout: 10_000 });
+  await expect(guest.getByRole('button', { name: 'Start a session' })).toBeVisible();
+  await expect(host.locator('section[aria-labelledby="vx-lt-people"]')).not.toContainText('Ravi', { timeout: 10_000 });
 
   await host.context().close();
   await guest.context().close();
@@ -625,7 +731,7 @@ for (const size of [{ name: 'a computer', width: 1280, height: 860 }, { name: 'a
     await host.getByRole('button', { name: 'Show me around' }).click();
     const asHost = await walkTour(host);
     // A host has Share invite and no fine-tune.
-    expect(titles(asHost)).toEqual(['You are live', 'Room code and QR', 'Share the invite', 'React and skip', 'Chat', 'Add a song', 'Who is listening', 'End or leave']);
+    expect(titles(asHost)).toEqual(['You are live', 'Room code and QR', 'Share the invite', 'Play, pause and skip', 'React', 'Chat', 'Add a song', 'Who is here', 'End or leave']);
     expect(asHost.every((s) => s.anchor === 'found')).toBe(true);
     // The tour ended nothing, and is now a quiet replay button.
     await expect(host.locator('.vx-lt-code')).toHaveText('ABC123');
@@ -637,7 +743,7 @@ for (const size of [{ name: 'a computer', width: 1280, height: 860 }, { name: 'a
     await guest.getByRole('button', { name: 'Show me around' }).click();
     const asGuest = await walkTour(guest);
     // A guest has the fine-tune and no Share invite.
-    expect(titles(asGuest)).toEqual(['You are live', 'Room code and QR', 'Fine-tune this phone', 'React and skip', 'Chat', 'Add a song', 'Who is listening', 'End or leave']);
+    expect(titles(asGuest)).toEqual(['You are live', 'Room code and QR', 'Play, pause and skip', 'Fine-tune this phone', 'React', 'Chat', 'Add a song', 'Who is here', 'End or leave']);
     expect(asGuest.every((s) => s.anchor === 'found')).toBe(true);
     await expect(guest.getByRole('button', { name: 'Leave session' })).toBeVisible();
 

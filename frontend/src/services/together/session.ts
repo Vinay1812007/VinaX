@@ -15,7 +15,7 @@
  */
 import { create } from 'zustand';
 import type { Song } from '@/types';
-import type { RoomMessage, RoomTrack } from './index';
+import type { RoomMessage, RoomPerson, RoomTrack } from './index';
 
 export type TogetherMode = 'idle' | 'host' | 'guest';
 export type TogetherStatus = 'connecting' | 'live' | 'reconnecting' | 'host-away';
@@ -43,6 +43,18 @@ interface TogetherState {
   messages: RoomMessage[];
   skipVotes: number;
   played: Song[];
+  /**
+   * 1.14 — the jam. Guests may play, pause and skip (the host decides); who
+   * is here by handle, this device's handle and the host's; and, for a guest,
+   * whether the music plays on this phone or only on the host's speaker.
+   */
+  guestControl: boolean;
+  people: RoomPerson[];
+  me: string | null;
+  hostH: string | null;
+  onThisPhone: boolean;
+  /** Guest: whether the host's music is playing (this phone may be quiet as the remote). */
+  hostPlaying: boolean;
   begin(mode: Exclude<TogetherMode, 'idle'>, code: string): void;
   patch(p: Partial<Omit<TogetherState, 'begin' | 'patch' | 'reset'>>): void;
   reset(): void;
@@ -87,6 +99,12 @@ const EMPTY = {
   messages: [] as RoomMessage[],
   skipVotes: 0,
   played: [] as Song[],
+  guestControl: true,
+  people: [] as RoomPerson[],
+  me: null as string | null,
+  hostH: null as string | null,
+  onThisPhone: true,
+  hostPlaying: false,
 };
 
 export const useTogether = create<TogetherState>((set) => ({

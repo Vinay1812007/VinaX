@@ -77,6 +77,28 @@ async function post(body: Record<string, unknown>): Promise<Record<string, unkno
 export interface RoomTrack {
   song: Song;
   by: string | null;
+  /** 1.14 — the handle of the guest who added it: they may take it out again. */
+  h?: string | null;
+}
+
+/** 1.14 — someone in the room, by the handle the server shows them by. */
+export interface RoomPerson {
+  h: string;
+  name: string;
+}
+
+/** 1.14 — what a guest can ask the host's app to do. */
+export type JamCmd = 'play' | 'pause' | 'next' | 'prev' | 'add' | 'remove';
+
+/** A guest's command, as the host's poll lists it. */
+export interface RoomControl {
+  id: string;
+  cmd: JamCmd;
+  h: string;
+  by: string;
+  at: string;
+  song?: Song;
+  songId?: string;
 }
 
 export interface RoomMessage { by: string; text: string; at: string; id?: string }
@@ -97,6 +119,9 @@ export interface RoomState {
   /** 15.0 — the room's short chat and how many voted to skip the current song. */
   messages?: RoomMessage[];
   skipVotes?: number;
+  /** 1.14 — guests may play, pause and skip; and the host's handle (null: a host app older than 1.14). */
+  guestControl?: boolean;
+  hostH?: string | null;
 }
 
 export type CreateRoomResult =
@@ -162,6 +187,7 @@ export async function updateRoom(
   queue: RoomTrack[] = [],
   consumedIds: string[] = [],
   at?: number,
+  jam?: { guestControl: boolean },
 ): Promise<UpdateResult> {
   try {
     const stamped = serverStamps && typeof at === 'number' && Number.isFinite(at);
@@ -170,7 +196,7 @@ export async function updateRoom(
     const res = await fetch(BASE, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'update', code, hostToken: getHostToken(code), song, position: lands, playing, queue, consumedIds, ...(stamped ? { at } : {}) }),
+      body: JSON.stringify({ action: 'update', code, hostToken: getHostToken(code), song, position: lands, playing, queue, consumedIds, ...(stamped ? { at } : {}), ...(jam ? { guestControl: jam.guestControl, deviceId: me().deviceId } : {}) }),
     });
     if (res.ok) {
       const rtt = performance.now() - sent;
@@ -199,6 +225,38 @@ export function isHostOf(code: string): boolean {
  *  when the server stored it — the UI used to say "Sent" either way. */
 export async function requestSong(code: string, song: Song): Promise<boolean> {
   const r = await post({ action: 'request', code, song, by: me().name });
+  return r?.ok === true;
+}
+
+export type ControlResult = 'ok' | 'no_control' | 'removed' | 'gone' | 'error';
+
+/**
+ * 1.14 — a guest plays, pauses, skips, adds or takes out a song. The host's
+ * app carries it out (it owns the music); `id` names the command so it is
+ * done once however it arrives.
+ */
+export async function sendControl(code: string, id: string, cmd: JamCmd, extra: { song?: Song; songId?: string } = {}): Promise<ControlResult> {
+  try {
+    const m = me();
+    const res = await fetch(BASE, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'control', code, deviceId: m.deviceId, name: m.name, id, cmd, ...extra }),
+    });
+    if (res.ok) return 'ok';
+    const r = (await res.json().catch(() => null)) as { error?: string } | null;
+    if (r?.error === 'no_control') return 'no_control';
+    if (r?.error === 'removed') return 'removed';
+    if (res.status === 404) return 'gone';
+    return 'error';
+  } catch {
+    return 'error';
+  }
+}
+
+/** 1.14 — host only: take someone out of the room (by handle). */
+export async function removePerson(code: string, who: string): Promise<boolean> {
+  const r = await post({ action: 'kick', code, hostToken: getHostToken(code), who });
   return r?.ok === true;
 }
 
@@ -276,6 +334,12 @@ export interface RoomPoll {
   took?: number;
   /** 1.13 — where the room's live line is (features/together/live.ts), when the server has one. */
   live?: unknown;
+  /** 1.14 — who is here (by handle), this device's handle, and whether the host removed it. */
+  people?: RoomPerson[];
+  me?: string;
+  removed?: boolean;
+  /** 1.14 — host only: the guests' commands. */
+  controls?: RoomControl[];
   /** 10.0 — client-measured round trip of this poll, and when it landed
    *  (performance.now()), so a follower can project the host's position. */
   rttMs?: number;
@@ -292,7 +356,9 @@ export async function getRoom(code: string): Promise<RoomPoll | null> {
     const hostToken = getHostToken(code);
     const auth = hostToken ? `&hostToken=${encodeURIComponent(hostToken)}` : '';
     const sent = performance.now();
-    const res = await fetch(`${BASE}?code=${encodeURIComponent(code)}${auth}`, { cache: 'no-store' });
+    // 1.14 — who is asking: the answer says this device's handle, and whether the host removed it.
+    const who = `&member=${encodeURIComponent(me().deviceId)}`;
+    const res = await fetch(`${BASE}?code=${encodeURIComponent(code)}${auth}${who}`, { cache: 'no-store' });
     if (!res.ok) return null;
     const body = (await res.json()) as RoomPoll;
     const receivedAt = performance.now();

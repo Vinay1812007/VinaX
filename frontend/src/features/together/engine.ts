@@ -36,6 +36,14 @@
  * it: the poll is the truth, the line is the shortcut. A poll that is older
  * than what the line just said is not allowed to undo it.
  *
+ * 1.14 — a jam, like Spotify's. Everyone adds songs straight to the shared
+ * queue (no asking), and takes out what they added; guests play, pause and
+ * skip for everyone unless the host turns that off; the host can remove
+ * someone; and a guest can let only the host's speaker play, with this phone
+ * as the remote. The host's app still owns the music: a guest's command goes
+ * to the server (which checks who sent it), the host's app reads it at once
+ * (the guest pokes it on the live line) and does it, and everyone follows.
+ *
  * The room only NAMES a song (id, title, artwork): the server keeps no stream
  * URLs. So a guest looks the host's song up in the catalogue before playing
  * it, exactly as the host does for a guest's request. Guests used to hand the
@@ -54,15 +62,21 @@ import {
   leaveRoomBeacon,
   myName,
   REACTION_EMOJI,
+  removePerson,
   requestSong,
   sayInRoom,
+  sendControl,
   sendReaction,
   updateRoom,
   voteSkip,
+  type ControlResult,
+  type JamCmd,
+  type RoomControl,
+  type RoomPoll,
   type RoomTrack,
 } from '@/services/together';
 import { useTogether } from '@/services/together/session';
-import { setRoomAsk, usePlayerStore } from '@/store/playerStore';
+import { asRoom, setRoomAsk, setRoomControl, usePlayerStore, type RoomCmd } from '@/store/playerStore';
 import { toast } from '@/store/toastStore';
 import { bestImage } from '@/utils/images';
 import type { Song } from '@/types';
@@ -245,11 +259,13 @@ function typingStopped(): void {
   line?.send('typing', { by: myName(), on: false });
 }
 
-/** 15.0 — vote to skip what is playing. The host simply skips. */
+/** 15.0 — vote to skip what is playing. The host simply skips; so does a guest
+ *  while the host lets guests control playback (1.14). */
 export async function voteToSkip(): Promise<void> {
   const st = useTogether.getState();
   if (!st.code) return;
   if (st.mode === 'host') { usePlayerStore.getState().next(true); return; }
+  if (st.guestControl) { control('next'); return; }
   const song = st.hostSong;
   if (!song) return;
   const n = await voteSkip(st.code, song.id);
@@ -302,12 +318,26 @@ async function fullSong(stub: Song): Promise<Song | null> {
   }
 }
 
+/** Host: push the room's state now (set while hosting). */
+let hostPush: (() => void) | null = null;
+/** Host: read the room now (set while hosting). */
+let hostPoll: (() => void) | null = null;
+
+/** A guest's command older than this (ms, server clock) is not carried out: a host that reloads must not replay a pause. */
+const CONTROL_FRESH_MS = 10_000;
+/** …a song a guest added stays good for longer: it is added once whenever it is read. */
+const ADD_FRESH_MS = 90_000;
+
+/** Who added a song to the queue, and their handle (they may take it out again). */
+const addedBy = new Map<string, { by: string; h: string | null }>();
+
 function runHost(code: string): () => void {
   let alive = true;
   // The server's clock, from the host's own polls: every push says at which
   // server moment its position was read.
   const server = new ServerClock();
-  const requestedBy = new Map<string, string>();
+  addedBy.clear();
+  const done = new Set<string>();
   const consumed = new Set<string>();
   const adopting = new Set<string>();
   let inFlight = false;
@@ -315,7 +345,10 @@ function runHost(code: string): () => void {
 
   const upNext = (): RoomTrack[] => {
     const s = usePlayerStore.getState();
-    return s.queue.slice(s.index + 1, s.index + 9).map((sg) => ({ song: sg, by: requestedBy.get(sg.id) ?? null }));
+    return s.queue.slice(s.index + 1, s.index + 9).map((sg) => {
+      const who = addedBy.get(sg.id);
+      return { song: sg, by: who?.by ?? null, ...(who?.h ? { h: who.h } : {}) };
+    });
   };
 
   // One push in flight at a time; a change during it schedules exactly one more.
@@ -338,7 +371,7 @@ function runHost(code: string): () => void {
     inFlight = true;
     const up = upNext();
     useTogether.getState().patch({ queue: up });
-    const r = await updateRoom(code, s.queue[s.index] ?? null, position, s.isPlaying, up, [...consumed], at);
+    const r = await updateRoom(code, s.queue[s.index] ?? null, position, s.isPlaying, up, [...consumed], at, { guestControl: useTogether.getState().guestControl });
     inFlight = false;
     if (!alive) return;
     if (r === 'gone') {
@@ -422,10 +455,66 @@ function runHost(code: string): () => void {
       toast(`Couldn’t add “${t.song.title}” from ${who} — it isn’t available`);
       return;
     }
-    requestedBy.set(song.id, who);
-    usePlayerStore.getState().enqueue(song);
+    addedBy.set(song.id, { by: who, h: t.h ?? null });
+    usePlayerStore.getState().enqueue(song, { quiet: true });
     // The song is in Up next; the host can also bring it on now.
-    toast(`${who} asked for “${song.title}”`, { image: bestImage(song.images, 100), duration: 8000, action: { label: 'Play now', onClick: () => playNow(song.id) } });
+    toast(`${who} added “${song.title}”`, { image: bestImage(song.images, 100), duration: 8000, action: { label: 'Play now', onClick: () => playNow(song.id) } });
+  };
+
+  /** 1.14 — a guest's command, carried out once. */
+  const carryOut = async (c: RoomControl, serverNow: number | undefined): Promise<void> => {
+    if (!c || typeof c.id !== 'string' || done.has(c.id)) return;
+    done.add(c.id);
+    const age = typeof serverNow === 'number' ? serverNow - Date.parse(c.at) : 0;
+    if (!Number.isFinite(age) || age > (c.cmd === 'add' ? ADD_FRESH_MS : CONTROL_FRESH_MS)) return;
+    const st = usePlayerStore.getState();
+    const who = c.by || 'Someone';
+    if (c.cmd === 'add' && c.song?.id) {
+      const stub = c.song;
+      const upcoming = (): boolean => {
+        const p = usePlayerStore.getState();
+        return p.queue.slice(p.index).some((x) => x.id === stub.id);
+      };
+      if (upcoming()) return;
+      const song = await fullSong(stub);
+      if (!alive || upcoming()) return;
+      if (!song) {
+        toast(`Couldn’t add “${stub.title}” from ${who} — it isn’t available`);
+        return;
+      }
+      // The player keeps one copy of a song, played ones included: one that has
+      // already played this session is not added again, and the host is told so.
+      if (usePlayerStore.getState().queue.some((x) => x.id === song.id)) {
+        toast(`${who} asked for “${song.title}” again — it has already played`, { key: `lt-add-${song.id}` });
+        return;
+      }
+      addedBy.set(song.id, { by: who, h: c.h });
+      usePlayerStore.getState().enqueue(song, { quiet: true });
+      toast(`${who} added “${song.title}”`, { image: bestImage(song.images, 100), duration: 6000, key: `lt-add-${song.id}`, action: { label: 'Play now', onClick: () => playNow(song.id) } });
+      void push();
+      return;
+    }
+    if (c.cmd === 'remove' && c.songId) {
+      const i = st.queue.findIndex((x, n) => n > st.index && x.id === c.songId);
+      // A guest takes out only a song they added.
+      if (i < 0 || addedBy.get(c.songId)?.h !== c.h) return;
+      const title = st.queue[i].title;
+      st.removeAt(i);
+      addedBy.delete(c.songId);
+      toast(`${who} took out “${title}”`, { key: 'lt-ctl' });
+      void push();
+      return;
+    }
+    // Playback: only while the host lets guests control it (the server checked
+    // when the command came in; the host may have turned it off since).
+    if (!useTogether.getState().guestControl) return;
+    if (c.cmd === 'play' && !st.isPlaying) st.togglePlay();
+    else if (c.cmd === 'pause' && st.isPlaying) st.togglePlay();
+    else if (c.cmd === 'next') st.next(true);
+    else if (c.cmd === 'prev') st.prev();
+    else return;
+    const said = { play: 'played the music', pause: 'paused', next: 'skipped to the next song', prev: 'went back a song' }[c.cmd];
+    toast(`${who} ${said}`, { key: 'lt-ctl' });
   };
 
   const poll = async (): Promise<void> => {
@@ -445,7 +534,12 @@ function runHost(code: string): () => void {
       listenerCount: d.memberCount ?? d.members?.length ?? 1,
       messages: d.room.messages ?? [],
       skipVotes: d.room.skipVotes ?? 0,
+      people: d.people ?? [],
+      me: d.me ?? null,
+      hostH: d.me ?? null,
     });
+    // 1.14 — the guests' commands, in the order they came.
+    for (const c of d.controls ?? []) await carryOut(c, d.now);
     chatListed(d.room.messages);
     floatReactions(d.reactions);
     // 15.0 — vote-to-skip: when more than half the room (host included) has
@@ -472,6 +566,8 @@ function runHost(code: string): () => void {
 
   void push();
   void poll();
+  hostPush = () => void push();
+  hostPoll = () => void poll();
   const iv = window.setInterval(() => void poll(), HOST_POLL_MS);
   // A guest asked for a song or voted to skip: read the room now, not in four seconds.
   let poked = -POKE_GAP_MS;
@@ -486,6 +582,8 @@ function runHost(code: string): () => void {
     unsub();
     window.clearInterval(iv);
     window.clearInterval(watch);
+    hostPush = null;
+    hostPoll = null;
     dropLine();
   };
 }
@@ -604,6 +702,8 @@ function startInPlace(song: Song): void {
  */
 async function loadHostSong(stub: Song): Promise<void> {
   const id = stub.id;
+  // 1.14 — only the host's speaker plays: this phone is the remote.
+  if (!useTogether.getState().onThisPhone) return;
   if (fetching === id) return;
   if (missed?.id === id && performance.now() - missed.at < MISSED_RETRY_MS) return;
   fetching = id;
@@ -617,7 +717,7 @@ async function loadHostSong(stub: Song): Promise<void> {
     missed = { id, at: performance.now() };
     room.patch({ unplayable: id });
     // Do not keep the last song running: the room has moved past it.
-    if (st.isPlaying) st.togglePlay();
+    if (st.isPlaying) asRoom(() => st.togglePlay());
     return;
   }
   missed = null;
@@ -660,9 +760,11 @@ function runGuest(code: string): () => void {
   const nudge = new RateNudge();
   const player = usePlayerStore.getState();
   player.setFollowMode(true);
-  // A song tapped or queued anywhere in the app is asked of the host.
+  // A song tapped or queued anywhere in the app goes into the room's queue.
   asked.clear();
   setRoomAsk((song) => void ask(song));
+  // 1.14 — play, pause, next and previous, from anywhere in the app, are the room's.
+  setRoomControl((cmd) => control(cmd));
 
   // Fine sync: between polls the host's playhead is projected locally, so the
   // guest can be compared with it several times a second.
@@ -724,6 +826,11 @@ function runGuest(code: string): () => void {
       store.reset();
       return;
     }
+    if (d.removed) {
+      toast(`${r.host_name ?? 'The host'} removed you from this session`);
+      store.reset();
+      return;
+    }
     ensureLine(code, d.live);
     // The live line has already said something newer than this answer holds
     // (the host's push to the server is still on its way): its playback part
@@ -736,10 +843,11 @@ function runGuest(code: string): () => void {
       listenerCount: d.memberCount ?? d.members?.length ?? 1,
       hostName: r.host_name ?? null,
       queue: r.queue ?? [],
-      ...(behind ? {} : { hostSong: r.song ?? null }),
+      ...(behind ? {} : { hostSong: r.song ?? null, hostPlaying: r.playing === true }),
       messages: r.messages ?? [],
       skipVotes: r.skipVotes ?? 0,
       status: hostIsAway({ updated_at: r.updated_at, now: d.now }) ? 'host-away' : 'live',
+      ...jamOf(d),
     });
     chatListed(r.messages);
     floatReactions(d.reactions);
@@ -765,6 +873,12 @@ function runGuest(code: string): () => void {
     const store = useTogether.getState();
     const r = { song, playing: hostPlaying };
     const st = usePlayerStore.getState();
+    // 1.14 — only the host's speaker plays: this phone stays quiet, as the remote.
+    if (!store.onThisPhone) {
+      if (st.isPlaying) asRoom(() => st.togglePlay());
+      if (store.drift !== null || store.needsTap) store.patch({ drift: null, needsTap: false });
+      return;
+    }
     const local = st.queue[st.index] ?? null;
     if (local?.id === r.song.id) rememberPlayed(local);
     const now = performance.now();
@@ -804,13 +918,13 @@ function runGuest(code: string): () => void {
           st.seek(at);
           landing = { lead: seekLead, at: now };
         }
-        if (!st.isPlaying) st.togglePlay();
+        if (!st.isPlaying) asRoom(() => st.togglePlay());
         lastCorrection = now;
         playAttempts += 1;
         break;
       }
       case 'pause': {
-        if (st.isPlaying) st.togglePlay();
+        if (st.isPlaying) asRoom(() => st.togglePlay());
         // This device heard of the pause a moment late and played on: step
         // back to where the host stopped. Silent, since nothing is playing.
         const at = inSong(target(now), st.duration);
@@ -858,6 +972,7 @@ function runGuest(code: string): () => void {
     liveSeen = performance.now();
     const store = useTogether.getState();
     if (store.hostSong?.id !== m.song.id) store.patch({ hostSong: m.song });
+    if (store.hostPlaying !== m.playing) store.patch({ hostPlaying: m.playing });
     if (store.status !== 'live') store.patch({ status: 'live' });
     follow(m.song, m.playing, true);
   };
@@ -885,6 +1000,7 @@ function runGuest(code: string): () => void {
     window.clearInterval(fineIv);
     window.removeEventListener('pagehide', onHide);
     setRoomAsk(null);
+    setRoomControl(null);
     dropLine();
     // Back to the listener's own playback speed.
     audioEngine.setRate(usePlayerStore.getState().rate || 1);
@@ -908,7 +1024,7 @@ export function tapToListen(): void {
       void loadHostSong(hostSong);
     }
   } else if (!st.isPlaying) {
-    st.togglePlay();
+    asRoom(() => st.togglePlay());
   }
   lastCorrection = 0; // let the next tick align the position straight away
   playAttempts = 0;
@@ -993,19 +1109,22 @@ export function leaveSession(): void {
   useTogether.getState().reset();
 }
 
-/** Guest asks for a song; host just queues it. Returns a message for a toast. */
+/** Add a song to the room's queue, from anyone. Returns a message for a toast. */
 export async function addSong(song: Song): Promise<string> {
-  const { mode, code, hostName } = useTogether.getState();
+  const { mode, code, hostName, hostH } = useTogether.getState();
   if (mode === 'host') {
     usePlayerStore.getState().enqueue(song);
-    return `Added “${song.title}” for everyone`;
+    return `Added “${song.title}” to the queue`;
   }
   asked.set(song.id, Date.now());
-  const ok = await requestSong(code, song);
-  // The host adds requests when it next reads the room: ask it to read now.
+  // 1.14 — a jam host takes it straight into the queue; a host app older than
+  // that (no handle) still takes it as a request.
+  const ok = hostH ? (await sendControl(code, newLineId(), 'add', { song: roomStub(song) as Song })) === 'ok' : await requestSong(code, song);
+  // The host adds it when it next reads the room: ask it to read now.
   if (ok) line?.send('poke', {});
   else asked.delete(song.id);
-  return ok ? `Asked ${hostName ?? 'the host'} for “${song.title}” — it joins Up next in a moment` : `Couldn’t send “${song.title}” — try again`;
+  if (!ok) return `Couldn’t add “${song.title}” — try again`;
+  return hostH ? `Added “${song.title}” to the queue` : `Asked ${hostName ?? 'the host'} for “${song.title}” — it joins Up next in a moment`;
 }
 
 /** Guest: the songs asked for lately (id → when), so a second tap does not ask twice. */
@@ -1014,8 +1133,9 @@ const ASKED_AGAIN_MS = 60_000;
 
 /**
  * 1.13 — a guest taps (or queues) a song anywhere in the app: Home, Search,
- * an album. The host picks the music, so the tap becomes a request to the
- * room; before, the song played here for a second and the room took it away.
+ * an album. The room's music plays from the host's app, so the tap adds the
+ * song to the room's queue (1.14: straight in, as in a jam); before, the song
+ * played here for a second and the room took it away.
  */
 export async function ask(song: Song): Promise<void> {
   const st = useTogether.getState();
@@ -1026,7 +1146,7 @@ export async function ask(song: Song): Promise<void> {
     return;
   }
   if (st.queue.some((t) => t.song.id === song.id) || Date.now() - (asked.get(song.id) ?? 0) < ASKED_AGAIN_MS) {
-    toast(`“${song.title}” is already on its way in the room`, { image, key: 'lt-ask' });
+    toast(`“${song.title}” is already in the room’s queue`, { image, key: 'lt-ask' });
     return;
   }
   toast(await addSong(song), { image, key: 'lt-ask' });
@@ -1038,4 +1158,129 @@ export function playNow(id: string): void {
   if (useTogether.getState().mode !== 'host') return;
   const i = st.queue.findIndex((s, n) => n > st.index && s.id === id);
   if (i > 0) st.playAt(i);
+}
+
+// ------------------------------------------------------------------- jam
+
+/** 1.14 — the jam fields of a guest's poll. A host app older than 1.14 sends no handle: then guests vote to skip and ask for songs, as before. */
+function jamOf(d: RoomPoll): { people: NonNullable<RoomPoll['people']>; me: string | null; hostH: string | null; guestControl: boolean } {
+  const hostH = d.room?.hostH ?? null;
+  return { people: d.people ?? [], me: d.me ?? null, hostH, guestControl: !!hostH && d.room?.guestControl !== false };
+}
+
+/** Guest: what a refused command means for the listener. */
+function refused(r: ControlResult): void {
+  const st = useTogether.getState();
+  if (r === 'no_control') {
+    st.patch({ guestControl: false });
+    toast(`${st.hostName ?? 'The host'} is in charge of playback in this session`, { key: 'lt-ctl' });
+  } else if (r === 'removed') {
+    toast(`${st.hostName ?? 'The host'} removed you from this session`);
+    st.reset();
+  } else if (r === 'gone') {
+    toast('The host ended the session');
+    st.reset();
+  } else if (r === 'error') {
+    toast('Couldn’t reach the room — try again', { key: 'lt-ctl' });
+  }
+}
+
+/**
+ * 1.14 — a guest plays, pauses or skips, for everyone: the player's buttons,
+ * the lock screen and the room's own buttons all come here while following.
+ * The host's app does it; everyone, this phone too, then follows the host.
+ */
+export function control(cmd: RoomCmd | 'play' | 'pause'): void {
+  const st = useTogether.getState();
+  if (st.mode !== 'guest' || !st.code) return;
+  // Play or pause is about the HOST's music, which may differ from this phone's for a moment.
+  const hostPlaying = clock.ready ? clock.isPlaying : st.hostPlaying;
+  // This phone is out of step with the room (the browser held its audio, or
+  // it played on a moment after a pause): the tap puts THIS phone right, it
+  // does not stop or start the music for everyone.
+  const local = usePlayerStore.getState();
+  if (cmd === 'toggle' && st.onThisPhone && local.isPlaying !== hostPlaying) {
+    if (hostPlaying) tapToListen();
+    else asRoom(() => local.togglePlay());
+    return;
+  }
+  if (!st.guestControl) {
+    toast(`${st.hostName ?? 'The host'} is in charge of playback in this session`, { key: 'lt-ctl' });
+    return;
+  }
+  const jc: JamCmd = cmd === 'toggle' ? (hostPlaying ? 'pause' : 'play') : cmd;
+  void sendControl(st.code, newLineId(), jc).then((r) => {
+    // The host carries commands out when it next reads the room: ask it to read now.
+    if (r === 'ok') line?.send('poke', {});
+    else refused(r);
+  });
+}
+
+/** Whether this device may take `track` out of the queue: the host, any; a guest, what they added. */
+export function canTakeOut(track: RoomTrack): boolean {
+  const st = useTogether.getState();
+  if (st.mode === 'host') return true;
+  return !!st.hostH && !!st.me && track.h === st.me;
+}
+
+/** 1.14 — take a song out of the room's queue. */
+export function takeOut(track: RoomTrack): void {
+  const st = useTogether.getState();
+  if (!canTakeOut(track)) return;
+  if (st.mode === 'host') {
+    const p = usePlayerStore.getState();
+    const i = p.queue.findIndex((x, n) => n > p.index && x.id === track.song.id);
+    if (i < 0) return;
+    p.removeAt(i);
+    addedBy.delete(track.song.id);
+    toast(`Took out “${track.song.title}”`, { key: 'lt-ctl' });
+    return;
+  }
+  // Out of this phone's list at once; the host's next push confirms it.
+  st.patch({ queue: st.queue.filter((t) => t.song.id !== track.song.id) });
+  void sendControl(st.code, newLineId(), 'remove', { songId: track.song.id }).then((r) => {
+    if (r === 'ok') line?.send('poke', {});
+    else refused(r);
+  });
+}
+
+/** 1.14 — host: let guests play, pause and skip, or not. */
+export function setGuestControl(on: boolean): void {
+  const st = useTogether.getState();
+  if (st.mode !== 'host') return;
+  st.patch({ guestControl: on });
+  hostPush?.();
+  toast(on ? 'Everyone can play, pause and skip' : 'Only you control playback now', { key: 'lt-ctl' });
+}
+
+/** 1.14 — host: take someone out of the room. */
+export async function removeFromRoom(h: string, name: string): Promise<void> {
+  const st = useTogether.getState();
+  if (st.mode !== 'host' || h === st.me) return;
+  const ok = await removePerson(st.code, h);
+  toast(ok ? `Removed ${name} from the session` : `Couldn’t remove ${name} — try again`);
+  if (ok) {
+    st.patch({ people: useTogether.getState().people.filter((p) => p.h !== h) });
+    hostPoll?.();
+  }
+}
+
+/**
+ * 1.14 — guest: play the room on this phone, or let only the host's speaker
+ * play and use this phone as the remote. Call from a tap: turning it back on
+ * starts the host's song inside it.
+ */
+export function setOnThisPhone(on: boolean): void {
+  const st = useTogether.getState();
+  if (st.mode !== 'guest') return;
+  st.patch({ onThisPhone: on });
+  if (on) {
+    missed = null;
+    tapToListen();
+    livePoke?.();
+  } else {
+    const p = usePlayerStore.getState();
+    if (p.isPlaying) asRoom(() => p.togglePlay());
+    audioEngine.setRate(p.rate || 1);
+  }
 }
