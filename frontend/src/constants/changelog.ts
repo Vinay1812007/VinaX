@@ -18,6 +18,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.14.1': {
+    title: 'Listen Together shows new messages, and the chat is in the player too',
+    changes: [
+      { type: 'new', text: 'The Listen Together pill counts new chat messages (1, 2, 3…) until you open the chat.' },
+      { type: 'improved', text: 'The player\'s Together tab shows the same count, and has the room\'s chat right there.' },
+      { type: 'fixed', text: 'On the player screen the pill steps aside, so it no longer covers the chat.' },
+    ],
+  },
   '1.14.0': {
     title: 'Listen Together works like a jam, and tells you when a phone is out of step',
     changes: [
