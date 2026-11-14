@@ -85,6 +85,21 @@ export interface RoomTrack {
 export interface RoomPerson {
   h: string;
   name: string;
+  /** 1.14 — the member's app version and Listen Together sync protocol (absent: an app older than 1.14). */
+  app?: string;
+  sync?: number;
+}
+
+/**
+ * 1.14 — the Listen Together sync protocol this app speaks. Raise it when a
+ * change means older apps can no longer keep in step with newer ones: the
+ * room then says whose app needs updating. Apps older than 1.14 send none.
+ */
+export const SYNC_PROTOCOL = 2;
+
+/** This app's version ("1.14.0"), without any build suffix. */
+export function appVersion(): string {
+  return (typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '').split('+')[0];
 }
 
 /** 1.14 — what a guest can ask the host's app to do. */
@@ -294,7 +309,8 @@ export async function voteSkip(code: string, songId: string): Promise<number | n
 
 export async function heartbeat(code: string): Promise<void> {
   const m = me();
-  await post({ action: 'heartbeat', code, deviceId: m.deviceId, name: m.name });
+  // 1.14 — which app this is, so the room can say whose app is too old to keep in step.
+  await post({ action: 'heartbeat', code, deviceId: m.deviceId, name: m.name, app: appVersion() || undefined, sync: SYNC_PROTOCOL });
 }
 
 export async function leaveRoom(code: string): Promise<void> {

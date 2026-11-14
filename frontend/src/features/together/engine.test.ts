@@ -147,7 +147,7 @@ vi.mock('@/store/playerStore', () => ({
 }));
 
 import { useTogether } from '@/services/together/session';
-import { addSong, ask, canTakeOut, getTrimMs, joinSession, leaveSession, playNow, react, removeFromRoom, runSession, say, setGuestControl, setOnThisPhone, setTrimMs, takeOut, tapToListen, TRIM_MAX_MS, typing } from './engine';
+import { addSong, ask, canTakeOut, getTrimMs, joinSession, leaveSession, playNow, react, removeFromRoom, resync, runSession, say, setGuestControl, setOnThisPhone, setTrimMs, takeOut, tapToListen, TRIM_MAX_MS, typing } from './engine';
 import { useRoom } from './room';
 
 const song = (id: string, playable = true) => ({ id, title: `Song ${id}`, subtitle: '', images: [], audio: playable ? [{ quality: '320kbps', url: 'u' }] : [] });
@@ -332,6 +332,40 @@ describe('guest', () => {
       stop();
     });
 
+    it('1.14 — the sync check shows the offset as it is now, not as of the last poll', async () => {
+      let offset = -0.2;
+      const { stop } = await follow(() => offset);
+      await vi.advanceTimersByTimeAsync(1600);
+      expect(useTogether.getState().drift).toBeCloseTo(-0.2, 1);
+      offset = 0.1;
+      await vi.advanceTimersByTimeAsync(250);
+      expect(useTogether.getState().drift).toBeCloseTo(0.1, 1);
+      stop();
+    });
+
+    it('1.14 — Resync reads the room at once and puts a phone that is off straight where the host is', async () => {
+      const seeks: number[] = [];
+      const orig = player.getState();
+      player.set({ seek: (t: number) => (seeks.push(t), orig.seek(t)) } as never);
+      let offset = -20;
+      const { stop, hostAt } = await follow(() => offset);
+      await vi.advanceTimersByTimeAsync(4000);
+      expect(seeks).toHaveLength(1);
+      // Knocked off again, between two polls.
+      offset = -5;
+      api.getRoom.mockClear();
+      // The listener taps Resync: the room is read now, not at the next poll.
+      resync();
+      expect(useTogether.getState().drift).toBeNull();
+      expect(api.getRoom).toHaveBeenCalledTimes(1);
+      expect(lastToast()).toBe('Syncing with the host…');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(seeks).toHaveLength(2);
+      expect(seeks[1]).toBeGreaterThan(hostAt());
+      expect(seeks[1] - hostAt()).toBeLessThan(1);
+      stop();
+    });
+
     it('a guest far off seeks ahead of the host by the time a seek takes', async () => {
       // How far ahead of the host each seek aimed, at the moment it was made.
       const seeks: number[] = [];
@@ -428,6 +462,7 @@ describe('guest', () => {
       expect(setTrimMs(40)).toBe(40);
       expect(getTrimMs()).toBe(40);
       expect(JSON.parse(localStorage.getItem('vinax.together-trim.v1') ?? 'null')).toBe(40);
+      expect(TRIM_MAX_MS).toBe(2000);
       expect(setTrimMs(9000)).toBe(TRIM_MAX_MS);
       expect(setTrimMs(-9000)).toBe(-TRIM_MAX_MS);
       expect(setTrimMs(Number.NaN)).toBe(0);

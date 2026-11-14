@@ -638,8 +638,8 @@ let landing: { lead: SeekLead; at: number } | null = null;
 /** A landing measured later than this says nothing about the seek (the host paused meanwhile, say). */
 const LANDING_WINDOW_MS = 8000;
 
-/** The most a device can be fine-tuned either way (ms). */
-export const TRIM_MAX_MS = 500;
+/** The most a device can be fine-tuned either way (ms). 1.14: 2 s (it was 0.5 s), for a speaker or TV that is slow to sound. */
+export const TRIM_MAX_MS = 2000;
 const cleanTrim = (ms: unknown): number => (typeof ms === 'number' && Number.isFinite(ms) ? Math.max(-TRIM_MAX_MS, Math.min(TRIM_MAX_MS, Math.round(ms))) : 0);
 let trimMs = cleanTrim(getLocal<number>(KEYS.togetherTrim, 0));
 
@@ -799,6 +799,9 @@ function runGuest(code: string): () => void {
       }
     }
     audioEngine.setRate(nudge.next(drift));
+    // 1.14 — the room page's sync check shows the offset as it is now, not as of the last poll.
+    const shown = useTogether.getState().drift;
+    if (shown === null || Math.abs(shown - drift) >= 0.005) useTogether.getState().patch({ drift });
   };
 
   const tick = async (): Promise<void> => {
@@ -1283,4 +1286,35 @@ export function setOnThisPhone(on: boolean): void {
     if (p.isPlaying) asRoom(() => p.togglePlay());
     audioEngine.setRate(p.rate || 1);
   }
+}
+
+/**
+ * 1.14 — guest: start over in step with the host. The host's clock is read
+ * afresh from the next answers, and this phone jumps straight to where the
+ * host is, as if it had just joined. For a phone that sounds behind however
+ * long it waits.
+ */
+export function resync(): void {
+  const st = useTogether.getState();
+  if (st.mode !== 'guest' || !st.code) return;
+  // The host's playhead, kept from the last answers, carried into a fresh clock.
+  const songId = clock.songId;
+  const fresh = new HostClock();
+  clock = fresh;
+  clockCode = st.code;
+  landing = null;
+  lastCorrection = 0;
+  trackStartedAt = 0;
+  playAttempts = 0;
+  missed = null;
+  audioEngine.setRate(1);
+  st.patch({ drift: null });
+  if (st.onThisPhone) {
+    // Nothing to measure from until the room answers: read it now. The
+    // answer starts the host's song here if it is not playing yet, and puts
+    // the playhead where the host is.
+    if (!songId || usePlayerStore.getState().queue[usePlayerStore.getState().index]?.id !== st.hostSong?.id) tapToListen();
+  }
+  livePoke?.();
+  toast('Syncing with the host…', { key: 'lt-resync' });
 }

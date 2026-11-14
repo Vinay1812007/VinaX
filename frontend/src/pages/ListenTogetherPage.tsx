@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { ArtistAvatar } from '@/features/stats/artwork';
 import { useCurrentSong, usePlayerStore } from '@/store/playerStore';
-import { REACTION_EMOJI } from '@/services/together';
+import { appVersion, REACTION_EMOJI, SYNC_PROTOCOL } from '@/services/together';
 import { useTogether } from '@/services/together/session';
 import {
   addSong,
@@ -15,6 +15,7 @@ import {
   playNow,
   react,
   removeFromRoom,
+  resync,
   setGuestControl,
   setOnThisPhone,
   setTrimMs,
@@ -48,14 +49,59 @@ import '@/styles/pages/together.css';
  * playing; how long each phone's speaker (or a Bluetooth one) then takes to
  * sound differs from device to device and cannot be measured from here. So
  * each device can be set a little earlier or later by ear, once; it is kept.
+ *
+ * 1.14 — a sync check around it: how far this phone's player is from the
+ * host's right now, whether the instant connection is up, which app this is,
+ * and Resync to start over in step. The fine-tune now reaches 2 s either way,
+ * with 0.1 s steps as well as 10 ms ones, for a speaker or TV slow to sound.
  */
 const TRIM_STEP_MS = 10;
-function FineTune(): ReactNode {
+const TRIM_BIG_STEP_MS = 100;
+function offsetText(drift: number | null, status: string): string {
+  if (status !== 'live') return 'Waiting for the host…';
+  if (drift === null) return 'Measuring…';
+  const ms = Math.round(drift * 1000);
+  if (Math.abs(ms) < 30) return `In step (${ms > 0 ? '+' : ''}${ms} ms)`;
+  return ms < 0 ? `${-ms} ms behind the host — catching up` : `${ms} ms ahead of the host — easing back`;
+}
+function SyncCheck(): ReactNode {
   const [ms, setMs] = useState(getTrimMs);
+  const drift = useTogether((s) => s.drift);
+  const status = useTogether((s) => s.status);
+  const onThisPhone = useTogether((s) => s.onThisPhone);
+  const online = useRoom((s) => s.online);
   const move = (by: number) => setMs(setTrimMs(ms + by));
+  const version = appVersion();
   return (
-    <div className="vx-lt-trim" role="group" aria-label="Fine-tune this phone">
+    <div className="vx-lt-trim" role="group" aria-label="Sync check">
       <div className="min-w-0">
+        <p className="vx-lt-kicker">Sync check</p>
+        <dl className="vx-lt-check">
+          <div>
+            <dt>This phone</dt>
+            <dd data-testid="lt-offset">{onThisPhone ? offsetText(drift, status) : 'Not playing here (remote only)'}</dd>
+          </div>
+          <div>
+            <dt>Instant connection</dt>
+            <dd>{online ? 'On' : 'Off — following every 2 seconds'}</dd>
+          </div>
+          {version && (
+            <div>
+              <dt>App</dt>
+              <dd>VinaX {version}</dd>
+            </div>
+          )}
+        </dl>
+        <p className="vx-lt-trim-hint">
+          Still sounds behind? Tap Resync. If the players are in step but the sound is not, a speaker is slow: fine-tune below.
+        </p>
+      </div>
+      <div className="vx-lt-trim-row">
+        <button type="button" className="vx-sec-pill" onClick={resync} disabled={!onThisPhone}>
+          Resync
+        </button>
+      </div>
+      <div className="min-w-0" role="group" aria-label="Fine-tune this phone">
         <p className="vx-lt-kicker">Fine-tune this phone</p>
         <p className="vx-lt-trim-hint">
           {ms === 0
@@ -64,22 +110,56 @@ function FineTune(): ReactNode {
               ? `This phone plays ${ms} ms earlier. Kept for next time.`
               : `This phone plays ${-ms} ms later. Kept for next time.`}
         </p>
-      </div>
-      <div className="vx-lt-trim-row">
-        <button type="button" className="vx-sec-pill" onClick={() => move(-TRIM_STEP_MS)} disabled={ms <= -TRIM_MAX_MS} aria-label={`Play this phone ${TRIM_STEP_MS} milliseconds later`}>
-          Later
-        </button>
-        <output className="vx-lt-trim-value" aria-live="polite">{ms > 0 ? `+${ms}` : ms} ms</output>
-        <button type="button" className="vx-sec-pill" onClick={() => move(TRIM_STEP_MS)} disabled={ms >= TRIM_MAX_MS} aria-label={`Play this phone ${TRIM_STEP_MS} milliseconds earlier`}>
-          Earlier
-        </button>
-        {ms !== 0 && (
-          <button type="button" className="vx-sec-pill" onClick={() => setMs(setTrimMs(0))}>
-            Reset
+        <div className="vx-lt-trim-row">
+          <button type="button" className="vx-sec-pill" onClick={() => move(-TRIM_BIG_STEP_MS)} disabled={ms <= -TRIM_MAX_MS} aria-label={`Play this phone ${TRIM_BIG_STEP_MS} milliseconds later`}>
+            −0.1 s
           </button>
-        )}
+          <button type="button" className="vx-sec-pill" onClick={() => move(-TRIM_STEP_MS)} disabled={ms <= -TRIM_MAX_MS} aria-label={`Play this phone ${TRIM_STEP_MS} milliseconds later`}>
+            Later
+          </button>
+          <output className="vx-lt-trim-value" aria-live="polite">{ms > 0 ? `+${ms}` : ms} ms</output>
+          <button type="button" className="vx-sec-pill" onClick={() => move(TRIM_STEP_MS)} disabled={ms >= TRIM_MAX_MS} aria-label={`Play this phone ${TRIM_STEP_MS} milliseconds earlier`}>
+            Earlier
+          </button>
+          <button type="button" className="vx-sec-pill" onClick={() => move(TRIM_BIG_STEP_MS)} disabled={ms >= TRIM_MAX_MS} aria-label={`Play this phone ${TRIM_BIG_STEP_MS} milliseconds earlier`}>
+            +0.1 s
+          </button>
+          {ms !== 0 && (
+            <button type="button" className="vx-sec-pill" onClick={() => setMs(setTrimMs(0))}>
+              Reset
+            </button>
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * 1.14 — whose app is too old to keep in step. An app older than 1.14 says
+ * no sync protocol at all; this phone may also be the old one.
+ */
+const isOld = (p: { sync?: number }): boolean => typeof p.sync !== 'number' || p.sync < SYNC_PROTOCOL;
+function UpdateWarning(): ReactNode {
+  const people = useTogether((s) => s.people);
+  const me = useTogether((s) => s.me);
+  if (!people.length) return null;
+  const others = people.filter((p) => p.h !== me);
+  const meBehind = others.some((p) => typeof p.sync === 'number' && p.sync > SYNC_PROTOCOL);
+  const old = others.filter(isOld).map((p) => p.name);
+  if (meBehind) {
+    return (
+      <p className="vx-lt-warn" role="alert">
+        Your VinaX is older than the others in this room, so it may not play in step. Update VinaX, then join again.
+      </p>
+    );
+  }
+  if (!old.length) return null;
+  const who = old.length === 1 ? `${old[0]}’s VinaX is` : old.length === 2 ? `${old[0]} and ${old[1]}’s VinaX are` : `${old.length} people’s VinaX are`;
+  return (
+    <p className="vx-lt-warn" role="alert">
+      {who} out of date, so {old.length === 1 ? 'it' : 'they'} may play a few seconds off. Ask them to update VinaX (the latest app, or reload the website), then join again.
+    </p>
   );
 }
 
@@ -273,6 +353,7 @@ function People(): ReactNode {
               <span className="min-w-0 truncate-1">{p.name}</span>
               {p.h === hostH && <span className="vx-lt-tag">Host</span>}
               {p.h === me && p.h !== hostH && <span className="vx-lt-tag is-you">You</span>}
+              {p.h !== me && isOld(p) && <span className="vx-lt-tag is-old" title="This person’s VinaX is out of date">Old app</span>}
               {mode === 'host' && p.h !== me && (
                 confirm === p.h ? (
                   <span className="vx-lt-person-ask">
@@ -518,7 +599,7 @@ function Live(): ReactNode {
           </div>
           {qr && <img src={qr} alt={`QR code to join room ${code}`} className="vx-lt-qr" />}
         </div>
-        {mode === 'guest' && <FineTune />}
+        {mode === 'guest' && <SyncCheck />}
         {mode === 'host' && (
           <div className="vx-lt-actions" data-tour="lt-invite">
             <button
@@ -601,6 +682,7 @@ function Live(): ReactNode {
         </section>
       )}
 
+      <UpdateWarning />
       <People />
 
       {played.length > 0 && (

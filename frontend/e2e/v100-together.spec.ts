@@ -82,11 +82,21 @@ function roomServer(opts: { line?: boolean; pushDelayMs?: number; jam?: boolean 
   const members = new Map<string, Map<string, number>>();
   /** 1.14 — the jam (only with `jam`, so the other tests keep a pre-1.14 server): names, settings, commands, who was removed. */
   const names = new Map<string, string>();
+  /** 1.14 — the sync protocol each member's heartbeat said (none: an app older than 1.14). */
+  const syncs = new Map<string, number>();
   const jam = { guestControl: true, host: null as string | null, controls: [] as Array<Record<string, unknown>>, removed: new Set<string>() };
   /** 1.13 — the phones on the room's live line: what one says, the others hear. */
   const sockets = new Set<{ send(data: string): void }>();
   return {
     rooms,
+    /** 1.14 — someone on an app older than 1.14 (it sends no sync protocol) is in the room. */
+    addOldMember(code: string, id: string, name: string): void {
+      if (!members.has(code)) members.set(code, new Map());
+      const beat = () => members.get(code)!.set(id, Date.now());
+      beat();
+      setInterval(beat, 4000);
+      names.set(id, name);
+    },
     line: opts.line === true,
     /** How long a host push takes to reach this server (ms): the live line must not wait for it. */
     pushDelayMs: opts.pushDelayMs ?? 0,
@@ -103,7 +113,7 @@ function roomServer(opts: { line?: boolean; pushDelayMs?: number; jam?: boolean 
         return {
           ...base,
           room: { ...r, guestControl: jam.guestControl, hostH: jam.host },
-          people: here.map((id) => ({ h: handleOf(id), name: names.get(id) ?? 'Listener' })),
+          people: here.map((id) => ({ h: handleOf(id), name: names.get(id) ?? 'Listener', ...(syncs.has(id) ? { sync: syncs.get(id) } : {}) })),
           me: handleOf(member),
           ...(jam.removed.has(member) ? { removed: true } : {}),
           ...(url.searchParams.get('hostToken') === 'tok' ? { controls: jam.controls } : {}),
@@ -138,6 +148,7 @@ function roomServer(opts: { line?: boolean; pushDelayMs?: number; jam?: boolean 
           if (!members.has(code)) members.set(code, new Map());
           members.get(code)!.set(String(body.deviceId), Date.now());
           names.set(String(body.deviceId), String(body.name ?? ''));
+          if (typeof body.sync === 'number') syncs.set(String(body.deviceId), body.sync);
           return { ok: true };
         }
         case 'control': {
@@ -357,7 +368,7 @@ test('a guest follows the host across pages, in sync, and its request is playabl
     return h && g && !g.paused ? g.t - h.t : -99;
   };
   const tune = guest.getByRole('group', { name: 'Fine-tune this phone' });
-  for (let i = 0; i < 10; i += 1) await tune.getByRole('button', { name: /earlier$/ }).click();
+  for (let i = 0; i < 10; i += 1) await tune.getByRole('button', { name: 'Play this phone 10 milliseconds earlier' }).click();
   await expect(tune).toContainText('+100 ms');
   await expect.poll(ahead, { timeout: 25_000, intervals: [500] }).toBeGreaterThan(0.06);
   await expect.poll(ahead, { timeout: 10_000, intervals: [500] }).toBeLessThan(0.14);
@@ -476,10 +487,25 @@ test('a jam: the guest pauses, plays, adds, takes out and skips for everyone; th
   await startListeningIfAsked(guest);
   await expect.poll(async () => (await audioState(guest))?.paused, { timeout: 15_000 }).toBe(false);
 
-  // Everyone sees who is here, with the host marked.
+  // Everyone sees who is here, with the host marked; both apps are new enough.
   const people = guest.locator('section[aria-labelledby="vx-lt-people"]');
   await expect(people).toContainText('Asha', { timeout: 10_000 });
   await expect(people.locator('.vx-lt-tag').first()).toHaveText('Host');
+  await expect(people.getByText('Old app')).toHaveCount(0);
+  await expect(guest.locator('.vx-lt-warn')).toHaveCount(0);
+
+  // 1.14 — the guest's sync check: in step, the instant connection's state, and Resync.
+  const check = guest.getByRole('group', { name: 'Sync check' });
+  await expect(check.getByTestId('lt-offset')).toContainText('In step', { timeout: 25_000 });
+  await expect(check).toContainText('Instant connection');
+  await check.getByRole('button', { name: 'Resync' }).click();
+  await expect(guest.getByText('Syncing with the host…')).toBeVisible();
+  await expect.poll(() => gap(host, guest), { timeout: 25_000, intervals: [500] }).toBeLessThan(0.08);
+
+  // Someone joins on an app older than 1.14: everyone is told whose app to update.
+  server.addOldMember('ABC123', 'old-device', 'Kiran');
+  await expect(host.locator('.vx-lt-warn')).toContainText('Kiran’s VinaX is out of date', { timeout: 10_000 });
+  await expect(people.locator('li', { hasText: 'Kiran' }).getByText('Old app')).toBeVisible({ timeout: 10_000 });
 
   // The guest pauses the room: the HOST's music stops, and so does the guest's.
   await guest.getByRole('button', { name: 'Pause for everyone' }).click();

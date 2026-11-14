@@ -21,6 +21,9 @@
  *   POST { action: 'kick', code, hostToken, who }          host only: remove someone (by handle)
  *   `update` also takes `guestControl` and the host's `deviceId` (so everyone
  *   can tell which person is the host).
+ *   `heartbeat` also takes `app` (the app's version) and `sync` (its Listen
+ *   Together sync protocol); `people` carry them, so a room can say whose app
+ *   is too old to keep in step. An app older than 1.14 sends neither.
  *
  * A member is shown to the room by a HANDLE, never by device id: the first 12
  * hex of SHA-256(code:deviceId). The device id is what heartbeats and votes
@@ -293,8 +296,8 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const now = Date.now();
   const [room, members] = await Promise.all([
     readRoom(env, code),
-    db.select<{ member_id: string; name: string | null; last_seen: string; reaction: string | null; reacted_at: string | null }>(
-      env, 'room_members', q().eq('room_code', code).gte('last_seen', new Date(now - 86_400_000).toISOString()).select('member_id,name,last_seen,reaction,reacted_at').limit(200),
+    db.select<{ member_id: string; name: string | null; last_seen: string; reaction: string | null; reacted_at: string | null; app?: string | null; sync?: number | null }>(
+      env, 'room_members', q().eq('room_code', code).gte('last_seen', new Date(now - 86_400_000).toISOString()).select('member_id,name,last_seen,reaction,reacted_at,app,sync').limit(200),
     ),
   ]);
   if (!room.ok) return json({ error: 'unavailable' }, 503);
@@ -329,7 +332,13 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   if (hostAuthorized) body.members = names;
   // 1.14 — who is here, by handle, so the room can say who added a song and
   // the host can remove someone; and who the asker is in that list.
-  body.people = await Promise.all(present.map(async (m) => ({ h: await memberHandle(code, m.member_id), name: m.name ?? 'Listener' })));
+  body.people = await Promise.all(present.map(async (m) => ({
+    h: await memberHandle(code, m.member_id),
+    name: m.name ?? 'Listener',
+    // The member's app version and sync protocol; absent: an app older than 1.14.
+    ...(m.app ? { app: m.app } : {}),
+    ...(typeof m.sync === 'number' ? { sync: m.sync } : {}),
+  })));
   if (asker && room.room) {
     body.me = await memberHandle(code, asker);
     if (removed.has(asker)) body.removed = true;
@@ -478,7 +487,16 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
 
   if (action === 'heartbeat') {
     if (!memberId) return json({ error: 'bad_request' }, 400);
-    const r = await db.upsert(env, 'room_members', { room_code: code, member_id: memberId, name: clip(body.name, 60), last_seen: now }, 'room_code,member_id');
+    const app = clip(body.app, 24);
+    const sync = typeof body.sync === 'number' && Number.isInteger(body.sync) && body.sync > 0 && body.sync < 1000 ? body.sync : null;
+    const r = await db.upsert(env, 'room_members', {
+      room_code: code,
+      member_id: memberId,
+      name: clip(body.name, 60),
+      last_seen: now,
+      ...(app && /^\d+\.\d+\.\d+/.test(app) ? { app } : {}),
+      ...(sync ? { sync } : {}),
+    }, 'room_code,member_id');
     // A heartbeat for a room that no longer exists is refused by the foreign key: tell the guest.
     if (!r.ok && (r.error === 'bad_request' || r.error === 'conflict')) return json({ error: 'not_found' }, 404);
     return json({ ok: r.ok });

@@ -246,6 +246,17 @@ describe('/api/room as a jam (schema 22)', () => {
     expect((await post({ action: 'say', code: 'ABC234', deviceId: 'g1', name: 'Asha', text: 'hi' })).status).toBe(403);
   });
 
+  it('a heartbeat says which app a member runs, and everyone sees it; junk is dropped', async () => {
+    fakeDb({ rooms: [room()] });
+    await post({ action: 'heartbeat', code: 'ABC234', deviceId: 'g1', name: 'Asha', app: '1.14.0', sync: 2 });
+    await post({ action: 'heartbeat', code: 'ABC234', deviceId: 'g2', name: 'Old', app: '<b>', sync: 'x' });
+    const out = (await (await get('code=ABC234')).json()) as { people: Array<{ name: string; app?: string; sync?: number }> };
+    expect(out.people).toContainEqual(expect.objectContaining({ name: 'Asha', app: '1.14.0', sync: 2 }));
+    const old = out.people.find((p) => p.name === 'Old');
+    expect(old?.app).toBeUndefined();
+    expect(old?.sync).toBeUndefined();
+  });
+
   it('a queued song keeps the handle of the guest who added it, and nothing that is not one', async () => {
     const fake = fakeDb({ rooms: [room()] });
     const h = await memberHandle('ABC234', 'g1');

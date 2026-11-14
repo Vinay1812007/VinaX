@@ -75,3 +75,19 @@ describe('updateRoom: a push says where the playhead will be when it lands', () 
     expect(sent[1].position).toBe(20);
   });
 });
+
+describe('heartbeat: a member says which app it runs (1.14)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('sends the app version and the sync protocol, so the room can say whose app is too old', async () => {
+    vi.resetModules();
+    const sent: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body: string }) => {
+      sent.push(JSON.parse(init.body) as Record<string, unknown>);
+      return new Response('{"ok":true}', { status: 200 });
+    }));
+    const { heartbeat, SYNC_PROTOCOL } = await import('./index');
+    await heartbeat('ABC123');
+    expect(sent[0]).toMatchObject({ action: 'heartbeat', code: 'ABC123', sync: SYNC_PROTOCOL });
+    expect(SYNC_PROTOCOL).toBeGreaterThanOrEqual(2);
+  });
+});

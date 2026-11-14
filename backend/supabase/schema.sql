@@ -44,7 +44,9 @@
 --  made, run once by hand);
 --  version 22 makes Listen Together a jam: rooms gain `jam` (guests may
 --  control playback, who the host is, who was removed) and `controls`
---  (guests' play, pause, skip, add and remove), and room_control adds one)
+--  (guests' play, pause, skip, add and remove), and room_control adds one;
+--  room_members gain `app` and `sync`, the version a member's app runs, so a
+--  room can say whose app is too old to keep in step)
 --  12. security
 -- =============================================================================
 
@@ -396,9 +398,13 @@ create table if not exists room_members (
   last_seen    timestamptz not null default now(),
   reaction     text,
   reacted_at   timestamptz,
+  app          text,                                     -- v22: the member's app version ("1.14.0")
+  sync         smallint,                                 -- v22: its Listen Together sync protocol (none: older than 1.14)
   primary key (room_code, member_id)
 );
 create index if not exists room_members_seen_idx on room_members (room_code, last_seen desc);
+alter table room_members add column if not exists app text;
+alter table room_members add column if not exists sync smallint;
 
 -- ------------------------------------------- 6. push devices, notifications --
 
