@@ -18,6 +18,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.14.2': {
+    title: 'Settings links from the profile menu land on their section, and the Admin link is gone',
+    changes: [
+      { type: 'improved', text: 'Picking a Settings section from the profile menu while already on Settings.' },
+      { type: 'improved', text: 'On a desktop window too narrow for the label and a wide control side by.' },
+      { type: 'fixed', text: 'The profile menu no longer has the Admin section or the Admin dashboard.' },
+    ],
+  },
   '1.14.1': {
     title: 'Listen Together shows new messages, and the chat is in the player too',
     changes: [
