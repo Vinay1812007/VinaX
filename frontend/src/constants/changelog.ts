@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.14.4': {
+    title: 'Flow plays music videos like reels, and Home and Up Next bring new songs',
+    changes: [
+      { type: 'improved', text: 'Flow now plays music videos, one per screen, like reels: swipe up for the next one, and it moves on by itself when a clip ends.' },
+      { type: 'improved', text: 'Flow is in the sidebar on a computer and in the bottom bar on Android.' },
+      { type: 'fixed', text: 'Fixed: Up Next no longer keeps coming back to the same songs; when the similar songs run out it looks further for music you haven\'t heard.' },
+      { type: 'fixed', text: 'Fixed: Home\'s Trending, New releases, Popular and your Daily mix no longer show the same songs every time you open the app.' },
+    ],
+  },
   '1.14.3': {
     title: 'Every choice button in Settings works on a computer again, and slides to what you pick',
     changes: [
