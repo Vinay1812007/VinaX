@@ -4,15 +4,11 @@ import type { FallbackReason, NextRecommendationOptions, NextSongsPlan, PlanNoti
 import { toastNavigate } from '@/store/toastStore';
 import { getArtist, getArtistTopSongs, getSongSuggestions, searchSongs, searchSongsPage } from '@/services/api/saavn';
 import { hasHeardKey, initHeardSet } from '@/services/recommendation/heardSet';
-import { fetchPersonalRecommendations, personalEnabled } from '@/services/personal/api';
-import { toSong } from '@/services/personal/types';
 import { useSettingsStore } from '@/store/settingsStore';
-import { aiReasonLine, rerankWithAi } from '@/services/ai/musicAi';
 import { songKey } from '@/services/recommendation/songKey';
 import { inferMood, type Mood } from '@/services/recommendation/mood';
 import { exposureLedger, recordExposure } from '@/services/recommendation/exposure';
 import { tuneScoreAdjust, tuneSearchQuery, type TuneIntent } from '@/services/recommendation/tune';
-import { aiDjSongs, djReason } from '@/services/ai/dj';
 import { isSoftMuted } from '@/services/recommendation/admission';
 import { getSessionIntent } from '@/services/personalization/sessionIntent';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
@@ -75,10 +71,6 @@ import { planLookups, planWideLookups, runLookups, type CatalogueApi, type Fetch
 export const NEXTUP_VERSION = '2.0.0';
 
 /** 1.4 — Never repeat found nothing unheard (the same words as the 9.x engine's notice). */
-const NEVER_REPEAT_GENERATING: PlanNotice = {
-  text: "You've heard everything we can find here, so VinaX is making you a new song",
-  opts: { key: 'never-repeat-exhausted' },
-};
 const NEVER_REPEAT_EXHAUSTED: PlanNotice = {
   text: "You've heard everything we can find here. Try Discover or another language",
   opts: { key: 'never-repeat-exhausted', action: { label: 'Discover', onClick: () => toastNavigate('/discover') } },
@@ -119,16 +111,10 @@ let refilling: Promise<void> | null = null;
 const defaultApi: CatalogueApi = {
   similar: (id, limit, signal) => getSongSuggestions(id, limit, { signal }),
   artistTop: (id) => getArtistTopSongs(id, 0),
-  personalOn: () => personalEnabled(),
-  // The server answers display records without audio; each resolves when it starts (the player
-  // refetches a song that has none). Nothing is resolved here on purpose: a list in which some
-  // songs carry audio and others do not marks the others unplayable (addToPool).
-  personal: async (seedId, limit, signal) => (await fetchPersonalRecommendations({ seed: seedId, limit, signal, mode: useSettingsStore.getState().discoveryMode })).map(toSong),
   search: (q, limit, signal) => searchSongs(q, limit, { signal }),
   searchPage: (q, page, limit, signal) => searchSongsPage(q, page, limit, { signal }),
   related: async (id) => ((await getArtist(id))?.similarArtists ?? []).filter((a) => !!a?.id).map((a) => ({ id: a.id, name: a.name })),
   artistPage: (id, page) => getArtistTopSongs(id, page),
-  aiDj: (seed, ctx, o) => aiDjSongs(seed, ctx, o),
 };
 let api: CatalogueApi = defaultApi;
 
@@ -217,7 +203,7 @@ interface Env {
   played: Map<string, number>;
   served: Map<string, number>;
   tuneQuery: string | null;
-  /** The "Tune this queue" chip, for the AI DJ. */
+  /** The "Tune this queue" chip. */
   tune: TuneIntent | null;
   score: ScoreContext;
   /** 1.4 — Never repeat: the lifetime heard-set's lookup; absent when the mode is off. */
@@ -366,9 +352,7 @@ function refill(p: Pool, env: Env, deadlineMs: number, signal?: AbortSignal, fre
     const s = [...(env.ctx.favorites ?? []), ...env.anchor.seeds.map((x) => x.song)].find((x) => leadOf(x) === lead && x.artists?.[0]?.id);
     if (s) pulled.push({ id: s.artists[0].id, name: s.artists[0].name });
   }
-  const dj = env.ctx.aiDj && api.aiDj ? api.aiDj : null;
-  const aiDj = dj ? () => dj(env.seed, env.ctx, { tune: env.tune, language: env.languages[0] ?? null }) : undefined;
-  const lookups = planLookups({ anchor: env.anchor, favorites: env.ctx.favorites ?? [], pulledArtists: pulled, rotation: rotation++, tuneQuery: env.tuneQuery, api, signal, aiDj });
+  const lookups = planLookups({ anchor: env.anchor, favorites: env.ctx.favorites ?? [], pulledArtists: pulled, rotation: rotation++, tuneQuery: env.tuneQuery, api, signal });
   if (env.tuneQuery) p.asked.add(env.tuneQuery);
   // One lookup adds at most this many: a single huge answer can never push out what the other lookups (a new like) just brought.
   const merge = (f: Fetched): void => {
@@ -444,7 +428,6 @@ function publishDebug(p: Pool, env: Env, filter: FilterContext, songs: Song[], r
 function whyLine(c: Candidate | undefined): string | null {
   if (!c) return null;
   const has = (s: Source): boolean => c.sources.has(s);
-  if (has('ai-dj')) return djReason(c.song.id) ?? 'Picked by the AI DJ for this moment';
   if (has('tune')) return 'Fits how you tuned this queue';
   if (has('liked-similar') && c.via) return `Like “${c.via}”, from your liked songs`;
   if (has('liked-artist') && c.via) return `${c.via} — an artist you like`;
@@ -550,25 +533,6 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
       if (shorter.songs.length > result.songs.length) { result = shorter; relaxed.push('cooldown'); }
     }
   }
-  // 1.4 — the music AI may reorder the top of the ranked pool (services/ai/musicAi.ts),
-  // within 1.5 s; the spacing rule then picks the stretch from its order, and the
-  // player's admission gate still checks every song. Never while the listener is
-  // waiting at the end of the queue, and the on-device stretch stands on any failure.
-  const urgent = options.deadlineMs !== undefined && options.deadlineMs < NEXTUP_DEADLINE_MS;
-  let aiReasons = new Map<string, string>();
-  if (ctx.aiRerank && !urgent && result.ranked.length > 1 && !signal?.aborted) {
-    const ai = await rerankWithAi(result.ranked, (s) => s, ctx, { signal, tune: options.tune ?? null, language }).catch(() => null);
-    if (signal?.aborted) return empty(null);
-    if (ai?.used) {
-      const picked = pickSequence(ai.items, before, limit, songKey);
-      // The AI may change the order, never shorten the stretch.
-      if (picked.songs.length >= result.songs.length) {
-        result = { ...result, ...picked, ranked: ai.items };
-        aiReasons = new Map([...ai.reasons].map(([id, why]) => [id, aiReasonLine(why)]));
-        relaxed.push('ai-rerank');
-      }
-    }
-  }
   relaxed.unshift(...result.relaxed);
   if (widenedTo) relaxed.push(`widened-${widenedTo}`);
   // Keep the pool warm for the next stretch without making this one wait.
@@ -586,7 +550,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
       recordExposure(fresh, 'queued');
       const lines: Array<[string, string]> = [];
       for (const s of fresh) {
-        const why = aiReasons.get(s.id) ?? whyLine(p.items.get(s.id));
+        const why = whyLine(p.items.get(s.id));
         if (why) lines.push([s.id, why]);
       }
       if (lines.length) useReasonStore.getState().setReasons(lines);
@@ -616,9 +580,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     return picked;
   };
   const discoveryIds = new Set(songs.filter((s) => !env.likedLeads.has(leadOf(s)) && !env.score.tasteLeads.has(leadOf(s))).map((s) => s.id));
-  const plan: NextSongsPlan = { songs, picker: 'local', fallback, latencyMs: Date.now() - t0, alg, relaxed, discoveryIds, language, commit, topUp, ...(env.heard && !songs.length ? { exhausted: true, notice: ctx.genInQueue ? NEVER_REPEAT_GENERATING : NEVER_REPEAT_EXHAUSTED } : {}) };
-  // 1.4 — Never repeat's third widening step: a generated song, when the listener allows them.
-  if (plan.exhausted && ctx.genInQueue) void import('@/services/ai/genInQueue').then((m) => m.fillWithGenerated(seed)).catch(() => undefined);
+  const plan: NextSongsPlan = { songs, picker: 'local', fallback, latencyMs: Date.now() - t0, alg, relaxed, discoveryIds, language, commit, topUp, ...(env.heard && !songs.length ? { exhausted: true, notice: NEVER_REPEAT_EXHAUSTED } : {}) };
 
   return plan;
 }

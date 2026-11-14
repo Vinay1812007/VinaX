@@ -189,12 +189,6 @@ export const NEVER_REPEAT_EXHAUSTED: PlanNotice = {
   opts: { key: 'never-repeat-exhausted', action: { label: 'Discover', onClick: () => toastNavigate('/discover') } },
 };
 
-/** 1.4 — Never repeat's last step: nothing unheard was found, so a new song is being made. */
-export const NEVER_REPEAT_GENERATING: PlanNotice = {
-  text: "You've heard everything we can find here, so VinaX is making you a new song",
-  opts: { key: 'never-repeat-exhausted' },
-};
-
 /** Why a continuation is shorter or later than planned. */
 export type FallbackReason = 'deadline' | 'error';
 
@@ -462,26 +456,6 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     const folded = new Set(foldRemixes(ranked.map((item) => item.candidate.song), (song) => rejected.push({ song, reason: 'duplicate-version', stage: 'rank' })).map((s) => s.id));
     ranked = ranked.filter((item) => folded.has(item.candidate.song.id));
   }
-  // 4b — 1.4: the music AI may reorder the top of the scored pool for this
-  // listener now (services/ai/musicAi.ts). It sees a compact summary under
-  // opaque keys, can only reorder what is here, and gets at most 1.5 s; on any
-  // failure the on-device order stands. Sequencing, validation and the
-  // admission gate all still run after it.
-  let aiReasons = new Map<string, string>();
-  let aiReranked = false;
-  if (nextCtx.aiRerank && ranked.length > 1) {
-    const budget = Math.min(1_500, left() - RANK_RESERVE_MS);
-    if (budget >= 300) {
-      const { rerankWithAi, aiReasonLine } = await import('@/services/ai/musicAi');
-      const ai = await rerankWithAi(ranked, (item) => item.candidate.song, nextCtx, { deadlineMs: budget, signal, tune, language: seedLanguage }).catch(() => null);
-      if (signal?.aborted) return emptyPlan(null);
-      if (ai?.used) {
-        ranked = ai.items;
-        aiReasons = new Map([...ai.reasons].map(([id, why]) => [id, aiReasonLine(why)]));
-        aiReranked = true;
-      }
-    }
-  }
   const orderedPool: Song[] = ranked.map((item) => item.candidate.song);
 
   // 9 — queue sequencing. Lazy: the sequencer and the session-context reader are only needed once a queue is extended.
@@ -530,7 +504,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   // fallback reason, not only the stage counts.
   const sourceCounts: Record<string, number> = {};
   for (const c of candidates) sourceCounts[c.source] = (sourceCounts[c.source] ?? 0) + 1;
-  const trace: DebugTrace = { mode, shape, lock, languagePolicy, discoveryShare, intent: intent ? { skipStreak: intent.skipStreak, completionStreak: intent.completionStreak, discoveryAppetite: intent.discoveryAppetite, energySteer: intent.energySteer } : null, stages: { candidates: candidates.length, admitted: filtered.admitted.length, ranked: ranked.length, sequenced: arc.songs.length, validated: songs.length }, relaxed: [...new Set([...(arc.relaxed ?? []), ...local.relaxed, ...(widenedTo ? [`widened-${widenedTo}`] : []), ...(aiReranked ? ['ai-rerank'] : [])])], repairs: local.repairs, latencyMs: Date.now() - t0, fallback, sources: sourceCounts };
+  const trace: DebugTrace = { mode, shape, lock, languagePolicy, discoveryShare, intent: intent ? { skipStreak: intent.skipStreak, completionStreak: intent.completionStreak, discoveryAppetite: intent.discoveryAppetite, energySteer: intent.energySteer } : null, stages: { candidates: candidates.length, admitted: filtered.admitted.length, ranked: ranked.length, sequenced: arc.songs.length, validated: songs.length }, relaxed: [...new Set([...(arc.relaxed ?? []), ...local.relaxed, ...(widenedTo ? [`widened-${widenedTo}`] : [])])], repairs: local.repairs, latencyMs: Date.now() - t0, fallback, sources: sourceCounts };
   publishDebug(ranked, songs, 'local', { trace, rejected: [...rejected, ...local.rejected] });
 
   const shipped = new Set(songs.map((s) => s.id));
@@ -554,8 +528,6 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     // 8.3.0 — a song that keeps the style says so first ("Keeps the DJ remix going · holds the energy").
     if (whyFromArc) useReasonStore.getState().setReasons(arc.songs.filter((s) => s.why && ids.has(s.song.id)).map((s) => [s.song.id, style && isStyled(s.song) ? `${styleWhy(style)} · ${s.why}` : s.why]));
     publishReasons(ranked.filter((item) => ids.has(item.candidate.song.id)));
-    // 1.4 — a song the AI placed says so in "Why this song?".
-    if (aiReasons.size) useReasonStore.getState().setReasons([...aiReasons].filter(([id]) => ids.has(id)));
   };
   const topUp = (seedNow: Song, n: number, exclude: { ids: Set<string>; keys: Set<string> }): Song[] => {
     if (n <= 0) return [];
@@ -574,10 +546,8 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     language: lock,
     commit: (accepted) => publishFor(accepted, true),
     topUp,
-    ...(heardBefore && !songs.length ? { exhausted: true, notice: ctx.genInQueue ? NEVER_REPEAT_GENERATING : NEVER_REPEAT_EXHAUSTED } : {}),
+    ...(heardBefore && !songs.length ? { exhausted: true, notice: NEVER_REPEAT_EXHAUSTED } : {}),
   };
-  // 1.4 — the third widening step: generated songs, when the listener allows them.
-  if (plan.exhausted && ctx.genInQueue) void import('@/services/ai/genInQueue').then((m) => m.fillWithGenerated(seed)).catch(() => undefined);
 
   return plan;
 }

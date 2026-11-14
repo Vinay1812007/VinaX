@@ -1,10 +1,9 @@
-import type { HistoryEntry, Song } from '@/types';
+import type { Song } from '@/types';
 import { searchSongs } from '@/services/api/saavn';
-import { isSkippedPlay } from '@/utils/plays';
 
 /**
- * Songs the music AI NAMES (the AI DJ, AI Playlist) become real catalogue
- * tracks here: each title/artist pair is searched in VinaX's own catalogue,
+ * Songs VinaX AI NAMES in a playlist card (PlaylistCard.tsx) become real
+ * catalogue tracks here: each title/artist pair is searched in VinaX's own catalogue,
  * and only a confident match is kept (the title matches and the artist is
  * among the song's artists). A pair with no such match is dropped, so the AI
  * can never put a wrong or made-up song in front of the listener.
@@ -93,28 +92,4 @@ export async function resolvePicks<T extends SongPick>(picks: readonly T[], o: R
     seen.add(x.song.id);
     return true;
   });
-}
-
-const leadArtist = (s: Song): string => s.artists?.[0]?.name ?? s.subtitle?.split(',')[0]?.trim() ?? '';
-
-/** The song as the AI DJ and AI Playlist name it. */
-export const songRef = (s: Song): SongRef => ({ title: s.title, artist: leadArtist(s) });
-
-/**
- * The listener's last plays they let run, newest first, as title/artist pairs:
- * what the AI DJ and AI Playlist send so they do not suggest them again
- * (README.md (Data and privacy)). At most `n`.
- */
-export function recentPlays(history: readonly HistoryEntry[] | undefined, n = 10): SongRef[] {
-  const out: SongRef[] = [];
-  const seen = new Set<string>();
-  for (const e of history ?? []) {
-    if (out.length >= n) break;
-    if (!e?.song || isSkippedPlay(e) || e.song.generated) continue;
-    const ref = songRef(e.song);
-    if (!ref.title || !ref.artist || seen.has(e.song.id)) continue;
-    seen.add(e.song.id);
-    out.push(ref);
-  }
-  return out;
 }

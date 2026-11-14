@@ -2,7 +2,6 @@ import { Fragment, lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect
 import { songLine } from '@/utils/songLine';
 
 const QueueBuilderSheet = lazy(() => import('@/features/queue/QueueBuilderSheet').then((m) => ({ default: m.QueueBuilderSheet })));
-const AiPlaylistSheet = lazy(() => import('@/features/playlists/AiPlaylistSheet'));
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Link } from 'react-router-dom';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
@@ -217,7 +216,6 @@ export default function QueuePage() {
   }, [origins]);
   // v6.3.0 — Queue Builder.
   const [building, setBuilding] = useState(false);
-  const [aiPlaylist, setAiPlaylist] = useState(false);
   /** Spoken through the polite live region below — reorders are otherwise silent. */
   const [announcement, setAnnouncement] = useState('');
 
@@ -520,7 +518,6 @@ export default function QueuePage() {
         {/* The page keeps its title when empty, for screen-reader heading navigation. */}
         <h1 className="sr-only">Queue</h1>
         {building && <Suspense fallback={null}><QueueBuilderSheet onClose={() => setBuilding(false)} /></Suspense>}
-        {aiPlaylist && <Suspense fallback={null}><AiPlaylistSheet onClose={() => setAiPlaylist(false)} /></Suspense>}
         <EmptyState
           icon={<QueueIcon className="w-8 h-8" />}
           title="Queue is empty"
@@ -528,7 +525,6 @@ export default function QueuePage() {
           action={
             <span className="flex flex-wrap gap-2 justify-center">
               <button type="button" onClick={() => setBuilding(true)} className="vx-tap px-5 py-2.5 rounded-full btn-primary">Build a queue</button>
-              <button type="button" onClick={() => setAiPlaylist(true)} className="vx-tap px-5 py-2.5 rounded-full btn-secondary inline-flex items-center gap-1.5"><SparkleIcon className="w-4 h-4" />AI Playlist</button>
               <Link to="/radio" className="vx-tap px-5 py-2.5 rounded-full btn-secondary inline-flex items-center">Start radio</Link>
               <Link to="/" className="vx-tap px-5 py-2.5 rounded-full btn-secondary inline-flex items-center">Browse Home</Link>
             </span>
@@ -560,7 +556,6 @@ export default function QueuePage() {
         </div>
         <div className="vx-queue-actions">
           <button type="button" onClick={() => setBuilding(true)} className="vx-queue-btn is-primary">Build a queue</button>
-          <button type="button" onClick={() => setAiPlaylist(true)} className="vx-queue-btn">AI Playlist</button>
           {canRebuild && (
             <button
               type="button"
@@ -728,7 +723,6 @@ export default function QueuePage() {
         <SmartQueue />
       </section>
       {building && <Suspense fallback={null}><QueueBuilderSheet onClose={() => setBuilding(false)} /></Suspense>}
-      {aiPlaylist && <Suspense fallback={null}><AiPlaylistSheet onClose={() => setAiPlaylist(false)} /></Suspense>}
     </div>
   );
 }

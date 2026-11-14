@@ -40,8 +40,7 @@ import {
 import { useSearchStore } from '@/store/searchStore';
 import { DISCOVERY_OPTIONS, QUEUE_LANGUAGE_OPTIONS, intensityWords } from '@/features/settings/recommendationCopy';
 import { PersonalizationPreview } from '@/features/personalization/PersonalizationPreview';
-import { HomeAiSettings } from '@/features/home/HomeAiSettings';
-import { GenerationSettings } from '@/features/settings/GenerationSettings';
+import { HomeSettings } from '@/features/home/HomeSettings';
 import { SoftMuteList } from '@/features/personalization/SoftMuteList';
 import { ACCENT_OPTIONS } from '@/constants/accents';
 import { templateOption } from '@/constants/templates';
@@ -370,53 +369,6 @@ function ClearRecentSearchesRow() {
   );
 }
 
-/**
- * V2 1.4 — the personal engine: the switch, what it sends, and Erase my taste
- * model (DELETE /api/personal/taste). Signed-out listeners see the switch
- * greyed with a line saying it needs the account.
- */
-function PersonalEngineRow() {
-  const account = useAccount();
-  const on = useSettingsStore((s) => s.personalEngine);
-  const setOn = useSettingsStore((s) => s.setPersonalEngine);
-  const kid = useSettingsStore((s) => s.kidMode);
-  const [erasing, setErasing] = useState(false);
-  const [confirm, setConfirm] = useState(false);
-  const erase = () => {
-    setErasing(true);
-    void import('@/services/personal/api')
-      .then((m) => m.erasePersonalTaste())
-      .then(() => toast('Your taste model is erased. The engine starts again from what you play next.'))
-      .catch(() => toast('Could not erase just now. Try again in a moment.'))
-      .finally(() => { setErasing(false); setConfirm(false); });
-  };
-  return (
-    <>
-      <Row
-        label="Personal engine"
-        note={account
-          ? `While this is on, what you play, finish, skip, like and save goes to your account's taste model on the server, which builds Home, playlists and radio for you. ${kid ? 'Paused in Kid mode: the kid profile stays on this device.' : 'Switch it off and Home goes back to the on-device engine at once.'}`
-          : 'Sign in to use the personal engine: a taste model kept with your account that builds Home, playlists and radio.'}
-        keywords="personalised recommendations taste model AI home playlist server"
-      >
-        <Toggle on={on} label="Personal engine" disabled={!account} onChange={(v) => { setOn(v); toast(v ? 'The personal engine is on' : 'The personal engine is off. Home uses the on-device engine.'); }} />
-      </Row>
-      {account && (
-        <Row label="Erase my taste model" note="Removes everything the personal engine has learned about this account on the server: the events, the model, the pages it built. Your device's own taste profile stays." keywords="delete privacy data">
-          {confirm ? (
-            <span className="flex items-center gap-2">
-              <RowButton tone="danger-solid" onClick={erase} disabled={erasing}>{erasing ? 'Erasing…' : 'Erase'}</RowButton>
-              <RowButton onClick={() => setConfirm(false)} disabled={erasing}>Keep</RowButton>
-            </span>
-          ) : (
-            <RowButton tone="danger" onClick={() => setConfirm(true)}>Erase</RowButton>
-          )}
-        </Row>
-      )}
-    </>
-  );
-}
-
 /** VinaX AI: download every chat (signed in only). The export code ships with the chat, not with Settings. */
 function AiChatsExportRow() {
   const account = useAccount();
@@ -742,27 +694,12 @@ export default function SettingsPage() {
                 <Toggle on={!!s.neverRepeat} onChange={s.setNeverRepeat} label="Never repeat" />
               </Row>
               <Row
-                label="AI DJ"
-                note="Builds Up Next around the song playing now. VinaX sends a short summary of your taste, mood, languages and your last 10 songs; the AI suggests songs and VinaX finds them in its catalogue. If the AI is slow or away, VinaX's own picks fill the queue."
-                keywords="ai dj suggestions up next personalised smart queue"
-              >
-                <Toggle on={s.aiDjPicks !== false} onChange={s.setAiDjPicks} label="AI DJ" />
-              </Row>
-              <Row
-                label="AI fine-tunes Up Next"
-                note="VinaX's AI puts its best picks for you in a better order, from a short summary of your taste. If the AI is slow or away, VinaX's own order plays."
-                keywords="ai rerank order up next personalised smart"
-              >
-                <Toggle on={s.aiRerank !== false} onChange={s.setAiRerank} label="AI fine-tunes Up Next" />
-              </Row>
-              <Row
                 label="Time and day awareness"
-                note="VinaX learns what you play at each time of day on weekdays and weekends, from your history on this device, and leans Up Next, the AI DJ and a Home shelf towards it."
+                note="VinaX learns what you play at each time of day on weekdays and weekends, from your history on this device, and leans Up Next and a Home shelf towards it."
                 keywords="moment time of day weekday weekend morning evening habit personalised"
               >
                 <Toggle on={s.momentAware !== false} onChange={s.setMomentAware} label="Time and day awareness" />
               </Row>
-              <GenerationSettings />
               <Block
                 label="Trending vs. your taste"
                 note="How much Home and Up Next lean on what is popular right now."
@@ -880,7 +817,7 @@ export default function SettingsPage() {
           </Section>
 
           <Section title="Home" id="home" lede="How your Home is put together.">
-            <HomeAiSettings />
+            <HomeSettings />
           </Section>
 
           {showNotifications && (
@@ -946,8 +883,7 @@ export default function SettingsPage() {
             )}
           </Section>
 
-          <Section title="Region & privacy" id="privacy" lede="The personal engine and anonymous usage sharing are on by default; switch either off here. Session insights stay off unless you turn them on.">
-            <PersonalEngineRow />
+          <Section title="Region & privacy" id="privacy" lede="Anonymous usage sharing is on by default; switch it off here. Session insights stay off unless you turn them on.">
             <Row label="App permissions" note="Notifications and the microphone: see what VinaX can use, and allow what it needs." keywords="permission allow microphone mic notifications access">
               <button type="button" onClick={() => openPermissionsSheet('settings')} className="vx-tap vx-set-btn">Review</button>
             </Row>

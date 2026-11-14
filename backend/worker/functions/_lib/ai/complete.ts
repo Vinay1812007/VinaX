@@ -2,9 +2,9 @@
  * VinaX AI — one answer, not a stream: `completeText` runs a ladder through
  * the same failover loop the chat uses and collects the text; `completeJson`
  * does the same and parses the answer as JSON, with one repair turn when
- * the first answer does not parse or does not validate. Built for the
- * personal engine's composer and playlist builder, usable by anything that
- * needs a structured answer. Every failure is a null, never a throw.
+ * the first answer does not parse or does not validate. Used by Live
+ * voice's call summary (callSummary.ts) and anything else that needs a
+ * structured answer. Every failure is a null, never a throw.
  */
 import { isLockedModel } from './claudeAccess';
 import { aiSettings, registryFor } from './config';

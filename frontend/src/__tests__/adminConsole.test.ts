@@ -99,7 +99,7 @@ describe('page registry', () => {
       'app-settings/privacy', 'app-settings/search', 'app-settings/updates', 'app-versions', 'at-risk', 'automatic-notifications',
       'blocked-music', 'change-log', 'coming-back', 'dashboard', 'db-maintenance', 'db-tables', 'feedback', 'find-music',
       'google-search', 'languages', 'listen-together', 'listening-hours', 'listening-now', 'listening-time', 'music-sources',
-      'notification-rules', 'notification-setup', 'page-check', 'phones-browsers', 'recent-activity', 'recommendations', 'rising-songs',
+      'notification-rules', 'notification-setup', 'page-check', 'phones-browsers', 'recent-activity', 'rising-songs',
       'saved-audiences', 'scheduled-jobs', 'search-console', 'search-no-results', 'search-overview', 'search-pins',
       'send-notification', 'sent-notifications', 'server-checks', 'signup-journey', 'skipped-songs', 'top-artists',
       'top-listeners', 'top-songs', 'trending', 'user', 'users', 'where-users-are']);
@@ -160,7 +160,7 @@ describe('page registry', () => {
 
   it('every group has its own pages in the sidebar', () => {
     const counts = Object.fromEntries(GROUPS.map((g) => [g, VX.pages().filter((p) => p.group === g && !p.hidden).length]));
-    expect(counts).toEqual({ Home: 5, People: 10, Music: 11, Notifications: 6, 'App Settings': 7, Health: 7, Growth: 4, System: 5 });
+    expect(counts).toEqual({ Home: 5, People: 10, Music: 11, Notifications: 6, 'App Settings': 7, Health: 6, Growth: 4, System: 5 });
   });
 
   it('App Settings pages are listed under one group, in the spec order', () => {

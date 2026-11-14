@@ -12,7 +12,7 @@ import { parsePlaylistBlock } from './playlistBlock';
  * (backend prompt, # Music): an optional `title: …` line, then one song per
  * line as "Title — Artist". The card shows those lines as they stream in and
  * looks the songs up in the catalogue only when the listener presses Play or
- * Save (services/ai/suggest.ts resolvePicks), so a reply costs no catalogue
+ * Save (./suggest.ts resolvePicks), so a reply costs no catalogue
  * calls until it is used. Model output is untrusted: it is only ever shown as
  * text and used as search words.
  */
@@ -28,7 +28,7 @@ export function PlaylistCard({ text }: { text: string }) {
 
   // Look the songs up once per press; the catalogue answers in the order asked.
   const resolve = async (): Promise<Song[]> => {
-    const { resolvePicks } = await import('@/services/ai/suggest');
+    const { resolvePicks } = await import('./suggest');
     const found = await resolvePicks(draft.songs);
     return found.map((f) => f.song);
   };

@@ -260,7 +260,7 @@ export const MODELS: readonly ModelSpec[] = [
     description: 'Light reasoning for everyday code', maxContextChars: CF_CTX, maxOutput: 8_192,
     flags: { reasoning: true, artifacts: true, thinkFormat: 'field' },
   }),
-  // ---- More models (never in a ladder, except MiniMax last in music and Gemma 4 31B last in title)
+  // ---- More models (never in a ladder, except Gemma 4 31B last in title)
   m('nvidia', 'minimaxai/minimax-m3.1-flash', 'MiniMax M3.1 Flash', 'more', {
     description: 'Long, thorough answers (slow)', maxContextChars: NVIDIA_CTX,
   }),
@@ -350,7 +350,7 @@ export const UTILITY_MODELS: readonly UtilityModel[] = [
   u('gemini', 'aqa', 'Gemini AQA', 'aqa'),
 ];
 
-export type LadderName = 'vision' | 'long' | 'deep' | 'code' | 'fast' | 'default' | 'title' | 'grounded' | 'music';
+export type LadderName = 'vision' | 'long' | 'deep' | 'code' | 'fast' | 'default' | 'title' | 'grounded' | 'backstage';
 
 /**
  * Auto's ladders, best first (README.md (VinaX AI) "Auto"). Only approved
@@ -376,10 +376,10 @@ export const LADDERS: Readonly<Record<LadderName, readonly string[]>> = {
   default: ['groq:openai/gpt-oss-120b', 'nvidia:nvidia/nemotron-3.5-bolt-e4b', 'gemini:gemini-3.1-flash-lite', 'openrouter:nvidia/nemotron-3-ultra-550b-a55b:free', 'nvidia:nvidia/nemotron-3.5-lightning-30b-a3b', 'nvidia:mistralai/mistral-large-4-1t-a52b'],
   title: ['gemini:gemini-3.1-flash-lite', 'nvidia:nvidia/nemotron-3.5-bolt-e4b'],
   /**
-   * The music routes' short JSON tasks (POST /api/ai/rerank, /api/ai/home-layout):
-   * the quickest models first, because each answer has a deadline of 1.5–2.5 s.
+   * Short backstage JSON tasks (VinaX AI's memory learning, after the title
+   * ladder): the quickest models first, because each answer has a deadline.
    */
-  music: ['nvidia:nvidia/nemotron-3.5-bolt-e4b', 'gemini:gemini-3.1-flash-lite'],
+  backstage: ['nvidia:nvidia/nemotron-3.5-bolt-e4b', 'gemini:gemini-3.1-flash-lite'],
   /** Put first in Auto's ladder when a reply searches the web: free Google Search grounding (none work now; see above). */
   grounded: [],
 };

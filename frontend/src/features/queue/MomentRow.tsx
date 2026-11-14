@@ -19,7 +19,7 @@ export function MomentRow() {
     <div className="vx-queue-toolrow" data-testid="queue-moment">
       <span className="vx-queue-toolrow-label" aria-hidden>Moment</span>
       <p className="text-meta text-ink-300 py-1 m-0">
-        {line}. Up Next and the AI DJ lean that way. <Link to="/settings#recommendations" className="underline">Change</Link>
+        {line}. Up Next leans that way. <Link to="/settings#recommendations" className="underline">Change</Link>
       </p>
     </div>
   );

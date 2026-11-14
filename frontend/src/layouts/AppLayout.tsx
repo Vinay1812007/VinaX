@@ -304,8 +304,6 @@ export function AppLayout() {
       void import('@/services/push/notifyAsk').then((m) => m.installNotifyAsk()).catch(() => undefined);
       // 13.0 — library, history, taste and settings follow the Google account.
       void import('@/services/account/sync').then((m) => m.installAccountSync()).catch(() => undefined);
-      // V2 1.4 — the personal engine learns from listening while signed in with the setting on.
-      void import('@/services/personal/reporter').then((m) => m.installPersonalReporter()).catch(() => undefined);
       void loadBlocklist();
       // 1.4 — on demand: it brings the lyrics client, which nothing else in the first load needs.
       void import('@/services/media-session/lockscreenLyrics').then((m) => m.initLockScreenLyrics()).catch(() => undefined);

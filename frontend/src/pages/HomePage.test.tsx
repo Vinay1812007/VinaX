@@ -86,7 +86,7 @@ beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
   resetSessionHomeOrder();
-  // 1.4 — the AI Home Builder's per-generation decision (tests restart the generation counter).
+  // Home's per-generation order (tests restart the generation counter).
   resetHomeDecision();
   searched.length = 0;
   feeds.charts = feeds.featured = feeds.newReleases = feeds.trendingPlaylists = undefined;

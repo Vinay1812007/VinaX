@@ -77,6 +77,13 @@ const AI_KEYS = new Set([
   'vinax.recommendation.ai-metadata.v2',
   'vinax.recommendation.ai-metadata.v3',
   'vinax.aihome.recent.v1',
+  // 1.14 — the music AI is gone: the "Generated for you" Home list.
+  'vinax.generated.v1',
+  // 1.14 — the AI Home Builder: its switch, "not interested" shelves and recent shelf titles.
+  'vinax.home.ai.v1',
+  'vinax.home-ai.titles.v1',
+  // 1.14 — the personal engine's outgoing event queue.
+  'vinax.personal-queue.v1',
 ]);
 /** `vinax.ai.*`, `vinax.aiplaylist.*` and the `vinax.aiSomething` preferences. */
 const AI_KEY_RE = /^vinax\.ai(\.|playlist\.|[A-Z])/;

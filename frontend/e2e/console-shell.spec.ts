@@ -51,7 +51,7 @@ test.describe('console shell', () => {
     await expect(page.locator('.nav-group.open')).toHaveCount(1);
     await expect(page.locator('.nav-group.open .nav-link')).toHaveText(['Dashboard', 'Listening Now', 'Recent Activity', 'Listen Together Rooms', 'Smart Alerts']);
     await groups.filter({ hasText: 'Health' }).click();
-    await expect(page.locator('.nav-group[data-group="Health"] .nav-link')).toHaveText(['App Errors', 'Server Checks', 'Music Sources', 'AI Assistant', 'Recommendations', 'App Versions', 'API Keys Status']);
+    await expect(page.locator('.nav-group[data-group="Health"] .nav-link')).toHaveText(['App Errors', 'Server Checks', 'Music Sources', 'AI Assistant', 'App Versions', 'API Keys Status']);
     await groups.filter({ hasText: 'Health' }).click();
     await expect(page.locator('.nav-group[data-group="Health"] ul')).toBeHidden();
     await groups.filter({ hasText: 'People' }).click();

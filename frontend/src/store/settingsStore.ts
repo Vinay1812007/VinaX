@@ -99,31 +99,14 @@ export interface SettingsState {
    * queued songs and an explicit "Play again" are never held back.
    */
   neverRepeat: boolean;
-  /**
-   * 1.4 — let the music AI fine-tune the order of Up Next (services/ai/musicAi.ts):
-   * the top of the on-device order, as a compact summary, comes back in a better
-   * order within 1.5 s, or the on-device order plays. On by default.
-   */
-  aiRerank: boolean;
-  /** 1.12 — Up Next, the AI DJ and Home know the time of day and weekday/weekend, from the listener's own history. */
+  /** 1.12 — Up Next and Home know the time of day and weekday/weekend, from the listener's own history. */
   momentAware: boolean;
-  /** The AI DJ suggests songs for Up Next (not `aiDj`: that name belongs to a retired setting the migration removes) from a taste summary and recent plays (services/ai/dj.ts). On by default. */
-  aiDjPicks: boolean;
-  /** 1.4 — add one AI generated song to each automatic stretch (services/ai/genInQueue.ts). Off by default. */
-  genInQueue: boolean;
   /** v6.5.0 — smart queue: tapping a song starts it and VinaX builds the
    *  continuation on the device, instead of following the tapped list. */
   djTakeover: boolean;
   /** Package C2 — Kid mode: hides explicit-flagged songs and switches to a
    *  separate taste profile. Favorites/downloads/settings stay shared. */
   kidMode: boolean;
-  /**
-   * V2 1.4 — the personal engine: while signed in, listening is reported to
-   * the account's taste model on the server, which builds Home, playlists
-   * and radio (README.md (The personal engine)). On by default; off stops the
-   * reporting at once and Home goes back to the on-device engine.
-   */
-  personalEngine: boolean;
   allowRegionInference: boolean;
   manualCountry: string | null;
   manualRegionLabel: string | null;
@@ -182,13 +165,9 @@ export interface SettingsState {
   setDiscoveryMode(v: DiscoveryMode): void;
   setQueueLanguages(v: QueueLanguages): void;
   setNeverRepeat(v: boolean): void;
-  setAiRerank(v: boolean): void;
   setMomentAware(v: boolean): void;
-  setAiDjPicks(v: boolean): void;
-  setGenInQueue(v: boolean): void;
   setDjTakeover(v: boolean): void;
   setKidMode(v: boolean): void;
-  setPersonalEngine(v: boolean): void;
   setAllowRegionInference(v: boolean): void;
   setManualCountry(c: string | null): void;
   setManualRegionLabel(r: string | null): void;
@@ -257,13 +236,9 @@ const defaults = {
   discoveryMode: 'balanced' as DiscoveryMode,
   queueLanguages: 'mix' as QueueLanguages,
   neverRepeat: false,
-  aiRerank: true,
   momentAware: true,
-  aiDjPicks: true,
-  genInQueue: false,
   djTakeover: true,
   kidMode: false,
-  personalEngine: true,
   allowRegionInference: true,
   manualCountry: null,
   manualRegionLabel: null,
@@ -400,17 +375,13 @@ export const useSettingsStore = create<SettingsState>()(
       setExploreMode: (exploreMode) => set({ exploreMode, discoveryMode: exploreMode ? 'discover' : 'balanced' }),
       setQueueLanguages: (queueLanguages) => set({ queueLanguages: queueLanguages === 'one' ? 'one' : 'mix' }),
       setNeverRepeat: (neverRepeat) => set({ neverRepeat: !!neverRepeat }),
-      setAiRerank: (aiRerank) => set({ aiRerank: !!aiRerank }),
       setMomentAware: (momentAware) => set({ momentAware: !!momentAware }),
-      setAiDjPicks: (aiDjPicks) => set({ aiDjPicks: !!aiDjPicks }),
-      setGenInQueue: (genInQueue) => set({ genInQueue: !!genInQueue }),
       setDiscoveryMode: (mode) => {
         const discoveryMode = isDiscoveryMode(mode) ? mode : 'balanced';
         set({ discoveryMode, exploreMode: discoveryMode === 'discover' });
       },
       setDjTakeover: (djTakeover) => set({ djTakeover }),
       setKidMode: (kidMode) => set({ kidMode }),
-      setPersonalEngine: (personalEngine) => set({ personalEngine }),
       setAllowRegionInference: (allowRegionInference) => set({ allowRegionInference }),
       setManualCountry: (manualCountry) => set({ manualCountry }),
       setManualRegionLabel: (manualRegionLabel) => set({ manualRegionLabel }),
@@ -465,6 +436,12 @@ export const useSettingsStore = create<SettingsState>()(
         delete legacy.aiHomeShelves;
         delete legacy.aiAssist;
         delete legacy.djVoice;
+        // 1.14 — the music AI switches (pickSettings drops them too).
+        delete legacy.aiRerank;
+        delete legacy.aiDjPicks;
+        delete legacy.genInQueue;
+        // 1.14 — the personal engine (server taste model) is gone.
+        delete legacy.personalEngine;
         try {
           window.localStorage.removeItem('vinax.home.shown.v1');
           window.localStorage.removeItem('vinax.aihome.recent.v1');

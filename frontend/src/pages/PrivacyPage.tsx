@@ -42,32 +42,6 @@ export default function PrivacyPage() {
           emails are sent through our email provider, Resend, which receives your email address, your first name and
           what the email says. VinaX never sends marketing emails.
         </p>
-        <H>The personal engine — on while you are signed in, unless you switch it off</H>
-        <p>
-          Signed in, VinaX keeps a <b>taste model</b> for your account on its own server and uses it to build Home,
-          playlists and radio for you. While the switch in Settings &rarr; Region &amp; privacy is on, the app sends,
-          in small batches, what you play, finish, skip, like, un-like, mark as not interested, save to a playlist,
-          queue or play from search &mdash; each with the song&rsquo;s title, artists (with their catalogue ids), album,
-          language, year, length, artwork link and the mood, genre or energy the app guessed for it, how many seconds
-          you heard, the hour and weekday on your clock, your time zone name, which shelf it came from and where on
-          it, and your Familiar / Balanced / Discover setting. The server keeps these events for a year, the model
-          they add up to (your artists, languages, moods, hours and songs as scores, and a vector that stands for your
-          taste), what it has shown you, and the pages it built, all tied to your account and to no one else. Your
-          plays also count, without your name or account, in two community figures every listener&rsquo;s Home draws
-          on: how many listeners played a song this week, and which songs listeners tend to play together.{' '}
-          <strong>Nothing goes to an advertiser.</strong>
-        </p>
-        <p>
-          Two things about it use an AI model. A short embedding of each song&rsquo;s catalogue words (title,
-          artists, album, language, year) is computed with an AI model so that similar songs sit near each other;
-          this is about the song, never about you. And the page Home shows and the playlists you ask for are arranged
-          by one of the AI models VinaX AI also uses, which is given a few plain lines about your taste
-          (&ldquo;listens mostly to Telugu, top artists&hellip;&rdquo;), the hour, the day,
-          your first name, and the candidate songs &mdash; never your event history. Which AI providers can be involved is listed in the AI
-          section below. Switching the engine off stops the reporting at once and Home goes back to the on-device
-          engine; <b>Erase my taste model</b> in the same place removes everything the engine holds about your account,
-          and deleting your account removes it too. Kid mode never reports: the kid profile stays on the device.
-        </p>
         <H>What we receive — anonymous usage, on unless you switch it off</H>
         <p>
           Anonymous usage sharing is on by default: the welcome screen shows it as a ticked box you can untick, and
@@ -104,51 +78,11 @@ export default function PrivacyPage() {
         </p>
         <H>AI</H>
         <p>
-          Signed out, or with the personal engine switched off, your music is never sent to an AI service: what plays
-          next, Radio, Home&rsquo;s shelves and your taste profile are worked out on your device. With the personal
-          engine on, the section above says exactly what reaches an AI model (a song&rsquo;s catalogue words for its
-          embedding, and a few lines about your taste for arranging Home and building a playlist). Voice search and Drive mode&rsquo;s voice commands use your device&rsquo;s own
-          speech engine — in supporting browsers and in the Android app, speech is recognised on your device — and
-          VinaX never receives or stores audio.
-        </p>
-        <p>
-          &ldquo;AI fine-tunes Up Next&rdquo; (on by default, Settings → Recommendations) asks VinaX&rsquo;s AI to put
-          the best of what VinaX picked in a better order. It sends a short summary only: for up to 40 songs their
-          language, mood, energy, genre and lead artist under a made-up label (never a title), and your top languages,
-          artists and moods, how lively your listening is by time of day, your discovery setting and how many songs
-          you skipped in a row. It goes through VinaX&rsquo;s server to the same AI providers as VinaX AI, and nothing
-          is stored. If the AI is slow or away, VinaX&rsquo;s own order plays.
-        </p>
-        <p>
-          &ldquo;Let AI build my Home&rdquo; (on by default, Settings → Home) sends the same short summary, the
-          shelves Home may show and the ones you said you are not interested in, and up to 8 of your own songs as
-          features under made-up labels (never a title), so the AI can pick and name your shelves. It also sends the
-          last 20 shelf titles it gave you, kept on your device, so it does not repeat them. Every song on Home still
-          comes from VinaX&rsquo;s own picks.
-        </p>
-        <p>
-          The &ldquo;AI DJ&rdquo; (on by default, Settings → Recommendations) builds Up Next around the song playing
-          now. It sends that song&rsquo;s title, artist, language, mood and energy, the titles and artists of your last
-          10 songs, the same short taste summary, and the &ldquo;Tune this queue&rdquo; choice you tapped. The AI
-          suggests songs by name, and VinaX searches its own catalogue for each one and keeps only real, playable
-          matches. If the AI is slow or away, VinaX&rsquo;s own picks fill the queue.
-        </p>
-        <p>
-          &ldquo;AI Playlist&rdquo; (Library and Queue) sends the words you type, the titles and artists of your last
-          10 songs and the short taste summary when you press Make playlist. The suggested songs are found in the
-          catalogue, and songs in a language you muted or played in the last week are left out. Without the AI, the
-          playlist comes from a catalogue search for your words.
-        </p>
-        <p>
-          The lyrics tools on the Lyrics page (Romanized, English, Meaning) send only the song&rsquo;s lyrics, title,
-          artist and language, never anything about you.
-        </p>
-        <p>
-          &ldquo;Generate a song like this&rdquo; (where it is switched on) sends only the playing song&rsquo;s feel —
-          its mood, energy, tempo, genre and language, a length — and any words you add, never the song itself, its
-          title, its singers or its words. The new song is made by Google&rsquo;s music model (Gemini) through VinaX&rsquo;s server and
-          kept there for a day; your device&rsquo;s random install id is used, hashed, to count your songs for the
-          day. Generated songs are always labelled &ldquo;AI generated&rdquo;.
+          The music side of VinaX uses no AI. What plays next, Radio, Home&rsquo;s shelves, playlists, lyrics and
+          your taste profile are worked out on your device, and your listening is never sent to an AI service.
+          Voice search and Drive mode&rsquo;s voice commands use your device&rsquo;s own speech engine — in
+          supporting browsers and in the Android app, speech is recognised on your device — and VinaX never
+          receives or stores audio.
         </p>
         <p>
           VinaX AI, the chat assistant at /vinaxai, is the one exception, and only when you use it. What you type in
@@ -217,8 +151,7 @@ export default function PrivacyPage() {
         <H>Ads and trackers — the honest version</H>
         <p>
           VinaX sets no tracking cookies of its own, and runs no third-party analytics unless you opt in to session
-          insights above — and even then, your taste profile, history and favorites never reach a third party. The
-          personal engine keeps its copy on VinaX&rsquo;s own server, for your account alone.
+          insights above — and even then, your taste profile, history and favorites never reach a third party.
         </p>
         <p>
           <b>No ads.</b> VinaX shows no advertising anywhere: not on the website, not in the Android app and not in

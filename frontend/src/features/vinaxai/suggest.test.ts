@@ -1,12 +1,11 @@
 /**
- * Songs the music AI names become catalogue songs only on a confident match:
+ * Songs VinaX AI names become catalogue songs only on a confident match:
  * the title matches and the artist is among the song's artists. Anything
  * else is dropped, so the AI can never put a wrong or made-up song on screen.
  */
 import { describe, expect, it, vi } from 'vitest';
 import { makeSong } from '@/__fixtures__/songs';
-import type { HistoryEntry } from '@/types';
-import { bestMatch, recentPlays, resolvePicks } from './suggest';
+import { bestMatch, resolvePicks } from './suggest';
 
 const samaja = makeSong('s1', { title: 'Samajavaragamana (From "Ala Vaikunthapurramuloo")', artist: 'Sid Sriram' });
 const cover = makeSong('s2', { title: 'Samajavaragamana', artist: 'Some Cover Band' });
@@ -37,13 +36,5 @@ describe('resolvePicks', () => {
     ], { search, concurrency: 2 });
     expect(out.map((x) => x.song.id)).toEqual(['s3', 's1']);
     expect(out[0].pick.reason).toBe('Bouncy');
-  });
-});
-
-describe('recentPlays', () => {
-  it('lists the last songs the listener let play, newest first, without skips or repeats', () => {
-    const e = (song: ReturnType<typeof makeSong>, skipped = false): HistoryEntry => ({ song, ts: Date.now(), completed: !skipped, playedMs: skipped ? 2_000 : 200_000, ...(skipped ? { skipped: true } : {}) } as unknown as HistoryEntry);
-    const plays = recentPlays([e(other), e(cover, true), e(samaja), e(other)], 10);
-    expect(plays.map((p) => p.artist)).toEqual(['Armaan Malik', 'Sid Sriram']);
   });
 });

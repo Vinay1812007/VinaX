@@ -242,15 +242,6 @@
                 if (yes) return post({ action: 'purge_events', days: purgeDays }, 'Clean-up', function (r) { return fmt.plural(r.deleted, 'row') + ' removed'; });
               });
             } })),
-          action('Rebuild statistics', 'Re-works the “played together” links behind recommendations from the last 30 days. Normally this happens every night. It can take a minute.', null,
-            ui.button('Rebuild now', { kind: 'ghost', icon: 'refresh', onClick: function () {
-              return VX.confirm({ title: 'Rebuild statistics now?', body: 'Recommendations keep working while it runs.', confirmLabel: 'Rebuild' }).then(function (yes) {
-                if (!yes) return;
-                return VX.api.post('/api/admin/personal', { action: 'colisten' }, { timeout: 120000 }).then(function (res) {
-                  VX.toast(res.ok ? 'Statistics rebuilt — ' + fmt.plural(obj(res.data).pairs, 'link') + ' ✓' : 'Something went wrong — ' + res.message, res.ok ? 'ok' : 'bad');
-                });
-              });
-            } })),
           action('Close empty Listen Together rooms', 'Closes rooms nobody used for six hours and removes members who left a day ago. Happens by itself every hour.', null,
             ui.button('Close empty rooms', { kind: 'ghost', icon: 'refresh', onClick: function () {
               return VX.confirm({ title: 'Close empty rooms now?', body: 'Rooms people are using stay open.', confirmLabel: 'Close empty rooms' }).then(function (yes) {

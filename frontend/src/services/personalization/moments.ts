@@ -7,10 +7,8 @@ import { energyOfSong } from './session';
  * A weekday morning commute, a weekend afternoon, a late weeknight: each is a
  * moment with its own languages, artists and energy. The moment feeds three
  * places — Up Next's scorer (a bonus for the languages and artists of this
- * moment), the music AI's "sitting intent" (so the AI DJ and the rerank know
- * it is "weekday evening" and who usually plays then) and a Home shelf
- * ("For your weekday evenings"). Nothing leaves the device but the moment's
- * name and up to three artist names, and only when the AI is asked.
+ * moment), the "This moment" line in Up Next and a Home shelf ("For your
+ * weekday evenings"). It is all worked out on the device; nothing leaves it.
  */
 export type MomentPart = 'early-morning' | 'morning' | 'afternoon' | 'evening' | 'night' | 'late-night';
 

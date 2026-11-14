@@ -1,5 +1,5 @@
-/* App Settings › Features & AI — feature switches, VinaX AI (who may use it,
- * models, limits, instructions), recommendations and music AI.
+/* App Settings › Features & AI — feature switches and VinaX AI (who may use
+ * it, models, limits, instructions). The music side has no AI.
  * Stored shapes and who reads them: README.md (Owner console) → "Features & AI". */
 (function () {
   'use strict';
@@ -172,105 +172,9 @@
     }
   };
 
-  /* ---------------------------------------------------------- recommendations */
-
-  var WEIGHTS = [
-    { key: 'tasteFit', def: 0.3, label: 'Match each person’s taste', hint: 'How much picks follow what the person already likes.' },
-    { key: 'novelty', def: 0.1, label: 'Mix of new vs familiar songs', hint: 'More = more songs they have not heard yet.' },
-    { key: 'freshness', def: 0.05, label: 'New releases', hint: 'More = newer songs come up more often.' },
-    { key: 'language', def: 0.14, label: 'Stay in their languages', hint: 'Less = more language variety.' },
-    { key: 'artist', def: 0.22, label: 'Favourite artists', hint: 'More = more songs by artists they play a lot.' },
-    { key: 'colisten', def: 0.14, label: 'Songs people play together', hint: 'More = songs often played after one another.' },
-    { key: 'community', def: 0.04, label: 'Popular with everyone', hint: 'More = what is popular across VinaX.' },
-    { key: 'hour', def: 0.06, label: 'Time of day', hint: 'More = picks follow what they play at this hour.' },
-    { key: 'skips', def: 0.2, label: 'Avoid songs they skip', hint: 'More = songs they skipped come back less.' },
-    { key: 'exposure', def: 1, label: 'Avoid repeating songs', hint: 'More = a song shown recently waits longer.' }
-  ];
-  var factorText = function (f) { return f === 1 ? 'Built-in' : f < 1 ? (f <= 0.6 ? 'Much less' : 'Less') + ' (' + f.toFixed(1) + '×)' : (f >= 1.7 ? 'Much more' : 'More') + ' (' + f.toFixed(1) + '×)'; };
-  var personalSection = {
-    key: 'personal-config', title: 'Recommendations',
-    desc: 'How VinaX picks songs for each signed-in person. Each slider can go from half to double the built-in amount.',
-    fromValue: function (v) {
-      v = obj(v);
-      var w = obj(v.weights), f = {};
-      WEIGHTS.forEach(function (x) { f[x.key] = typeof w[x.key] === 'number' ? Math.round(Math.min(2, Math.max(0.5, w[x.key] / x.def)) * 10) / 10 : 1; });
-      var rest = {};
-      Object.keys(w).forEach(function (k) { if (!WEIGHTS.some(function (x) { return x.key === k; })) rest[k] = w[k]; });
-      return { enabled: v.enabled !== false, composer: v.composer !== false, embedModel: v.embedModel || '', factors: f, otherWeights: rest };
-    },
-    toValue: function (m) {
-      var weights = st.clone(m.otherWeights);
-      WEIGHTS.forEach(function (x) { if (m.factors[x.key] !== 1) weights[x.key] = Math.round(x.def * m.factors[x.key] * 10000) / 10000; });
-      var o = {};
-      if (!m.enabled) o.enabled = false;
-      if (!m.composer) o.composer = false;
-      if (m.embedModel) o.embedModel = m.embedModel;
-      if (Object.keys(weights).length) o.weights = weights;
-      return Object.keys(o).length ? o : null;
-    },
-    describe: function (v) {
-      v = obj(v);
-      if (v.enabled === false) return 'Recommendations off (the app uses its own picks)';
-      var changed = WEIGHTS.filter(function (x) { return typeof obj(v.weights)[x.key] === 'number'; }).map(function (x) { return x.label.toLowerCase(); });
-      return changed.length ? 'Changed: ' + changed.join(', ') : 'Built-in mix';
-    },
-    render: function (m, set) {
-      return h('div.form-col',
-        st.toggle(m, 'enabled', set, 'Personal recommendations', 'Off makes the app use its own on-device picks instead.'),
-        st.toggle(m, 'composer', set, 'Build Home for each person', 'Off keeps one Home layout for everyone.'),
-        h('div.limit-grid', WEIGHTS.map(function (x) {
-          return ui.slider({ label: x.label, min: 0.5, max: 2, step: 0.1, value: m.factors[x.key], hint: x.hint, marks: ['Less', 'More'],
-            format: factorText, onChange: function (v) { m.factors[x.key] = Math.round(v * 10) / 10; set(m); } });
-        })));
-    }
-  };
-
-  /* ---------------------------------------------------------- music AI */
-
-  var musicSection = {
-    key: 'ai-music', title: 'Music AI',
-    desc: 'AI help with what plays next, the AI DJ, AI playlists, lyrics tools, the Home layout and making new songs. When it is off, the app uses its own picks.',
-    fromValue: function (v) {
-      v = obj(v); var g = obj(v.generate);
-      return { enabled: v.enabled !== false, rerank: v.rerank !== false, home: v.home !== false, dj: v.dj !== false, playlist: v.playlist !== false, lyrics: v.lyrics !== false, generate: g.enabled === true, quota: typeof g.dailyQuota === 'number' ? Math.min(50, Math.max(1, Math.round(g.dailyQuota))) : 5 };
-    },
-    toValue: function (m) {
-      var o = {};
-      if (!m.enabled) o.enabled = false;
-      if (!m.rerank) o.rerank = false;
-      if (!m.home) o.home = false;
-      if (!m.dj) o.dj = false;
-      if (!m.playlist) o.playlist = false;
-      if (!m.lyrics) o.lyrics = false;
-      if (m.generate || m.quota !== 5) o.generate = { enabled: m.generate, dailyQuota: m.quota };
-      return Object.keys(o).length ? o : null;
-    },
-    describe: function (v) {
-      v = obj(v);
-      if (v.enabled === false) return 'Music AI off';
-      var on = [v.rerank !== false ? 'Up Next order' : null, v.dj !== false ? 'AI DJ' : null, v.playlist !== false ? 'AI playlists' : null, v.lyrics !== false ? 'lyrics tools' : null, v.home !== false ? 'Home layout' : null, obj(v.generate).enabled ? 'song making (' + (obj(v.generate).dailyQuota || 5) + ' a day)' : null].filter(Boolean);
-      return on.length ? 'On: ' + on.join(', ') : 'Every part off';
-    },
-    render: function (m, set) {
-      var sub = h('div');
-      function draw() {
-        VX.mount(sub, h('div' + (m.enabled ? '' : '.dim-group'),
-          ui.switchRow('Order Up Next with AI', 'Puts the next songs in a smarter order.', m.rerank, function (on) { m.rerank = on; set(m); }, { disabled: !m.enabled }),
-          ui.switchRow('AI DJ', 'Suggests songs to follow the one playing; the app finds them in its catalogue.', m.dj, function (on) { m.dj = on; set(m); }, { disabled: !m.enabled }),
-          ui.switchRow('AI playlists', 'Makes a playlist from a vibe people describe in their own words.', m.playlist, function (on) { m.playlist = on; set(m); }, { disabled: !m.enabled }),
-          ui.switchRow('Lyrics tools', 'Romanizes, translates and explains lyrics.', m.lyrics, function (on) { m.lyrics = on; set(m); }, { disabled: !m.enabled }),
-          ui.switchRow('Arrange Home with AI', 'Lets AI choose the order of Home sections.', m.home, function (on) { m.home = on; set(m); }, { disabled: !m.enabled }),
-          ui.switchRow('Let people make songs', 'Makes a new song like one they love.', m.generate, function (on) { m.generate = on; set(m); draw(); }, { disabled: !m.enabled }),
-          m.generate ? ui.slider({ label: 'Songs each person can make a day', min: 1, max: 50, value: m.quota, disabled: !m.enabled, format: function (v) { return fmt.plural(v, 'song') + (v === 5 ? ' (built-in)' : ''); }, onChange: function (v) { m.quota = v; set(m); } }) : null));
-      }
-      draw();
-      return h('div.form-col', ui.switchRow('Music AI', 'Off stops every music AI feature.', m.enabled, function (on) { m.enabled = on; set(m); draw(); }), sub);
-    }
-  };
-
   VX.settingsPage({
     id: 'app-settings/features', title: 'Features & AI', icon: 'spark', order: 2,
-    desc: 'Switch app features on or off, and control VinaX AI, recommendations and music AI.',
-    sections: [flagsSection, aiSection, personalSection, musicSection]
+    desc: 'Switch app features on or off, and control VinaX AI.',
+    sections: [flagsSection, aiSection]
   });
 })();

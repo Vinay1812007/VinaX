@@ -1,10 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { albumPath, artistPath, songPath } from '@/utils/slug';
-// 1.4 — "Generate a song like this": its own chunk, loaded with Now Playing, shown only where song making is on.
 // 1.13 — the Together tab's panel (start, join, scan a QR): loaded when the tab is first opened.
 const TogetherPanel = lazy(() => import('@/features/together/TogetherPanel'));
-const GenerateLikeThis = lazy(() => import('@/features/player/GenerateLikeThis').then((m) => ({ default: m.GenerateLikeThis })));
 import { isEpisode, podcastPath } from '@/features/podcasts/paths';
 import { filmTitleFromAlbumName } from '@/services/api/movies';
 import { Link, useNavigate } from 'react-router-dom';
@@ -827,10 +825,6 @@ export default function NowPlayingPage() {
                   <SlidersIcon />
                 </IconButton>
               </div>
-
-              <Suspense fallback={null}>
-                <GenerateLikeThis song={song} />
-              </Suspense>
 
               {playingOn && (
                 <p className="vx-np-device-line">

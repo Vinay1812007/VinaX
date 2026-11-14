@@ -4,7 +4,6 @@
  *   checks           Server Checks: the website and the services the app calls (/api/admin/edge)
  *   sources          Music Sources: each music source checked with a one-song search (/api/admin/musicapi)
  *   ai               AI Assistant: VinaX AI's providers and models (/api/admin/ai)
- *   recommendations  Recommendations: the "For you" engine (/api/admin/personal)
  *   versions         App Versions: releases and builds (/api/admin/releases)
  *   keys             API Keys Status: Set ✓ / Missing ✗, never values (/api/admin/envcheck)
  */
@@ -25,9 +24,6 @@
     { id: 'ai-status', title: 'AI Assistant', icon: 'spark', render: renderAi,
       desc: 'The companies and models behind VinaX AI, and whether each one is ready.',
       keywords: 'ai vinax ai models providers chat' },
-    { id: 'recommendations', title: 'Recommendations', icon: 'target', render: renderRecs,
-      desc: 'The engine behind “For you” picks: what it has learned and what it is still working on.',
-      keywords: 'recommendations for you picks engine up next' },
     { id: 'app-versions', title: 'App Versions', icon: 'phone', render: renderVersions,
       desc: 'The newest app release and the latest builds.',
       keywords: 'versions releases builds apk android update' },
@@ -392,47 +388,6 @@
           h('a', { href: '#/app-settings/features', onclick: function (e) { e.preventDefault(); ctx.go('app-settings/features'); } }, 'App Settings → Features & AI'), '.')
       ];
     });
-  }
-
-  /* ----------------------------------------------------- Recommendations */
-
-  function renderRecs(host, ctx) {
-    var body = h('div');
-    function run(action, label, done) {
-      return VX.api.post('/api/admin/personal', { action: action }, { timeout: 90000 }).then(function (res) {
-        if (!res.ok) { VX.toast('Something went wrong — ' + res.message, 'bad'); return; }
-        VX.toast(done(obj(res.data)), 'ok');
-        return load();
-      });
-    }
-    host.appendChild(h('div.toolbar',
-      VX.can('edit') ? ui.button('Learn new songs now', { small: true, icon: 'spark', onClick: function () { return run('embed', 'Learning', function (d) { return 'Learned ' + fmt.plural(d.embedded, 'song') + ' ✓ · ' + fmt.num(d.backlog) + ' still to learn'; }); } }) : null,
-      VX.can('edit') ? ui.button('Rebuild played-together links', { small: true, icon: 'refresh', onClick: function () { return run('colisten', 'Rebuilding', function (d) { return 'Rebuilt ✓ · ' + fmt.plural(d.pairs, 'link'); }); } }) : null));
-    host.appendChild(body);
-    function load() {
-      return ui.load(body, function () { return VX.api.get('/api/admin/personal', null, { fresh: true }); }, function (d) {
-        var gate = ui.gate(d, ctx);
-        if (gate) return gate;
-        var st = obj(d.stats), cfg = obj(d.config), embed = obj(d.embed);
-        var n = function (v) { return v == null ? '—' : fmt.num(v); };
-        return [
-          cfg.enabled === false ? ui.notice('Recommendations are switched off. People get simpler picks made on their phone. Switch them on in App Settings → Features & AI.', 'warn')
-            : !embed.configured ? ui.notice('Recommendations are on, but the server cannot learn new songs right now (no AI provider for it). Picks still use what people play together.', 'warn')
-              : ui.notice('Recommendations are on and learning.', 'ok'),
-          ui.stats([
-            { label: 'People with a taste profile', value: n(st.accounts), info: 'Signed-in people the engine has learned enough about to make personal picks.' },
-            { label: 'Signals today', value: n(st.eventsDay), sub: n(st.eventsWeek) + ' this week', info: 'Plays, skips and likes the engine learned from today.' },
-            { label: 'Songs it knows', value: n(st.songs), sub: n(st.songsEmbedded) + ' fully learned', info: 'Songs the engine has seen. “Fully learned” songs can be matched by sound and mood.' },
-            { label: 'Songs still to learn', value: n(st.backlog), tone: num(st.backlog) > 1000 ? 'warn' : null, info: 'New songs waiting to be learned. The Recommendation learning job works through them every half hour.' },
-            { label: 'Made-for-you pages today', value: n(st.pagesDay), sub: n(st.playlistsDay) + ' playlists', info: 'Personal pages and playlists the engine built for people today.' },
-            { label: 'Played-together links', value: fmt.compact(st.colistenPairs || 0), sub: st.colistenUpdatedAt ? 'rebuilt ' + fmt.ago(st.colistenUpdatedAt) : 'never rebuilt', info: 'Pairs of songs people often play one after the other. Rebuilt every night.' }
-          ]),
-          h('p.muted.small', 'Change how recommendations mix new and familiar songs in ',
-            h('a', { href: '#/app-settings/features', onclick: function (e) { e.preventDefault(); ctx.go('app-settings/features'); } }, 'App Settings → Features & AI'), '.')
-        ];
-      });
-    }
-    return load();
   }
 
   /* -------------------------------------------------------- App Versions */

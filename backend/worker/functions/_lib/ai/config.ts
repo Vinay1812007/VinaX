@@ -134,7 +134,7 @@ export async function aiSettings(env: DbEnv): Promise<AiSettings> {
 /** May this account use VinaX AI now? */
 export const aiOpenFor = (s: AiSettings, accountId: string | null): boolean => s.enabled || (!!accountId && s.testers.includes(accountId));
 
-/** The curated registry after the owner's model overrides (Auto's ladders, the music and backstage tasks); approved models only. */
+/** The curated registry after the owner's model overrides (Auto's ladders and the backstage tasks); approved models only. */
 export const registryFor = (s: AiSettings): ModelSpec[] => applyOverrides(MODELS.filter((spec) => offeredId(s, spec.id)), s.models);
 
 /** Approved, or paused but answering again (the daily check). */

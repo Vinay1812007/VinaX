@@ -22,7 +22,6 @@ export const EXPECTED_TABLES = [
   'push_devices', 'notifications', 'settings', 'settings_history', 'experiments', 'audit_log', 'uptime_days', 'uptime_latest', 'job_runs',
   'admins', 'error_status',
   'ai_conversations', 'ai_messages', 'ai_attachments', 'ai_daily_usage', 'ai_shares', 'ai_projects', 'ai_memories', 'ai_memory_prefs',
-  'personal_songs', 'personal_events', 'personal_taste', 'personal_exposure', 'personal_pages', 'personal_colisten',
 ] as const;
 
 /** What each table holds, in plain words (the technical name is shown small beside it). */
@@ -54,16 +53,10 @@ export const TABLE_NAMES: Record<string, { name: string; about: string }> = {
   ai_messages: { name: 'VinaX AI messages', about: 'The messages inside those chats.' },
   ai_attachments: { name: 'VinaX AI files', about: 'Pictures and documents users added to chats.' },
   ai_daily_usage: { name: 'VinaX AI daily limits', about: 'How much of each daily allowance was used.' },
-  personal_songs: { name: 'Recommendation song list', about: 'Songs the recommendation engine knows about.' },
-  personal_events: { name: 'Recommendation signals', about: 'Plays and skips the recommendation engine learns from.' },
-  personal_taste: { name: 'Taste profiles', about: 'What each signed-in user tends to like.' },
-  personal_exposure: { name: 'Songs already shown', about: 'Which songs each user has already been offered.' },
-  personal_pages: { name: 'Made-for-you pages', about: 'Pages the recommendation engine built for users.' },
-  personal_colisten: { name: 'Played-together links', about: 'Songs people often play one after another.' },
 };
 
 /** The large tables whose row counts come from the database's quick estimate. */
-const ESTIMATED = new Set(['events', 'personal_events', 'personal_songs', 'personal_exposure', 'personal_colisten']);
+const ESTIMATED = new Set(['events']);
 
 /** How long a table's rows are kept, in words. */
 function keptFor(table: string, r: ReturnType<typeof retentionOf>): string {
@@ -75,7 +68,6 @@ function keptFor(table: string, r: ReturnType<typeof retentionOf>): string {
     case 'push_devices': return '180 days after the last notification';
     case 'rooms': case 'room_members': return 'Until the room is empty';
     case 'ai_daily_usage': return '90 days';
-    case 'personal_events': case 'personal_pages': return '1 year';
     case 'ai_conversations': case 'ai_messages': case 'ai_attachments': return 'Until the user deletes it';
     default: return 'Forever';
   }

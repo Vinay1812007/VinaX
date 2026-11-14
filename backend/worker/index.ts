@@ -28,7 +28,6 @@ import { guardVerdict, isEntityPage, isHubPage, plainShell } from './functions/_
 import * as m_api_admin_envcheck from './functions/api/admin/envcheck';
 import * as m_api_admin_musicapi from './functions/api/admin/musicapi';
 import * as m_api_admin_ai from './functions/api/admin/ai';
-import * as m_api_admin_personal from './functions/api/admin/personal';
 import * as m_api_admin_fcmcheck from './functions/api/admin/fcmcheck';
 import * as m_api_admin_releases from './functions/api/admin/releases';
 // 14.0 — the database-backed console routes and the scheduled jobs.
@@ -74,11 +73,6 @@ import * as m_api_account_data from './functions/api/account/data';
 import * as m_api_ai_chat from './functions/api/ai/chat';
 import * as m_api_ai_keep from './functions/api/ai/keep';
 import * as m_api_ai_models from './functions/api/ai/models';
-import * as m_api_personal_events from './functions/api/personal/events';
-import * as m_api_personal_home from './functions/api/personal/home';
-import * as m_api_personal_recommend from './functions/api/personal/recommend';
-import * as m_api_personal_playlist from './functions/api/personal/playlist';
-import * as m_api_personal_taste from './functions/api/personal/taste';
 import * as m_api_ai_conversations from './functions/api/ai/conversations';
 import * as m_api_ai_export from './functions/api/ai/export';
 import * as m_api_ai_attachments from './functions/api/ai/attachments';
@@ -87,14 +81,6 @@ import * as m_api_ai_transcribe from './functions/api/ai/transcribe';
 import * as m_api_ai_speak from './functions/api/ai/speak';
 import * as m_api_ai_live_token from './functions/api/ai/live-token';
 import * as m_api_ai_live_transcript from './functions/api/ai/live-transcript';
-import * as m_api_ai_rerank from './functions/api/ai/rerank';
-import * as m_api_ai_home_layout from './functions/api/ai/home-layout';
-import * as m_api_ai_dj from './functions/api/ai/dj';
-import * as m_api_ai_playlist from './functions/api/ai/playlist';
-import * as m_api_ai_lyrics from './functions/api/ai/lyrics';
-import * as m_api_ai_generate_song from './functions/api/ai/generate-song';
-import * as m_api_ai_generate_song_id from './functions/api/ai/generate-song/[id]';
-import * as m_api_ai_generate_song_audio from './functions/api/ai/generate-song/[id]-audio';
 import * as m_api_ai_conversation_id from './functions/api/ai/conversations/[id]';
 import * as m_api_ai_shares from './functions/api/ai/shares';
 import * as m_api_ai_artifacts from './functions/api/ai/artifacts';
@@ -182,7 +168,6 @@ const EXACT: Record<string, Mod> = {
   '/api/admin/outreach': m_api_admin_outreach,
   '/api/admin/musicapi': m_api_admin_musicapi,
   '/api/admin/ai': m_api_admin_ai,
-  '/api/admin/personal': m_api_admin_personal,
   '/api/admin/fcmcheck': m_api_admin_fcmcheck,
   '/api/admin/releases': m_api_admin_releases,
   '/api/admin/overview': m_api_admin_overview,
@@ -230,17 +215,6 @@ const EXACT: Record<string, Mod> = {
   '/api/ai/speak': m_api_ai_speak,
   '/api/ai/live-token': m_api_ai_live_token,
   '/api/ai/live-transcript': m_api_ai_live_transcript,
-  '/api/personal/events': m_api_personal_events,
-  '/api/personal/home': m_api_personal_home,
-  '/api/personal/recommend': m_api_personal_recommend,
-  '/api/personal/playlist': m_api_personal_playlist,
-  '/api/personal/taste': m_api_personal_taste,
-  '/api/ai/rerank': m_api_ai_rerank,
-  '/api/ai/home-layout': m_api_ai_home_layout,
-  '/api/ai/dj': m_api_ai_dj,
-  '/api/ai/playlist': m_api_ai_playlist,
-  '/api/ai/lyrics': m_api_ai_lyrics,
-  '/api/ai/generate-song': m_api_ai_generate_song,
   '/api/ai/shares': m_api_ai_shares,
   '/api/ai/artifacts': m_api_ai_artifacts,
   '/api/ai/projects': m_api_ai_projects,
@@ -286,8 +260,6 @@ const DYNAMIC: Array<{ re: RegExp; mod: Mod; key: string }> = [
   { re: /^\/api\/shared-playlist\/([^/]+)\/?$/, mod: m_api_shared_playlist_id, key: 'id' },
   { re: /^\/api\/ai\/conversations\/([^/]+)\/?$/, mod: m_api_ai_conversation_id, key: 'id' },
   { re: /^\/api\/ai\/attachments\/([^/]+)\/?$/, mod: m_api_ai_attachment_id, key: 'id' },
-  { re: /^\/api\/ai\/generate-song\/([^/]+)\/audio\/?$/, mod: m_api_ai_generate_song_audio, key: 'id' },
-  { re: /^\/api\/ai\/generate-song\/([^/]+)\/?$/, mod: m_api_ai_generate_song_id, key: 'id' },
   { re: /^\/api\/ai\/shares\/([^/]+)\/continue\/?$/, mod: m_api_ai_share_continue, key: 'id' },
   { re: /^\/api\/ai\/shares\/([^/]+)\/?$/, mod: m_api_ai_share_id, key: 'id' },
   // Both ids as one key: "<conversation id>/<artifact id>".

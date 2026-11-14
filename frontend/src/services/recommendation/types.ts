@@ -36,16 +36,14 @@ export type CandidateSource =
    * bonus to a song some other source had already returned — a chart entry the
    * catalogue searches missed could never be recommended.
    */
-  | 'verified-trend'
-  /** 1.4 — a NEW song the music AI made in the feel of the seed (services/ai/songGen.ts). Never a play of the seed, never in a chart. */
-  | 'generated';
+  | 'verified-trend';
 
 /**
  * 7.2.0 — which source a song "belongs to" when several found it: the first
  * of these it has. The listener's stated intent wins, then the seed and taste
  * sources, then the broad ones (the order of the scorer's source boosts).
  */
-export const SOURCE_PRIORITY: readonly CandidateSource[] = ['intent', 'related', 'favorite-artist', 'album', 'favorite-album', 'related-artist', 'style', 'proven', 'verified-trend', 'history', 'rediscovery', 'genre', 'explore', 'trending', 'generated'];
+export const SOURCE_PRIORITY: readonly CandidateSource[] = ['intent', 'related', 'favorite-artist', 'album', 'favorite-album', 'related-artist', 'style', 'proven', 'verified-trend', 'history', 'rediscovery', 'genre', 'explore', 'trending'];
 
 const rank = (s: CandidateSource): number => SOURCE_PRIORITY.indexOf(s);
 const titlesOf = (c: Candidate): string[] => c.seedTitles ?? (c.seedTitle ? [c.seedTitle] : []);
@@ -334,22 +332,6 @@ export interface RecommendationContext {
    * adds the explore source in the listener's own languages. Absent = 0.
    */
   widen?: 0 | 1 | 2;
-  /**
-   * 1.4 — let the music AI reorder the top of a continuation after scoring
-   * (services/ai/musicAi.ts). Validation and the admission gate still run after
-   * it; on a timeout or an error the on-device order plays. Absent = off.
-   */
-  aiRerank?: boolean;
-  /**
-   * The AI DJ may suggest songs for Up Next (services/ai/dj.ts), sending a
-   * taste summary and recent plays. Absent = off.
-   */
-  aiDj?: boolean;
-  /**
-   * 1.4 — generated songs are allowed (Settings → "Add a generated song to my
-   * queues"): Never repeat's last step makes a new song instead of stopping.
-   */
-  genInQueue?: boolean;
 }
 
 /** v7.0.0 — why a candidate never reached the ranked pool (developer score breakdowns). 'soft-muted' (7.2.0): an artist under an active "show fewer like this". */

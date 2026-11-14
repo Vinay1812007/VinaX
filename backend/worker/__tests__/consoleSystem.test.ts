@@ -150,7 +150,7 @@ describe('scheduled jobs', () => {
 
   it('the cron skips switched-off jobs and runs the due ones', async () => {
     stub((c, t) => {
-      if (t === 'settings') return json([{ key: 'jobs', value: { 'personal-embed': { enabled: false }, housekeeping: { enabled: false } }, updated_at: 't', updated_by: 'o' }]);
+      if (t === 'settings') return json([{ key: 'jobs', value: { 'weekly-summary': { enabled: false }, housekeeping: { enabled: false } }, updated_at: 't', updated_by: 'o' }]);
       if (t === 'job_runs' && c.method === 'GET') return json([{ job: 'status-tick', started_at: new Date(Date.now() - 5 * 60_000).toISOString() }]);
       if (t === 'job_runs' && c.method === 'POST') return json([{ id: 9 }], 201);
       return undefined;

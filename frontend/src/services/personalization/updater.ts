@@ -16,12 +16,12 @@ import { withProfile as withProfileCoalesced } from './storage';
 import { energyOfSong, recordSessionPlay } from './session';
 import { EVENT_WEIGHTS, SKIP_RETRACTS_PLAY } from './eventWeights';
 import { noteSessionEvent } from './sessionIntent';
-import { emitTasteEvent } from './tasteEvents';
 
 /**
- * 1.4 — a song the music AI made (id "gen-…", services/ai/songGen.ts) teaches the
- * taste profile nothing: it is not the listener's choice of artist, and it must
- * never count as a play of the song it was inspired by.
+ * A song the old music AI made (id "gen-…"; VinaX no longer makes them, but a
+ * listener may still have one saved) teaches the taste profile nothing: it is
+ * not the listener's choice of artist, and it must never count as a play of
+ * the song it was inspired by.
  */
 const generated = (song: Song): boolean => song.id.startsWith('gen-');
 
@@ -132,7 +132,6 @@ export function recordPlay(song: Song): void {
   // influences the next batch of recommendations. Session-only, never persisted.
   recordSessionPlay(song);
   logEvent('play', song);
-  emitTasteEvent({ kind: 'play', song });
 }
 
 export function recordComplete(song: Song, playedSec: number): void {
@@ -146,7 +145,6 @@ export function recordComplete(song: Song, playedSec: number): void {
   });
   noteSessionEvent('complete', song);
   logEvent('complete', song, playedSec);
-  emitTasteEvent({ kind: 'complete', song, heardSec: playedSec });
 }
 
 export function recordSkip(song: Song, playedSec: number): void {
@@ -158,7 +156,6 @@ export function recordSkip(song: Song, playedSec: number): void {
   });
   noteSessionEvent('skip', song);
   logEvent('skip', song, playedSec);
-  emitTasteEvent({ kind: 'skip', song, heardSec: playedSec });
 }
 
 export function recordFavorite(song: Song, favored: boolean): void {
@@ -172,7 +169,6 @@ export function recordFavorite(song: Song, favored: boolean): void {
   });
   noteSessionEvent(favored ? 'like' : 'unlike', song);
   if (favored) logEvent('favorite', song);
-  emitTasteEvent({ kind: favored ? 'like' : 'unlike', song });
 }
 
 export function recordQueueAdd(song: Song): void {
@@ -183,7 +179,6 @@ export function recordQueueAdd(song: Song): void {
   });
   noteSessionEvent('queue_add', song);
   logEvent('queue_add', song);
-  emitTasteEvent({ kind: 'queue', song });
 }
 
 /**
@@ -210,7 +205,6 @@ export function recordDislike(song: Song, disliked: boolean): void {
   if (!disliked) return;
   noteSessionEvent('dislike', song);
   logEvent('dislike', song);
-  emitTasteEvent({ kind: 'dislike', song });
 }
 
 /** 8.5.0 — the listener put a song in one of their own playlists: worth a play for its artists, language and the song. */
@@ -222,7 +216,6 @@ export function recordPlaylistAdd(song: Song): void {
   });
   noteSessionEvent('queue_add', song);
   logEvent('playlist_add', song);
-  emitTasteEvent({ kind: 'save', song });
 }
 
 /**
@@ -238,7 +231,6 @@ export function recordSearchPlay(song: Song): void {
   });
   noteSessionEvent('search_play', song);
   logEvent('search_play', song);
-  emitTasteEvent({ kind: 'search_play', song });
 }
 
 /** Package A3 — the listener explicitly asked for less of an artist.

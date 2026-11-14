@@ -10,7 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { issueAdminSession, resetAdminMemo } from '../functions/_lib/adminAuth';
 import { forgetBlocked, issueSession, readSession } from '../functions/_lib/googleAuth';
-import { colistenDue, JOBS, runScheduled } from '../functions/_lib/jobs';
+import { JOBS, runScheduled } from '../functions/_lib/jobs';
 import { readOnlyRefusal } from '../functions/_lib/readOnly';
 import { resetSettingsMemo } from '../functions/_lib/settings';
 import * as cronRun from '../functions/api/cron/run';
@@ -126,20 +126,11 @@ describe('scheduler', () => {
     const out = await runScheduled(DB, T);
     expect(out).toEqual([]);
     const reads = calls.filter((c) => c.url.pathname.endsWith('/job_runs') && c.method === 'GET');
-    expect(reads.length).toBe(JOBS.length); // one per job (nine with the weekly summary, the automatic notifications and the VinaX AI model check)
-    expect(JOBS.length).toBe(9);
+    expect(reads.length).toBe(JOBS.length); // one per job (eight: the personal engine's learning job is gone)
+    expect(JOBS.length).toBe(8);
     for (const r of reads) {
       expect(r.url.searchParams.get('job')).toMatch(/^eq\./);
       expect(r.url.searchParams.get('limit')).toBe('1');
     }
-  });
-
-  it('the daily rebuild prefers 21:00 UTC and catches up after 30 hours', () => {
-    const at = (h: number) => Date.UTC(2026, 10, 3, h, 0);
-    expect(colistenDue(null, at(10))).toBe(true);
-    expect(colistenDue(new Date(at(21) - 22 * 3_600_000).toISOString(), at(21))).toBe(true);
-    expect(colistenDue(new Date(at(21) - 10 * 3_600_000).toISOString(), at(21))).toBe(false);
-    expect(colistenDue(new Date(at(10) - 25 * 3_600_000).toISOString(), at(10))).toBe(false);
-    expect(colistenDue(new Date(at(10) - 31 * 3_600_000).toISOString(), at(10))).toBe(true);
   });
 });

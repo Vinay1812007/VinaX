@@ -21,18 +21,12 @@ export type Source =
   | 'favourite-play'
   /** A "Tune this queue" search. */
   | 'tune'
-  /** V2 1.4 — the personal engine's ranked list around the anchor (signed in, the setting on). */
-  | 'personal'
   /** 1.4 — Never repeat, widened: top songs of artists related to an anchor song's artist. */
   | 'related-artist'
   /** 1.4 — Never repeat, widened: deeper pages of a search for the anchor's genre or mood. */
   | 'genre'
   /** 1.4 — Never repeat, widened twice: popular songs in the session's own languages, past the first pages. */
-  | 'explore'
-  /** 1.4 — a NEW song the music AI made in the session's feel (services/ai/songGen.ts). */
-  | 'generated'
-  /** A song the AI DJ suggested for the playing song, found in the catalogue (services/ai/dj.ts). */
-  | 'ai-dj';
+  | 'explore';
 
 export const SOURCE_BASE: Readonly<Record<Source, number>> = Object.freeze({
   anchor: 1,
@@ -41,12 +35,9 @@ export const SOURCE_BASE: Readonly<Record<Source, number>> = Object.freeze({
   liked: 0.85,
   'favourite-play': 0.6,
   tune: 1.1,
-  personal: 1.08,
   'related-artist': 0.8,
   genre: 0.7,
   explore: 0.55,
-  generated: 0.5,
-  'ai-dj': 1.12,
 });
 
 export interface Candidate {

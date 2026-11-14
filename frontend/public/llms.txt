@@ -1,6 +1,6 @@
 # VinaX
 
-> Free music-streaming web app and Android app for India. Browse Home, charts, new releases, radio, podcasts and every song, album and artist page without signing in; sign in with Google (one tap) to play, like, save and keep your library on every device. No subscription, no premium tier, no ads in the player. Tuned for Indian languages: Hindi, Telugu, Tamil, Punjabi, Kannada, Malayalam, Bengali, Marathi, Bhojpuri, Gujarati, Urdu and English. Recommendations run on your device; signed in, a personal engine keeps a taste model with your account.
+> Free music-streaming web app and Android app for India. Browse Home, charts, new releases, radio, podcasts and every song, album and artist page without signing in; sign in with Google (one tap) to play, like, save and keep your library on every device. No subscription, no premium tier, no ads in the player. Tuned for Indian languages: Hindi, Telugu, Tamil, Punjabi, Kannada, Malayalam, Bengali, Marathi, Bhojpuri, Gujarati, Urdu and English. Recommendations run on your device, with no AI.
 
 ## Pages
 
@@ -42,8 +42,8 @@ Each language also has mood pages at /{language}-{mood}-songs for romantic, sad,
 ## What a listener can do
 
 - Tap any song and Up Next fills itself five songs at a time, led by that song's language and mood, never repeating what you have heard; songs you queue yourself play first. Familiar, Balanced or Discover sets how adventurous it is; Tune this queue pins a mood.
-- Signed in: Home shelves composed for you ("Made for you", "Because you liked…", your languages, discoveries), an AI DJ that suggests songs for the one playing, "Make me a playlist" from a sentence, a weekly mix, Discover 5 unheard songs a day, badges and listening stats.
-- Search by title, artist, album or a line of lyrics; synced lyrics with romanised text, translation and meaning; karaoke mode.
+- Signed in: Home shelves made for you on your device ("Made for you", "Because you liked…", your languages, discoveries), a weekly mix, Discover 5 unheard songs a day, badges and listening stats.
+- Search by title, artist, album or a line of lyrics; synced lyrics with romanised text; karaoke mode.
 - One "Music languages" button in the top bar changes Home, charts, radio and search together.
 - Five reactions under every song; follow artists and see their new songs first on the Following page; share playlists as public pages; Listen Together rooms with a link, QR code or room code.
 - Appearance: six app styles (Lumen, Verdant, Monsoon, Harbour, Verse, Onyx), dark, light, true-black, system or automatic themes, any accent colour, and an app language of English, Telugu, Hindi or Tamil.

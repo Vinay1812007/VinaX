@@ -47,8 +47,6 @@ export default {
     voice: { dictation: true, readAloud: true, live: false },
   }),
   'POST /api/admin/ai': () => ({ ok: true, firstTokenMs: 420 }),
-  'GET /api/admin/personal': () => ({ configured: true, stats: { accounts: 12, eventsDay: 340, eventsWeek: 2100, songs: 5400, songsEmbedded: 5100, backlog: 300, pagesDay: 18, playlistsDay: 4, colistenPairs: 23000, colistenUpdatedAt: ago(600) }, config: { enabled: true }, embed: { configured: true, model: 'x' } }),
-  'POST /api/admin/personal': (url, b) => (b.action === 'embed' ? { embedded: 120, backlog: 180 } : { pairs: 23400 }),
   'GET /api/admin/releases': () => ({
     configured: true, release: { tag: 'v1.8.3', name: 'VinaX 1.8.3', notes: 'VinaX AI settings, Claude-style replies and live previews.', assets: [{ name: 'vinax-1.8.3.apk', url: 'https://github.com/x/y/releases/download/v1.8.3/vinax.apk' }] },
     live: { version: '1.8.3', build: 183, minBuild: 170 },
@@ -80,7 +78,6 @@ export default {
     jobs: [
       { job: 'status-tick', label: 'Status check', about: 'Checks that the website, the app and the music sources answer.', enabled: true, every: 30, defaultEvery: 30, choices: [30, 60, 180, 360], lastAt: ago(8), ok: true, overdue: false, neverRan: false },
       { job: 'housekeeping', label: 'Clean-up', about: 'Removes old data and closes empty rooms.', enabled: true, every: 60, defaultEvery: 60, choices: [60, 180, 360, 720, 1440], lastAt: ago(250), ok: false, summary: { error: 'housekeeping: a step failed' }, overdue: true, neverRan: false },
-      { job: 'personal-embed', label: 'Recommendation learning', about: 'Teaches the engine about new songs.', enabled: false, every: 30, defaultEvery: 30, choices: [30, 60, 180, 360, 1440], lastAt: null, ok: null, overdue: false, neverRan: true },
       { job: 'alerts', label: 'Smart Alerts', about: 'Looks for problems and alerts admins on their phones.', enabled: true, every: 5, defaultEvery: 5, choices: [5, 10, 15, 30], lastAt: ago(2), ok: true, summary: { on: true, firing: [] }, overdue: false, neverRan: false },
       { job: 'scheduled-notifications', label: 'Scheduled notifications', about: 'Sends notifications whose time has come.', enabled: true, every: 5, defaultEvery: 5, choices: [5, 15, 30, 60], lastAt: ago(3), ok: true, overdue: false, neverRan: false },
     ],

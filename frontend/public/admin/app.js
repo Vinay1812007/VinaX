@@ -54,7 +54,7 @@
     'notifications/history': 'sent-notifications', 'notifications/audiences': 'saved-audiences',
     'notifications/setup': 'notification-setup', 'app-settings/notification-rules': 'notification-rules',
     health: 'app-errors', 'health/errors': 'app-errors', 'health/checks': 'server-checks',
-    'health/sources': 'music-sources', 'health/ai': 'ai-status', 'health/recommendations': 'recommendations',
+    'health/sources': 'music-sources', 'health/ai': 'ai-status', 'health/recommendations': 'app-errors', recommendations: 'app-errors',
     'health/versions': 'app-versions', 'health/keys': 'api-keys',
     'google-search/summary': 'google-search', 'google-search/pages': 'page-check', 'google-search/console': 'search-console',
     database: 'db-tables', 'database/tables': 'db-tables', 'database/jobs': 'scheduled-jobs',

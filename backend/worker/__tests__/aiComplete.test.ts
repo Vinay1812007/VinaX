@@ -1,17 +1,12 @@
 /**
  * The non-streaming completion over the ladder: the text collected from the
  * first model that answers, failover when the first one fails, the JSON
- * variant's extraction, and its one repair turn. Also the composer end to
- * end with a stubbed provider: the page it shapes, and the deterministic
- * page when the provider is down.
+ * variant's extraction, and its one repair turn.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { _resetCooldowns } from '../functions/_lib/ai/cooldown';
 import { candidatesFor, completeJson, completeText } from '../functions/_lib/ai/complete';
 import { resetSettingsMemo } from '../functions/_lib/settings';
-import { composeHome } from '../functions/_lib/personal/compose';
-import { emptyTaste } from '../functions/_lib/personal/taste';
-import type { Shelf, SongRecord } from '../functions/_lib/personal/types';
 import { DB_ENV, fakeDb } from './helpers/fakeDb';
 import { openAiSse, sseResponse } from './helpers/aiStreams';
 
@@ -80,43 +75,5 @@ describe('completeJson', () => {
     seed(() => sseResponse(openAiSse('not json at all')));
     expect(await completeJson(ENV, { system: 's', user: 'u', validate })).toBeNull();
     expect(await completeJson(ENV, { system: 's', user: 'u', validate, repair: false })).toBeNull();
-  });
-});
-
-describe('composeHome', () => {
-  const rec = (id: string): SongRecord => ({ id, title: `Song ${id}`, artist: `Artist ${id[0]}`, artistId: null, artists: [], album: null, albumId: null, language: 'telugu', year: 2024, duration: 200, image: null, facets: {} });
-  const shelf = (key: string, n: number): Shelf => ({ key, title: key, reason: `why ${key}`, songs: Array.from({ length: n }, (_, i) => rec(`${key[0]}${i}`)) });
-  const shelves = [shelf('made-for-you', 20), shelf('discover', 12), shelf('trending', 8)];
-  const ctx = { taste: emptyTaste(), firstName: 'Asha', hour: 21, dow: 6 };
-
-  it('applies the model\'s page: order, names, a greeting and a themed shelf from the pool', async () => {
-    seed(() => sseResponse(openAiSse(JSON.stringify({
-      greeting: 'Good evening, Asha',
-      shelves: [
-        { key: 'themed:late-evening', title: 'Late evening calm', reason: 'Saturday night', songIds: ['m0', 'd0', 't0', 'm1', 'd1', 't1', 'm2'] },
-        { key: 'discover', title: 'New for you', reason: 'You like finding things' },
-      ],
-    }))));
-    const r = await composeHome(ENV, shelves, ctx);
-    expect(r.composed).toBe(true);
-    expect(r.greeting).toBe('Good evening, Asha');
-    expect(r.model).toBe('groq:openai/gpt-oss-120b');
-    expect(r.shelves.map((s) => s.key)).toEqual(['themed:late-evening', 'discover', 'made-for-you', 'trending']);
-    expect(r.shelves[1].title).toBe('New for you');
-    expect(r.shelves[0].songs.map((s) => s.id)).toEqual(['m0', 'd0', 't0', 'm1', 'd1', 't1', 'm2']);
-  });
-
-  it('serves the deterministic page when the provider is down or answers nonsense', async () => {
-    seed(() => new Response('{"error":"down"}', { status: 503 }));
-    const down = await composeHome(ENV, shelves, ctx);
-    expect(down.composed).toBe(false);
-    expect(down.shelves).toEqual(shelves);
-    expect(down.model).toBeNull();
-    _resetCooldowns();
-    vi.unstubAllGlobals();
-    seed(() => sseResponse(openAiSse('I would rather not.')));
-    const nonsense = await composeHome(ENV, shelves, ctx);
-    expect(nonsense.composed).toBe(false);
-    expect(nonsense.shelves).toEqual(shelves);
   });
 });
