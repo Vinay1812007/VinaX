@@ -18,6 +18,13 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.14.3': {
+    title: 'Every choice button in Settings works on a computer again, and slides to what you pick',
+    changes: [
+      { type: 'fixed', text: 'Fixed: on a computer, the choice buttons in Settings (Basic/All, Theme, App language, Display size, Crossfade, Audio quality, Lyrics size and the rest) did nothing when clicked.' },
+      { type: 'new', text: 'Improved: the chosen option now sits on a solid accent pill that slides to your new pick, with clearer hover and press feedback.' },
+    ],
+  },
   '1.14.2': {
     title: 'Settings links from the profile menu land on their section, and the Admin link is gone',
     changes: [
