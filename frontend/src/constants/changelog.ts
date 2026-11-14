@@ -18,6 +18,12 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.13.28': {
+    title: 'The Admin button is gone from the top bar',
+    changes: [
+      { type: 'fixed', text: 'Admins no longer see an Admin button in the app\'s top bar; the admin dashboard is still one click away under "Admin dashboard" in the profile menu.' },
+    ],
+  },
   '1.13.27': {
     title: 'An easier admin dashboard, one click from the app',
     changes: [
