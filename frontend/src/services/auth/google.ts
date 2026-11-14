@@ -37,7 +37,7 @@ export interface AccountUser {
   username: string | null;
   /** Schema 20: the account can also sign in with its email and a password. */
   hasPassword?: boolean;
-  /** 2.0 — the account's email is on the console's Admins & Roles (shows the Admin link; the console signs in on its own). */
+  /** 2.0 — the account's email is on the console's Admins & Roles (the app no longer links to the console). */
   admin?: boolean;
 }
 /** How this device signed in. */

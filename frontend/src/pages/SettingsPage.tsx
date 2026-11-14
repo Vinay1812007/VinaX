@@ -454,7 +454,11 @@ export default function SettingsPage() {
   const alarm = useAlarmStore();
   const collections = useLibraryStore((s) => s.collections);
   // A link like /settings#your-data lands on the section, under the sticky search.
-  const { hash } = useLocation();
+  // Keyed on the navigation too: picking the same section again from the profile
+  // menu is a new navigation with the same hash, and the layout has just scrolled
+  // the page to the top for it. That reset runs after this effect (parents run
+  // after children), so the jump waits a frame to land after it.
+  const { hash, key } = useLocation();
   useEffect(() => {
     if (!hash) return;
     // A link to a section Basic hides opens the full list first.
@@ -462,9 +466,11 @@ export default function SettingsPage() {
       setViewState('all');
       return;
     }
-    const el = document.getElementById(hash.slice(1));
-    el?.scrollIntoView({ block: 'start', behavior: scrollBehavior() });
-  }, [hash, view]);
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start', behavior: scrollBehavior() });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [hash, key, view]);
 
   const q = settingsQuery.trim();
   const showNotifications = pushSupported() || isNativePlatform();
