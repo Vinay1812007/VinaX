@@ -18,6 +18,14 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.16.2': {
+    title: 'Disco lights: flash the phone\'s flashlight on the beat',
+    changes: [
+      { type: 'new', text: 'New flashlight button on the disco lights screen (and a switch in Adjust): your phone\'s flashlight flashes with the beat, never more than three times a second.' },
+      { type: 'improved', text: 'Works in the Android app, in Chrome on Android and in Safari on recent iPhones.' },
+      { type: 'improved', text: 'In the Android app the screen goes to full brightness while the lights are open, and the status and navigation bars really hide when you tap the lights; both come back when you leave.' },
+    ],
+  },
   '1.16.1': {
     title: 'Brighter, full-screen RGB disco lights',
     changes: [
