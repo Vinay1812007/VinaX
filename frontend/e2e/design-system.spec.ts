@@ -60,21 +60,22 @@ for (const theme of ['dark', 'light'] as const) {
   });
 }
 
-test('previews a theme, then gives the listener their own look back', async ({ page }) => {
+test('previews reduced motion, then gives the listener their own setting back', async ({ page }) => {
+  // 1.15 — one dark look: the preview bar has only the motion switch.
   await seed(page);
   await open(page);
   const html = page.locator('html');
   const bar = page.getByRole('group', { name: 'Preview' });
+  await expect(bar.getByRole('tablist', { name: 'Theme' })).toHaveCount(0);
 
-  await bar.getByRole('tablist', { name: 'Theme' }).getByRole('tab', { name: 'Light' }).click();
-  await expect(html).toHaveClass(/\blight\b/);
+  await bar.getByRole('switch', { name: 'Reduce motion' }).click();
+  await expect(html).toHaveClass(/\breduce-motion\b/);
 
-  // Leaving puts back the saved look: dark, as the listener had it.
+  // Leaving puts back the saved setting: motion on, as the listener had it.
   await page.getByRole('link', { name: 'Home' }).first().click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(html).not.toHaveClass(/\blight\b/);
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('vinax.settings.v1') ?? '{}').state?.theme);
-  expect(saved).toBe('dark');
+  await expect(html).not.toHaveClass(/\breduce-motion\b/);
+  await expect(html).toHaveClass(/\bdark\b/);
 });
 
 test('primitives: tabs by keyboard, a switch, and a dialog that returns focus', async ({ page }) => {
@@ -115,6 +116,6 @@ test('the v2 primitives take the app style\'s shape (Phase 7)', async ({ page })
   await seed(page);
   await open(page);
   const radius = (sel: string) => page.locator(sel).first().evaluate((el) => getComputedStyle(el).borderTopLeftRadius);
-  // The look's dials (styles/templates/vinax.css): tiles and cards have a 10px corner.
-  await expect.poll(() => radius('.vx-card')).toBe('10px');
+  // The look's dials (styles/templates/vinax.css): tiles and cards have an 8px corner (1.15).
+  await expect.poll(() => radius('.vx-card')).toBe('8px');
 });

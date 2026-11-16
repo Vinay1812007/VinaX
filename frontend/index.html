@@ -14,7 +14,7 @@
     <link rel="dns-prefetch" href="https://aac.saavncdn.com" />
     <link rel="dns-prefetch" href="https://lrclib.net" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#130e16" />
+    <meta name="theme-color" content="#121212" />
     <meta name="description" content="VinaX — free music streaming for India in 12 languages. One Google sign-in, no subscription." />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="VinaX" />
@@ -34,9 +34,8 @@
     <meta name="apple-mobile-web-app-title" content="VinaX" />
     <title>VinaX</title>
     <script>
-      // Pre-paint theme: read the persisted preference and class <html> before
-      // first paint, so light/system users never see a dark flash (and AMOLED
-      // users never see a grey one). Mirrors src/utils/theme.ts — keep in sync.
+      // Pre-paint: read the persisted settings and class <html> before first
+      // paint, so nothing flashes. Mirrors src/utils/theme.ts — keep in sync.
       (function () {
         // Boot transition guard (4.17.0): CSS transitions that fire while the
         // app hydrates (theme class application, focus styles) register as
@@ -46,11 +45,9 @@
         try {
           var raw = localStorage.getItem('vinax.settings.v1');
           var st = (raw && JSON.parse(raw).state) || {};
-          var pref = st.theme || 'dark';
-          // Accent before first paint too — else picked accents flash indigo.
-          if (st.accent && st.accent !== 'crimson') document.documentElement.setAttribute('data-accent', st.accent);
-          // v5.17.0 — display size + high contrast before first paint (custom
-          // accent ramps are applied by the app a frame later).
+          // 1.15 — one look, always dark: no light/system/AMOLED theme and no
+          // accent picker any more (stored values from older releases are ignored).
+          // v5.17.0 — display size + high contrast before first paint.
           if (st.uiScale === 'sm') document.documentElement.style.fontSize = '15px';
           else if (st.uiScale === 'lg') document.documentElement.style.fontSize = '17.5px';
           if (st.highContrast) document.documentElement.classList.add('hc');
@@ -59,21 +56,14 @@
           document.documentElement.style.setProperty('--glass-alpha', String(1 - 0.55 * (gl / 100)));
           var gb = typeof st.glassBlur === 'number' ? Math.min(100, Math.max(0, st.glassBlur)) : 40;
           document.documentElement.style.setProperty('--glass-blur-boost', String(gb / 100));
-          var hr = new Date().getHours();
-          var dark = pref === 'system'
-            ? window.matchMedia('(prefers-color-scheme: dark)').matches
-            : pref === 'auto' ? !(hr >= 7 && hr < 19) : pref !== 'light';
-          var cls = document.documentElement.classList;
-          cls.toggle('light', !dark);
-          cls.toggle('dark', dark);
-          cls.toggle('amoled', pref === 'amoled');
+          document.documentElement.classList.add('dark');
           // 11.0 — the app style before first paint (mirrors TEMPLATE_CANVAS in
-          // src/utils/theme.ts: [dark, light] page canvas per style).
-          var TC = { vinax: ['#130e16', '#faf5ed'] };
+          // src/utils/theme.ts: the page canvas per style).
+          var TC = { vinax: '#121212' };
           // 2.0 — one look: every style id an earlier release stored opens in it.
           var tpl = TC.hasOwnProperty(st.template) ? st.template : 'vinax';
           document.documentElement.setAttribute('data-template', tpl);
-          var bg = pref === 'amoled' ? '#000000' : TC[tpl][dark ? 0 : 1];
+          var bg = TC[tpl];
           document.documentElement.style.background = bg;
           document.documentElement.style.setProperty('--boot-bg', bg);
           var m = document.querySelector('meta[name="theme-color"]');
@@ -173,8 +163,7 @@
          until React replaces #root. Paint cost is unchanged: everything here
          is inline CSS, so FCP/LCP still land at HTML-parse time. */
       /* 11.0 — the canvas is the app style's (--boot-bg, stamped by the pre-paint script above). */
-      html, body { background: var(--boot-bg, #130e16); margin: 0; }
-      html.amoled, html.amoled body { background: #000; }
+      html, body { background: var(--boot-bg, #121212); margin: 0; }
       /* 13.2 — the face is set on BODY, never on #root. #root used to carry a
          system-font stack for the boot splash, and the whole app mounts inside
          #root, so every element without its own font-family inherited the
@@ -183,9 +172,9 @@
          listener's novelty font. Only sheets portaled to <body> were right.
          The app style's own body face (html[data-template] body, base.css)
          replaces this one as soon as the stylesheet applies. */
-      /* 1.12 — Manrope's metrics on the system Arial until Manrope arrives (same face as styles/index.css): the swap moves nothing. */
-      @font-face { font-family: 'Manrope Fallback'; src: local('Arial'), local('Helvetica Neue'), local('Liberation Sans'); size-adjust: 101%; ascent-override: 105.5%; descent-override: 29.7%; line-gap-override: 0%; }
-      body { font-family: 'Manrope', 'Manrope Fallback', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; }
+      /* 1.15 — Figtree's metrics on the system Arial until Figtree arrives (same face as styles/index.css): the swap moves nothing. */
+      @font-face { font-family: 'Figtree Fallback'; src: local('Arial'), local('Helvetica Neue'), local('Liberation Sans'); size-adjust: 98%; ascent-override: 96.9%; descent-override: 25.5%; line-gap-override: 0%; }
+      body { font-family: 'Figtree', 'Figtree Fallback', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; }
       #root { min-height: 100dvh; color: #eff2f8; }
       /* Neon boot sign (14.x, 2026-11-06): the logo lights up like a neon
          sign — the glass tubes draw in, the V buzzes on, then the bolt, then
@@ -196,9 +185,7 @@
          #boot id at mount (the recovery script below reads a missing #boot as
          "mounted"), waits for the reveal to finish, then fades it out. Styles
          key on .vxb, never #boot, so dropping the id keeps every animation. */
-      .vxb { position: fixed; inset: 0; z-index: 2147483600; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: var(--boot-bg, #130e16); padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom); }
-      html.amoled .vxb { background: #000; }
-      html.light .vxb { background: #0f0d12; }
+      .vxb { position: fixed; inset: 0; z-index: 2147483600; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: var(--boot-bg, #121212); padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom); }
       .vxb.out { animation: vxb-out .35s ease-in forwards; pointer-events: none; }
       .vxb-sign { position: relative; width: 112px; height: 112px; }
       .vxb-sign svg { position: relative; display: block; width: 100%; height: 100%; }
@@ -221,7 +208,7 @@
       #seo-content { padding: 14px 20px 32px; max-width: 720px; }
       #seo-content h1 { font-size: clamp(28px, 7vw, 40px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.12; margin: 14px 0 10px; }
       #seo-content p { font-size: 16px; line-height: 1.55; color: #cbc2cb; max-width: 60ch; margin: 0 0 10px; }
-      #seo-content p strong { color: #ffc066; }
+      #seo-content p strong { color: #1ed760; }
       #seo-content img { width: 148px; height: 148px; border-radius: 14px; object-fit: cover; margin: 8px 0; }
       #seo-content ol { padding-left: 20px; color: #cbc2cb; font-size: 14px; line-height: 1.7; }
       #seo-content h2 { font-size: 20px; font-weight: 700; line-height: 1.3; margin: 26px 0 8px; }
@@ -233,11 +220,6 @@
       #seo-content a { color: #eae3e2; }
       #seo-content nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
       #seo-content nav a { font-size: 12px; font-weight: 700; color: #eae3e2; background: rgba(255,245,236,0.06); border: 1px solid rgba(255,245,236,0.1); padding: 8px 14px; border-radius: 999px; text-decoration: none; }
-      html.light #root { color: #0c0e14; }
-      html.light #seo-content p, html.light #seo-content ol, html.light #seo-content ul, html.light #seo-content dl { color: #5e4f58; }
-      html.light #seo-content p strong { color: #9c4404; }
-      html.light #seo-content a { color: #4a3c46; }
-      html.light #seo-content nav a { background: rgba(10,15,25,0.05); border-color: rgba(10,15,25,0.1); }
     </style>
     <script type="application/ld+json">
       {"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://www.vinaxmusic.online/#org","name":"VinaX","alternateName":["VinaX V1","VinaX Music","vinaxmusic.online"],"url":"https://www.vinaxmusic.online/","logo":{"@type":"ImageObject","url":"https://www.vinaxmusic.online/icons/icon.svg"},"slogan":"Music tuned to you","description":"VinaX is a free music app for India in 12 languages: playlists, synced lyrics, radio, offline downloads in the Android app and casting. No subscription; browse without signing in, sign in with Google to save your music.","sameAs":["https://github.com/Vinay1812007/VinaX"]},{"@type":"WebSite","@id":"https://www.vinaxmusic.online/#website","url":"https://www.vinaxmusic.online/","name":"VinaX","publisher":{"@id":"https://www.vinaxmusic.online/#org"},"inLanguage":"en","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://www.vinaxmusic.online/search/{search_term_string}"},"query-input":"required name=search_term_string"}},{"@type":"SoftwareApplication","@id":"https://www.vinaxmusic.online/#app","name":"VinaX","operatingSystem":"Android, Web","applicationCategory":"MusicApplication","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"},"publisher":{"@id":"https://www.vinaxmusic.online/#org"},"url":"https://www.vinaxmusic.online/download"}]}
@@ -278,7 +260,7 @@
         ]
       }
     </script>
-      <link rel="preload" href="/fonts/manrope-var.woff2" as="font" type="font/woff2" crossorigin />
+      <link rel="preload" href="/fonts/figtree-var.woff2" as="font" type="font/woff2" crossorigin />
   </head>
   <body>
     <div id="boot" class="vxb"><div class="vxb-sign"><i class="vxb-halo"></i><svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="VinaX"><defs><linearGradient id="vxbGrad" x1="98" y1="26" x2="64" y2="102" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ff6384"/><stop offset="1" stop-color="#ffc066"/></linearGradient><filter id="vxbGlow" filterUnits="userSpaceOnUse" x="-16" y="-16" width="160" height="160"><feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="a"/><feGaussianBlur in="SourceGraphic" stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="a"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><rect class="vxb-tile" width="128" height="128" rx="28" fill="#130e16"/><g class="vxb-glass" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="30" y1="26" x2="64" y2="102" stroke-width="16"/><polyline points="98,26 78,52 90,70 64,102" stroke-width="12"/></g><g class="vxb-t1" filter="url(#vxbGlow)" fill="none" stroke-linecap="round"><line x1="30" y1="26" x2="64" y2="102" stroke="#ffa42e" stroke-width="16"/><line x1="30" y1="26" x2="64" y2="102" stroke="#ffe7c4" stroke-opacity=".55" stroke-width="5"/></g><g class="vxb-t2" filter="url(#vxbGlow)" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="98,26 78,52 90,70 64,102" stroke="url(#vxbGrad)" stroke-width="12"/><polyline points="98,26 78,52 90,70 64,102" stroke="#ffe9e0" stroke-opacity=".55" stroke-width="4"/></g></svg></div><div class="bt">VinaX</div><div class="bs">Free music, for everyone.</div></div>

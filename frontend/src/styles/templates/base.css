@@ -11,27 +11,24 @@
       block of values plus the handful of layout rules that are its own;
    2. the tokens that are derived from the ink scale (glass fills, solid
       surfaces), re-derived so a template only has to state its inks;
-   3. the switches that must keep winning over any template: AMOLED (true
-      black) and high contrast.
+   3. the switch that must keep winning over any template: high contrast.
 
    The contract (asserted in src/constants/templates.test.ts):
    - a template's COLOUR blocks (tokens and canvas paint) carry `:root` on
      the html selector. It always matches; it is there for its weight, so
-     these blocks keep their place in the cascade against the theme, accent
-     and page rules. Take it off one block and that block loses to rules it
-     beats today;
-   - a template's accent applies only while the listener has not picked one
-     (no data-accent, or the default 'crimson');
-   - every template has a dark and a light look; text and accent tiers clear
-     WCAG AA on its canvas and raised surface;
+     these blocks keep their place in the cascade against the page rules.
+     Take it off one block and that block loses to rules it beats today;
+   - 1.15: the look is dark only (no light or black theme, no accent
+     picker); text and accent tiers clear WCAG AA on its canvas and raised
+     surface;
    - page stylesheets load after this file (they ship with their lazy page),
      so every rule here wins by specificity, never by order.
    ========================================================================= */
 
 /* ------------------------------------------------------------ display face */
-/* Titles are Bricolage Grotesque and body copy is Manrope; both are declared
-   in styles/index.css and self-hosted in /fonts (SIL OFL 1.1). 2.0 retired
-   Inter, Figtree, Archivo, Baloo 2 and Roboto with the styles that used them. */
+/* 1.15 — one face: Figtree for titles and body, declared in styles/index.css
+   and self-hosted in /fonts (SIL OFL 1.1). Bricolage Grotesque and Manrope
+   are retired from the app (the owner console keeps its own copies). */
 
 /* ------------------------------------------------------------------ dials */
 html[data-template] {
@@ -48,7 +45,7 @@ html[data-template] {
   --tpl-r-mini: 16px;       /* phone mini player */
   --tpl-r-np-art: 22px;     /* Now Playing artwork */
   /* Type. */
-  --tpl-font-body: 'Manrope', 'Manrope Fallback', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --tpl-font-body: 'Figtree', 'Figtree Fallback', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, sans-serif;
   --tpl-title-weight: 800;
   --tpl-title-tracking: -0.035em;
   --tpl-section-weight: 750;
@@ -87,133 +84,8 @@ html[data-template]:root {
   --aura-violet: var(--ember-500);
   --aura-cyan: var(--tide-500);
 }
-html.light[data-template]:root {
-  --glass-bg: rgb(var(--ink-950) / var(--glass-alpha));
-  --glass-bg-strong: rgb(var(--ink-950) / var(--glass-alpha));
-  --glass-bg-muted: rgb(var(--ink-900) / var(--glass-alpha));
-  --glass-bg-hover: rgb(var(--ink-850) / max(var(--glass-alpha), 0.85));
-  --glass-bg-active: rgb(var(--ink-800) / max(var(--glass-alpha), 0.9));
-  --glass-border: rgb(var(--ink-100) / 0.09);
-  --glass-border-strong: rgb(var(--ink-100) / 0.16);
-  --glass-shadow: 0 4px 12px -6px rgb(var(--ink-100) / 0.12);
-  --glass-shadow-strong: 0 -8px 20px -8px rgb(var(--ink-100) / 0.12);
-  --vx-mat-thin: rgb(var(--ink-950) / calc(var(--glass-alpha) * 0.6));
-  --vx-mat-regular: rgb(var(--ink-950) / clamp(0.5, calc(var(--glass-alpha) - 0.1), 0.92));
-  --vx-mat-chrome: rgb(var(--ink-950) / clamp(0.8, calc(var(--glass-alpha) + 0.06), 0.97));
-  --vx-mat-thick: rgb(var(--ink-950) / clamp(0.86, calc(var(--glass-alpha) + 0.12), 0.98));
-  --vx-mat-hairline: rgb(var(--ink-100) / 0.1);
-  --surface-solid: rgb(var(--ink-950));
-  --surface-input: rgb(var(--ink-850));
-  --surface-navbar: rgb(var(--ink-950));
-  --surface-sidebar: rgb(var(--ink-950));
-  --surface-modal: rgb(var(--ink-950));
-  --surface-player: rgb(var(--ink-950));
-  --vx-art-shadow: 0 10px 24px -14px rgb(var(--ink-100) / 0.35);
-  --vx-deck-shadow: 0 16px 36px -18px rgb(var(--ink-100) / 0.35);
-}
-html.light[data-template]:root body { background-color: rgb(var(--ink-900)); }
 
-/* ------------------------------------------------- 11.0 — light is glass too */
-/* The light theme used to be white panes on a near-white canvas: frost over
-   white reads as paint, however much blur it carries. Light now has a canvas
-   worth seeing through — the style's accent, its second colour and the
-   playing artwork as three soft lights behind everything — and thinner,
-   bluer frost on every bar and sheet, so the glass is the look rather than a
-   setting. The fills where text sits keep the 10.1 floors (chrome 0.8,
-   thick 0.86): muted text on 80% white over a black cover is exactly where
-   AA (4.5:1) still holds — asserted per style in constants/templates.test.ts.
-   The glass comes from the lights behind, the saturation and the blur, not
-   from thinner frost. */
-html.light[data-template]:root {
-  --vx-mat-thin: rgb(var(--ink-950) / calc(var(--glass-alpha) * 0.5));
-  --vx-mat-regular: rgb(var(--ink-950) / clamp(0.4, calc(var(--glass-alpha) - 0.25), 0.85));
-  --vx-mat-chrome: rgb(var(--ink-950) / clamp(0.8, calc(var(--glass-alpha) + 0.02), 0.94));
-  --vx-mat-thick: rgb(var(--ink-950) / clamp(0.86, calc(var(--glass-alpha) + 0.08), 0.96));
-  --vx-mat-thin-blur: calc(18px + var(--glass-blur-boost) * 30px);
-  --vx-mat-chrome-blur: calc(22px + var(--glass-blur-boost) * 36px);
-  --vx-mat-thick-blur: calc(28px + var(--glass-blur-boost) * 40px);
-  --vx-mat-sat: calc(150% + (1 - var(--glass-alpha)) * 60%);
-  --vx-mat-specular: rgb(255 255 255 / 0.95);
-  --vx-mat-hairline: rgb(var(--ink-100) / 0.08);
-  --vx-mat-art: 0.16;
-  --vx-mesh-ember: 0.22;
-  --vx-mesh-tide: 0.16;
-  /* Raised surfaces in light are translucent white, not paint. */
-  --vxh-tile-bg: rgb(var(--ink-950) / 0.62);
-  --vxh-tile-hover: rgb(var(--ink-950) / 0.86);
-  --glass-bg: rgb(var(--ink-950) / clamp(0.5, calc(var(--glass-alpha) - 0.2), 0.9));
-  --glass-border: rgb(255 255 255 / 0.7);
-  --vx-border: rgb(var(--ink-100) / 0.08);
-}
-/* The three lights behind the panes: accent low left, second colour top
-   right, the playing artwork top left. Painted once on the shell; the panes'
-   frost reads them. */
-html.light[data-template]:root .vx-shell {
-  position: relative;
-  isolation: isolate;
-}
-html.light[data-template]:root .vx-shell::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(55% 48% at 4% 96%, rgb(var(--ember-500) / 0.26), transparent 70%),
-    radial-gradient(50% 44% at 96% 4%, rgb(var(--tide-500) / 0.22), transparent 70%),
-    radial-gradient(60% 50% at 14% 10%, rgb(var(--art) / 0.34), transparent 72%),
-    radial-gradient(40% 40% at 70% 70%, rgb(var(--ember-300) / 0.14), transparent 70%);
-}
-/* The workspace sheet is frost over the lights, not a solid page. */
-html.light[data-template]:root .vx-workspace {
-  background:
-    radial-gradient(820px 320px at 12% -140px, rgb(var(--ember-500) / var(--vx-mesh-ember)), transparent 70%) local,
-    radial-gradient(700px 300px at 92% -140px, rgb(var(--tide-500) / var(--vx-mesh-tide)), transparent 70%) local,
-    rgb(var(--ink-900) / 0.55);
-}
-/* Cards and tiles: translucent white with a lit edge; no blur on scrolling
-   content (that is the one rule of the material system). */
-html.light[data-template]:root :is(.vxh-tile, .vxh-card, .vxh-shortcut, .vxh-disclose, .glass-card, .glass-panel, .vx-lt-card, .vx-help-tile, .vx-panel) {
-  background: rgb(var(--ink-950) / 0.62);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), inset 0 0 0 1px rgb(var(--ink-100) / 0.06);
-}
-html.light[data-template]:root :is(.vxh-tile, .vxh-card, .vxh-shortcut):hover { background: rgb(var(--ink-950) / 0.86); }
-html.light[data-template]:root .vxh-hero { background: rgb(var(--ink-950) / 0.6); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), inset 0 0 0 1px rgb(var(--ink-100) / 0.06), 0 24px 60px -36px rgb(var(--ink-100) / 0.3); }
-html.light[data-template]:root .vx-library { background: rgb(var(--ink-950) / 0.5); }
-html.light[data-template]:root .vx-settings { --set-card: rgb(var(--ink-950) / 0.66); }
-html.light[data-template]:root :is(.glass-input, .glass-search, .vx-set-input) { background: rgb(var(--ink-950) / 0.7); }
-/* Prefers-reduced-transparency and no-backdrop-filter fallbacks in index.css
-   still force solid surfaces; nothing here outranks them. */
-
-/* ------------------------------------------ switches that outrank a template */
-/* AMOLED is true black in every style: only the deepest tiers move, the
-   style's own greys, accent, shapes and layout stay. `:not(#_)` lifts these
-   two blocks above every template block without !important. */
-html.amoled[data-template]:not(#_) {
-  --ink-950: 0 0 0;
-  --ink-900: 2 2 3;
-  --ink-850: 9 9 12;
-  --ink-800: 17 18 23;
-  --glass-bg: rgb(8 8 11);
-  --glass-bg-muted: rgb(3 3 5);
-  --surface-solid: rgb(0 0 0);
-  --surface-navbar: rgb(0 0 0);
-  --surface-sidebar: rgb(0 0 0);
-  --surface-player: rgb(3 3 5);
-  --surface-modal: rgb(6 6 9);
-  --vx-mat-thin: rgb(0 0 0);
-  --vx-mat-regular: rgb(9 9 12);
-  --vx-mat-chrome: rgb(0 0 0);
-  --vx-mat-thick: rgb(9 9 12);
-  --vx-mat-specular: rgb(255 255 255 / 0.05);
-  --vx-mat-art: 0;
-}
-html.amoled[data-template]:not(#_) .vx-shell { background: #000; }
-html.amoled[data-template]:not(#_):root .vx-workspace {
-  background: radial-gradient(900px 320px at 30% -160px, rgb(var(--ember-500) / 0.1), transparent 70%) local, #000;
-}
 html.hc[data-template]:not(#_) { --ink-300: 230 230 230; --ink-400: 205 205 205; --ink-500: 170 170 170; --glass-alpha: 0.98; }
-html.hc.light[data-template]:not(#_) { --ink-300: 40 40 40; --ink-400: 60 60 60; --ink-500: 80 80 80; }
 
 /* ------------------------------------------------- the dials, wired to hooks */
 html[data-template] body { font-family: var(--tpl-font-body); }

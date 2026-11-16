@@ -71,7 +71,6 @@ export interface PlayerState {
   /** v5.12.0 — A-B repeat: loop between these positions (seconds); null = off. */
   loopA: number | null;
   loopB: number | null;
-  currentAccent: string | null;
   streamKbps: number | null;
   /** True while following a Listen Together host. */
   followMode: boolean;
@@ -156,7 +155,6 @@ export interface PlayerState {
   toggleShuffle(): void;
   setSleepTimer(minutes: number | null): void;
   setSleepAfterTrack(v: boolean): void;
-  setCurrentAccent(c: string | null): void;
   setFollowMode(v: boolean): void;
   /**
    * 10.1 Flow — set the listener's queue aside (paused) and take the player
@@ -822,7 +820,6 @@ export const usePlayerStore = create<PlayerState>()(
         sleepSongsLeft: 0,
         loopA: null,
         loopB: null,
-        currentAccent: null,
         streamKbps: null,
         followMode: false,
         tuneIntent: null,
@@ -1555,7 +1552,6 @@ export const usePlayerStore = create<PlayerState>()(
           if (v) toast('Will stop after this song');
         },
 
-        setCurrentAccent: (currentAccent) => set({ currentAccent }),
         setFollowMode: (followMode) => {
           if (followMode && preview) get().exitPreview();
           set({ followMode });

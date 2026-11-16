@@ -47,7 +47,7 @@ import {
 import { DeviceSheet } from '@/components/DeviceSheet';
 import { bestImage } from '@/utils/images';
 import { SongCanvas, SongCanvasBackdrop, useSongCanvas } from '@/components/SongCanvas';
-import { extractAverageColor, extractVibrantColor } from '@/utils/color';
+import { extractVibrantColor } from '@/utils/color';
 import { acquireWakeLock, releaseWakeLock } from '@/utils/wakeLock';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useAudioOutputStore } from '@/services/audio/outputWatcher';
@@ -234,8 +234,6 @@ export default function NowPlayingPage() {
     usePlayerStore.getState();
   const reasons = useReasonStore((s) => s.reasons);
 
-  const setCurrentAccent = usePlayerStore((s) => s.setCurrentAccent);
-  const dynamicTheme = useSettingsStore((s) => s.dynamicTheme);
   const [showMore, setShowMore] = useState(false);
   const [showDevices, setShowDevices] = useState(false);
   const [showSleep, setShowSleep] = useState(false);
@@ -480,21 +478,6 @@ export default function NowPlayingPage() {
     };
   }, [artUrl]);
 
-  useEffect(() => {
-    let alive = true;
-    if (!dynamicTheme) {
-      setCurrentAccent(null);
-      return;
-    }
-    if (artUrl) {
-      void extractAverageColor(artUrl).then((c) => {
-        if (alive) setCurrentAccent(c);
-      });
-    }
-    return () => {
-      alive = false;
-    };
-  }, [artUrl, dynamicTheme, setCurrentAccent]);
 
   if (!song) {
     return (

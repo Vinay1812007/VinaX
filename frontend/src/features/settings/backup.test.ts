@@ -432,7 +432,8 @@ describe('validated import keeps wrong types out', () => {
       },
     });
     const state = (valuesOf(parseOk(json), 'settings')[KEYS.settings] as { state: Record<string, unknown>; version: number });
-    expect(state.state).toEqual({ accent: 'ocean', glassLevel: 100, pinnedLanguages: ['telugu'], exploreMode: true, discoveryMode: 'discover', manualCountry: 'IN' });
+    // 1.15 — theme and accent are not settings any more (one dark look): a backup's are dropped.
+    expect(state.state).toEqual({ glassLevel: 100, pinnedLanguages: ['telugu'], exploreMode: true, discoveryMode: 'discover', manualCountry: 'IN' });
     // An older file keeps its version so the store's migrate still runs; a newer one is clamped.
     expect(state.version).toBe(3);
     const newer = fileWith({ settings: { [KEYS.settings]: { state: { theme: 'light', discoveryMode: 'familiar', exploreMode: true }, version: 99 } } });

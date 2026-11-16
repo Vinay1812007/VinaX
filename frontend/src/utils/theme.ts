@@ -1,18 +1,8 @@
-export type ThemePref = 'dark' | 'light' | 'system' | 'amoled' | 'auto';
-export type ResolvedTheme = 'dark' | 'light' | 'amoled';
-
-/** Resolve the user preference against the system scheme. Pure. */
-export function resolveTheme(pref: ThemePref, systemPrefersDark: boolean, hour = new Date().getHours()): ResolvedTheme {
-  if (pref === 'system') return systemPrefersDark ? 'dark' : 'light';
-  // v5.12.0 — Auto: light through the day (07:00–18:59), dark at night.
-  if (pref === 'auto') return hour >= 7 && hour < 19 ? 'light' : 'dark';
-  return pref;
-}
-
 // ---------------------------------------------------------------------------
 // App style ("template"): html[data-template] names the look the stylesheets
-// in styles/templates/ are written for. 2.0 — VinaX has ONE look, `vinax`
-// (deep plum, amber and pink, from the app icon), in dark, light and black.
+// in styles/templates/ are written for. 2.0 — VinaX has ONE look, `vinax`.
+// 1.15 — and one theme: black and green, always dark (no light, black or
+// auto theme, no accent picker).
 // The id, the setting and the pre-paint stamp stay, so a second look can be
 // added the way README.md (Adding an app style) describes.
 // ---------------------------------------------------------------------------
@@ -20,11 +10,11 @@ export function resolveTheme(pref: ThemePref, systemPrefersDark: boolean, hour =
 export type TemplateId = 'vinax';
 export const DEFAULT_TEMPLATE: TemplateId = 'vinax';
 
-/** The page canvas (= the style's --ink-900) per theme: [dark, light]. The
- *  pre-paint script in index.html carries the same table — keep in sync
- *  (asserted in templates.test.ts). AMOLED is black. */
-export const TEMPLATE_CANVAS: Record<TemplateId, readonly [string, string]> = {
-  vinax: ['#130e16', '#faf5ed'],
+/** The page canvas (= the style's --ink-900). The pre-paint script in
+ *  index.html carries the same table — keep in sync (asserted in
+ *  templates.test.ts). */
+export const TEMPLATE_CANVAS: Record<TemplateId, string> = {
+  vinax: '#121212',
 };
 
 /** 2.0 — every style id an earlier release stored (the six of 15.0–1.13 and
@@ -53,18 +43,15 @@ export function normalizeTemplate(id: unknown): TemplateId {
   return DEFAULT_TEMPLATE;
 }
 
-/** Apply theme classes, the app style and the browser chrome colour. Idempotent.
+/** Apply the dark class, the app style and the browser chrome colour. Idempotent.
  * Mirrored by the inline pre-paint script in index.html — keep in sync. */
-export function applyThemeClasses(resolved: ResolvedTheme, root: HTMLElement = document.documentElement, template?: unknown): void {
-  root.classList.toggle('light', resolved === 'light');
-  root.classList.toggle('dark', resolved === 'dark' || resolved === 'amoled');
-  root.classList.toggle('amoled', resolved === 'amoled');
+export function applyThemeClasses(root: HTMLElement = document.documentElement, template?: unknown): void {
+  root.classList.remove('light', 'amoled');
+  root.classList.add('dark');
   // A caller that passes no style keeps whatever is already on <html>.
   const tpl = normalizeTemplate(template ?? root.dataset.template);
   root.dataset.template = tpl;
-  const bg = resolved === 'amoled' ? '#000000' : TEMPLATE_CANVAS[tpl][resolved === 'light' ? 1 : 0];
-  // Also clear/replace the inline background the pre-paint script stamped on
-  // <html>, so runtime theme switches don't leave a stale overscroll color.
+  const bg = TEMPLATE_CANVAS[tpl];
   root.style.background = bg;
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bg);
 }

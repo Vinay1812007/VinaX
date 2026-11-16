@@ -288,7 +288,7 @@ test('a guest follows the host across pages, in sync, and its request is playabl
   await expect.poll(async () => (await audioState(host))?.paused, { timeout: 10_000 }).toBe(false);
 
   // The host leaves the Listen Together page; the session must keep going.
-  await host.getByRole('link', { name: /^Search songs/ }).first().click();
+  await host.getByRole('link', { name: /^What do you want to play/ }).first().click();
   await expect(host.locator('.vx-lt-pill')).toContainText('Hosting');
 
   // The host is a minute into the song when the guest arrives.
@@ -330,7 +330,7 @@ test('a guest follows the host across pages, in sync, and its request is playabl
   await expect.poll(async () => (await audioState(guest))?.src ?? '', { timeout: 15_000 }).toContain('/t-b.wav');
 
   // The guest also browses away and keeps following, with the pill showing it.
-  await guest.getByRole('link', { name: /^Search songs/ }).first().click();
+  await guest.getByRole('link', { name: /^What do you want to play/ }).first().click();
   await expect(guest.locator('.vx-lt-pill')).toContainText(/Listening with Asha/);
 
   // 1.13 — a song the guest taps on another page is ASKED of the host: it
@@ -455,7 +455,7 @@ test('with the live line, a pause, a chat line, "typing" and a reaction reach th
   expect(sky?.width).toBe(view.width);
   expect(sky?.height).toBe(view.height);
   // …and on any other page of the app.
-  await guest.getByRole('link', { name: /^Search songs/ }).first().click();
+  await guest.getByRole('link', { name: /^What do you want to play/ }).first().click();
   await expect(guest.locator('.vx-lt-pill')).toBeVisible();
   await host.getByRole('button', { name: 'React ❤️' }).click();
   await expect(guest.locator('.vx-lt-sky .vx-lt-fly').first()).toBeVisible({ timeout: 2000 });
@@ -567,7 +567,7 @@ test('new chat lines count up on the pill until the chat is opened, and the play
   await expect(guest.locator('.vx-lt-status')).toContainText('Live', { timeout: 15_000 });
 
   // The guest is browsing elsewhere when the host says something.
-  await guest.getByRole('link', { name: /^Search songs/ }).first().click();
+  await guest.getByRole('link', { name: /^What do you want to play/ }).first().click();
   const pill = guest.locator('.vx-lt-pill');
   await expect(pill).toBeVisible();
   await expect(pill.getByTestId('lt-unread')).toHaveCount(0);
@@ -585,7 +585,7 @@ test('new chat lines count up on the pill until the chat is opened, and the play
   // Opening the room reads them.
   await pill.getByRole('link').click();
   await expect(guest.locator('.vx-lt-msg', { hasText: 'second' })).toBeVisible();
-  await guest.getByRole('link', { name: /^Search songs/ }).first().click();
+  await guest.getByRole('link', { name: /^What do you want to play/ }).first().click();
   await expect(guest.locator('.vx-lt-pill')).toBeVisible();
   await expect(guest.locator('.vx-lt-pill').getByTestId('lt-unread')).toHaveCount(0);
 
@@ -619,7 +619,7 @@ test('the Listen Together pill can be dragged out of the way, stays there, and a
   await host.goto('/together');
   await host.getByRole('button', { name: 'Start a session' }).click();
   await expect(host.locator('.vx-lt-code')).toHaveText('ABC123');
-  await host.getByRole('link', { name: /^Search songs/ }).first().click();
+  await host.getByRole('link', { name: /^What do you want to play/ }).first().click();
   const pill = host.locator('.vx-lt-pill');
   await expect(pill).toContainText('Hosting');
   // The pill sits above the player, which takes a moment to reach its height.

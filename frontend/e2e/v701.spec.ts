@@ -81,7 +81,8 @@ test('top bar: no search box, Home actions live in it; Discover has no Ads tile 
   await page.waitForSelector('.vx-hero');
   const bar = page.locator('.vx-topbar');
   await expect(bar.getByRole('button', { name: 'Notifications' })).toBeVisible();
-  await expect(bar.getByRole('button', { name: 'Toggle theme' })).toBeVisible();
+  // 1.15 — one dark look: no theme toggle.
+  await expect(bar.getByRole('button', { name: 'Toggle theme' })).toHaveCount(0);
   // 13.4.0 — the avatar is a menu button (profile + app settings), not a link.
   await expect(bar.getByRole('button', { name: /profile and settings/i })).toBeVisible();
   expect(await bar.getByRole('link', { name: /search/i }).count()).toBe(0);

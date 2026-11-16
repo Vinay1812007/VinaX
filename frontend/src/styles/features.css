@@ -40,12 +40,12 @@
 .home-studio-intro > p:last-child { max-width: 300px; color: rgb(var(--ink-300)); font-size: 13px; line-height: 1.7; }
 .home-studio-editor { min-width: 0; }
 .home-studio-editor > label { display: block; margin: 0 0 7px; color: rgb(var(--ink-300)); font-size: 12px; font-weight: 700; }
-.home-studio-editor textarea, .home-studio-editor input:not([type="checkbox"]) { width: 100%; border: 1px solid rgb(var(--ink-100) / 0.14); border-radius: 12px; background: rgb(var(--ink-950) / .38); color: rgb(var(--ink-100)); padding: 11px 12px; outline: none; resize: vertical; font: inherit; font-size: 13px; }
-.home-studio-editor textarea:focus, .home-studio-editor input:not([type="checkbox"]):focus { border-color: rgb(var(--ember-400) / .7); box-shadow: 0 0 0 3px rgb(var(--ember-500) / .12); }
+.home-studio-editor textarea, .home-studio-editor input:not([type="checkbox"]) { width: 100%; border: 1px solid rgb(var(--ink-100) / 0.14); border-radius: 8px; background: rgb(var(--ink-950) / .38); color: rgb(var(--ink-100)); padding: 11px 12px; outline: none; resize: vertical; font: inherit; font-size: 13px; }
+.home-studio-editor textarea:focus, .home-studio-editor input:not([type="checkbox"]):focus { border-color: rgb(var(--ink-100) / 0.16); box-shadow: 0 0 0 3px rgb(0 0 0 / 0.22); }
 .home-studio-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .home-studio-actions button { min-height: 44px; padding: 0 15px; }
 .home-studio-notice { min-height: 18px; margin: 7px 0 18px; color: rgb(var(--ink-400)); font-size: 12px; }
-.home-studio-shelves { margin: 10px 0 18px; padding: 0; list-style: none; border: 1px solid rgb(var(--ink-100) / .1); border-radius: 12px; overflow: hidden; }
+.home-studio-shelves { margin: 10px 0 18px; padding: 0; list-style: none; border: 1px solid rgb(var(--ink-100) / .1); border-radius: 8px; overflow: hidden; }
 .home-studio-shelves li { display: grid; grid-template-columns: 24px minmax(0, 1fr) 44px 44px; align-items: center; gap: 7px; min-height: 40px; padding: 0 8px; border-bottom: 1px solid rgb(var(--ink-100) / .07); }
 .home-studio-shelves li:last-child { border-bottom: 0; }
 .home-studio-shelves label { display: flex; align-items: center; gap: 9px; min-width: 0; color: rgb(var(--ink-200)); font-size: 12px; }

@@ -5,8 +5,8 @@
   min-height: 100dvh;
   color: rgb(var(--ink-200));
   background:
-    radial-gradient(55% 40dvh at 15% 0, rgb(var(--ember-500) / 0.16), transparent 70%),
-    radial-gradient(45% 40dvh at 95% 100%, rgb(var(--tide-500) / 0.14), transparent 70%),
+    radial-gradient(55% 40dvh at 15% 0, rgb(var(--ink-100) / 0.16), transparent 70%),
+    radial-gradient(45% 40dvh at 95% 100%, rgb(var(--ink-100) / 0.14), transparent 70%),
     rgb(var(--ink-950));
   background-attachment: fixed;
 }
@@ -72,7 +72,7 @@
 .vx-public-content ol { list-style: none; counter-reset: vxpub; margin: 12px 0 20px; padding: 0; display: grid; gap: 2px; }
 .vx-public-content ol > li {
   counter-increment: vxpub; position: relative; margin: 0;
-  padding: 10px 12px 10px 48px; border-radius: 12px; color: rgb(var(--ink-400));
+  padding: 10px 12px 10px 48px; border-radius: 8px; color: rgb(var(--ink-400));
 }
 .vx-public-content ol > li::before {
   content: counter(vxpub); position: absolute; left: 12px; top: 10px; width: 2.4ch; text-align: right;
@@ -92,7 +92,7 @@
   padding: 24px 22px 20px; border-radius: var(--radius-2xl); text-align: center; border: 1px solid var(--line-1);
   scroll-margin-top: 88px;
 }
-.vx-public-signin-logo { margin: 0 auto 12px; border-radius: 14px; }
+.vx-public-signin-logo { margin: 0 auto 12px; border-radius: 8px; }
 .vx-public-signin h2 { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: rgb(var(--ink-100)); }
 .vx-public-signin > p { margin-top: 6px; font-size: 14.5px; line-height: 1.55; color: rgb(var(--ink-300)); }
 .vx-public-signin-button { margin-top: 18px; display: flex; justify-content: center; min-height: 44px; }

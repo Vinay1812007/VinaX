@@ -25,11 +25,7 @@
   margin: 0 auto;
   padding-bottom: 56px;
 }
-html.light .vx-sec {
-  --sec-fill: rgb(var(--ink-100) / 0.05);
-  --sec-fill-hover: rgb(var(--ink-100) / 0.085);
-  --sec-raised: rgb(var(--ink-950));
-}
+
 .vx-sec.is-narrow { max-width: 600px; }
 .vx-sec.is-wide { max-width: 960px; }
 .vx-sec-block { margin-bottom: 48px; }
@@ -107,12 +103,12 @@ a.vx-row:active, button.vx-row:active, summary.vx-row:active { background: var(-
   place-items: center;
   width: 44px;
   height: 44px;
-  border-radius: 14px;
+  border-radius: 8px;
   color: rgb(var(--ink-200));
   background: var(--sec-fill);
   font-size: 20px;
 }
-.vx-row-art { width: 48px; height: 48px; flex-shrink: 0; border-radius: 10px; object-fit: cover; background: rgb(var(--ink-800)); }
+.vx-row-art { width: 48px; height: 48px; flex-shrink: 0; border-radius: 8px; object-fit: cover; background: rgb(var(--ink-800)); }
 .vx-row-rank { width: 22px; flex-shrink: 0; color: rgb(var(--ink-400)); font-size: 15px; font-weight: 750; text-align: center; font-variant-numeric: tabular-nums; }
 .vx-row-danger .vx-row-label { color: var(--vx-danger); }
 .truncate-1 { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -134,7 +130,7 @@ details[open] > summary .vx-row-toggle { transform: rotate(180deg); }
   border-radius: var(--vx-radius-panel);
   background: var(--sec-raised);
 }
-html.light .vx-panel { box-shadow: inset 0 0 0 1px var(--sec-line); }
+
 @media (min-width: 768px) { .vx-panel { padding: 24px; } }
 
 /* ------------------------------------------------------------- numbers */
@@ -173,7 +169,7 @@ html.light .vx-panel { box-shadow: inset 0 0 0 1px var(--sec-line); }
 /* Column charts (listening clock, the last seven days). */
 .vx-columns { display: flex; align-items: flex-end; gap: 4px; height: 128px; }
 .vx-columns > div { position: relative; display: flex; flex: 1; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
-.vx-columns i { display: block; width: 100%; min-height: 3px; border-radius: 4px 4px 2px 2px; background: rgb(var(--ember-500) / 0.85); }
+.vx-columns i { display: block; width: 100%; min-height: 3px; border-radius: 4px 4px 2px 2px; background: rgb(var(--ink-100) / 0.16); }
 .vx-columns i.is-quiet { background: rgb(var(--ink-100) / 0.12); }
 .vx-columns-axis { display: flex; gap: 4px; margin-top: 8px; }
 .vx-columns-axis > span { flex: 1; color: rgb(var(--ink-400)); font-size: 11.5px; font-weight: 650; text-align: center; font-variant-numeric: tabular-nums; }
@@ -186,13 +182,13 @@ html.light .vx-panel { box-shadow: inset 0 0 0 1px var(--sec-line); }
   overflow: hidden;
   width: var(--collage, 168px);
   height: var(--collage, 168px);
-  border-radius: 20px;
+  border-radius: 8px;
   background: rgb(var(--ink-800));
   box-shadow: var(--vx-art-shadow);
 }
 .vx-collage img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .vx-collage.is-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
-@media (max-width: 639px) { .vx-collage { --collage: 128px; border-radius: 16px; } }
+@media (max-width: 639px) { .vx-collage { --collage: 128px; border-radius: 8px; } }
 .vx-avatar-img { flex-shrink: 0; border-radius: 50%; object-fit: cover; background: rgb(var(--ink-800)); }
 .vx-avatar-initial {
   display: grid;
@@ -204,7 +200,6 @@ html.light .vx-panel { box-shadow: inset 0 0 0 1px var(--sec-line); }
   font-weight: 800;
   line-height: 1;
 }
-html.light .vx-avatar-initial { background: rgb(var(--ink-850)); }
 
 /* A hero: artwork beside the headline, for stats / recap / taste. */
 .vx-hero-row { display: flex; align-items: center; gap: 28px; }
@@ -213,7 +208,7 @@ html.light .vx-avatar-initial { background: rgb(var(--ink-850)); }
   .vx-hero-row { align-items: flex-start; flex-direction: column; gap: 20px; }
   /* Stats and taste keep the cover beside the numbers, smaller. */
   .vx-hero-row.is-inline { flex-direction: row; gap: 16px; }
-  .vx-hero-row.is-inline .vx-collage { --collage: 96px; border-radius: 14px; }
+  .vx-hero-row.is-inline .vx-collage { --collage: 96px; border-radius: 8px; }
   .vx-hero-row.is-inline .vx-kpis { gap: 14px 14px; }
   .vx-hero-row.is-inline .vx-kpi { padding-top: 10px; }
   .vx-hero-row.is-inline .vx-kpi-value { font-size: 24px; }
@@ -231,16 +226,10 @@ html.light .vx-avatar-initial { background: rgb(var(--ink-850)); }
   border-radius: var(--vx-radius-panel);
   background:
     radial-gradient(120% 140% at 0% 0%, rgb(var(--art) / 0.28), transparent 62%),
-    radial-gradient(90% 120% at 100% 100%, rgb(var(--tide-500) / 0.12), transparent 60%),
+    radial-gradient(90% 120% at 100% 100%, rgb(var(--ink-100) / 0.12), transparent 60%),
     rgb(var(--ink-850));
 }
-html.light .vx-sec-feature {
-  background:
-    radial-gradient(120% 140% at 0% 0%, rgb(var(--art) / 0.16), transparent 62%),
-    radial-gradient(90% 120% at 100% 100%, rgb(var(--tide-500) / 0.08), transparent 60%),
-    rgb(var(--ink-950));
-  box-shadow: inset 0 0 0 1px var(--sec-line);
-}
+
 @media (min-width: 768px) { .vx-sec-feature { padding: 32px; } }
 
 /* --------------------------------------------------- long-form pages */
@@ -311,16 +300,14 @@ html.light .vx-sec-feature {
   width: 88px;
   height: 88px;
   margin-bottom: 24px;
-  border-radius: 28px;
+  border-radius: 8px;
   color: rgb(var(--ember-400));
   background:
-    radial-gradient(80% 80% at 30% 20%, rgb(var(--ember-500) / 0.22), transparent 70%),
+    radial-gradient(80% 80% at 30% 20%, rgb(var(--ink-100) / 0.16), transparent 70%),
     rgb(var(--ink-850));
   box-shadow: inset 0 0 0 1px var(--vx-border);
 }
-html.light .vx-empty-icon {
-  background: radial-gradient(80% 80% at 30% 20%, rgb(var(--ember-500) / 0.14), transparent 70%), rgb(var(--ink-950));
-}
+
 .vx-empty-page h1, .vx-empty-page h2 { color: rgb(var(--ink-100)); font-family: var(--vx-font-display); font-size: var(--vx-type-page); font-weight: 800; line-height: 1.1; letter-spacing: -0.035em; }
 .vx-empty-page p { max-width: 40ch; margin-top: 10px; color: rgb(var(--ink-400)); font-size: 15px; line-height: 1.55; }
 .vx-empty-page .btn-primary { margin-top: 28px; }
@@ -356,17 +343,17 @@ html.light .vx-empty-icon {
   color: rgb(var(--ink-100));
   background: var(--sec-raised);
   border: 1px solid var(--sec-line);
-  border-radius: 14px;
+  border-radius: 8px;
   font-size: 15px;
   outline: none;
   transition: border-color var(--dur-quick) var(--ease-standard), box-shadow var(--dur-quick) var(--ease-standard);
 }
 .vx-sec-field::placeholder { color: rgb(var(--ink-500)); }
-.vx-sec-field:focus { border-color: rgb(var(--ember-500) / 0.7); box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.2); }
+.vx-sec-field:focus { border-color: rgb(var(--ink-100) / 0.16); box-shadow: 0 0 0 3px rgb(0 0 0 / 0.30); }
 .vx-sec-field.is-invalid { border-color: var(--vx-danger); }
 textarea.vx-sec-field { min-height: 128px; padding: 12px 16px; line-height: 1.55; resize: vertical; }
 .vx-panel .vx-sec-field { background: rgb(var(--ink-900)); }
-html.light .vx-panel .vx-sec-field { background: rgb(var(--ink-900)); }
+
 .vx-label { display: block; margin-bottom: 8px; color: rgb(var(--ink-200)); font-size: 14px; font-weight: 650; }
 .vx-check { display: flex; align-items: center; gap: 12px; min-height: 44px; color: rgb(var(--ink-300)); font-size: 14px; cursor: pointer; }
 .vx-check input { width: 18px; height: 18px; flex-shrink: 0; accent-color: rgb(var(--ember-500)); }
@@ -382,7 +369,7 @@ html.light .vx-panel .vx-sec-field { background: rgb(var(--ink-900)); }
 .vx-code-inline { color: rgb(var(--ink-100)); font-weight: 750; letter-spacing: 0.06em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 /* Lagoon marks live moments. */
 .vx-status-dot { position: relative; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: rgb(var(--tide-400)); }
-.vx-status-dot::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; background: rgb(var(--tide-400) / 0.35); animation: vxLivePulse 1.8s var(--ease-calm) infinite; }
+.vx-status-dot::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; background: rgb(var(--ink-100) / 0.16); animation: vxLivePulse 1.8s var(--ease-calm) infinite; }
 @keyframes vxLivePulse { from { transform: scale(0.6); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
 .vx-live-label { display: inline-flex; align-items: center; gap: 10px; color: rgb(var(--tide-400)); font-size: 13px; font-weight: 750; }
 
@@ -392,7 +379,7 @@ html.light .vx-panel .vx-sec-field { background: rgb(var(--ink-900)); }
 .vx-step:last-child { padding-bottom: 0; }
 /* The thread between marks. */
 .vx-step:not(:last-child)::before { content: ''; position: absolute; top: 34px; bottom: 4px; left: 15px; width: 2px; border-radius: 1px; background: var(--sec-line); }
-.vx-step[data-state='done']:not(:last-child)::before { background: rgb(var(--ember-500) / 0.5); }
+.vx-step[data-state='done']:not(:last-child)::before { background: rgb(var(--ink-100) / 0.16); }
 .vx-step-mark {
   display: grid;
   flex-shrink: 0;
@@ -426,8 +413,8 @@ html.light .vx-panel .vx-sec-field { background: rgb(var(--ink-900)); }
   font-weight: 600;
   line-height: 1.5;
 }
-.vx-qr { display: block; width: 224px; height: 224px; margin-inline: auto; padding: 10px; border-radius: 20px; background: #fff; }
-.vx-qr.is-small { width: 160px; height: 160px; padding: 8px; border-radius: 16px; }
+.vx-qr { display: block; width: 224px; height: 224px; margin-inline: auto; padding: 10px; border-radius: 8px; background: #fff; }
+.vx-qr.is-small { width: 160px; height: 160px; padding: 8px; border-radius: 8px; }
 
 /* Listen Together: people are circles. */
 .vx-people { display: flex; flex-wrap: wrap; gap: 12px 16px; }
@@ -460,8 +447,7 @@ html.light .vx-panel .vx-sec-field { background: rgb(var(--ink-900)); }
 }
 .vx-help-tile:hover { background: var(--sec-fill-hover); transform: translateY(-2px); }
 .vx-help-tile:active { transform: scale(0.99); }
-html.light .vx-help-tile { background: rgb(var(--ink-950)); box-shadow: inset 0 0 0 1px var(--sec-line); }
-html.light .vx-help-tile:hover { background: rgb(var(--ink-950)); box-shadow: inset 0 0 0 1px var(--sec-line), 0 8px 20px -14px rgb(48 22 34 / 0.35); }
+
 .vx-done { display: inline-flex; flex-shrink: 0; align-items: center; gap: 4px; color: var(--vx-success); font-size: 12.5px; font-weight: 700; }
 .vx-new-dot { flex-shrink: 0; width: 7px; height: 7px; margin-top: 8px; border-radius: 50%; background: rgb(var(--ink-400)); }
 .vx-new-dot.is-new { background: rgb(var(--ember-500)); }

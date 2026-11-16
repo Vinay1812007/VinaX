@@ -24,7 +24,6 @@ import { useAccount } from './useAccount';
 import { SparkleIcon, PlayIcon, HeartIcon, CompassIcon } from './Icons';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { cn } from '@/utils/cn';
-import { DEFAULT_TEMPLATE, TEMPLATE_CANVAS } from '@/utils/theme';
 import '@/styles/overlays.css';
 
 /** Small pill for keyboard shortcut hints ("Space", "⌘K", etc). */
@@ -78,7 +77,7 @@ const TOUR: TourSlide[] = [
     icon: <SparkleIcon className="w-7 h-7" />,
     title: 'Change it any time',
     lines: [
-      'Settings → Appearance holds the theme and accent colour.',
+      'Settings → Appearance holds the display size and motion.',
       'Customise Home, at the end of Home, reorders or hides its shelves.',
     ],
   },
@@ -93,15 +92,7 @@ const TOUR: TourSlide[] = [
 ];
 
 /** 11.0 — the welcome is one linear sequence of stages. `t0…` are TOUR slides. */
-type Stage = 'you' | 'langs' | 'look' | 'songs' | `t${number}`;
-/** The look step: the theme, as four choices. The dot is each theme's page
- *  canvas (TEMPLATE_CANVAS; black for true black, a split for "match my device"). */
-const LOOKS: ReadonlyArray<{ value: 'dark' | 'light' | 'amoled' | 'system'; label: string; dot: string }> = [
-  { value: 'dark', label: 'Dark', dot: TEMPLATE_CANVAS[DEFAULT_TEMPLATE][0] },
-  { value: 'light', label: 'Light', dot: TEMPLATE_CANVAS[DEFAULT_TEMPLATE][1] },
-  { value: 'amoled', label: 'Black', dot: 'rgb(0 0 0)' },
-  { value: 'system', label: 'Match my device', dot: `linear-gradient(90deg, ${TEMPLATE_CANVAS[DEFAULT_TEMPLATE][0]} 50%, ${TEMPLATE_CANVAS[DEFAULT_TEMPLATE][1]} 50%)` },
-];
+type Stage = 'you' | 'langs' | 'songs' | `t${number}`;
 const TOUR_STAGES: Stage[] = TOUR.map((_, i) => `t${i}` as Stage);
 
 /**
@@ -136,8 +127,6 @@ export function OnboardingSheet() {
     window.addEventListener('vinax:returning-account', onReturning);
     return () => window.removeEventListener('vinax:returning-account', onReturning);
   }, [stage]);
-  const theme = useSettingsStore((st) => st.theme);
-  const setTheme = useSettingsStore((st) => st.setTheme);
   const detected = readBrowserSignals().languages;
   const [picked, setPicked] = useState<string[]>(detected.length ? detected : ['hindi', 'english']);
   // 13.0 — signed in with Google before the welcome: the name starts as the account's.
@@ -183,9 +172,9 @@ export function OnboardingSheet() {
     }
   };
 
-  // Help → "Replay the welcome tour": the look step, then the slides.
+  // Help → "Replay the welcome tour": the slides. 1.15 — no look step (one dark look).
   useEffect(() => {
-    if (tourOpen) setStage('look');
+    if (tourOpen) setStage(TOUR_STAGES[0]);
   }, [tourOpen]);
 
   // 11.0 — keep the sheet above the on-screen keyboard. Browsers that overlay
@@ -305,10 +294,10 @@ export function OnboardingSheet() {
   };
 
   // The sequence the listener walks. A returning listener who only owes a
-  // username sees that one step; a replay starts at the look.
+  // username sees that one step; a replay starts at the slides.
   const seq: Stage[] = firstRun
-      ? ['you', 'langs', 'look', ...(seed === 'none' ? [] : (['songs'] as Stage[])), ...TOUR_STAGES]
-      : ['look', ...TOUR_STAGES];
+      ? ['you', 'langs', ...(seed === 'none' ? [] : (['songs'] as Stage[])), ...TOUR_STAGES]
+      : TOUR_STAGES;
   const pos = Math.max(0, seq.indexOf(stage));
   const required = firstRun && (stage === 'you' || stage === 'langs');
   // Escape closes the sheet only once the required steps are behind: leaving
@@ -337,7 +326,7 @@ export function OnboardingSheet() {
     // a fresh opt-in is covered from this session, not the next reload.
     initSessionInsights();
     // Fetch a dozen trending songs in the first picked language for the
-    // "songs" step while the listener picks a look. If the catalogue is
+    // "songs" step (it shows placeholders until they arrive). If the catalogue is
     // unreachable or returns too few, that step is left out — it never blocks.
     setSeed('loading');
     setSeedSongs([]);
@@ -355,7 +344,7 @@ export function OnboardingSheet() {
         } else drop();
       })
       .catch(drop);
-    setStage('look');
+    setStage('songs');
   };
 
   const toggleSeed = (id: string) =>
@@ -382,7 +371,7 @@ export function OnboardingSheet() {
 
   return (
     <div
-      className={cn('vx-welcome-scrim fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-6', stage === 'look' && 'is-look')}
+      className={'vx-welcome-scrim fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-6'}
       style={vv ? { height: vv.h, top: vv.top, bottom: 'auto' } : undefined}
       data-keyboard={vv?.kb ? 'open' : undefined}
       role="dialog"
@@ -398,8 +387,8 @@ export function OnboardingSheet() {
               {seq.map((id, i) => <span key={id} className={cn(i < pos && 'is-done', i === pos && 'is-on')} />)}
             </div>
             {!required && !last && (
-              <button type="button" onClick={stage === 'look' || stage === 'songs' ? goNext : () => finish()} className="vx-welcome-skip">
-                {stage === 'look' || stage === 'songs' ? 'Skip' : 'Skip the rest'}
+              <button type="button" onClick={stage === 'songs' ? goNext : () => finish()} className="vx-welcome-skip">
+                {stage === 'songs' ? 'Skip' : 'Skip the rest'}
               </button>
             )}
           </div>
@@ -475,22 +464,6 @@ export function OnboardingSheet() {
                 <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
                 <span>Share anonymous usage with VinaX (which song is playing, city-level location, no account) so the app can be improved. On by default — untick to keep it off, or change it anytime in Settings → Region &amp; privacy.</span>
               </label>
-            </>
-          ) : stage === 'look' ? (
-            <>
-              {title('Pick your look')}
-              {lede('Dark, light or true black. It applies as you choose, and your music and library stay the same.')}
-              <div className="vx-welcome-look">
-                <div role="radiogroup" aria-label="Theme" className="vx-welcome-themes">
-                  {LOOKS.map((look) => (
-                    <button key={look.value} type="button" role="radio" aria-checked={theme === look.value} className="vx-welcome-theme" onClick={() => setTheme(look.value)}>
-                      <span className="vx-welcome-theme-dot" style={{ background: look.dot }} aria-hidden />
-                      <span>{look.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <p className="vx-welcome-msg">Change it later in Settings → Appearance → Theme.</p>
             </>
           ) : stage === 'songs' ? (
             <>
@@ -571,7 +544,7 @@ export function OnboardingSheet() {
                 ? `Continue with ${seedLiked.length} liked`
                 : slide
                   ? last ? 'Start listening' : 'Next'
-                  : stage === 'look' ? 'Use this look' : 'Continue'}
+                  : 'Continue'}
           </button>
         </div>
       </div>

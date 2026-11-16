@@ -49,14 +49,6 @@
   --bx-surface-hover: rgb(var(--ink-800));
   --bx-edge: none;
 }
-html.light .vx-browse {
-  --bx-wash: 0.2;
-  --bx-sheen: 0.06;
-  --bx-chip-wash: 0.16;
-  --bx-surface: rgb(var(--ink-950));
-  --bx-surface-hover: rgb(var(--ink-850));
-  --bx-edge: inset 0 0 0 1px var(--vx-border);
-}
 
 /* ------------------------------------------------------ page scaffolding */
 .vx-browse-page { padding-bottom: 24px; }
@@ -193,8 +185,8 @@ html.light .vx-browse {
 .vx-browse .vx-link-chip:hover { background: rgb(var(--ink-100) / 0.13); }
 
 /* ------------------------------------------------------------- fields
-   The rounded field of Search, Movies and Videos. A hairline at rest, a
-   Marigold ring and a warm glow while typing. */
+   The rounded field of Search, Movies and Videos: a #1f1f1f pill that
+   lightens on hover and takes a 2px white ring while typing. */
 .vx-browse .bx-field { position: relative; display: flex; align-items: center; min-width: 0; }
 .vx-browse .bx-field > svg:first-child {
   position: absolute;
@@ -208,29 +200,28 @@ html.light .vx-browse {
   width: 100%;
   height: 48px;
   padding: 0 52px 0 50px;
-  border: 1px solid var(--vx-border);
+  border: 1px solid transparent;
   border-radius: var(--radius-pill);
-  background: rgb(var(--ink-850));
+  background: rgb(var(--ink-800));
   color: rgb(var(--ink-100));
-  font-size: 15px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 400;
   line-height: 1.4;
   outline: none;
   box-shadow: none;
   transition: background-color var(--dur-quick) var(--ease-standard), border-color var(--dur-quick) var(--ease-standard), box-shadow var(--dur-quick) var(--ease-standard);
 }
-html.light .vx-browse .bx-field input { background: rgb(var(--ink-950)); }
-.vx-browse .bx-field input::placeholder { color: rgb(var(--ink-400)); opacity: 1; }
+
+.vx-browse .bx-field input::placeholder { color: rgb(var(--ink-300)); opacity: 1; }
 .vx-browse .bx-field input::-webkit-search-cancel-button { display: none; }
 @media (hover: hover) and (pointer: fine) {
-  .vx-browse .bx-field input:hover:not(:focus) { border-color: rgb(var(--ink-600)); }
+  .vx-browse .bx-field input:hover:not(:focus) { border-color: rgb(var(--ink-100) / 0.1); background: rgb(var(--ink-700)); }
 }
 .vx-browse .bx-field input:focus {
-  border-color: rgb(var(--ember-500));
-  box-shadow: 0 0 0 1px rgb(var(--ember-500)), 0 0 0 5px rgb(var(--ember-500) / 0.16), 0 12px 32px -18px rgb(var(--ember-500) / 0.6);
+  border-color: rgb(var(--ink-100));
+  box-shadow: 0 0 0 1px rgb(var(--ink-100));
 }
-/* The focused field's glass icon takes the accent too. */
-.vx-browse .bx-field:focus-within > svg:first-child { color: rgb(var(--ember-400)); }
+.vx-browse .bx-field:focus-within > svg:first-child { color: rgb(var(--ink-100)); }
 .vx-browse .bx-field input:focus-visible { outline: none; }
 .vx-browse .bx-field-actions { position: absolute; right: 6px; display: flex; align-items: center; gap: 2px; }
 @media (max-width: 767px) {
@@ -252,7 +243,7 @@ html.light .vx-browse .bx-field input { background: rgb(var(--ink-950)); }
   -webkit-appearance: none;
   appearance: none;
 }
-html.light .vx-browse .bx-select { background-color: rgb(var(--ink-950)); }
+
 .vx-browse .bx-select:focus-visible { border-color: rgb(var(--ember-500)); box-shadow: 0 0 0 1px rgb(var(--ember-500)); }
 
 /* ================================================================ TILES
@@ -270,7 +261,7 @@ html.light .vx-browse .bx-select { background-color: rgb(var(--ink-950)); }
   min-height: 112px;
   padding: 16px 18px;
   overflow: hidden;
-  border-radius: 16px;
+  border-radius: 8px;
   background: var(--bx-surface);
   box-shadow: var(--bx-edge);
   color: rgb(var(--ink-100));
@@ -302,7 +293,7 @@ html.light .vx-browse .bx-select { background-color: rgb(var(--ink-950)); }
   background: var(--bx-surface-hover);
   box-shadow: inset 0 0 0 2px rgb(var(--ember-500));
 }
-html.light .vx-browse .bx-tile[aria-pressed='true'] { --bx-wash: 0.32; }
+
 .vx-browse .bx-tile-text {
   position: relative;
   z-index: 1;
@@ -350,7 +341,7 @@ html.light .vx-browse .bx-tile[aria-pressed='true'] { --bx-wash: 0.32; }
   width: 48px;
   height: 48px;
   flex-shrink: 0;
-  border-radius: 14px;
+  border-radius: 8px;
   background: rgb(var(--tone, var(--ink-600)) / var(--bx-chip-wash));
   color: rgb(var(--ink-100));
   font-size: 24px;
@@ -367,7 +358,7 @@ html.light .vx-browse .bx-tile[aria-pressed='true'] { --bx-wash: 0.32; }
   width: 44px;
   height: 44px;
   margin-left: -10px;
-  border-radius: 13px;
+  border-radius: 8px;
   background: var(--bx-surface);
   box-shadow: 0 6px 16px -8px rgb(0 0 0 / 0.55), inset 0 0 0 1px var(--vx-border);
   color: rgb(var(--ink-100));
@@ -388,7 +379,7 @@ html.light .vx-browse .bx-tile[aria-pressed='true'] { --bx-wash: 0.32; }
   height: var(--bx-cover, 64px);
   margin-left: calc(var(--bx-cover, 64px) * -0.42);
   flex-shrink: 0;
-  border-radius: 12px;
+  border-radius: 8px;
   object-fit: cover;
   background: rgb(var(--ink-800));
   box-shadow: 0 10px 22px -10px rgb(0 0 0 / 0.7);
@@ -426,7 +417,7 @@ html.light .vx-browse .bx-tile[aria-pressed='true'] { --bx-wash: 0.32; }
   min-width: 0;
   min-height: 64px;
   padding: 10px 14px 10px 10px;
-  border-radius: 16px;
+  border-radius: 8px;
   background: var(--bx-surface);
   box-shadow: var(--bx-edge);
   color: rgb(var(--ink-100));
@@ -436,7 +427,7 @@ html.light .vx-browse .bx-tile[aria-pressed='true'] { --bx-wash: 0.32; }
   .vx-browse .bx-dest:hover { background: var(--bx-surface-hover); }
 }
 .vx-browse .bx-dest:active { transform: scale(0.98); }
-.vx-browse .bx-dest .bx-glyph { width: 44px; height: 44px; border-radius: 13px; }
+.vx-browse .bx-dest .bx-glyph { width: 44px; height: 44px; border-radius: 8px; }
 .vx-browse .bx-dest .bx-glyph svg { width: 22px; height: 22px; }
 .vx-browse .bx-dest-text { display: block; min-width: 0; }
 .vx-browse .bx-dest-title { display: block; overflow: hidden; font-size: 15px; font-weight: 700; line-height: 1.3; white-space: nowrap; text-overflow: ellipsis; }
@@ -470,7 +461,7 @@ html.light .vx-browse .bx-tile[aria-pressed='true'] { --bx-wash: 0.32; }
 @container (max-width: 599px) {
   .vx-browse .bx-dests.is-thirds { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
   .vx-browse .bx-dests.is-thirds .bx-dest { flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 10px; min-height: 96px; padding: 12px; }
-  .vx-browse .bx-dests.is-thirds .bx-dest .bx-glyph { width: 40px; height: 40px; border-radius: 12px; }
+  .vx-browse .bx-dests.is-thirds .bx-dest .bx-glyph { width: 40px; height: 40px; border-radius: 8px; }
   .vx-browse .bx-dests.is-thirds .bx-dest-title { font-size: 14px; }
 }
 
@@ -560,7 +551,7 @@ html.light .vx-browse .bx-tile[aria-pressed='true'] { --bx-wash: 0.32; }
   min-height: 112px;
   overflow: hidden;
   padding: 14px 16px 14px;
-  border-radius: 16px;
+  border-radius: 8px;
   background: var(--bx-surface);
   box-shadow: var(--bx-edge);
   color: rgb(var(--ink-100));
@@ -624,12 +615,7 @@ html.light .vx-browse .bx-tile[aria-pressed='true'] { --bx-wash: 0.32; }
   line-height: 1.5;
   text-align: center;
 }
-html.light .vx-browse .bx-cover-script {
-  background:
-    radial-gradient(110% 110% at 100% 100%, rgb(var(--tone) / 0.42), rgb(var(--tone) / 0) 70%),
-    radial-gradient(90% 90% at 0% 0%, rgb(var(--tone) / 0.2), rgb(var(--tone) / 0) 70%),
-    rgb(var(--ink-950));
-}
+
 .vx-browse .bx-cover-script svg { width: 38%; height: 38%; }
 .vx-browse .bx-mosaic { display: grid; grid-template-columns: 1fr 1fr; width: 100%; height: 100%; background: rgb(var(--ink-850)); }
 .vx-browse .bx-mosaic img { width: 100%; height: 100%; object-fit: cover; }
@@ -658,7 +644,7 @@ html.light .vx-browse .bx-cover-script {
   filter: blur(44px) saturate(1.3);
   transform: scale(1.3);
 }
-html.light .vx-browse .bx-feature-bg { opacity: 0.35; }
+
 .vx-browse .bx-feature::after {
   content: '';
   position: absolute;
@@ -667,7 +653,7 @@ html.light .vx-browse .bx-feature-bg { opacity: 0.35; }
   background: linear-gradient(to top, rgb(var(--ink-900) / 0.9), rgb(var(--ink-900) / 0.25));
 }
 .vx-browse .bx-feature-body { display: flex; align-items: flex-end; gap: 22px; padding: 56px 24px 24px; }
-.vx-browse .bx-feature-art { width: 144px; height: 144px; flex-shrink: 0; border-radius: 16px; object-fit: cover; box-shadow: var(--vx-art-shadow); }
+.vx-browse .bx-feature-art { width: 144px; height: 144px; flex-shrink: 0; border-radius: 8px; object-fit: cover; box-shadow: var(--vx-art-shadow); }
 .vx-browse .bx-feature-kind { margin-bottom: 4px; color: rgb(var(--ink-200)); font-size: 13px; font-weight: 700; }
 .vx-browse .bx-feature-title {
   display: -webkit-box;
@@ -686,8 +672,8 @@ html.light .vx-browse .bx-feature-bg { opacity: 0.35; }
 .vx-browse .bx-feature-meta { margin-top: 6px; overflow: hidden; color: rgb(var(--ink-300)); font-size: 14px; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
 @media (max-width: 767px) {
   .vx-browse .bx-feature-body { gap: 14px; padding: 40px 16px 16px; }
-  .vx-browse .bx-feature-art { width: 88px; height: 88px; border-radius: 12px; }
-  .vx-browse .bx-feature .vx-play-fab { width: 48px; height: 48px; border-radius: 16px; }
+  .vx-browse .bx-feature-art { width: 88px; height: 88px; border-radius: 8px; }
+  .vx-browse .bx-feature .vx-play-fab { width: 48px; height: 48px; border-radius: 8px; }
 }
 
 /* ============================================================== SEARCH */
@@ -712,43 +698,40 @@ html.light .vx-browse .bx-feature-bg { opacity: 0.35; }
   backdrop-filter: blur(20px) saturate(1.4);
 }
 .vx-browse .search-field { max-width: 760px; }
-/* 10.1 — a large pill on the raised plum surface; focus draws a Marigold
-   ring with a soft halo. */
+/* A large pill; focus draws a 2px white ring. */
 .vx-browse .search-field input {
-  height: 60px;
+  height: 48px;
   padding-right: 60px;
-  padding-left: 56px;
-  border-color: var(--glass-border-strong);
-  background: var(--vx-surface-raised);
-  font-size: 17px;
+  padding-left: 52px;
+  font-size: 16px;
   text-overflow: ellipsis;
 }
-html.light .vx-browse .search-field input { background: rgb(var(--ink-950)); }
+
 .vx-browse .search-field input:focus {
-  border-color: rgb(var(--ember-500));
-  box-shadow: 0 0 0 2px rgb(var(--ember-500)), 0 0 0 7px rgb(var(--ember-500) / 0.18), 0 16px 40px -20px rgb(var(--ember-500) / 0.7);
+  border-color: rgb(var(--ink-100));
+  box-shadow: 0 0 0 1px rgb(var(--ink-100));
 }
 .vx-browse .search-field.has-clear input { padding-right: 104px; }
 .vx-browse .search-field > svg:first-child { left: 20px; width: 22px; height: 22px; }
 .vx-browse .search-field .bx-field-actions { right: 8px; }
 .vx-browse .search-field.is-listening input {
-  border-color: rgb(var(--tide-500));
-  box-shadow: 0 0 0 1px rgb(var(--tide-500)), 0 0 0 5px rgb(var(--tide-500) / 0.16);
+  border-color: rgb(var(--ember-500));
+  box-shadow: 0 0 0 1px rgb(var(--ember-500));
 }
 .vx-browse .search-field-btn { color: rgb(var(--ink-400)); }
 .vx-browse .search-field-btn:hover { color: rgb(var(--ink-100)); background: var(--vx-hover); }
 .vx-browse .search-field-btn svg { width: 19px; height: 19px; }
 /* Listening is a live moment: Rose, with one soft ring. */
-.vx-browse .search-field-btn.is-live { color: rgb(var(--tide-400)); background: rgb(var(--tide-500) / 0.14); }
+.vx-browse .search-field-btn.is-live { color: rgb(var(--tide-400)); background: rgb(var(--ink-100) / 0.14); }
 .vx-browse .search-field-btn.is-live::before {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  box-shadow: 0 0 0 0 rgb(var(--tide-500) / 0.45);
+  box-shadow: 0 0 0 0 rgb(0 0 0 / 0.50);
   animation: bx-listen 1.6s var(--ease-calm) infinite;
 }
-@keyframes bx-listen { to { box-shadow: 0 0 0 10px rgb(var(--tide-500) / 0); } }
+@keyframes bx-listen { to { box-shadow: 0 0 0 10px rgb(0 0 0 / 0.10); } }
 @media (max-width: 767px) {
   .vx-browse .search-field input { height: 54px; font-size: 16px; padding-left: 50px; }
   .vx-browse .search-field > svg:first-child { left: 18px; width: 20px; height: 20px; }
@@ -766,23 +749,16 @@ html.light .vx-browse .search-field input { background: rgb(var(--ink-950)); }
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 8px 0;
-  border: 1px solid var(--glass-border-strong);
-  border-radius: 22px;
-  background: var(--vx-surface-raised);
-  box-shadow: var(--vx-shadow-overlay);
+  border: 0;
+  border-radius: var(--radius-md, 8px);
+  background: rgb(var(--ink-700));
+  box-shadow: 0 16px 24px rgb(0 0 0 / 0.3), 0 6px 8px rgb(0 0 0 / 0.2);
   animation: search-panel-in var(--dur-quick) var(--ease-standard);
-}
-@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-  .vx-browse .search-panel {
-    background: var(--glass-bg-strong);
-    -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
-    backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
-  }
 }
 @media (prefers-reduced-transparency: reduce) {
   .vx-browse .search-panel { background: var(--vx-surface-raised); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
-html.light .vx-browse .search-panel { box-shadow: 0 24px 56px -18px rgb(var(--ink-100) / 0.28); }
+
 @keyframes search-panel-in { from { opacity: 0; transform: translateY(-4px); } }
 @media (prefers-reduced-motion: reduce) { .vx-browse .search-panel { animation: none; } }
 .vx-browse .search-panel-group + .search-panel-group { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--vx-border); }
@@ -838,11 +814,11 @@ html.light .vx-browse .search-panel { box-shadow: 0 24px 56px -18px rgb(var(--in
 .vx-browse .search-option.is-stale { opacity: 0.5; cursor: default; }
 .vx-browse .search-option-glyph { display: grid; width: 32px; height: 32px; flex-shrink: 0; place-items: center; border-radius: 50%; background: rgb(var(--ink-100) / 0.06); color: rgb(var(--ink-400)); }
 .vx-browse .search-option-glyph svg { width: 16px; height: 16px; }
-.vx-browse .search-option-glyph.is-trend { background: rgb(var(--ember-500) / 0.14); color: rgb(var(--ember-400)); }
+.vx-browse .search-option-glyph.is-trend { background: rgb(var(--ink-100) / 0.14); color: rgb(var(--ember-400)); }
 .vx-browse .search-option-text { min-width: 0; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .vx-browse .search-option-tag { flex-shrink: 0; color: rgb(var(--ink-400)); font-size: 12px; font-weight: 600; }
 .vx-browse .search-hl { color: rgb(var(--ink-100)); font-weight: 750; }
-.vx-browse .search-option img { width: 44px; height: 44px; flex-shrink: 0; border-radius: 10px; object-fit: cover; background: rgb(var(--ink-800)); }
+.vx-browse .search-option img { width: 44px; height: 44px; flex-shrink: 0; border-radius: 8px; object-fit: cover; background: rgb(var(--ink-800)); }
 .vx-browse .search-option img.is-round { border-radius: 50%; }
 .vx-browse .search-quick-text { display: block; min-width: 0; flex: 1; }
 .vx-browse .search-quick-title { display: block; overflow: hidden; color: rgb(var(--ink-100)); font-size: 14.5px; font-weight: 650; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
@@ -854,7 +830,7 @@ html.light .vx-browse .search-panel { box-shadow: 0 24px 56px -18px rgb(var(--in
 @media (hover: hover) and (pointer: fine) {
   .vx-browse .search-option:hover .search-option-play { opacity: 1; transform: none; }
 }
-@media (hover: none) { .vx-browse .search-option-play { opacity: 1; transform: none; background: rgb(var(--ember-500) / 0.16); color: rgb(var(--ember-400)); } }
+@media (hover: none) { .vx-browse .search-option-play { opacity: 1; transform: none; background: rgb(var(--ink-100) / 0.16); color: rgb(var(--ember-400)); } }
 .vx-browse .search-panel-loading { padding: 4px 10px; }
 
 /* Filter chips under the field. */
@@ -878,7 +854,7 @@ html.light .vx-browse .search-panel { box-shadow: 0 24px 56px -18px rgb(var(--in
   margin-top: 8px;
   padding: 4px 4px 4px 16px;
   border-radius: var(--radius-pill);
-  background: rgb(var(--tide-500) / 0.1);
+  background: rgb(var(--ink-100) / 0.10);
   color: rgb(var(--ink-200));
   font-size: 13px;
   font-weight: 550;
@@ -903,7 +879,7 @@ html.light .vx-browse .search-panel { box-shadow: 0 24px 56px -18px rgb(var(--in
   gap: 4px;
   min-height: 56px;
   padding: 0 4px 0 8px;
-  border-radius: 14px;
+  border-radius: 8px;
   transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-browse .search-recent-row:hover,
@@ -915,7 +891,7 @@ html.light .vx-browse .search-panel { box-shadow: 0 24px 56px -18px rgb(var(--in
   gap: 14px;
   min-width: 0;
   min-height: 52px;
-  border-radius: 12px;
+  border-radius: 8px;
   text-align: left;
   -webkit-user-select: none;
   user-select: none;
@@ -928,7 +904,7 @@ html.light .vx-browse .search-panel { box-shadow: 0 24px 56px -18px rgb(var(--in
   flex-shrink: 0;
   width: 40px;
   height: 40px;
-  border-radius: 12px;
+  border-radius: 8px;
   background: rgb(var(--ink-100) / 0.07);
   color: rgb(var(--ink-300));
 }
@@ -966,7 +942,7 @@ html.light .vx-browse .search-panel { box-shadow: 0 24px 56px -18px rgb(var(--in
 }
 .vx-browse .search-trend-chip > span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .vx-browse .search-trend-chip svg { width: 15px; height: 15px; flex-shrink: 0; color: rgb(var(--ink-400)); }
-.vx-browse .search-trend-chip.is-top { border-color: rgb(var(--ember-500) / 0.4); background: rgb(var(--ember-500) / 0.1); }
+.vx-browse .search-trend-chip.is-top { border-color: rgb(var(--ink-100) / 0.16); background: rgb(var(--ink-100) / 0.10); }
 .vx-browse .search-trend-chip.is-top svg { color: rgb(var(--ember-400)); }
 @media (hover: hover) and (pointer: fine) {
   .vx-browse .search-trend-chip:hover { border-color: rgb(var(--ink-600)); background: var(--vx-hover); }
@@ -980,7 +956,7 @@ html.light .vx-browse .search-panel { box-shadow: 0 24px 56px -18px rgb(var(--in
   justify-content: space-between;
   min-width: 0;
   padding: 14px 16px 8px;
-  border-radius: 16px;
+  border-radius: 8px;
   background: var(--bx-surface);
   box-shadow: var(--bx-edge);
 }
@@ -1010,7 +986,7 @@ html.light .vx-browse .search-panel { box-shadow: 0 24px 56px -18px rgb(var(--in
   height: 40px;
   padding: 0 12px;
   border: 1px solid var(--vx-border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgb(var(--ink-900));
   color: rgb(var(--ink-100));
   font-size: 14px;
@@ -1055,7 +1031,7 @@ html.light .vx-browse .search-panel { box-shadow: 0 24px 56px -18px rgb(var(--in
   cursor: pointer;
   transition: background-color var(--dur-quick) var(--ease-standard);
 }
-html.light .vx-browse .search-top-result { background: rgb(var(--ink-950)); }
+
 .vx-browse .search-top-bg {
   position: absolute;
   inset: -20%;
@@ -1067,16 +1043,16 @@ html.light .vx-browse .search-top-result { background: rgb(var(--ink-950)); }
   filter: blur(48px) saturate(1.5);
   pointer-events: none;
 }
-html.light .vx-browse .search-top-bg { opacity: 0.18; }
+
 @media (hover: hover) and (pointer: fine) {
   .vx-browse .search-top-result:hover { background: rgb(var(--ink-800)); }
-  html.light .vx-browse .search-top-result:hover { background: rgb(var(--ink-850)); }
+  
 }
 .vx-browse .search-top-art {
   width: 96px;
   height: 96px;
   flex-shrink: 0;
-  border-radius: 16px;
+  border-radius: 8px;
   object-fit: cover;
   background: rgb(var(--ink-800));
   box-shadow: var(--vx-art-shadow);
@@ -1105,14 +1081,14 @@ html.light .vx-browse .search-top-bg { opacity: 0.18; }
   flex-shrink: 0;
   padding: 3px 10px;
   border-radius: var(--radius-pill);
-  background: rgb(var(--ember-500) / 0.16);
+  background: rgb(var(--ink-100) / 0.16);
   color: rgb(var(--ember-400));
   font-size: 12px;
   font-weight: 700;
   line-height: 1.4;
 }
 .vx-browse .search-top-tools { order: 4; display: flex; align-items: center; flex-shrink: 0; margin-right: -6px; }
-.vx-browse .search-top-result > .vx-play-fab { order: 3; flex-shrink: 0; width: 48px; height: 48px; border-radius: 16px; }
+.vx-browse .search-top-result > .vx-play-fab { order: 3; flex-shrink: 0; width: 48px; height: 48px; border-radius: 8px; }
 .vx-browse .search-top-result .vx-play-fab svg { width: 22px; height: 22px; }
 @container (min-width: 720px) {
   .vx-browse .search-top-result {
@@ -1123,11 +1099,11 @@ html.light .vx-browse .search-top-bg { opacity: 0.18; }
     min-height: 300px;
     padding: 24px;
   }
-  .vx-browse .search-top-art { width: 152px; height: 152px; border-radius: 20px; }
+  .vx-browse .search-top-art { width: 152px; height: 152px; border-radius: 8px; }
   .vx-browse .search-top-body { flex: none; width: 100%; padding-right: 72px; }
   .vx-browse .search-top-result-name { font-size: 34px; line-height: 1.1; letter-spacing: -0.03em; }
   .vx-browse .search-top-tools { position: absolute; top: 14px; right: 14px; margin: 0; }
-  .vx-browse .search-top-result > .vx-play-fab { position: absolute; right: 22px; bottom: 22px; width: 56px; height: 56px; border-radius: 18px; }
+  .vx-browse .search-top-result > .vx-play-fab { position: absolute; right: 22px; bottom: 22px; width: 56px; height: 56px; border-radius: 8px; }
   .vx-browse .search-top-result > .vx-play-fab svg { width: 26px; height: 26px; }
 }
 .vx-browse .search-top-songs .vx-track-row .vx-track-number { display: none; }
@@ -1229,7 +1205,7 @@ html.light .vx-browse .search-top-bg { opacity: 0.18; }
   height: 44px;
   padding: 0 12px;
   border: 1px solid var(--vx-border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgb(var(--ink-900));
   color: rgb(var(--ink-100));
   font-size: 14px;
@@ -1288,7 +1264,7 @@ html.light .vx-browse .search-top-bg { opacity: 0.18; }
   justify-content: space-between;
   gap: 12px;
   padding: 14px 8px 14px 18px;
-  border-radius: 16px;
+  border-radius: 8px;
   background: var(--bx-surface);
   box-shadow: var(--bx-edge);
   color: rgb(var(--ink-300));
@@ -1302,7 +1278,7 @@ html.light .vx-browse .search-top-bg { opacity: 0.18; }
   width: 100%;
   min-height: 64px;
   padding: 8px 10px 8px 4px;
-  border-radius: 14px;
+  border-radius: 8px;
   text-align: left;
   transition: background-color var(--dur-quick) var(--ease-standard);
 }
@@ -1319,7 +1295,7 @@ html.light .vx-browse .search-top-bg { opacity: 0.18; }
 }
 .vx-browse li:nth-child(-n + 3) > .vx-chart-row .vx-chart-rank,
 .vx-browse li:nth-child(-n + 3) > div > .vx-chart-rank { color: rgb(var(--ink-100)); font-size: 20px; font-weight: 800; }
-.vx-browse .vx-chart-row img { width: 48px; height: 48px; flex-shrink: 0; border-radius: 10px; object-fit: cover; background: rgb(var(--ink-800)); }
+.vx-browse .vx-chart-row img { width: 48px; height: 48px; flex-shrink: 0; border-radius: 8px; object-fit: cover; background: rgb(var(--ink-800)); }
 .vx-browse .vx-chart-title { display: block; overflow: hidden; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 650; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
 .vx-browse .vx-chart-sub { display: block; overflow: hidden; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; line-height: 1.4; white-space: nowrap; text-overflow: ellipsis; }
 .vx-browse .vx-chart-plays { flex-shrink: 0; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
@@ -1334,7 +1310,7 @@ html.light .vx-browse .search-top-bg { opacity: 0.18; }
   gap: 12px;
   min-height: 52px;
   padding: 4px 8px 4px 12px;
-  border-radius: 14px;
+  border-radius: 8px;
   color: rgb(var(--ink-100));
   transition: background-color var(--dur-quick) var(--ease-standard);
 }
@@ -1362,7 +1338,7 @@ html.light .vx-browse .search-top-bg { opacity: 0.18; }
   min-height: 96px;
   padding: 14px 16px;
   overflow: hidden;
-  border-radius: 16px;
+  border-radius: 8px;
   background: var(--bx-surface);
   box-shadow: var(--bx-edge);
   color: rgb(var(--ink-100));
@@ -1397,13 +1373,13 @@ html.light .vx-browse .search-top-bg { opacity: 0.18; }
   min-width: 0;
   min-height: 56px;
   padding: 8px 14px 8px 8px;
-  border-radius: 14px;
+  border-radius: 8px;
   background: var(--bx-surface);
   box-shadow: var(--bx-edge);
   transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-browse .vx-hub-cell:hover { background: var(--bx-surface-hover); }
-.vx-browse .vx-hub-cell .bx-glyph { width: 36px; height: 36px; border-radius: 11px; }
+.vx-browse .vx-hub-cell .bx-glyph { width: 36px; height: 36px; border-radius: 8px; }
 .vx-browse .vx-hub-cell .bx-glyph svg { width: 18px; height: 18px; }
 .vx-browse .vx-hub-cell span { display: block; min-width: 0; }
 .vx-browse .vx-hub-cell b { display: block; overflow: hidden; color: rgb(var(--ink-100)); font-size: 14px; font-weight: 650; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
@@ -1414,12 +1390,12 @@ html.light .vx-browse .search-top-bg { opacity: 0.18; }
 @media (max-width: 767px) {
   .vx-browse .vx-video-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px var(--vx-card-gap); }
 }
-.vx-browse .bx-video { display: block; min-width: 0; border-radius: 14px; }
+.vx-browse .bx-video { display: block; min-width: 0; border-radius: 8px; }
 .vx-browse .bx-video-thumb {
   position: relative;
   overflow: hidden;
   aspect-ratio: 16 / 9;
-  border-radius: 14px;
+  border-radius: 8px;
   background: rgb(var(--ink-850));
   box-shadow: var(--vx-art-shadow);
   transition: transform 220ms var(--vx-ease-out, var(--ease-calm));
@@ -1435,7 +1411,7 @@ html.light .vx-browse .search-top-bg { opacity: 0.18; }
   place-items: center;
   width: 48px;
   height: 48px;
-  border-radius: 16px;
+  border-radius: 8px;
   background: rgb(var(--ember-500));
   color: var(--vx-on-accent);
   box-shadow: 0 10px 22px -8px rgb(0 0 0 / 0.65);
@@ -1519,9 +1495,28 @@ html.light .vx-browse .search-top-bg { opacity: 0.18; }
   .vx-browse .search-sticky { transition: none !important; }
   .vx-browse .bx-tile:hover, .vx-browse .bx-tile:active, .vx-browse .bx-dest:active, .vx-browse .bx-lang:hover,
   .vx-browse .bx-lang:active, .vx-browse .bx-decade:hover, .vx-browse .bx-decade:active, .vx-browse .bx-video:hover .bx-video-thumb { transform: none; }
-  .vx-browse .search-field-btn.is-live::before { animation: none; box-shadow: 0 0 0 3px rgb(var(--tide-500) / 0.3); }
+  .vx-browse .search-field-btn.is-live::before { animation: none; box-shadow: 0 0 0 3px rgb(0 0 0 / 0.40); }
 }
 html.reduce-motion .vx-browse .bx-tile:hover, html.reduce-motion .vx-browse .bx-tile:active,
 html.reduce-motion .vx-browse .bx-lang:hover, html.reduce-motion .vx-browse .bx-decade:hover,
 html.reduce-motion .vx-browse .bx-video:hover .bx-video-thumb { transform: none; }
-html.reduce-motion .vx-browse .search-field-btn.is-live::before { box-shadow: 0 0 0 3px rgb(var(--tide-500) / 0.3); }
+html.reduce-motion .vx-browse .search-field-btn.is-live::before { box-shadow: 0 0 0 3px rgb(0 0 0 / 0.40); }
+
+/* 1.15 — from 768px Search's field sits in the window bar (pages/SearchPage.tsx
+   InWindowBar): the bar's pill is the field, so the input itself is clear. */
+.vx-winbar-search-slot { flex: 1; align-self: stretch; min-width: 0; }
+.vx-winbar-search-slot .search-field { max-width: none; height: 100%; }
+.vx-winbar-search-slot .search-field input,
+.vx-winbar-search-slot .search-field input:focus,
+.vx-winbar-search-slot .search-field input:hover:not(:focus) { height: 48px; padding-left: 50px; border: 0; background: transparent; box-shadow: none; }
+.vx-winbar-search-slot .search-field > svg:first-child { left: 14px; width: 24px; height: 24px; color: rgb(var(--ink-300)); }
+.vx-winbar-search-slot .search-field:focus-within > svg:first-child { color: rgb(var(--ink-100)); }
+.vx-winbar-search-slot .search-panel { top: calc(100% + 8px); }
+/* Phones: a white field with black type. */
+@media (max-width: 767px) {
+  .vx-browse .search-field input { border-radius: var(--radius-sm, 4px); background: rgb(var(--ink-100)); color: rgb(var(--ink-950)); font-weight: 700; }
+  .vx-browse .search-field input::placeholder { color: rgb(var(--ink-700)); font-weight: 700; }
+  .vx-browse .search-field > svg:first-child { color: rgb(var(--ink-950)); }
+  .vx-browse .search-field:focus-within > svg:first-child { color: rgb(var(--ink-950)); }
+  .vx-browse .search-field .search-field-btn { color: rgb(var(--ink-950)); }
+}

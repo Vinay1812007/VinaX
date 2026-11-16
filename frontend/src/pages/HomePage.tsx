@@ -13,7 +13,7 @@ import { NotificationSheet } from '@/components/NotificationSheet';
 import { DownloadCta } from '@/components/DownloadCta';
 import { Shelf } from '@/components/Shelf';
 import { MediaCard } from '@/components/MediaCard';
-import { BellIcon, ChevronDownIcon, MoonIcon, SparkleIcon, SunIcon } from '@/components/Icons';
+import { BellIcon, ChevronDownIcon, SparkleIcon } from '@/components/Icons';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDiscoveryStore } from '@/store/discoveryStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -195,8 +195,6 @@ function SignedInHome() {
   useState(() => resetShelfLedger());
   usePageTitle('Home');
   const pinned = useSettingsStore((s) => s.pinnedLanguages);
-  const theme = useSettingsStore((s) => s.theme);
-  const setTheme = useSettingsStore((s) => s.setTheme);
   const navigate = useNavigate();
   const qc = useQueryClient();
   // Warms the region lookup the Charts and Trending-near-you blocks read.
@@ -383,7 +381,6 @@ function SignedInHome() {
           <TopBarActions>
             {/* VinaX AI, one tap from Home (on phones it is otherwise only in the profile menu). */}
             <IconButton label="VinaX AI" onClick={() => navigate('/vinaxai')}><SparkleIcon className="w-5 h-5" /></IconButton>
-            <IconButton label="Toggle theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}</IconButton>
             <IconButton label="Notifications" onClick={() => setNotifOpen(true)}><BellIcon className="w-5 h-5" /></IconButton>
           </TopBarActions>
           <NotificationSheet open={notifOpen} onClose={() => setNotifOpen(false)} />

@@ -175,7 +175,8 @@ test('home, stats, history, explore, library, collection, search, settings rende
   await visit(page, '/library', /road trip/i);
   await visit(page, '/collection/c1', /duplicate/i);
   await visit(page, '/search', /lyric/i);
-  await visit(page, '/settings', /custom accent[\s\S]*display size[\s\S]*high contrast[\s\S]*startup page[\s\S]*data saver/i);
+  // 1.15 — one dark look: no accent rows; display size, contrast and startup page stay.
+  await visit(page, '/settings', /display size[\s\S]*high contrast[\s\S]*startup page[\s\S]*data saver/i);
   expect(pageErrors).toEqual([]);
 });
 

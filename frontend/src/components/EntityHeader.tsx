@@ -4,6 +4,7 @@ import { extractVibrantColor } from '@/utils/color';
 import { cn } from '@/utils/cn';
 import { IconButton } from './IconButton';
 import { DotsIcon, PlayIcon } from './Icons';
+import { useUiStore } from '@/store/uiStore';
 import '@/styles/pages/library.css';
 
 /**
@@ -81,6 +82,13 @@ function titleSize(text: string | undefined): string | undefined {
 export function EntityHeader({ kind, title, titleText, art, artUrl, tone, round, description, meta, children, actions, className }: EntityHeaderProps) {
   const sampled = useArtTone(tone ? undefined : artUrl);
   const hero = tone ?? sampled ?? 'var(--art)';
+  // 1.15 — the sticky top bar takes the header's colour and name once the page scrolls.
+  const triplet = /^\d{1,3} \d{1,3} \d{1,3}$/.test(hero) ? hero : null;
+  const name = titleText ?? (typeof title === 'string' ? title : null);
+  useEffect(() => {
+    useUiStore.getState().setPage({ pageTone: triplet, pageTitle: name });
+    return () => useUiStore.getState().setPage({ pageTone: null, pageTitle: null });
+  }, [triplet, name]);
   return (
     <section className={cn('vx-ehead', round && 'is-person', className)} style={{ '--hero': hero } as CSSProperties}>
       <div className="vx-ehead-wash" aria-hidden />
@@ -116,10 +124,18 @@ export function EntityMeta({ items }: { items: ReactNode[] }) {
 }
 
 /**
- * The Iris squircle that leads every entity action row. `lg` (64px, 56px on
+ * The green play circle that leads every entity action row. `lg` (64px, 56px on
  * phones) is the entity-page size; `md` (56px) suits smaller result headers.
  */
 export function PlayFab({ label, onClick, disabled, size = 'md' }: { label: string; onClick: () => void; disabled?: boolean; size?: 'md' | 'lg' }) {
+  // 1.15 — the sticky top bar repeats this play button once the header scrolls away.
+  const latest = useRef(onClick);
+  latest.current = onClick;
+  useEffect(() => {
+    if (disabled) return;
+    useUiStore.getState().setPage({ pagePlay: { label, run: () => latest.current() } });
+    return () => useUiStore.getState().setPage({ pagePlay: null });
+  }, [label, disabled]);
   return (
     <button type="button" className={cn('vx-play-fab vx-ehead-fab', size === 'lg' && 'is-lg')} aria-label={label} title={label} onClick={onClick} disabled={disabled}>
       <PlayIcon />

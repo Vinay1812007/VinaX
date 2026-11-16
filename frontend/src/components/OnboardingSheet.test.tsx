@@ -33,7 +33,6 @@ const heading = (name: string) => screen.findByRole('heading', { name });
 
 beforeEach(() => {
   localStorage.clear();
-  useSettingsStore.getState().setTheme('dark');
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ available: true }) })));
 });
 afterEach(() => {
@@ -43,12 +42,12 @@ afterEach(() => {
 });
 
 describe('OnboardingSheet (11.0 welcome)', () => {
-  it('walks name → languages → look → slides, and the look step persists the theme', async () => {
+  it('walks name → languages → slides (1.15: no look step — one dark look)', async () => {
     mount();
     const dialog = screen.getByRole('dialog');
     expect(dialog.querySelector('.vx-mat-thick')).toBeTruthy();
     await heading('Welcome to VinaX');
-    expect(screen.getByText('Step 1 of 8')).toBeTruthy();
+    expect(screen.getByText('Step 1 of 7')).toBeTruthy();
 
     // Required step: Escape does not close it, and an empty name is refused.
     fireEvent.keyDown(dialog, { key: 'Escape' });
@@ -79,21 +78,12 @@ describe('OnboardingSheet (11.0 welcome)', () => {
     fireEvent.click(box);
     expect(box.checked).toBe(false);
     press('Continue');
-    await heading('Pick your look');
     expect(getLocal<boolean>(KEYS.analyticsConsent, true)).toBe(false);
     expect(useSettingsStore.getState().pinnedLanguages.length).toBeGreaterThan(0);
 
-    const looks = screen.getAllByRole('radio');
-    expect(looks).toHaveLength(4);
-    fireEvent.click(screen.getByRole('radio', { name: /Light/ }));
-    expect(useSettingsStore.getState().theme).toBe('light');
-    expect(localStorage.getItem('vinax.settings.v1')).toContain('"theme":"light"');
-    expect(screen.getByRole('button', { name: 'Skip' })).toBeTruthy();
-    press('Use this look');
-
     // The catalogue returned nothing, so the songs step is left out.
     await heading('Four places to go');
-    await waitFor(() => expect(screen.getByText('Step 4 of 7')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Step 3 of 6')).toBeTruthy());
     press('Next');
     await heading('Tap one song');
     press('Next');
@@ -105,13 +95,13 @@ describe('OnboardingSheet (11.0 welcome)', () => {
     expect(getLocal<boolean>(KEYS.onboarded, false)).toBe(true);
   });
 
-  it('Escape closes an optional step, and a replay starts at the look', async () => {
+  it('Escape closes an optional step, and a replay starts at the slides', async () => {
     localStorage.setItem(KEYS.onboarded, JSON.stringify(true));
     localStorage.setItem(KEYS.userHandle, JSON.stringify('tester_one'));
     useUiStore.getState().openTour();
     mount();
-    await heading('Pick your look');
-    expect(screen.getByText('Step 1 of 5')).toBeTruthy();
+    await heading('Four places to go');
+    expect(screen.getByText('Step 1 of 4')).toBeTruthy();
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });

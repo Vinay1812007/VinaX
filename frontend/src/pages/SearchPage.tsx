@@ -9,7 +9,9 @@ import { useLibraryStore } from '@/store/libraryStore';
 import { useHistoryStore } from '@/store/historyStore';
 import { isNativePlatform } from '@/services/native';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { albumPath, artistPath, playlistPath } from '@/utils/slug';
 import { useNavigate, useNavigationType, useParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -752,8 +754,9 @@ export default function SearchPage() {
 
   return (
     <div className={cn('search-experience vx-browse mx-auto', active && 'is-searching')}>
-      <PageHeader title="Search" />
+      <div className="md:sr-only"><PageHeader title="Search" /></div>
       <div ref={stickyRef} className={cn('search-sticky', stuck && 'is-stuck')}>
+        <InWindowBar>
         <div className={cn('bx-field search-field', listening && 'is-listening', !!input && voiceReady && 'has-clear')}>
           <SearchIcon />
           <input
@@ -857,6 +860,7 @@ export default function SearchPage() {
             />
           )}
         </div>
+        </InWindowBar>
         {(active || lyricsMode || !trimmed) && (
           <div className="search-filters" role="group" aria-label="Search filters">
             {!lyricsMode &&
@@ -1457,4 +1461,17 @@ export default function SearchPage() {
       )}
     </div>
   );
+}
+
+/**
+ * 1.15 — from 768px Search's field lives in the window bar, where the search
+ * pill is on every other page (components/TopBar.tsx leaves a slot there
+ * while Search is open). A portal, so the field keeps its state, focus and
+ * suggestions; phones keep it at the top of the page.
+ */
+function InWindowBar({ children }: { children: ReactNode }) {
+  const wide = useMediaQuery('(min-width: 768px)');
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => setSlot(wide ? document.getElementById('vx-winbar-search-slot') : null), [wide]);
+  return wide && slot ? createPortal(children, slot) : <>{children}</>;
 }

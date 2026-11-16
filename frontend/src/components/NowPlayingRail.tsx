@@ -1,11 +1,15 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
 import { useReasonStore } from '@/store/reasonStore';
+import { useSettingsStore } from '@/store/settingsStore';
+import { useUiStore } from '@/store/uiStore';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
+import { songLine } from '@/utils/songLine';
 import { FavButton } from './FavButton';
 import { Marquee } from './Marquee';
 import { LiveLyricLine } from './LiveLyricLine';
-import { SparkleIcon } from './Icons';
+import { SparkleIcon, XIcon } from './Icons';
+import { IconButton } from './IconButton';
 import { artistPath } from '@/utils/slug';
 import { useSyncedLyrics } from '@/features/lyrics/useSyncedLyrics';
 import { UpNextRows } from '@/features/player/UpNextRows';
@@ -13,9 +17,10 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import '@/styles/pages/player.css';
 
 /**
- * Persistent Now Playing panel on wide screens — artwork, the song, what
- * plays next (each entry marked "VinaX pick" or "Added by you", in words) and
- * a live lyrics preview; one tap to the full player.
+ * The right-hand panel on wide screens (1.15 "Now playing view"): the
+ * playing song's artwork and title, a lyrics card and the next songs; or,
+ * from the player bar's queue button, the queue itself. The player bar's
+ * panel switch hides it (settings: nowPlayingView), and so does its ×.
  *
  * The panel is only ever visible from the `xl` breakpoint up. CSS-hiding it
  * was not enough: below 1280px it still mounted, fetched synced lyrics, held a
@@ -31,21 +36,58 @@ function NowPlayingRailBody() {
   const song = useCurrentSong();
   const queue = usePlayerStore((s) => s.queue);
   const index = usePlayerStore((s) => s.index);
+  const context = usePlayerStore((s) => s.context);
   const why = useReasonStore((s) => (song ? s.reasons[song.id] : undefined));
+  const view = useUiStore((s) => s.railView);
+  const setView = useUiStore((s) => s.setRailView);
+  const close = () => useSettingsStore.getState().setNowPlayingView(false);
   const { pathname } = useLocation();
   const navigate = useNavigate();
   // Registered before the early return — hooks must run unconditionally.
-  const lyrics = useSyncedLyrics(song);
+  const lyrics = useSyncedLyrics(view === 'playing' ? song : null);
   if (!song || pathname === '/now-playing') return null;
-  const upNext = queue.slice(index + 1, index + 6);
+
+  if (view === 'queue') {
+    const upcoming = queue.slice(index + 1, index + 41);
+    const line = songLine(song);
+    return (
+      <aside aria-label="Queue" className="vx-playing-rail vx-rail is-queue shrink-0 flex-col overflow-y-auto">
+        <div className="vx-rail-bar">
+          <h2>Queue</h2>
+          <IconButton size="sm" label="Close the queue" onClick={() => setView('playing')}><XIcon className="w-5 h-5" /></IconButton>
+        </div>
+        <h3 className="vx-rail-sub">Now playing</h3>
+        <div className="vx-upnext-row is-now">
+          <img src={bestImage(song.images, 150)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" />
+          <span className="vx-upnext-text">
+            <span className="vx-upnext-title">{line.title}</span>
+            <span className="vx-upnext-meta">{[line.album, line.artist].filter(Boolean).join(' – ')}</span>
+          </span>
+        </div>
+        <h3 className="vx-rail-sub">{context?.label ? `Next from: ${context.label}` : 'Next in queue'}</h3>
+        {upcoming.length === 0 ? (
+          <p className="vx-rail-empty">You’re at the end of this queue. Add a song or tune your next mix.</p>
+        ) : (
+          <UpNextRows songs={upcoming} start={index + 1} variant="rail" />
+        )}
+        <Link to="/queue" className="vx-rail-more">Open the full queue</Link>
+      </aside>
+    );
+  }
+
+  const upNext = queue.slice(index + 1, index + 4);
   const plainPreview = !lyrics.data?.synced && lyrics.data?.plain
     ? lyrics.data.plain.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 4)
     : null;
   return (
-    <aside aria-label="Now playing" className="vx-playing-rail vx-rail hidden xl:flex shrink-0 flex-col overflow-y-auto px-5 pt-4 pb-32">
-      <div className="vx-rail-head">
-        <h2>Now playing</h2>
-        <Link to="/now-playing" className="vx-rail-link">Full screen</Link>
+    <aside aria-label="Now playing" className="vx-playing-rail vx-rail shrink-0 flex-col overflow-y-auto">
+      <div className="vx-rail-bar">
+        {context?.path ? (
+          <Link to={context.path} className="vx-rail-context">{context.label}</Link>
+        ) : (
+          <h2>{context?.label || 'Now playing'}</h2>
+        )}
+        <IconButton size="sm" label="Hide the Now playing view" onClick={close}><XIcon className="w-5 h-5" /></IconButton>
       </div>
       <button type="button" onClick={() => navigate('/now-playing')} aria-label="Open full screen player" className="vx-rail-art">
         <img src={bestImage(song.images, 500)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" />
@@ -71,24 +113,13 @@ function NowPlayingRailBody() {
         </p>
       )}
 
-      {/* Up next: a compact list, tap to jump. */}
-      <div className="vx-rail-head is-section">
-        <h3>Up next</h3>
-        <Link to="/queue" className="vx-rail-link">Open queue</Link>
-      </div>
-      {upNext.length === 0 ? (
-        <p className="vx-rail-empty">You’re at the end of this queue. Add a song or tune your next mix.</p>
-      ) : (
-        <UpNextRows songs={upNext} start={index + 1} variant="rail" />
-      )}
-
-      {/* Lyrics preview: the line being sung, tinted by the artwork. */}
+      {/* Lyrics: the line being sung, on the artwork's colour. */}
       {lyrics.data?.synced ? (
-        <section aria-label="Live lyrics" className="mt-6">
-          <LiveLyricLine lines={lyrics.data.synced} onOpen={() => navigate('/now-playing')} />
+        <section aria-label="Live lyrics" className="vx-rail-card is-lyrics">
+          <LiveLyricLine lines={lyrics.data.synced} onOpen={() => navigate(`/lyrics/${song.id}`)} />
         </section>
       ) : plainPreview && plainPreview.length > 0 ? (
-        <section aria-label="Lyrics preview" className="mt-6">
+        <section aria-label="Lyrics preview" className="vx-rail-card is-lyrics">
           <Link to={`/lyrics/${song.id}`} className="vx-rail-lyrics-card">
             <span className="vx-rail-lyrics-label">Lyrics</span>
             {plainPreview.map((l, i) => (
@@ -97,6 +128,19 @@ function NowPlayingRailBody() {
           </Link>
         </section>
       ) : null}
+
+      {/* Next in queue: a card with the next few songs. */}
+      <section aria-label="Next in queue" className="vx-rail-card">
+        <div className="vx-rail-head">
+          <h3>Next in queue</h3>
+          <button type="button" className="vx-rail-link" onClick={() => setView('queue')}>Open queue</button>
+        </div>
+        {upNext.length === 0 ? (
+          <p className="vx-rail-empty">You’re at the end of this queue. Add a song or tune your next mix.</p>
+        ) : (
+          <UpNextRows songs={upNext} start={index + 1} variant="rail" />
+        )}
+      </section>
     </aside>
   );
 }

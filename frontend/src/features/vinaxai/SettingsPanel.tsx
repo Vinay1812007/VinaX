@@ -20,7 +20,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import { toast } from '@/store/toastStore';
-import { useSettingsStore } from '@/store/settingsStore';
 import { cleanMicLabel, closeMic, listMics, micLabelOf, MicError, micNotice, newAudioContext, openMic, silentMicNotice, watchMic, type MicDevice } from './mic';
 import { PERSONAL_MAX, usePrefs, type ReplyStyle } from './prefs';
 import { voiceLabel } from './live/liveOptions';
@@ -33,13 +32,6 @@ import type { WebSearch } from './PlusMenu';
 
 export type SettingsSection = 'general' | 'personal' | 'memory' | 'chat' | 'voice' | 'chats';
 
-const THEMES: Array<{ value: 'dark' | 'amoled' | 'light' | 'system' | 'auto'; label: string }> = [
-  { value: 'system', label: 'System: follow this device' },
-  { value: 'dark', label: 'Dark' },
-  { value: 'amoled', label: 'Black' },
-  { value: 'light', label: 'Light' },
-  { value: 'auto', label: 'Auto: light by day, dark at night' },
-];
 const STYLES: Array<{ value: ReplyStyle; label: string }> = [
   { value: 'normal', label: 'Normal: VinaX AI’s usual replies' },
   { value: 'concise', label: 'Concise: shorter, to the point' },
@@ -73,8 +65,6 @@ interface Props {
 
 export function SettingsPanel({ models, groups, voice, search, section, onClose }: Props): ReactNode {
   const prefs = usePrefs();
-  const theme = useSettingsStore((s) => s.theme);
-  const setTheme = useSettingsStore((s) => s.setTheme);
   const box = useRef<HTMLDivElement>(null);
   useDismissOnBack(true, onClose);
   useEffect(() => {
@@ -128,11 +118,6 @@ export function SettingsPanel({ models, groups, voice, search, section, onClose 
         <div className="vx-ai-settings-body">
           <section id="vx-ai-set-general" aria-labelledby="vx-ai-set-general-h">
             <h3 id="vx-ai-set-general-h">General</h3>
-            <Field id="theme" label="Appearance" hint="The same theme as the rest of VinaX.">
-              <select id="vx-ai-set-theme" aria-describedby="vx-ai-set-theme-hint" value={theme} onChange={(e) => setTheme(e.target.value as typeof theme)}>
-                {THEMES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </Field>
             <Switch on={prefs.artifacts} label="Artifacts" sub="Whole files, pages, charts and diagrams open in their own panel" onToggle={() => prefs.set({ artifacts: !prefs.artifacts })} />
             <Switch on={prefs.inlinePreviews && prefs.artifacts} disabled={!prefs.artifacts} label="Live previews in replies" sub="Shows pages, charts and diagrams right in the chat" onToggle={() => prefs.set({ inlinePreviews: !prefs.inlinePreviews })} />
           </section>

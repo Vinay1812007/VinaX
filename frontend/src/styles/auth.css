@@ -11,10 +11,8 @@
   align-items: center;
   gap: 20px;
   padding: max(40px, 8dvh, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom));
-  background:
-    radial-gradient(60% 50dvh at 15% 0, rgb(var(--ember-500) / 0.2), transparent 70%),
-    radial-gradient(50% 45dvh at 90% 100%, rgb(var(--tide-500) / 0.16), transparent 70%),
-    rgb(var(--ink-950));
+  /* 1.15 — a dark grey that falls to black, the card in #121212 on it. */
+  background: linear-gradient(180deg, rgb(var(--ink-700)) 0%, rgb(var(--ink-950)) 100%);
   background-repeat: no-repeat;
   color: rgb(var(--ink-300));
 }
@@ -26,32 +24,38 @@
   flex-direction: column;
   align-items: center;
   gap: 16px;
-  padding: 28px 24px 24px;
-  border-radius: var(--radius-2xl);
-  border: 1px solid var(--line-1);
-  box-shadow: var(--elev-4);
+  padding: 40px 32px 32px;
+  border-radius: var(--radius-md);
+  border: 0;
+  background: rgb(var(--ink-900));
+  box-shadow: none;
+}
+@media (max-width: 600px) {
+  /* Phones: no card, the form sits on the page. */
+  .vx-auth { background: rgb(var(--ink-900)); }
+  .vx-auth-card { padding: 16px 0; background: transparent; }
 }
 @media (max-width: 400px) {
   .vx-auth-card { padding: 24px 18px 20px; }
 }
-.vx-auth-title { font-size: clamp(24px, 6vw, 28px); font-weight: 800; letter-spacing: -0.025em; line-height: 1.15; text-align: center; color: rgb(var(--ink-100)); }
+.vx-auth-title { font-size: clamp(28px, 7vw, 32px); font-weight: 800; letter-spacing: -0.04em; line-height: 1.15; text-align: center; color: rgb(var(--ink-100)); }
 .vx-auth-lede { margin-top: -8px; font-size: 14.5px; line-height: 1.55; text-align: center; color: rgb(var(--ink-300)); }
 .vx-auth-google { width: 100%; display: flex; justify-content: center; min-height: 44px; }
 .vx-auth-card .vx-or { max-width: none; }
 
 .vx-auth-form { display: flex; flex-direction: column; gap: 14px; width: 100%; text-align: left; }
-.vx-auth-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: rgb(var(--ink-300)); }
+.vx-auth-field { display: flex; flex-direction: column; gap: 8px; font-size: 14px; font-weight: 700; color: rgb(var(--ink-100)); }
 .vx-auth-field em { font-style: normal; font-weight: 400; color: rgb(var(--ink-400)); }
 .vx-auth-label-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .vx-auth-field input {
-  width: 100%; min-height: 46px; padding: 0 14px; border-radius: var(--radius-input);
+  width: 100%; min-height: 48px; padding: 0 14px; border-radius: var(--radius-sm);
   font-size: 16px; font-weight: 400; color: var(--text-1);
-  background: rgb(var(--ink-100) / 0.06); border: 1px solid var(--line-2);
+  background: rgb(var(--ink-900)); border: 1px solid rgb(var(--ink-600));
   transition: border-color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard), box-shadow var(--dur-quick) var(--ease-standard);
 }
 .vx-auth-field input::placeholder { color: var(--text-4); }
-.vx-auth-field input:hover { border-color: var(--line-3); }
-.vx-auth-field input:focus { outline: none; border-color: var(--accent-line); box-shadow: var(--focus-ring); background: rgb(var(--ink-100) / 0.08); }
+.vx-auth-field input:hover { border-color: rgb(var(--ink-100)); }
+.vx-auth-field input:focus { outline: none; border-color: rgb(var(--ink-100)); box-shadow: inset 0 0 0 1px rgb(var(--ink-100)); }
 .vx-auth-code { font-variant-numeric: tabular-nums; letter-spacing: 0.4em; font-size: 20px !important; text-align: center; }
 .vx-auth-pw { position: relative; display: block; }
 .vx-auth-pw input { padding-right: 68px; }
@@ -63,11 +67,11 @@
 .vx-auth-error { font-size: 13.5px; line-height: 1.5; color: var(--danger); }
 .vx-auth-error a { color: inherit; text-decoration: underline; text-underline-offset: 2px; font-weight: 600; }
 .vx-auth-submit {
-  min-height: 48px; border-radius: var(--radius-control); font-size: 15px; font-weight: 750;
+  min-height: 48px; border-radius: var(--radius-control); font-size: 16px; font-weight: 700;
   color: var(--text-on-accent); background: var(--accent);
   transition: background-color var(--dur-quick) var(--ease-standard), opacity var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-spring);
 }
-.vx-auth-submit:hover:not(:disabled) { background: var(--accent-hover); }
+.vx-auth-submit:hover:not(:disabled) { background: var(--accent-hover); transform: scale(1.04); }
 .vx-auth-submit:active:not(:disabled) { transform: scale(var(--press-scale)); filter: none; }
 .vx-auth-submit:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 /* Not ready yet (empty fields): still the accent, just quieter — a flat grey bar read as broken. */

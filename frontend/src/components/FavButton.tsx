@@ -5,7 +5,20 @@ import { cn } from '@/utils/cn';
 import { isFavoriteIn } from '@/utils/favIndex';
 import { bestImage } from '@/utils/images';
 import { requireAccount } from '@/services/auth/gate';
-import { HeartIcon } from './Icons';
+/** The like control's glyph: ⊕ to add, a filled green disc with a black ✓ once liked. */
+export function LikeGlyph({ on, className }: { on: boolean; className?: string }) {
+  return on ? (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden>
+      <circle cx="12" cy="12" r="10.5" fill="currentColor" />
+      <path d="m7.4 12.3 3 3 6.2-6.4" fill="none" stroke="rgb(var(--ink-950))" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+      <circle cx="12" cy="12" r="9.6" />
+      <path d="M12 8v8M8 12h8" />
+    </svg>
+  );
+}
 
 /**
  * 10.1.0 — like or unlike a song and confirm it with a snackbar carrying the
@@ -38,14 +51,15 @@ export function FavButton({ song, className }: { song: Song; className?: string 
         toggleLike(song);
       }}
       className={cn(
-        'p-2.5 rounded-full hover:bg-ink-700 transition-colors active:scale-90',
+        'vx-like p-2.5 rounded-full transition-[color,transform] hover:scale-[1.04] active:scale-90',
         // 36px visual box; the invisible pad grows the HIT area to 44px+ without moving neighbours.
         'relative after:absolute after:inset-0 after:-m-[4px]',
-        isFav ? 'text-ember-500' : 'text-ink-300',
+        isFav ? 'text-ember-500' : 'text-ink-300 hover:text-ink-100',
         className,
       )}
     >
-      <HeartIcon key={String(isFav)} className={cn('w-4 h-4', isFav && 'heart-pop')} filled={isFav} />
+      {/* 1.15 — an outlined plus to add; a green disc with a check once it is in Liked songs. */}
+      <LikeGlyph key={String(isFav)} on={isFav} className={cn('w-4 h-4', isFav && 'heart-pop')} />
     </button>
   );
 }

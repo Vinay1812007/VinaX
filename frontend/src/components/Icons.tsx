@@ -328,3 +328,11 @@ export const BookmarkIcon = ({ className }: IconProps) => (
     <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z" />
   </svg>
 );
+/** 1.15 — the "Now playing view" switch in the player bar: a window with its right-hand panel. */
+export const PanelIcon = ({ className, filled }: IconProps) => (
+  <svg {...base(className)}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M14.5 4v16" />
+    {filled && <path d="M14.5 4H19a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4.5z" fill="currentColor" stroke="none" />}
+  </svg>
+);

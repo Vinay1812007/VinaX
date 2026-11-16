@@ -22,7 +22,7 @@ describe('guided tours', () => {
       'first-song', 'find-anything', 'listen-together', 'together-room', 'app-look', 'make-it-yours', 'save-organise',
     ]);
     expect(new Set(TUTORIALS.map((t) => t.id)).size).toBe(TUTORIALS.length);
-    expect(tutorialById('app-look')?.title).toBe('Change the app’s look');
+    expect(tutorialById('app-look')?.title).toBe('Make it easy to read');
     expect(tutorialById('nope')).toBeNull();
   });
 

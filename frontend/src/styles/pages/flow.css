@@ -131,10 +131,6 @@
   inset: 0;
   background: linear-gradient(180deg, rgb(var(--ink-950) / 0.3) 0%, rgb(var(--ink-950) / 0.08) 38%, rgb(var(--ink-950) / 0.86) 100%);
 }
-html.light .vx-flow-bg img { filter: blur(48px) saturate(1.35) brightness(1.08); }
-html.light .vx-flow-bg::after {
-  background: linear-gradient(180deg, rgb(var(--ink-950) / 0.45) 0%, rgb(var(--ink-950) / 0.2) 38%, rgb(var(--ink-950) / 0.9) 100%);
-}
 
 /* --------------------------------------------------------------- the reel */
 .vx-reel-stage {
@@ -180,7 +176,7 @@ html.light .vx-flow-bg::after {
   font-size: 14px;
   font-weight: 800;
   transform: translateX(-50%);
-  box-shadow: 0 10px 28px -8px rgb(var(--ember-500) / 0.65);
+  box-shadow: 0 10px 28px -8px rgb(0 0 0 / 0.50);
 }
 
 /* ---------------------------------------------- title, controls, the rail */
@@ -357,7 +353,7 @@ html.light .vx-flow-bg::after {
   position: absolute;
   z-index: 4;
   color: rgb(var(--ember-500));
-  filter: drop-shadow(0 6px 22px rgb(var(--ember-500) / 0.55));
+  filter: drop-shadow(0 6px 22px rgb(0 0 0 / 0.50));
   pointer-events: none;
   animation: vxf-burst 0.9s var(--ease-calm) forwards;
 }

@@ -99,39 +99,6 @@ html:not(.hc) .vx-ai {
   font-family: var(--vx-ai-sans);
 }
 
-/* ---- palette: light (soft cream) ------------------------------------- */
-html.light:not(.hc) .vx-ai {
-  --ink-50: 0 0 0;
-  --ink-100: 20 20 19;
-  --ink-200: 41 41 39;
-  --ink-300: 61 61 58;
-  --ink-400: 94 93 89;
-  --ink-500: 107 106 100;
-  --ink-600: 150 148 140;
-  --ink-700: 222 220 209;
-  --ink-800: 232 230 220;
-  --ink-850: 240 238 230;
-  --ink-900: 250 249 245;
-  --ink-950: 245 244 237;
-  --ember-600: 150 72 38;
-  --ember-500: 174 86 48;
-  --ember-400: 158 77 42;
-  --ember-300: 150 72 38;
-  --tide-500: 46 98 156;
-  --tide-400: 36 84 138;
-  --vx-ai-composer: 255 255 255;
-  --vx-ai-bubble: 240 238 230;
-  --vx-ai-code-bg: 245 244 237;
-  --vx-ai-shadow: 60 50 30;
-  --vx-on-accent: rgb(255 255 255);
-  --glass-border: rgb(31 30 29 / 0.13);
-  --vx-ai-hover: rgb(31 30 29 / 0.05);
-  --vx-ai-press: rgb(31 30 29 / 0.08);
-  --vx-ai-lift: 0 16px 48px -16px rgb(var(--vx-ai-shadow) / 0.22), 0 2px 6px rgb(var(--vx-ai-shadow) / 0.06);
-  --vx-ai-lift-sm: 0 4px 20px rgb(var(--vx-ai-shadow) / 0.07);
-  --vx-ai-skel-hi: rgb(255 255 255 / 0.75);
-}
-
 /* The canvas is one calm colour: no ambient glow. */
 html:not(.hc) .vx-ai,
 html:not(.hc) .vx-ai.vx-ai-gallery-page { background: rgb(var(--ink-900)); }
@@ -245,7 +212,7 @@ html:not(.hc) .vx-ai .vx-ai-composer:focus-within { border-color: rgb(var(--ink-
 .vx-ai .vx-ai-picker-btn { font-size: 0.8125rem; font-weight: 500; }
 .vx-ai .vx-ai-send { width: 32px; height: 32px; border-radius: var(--vx-radius-control); background: rgb(var(--ember-500)); color: var(--vx-on-accent); transition: background var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard), opacity var(--dur-quick) var(--ease-standard); }
 .vx-ai .vx-ai-send:hover:not(:disabled) { background: rgb(var(--ember-600)); }
-html.light .vx-ai .vx-ai-send:hover:not(:disabled) { background: rgb(var(--ember-400)); }
+
 .vx-ai .vx-ai-send:disabled { opacity: 0.35; }
 .vx-ai .vx-ai-send.is-stop { background: rgb(var(--ink-100)); color: rgb(var(--ink-900)); }
 .vx-ai .vx-ai-footer { color: rgb(var(--ink-500)); font-size: 0.75rem; }
@@ -273,7 +240,7 @@ html:not(.hc) .vx-ai .vx-ai-bubble {
 .vx-ai .vx-ai-md :is(h1, h2, h3, h4) { font-family: var(--vx-ai-serif); font-weight: 600; letter-spacing: -0.01em; }
 .vx-ai .vx-ai-md :is(table, .vx-ai-code, code) { font-family: var(--vx-ai-sans); }
 .vx-ai .vx-ai-md :not(pre) > code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: rgb(var(--ink-100) / 0.08); color: rgb(var(--ember-300)); }
-html.light .vx-ai .vx-ai-md :not(pre) > code { color: rgb(var(--ember-600)); }
+
 .vx-ai .vx-ai-md a { color: rgb(var(--ink-100)); text-decoration-color: rgb(var(--ink-100) / 0.35); }
 .vx-ai .vx-ai-md a:hover { text-decoration-color: currentColor; }
 .vx-ai .vx-ai-md blockquote { border-left-color: rgb(var(--ember-500) / 0.6); }
@@ -289,7 +256,7 @@ html:not(.hc) .vx-ai .vx-ai-think { background: transparent; border-color: var(-
 .vx-ai .vx-ai-chip:hover { background: var(--vx-ai-hover); }
 .vx-ai .vx-ai-chip.is-primary { background: rgb(var(--ember-500)); color: var(--vx-on-accent); border-color: transparent; font-weight: 600; }
 .vx-ai .vx-ai-chip.is-primary:hover:not(:disabled) { background: rgb(var(--ember-600)); }
-html.light .vx-ai .vx-ai-chip.is-primary:hover:not(:disabled) { background: rgb(var(--ember-400)); }
+
 .vx-ai .vx-ai-chip:disabled { opacity: 0.5; }
 html:not(.hc) .vx-ai .vx-ai-error, html:not(.hc) .vx-ai .vx-ai-notice { background: rgb(var(--ink-850)); border: 1px solid var(--glass-border); }
 .vx-ai .vx-ai-jump { background: rgb(var(--vx-ai-composer)); }
@@ -311,7 +278,7 @@ html:not(.hc) .vx-ai :is(.vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog) {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
-html.light:not(.hc) .vx-ai :is(.vx-ai-pop, .vx-ai-cite-tip, .vx-ai-dialog) { background: rgb(var(--vx-ai-composer)); }
+
 html:not(.hc) .vx-ai .vx-ai-settings { background: rgb(var(--ink-900)); }
 .vx-ai .vx-ai-opt[aria-selected='true'] { background: rgb(var(--ember-500) / 0.12); }
 .vx-ai .vx-ai-switch.is-on { background: rgb(var(--ember-500)); }
@@ -324,12 +291,12 @@ html:not(.hc) .vx-ai .vx-ai-artifact-card {
   font-family: var(--vx-ai-sans);
 }
 html:not(.hc) .vx-ai .vx-ai-artifact-card:hover { background: rgb(var(--ink-800)); }
-html.light:not(.hc) .vx-ai .vx-ai-artifact-card:hover { background: rgb(var(--ink-950)); }
+
 html:not(.hc) .vx-ai .vx-ai-artifact-icon {
   display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: var(--vx-radius-control);
   background: rgb(var(--ink-800)); color: rgb(var(--ink-300)); border: 1px solid var(--glass-border);
 }
-html.light:not(.hc) .vx-ai .vx-ai-artifact-icon { background: rgb(var(--ink-950)); }
+
 .vx-ai .vx-ai-artifact-card .vx-ai-file-name { font-weight: 600; }
 .vx-ai .vx-ai-artifact-card .vx-ai-file-meta { color: rgb(var(--ink-500)); }
 
@@ -477,9 +444,6 @@ html:not(.hc) .vx-ai .vx-ai-tabs button[aria-selected='true'] { background: rgb(
   text-transform: none; letter-spacing: 0; font-size: 0.8125rem; font-weight: 600; color: rgb(var(--ink-300));
 }
 
-/* Dimmer behind dialogs and the settings sheet: warm, not purple. */
-html.light .vx-ai .vx-ai-scrim::before { background: rgb(31 30 29 / 0.28); }
-
 /* Settings: a calm sheet with text tabs and outlined fields. */
 html:not(.hc) .vx-ai .vx-ai-settings { background: rgb(var(--ink-900)); }
 .vx-ai .vx-ai-settings-head { border-bottom: 0; padding: 14px 12px 4px 20px; }
@@ -498,7 +462,7 @@ html:not(.hc) .vx-ai .vx-ai-field :is(input, textarea, select) {
   background: transparent; border: 1px solid rgb(var(--ink-100) / 0.16); border-radius: var(--vx-radius-control);
   transition: border-color var(--dur-quick) var(--ease-standard);
 }
-html.light:not(.hc) .vx-ai .vx-ai-field :is(input, textarea, select) { background: rgb(var(--vx-ai-composer)); }
+
 html:not(.hc) .vx-ai .vx-ai-field :is(input, textarea, select):hover { border-color: rgb(var(--ink-100) / 0.28); }
 html:not(.hc) .vx-ai .vx-ai-field :is(input, textarea, select):focus-visible { outline: none; border-color: rgb(var(--ember-500)); box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.18); }
 .vx-ai .vx-ai-field input::placeholder, .vx-ai .vx-ai-field textarea::placeholder { color: rgb(var(--ink-500)); }
@@ -509,13 +473,13 @@ html:not(.hc) .vx-ai .vx-ai-field :is(input, textarea, select):focus-visible { o
 /* Projects: cards like the composer, headings in the serif. */
 html:not(.hc) .vx-ai :is(.vx-ai-proj-box, .vx-ai-proj-card) { background: rgb(var(--vx-ai-composer)); border: 1px solid var(--glass-border); border-radius: var(--vx-radius-card); box-shadow: var(--vx-ai-lift-sm); }
 html:not(.hc) .vx-ai .vx-ai-proj-card:hover { background: rgb(var(--ink-800)); }
-html.light:not(.hc) .vx-ai .vx-ai-proj-card:hover { background: rgb(var(--ink-950)); }
+
 html:not(.hc) .vx-ai .vx-ai-proj-box .vx-ai-field textarea { background: transparent; }
 
 /* Artifacts gallery: neutral thumbnails; the picked kind is a dark, filled tab. */
 html:not(.hc) .vx-ai .vx-ai-gallery-card { background: rgb(var(--vx-ai-composer)); border-radius: var(--vx-radius-card); }
 html:not(.hc) .vx-ai .vx-ai-gallery-card:hover { background: rgb(var(--ink-800)); }
-html.light:not(.hc) .vx-ai .vx-ai-gallery-card:hover { background: rgb(var(--ink-950)); }
+
 html:not(.hc) .vx-ai .vx-ai-gallery-thumb { background: rgb(var(--ink-100) / 0.05); color: rgb(var(--ink-400)); border: 1px solid var(--glass-border); }
 .vx-ai .vx-ai-gallery-kinds .vx-ai-chip[aria-pressed='true'] { background: rgb(var(--ink-100)); color: rgb(var(--ink-900)); border-color: transparent; }
 .vx-ai .vx-ai-gallery-kinds .vx-ai-chip[aria-pressed='true']:hover { background: rgb(var(--ink-200)); }
@@ -526,5 +490,5 @@ html:not(.hc) .vx-ai .vx-ai-gallery-thumb { background: rgb(var(--ink-100) / 0.0
 
 /* A destructive button stays red (the quiet chip rule above must not flatten it). */
 .vx-ai .vx-ai-chip.is-danger { background: var(--vx-danger); color: rgb(26 5 8); border-color: transparent; font-weight: 600; }
-html.light .vx-ai .vx-ai-chip.is-danger { color: rgb(255 255 255); }
+
 .vx-ai .vx-ai-chip.is-danger:hover:not(:disabled) { filter: brightness(1.08); }

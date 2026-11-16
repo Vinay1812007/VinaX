@@ -27,7 +27,7 @@ async function markOnboarded(page: Page): Promise<void> {
   }, latestNotesFingerprint());
 }
 
-test('first run walks the welcome: name → languages → look → slides → app shell', async ({ page }) => {
+test('first run walks the welcome: name → languages → slides → app shell', async ({ page }) => {
   await goOffline(page);
   await page.goto('/');
 
@@ -44,12 +44,9 @@ test('first run walks the welcome: name → languages → look → slides → ap
   await expect(page.getByRole('heading', { name: 'Choose your languages' })).toBeVisible();
   await page.getByRole('button', { name: 'Continue' }).click();
 
-  // The look step: the theme, applied live.
-  await expect(page.getByRole('heading', { name: 'Pick your look' })).toBeVisible();
-  await page.getByRole('radio', { name: /Light/ }).click();
+  // 1.15 — no look step: one dark look.
   await expect(page.locator('html')).toHaveAttribute('data-template', 'vinax');
-  await expect(page.locator('html')).toHaveClass(/light/);
-  await page.getByRole('button', { name: 'Use this look' }).click();
+  await expect(page.locator('html')).toHaveClass(/dark/);
 
   // Catalogue unreachable → the songs step is left out and the slides follow.
   await expect(page.getByText('Five places to go')).toBeVisible();
@@ -99,7 +96,7 @@ test('handoff fails soft when no relay is reachable', async ({ page }) => {
   ).toBeVisible({ timeout: 20_000 });
 });
 
-test('persisted light theme applies before hydration (no dark flash)', async ({ page }) => {
+test('a light theme stored by an older build still opens dark (1.15: one look)', async ({ page }) => {
   await markOnboarded(page);
   await page.addInitScript(() => {
     const raw = localStorage.getItem('vinax.settings.v1');
@@ -109,12 +106,10 @@ test('persisted light theme applies before hydration (no dark flash)', async ({ 
   });
   await goOffline(page);
   await page.goto('/settings');
-  // The inline pre-paint script (index.html) must have classed <html> — if
-  // only the React effect did it, DOMContentLoaded-time checks would flake.
-  await expect(page.locator('html')).toHaveClass(/light/);
-  await expect(page.locator('html')).not.toHaveClass(/dark/);
+  await expect(page.locator('html')).toHaveClass(/dark/);
+  await expect(page.locator('html')).not.toHaveClass(/light/);
   const bg = await page.evaluate(() => document.documentElement.style.background);
-  expect(bg).toContain('rgb(240, 242, 247)');
+  expect(bg).toContain('rgb(18, 18, 18)');
 });
 
 test('back-navigation restores the scroll position (P0-3)', async ({ page }) => {

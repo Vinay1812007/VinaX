@@ -32,7 +32,8 @@ test('signed out, Explore, Search and a song page are the live app with a Sign i
   for (const path of ['/explore', '/search', '/song/x-123', '/discover']) {
     await page.goto(path);
     await expect(page.locator('.vx-topbar')).toBeVisible();
-    await expect(page.locator('.vx-topbar .vx-topbar-signin')).toHaveText('Sign in');
+    // 1.15 — on a computer the account tools sit in the window bar.
+    await expect(page.locator('.vx-winbar .vx-topbar-signin')).toHaveText('Sign in');
     await expect(page.locator('.vx-avatar')).toHaveCount(0);
     await expect(page.locator('main.vx-auth')).toHaveCount(0);
   }

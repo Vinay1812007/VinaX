@@ -15,20 +15,16 @@
   --mat-lift: 0 -16px 48px -16px rgb(0 0 0 / 0.6);
   position: relative;
   color: rgb(var(--ink-100));
-  border-radius: 24px 24px 0 0;
+  border-radius: 8px 8px 0 0;
   animation: vx-sheet-up 240ms var(--vx-ease-out) backwards;
 }
 @media (min-width: 640px) {
   .vx-sheet {
     --mat-lift: 0 24px 64px -16px rgb(0 0 0 / 0.65);
-    border-radius: 22px;
+    border-radius: 8px;
     animation-name: vx-dialog-in;
     animation-duration: 200ms;
   }
-}
-html.light .vx-sheet { --mat-lift: 0 -12px 40px -16px rgb(48 22 34 / 0.28); }
-@media (min-width: 640px) {
-  html.light .vx-sheet { --mat-lift: 0 24px 64px -20px rgb(48 22 34 / 0.3); }
 }
 
 .vx-sheet-grab {
@@ -99,24 +95,22 @@ html.light .vx-sheet { --mat-lift: 0 -12px 40px -16px rgb(48 22 34 / 0.28); }
   width: 256px;
   padding: 4px;
   color: rgb(var(--ink-100));
-  border-radius: 16px;
+  border-radius: 4px;
   max-height: min(420px, calc(100dvh - 16px));
   animation: vx-dialog-in 160ms var(--vx-ease-out) backwards;
 }
-html.light .vx-menu {
-  --mat-lift: 0 16px 40px -16px rgb(48 22 34 / 0.3), 0 2px 8px -2px rgb(48 22 34 / 0.12);
-}
+
 .vx-menu-item {
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 44px;
+  min-height: 40px;
   padding: 0 12px;
-  border-radius: 10px;
-  color: rgb(var(--ink-100));
+  border-radius: 2px;
+  color: rgb(var(--ink-100) / 0.9);
   font-size: 14px;
-  font-weight: 550;
+  font-weight: 400;
   text-align: left;
   white-space: nowrap;
   overflow: hidden;
@@ -124,12 +118,12 @@ html.light .vx-menu {
   outline: none;
   transition: background-color 120ms var(--ease-calm);
 }
-.vx-menu-item:focus-visible { background: var(--vx-hover); }
+.vx-menu-item:focus-visible { background: rgb(var(--ink-100) / 0.1); color: rgb(var(--ink-100)); }
 @media (hover: hover) and (pointer: fine) {
-  .vx-menu-item:hover { background: var(--vx-hover); }
+  .vx-menu-item:hover { background: rgb(var(--ink-100) / 0.1); color: rgb(var(--ink-100)); }
 }
-.vx-menu-item:active { background: var(--vx-pressed); }
-.vx-menu-item:focus-visible { box-shadow: inset 0 0 0 2px rgb(var(--ember-500) / 0.6); }
+.vx-menu-item:active { background: rgb(var(--ink-100) / 0.14); }
+.vx-menu-item:focus-visible { box-shadow: inset 0 0 0 2px rgb(var(--ink-100)); }
 .vx-menu-item > svg { flex-shrink: 0; width: 20px; height: 20px; color: rgb(var(--ink-300)); }
 .vx-menu-item > .vx-menu-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .vx-menu-item > .vx-menu-chev { display: flex; margin-left: auto; padding-left: 8px; color: rgb(var(--ink-400)); }
@@ -152,7 +146,7 @@ html.light .vx-menu {
   width: auto;
   max-height: min(78dvh, calc(100dvh - var(--safe-top) - 48px));
   padding: 0 8px max(12px, var(--safe-bottom));
-  border-radius: 24px 24px 0 0;
+  border-radius: 8px 8px 0 0;
   animation: vx-sheet-up 240ms var(--vx-ease-out) backwards;
 }
 .vx-menu.is-sheet .vx-menu-head {
@@ -169,7 +163,7 @@ html.light .vx-menu {
   background: rgb(var(--ink-850) / 0.97);
   border-bottom: 1px solid var(--vx-border);
 }
-html.light .vx-menu.is-sheet .vx-menu-head { background: rgb(var(--ink-950) / 0.97); }
+
 .vx-menu.is-sheet .vx-menu-head::before {
   content: '';
   position: absolute;
@@ -208,7 +202,7 @@ html.light .vx-menu.is-sheet .vx-menu-head { background: rgb(var(--ink-950) / 0.
 .vx-welcome-count { flex: none; color: rgb(var(--ink-400)); font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .vx-welcome-track { flex: 1 1 auto; display: flex; gap: 4px; }
 .vx-welcome-track span { flex: 1 1 0; height: 3px; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.16); transition: background-color 0.2s ease; }
-.vx-welcome-track span.is-done { background: rgb(var(--ember-500) / 0.5); }
+.vx-welcome-track span.is-done { background: rgb(var(--ink-100) / 0.16); }
 .vx-welcome-track span.is-on { background: rgb(var(--ember-500)); }
 .vx-welcome-foot { flex: none; display: flex; gap: 8px; padding: 12px 24px max(16px, var(--safe-bottom)); border-top: 1px solid var(--vx-border); }
 /* Three buttons on the last step: none may be clipped on a narrow phone. */
@@ -247,13 +241,13 @@ html.reduce-motion .vx-welcome-scrim, html.reduce-motion .vx-welcome-track span 
   position: relative;
   height: 148px;
   overflow: hidden;
-  border-radius: 24px 24px 0 0;
+  border-radius: 8px 8px 0 0;
   background:
     radial-gradient(90% 140% at 0% 0%, rgb(255 164 46 / 0.85), transparent 62%),
     radial-gradient(80% 140% at 100% 100%, rgb(255 99 132 / 0.7), transparent 60%),
     #1d1421;
 }
-@media (min-width: 640px) { .vx-welcome-art { border-radius: 22px 22px 0 0; } }
+@media (min-width: 640px) { .vx-welcome-art { border-radius: 8px 8px 0 0; } }
 .vx-welcome-scripts {
   position: absolute;
   inset: -12px -40px;
@@ -282,7 +276,7 @@ html.reduce-motion .vx-welcome-scrim, html.reduce-motion .vx-welcome-track span 
   width: 52px;
   height: 52px;
   padding: 0;
-  border-radius: 14px;
+  border-radius: 8px;
   box-shadow: 0 10px 24px -8px rgb(0 0 0 / 0.6);
 }
 @media (min-width: 640px) { .vx-welcome-logo { left: 28px; } }
@@ -333,10 +327,10 @@ html.reduce-motion .vx-welcome-scrim, html.reduce-motion .vx-welcome-track span 
   flex-wrap: wrap;
   gap: 8px;
   padding: 12px;
-  border-radius: 12px;
+  border-radius: 8px;
   background: rgb(var(--ink-900));
 }
-html.light .vx-welcome-langs { background: rgb(var(--ink-900)); }
+
 .vx-welcome-more {
   position: relative;
   min-height: 36px;
@@ -358,7 +352,7 @@ html.light .vx-welcome-langs { background: rgb(var(--ink-900)); }
   background: rgb(var(--ink-850));
   box-shadow: 0 -12px 16px -12px rgb(0 0 0 / 0.5);
 }
-html.light .vx-welcome-cta { background: rgb(var(--ink-950)); box-shadow: 0 -12px 16px -14px rgb(48 22 34 / 0.2); }
+
 @media (min-width: 640px) { .vx-welcome-cta { margin: 20px -28px 0; padding: 12px 28px; } }
 .vx-welcome-consent {
   display: flex;
@@ -386,10 +380,10 @@ html.light .vx-welcome-cta { background: rgb(var(--ink-950)); box-shadow: 0 -12p
   place-items: center;
   width: 72px;
   height: 72px;
-  border-radius: 20px;
+  border-radius: 8px;
   color: var(--vx-on-accent);
   background: var(--vx-glow);
-  box-shadow: 0 12px 28px -12px rgb(var(--ember-600) / 0.8);
+  box-shadow: 0 12px 28px -12px rgb(0 0 0 / 0.50);
 }
 
 /* Taste seed: square artwork, a heart that fills. */
@@ -455,12 +449,12 @@ html.light .vx-welcome-cta { background: rgb(var(--ink-950)); box-shadow: 0 -12p
   width: 100%;
   min-height: 64px;
   padding: 8px 10px;
-  border-radius: 16px;
+  border-radius: 8px;
   text-align: left;
   background: rgb(var(--ink-100) / 0.04);
   transition: background-color 160ms var(--ease-calm);
 }
-html.light .vx-inbox-row { background: rgb(255 255 255 / 0.55); }
+
 button.vx-inbox-row:hover { background: var(--vx-hover-warm); }
 button.vx-inbox-row:active { background: var(--vx-pressed); }
 .vx-inbox-art {
@@ -470,7 +464,7 @@ button.vx-inbox-row:active { background: var(--vx-pressed); }
   width: 48px;
   height: 48px;
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: 8px;
   color: var(--vx-on-accent);
   background: var(--vx-glow);
   box-shadow: var(--vx-art-shadow);
@@ -499,13 +493,12 @@ html.reduce-motion .vx-inbox-row { transition: none; }
 
 /* 11.0 — guided tours (TutorialRunner). The card is frosted like every sheet;
    the spotlight ring takes the accent of whichever app style is on. */
-.vx-tut-card { padding: 20px; border-radius: 20px; max-height: calc(100dvh - 24px); overflow-y: auto; box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.65); }
+.vx-tut-card { padding: 20px; border-radius: 8px; max-height: calc(100dvh - 24px); overflow-y: auto; box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.65); }
 .vx-tut-card:focus-visible { outline: 2px solid rgb(var(--ember-500)); outline-offset: 2px; }
-.vx-tut-spot { border-radius: 14px; box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.62), 0 0 0 2px rgb(var(--ember-500)); transition: top 0.2s ease, left 0.2s ease, width 0.2s ease, height 0.2s ease; }
+.vx-tut-spot { border-radius: 8px; box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.62), 0 0 0 2px rgb(var(--ember-500)); transition: top 0.2s ease, left 0.2s ease, width 0.2s ease, height 0.2s ease; }
 html.reduce-motion .vx-tut-spot { transition: none; }
 html.reduce-motion .vx-tut-card { animation: none; }
 @media (prefers-reduced-motion: reduce) { .vx-tut-spot { transition: none; } .vx-tut-card { animation: none; } }
-
 
 /* 1.12 — Ideas & bugs popup (components/FeedbackSheet.tsx). */
 .vx-fb-title { display: inline-flex; align-items: center; gap: 10px; }
@@ -515,7 +508,7 @@ html.reduce-motion .vx-tut-card { animation: none; }
   width: 100%;
   min-height: 132px;
   padding: 12px 14px;
-  border-radius: 14px;
+  border-radius: 8px;
   border: 1px solid rgb(var(--ink-100) / 0.12);
   background: rgb(var(--ink-100) / 0.05);
   color: rgb(var(--ink-100));
@@ -525,19 +518,19 @@ html.reduce-motion .vx-tut-card { animation: none; }
   resize: vertical;
 }
 .vx-fb-text::placeholder { color: rgb(var(--ink-500)); }
-.vx-fb-text:focus { outline: none; border-color: rgb(var(--ember-500) / 0.7); box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.2); }
-html.light .vx-fb-text { border-color: rgb(var(--ink-900) / 0.14); background: rgb(var(--ink-900) / 0.04); color: rgb(var(--ink-900)); }
+.vx-fb-text:focus { outline: none; border-color: rgb(var(--ink-100) / 0.16); box-shadow: 0 0 0 3px rgb(0 0 0 / 0.30); }
+
 .vx-fb-meta { margin-top: 12px; display: grid; gap: 8px; }
 .vx-fb-meta .vx-check { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; color: rgb(var(--ink-300)); cursor: pointer; }
 .vx-fb-meta .vx-check input { width: 16px; height: 16px; accent-color: rgb(var(--ember-500)); }
 .vx-fb-facts { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .vx-fb-facts li { font-size: 11.5px; font-weight: 600; color: rgb(var(--ink-300)); background: rgb(var(--ink-100) / 0.06); border: 1px solid rgb(var(--ink-100) / 0.08); border-radius: var(--radius-pill); padding: 3px 9px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-html.light .vx-fb-facts li { background: rgb(var(--ink-900) / 0.05); border-color: rgb(var(--ink-900) / 0.1); }
+
 .vx-fb-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 16px; }
 .vx-fb-count { margin-right: auto; font-size: 12px; color: rgb(var(--ink-500)); font-variant-numeric: tabular-nums; }
 .vx-fb-btn { min-height: 44px; padding: 0 20px; border-radius: var(--radius-pill); font-weight: 700; font-size: 14px; }
 .vx-fb-btn.is-quiet { border: 1px solid rgb(var(--ink-100) / 0.14); color: rgb(var(--ink-100)); }
-html.light .vx-fb-btn.is-quiet { border-color: rgb(var(--ink-900) / 0.16); color: rgb(var(--ink-900)); }
+
 .vx-fb-done { padding: 12px 0 4px; }
 .vx-fb-done-title { font-size: 20px; font-weight: 800; margin: 0 0 6px; }
 .vx-fb-done-sub { margin: 0; font-size: 14px; line-height: 1.5; color: rgb(var(--ink-300)); }

@@ -51,7 +51,7 @@ export function IconButton({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'inline-flex items-center justify-center rounded-full transition-colors shrink-0',
+        'vx-icon-btn inline-flex items-center justify-center rounded-full transition-[color,transform] shrink-0',
         // Visual size scales, but the tap target stays >= 44px via padding box.
         
         // v7.0.1 — medium: 36 / 40px discs; the ::after pad keeps the hit box at 44px.
@@ -59,8 +59,9 @@ export function IconButton({
         size === 'sm' && 'w-9 h-9 after:-inset-1',
         size === 'md' && 'w-10 h-10 after:-inset-0.5',
         size === 'lg' && 'w-12 h-12',
-        active ? 'text-ember-400' : 'text-ink-300 hover:text-ink-100',
-        'hover:bg-ink-800',
+        // 1.15 — no disc on hover: the glyph brightens and grows a touch; on = green.
+        active ? 'text-ember-500 hover:text-ember-400' : 'text-ink-300 hover:text-ink-100',
+        'hover:scale-[1.04] active:scale-95',
         'disabled:opacity-40 disabled:pointer-events-none',
         className,
       )}

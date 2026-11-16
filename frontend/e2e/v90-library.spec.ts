@@ -128,7 +128,8 @@ for (const size of SIZES) {
     await expect.poll(() => rowTitles(page)).toContain('Monsoon Album');
 
     // Filter chips narrow the list.
-    await page.getByRole('button', { name: 'Albums', exact: true }).click();
+    // 1.15 — Your Library's panel has an Albums chip too: use the page's.
+    await page.getByRole('main').getByRole('button', { name: 'Albums', exact: true }).click();
     await expect.poll(() => rowTitles(page)).toEqual(['Monsoon Album']);
     await page.getByRole('button', { name: 'All', exact: true }).click();
 

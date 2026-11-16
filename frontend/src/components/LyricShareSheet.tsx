@@ -7,7 +7,7 @@ import { Sheet, SheetHeader } from './Sheet';
 import { fitText } from '@/utils/fitText';
 
 const MAX = 6;
-const FONT = 'Manrope, system-ui, sans-serif';
+const FONT = 'Figtree, system-ui, sans-serif';
 
 
 /** The share card. Canvas art is the standing exception to "no raw colours": these are Encore's charcoal, Iris and Lagoon. */

@@ -11,7 +11,6 @@
    ========================================================================= */
 
 .vx-lt { --lt-card: rgb(var(--ink-850)); --lt-line: var(--vx-border); }
-html.light .vx-lt { --lt-card: rgb(var(--ink-950)); }
 
 /* ----------------------------------------------------------------- idle */
 .vx-lt-hero { padding: 8px 0 32px; }
@@ -21,10 +20,10 @@ html.light .vx-lt { --lt-card: rgb(var(--ink-950)); }
   width: 52px;
   height: 52px;
   margin-bottom: 20px;
-  border-radius: 16px;
+  border-radius: 8px;
   background: var(--vx-glow);
   color: var(--vx-on-accent);
-  box-shadow: 0 12px 30px -14px rgb(var(--ember-500) / 0.7);
+  box-shadow: 0 12px 30px -14px rgb(0 0 0 / 0.50);
 }
 .vx-lt-title {
   font-family: var(--vx-font-display);
@@ -53,7 +52,7 @@ html.light .vx-lt { --lt-card: rgb(var(--ink-950)); }
 }
 .vx-lt-card.is-host {
   background:
-    radial-gradient(420px 220px at 100% 0%, rgb(var(--ember-500) / 0.16), transparent 70%),
+    radial-gradient(420px 220px at 100% 0%, rgb(var(--ink-100) / 0.16), transparent 70%),
     var(--lt-card);
 }
 .vx-lt-h2 { margin-bottom: 6px; color: rgb(var(--ink-100)); font-size: 18px; font-weight: 750; letter-spacing: -0.02em; }
@@ -77,7 +76,7 @@ html.light .vx-lt { --lt-card: rgb(var(--ink-950)); }
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: rgb(var(--ember-500) / 0.16);
+  background: rgb(var(--ink-100) / 0.16);
   color: rgb(var(--ember-400));
   font-size: 12px;
   font-weight: 800;
@@ -99,7 +98,7 @@ html.light .vx-lt { --lt-card: rgb(var(--ink-950)); }
   font-weight: 800;
   transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard);
 }
-.vx-lt-cta:hover { background: rgb(var(--ember-400)); box-shadow: 0 10px 24px -12px rgb(var(--ember-500) / 0.8); }
+.vx-lt-cta:hover { background: rgb(var(--ember-400)); box-shadow: 0 10px 24px -12px rgb(0 0 0 / 0.50); }
 .vx-lt-cta:active { transform: scale(0.98); }
 .vx-lt-cta:disabled { opacity: 0.6; pointer-events: none; }
 .vx-lt-cta.is-sm { width: auto; min-height: 44px; margin-top: 0; font-size: 14px; }
@@ -109,7 +108,7 @@ html.light .vx-lt { --lt-card: rgb(var(--ink-950)); }
   min-width: 0;
   min-height: 52px;
   padding: 0 16px;
-  border-radius: 14px;
+  border-radius: 8px;
   background: rgb(var(--ink-100) / 0.06);
   box-shadow: inset 0 0 0 1px var(--lt-line);
   color: rgb(var(--ink-100));
@@ -126,7 +125,7 @@ html.light .vx-lt { --lt-card: rgb(var(--ink-950)); }
 .vx-lt-join {
   min-height: 52px;
   padding: 0 22px;
-  border-radius: 14px;
+  border-radius: 8px;
   background: rgb(var(--ink-100));
   color: rgb(var(--ink-900));
   font-size: 15px;
@@ -156,14 +155,9 @@ html.light .vx-lt { --lt-card: rgb(var(--ink-950)); }
   z-index: -1;
   background:
     linear-gradient(180deg, rgb(var(--ink-850) / 0.55), rgb(var(--ink-850) / 0.92) 70%),
-    var(--lt-art, radial-gradient(400px 260px at 20% 0%, rgb(var(--ember-500) / 0.22), transparent 70%)) center / cover;
+    var(--lt-art, radial-gradient(400px 260px at 20% 0%, rgb(var(--ink-100) / 0.16), transparent 70%)) center / cover;
   filter: blur(36px) saturate(1.2);
   opacity: 0.9;
-}
-html.light .vx-lt-room::before {
-  background:
-    linear-gradient(180deg, rgb(var(--ink-950) / 0.6), rgb(var(--ink-950) / 0.94) 70%),
-    var(--lt-art, radial-gradient(400px 260px at 20% 0%, rgb(var(--ember-500) / 0.18), transparent 70%)) center / cover;
 }
 
 .vx-lt-status {
@@ -173,14 +167,14 @@ html.light .vx-lt-room::before {
   min-height: 30px;
   padding: 0 12px 0 10px;
   border-radius: var(--radius-pill);
-  background: rgb(var(--tide-500) / 0.14);
+  background: rgb(var(--ink-100) / 0.14);
   color: rgb(var(--tide-400));
   font-size: 12.5px;
   font-weight: 750;
 }
 .vx-lt-status[data-status='reconnecting'],
 .vx-lt-status[data-status='connecting'] { background: rgb(var(--ink-100) / 0.08); color: rgb(var(--ink-300)); }
-.vx-lt-status[data-status='host-away'] { background: rgb(var(--ember-500) / 0.14); color: rgb(var(--ember-400)); }
+.vx-lt-status[data-status='host-away'] { background: rgb(var(--ink-100) / 0.14); color: rgb(var(--ember-400)); }
 
 .vx-lt-dot { position: relative; display: inline-block; flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .vx-lt-dot::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; background: currentColor; opacity: 0.3; }
@@ -210,7 +204,7 @@ html.reduce-motion .vx-lt-dot::after { animation: none; }
   .vx-lt-tap { animation: vx-lt-nudge 1.6s var(--ease-calm) infinite; }
 }
 html.reduce-motion .vx-lt-tap { animation: none; }
-@keyframes vx-lt-nudge { 0%, 100% { box-shadow: 0 0 0 0 rgb(var(--ember-500) / 0.5); } 50% { box-shadow: 0 0 0 10px rgb(var(--ember-500) / 0); } }
+@keyframes vx-lt-nudge { 0%, 100% { box-shadow: 0 0 0 0 rgb(0 0 0 / 0.50); } 50% { box-shadow: 0 0 0 10px rgb(0 0 0 / 0.10); } }
 
 .vx-lt-code-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--lt-line); }
 .vx-lt-code {
@@ -222,7 +216,7 @@ html.reduce-motion .vx-lt-tap { animation: none; }
   letter-spacing: 0.16em;
   font-variant-numeric: tabular-nums;
 }
-.vx-lt-qr { width: 112px; height: 112px; padding: 6px; border-radius: 14px; background: #fff; }
+.vx-lt-qr { width: 112px; height: 112px; padding: 6px; border-radius: 8px; background: #fff; }
 .vx-lt-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 /* 1.12.11 — a guest's fine-tune: this phone a little earlier or later. */
 .vx-lt-trim { display: grid; gap: 10px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--lt-line); }
@@ -272,7 +266,7 @@ html.reduce-motion .vx-lt-tap { animation: none; }
 .vx-lt-x:hover { background: rgb(var(--ink-100) / 0.08); color: rgb(var(--ink-100)); }
 .vx-person .vx-lt-x, .vx-lt-person-ask { margin-left: auto; }
 .vx-lt-person-ask { display: inline-flex; gap: 6px; }
-.vx-lt-tag { flex: none; padding: 2px 8px; border-radius: var(--radius-pill); background: rgb(var(--ember-500) / 0.16); color: var(--accent-text); font-size: 11.5px; font-weight: 750; }
+.vx-lt-tag { flex: none; padding: 2px 8px; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.16); color: var(--accent-text); font-size: 11.5px; font-weight: 750; }
 .vx-lt-tag.is-you { background: rgb(var(--ink-100) / 0.08); color: rgb(var(--ink-300)); }
 .vx-lt-tag.is-old { background: rgb(var(--ink-100) / 0.08); color: var(--danger); }
 /* 1.14 — the guest's sync check, and the warning when someone's app is too old to keep in step. */
@@ -335,8 +329,7 @@ html.reduce-motion .vx-lt-tap { animation: none; }
   font-weight: 700;
   transition: transform var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
-html.light .vx-lt-pill-link,
-html.light .vx-lt-pill-tap { background: rgb(var(--ink-950) / 0.94); box-shadow: inset 0 0 0 1px var(--glass-border-strong), 0 12px 26px -14px rgb(48 22 34 / 0.35); }
+
 .vx-lt-pill-link:active,
 .vx-lt-pill-tap:active { transform: scale(0.97); }
 .vx-lt-pill .vx-lt-dot { color: rgb(var(--tide-400)); }
@@ -402,7 +395,7 @@ html.reduce-motion .vx-lt-pill { animation: none; }
 .vx-lt-msg-by { margin: 0 0 4px 12px; color: rgb(var(--ember-400)); font-size: 12px; font-weight: 750; }
 .vx-lt-bubble {
   padding: 8px 14px;
-  border-radius: 18px;
+  border-radius: 8px;
   background: rgb(var(--ink-100) / 0.08);
   color: rgb(var(--ink-100));
   font-size: 15px;
@@ -434,7 +427,7 @@ html.reduce-motion .vx-lt-typing-dots i { animation: none; }
 .vx-lt-send {
   min-height: 52px;
   padding: 0 20px;
-  border-radius: 14px;
+  border-radius: 8px;
   background: rgb(var(--ember-500));
   color: var(--vx-on-accent);
   font-size: 15px;
@@ -445,7 +438,7 @@ html.reduce-motion .vx-lt-typing-dots i { animation: none; }
 .vx-lt-send:disabled { opacity: 0.45; pointer-events: none; }
 
 /* 1.13 — "Instant": the live line is up. */
-.vx-lt-instant { padding: 2px 8px; border-radius: var(--radius-pill); background: rgb(var(--tide-500) / 0.22); font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.vx-lt-instant { padding: 2px 8px; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.16); font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
 
 /* 1.13 — the room's energy: reactions fill it, a full bar sets the room off. */
 .vx-lt-energy { margin-top: 18px; }
@@ -500,7 +493,7 @@ html.reduce-motion .vx-lt-energy-bar i { transition: none; }
   padding: 12px 22px;
   border-radius: var(--radius-pill);
   background: linear-gradient(90deg, rgb(var(--ember-500)), rgb(var(--tide-500)));
-  box-shadow: 0 18px 44px -16px rgb(var(--ember-500) / 0.9);
+  box-shadow: 0 18px 44px -16px rgb(0 0 0 / 0.50);
   color: #fff;
   font-family: var(--vx-font-display);
   font-size: clamp(16px, 4.4vw, 22px);
@@ -527,7 +520,7 @@ html.reduce-motion .vx-lt-burst { animation-name: vx-lt-fade; }
   width: 100%;
   min-height: 48px;
   margin-top: 10px;
-  border-radius: 14px;
+  border-radius: 8px;
   background: rgb(var(--ink-100) / 0.06);
   box-shadow: inset 0 0 0 1px var(--lt-line);
   color: rgb(var(--ink-100));
@@ -541,17 +534,17 @@ html.reduce-motion .vx-lt-burst { animation-name: vx-lt-fade; }
 .vx-lt-scan-btn svg { color: rgb(var(--ember-400)); }
 
 /* The scanner sheet (portalled to <body>, so it reads tokens directly). */
-.vx-lt-scan { position: relative; overflow: hidden; margin-top: 16px; border-radius: 20px; background: #000; aspect-ratio: 1; }
+.vx-lt-scan { position: relative; overflow: hidden; margin-top: 16px; border-radius: 8px; background: #000; aspect-ratio: 1; }
 .vx-lt-scan-video { display: block; width: 100%; height: 100%; object-fit: cover; }
 .vx-lt-scan-frame {
   position: absolute;
   inset: 16%;
-  border-radius: 22px;
+  border-radius: 8px;
   box-shadow: 0 0 0 2px rgb(255 255 255 / 0.9), 0 0 0 100vmax rgb(0 0 0 / 0.42);
   pointer-events: none;
 }
 .vx-lt-scan-hint { position: absolute; inset: auto 0 12px; color: #fff; font-size: 13px; font-weight: 650; text-align: center; text-shadow: 0 1px 6px rgb(0 0 0 / 0.7); }
-.vx-lt-scan-problem { margin-top: 16px; padding: 16px; border-radius: 16px; background: rgb(var(--ink-100) / 0.06); color: rgb(var(--ink-200)); font-size: 14.5px; line-height: 1.55; }
+.vx-lt-scan-problem { margin-top: 16px; padding: 16px; border-radius: 8px; background: rgb(var(--ink-100) / 0.06); color: rgb(var(--ink-200)); font-size: 14.5px; line-height: 1.55; }
 .vx-lt-scan-cancel {
   width: 100%;
   min-height: 48px;
@@ -571,14 +564,14 @@ html.reduce-motion .vx-lt-burst { animation-name: vx-lt-fade; }
   gap: 12px;
   margin-top: 16px;
   padding: 12px 14px;
-  border-radius: 18px;
-  background: rgb(var(--ember-500) / 0.1);
-  box-shadow: inset 0 0 0 1px rgb(var(--ember-500) / 0.28);
+  border-radius: 8px;
+  background: rgb(var(--ink-100) / 0.10);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.38);
   color: rgb(var(--ink-100));
   transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-lt-app:active { transform: scale(0.99); }
-.vx-lt-app img { flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; }
+.vx-lt-app img { flex-shrink: 0; width: 36px; height: 36px; border-radius: 8px; }
 .vx-lt-app-text { display: flex; flex: 1; flex-direction: column; min-width: 0; }
 .vx-lt-app-text b { font-size: 14.5px; font-weight: 750; }
 .vx-lt-app-text small { color: rgb(var(--ink-300)); font-size: 12.5px; line-height: 1.4; }
@@ -603,10 +596,10 @@ html.reduce-motion .vx-lt-burst { animation-name: vx-lt-fade; }
   place-items: center;
   width: 52px;
   height: 52px;
-  border-radius: 16px;
+  border-radius: 8px;
   background: var(--vx-glow);
   color: var(--vx-on-accent);
-  box-shadow: 0 12px 30px -14px rgb(var(--ember-500) / 0.7);
+  box-shadow: 0 12px 30px -14px rgb(0 0 0 / 0.50);
 }
 .vx-ltp-title { color: rgb(var(--ink-100)); font-family: var(--vx-font-display); font-size: 24px; font-weight: 800; line-height: 1.15; letter-spacing: -0.03em; }
 .vx-ltp-lede { margin-top: 4px; color: rgb(var(--ink-300)); font-size: 14px; line-height: 1.5; }
@@ -651,9 +644,9 @@ html.reduce-motion .vx-lt-burst { animation-name: vx-lt-fade; }
   padding: 20px 24px;
   border-radius: var(--vx-radius-panel);
   background:
-    radial-gradient(520px 200px at 0% 0%, rgb(var(--ember-500) / 0.14), transparent 70%),
+    radial-gradient(520px 200px at 0% 0%, rgb(var(--ink-100) / 0.14), transparent 70%),
     var(--lt-card);
-  box-shadow: inset 0 0 0 1px rgb(var(--ember-500) / 0.32);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.42);
 }
 .vx-lt-intro .vx-lt-h2 { margin: 4px 0; }
 .vx-lt-intro-text { max-width: 34rem; color: rgb(var(--ink-300)); font-size: 14px; line-height: 1.5; }
@@ -664,7 +657,7 @@ html.reduce-motion .vx-lt-burst { animation-name: vx-lt-fade; }
   padding: 14px 18px;
   border-radius: var(--vx-radius-panel);
   background: var(--lt-card);
-  box-shadow: inset 0 0 0 1px rgb(var(--ember-500) / 0.32);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.42);
 }
 .vx-lt-around-text { flex: 1 1 16rem; color: rgb(var(--ink-200)); font-size: 14px; line-height: 1.45; }
 .vx-ltp-how {

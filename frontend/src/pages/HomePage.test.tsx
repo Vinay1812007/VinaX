@@ -184,14 +184,14 @@ describe('HomePage 8.2', () => {
 });
 
 describe('HomePage — the top bar', () => {
-  it('opens VinaX AI from its button next to the theme and notifications', async () => {
+  it('opens VinaX AI from its button next to notifications', async () => {
     const slot = document.createElement('div');
     slot.id = 'vx-topbar-actions';
     document.body.appendChild(slot);
     onTestFinished(() => slot.remove());
     renderHome();
     const buttons = within(slot).getAllByRole('button').map((b) => b.getAttribute('aria-label'));
-    expect(buttons.slice(0, 3)).toEqual(['VinaX AI', 'Toggle theme', 'Notifications']);
+    expect(buttons.slice(0, 2)).toEqual(['VinaX AI', 'Notifications']);
     fireEvent.click(within(slot).getByRole('button', { name: 'VinaX AI' }));
     expect(await screen.findByText('VinaX AI page')).toBeTruthy();
   });

@@ -6,10 +6,7 @@
  *    mounts in #root, so everything without its own font-family inherited
  *    the DEVICE font — on Android phones with a theme font, VinaX rendered in
  *    the listener's novelty font. The face belongs on <body>.
- * 2. A flat style's opaque materials actually win in the light theme. The
- *    light glass rule in base.css is `html.light[data-template]:root`
- *    — specificity (0,3,1) — and a plain `html.light[data-template='pulse']`
- *    (0,2,1) lost to it, shipping see-through bars with no blur.
+ * 2. (1.15: there is no light theme any more; the one look is solid.)
  *
  * Plus the type contract: each style names its own display face, every
  * self-hosted face has its file and its licence, and no style lets a system
@@ -26,7 +23,7 @@ describe('the app text is in the style face, never the device font', () => {
     const html = read('index.html');
     const rootRule = /#root\s*\{([^}]*)\}/.exec(html)?.[1] ?? '';
     expect(rootRule).not.toMatch(/font-family/);
-    expect(html).toMatch(/\bbody\s*\{[^}]*font-family:\s*'Manrope'/);
+    expect(html).toMatch(/\bbody\s*\{[^}]*font-family:\s*'Figtree'/);
   });
 
   it('no style leads its body or display stack with a system font', () => {
@@ -41,9 +38,9 @@ describe('the app text is in the style face, never the device font', () => {
 });
 
 describe('display faces', () => {
+  // 1.15 — one face, Figtree (the owner console still ships Bricolage and Manrope itself).
   const FACES: Record<string, { file: string; licence: string | null }> = {
-    'Bricolage Grotesque': { file: 'bricolage-var.woff2', licence: 'bricolage-OFL.txt' },
-    Manrope: { file: 'manrope-var.woff2', licence: null },
+    Figtree: { file: 'figtree-var.woff2', licence: 'figtree-OFL.txt' },
   };
 
   it('every self-hosted face is declared and shipped, and the display face is licensed (SIL OFL)', () => {
@@ -56,27 +53,16 @@ describe('display faces', () => {
     }
   });
 
-  it('the look speaks in Bricolage Grotesque', () => {
+  it('the look speaks in Figtree, titles and body alike', () => {
     for (const id of STYLES) {
       const css = read(`src/styles/templates/${id}.css`);
-      expect(/--vx-font-display:\s*'([^']+)'/.exec(css)?.[1], id).toBe('Bricolage Grotesque');
+      expect(/--vx-font-display:\s*'([^']+)'/.exec(css)?.[1], id).toBe('Figtree');
     }
+    expect(read('src/styles/templates/base.css')).toMatch(/--tpl-font-body:\s*'Figtree'/);
   });
 
-  it('no retired face is still declared', () => {
+  it('no retired face is still declared in the app', () => {
     const css = read('src/styles/templates/base.css') + read('src/styles/index.css');
-    for (const gone of ['Inter', 'Figtree', 'Archivo', 'Baloo 2']) expect(css, gone).not.toContain(`font-family: '${gone}'`);
-  });
-});
-
-describe('the solid look stays opaque in the light theme', () => {
-  it('matches the light glass rule specificity for all four materials', () => {
-    for (const id of STYLES) {
-      const css = read(`src/styles/templates/${id}.css`);
-      // The selector also opens the style's colour block: find the one that sets the materials.
-      const blocks = [...css.matchAll(new RegExp(`html\\.light\\[data-template='${id}'\\]:root\\s*\\{([^}]*)\\}`, 'g'))].map((m) => m[1]);
-      const block = blocks.find((b) => b.includes('--vx-mat-')) ?? '';
-      for (const mat of ['thin', 'regular', 'chrome', 'thick']) expect(block, `${id} --vx-mat-${mat}`).toMatch(new RegExp(`--vx-mat-${mat}:\\s*rgb\\(var\\(--ink-950\\)\\);`));
-    }
+    for (const gone of ['Inter', 'Archivo', 'Baloo 2', 'Bricolage Grotesque', 'Manrope']) expect(css, gone).not.toContain(`font-family: '${gone}'`);
   });
 });

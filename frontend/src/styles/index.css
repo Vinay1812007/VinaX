@@ -7,8 +7,8 @@
 
    This file replaces five stacked design eras (v3.7 aurora, v3.8 modern
    minimal, flat re-skin, Noir Bloom, Glass 2.0 / 4.0). One source of truth:
-   tokens defined once in :root, theme-swapped through html.light / html.amoled
-   / html[data-accent=*], components read tokens (never redefine them), and
+   tokens defined once in :root (1.15: one dark look, no theme or accent
+   swaps), components read tokens (never redefine them), and
    every animation has a prefers-reduced-motion fallback.
 
    Cascade contract asserted by src/utils/theme.test.ts — do not change token
@@ -23,33 +23,33 @@
   initial-value: 0%;
 }
 
-/* 10.0 "Marigold" — the display face for headlines, page titles and the
-   brand moments (Bricolage Grotesque, SIL OFL 1.1, self-hosted). Body copy
-   stays Manrope. Only fetched when a display-styled heading renders. */
+/* 1.15 — one face for everything: Figtree (SIL OFL 1.1, self-hosted), a
+   clean geometric sans. Titles take its heavy weights, body copy the book
+   weights. Latin first; the extended set only downloads when a page needs it. */
 @font-face {
-  font-family: 'Bricolage Grotesque';
-  src: url('/fonts/bricolage-var.woff2') format('woff2-variations');
-  font-weight: 200 800;
+  font-family: 'Figtree';
+  src: url('/fonts/figtree-var.woff2') format('woff2-variations');
+  font-weight: 300 900;
   font-style: normal;
   font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
-
 @font-face {
-  font-family: 'Manrope';
-  src: url('/fonts/manrope-var.woff2') format('woff2-variations');
-  font-weight: 200 800;
+  font-family: 'Figtree';
+  src: url('/fonts/figtree-ext-var.woff2') format('woff2-variations');
+  font-weight: 300 900;
   font-style: normal;
   font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  /* 1.12 — Manrope's metrics on the system Arial while Manrope loads, so the
-     swap moves nothing (Manrope: ascent 1.066, descent 0.30, no line gap,
-     about 1% wider than Arial; measured in Chromium). */
-  font-family: 'Manrope Fallback';
+  /* Figtree's metrics on the system Arial while Figtree loads, so the swap
+     moves nothing (same face as the inline one in index.html). */
+  font-family: 'Figtree Fallback';
   src: local('Arial'), local('Helvetica Neue'), local('Liberation Sans');
-  size-adjust: 101%;
-  ascent-override: 105.5%;
-  descent-override: 29.7%;
+  size-adjust: 98%;
+  ascent-override: 96.9%;
+  descent-override: 25.5%;
   line-gap-override: 0%;
 }
 
@@ -69,10 +69,10 @@
   --vx-text-muted: rgb(var(--ink-400));
   --vx-accent: rgb(var(--ember-500));
   --vx-accent-hover: rgb(var(--ember-400));
-  --vx-on-accent: #1a0e06;
+  --vx-on-accent: #000;
   --vx-focus: rgb(var(--ember-400));
-  --vx-danger: #fda4af;
-  --vx-success: #86efac;
+  --vx-danger: #f3727f;
+  --vx-success: #1ed760;
   --vx-art-accent: rgb(var(--art));
   --vx-radius-control: 10px;
   /* v7.0.1 — one medium control scale: what a control LOOKS like. Touch targets stay
@@ -87,7 +87,7 @@
   --vx-shadow-overlay: 0 24px 64px -12px rgb(0 0 0 / 0.6);
   --vx-motion-fast: 140ms;
   --vx-motion-normal: 200ms;
-  --vx-font-display: 'Bricolage Grotesque', 'Manrope', system-ui, sans-serif;
+  --vx-font-display: 'Figtree', 'Figtree Fallback', system-ui, sans-serif;
   --vx-type-display: clamp(2.25rem, 4vw, 3.75rem);
   --vx-type-page: clamp(1.875rem, 3vw, 2.625rem);
   --vx-type-section: 1.375rem;
@@ -106,41 +106,38 @@
   --vx-space-12: 48px;
   --vx-space-16: 64px;
 
-  /* Surface scale — 9.0 "Encore": deep charcoal with a cool undertone.
-     ink-950 is the chrome (sidebar, player deck, tab bar), ink-900 the
-     workspace, ink-850 / ink-800 the raised tiers (cards, panels, hover).
-     AAA on --ink-900 with --ink-100. */
-  --ink-950: 13 9 15;
-  --ink-900: 19 14 22;
-  --ink-850: 27 20 31;
-  --ink-800: 37 28 42;
-  --ink-700: 56 44 62;
-  --ink-600: 98 86 104;
-  /* ink-500 is used as TEXT (captions, counts, hints), so it must clear AA:
-     146 148 162 measures 6.3:1 on ink-900 and 5.4:1 on ink-800 (4.5 needed).
-     Asserted in contrast.test.ts. */
-  --ink-500: 160 148 162;
-  --ink-400: 182 171 184;
-  --ink-300: 203 194 203;
-  --ink-200: 234 227 226;
-  --ink-100: 251 245 236;
+  /* Surface scale — 1.15: neutral black. ink-950 is the window behind the
+     panels (true black), ink-900 the panels and the page (#121212), ink-850
+     the hover tier, ink-800 / ink-700 raised cards, menus and dialogs. */
+  --ink-950: 0 0 0;
+  --ink-900: 18 18 18;
+  --ink-850: 26 26 26;
+  --ink-800: 31 31 31;
+  --ink-700: 42 42 42;
+  --ink-600: 114 114 114;
+  /* ink-300..500 are TEXT tiers (secondary copy, captions, counts), so they
+     must clear AA on ink-900 and ink-800. Asserted in contrast.test.ts. */
+  --ink-500: 150 150 150;
+  --ink-400: 167 167 167;
+  --ink-300: 179 179 179;
+  --ink-200: 222 222 222;
+  --ink-100: 255 255 255;
 
   /* Brand ramps (palette channels — components read the semantic names in
-     styles/tokens.css, not these). ember = the accent, Marigold orange by
-     default: play buttons, focus rings, active state, progress. tide = its
-     partner, Rose pink: live accents and the one gradient (ember → tide).
-     Accent and app-style selectors override both at runtime. */
-  --ember-600: 236 132 20;
-  --ember-500: 255 164 46;
-  --ember-400: 255 192 102;
-  --ember-300: 255 218 158;
-  --tide-500: 255 99 132;
-  --tide-400: 255 145 168;
+     styles/tokens.css, not these). ember = the accent, green: play buttons,
+     the playing row, switches, progress on hover. tide = its partner, the
+     same green family, so a gradient reads as one colour. */
+  --ember-600: 29 185 84;
+  --ember-500: 30 215 96;
+  --ember-400: 63 228 121;
+  --ember-300: 120 240 160;
+  --tide-500: 30 215 96;
+  --tide-400: 63 228 121;
 
   /* --art: living accent extracted from the currently playing artwork.
      Set at runtime by src/layouts/AppLayout.tsx; defaults to the accent so
      the very first page load doesn't leak a stale hue. */
-  --art: 255 164 46;
+  --art: 83 83 83;
 
   /* Art-tint alphas — used by light-mode glass surfaces to wash the frost
      with the current artwork's dominant color. Kept as tokens so future
@@ -152,8 +149,8 @@
 
   /* Aura palette — the home-page hero wash + settings glow. The names are
      historical: "violet" is the Marigold accent, "cyan" its Rose partner. */
-  --aura-violet: 255 164 46;
-  --aura-cyan: 255 99 132;
+  --aura-violet: 30 215 96;
+  --aura-cyan: 30 215 96;
   --aura-lime: 163 230 53;
 
   /* Glass material — ADJUSTABLE frosted translucency (Settings → Glass
@@ -274,247 +271,17 @@
   --track: rgba(255, 255, 255, 0.12);
 }
 
-/* Light theme — inverts the ink scale and switches glass to white surfaces
-   with cool-tinted hairlines. Every glass primitive re-themes automatically. */
-html.light {
-  color-scheme: light;
-  --vx-on-accent: #fff;
-  --vx-danger: #be123c;
-  --vx-success: #166534;
-
-  /* 9.0 — a warm paper canvas under white chrome. */
-  --ink-950: 255 252 247;
-  --ink-900: 250 245 237;
-  --ink-850: 244 237 227;
-  --ink-800: 236 227 214;
-  --ink-700: 216 205 192;
-  --ink-600: 156 142 138;
-  /* 5.7:1 on ink-900, 4.8:1 on ink-800. Stays one step lighter than ink-400
-     so the ramp remains monotonic. */
-  --ink-500: 104 88 96;
-  /* The muted-text tier clears AA on the canvas (6.2:1) and on cards (5.3:1). */
-  --ink-400: 94 79 88;
-  --ink-300: 74 60 70;
-  --ink-200: 42 30 40;
-  --ink-100: 24 14 22;
-
-  /* Accent ramps re-pitched for the light canvas. The dark ramps (indigo
-     500/400) measure 2.66–4.35:1 on light surfaces — illegible. Each tier
-     shifts ~2 shades darker; ember-400 (the text tier, 87 call sites) and
-     tide-400 clear 4.5:1 on ink-900 AND ink-800. Asserted in
-     src/__tests__/contrast.test.ts. */
-  --ember-600: 128 54 2;
-  --ember-500: 168 74 4;
-  --ember-400: 156 68 4;
-  --ember-300: 180 84 8;
-  --tide-500: 196 32 96;
-  --tide-400: 176 24 80;
-
-  --glass-bg: rgb(255 255 255 / var(--glass-alpha));
-  --glass-bg-strong: rgb(255 251 245 / var(--glass-alpha));
-  --glass-bg-muted: rgb(248 242 233 / var(--glass-alpha));
-  --glass-bg-hover: rgb(243 236 226 / max(var(--glass-alpha), 0.85));
-  --glass-bg-active: rgb(236 227 214 / max(var(--glass-alpha), 0.9));
-  --glass-border: rgba(48, 22, 34, 0.09);
-  --glass-border-strong: rgba(48, 22, 34, 0.16);
-  --glass-highlight: rgba(255, 255, 255, 0.75);
-  --glass-shadow: 0 4px 12px -6px rgba(48, 22, 34, 0.12);
-  --glass-shadow-strong: 0 -8px 20px -8px rgba(48, 22, 34, 0.12);
-
-  /* White frosted glass on the cream canvas. */
-  --vx-mat-thin: rgb(255 255 255 / calc(var(--glass-alpha) * 0.6));
-  --vx-mat-regular: rgb(255 255 255 / clamp(0.5, calc(var(--glass-alpha) - 0.1), 0.92));
-  --vx-mat-chrome: rgb(255 253 250 / clamp(0.8, calc(var(--glass-alpha) + 0.06), 0.97));
-  --vx-mat-thick: rgb(255 253 250 / clamp(0.86, calc(var(--glass-alpha) + 0.12), 0.98));
-  --vx-mat-sat: calc(140% + (1 - var(--glass-alpha)) * 50%);
-  --vx-mat-specular: rgb(255 255 255 / 0.95);
-  --vx-mat-hairline: rgb(48 22 34 / 0.1);
-  --vx-mat-art: 0.08;
-
-  --surface-solid: rgb(255 252 247);
-  --surface-input: rgb(248 242 233);
-  --surface-navbar: rgb(255 252 247);
-  --surface-sidebar: rgb(255 252 247);
-  --surface-modal: rgb(255 252 247);
-  --surface-player: rgb(255 252 247);
-
-  --lyric-active: 10 12 16;
-  --lyric-dim: 71 85 105;
-  --lyric-passed: rgba(15, 23, 42, 0.35);
-
-  --tile: rgba(255, 255, 255, 0.5);
-  --tile-2: rgba(255, 255, 255, 0.56);
-  --tile-hover: rgba(31, 38, 135, 0.07);
-  --track: rgba(31, 38, 135, 0.16);
-
-  /* Light-mode carries the "living glass" wash — every frosted surface
-     picks up a low-alpha art tint. Border alpha runs a little hotter than
-     the surface fill so the edge does the reading work. */
-  --art-tint-alpha: 0.10;
-  --art-tint-border-alpha: 0.28;
-  --art-corner-alpha: 0.13;
-
-  /* When nothing is playing, --art falls back to the :root default (the
-     indigo accent). On the pale light canvas that indigo reads too saturated
-     for a "resting" wash, so light mode overrides the resting hue to a soft
-     neutral slate. The moment applyArtColor() sets an inline style on <html>
-     this override is superseded. */
-  --art: 176 150 132;
-}
-
-/* AMOLED — true-black canvas for OLED displays. Rides the dark theme; only
-   the deepest tokens shift, so every component adapts without per-component
-   overrides. */
-html.amoled {
-  --ink-950: 0 0 0;
-  --ink-900: 2 2 3;
-  --ink-850: 9 9 12;
-  --ink-800: 17 18 23;
-  --glass-bg: rgb(8 8 11);
-  --glass-bg-muted: rgb(3 3 5);
-  --surface-solid: rgb(0 0 0);
-  --surface-navbar: rgb(0 0 0);
-  --surface-sidebar: rgb(var(--ink-950));
-  --surface-player: rgb(3 3 5);
-  --surface-modal: rgb(6 6 9);
-  /* AMOLED stays solid: true black does not frost. */
-  --vx-mat-thin: rgb(0 0 0);
-  --vx-mat-regular: rgb(9 9 12);
-  --vx-mat-chrome: rgb(0 0 0);
-  --vx-mat-thick: rgb(9 9 12);
-  --vx-mat-specular: rgb(255 255 255 / 0.05);
-  --vx-mat-art: 0;
-}
-html.amoled body {
-  background-color: #000;
-}
-
-/* ---------------------------------------------------------------------------
-   Accent themes — swapped at runtime via html[data-accent="…"]. Only the
-   brand ramps change; component styling stays identical.
-
-   The picker returned in Settings (roadmap O.4). accent='crimson' (the
-   default every device migrated to in settings v2) intentionally has no
-   block: it rides the :root Marigold ramp and the picker calls it
-   "Marigold" ('ember' below is shown as "Copper"). Every named accent below has a
-   matching `html.light[data-accent='…']` ramp further down — light surfaces
-   need much darker accents to stay AA; those ramps are generated from the
-   Tailwind palettes and GATED in src/__tests__/contrast.test.ts.
-   --------------------------------------------------------------------------- */
-/* 11.0 — "Marigold", by name: the :root ramp as an accent a listener can
-   keep in any app style (the default id 'crimson' now means "the style's own
-   colour", so Marigold needs an id of its own). */
-html[data-accent='marigold'] {
-  --ember-600: 236 132 20; --ember-500: 255 164 46; --ember-400: 255 192 102; --ember-300: 255 218 158;
-  --tide-500: 255 99 132; --tide-400: 255 145 168;
-}
-html[data-accent='ember'] {
-  /* 10.0 — "Copper": re-pitched redder and deeper so it no longer reads as the Marigold default. */
-  --ember-600: 176 90 52; --ember-500: 214 120 78; --ember-400: 230 152 116; --ember-300: 242 192 166;
-  --tide-500: 45 212 191; --tide-400: 94 234 212;
-}
-html[data-accent='ocean'] {
-  --ember-600: 2 132 199; --ember-500: 56 189 248; --ember-400: 125 211 252; --ember-300: 186 230 253;
-  --tide-500: 52 211 153; --tide-400: 110 231 183;
-}
-html[data-accent='violet'] {
-  --ember-600: 124 58 237; --ember-500: 167 139 250; --ember-400: 196 181 253; --ember-300: 221 214 254;
-  --tide-500: 244 114 182; --tide-400: 249 168 212;
-}
-html[data-accent='rose'] {
-  --ember-600: 225 29 72; --ember-500: 251 113 133; --ember-400: 253 164 175; --ember-300: 254 205 211;
-  --tide-500: 251 191 36; --tide-400: 252 211 77;
-}
-html[data-accent='emerald'] {
-  --ember-600: 5 150 105; --ember-500: 52 211 153; --ember-400: 110 231 183; --ember-300: 167 243 208;
-  --tide-500: 251 191 36; --tide-400: 252 211 77;
-}
-html[data-accent='sunset'] {
-  --ember-600: 234 88 12; --ember-500: 251 146 60; --ember-400: 253 186 116; --ember-300: 254 215 170;
-  --tide-500: 244 114 182; --tide-400: 249 168 212;
-}
-html[data-accent='aurora'] {
-  --ember-600: 99 102 241; --ember-500: 129 140 248; --ember-400: 165 180 252; --ember-300: 199 210 254;
-  --tide-500: 45 212 191; --tide-400: 94 234 212;
-}
-html[data-accent='mono'] {
-  --ember-600: 180 185 200; --ember-500: 226 230 240; --ember-400: 240 242 248; --ember-300: 248 250 252;
-  --tide-500: 148 163 184; --tide-400: 203 213 225;
-}
-html[data-accent='gold'] {
-  --ember-600: 202 138 4; --ember-500: 234 179 8; --ember-400: 250 204 21; --ember-300: 253 224 71;
-  --tide-500: 56 189 248; --tide-400: 125 211 252;
-}
-html[data-accent='azure'] {
-  --ember-600: 37 99 235; --ember-500: 59 130 246; --ember-400: 96 165 250; --ember-300: 147 197 253;
-  --tide-500: 45 212 191; --tide-400: 94 234 212;
-}
-
-/* Light-mode accent ramps — the same hues re-pitched dark enough for the pale
-   canvas. Pattern mirrors the default html.light ramp: 400 is the text tier
-   (must clear 4.5:1 on ink-900 AND ink-800), 300 one shade lighter, 500/600
-   progressively darker. Values are Tailwind palette shades chosen by an AA
-   solver; contrast.test.ts re-derives the math and fails on any regression. */
-html.light[data-accent='marigold'] {
-  --ember-600: 128 54 2; --ember-500: 168 74 4; --ember-400: 156 68 4; --ember-300: 180 84 8;
-  --tide-500: 196 32 96; --tide-400: 176 24 80;
-}
-html.light[data-accent='ember'] {
-  --ember-600: 84 32 14; --ember-500: 128 48 22; --ember-400: 140 52 24; --ember-300: 158 62 30;
-  --tide-500: 15 118 110; --tide-400: 17 94 89;
-}
-html.light[data-accent='ocean'] {
-  --ember-600: 8 47 73; --ember-500: 12 74 110; --ember-400: 7 89 133; --ember-300: 3 105 161;
-  --tide-500: 4 120 87; --tide-400: 6 95 70;
-}
-html.light[data-accent='violet'] {
-  --ember-600: 76 29 149; --ember-500: 91 33 182; --ember-400: 109 40 217; --ember-300: 124 58 237;
-  --tide-500: 219 39 119; --tide-400: 190 24 93;
-}
-html.light[data-accent='rose'] {
-  --ember-600: 136 19 55; --ember-500: 159 18 57; --ember-400: 190 18 60; --ember-300: 225 29 72;
-  --tide-500: 180 83 9; --tide-400: 146 64 14;
-}
-html.light[data-accent='emerald'] {
-  --ember-600: 2 44 34; --ember-500: 6 78 59; --ember-400: 6 95 70; --ember-300: 4 120 87;
-  --tide-500: 180 83 9; --tide-400: 146 64 14;
-}
-html.light[data-accent='sunset'] {
-  --ember-600: 67 20 7; --ember-500: 124 45 18; --ember-400: 154 52 18; --ember-300: 194 65 12;
-  --tide-500: 219 39 119; --tide-400: 190 24 93;
-}
-html.light[data-accent='aurora'] {
-  --ember-600: 55 48 163; --ember-500: 67 56 202; --ember-400: 79 70 229; --ember-300: 99 102 241;
-  --tide-500: 15 118 110; --tide-400: 17 94 89;
-}
-html.light[data-accent='mono'] {
-  --ember-600: 30 41 59; --ember-500: 51 65 85; --ember-400: 71 85 105; --ember-300: 100 116 139;
-  --tide-500: 71 85 105; --tide-400: 51 65 85;
-}
-html.light[data-accent='gold'] {
-  --ember-600: 66 32 6; --ember-500: 113 63 18; --ember-400: 133 77 14; --ember-300: 161 98 7;
-  --tide-500: 3 105 161; --tide-400: 7 89 133;
-}
-html.light[data-accent='azure'] {
-  --ember-600: 30 58 138; --ember-500: 30 64 175; --ember-400: 29 78 216; --ember-300: 37 99 235;
-  --tide-500: 15 118 110; --tide-400: 17 94 89;
-}
-
 /* ============================================================================
    Base — page canvas, typography, scroll, selection, focus.
    ========================================================================= */
 body {
   @apply bg-ink-900 text-ink-100 antialiased;
-  font-family: 'Manrope', 'Manrope Fallback', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui,
+  font-family: 'Figtree', 'Figtree Fallback', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui,
     'Segoe UI', Roboto, sans-serif;
-  font-feature-settings: 'ss01', 'cv11', 'ss03';
-  letter-spacing: -0.005em;
+  letter-spacing: 0;
   -webkit-tap-highlight-color: transparent;
   font-synthesis: none;
   transition: background-color 0.4s ease, color 0.4s ease;
-}
-html.light body {
-  background-color: rgb(250 245 237);
 }
 
 main {
@@ -531,17 +298,17 @@ h1, h2, h3, h4 { text-wrap: balance; }
 p { text-wrap: pretty; }
 
 ::selection {
-  background: rgb(var(--ember-500) / 0.28);
+  background: rgb(var(--ink-100) / 0.3);
   color: rgb(var(--ink-100));
 }
 
 /* Focus ring — visible on keyboard, hidden on mouse. Text inputs use a
    quieter border shift (declared with the glass-input rules below). */
 :focus-visible {
-  outline: 2px solid rgb(var(--ember-500));
+  outline: 2px solid rgb(var(--ink-100));
   outline-offset: 2px;
-  border-radius: 6px;
-  box-shadow: 0 0 0 5px rgb(var(--ember-500) / 0.32);
+  border-radius: 4px;
+  box-shadow: none;
 }
 /* TEXT-LIKE inputs only. This used to be a bare `input:focus-visible`, which
    also erased the ring on sliders, checkboxes and radios — keyboard users had
@@ -652,8 +419,8 @@ textarea:focus-visible {
 .glass-input:focus-within,
 .glass-search:focus,
 .glass-search:focus-within {
-  border-color: rgb(var(--ember-500) / 0.7);
-  box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.18);
+  border-color: rgb(var(--ink-100));
+  box-shadow: 0 0 0 1px rgb(var(--ink-100));
   background: var(--glass-bg-hover);
 }
 
@@ -675,9 +442,9 @@ textarea:focus-visible {
 }
 .glass-hover:active { transform: scale(0.985); }
 .glass-focus:focus-visible {
-  outline: 2px solid rgb(var(--ember-500));
+  outline: 2px solid rgb(var(--ink-100));
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgb(var(--ember-500) / 0.18);
+  box-shadow: none;
 }
 
 /* 10.1 — the frosted materials (tokens in :root). A component either takes
@@ -696,10 +463,6 @@ textarea:focus-visible {
 .vx-mat-regular { --mat-fill: var(--vx-mat-regular); --mat-blur: var(--vx-mat-regular-blur); }
 .vx-mat-chrome { --mat-fill: var(--vx-mat-chrome); --mat-blur: var(--vx-mat-chrome-blur); }
 .vx-mat-thick { --mat-fill: var(--vx-mat-thick); --mat-blur: var(--vx-mat-thick-blur); }
-html.amoled :is(.vx-mat-thin, .vx-mat-regular, .vx-mat-chrome, .vx-mat-thick) {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
 
 /* Explicit utility so components can compose an accent halo on demand. */
 .glass-accent-glow { box-shadow: var(--glass-accent-glow); }
@@ -773,9 +536,9 @@ button:active:not(:disabled) { filter: brightness(.96); }
   background: rgb(var(--ember-500));
   color: var(--vx-on-accent);
   min-height: var(--vx-control-h);
-  padding-inline: max(20px, 1.25em);
-  font-weight: 750;
-  letter-spacing: -0.005em;
+  padding-inline: max(24px, 1.5em);
+  font-weight: 700;
+  letter-spacing: 0;
   border: 1px solid rgb(var(--ember-500));
   /* 9.0 — every action is a pill. */
   border-radius: var(--radius-pill);
@@ -788,6 +551,7 @@ button:active:not(:disabled) { filter: brightness(.96); }
 .btn-premium:hover {
   background: rgb(var(--ember-400));
   border-color: rgb(var(--ember-400));
+  transform: scale(1.04);
 }
 .btn-primary:active,
 .btn-premium:active {
@@ -806,19 +570,20 @@ button:active:not(:disabled) { filter: brightness(.96); }
   min-height: var(--vx-control-h);
   padding-inline: max(18px, 1.1em);
   background: transparent;
-  border: 1px solid rgb(var(--ink-100) / 0.22);
+  border: 1px solid rgb(var(--ink-600));
   color: rgb(var(--ink-100));
-  font-weight: 650;
-  letter-spacing: -0.005em;
+  font-weight: 700;
+  letter-spacing: 0;
   border-radius: var(--radius-pill);
   white-space: nowrap;
   transition: transform var(--dur-quick) var(--ease-spring), background-color var(--dur-quick) var(--ease-standard),
     border-color var(--dur-quick) var(--ease-standard), color var(--dur-quick) var(--ease-standard);
 }
 .btn-secondary:hover {
-  background: var(--vx-hover, rgb(var(--ink-100) / 0.06));
-  border-color: rgb(var(--ink-100) / 0.5);
+  background: transparent;
+  border-color: rgb(var(--ink-100));
   color: rgb(var(--ink-100));
+  transform: scale(1.04);
 }
 .btn-secondary:active { transform: scale(var(--press-scale)); }
 
@@ -852,29 +617,40 @@ button:disabled,
 .bg-premium { background: var(--gradient-premium); }
 
 /* ============================================================================
-   Range inputs — accent-tinted track fill driven by --fill.
+   Range inputs (1.15) — a 4px white fill on a grey track, driven by --fill.
+   On hover the fill turns green and a 12px white knob appears.
    ========================================================================= */
 input[type='range'] {
   @apply appearance-none bg-transparent cursor-pointer;
   --fill: 0%;
+  --range-on: rgb(var(--ink-100));
 }
+input[type='range']:hover, input[type='range']:active, input[type='range']:focus-visible { --range-on: rgb(var(--ember-500)); }
 input[type='range']::-webkit-slider-runnable-track {
-  @apply h-1.5 rounded-full;
-  background: linear-gradient(to right, rgb(var(--ember-500)) var(--fill), rgb(var(--ink-600)) var(--fill));
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(to right, var(--range-on) var(--fill), rgb(var(--ink-100) / 0.3) var(--fill));
 }
 input[type='range']::-webkit-slider-thumb {
-  @apply appearance-none w-4 h-4 rounded-full bg-ember-500 shadow-md;
-  margin-top: -5px;
-  transition: transform 0.15s var(--ease-calm), box-shadow 0.15s var(--ease-calm);
+  @apply appearance-none rounded-full;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  background: rgb(var(--ink-100));
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.5);
+  transform: scale(0);
+  transition: transform var(--dur-instant) var(--ease-standard);
 }
-input[type='range']:hover::-webkit-slider-thumb {
-  transform: scale(1.2);
-  box-shadow: 0 0 0 6px rgb(var(--ember-500) / 0.18);
+input[type='range']:is(:hover, :active, :focus-visible)::-webkit-slider-thumb { transform: scale(1); }
+input[type='range']::-moz-range-track { height: 4px; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.3); }
+input[type='range']::-moz-range-progress { height: 4px; border-radius: var(--radius-pill); background: var(--range-on); }
+input[type='range']::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 50%; background: rgb(var(--ink-100)); transform: scale(0); }
+input[type='range']:is(:hover, :active, :focus-visible)::-moz-range-thumb { transform: scale(1); }
+/* Touch screens have no hover: the knob always shows. */
+@media (hover: none) {
+  input[type='range']::-webkit-slider-thumb { transform: scale(1); }
+  input[type='range']::-moz-range-thumb { transform: scale(1); }
 }
-input[type='range']:active::-webkit-slider-thumb { transform: scale(1.1); }
-input[type='range']::-moz-range-track { @apply h-1.5 rounded-full bg-ink-600; }
-input[type='range']::-moz-range-progress { @apply h-1.5 rounded-full bg-ember-500; }
-input[type='range']::-moz-range-thumb { @apply w-4 h-4 border-0 rounded-full bg-ember-500 shadow-md; }
 
 /* Touch: larger slider hit areas (seekbar + volume). */
 html.pointer-coarse input[type='range'] { min-height: 44px; }
@@ -910,9 +686,6 @@ html.pointer-coarse .overflow-x-auto::-webkit-scrollbar { display: none; }
   /* A slanted white stripe that flashes across every loading shape. */
   background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.2) 50%, transparent 70%);
   animation: vxShimmer 1.6s infinite;
-}
-html.light .skeleton::after {
-  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.75) 50%, transparent 70%);
 }
 
 /* Artwork tiles: a see-through VinaX "V" sits in the middle and brightens as
@@ -1034,13 +807,7 @@ html.vx-cursor-on .vx-ai-artifact-resize { cursor: col-resize !important; }
 
 /* A slightly thicker seek + volume track inside the desktop deck. Scoped to
    the deck so other range inputs (settings, EQ…) keep their compact geometry. */
-.vx-deck input[type='range']::-webkit-slider-runnable-track { height: 4px; }
-.vx-deck input[type='range']::-webkit-slider-thumb {
-  margin-top: -6px;
-  box-shadow: 0 0 0 4px rgb(var(--ember-500) / 0.18), 0 2px 6px rgba(0, 0, 0, 0.4);
-}
-.vx-deck input[type='range']::-moz-range-track { height: 4px; }
-.vx-deck input[type='range']::-moz-range-progress { height: 4px; }
+/* (1.15 — every slider has the deck's 4px track now.) */
 
 /* ============================================================================
    Theme toggle (sun ⇄ moon crossfade + rotate).
@@ -1048,8 +815,6 @@ html.vx-cursor-on .vx-ai-artifact-resize { cursor: col-resize !important; }
 .theme-ico { transition: transform 0.5s var(--ease-calm), opacity 0.35s ease; }
 html:not(.light) .theme-ico-sun { transform: translateY(14px) rotate(90deg); opacity: 0; }
 html:not(.light) .theme-ico-moon { transform: translateY(0) rotate(0deg); opacity: 1; }
-html.light .theme-ico-moon { transform: translateY(-14px) rotate(-90deg); opacity: 0; }
-html.light .theme-ico-sun { transform: translateY(0) rotate(0deg); opacity: 1; }
 
 /* ============================================================================
    Loading dots and the signature equalizer.
@@ -1097,28 +862,19 @@ html.light .theme-ico-sun { transform: translateY(0) rotate(0deg); opacity: 1; }
 .vx-blob-b { animation: vxBlobRev 22s ease-in-out infinite; }
 .vx-blob-c { animation: vxBlob 26s ease-in-out infinite reverse; }
 .vx-blob-d { animation: vxBlobRev 30s ease-in-out infinite; }
-html.light .vx-blob { opacity: 0.55; }
 
 /* ============================================================================
    Home hero + editorial surfaces.
    ========================================================================= */
 .vx-hero-wash { /* Home page hero radial-gradient wash — opacity trimmed in light. */ }
-html.light .vx-hero-wash { opacity: 0.5; }
-html.light .hero-animated { filter: brightness(0.96); }
-html.light .bg-premium,
-html.light .btn-premium { filter: brightness(0.96) saturate(0.95); }
 
 .aura-eyebrow { color: rgb(var(--ember-400)); }
-html.light .aura-eyebrow { color: rgb(var(--ember-600)); }
 
 .vx-reason {
   background: rgb(var(--tide-500) / 0.12);
   color: rgb(var(--tide-400));
 }
-html.light .vx-reason {
-  background: rgb(var(--tide-500) / 0.09);
-  color: rgb(var(--tide-500));
-}
+
 .vx-nowcard { background: rgb(var(--art) / 0.14); }
 
 /* Slow ambient gradient drift for the hero banner. */
@@ -1228,17 +984,11 @@ html.light .vx-reason {
   --ksung-from: var(--ember-300);
   --ksung-to: var(--ember-400);
 }
-html.light .karaoke-fill {
-  --kstripe: var(--ember-500);
-  --ksung-from: var(--ember-600);
-  --ksung-to: var(--ember-400);
-  filter: none;
-}
+
 @keyframes lyr-flash {
   0% { filter: brightness(2.1) drop-shadow(0 0 22px rgb(var(--kstripe) / 0.75)); }
   100% { filter: brightness(1) drop-shadow(0 0 14px rgb(var(--ksung-to) / 0.28)); }
 }
-html.light .karaoke-fill { animation-name: lyr-pop, none; }
 
 .vx-lyric-active {
   color: rgb(var(--lyric-active));
@@ -1247,7 +997,6 @@ html.light .karaoke-fill { animation-name: lyr-pop, none; }
 .vx-lyric-active:has(.karaoke-fill) { text-shadow: none; }
 .vx-lyric-dim { color: rgb(var(--lyric-dim)); }
 .vx-lyric-passed { color: var(--lyric-passed); }
-html.light .vx-lyric-active { text-shadow: none; }
 
 /* ============================================================================
    Perf niceties.
@@ -1326,10 +1075,7 @@ html.device-tv :focus-visible {
     --glass-blur: max(0px, var(--glass-blur-boost) * 22px);
     --glass-blur-strong: max(0px, 4px + var(--glass-blur-boost) * 26px);
   }
-  html.light {
-    --glass-blur: max(0px, 4px + var(--glass-blur-boost) * 26px);
-    --glass-blur-strong: max(0px, 8px + var(--glass-blur-boost) * 30px);
-  }
+  
   /* The materials get the same phone cap: a lighter blur that still follows
      the Blur dial (default ≈ 16–22px), so the tab bar, mini player and top
      bar stay cheap to composite while a list scrolls under them. */
@@ -1340,97 +1086,6 @@ html.device-tv :focus-visible {
     --vx-mat-thick-blur: calc(14px + var(--glass-blur-boost) * 22px);
   }
 }
-
-/* ============================================================================
-   Living Glass — light-mode art tint (v1.4.1)
-
-   Dark mode already threads --art through the mini-player halo, the bottom-
-   player top edge and the dock pill. Light mode did not, so the frosted-white
-   surfaces felt inert while music played. This block adds a low-alpha wash
-   of the currently-playing artwork's dominant color to every glass primitive
-   in light mode only — dark stays visually identical.
-
-   Alphas are driven by --art-tint-alpha / --art-tint-border-alpha so future
-   tuning is a one-line change. No !important, no motion (colors update the
-   moment applyArtColor() rewrites --art on <html>), no accessibility hit —
-   the wash is a max ~10% overlay on opaque white, so dark-slate body copy
-   stays well above WCAG AA on every surface.
-   ========================================================================= */
-
-/* Top-of-page bloom: a soft radial pair in the artwork color, biased to the
-   corners so it reads as ambient light spilling in. Fixed to the viewport
-   with pointer-events: none — behaves like a wallpaper effect. When nothing
-   is playing, --art resolves to the neutral slate declared in html.light so
-   the wash reads as a tasteful cool haze rather than a saturated stain. */
-html.light body::before {
-  content: '';
-  position: fixed;
-  inset: 0 0 auto 0;
-  height: 520px;
-  pointer-events: none;
-  z-index: 0;
-  background:
-    radial-gradient(60% 42% at 20% 0%, rgb(var(--art) / 0.10), transparent 66%),
-    radial-gradient(52% 38% at 80% 0%, rgb(var(--art) / 0.08), transparent 68%);
-  transition: background 0.6s ease;
-}
-
-/* Non-card glass surfaces: one linear wash from the top-left corner. */
-html.light .glass-panel,
-html.light .glass-navbar,
-html.light .glass-sidebar,
-html.light .glass-modal,
-html.light .glass-sheet {
-  background-image: linear-gradient(
-    135deg,
-    rgb(var(--art) / var(--art-tint-alpha)),
-    transparent 60%
-  );
-}
-
-/* Cards get the linear wash PLUS the design-doc corner glow (radial 170px
-   at top-right, .13). Dark mode's corner glow is unchanged (still absent —
-   left to the existing card recipe so this pass stays light-only). */
-html.light .glass-card {
-  background-image:
-    linear-gradient(
-      135deg,
-      rgb(var(--art) / var(--art-tint-alpha)),
-      transparent 60%
-    ),
-    radial-gradient(
-      170px circle at 100% 0%,
-      rgb(var(--art) / var(--art-corner-alpha)),
-      transparent 65%
-    );
-}
-
-/* Borders pick up a hint of art — the edge is where the tint reads first. */
-html.light .glass-card,
-html.light .glass-panel,
-html.light .glass-modal {
-  border-color: rgb(var(--art) / var(--art-tint-border-alpha));
-}
-html.light .glass-navbar { border-bottom-color: rgb(var(--art) / var(--art-tint-border-alpha)); }
-html.light .glass-sidebar { border-right-color: rgb(var(--art) / var(--art-tint-border-alpha)); }
-html.light .glass-sheet { border-top-color: rgb(var(--art) / var(--art-tint-border-alpha)); }
-
-/* Sidebar top bloom — a soft flow of the artwork color pouring in from the
-   navbar edge. Scoped to light mode so dark stays as-is. Sidebar is already
-   an overflow-y-auto column; ::before is absolute-positioned inside it and
-   the existing scroll clip keeps the bloom within the rounded sidebar box. */
-html.light .glass-sidebar { position: relative; }
-html.light .glass-sidebar > * { position: relative; z-index: 1; }
-html.light .glass-sidebar::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 120px;
-  background: linear-gradient(180deg, rgb(var(--art) / 0.14), transparent 60%);
-  pointer-events: none;
-  z-index: 0;
-}
-
 
 /* ============================================================================
    Keyframes — every animation the app uses. Reduced-motion cascade below
@@ -1611,12 +1266,7 @@ html.reduce-motion *::after {
     --ink-400: 204 194 204;
     --ink-500: 188 177 189;
   }
-  html.light {
-    --glass-border: rgba(48, 22, 34, 0.28);
-    --glass-border-strong: rgba(48, 22, 34, 0.4);
-    --ink-400: 68 54 64;
-    --ink-500: 82 68 78;
-  }
+  
 }
 
 /* Marquee under reduced motion: the glide is stopped by the block above, so
@@ -1654,34 +1304,9 @@ html.boot-still *, html.boot-still *::before, html.boot-still *::after {
   transition-property: none !important;
 }
 
-
-
-/* ============================================================================
-   v5.11.6 — Light and Black modes finished. Dark = charcoal + bright green
-   with black labels; Light = clean white, deep-green fills with WHITE labels
-   (the light accent is darkened for AA text, so black-on-green no longer
-   reads); Black = pure OLED black. Everything below is light-mode only.
-   ========================================================================= */
-html.light .btn-primary,
-html.light .btn-premium,
-html.light .card-play,
-html.light .bg-ember-500.text-black,
-html.light .bg-ember-400.text-black { color: #fff; }
-html.light .btn-primary:hover,
-html.light .btn-premium:hover { background: rgb(var(--ember-400)); border-color: rgb(var(--ember-400)); }
-html.light .btn-secondary { border-color: rgb(var(--ink-600)); }
-html.light .btn-secondary:hover { border-color: rgb(var(--ink-100)); }
-/* Shell panels get a hairline instead of black: white on white needs an edge. */
-html.light .glass-sidebar { border-right: 1px solid rgb(var(--ink-800)); }
-html.light .vx-dock { border-top: 1px solid rgb(var(--ink-800)); }
-/* Focus ring: a dark halo, the white one vanished on the light canvas. */
-html.light :focus-visible { box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.16); outline-color: rgb(var(--ink-100)); }
-html.light .btn-primary:focus-visible,
-html.light .card-play:focus-visible { outline-color: rgb(var(--ember-500)); }
-
 /* v5.17.0 — high contrast: brighter secondary text, visible borders, no glass fog. */
 html.hc { --ink-300: 230 230 230; --ink-400: 205 205 205; --ink-500: 170 170 170; --glass-alpha: 0.98; }
-html.hc.light { --ink-300: 40 40 40; --ink-400: 60 60 60; --ink-500: 80 80 80; }
+
 html.hc .border-glass, html.hc [class*='border-ink-'] { border-color: rgb(var(--ink-500)) !important; }
 html.hc a:focus-visible, html.hc button:focus-visible { outline: 3px solid rgb(var(--ember-400)); outline-offset: 2px; }
 
@@ -1700,10 +1325,10 @@ input[type='range']:focus-visible {
   box-shadow: none;
 }
 input[type='range']:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 0 0 2px rgb(var(--ink-900)), 0 0 0 4px rgb(var(--ember-400));
+  box-shadow: 0 0 0 2px rgb(var(--ink-900)), 0 0 0 4px rgb(var(--ink-100));
 }
 input[type='range']:focus-visible::-moz-range-thumb {
-  box-shadow: 0 0 0 2px rgb(var(--ink-900)), 0 0 0 4px rgb(var(--ember-400));
+  box-shadow: 0 0 0 2px rgb(var(--ink-900)), 0 0 0 4px rgb(var(--ink-100));
 }
 input[type='checkbox']:focus-visible,
 input[type='radio']:focus-visible {

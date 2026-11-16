@@ -232,7 +232,7 @@
 .vx-ds-mini-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: linear-gradient(90deg, var(--player-seek, var(--accent)) var(--p), transparent var(--p)); }
 .vx-ds-full { position: relative; display: grid; width: min(100%, 420px); padding: var(--space-4) var(--space-5) var(--space-6); overflow: hidden; border-radius: var(--radius-2xl); isolation: isolate; box-shadow: var(--elev-4); }
 .vx-ds-full-bg { position: absolute; inset: -20%; z-index: -1; background: radial-gradient(50% 40% at 40% 30%, #be123c, transparent 70%), radial-gradient(50% 50% at 70% 80%, #7c2d12, transparent 70%), var(--surface-1); filter: blur(40px) saturate(1.2); opacity: 0.9; }
-html.light .vx-ds-full-bg { opacity: 0.35; }
+
 .vx-ds-full-top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .vx-ds-full-meta { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .vx-ds-full-meta strong { display: block; font-family: var(--font-display); font-size: var(--type-title-lg); font-weight: 800; letter-spacing: var(--tracking-title); color: var(--text-1); }

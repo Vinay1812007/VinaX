@@ -7,7 +7,7 @@
 .vx-episodes { display: flex; flex-direction: column; gap: 2px; }
 .vx-episode { align-items: flex-start; }
 .vx-episode .vx-track-play { align-items: flex-start; gap: 16px; padding: 12px 0; }
-.vx-episode .vx-track-art { width: 72px; height: 72px; border-radius: 12px; }
+.vx-episode .vx-track-art { width: 72px; height: 72px; border-radius: 8px; }
 .vx-episode .vx-track-more { align-self: center; }
 .vx-episode-meta {
   display: block;

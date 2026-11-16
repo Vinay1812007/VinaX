@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { ProfileSettings } from '@/features/social/ProfileSettings';
 import { useLocation } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -42,8 +42,6 @@ import { DISCOVERY_OPTIONS, QUEUE_LANGUAGE_OPTIONS, intensityWords } from '@/fea
 import { PersonalizationPreview } from '@/features/personalization/PersonalizationPreview';
 import { HomeSettings } from '@/features/home/HomeSettings';
 import { SoftMuteList } from '@/features/personalization/SoftMuteList';
-import { ACCENT_OPTIONS } from '@/constants/accents';
-import { templateOption } from '@/constants/templates';
 import { COUNTRIES, REGIONS } from '@/constants/regions';
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal, setLocal } from '@/services/storage/local';
@@ -531,39 +529,10 @@ export default function SettingsPage() {
             <LinkRow to="/stats" label="Listening stats" note="Your minutes, top songs and listening calendar." keywords="stats minutes calendar profile" />
           </Section>
 
-          <Section title="Appearance" id="appearance" lede="Language, theme, colour and size.">
+          <Section title="Appearance" id="appearance" lede="Language, size and motion.">
             <Row stack label="App language" keywords="display language interface">
               <Segmented label="App language" value={s.uiLanguage} onChange={s.setUiLanguage} options={UI_LANGS.map((l) => ({ value: l.id, label: l.label }))} />
             </Row>
-            <Row stack label="Theme" keywords="dark light black system auto day night mode amoled">
-              <Segmented
-                label="Theme"
-                value={s.theme}
-                onChange={s.setTheme}
-                options={[
-                  { value: 'dark', label: 'Dark' },
-                  { value: 'amoled', label: 'Black' },
-                  { value: 'light', label: 'Light' },
-                  { value: 'system', label: 'System' },
-                  { value: 'auto', label: 'Auto', title: 'Auto (day/night)' },
-                ]}
-              />
-            </Row>
-            <Group title="Colour">
-              <Block label="Accent color" note="Play buttons, progress, focus and everything you have chosen. The first swatch is VinaX’s own amber." keywords="colour highlight buttons links player marigold copper style">
-                <AccentSwatches value={s.accent} onChange={s.setAccent} template={s.template} />
-              </Block>
-              <Row stack label="Custom accent" note="Any colour. VinaX builds a readable palette from it." keywords="colour color palette hex">
-                <div className="flex items-center gap-2">
-                  <input type="color" aria-label="Custom accent colour" value={s.accentCustom ?? '#ffa42e'} onChange={(e) => s.setAccentCustom(e.target.value)} className="vx-set-color" />
-                  <input value={s.accentCustom ?? ''} onChange={(e) => { const v = e.target.value.trim(); if (/^#[0-9a-fA-F]{6}$/.test(v)) s.setAccentCustom(v); }} placeholder="#ffa42e" maxLength={7} className="vx-set-input w-28 font-mono" aria-label="Custom accent hex" />
-                  {s.accent === 'custom' && <RowButton onClick={() => s.setAccentCustom(null)}>Use a preset</RowButton>}
-                </div>
-              </Row>
-              <Row label="Dynamic theme" note="Takes the accent from the playing song’s artwork." keywords="experimental colour">
-                <Toggle on={s.dynamicTheme} onChange={s.setDynamicTheme} label="Dynamic theme" />
-              </Row>
-            </Group>
             <Group title="Size and comfort">
               <Row stack label="Display size" note="Text and controls, everywhere." keywords="scale font zoom">
                 <Segmented label="Display size" value={s.uiScale} onChange={s.setUiScale} options={[{ value: 'sm', label: 'Small' }, { value: 'md', label: 'Default' }, { value: 'lg', label: 'Large' }]} />
@@ -1081,49 +1050,5 @@ export default function SettingsPage() {
       )}
       </SettingsViewCtx.Provider>
     </SettingsSearchCtx.Provider>
-  );
-}
-
-/** Ten preset accents as one radio group (arrow keys move the choice), with the chosen one's name under it. */
-function AccentSwatches({ value, onChange, template }: { value: string; onChange: (id: (typeof ACCENT_OPTIONS)[number]['id']) => void; template: string }) {
-  // The default accent is the app style's own colour: show that style's swatch.
-  const styleDot = templateOption(template).swatch.accent;
-  const ids = ACCENT_OPTIONS.map((a) => a.id);
-  const at = ids.indexOf(value as (typeof ids)[number]);
-  const refs = useRef<Array<HTMLButtonElement | null>>([]);
-  const move = (e: KeyboardEvent, i: number): void => {
-    const last = ids.length - 1;
-    const next = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? (i === last ? 0 : i + 1) : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? (i === 0 ? last : i - 1) : e.key === 'Home' ? 0 : e.key === 'End' ? last : -1;
-    if (next < 0) return;
-    e.preventDefault();
-    onChange(ids[next]);
-    refs.current[next]?.focus();
-  };
-  return (
-    <>
-      <div className="vx-set-swatches" role="radiogroup" aria-label="Accent color">
-        {ACCENT_OPTIONS.map((a, i) => (
-          <button
-            key={a.id}
-            ref={(el) => {
-              refs.current[i] = el;
-            }}
-            type="button"
-            role="radio"
-            aria-checked={value === a.id}
-            aria-label={`${a.label} accent`}
-            title={a.label}
-            tabIndex={i === (at < 0 ? 0 : at) ? 0 : -1}
-            onKeyDown={(e) => move(e, i)}
-            onClick={() => onChange(a.id)}
-            className="vx-set-swatch"
-            style={{ backgroundColor: a.id === 'crimson' ? styleDot : a.dot }}
-          />
-        ))}
-      </div>
-      <p className="vx-set-swatch-name">
-        {value === 'custom' ? 'Custom colour' : <b>{ACCENT_OPTIONS[at < 0 ? 0 : at].label}</b>}
-      </p>
-    </>
   );
 }

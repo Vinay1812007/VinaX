@@ -44,7 +44,6 @@ describe('glassAlpha', () => {
     const css = readFileSync(resolve(__dirname, '../styles/index.css'), 'utf8');
     expect(css).toContain('--glass-alpha: 0.78');
     expect(css).toMatch(/--glass-bg: rgb\(27 20 31 \/ var\(--glass-alpha\)\)/);
-    expect(css).toMatch(/--glass-bg: rgb\(255 255 255 \/ var\(--glass-alpha\)\)/);
     // 4.13 split: blur is its own dial (--glass-blur-boost 0..1) — sharp
     // glass and hazy solids are now BOTH reachable, which the single alpha
     // dial couldn't express.
@@ -91,7 +90,6 @@ describe('frosted materials keep text legible over any backdrop', () => {
   /** The fill composited over a backdrop at the fill's floor alpha. */
   const over = (fill: number[], alpha: number, backdrop: number[]): number[] => fill.map((c, i) => c * alpha + backdrop[i] * (1 - alpha));
   const WHITE = [255, 255, 255];
-  const BLACK = [0, 0, 0];
 
   it('the four tiers exist, follow both dials and are floored where text sits', () => {
     for (const t of ['thin', 'regular', 'chrome', 'thick']) {
@@ -102,38 +100,34 @@ describe('frosted materials keep text legible over any backdrop', () => {
     expect(index).toContain('--vx-mat-thin: rgb(var(--ink-950) / calc(var(--glass-alpha)');
     expect(index).toContain('--vx-mat-chrome: rgb(var(--ink-950) / clamp(0.8, calc(var(--glass-alpha) + 0.06), 0.97))');
     expect(index).toContain('--vx-mat-thick: rgb(var(--ink-850) / clamp(0.86, calc(var(--glass-alpha) + 0.12), 0.98))');
-    expect(index).toContain('--vx-mat-chrome: rgb(255 253 250 / clamp(0.8, calc(var(--glass-alpha) + 0.06), 0.97))');
-    expect(index).toContain('--vx-mat-thick: rgb(255 253 250 / clamp(0.86, calc(var(--glass-alpha) + 0.12), 0.98))');
-    expect(shell).toContain('--mat-fill: rgb(var(--ink-800) / clamp(0.86, calc(var(--glass-alpha) + 0.12), 0.98))');
-    expect(shell).toContain('--mat-fill: rgb(var(--ink-950) / clamp(0.92, calc(var(--glass-alpha) + 0.16), 0.98))');
+    // 1.15 — the snackbar is a solid blue notice, whatever the dial says.
+    expect(shell).toContain('--mat-fill: rgb(32 107 196);');
+  });
+
+  it('1.15 — the snackbar\'s white text clears AA on its blue', () => {
+    expect(ratio(WHITE, [32, 107, 196])).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('1.15 — the one look is solid: every material is opaque there', () => {
+    const look = readFileSync(resolve(__dirname, '../styles/templates/vinax.css'), 'utf8');
+    for (const t of ['thin', 'regular', 'chrome', 'thick']) expect(look).toMatch(new RegExp(`--vx-mat-${t}: rgb\\(var\\(--ink-\\d+\\)\\);`));
   });
 
   it('dark: muted text on the chrome, body text on menus and snackbars clear AA over a white cover', () => {
-    const ink950 = [13, 9, 15];
-    const ink850 = [27, 20, 31];
-    const ink800 = [37, 28, 42];
-    const ink400 = [182, 171, 184];
-    const ink100 = [251, 245, 236];
-    const ember400 = [255, 192, 102];
+    // 1.15 — the black-and-green inks (index.css :root).
+    const ink950 = [0, 0, 0];
+    const ink850 = [26, 26, 26];
+    const ink800 = [31, 31, 31];
+    const ink400 = [167, 167, 167];
+    const ink100 = [255, 255, 255];
+    const ember400 = [63, 228, 121];
     expect(ratio(ink400, over(ink950, 0.8, WHITE))).toBeGreaterThanOrEqual(4.5);
     expect(ratio(ink400, over(ink850, 0.86, WHITE))).toBeGreaterThanOrEqual(4.5);
     expect(ratio(ink100, over(ink800, 0.86, WHITE))).toBeGreaterThanOrEqual(4.5);
     expect(ratio(ember400, over(ink800, 0.86, WHITE))).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('light: the same text tiers clear AA on white glass over a black cover', () => {
-    const glass = [255, 253, 250];
-    const ink400 = [94, 79, 88];
-    const ink100 = [24, 14, 22];
-    const ember400 = [156, 68, 4];
-    expect(ratio(ink400, over(glass, 0.8, BLACK))).toBeGreaterThanOrEqual(4.5);
-    expect(ratio(ink400, over(glass, 0.86, BLACK))).toBeGreaterThanOrEqual(4.5);
-    expect(ratio(ink100, over(glass, 0.92, BLACK))).toBeGreaterThanOrEqual(4.5);
-    expect(ratio(ember400, over(glass, 0.92, BLACK))).toBeGreaterThanOrEqual(4.5);
-  });
-
-  it('AMOLED stays solid, and both translucency fallbacks cover the materials', () => {
-    expect(index).toMatch(/html\.amoled\s*\{[^}]*--vx-mat-chrome:\s*rgb\(0 0 0\)/);
+  it('both translucency fallbacks cover the materials', () => {
     const supportsNot = index.slice(index.indexOf('@supports not ((backdrop-filter'));
     expect(supportsNot.slice(0, supportsNot.indexOf('}\n}'))).toContain('.vx-mat-chrome');
     const reduced = index.slice(index.indexOf('@media (prefers-reduced-transparency: reduce)'));

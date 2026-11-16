@@ -55,13 +55,15 @@
 .vx-btn--sm::after { content: ''; position: absolute; inset: -4px 0; }
 
 .vx-btn--primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
-.vx-btn--primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
-.vx-btn--secondary { background: transparent; border-color: var(--line-3); color: var(--text-1); font-weight: 650; }
-.vx-btn--secondary:hover:not(:disabled) { background: rgb(var(--ink-100) / 0.06); border-color: rgb(var(--ink-100) / 0.45); }
-.vx-btn--tonal { background: var(--accent-soft); color: var(--accent-text); }
-.vx-btn--tonal:hover:not(:disabled) { background: var(--accent-soft-hover); }
-.vx-btn--ghost { background: transparent; color: var(--text-2); font-weight: 650; }
-.vx-btn--ghost:hover:not(:disabled) { background: rgb(var(--ink-100) / 0.06); color: var(--text-1); }
+.vx-btn--primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); transform: scale(1.04); }
+/* 1.15 — secondary is an outline that turns white on hover; tonal is a white
+   wash (not a green one); ghost is bare text that brightens. */
+.vx-btn--secondary { background: transparent; border-color: rgb(var(--ink-600)); color: var(--text-1); font-weight: 700; }
+.vx-btn--secondary:hover:not(:disabled) { background: transparent; border-color: rgb(var(--ink-100)); transform: scale(1.04); }
+.vx-btn--tonal { background: rgb(var(--ink-100) / 0.1); color: var(--text-1); }
+.vx-btn--tonal:hover:not(:disabled) { background: rgb(var(--ink-100) / 0.16); transform: scale(1.04); }
+.vx-btn--ghost { background: transparent; color: var(--text-2); font-weight: 700; }
+.vx-btn--ghost:hover:not(:disabled) { background: transparent; color: var(--text-1); transform: scale(1.04); }
 /* Danger is tinted, never solid: with a red app style a solid red would read as
    the main action. The red text and tint still say "destructive" on any accent. */
 .vx-btn--danger { background: color-mix(in srgb, var(--danger-solid) 16%, transparent); color: var(--danger); }
@@ -72,7 +74,7 @@
 .vx-btn--primary[aria-busy='true'] > .vx-spinner { color: var(--text-on-accent); }
 .vx-btn--secondary[aria-busy='true'] > .vx-spinner,
 .vx-btn--ghost[aria-busy='true'] > .vx-spinner { color: var(--text-1); }
-.vx-btn--tonal[aria-busy='true'] > .vx-spinner { color: var(--accent-text); }
+.vx-btn--tonal[aria-busy='true'] > .vx-spinner { color: var(--text-1); }
 .vx-btn--danger[aria-busy='true'] > .vx-spinner { color: var(--danger); }
 
 /* ---- Icon button. ------------------------------------------------------- */
@@ -97,7 +99,7 @@
 }
 .vx-ibtn::after { content: ''; position: absolute; inset: min(0px, calc((var(--ibtn) - 44px) / 2)); }
 .vx-ibtn > svg { width: 55%; height: 55%; }
-.vx-ibtn:hover:not(:disabled) { background: rgb(var(--ink-100) / 0.08); color: var(--text-1); }
+.vx-ibtn:hover:not(:disabled) { background: transparent; color: var(--text-1); transform: scale(1.04); }
 .vx-ibtn:active:not(:disabled) { transform: scale(0.92); filter: none; }
 .vx-ibtn:disabled { opacity: 0.4; cursor: not-allowed; }
 .vx-ibtn--sm { --ibtn: 36px; }
@@ -125,17 +127,17 @@
 .vx-switch-row { display: flex; align-items: center; gap: var(--space-4); justify-content: space-between; cursor: pointer; }
 .vx-switch-row[data-disabled] { cursor: not-allowed; opacity: 0.5; }
 .vx-switch-text { min-width: 0; }
-.vx-switch-label { display: block; color: var(--text-1); font-weight: 650; font-size: var(--type-body); }
+.vx-switch-label { display: block; color: var(--text-1); font-weight: 400; font-size: var(--type-body); }
 .vx-switch-desc { display: block; margin-top: 2px; color: var(--text-3); font-size: var(--type-meta); line-height: var(--leading-body); }
 .vx-switch {
   position: relative;
   flex: none;
-  width: 46px;
-  height: 28px;
+  width: 40px;
+  height: 24px;
   padding: 0;
   border: 0;
   border-radius: var(--radius-pill);
-  background: rgb(var(--ink-100) / 0.18);
+  background: rgb(var(--ink-600));
   cursor: inherit;
   transition: background-color var(--dur-base) var(--ease-standard);
 }
@@ -144,22 +146,24 @@
   position: absolute;
   top: 3px;
   left: 3px;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  background: #fff;
+  /* 1.15 — a black knob on a grey track, the track green once on. */
+  background: rgb(var(--ink-950));
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
   transition: transform var(--dur-slow) var(--ease-spring), width var(--dur-quick) var(--ease-standard);
 }
 .vx-switch[aria-checked='true'] { background: var(--accent); }
-.vx-switch[aria-checked='true'] .vx-switch-thumb { transform: translateX(18px); }
-.vx-switch:active .vx-switch-thumb { width: 26px; }
-.vx-switch[aria-checked='true']:active .vx-switch-thumb { transform: translateX(14px); }
+.vx-switch[aria-checked='true'] .vx-switch-thumb { transform: translateX(16px); }
+.vx-switch:hover { filter: brightness(1.1); transform: scale(1.04); }
+.vx-switch:active .vx-switch-thumb { width: 22px; }
+.vx-switch[aria-checked='true']:active .vx-switch-thumb { transform: translateX(12px); }
 
 /* ---- Slider. ------------------------------------------------------------ */
 .vx-slider { display: grid; gap: var(--space-2); }
 .vx-slider-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); }
-.vx-slider-label { color: var(--text-1); font-weight: 650; font-size: var(--type-body); }
+.vx-slider-label { color: var(--text-1); font-weight: 400; font-size: var(--type-body); }
 .vx-slider-value { color: var(--text-3); font-size: var(--type-meta); font-variant-numeric: tabular-nums; }
 .vx-slider input {
   --fill: 50%;
@@ -173,12 +177,12 @@
   cursor: pointer;
 }
 .vx-slider input::-webkit-slider-runnable-track {
-  height: 6px;
+  height: 4px;
   border-radius: var(--radius-pill);
-  background: linear-gradient(90deg, var(--accent) var(--fill), rgb(var(--ink-100) / 0.16) var(--fill));
+  background: linear-gradient(90deg, var(--range-on, var(--accent)) var(--fill), rgb(var(--ink-100) / 0.3) var(--fill));
 }
-.vx-slider input::-moz-range-track { height: 6px; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.16); }
-.vx-slider input::-moz-range-progress { height: 6px; border-radius: var(--radius-pill); background: var(--accent); }
+.vx-slider input::-moz-range-track { height: 4px; border-radius: var(--radius-pill); background: rgb(var(--ink-100) / 0.3); }
+.vx-slider input::-moz-range-progress { height: 4px; border-radius: var(--radius-pill); background: var(--range-on, var(--accent)); }
 .vx-slider input::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 18px;
@@ -228,7 +232,7 @@
   transition: transform var(--dur-slow) var(--ease-spring), width var(--dur-slow) var(--ease-spring);
 }
 .vx-tabs--segmented .vx-tabs-ind { top: 3px; bottom: 3px; border-radius: var(--radius-control); background: var(--surface-3); box-shadow: var(--elev-1); }
-html.light .vx-tabs--segmented .vx-tabs-ind { background: rgb(255 255 255); }
+
 .vx-tabs--underline .vx-tabs-ind { bottom: -1px; height: 2px; border-radius: 2px; background: var(--accent); }
 .vx-tabs[data-ready='false'] .vx-tabs-ind { transition: none; }
 

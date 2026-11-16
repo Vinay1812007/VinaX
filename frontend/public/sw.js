@@ -19,7 +19,7 @@
  * works offline once it has been online for a few seconds after a deploy.
  */
 const CACHE = 'vinax-shell-v16';
-const SHELL = ['/', '/manifest.webmanifest', '/icons/icon.svg?v=14', '/fonts/manrope-var.woff2', '/fonts/bricolage-var.woff2'];
+const SHELL = ['/', '/manifest.webmanifest', '/icons/icon.svg?v=14', '/fonts/figtree-var.woff2'];
 // Downloaded songs (written by services/downloads at download time). NEVER
 // cleared on activate — losing it silently un-downloads every saved song.
 const AUDIO_CACHE = 'vinax-audio-v1';

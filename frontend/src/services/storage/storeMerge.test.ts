@@ -26,17 +26,17 @@ afterEach(() => resetLocalGuardsForTests());
 describe('settings merge', () => {
   it('takes known keys of the right type and leaves the rest at their current value', async () => {
     useSettingsStore.getState().resetSettings();
-    put(KEYS.settings, { theme: 'light', crossfade: 'yes', crossfadeSeconds: null, eqGains: 'loud', pinnedLanguages: ['telugu', 3], setTheme: 'oops', resetSettings: 1, bogus: true, balance: 7, uiScale: 'huge' }, 4);
+    put(KEYS.settings, { uiScale: 'lg', crossfade: 'yes', crossfadeSeconds: null, eqGains: 'loud', pinnedLanguages: ['telugu', 3], setUiScale: 'oops', resetSettings: 1, bogus: true, balance: 7, density: 'huge' }, 6);
     await useSettingsStore.persist.rehydrate();
     const s = useSettingsStore.getState();
-    expect(s.theme).toBe('light');
+    expect(s.uiScale).toBe('lg');
     expect(s.crossfade).toBe(true);
     expect(s.crossfadeSeconds).toBe(5);
     expect(s.eqGains).toEqual([0, 0, 0, 0, 0]);
     expect(s.pinnedLanguages).toEqual(['telugu']);
     expect(s.balance).toBe(1);
-    expect(s.uiScale).toBe('md');
-    expect(typeof s.setTheme).toBe('function');
+    expect(s.density).toBe('comfortable');
+    expect(typeof s.setUiScale).toBe('function');
     expect(typeof s.resetSettings).toBe('function');
     expect(s).not.toHaveProperty('bogus');
   });
@@ -46,7 +46,9 @@ describe('settings merge', () => {
     expect(pickSettings({ exploreMode: false }).discoveryMode).toBe('balanced');
     expect(pickSettings({ exploreMode: true, discoveryMode: 'familiar' }).discoveryMode).toBe('familiar');
     expect(pickSettings({ exploreMode: true, discoveryMode: 'everything' }).discoveryMode).toBe('discover');
-    expect(pickSettings({ theme: 'dark' })).not.toHaveProperty('discoveryMode');
+    expect(pickSettings({ uiScale: 'md' })).not.toHaveProperty('discoveryMode');
+    // 1.15 — retired theme keys are not settings any more.
+    expect(pickSettings({ theme: 'light', accent: 'ocean' })).toEqual({});
     expect(pickSettings(null)).toEqual({});
     expect(pickSettings({ inferredRegion: { country: 'IN', regionLabel: 5, source: 'gps' } }).inferredRegion).toEqual({ country: 'IN', regionLabel: null, source: 'unknown' });
   });
@@ -96,7 +98,7 @@ describe('write freeze', () => {
     localStorage.setItem(KEYS.lyricsOffset, restored);
     freezeLocalWrites();
     useLyricsOffsetStore.getState().nudge('s1', 1);
-    useSettingsStore.getState().setTheme('amoled');
+    useSettingsStore.getState().setUiScale('lg');
     expect(localStorage.getItem(KEYS.lyricsOffset)).toBe(restored);
   });
 });

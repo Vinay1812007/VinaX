@@ -20,18 +20,14 @@ export function resolveDiscoveryMode(s: { discoveryMode?: unknown; exploreMode?:
 }
 
 export interface SettingsState {
-  theme: 'dark' | 'light' | 'system' | 'amoled' | 'auto';
-  accent: string;
   /**
    * 11.0 — the app style: palette, type, shapes, navigation and mini-player
-   * layout, card treatment and motion (styles/templates/<id>.css). The accent
-   * picker still wins over a style's own accent.
+   * layout, card treatment and motion (styles/templates/<id>.css). 1.15 — one
+   * dark look: the theme, accent and dynamic-theme settings are gone.
    */
   template: TemplateId;
   /** v5.12.0 — daily listening goal in minutes (0 = off). */
   dailyGoalMinutes: number;
-  /** v5.17.0 — custom accent hex when `accent === 'custom'`. */
-  accentCustom: string | null;
   /** v5.17.0 — display size: text and controls scale. */
   uiScale: 'sm' | 'md' | 'lg';
   /** v5.17.0 — data saver: lowest audio quality, no video canvas, lighter images. */
@@ -72,7 +68,6 @@ export interface SettingsState {
   /** 1.3 — lyrics as written ('original') or in English letters ('latin'). */
   lyricsScript: 'original' | 'latin';
   uiLanguage: 'en' | 'te' | 'hi' | 'ta';
-  dynamicTheme: boolean;
   reduceMotion: boolean;
   /** 0..1 — how aggressively recommendations personalize. */
   recommendationIntensity: number;
@@ -115,6 +110,8 @@ export interface SettingsState {
   pinnedLanguages: string[];
   mutedLanguages: string[];
   sidebarCollapsed: boolean;
+  /** 1.15 — desktop: the Now playing panel on the right of the window (wide screens). */
+  nowPlayingView: boolean;
   /** v5.19.0 — sound effects master switch (Web Audio chain; graph code is a
    *  lazy chunk — services/audio/effects.ts). Off = plain element playback. */
   soundEffects: boolean;
@@ -129,15 +126,12 @@ export interface SettingsState {
   /** v5.19.0 — loudness normalisation (compressor). */
   normalize: boolean;
 
-  setTheme(theme: 'dark' | 'light' | 'system' | 'amoled' | 'auto'): void;
   setDailyGoalMinutes(n: number): void;
-  setAccentCustom(hex: string | null): void;
   setUiScale(v: 'sm' | 'md' | 'lg'): void;
   setDataSaver(v: boolean): void;
   setStartPage(v: 'home' | 'search' | 'library' | 'last'): void;
   setHighContrast(v: boolean): void;
   setLogoCursor(v: boolean): void;
-  setAccent(accent: string): void;
   setTemplate(template: string): void;
   setGlassLevel(v: number): void;
   setGlassBlur(v: number): void;
@@ -158,7 +152,6 @@ export interface SettingsState {
   setLyricsSize(v: 'sm' | 'md' | 'lg' | 'xl'): void;
   setLyricsScript(v: 'original' | 'latin'): void;
   setUiLanguage(v: 'en' | 'te' | 'hi' | 'ta'): void;
-  setDynamicTheme(v: boolean): void;
   setReduceMotion(v: boolean): void;
   setRecommendationIntensity(v: number): void;
   setExploreMode(v: boolean): void;
@@ -177,6 +170,7 @@ export interface SettingsState {
   setPinnedLanguages(ids: string[]): void;
   setMutedLanguages(ids: string[]): void;
   toggleSidebar(): void;
+  setNowPlayingView(v: boolean): void;
   setSoundEffects(v: boolean): void;
   /** Clamps to five values in ±12 dB and marks the preset 'custom'. */
   setEqGains(gains: number[]): void;
@@ -198,11 +192,8 @@ function clampEq(gains: readonly number[] | undefined): number[] {
 }
 
 const defaults = {
-  theme: 'dark' as const,
-  accent: 'crimson',
   template: DEFAULT_TEMPLATE as TemplateId,
   dailyGoalMinutes: 0,
-  accentCustom: null,
   uiScale: 'md' as const,
   dataSaver: false,
   startPage: 'home' as const,
@@ -229,7 +220,6 @@ const defaults = {
   lyricsSize: 'md' as 'sm' | 'md' | 'lg' | 'xl',
   lyricsScript: 'original' as 'original' | 'latin',
   uiLanguage: 'en' as 'en' | 'te' | 'hi' | 'ta',
-  dynamicTheme: false,
   reduceMotion: false,
   recommendationIntensity: 0.7,
   exploreMode: false,
@@ -246,6 +236,7 @@ const defaults = {
   pinnedLanguages: [] as string[],
   mutedLanguages: [] as string[],
   sidebarCollapsed: false,
+  nowPlayingView: true,
   soundEffects: false,
   eqGains: [0, 0, 0, 0, 0] as number[],
   eqPreset: 'flat',
@@ -258,7 +249,6 @@ const defaults = {
 export type SettingsData = typeof defaults;
 
 const SETTINGS_ENUMS: Partial<Record<keyof SettingsData, readonly string[]>> = {
-  theme: ['dark', 'light', 'system', 'amoled', 'auto'],
   template: ['vinax'],
   uiScale: ['sm', 'md', 'lg'],
   startPage: ['home', 'search', 'library', 'last'],
@@ -280,7 +270,7 @@ const SETTINGS_RANGES: Partial<Record<keyof SettingsData, readonly [number, numb
   recommendationIntensity: [0, 1],
   balance: [-1, 1],
 };
-const NULLABLE_TEXT: ReadonlySet<string> = new Set(['accentCustom', 'manualCountry', 'manualRegionLabel', 'eqOwnPreset']);
+const NULLABLE_TEXT: ReadonlySet<string> = new Set(['manualCountry', 'manualRegionLabel', 'eqOwnPreset']);
 
 function pickRegion(v: unknown): RegionInfo | null {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
@@ -337,9 +327,7 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set, get) => ({
       ...defaults,
-      setTheme: (theme) => set({ theme }),
       setDailyGoalMinutes: (n) => set({ dailyGoalMinutes: Math.max(0, Math.min(600, Math.round(n))) }),
-      setAccentCustom: (accentCustom) => set({ accentCustom, accent: accentCustom ? 'custom' : 'crimson' }),
       setUiScale: (uiScale) => set({ uiScale }),
       // Data saver also drops the stream to the lightest quality; turning it
       // off leaves the quality where the listener last set it.
@@ -347,7 +335,6 @@ export const useSettingsStore = create<SettingsState>()(
       setStartPage: (startPage) => set({ startPage }),
       setHighContrast: (highContrast) => set({ highContrast }),
       setLogoCursor: (logoCursor) => set({ logoCursor }),
-      setAccent: (accent) => set({ accent }),
       setTemplate: (template) => set({ template: normalizeTemplate(template) }),
       setGlassLevel: (v) => set({ glassLevel: Math.min(100, Math.max(0, Math.round(v))) }),
       setGlassBlur: (v) => set({ glassBlur: Math.min(100, Math.max(0, Math.round(v))) }),
@@ -368,7 +355,6 @@ export const useSettingsStore = create<SettingsState>()(
       setLyricsSize: (lyricsSize) => set({ lyricsSize }),
       setLyricsScript: (lyricsScript) => set({ lyricsScript }),
       setUiLanguage: (uiLanguage) => set({ uiLanguage }),
-      setDynamicTheme: (dynamicTheme) => set({ dynamicTheme }),
       setReduceMotion: (reduceMotion) => set({ reduceMotion }),
       setRecommendationIntensity: (v) =>
         set({ recommendationIntensity: Math.min(1, Math.max(0, v)) }),
@@ -403,6 +389,7 @@ export const useSettingsStore = create<SettingsState>()(
       setPinnedLanguages: (pinnedLanguages) => set({ pinnedLanguages }),
       setMutedLanguages: (mutedLanguages) => set({ mutedLanguages }),
       toggleSidebar: () => set({ sidebarCollapsed: !get().sidebarCollapsed }),
+      setNowPlayingView: (nowPlayingView) => set({ nowPlayingView: !!nowPlayingView }),
       // v5.19.0 — sound effects. The engine/graph is driven by a subscription
       // in services/audio/effectsBridge.ts (lazy), never from here.
       setSoundEffects: (soundEffects) => set({ soundEffects }),
@@ -415,17 +402,16 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: KEYS.settings,
-      version: 5,
+      version: 6,
       // One-time migrations: turn off artwork-tinting (v1) and reset to the
       // single brand accent (v2) when the old picker was removed. The picker
       // RETURNED in 4.7.0 with per-accent light ramps — v2 stays as-is so
       // long-time devices keep the default until they choose again.
       // v3 removes retired queue/layout preferences and generated Home caches.
       // v5 (1.3) removes the AI switches: VinaX has no AI features any more.
+      // v6 (1.15) removes the theme, accent, custom accent and dynamic theme: one dark look.
       migrate: (persisted: unknown, version: number) => {
         const state = (persisted ?? {}) as Partial<SettingsState>;
-        if (version < 1) state.dynamicTheme = false;
-        if (version < 2) state.accent = 'crimson';
         // v4 (7.0.0) — the explore switch became the three-way discovery mode.
         if (version < 4 || !isDiscoveryMode(state.discoveryMode)) state.discoveryMode = state.exploreMode ? 'discover' : 'balanced';
         const legacy = state as Partial<SettingsState> & Record<string, unknown>;
@@ -442,6 +428,11 @@ export const useSettingsStore = create<SettingsState>()(
         delete legacy.genInQueue;
         // 1.14 — the personal engine (server taste model) is gone.
         delete legacy.personalEngine;
+        // 1.15 — one dark look.
+        delete legacy.theme;
+        delete legacy.accent;
+        delete legacy.accentCustom;
+        delete legacy.dynamicTheme;
         try {
           window.localStorage.removeItem('vinax.home.shown.v1');
           window.localStorage.removeItem('vinax.aihome.recent.v1');

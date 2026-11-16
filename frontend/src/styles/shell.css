@@ -1,293 +1,292 @@
 /* ============================================================================
-   VinaX 10 — "Marigold": the app shell and the shared primitives.
-   Design system v2 (2026-11): radii, timings, curves and focus read the
-   tokens in styles/tokens.css; page changes are View Transitions (end of
-   this file, utils/pageTransitions.ts).
+   VinaX 1.15 — the app shell and the shared primitives, black and green.
+   Design system v2: radii, timings, curves and focus read the tokens in
+   styles/tokens.css; page changes are View Transitions (end of this file,
+   utils/pageTransitions.ts).
 
-   One file for the frame every listener screen sits in (9.0 folded 8.0's
-   stage.css and the shell half of flow.css into it). Tokens live only in
+   One file for the frame every listener screen sits in. Tokens live only in
    index.css; this file reads them. Page styles live in
    styles/pages/<area>.css, imported by that page so they ship in its lazy
    chunk. Track rows and media cards: styles/pages/tracklist.css.
 
    The language:
-   - artwork leads; copy follows; hierarchy from size and weight, not boxes;
-   - plum-black tiers: ink-950 chrome, ink-900 workspace, ink-850 / ink-800
-     raised, cream text; light mode is warm cream paper; hairlines only
-     between rows and around inputs;
-   - Marigold (ember) is for play, progress, the active destination, primary
-     calls to action and focus, with deep-brown labels (--vx-on-accent);
-     Rose (tide) marks live moments; the one gradient is
-     Marigold → Rose (--vx-glow);
-   - the display face (--vx-font-display) for page titles, section titles,
-     the wordmark and the brand moments; Manrope for everything else;
-   - shapes: pills for actions, filters and the active destination,
-     squircles for play buttons and artwork, circles for people;
-   - an 8-pt rhythm; motion 140–240 ms on the calm curve, and none at all
-     under either reduced-motion switch;
-   - 10.1 "frosted glass": the chrome is made of the .vx-mat-* materials
-     (index.css) — the sidebar a thin pane over an artwork-tinted canvas, the
-     top bar, tab bar, mini player and player deck the chrome tier, each
-     carrying the playing artwork's colour faintly. Blur lives only on fixed
-     or sticky chrome and overlays, never on a row in a scrolling list.
+   - a true-black window (ink-950). From 768px: a window bar across the top,
+     then three rounded #121212 panels (ink-900) side by side with 8px
+     between them (Your Library, the page, Now playing), and from 1024px the
+     player bar across the bottom on the black;
+   - white type; secondary copy #b3b3b3 (ink-300); hover tiers are
+     white at low alpha, never a colour;
+   - green (ember) is for play, the playing row, switches, progress on
+     hover, focus and the chosen chip, with black labels (--vx-on-accent);
+   - one face, Figtree: heavy for titles, book for everything else;
+   - shapes: pills for actions and filters, circles for play and people,
+     4px artwork, 8px panels and cards;
+   - motion 90–240 ms on the standard curve, and none at all under either
+     reduced-motion switch. Solid surfaces: no frosted glass on the chrome.
    ========================================================================= */
 
 :root {
-  --vx-sidebar-w: 264px;
-  --vx-sidebar-rail: 80px;
-  /* The desktop player deck floats above the bottom edge. */
-  --vx-player-h: 76px;
-  --vx-deck-gap: 10px;
-  --vx-gutter: 32px;
-  --vx-shelf-gap: 44px;
-  --vx-card-gap: 18px;
-  --vx-hover: rgb(var(--ink-100) / 0.06);
-  --vx-pressed: rgb(var(--ink-100) / 0.1);
-  --vx-accent-wash: rgb(var(--ember-500) / 0.14);
-  --vx-art-shadow: 0 10px 28px -14px rgb(0 0 0 / 0.7);
-  --vx-deck-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.75);
-  --vx-glow: linear-gradient(120deg, rgb(var(--ember-500)), rgb(var(--tide-500)));
+  --vx-sidebar-w: 300px;
+  --vx-sidebar-rail: 72px;
+  --vx-player-h: 72px;
+  --vx-deck-gap: 0px;
+  --vx-winbar-h: 64px;
+  --vx-panel-gap: 8px;
+  --vx-gutter: 24px;
+  --vx-shelf-gap: 40px;
+  --vx-card-gap: 12px;
+  --vx-hover: rgb(var(--ink-100) / 0.07);
+  --vx-pressed: rgb(var(--ink-100) / 0.12);
+  --vx-accent-wash: rgb(var(--ink-100) / 0.1);
+  --vx-art-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+  --vx-deck-shadow: none;
+  --vx-glow: linear-gradient(135deg, rgb(var(--ember-600)), rgb(var(--ember-400)));
   --vx-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  /* 10.0 — a warm hover for the chrome (nav, library rows): a breath of
-     Marigold instead of a grey wash. */
-  --vx-hover-warm: rgb(var(--ember-500) / 0.1);
-  /* The workspace's top mesh: Marigold from the left, Rose from the right,
-     the playing artwork underneath. Painted once, scrolls away with the page. */
-  --vx-mesh-ember: 0.13;
-  --vx-mesh-tide: 0.09;
+  /* The chrome's hover: a white wash, as everywhere else. */
+  --vx-hover-warm: rgb(var(--ink-100) / 0.07);
+  --vx-mesh-ember: 0;
+  --vx-mesh-tide: 0;
 }
-html.light {
-  --vx-art-shadow: 0 10px 24px -14px rgb(48 22 34 / 0.35);
-  --vx-deck-shadow: 0 16px 36px -18px rgb(48 22 34 / 0.35);
-  --vx-hover: rgb(var(--ink-100) / 0.05);
-  --vx-pressed: rgb(var(--ink-100) / 0.09);
-  --vx-accent-wash: rgb(var(--ember-500) / 0.1);
-  --vx-hover-warm: rgb(var(--ember-500) / 0.08);
-  --vx-mesh-ember: 0.12;
-  --vx-mesh-tide: 0.07;
-}
+
 @media (max-width: 767px) {
   :root {
     --vx-gutter: 16px;
-    --vx-shelf-gap: 36px;
+    --vx-shelf-gap: 32px;
     --vx-card-gap: 12px;
     --vx-topbar-h: calc(max(8px, env(safe-area-inset-top)) + 48px);
   }
 }
 
 /* ---------------------------------------------------------------- canvas */
-body { letter-spacing: -0.006em; }
-/* The canvas behind the panes: plum-black lit by the playing artwork from the
-   top left and a little Marigold from the bottom left. Static (no motion, no
-   blur of its own), so the sidebar's frost over it costs one paint. */
-.vx-shell {
-  background:
-    radial-gradient(70% 55% at 0% 0%, rgb(var(--art) / 0.2), transparent 72%),
-    radial-gradient(60% 45% at 0% 100%, rgb(var(--ember-500) / 0.08), transparent 70%),
-    rgb(var(--ink-950));
+.vx-shell { background: rgb(var(--ink-950)); }
+@media (max-width: 767px) {
+  /* A phone has no panels: the page is the canvas. */
+  .vx-shell { background: rgb(var(--ink-900)); }
 }
-html.light .vx-shell {
-  background:
-    radial-gradient(70% 55% at 0% 0%, rgb(var(--art) / 0.22), transparent 72%),
-    radial-gradient(60% 45% at 0% 100%, rgb(var(--ember-500) / 0.1), transparent 70%),
-    rgb(var(--ink-800));
-}
-html.amoled .vx-shell { background: #000; }
+
 .vx-workspace {
-  /* 10.0 — a warm gradient mesh at the top of every page: Marigold rising
-     from the top left, Rose from the top right, and the playing artwork's
-     glow between them. Three gradients painted with the content
-     (attachment: local), so it scrolls away and never sits behind text the
-     listener is reading lower down — no blur, no fixed layer, no cost on
-     scroll. */
-  background:
-    radial-gradient(760px 300px at 8% -120px, rgb(var(--ember-500) / var(--vx-mesh-ember)), transparent 70%) local,
-    radial-gradient(680px 280px at 92% -140px, rgb(var(--tide-500) / var(--vx-mesh-tide)), transparent 70%) local,
-    radial-gradient(1100px 380px at 40% -160px, rgb(var(--art) / 0.12), transparent 72%) local,
-    rgb(var(--ink-900));
+  background: rgb(var(--ink-900));
   scrollbar-gutter: stable;
 }
 @media (min-width: 768px) {
-  /* The workspace is a rounded sheet inside the chrome. */
-  .vx-workspace { margin: 8px 8px 0 0; border-radius: var(--vx-radius-panel) var(--vx-radius-panel) 0 0; }
+  /* Three rounded panels on the black, 8px apart. */
+  .vx-panels { gap: var(--vx-panel-gap); padding: 0 var(--vx-panel-gap); }
+  .vx-workspace { border-radius: var(--radius-md, 8px); }
 }
-html.amoled .vx-workspace {
-  background:
-    radial-gradient(760px 300px at 8% -120px, rgb(var(--ember-500) / 0.1), transparent 70%) local,
-    radial-gradient(1100px 380px at 40% -160px, rgb(var(--art) / 0.1), transparent 72%) local,
-    #000;
+@media (min-width: 1024px) {
+  .vx-panels { padding-bottom: 0; }
 }
 
-/* --------------------------------------------------------------- sidebar */
-.vx-sidebar {
-  position: sticky;
-  top: 0;
-  flex-direction: column;
-  flex-shrink: 0;
-  width: var(--vx-sidebar-w);
-  max-height: 100dvh;
-  padding-bottom: calc(var(--vx-player-h) + var(--vx-deck-gap) * 2);
-  overflow: hidden;
-  transition: width var(--dur-slow) var(--ease-standard);
-}
-/* 10.1 — the sidebar is a thin frosted pane on the tinted canvas, its top
-   corners rounded to match the workspace sheet beside it. */
-@media (min-width: 768px) {
-  .vx-sidebar {
-    margin: 8px 8px 0;
-    max-height: calc(100dvh - 8px);
-    border-radius: var(--vx-radius-panel) var(--vx-radius-panel) 0 0;
-  }
-}
-.vx-sidebar.is-collapsed { width: var(--vx-sidebar-rail); }
-/* Tablets get the rail whatever the setting says: the workspace needs the room. */
-@media (min-width: 768px) and (max-width: 1099px) { .vx-sidebar { width: var(--vx-sidebar-rail); } }
-.vx-sidebar-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 68px;
-  padding: 14px 12px 6px 22px;
-}
-.vx-sidebar.is-collapsed .vx-sidebar-head { justify-content: center; padding: 14px 0 6px; }
-.vx-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  min-height: 44px;
-  color: rgb(var(--ink-100));
-  font-family: var(--vx-font-display);
-  font-size: 23px;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-}
-.vx-brand img { border-radius: 9px; flex-shrink: 0; transition: transform var(--dur-base) var(--ease-standard); }
-.vx-brand:hover img { transform: rotate(-6deg) scale(1.04); }
-/* "Free" beside the wordmark: the promise, always in view on desktop. */
-.vx-brand .vx-brand-free {
-  align-self: center;
-  margin-left: 2px;
-  padding: 3px 8px 4px;
-  border-radius: var(--radius-pill);
-  background: rgb(var(--ember-500) / 0.14);
-  color: rgb(var(--ember-400));
-  font-family: 'Manrope', system-ui, sans-serif;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.01em;
-  line-height: 1;
-}
-.vx-sidebar-nav ul { display: grid; gap: 2px; padding: 6px 12px; }
-/* The Browse list: smaller rows, so the library keeps its room. */
-.vx-nav-link {
+/* ------------------------------------------------------------ window bar */
+.vx-winbar {
   position: relative;
+  z-index: 36;
   display: flex;
+  flex: none;
   align-items: center;
-  gap: 14px;
-  min-height: 46px;
-  padding: 0 14px;
-  border-radius: var(--radius-pill);
-  color: rgb(var(--ink-300));
-  font-size: 15px;
-  font-weight: 650;
-  transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-base) var(--ease-standard),
-    box-shadow var(--dur-base) var(--ease-standard), transform var(--dur-quick) var(--ease-spring);
+  gap: 8px;
+  height: var(--vx-winbar-h);
+  padding: 8px 8px 8px 20px;
+  background: rgb(var(--ink-950));
 }
-.vx-nav-link:active { transform: scale(var(--press-scale)); }
-.vx-nav-link:hover { color: rgb(var(--ink-100)); background: var(--vx-hover-warm); }
-/* The active destination is a solid Marigold pill with a deep-brown label. */
-.vx-nav-active, .vx-nav-active:hover {
-  color: var(--vx-on-accent);
-  background: rgb(var(--ember-500));
-  font-weight: 750;
-  box-shadow: 0 8px 20px -12px rgb(var(--ember-600) / 0.9);
-}
-.vx-nav-active svg { color: inherit; }
-/* v2 — the newly active destination settles into its pill. */
-.vx-nav-active { animation: vx-settle var(--dur-slow) var(--ease-spring) backwards; }
-@keyframes vx-settle { from { transform: scale(0.94); } }
-.vx-sidebar.is-collapsed .vx-nav-link,
-.vx-sidebar.is-collapsed .vx-library-title { justify-content: center; padding: 0; }
-@media (min-width: 768px) and (max-width: 1099px) {
-  .vx-sidebar .vx-nav-link, .vx-sidebar .vx-library-title { justify-content: center; padding: 0; }
-  .vx-sidebar .vx-nav-link > span, .vx-sidebar .vx-library-title > span, .vx-sidebar .vx-brand > span,
-  .vx-sidebar .vx-lib-text, .vx-sidebar .vx-library-head > button, .vx-sidebar .vx-sidebar-toggle, .vx-sidebar .vx-lib-label { display: none; }
-  .vx-sidebar .vx-sidebar-head { justify-content: center; padding: 14px 0 6px; }
-  .vx-sidebar .vx-lib-row { justify-content: center; padding: 6px 0; }
-}
-
-.vx-library {
+.vx-winbar-brand { display: grid; flex: none; place-items: center; width: 40px; height: 48px; margin-right: 8px; }
+.vx-winbar-brand img { border-radius: 8px; transition: transform var(--dur-quick) var(--ease-standard); }
+.vx-winbar-brand:hover img { transform: scale(1.06); }
+.vx-winbar-nav {
   display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-height: 0;
-  margin: 14px 12px 0;
-  padding: 10px 0 0;
-  border-radius: var(--vx-radius-panel);
-  background: rgb(var(--ink-900) / 0.6);
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
 }
-html.light .vx-library { background: rgb(var(--ink-950) / 0.7); }
-.vx-sidebar.is-collapsed .vx-library { margin-inline: 10px; }
-.vx-library-head { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 0 8px 4px; }
-.vx-sidebar.is-collapsed .vx-library-head { justify-content: center; }
-.vx-library-title {
+.vx-winbar-home, .vx-winbar-link {
+  display: grid;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  color: rgb(var(--ink-300));
+  background: rgb(var(--ink-800));
+  transition: transform var(--dur-quick) var(--ease-standard), color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
+}
+.vx-winbar-home { width: 48px; height: 48px; }
+.vx-winbar-link { width: 40px; height: 40px; background: transparent; }
+.vx-winbar-home:hover, .vx-winbar-link:hover { color: rgb(var(--ink-100)); transform: scale(1.04); }
+.vx-winbar-home:hover { background: rgb(var(--ink-700)); }
+.vx-winbar-link:hover { background: rgb(var(--ink-800)); }
+:is(.vx-winbar-home, .vx-winbar-link).is-active { color: rgb(var(--ink-100)); }
+.vx-winbar-link.is-active { background: rgb(var(--ink-800)); }
+.vx-winbar-search {
+  display: flex;
+  flex: 0 1 474px;
+  align-items: center;
+  min-width: 0;
+  height: 48px;
+  border-radius: var(--radius-pill);
+  background: rgb(var(--ink-800));
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: background-color var(--dur-quick) var(--ease-standard), box-shadow var(--dur-quick) var(--ease-standard);
+}
+.vx-winbar-search:hover { background: rgb(var(--ink-700)); box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.1); }
+.vx-winbar-search.is-active, .vx-winbar-search:focus-within { box-shadow: inset 0 0 0 2px rgb(var(--ink-100)); }
+.vx-winbar-search-field {
   display: flex;
   flex: 1;
   align-items: center;
   gap: 12px;
   min-width: 0;
-  min-height: 44px;
-  padding: 0 10px;
-  border-radius: var(--radius-pill);
+  height: 100%;
+  padding: 0 12px 0 14px;
+  border-radius: var(--radius-pill) 0 0 var(--radius-pill);
   color: rgb(var(--ink-300));
-  font-size: 15px;
+  font-size: 16px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.vx-winbar-search-field span { overflow: hidden; text-overflow: ellipsis; }
+.vx-winbar-search-field:hover { color: rgb(var(--ink-100)); }
+.vx-winbar-search-field:focus-visible { outline: none; }
+.vx-winbar-search-rule { flex: none; width: 1px; height: 24px; background: rgb(var(--ink-600)); }
+.vx-winbar-browse {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 48px;
+  height: 100%;
+  border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
+  color: rgb(var(--ink-300));
+  transition: color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
+}
+.vx-winbar-browse:hover, .vx-winbar-browse.is-active { color: rgb(var(--ink-100)); }
+.vx-winbar-browse:hover svg { transform: scale(1.06); }
+.vx-winbar-tools { display: flex; flex: none; align-items: center; gap: 8px; margin-left: auto; }
+
+/* --------------------------------------------------------- Your Library */
+.vx-sidebar {
+  position: relative;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: var(--vx-sidebar-w);
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--radius-md, 8px);
+  background: rgb(var(--ink-900));
+  transition: width var(--dur-slow) var(--ease-standard);
+}
+/* Phones and tablets: the floating player covers the panel's foot. */
+@media (max-width: 1023px) { .vx-sidebar { padding-bottom: var(--player-safe-offset); } }
+.vx-sidebar.is-collapsed { width: var(--vx-sidebar-rail); }
+/* Tablets get the rail whatever the setting says: the workspace needs the room. */
+@media (min-width: 768px) and (max-width: 1099px) { .vx-sidebar { width: var(--vx-sidebar-rail); } }
+.vx-library-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 64px; padding: 12px 16px 8px; }
+.vx-sidebar.is-collapsed .vx-library-head { justify-content: center; padding: 12px 0 8px; }
+.vx-library-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm, 4px);
+  color: rgb(var(--ink-300));
+  font-size: 16px;
   font-weight: 700;
+  transition: color var(--dur-quick) var(--ease-standard);
 }
-.vx-library-title:hover, .vx-library-title.is-active { color: rgb(var(--ink-100)); }
-.vx-library-title.is-active svg { color: rgb(var(--ember-400)); }
-.vx-lib-label {
-  padding: 10px 12px 4px;
-  color: rgb(var(--ink-500));
-  font-size: 11.5px;
-  font-weight: 750;
-  letter-spacing: 0.02em;
+.vx-library-title:hover { color: rgb(var(--ink-100)); }
+.vx-library-tools { display: flex; align-items: center; gap: 4px; }
+.vx-library-tools .vx-library-create { background: rgb(var(--ink-800)); color: rgb(var(--ink-100)); }
+.vx-library-tools .vx-library-create:hover { background: rgb(var(--ink-700)); }
+.vx-library-open {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: rgb(var(--ink-300));
 }
-.vx-library-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 6px 10px; }
+.vx-library-open:hover { color: rgb(var(--ink-100)); background: var(--vx-hover); }
+.vx-library-rail-create { display: flex; justify-content: center; padding-bottom: 8px; }
+.vx-library-chips { display: flex; gap: 8px; overflow-x: auto; padding: 0 16px 4px; }
+.vx-lib-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  background: rgb(var(--ink-100) / 0.07);
+  color: rgb(var(--ink-100));
+  font-size: 14px;
+  font-weight: 400;
+  transition: background-color var(--dur-quick) var(--ease-standard);
+}
+.vx-lib-chip:hover { background: rgb(var(--ink-100) / 0.12); }
+.vx-lib-chip.is-on { background: rgb(var(--ink-100)); color: rgb(var(--ink-950)); }
+.vx-lib-chip.is-clear { justify-content: center; width: 32px; padding: 0; }
+.vx-library-find { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 48px; padding: 4px 8px 0 12px; }
+.vx-library-find-field {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm, 4px);
+  background: rgb(var(--ink-700));
+  color: rgb(var(--ink-300));
+}
+.vx-library-find-field input { flex: 1; min-width: 0; background: transparent; color: rgb(var(--ink-100)); font-size: 14px; outline: none; }
+.vx-library-find-field input::placeholder { color: rgb(var(--ink-400)); }
+.vx-library-sort { flex: none; padding: 4px 8px; color: rgb(var(--ink-300)); font-size: 14px; font-weight: 400; }
+.vx-library-sort:hover { color: rgb(var(--ink-100)); transform: scale(1.03); }
+.vx-library-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 8px; scrollbar-width: thin; }
 .vx-lib-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 56px;
-  padding: 6px 8px;
-  border-radius: var(--radius-lg);
-  transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-spring);
+  min-height: 64px;
+  padding: 8px;
+  border-radius: var(--radius-sm, 4px);
+  transition: background-color var(--dur-quick) var(--ease-standard);
 }
-.vx-lib-row:active { transform: scale(0.985); }
-.vx-lib-row:hover { background: var(--vx-hover-warm); }
-.vx-lib-row.is-active { background: var(--vx-accent-wash); }
-.vx-lib-row.is-active .vx-lib-title { color: rgb(var(--ember-400)); }
-.vx-sidebar.is-collapsed .vx-lib-row { justify-content: center; padding: 6px 0; }
-.vx-lib-art { width: 44px; height: 44px; border-radius: var(--radius-art); flex-shrink: 0; object-fit: cover; }
+.vx-lib-row:hover { background: rgb(var(--ink-100) / 0.07); }
+.vx-lib-row:active { background: rgb(var(--ink-950)); }
+.vx-lib-row.is-active { background: rgb(var(--ink-100) / 0.1); }
+.vx-lib-row.is-active:hover { background: rgb(var(--ink-100) / 0.14); }
+.vx-lib-row.is-playing .vx-lib-title { color: rgb(var(--ember-500)); }
+.vx-lib-now { display: grid; flex: none; place-items: center; margin-left: auto; color: rgb(var(--ember-500)); }
+.vx-sidebar.is-collapsed .vx-lib-row { justify-content: center; padding: 8px 0; }
+.vx-lib-art { width: 48px; height: 48px; border-radius: var(--radius-sm, 4px); flex-shrink: 0; object-fit: cover; }
 .vx-lib-art.rounded-full { border-radius: 50%; }
 .vx-lib-glyph {
   display: grid;
   place-items: center;
-  color: rgb(var(--ink-200));
-  background: rgb(var(--ink-800));
-  font-size: 17px;
-  font-weight: 800;
+  color: rgb(var(--ink-300));
+  background: rgb(var(--ink-700));
+  font-size: 18px;
+  font-weight: 700;
 }
-.vx-lib-glyph.is-liked { color: var(--vx-on-accent); background: var(--vx-glow); }
-.vx-lib-glyph.is-later { color: rgb(var(--ink-950)); background: rgb(var(--tide-400)); }
-html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)); }
-.vx-lib-glyph.is-downloads, .vx-lib-glyph.is-history { color: rgb(var(--ink-200)); background: rgb(var(--ink-800)); }
+.vx-lib-glyph.is-liked { color: #fff; background: linear-gradient(135deg, rgb(69 10 245), rgb(196 239 217)); }
+.vx-lib-glyph.is-later { color: rgb(var(--ink-950)); background: rgb(var(--ember-500)); }
+.vx-lib-glyph.is-downloads { color: rgb(var(--ink-950)); background: rgb(var(--ember-600)); }
+.vx-lib-glyph.is-history { color: rgb(var(--ink-100)); background: rgb(var(--ink-700)); }
 .vx-lib-text { min-width: 0; }
-.vx-lib-title { display: block; overflow: hidden; color: rgb(var(--ink-100)); font-size: 14px; font-weight: 650; white-space: nowrap; text-overflow: ellipsis; }
-.vx-lib-meta { display: block; overflow: hidden; margin-top: 2px; color: rgb(var(--ink-400)); font-size: 12.5px; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
+.vx-lib-title { display: block; overflow: hidden; color: rgb(var(--ink-100)); font-size: 16px; font-weight: 400; line-height: 1.4; white-space: nowrap; text-overflow: ellipsis; }
+.vx-lib-meta { display: block; overflow: hidden; margin-top: 2px; color: rgb(var(--ink-300)); font-size: 14px; font-weight: 400; white-space: nowrap; text-overflow: ellipsis; }
+.vx-lib-none { padding: 16px 8px; color: rgb(var(--ink-300)); font-size: 14px; }
+@media (min-width: 768px) and (max-width: 1099px) {
+  .vx-sidebar .vx-library-title > span, .vx-sidebar .vx-lib-text, .vx-sidebar .vx-library-tools,
+  .vx-sidebar .vx-library-chips, .vx-sidebar .vx-library-find, .vx-sidebar .vx-lib-now { display: none; }
+  .vx-sidebar .vx-library-head { justify-content: center; padding: 12px 0 8px; }
+  .vx-sidebar .vx-lib-row { justify-content: center; padding: 8px 0; }
+}
 
 /* --------------------------------------------------------------- top bar */
+/* The page's own bar: sticky at the top of the scrolling page. Clear at the
+   top, so a page's colour header runs up behind it; once content scrolls
+   under it, it takes the page's colour (--hero, set by EntityHeader and
+   the colour pages) darkened, or plain #121212. */
 .vx-topbar {
   position: sticky;
   top: 0;
@@ -299,35 +298,28 @@ html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)
   margin: 0 calc(-1 * var(--vx-gutter)) 4px;
   padding: 12px var(--vx-gutter);
   background: transparent;
-  transition: background-color var(--dur-base) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard);
+  transition: background-color var(--dur-base) var(--ease-standard);
 }
-/* Clear at the top of the page, so artwork headers run up behind it; the
-   chrome material once content scrolls under it (TopBar watches a sentinel
-   with an IntersectionObserver and adds .vx-mat-chrome). A bar across the
-   whole width wants one hairline, along the bottom only. */
-/* The fill is restated here: `.vx-topbar { background: transparent }` above
-   has the same weight as `.vx-mat-chrome` and comes later, so without this
-   the scrolled bar had blur but no fill — and where blur is off (AMOLED,
-   the flat app styles) page text ran straight through the title. */
 .vx-topbar.is-scrolled {
-  --mat-tint: linear-gradient(90deg, rgb(var(--art) / var(--vx-mat-art)), transparent 60%);
-  background-color: var(--mat-fill);
-  background-image: var(--mat-tint, none);
-  box-shadow: inset 0 -1px 0 var(--vx-mat-hairline);
+  background-color: rgb(var(--ink-900));
+  background-image: linear-gradient(rgb(var(--hero-rgb, var(--ink-900)) / 0.6), rgb(var(--hero-rgb, var(--ink-900)) / 0.6));
+}
+@media (min-width: 768px) {
+  .vx-topbar { --vx-topbar-h: 64px; padding-block: 12px; }
+  .vx-workspace > .vx-topbar { margin-top: 0; }
 }
 /* A zero-height marker 8px into the page: once it leaves the scroller, the
    page is scrolled. */
 .vx-topbar-sentinel { height: 8px; margin-bottom: -8px; pointer-events: none; }
-.vx-topbar-nav { background: rgb(var(--ink-950) / 0.55); color: rgb(var(--ink-100)); }
-.vx-topbar-nav:hover { background: rgb(var(--ink-950) / 0.85); color: rgb(var(--ember-400)); }
+.vx-topbar-nav { width: 32px; height: 32px; background: rgb(0 0 0 / 0.7); color: rgb(var(--ink-100)); }
+.vx-topbar-nav:hover { background: rgb(0 0 0 / 0.85); color: rgb(var(--ink-100)); }
 .vx-topbar-context {
   min-width: 0;
   overflow: hidden;
   color: rgb(var(--ink-100));
-  font-family: var(--vx-font-display);
-  font-size: 17px;
-  font-weight: 750;
-  letter-spacing: -0.025em;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   white-space: nowrap;
   text-overflow: ellipsis;
   opacity: 0;
@@ -335,173 +327,173 @@ html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)
   transition: opacity var(--dur-base) var(--ease-standard), transform var(--dur-base) var(--ease-standard);
 }
 .vx-topbar.is-scrolled .vx-topbar-context { opacity: 1; transform: none; }
-/* 2.0 — the search field in the bar (768px and wider): a pill that opens
-   Search. Display comes from the utility classes on the link (hidden md:flex). */
-.vx-topbar-search {
-  flex: 0 1 420px;
-  min-width: 0;
-  align-items: center;
-  gap: var(--space-3);
-  height: 44px;
-  padding: 0 var(--space-4);
-  border-radius: var(--radius-pill);
-  background: var(--surface-2);
-  box-shadow: inset 0 0 0 1px var(--line-2);
-  color: var(--text-3);
-  font-size: var(--type-body);
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  transition: background var(--dur-quick) var(--ease-standard), color var(--dur-quick) var(--ease-standard);
+/* The page's play button, repeated in the bar once its header has scrolled away. */
+.vx-topbar-play {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgb(var(--ember-500));
+  color: rgb(var(--ink-950));
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity var(--dur-base) var(--ease-standard), transform var(--dur-base) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
-.vx-topbar-search:hover { background: var(--surface-3); color: var(--text-1); }
-.vx-topbar-search:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.vx-topbar-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.vx-topbar.is-scrolled .vx-topbar-play { opacity: 1; pointer-events: auto; transform: none; }
+.vx-topbar-play:hover { background: rgb(var(--ember-400)); transform: scale(1.04); }
+@media (max-width: 767px) { .vx-topbar-play { display: none; } }
+@media (max-width: 767px) {
+  /* Phones: the page's own title says where you are; the bar's name fades in once it scrolls away. */
+  .vx-topbar-context { font-size: 18px; }
+}
+.vx-topbar-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .vx-command-key {
   align-items: center;
   gap: 3px;
-  min-height: 34px;
-  margin-right: 4px;
+  min-height: 32px;
   padding: 0 8px;
   border-radius: var(--radius-pill);
-  color: rgb(var(--ink-400));
-  background: rgb(var(--ink-950) / 0.4);
+  color: rgb(var(--ink-300));
+  background: transparent;
 }
-.vx-command-key:hover { color: rgb(var(--ink-100)); background: rgb(var(--ink-950) / 0.7); }
+.vx-command-key:hover { color: rgb(var(--ink-100)); transform: scale(1.04); }
 .vx-command-key kbd {
   min-width: 20px;
   padding: 3px 5px;
-  border-radius: 6px;
-  background: rgb(var(--ink-100) / 0.08);
-  font: 700 11px/1 'Manrope', system-ui, sans-serif;
+  border-radius: 4px;
+  background: rgb(var(--ink-100) / 0.1);
+  font: 700 11px/1 'Figtree', system-ui, sans-serif;
   text-align: center;
 }
+/* The face: a 32px disc (the photo, or the initial on green) inside an
+   8px dark ring, 48px in all. */
 .vx-avatar {
   position: relative;
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  margin-left: 4px;
+  width: 32px;
+  height: 32px;
+  margin: 8px;
   border-radius: 50%;
-  background: var(--vx-glow);
-  color: var(--vx-on-accent);
+  background: rgb(var(--ember-600));
+  color: rgb(var(--ink-950));
   font-size: 14px;
-  font-weight: 800;
-  box-shadow: 0 0 0 3px rgb(var(--ink-950) / 0.55);
-  transition: transform var(--dur-quick) var(--ease-standard);
+  font-weight: 700;
+  box-shadow: 0 0 0 8px rgb(var(--ink-800));
+  transition: transform var(--dur-quick) var(--ease-standard), box-shadow var(--dur-quick) var(--ease-standard);
 }
-.vx-avatar::after { content: ''; position: absolute; inset: -4px; }
-.vx-avatar:hover { transform: scale(1.05); }
-.vx-avatar.is-open { box-shadow: 0 0 0 2px rgb(var(--ink-950)), 0 0 0 4px rgb(var(--ember-400)); }
-.vx-avatar:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.vx-avatar::after { content: ''; position: absolute; inset: -8px; }
+.vx-avatar:hover { transform: scale(1.04); box-shadow: 0 0 0 8px rgb(var(--ink-700)); }
+.vx-avatar.is-open { box-shadow: 0 0 0 8px rgb(var(--ink-700)); }
+.vx-avatar:focus-visible { outline: none; box-shadow: 0 0 0 8px rgb(var(--ink-800)), 0 0 0 10px rgb(var(--ink-100)); }
+@media (max-width: 767px) {
+  .vx-avatar { margin: 0; box-shadow: none; }
+  .vx-avatar:hover { box-shadow: none; }
+}
 
 /* The "Music languages" button (TopBar → LanguagePicker). */
 .vx-langbtn {
-  display: inline-flex; align-items: center; gap: 6px; min-height: 36px; max-width: 220px; padding: 0 10px;
-  border-radius: var(--radius-pill); color: rgb(var(--ink-100)); background: rgb(var(--ink-950) / 0.4); text-align: left;
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; max-width: 220px; padding: 0 12px;
+  border-radius: var(--radius-pill); color: rgb(var(--ink-100)); background: rgb(var(--ink-800)); text-align: left;
+  transition: transform var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
-.vx-langbtn:hover, .vx-langbtn[aria-expanded='true'] { background: rgb(var(--ink-950) / 0.7); }
-.vx-langbtn-text { display: flex; flex-direction: column; min-width: 0; font-size: 12.5px; font-weight: 750; line-height: 1.15; }
-.vx-langbtn-text small { overflow: hidden; color: rgb(var(--ink-400)); font-size: 11.5px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.vx-langbtn:hover, .vx-langbtn[aria-expanded='true'] { background: rgb(var(--ink-700)); transform: scale(1.04); }
+.vx-langbtn-text { display: flex; flex-direction: column; min-width: 0; font-size: 12.5px; font-weight: 700; line-height: 1.15; }
+.vx-langbtn-text small { overflow: hidden; color: rgb(var(--ink-300)); font-size: 11.5px; font-weight: 400; white-space: nowrap; text-overflow: ellipsis; }
 @media (max-width: 767px) { .vx-langbtn-text small { color: rgb(var(--ink-100)); font-size: 12.5px; font-weight: 700; } }
 
-/* 1.12 — Ideas & bugs: the VinaX mark as a pill; the words hide on a phone. */
+/* 1.12 — Ideas & bugs: a dark pill with the lightbulb; the words hide on a phone. */
 .vx-topbar-feedback {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  min-height: 36px;
-  padding: 0 13px 0 10px;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 14px 0 10px;
   border-radius: var(--radius-pill);
-  border: 1px solid rgb(var(--ink-100) / 0.1);
-  background: rgb(var(--ink-100) / 0.05);
+  background: rgb(var(--ink-800));
   color: rgb(var(--ink-100));
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 700;
   white-space: nowrap;
-  transition: transform var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard), border-color var(--dur-quick) var(--ease-standard);
+  transition: transform var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
-.vx-topbar-feedback-icon { flex-shrink: 0; width: 20px; height: 20px; color: rgb(var(--ember-400)); }
-.vx-topbar-feedback:hover { transform: scale(1.03); border-color: rgb(var(--ember-500) / 0.6); background: rgb(var(--ember-500) / 0.12); }
+.vx-topbar-feedback-icon { flex-shrink: 0; width: 18px; height: 18px; color: rgb(var(--ink-100)); }
+.vx-topbar-feedback:hover { transform: scale(1.04); background: rgb(var(--ink-700)); }
 .vx-topbar-feedback:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-/* Phones: a round 36px button like its neighbours, the bulb centred. */
-@media (max-width: 767px) { .vx-topbar-feedback { flex-shrink: 0; justify-content: center; width: 36px; padding: 0; } .vx-topbar-feedback span { display: none; } }
-/* Light: ink-900 is the cream canvas there, so the pill reads the text ink (it was near-invisible). */
-html.light .vx-topbar-feedback { border-color: var(--line-2); background: rgb(var(--ink-100) / 0.04); color: var(--text-1); }
+@media (max-width: 1199px) { .vx-winbar .vx-topbar-feedback { justify-content: center; width: 32px; padding: 0; } .vx-winbar .vx-topbar-feedback span { display: none; } }
+/* Phones: a round 32px button like its neighbours, the bulb centred. */
+@media (max-width: 767px) { .vx-topbar-feedback { flex-shrink: 0; justify-content: center; width: 32px; padding: 0; background: transparent; } .vx-topbar-feedback span { display: none; } }
 
 /* 13.9 — a visitor browsing signed out: Sign in where the avatar goes. */
 .vx-topbar-signin {
   display: inline-flex;
   align-items: center;
-  min-height: 36px;
-  margin-left: 4px;
-  padding: 0 16px;
+  min-height: 48px;
+  padding: 0 32px;
   border-radius: var(--radius-pill);
-  background: var(--vx-glow);
-  color: var(--vx-on-accent);
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.01em;
-  box-shadow: 0 0 0 3px rgb(var(--ink-950) / 0.55);
-  transition: transform var(--dur-quick) var(--ease-standard);
+  background: rgb(var(--ink-100));
+  color: rgb(var(--ink-950));
+  font-size: 16px;
+  font-weight: 700;
+  transition: transform var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
-.vx-topbar-signin:hover { transform: scale(1.04); }
+.vx-topbar-signin:hover { transform: scale(1.04); background: rgb(var(--ink-200)); }
 .vx-topbar-signin:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+@media (max-width: 767px) { .vx-topbar-signin { min-height: 32px; padding: 0 16px; font-size: 14px; } }
 
 /* 13.4.0 — the avatar's menu (components/ProfileMenu.tsx): who, profile
    settings, app settings, Sign out. Anchored under the avatar's right edge. */
 .vx-avatar-wrap { position: relative; display: inline-flex; }
 .vx-pmenu {
   position: absolute;
-  top: calc(100% + 10px);
+  top: calc(100% + 8px);
   right: 0;
   z-index: 80;
   width: min(300px, calc(100vw - 24px));
   max-height: calc(100dvh - 96px);
   overflow-y: auto;
-  padding: 6px;
-  border-radius: 18px;
-  border: 1px solid var(--vx-border);
-  background-color: rgb(var(--ink-900) / 0.96);
-  animation: vx-pmenu-in var(--dur-base) var(--ease-enter);
+  padding: 4px;
+  border-radius: var(--radius-sm, 4px);
+  background-color: rgb(var(--ink-700));
+  box-shadow: 0 16px 24px rgb(0 0 0 / 0.3), 0 6px 8px rgb(0 0 0 / 0.2);
+  animation: vx-pmenu-in var(--dur-quick) var(--ease-enter);
   transform-origin: top right;
 }
-html.light .vx-pmenu { background-color: rgb(255 255 255 / 0.97); }
-@keyframes vx-pmenu-in { from { opacity: 0; transform: translateY(-4px) scale(0.97); } }
-.vx-pmenu-who { display: flex; align-items: center; gap: 12px; padding: 10px 10px 12px; margin-bottom: 4px; border-bottom: 1px solid var(--vx-border); }
+
+@keyframes vx-pmenu-in { from { opacity: 0; transform: translateY(-4px); } }
+.vx-pmenu-who { display: flex; align-items: center; gap: 12px; padding: 10px 10px 12px; margin-bottom: 4px; border-bottom: 1px solid rgb(var(--ink-100) / 0.1); }
 .vx-pmenu-avatar {
   display: grid; place-items: center; flex: none; width: 44px; height: 44px; overflow: hidden;
-  border-radius: 50%; background: var(--vx-glow); color: var(--vx-on-accent); font-size: 17px; font-weight: 800;
+  border-radius: 50%; background: rgb(var(--ember-600)); color: rgb(var(--ink-950)); font-size: 17px; font-weight: 700;
 }
 .vx-pmenu-avatar > img { width: 100%; height: 100%; object-fit: cover; }
 .vx-pmenu-id { display: flex; flex-direction: column; min-width: 0; }
-.vx-pmenu-name { font-size: 15px; font-weight: 800; color: rgb(var(--ink-100)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vx-pmenu-sub { font-size: 12.5px; color: rgb(var(--ink-400)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vx-pmenu-label { padding: 10px 10px 4px; font-size: 11.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: rgb(var(--ink-400)); }
+.vx-pmenu-name { font-size: 15px; font-weight: 700; color: rgb(var(--ink-100)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vx-pmenu-sub { font-size: 12.5px; color: rgb(var(--ink-300)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vx-pmenu-label { padding: 10px 12px 4px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: rgb(var(--ink-300)); }
 .vx-pmenu-item {
-  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 42px; padding: 0 10px;
-  border-radius: 10px; text-align: left; font-size: 14px; font-weight: 600; color: rgb(var(--ink-100)); outline: none;
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 40px; padding: 0 12px;
+  border-radius: 2px; text-align: left; font-size: 14px; font-weight: 400; color: rgb(var(--ink-100)); outline: none;
 }
 .vx-pmenu-item > svg { flex: none; color: rgb(var(--ink-300)); }
-.vx-pmenu-item:hover, .vx-pmenu-item:focus-visible { background: rgb(var(--ink-100) / 0.08); }
-.vx-pmenu-item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent-text); }
-.vx-pmenu-item.is-out { margin-top: 4px; border-top: 1px solid var(--vx-border); border-radius: 0 0 10px 10px; color: rgb(var(--ember-400)); }
+.vx-pmenu-item:hover, .vx-pmenu-item:focus-visible { background: rgb(var(--ink-100) / 0.1); }
+.vx-pmenu-item:focus-visible { box-shadow: inset 0 0 0 2px rgb(var(--ink-100)); }
+.vx-pmenu-item.is-out { margin-top: 4px; border-top: 1px solid rgb(var(--ink-100) / 0.1); border-radius: 0 0 2px 2px; }
 .vx-pmenu-item.is-out > svg { color: inherit; }
 @media (prefers-reduced-motion: reduce) { .vx-pmenu { animation: none; } }
 html.reduce-motion .vx-pmenu { animation: none; }
 @media (max-width: 767px) {
   .vx-topbar { gap: 10px; margin-bottom: 2px; padding: max(8px, var(--safe-top)) var(--vx-gutter) 8px; }
-  .vx-topbar-context { font-size: 17px; }
 }
 
 /* ------------------------------------------------------- phone tab bar */
-/* 10.1 — the chrome material: content scrolls under it and shows through,
-   blurred, with the playing artwork's colour rising faintly from the bottom.
-   The specular line runs along its top edge, the hairline above it. */
+/* A black wash rising from the bottom edge; the page shows faintly through
+   its top. Icon over label; the current tab is white and bold. */
 .vx-dock {
-  --mat-tint: linear-gradient(0deg, rgb(var(--art) / var(--vx-mat-art)), transparent 80%);
-  box-shadow: inset 0 1px 0 var(--vx-mat-specular), 0 -1px 0 var(--vx-mat-hairline);
+  background: linear-gradient(to top, rgb(0 0 0) 0%, rgb(0 0 0 / 0.96) 60%, rgb(0 0 0 / 0.88) 100%);
 }
 .vx-dock-item {
   display: flex;
@@ -510,137 +502,145 @@ html.reduce-motion .vx-pmenu { animation: none; }
   justify-content: center;
   gap: 4px;
   min-height: 60px;
-  padding: 6px 2px 6px;
-  color: rgb(var(--ink-400));
+  padding: 8px 2px 6px;
+  color: rgb(var(--ink-300));
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 400;
 }
-/* The active tab's icon sits in a solid Marigold pill, its label in cream. */
 .vx-dock-pill {
   display: grid;
   place-items: center;
-  width: 56px;
-  height: 30px;
-  border-radius: var(--radius-pill);
-  transition: background-color var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard), transform var(--dur-quick) var(--ease-spring);
+  width: 32px;
+  height: 28px;
+  transition: transform var(--dur-quick) var(--ease-standard);
 }
 .vx-dock-item:active .vx-dock-pill { transform: scale(0.9); }
-/* v2 — the active tab's pill grows out from its icon. */
-.vx-dock-active .vx-dock-pill { animation: vx-pill-in var(--dur-slow) var(--ease-spring) backwards; }
-@keyframes vx-pill-in { from { transform: scaleX(0.55); opacity: 0.4; } }
-.vx-dock-active, .vx-dock-active:hover { color: rgb(var(--ink-100)); font-weight: 800; }
-.vx-dock-active .vx-dock-pill { background: rgb(var(--ember-500)); color: var(--vx-on-accent); }
+.vx-dock-active, .vx-dock-active:hover { color: rgb(var(--ink-100)); font-weight: 700; }
 
-/* ---------------------------------------------------------- player deck */
-.vx-deck-wrap { padding: 0 var(--vx-deck-gap) var(--vx-deck-gap); }
+/* ---------------------------------------------------------- player bar */
+.vx-deck-wrap { background: rgb(var(--ink-950)); }
 .vx-deck {
-  --mat-lift: var(--vx-deck-shadow);
   position: relative;
   overflow: hidden;
-  border-radius: 22px;
+  background: rgb(var(--ink-950));
 }
-/* v2 — a new song slides in: artwork and titles arrive together. */
+/* A new song slides in: artwork and titles arrive together. */
 .vx-deck.np-changed .vx-pb-track > * { animation: vx-track-in var(--dur-slow) var(--ease-enter) backwards; }
 .vx-deck.np-changed .vx-pb-track > :nth-child(2) { animation-delay: 40ms; }
 .np-mini.np-changed .np-mini-thumb { animation: vx-track-in var(--dur-slow) var(--ease-enter) backwards; }
 @keyframes vx-track-in { from { opacity: 0; transform: translateX(-8px); } }
-/* A hairline of the brand gradient along the deck's top edge. */
-.vx-deck::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 18%;
-  right: 18%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgb(var(--ember-500) / 0.55), rgb(var(--tide-500) / 0.4), transparent);
-  pointer-events: none;
-}
-/* The artwork's colour bleeds in from the left edge, very quietly. */
-.vx-deck::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, rgb(var(--art) / 0.16), transparent 38%);
-  pointer-events: none;
-}
 .vx-pb-row {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(360px, 1.5fr) minmax(220px, 1fr);
+  grid-template-columns: minmax(180px, 30%) minmax(320px, 40%) minmax(180px, 30%);
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   min-height: var(--vx-player-h);
-  padding: 8px 14px 8px 10px;
+  padding: 0 16px 0 8px;
 }
-.vx-pb-track { display: flex; align-items: center; gap: 14px; min-width: 0; }
-.vx-pb-art { position: relative; display: block; overflow: hidden; border-radius: var(--radius-art); box-shadow: var(--vx-art-shadow); }
+.vx-pb-track { display: flex; align-items: center; gap: 12px; min-width: 0; padding-left: 8px; }
+.vx-pb-art { position: relative; display: block; overflow: hidden; border-radius: var(--radius-sm, 4px); box-shadow: 0 4px 12px rgb(0 0 0 / 0.5); }
 .vx-pb-art-hint {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgb(0 0 0 / 0.45);
+  background: rgb(0 0 0 / 0.5);
   color: #fff;
   opacity: 0;
   transition: opacity var(--dur-quick) var(--ease-standard);
 }
 .vx-pb-art:hover .vx-pb-art-hint, .vx-pb-art:focus-visible .vx-pb-art-hint { opacity: 1; }
-.vx-pb-title { color: rgb(var(--ink-100)); font-size: 14px; font-weight: 700; }
-.vx-pb-sub { overflow: hidden; color: rgb(var(--ink-400)); font-size: 12.5px; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
+.vx-pb-title { color: rgb(var(--ink-100)); font-size: 14px; font-weight: 400; }
+.vx-pb-title:hover { text-decoration: underline; text-underline-offset: 2px; }
+.vx-pb-sub { overflow: hidden; color: rgb(var(--ink-300)); font-size: 12px; font-weight: 400; white-space: nowrap; text-overflow: ellipsis; }
 .vx-pb-sub a:hover { color: rgb(var(--ink-100)); text-decoration: underline; text-underline-offset: 2px; }
-.vx-pb-center { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
-.vx-pb-center > div:last-child { width: 100%; max-width: 640px; }
-.vx-pb-tools { display: flex; align-items: center; justify-content: flex-end; gap: 2px; min-width: 0; }
+.vx-pb-track > button[aria-pressed] { color: rgb(var(--ink-300)); }
+.vx-pb-track > button[aria-pressed]:hover { color: rgb(var(--ink-100)); }
+.vx-pb-track > button[aria-pressed='true'] { color: rgb(var(--ember-500)); }
+.vx-pb-center { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.vx-pb-center > div:first-child { gap: 16px; }
+.vx-pb-center > div:last-child { width: 100%; max-width: 722px; }
+.vx-pb-center .vx-icon-btn, .vx-pb-center > div:first-child > button:not(.np-play-desktop) { color: rgb(var(--ink-300)); }
+.vx-pb-center > div:first-child > button:not(.np-play-desktop):hover { color: rgb(var(--ink-100)); transform: scale(1.04); }
+/* Shuffle and repeat on: green, with a dot under the icon. */
+.vx-pb-center > div:first-child > button[aria-pressed='true'] { position: relative; color: rgb(var(--ember-500)); }
+.vx-pb-center > div:first-child > button[aria-pressed='true']:hover { color: rgb(var(--ember-400)); }
+.vx-pb-center > div:first-child > button[aria-pressed='true']::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+.vx-pb-tools { display: flex; align-items: center; justify-content: flex-end; gap: 4px; min-width: 0; }
 .vx-pb-link {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   color: rgb(var(--ink-300));
-  transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
+  transition: color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
-.vx-pb-link::after { content: ''; position: absolute; inset: -4px; }
-.vx-pb-link:hover { color: rgb(var(--ink-100)); background: var(--vx-hover-warm); }
-.vx-pb-link[aria-current='page'] { color: rgb(var(--ember-400)); }
-.vx-volume { width: 96px; }
-/* The play button is a Marigold squircle: VinaX's shape and colour for "play". */
+.vx-pb-link::after { content: ''; position: absolute; inset: -6px; }
+.vx-pb-link:hover { color: rgb(var(--ink-100)); transform: scale(1.04); }
+.vx-pb-link:is([aria-current='page'], [aria-pressed='true']) { color: rgb(var(--ember-500)); }
+.vx-pb-link:is([aria-current='page'], [aria-pressed='true'])::before {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+.vx-pb-tools .vx-icon-btn { color: rgb(var(--ink-300)); }
+.vx-pb-tools .vx-icon-btn:hover { color: rgb(var(--ink-100)); }
+.vx-volume { width: 93px; }
+/* Play: a white circle with a black glyph. */
 .np-play-desktop {
   position: relative;
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 15px;
-  background: rgb(var(--ember-500));
-  color: var(--vx-on-accent);
-  box-shadow: 0 10px 22px -12px rgb(var(--ember-600) / 0.9);
-  transition: transform var(--dur-quick) var(--ease-spring), background-color var(--dur-quick) var(--ease-standard);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgb(var(--ink-100));
+  color: rgb(var(--ink-950));
+  transition: transform var(--dur-quick) var(--ease-standard);
 }
-.np-play-desktop::after { content: ''; position: absolute; inset: -1px; }
-.np-play-desktop:hover { transform: scale(1.05); background: rgb(var(--ember-400)); }
-.np-play-desktop:active { transform: scale(0.95); }
-/* v2 — play ⇄ pause: the new glyph springs in (the icons swap, so each mounts fresh). */
+.np-play-desktop svg { width: 16px; height: 16px; }
+.np-play-desktop::after { content: ''; position: absolute; inset: -6px; }
+.np-play-desktop:hover { transform: scale(1.06); }
+.np-play-desktop:active { transform: scale(0.96); }
+/* Play ⇄ pause: the new glyph springs in (the icons swap, so each mounts fresh). */
 :is(.np-play-desktop, .np-mini-play) > svg { animation: vx-glyph-in var(--dur-base) var(--ease-spring) backwards; }
-@keyframes vx-glyph-in { from { opacity: 0; transform: scale(0.6) rotate(-12deg); } }
+@keyframes vx-glyph-in { from { opacity: 0; transform: scale(0.6); } }
 
-/* Phone: the compact player floats above the tab bar — a chrome pane tinted
-   with the cover's living colour (--art), strongest behind the artwork. */
+/* Phone: the mini player, a card in the artwork's colour (--art, darkened)
+   floating above the tab bar, with a white progress line along its foot. */
 .np-mini {
-  --mat-lift: var(--vx-deck-shadow);
-  --mat-tint: linear-gradient(90deg, rgb(var(--art) / 0.2), rgb(var(--art) / 0.06));
-  border-radius: 16px;
+  border-radius: 6px;
+  background: linear-gradient(rgb(var(--art) / 0.55), rgb(var(--art) / 0.55)), rgb(var(--ink-850));
+  box-shadow: none;
 }
-html.light .np-mini { --mat-tint: linear-gradient(90deg, rgb(var(--art) / 0.14), rgb(var(--art) / 0.04)); }
-html.amoled .np-mini { --mat-tint: none; }
-.np-mini-thumb { border-radius: 10px; }
-.np-mini-play { border-radius: 12px; }
-/* Play is Marigold on the phone too (beats the utility fill on the button). */
-.np-mini .np-mini-play { background: rgb(var(--ember-500)); color: var(--vx-on-accent); }
-.np-mini-progress { position: absolute; left: 12px; right: 12px; bottom: 0; height: 2px; overflow: hidden; border-radius: 2px; background: rgb(var(--ink-100) / 0.14); }
-.np-mini-progress > i { display: block; width: 100%; height: 100%; border-radius: 2px; background: rgb(var(--ember-400)); transform-origin: left; transition: transform 300ms linear; }
+.np-mini-thumb { border-radius: 4px; }
+.np-mini-thumb img { border-radius: 4px; }
+.np-mini .np-mini-play { width: 40px; height: 40px; border-radius: 50%; background: transparent; color: rgb(var(--ink-100)); }
+.np-mini .np-mini-play svg { width: 26px; height: 26px; }
+.np-mini .np-mini-tool { color: rgb(var(--ink-100)); }
+.np-mini .np-mini-tool[aria-pressed='true'] { color: rgb(var(--ember-500)); }
+.np-mini-progress { position: absolute; left: 8px; right: 8px; bottom: 0; height: 2px; overflow: hidden; border-radius: 2px; background: rgb(var(--ink-100) / 0.25); }
+.np-mini-progress > i { display: block; width: 100%; height: 100%; border-radius: 2px; background: rgb(var(--ink-100)); transform-origin: left; transition: transform 300ms linear; }
 
 /* --------------------------------------------- page and section headers */
 .vx-eyebrow { font-size: var(--vx-type-caption); font-weight: 700; letter-spacing: 0.01em; color: rgb(var(--ink-400)); }
@@ -657,9 +657,9 @@ html.amoled .np-mini { --mat-tint: none; }
   font-size: var(--vx-type-page);
   font-weight: 800;
   line-height: 1.08;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.04em;
 }
-.vx-page-header > div > p { margin-top: 6px; color: rgb(var(--ink-400)); font-size: 14px; }
+.vx-page-header > div > p { margin-top: 6px; color: rgb(var(--ink-300)); font-size: 14px; }
 .vx-display {
   font-family: var(--vx-font-display);
   font-size: var(--vx-type-display);
@@ -668,8 +668,9 @@ html.amoled .np-mini { --mat-tint: none; }
   letter-spacing: -0.04em;
 }
 .vx-section-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
-.vx-section-header h2 { font-family: var(--vx-font-display); font-size: var(--vx-type-section); font-weight: 750; line-height: 1.2; letter-spacing: -0.03em; }
-.vx-section-header p { margin-top: 3px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; }
+.vx-section-header h2 { font-family: var(--vx-font-display); font-size: var(--vx-type-section); font-weight: 700; line-height: 1.25; letter-spacing: -0.01em; }
+.vx-section-header h2 a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.vx-section-header p { margin-top: 2px; color: rgb(var(--ink-300)); font-size: 14px; font-weight: 400; }
 .vx-section-link {
   display: inline-flex;
   align-items: center;
@@ -684,7 +685,7 @@ html.amoled .np-mini { --mat-tint: none; }
   transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-section-link::after { content: ''; position: absolute; inset: -5px 0; }
-.vx-section-link:hover { color: rgb(var(--ember-400)); background: var(--vx-hover-warm); }
+.vx-section-link:hover { color: rgb(var(--ink-100)); text-decoration: underline; text-underline-offset: 2px; }
 @media (max-width: 767px) {
   .vx-page-header { align-items: flex-start; margin-bottom: 20px; }
   .vx-section-header { align-items: flex-start; }
@@ -693,8 +694,8 @@ html.amoled .np-mini { --mat-tint: none; }
 
 /* --------------------------------------------------------- rails, grids */
 .vx-shelf { margin-bottom: var(--vx-shelf-gap); }
-.vx-shelf-nav { background: rgb(var(--ink-850)); color: rgb(var(--ink-100)); }
-.vx-shelf-nav:hover { background: rgb(var(--ink-800)); }
+.vx-shelf-nav { background: rgb(var(--ink-700)); color: rgb(var(--ink-100)); }
+.vx-shelf-nav:hover { background: rgb(var(--ink-600)); transform: scale(1.04); }
 .vx-media-rail {
   display: flex;
   gap: var(--vx-card-gap);
@@ -714,8 +715,8 @@ html.amoled .np-mini { --mat-tint: none; }
 @media (min-width: 1024px) {
   .vx-media-rail.vx-media-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
-    gap: 26px var(--vx-card-gap);
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 8px 0;
     margin: 0;
     padding: 4px 0 10px;
     overflow: visible;
@@ -724,35 +725,35 @@ html.amoled .np-mini { --mat-tint: none; }
 }
 
 /* ---------------------------------------------------------------- buttons */
-/* The big play button of entity headers, the hero and the player: a squircle. */
+/* The big play button of entity headers, the hero and the player: a green circle. */
 .vx-play-fab {
   position: relative;
   display: inline-grid;
   place-items: center;
   width: 56px;
   height: 56px;
-  border-radius: 18px;
+  border-radius: 50%;
   background: rgb(var(--ember-500));
   color: var(--vx-on-accent);
-  box-shadow: 0 12px 28px -12px rgb(var(--ember-600) / 0.9);
-  transition: transform var(--dur-quick) var(--ease-spring), background-color var(--dur-quick) var(--ease-standard);
+  box-shadow: 0 8px 8px rgb(0 0 0 / 0.3);
+  transition: transform var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-play-fab:hover { background: rgb(var(--ember-400)); transform: scale(1.04); }
 .vx-play-fab:active { transform: scale(0.96); }
-.vx-play-fab svg { width: 26px; height: 26px; }
-.vx-play-fab.is-lg { width: 64px; height: 64px; border-radius: 20px; }
-.vx-play-fab.is-lg svg { width: 30px; height: 30px; }
+.vx-play-fab svg { width: 24px; height: 24px; }
+.vx-play-fab.is-lg { width: 56px; height: 56px; }
+.vx-play-fab.is-lg svg { width: 24px; height: 24px; }
 
-/* Chips (components/Chip.tsx): a quiet fill at rest, solid Marigold when chosen. */
+/* Chips (components/Chip.tsx): a white wash at rest, green when chosen. */
 .vx-chip-idle { background: rgb(var(--ink-100) / 0.07); }
-.vx-chip-idle:hover { background: rgb(var(--ink-100) / 0.13); }
+.vx-chip-idle:hover { background: rgb(var(--ink-100) / 0.12); }
 .vx-chip-on { background: rgb(var(--ember-500)); border-color: rgb(var(--ember-500)); color: var(--vx-on-accent); }
 
 /* Inputs. */
-.glass-input, .glass-search { border-radius: 14px; }
+.glass-input, .glass-search { border-radius: 4px; }
 
-/* Wide screens: the Now Playing panel beside the workspace. */
-.vx-playing-rail { background: rgb(var(--ink-950)); width: clamp(300px, 22vw, 340px); }
+/* Wide screens: the Now playing panel, the third panel on the black. */
+.vx-playing-rail { display: flex; width: clamp(280px, 22vw, 420px); padding: 0 16px 16px; border-radius: var(--radius-md, 8px); background: rgb(var(--ink-900)); }
 
 /* A short control (a 40px button, a 24px switch) with a 44px touch target:
    an invisible, centred pad, the same trick IconButton uses. */
@@ -768,8 +769,8 @@ html.amoled .np-mini { --mat-tint: none; }
 }
 
 /* ------------------------------------------------------- states, focus */
-:focus-visible { outline: 2px solid var(--vx-focus); outline-offset: 3px; }
-html.light :focus-visible { outline-color: var(--vx-focus); box-shadow: none; }
+:focus-visible { outline: 2px solid rgb(var(--ink-100)); outline-offset: 2px; }
+
 .glass-card, .glass-panel { box-shadow: none; }
 html[data-density='compact'] .vx-shelf { margin-bottom: 28px; }
 @media (hover: none), (pointer: coarse) {
@@ -778,14 +779,13 @@ html[data-density='compact'] .vx-shelf { margin-bottom: 28px; }
 }
 
 /* ------------------------------------------------- popovers, snackbars */
-/* The right-click menu: the thick material with one soft lift. */
+/* The right-click menu: #2a2a2a with one deep shadow. */
 .vx-popover {
-  --mat-lift: 0 16px 40px -12px rgb(0 0 0 / 0.55), 0 4px 12px -4px rgb(0 0 0 / 0.3);
+  --mat-lift: 0 16px 24px rgb(0 0 0 / 0.3), 0 6px 8px rgb(0 0 0 / 0.2);
   color: rgb(var(--ink-100));
 }
 .vx-pop-in { animation: vx-pop-in var(--dur-base) var(--ease-spring) backwards; }
 @keyframes vx-pop-in { from { opacity: 0; transform: scale(0.94); } }
-html.light .vx-popover { --mat-lift: 0 16px 40px -16px rgb(48 22 34 / 0.3), 0 2px 8px -2px rgb(48 22 34 / 0.12); }
 
 /* 10.1 — snackbars (components/Toasts.tsx) rise above the tab bar and the
    mini player on phones, the player deck on computers. */
@@ -806,33 +806,29 @@ html.light .vx-popover { --mat-lift: 0 16px 40px -16px rgb(48 22 34 / 0.3), 0 2p
   .vx-snackbar-region { bottom: calc(var(--mini-player-height) + var(--safe-bottom) + 14px); }
 }
 @media (min-width: 1024px) {
-  .vx-snackbar-region { bottom: calc(var(--vx-player-h) + var(--vx-deck-gap) * 2 + 12px); }
+  .vx-snackbar-region { bottom: calc(var(--vx-player-h) + 16px); }
 }
-/* A compact pill of glass: one step lighter than the chrome in dark (so it
-   lifts off the page), white glass in light. The fill is floored high
-   enough that its text keeps AA over any cover (glass.test.ts). */
+/* 1.15 — a solid blue notice with white type (contrast 4.9:1), lifted off
+   the page by one shadow. */
 .vx-snack {
-  --mat-fill: rgb(var(--ink-800) / clamp(0.86, calc(var(--glass-alpha) + 0.12), 0.98));
-  --mat-lift: 0 14px 32px -12px rgb(0 0 0 / 0.65), 0 2px 8px -2px rgb(0 0 0 / 0.3);
+  --mat-fill: rgb(32 107 196);
+  --mat-lift: 0 8px 24px rgb(0 0 0 / 0.5);
+  background: rgb(32 107 196);
   display: flex;
   align-items: center;
   gap: 12px;
   width: max-content;
   max-width: min(480px, 100%);
   min-height: 48px;
-  padding: 6px 6px 6px 18px;
-  border-radius: 20px;
-  color: rgb(var(--ink-100));
+  padding: 6px 6px 6px 16px;
+  border-radius: var(--radius-md, 8px);
+  color: #fff;
   pointer-events: auto;
   touch-action: none;
   user-select: none;
   animation: vx-snack-in var(--dur-slow) var(--ease-spring) backwards;
 }
-html.light .vx-snack {
-  --mat-fill: rgb(var(--ink-950) / clamp(0.92, calc(var(--glass-alpha) + 0.16), 0.98));
-  --mat-lift: 0 14px 32px -14px rgb(48 22 34 / 0.35), 0 2px 8px -2px rgb(48 22 34 / 0.12);
-}
-html.amoled .vx-snack { --mat-fill: rgb(var(--ink-800)); }
+
 .vx-snack:has(.vx-snack-art) { padding-left: 6px; }
 .vx-snack:not(:has(.vx-snack-action)) { padding-right: 18px; }
 .vx-snack.is-leaving { pointer-events: none; animation: vx-snack-out var(--dur-quick) var(--ease-standard) forwards; }
@@ -840,7 +836,7 @@ html.amoled .vx-snack { --mat-fill: rgb(var(--ink-800)); }
   flex-shrink: 0;
   width: 36px;
   height: 36px;
-  border-radius: 10px;
+  border-radius: 4px;
   object-fit: cover;
   background: rgb(var(--ink-700));
 }
@@ -849,26 +845,26 @@ html.amoled .vx-snack { --mat-fill: rgb(var(--ink-800)); }
   min-width: 0;
   overflow: hidden;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 400;
   line-height: 1.35;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
-/* The one action: Marigold text on the glass, 44px to hit. */
+/* The one action: bold white text on the blue, 44px to hit. */
 .vx-snack-action {
   position: relative;
   flex-shrink: 0;
   min-height: 36px;
-  padding: 0 14px;
-  border-radius: 14px;
-  color: rgb(var(--ember-400));
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  color: #fff;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 700;
   transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-snack-action::after { content: ''; position: absolute; inset: -4px 0; }
-.vx-snack-action:hover { background: var(--vx-hover-warm); }
-.vx-snack-action:active { background: rgb(var(--ember-500) / 0.18); }
+.vx-snack-action:hover { background: rgb(255 255 255 / 0.14); }
+.vx-snack-action:active { background: rgb(255 255 255 / 0.22); }
 @keyframes vx-snack-in {
   from { opacity: 0; transform: translateY(14px) scale(0.96); }
   to { opacity: 1; transform: none; }
@@ -939,10 +935,10 @@ html.reduce-motion .vx-snack { animation: none !important; transition: none !imp
 .vx-getapp-btn {
   flex: none; display: inline-flex; align-items: center; justify-content: center;
   min-height: 36px; padding: 0 16px; border-radius: var(--radius-pill);
-  font-size: 14px; font-weight: 800; white-space: nowrap;
+  font-size: 14px; font-weight: 700; white-space: nowrap;
   color: var(--vx-on-accent); background: rgb(var(--ember-500));
 }
-.vx-getapp-btn:hover { background: rgb(var(--ember-400)); }
+.vx-getapp-btn:hover { background: rgb(var(--ember-400)); transform: scale(1.04); }
 .vx-getapp-btn:focus-visible, .vx-getapp-close:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .vx-getapp-close {
   flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--radius-pill);

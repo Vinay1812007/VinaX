@@ -6,14 +6,12 @@ import { rankSongs } from '@/features/search/useSearch';
 import { recordSearchPlay } from '@/services/personalization/updater';
 import { usePlayerStore } from '@/store/playerStore';
 import { toast } from '@/store/toastStore';
-import { useSettingsStore } from '@/store/settingsStore';
-import { resolveTheme } from '@/utils/theme';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { NAV_GROUPS } from '@/constants/nav';
 import { cn } from '@/utils/cn';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
-import { MoonIcon, NextIcon, PlayIcon, PrevIcon, RepeatIcon, SearchIcon, ShuffleIcon, SparkleIcon, VolumeIcon } from './Icons';
+import { NextIcon, PlayIcon, PrevIcon, RepeatIcon, SearchIcon, ShuffleIcon, SparkleIcon, VolumeIcon } from './Icons';
 
 interface Entry {
   id: string;
@@ -121,18 +119,6 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
           }
           st.tuneQueue('surprise');
           toast('Surprise coming up ✦');
-        },
-      },
-      {
-        id: 'a-theme',
-        icon: MoonIcon,
-        label: 'Toggle theme',
-        hint: 'Appearance',
-        kind: 'action',
-        run: () => {
-          const s = useSettingsStore.getState();
-          const resolved = resolveTheme(s.theme, window.matchMedia('(prefers-color-scheme: dark)').matches);
-          s.setTheme(resolved === 'light' ? 'dark' : 'light');
         },
       },
     ];

@@ -9,10 +9,10 @@
    Row anatomy (one flex line, every column optional):
      [ play button: # | art | title + artist ]  [ album ]  [ ♥ ]  [ 3:45 ]  [ ⋯ ]
    The number sits INSIDE the play button, so the whole left block is one
-   target and the number turns into a play glyph on hover. The playing row
-   carries a Marigold bar on its leading edge, a warm Marigold wash and a
-   Marigold title; its number becomes a small Marigold equaliser. The header row (.vx-tracklist-head) uses the
-   same column widths.
+   target and the number turns into a play glyph on hover. Hover is a white
+   wash with a 4px corner; the playing row has a green title and its number
+   becomes a small green equaliser. The header row (.vx-tracklist-head) uses
+   the same column widths.
    ========================================================================= */
 
 .vx-track-row {
@@ -23,31 +23,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 60px;
+  min-height: 56px;
   padding: 0 8px;
-  border-radius: 14px;
-  transition: background-color var(--dur-quick) var(--ease-standard);
+  border-radius: 4px;
+  transition: background-color var(--dur-instant) var(--ease-standard);
 }
-.vx-track-row:hover { background: rgb(var(--ink-100) / 0.06); }
-.vx-track-row.is-current {
-  /* 10.0 Marigold: the wash warms from the leading bar and fades across the row. */
-  background: linear-gradient(90deg, rgb(var(--ember-500) / 0.16), rgb(var(--ember-500) / 0.06) 55%, rgb(var(--ember-500) / 0.03));
-}
-html.light .vx-track-row.is-current { background: linear-gradient(90deg, rgb(var(--ember-500) / 0.12), rgb(var(--ember-500) / 0.04) 55%, rgb(var(--ember-500) / 0.02)); }
-.vx-track-row.is-current::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 14px;
-  bottom: 14px;
-  width: 3px;
-  border-radius: 3px;
-  background: rgb(var(--ember-500));
-  box-shadow: 0 0 10px rgb(var(--ember-500) / 0.55);
-}
-html.light .vx-track-row.is-current::before { box-shadow: none; }
-.vx-track-row.is-current:hover { background: linear-gradient(90deg, rgb(var(--ember-500) / 0.2), rgb(var(--ember-500) / 0.09) 55%, rgb(var(--ember-500) / 0.05)); }
-html.light .vx-track-row.is-current:hover { background: linear-gradient(90deg, rgb(var(--ember-500) / 0.16), rgb(var(--ember-500) / 0.07) 55%, rgb(var(--ember-500) / 0.04)); }
+.vx-track-row:hover { background: rgb(var(--ink-100) / 0.1); }
+.vx-track-row:active { background: rgb(var(--ink-100) / 0.14); }
 
 .vx-track-play {
   display: flex;
@@ -57,7 +39,7 @@ html.light .vx-track-row.is-current:hover { background: linear-gradient(90deg, r
   min-width: 0;
   min-height: 60px;
   padding: 8px 0;
-  border-radius: 12px;
+  border-radius: 8px;
   text-align: left;
 }
 .vx-track-play:focus-visible { outline-offset: -2px; }
@@ -78,7 +60,7 @@ html.light .vx-track-row.is-current:hover { background: linear-gradient(90deg, r
 .vx-track-index { grid-area: 1 / 1; }
 .vx-track-glyph { grid-area: 1 / 1; width: 16px; height: 16px; color: rgb(var(--ink-100)); opacity: 0; }
 .vx-track-number .vx-eq { grid-area: 1 / 1; }
-.vx-track-row.is-current .vx-track-index { color: rgb(var(--ember-400)); }
+.vx-track-row.is-current .vx-track-index { color: rgb(var(--ember-500)); }
 .vx-track-row.is-playing .vx-track-index { opacity: 0; }
 @media (hover: hover) and (pointer: fine) {
   .vx-track-row:hover .vx-track-index,
@@ -97,7 +79,7 @@ html.light .vx-track-row.is-current:hover { background: linear-gradient(90deg, r
   height: 44px;
   flex-shrink: 0;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgb(var(--ink-800));
 }
 .vx-track-art img { width: 100%; height: 100%; object-fit: cover; }
@@ -129,20 +111,20 @@ html.light .vx-track-row.is-current:hover { background: linear-gradient(90deg, r
   gap: 6px;
   min-width: 0;
   color: rgb(var(--ink-100));
-  font-size: 15px;
-  font-weight: 650;
+  font-size: 16px;
+  font-weight: 400;
   line-height: 1.3;
-  letter-spacing: -0.008em;
+  letter-spacing: 0;
 }
 .vx-track-title > span:first-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.vx-track-row.is-current .vx-track-title { color: rgb(var(--ember-400)); }
+.vx-track-row.is-current .vx-track-title { color: rgb(var(--ember-500)); }
 .vx-track-sub {
   display: block;
-  margin-top: 3px;
+  margin-top: 2px;
   overflow: hidden;
-  color: rgb(var(--ink-400));
-  font-size: 13px;
-  font-weight: 500;
+  color: rgb(var(--ink-300));
+  font-size: 14px;
+  font-weight: 400;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -152,8 +134,8 @@ html.light .vx-track-row.is-current:hover { background: linear-gradient(90deg, r
   flex-shrink: 0;
   width: 16px;
   height: 16px;
-  border-radius: 4px;
-  background: rgb(var(--ink-400));
+  border-radius: 2px;
+  background: rgb(var(--ink-300));
   color: rgb(var(--ink-900));
   font-size: 9px;
   font-weight: 800;
@@ -259,19 +241,30 @@ html[data-density='compact'] .vx-track-art { width: 38px; height: 38px; }
 .vx-tracklist.no-album .vx-tracklist-head .h-album { display: none; }
 
 /* ------------------------------------------------------------ media cards */
-.vx-media-card { position: relative; display: block; padding: 0; background: transparent; }
+/* 1.15 — a card is its artwork (4px corner, a circle for people) over a
+   title and a two-line subtitle. On a computer the card carries 12px of
+   padding and a quiet white wash on hover, and a green play button rises in
+   at the artwork's bottom-right corner. */
+.vx-media-card { position: relative; display: block; padding: 0; border-radius: 6px; background: transparent; transition: background-color var(--dur-base) var(--ease-standard); }
+@media (hover: hover) and (pointer: fine) and (min-width: 768px) {
+  .vx-media-card { padding: 12px; }
+  .vx-media-card:not(.w-full) { box-sizing: content-box; }
+  .vx-media-card:hover { background: rgb(var(--ink-100) / 0.07); }
+  .vx-media-card:active { background: rgb(var(--ink-950)); }
+  .vx-media-rail { gap: 0; padding-inline: calc(var(--vx-gutter) - 12px); }
+  .vx-media-rail.vx-media-grid { margin-inline: -12px; padding-inline: 0; }
+}
 .vx-media-art {
   position: relative;
   overflow: hidden;
   aspect-ratio: 1;
-  border-radius: 16px;
-  background: rgb(var(--ink-850));
-  box-shadow: var(--vx-art-shadow);
-  transition: transform 220ms var(--vx-ease-out, var(--ease-calm)), box-shadow var(--dur-base) var(--ease-standard);
+  border-radius: var(--radius-sm, 4px);
+  background: rgb(var(--ink-800));
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
 }
-.vx-media-art img { border-radius: inherit; transition: filter var(--dur-base) var(--ease-standard); }
+.vx-media-art img { border-radius: inherit; }
 .vx-media-art.is-artist { border-radius: 50%; }
-/* v2 — an artist with no photo: initials on a tint picked from their name. */
+/* An artist with no photo: initials on a tint picked from their name. */
 .vx-media-monogram {
   display: grid;
   place-items: center;
@@ -282,73 +275,38 @@ html[data-density='compact'] .vx-track-art { width: 38px; height: 38px; }
   color: rgb(255 255 255 / 0.92);
   font-family: var(--font-display);
   font-size: 44px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-}
-html.light .vx-media-monogram { background: radial-gradient(120% 120% at 30% 20%, hsl(var(--mono-h) 55% 56%), hsl(var(--mono-h) 50% 34%)); }
-/* Hover shine (glass sweep): two sharp slanted white stripes, one wide and one
-   thin, sweep across the art once each time the pointer enters, and the edge
-   lights up with a thin white rim. Layering: the hover darken filter lifts the
-   img into its own layer, so the stripes need z-index 1 to stay above it, and
-   the heart / play buttons get z-index 2 to stay above the stripes.
-   Transform and opacity only. */
-.vx-media-art::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background: linear-gradient(
-    115deg,
-    transparent 36%,
-    rgba(255, 255, 255, 0.55) 36.6%, rgba(255, 255, 255, 0.55) 44%,
-    transparent 44.6%, transparent 47%,
-    rgba(255, 255, 255, 0.45) 47.6%, rgba(255, 255, 255, 0.45) 49.4%,
-    transparent 50%
-  );
-  transform: translateX(-100%);
-}
-.vx-media-art::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.5);
-  opacity: 0;
-  transition: opacity var(--dur-base) var(--ease-standard);
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 .vx-media-art .vx-card-fav,
 .vx-media-art .card-play { z-index: 2; }
-@media (hover: hover) and (pointer: fine) {
-  .vx-media-card:hover .vx-media-art { transform: translateY(-3px); }
-  .vx-media-card:hover .vx-media-art img { filter: brightness(0.92); }
-  .vx-media-card:hover .vx-media-art::before { animation: vxCardShine 650ms cubic-bezier(0.3, 0.6, 0.4, 1) both; }
-  .vx-media-card:hover .vx-media-art::after { opacity: 1; }
-}
-@keyframes vxCardShine {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(100%); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .vx-media-card:hover .vx-media-art::before { animation: none; }
-}
 .vx-media-title {
   display: block;
-  margin-top: 12px;
+  margin-top: 8px;
   overflow: hidden;
-  font-size: 14px;
-  font-weight: 650;
-  line-height: 1.35;
-  letter-spacing: -0.01em;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: 0;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 .vx-media-title a { color: rgb(var(--ink-100)); }
 .vx-media-title a:hover { text-decoration: underline; text-underline-offset: 2px; }
-.vx-media-subtitle { margin-top: 3px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; line-height: 1.35; }
+.vx-media-subtitle {
+  display: -webkit-box;
+  margin-top: 2px;
+  overflow: hidden;
+  color: rgb(var(--ink-300));
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
 
-/* The card's favourite badge (MediaCard): quiet until wanted. */
+/* The card's like badge (MediaCard): only on hover, or once liked. */
 .vx-card-fav {
   position: absolute;
   top: 8px;
@@ -358,47 +316,46 @@ html.light .vx-media-monogram { background: radial-gradient(120% 120% at 30% 20%
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  /* Always dark (it sits on artwork): the plum-black of the dark canvas.
-     No backdrop blur: every card has this badge, and a blur on each one
-     made Chrome keep a separate layer per card (and for everything drawn
-     after it). On a long Home that ran out of graphics memory and parts of
-     the screen, the sidebar included, went blank while scrolling. */
-  background: rgb(13 9 15 / 0.66);
-  color: #fff;
+  /* Always dark (it sits on artwork). No backdrop blur: every card has this
+     badge, and a blur on each one made Chrome keep a separate layer per card;
+     on a long Home that ran out of graphics memory and parts of the screen
+     went blank while scrolling. */
+  background: rgb(0 0 0 / 0.6);
+  color: rgb(255 255 255);
   transition: opacity var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-card-fav::after { content: ''; position: absolute; inset: -6px; }
-.vx-card-fav:hover { background: rgb(13 9 15 / 0.75); }
+.vx-card-fav:hover { background: rgb(0 0 0 / 0.75); transform: scale(1.04); }
 .vx-card-fav:active { transform: scale(0.9); }
-.vx-card-fav.is-on { color: rgb(var(--ember-400)); }
+.vx-card-fav.is-on { color: rgb(var(--ember-500)); }
 .vx-card-fav.hover-reveal { opacity: 0; }
 .group:hover .vx-card-fav.hover-reveal, .group:focus-within .vx-card-fav.hover-reveal { opacity: 1; }
 @media (hover: none), (pointer: coarse) { .vx-card-fav.hover-reveal { opacity: 0; pointer-events: none; } }
 
-/* The card's play button: a Marigold squircle that rises in on hover. */
+/* The card's play button: a green circle that rises in on hover. */
 .card-play {
   position: absolute;
-  right: 10px;
-  bottom: 10px;
+  right: 8px;
+  bottom: 8px;
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 15px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
   background: rgb(var(--ember-500));
   color: var(--vx-on-accent);
-  box-shadow: 0 10px 22px -8px rgb(0 0 0 / 0.65), 0 6px 18px -6px rgb(var(--ember-500) / 0.45);
+  box-shadow: 0 8px 8px rgb(0 0 0 / 0.3);
   opacity: 0;
   transform: translateY(8px);
-  transition: opacity var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
+  transition: opacity var(--dur-base) var(--ease-standard), transform var(--dur-base) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard);
 }
-.card-play svg { width: 22px; height: 22px; margin-left: 2px; }
+.card-play svg { width: 22px; height: 22px; margin-left: 1px; }
 .group:hover .card-play, .group:focus-within .card-play { opacity: 1; transform: none; }
-.card-play:hover { background: rgb(var(--ember-400)); transform: scale(1.05); }
-.vx-media-art.is-artist .card-play { right: 8%; bottom: 8%; border-radius: 50%; }
+.card-play:hover { background: rgb(var(--ember-400)); transform: scale(1.04); }
+.vx-media-art.is-artist .card-play { right: 8%; bottom: 8%; }
 .card-scrim { display: none; }
 @media (hover: none), (pointer: coarse) {
-  /* Touch has no hover: the play button stays visible, smaller. */
-  .card-play { opacity: 1; transform: none; width: 40px; height: 40px; right: 8px; bottom: 8px; border-radius: 13px; }
+  /* Touch has no hover: the play button stays, smaller, so a song still plays in one tap. */
+  .card-play { opacity: 1; transform: none; width: 36px; height: 36px; right: 6px; bottom: 6px; }
   .card-play svg { width: 18px; height: 18px; }
 }

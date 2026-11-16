@@ -183,13 +183,13 @@ export const TUTORIALS: Tutorial[] = [
   },
   {
     id: 'app-look',
-    title: 'Change the app’s look',
-    blurb: 'Dark, light or black, and your own accent colour.',
+    title: 'Make it easy to read',
+    blurb: 'Bigger text and controls, more contrast, less motion.',
     minutes: 1,
-    emoji: '🎨',
+    emoji: '🔠',
     steps: [
-      { route: '/settings', target: '[aria-label="Theme"] [aria-checked="true"]', title: 'Theme', body: 'This is the theme in use. Choose Dark, Black or Light, or let it follow your device or the time of day.', action: reveal('[aria-label="Theme"]'), placement: 'bottom' },
-      { route: '/settings', target: '[aria-label="Custom accent colour"]', title: 'Accent colour', body: 'Choose one of the preset accents, or pick any colour here and VinaX builds the palette from it.', action: reveal('[aria-label="Custom accent colour"]'), placement: 'bottom' },
+      { route: '/settings', target: '[aria-label="Display size"] [aria-checked="true"]', title: 'Display size', body: 'Small, Default or Large scales the text and controls everywhere in VinaX.', action: reveal('[aria-label="Display size"]'), placement: 'bottom' },
+      { route: '/settings', target: '[aria-label="High contrast"]', title: 'High contrast', body: 'Brighter text, visible borders and a strong focus ring.', action: reveal('[aria-label="High contrast"]'), placement: 'bottom' },
     ],
   },
   {

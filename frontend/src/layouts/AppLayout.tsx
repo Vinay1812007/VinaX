@@ -15,7 +15,7 @@ import { NowPlayingAnnouncer } from '@/components/NowPlayingAnnouncer';
 const NextUpCard = lazy(() => import('@/components/NextUpCard').then(m => ({ default: m.NextUpCard })));
 const NowPlayingRail = lazy(() => import('@/components/NowPlayingRail').then(m => ({ default: m.NowPlayingRail })));
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { TopBar } from '@/components/TopBar';
+import { TopBar, WindowBar } from '@/components/TopBar';
 import { GetAppSlot } from '@/components/GetAppSlot';
 import { useUiStore } from '@/store/uiStore';
 import { DiagBanner } from '@/components/DiagBanner';
@@ -31,7 +31,7 @@ const VersionNotice = lazy(() => import('@/components/OwnerMessages').then((m) =
 const AnnouncementPopup = lazy(() => import('@/components/OwnerMessages').then((m) => ({ default: m.AnnouncementPopup })));
 import { applyUsageSharingDefault, initTelemetry } from '@/services/analytics/telemetry';
 import { initSessionInsights } from '@/services/analytics/sessionInsights';
-import { applyGlassLevel, applyThemeClasses, resolveTheme } from '@/utils/theme';
+import { applyGlassLevel, applyThemeClasses } from '@/utils/theme';
 import { closeTopOverlay } from '@/hooks/useDismissOnBack';
 import { recallScroll, rememberScroll, restoreWhenTall } from '@/features/nav/scrollMemory';
 import { shouldRescueTouch, shouldRescueWheel } from '@/features/nav/wheelRescue';
@@ -119,6 +119,9 @@ const recsDebugWanted = recsDebugEnabled();
 
 export function AppLayout() {
   const wideWorkspace = useMediaQuery('(min-width: 1280px)');
+  // 1.15 — 768px and wider: the window bar across the top, the library, the page and the Now playing panel as three panels.
+  const windowBar = useMediaQuery('(min-width: 768px)');
+  const nowPlayingView = useSettingsStore((s) => s.nowPlayingView);
   const hasTrack = usePlayerStore(s => s.queue.length > 0);
   const inSession = useTogether((s) => s.mode !== 'idle');
   // 1.12 — read once per mount and kept until the first navigation: the flag
@@ -174,15 +177,10 @@ export function AppLayout() {
     return () => document.removeEventListener('visibilitychange', tryResume);
   }, []);
   const navigationType = useNavigationType();
-  const theme = useSettingsStore((s) => s.theme);
-  const accent = useSettingsStore((s) => s.accent);
   const template = useSettingsStore((s) => s.template);
   const glassLevel = useSettingsStore((s) => s.glassLevel);
   const glassBlur = useSettingsStore((s) => s.glassBlur);
-  const dynamicTheme = useSettingsStore((s) => s.dynamicTheme);
-  const currentAccent = usePlayerStore((s) => s.currentAccent);
   const density = useSettingsStore((s) => s.density);
-  const accentCustom = useSettingsStore((s) => s.accentCustom);
   const uiScale = useSettingsStore((s) => s.uiScale);
   const highContrast = useSettingsStore((s) => s.highContrast);
   const location = useLocation();
@@ -434,44 +432,14 @@ export function AppLayout() {
   }, [locationKey, navigationType]);
 
   useEffect(() => {
-    const apply = () => {
-      const resolved = resolveTheme(theme, window.matchMedia('(prefers-color-scheme: dark)').matches);
-      applyThemeClasses(resolved, document.documentElement, template);
-      document.documentElement.dataset.accent = accent;
-      document.documentElement.dataset.density = density;
-      // v5.17.0 — custom accent (one hex → derived ramps), display size, high contrast.
-      // Custom accent math lives in a lazy chunk — only listeners who picked one pay for it.
-      if (accent === 'custom' && accentCustom) void import('@/utils/accentRamp').then((m) => m.applyCustomAccent(accentCustom, resolved === 'light')).catch(() => undefined);
-      document.documentElement.style.fontSize = uiScale === 'sm' ? '15px' : uiScale === 'lg' ? '17.5px' : '';
-      document.documentElement.classList.toggle('hc', highContrast);
-      applyGlassLevel(glassLevel, glassBlur);
-
-      // Dynamic accent (experimental, off by default): the artwork-tint math
-      // lives in a lazy chunk so first-load users never pay for it.
-      if (dynamicTheme && currentAccent) {
-        void import('@/utils/dynamicAccent').then((m) => m.applyArtAccent(currentAccent)).catch(() => undefined);
-      } else {
-        const st = document.documentElement.style;
-        st.removeProperty('--ember-500');
-        st.removeProperty('--ember-400');
-        st.removeProperty('--ember-600');
-        if (accent === 'custom' && accentCustom) void import('@/utils/accentRamp').then((m) => m.applyCustomAccent(accentCustom, resolved === 'light')).catch(() => undefined);
-      }
-    };
-    apply();
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    mq.addEventListener('change', apply);
-    // v5.12.0 — Auto follows the clock; re-check each minute so the sunset
-    // flip happens without a reload. The interval belongs to THIS effect run
-    // and is cleared with it (it used to be created inside apply() and its
-    // cleanup discarded — one leaked interval per dependency change — and the
-    // early return skipped accent/density/scale/contrast/glass for Auto).
-    const clock = theme === 'auto' ? window.setInterval(apply, 60_000) : null;
-    return () => {
-      mq.removeEventListener('change', apply);
-      if (clock !== null) window.clearInterval(clock);
-    };
-  }, [theme, template, accent, density, glassLevel, glassBlur, dynamicTheme, currentAccent, accentCustom, uiScale, highContrast]);
+    // 1.15 — one dark look: no theme, accent or dynamic-theme to apply.
+    applyThemeClasses(document.documentElement, template);
+    document.documentElement.dataset.density = density;
+    // v5.17.0 — display size, high contrast.
+    document.documentElement.style.fontSize = uiScale === 'sm' ? '15px' : uiScale === 'lg' ? '17.5px' : '';
+    document.documentElement.classList.toggle('hc', highContrast);
+    applyGlassLevel(glassLevel, glassBlur);
+  }, [template, density, glassLevel, glassBlur, uiScale, highContrast]);
 
   // Per-route canonical + index/noindex strategy (search & personal pages noindex).
   useEffect(() => {
@@ -534,10 +502,11 @@ export function AppLayout() {
         Skip to content
       </a>
       <GetAppSlot />
-      <div className="flex flex-1 min-h-0">
-        {!isChat && <Sidebar />}
-        <main ref={mainRef} id="main-content" tabIndex={-1} className={isChat ? 'vx-workspace flex-1 min-w-0 overflow-hidden' : 'vx-workspace flex-1 min-w-0 overflow-y-auto px-4 md:px-8 pb-[calc(var(--player-safe-offset)+2rem)] md:pb-28'}>
-          {!isFullScreenPlayer && <TopBar onCommands={() => setPaletteOpen(true)} />}
+      {windowBar && !isFullScreenPlayer && <WindowBar onCommands={() => setPaletteOpen(true)} />}
+      <div className={isFullScreenPlayer ? 'flex flex-1 min-h-0' : 'vx-panels flex flex-1 min-h-0'}>
+        {!isFullScreenPlayer && <Sidebar />}
+        <main ref={mainRef} id="main-content" tabIndex={-1} className={isChat ? 'vx-workspace flex-1 min-w-0 overflow-hidden' : 'vx-workspace flex-1 min-w-0 overflow-y-auto px-4 md:px-6 pb-[calc(var(--player-safe-offset)+2rem)] md:pb-28 lg:pb-10'}>
+          {!isFullScreenPlayer && <TopBar windowBar={windowBar} onCommands={() => setPaletteOpen(true)} />}
           {!isChat && <MobileBackBar />}
           <DiagBanner />
           <OfflineBanner />
@@ -554,9 +523,19 @@ export function AppLayout() {
           </ErrorBoundary>
         </main>
         <PlayerErrorBoundary silent>
-          {wideWorkspace && hasTrack && !isFullScreenPlayer && <Suspense fallback={null}><NowPlayingRail /></Suspense>}
+          {wideWorkspace && nowPlayingView && hasTrack && !isFullScreenPlayer && <Suspense fallback={null}><NowPlayingRail /></Suspense>}
         </PlayerErrorBoundary>
       </div>
+      {/* Phones and tablets: the player and the tab bar float over the page.
+          1.15 — from 1024px the player bar sits in the window's flow, under the panels. */}
+      {!isFullScreenPlayer && (
+        <div ref={bottomChromeRef} className="vx-bottom-chrome fixed bottom-0 inset-x-0 z-40 pb-[var(--safe-bottom)] lg:static lg:pb-0">
+          <PlayerErrorBoundary>
+            <PlayerBar />
+          </PlayerErrorBoundary>
+          <BottomNav />
+        </div>
+      )}
       <Toasts />
       {liveOn && (
         <Suspense fallback={<div className="vx-ai-live" role="status" aria-label="Opening Live voice" />}>
@@ -599,14 +578,6 @@ export function AppLayout() {
         <Suspense fallback={null}>
           <SignInPrompt />
         </Suspense>
-      )}
-      {!isFullScreenPlayer && (
-        <div ref={bottomChromeRef} className="fixed bottom-0 inset-x-0 z-40 pb-[var(--safe-bottom)]">
-          <PlayerErrorBoundary>
-            <PlayerBar />
-          </PlayerErrorBoundary>
-          <BottomNav />
-        </div>
       )}
     </div>
   );

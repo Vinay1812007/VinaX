@@ -6,7 +6,7 @@
    Stop, and a failure is a quiet notice with the next useful step. Pills for
    actions, squircles for artwork, sentence case, motion off under either
    reduced-motion switch.
-   =========================================================================
+   ========================================================================= */
 
 .vx-studio {
   --vxs-raised: rgb(var(--ink-850));
@@ -14,9 +14,6 @@
   --vxs-field: rgb(var(--ink-850));
   max-width: 960px;
   padding-bottom: 48px;
-}
-html.light .vx-studio {
-  --vxs-field: rgb(var(--ink-950));
 }
 .vx-studio-section { margin-top: 40px; }
 .vx-studio-title {
@@ -58,7 +55,7 @@ html.light .vx-studio {
   place-items: center;
   width: 36px;
   height: 36px;
-  border-radius: 12px;
+  border-radius: 8px;
   background: rgb(var(--ink-100) / 0.07);
   color: rgb(var(--ink-200));
 }
@@ -113,8 +110,7 @@ html.light .vx-studio {
   border-radius: var(--vx-radius-panel);
   background: rgb(var(--ink-100) / 0.04);
 }
-html.light .vx-radio-live[data-state='busy'],
-html.light .vx-radio-live[data-state='on'] { background: rgb(var(--ink-850)); }
+
 .vx-radio-status { flex: 1; min-width: 0; color: rgb(var(--ink-200)); font-size: 14px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
 .vx-radio-status:empty { display: none; }
 .vx-radio-status a { color: rgb(var(--tide-400)); font-weight: 700; text-decoration: underline; text-decoration-color: rgb(var(--tide-400) / 0.4); text-underline-offset: 3px; }
@@ -129,7 +125,7 @@ html.light .vx-radio-live[data-state='on'] { background: rgb(var(--ink-850)); }
   margin: 0 4px;
   border-radius: 50%;
   background: rgb(var(--tide-400));
-  box-shadow: 0 0 0 4px rgb(var(--tide-400) / 0.18);
+  box-shadow: 0 0 0 4px rgb(0 0 0 / 0.28);
 }
 
 /* Moods: big pills with a tone-tinted radio glyph. */
@@ -149,7 +145,7 @@ html.light .vx-radio-live[data-state='on'] { background: rgb(var(--ink-850)); }
   font-weight: 700;
   transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
-html.light .vx-radio-mood { background: rgb(var(--ink-950)); box-shadow: inset 0 0 0 1px var(--vx-border); }
+
 .vx-radio-mood:hover:not(:disabled) { background: rgb(var(--tone) / 0.22); }
 .vx-radio-mood:active:not(:disabled) { transform: scale(0.97); }
 .vx-radio-mood:disabled { opacity: 0.55; }
@@ -164,7 +160,7 @@ html.light .vx-radio-mood { background: rgb(var(--ink-950)); box-shadow: inset 0
   background: rgb(var(--tone) / 0.34);
   color: color-mix(in srgb, rgb(var(--tone)) 30%, white);
 }
-html.light .vx-radio-mood-glyph { background: rgb(var(--tone) / 0.12); color: rgb(var(--tone)); }
+
 .vx-radio-mood-glyph svg { width: 20px; height: 20px; }
 .vx-radio-mood.tone-1 { --tone: var(--vxr-t1); }
 .vx-radio-mood.tone-2 { --tone: var(--vxr-t2); }
@@ -205,7 +201,7 @@ html.light .vx-radio-mood-glyph { background: rgb(var(--tone) / 0.12); color: rg
   display: block;
   aspect-ratio: 1;
   overflow: hidden;
-  border-radius: 16px;
+  border-radius: 8px;
   background: rgb(var(--ink-850));
   box-shadow: var(--vx-art-shadow);
   transition: transform 220ms var(--vx-ease-out, var(--ease-calm));
@@ -220,7 +216,7 @@ html.light .vx-radio-mood-glyph { background: rgb(var(--tone) / 0.12); color: rg
   place-items: center;
   width: 40px;
   height: 40px;
-  border-radius: 13px;
+  border-radius: 8px;
   background: rgb(var(--tide-400));
   color: rgb(var(--ink-950));
   box-shadow: 0 10px 22px -8px rgb(0 0 0 / 0.65);
@@ -228,7 +224,7 @@ html.light .vx-radio-mood-glyph { background: rgb(var(--tone) / 0.12); color: rg
   transform: translateY(6px);
   transition: opacity var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
-html.light .vx-radio-seed-badge { background: rgb(var(--tide-500)); color: #fff; }
+
 .vx-radio-seed-badge svg { width: 20px; height: 20px; }
 .vx-radio-seed:hover .vx-radio-seed-badge,
 .vx-radio-seed:focus-visible .vx-radio-seed-badge,
@@ -237,7 +233,7 @@ html.light .vx-radio-seed-badge { background: rgb(var(--tide-500)); color: #fff;
   .vx-radio-seed:hover .vx-radio-seed-art { transform: translateY(-3px); }
 }
 @media (hover: none), (pointer: coarse) {
-  .vx-radio-seed-badge { opacity: 1; transform: none; width: 34px; height: 34px; border-radius: 11px; }
+  .vx-radio-seed-badge { opacity: 1; transform: none; width: 34px; height: 34px; border-radius: 8px; }
   .vx-radio-seed-badge svg { width: 17px; height: 17px; }
 }
 .vx-radio-seed-title,
@@ -286,15 +282,15 @@ html.light .vx-radio-seed-badge { background: rgb(var(--tide-500)); color: #fff;
   border-radius: var(--vx-radius-panel);
   background: rgb(var(--ink-850));
 }
-html.light .vx-smartq { background: rgb(var(--ink-950)); box-shadow: inset 0 0 0 1px var(--vx-border); }
+
 .vx-smartq-icon {
   display: grid;
   flex-shrink: 0;
   place-items: center;
   width: 40px;
   height: 40px;
-  border-radius: 13px;
-  background: rgb(var(--tide-500) / 0.14);
+  border-radius: 8px;
+  background: rgb(var(--ink-100) / 0.14);
   color: rgb(var(--tide-400));
 }
 .vx-smartq-icon svg { width: 20px; height: 20px; }
@@ -326,8 +322,6 @@ html.light .vx-smartq { background: rgb(var(--ink-950)); box-shadow: inset 0 0 0
   transition: transform var(--dur-quick) var(--ease-standard);
 }
 .vx-smartq [role='switch'][aria-checked='true'] > span { transform: translateX(18px); }
-html.light .vx-smartq [role='switch'] { background: rgb(var(--ink-100) / 0.16); }
-html.light .vx-smartq [role='switch'][aria-checked='true'] { background: rgb(var(--ember-500)); }
 
 /* ------------------------------------------------------------------ motion */
 @keyframes vxs-shimmer {

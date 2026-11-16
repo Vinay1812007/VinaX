@@ -106,13 +106,13 @@ test('Flow is a reels feed of music videos, reached from the phone tab bar', asy
   await ctx.close();
 });
 
-test('Flow is in the desktop sidebar', async ({ browser, baseURL }) => {
+test('Flow is in the desktop window bar', async ({ browser, baseURL }) => {
   const base = baseURL!;
   const ctx = await browser.newContext({ baseURL: base, viewport: { width: 1280, height: 800 } });
   const page = await ctx.newPage();
   await setup(page, base);
   await page.goto('/');
-  await page.locator('nav.vx-sidebar-nav').getByRole('link', { name: 'Flow' }).click();
+  await page.locator('nav.vx-winbar-nav').getByRole('link', { name: 'Flow' }).click();
   await expect(page.locator('.vx-reel').first()).toBeVisible();
   await expect.poll(async () => (await reelState(page, 0))?.paused, { timeout: 15_000 }).toBe(false);
   await ctx.close();

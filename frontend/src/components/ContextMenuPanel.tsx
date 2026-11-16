@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePlayerStore } from '@/store/playerStore';
 import { useLibraryStore } from '@/store/libraryStore';
-import { useSettingsStore } from '@/store/settingsStore';
-import { resolveTheme } from '@/utils/theme';
 import { songPath } from '@/utils/slug';
 import { toast } from '@/store/toastStore';
 import { cn } from '@/utils/cn';
@@ -14,14 +12,12 @@ import {
   ChevronRightIcon,
   HeartIcon,
   HomeIcon,
-  MoonIcon,
   NextIcon,
   PlayIcon,
   QueueIcon,
   RepeatIcon,
   SearchIcon,
   ShareIcon,
-  SunIcon,
 } from './Icons';
 
 interface MenuItem {
@@ -103,15 +99,6 @@ export default function ContextMenuPanel({ menu, onClose }: { menu: ContextMenuS
       { label: 'Forward', icon: ChevronRightIcon, action: () => window.history.forward() },
       { label: 'Home', icon: HomeIcon, action: () => navigate('/') },
       { label: 'Search', icon: SearchIcon, action: () => navigate('/search') },
-      {
-        label: 'Toggle theme',
-        icon: document.documentElement.classList.contains('light') ? MoonIcon : SunIcon,
-        action: () => {
-          const s = useSettingsStore.getState();
-          const resolved = resolveTheme(s.theme, window.matchMedia('(prefers-color-scheme: dark)').matches);
-          s.setTheme(resolved === 'light' ? 'dark' : 'light');
-        },
-      },
       {
         label: 'Refresh data',
         icon: RepeatIcon,

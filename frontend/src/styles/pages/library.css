@@ -17,46 +17,47 @@
 /* ------------------------------------------------------------ entity page */
 .vx-entity { position: relative; padding-bottom: 32px; }
 
-/* The header: a wash of the artwork colour (--hero, "R G B") that glows from
-   behind the cover and fades into the workspace, drawn edge to edge behind
-   the top bar. z-index: the ⋯ menu inside must float over the list below. */
-.vx-ehead { --wash-a: 0.5; position: relative; z-index: 2; isolation: isolate; }
-html.light .vx-ehead { --wash-a: 0.3; }
-html.amoled .vx-ehead { --wash-a: 0.42; }
+/* 1.15 — the header is a solid band of the artwork's colour (--hero,
+   "R G B") from the top of the panel, darkening as it goes down; under it
+   the action bar sits on a softer band of the same colour that fades into
+   #121212. Drawn edge to edge behind the top bar. z-index: the ⋯ menu
+   inside must float over the list below. */
+.vx-ehead { --wash-a: 1; position: relative; z-index: 2; isolation: isolate; }
+
 .vx-ehead-wash {
   position: absolute;
   z-index: -1;
   top: calc(-1 * (var(--vx-topbar-h) + 8px));
   right: calc(-1 * var(--vx-gutter));
   left: calc(-1 * var(--vx-gutter));
-  height: calc(100% + var(--vx-topbar-h) + 120px);
+  height: calc(100% + var(--vx-topbar-h) + 160px);
   background:
-    radial-gradient(70% 85% at 14% 12%, rgb(var(--hero) / var(--wash-a)), rgb(var(--hero) / 0) 72%),
-    linear-gradient(180deg, rgb(var(--hero) / calc(var(--wash-a) * 0.62)) 0%, rgb(var(--hero) / calc(var(--wash-a) * 0.2)) 58%, rgb(var(--hero) / 0) 100%);
+    linear-gradient(180deg, rgb(0 0 0 / 0) 0%, rgb(0 0 0 / 0.3) calc(100% - 232px), rgb(0 0 0 / 0) 100%),
+    linear-gradient(180deg, rgb(var(--hero) / 0.85) 0%, rgb(var(--hero) / 0.55) calc(100% - 232px), rgb(var(--hero) / 0.22) calc(100% - 140px), rgb(var(--hero) / 0) 100%);
   pointer-events: none;
 }
 .vx-ehead-main {
   display: flex;
   align-items: flex-end;
-  gap: 32px;
-  padding: 20px 0 24px;
+  gap: 24px;
+  padding: 24px 0 24px;
 }
 .vx-ehead-art {
   position: relative;
-  width: clamp(184px, 19vw, 240px);
+  width: clamp(192px, 18vw, 232px);
   aspect-ratio: 1;
   flex-shrink: 0;
   overflow: hidden;
-  border-radius: var(--vx-radius-panel);
-  background: rgb(var(--ink-850));
-  box-shadow: 0 24px 48px -20px rgb(0 0 0 / 0.7);
+  border-radius: var(--radius-sm, 4px);
+  background: rgb(var(--ink-800));
+  box-shadow: 0 4px 60px rgb(0 0 0 / 0.5);
 }
-html.light .vx-ehead-art { box-shadow: 0 18px 40px -20px rgb(48 22 34 / 0.4); }
+
 .vx-ehead-art > img,
 .vx-ehead-art > div { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
 .vx-ehead-art.is-round { border-radius: 50%; }
 .vx-ehead-body { min-width: 0; flex: 1; padding-bottom: 6px; }
-.vx-ehead-kind { color: rgb(var(--ink-200)); font-size: 13px; font-weight: 700; }
+.vx-ehead-kind { color: rgb(var(--ink-100)); font-size: 14px; font-weight: 400; }
 /* Line-height leaves room for descenders and Indic vowel signs under the
    clamp; long titles step down instead of wrapping into five lines. */
 .vx-ehead-title {
@@ -64,13 +65,16 @@ html.light .vx-ehead-art { box-shadow: 0 18px 40px -20px rgb(48 22 34 / 0.4); }
   margin: 6px 0 12px;
   overflow: hidden;
   color: rgb(var(--ink-100));
-  line-height: 1.12;
+  font-size: clamp(2.5rem, 6vw, 6rem);
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
   line-clamp: 3;
 }
-.vx-ehead-title.is-long { font-size: clamp(2rem, 3.2vw, 3rem); line-height: 1.12; }
+.vx-ehead-title.is-long { font-size: clamp(2rem, 4vw, 4.5rem); line-height: 1.08; }
 /* The catalogue's verified tick, beside an artist's name. */
 .vx-verified {
   display: inline-grid;
@@ -82,58 +86,59 @@ html.light .vx-ehead-art { box-shadow: 0 18px 40px -20px rgb(48 22 34 / 0.4); }
   margin-left: 0.25em;
   vertical-align: 0.12em;
   border-radius: var(--radius-pill);
-  background: rgb(var(--ember-500));
-  color: var(--vx-on-accent);
+  background: rgb(80 155 245);
+  color: rgb(var(--ink-100));
 }
-.vx-ehead-title.is-xlong { font-size: clamp(1.625rem, 2.4vw, 2.25rem); line-height: 1.18; letter-spacing: -0.03em; }
+.vx-ehead-title.is-xlong { font-size: clamp(1.75rem, 3vw, 3rem); line-height: 1.12; letter-spacing: -0.03em; }
 .vx-ehead-desc {
   display: -webkit-box;
   max-width: 72ch;
   margin: -2px 0 10px;
   overflow: hidden;
-  color: rgb(var(--ink-300));
+  color: rgb(var(--ink-100) / 0.7);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 400;
   line-height: 1.5;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
 }
-.vx-ehead-meta { color: rgb(var(--ink-300)); font-size: 14px; font-weight: 500; line-height: 1.55; }
+.vx-ehead-meta { color: rgb(var(--ink-100) / 0.7); font-size: 14px; font-weight: 400; line-height: 1.55; }
 .vx-ehead-meta .is-lead { color: rgb(var(--ink-100)); font-weight: 700; }
 .vx-ehead-meta a { text-underline-offset: 3px; }
 .vx-ehead-meta a:hover { text-decoration: underline; }
-.vx-ehead-dot { color: rgb(var(--ink-400)); }
+.vx-ehead-dot { color: rgb(var(--ink-100) / 0.7); }
 
-/* Actions: one Marigold squircle, then quiet round buttons and the ⋯ menu. */
+/* Actions: one green play circle, then bare icons that brighten and grow
+   on hover, and the ⋯ menu. */
 .vx-ehead-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  padding: 4px 0 28px;
+  gap: 16px;
+  padding: 24px 0 24px;
 }
-.vx-ehead-fab { margin-right: 6px; }
+.vx-ehead-fab { margin-right: 8px; }
 .vx-ehead-fab:disabled { opacity: 0.45; box-shadow: none; pointer-events: none; }
 .vx-ehead-icon.vx-ehead-icon {
-  color: rgb(var(--ink-200));
-  background: rgb(var(--ink-100) / 0.07);
-  transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
+  color: rgb(var(--ink-300));
+  background: transparent;
+  transition: color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
-.vx-ehead-icon.vx-ehead-icon:hover { color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.13); }
+.vx-ehead-icon.vx-ehead-icon:hover { color: rgb(var(--ink-100)); background: transparent; transform: scale(1.04); }
 .vx-ehead-icon.vx-ehead-icon:active { transform: scale(0.95); }
 .vx-ehead-icon.vx-ehead-icon[aria-pressed='true'],
-.vx-ehead-icon.vx-ehead-icon[aria-expanded='true'] { color: rgb(var(--ember-400)); background: var(--vx-accent-wash); }
-.vx-ehead-icon svg { width: 24px; height: 24px; }
+.vx-ehead-icon.vx-ehead-icon[aria-expanded='true'] { color: rgb(var(--ember-500)); background: transparent; }
+.vx-ehead-icon svg { width: 32px; height: 32px; }
 /* An outlined pill action (Follow, Lyrics). */
 .vx-ehead-pill {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 40px;
-  padding: 0 18px;
-  border: 1px solid rgb(var(--ink-100) / 0.26);
+  min-height: 32px;
+  padding: 0 15px;
+  border: 1px solid rgb(var(--ink-600));
   border-radius: var(--radius-pill);
   background: transparent;
   color: rgb(var(--ink-100));
@@ -142,11 +147,11 @@ html.light .vx-ehead-art { box-shadow: 0 18px 40px -20px rgb(48 22 34 / 0.4); }
   transition: border-color var(--dur-quick) var(--ease-standard), color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-ehead-pill::after { content: ''; position: absolute; inset: -2px 0; }
-.vx-ehead-pill:hover { border-color: rgb(var(--ink-100) / 0.62); }
+.vx-ehead-pill:hover { border-color: rgb(var(--ink-100)); transform: scale(1.04); }
 .vx-ehead-pill:active { transform: scale(0.97); }
-.vx-ehead-pill[aria-pressed='true'] { border-color: rgb(var(--ember-500)); color: rgb(var(--ember-400)); }
+.vx-ehead-pill[aria-pressed='true'] { border-color: rgb(var(--ink-100)); color: rgb(var(--ink-100)); }
 
-/* Save (components/SaveButton icon variant): a plus ring → a filled Marigold check. */
+/* Save (components/SaveButton icon variant): a plus ring → a filled green check. */
 .vx-save-icon {
   position: relative;
   display: inline-grid;
@@ -154,22 +159,22 @@ html.light .vx-ehead-art { box-shadow: 0 18px 40px -20px rgb(48 22 34 / 0.4); }
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: rgb(var(--ink-100) / 0.07);
-  color: rgb(var(--ink-200));
+  background: transparent;
+  color: rgb(var(--ink-300));
   transition: color var(--dur-quick) var(--ease-standard), background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-save-icon > span {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   border: 2px solid currentColor;
   border-radius: 50%;
 }
-.vx-save-icon > span svg { width: 14px; height: 14px; stroke-width: 2.6; }
-.vx-save-icon:hover { color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.13); }
+.vx-save-icon > span svg { width: 16px; height: 16px; stroke-width: 2.6; }
+.vx-save-icon:hover { color: rgb(var(--ink-100)); background: transparent; transform: scale(1.04); }
 .vx-save-icon:active { transform: scale(0.95); }
-.vx-save-icon.is-saved { background: var(--vx-accent-wash); }
+.vx-save-icon.is-saved { background: transparent; }
 .vx-save-icon.is-saved > span { border-color: rgb(var(--ember-500)); background: rgb(var(--ember-500)); color: var(--vx-on-accent); }
 
 /* The song page's heart, sized like the other round actions. */
@@ -179,11 +184,11 @@ html.light .vx-ehead-art { box-shadow: 0 18px 40px -20px rgb(48 22 34 / 0.4); }
   width: 48px;
   height: 48px;
   padding: 0;
-  background: rgb(var(--ink-100) / 0.07);
+  background: transparent;
 }
-.vx-ehead-fav.vx-ehead-fav:hover { background: rgb(var(--ink-100) / 0.13); }
-.vx-ehead-fav.vx-ehead-fav[aria-pressed='true'] { background: var(--vx-accent-wash); }
-.vx-ehead-fav svg { width: 24px; height: 24px; }
+.vx-ehead-fav.vx-ehead-fav:hover { background: transparent; }
+.vx-ehead-fav.vx-ehead-fav[aria-pressed='true'] { background: transparent; }
+.vx-ehead-fav svg { width: 32px; height: 32px; }
 
 /* ⋯ menu (EntityMenu): inline, anchored to its trigger, flips up near the player. */
 .vx-emenu { position: relative; display: inline-flex; }
@@ -203,8 +208,7 @@ html.light .vx-ehead-art { box-shadow: 0 18px 40px -20px rgb(48 22 34 / 0.4); }
 }
 .vx-emenu-panel.is-end { right: 0; left: auto; }
 .vx-emenu-panel.is-up { top: auto; bottom: calc(100% + 6px); }
-html.light .vx-emenu-panel { background: rgb(var(--ink-950)); }
-html.amoled .vx-emenu-panel { background: rgb(var(--ink-800)); }
+
 .vx-emenu-item {
   display: flex;
   align-items: center;
@@ -237,9 +241,9 @@ html.amoled .vx-emenu-panel { background: rgb(var(--ink-800)); }
 }
 .vx-glyph-cover svg { width: 36%; height: 36%; }
 .vx-glyph-cover.is-liked { background: var(--vx-glow); color: var(--vx-on-accent); }
-.vx-glyph-cover.is-later { background: linear-gradient(150deg, rgb(var(--tide-500) / 0.92), rgb(var(--tide-500) / 0.34)), rgb(var(--ink-850)); }
-html.light .vx-glyph-cover.is-later { background: linear-gradient(150deg, rgb(var(--tide-400)), rgb(var(--tide-500) / 0.7)), rgb(var(--ink-850)); }
-.vx-glyph-cover.is-smart { background: linear-gradient(150deg, rgb(var(--tide-500) / 0.85), rgb(var(--ink-800))); }
+.vx-glyph-cover.is-later { background: linear-gradient(150deg, rgb(var(--ink-100) / 0.16), rgb(var(--ink-100) / 0.16)), rgb(var(--ink-850)); }
+
+.vx-glyph-cover.is-smart { background: linear-gradient(150deg, rgb(var(--ink-100) / 0.16), rgb(var(--ink-800))); }
 .vx-glyph-cover.is-history,
 .vx-glyph-cover.is-downloads { background: linear-gradient(150deg, rgb(var(--ink-700)), rgb(var(--ink-850))); color: rgb(var(--ink-200)); }
 /* A glyph says less than artwork, so it takes less room. */
@@ -284,9 +288,9 @@ html.light .vx-glyph-cover.is-later { background: linear-gradient(150deg, rgb(va
 .vx-lfield.is-plain input { padding-left: 18px; }
 .vx-lfield input::placeholder { color: rgb(var(--ink-400)); }
 @media (hover: hover) and (pointer: fine) { .vx-lfield input:hover:not(:focus) { background: rgb(var(--ink-800)); } }
-.vx-lfield input:focus { border-color: rgb(var(--ember-400)); box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.2); }
+.vx-lfield input:focus { border-color: rgb(var(--ember-400)); box-shadow: 0 0 0 3px rgb(0 0 0 / 0.30); }
 .vx-lfield input::-webkit-search-cancel-button { display: none; }
-html.amoled .vx-lfield input { background: rgb(var(--ink-800)); }
+
 .vx-lfield-clear {
   position: absolute;
   right: 4px;
@@ -317,9 +321,8 @@ html.amoled .vx-lfield input { background: rgb(var(--ink-800)); }
   transition: background-color var(--dur-quick) var(--ease-standard), border-color var(--dur-quick) var(--ease-standard);
 }
 @media (hover: hover) and (pointer: fine) { .vx-lselect:hover { background-color: rgb(var(--ink-800)); } }
-.vx-lselect:focus-visible { border-color: rgb(var(--ember-400)); box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.2); }
+.vx-lselect:focus-visible { border-color: rgb(var(--ember-400)); box-shadow: 0 0 0 3px rgb(0 0 0 / 0.30); }
 .vx-lselect option { background: rgb(var(--ink-850)); color: rgb(var(--ink-100)); }
-html.amoled .vx-lselect { background-color: rgb(var(--ink-800)); }
 
 /* A quiet pill: a translucent fill at rest, solid Marigold when pressed. */
 .vx-quiet-btn {
@@ -358,7 +361,7 @@ html.amoled .vx-lselect { background-color: rgb(var(--ink-800)); }
   background: rgb(var(--ink-850));
   font-size: 14px;
 }
-html.amoled .vx-strip { background: rgb(var(--ink-800)); }
+
 .vx-strip-text { flex: 1 1 220px; min-width: 0; color: rgb(var(--ink-100)); }
 .vx-strip-text span { color: rgb(var(--ink-400)); }
 /* While songs are being picked the bar stays under the top bar. */
@@ -425,7 +428,7 @@ html.amoled .vx-strip { background: rgb(var(--ink-800)); }
 .vx-row-done:hover { border-color: rgb(var(--ember-400)); color: rgb(var(--ember-400)); }
 
 /* Collection rows: a SongRow flanked by the list's own controls. */
-.vx-crow { gap: 2px; border-radius: 14px; transition: background-color var(--dur-quick) var(--ease-standard); }
+.vx-crow { gap: 2px; border-radius: 8px; transition: background-color var(--dur-quick) var(--ease-standard); }
 .vx-crow.is-picked { background: var(--vx-accent-wash); }
 .vx-crow-check { display: grid; place-items: center; flex: 0 0 36px; height: 44px; }
 .vx-crow-dl { display: grid; place-items: center; flex-shrink: 0; width: 24px; color: rgb(var(--ink-400)); }
@@ -446,7 +449,7 @@ html.amoled .vx-strip { background: rgb(var(--ink-800)); }
 .vx-edit-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; max-width: 520px; margin-top: 14px; }
 
 /* Downloads rows: the same rhythm as a track row. */
-.vx-drow { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 0 4px 0 8px; border-radius: 14px; transition: background-color var(--dur-quick) var(--ease-standard); }
+.vx-drow { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 0 4px 0 8px; border-radius: 8px; transition: background-color var(--dur-quick) var(--ease-standard); }
 .vx-drow:hover { background: var(--vx-hover); }
 .vx-drow.is-picked { background: var(--vx-accent-wash); }
 .vx-drow-art { position: relative; }
@@ -519,25 +522,24 @@ html.amoled .vx-strip { background: rgb(var(--ink-800)); }
 }
 .vx-lp-tile:hover { background: rgb(var(--ink-800)); }
 .vx-lp-tile:active { transform: scale(0.985); }
-html.amoled .vx-lp-tile { background: rgb(var(--ink-800)); }
-html.amoled .vx-lp-tile:hover { background: rgb(var(--ink-700)); }
+
 .vx-lp-tile-glyph {
   display: grid;
   place-items: center;
   width: 48px;
   height: 48px;
   flex-shrink: 0;
-  border-radius: 14px;
+  border-radius: 8px;
   background: rgb(var(--ink-800));
   color: rgb(var(--ink-200));
   transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-lp-tile-glyph svg { width: 22px; height: 22px; }
 .vx-lp-tile:hover .vx-lp-tile-glyph.is-plain { background: rgb(var(--ink-700)); }
-html.amoled .vx-lp-tile-glyph.is-plain { background: rgb(var(--ink-700)); }
+
 .vx-lp-tile-glyph.is-liked { background: var(--vx-glow); color: var(--vx-on-accent); }
 .vx-lp-tile-glyph.is-later { background: rgb(var(--tide-400)); color: rgb(var(--ink-950)); }
-html.light .vx-lp-tile-glyph.is-later { background: rgb(var(--tide-500)); color: #fff; }
+
 .vx-lp-tile-text { display: block; min-width: 0; }
 .vx-lp-tile-title { display: block; overflow: hidden; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; text-overflow: ellipsis; }
 .vx-lp-tile-meta { display: block; margin-top: 2px; overflow: hidden; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
@@ -568,7 +570,7 @@ html.light .vx-lp-tile-glyph.is-later { background: rgb(var(--tide-500)); color:
 }
 .vx-lp-view button { color: rgb(var(--ink-300)); }
 .vx-lp-view button[aria-pressed='true'] { background: var(--vx-accent-wash); color: rgb(var(--ember-400)); }
-html.amoled .vx-lp-view { background: rgb(var(--ink-800)); }
+
 .vx-lp-tags { display: flex; flex-wrap: wrap; gap: 8px; }
 .vx-lp-note { color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; }
 
@@ -577,14 +579,13 @@ html.amoled .vx-lp-view { background: rgb(var(--ink-800)); }
 .vx-lp-empty {
   max-width: 72ch;
   padding: 16px 18px;
-  border: 1px dashed rgb(var(--ember-500) / 0.38);
+  border: 1px dashed rgb(var(--ink-100) / 0.16);
   border-radius: var(--vx-radius-card);
-  background: rgb(var(--ember-500) / 0.05);
+  background: rgb(var(--ink-100) / 0.05);
   color: rgb(var(--ink-300));
   font-size: 14px;
   line-height: 1.55;
 }
-html.light .vx-lp-empty { border-color: rgb(var(--ember-500) / 0.32); background: rgb(var(--ember-500) / 0.04); }
 
 /* List view: 56px artwork, title, one meta line, ⋯. */
 /* minmax(0, 1fr): a long title must ellipsize, never widen the column (and the page). */
@@ -603,7 +604,7 @@ html.light .vx-lp-empty { border-color: rgb(var(--ember-500) / 0.32); background
 .vx-lp-row:has(.vx-emenu.is-open) { z-index: 3; }
 .vx-lp-row-link { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; min-height: 72px; padding: 8px 0; border-radius: var(--vx-radius-card); }
 .vx-lp-row-link:focus-visible { outline-offset: -2px; }
-.vx-lp-row-art { width: 56px; height: 56px; flex-shrink: 0; overflow: hidden; border-radius: 12px; background: rgb(var(--ink-850)); }
+.vx-lp-row-art { width: 56px; height: 56px; flex-shrink: 0; overflow: hidden; border-radius: 8px; background: rgb(var(--ink-850)); }
 .vx-lp-row-art > img, .vx-lp-row-art > div { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
 .vx-lp-row-art.is-round { border-radius: 50%; }
 .vx-lp-row-text { display: block; flex: 1; min-width: 0; }
@@ -630,7 +631,7 @@ html.light .vx-lp-empty { border-color: rgb(var(--ember-500) / 0.32); background
   position: relative;
   overflow: hidden;
   aspect-ratio: 1;
-  border-radius: 16px;
+  border-radius: 8px;
   background: rgb(var(--ink-850));
   box-shadow: var(--vx-art-shadow);
   transition: transform 220ms var(--vx-ease-out, var(--ease-calm));
@@ -660,15 +661,15 @@ html.light .vx-lp-empty { border-color: rgb(var(--ember-500) / 0.32); background
   transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-lp-smart-card:hover { background: rgb(var(--ink-800)); }
-html.amoled .vx-lp-smart-card { background: rgb(var(--ink-800)); }
+
 .vx-lp-smart-glyph {
   display: grid;
   place-items: center;
   width: 48px;
   height: 48px;
   flex-shrink: 0;
-  border-radius: 14px;
-  background: rgb(var(--tide-500) / 0.16);
+  border-radius: 8px;
+  background: rgb(var(--ink-100) / 0.16);
   color: rgb(var(--tide-400));
   font-size: 22px;
   line-height: 1;
@@ -694,8 +695,8 @@ html.amoled .vx-lp-smart-card { background: rgb(var(--ink-800)); }
   transition: background-color var(--dur-quick) var(--ease-standard);
 }
 .vx-lp-link:hover { background: var(--vx-hover); }
-.vx-lp-link-glyph { display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 12px; background: rgb(var(--ink-850)); color: rgb(var(--ink-200)); }
-html.amoled .vx-lp-link-glyph { background: rgb(var(--ink-800)); }
+.vx-lp-link-glyph { display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 8px; background: rgb(var(--ink-850)); color: rgb(var(--ink-200)); }
+
 .vx-lp-link-text { display: block; flex: 1; min-width: 0; }
 .vx-lp-link-text > span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .vx-lp-link-text .t { color: rgb(var(--ink-100)); font-size: 15px; font-weight: 650; }
@@ -724,19 +725,24 @@ html.amoled .vx-lp-link-glyph { background: rgb(var(--ink-800)); }
 
 /* ------------------------------------------------------------------- phone */
 @media (max-width: 767px) {
-  .vx-ehead-main { flex-direction: column; align-items: stretch; gap: 20px; padding: 8px 0 16px; }
-  .vx-ehead-art { align-self: center; width: min(216px, 58vw); border-radius: 18px; }
+  /* Phones: the cover centred with its shadow, the title under it on the
+     left, and the play button at the right end of the action row. */
+  .vx-ehead-main { flex-direction: column; align-items: stretch; gap: 16px; padding: 8px 0 8px; }
+  .vx-ehead-art { align-self: center; width: min(240px, 64vw); border-radius: var(--radius-sm, 4px); }
   .vx-ehead-art.is-round { width: min(200px, 54vw); border-radius: 50%; }
   .vx-ehead:has(.vx-ehead-art > .vx-glyph-cover) .vx-ehead-main { flex-direction: row; align-items: flex-end; gap: 16px; padding-top: 12px; }
-  .vx-ehead-art:has(> .vx-glyph-cover) { align-self: flex-end; width: 108px; border-radius: 16px; }
-  .vx-ehead-title, .vx-ehead-title.is-long { margin: 4px 0 10px; font-size: clamp(1.75rem, 8vw, 2.25rem); line-height: 1.14; }
-  .vx-ehead-title.is-xlong { font-size: 1.5rem; line-height: 1.2; }
+  .vx-ehead-art:has(> .vx-glyph-cover) { align-self: flex-end; width: 108px; border-radius: var(--radius-sm, 4px); }
+  .vx-ehead-kind { display: none; }
+  .vx-ehead-title, .vx-ehead-title.is-long { margin: 0 0 8px; font-size: 24px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }
+  .vx-ehead-title.is-xlong { font-size: 20px; line-height: 1.25; }
   .vx-ehead-meta { font-size: 13px; }
-  .vx-ehead-actions { gap: 8px; padding: 0 0 20px; }
-  .vx-ehead .vx-play-fab.is-lg { width: 56px; height: 56px; border-radius: 18px; }
-  .vx-ehead .vx-play-fab.is-lg svg { width: 26px; height: 26px; }
+  .vx-ehead-actions { gap: 8px; padding: 0 0 16px; }
+  .vx-ehead-actions > .vx-ehead-fab { order: 99; margin: 0 0 0 auto; }
+  .vx-ehead .vx-play-fab.is-lg { width: 56px; height: 56px; border-radius: 50%; }
+  .vx-ehead .vx-play-fab.is-lg svg { width: 24px; height: 24px; }
+  .vx-ehead-icon svg { width: 24px; height: 24px; }
   .vx-entity-hero { flex-direction: column; align-items: stretch; gap: 20px; padding: 8px 0 24px; }
-  .vx-entity-hero > .skeleton:first-child { border-radius: 18px; }
+  .vx-entity-hero > .skeleton:first-child { border-radius: var(--radius-sm, 4px); }
   .vx-esection { margin-top: 28px; }
 
   .vx-etools { gap: 10px 8px; }
@@ -750,7 +756,7 @@ html.amoled .vx-lp-link-glyph { background: rgb(var(--ink-800)); }
   .vx-lp .vx-page-header { margin-bottom: 18px; }
   .vx-lp-quick { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 24px; }
   .vx-lp-tile { gap: 10px; min-height: 60px; padding: 8px 10px 8px 8px; }
-  .vx-lp-tile-glyph { width: 44px; height: 44px; border-radius: 12px; }
+  .vx-lp-tile-glyph { width: 44px; height: 44px; border-radius: 8px; }
   .vx-lp-tile-glyph svg { width: 20px; height: 20px; }
   .vx-lp-tile-title { font-size: 14px; }
   .vx-lp-tile-meta { font-size: 12px; }
@@ -770,5 +776,5 @@ html.amoled .vx-lp-link-glyph { background: rgb(var(--ink-800)); }
   .vx-lp-view.vx-lp-view { display: none; }
   .vx-lp-view-toggle.vx-lp-view-toggle { display: inline-flex; flex-shrink: 0; width: 44px; height: 44px; border: 1px solid var(--vx-border); background: rgb(var(--ink-850)); color: rgb(var(--ink-300)); }
   .vx-lp-view-toggle.vx-lp-view-toggle[aria-pressed='true'] { color: rgb(var(--ember-400)); background: var(--vx-accent-wash); }
-  html.amoled .vx-lp-view-toggle.vx-lp-view-toggle { background: rgb(var(--ink-800)); }
+  
 }

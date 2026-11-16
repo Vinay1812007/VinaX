@@ -3,9 +3,8 @@
 
    Two layers:
      1. Palette channels ("r g b" triplets) in styles/index.css: --ink-*,
-        --ember-*, --tide-*, --art. Themes (html.light / .amoled), accents
-        (html[data-accent]) and app styles (html[data-template]) swap THESE
-        — nothing else.
+        --ember-*, --tide-*, --art. The app style (html[data-template])
+        sets THESE — nothing else. 1.15: one dark look, no theme or accent.
      2. This file: what a colour, size or curve is FOR. Components read only
         these names, so every theme, accent and style reaches every
         component without a per-component override.
@@ -17,13 +16,13 @@
    ========================================================================= */
 :root {
   /* ---- Surfaces — back to front. --------------------------------------- */
-  --surface-0: rgb(var(--ink-950)); /* chrome: sidebar, top bar, player deck */
-  --surface-1: rgb(var(--ink-900)); /* the page canvas */
-  --surface-2: rgb(var(--ink-850)); /* cards, panels, inputs */
-  --surface-3: rgb(var(--ink-800)); /* hover, raised controls */
+  --surface-0: rgb(var(--ink-950)); /* the window behind the panels, the player bar */
+  --surface-1: rgb(var(--ink-900)); /* the panels and the page */
+  --surface-2: rgb(var(--ink-800)); /* cards, inputs, raised controls */
+  --surface-3: rgb(var(--ink-700)); /* hover on raised controls */
   --surface-4: rgb(var(--ink-700)); /* pressed, selected */
   --surface-raised: var(--vx-mat-thick); /* menus, sheets, dialogs */
-  --scrim: rgb(6 3 8 / 0.62);
+  --scrim: rgb(0 0 0 / 0.7);
 
   /* ---- Text — four steps, every one AA on --surface-1..3. -------------- */
   --text-1: rgb(var(--ink-100)); /* titles, primary copy */
@@ -32,7 +31,7 @@
   --text-4: rgb(var(--ink-500)); /* captions, counts, hints */
   --text-on-accent: var(--vx-on-accent);
 
-  /* ---- Accent — the listener's colour (accent picker, app style). */
+  /* ---- Accent — green: play, the playing row, switches, the chosen state. */
   --accent: rgb(var(--ember-500));
   --accent-hover: rgb(var(--ember-400));
   --accent-strong: rgb(var(--ember-600));
@@ -42,7 +41,7 @@
   --accent-line: rgb(var(--ember-500) / 0.35);
   --accent-2: rgb(var(--tide-500)); /* the one partner colour */
   --accent-gradient: linear-gradient(120deg, rgb(var(--ember-500)), rgb(var(--tide-500)));
-  --focus-ring: 0 0 0 2px var(--surface-1), 0 0 0 4px rgb(var(--ember-400));
+  --focus-ring: 0 0 0 2px var(--surface-1), 0 0 0 4px rgb(var(--ink-100));
 
   /* ---- Lines (hairlines re-theme; never border-white/N). --------------- */
   --line-1: rgb(var(--ink-100) / 0.07);
@@ -52,13 +51,13 @@
   /* ---- Status. --------------------------------------------------------- */
   --positive: var(--vx-success);
   --danger: var(--vx-danger);
-  --warning: #fcd34d;
-  --info: #93c5fd;
-  --danger-solid: #e11d48;
+  --warning: #ffa42b;
+  --info: #3d91f4;
+  --danger-solid: #e91429;
 
-  /* ---- Type — one scale. Display face for headings, Manrope for the rest. */
+  /* ---- Type — one scale, one face (Figtree): heavy titles, book body. */
   --font-display: var(--vx-font-display);
-  --font-body: 'Manrope', 'Manrope Fallback', -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-body: 'Figtree', 'Figtree Fallback', -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, sans-serif;
   --type-hero: clamp(2.5rem, 5.2vw, 4.25rem);
   --type-display: var(--vx-type-display);
   --type-page: var(--vx-type-page);
@@ -132,7 +131,8 @@
   --z-toast: 90;
 }
 
-/* Light canvas: softer, warmer shadows; status colours that clear AA. */
+/* 1.15 — the app is dark only; the owner console still has a light theme,
+   and its shared elevations come from here (scripts/admin-tokens.mjs). */
 html.light {
   --scrim: rgb(24 14 22 / 0.42);
   --warning: #92400e;

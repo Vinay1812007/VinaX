@@ -74,7 +74,7 @@ const STATUS = [
   ['--info', 'Info'],
 ] as const;
 
-/** Re-measures whenever `version` changes (theme, accent or style preview). */
+/** Re-measures whenever `version` changes (style preview). */
 function useMeasured(version: string) {
   const ref = useRef<HTMLDivElement>(null);
   const [ratios, setRatios] = useState<Record<string, string>>({});
@@ -99,7 +99,7 @@ function useMeasured(version: string) {
 export function ColorSection({ version }: { version: string }) {
   const { ref, ratios } = useMeasured(version);
   return (
-    <Section id="colour" title="Colour" lead="Semantic tokens over palette channels. Theme, accent and app style swap the channels; every component follows.">
+    <Section id="colour" title="Colour" lead="Semantic tokens over palette channels. One dark look: black panels, white type, one green.">
       <Sub title="Surfaces">
         <div className="vx-ds-swatches">
           {SURFACES.map(([t, name]) => (
@@ -158,7 +158,7 @@ const TYPE = [
 
 export function TypeSection() {
   return (
-    <Section id="type" title="Type" lead="Bricolage Grotesque for headings, Manrope for everything you read. One scale, fluid at the top.">
+    <Section id="type" title="Type" lead="Figtree for everything: heavy for titles, book weights for what you read. One scale, fluid at the top.">
       <div className="vx-ds-type">
         {TYPE.map(([t, name, face, sample]) => (
           <div key={t} className="vx-ds-type-row">

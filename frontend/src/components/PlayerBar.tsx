@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
 import { useCastStore } from '@/services/cast';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
@@ -9,6 +9,9 @@ import { Seekbar } from './Seekbar';
 import { FavButton } from './FavButton';
 import { IconButton } from './IconButton';
 import { Marquee } from './Marquee';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useSettingsStore } from '@/store/settingsStore';
+import { useUiStore } from '@/store/uiStore';
 const DeviceSheet = lazy(() => import('./DeviceSheet').then(m => ({ default: m.DeviceSheet })));
 // Lazy: the live lyric line pulls the synced-lyrics hook, which the first paint never needs.
 const NowLine = lazy(() => import('./NowLine').then((m) => ({ default: m.NowLine })));
@@ -18,6 +21,7 @@ import {
   ExpandIcon,
   MicIcon,
   NextIcon,
+  PanelIcon,
   PauseIcon,
   PlayIcon,
   PrevIcon,
@@ -85,6 +89,14 @@ export function PlayerBar() {
     setSleepSongs(0);
   };
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  // 1.15 — wide screens: the queue opens in the right-hand panel, and a switch shows or hides that panel.
+  const wide = useMediaQuery('(min-width: 1280px)');
+  const panelOn = useSettingsStore((s) => s.nowPlayingView);
+  const setPanelOn = useSettingsStore((s) => s.setNowPlayingView);
+  const railView = useUiStore((s) => s.railView);
+  const setRailView = useUiStore((s) => s.setRailView);
+  const queueInPanel = wide && panelOn && railView === 'queue';
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const castAvailable = useCastStore((s) => s.available);
 
@@ -174,13 +186,14 @@ export function PlayerBar() {
                 <cast-media-route-button style={{ width: '24px', height: '24px', '--connected-color': 'rgb(var(--ember-400))', '--disconnected-color': 'currentColor' }} />
               </div>
             )}
-            <FavButton song={song} className="text-ink-300" />
+            <IconButton size="sm" label="Connect to a device" onClick={() => setDevicesOpen(true)} className="np-mini-tool"><DevicesIcon className="w-5 h-5" /></IconButton>
+            <FavButton song={song} className="np-mini-tool" />
             <button
               type="button"
               aria-label={isPlaying ? 'Pause' : 'Play'}
               title={isPlaying ? 'Pause' : 'Play'}
               onClick={togglePlay}
-              className="np-mini-play relative after:absolute after:-inset-0.5 inline-flex items-center justify-center w-10 h-10 mx-1 bg-ink-100 text-ink-950 shrink-0 active:scale-95 transition-transform"
+              className="np-mini-play relative after:absolute after:-inset-0.5 inline-flex items-center justify-center w-10 h-10 mx-0.5 shrink-0 active:scale-95 transition-transform"
             >
               {isPlaying ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5 ml-0.5" />}
             </button>
@@ -190,8 +203,8 @@ export function PlayerBar() {
         </div>
       </div>
 
-      {/* ---- Desktop: the player deck, three zones ---- */}
-      {/* 9.0.0 — a floating, rounded deck tinted from the artwork's left edge. */}
+      {/* ---- Desktop: the player bar, three zones ---- */}
+      {/* 1.15 — a black bar across the bottom of the window, under the panels. */}
       <div className="hidden lg:block vx-deck-wrap" data-tour="player">
         <div className={cn('vx-deck vx-mat-chrome', changed && 'np-changed')}>
         <div className="vx-pb-row">
@@ -224,7 +237,7 @@ export function PlayerBar() {
                 type="button"
                 onClick={togglePlay}
                 aria-label={isPlaying ? 'Pause' : 'Play'}
-                // 42px squircle; its ::after pad keeps the hit area at 44px (shell.css).
+                // 32px white circle; its ::after pad keeps the hit area at 44px (shell.css).
                 className="np-play-desktop"
               >
                 {isPlaying ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5 ml-0.5" />}
@@ -258,10 +271,33 @@ export function PlayerBar() {
                 <ClockIcon className="w-3.5 h-3.5" /> {sleepLabel}
               </button>
             )}
-            <Link to="/now-playing" aria-label="Lyrics and now playing" title="Lyrics and now playing" className="vx-pb-link"><MicIcon className="w-[18px] h-[18px]" /></Link>
-            <Link to="/queue" aria-label="Queue" title="Queue" className="vx-pb-link">
-              <QueueIcon className="w-[18px] h-[18px]" />
-            </Link>
+            {wide && (
+              <button type="button" aria-label="Now playing view" title="Now playing view" aria-pressed={panelOn && railView === 'playing'} className="vx-pb-link" onClick={() => {
+                if (panelOn && railView === 'playing') setPanelOn(false);
+                else {
+                  setRailView('playing');
+                  setPanelOn(true);
+                }
+              }}>
+                <PanelIcon className="w-[18px] h-[18px]" filled={panelOn && railView === 'playing'} />
+              </button>
+            )}
+            <Link to={`/lyrics/${song.id}`} aria-label="Lyrics" title="Lyrics" className="vx-pb-link" aria-current={pathname.startsWith('/lyrics/') ? 'page' : undefined}><MicIcon className="w-[18px] h-[18px]" /></Link>
+            {wide ? (
+              <button type="button" aria-label="Queue" title="Queue" aria-pressed={queueInPanel} className="vx-pb-link" onClick={() => {
+                if (queueInPanel) setRailView('playing');
+                else {
+                  setRailView('queue');
+                  setPanelOn(true);
+                }
+              }}>
+                <QueueIcon className="w-[18px] h-[18px]" />
+              </button>
+            ) : (
+              <Link to="/queue" aria-label="Queue" title="Queue" className="vx-pb-link" aria-current={pathname === '/queue' ? 'page' : undefined}>
+                <QueueIcon className="w-[18px] h-[18px]" />
+              </Link>
+            )}
             <IconButton size="sm" label="Connect to a device" onClick={() => setDevicesOpen(true)}><DevicesIcon className="w-[18px] h-[18px]" /></IconButton>
             <IconButton label={muted ? 'Unmute' : 'Mute'} onClick={toggleMute} size="sm">
               <VolumeIcon className="w-4 h-4" muted={muted} />
