@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.15.1': {
+    title: 'Owner console rebuilt as a clean pro admin: flat dark and light panels, one blue accent,…',
+    changes: [
+      { type: 'improved', text: 'css/theme.css is the only sheet with colours (dark in :root, light in html.light, always-dark phone-preview inks); glass.css and the aurora background are gone; Figtree from the app.' },
+      { type: 'improved', text: 'console.css rewritten: 240px sidebar, 52px top bar, a page header (title, description, ctx.actions slot), dense tables, tight corners.' },
+      { type: 'improved', text: 'Theme and time zone live in the profile menu; auto-refresh in a menu beside Refresh.' },
+      { type: 'improved', text: 'Charts get a hover crosshair and one tooltip (arrow keys when focused); donuts show the total; dataviz palette validated per theme.' },
+    ],
+  },
   '1.15.0': {
     title: 'A new look for VinaX: black and green, with your library, the page and Now playing side…',
     changes: [
