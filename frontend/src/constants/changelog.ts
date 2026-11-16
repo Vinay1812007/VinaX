@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.14.5': {
+    title: 'Flow opens on new music videos every time, only in your languages',
+    changes: [
+      { type: 'fixed', text: 'Fixed: Flow no longer shows the same videos every time you open it; each visit starts somewhere new in your languages\' videos.' },
+      { type: 'fixed', text: 'Fixed: Flow only shows videos in the languages you picked.' },
+      { type: 'new', text: 'Videos you already watched in Flow come back only when there is nothing new left.' },
+      { type: 'improved', text: 'When videos can\'t load, Flow says so and offers Try again, instead of saying there are no videos.' },
+    ],
+  },
   '1.14.4': {
     title: 'Flow plays music videos like reels, and Home and Up Next bring new songs',
     changes: [
