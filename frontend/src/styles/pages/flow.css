@@ -370,7 +370,9 @@ html.light .vx-flow-bg::after {
 }
 
 .vx-flow-empty { padding: 24px; color: rgb(var(--ink-300)); text-align: center; }
-.vx-flow-empty a { color: rgb(var(--ember-500)); font-weight: 700; }
+.vx-flow-empty a,
+.vx-flow-retry { color: rgb(var(--ember-500)); font-weight: 700; }
+.vx-flow-retry { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline; }
 
 /* ---------------------------------------------------------------- desktop */
 @media (min-width: 900px) {

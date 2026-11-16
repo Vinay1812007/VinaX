@@ -117,3 +117,21 @@ test('Flow is in the desktop sidebar', async ({ browser, baseURL }) => {
   await expect.poll(async () => (await reelState(page, 0))?.paused, { timeout: 15_000 }).toBe(false);
   await ctx.close();
 });
+
+test('Flow offers Try again when the video search keeps failing, instead of saying there are no videos', async ({ browser, baseURL }) => {
+  const base = baseURL!;
+  const ctx = await browser.newContext({ baseURL: base, viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage();
+  await setup(page, base);
+  // Routes added later win: the video search answers errors until `down` flips.
+  let down = true;
+  await page.route('**/api/cat/videos**', (route) => (down ? route.fulfill({ status: 503, body: '' }) : route.fallback()));
+  await page.goto('/flow');
+  const retry = page.getByRole('button', { name: 'try again' });
+  await expect(retry).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText('No videos to show right now')).toHaveCount(0);
+  down = false;
+  await retry.click();
+  await expect(page.locator('.vx-reel').first()).toBeVisible();
+  await ctx.close();
+});

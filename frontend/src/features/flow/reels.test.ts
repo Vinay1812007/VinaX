@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Video } from '@/services/api/videos';
-import { SEEN_CAP, appendReels, markSeen, readSeen, reelKey, reelQueries, reelSources, searchableTitle } from './reels';
+import {
+  SEEN_CAP, appendReels, markSeen, notePageAsked, notePageCount, pageCount, pickPage, readSeen, reelKey, reelQueries, reelSources, searchableTitle,
+  type PageBook,
+} from './reels';
 
 const video = (id: string, title: string, over: Partial<Video> = {}): Video => ({
   id, title, subtitle: 'Singer', language: 'Telugu', year: '2024', duration: 200, thumbnail: null,
@@ -23,33 +26,65 @@ describe('Flow reels', () => {
     expect(reelSources(video('1', 'A', { previewUrl: null }))).toEqual(['https://v/full-1.mp4']);
   });
 
-  it('appends only playable reels in the listener’s languages, unseen ones first, never moving the current ones', () => {
+  it('appends only playable reels labelled with the listener’s languages, holding back watched ones, never moving the current ones', () => {
     const current = [video('c', 'Current')];
     const incoming = [
       video('seen', 'Seen Song'),
       video('new', 'New Song'),
       video('dupe', 'New Song (Lyric Video)'),
       video('tamil', 'Tamil Song', { language: 'Tamil' }),
-      video('unknown', 'Mystery Song', { language: null }),
+      video('unknown', 'All The Stars (Official Video)', { language: null }),
       video('dead', 'No Clip', { previewUrl: null, streamUrl: null }),
       video('c', 'Current'),
     ];
     const out = appendReels(current, incoming, { languages: ['telugu'], seen: new Set(['seen']) });
-    expect(out.map((v) => v.id)).toEqual(['c', 'new', 'unknown', 'seen']);
-    expect(appendReels(out, [], { languages: ['telugu'], seen: new Set() })).toBe(out);
+    expect(out.reels.map((v) => v.id)).toEqual(['c', 'new']);
+    expect(out.held.map((v) => v.id)).toEqual(['seen']);
+    const later = appendReels(out.reels, out.held, { languages: ['telugu'], seen: new Set(['seen']), includeSeen: true });
+    expect(later.reels.map((v) => v.id)).toEqual(['c', 'new', 'seen']);
+    expect(appendReels(later.reels, [], { languages: ['telugu'], seen: new Set() }).reels).toBe(later.reels);
   });
 
-  it('asks with song titles first, then a deeper page of the language searches each round', () => {
-    const r0 = reelQueries({ languages: ['telugu'], titles: ["Srivalli (From 'Pushpa')", 'Oo Antava', 'A', 'B', 'C'], round: 0, asked: new Set(['oo antava']) });
-    expect(r0.slice(0, 4).map((q) => q.query)).toEqual(['Srivalli', 'A', 'B', 'C']);
-    expect(r0).toContainEqual({ query: 'telugu video songs', page: 1 });
-    const r3 = reelQueries({ languages: ['telugu'], titles: [], round: 3, asked: new Set() });
-    expect(r3).toContainEqual({ query: 'telugu video songs', page: 2 });
+  it('reads a random unread page of each language’s video list, a language-bound mood search, then song titles', () => {
+    const book: PageBook = new Map();
+    const r0 = reelQueries({
+      languages: ['telugu', 'hindi'], titles: ["Srivalli (From 'Pushpa')", 'Oo Antava', 'A', 'B', 'C'], round: 0,
+      asked: new Set(['oo antava']), book, rand: () => 0.99,
+    });
+    expect(r0.map((q) => q.query)).toEqual(['telugu video songs', 'hindi video songs', 'telugu love', 'Srivalli', 'A', 'B']);
+    // Before the API has said how many pages there are, a page from the first ten.
+    expect(r0[0]).toEqual({ query: 'telugu video songs', page: 10 });
+    // Never a bare mood word: "party" alone finds English, Tamil and German videos.
+    expect(r0.every((q) => !/^(love|dance|party|mass|sad)$/.test(q.query))).toBe(true);
+
+    for (const q of r0) notePageAsked(book, q);
+    notePageCount(book, 'telugu video songs', 1282, 10);
+    expect(book.get('telugu video songs')?.pages).toBe(128);
+    const r1 = reelQueries({ languages: ['telugu', 'hindi'], titles: [], round: 1, asked: new Set(), book, rand: () => 0.5 });
+    expect(r1[0].query).toBe('telugu video songs');
+    expect(r1[0].page).toBeGreaterThan(10);
+    expect(r1[2].query).toBe('hindi dance');
+  });
+
+  it('opens on different pages on different visits', () => {
+    const first = (rand: () => number) =>
+      reelQueries({ languages: ['telugu'], titles: [], round: 0, asked: new Set(), book: new Map(), rand })[0].page;
+    expect(first(() => 0)).not.toBe(first(() => 0.7));
+  });
+
+  it('picks pages it has not read yet, and leaves out the list’s last partial page', () => {
+    expect(pageCount(1282, 10)).toBe(128);
+    expect(pageCount(3, 10)).toBe(1);
+    const used = new Set([1, 2, 3, 4]);
+    for (const r of [0, 0.3, 0.99]) expect(used.has(pickPage(5, used, () => r))).toBe(false);
+    expect(pickPage(2, new Set([1, 2]), () => 0)).toBe(1);
   });
 
   it('cleans a title for the search', () => {
     expect(searchableTitle('Heeriye (feat. Arijit Singh)')).toBe('Heeriye');
     expect(searchableTitle("Naatu Naatu (From 'RRR')")).toBe('Naatu Naatu');
+    expect(searchableTitle('Badass (From "Leo (Telugu)")')).toBe('Badass');
+    expect(searchableTitle('Kesariya [Lyric Video] - Remix')).toBe('Kesariya');
   });
 
   it('remembers watched reels, newest last, up to the cap', () => {

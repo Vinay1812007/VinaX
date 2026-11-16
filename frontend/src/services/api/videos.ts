@@ -107,10 +107,22 @@ function normalizeVideo(raw: RawVideo | null | undefined): Video | null {
   };
 }
 
-export async function searchVideos(query: string, page = 0, limit = 20): Promise<Video[]> {
+export interface VideoPage {
+  results: Video[];
+  /** How many videos the search matches in all (0 when the API leaves it out). */
+  total: number;
+}
+
+/**
+ * One page of a video search, or null when the request failed (offline,
+ * timeout, an error status, or the API's occasional `data: null`) — so a
+ * caller can tell "nothing matches" from "couldn't ask".
+ */
+export async function searchVideosPage(query: string, page = 0, limit = 20): Promise<VideoPage | null> {
   const url = `${BASE}/videos?query=${encodeURIComponent(query)}&page=${page}&limit=${limit}`;
-  const json = (await getJson(url)) as { data?: { results?: RawVideo[] } } | null;
-  const list = json?.data?.results ?? [];
+  const json = (await getJson(url)) as { data?: { results?: RawVideo[]; total?: unknown } | null } | null;
+  if (!json?.data) return null;
+  const list = Array.isArray(json.data.results) ? json.data.results : [];
   const seen = new Set<string>();
   const out: Video[] = [];
   for (const raw of list) {
@@ -120,7 +132,12 @@ export async function searchVideos(query: string, page = 0, limit = 20): Promise
       out.push(v);
     }
   }
-  return out;
+  const total = typeof json.data.total === 'number' && json.data.total > 0 ? json.data.total : 0;
+  return { results: out, total };
+}
+
+export async function searchVideos(query: string, page = 0, limit = 20): Promise<Video[]> {
+  return (await searchVideosPage(query, page, limit))?.results ?? [];
 }
 
 export async function getVideo(id: string): Promise<Video | null> {

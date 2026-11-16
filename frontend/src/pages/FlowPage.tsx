@@ -81,7 +81,7 @@ export default function FlowPage() {
   const inSession = useTogether((s) => s.mode !== 'idle');
   const following = usePlayerStore((s) => s.followMode);
   const locked = inSession || following;
-  const { reels, loading, done, more } = useFlowReels();
+  const { reels, loading, done, failed: loadFailed, more, retry } = useFlowReels();
   const [reduceMotion] = useState(reducedMotion);
   const [active, setActive] = useState(0);
   const [muted, setMuted] = useState(() => locked || readFlag(FLOW_MUTED_KEY, false));
@@ -331,6 +331,14 @@ export default function FlowPage() {
           <div className="vx-flow-card vx-flow-empty">
             {loading || !done ? (
               <p role="status">Finding videos for you…</p>
+            ) : loadFailed ? (
+              <p role="status">
+                Couldn’t load videos. Check your connection, then{' '}
+                <button type="button" className="vx-flow-retry" onClick={retry}>
+                  try again
+                </button>
+                .
+              </p>
             ) : (
               <p role="status">
                 No videos to show right now. Check your connection, or <Link to="/videos">browse Videos</Link>.
