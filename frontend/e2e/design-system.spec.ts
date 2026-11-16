@@ -60,13 +60,13 @@ for (const theme of ['dark', 'light'] as const) {
   });
 }
 
-test('previews reduced motion, then gives the listener their own setting back', async ({ page }) => {
-  // 1.15 — one dark look: the preview bar has only the motion switch.
+test('previews a theme and reduced motion, then gives the listener their own look back', async ({ page }) => {
   await seed(page);
   await open(page);
   const html = page.locator('html');
   const bar = page.getByRole('group', { name: 'Preview' });
-  await expect(bar.getByRole('tablist', { name: 'Theme' })).toHaveCount(0);
+  await bar.getByRole('tablist', { name: 'Theme' }).getByRole('tab', { name: 'Light' }).click();
+  await expect(html).toHaveClass(/\blight\b/);
 
   await bar.getByRole('switch', { name: 'Reduce motion' }).click();
   await expect(html).toHaveClass(/\breduce-motion\b/);
@@ -75,7 +75,7 @@ test('previews reduced motion, then gives the listener their own setting back', 
   await page.getByRole('link', { name: 'Home' }).first().click();
   await expect(page).toHaveURL(/\/$/);
   await expect(html).not.toHaveClass(/\breduce-motion\b/);
-  await expect(html).toHaveClass(/\bdark\b/);
+  await expect(html).not.toHaveClass(/\blight\b/);
 });
 
 test('primitives: tabs by keyboard, a switch, and a dialog that returns focus', async ({ page }) => {

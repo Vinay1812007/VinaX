@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Switch } from '@/components/ui';
+import { Switch, Tabs } from '@/components/ui';
+import type { ResolvedTheme } from '@/utils/theme';
 import { usePreview } from '@/features/design/usePreview';
 import { ColorSection, ShapeSection, TypeSection } from '@/features/design/Foundations';
 import { MotionSection, PlayerDemo } from '@/features/design/Motion';
@@ -14,6 +15,11 @@ import '@/styles/pages/design.css';
  * ON_DEMAND_PAGES). The preview bar changes only what <html> looks like
  * while the page is open; it never touches the listener's settings.
  */
+
+const THEMES = [
+  { id: 'dark', label: 'Dark' },
+  { id: 'light', label: 'Light' },
+] as const;
 
 const NAV = [
   ['colour', 'Colour'],
@@ -38,7 +44,7 @@ export default function DesignPage() {
   usePageTitle('Design system');
   useNoIndex();
   const [p, set] = usePreview();
-  const version = `${p.template}`; // re-measures contrast when the look changes
+  const version = `${p.theme}|${p.template}`; // re-measures contrast when the look changes
 
   return (
     <div className="vx-ds">
@@ -46,7 +52,7 @@ export default function DesignPage() {
         <p className="vx-ds-overline">VinaX design system · v2</p>
         <h1>Every screen, one language.</h1>
         <p className="vx-ds-hero-lead">
-          Tokens, type, motion and components for the rebuild. One dark look, black and green. Use the bar below to preview reduced motion. Nothing here changes your settings.
+          Tokens, type, motion and components for the rebuild. Black and green, in light and dark. Use the bar below to preview each theme and reduced motion. Nothing here changes your settings.
         </p>
         <nav aria-label="Style guide sections" className="vx-ds-nav">
           {NAV.map(([id, label]) => (
@@ -56,6 +62,7 @@ export default function DesignPage() {
       </header>
 
       <div className="vx-ds-bar vx-mat-chrome" role="group" aria-label="Preview">
+        <Tabs label="Theme" items={THEMES} value={p.theme} onChange={(theme: ResolvedTheme) => set({ theme })} />
         <Switch className="vx-ds-bar-switch" checked={p.reduceMotion} onChange={(reduceMotion) => set({ reduceMotion })} label="Reduce motion" />
       </div>
 

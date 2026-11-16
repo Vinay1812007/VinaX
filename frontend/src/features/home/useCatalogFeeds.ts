@@ -112,7 +112,8 @@ export function useTrendingPlaylists() {
  * /new-releases, /trending/albums, /trending/playlists). One limit, so the
  * Most Searched page shares the /charts request.
  */
-export const CHARTS_LIMIT = 50;
+/** 1.15.1 — the most the catalogue serves in one answer (MAX_FEED_LIMIT); 50 made every Charts list fail. */
+export const CHARTS_LIMIT = 24;
 
 export function useChartPlaylists() {
   return useBundleList<Playlist>('charts-page-charts', (l, signal) => getCharts(l, CHARTS_LIMIT, { signal }));
@@ -135,7 +136,7 @@ export function useChartsTrendingPlaylists() {
 }
 
 /** The trending-songs feed as a full list, in the catalogue's order (Charts, /trending). One limit, one shared request. */
-export const TRENDING_LIST_LIMIT = 50;
+export const TRENDING_LIST_LIMIT = 24; // 1.15.1 — the catalogue serves at most 24 (MAX_FEED_LIMIT)
 
 export function useTrendingFeedSongs(enabled = true) {
   const langs = usePinnedFeedLangs();

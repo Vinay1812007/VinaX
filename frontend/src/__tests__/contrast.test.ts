@@ -94,9 +94,11 @@ describe.each([['dark', dark]])('%s look contrast', (_name, t) => {
   });
 });
 
-it('1.15 — one look: no theme or accent blocks are left in the token sheet', () => {
-  expect(css).not.toMatch(/^html\.(light|amoled)\b/m);
+it('1.15 — one look: no black theme or accent blocks are left in the token sheet', () => {
+  expect(css).not.toMatch(/^html\.amoled\b/m);
   expect(css).not.toMatch(/^html\[data-accent=/m);
+  // 1.15.1 — the light block re-pitches only non-ramp tokens; the ramps are the look's (templates.test.ts).
+  expect(tokensOf('html.light')['ink-900']).toBeUndefined();
 });
 
 it('every ink tier referenced by Tailwind exists', () => {

@@ -52,13 +52,15 @@ const openSettings = async (page: Page) => {
   return page.getByRole('dialog', { name: 'VinaX AI settings' });
 };
 
-test('General has no theme choice: VinaX is one dark look (1.15)', async ({ page }) => {
+test('Appearance changes the whole app’s theme', async ({ page }) => {
   await setup(page);
   await page.goto('/vinaxai');
   const dialog = await openSettings(page);
   await expect(dialog.getByRole('heading', { name: 'General' })).toBeVisible();
-  await expect(dialog.getByLabel('Appearance')).toHaveCount(0);
-  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+  await dialog.getByLabel('Appearance').selectOption('light');
+  await expect(page.locator('html')).toHaveClass(/\blight\b/);
+  await dialog.getByLabel('Appearance').selectOption('dark');
+  await expect(page.locator('html')).not.toHaveClass(/\blight\b/);
 });
 
 test('Personalisation and the Artifacts switch go with each message', async ({ page }) => {

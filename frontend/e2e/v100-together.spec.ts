@@ -741,7 +741,8 @@ async function walkTour(p: Page): Promise<TourStep[]> {
       const apart = card.y >= spot.y + spot.height - 1 || card.y + card.height <= spot.y + 1;
       expect(apart, `${title}: the card lies on its control`).toBe(true);
     }
-    seen.push({ title, anchor });
+    // Read again: the first read can land while the spotlight is still finding its control ('pending').
+    seen.push({ title, anchor: await tour.getAttribute('data-anchor') });
     const done = tour.getByRole('button', { name: 'Done' });
     if (await done.isVisible()) {
       await done.click();

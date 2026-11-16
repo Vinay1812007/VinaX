@@ -19,11 +19,16 @@ export function resolveDiscoveryMode(s: { discoveryMode?: unknown; exploreMode?:
   return isDiscoveryMode(s.discoveryMode) ? s.discoveryMode : s.exploreMode === true ? 'discover' : 'balanced';
 }
 
+/** 1.15.1 — the theme: follow the device, or always light, or always dark. */
+export type ThemePref = 'system' | 'light' | 'dark';
+
 export interface SettingsState {
+  theme: ThemePref;
   /**
    * 11.0 — the app style: palette, type, shapes, navigation and mini-player
    * layout, card treatment and motion (styles/templates/<id>.css). 1.15 — one
-   * dark look: the theme, accent and dynamic-theme settings are gone.
+   * black-and-green look (no accent or dynamic theme); 1.15.1 — in light or
+   * dark, or following the device (`theme`).
    */
   template: TemplateId;
   /** v5.12.0 — daily listening goal in minutes (0 = off). */
@@ -170,6 +175,7 @@ export interface SettingsState {
   setPinnedLanguages(ids: string[]): void;
   setMutedLanguages(ids: string[]): void;
   toggleSidebar(): void;
+  setTheme(theme: ThemePref): void;
   setNowPlayingView(v: boolean): void;
   setSoundEffects(v: boolean): void;
   /** Clamps to five values in ±12 dB and marks the preset 'custom'. */
@@ -192,6 +198,7 @@ function clampEq(gains: readonly number[] | undefined): number[] {
 }
 
 const defaults = {
+  theme: 'system' as ThemePref,
   template: DEFAULT_TEMPLATE as TemplateId,
   dailyGoalMinutes: 0,
   uiScale: 'md' as const,
@@ -249,6 +256,7 @@ const defaults = {
 export type SettingsData = typeof defaults;
 
 const SETTINGS_ENUMS: Partial<Record<keyof SettingsData, readonly string[]>> = {
+  theme: ['system', 'light', 'dark'],
   template: ['vinax'],
   uiScale: ['sm', 'md', 'lg'],
   startPage: ['home', 'search', 'library', 'last'],
@@ -389,6 +397,7 @@ export const useSettingsStore = create<SettingsState>()(
       setPinnedLanguages: (pinnedLanguages) => set({ pinnedLanguages }),
       setMutedLanguages: (mutedLanguages) => set({ mutedLanguages }),
       toggleSidebar: () => set({ sidebarCollapsed: !get().sidebarCollapsed }),
+      setTheme: (theme) => set({ theme: theme === 'light' || theme === 'dark' ? theme : 'system' }),
       setNowPlayingView: (nowPlayingView) => set({ nowPlayingView: !!nowPlayingView }),
       // v5.19.0 — sound effects. The engine/graph is driven by a subscription
       // in services/audio/effectsBridge.ts (lazy), never from here.
@@ -402,14 +411,17 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: KEYS.settings,
-      version: 6,
+      version: 7,
       // One-time migrations: turn off artwork-tinting (v1) and reset to the
       // single brand accent (v2) when the old picker was removed. The picker
       // RETURNED in 4.7.0 with per-accent light ramps — v2 stays as-is so
       // long-time devices keep the default until they choose again.
       // v3 removes retired queue/layout preferences and generated Home caches.
       // v5 (1.3) removes the AI switches: VinaX has no AI features any more.
-      // v6 (1.15) removes the theme, accent, custom accent and dynamic theme: one dark look.
+      // v6 (1.15) removes the accent, custom accent and dynamic theme: one look.
+      // v7 (1.15.1) brings the theme back as System / Light / Dark: a record from
+      // before 1.15 keeps its choice (Black → Dark, Auto → System); 1.15 records
+      // had it removed and start on System.
       migrate: (persisted: unknown, version: number) => {
         const state = (persisted ?? {}) as Partial<SettingsState>;
         // v4 (7.0.0) — the explore switch became the three-way discovery mode.
@@ -428,8 +440,9 @@ export const useSettingsStore = create<SettingsState>()(
         delete legacy.genInQueue;
         // 1.14 — the personal engine (server taste model) is gone.
         delete legacy.personalEngine;
-        // 1.15 — one dark look.
-        delete legacy.theme;
+        // 1.15 — one look; 1.15.1 — the theme is back, in three values.
+        const oldTheme = legacy.theme as unknown;
+        legacy.theme = oldTheme === 'light' || oldTheme === 'dark' ? oldTheme : oldTheme === 'amoled' ? 'dark' : 'system';
         delete legacy.accent;
         delete legacy.accentCustom;
         delete legacy.dynamicTheme;

@@ -58,7 +58,8 @@ it('sends only supported languages, at most three, defaulting to hindi', () => {
 it('reads the trending feed and asks with the language list and clamped limit', async () => {
   answer({ success: true, data: { songs: [song('a')], albums: [], playlists: [playlist('p')] } });
   const t = await getTrending(['telugu', 'hindi'], 500);
-  expect(request.mock.calls[0][0].paths).toEqual(['/trending?language=telugu%2Chindi&limit=50']);
+  // 1.15.1 — the catalogue refuses any limit above 24 (success:false), so 24 is the ceiling.
+  expect(request.mock.calls[0][0].paths).toEqual(['/trending?language=telugu%2Chindi&limit=24']);
   expect(t.songs.map((s) => s.id)).toEqual(['a']);
   expect(t.songs[0].audio[0].url).toContain('_320.mp4');
   expect(t.playlists[0].title).toBe('List p');

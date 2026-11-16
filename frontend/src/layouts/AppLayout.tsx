@@ -31,7 +31,7 @@ const VersionNotice = lazy(() => import('@/components/OwnerMessages').then((m) =
 const AnnouncementPopup = lazy(() => import('@/components/OwnerMessages').then((m) => ({ default: m.AnnouncementPopup })));
 import { applyUsageSharingDefault, initTelemetry } from '@/services/analytics/telemetry';
 import { initSessionInsights } from '@/services/analytics/sessionInsights';
-import { applyGlassLevel, applyThemeClasses } from '@/utils/theme';
+import { applyGlassLevel, applyThemeClasses, resolveTheme } from '@/utils/theme';
 import { closeTopOverlay } from '@/hooks/useDismissOnBack';
 import { recallScroll, rememberScroll, restoreWhenTall } from '@/features/nav/scrollMemory';
 import { shouldRescueTouch, shouldRescueWheel } from '@/features/nav/wheelRescue';
@@ -431,15 +431,21 @@ export function AppLayout() {
     };
   }, [locationKey, navigationType]);
 
+  const theme = useSettingsStore((s) => s.theme);
   useEffect(() => {
-    // 1.15 — one dark look: no theme, accent or dynamic-theme to apply.
-    applyThemeClasses(document.documentElement, template);
+    // 1.15.1 — System follows the device, live; Light and Dark are fixed.
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const apply = (): void => applyThemeClasses(document.documentElement, template, resolveTheme(theme, mq.matches));
+    apply();
     document.documentElement.dataset.density = density;
     // v5.17.0 — display size, high contrast.
     document.documentElement.style.fontSize = uiScale === 'sm' ? '15px' : uiScale === 'lg' ? '17.5px' : '';
     document.documentElement.classList.toggle('hc', highContrast);
     applyGlassLevel(glassLevel, glassBlur);
-  }, [template, density, glassLevel, glassBlur, uiScale, highContrast]);
+    if (theme !== 'system') return;
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, [theme, template, density, glassLevel, glassBlur, uiScale, highContrast]);
 
   // Per-route canonical + index/noindex strategy (search & personal pages noindex).
   useEffect(() => {

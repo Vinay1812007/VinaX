@@ -1,9 +1,8 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
-import { flattenSongPages, useInfiniteSongs } from '@/features/search/useInfiniteSongs';
 import { useRegion } from '@/features/location/useRegion';
 import { usePlayerStore } from '@/store/playerStore';
 import { useHistoryStore } from '@/store/historyStore';
@@ -14,7 +13,7 @@ import { cn } from '@/utils/cn';
 import { ChevronRightIcon, SparkleIcon } from '@/components/Icons';
 import { useSessionState } from '@/hooks/useSessionState';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
-import { getSong } from '@/services/api';
+import { API_LANGUAGES, getCharts, getPlaylist, getSong, MAX_FEED_LIMIT } from '@/services/api';
 import type { TrendsSnapshot, VerifiedTrend } from '@/services/trends/client';
 import { PageHeader } from '@/components/PageHeader';
 import { Chip } from '@/components/Chip';
@@ -28,42 +27,29 @@ import { MediaCard } from '@/components/MediaCard';
 import { playPlaylist } from '@/features/player/playEntity';
 import { albumPath, playlistPath } from '@/utils/slug';
 import {
+  feedLanguages,
   playlistSubtitle,
-  useChartPlaylists,
+  usePinnedFeedLangs,
   useChartsFeaturedPlaylists,
   useChartsNewAlbums,
   useChartsTrendingAlbums,
   useChartsTrendingPlaylists,
-  useTrendingFeedSongs,
 } from '@/features/home/useCatalogFeeds';
 import type { Album, Playlist, Song } from '@/types';
-import { CATALOGUE_TRENDING_PROVENANCE } from '@/features/home/useTrendingShelves';
 import { useShelfSafety } from '@/features/home/useShelfSafety';
 import '@/styles/pages/browse.css';
 import { songLine } from '@/utils/songLine';
-import { CATALOGUE_LIST_NOTE, CATALOGUE_LIST_TITLE, movementMarker, provenanceLine, sourceChips, sourceLine, verifiedView } from '@/services/trends/present';
+import { movementMarker, provenanceLine, sourceChips, sourceLine, verifiedView } from '@/services/trends/present';
 
 /**
- * 7.2 — two different things, labelled as what they are:
- *   - "Public charts": catalogue songs the server matched with confidence to
- *     an outside chart entry or an editorial pick, each with its source, rank,
- *     region, update time and evidence link (services/trends). "Rising" and
- *     "New entry" appear only when the snapshot carries them.
- *   - "Popular in the catalogue": catalogue search results for popular songs.
- *     Not a chart, and never called one. 1.3 — its "Popular" list reads the
- *     catalogue's own trending feed first, and says so; the search is the
- *     fallback.
- *   - 1.3 — "Catalogue charts": the chart playlists the catalogue publishes,
- *     shown only when the catalogue answers.
- * The trends client is loaded lazily, and neither section waits for the other.
+ * The Charts page. 1.15.1 — led by Top Charts: the catalogue's chart
+ * playlists in a grid, for the listener's languages or one picked language,
+ * then the songs of the Trending Today chart, ranked. (The old "Popular in
+ * the catalogue" list was a keyword search and surfaced songs merely named
+ * "trending"; it is gone.) "Public charts" (services/trends) still shows
+ * first when a chart source is connected; the catalogue's trending and new
+ * lists and the moods / hubs column follow.
  */
-
-// Catalogue searches. The labels describe the search, not a chart position.
-const PERIODS = [
-  { id: 'today', label: 'Popular', q: 'trending songs india' },
-  { id: 'week', label: 'Recent hits', q: 'top hits this week india' },
-  { id: 'all', label: 'All-time hits', q: 'all time hit songs india' },
-] as const;
 
 const MOODS: Array<{ id: string; label: string; to: string }> = [
   { id: 'romance', label: 'Romance', to: '/moods' },
@@ -281,12 +267,104 @@ function AlbumRow({ title, list }: { title: string; list: Album[] | undefined })
 }
 
 /** 1.3 — the catalogue's chart playlists; nothing at all while loading, on a miss or when empty. */
-function CatalogueChartPlaylists() {
-  const charts = useChartPlaylists();
-  return <PlaylistRow title="Catalogue charts" explanation="Chart playlists the catalogue publishes" list={charts.isError ? undefined : charts.data} />;
+/**
+ * 1.15.1 — Top Charts, the way the catalogue's own site lays them out: a grid
+ * of the chart playlists (Most Searched, Most Streamed Love Songs, Trending
+ * Today, the decades…) for the listener's languages, or for one language
+ * picked from the chips. Each card opens the chart; its play button plays it.
+ */
+function TopCharts({ onCharts }: { onCharts: (list: Playlist[]) => void }) {
+  const mine = feedLanguages(usePinnedFeedLangs());
+  const [lang, setLang] = useSessionState<string>('vinax.charts.lang.v1', 'mine');
+  const known: readonly string[] = API_LANGUAGES;
+  const langs = lang === 'mine' || !known.includes(lang) ? (mine.length ? mine : ['hindi']) : [lang];
+  const q = useQuery<Playlist[]>({
+    queryKey: ['top-charts', langs],
+    queryFn: async ({ signal }) => (await getCharts(langs, MAX_FEED_LIMIT, { signal })).filter((p) => p.id && p.title),
+    staleTime: 30 * 60_000,
+    retry: 1,
+  });
+  const charts = q.data ?? [];
+  const chips = HUB_LANGUAGES.filter((l) => known.includes(l));
+  return (
+    <section aria-labelledby="top-charts" className="vx-section vx-topcharts">
+      <div className="vx-section-header flex-wrap">
+        <h2 id="top-charts">Top Charts</h2>
+      </div>
+      <div className="vx-chip-row vx-topcharts-langs no-scrollbar" role="group" aria-label="Chart language">
+        <Chip active={lang === 'mine'} onClick={() => setLang('mine')}>Your languages</Chip>
+        {chips.map((l) => (
+          <Chip key={l} active={lang === l} onClick={() => setLang(l)}>{languageLabel(l)}</Chip>
+        ))}
+      </div>
+      {q.isLoading ? (
+        <div className="vx-topcharts-grid" aria-hidden>
+          {Array.from({ length: 8 }, (_, i) => <div key={i} className="vx-topcharts-skel skeleton" />)}
+        </div>
+      ) : q.isError || charts.length === 0 ? (
+        <ErrorState retry={() => void q.refetch()} />
+      ) : (
+        <ChartsGrid charts={charts} onReady={onCharts} />
+      )}
+    </section>
+  );
 }
 
-/** 1.3 — the catalogue's longer lists, one route each; each row hides on a miss. */
+function ChartsGrid({ charts, onReady }: { charts: Playlist[]; onReady: (list: Playlist[]) => void }) {
+  // Hand the list up once it is shown, so Trending Today can follow the language picked.
+  const key = charts.map((c) => c.id).join(',');
+  useEffect(() => onReady(charts), [key]); // eslint-disable-line react-hooks/exhaustive-deps -- the ids are the identity
+  return (
+    <div className="vx-topcharts-grid">
+      {charts.map((p) => (
+        <MediaCard key={p.id} fluid to={playlistPath(p)} image={bestImage(p.images)} images={p.images} title={p.title} subtitle={p.language ? `${languageLabel(p.language)} · Chart` : 'Chart'} onPlay={() => void playPlaylist(p.id, p.title)} />
+      ))}
+    </div>
+  );
+}
+
+/** The songs of the "Trending Today" chart (or the first chart), ranked, one tap to play from that place. */
+function TrendingToday({ charts }: { charts: Playlist[] }) {
+  const chart = charts.find((c) => /trending today/i.test(c.title)) ?? charts[0];
+  const q = useQuery({
+    queryKey: ['chart-songs', chart?.id],
+    queryFn: () => getPlaylist(chart!.id, 50),
+    enabled: !!chart,
+    staleTime: 30 * 60_000,
+    retry: 1,
+  });
+  const allowed = useShelfSafety();
+  const playQueue = usePlayerStore((s) => s.playQueue);
+  if (!chart) return null;
+  const songs = (q.data?.songs ?? []).filter(allowed).slice(0, 20);
+  return (
+    <section aria-labelledby="chart-songs" className="vx-section">
+      <div className="vx-section-header">
+        <h2 id="chart-songs">{chart.title}</h2>
+        <Link to={playlistPath(chart)} className="vx-section-link">Show all</Link>
+      </div>
+      {q.isLoading ? (
+        <ListSkeleton />
+      ) : q.isError ? (
+        <ErrorState retry={() => void q.refetch()} />
+      ) : (
+        <ul className="vx-track-list">
+          {songs.map((s, i) => (
+            <li key={s.id}>
+              <button type="button" onClick={() => playQueue(songs, i, { from: { kind: 'playlist', label: chart.title, path: playlistPath(chart) } })} className="vx-chart-row">
+                <span className="vx-chart-rank">{i + 1}</span>
+                <img src={bestImage(s.images, 96)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" width={48} height={48} loading={i < 8 ? undefined : 'lazy'} decoding="async" />
+                <ChartRowText song={s} />
+                <span className="vx-chart-plays">{fmtPlays(s.playCount)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function CatalogueLists() {
   const trendingPlaylists = useChartsTrendingPlaylists();
   const trendingAlbums = useChartsTrendingAlbums();
@@ -308,70 +386,21 @@ export default function ChartsPage() {
   const regionInfo = useRegion();
   const country = (regionInfo?.country ?? '').toUpperCase();
   const region = /^[A-Z]{2}$/.test(country) ? country : 'IN';
-  const [period, setPeriod] = useSessionState<(typeof PERIODS)[number]['id']>('vinax.charts.period.v1', 'today');
-  const q = PERIODS.find((p) => p.id === period)?.q ?? PERIODS[0].q;
-  // 1.3 — "Popular" is the catalogue's trending feed when it answers; the search only when it does not.
-  const trendingQ = useTrendingFeedSongs(period === 'today');
-  const allowed = useShelfSafety();
-  const trending = period === 'today' && !trendingQ.isError ? (trendingQ.data ?? []).filter(allowed).slice(0, 20) : [];
-  const fromFeed = trending.length > 0;
-  const waitingForFeed = period === 'today' && trendingQ.isLoading;
-  const songsQ = useInfiniteSongs(q, !fromFeed && !waitingForFeed);
-  const songs = fromFeed ? trending : flattenSongPages(songsQ.data?.pages).slice(0, 20);
-  const playQueue = usePlayerStore((s) => s.playQueue);
   const playsCount = useHistoryStore((s) => s.entries.length);
+  const [charts, setCharts] = useState<Playlist[]>([]);
 
   return (
     <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
-      <PageHeader title="Charts" subtitle="What is popular right now, and where each list comes from." />
+      <PageHeader title="Charts" subtitle="The top charts in your languages, refreshed by the catalogue." />
 
       <div className="vx-chart-wrap">
       <div className="vx-chart-layout">
         <div className="min-w-0">
           <VerifiedCharts region={region} />
 
-          <CatalogueChartPlaylists />
+          <TopCharts onCharts={setCharts} />
 
-          {/* catalogue list — labelled as what it is */}
-          <section aria-labelledby="catalogue-popular">
-            <div className="vx-section-header flex-wrap">
-              <h2 id="catalogue-popular">{CATALOGUE_LIST_TITLE}</h2>
-              <div className="vx-chip-row" role="group" aria-label="Catalogue list">
-                {PERIODS.map((p) => (
-                  <Chip key={p.id} active={period === p.id} onClick={() => setPeriod(p.id)}>
-                    {p.label}
-                  </Chip>
-                ))}
-              </div>
-            </div>
-            <p className="vx-chart-note">{fromFeed ? CATALOGUE_TRENDING_PROVENANCE.note : CATALOGUE_LIST_NOTE}</p>
-            {waitingForFeed || (!fromFeed && songsQ.isLoading) ? (
-              <ListSkeleton />
-            ) : !fromFeed && songsQ.isError ? (
-              <ErrorState retry={() => void songsQ.refetch()} />
-            ) : (
-              <ul className="vx-track-list">
-                {songs.map((s, i) => (
-                  <li key={s.id}>
-                    <button type="button" onClick={() => playQueue(songs, i)} className="vx-chart-row">
-                      <span className="vx-chart-rank">{i + 1}</span>
-                      <img
-                        src={bestImage(s.images, 96)}
-                        onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
-                        alt=""
-                        width={48}
-                        height={48}
-                        loading={i < 8 ? undefined : 'lazy'}
-                        decoding="async"
-                      />
-                      <ChartRowText song={s} />
-                      <span className="vx-chart-plays">{fmtPlays(s.playCount)}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          <TrendingToday charts={charts} />
 
           <CatalogueLists />
         </div>

@@ -86,6 +86,8 @@ html[data-template]:root {
 }
 
 html.hc[data-template]:not(#_) { --ink-300: 230 230 230; --ink-400: 205 205 205; --ink-500: 170 170 170; --glass-alpha: 0.98; }
+/* 1.15.1 — high contrast in the light theme: darker secondary tiers, not lighter. */
+html.hc.light[data-template]:not(#_) { --ink-300: 34 34 34; --ink-400: 48 48 48; --ink-500: 64 64 64; }
 
 /* ------------------------------------------------- the dials, wired to hooks */
 html[data-template] body { font-family: var(--tpl-font-body); }

@@ -27,8 +27,11 @@ const getTrendingAlbums = vi.fn();
 const getTrendingPlaylists = vi.fn();
 const getNewReleases = vi.fn();
 const getFeaturedPlaylists = vi.fn();
+const getPlaylist = vi.fn();
 vi.mock('@/services/api', () => ({
   API_LANGUAGES: ['hindi', 'telugu'],
+  MAX_FEED_LIMIT: 24,
+  getPlaylist: (...a: unknown[]) => getPlaylist(...a),
   getSong: (id: string) => getSong(id),
   getTrendingSongs: (...a: unknown[]) => getTrendingSongs(...a),
   getCharts: (...a: unknown[]) => getCharts(...a),
@@ -41,18 +44,6 @@ vi.mock('@/hooks/useOnlineStatus', () => ({ useOnlineStatus: () => online }));
 vi.mock('@/features/location/useRegion', () => ({ useRegion: () => ({ country: 'IN', regionLabel: null, source: 'manual' }) }));
 vi.mock('@/store/playerStore', () => ({ usePlayerStore: (sel: (s: { playQueue: typeof playQueue }) => unknown) => sel({ playQueue }) }));
 vi.mock('@/store/historyStore', () => ({ useHistoryStore: (sel: (s: { entries: unknown[] }) => unknown) => sel({ entries: [] }) }));
-const catalogueSongs = [makeSong('p1', { title: 'Catalogue One' }), makeSong('p2', { title: 'Catalogue Two' })];
-const searchEnabled: boolean[] = [];
-vi.mock('@/features/search/useInfiniteSongs', () => ({
-  useInfiniteSongs: (_q: string, enabled = true) => {
-    searchEnabled.push(enabled);
-    return enabled
-      ? { isLoading: false, isError: false, data: { pages: [catalogueSongs] }, refetch: vi.fn() }
-      : { isLoading: false, isError: false, data: undefined, refetch: vi.fn() };
-  },
-  flattenSongPages: (pages?: unknown[][]) => (pages ?? []).flat(),
-}));
-
 import ChartsPage from './ChartsPage';
 
 const NOW = Date.now();
@@ -108,27 +99,24 @@ beforeEach(() => {
   playQueue.mockReset();
   getTrendingSongs.mockReset().mockRejectedValue(new Error('route not found'));
   getCharts.mockReset().mockRejectedValue(new Error('route not found'));
+  getPlaylist.mockReset().mockRejectedValue(new Error('route not found'));
   for (const f of [getTrendingAlbums, getTrendingPlaylists, getNewReleases, getFeaturedPlaylists]) f.mockReset().mockRejectedValue(new Error('route not found'));
-  searchEnabled.length = 0;
   window.sessionStorage.clear();
 });
 afterEach(cleanup);
 
 describe('ChartsPage', () => {
-  it('without a connected chart, shows no empty chart box and labels the catalogue lists as catalogue lists', async () => {
+  it('without a connected chart, shows no empty chart box, and Top Charts leads the page', async () => {
     fetchVerifiedTrends.mockResolvedValue({ generatedAt: iso(0), sources: [{ ...chartSource, status: 'not_configured', lastSuccessAt: null }, shortVideo, { ...editorialSource, status: 'not_configured', lastSuccessAt: null }], items: [] });
     mount();
-    expect(await screen.findByRole('heading', { name: 'Popular in the catalogue' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Top Charts' })).toBeTruthy();
     // v2 — nothing connected: no "Public charts" section leading the page with an empty box.
-    // (While it checks, the section shows "Checking public charts…"; once it knows, the section goes.)
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Public charts' })).toBeNull());
     expect(screen.queryByText(/No public chart is connected yet/)).toBeNull();
-    expect(screen.getByText(/not a live chart/)).toBeTruthy();
-    expect(screen.getByText('Catalogue One')).toBeTruthy();
     // The disabled short-video source is never presented as a chart.
     expect(pageText()).not.toMatch(/Short-video audio/);
-    // 1.3 — a feed miss hides the catalogue chart playlists entirely.
-    expect(screen.queryByRole('heading', { name: 'Catalogue charts' })).toBeNull();
+    // 1.15.1 — the keyword-search list ("Popular in the catalogue") is gone.
+    expect(screen.queryByRole('heading', { name: 'Popular in the catalogue' })).toBeNull();
     noUnverifiedClaims();
   });
 
@@ -191,7 +179,7 @@ describe('ChartsPage', () => {
     fetchVerifiedTrends.mockResolvedValueOnce(null);
     mount();
     expect(await screen.findByText('Public charts are unavailable right now.')).toBeTruthy();
-    expect(screen.getByText('Catalogue One')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Top Charts' })).toBeTruthy();
     fetchVerifiedTrends.mockResolvedValueOnce({ generatedAt: iso(0), sources: [chartSource], items: [trend({})] });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
@@ -232,32 +220,37 @@ describe('ChartsPage', () => {
     expect(playQueue).not.toHaveBeenCalled();
   });
 
-  it('1.3 — "Popular" reads the catalogue’s trending feed first and labels it as that, not a chart', async () => {
-    fetchVerifiedTrends.mockResolvedValue(null);
-    getTrendingSongs.mockResolvedValue([makeSong('t1', { title: 'Feed One' }), makeSong('t2', { title: 'Feed Two' })]);
-    mount();
-    expect(await screen.findByText('Feed One')).toBeTruthy();
-    expect(screen.getByText('The catalogue’s own trending list — not a public chart.')).toBeTruthy();
-    expect(screen.queryByText('Catalogue One')).toBeNull();
-    // The search never runs while the feed answers.
-    expect(searchEnabled[searchEnabled.length - 1]).toBe(false);
-    // "Recent hits" is still the search.
-    fireEvent.click(screen.getByRole('button', { name: 'Recent hits' }));
-    expect(await screen.findByText('Catalogue One')).toBeTruthy();
-    expect(screen.getByText(/not a live chart/)).toBeTruthy();
-    noUnverifiedClaims();
-  });
-
-  it('1.3 — shows the catalogue’s chart playlists, each linking to its playlist page', async () => {
+  it('1.15.1 — Top Charts: the chart playlists in a grid, each linking to its chart, with no source name', async () => {
     fetchVerifiedTrends.mockResolvedValue(null);
     getCharts.mockResolvedValue([
       { kind: 'playlist', id: '946682072', title: 'Most Searched Songs - Hindi', subtitle: 'JioSaavn', images: [], songs: [], songCount: null, language: 'hindi' },
+      { kind: 'playlist', id: '110858205', title: 'Trending Today', subtitle: 'JioSaavn', images: [], songs: [], songCount: null, language: 'hindi' },
     ]);
+    getPlaylist.mockResolvedValue({ kind: 'playlist', id: '110858205', title: 'Trending Today', images: [], songs: [makeSong('t1', { title: 'Feed One' }), makeSong('t2', { title: 'Feed Two' })] });
     mount();
-    expect(await screen.findByRole('heading', { name: 'Catalogue charts' })).toBeTruthy();
-    const link = screen.getAllByRole('link').find((a) => a.getAttribute('href')?.startsWith('/playlist/'));
-    expect(link?.getAttribute('href')).toBe('/playlist/most-searched-songs-hindi-946682072');
+    expect(await screen.findByRole('heading', { name: 'Top Charts' })).toBeTruthy();
+    expect(await screen.findByText('Most Searched Songs - Hindi')).toBeTruthy();
+    const link = screen.getAllByRole('link').find((a) => a.getAttribute('href') === '/playlist/most-searched-songs-hindi-946682072');
+    expect(link).toBeTruthy();
     expect(pageText()).not.toMatch(/JioSaavn/);
+    // Asked once for the most the catalogue serves.
+    expect(getCharts.mock.calls[0][1]).toBe(24);
+    // Trending Today's songs follow, ranked, and play from their place in the chart.
+    expect(await screen.findByRole('heading', { name: 'Trending Today' })).toBeTruthy();
+    expect(getPlaylist).toHaveBeenCalledWith('110858205', 50);
+    fireEvent.click(await screen.findByText('Feed Two'));
+    expect(playQueue).toHaveBeenCalledWith(expect.any(Array), 1, expect.objectContaining({ from: expect.objectContaining({ kind: 'playlist', label: 'Trending Today' }) }));
+  });
+
+  it('1.15.1 — a language chip shows that language’s charts', async () => {
+    fetchVerifiedTrends.mockResolvedValue(null);
+    getCharts.mockResolvedValue([{ kind: 'playlist', id: '1', title: 'Hindi 1990s', subtitle: '', images: [], songs: [], songCount: null, language: 'hindi' }]);
+    mount();
+    expect(await screen.findByText('Hindi 1990s')).toBeTruthy();
+    getCharts.mockResolvedValue([{ kind: 'playlist', id: '2', title: 'Telugu 1990s', subtitle: '', images: [], songs: [], songCount: null, language: 'telugu' }]);
+    fireEvent.click(screen.getByRole('button', { name: 'Telugu' }));
+    expect(await screen.findByText('Telugu 1990s')).toBeTruthy();
+    expect(getCharts.mock.calls[getCharts.mock.calls.length - 1][0]).toEqual(['telugu']);
   });
 
   it('1.3 — shows the catalogue’s longer lists, one route each, and hides the ones that miss', async () => {
@@ -273,6 +266,6 @@ describe('ChartsPage', () => {
     expect(screen.getByRole('heading', { name: 'New albums' })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Featured playlists' })).toBeNull();
     expect(screen.getByText('Udta Teer').closest('a')?.getAttribute('href')).toBe('/album/udta-teer-82064668');
-    expect(getTrendingPlaylists.mock.calls[0][1]).toBe(50);
+    expect(getTrendingPlaylists.mock.calls[0][1]).toBe(24);
   });
 });

@@ -1,9 +1,10 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import { ProfileSettings } from '@/features/social/ProfileSettings';
 import { useLocation } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { scrollBehavior } from '@/utils/motion';
 import { useSettingsStore } from '@/store/settingsStore';
+import { applyGlassLevel } from '@/utils/theme';
 import { useLibraryStore } from '@/store/libraryStore';
 import { LocationRow } from '@/features/location/LocationRow';
 import {
@@ -529,7 +530,55 @@ export default function SettingsPage() {
             <LinkRow to="/stats" label="Listening stats" note="Your minutes, top songs and listening calendar." keywords="stats minutes calendar profile" />
           </Section>
 
-          <Section title="Appearance" id="appearance" lede="Language, size and motion.">
+          <Section title="Appearance" id="appearance" lede="Theme, glass, language, size and motion.">
+            <Row stack label="Theme" note="System follows your device’s light or dark setting." keywords="dark light system mode night day appearance">
+              <Segmented
+                label="Theme"
+                value={s.theme}
+                onChange={s.setTheme}
+                options={[
+                  { value: 'system', label: 'System' },
+                  { value: 'light', label: 'Light' },
+                  { value: 'dark', label: 'Dark' },
+                ]}
+              />
+            </Row>
+            <Row stack label="Glass effect" note="From solid panels to frosted glass, with the playing song’s colour behind them." keywords="transparency see-through frosted solid glass">
+              <RangeRow from="Solid" to="Glass">
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={s.glassLevel}
+                  aria-label="Glass effect intensity"
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    s.setGlassLevel(v);
+                    applyGlassLevel(v, s.glassBlur);
+                  }}
+                  style={{ '--fill': `${s.glassLevel}%` } as CSSProperties}
+                />
+              </RangeRow>
+            </Row>
+            <Row stack label="Background blur" note="How soft things look through the glass." keywords="glass haze frosted">
+              <RangeRow from="Sharp" to="Hazy">
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={s.glassBlur}
+                  aria-label="Background blur intensity"
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    s.setGlassBlur(v);
+                    applyGlassLevel(s.glassLevel, v);
+                  }}
+                  style={{ '--fill': `${s.glassBlur}%` } as CSSProperties}
+                />
+              </RangeRow>
+            </Row>
             <Row stack label="App language" keywords="display language interface">
               <Segmented label="App language" value={s.uiLanguage} onChange={s.setUiLanguage} options={UI_LANGS.map((l) => ({ value: l.id, label: l.label }))} />
             </Row>

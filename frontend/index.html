@@ -14,7 +14,7 @@
     <link rel="dns-prefetch" href="https://aac.saavncdn.com" />
     <link rel="dns-prefetch" href="https://lrclib.net" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#121212" />
+    <meta name="theme-color" content="#000000" />
     <meta name="description" content="VinaX — free music streaming for India in 12 languages. One Google sign-in, no subscription." />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="VinaX" />
@@ -45,8 +45,8 @@
         try {
           var raw = localStorage.getItem('vinax.settings.v1');
           var st = (raw && JSON.parse(raw).state) || {};
-          // 1.15 — one look, always dark: no light/system/AMOLED theme and no
-          // accent picker any more (stored values from older releases are ignored).
+          // 1.15 — one look, no accent picker; 1.15.1 — the theme is System
+          // (the device's setting), Light or Dark.
           // v5.17.0 — display size + high contrast before first paint.
           if (st.uiScale === 'sm') document.documentElement.style.fontSize = '15px';
           else if (st.uiScale === 'lg') document.documentElement.style.fontSize = '17.5px';
@@ -56,14 +56,17 @@
           document.documentElement.style.setProperty('--glass-alpha', String(1 - 0.55 * (gl / 100)));
           var gb = typeof st.glassBlur === 'number' ? Math.min(100, Math.max(0, st.glassBlur)) : 40;
           document.documentElement.style.setProperty('--glass-blur-boost', String(gb / 100));
-          document.documentElement.classList.add('dark');
+          var pref = st.theme === 'light' || st.theme === 'dark' ? st.theme : 'system';
+          var dark = pref === 'system' ? window.matchMedia('(prefers-color-scheme: dark)').matches : pref === 'dark';
+          document.documentElement.classList.toggle('light', !dark);
+          document.documentElement.classList.toggle('dark', dark);
           // 11.0 — the app style before first paint (mirrors TEMPLATE_CANVAS in
-          // src/utils/theme.ts: the page canvas per style).
-          var TC = { vinax: '#121212' };
+          // src/utils/theme.ts: the window canvas per style and theme).
+          var TC = { vinax: { dark: '#000000', light: '#ffffff' } };
           // 2.0 — one look: every style id an earlier release stored opens in it.
           var tpl = TC.hasOwnProperty(st.template) ? st.template : 'vinax';
           document.documentElement.setAttribute('data-template', tpl);
-          var bg = TC[tpl];
+          var bg = TC[tpl][dark ? 'dark' : 'light'];
           document.documentElement.style.background = bg;
           document.documentElement.style.setProperty('--boot-bg', bg);
           var m = document.querySelector('meta[name="theme-color"]');
@@ -163,7 +166,7 @@
          until React replaces #root. Paint cost is unchanged: everything here
          is inline CSS, so FCP/LCP still land at HTML-parse time. */
       /* 11.0 — the canvas is the app style's (--boot-bg, stamped by the pre-paint script above). */
-      html, body { background: var(--boot-bg, #121212); margin: 0; }
+      html, body { background: var(--boot-bg, #000000); margin: 0; }
       /* 13.2 — the face is set on BODY, never on #root. #root used to carry a
          system-font stack for the boot splash, and the whole app mounts inside
          #root, so every element without its own font-family inherited the
@@ -185,7 +188,7 @@
          #boot id at mount (the recovery script below reads a missing #boot as
          "mounted"), waits for the reveal to finish, then fades it out. Styles
          key on .vxb, never #boot, so dropping the id keeps every animation. */
-      .vxb { position: fixed; inset: 0; z-index: 2147483600; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: var(--boot-bg, #121212); padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom); }
+      .vxb { position: fixed; inset: 0; z-index: 2147483600; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: var(--boot-bg, #000000); padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom); }
       .vxb.out { animation: vxb-out .35s ease-in forwards; pointer-events: none; }
       .vxb-sign { position: relative; width: 112px; height: 112px; }
       .vxb-sign svg { position: relative; display: block; width: 100%; height: 100%; }
@@ -220,6 +223,13 @@
       #seo-content a { color: #eae3e2; }
       #seo-content nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
       #seo-content nav a { font-size: 12px; font-weight: 700; color: #eae3e2; background: rgba(255,245,236,0.06); border: 1px solid rgba(255,245,236,0.1); padding: 8px 14px; border-radius: 999px; text-decoration: none; }
+      /* 1.15.1 — the light theme: the neon boot sign stays on black; the content block reads dark on white. */
+      html.light .vxb { background: #000; }
+      html.light #root { color: #121212; }
+      html.light #seo-content p, html.light #seo-content ol, html.light #seo-content ul, html.light #seo-content dl { color: #535353; }
+      html.light #seo-content p strong { color: #117a35; }
+      html.light #seo-content a, html.light #seo-content dt { color: #121212; }
+      html.light #seo-content nav a { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.1); }
     </style>
     <script type="application/ld+json">
       {"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://www.vinaxmusic.online/#org","name":"VinaX","alternateName":["VinaX V1","VinaX Music","vinaxmusic.online"],"url":"https://www.vinaxmusic.online/","logo":{"@type":"ImageObject","url":"https://www.vinaxmusic.online/icons/icon.svg"},"slogan":"Music tuned to you","description":"VinaX is a free music app for India in 12 languages: playlists, synced lyrics, radio, offline downloads in the Android app and casting. No subscription; browse without signing in, sign in with Google to save your music.","sameAs":["https://github.com/Vinay1812007/VinaX"]},{"@type":"WebSite","@id":"https://www.vinaxmusic.online/#website","url":"https://www.vinaxmusic.online/","name":"VinaX","publisher":{"@id":"https://www.vinaxmusic.online/#org"},"inLanguage":"en","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://www.vinaxmusic.online/search/{search_term_string}"},"query-input":"required name=search_term_string"}},{"@type":"SoftwareApplication","@id":"https://www.vinaxmusic.online/#app","name":"VinaX","operatingSystem":"Android, Web","applicationCategory":"MusicApplication","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"},"publisher":{"@id":"https://www.vinaxmusic.online/#org"},"url":"https://www.vinaxmusic.online/download"}]}

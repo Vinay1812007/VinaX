@@ -26,9 +26,16 @@ import { voiceLabel } from './live/liveOptions';
 import { SharedLinks } from './SharedLinks';
 import { MemorySettings } from './MemorySettings';
 import { ArtifactsIcon, CloseIcon, DownloadIcon, MicIcon } from './icons';
+import { useSettingsStore } from '@/store/settingsStore';
 import { THINKING_CHOICES, type PickerModel, type ThinkingChoice, type VoiceInfo } from './types';
 import { THINKING_LABELS, THINKING_NOTES } from './ThinkingPicker';
 import type { WebSearch } from './PlusMenu';
+
+const THEMES: Array<{ value: 'system' | 'light' | 'dark'; label: string }> = [
+  { value: 'system', label: 'System: follow this device' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+];
 
 export type SettingsSection = 'general' | 'personal' | 'memory' | 'chat' | 'voice' | 'chats';
 
@@ -65,6 +72,8 @@ interface Props {
 
 export function SettingsPanel({ models, groups, voice, search, section, onClose }: Props): ReactNode {
   const prefs = usePrefs();
+  const theme = useSettingsStore((s) => s.theme);
+  const setTheme = useSettingsStore((s) => s.setTheme);
   const box = useRef<HTMLDivElement>(null);
   useDismissOnBack(true, onClose);
   useEffect(() => {
@@ -118,6 +127,11 @@ export function SettingsPanel({ models, groups, voice, search, section, onClose 
         <div className="vx-ai-settings-body">
           <section id="vx-ai-set-general" aria-labelledby="vx-ai-set-general-h">
             <h3 id="vx-ai-set-general-h">General</h3>
+            <Field id="theme" label="Appearance" hint="The same theme as the rest of VinaX.">
+              <select id="vx-ai-set-theme" aria-describedby="vx-ai-set-theme-hint" value={theme} onChange={(e) => setTheme(e.target.value as typeof theme)}>
+                {THEMES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </Field>
             <Switch on={prefs.artifacts} label="Artifacts" sub="Whole files, pages, charts and diagrams open in their own panel" onToggle={() => prefs.set({ artifacts: !prefs.artifacts })} />
             <Switch on={prefs.inlinePreviews && prefs.artifacts} disabled={!prefs.artifacts} label="Live previews in replies" sub="Shows pages, charts and diagrams right in the chat" onToggle={() => prefs.set({ inlinePreviews: !prefs.inlinePreviews })} />
           </section>

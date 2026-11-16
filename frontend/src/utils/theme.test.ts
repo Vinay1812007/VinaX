@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { applyThemeClasses, normalizeTemplate } from './theme';
+import { applyThemeClasses, normalizeTemplate, resolveTheme } from './theme';
 
 const css = readFileSync('src/styles/index.css', 'utf8');
 
@@ -77,16 +77,17 @@ describe('color tokens (1.15 black and green)', () => {
 describe('the one look, applied', () => {
   it('stamps the app style and its canvas, whatever style a caller names', () => {
     const root = document.createElement('html');
-    applyThemeClasses(root, 'vinax');
+    applyThemeClasses(root, 'vinax', 'dark');
     expect(root.dataset.template).toBe('vinax');
-    expect(root.style.background).toBe('rgb(18, 18, 18)');
+    expect(root.style.background).toBe('rgb(0, 0, 0)');
     // No style passed (an older call site): whatever is on <html> stays.
-    applyThemeClasses(root);
+    applyThemeClasses(root, undefined, 'light');
     expect(root.dataset.template).toBe('vinax');
+    expect(root.style.background).toBe('rgb(255, 255, 255)');
     // Nonsense falls back to the one look.
     applyThemeClasses(root, 'nonsense');
     expect(root.dataset.template).toBe('vinax');
-    expect(root.style.background).toBe('rgb(18, 18, 18)');
+    expect(root.style.background).toBe('rgb(0, 0, 0)');
   });
 
   it('2.0 — every style id an earlier release stored opens in the one look', () => {
@@ -94,16 +95,28 @@ describe('the one look, applied', () => {
     const root = document.createElement('html');
     applyThemeClasses(root, 'marquee');
     expect(root.dataset.template).toBe('vinax');
-    expect(root.style.background).toBe('rgb(18, 18, 18)');
+    expect(root.style.background).toBe('rgb(0, 0, 0)');
   });
 
-  it('1.15 — always dark: a light or black class an older build left behind is removed', () => {
+  it('1.15.1 — light or dark, and a black class an older build left behind is removed', () => {
     const root = document.createElement('html');
-    root.classList.add('light', 'amoled');
-    applyThemeClasses(root);
-    expect(root.classList.contains('light')).toBe(false);
+    root.classList.add('amoled');
+    applyThemeClasses(root, 'vinax', 'light');
+    expect(root.classList.contains('light')).toBe(true);
+    expect(root.classList.contains('dark')).toBe(false);
     expect(root.classList.contains('amoled')).toBe(false);
+    applyThemeClasses(root, 'vinax', 'dark');
+    expect(root.classList.contains('light')).toBe(false);
     expect(root.classList.contains('dark')).toBe(true);
+  });
+
+  it('1.15.1 — System follows the device; Light and Dark are fixed; anything else is System', () => {
+    expect(resolveTheme('system', true)).toBe('dark');
+    expect(resolveTheme('system', false)).toBe('light');
+    expect(resolveTheme('light', true)).toBe('light');
+    expect(resolveTheme('dark', false)).toBe('dark');
+    expect(resolveTheme('amoled', false)).toBe('light');
+    expect(resolveTheme(undefined, true)).toBe('dark');
   });
 });
 

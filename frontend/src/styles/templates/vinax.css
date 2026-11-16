@@ -7,9 +7,13 @@
    titles, book body), #b3b3b3 for everything secondary. Green is the one
    colour: play, the playing row, switches, the chosen state, focus. Artwork
    has a 4px corner, cards and panels 8px; chips and buttons are pills and
-   play is a round green button with a black glyph. Hover is a white wash,
-   never a colour. Always dark: there is no light or black theme and no
-   accent picker any more.
+   play is a round green button with a black glyph. Hover is a wash of the
+   text colour, never a colour. No accent picker.
+   1.15.1 — light and dark (System follows the device), and glass: the
+   window is a slow mesh of the playing artwork's colour and a little green,
+   and the panels, bars, player, menus and sheets are frosted glass over it.
+   Settings > Glass effect (--glass-alpha) runs from solid to glass, and at
+   solid the mesh is gone too.
    Design contract: README.md › App style.
    ========================================================================= */
 
@@ -34,8 +38,29 @@ html[data-template='vinax']:root {
   --tide-400: 63 228 121;
   --vx-on-accent: #000;
   --art: 83 83 83;
-  --vx-mesh-ember: 0;
-  --vx-mesh-tide: 0;
+}
+/* Light: white window, near-white panels, near-black type; a deeper green
+   so it still reads as text and as a ring on white (4.5:1 and 3:1), with
+   black labels on it. */
+html.light[data-template='vinax']:root {
+  --ink-950: 255 255 255;
+  --ink-900: 248 248 248;
+  --ink-850: 240 240 240;
+  --ink-800: 235 235 235;
+  --ink-700: 222 222 222;
+  --ink-600: 140 140 140;
+  --ink-500: 100 100 100;
+  --ink-400: 88 88 88;
+  --ink-300: 77 77 77;
+  --ink-200: 40 40 40;
+  --ink-100: 18 18 18;
+  --ember-600: 16 120 50;
+  --ember-500: 20 138 60;
+  --ember-400: 15 112 48;
+  --ember-300: 30 160 80;
+  --tide-500: 20 138 60;
+  --tide-400: 15 112 48;
+  --art: 190 190 190;
 }
 
 /* ------------------------------------------------------------------ dials */
@@ -78,24 +103,70 @@ html[data-template='vinax'] {
   --radius-xl: 12px;
   --radius-2xl: 16px;
 }
-/* Solid: opaque materials whatever the glass setting says. */
+/* ------------------------------------------------------------------ glass */
+/* The materials follow the Glass effect dial (--glass-alpha: 1 solid … 0.45
+   deepest). Fills that carry text are floored, so text keeps AA whatever
+   shows through (__tests__/glass.test.ts). */
 html[data-template='vinax'] {
-  --vx-mat-thin: rgb(var(--ink-900));
-  --vx-mat-regular: rgb(var(--ink-800));
-  --vx-mat-chrome: rgb(var(--ink-900));
-  --vx-mat-thick: rgb(var(--ink-700));
-  --vx-mat-specular: transparent;
-  --vx-mat-hairline: transparent;
-  --vx-mat-art: 0;
+  /* Panels: fully solid at Solid, 65% at the default, never below 50%. */
+  --vx-panel-fill: rgb(var(--ink-900) / clamp(0.5, calc(1 - (1 - var(--glass-alpha)) * 1.6), 1));
+  --vx-mat-thin: var(--vx-panel-fill);
+  --vx-mat-regular: rgb(var(--ink-800) / clamp(0.6, calc(var(--glass-alpha) - 0.05), 1));
+  --vx-mat-chrome: rgb(var(--ink-950) / clamp(0.8, calc(var(--glass-alpha) + 0.04), 1));
+  --vx-mat-thick: rgb(var(--ink-700) / clamp(0.86, calc(var(--glass-alpha) + 0.12), 1));
+  --vx-mat-specular: rgb(255 255 255 / calc((1 - var(--glass-alpha)) * 0.4));
+  --vx-mat-hairline: rgb(var(--ink-100) / calc((1 - var(--glass-alpha)) * 0.3));
+  --vx-mat-art: calc((1 - var(--glass-alpha)) * 0.5);
+  /* How strongly the window's colour mesh shows: none at all when solid. */
+  --vx-mesh-art: calc((1 - var(--glass-alpha)) * 2.4);
+  --vx-mesh-ember: calc((1 - var(--glass-alpha)) * 0.8);
 }
-html[data-template='vinax'] :is(.vx-mat-thin, .vx-mat-regular, .vx-mat-chrome, .vx-mat-thick) {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+html.light[data-template='vinax']:root {
+  --vx-mat-specular: rgb(255 255 255 / calc((1 - var(--glass-alpha)) * 2.6));
+  --vx-mat-hairline: rgb(var(--ink-100) / calc((1 - var(--glass-alpha)) * 0.36));
+  --vx-mesh-art: calc((1 - var(--glass-alpha)) * 2.8);
+  --vx-mesh-ember: calc((1 - var(--glass-alpha)) * 0.9);
 }
 
 /* ------------------------------------------------------------------ shell */
-html[data-template='vinax']:root .vx-shell { background: rgb(var(--ink-950)); }
-html[data-template='vinax']:root .vx-workspace { background: rgb(var(--ink-900)); }
+/* The window: the playing artwork's colour from the top left and the bottom,
+   a little green from the top right, over black (white in light). The
+   panels are glass over it: a fill that lets the colour through, a
+   specular line along the top edge and a hairline round them. They do not
+   blur (the mesh is already soft, and a blurring pane under a scrolling
+   page costs every frame); the bars, the player and the overlays do. */
+html[data-template='vinax']:root .vx-shell {
+  isolation: isolate;
+  background:
+    radial-gradient(60% 70% at 0% 0%, rgb(var(--art) / var(--vx-mesh-art)), transparent 72%),
+    radial-gradient(45% 55% at 100% 0%, rgb(var(--ember-500) / var(--vx-mesh-ember)), transparent 70%),
+    radial-gradient(70% 55% at 55% 105%, rgb(var(--art) / calc(var(--vx-mesh-art) * 0.75)), transparent 72%),
+    rgb(var(--ink-950));
+  transition: background-color var(--dur-slow) var(--ease-standard);
+}
+/* A slow drift of light across the window, under everything. */
+html[data-template='vinax'] .vx-shell::before {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  inset: -20%;
+  background:
+    radial-gradient(28% 30% at 30% 35%, rgb(var(--art) / calc(var(--vx-mesh-art) * 0.6)), transparent 70%),
+    radial-gradient(24% 26% at 72% 62%, rgb(var(--ember-500) / calc(var(--vx-mesh-ember) * 0.8)), transparent 70%);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  html[data-template='vinax']:not(.reduce-motion) .vx-shell::before { animation: vx-mesh-drift 48s ease-in-out infinite alternate; }
+}
+html[data-template='vinax']:root .vx-workspace { background: var(--vx-panel-fill); }
+html[data-template='vinax'] :is(.vx-sidebar, .vx-playing-rail) { background: var(--vx-panel-fill); }
+@media (min-width: 768px) {
+  html[data-template='vinax'] :is(.vx-workspace, .vx-sidebar, .vx-playing-rail) {
+    box-shadow: inset 0 1px 0 var(--vx-mat-specular), inset 0 0 0 1px var(--vx-mat-hairline);
+  }
+}
+/* The window bar and the player bar sit on the window itself. */
+html[data-template='vinax'] :is(.vx-winbar, .vx-deck-wrap, .vx-deck) { background: transparent; }
 
 /* ------------------------------------------------------- pages and cards */
 html[data-template='vinax'] .vx-section-link { color: rgb(var(--ink-300)); font-size: 14px; font-weight: 700; padding-inline: 0; }
@@ -106,9 +177,9 @@ html[data-template='vinax'] :is(.vx-play-fab, .vx-np-play, .card-play):hover { b
 /* Chips: a white wash at rest; the chosen one is green with black type. */
 html[data-template='vinax'] :is(.vx-chip-idle, .vxh-chip) { background: rgb(var(--ink-100) / 0.07); box-shadow: none; color: rgb(var(--ink-100)); font-weight: 400; }
 html[data-template='vinax'] :is(.vx-chip-idle, .vxh-chip):hover { background: rgb(var(--ink-100) / 0.12); }
-html[data-template='vinax'] .vx-chip-on { background: rgb(var(--ember-500)); border-color: rgb(var(--ember-500)); color: rgb(var(--ink-950)); font-weight: 400; }
+html[data-template='vinax'] .vx-chip-on { background: rgb(var(--ember-500)); border-color: rgb(var(--ember-500)); color: var(--vx-on-accent); font-weight: 400; }
 html[data-template='vinax'] .vx-track-row.is-current { background: rgb(var(--ink-100) / 0.1); }
-html[data-template='vinax'] .vxh-tile { background: rgb(var(--ink-100) / 0.1); }
+html[data-template='vinax'] .vxh-tile { background: rgb(var(--ink-100) / 0.1); box-shadow: inset 0 1px 0 var(--vx-mat-specular), inset 0 0 0 1px var(--vx-mat-hairline); }
 html[data-template='vinax'] .vxh-tile:hover { background: rgb(var(--ink-100) / 0.2); }
 html[data-template='vinax'] .vxh-hero { border-radius: 8px; box-shadow: none; }
 html[data-template='vinax'] :is(.btn-primary, .btn-secondary, .btn-premium) { font-weight: 700; }
@@ -116,6 +187,7 @@ html[data-template='vinax'] .vx-np-tabs [role='tab'][aria-selected='true'] { bac
 
 /* Now Playing: the artwork's colour fading to black, a 64px green play. */
 html[data-template='vinax']:root .vx-np-bg-wash { background: linear-gradient(180deg, rgb(var(--ink-950) / 0.35), rgb(var(--ink-950) / 0.92) 75%); }
+html.light[data-template='vinax']:root .vx-np-bg-wash { background: linear-gradient(180deg, rgb(var(--ink-950) / 0.45), rgb(var(--ink-950) / 0.9) 75%); }
 /* The full-screen player's play is white with a black glyph. */
 html[data-template='vinax'] .vx-np-play { width: 64px; height: 64px; background: rgb(var(--ink-100)); color: rgb(var(--ink-950)); }
 html[data-template='vinax'] .vx-np-play:hover { background: rgb(var(--ink-100)); transform: scale(1.04); }

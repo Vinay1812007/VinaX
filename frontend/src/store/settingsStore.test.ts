@@ -12,12 +12,13 @@ it('migrates retired queue and Home controls while preserving listener preferenc
   }));
   await useSettingsStore.persist.rehydrate();
   const saved = JSON.parse(localStorage.getItem(KEYS.settings) ?? '{}');
-  expect(saved.version).toBe(6);
+  expect(saved.version).toBe(7);
   expect(localStorage.getItem('vinax.home.shown.v1')).toBeNull();
   expect(localStorage.getItem('vinax.aihome.recent.v1')).toBeNull();
-  expect(saved.state).toMatchObject({ pinnedLanguages: ['telugu'], crossfade: false });
-  // 1.15 — one dark look: the theme, accent and dynamic theme are gone.
-  for (const key of ['theme', 'accent', 'accentCustom', 'dynamicTheme', 'autoqueueSimilar', 'hiddenHome', 'homeOrder', 'aiDj', 'aiAssist', 'aiHomeShelves', 'djVoice']) {
+  // 1.15.1 — a record from before 1.15 keeps its theme choice.
+  expect(saved.state).toMatchObject({ theme: 'light', pinnedLanguages: ['telugu'], crossfade: false });
+  // 1.15 — the accent and dynamic theme are gone.
+  for (const key of ['accent', 'accentCustom', 'dynamicTheme', 'autoqueueSimilar', 'hiddenHome', 'homeOrder', 'aiDj', 'aiAssist', 'aiHomeShelves', 'djVoice']) {
     expect(saved.state).not.toHaveProperty(key);
     expect(useSettingsStore.getState()).not.toHaveProperty(key);
   }
@@ -60,4 +61,20 @@ it('2.0 — there is one app style: it is the default, survives a reload, and ev
   expect(pickSettings({ template: 'vinax' })).toEqual({ template: 'vinax' });
   expect(pickSettings({ template: 7 })).toEqual({});
   useSettingsStore.getState().resetSettings();
+});
+
+it('1.15.1 — the theme is back: a 1.15 record (no theme) opens on System, and a set theme survives a reload', async () => {
+  localStorage.setItem(KEYS.settings, JSON.stringify({ version: 6, state: { uiScale: 'lg' } }));
+  await useSettingsStore.persist.rehydrate();
+  expect(useSettingsStore.getState()).toMatchObject({ theme: 'system', uiScale: 'lg' });
+  useSettingsStore.getState().setTheme('dark');
+  await useSettingsStore.persist.rehydrate();
+  expect(useSettingsStore.getState().theme).toBe('dark');
+  // A Black or Auto choice from before 1.15 becomes Dark or System.
+  localStorage.setItem(KEYS.settings, JSON.stringify({ version: 5, state: { theme: 'amoled' } }));
+  await useSettingsStore.persist.rehydrate();
+  expect(useSettingsStore.getState().theme).toBe('dark');
+  localStorage.setItem(KEYS.settings, JSON.stringify({ version: 5, state: { theme: 'auto' } }));
+  await useSettingsStore.persist.rehydrate();
+  expect(useSettingsStore.getState().theme).toBe('system');
 });

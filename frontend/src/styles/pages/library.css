@@ -778,3 +778,12 @@
   .vx-lp-view-toggle.vx-lp-view-toggle[aria-pressed='true'] { color: rgb(var(--ember-400)); background: var(--vx-accent-wash); }
   
 }
+
+/* 1.15.1 — the light theme: the cover's colour band brightens instead of
+   darkening, so the near-black title and meta stay readable on it. */
+html.light .vx-ehead-wash {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.25) 0%, rgb(255 255 255 / 0.35) calc(100% - 232px), rgb(255 255 255 / 0) 100%),
+    linear-gradient(180deg, rgb(var(--hero) / 0.7) 0%, rgb(var(--hero) / 0.45) calc(100% - 232px), rgb(var(--hero) / 0.16) calc(100% - 140px), rgb(var(--hero) / 0) 100%);
+}
+html.light .vx-ehead-meta, html.light .vx-ehead-dot, html.light .vx-ehead-desc { color: rgb(var(--ink-100) / 0.78); }

@@ -1180,6 +1180,11 @@ div.vx-ai-gallery-note p { margin: 0; }
   --vx-ai-glow-a: 0.16;
   --vx-ai-glow-b: 0.09;
 }
+html.light {
+  --vx-ai-skel-hi: rgb(255 255 255 / 0.75);
+  --vx-ai-glow-a: 0.07;
+  --vx-ai-glow-b: 0.05;
+}
 
 /* The canvas: a soft ambient light from the active accent, so the glass has
    colour to frost. Static on purpose: a moving backdrop would make every
@@ -1271,7 +1276,7 @@ html:is(.amoled, .hc, [data-template='vinax']) .vx-ai { background: rgb(var(--in
   background: rgb(0 0 0 / 0.5);
   pointer-events: none;
 }
-
+html.light .vx-ai-scrim::before { background: rgb(48 22 34 / 0.3); }
 .vx-ai-scrim > * { position: relative; }
 @media (min-width: 641px) {
   .vx-ai-scrim:not(.vx-ai-drawer-scrim)::before {

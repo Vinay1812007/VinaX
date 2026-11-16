@@ -271,6 +271,32 @@
   --track: rgba(255, 255, 255, 0.12);
 }
 
+/* 1.15.1 — the light theme. The ink and green ramps are the app style's
+   (templates/vinax.css); this block re-pitches the few tokens that are not
+   built on them, so they read on white. */
+html.light {
+  color-scheme: light;
+  --vx-danger: rgb(190 18 60);
+  --vx-success: rgb(var(--ember-400));
+  --glass-border: rgb(var(--ink-100) / 0.09);
+  --glass-border-strong: rgb(var(--ink-100) / 0.16);
+  --glass-highlight: rgb(255 255 255 / 0.75);
+  --glass-shadow: 0 4px 12px -6px rgb(0 0 0 / 0.12);
+  --glass-shadow-strong: 0 -8px 20px -8px rgb(0 0 0 / 0.12);
+  --surface-input: rgb(var(--ink-800));
+  --surface-navbar: rgb(var(--ink-950));
+  --surface-sidebar: rgb(var(--ink-950));
+  --surface-modal: rgb(var(--ink-950));
+  --surface-player: rgb(var(--ink-950));
+  --lyric-active: 10 12 16;
+  --lyric-dim: 71 85 105;
+  --lyric-passed: rgb(15 23 42 / 0.35);
+  --tile: rgb(var(--ink-100) / 0.05);
+  --tile-2: rgb(var(--ink-100) / 0.06);
+  --tile-hover: rgb(var(--ink-100) / 0.08);
+  --track: rgb(var(--ink-100) / 0.16);
+}
+
 /* ============================================================================
    Base — page canvas, typography, scroll, selection, focus.
    ========================================================================= */

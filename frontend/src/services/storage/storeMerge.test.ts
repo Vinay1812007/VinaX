@@ -48,7 +48,9 @@ describe('settings merge', () => {
     expect(pickSettings({ exploreMode: true, discoveryMode: 'everything' }).discoveryMode).toBe('discover');
     expect(pickSettings({ uiScale: 'md' })).not.toHaveProperty('discoveryMode');
     // 1.15 — retired theme keys are not settings any more.
-    expect(pickSettings({ theme: 'light', accent: 'ocean' })).toEqual({});
+    // 1.15.1 — the theme is a setting again (System / Light / Dark); the accent is not, and a retired theme value is dropped.
+    expect(pickSettings({ theme: 'light', accent: 'ocean' })).toEqual({ theme: 'light' });
+    expect(pickSettings({ theme: 'amoled' })).toEqual({});
     expect(pickSettings(null)).toEqual({});
     expect(pickSettings({ inferredRegion: { country: 'IN', regionLabel: 5, source: 'gps' } }).inferredRegion).toEqual({ country: 'IN', regionLabel: null, source: 'unknown' });
   });

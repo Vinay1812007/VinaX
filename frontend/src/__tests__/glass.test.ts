@@ -108,9 +108,25 @@ describe('frosted materials keep text legible over any backdrop', () => {
     expect(ratio(WHITE, [32, 107, 196])).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('1.15 — the one look is solid: every material is opaque there', () => {
+  it('1.15.1 — the look is glass that follows the dial, solid at Solid, and floored where text sits', () => {
     const look = readFileSync(resolve(__dirname, '../styles/templates/vinax.css'), 'utf8');
-    for (const t of ['thin', 'regular', 'chrome', 'thick']) expect(look).toMatch(new RegExp(`--vx-mat-${t}: rgb\\(var\\(--ink-\\d+\\)\\);`));
+    // Panels: 1 at --glass-alpha 1 (Solid), never below 50%.
+    expect(look).toContain('--vx-panel-fill: rgb(var(--ink-900) / clamp(0.5, calc(1 - (1 - var(--glass-alpha)) * 1.6), 1));');
+    // Bars and overlays that carry text keep the base floors (chrome 80%, thick 86%).
+    expect(look).toContain('--vx-mat-chrome: rgb(var(--ink-950) / clamp(0.8, calc(var(--glass-alpha) + 0.04), 1));');
+    expect(look).toContain('--vx-mat-thick: rgb(var(--ink-700) / clamp(0.86, calc(var(--glass-alpha) + 0.12), 1));');
+    // The colour mesh behind the glass is gone at Solid.
+    expect(look).toContain('--vx-mesh-art: calc((1 - var(--glass-alpha)) * 2.4);');
+    // No more "glass off" switch in the look.
+    expect(look).not.toMatch(/backdrop-filter:\s*none/);
+  });
+
+  it('1.15.1 — panel text clears AA at the deepest glass, over the brightest mesh', () => {
+    // Dark: white text on #121212 at 50% over a fully saturated mid-tone mesh (worst case ~ #808080).
+    const mid = [128, 128, 128];
+    expect(ratio(WHITE, over([18, 18, 18], 0.5, mid))).toBeGreaterThanOrEqual(4.5);
+    // Light: #121212 text on #f8f8f8 at 50% over the same mesh.
+    expect(ratio([18, 18, 18], over([248, 248, 248], 0.5, mid))).toBeGreaterThanOrEqual(4.5);
   });
 
   it('dark: muted text on the chrome, body text on menus and snackbars clear AA over a white cover', () => {

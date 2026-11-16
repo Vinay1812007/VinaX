@@ -70,13 +70,17 @@ function splitSelectors(group: string): string[] {
 const WEIGHT = ':root';
 const rootDark = tokensOf(base, ':root');
 
-/** The tokens a style resolves to. */
-function resolved(id: string): { dark: Record<string, RGB>; onDark: string } {
+/** The tokens a style resolves to, per theme (1.15.1: light and dark). */
+function resolved(id: string): { dark: Record<string, RGB>; light: Record<string, RGB>; onDark: string; onLight: string } {
   const css = tplCss(id);
   const sel = `html[data-template='${id}']${WEIGHT}`;
+  const selLight = `html.light[data-template='${id}']${WEIGHT}`;
+  const dark = { ...rootDark, ...tokensOf(css, sel) };
   return {
-    dark: { ...rootDark, ...tokensOf(css, sel) },
+    dark,
+    light: { ...dark, ...tokensOf(css, selLight) },
     onDark: hexOf(css, sel, 'vx-on-accent') ?? '#000',
+    onLight: hexOf(css, selLight, 'vx-on-accent') ?? hexOf(css, sel, 'vx-on-accent') ?? '#000',
   };
 }
 
@@ -111,7 +115,7 @@ describe.each(TEMPLATE_IDS.map((id) => [id]))('app style %s: stylesheet contract
     expect(blocks.length).toBeGreaterThan(10);
     for (const [, group] of blocks) {
       for (const one of splitSelectors(group)) {
-        expect(one, `${id}: stray selector "${one}"`).toMatch(new RegExp(`^html\\[data-template='${id}'\\]`));
+        expect(one, `${id}: stray selector "${one}"`).toMatch(new RegExp(`^html(\\.light)?\\[data-template='${id}'\\]`));
       }
     }
   });
@@ -127,16 +131,17 @@ describe.each(TEMPLATE_IDS.map((id) => [id]))('app style %s: stylesheet contract
     }
   });
 
-  it('stamps the same canvas before first paint as its --ink-900', () => {
+  it('stamps the same window canvas before first paint as its --ink-950, in both themes', () => {
     const t = resolved(id);
-    expect(toHex(t.dark['ink-900'])).toBe(TEMPLATE_CANVAS[id]);
-    expect(indexHtml).toContain(`${id}: '${TEMPLATE_CANVAS[id]}'`);
+    expect(toHex(t.dark['ink-950'])).toBe(TEMPLATE_CANVAS[id].dark);
+    expect(toHex(t.light['ink-950'])).toBe(TEMPLATE_CANVAS[id].light);
+    expect(indexHtml).toContain(`${id}: { dark: '${TEMPLATE_CANVAS[id].dark}', light: '${TEMPLATE_CANVAS[id].light}' }`);
   });
 
-  it.each([['dark']] as const)('keeps text and accent tiers readable (%s)', (theme) => {
+  it.each([['dark'], ['light']] as const)('keeps text and accent tiers readable (%s)', (theme) => {
     const t = resolved(id);
     const tok = t[theme];
-    const on = hexToRgb(t.onDark);
+    const on = hexToRgb(theme === 'dark' ? t.onDark : t.onLight);
     const check = (fg: string, bgs: string[], min: number): void => {
       for (const bg of bgs) expect(ratio(tok[fg], tok[bg]), `${id} ${theme}: ${fg} on ${bg}`).toBeGreaterThanOrEqual(min);
     };
@@ -153,17 +158,21 @@ describe.each(TEMPLATE_IDS.map((id) => [id]))('app style %s: stylesheet contract
     expect(ratio(on, tok['ember-500']), `${id} ${theme}: label on accent`).toBeGreaterThanOrEqual(4.5);
     // The ramp stays ordered so "one tier up" always means "more contrast".
     const lum = ['ink-950', 'ink-900', 'ink-850', 'ink-800', 'ink-700'].map((k) => luminance(tok[k]));
-    const sorted = [...lum].sort((a, b) => a - b);
+    const sorted = [...lum].sort((a, b) => (theme === 'dark' ? a - b : b - a));
     expect(lum).toEqual(sorted);
   });
 });
 
-describe('1.15 — one dark look', () => {
-  it('has no light, black or accent blocks', () => {
+describe('1.15 — one look, light and dark', () => {
+  it('has no black (AMOLED) theme and no accent blocks', () => {
     for (const css of [base, ...TEMPLATE_IDS.map(tplCss), read('../styles/templates/base.css')]) {
-      expect(css).not.toMatch(/html\.(light|amoled)\b/);
+      expect(css).not.toMatch(/html\.amoled\b/);
       expect(css).not.toMatch(/\[data-accent=/);
     }
+  });
+  it.each(TEMPLATE_IDS.map((id) => [id]))('%s: the light block sets every ink and green tier', (id) => {
+    const light = tokensOf(tplCss(id), `html.light[data-template='${id}']${WEIGHT}`);
+    for (const k of ['ink-950', 'ink-900', 'ink-850', 'ink-800', 'ink-700', 'ink-600', 'ink-500', 'ink-400', 'ink-300', 'ink-200', 'ink-100', 'ember-500', 'ember-400', 'tide-400']) expect(light[k], k).toBeDefined();
   });
 });
 

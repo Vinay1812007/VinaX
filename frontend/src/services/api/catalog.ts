@@ -51,6 +51,9 @@ const albums = (v: unknown): Album[] => (arr(v) ?? []).map(normalizeAlbum).filte
 const playlists = (v: unknown): Playlist[] =>
   (arr(v) ?? []).map(normalizePlaylist).filter((p): p is Playlist => p !== null);
 
+/** 1.15.1 — the catalogue answers `success:false` for any `limit` above 24 (measured on every feed, 2026-11-16), so a feed never asks for more. */
+export const MAX_FEED_LIMIT = 24;
+
 function feed<T>(path: string, validate: (d: any) => T | null, opts?: FeedOpts & { timeoutMs?: number }): Promise<T> {
   return orchestratedRequest({
     paths: [path],
@@ -71,7 +74,7 @@ export interface TrendingFeed {
 }
 
 export function getTrending(langs: readonly string[] | string, limit = 20, opts?: FeedOpts): Promise<TrendingFeed> {
-  return feed(`/trending?language=${enc(languageParam(langs))}&limit=${clamp(limit, 1, 50)}`, (d) => {
+  return feed(`/trending?language=${enc(languageParam(langs))}&limit=${clamp(limit, 1, MAX_FEED_LIMIT)}`, (d) => {
     if (!d || typeof d !== 'object' || (!arr(d.songs) && !arr(d.albums) && !arr(d.playlists))) return null;
     return { songs: normalizeSongList(d.songs), albums: albums(d.albums), playlists: playlists(d.playlists) };
   }, opts);
@@ -79,21 +82,21 @@ export function getTrending(langs: readonly string[] | string, limit = 20, opts?
 
 /** One section of the trending feed. Empty lists are a miss, so callers fall back. */
 export function getTrendingSongs(langs: readonly string[] | string, limit = 20, opts?: FeedOpts): Promise<Song[]> {
-  return feed(`/trending/songs?language=${enc(languageParam(langs))}&limit=${clamp(limit, 1, 50)}`, (d) => {
+  return feed(`/trending/songs?language=${enc(languageParam(langs))}&limit=${clamp(limit, 1, MAX_FEED_LIMIT)}`, (d) => {
     const songs = normalizeSongList(arr(d) ?? d?.songs);
     return songs.length ? songs : null;
   }, opts);
 }
 
 export function getTrendingAlbums(langs: readonly string[] | string, limit = 20, opts?: FeedOpts): Promise<Album[]> {
-  return feed(`/trending/albums?language=${enc(languageParam(langs))}&limit=${clamp(limit, 1, 50)}`, (d) => {
+  return feed(`/trending/albums?language=${enc(languageParam(langs))}&limit=${clamp(limit, 1, MAX_FEED_LIMIT)}`, (d) => {
     const list = albums(arr(d) ?? d?.albums);
     return list.length ? list : null;
   }, opts);
 }
 
 export function getTrendingPlaylists(langs: readonly string[] | string, limit = 20, opts?: FeedOpts): Promise<Playlist[]> {
-  return feed(`/trending/playlists?language=${enc(languageParam(langs))}&limit=${clamp(limit, 1, 50)}`, (d) => {
+  return feed(`/trending/playlists?language=${enc(languageParam(langs))}&limit=${clamp(limit, 1, MAX_FEED_LIMIT)}`, (d) => {
     const list = playlists(arr(d) ?? d?.playlists);
     return list.length ? list : null;
   }, opts);
@@ -105,7 +108,7 @@ export interface NewReleasesFeed {
 }
 
 export function getNewReleases(langs: readonly string[] | string, limit = 20, opts?: FeedOpts): Promise<NewReleasesFeed> {
-  return feed(`/new-releases?language=${enc(languageParam(langs))}&limit=${clamp(limit, 1, 50)}`, (d) => {
+  return feed(`/new-releases?language=${enc(languageParam(langs))}&limit=${clamp(limit, 1, MAX_FEED_LIMIT)}`, (d) => {
     if (!d || typeof d !== 'object') return null;
     const out = { songs: normalizeSongList(d.songs), albums: albums(d.albums) };
     return out.songs.length || out.albums.length ? out : null;
@@ -114,14 +117,14 @@ export function getNewReleases(langs: readonly string[] | string, limit = 20, op
 
 /** The catalogue's chart playlists ("Most Searched Songs - Hindi", "Trending Today"…). */
 export function getCharts(langs: readonly string[] | string, limit = 20, opts?: FeedOpts): Promise<Playlist[]> {
-  return feed(`/charts?language=${enc(languageParam(langs))}&limit=${clamp(limit, 1, 50)}`, (d) => {
+  return feed(`/charts?language=${enc(languageParam(langs))}&limit=${clamp(limit, 1, MAX_FEED_LIMIT)}`, (d) => {
     const list = playlists(d);
     return list.length ? list : null;
   }, opts);
 }
 
 export function getFeaturedPlaylists(langs: readonly string[] | string, limit = 20, opts?: FeedOpts): Promise<Playlist[]> {
-  return feed(`/featured-playlists?language=${enc(languageParam(langs))}&limit=${clamp(limit, 1, 50)}`, (d) => {
+  return feed(`/featured-playlists?language=${enc(languageParam(langs))}&limit=${clamp(limit, 1, MAX_FEED_LIMIT)}`, (d) => {
     const list = playlists(d);
     return list.length ? list : null;
   }, opts);
@@ -135,7 +138,7 @@ export interface HomeFeed {
 }
 
 export function getHomeFeed(langs: readonly string[] | string, limit = 12, opts?: FeedOpts): Promise<HomeFeed> {
-  return feed(`/home?language=${enc(languageParam(langs))}&limit=${clamp(limit, 1, 50)}`, (d) => {
+  return feed(`/home?language=${enc(languageParam(langs))}&limit=${clamp(limit, 1, MAX_FEED_LIMIT)}`, (d) => {
     if (!d || typeof d !== 'object') return null;
     const out: HomeFeed = {
       newSongs: normalizeSongList(d.newReleases?.songs),
@@ -276,7 +279,7 @@ export function nextStationSongs(stationId: string, limit = 10, opts?: FeedOpts)
 // ── Similar albums and artists ──────────────────────────────────────────────
 
 export function getSimilarArtists(artistId: string, limit = 12, opts?: FeedOpts): Promise<ArtistRef[]> {
-  return feed(`/artists/${enc(artistId)}/similar?limit=${clamp(limit, 1, 50)}`, (d) => {
+  return feed(`/artists/${enc(artistId)}/similar?limit=${clamp(limit, 1, MAX_FEED_LIMIT)}`, (d) => {
     const out: ArtistRef[] = [];
     for (const r of arr(d) ?? []) {
       const raw = r as any;
@@ -291,7 +294,7 @@ export function getSimilarArtists(artistId: string, limit = 12, opts?: FeedOpts)
 }
 
 export function getSimilarAlbums(albumId: string, limit = 12, opts?: FeedOpts): Promise<Album[]> {
-  return feed(`/albums/${enc(albumId)}/similar?limit=${clamp(limit, 1, 50)}`, (d) => {
+  return feed(`/albums/${enc(albumId)}/similar?limit=${clamp(limit, 1, MAX_FEED_LIMIT)}`, (d) => {
     const list = albums(d);
     return list.length ? list : null;
   }, opts);
@@ -408,7 +411,7 @@ export function episodeToSong(raw: any): Song | null {
 const episodes = (v: unknown): Song[] => (arr(v) ?? []).map(episodeToSong).filter((s): s is Song => s !== null);
 
 export function getPodcasts(page = 1, limit = 20, opts?: FeedOpts): Promise<PodcastSummary[]> {
-  return feed(`/podcasts?page=${clamp(page, 1, 500)}&limit=${clamp(limit, 1, 50)}`, (d) => {
+  return feed(`/podcasts?page=${clamp(page, 1, 500)}&limit=${clamp(limit, 1, MAX_FEED_LIMIT)}`, (d) => {
     const list = arr(d);
     if (!list) return null;
     // Past page 1 an empty list is the end, not a miss.
@@ -453,7 +456,7 @@ export function getPodcastEpisodes(
   opts?: FeedOpts,
 ): Promise<Song[]> {
   const s = season != null ? `&season=${clamp(season, 1, 1000)}` : '';
-  return feed(`/podcasts/${enc(id)}/episodes?page=${clamp(page, 1, 1000)}&limit=${clamp(limit, 1, 50)}${s}`, (d) => {
+  return feed(`/podcasts/${enc(id)}/episodes?page=${clamp(page, 1, 1000)}&limit=${clamp(limit, 1, MAX_FEED_LIMIT)}${s}`, (d) => {
     const list = arr(d);
     return list ? episodes(list) : null;
   }, opts);

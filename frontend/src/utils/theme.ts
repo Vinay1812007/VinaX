@@ -1,8 +1,15 @@
+export type ResolvedTheme = 'dark' | 'light';
+
+/** 1.15.1 — System follows the device's light/dark setting. Pure. */
+export function resolveTheme(pref: unknown, systemPrefersDark: boolean): ResolvedTheme {
+  if (pref === 'light' || pref === 'dark') return pref;
+  return systemPrefersDark ? 'dark' : 'light';
+}
+
 // ---------------------------------------------------------------------------
 // App style ("template"): html[data-template] names the look the stylesheets
 // in styles/templates/ are written for. 2.0 — VinaX has ONE look, `vinax`.
-// 1.15 — and one theme: black and green, always dark (no light, black or
-// auto theme, no accent picker).
+// 1.15 — black and green, no accent picker; 1.15.1 — in light or dark.
 // The id, the setting and the pre-paint stamp stay, so a second look can be
 // added the way README.md (Adding an app style) describes.
 // ---------------------------------------------------------------------------
@@ -10,11 +17,11 @@
 export type TemplateId = 'vinax';
 export const DEFAULT_TEMPLATE: TemplateId = 'vinax';
 
-/** The page canvas (= the style's --ink-900). The pre-paint script in
- *  index.html carries the same table — keep in sync (asserted in
- *  templates.test.ts). */
-export const TEMPLATE_CANVAS: Record<TemplateId, string> = {
-  vinax: '#121212',
+/** The page canvas (= the style's --ink-950, the window behind the panels)
+ *  per theme. The pre-paint script in index.html carries the same table —
+ *  keep in sync (asserted in templates.test.ts). */
+export const TEMPLATE_CANVAS: Record<TemplateId, { dark: string; light: string }> = {
+  vinax: { dark: '#000000', light: '#ffffff' },
 };
 
 /** 2.0 — every style id an earlier release stored (the six of 15.0–1.13 and
@@ -43,15 +50,16 @@ export function normalizeTemplate(id: unknown): TemplateId {
   return DEFAULT_TEMPLATE;
 }
 
-/** Apply the dark class, the app style and the browser chrome colour. Idempotent.
+/** Apply the theme class, the app style and the browser chrome colour. Idempotent.
  * Mirrored by the inline pre-paint script in index.html — keep in sync. */
-export function applyThemeClasses(root: HTMLElement = document.documentElement, template?: unknown): void {
-  root.classList.remove('light', 'amoled');
-  root.classList.add('dark');
+export function applyThemeClasses(root: HTMLElement = document.documentElement, template?: unknown, theme: ResolvedTheme = 'dark'): void {
+  root.classList.remove('amoled');
+  root.classList.toggle('light', theme === 'light');
+  root.classList.toggle('dark', theme === 'dark');
   // A caller that passes no style keeps whatever is already on <html>.
   const tpl = normalizeTemplate(template ?? root.dataset.template);
   root.dataset.template = tpl;
-  const bg = TEMPLATE_CANVAS[tpl];
+  const bg = TEMPLATE_CANVAS[tpl][theme];
   root.style.background = bg;
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bg);
 }

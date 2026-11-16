@@ -449,7 +449,7 @@ a.vx-np-artist:hover { color: rgb(var(--ink-100)); text-decoration: underline; t
 .vx-np-tab-icon { width: 16px; height: 16px; }
 .vx-np-tabs [role='tab'].is-together:not([aria-selected='true']) { color: rgb(var(--ember-400)); }
 .vx-np-tabs [role='tab'].is-live:not([aria-selected='true']) { color: rgb(var(--tide-400)); }
-.vx-np-tab-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--radius-pill); background: rgb(var(--tide-500)); color: rgb(var(--ink-950)); font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.vx-np-tab-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--radius-pill); background: rgb(var(--tide-500)); color: var(--vx-on-accent); font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .vx-np-tab-live { width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--tide-400)); box-shadow: 0 0 0 3px rgb(0 0 0 / 0.35); }
 /* Four tabs and a link: on a phone the tab strip scrolls sideways before anything is cut off. */
 .vx-np-tabs { min-width: 0; overflow-x: auto; scrollbar-width: none; }
@@ -1128,7 +1128,9 @@ html.reduce-motion .vx-np-heart-burst { animation: none; opacity: 1; transform: 
   min-height: 64px;
   margin: 0 -16px;
   padding: 0 8px 0 16px;
-  background: rgb(var(--ink-900));
+  background: rgb(var(--ink-900) / clamp(0.8, calc(var(--glass-alpha) + 0.04), 1));
+  -webkit-backdrop-filter: blur(var(--vx-mat-chrome-blur));
+  backdrop-filter: blur(var(--vx-mat-chrome-blur));
 }
 .vx-rail-bar h2, .vx-rail-context { min-width: 0; overflow: hidden; color: rgb(var(--ink-100)); font-size: 16px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
 a.vx-rail-context:hover { text-decoration: underline; text-underline-offset: 2px; }
@@ -1170,7 +1172,7 @@ a.vx-rail-artist:hover { color: rgb(var(--ink-100)); text-decoration: underline;
 .vx-rail-empty { padding: 8px 0; color: rgb(var(--ink-300)); font-size: 14px; line-height: 1.5; }
 .vx-rail-mix { margin: 0 0 6px; color: rgb(var(--ink-300)); font-size: 12.5px; font-weight: 400; }
 /* A card on the panel: #1f1f1f with an 8px corner (the lyrics card takes the artwork's colour). */
-.vx-rail-card { margin-top: 16px; padding: 16px; border-radius: var(--radius-md, 8px); background: rgb(var(--ink-800)); }
+.vx-rail-card { margin-top: 16px; padding: 16px; border-radius: var(--radius-md, 8px); background: rgb(var(--ink-100) / 0.07); box-shadow: inset 0 1px 0 var(--vx-mat-specular), inset 0 0 0 1px var(--vx-mat-hairline); }
 .vx-rail-card.is-lyrics { padding: 0; overflow: hidden; background: rgb(var(--art)); }
 .vx-rail-card .vx-upnext.is-rail { margin: 8px -8px 0; }
 .vx-rail-sub { margin: 16px 0 8px; color: rgb(var(--ink-100)); font-size: 16px; font-weight: 700; }
@@ -1404,3 +1406,13 @@ html.reduce-motion :is(.vx-np-play > svg, .vx-np-art-img.is-swap, .vx-np-tabpane
 .vx-lyrics-page [data-line].vx-lyric-passed { color: rgb(var(--ink-100) / 0.6); }
 .vx-lyrics-page [data-line].vx-lyric-active { color: rgb(var(--ink-100)); }
 .vx-lyrics-page [data-line]:not(:disabled):hover { background: transparent; text-decoration: underline; text-underline-offset: 4px; }
+
+/* 1.15.1 — Lyrics in the light theme: a lighter wash of the artwork's colour,
+   the sung line in the text colour, the lines to come and the lines sung
+   in fainter steps of it. */
+html.light .vx-lyrics-page::before { background: linear-gradient(rgb(255 255 255 / 0.45), rgb(255 255 255 / 0.45)), rgb(var(--art)); }
+html.light .vx-lyrics-page [data-line].vx-lyric-dim { color: rgb(var(--ink-100) / 0.5); }
+html.light .vx-lyrics-page [data-line].vx-lyric-passed { color: rgb(var(--ink-100) / 0.34); }
+html.light .vx-lyrics-page .vx-np-tabs { background: rgb(255 255 255 / 0.45); }
+html.light .vx-rail-card.is-lyrics { background: linear-gradient(rgb(255 255 255 / 0.55), rgb(255 255 255 / 0.55)), rgb(var(--art)); }
+html.light .vx-rail-lyrics-card p { color: rgb(var(--ink-100) / 0.55); }
