@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.14.6': {
+    title: 'The queue works like Spotify: your added songs play next, and shuffle shows the real order',
+    changes: [
+      { type: 'new', text: 'Songs you add to the queue now play right after the current song, in the order you added them, before the rest of the album or playlist.' },
+      { type: 'improved', text: 'Shuffle now reorders the queue you see, so Up next always shows what plays next and Back goes to the song before; turning it off puts the list back in order.' },
+      { type: 'new', text: 'The Queue page is split into Next in queue, Next from (the album, playlist or page you started) and Autoplay, with Clear queue for the songs you added.' },
+      { type: 'improved', text: 'Playing from now names what you actually started, such as a playlist, Liked songs or a search, instead of the song\'s album.' },
+    ],
+  },
   '1.14.5': {
     title: 'Flow opens on new music videos every time, only in your languages',
     changes: [
