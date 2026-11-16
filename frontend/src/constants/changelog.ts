@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.14.7': {
+    title: 'VinaX AI settings, projects, artifacts gallery and dialogs get the Claude look too',
+    changes: [
+      { type: 'improved', text: 'Settings has text tabs, outlined fields and quiet sentence-case section names.' },
+      { type: 'improved', text: 'Projects and the Artifacts gallery use the same warm cards, with neutral previews and a dark selected filter.' },
+      { type: 'improved', text: 'Dialogs and the settings sheet dim the page with a warm shade instead of a purple one.' },
+      { type: 'improved', text: 'Delete buttons in confirm dialogs are red again, with readable text in light mode.' },
+    ],
+  },
   '1.14.6': {
     title: 'The queue works like Spotify: your added songs play next, and shuffle shows the real order',
     changes: [
