@@ -87,11 +87,18 @@ describe('manual actions outrank automation', () => {
     expect(last?.action?.label).toBe('View');
   });
 
-  it('keeps an album in order and appends hand-added songs after it', () => {
+  it('1.15 — plays hand-added songs right after the current one, in the order added, ahead of the rest of the album', () => {
     useSettingsStore.setState({ djTakeover: false });
     usePlayerStore.getState().playQueue([song('a'), song('b'), song('c')], 0);
     usePlayerStore.getState().enqueue(song('mine'));
-    expect(ids()).toEqual(['a', 'b', 'c', 'mine']);
+    usePlayerStore.getState().enqueue(song('mine2'));
+    expect(ids()).toEqual(['a', 'mine', 'mine2', 'b', 'c']);
+    // "Play next" goes to the very top; the album keeps its order after the adds.
+    usePlayerStore.getState().enqueueNext(song('now'));
+    expect(ids()).toEqual(['a', 'now', 'mine', 'mine2', 'b', 'c']);
+    usePlayerStore.getState().next();
+    usePlayerStore.getState().enqueue(song('mine3'));
+    expect(ids()).toEqual(['a', 'now', 'mine', 'mine2', 'mine3', 'b', 'c']);
   });
 
   it('"Tune this queue" rebuilds the automatic tail but never drops what the listener queued by hand', async () => {

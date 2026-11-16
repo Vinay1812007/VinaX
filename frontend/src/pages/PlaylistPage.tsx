@@ -6,7 +6,6 @@ import { usePlaylist } from '@/features/playlists/usePlaylist';
 import { usePlayerStore } from '@/store/playerStore';
 import { SongRow, TrackListHead } from '@/components/SongRow';
 import { EntityAction, EntityHeader, EntityMenu, EntityMeta, PlayFab, songsLabel, totalDuration } from '@/components/EntityHeader';
-import { shuffled } from '@/features/library/sort';
 import { languageLabel } from '@/constants/languages';
 import { HeaderSkeleton, ListSkeleton } from '@/components/Skeletons';
 import { EmptyState, ErrorState } from '@/components/States';
@@ -41,8 +40,7 @@ export default function PlaylistPage() {
   const shufflePlay = () => {
     if (!playlist.songs.length) return;
     const p = usePlayerStore.getState();
-    if (!p.shuffle) p.toggleShuffle();
-    p.playQueue(shuffled(playlist.songs), 0);
+    p.playQueue(playlist.songs, 0, { shuffle: true });
   };
 
   return (

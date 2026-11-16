@@ -23,7 +23,7 @@ describe('music tools', () => {
     h.search.mockResolvedValue([song('1', 'Kun Faya Kun', 'A.R. Rahman'), song('2', 'Khwaja', 'A.R. Rahman')]);
     expect(await runMusicTool('play_music', { query: '  sufi   rahman ' })).toEqual({ ok: true, playing: { title: 'Kun Faya Kun', artist: 'A.R. Rahman' }, upNext: 1 });
     expect(h.search).toHaveBeenCalledWith('sufi rahman', 20);
-    expect(h.player.playQueue).toHaveBeenCalledWith(expect.any(Array), 0);
+    expect(h.player.playQueue).toHaveBeenCalledWith(expect.any(Array), 0, { from: expect.objectContaining({ kind: 'search' }) });
   });
 
   it('play_music: nothing found, no query, or a failing search is an answer, never a throw', async () => {

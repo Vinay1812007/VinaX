@@ -228,6 +228,7 @@ export default function NowPlayingPage() {
   const loopB = usePlayerStore((s) => s.loopB);
   const queue = usePlayerStore((s) => s.queue);
   const index = usePlayerStore((s) => s.index);
+  const queueContext = usePlayerStore((s) => s.context);
   const streamKbps = usePlayerStore((s) => s.streamKbps);
   const { togglePlay, next, prev, cycleRepeat, toggleShuffle, setRate, setVolume, toggleMute, setLoopPoint, clearLoop } =
     usePlayerStore.getState();
@@ -548,7 +549,8 @@ export default function NowPlayingPage() {
   // Up next preview: the next six (Pin a mood still fits under them on a
   // desktop); the whole queue is one tap away (Open queue).
   const upNext = queue.slice(index + 1, index + 7);
-  const playingFrom = song.album?.name ?? 'Your queue';
+  // 1.15 — what the listener pressed play on (an album, a playlist, Liked songs, a search…).
+  const playingFrom = queueContext?.label ?? song.album?.name ?? 'Your queue';
   const filmTitle = song.album ? filmTitleFromAlbumName(song.album.name) : null;
   const creditChips = buildCreditChips(song, filmTitle);
   const washStyle = (wash ? { '--np-wash': wash } : undefined) as React.CSSProperties | undefined;

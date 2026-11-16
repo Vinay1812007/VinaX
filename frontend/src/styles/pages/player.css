@@ -1057,7 +1057,7 @@ html.light .vx-queue-now { background: linear-gradient(110deg, rgb(var(--art) / 
 .vx-queue-empty .vx-np-spinner { flex: none; width: 16px; height: 16px; border-width: 2px; color: rgb(var(--ember-400)); }
 .vx-queue-count { color: rgb(var(--ink-400)); font-size: 13px; font-weight: 600; white-space: nowrap; }
 
-/* The list reads in runs: "Your songs", then "VinaX picks". */
+/* 1.15 — the list reads in runs: "Next in queue", "Next from: …", then "Autoplay". */
 .vx-queue-list { display: flex; flex-direction: column; list-style: none; }
 .vx-queue-group {
   display: flex;
@@ -1072,6 +1072,11 @@ html.light .vx-queue-now { background: linear-gradient(110deg, rgb(var(--art) / 
 .vx-queue-group-note { color: rgb(var(--ink-400)); font-size: 12.5px; font-weight: 500; }
 .vx-queue-group.is-auto .vx-queue-group-title { display: inline-flex; align-items: center; gap: 6px; }
 .vx-queue-group.is-auto .vx-queue-group-title svg { width: 15px; height: 15px; color: rgb(var(--tide-400)); }
+/* 1.15 — "Next from: <album>" links back to it; "Clear queue" drops only the songs you added. */
+.vx-queue-group-title a { color: inherit; text-decoration: underline; text-decoration-color: rgb(var(--ink-400) / 0.5); text-underline-offset: 3px; }
+.vx-queue-group-title a:hover { text-decoration-color: currentColor; }
+.vx-queue-group-action { color: rgb(var(--ink-100)); font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
+.vx-queue-group-action:hover { color: rgb(var(--tide-400)); }
 
 /* Upcoming rows: flat, hairline-free, hover to the raised tier. */
 .vx-queue-row {

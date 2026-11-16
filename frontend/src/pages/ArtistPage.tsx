@@ -25,7 +25,6 @@ import { ARTIST_SONG_SORTS, compactCount, sortArtistSongs, type ArtistSongSort }
 import { EntityAction, EntityHeader, EntityMenu, EntityMeta, PlayFab } from '@/components/EntityHeader';
 import { artistTagline } from '@/utils/artistTagline';
 import { SectionHeader } from '@/components/SectionHeader';
-import { shuffled } from '@/features/library/sort';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { SaveButton } from '@/components/SaveButton';
 
@@ -90,8 +89,7 @@ export default function ArtistPage() {
   const shufflePlay = () => {
     if (!songs.length) return;
     const p = usePlayerStore.getState();
-    if (!p.shuffle) p.toggleShuffle();
-    p.playQueue(shuffled(songs), 0);
+    p.playQueue(songs, 0, { shuffle: true });
   };
 
   return (

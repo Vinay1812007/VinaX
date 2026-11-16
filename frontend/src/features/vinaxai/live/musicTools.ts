@@ -28,7 +28,7 @@ export async function runMusicTool(name: string, args: Record<string, unknown>):
         if (!query) return { ok: false, error: 'Say what to play.' };
         const songs = await searchSongs(query, 20);
         if (!songs.length) return { ok: false, found: 0, error: `Nothing found for "${query}".` };
-        usePlayerStore.getState().playQueue(songs, 0);
+        usePlayerStore.getState().playQueue(songs, 0, { from: { kind: 'search', label: `Search: ${query}` } });
         return { ok: true, playing: describe(songs[0]), upNext: songs.length - 1 };
       }
       case 'pause_music':

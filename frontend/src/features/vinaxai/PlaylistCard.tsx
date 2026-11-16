@@ -43,7 +43,7 @@ export function PlaylistCard({ text }: { text: string }) {
       }
       if (kind === 'play') {
         const { usePlayerStore } = await import('@/store/playerStore');
-        usePlayerStore.getState().playQueue(songs, 0);
+        usePlayerStore.getState().playQueue(songs, 0, { from: { kind: 'playlist', label: draft.title } });
       } else {
         const { useLibraryStore } = await import('@/store/libraryStore');
         const lib = useLibraryStore.getState();

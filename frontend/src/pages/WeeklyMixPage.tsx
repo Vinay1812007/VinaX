@@ -19,9 +19,8 @@ export default function WeeklyMixPage() {
   const play = (shuffle: boolean) => {
     if (!songs.length) return;
     const p = usePlayerStore.getState();
-    if (shuffle && !p.shuffle) p.toggleShuffle();
     if (!shuffle && p.shuffle) p.toggleShuffle();
-    p.playQueue(songs, shuffle ? Math.floor(Math.random() * songs.length) : 0);
+    p.playQueue(songs, 0, { shuffle });
   };
 
   const save = () => {

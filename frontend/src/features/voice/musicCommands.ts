@@ -104,11 +104,10 @@ export async function tryMusicCommand(text: string, say: (line: string) => void)
           player.enqueueNext(results[0]);
           say(`Queued ${results[0].title} by ${results[0].subtitle}.`);
         } else if (verb === 'shuffle') {
-          const shuffled = [...results].sort(() => Math.random() - 0.5);
-          player.playQueue(shuffled, 0);
-          say(`Shuffling ${shuffled.length} tracks from ${rest}.`);
+          player.playQueue(results, 0, { shuffle: true, from: { kind: 'search', label: `Search: ${rest}` } });
+          say(`Shuffling ${results.length} tracks from ${rest}.`);
         } else {
-          player.playQueue(results, 0);
+          player.playQueue(results, 0, { from: { kind: 'search', label: `Search: ${rest}` } });
           const langBit = langFilter ? ` (in ${langFilter})` : '';
           const excludeBit = excludeArtist ? ` (skipping ${excludeArtist})` : '';
           say(`Playing ${results[0].title} by ${results[0].subtitle}${langBit}${excludeBit}.`);

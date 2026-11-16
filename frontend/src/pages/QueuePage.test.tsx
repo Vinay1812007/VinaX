@@ -243,3 +243,22 @@ describe('1.11 — Save as playlist and Clear', () => {
     expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['now', 'a', 'x', 'b', 'x']);
   });
 });
+
+describe('1.15 — Spotify-style queue sections', () => {
+  it('reads Next in queue, Next from: <what you started>, then Autoplay; Clear queue drops only your adds', () => {
+    // Earlier tests leave ownership marks in the store's closure: start clean.
+    act(() => usePlayerStore.getState().clearQueue());
+    usePlayerStore.setState({ queue, index: 0, context: { kind: 'playlist', label: 'Telugu Hits', path: '/playlist/1' } });
+    seedOwnership();
+    mount();
+    const titles = Array.from(document.querySelectorAll('.vx-queue-group-title')).map((el) => el.textContent?.trim());
+    expect(titles).toEqual(['Next in queue', 'Next from: Telugu Hits', 'Autoplay']);
+    expect(screen.getByRole('link', { name: 'Telugu Hits' }).getAttribute('href')).toBe('/playlist/1');
+    // The song added by hand plays first, ahead of the rest of the playlist.
+    expect(order()[0]).toMatch(/^Mine/);
+    fireEvent.click(screen.getByRole('button', { name: 'Clear queue' }));
+    expect(usePlayerStore.getState().queue.some((s) => s.id === 'hand')).toBe(false);
+    expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['now', 'a', 'x', 'b', 'x', 'p1', 'p2']);
+    usePlayerStore.setState({ context: null });
+  });
+});

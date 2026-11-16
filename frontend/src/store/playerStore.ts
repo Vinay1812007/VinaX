@@ -28,6 +28,7 @@ import { admitSongs } from '@/services/recommendation/admission';
 import { isTuneIntent, randomTune, type TuneIntent } from '@/services/recommendation/tune';
 import { noteSessionEvent } from '@/services/personalization/sessionIntent';
 import { setNowPlayingProbe } from '@/store/libraryStore';
+import { contextFromPage, isQueueContext, queueInsertAt, shuffledStart, shuffleSongs, shuffleUpcoming, unshuffleUpcoming, type QueueContext, type QueueRun } from './queueOrder';
 import {
   creditTick,
   emitPlaybackEvent,
@@ -49,6 +50,7 @@ export type RepeatMode = 'off' | 'one' | 'all';
  * first; a miss falls back to the on-device plan, and two misses in a row end it.
  */
 export type RadioFeed = (limit: number, signal: AbortSignal) => Promise<Song[]>;
+export type { QueueContext } from './queueOrder';
 
 export interface PlayerState {
   queue: Song[];
@@ -79,6 +81,8 @@ export interface PlayerState {
   previewMode: boolean;
   /** 10.1 — the preview song that could not play (Flow moves past it). */
   previewError: string | null;
+  /** 1.15 — what the listener pressed play on ("Playing from", "Next from"); null when unknown. */
+  context: QueueContext | null;
 
   initEngine(): void;
   setSleepSongs(n: number): void;
@@ -92,7 +96,12 @@ export interface PlayerState {
    * the song starts alone and Up Next builds what follows. `keepList` forces
    * the list to become the queue whatever the setting (Queue Builder plans).
    */
-  playQueue(songs: Song[], startIndex?: number, opts?: { keepList?: boolean; asSeed?: boolean; startAt?: number; room?: boolean }): void;
+  /**
+   * 1.15 — `from` names what is playing ("Playing from"); left out, it is read
+   * from the page the listener is on. `shuffle: true` turns shuffle on and
+   * starts on a random song (the "Shuffle play" buttons).
+   */
+  playQueue(songs: Song[], startIndex?: number, opts?: { keepList?: boolean; asSeed?: boolean; startAt?: number; room?: boolean; from?: QueueContext | null; shuffle?: boolean }): void;
   /** `startAt` (seconds): start part-way in. Listen Together starts a guest where the host is. */
   playSong(song: Song, opts?: { startAt?: number; room?: boolean }): void;
   /** v6.5.0 — reshape what comes next: keeps what played and the current song, rebuilds the rest for the intent. */
@@ -118,7 +127,7 @@ export interface PlayerState {
    * `seeds` play first after the song (a mood's or a request's picks, up to
    * RADIO_SEED_MAX in all) and `tune` steers every continuation that follows.
    */
-  startRadio(song?: Song, opts?: { seeds?: Song[]; tune?: TuneIntent | null; feed?: RadioFeed | null }): void;
+  startRadio(song?: Song, opts?: { seeds?: Song[]; tune?: TuneIntent | null; feed?: RadioFeed | null; from?: QueueContext | null }): void;
   /** v6.3.0 — songs the recommender appended (not hand-queued), after the current one. */
   autoTail(): Song[];
   isAutoQueued(id: string): boolean;
@@ -251,8 +260,6 @@ function scheduleBridgeCheck(): void {
     });
   }, 8000);
 }
-/** Session-scoped played set: smart shuffle avoids repeats until exhausted. */
-const sessionPlayed = new Set<string>();
 const RESUME_KEY = 'vinax.resume.v1';
 function loadResume(): Record<string, number> {
   try { return JSON.parse(window.localStorage.getItem(RESUME_KEY) || '{}'); } catch { return {}; }
@@ -274,7 +281,7 @@ let _lastResumedSec = -1; // throttle: write at most once per 5-second mark
 let lastUnavailableToastAt = 0;
 
 /** Exactly what persist() writes to localStorage (see partialize). */
-type PersistedPlayerState = Pick<PlayerState, 'queue' | 'index' | 'repeat' | 'shuffle' | 'volume' | 'muted' | 'rate'>;
+type PersistedPlayerState = Pick<PlayerState, 'queue' | 'index' | 'repeat' | 'shuffle' | 'volume' | 'muted' | 'rate' | 'context'>;
 
 export const usePlayerStore = create<PlayerState>()(
   persist(
@@ -302,6 +309,9 @@ export const usePlayerStore = create<PlayerState>()(
        *  outrank everything automatic: they sit ahead of the recommender's tail,
        *  survive a re-plan and a "Tune this queue", and are never reordered. */
       const manualIds = new Set<string>();
+      /** 1.15 — the list's songs in the order the listener started it: turning shuffle off restores it. */
+      let listOrder: string[] = [];
+      const runOf = (id: string): QueueRun => (manualIds.has(id) ? 'manual' : autoIds.has(id) ? 'auto' : 'list');
       /** 7.2.0 — the playback instance measuring the current track (heard time, verdicts). */
       let playback: PlaybackInstance | null = null;
       /** Whether the current instance already has its history entry. */
@@ -358,12 +368,12 @@ export const usePlayerStore = create<PlayerState>()(
       /** 7.2.0 — who queued what, written next to the queue (not inside the
        *  de-duplicated player record, which must not change on a progress tick). */
       function saveOwnership(): void {
-        setLocal(KEYS.queueOwnership, { v: 1, auto: [...autoIds], manual: [...manualIds] });
+        setLocal(KEYS.queueOwnership, { v: 1, auto: [...autoIds], manual: [...manualIds], order: listOrder });
       }
 
       /** Restore ownership for the rehydrated queue; ids no longer in it are dropped. */
       function loadOwnership(): void {
-        const stored = getLocal<{ v?: number; auto?: unknown; manual?: unknown }>(KEYS.queueOwnership, { v: 1 });
+        const stored = getLocal<{ v?: number; auto?: unknown; manual?: unknown; order?: unknown }>(KEYS.queueOwnership, { v: 1 });
         const ids = new Set(get().queue.map((s) => s.id));
         const take = (raw: unknown, into: Set<string>): void => {
           if (!Array.isArray(raw)) return;
@@ -371,6 +381,9 @@ export const usePlayerStore = create<PlayerState>()(
         };
         take(stored?.auto, autoIds);
         take(stored?.manual, manualIds);
+        const order = new Set<string>();
+        take(stored?.order, order);
+        listOrder = [...order];
       }
 
       /** Distinct lead artists in a continuation (diversity, for opt-in quality telemetry). */
@@ -479,10 +492,8 @@ export const usePlayerStore = create<PlayerState>()(
               // hand-off the no-repeat-artist rule must judge.
               previous: queue[queue.length - 1] ?? null,
               // V2 — the whole run-up to the append point, so artist spacing holds across
-              // batches. Under shuffle the play order is not the queue order: the engine
-              // reads the history, then the automatic songs still to come (in queue order).
-              before: get().shuffle ? queue.filter((s, i) => i > get().index && autoIds.has(s.id) && !sessionPlayed.has(s.id)) : queue.slice(-12),
-              ...(get().shuffle ? { previous: seed } : {}),
+              // batches. 1.15 — the queue order is the play order, shuffle or not.
+              before: queue.slice(-12),
               signal: abort.signal,
               deadlineMs: opts.urgent ? NEXT_URGENT_DEADLINE_MS : undefined,
             });
@@ -502,8 +513,7 @@ export const usePlayerStore = create<PlayerState>()(
       }
 
       function preloadUpcoming(): void {
-        const { queue, index, shuffle } = get();
-        if (shuffle) return; // unknown next under shuffle
+        const { queue, index } = get();
         const next = queue[index + 1];
         if (!next) return;
         const url = orderedSources(next, useSettingsStore.getState().audioQuality)[0] ?? null;
@@ -568,7 +578,6 @@ export const usePlayerStore = create<PlayerState>()(
         }
         
         if (autoplay && !preview) {
-          sessionPlayed.add(song.id);
           // V2 — the no-repeat ledger outlives the 150-entry history.
           void loadNextUp().then((m) => m.notePlayed(song)).catch(() => undefined);
           // v7.0.0 — history gets the play at once (the listen clock needs the
@@ -592,8 +601,6 @@ export const usePlayerStore = create<PlayerState>()(
         preloadUpcoming();
         // Keep a small tail ready for autoplay and playlist continuation. The
         // async fetch never blocks starting the current song.
-        // V2 — under shuffle "what is left" is the songs not played yet, not the
-        // songs after the current index: a shuffled playlist plays in full first.
         if (autoplay && canExtend()) {
           const left = songsLeft();
           if (left <= 2) void appendRecommendations(song);
@@ -601,11 +608,10 @@ export const usePlayerStore = create<PlayerState>()(
         }
       }
 
-      /** Songs still to come in this queue (the unplayed ones under shuffle). */
+      /** Songs still to come in this queue (1.15: under shuffle too, the queue order is the play order). */
       function songsLeft(): number {
-        const { queue, index, shuffle } = get();
-        if (!shuffle) return queue.length - index - 1;
-        return queue.filter((s, i) => i !== index && !sessionPlayed.has(s.id)).length;
+        const { queue, index } = get();
+        return queue.length - index - 1;
       }
 
       /** V2 — what the listener chose starts the session's anchor (services/nextup/anchor). */
@@ -720,26 +726,6 @@ export const usePlayerStore = create<PlayerState>()(
         get().next(false);
       }
 
-      /** Smart shuffle: random among queue songs not yet played this session. */
-      function pickShuffleIndex(): number {
-        const { queue, index } = get();
-        const open = queue
-          .map((s, i) => ({ s, i }))
-          .filter(({ s, i }) => i !== index && !sessionPlayed.has(s.id));
-        // V2 — the listener's own songs first; automatic songs only once those have played.
-        const own = open.filter(({ s }) => !autoIds.has(s.id));
-        // Automatic songs were spaced in queue order (artists, albums): they play in that order.
-        if (!own.length && open.length) return open[0].i;
-        const unplayed = own;
-        if (!unplayed.length && get().repeat !== 'all') return queue.length;
-        if (!unplayed.length) {
-          sessionPlayed.clear();
-          sessionPlayed.add(queue[index].id);
-        }
-        const pool = unplayed.length ? unplayed : queue.map((s, i) => ({ s, i })).filter(({ i }) => i !== index);
-        return pool[Math.floor(Math.random() * pool.length)]?.i ?? index;
-      }
-
       function playCurrent(): void {
         const { queue, index, isPlaying } = get();
         const song = queue[index];
@@ -793,9 +779,9 @@ export const usePlayerStore = create<PlayerState>()(
           toast('Already in queue');
           return 0;
         }
-        const auto = new Set(snap.auto);
-        const firstAuto = snap.queue.findIndex((s, i) => i > snap.index && auto.has(s.id));
-        const at = !snap.queue.length ? 0 : next ? snap.index + 1 : firstAuto < 0 ? snap.queue.length : firstAuto;
+        // 1.15 — the same place as outside Flow: right after the song and the songs already added.
+        const manual = new Set(snap.manual);
+        const at = !snap.queue.length ? 0 : next ? snap.index + 1 : queueInsertAt(snap.queue, snap.index, (id) => manual.has(id));
         snap.queue = [...snap.queue.slice(0, at), ...fresh, ...snap.queue.slice(at)];
         snap.manual = [...snap.manual, ...fresh.map((s) => s.id)];
         set({}); // persist the listener's queue with the new songs
@@ -842,6 +828,7 @@ export const usePlayerStore = create<PlayerState>()(
         tuneIntent: null,
         previewMode: false,
         previewError: null,
+        context: null,
 
         initEngine: () => {
           if (engineInitialized) return;
@@ -995,7 +982,11 @@ export const usePlayerStore = create<PlayerState>()(
           if (!songs.length) return;
           // 13.9 — a visitor browsing signed out is asked to sign in; the tap plays after.
           if (!requireAccount('listen', () => get().playQueue(songs, startIndex, opts))) return;
-          const selectedIndex = Number.isFinite(startIndex) ? Math.min(Math.max(0, Math.floor(startIndex)), songs.length - 1) : 0;
+          // 1.15 — "Shuffle play": shuffle goes on and the list starts on a random song.
+          const randomStart = opts.shuffle === true;
+          const selectedIndex = randomStart
+            ? Math.floor(Math.random() * songs.length)
+            : Number.isFinite(startIndex) ? Math.min(Math.max(0, Math.floor(startIndex)), songs.length - 1) : 0;
           const seed = songs[selectedIndex];
           // C2 — kid mode: an explicit-flagged song never starts playback.
           if (seed.explicit && kidModeOn()) {
@@ -1013,9 +1004,7 @@ export const usePlayerStore = create<PlayerState>()(
           autoIds.clear();
           autoMetaById.clear();
           manualIds.clear();
-          sessionPlayed.clear();
           lastRemoval = null;
-          saveOwnership();
           // V2 — a list (a playlist, an album, a chart) plays IN FULL, in its
           // order or shuffled; Up Next continues only after its last song, in
           // the list's direction. Takeover is for a single tapped song: the
@@ -1025,15 +1014,23 @@ export const usePlayerStore = create<PlayerState>()(
           const takeover = (list.length < 2 || !!opts.asSeed) && settings.djTakeover && settings.autoplay && !opts.keepList && !get().followMode && get().repeat === 'off';
           radio = takeover;
           setAnchor(takeover ? [seed] : list);
+          // 1.15 — what this is playing from: the caller's words, else the page the listener is on.
+          const context = opts.from !== undefined ? opts.from : contextFromPage();
+          if (randomStart && !get().shuffle) set({ shuffle: true });
+          listOrder = (takeover ? [seed] : list).map((s) => s.id);
+          saveOwnership();
           const startAt = opts.startAt && Number.isFinite(opts.startAt) && opts.startAt > 0 ? opts.startAt : 0;
           if (takeover) {
-            set({ queue: [seed], index: 0, currentTime: startAt, duration: 0, loopA: null, loopB: null, tuneIntent: null });
+            set({ queue: [seed], index: 0, currentTime: startAt, duration: 0, loopA: null, loopB: null, tuneIntent: null, context });
             startTrack(seed, true, { startAt });
             return;
           }
-          const queue = list;
+          // 1.15 — with shuffle on, the chosen song plays first and the rest
+          // follow in a shuffled order that the queue shows (a Queue Builder
+          // plan keeps the order it was built in).
+          const queue = get().shuffle && !opts.keepList ? shuffledStart(list, seed) : list;
           const index = queue.indexOf(seed);
-          set({ queue: [...queue], index, currentTime: startAt, duration: 0, loopA: null, loopB: null, tuneIntent: null });
+          set({ queue: [...queue], index, currentTime: startAt, duration: 0, loopA: null, loopB: null, tuneIntent: null, context });
           startTrack(seed, true, { startAt });
         },
 
@@ -1104,16 +1101,15 @@ export const usePlayerStore = create<PlayerState>()(
           }
           recordQueueAdd(song);
           noteAnchor(song);
-          // v7.0.0 — a hand-queued song goes ahead of whatever the recommender
-          // appended (after the listener's own list and earlier hand-queued
-          // songs), not behind eight automatic picks.
+          // 1.15 — like Spotify: a hand-queued song plays right after the current
+          // one and after every song already added by hand, ahead of the rest of
+          // the album or playlist and of anything VinaX picked.
           const { index } = get();
-          const firstAuto = queue.findIndex((s, i) => i > index && autoIds.has(s.id));
-          const at = firstAuto < 0 ? queue.length : firstAuto;
+          const at = queueInsertAt(queue, index, (id) => manualIds.has(id));
           manualIds.add(song.id);
           saveOwnership();
           set({ queue: [...queue.slice(0, at), song, ...queue.slice(at)] });
-          if (firstAuto >= 0) preloadUpcoming();
+          if (at === index + 1) preloadUpcoming();
           // 10.1 — the snackbar shows which song went in, and opens the queue.
           if (!opts?.quiet) toast('Added to queue', { image: bestImage(song.images, 50), action: { label: 'View', onClick: () => toastNavigate('/queue') } });
           if (queue.length === 0) get().playQueue([song]);
@@ -1131,11 +1127,11 @@ export const usePlayerStore = create<PlayerState>()(
             return;
           }
           const current = get().queue;
-          const firstAuto = current.findIndex((s, i) => i > get().index && autoIds.has(s.id));
-          const at = firstAuto < 0 ? current.length : firstAuto;
+          const at = queueInsertAt(current, get().index, (id) => manualIds.has(id));
           for (const s of fresh) manualIds.add(s.id);
           saveOwnership();
           set({ queue: [...current.slice(0, at), ...fresh, ...current.slice(at)] });
+          if (current.length && at === get().index + 1) preloadUpcoming();
           toast(`Added ${fresh.length} songs to queue`);
           if (get().queue.length === fresh.length) startTrack(fresh[0], true);
         },
@@ -1246,9 +1242,10 @@ export const usePlayerStore = create<PlayerState>()(
           autoMetaById.clear();
           manualIds.clear();
           lastRemoval = null;
+          listOrder = [];
           saveOwnership();
           audioEngine.pause();
-          set({ queue: [], index: 0, isPlaying: false, currentTime: 0, duration: 0 });
+          set({ queue: [], index: 0, isPlaying: false, currentTime: 0, duration: 0, context: null });
           // 8.1.0 — an empty queue ends the media session: notification, lock-screen controls and the widget clear.
           updateMediaMetadata(null);
         },
@@ -1283,15 +1280,20 @@ export const usePlayerStore = create<PlayerState>()(
           if (!queue.length || preview) return; // Flow moves its own feed
           if (manual) haptic('light');
           maybeRecordSkip(manual);
-          let nextIndex: number;
-          if (shuffle && queue.length > 1) {
-            nextIndex = pickShuffleIndex();
-          } else {
-            nextIndex = index + 1;
-          }
+          // 1.15 — shuffle already ordered the queue: the next song is the next row.
+          let nextIndex = index + 1;
           if (nextIndex >= queue.length) {
             if (repeat === 'all') {
               nextIndex = 0;
+              // Spotify-style: a shuffled list gets a fresh order for its next time round.
+              if (shuffle && queue.length > 2) {
+                const order = shuffleSongs(queue);
+                // Never the song that just ended twice in a row.
+                if (order[0] === queue[index]) [order[0], order[order.length - 1]] = [order[order.length - 1], order[0]];
+                set({ queue: order, index: 0, currentTime: 0, duration: 0 });
+                startTrack(order[0], true);
+                return;
+              }
             } else {
               const playing = queue[index];
               if (playing && canExtend()) {
@@ -1299,7 +1301,7 @@ export const usePlayerStore = create<PlayerState>()(
                 // once while a fresh plan is built in the background.
                 const end = queue.length;
                 if (topUpFromReserve(playing) > 0) {
-                  // The first appended song (under shuffle, index + 1 may be one already played).
+                  // The first appended song.
                   set({ index: end, currentTime: 0, duration: 0 });
                   startTrack(get().queue[end], true, { from: playing });
                   return;
@@ -1438,9 +1440,11 @@ export const usePlayerStore = create<PlayerState>()(
           autoMetaById.clear();
           manualIds.clear();
           lastRemoval = null;
-          sessionPlayed.clear();
+          listOrder = queue.map((s) => s.id);
+          saveOwnership();
           setAnchor(queue);
-          set({ queue, index: 0, currentTime: 0, duration: 0, isPlaying: true, tuneIntent: tune });
+          const context: QueueContext | null = opts.from !== undefined ? opts.from : { kind: 'radio', label: `${queue[0].title} radio`, path: '/radio' };
+          set({ queue, index: 0, currentTime: 0, duration: 0, isPlaying: true, tuneIntent: tune, context });
           startTrack(queue[0], true);
           // Plan the first continuation at once, after the last seed, so Up next shows where the radio goes.
           void appendRecommendations(queue[queue.length - 1]);
@@ -1509,7 +1513,20 @@ export const usePlayerStore = create<PlayerState>()(
           set({ repeat: next });
         },
 
-        toggleShuffle: () => set({ shuffle: !get().shuffle }),
+        toggleShuffle: () => {
+          const on = !get().shuffle;
+          const { queue, index, followMode } = get();
+          // Flow's preview queue and a followed host's queue are not the listener's to reorder.
+          if (preview || followMode || queue.length - index < 3) {
+            set({ shuffle: on });
+            return;
+          }
+          // 1.15 — the queue itself is reordered, so it shows what will really
+          // play and Back returns to the song before; off puts the list back.
+          const reordered = on ? shuffleUpcoming(queue, index, runOf) : unshuffleUpcoming(queue, index, listOrder, runOf);
+          set({ shuffle: on, queue: reordered });
+          preloadUpcoming();
+        },
 
         setSleepTimer: (minutes) => {
           clearSleepTimeout();
@@ -1628,6 +1645,7 @@ export const usePlayerStore = create<PlayerState>()(
         volume: s.volume,
         muted: s.muted,
         rate: s.rate,
+        context: s.context,
       }),
       // Pre-v1 records share this shape — real validation lives in merge().
       migrate: (persisted) => persisted as PersistedPlayerState,
@@ -1657,6 +1675,7 @@ export const usePlayerStore = create<PlayerState>()(
           rate: num(p.rate, 0.5, 2, 1),
           queue,
           index: queue.length ? Math.min(Math.max(0, rawIndex), queue.length - 1) : 0,
+          context: queue.length && isQueueContext(p.context) ? p.context : null,
         };
       },
     },

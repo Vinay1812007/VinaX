@@ -32,7 +32,7 @@ describe('tryMusicCommand', () => {
     const said: string[] = [];
     expect(await tryMusicCommand('play Kesariya in Telugu', (l) => said.push(l))).toBe(true);
     expect(h.searchSongs).toHaveBeenCalledWith('Kesariya', 8);
-    expect(h.player.playQueue).toHaveBeenCalledWith([telugu], 0);
+    expect(h.player.playQueue).toHaveBeenCalledWith([telugu], 0, { from: expect.objectContaining({ kind: 'search' }) });
     expect(said[0]).toContain('(in telugu)');
   });
 

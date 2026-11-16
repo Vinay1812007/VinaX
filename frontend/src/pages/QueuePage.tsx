@@ -198,6 +198,8 @@ export default function QueuePage() {
   const djTakeover = useSettingsStore((s) => s.djTakeover);
   const index = usePlayerStore((s) => s.index);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const queueContext = usePlayerStore((s) => s.context);
+  const shuffle = usePlayerStore((s) => s.shuffle);
   const song = useCurrentSong();
   const online = useOnlineStatus();
   const reasons = useReasonStore((s) => s.reasons);
@@ -423,14 +425,25 @@ export default function QueuePage() {
     );
   }, []);
 
+  // 1.15 — Spotify's "Clear queue": only the songs added by hand go; the list and Autoplay stay.
+  const clearAdded = useCallback(() => {
+    const { queue: q, index: at, removeAt, enqueueAll, isManualQueued } = usePlayerStore.getState();
+    const added = q.slice(at + 1).filter((s) => isManualQueued(s.id));
+    if (!added.length) return;
+    for (let i = q.length - 1; i > at; i -= 1) if (isManualQueued(q[i].id)) removeAt(i);
+    refocus.current = { key: null, target: 'heading' };
+    setAnnouncement(`Removed ${added.length} songs you added`);
+    toast(`Removed ${added.length} songs you added`, { action: { label: 'Undo', onClick: () => enqueueAll(added) }, duration: 7000 });
+  }, []);
+
   const total = upNext.length;
   const renderRow = useCallback(
     (s: Song, i: number) => {
-      // The list reads in runs: the listener's own songs (their adds and the
-      // list they started), then what VinaX picked. A title opens each run,
-      // in words, so the change is never carried by colour alone.
-      const group = origins[i] === 'auto' ? 'auto' : 'yours';
-      const prevGroup = i > 0 ? (origins[i - 1] === 'auto' ? 'auto' : 'yours') : null;
+      // 1.15 — the list reads in Spotify's three runs, each opened by a title
+      // in words (never colour alone): the songs the listener added, then the
+      // rest of what they pressed play on, then what VinaX picked to follow.
+      const group = origins[i];
+      const prevGroup = i > 0 ? origins[i - 1] : null;
       return (
         <Fragment>
           {group !== prevGroup ? (
@@ -439,14 +452,28 @@ export default function QueuePage() {
                 <>
                   <span className="vx-queue-group-title">
                     <SparkleIcon />
-                    VinaX picks
+                    Autoplay
                   </span>
-                  <span className="vx-queue-group-note">Chosen to follow what’s playing · Refresh up next replaces them</span>
+                  <span className="vx-queue-group-note">VinaX picks similar songs to keep the music going · Refresh up next replaces them</span>
+                </>
+              ) : group === 'manual' ? (
+                <>
+                  <span className="vx-queue-group-title">Next in queue</span>
+                  <span className="vx-queue-group-note">
+                    Songs you added play first, in the order you added them
+                    {' · '}
+                    <button type="button" onClick={clearAdded} className="vx-queue-group-action">
+                      Clear queue
+                    </button>
+                  </span>
                 </>
               ) : (
                 <>
-                  <span className="vx-queue-group-title">Your songs</span>
-                  <span className="vx-queue-group-note">Play in your order and stay through every refresh</span>
+                  <span className="vx-queue-group-title">
+                    Next from:{' '}
+                    {queueContext?.path ? <Link to={queueContext.path}>{queueContext.label}</Link> : queueContext?.label ?? 'your list'}
+                  </span>
+                  <span className="vx-queue-group-note">{shuffle ? 'Shuffled · turn shuffle off to play it in order' : 'Plays in its order and stays through every refresh'}</span>
                 </>
               )}
             </li>
@@ -476,7 +503,7 @@ export default function QueuePage() {
         </Fragment>
       );
     },
-    [rowKeys, origins, reasons, total, dragFrom, dragOver, setRowEl, startDrag, onDragMove, endDrag, nudge, onMove, onKeep, onClearFrom, onRemove, onPlay],
+    [rowKeys, origins, reasons, total, dragFrom, dragOver, setRowEl, startDrag, onDragMove, endDrag, nudge, onMove, onKeep, onClearFrom, onRemove, onPlay, queueContext, shuffle, clearAdded],
   );
   const keyOfRow = useCallback((_s: Song, i: number) => rowKeys[i], [rowKeys]);
 

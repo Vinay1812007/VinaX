@@ -15,7 +15,7 @@ import { isNativePlatform } from '@/services/native';
 import { downloadMany, downloadFailureMessage } from '@/services/downloads';
 import { collageArt, CollageCover } from '@/features/library/CollageCover';
 import { findDuplicates } from '@/features/library/duplicates';
-import { SORT_OPTIONS, shuffled, sortSongs, type CollectionSort } from '@/features/library/sort';
+import { SORT_OPTIONS, sortSongs, type CollectionSort } from '@/features/library/sort';
 import { canShareText, collectionToText, copyText, shareText } from '@/features/library/collectionText';
 import { allTags } from '@/features/library/tags';
 import { TagChips, TagEditor } from '@/features/library/TagEditor';
@@ -117,8 +117,7 @@ export default function CollectionPage() {
   const shufflePlay = () => {
     if (!visible.length) return;
     const p = usePlayerStore.getState();
-    if (!p.shuffle) p.toggleShuffle();
-    p.playQueue(shuffled(visible), 0);
+    p.playQueue(visible, 0, { shuffle: true });
   };
   const startEdit = () => {
     setName(collection.name);

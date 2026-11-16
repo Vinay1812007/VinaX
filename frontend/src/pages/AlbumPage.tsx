@@ -12,7 +12,6 @@ import { MediaCard } from '@/components/MediaCard';
 import { usePlayerStore } from '@/store/playerStore';
 import { SongRow, TrackListHead } from '@/components/SongRow';
 import { EntityAction, EntityHeader, EntityMenu, EntityMeta, PlayFab, songsLabel, totalDuration } from '@/components/EntityHeader';
-import { shuffled } from '@/features/library/sort';
 import { HeaderSkeleton, ListSkeleton } from '@/components/Skeletons';
 import { EmptyState, ErrorState } from '@/components/States';
 import { ShareIcon, ShuffleIcon } from '@/components/Icons';
@@ -50,8 +49,7 @@ export default function AlbumPage() {
   const shufflePlay = () => {
     if (!album.songs.length) return;
     const p = usePlayerStore.getState();
-    if (!p.shuffle) p.toggleShuffle();
-    p.playQueue(shuffled(album.songs), 0);
+    p.playQueue(album.songs, 0, { shuffle: true });
   };
 
   return (

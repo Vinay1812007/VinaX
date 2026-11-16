@@ -184,3 +184,66 @@ describe('v6.5.0 — DJ takeover and Tune this queue', () => {
     expect(usePlayerStore.getState().tuneIntent).toBeNull();
   });
 });
+
+describe('1.15 — Spotify-style shuffle, queue order and Playing from', () => {
+  const ids = () => usePlayerStore.getState().queue.map((s) => s.id);
+  const album = () => ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => song(id));
+
+  it('shuffle on reorders what is still to come, and the queue order is the play order', () => {
+    usePlayerStore.getState().playQueue(album(), 1);
+    usePlayerStore.getState().enqueue(song('mine'));
+    usePlayerStore.getState().toggleShuffle();
+    const q = ids();
+    expect(q.slice(0, 3)).toEqual(['a', 'b', 'mine']); // history, the song playing, then your adds
+    expect([...q.slice(3)].sort()).toEqual(['c', 'd', 'e', 'f']);
+    usePlayerStore.getState().next();
+    usePlayerStore.getState().next();
+    expect(usePlayerStore.getState().queue[usePlayerStore.getState().index].id).toBe(q[3]);
+    // Back is the song before, not a random one.
+    usePlayerStore.getState().prev();
+    expect(usePlayerStore.getState().queue[usePlayerStore.getState().index].id).toBe('mine');
+  });
+
+  it('shuffle off puts the list back in its order, carrying on from the song playing', () => {
+    usePlayerStore.getState().playQueue(album(), 0);
+    usePlayerStore.getState().toggleShuffle();
+    usePlayerStore.getState().next();
+    const playing = usePlayerStore.getState().queue[1].id;
+    usePlayerStore.getState().toggleShuffle();
+    const rest = ids().slice(2);
+    const order = ['a', 'b', 'c', 'd', 'e', 'f'];
+    const after = order.slice(order.indexOf(playing) + 1);
+    const before = order.slice(1, order.indexOf(playing));
+    expect(rest).toEqual([...after, ...before]);
+  });
+
+  it('a list started with shuffle on begins with the tapped song; Shuffle play starts anywhere and turns shuffle on', () => {
+    usePlayerStore.setState({ shuffle: true });
+    usePlayerStore.getState().playQueue(album(), 3);
+    expect(ids()[0]).toBe('d');
+    expect(usePlayerStore.getState().index).toBe(0);
+    usePlayerStore.setState({ shuffle: false });
+    usePlayerStore.getState().playQueue(album(), 0, { shuffle: true });
+    expect(usePlayerStore.getState().shuffle).toBe(true);
+    expect(usePlayerStore.getState().index).toBe(0);
+    expect([...ids()].sort()).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
+    // Turning it off still restores the album's real order.
+    usePlayerStore.getState().toggleShuffle();
+    const order = ['a', 'b', 'c', 'd', 'e', 'f'];
+    const first = ids()[0];
+    expect(ids().slice(1)).toEqual([...order.slice(order.indexOf(first) + 1), ...order.slice(0, order.indexOf(first))]);
+  });
+
+  it('remembers what it is playing from: the caller, else the page', () => {
+    usePlayerStore.getState().playQueue(album(), 0, { from: { kind: 'album', label: 'Pushpa 2', path: '/album/1' } });
+    expect(usePlayerStore.getState().context).toEqual({ kind: 'album', label: 'Pushpa 2', path: '/album/1' });
+    window.history.pushState({}, '', '/favorites');
+    usePlayerStore.getState().playQueue(album(), 0);
+    expect(usePlayerStore.getState().context).toMatchObject({ kind: 'liked', label: 'Liked songs' });
+    window.history.pushState({}, '', '/');
+    usePlayerStore.getState().startRadio(song('seed'));
+    expect(usePlayerStore.getState().context).toMatchObject({ kind: 'radio', label: 'seed radio' });
+    usePlayerStore.getState().clearQueue();
+    expect(usePlayerStore.getState().context).toBeNull();
+  });
+});

@@ -12,7 +12,6 @@ import { useHistoryStore } from '@/store/historyStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { useSmartCollectionStore } from '@/store/smartCollectionStore';
 import { toast } from '@/store/toastStore';
-import { shuffled } from '@/features/library/sort';
 import { describeRules, evaluateSmartCollection } from '@/features/library/smartCollections';
 import { SmartCollectionSheet } from '@/features/library/SmartCollectionSheet';
 import { songCount } from '@/features/library/collectionEdit';
@@ -57,8 +56,7 @@ export default function SmartCollectionPage() {
   const shufflePlay = () => {
     if (!songs.length) return;
     const p = usePlayerStore.getState();
-    if (!p.shuffle) p.toggleShuffle();
-    p.playQueue(shuffled(songs), 0);
+    p.playQueue(songs, 0, { shuffle: true });
   };
   const freeze = () => {
     if (!songs.length) return;

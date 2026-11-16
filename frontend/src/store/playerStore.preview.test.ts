@@ -110,7 +110,8 @@ describe('Flow preview mode: the queue snapshot', () => {
     st().enqueue(song('p1'));
     expect(ids(st().queue)).toEqual(['p1']); // the preview itself is untouched
     st().exitPreview();
-    expect(ids(st().queue)).toEqual(['a', 'b', 'c', 'p1']);
+    // 1.15 — right after the song that was playing (b), ahead of the rest of the list.
+    expect(ids(st().queue)).toEqual(['a', 'b', 'p1', 'c']);
     expect(st().isManualQueued('p1')).toBe(true);
   });
 

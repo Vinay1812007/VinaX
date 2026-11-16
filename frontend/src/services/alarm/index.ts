@@ -20,8 +20,7 @@ function fireFavorites(): void {
   const favs = useLibraryStore.getState().favorites;
   const p = usePlayerStore.getState();
   if (favs.length) {
-    if (!p.shuffle) p.toggleShuffle();
-    p.playQueue(favs, Math.floor(Math.random() * favs.length));
+    p.playQueue(favs, 0, { shuffle: true, from: { kind: 'liked', label: 'Liked songs', path: '/favorites' } });
   } else if (p.queue.length && !p.isPlaying) {
     p.togglePlay();
   }
@@ -73,7 +72,7 @@ function fire(): void {
   if (a.fadeIn) fadeIn();
   const col = a.action === 'collection' && a.collectionId ? useLibraryStore.getState().collections.find((c) => c.id === a.collectionId) : null;
   if (col && col.songs.length) {
-    p.playQueue(col.songs, Math.floor(Math.random() * col.songs.length));
+    p.playQueue(col.songs, Math.floor(Math.random() * col.songs.length), { from: { kind: 'playlist', label: col.name, path: `/collection/${col.id}` } });
   } else if (a.action === 'resume' && p.queue.length) {
     if (!p.isPlaying) p.togglePlay();
   } else {

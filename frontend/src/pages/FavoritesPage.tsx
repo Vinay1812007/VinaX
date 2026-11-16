@@ -43,8 +43,6 @@ export default function FavoritesPage() {
   usePageTitle('Liked songs');
   const favorites = useLibraryStore((s) => s.favorites);
   const playQueue = usePlayerStore((s) => s.playQueue);
-  const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
-  const shuffle = usePlayerStore((s) => s.shuffle);
   const [sort, setSort] = useSessionState<SortMode>('vinax.favorites.sort.v1', 'recent');
   const [query, setQuery] = useState('');
   const sorted = useMemo(() => sortSongs(filterSongs(favorites, query), sort), [favorites, sort, query]);
@@ -67,8 +65,7 @@ export default function FavoritesPage() {
 
   const shufflePlay = () => {
     if (!sorted.length) return;
-    if (!shuffle) toggleShuffle();
-    playQueue(sorted, Math.floor(Math.random() * sorted.length));
+    playQueue(sorted, 0, { shuffle: true });
   };
 
   return (
