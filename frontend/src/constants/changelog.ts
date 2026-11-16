@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.16.1': {
+    title: 'Brighter, full-screen RGB disco lights',
+    changes: [
+      { type: 'improved', text: 'Wash now fills the whole screen in full-strength colour, with two more colours drifting across it, and glows brighter on the beat.' },
+      { type: 'new', text: 'New RGB colours: pure red, green and blue, like an RGB light strip. Neon is now electric magenta, cyan, green and blue.' },
+      { type: 'improved', text: 'Brightness goes up to 150%.' },
+      { type: 'improved', text: 'Tap the lights to hide the controls and the phone\'s status and navigation bars, so the lights fill the whole screen; tap again to bring them back.' },
+    ],
+  },
   '1.16.0': {
     title: 'Disco lights that follow the beat #minor',
     changes: [
