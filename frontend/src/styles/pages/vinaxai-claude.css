@@ -467,3 +467,64 @@ html:not(.hc) .vx-ai .vx-ai-tabs button[aria-selected='true'] { background: rgb(
 
 /* A failed preview shows its error bar with Fix it: the corner buttons step aside. */
 .vx-ai-inline-preview:has(.vx-ai-runner.has-error) .vx-ai-inline-tools { display: none; }
+
+/* ======================================================= the other screens
+   Settings, Projects, the Artifacts gallery, the shared page and dialogs:
+   sentence-case labels, outlined fields, quiet tabs, neutral thumbnails. */
+
+/* Labels in sentence case, never shouting. */
+.vx-ai :is(.vx-ai-settings-body h3, .vx-ai-proj-box h3, .vx-ai-proj-h, .vx-ai-pop-head) {
+  text-transform: none; letter-spacing: 0; font-size: 0.8125rem; font-weight: 600; color: rgb(var(--ink-300));
+}
+
+/* Dimmer behind dialogs and the settings sheet: warm, not purple. */
+html.light .vx-ai .vx-ai-scrim::before { background: rgb(31 30 29 / 0.28); }
+
+/* Settings: a calm sheet with text tabs and outlined fields. */
+html:not(.hc) .vx-ai .vx-ai-settings { background: rgb(var(--ink-900)); }
+.vx-ai .vx-ai-settings-head { border-bottom: 0; padding: 14px 12px 4px 20px; }
+.vx-ai .vx-ai-settings-head h2 { font-family: var(--vx-ai-serif); font-weight: 600; font-size: 1.25rem; }
+.vx-ai .vx-ai-settings-head .vx-ai-icon-btn { background: transparent; }
+.vx-ai .vx-ai-settings-nav { gap: 2px; padding: 4px 14px 0; }
+.vx-ai .vx-ai-settings-nav .vx-ai-chip {
+  min-height: 36px; padding: 0 10px; border: 0; border-radius: 0; background: transparent;
+  color: rgb(var(--ink-400)); font-weight: 500; box-shadow: inset 0 -2px 0 transparent;
+  transition: color var(--dur-quick) var(--ease-standard), box-shadow var(--dur-quick) var(--ease-standard);
+}
+.vx-ai .vx-ai-settings-nav .vx-ai-chip:hover { color: rgb(var(--ink-100)); box-shadow: inset 0 -2px 0 rgb(var(--ember-500)); background: transparent; }
+.vx-ai .vx-ai-settings-nav .vx-ai-chip:focus-visible { outline: none; box-shadow: inset 0 -2px 0 rgb(var(--ember-500)), var(--focus-ring); }
+.vx-ai .vx-ai-settings-body section { padding: 18px 0 8px; }
+html:not(.hc) .vx-ai .vx-ai-field :is(input, textarea, select) {
+  background: transparent; border: 1px solid rgb(var(--ink-100) / 0.16); border-radius: var(--vx-radius-control);
+  transition: border-color var(--dur-quick) var(--ease-standard);
+}
+html.light:not(.hc) .vx-ai .vx-ai-field :is(input, textarea, select) { background: rgb(var(--vx-ai-composer)); }
+html:not(.hc) .vx-ai .vx-ai-field :is(input, textarea, select):hover { border-color: rgb(var(--ink-100) / 0.28); }
+html:not(.hc) .vx-ai .vx-ai-field :is(input, textarea, select):focus-visible { outline: none; border-color: rgb(var(--ember-500)); box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.18); }
+.vx-ai .vx-ai-field input::placeholder, .vx-ai .vx-ai-field textarea::placeholder { color: rgb(var(--ink-500)); }
+.vx-ai .vx-ai-field select option { background: rgb(var(--ink-850)); color: rgb(var(--ink-100)); }
+.vx-ai .vx-ai-field small, .vx-ai .vx-ai-settings-note { color: rgb(var(--ink-400)); }
+.vx-ai .vx-ai-settings-note a { color: rgb(var(--ink-100)); }
+
+/* Projects: cards like the composer, headings in the serif. */
+html:not(.hc) .vx-ai :is(.vx-ai-proj-box, .vx-ai-proj-card) { background: rgb(var(--vx-ai-composer)); border: 1px solid var(--glass-border); border-radius: var(--vx-radius-card); box-shadow: var(--vx-ai-lift-sm); }
+html:not(.hc) .vx-ai .vx-ai-proj-card:hover { background: rgb(var(--ink-800)); }
+html.light:not(.hc) .vx-ai .vx-ai-proj-card:hover { background: rgb(var(--ink-950)); }
+html:not(.hc) .vx-ai .vx-ai-proj-box .vx-ai-field textarea { background: transparent; }
+
+/* Artifacts gallery: neutral thumbnails; the picked kind is a dark, filled tab. */
+html:not(.hc) .vx-ai .vx-ai-gallery-card { background: rgb(var(--vx-ai-composer)); border-radius: var(--vx-radius-card); }
+html:not(.hc) .vx-ai .vx-ai-gallery-card:hover { background: rgb(var(--ink-800)); }
+html.light:not(.hc) .vx-ai .vx-ai-gallery-card:hover { background: rgb(var(--ink-950)); }
+html:not(.hc) .vx-ai .vx-ai-gallery-thumb { background: rgb(var(--ink-100) / 0.05); color: rgb(var(--ink-400)); border: 1px solid var(--glass-border); }
+.vx-ai .vx-ai-gallery-kinds .vx-ai-chip[aria-pressed='true'] { background: rgb(var(--ink-100)); color: rgb(var(--ink-900)); border-color: transparent; }
+.vx-ai .vx-ai-gallery-kinds .vx-ai-chip[aria-pressed='true']:hover { background: rgb(var(--ink-200)); }
+.vx-ai .vx-ai-gallery-page .vx-ai-wordmark, .vx-ai.vx-ai-gallery-page .vx-ai-wordmark { font-size: 1.35rem; }
+
+/* The shared page: the same reading column, the kicker in quiet clay. */
+.vx-ai .vx-ai-share-kicker { text-transform: none; letter-spacing: 0; font-size: 0.8125rem; }
+
+/* A destructive button stays red (the quiet chip rule above must not flatten it). */
+.vx-ai .vx-ai-chip.is-danger { background: var(--vx-danger); color: rgb(26 5 8); border-color: transparent; font-weight: 600; }
+html.light .vx-ai .vx-ai-chip.is-danger { color: rgb(255 255 255); }
+.vx-ai .vx-ai-chip.is-danger:hover:not(:disabled) { filter: brightness(1.08); }
