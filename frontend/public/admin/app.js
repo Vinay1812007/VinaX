@@ -4,7 +4,9 @@
  * folding groups, one job per page, and a "Find a page" box), the hash
  * router (#/page, with every old page and tab address sent to its page now
  * and a "Page not found" screen), the top
- * bar (breadcrumb, global search, date range, auto-refresh, theme, profile),
+ * bar (breadcrumb, date range, search, refresh with its auto-refresh menu,
+ * profile with theme and time zone), the page header (title, description and
+ * a slot for page actions),
  * keyboard shortcuts (press ?) with quick actions in Ctrl K, and the
  * unsaved-changes guard. Pages register with VX.page() in
  * /admin/pages/*.js; this file only mounts them. See README.md (Owner console).
@@ -81,7 +83,7 @@
     var light = pref === 'light' || (pref === 'system' && !!(mql && mql.matches));
     document.documentElement.classList.toggle('light', light);
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', light ? '#faf5ed' : '#0d090f');
+    if (meta) meta.setAttribute('content', light ? '#fafafa' : '#0a0a0b');
   }
   if (mql && mql.addEventListener) mql.addEventListener('change', function () { if (themePref() === 'system') { applyTheme(); rerender(); } });
   var themeSel = $('themeSel');
@@ -201,23 +203,28 @@
 
   function stampUpdated() { $('updated').textContent = 'Last updated ' + fmt.time(new Date().toISOString()) + ' ' + VX.tzShort(); }
 
+  /** The top bar's "Group › Page" trail and the page header's title. */
   function crumbs(page, tab) {
+    var many = tab && page.tabs && page.tabs.length > 1;
     var host = VX.clear($('crumbs'));
     host.appendChild(h('span.muted', page.group));
-    host.appendChild(h('span.muted.sep', { 'aria-hidden': 'true' }, '›'));
-    host.appendChild(h(tab ? 'span' : 'h1#pageTitle', page.title));
-    if (tab && page.tabs && page.tabs.length > 1) {
-      host.appendChild(h('span.muted.sep', { 'aria-hidden': 'true' }, '›'));
-      host.appendChild(h('h1#pageTitle', tab.label));
+    host.appendChild(h('span.sep', { 'aria-hidden': 'true' }, '/'));
+    host.appendChild(h(many ? 'span.muted' : 'span.crumb-cur', page.title));
+    if (many) {
+      host.appendChild(h('span.sep', { 'aria-hidden': 'true' }, '/'));
+      host.appendChild(h('span.crumb-cur', tab.label));
     }
+    $('pageTitle').textContent = many ? tab.label : page.title;
   }
 
   function notFound() {
     dispose();
     current = null;
     markNav(null);
-    VX.mount($('crumbs'), h('h1#pageTitle', 'Page not found'));
+    VX.mount($('crumbs'), h('span.crumb-cur', 'Page not found'));
+    $('pageTitle').textContent = 'Page not found';
     $('pageDesc').textContent = '';
+    VX.clear($('pageActions'));
     VX.clear($('pageTabs'));
     $('rangeHost').hidden = true;
     document.title = 'Page not found · VinaX Console';
@@ -267,6 +274,7 @@
     drawRange(page);
     renderBody();
     openNav(false);
+    $('profilePop').hidden = true; $('autoPop').hidden = true; $('autoBtn').setAttribute('aria-expanded', 'false');
     var main = $('main'); if (main && main.scrollTo) main.scrollTo(0, 0);
   }
 
@@ -358,6 +366,8 @@
       every: function (ms, fn) { if (cur !== current) return; cur.timers.push(setInterval(function () { if (!document.hidden) fn(); }, ms)); },
       onDispose: function (fn) { cur.disposers.push(fn); },
       onLeave: function (fn) { cur.leave = fn; },
+      /** Buttons for the page header's right side (cleared on every render). */
+      actions: function () { if (cur !== current) return; VX.mount($('pageActions'), Array.prototype.slice.call(arguments)); },
       go: function (page, tab, params) { if (cur !== current) return; go(page, tab, params); },
       stamp: stampUpdated
     };
@@ -372,6 +382,7 @@
     // already left lands in a detached element.
     var body = h('div.page-body');
     VX.mount($('pageBody'), body);
+    VX.clear($('pageActions'));
     var fn = current.tab ? current.tab.render : current.page.render;
     try {
       var out = fn(body, makeCtx());
@@ -398,7 +409,22 @@
       rerender();
     }, autoMs()) : null;
     $('autoMs').disabled = !on;
+    $('refreshGroup').classList.toggle('is-auto', !!on);
+    $('autoBtn').setAttribute('aria-label', on ? 'Auto-refresh: on' : 'Auto-refresh: off');
   }
+  /* The auto-refresh menu beside Refresh. */
+  function openAuto(open) {
+    $('autoPop').hidden = !open;
+    $('autoBtn').setAttribute('aria-expanded', String(open));
+    if (open) { $('profilePop').hidden = true; $('autoRefresh').focus(); }
+  }
+  $('autoBtn').addEventListener('click', function (e) { e.stopPropagation(); openAuto($('autoPop').hidden); });
+  document.addEventListener('click', function (e) { if (!$('autoPop').hidden && !$('refreshGroup').contains(e.target)) openAuto(false); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (!$('autoPop').hidden) { openAuto(false); $('autoBtn').focus(); }
+    if (!$('profilePop').hidden) { $('profilePop').hidden = true; $('profileBtn').focus(); }
+  });
   $('autoRefresh').addEventListener('change', function (e) {
     try { localStorage.setItem(AUTO_KEY, e.target.checked ? '1' : '0'); } catch (x) {}
     setAuto(e.target.checked);
@@ -546,6 +572,8 @@
 
   /* ---------------------------------------------------------- profile */
   var ROLE_TEXT = { owner: 'Owner', editor: 'Editor', viewer: 'Viewer' };
+  /** The theme picker (#themeSel) is kept in the page and shown in the profile menu. */
+  var themeField = $('themeBox').firstElementChild;
   function drawProfile() {
     var me = VX.me || {};
     var btn = $('profileBtn');
@@ -563,10 +591,12 @@
     tz.addEventListener('change', function () { VX.setTz(tz.value); stampUpdated(); rerender(); VX.toast('Times now shown in ' + VX.tzShort() + ' ✓', 'ok'); });
     VX.mount(pop,
       h('div.profile-head', ui.media(me.picture, me.name || me.email, me.name ? me.email : null, true)),
-      h('p', 'Role: ', ui.pill(ROLE_TEXT[me.role] || 'Viewer', me.role === 'owner' ? 'accent' : me.role === 'editor' ? 'ok' : null)),
+      h('p.small', h('span.muted', 'Role '), ui.pill(ROLE_TEXT[me.role] || 'Viewer', me.role === 'owner' ? 'accent' : me.role === 'editor' ? 'ok' : null)),
       me.via === 'password' ? h('p.muted.small', 'Signed in with the owner recovery password.') : null,
-      h('label.dd', h('span.dd-label', 'Change timezone'), tz),
+      themeField,
+      h('label.dd', h('span.dd-label', 'Time zone'), tz),
       ui.button('Sign out', { kind: 'ghost', icon: 'logout', onClick: signOut }));
+    $('autoPop').hidden = true; $('autoBtn').setAttribute('aria-expanded', 'false');
     pop.hidden = false;
   });
   document.addEventListener('click', function (e) { var pop = $('profilePop'); if (!pop.hidden && !pop.contains(e.target) && e.target !== $('profileBtn')) pop.hidden = true; });

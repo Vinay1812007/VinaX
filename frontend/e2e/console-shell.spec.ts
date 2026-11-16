@@ -160,12 +160,21 @@ test.describe('console shell', () => {
     await expect(range).toBeVisible();
     await range.selectOption('30');
     await expect(page).toHaveURL(/range=30/);
-    await page.locator('#themeSel').selectOption('light');
+    // Theme lives in the profile menu.
+    await page.click('#profileBtn');
+    await page.locator('#profilePop #themeSel').selectOption('light');
     await expect(page.locator('html')).toHaveClass(/light/);
     await page.locator('#themeSel').selectOption('dark');
     await expect(page.locator('html')).not.toHaveClass(/light/);
+    // Auto-refresh lives in the menu beside Refresh.
+    await page.click('#autoBtn');
+    await expect(page.locator('#autoPop')).toBeVisible();
+    await expect(page.locator('#profilePop')).toBeHidden();
     await page.locator('#autoRefresh').check({ force: true });
     await expect(page.locator('#autoMs')).toBeEnabled();
+    await expect(page.locator('#refreshGroup')).toHaveClass(/is-auto/);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#autoPop')).toBeHidden();
     await expect(page.locator('#updated')).toContainText('Last updated');
     await page.goto('/admin/#/users');
     await expect(page.locator('#rangeHost')).toBeHidden();

@@ -1,36 +1,38 @@
 /* VinaX console — page styles (people): Dashboard, Live Now, Users. Uses the tokens in console.css. */
 
-/* Dashboard */
-.dash-head { margin: 6px 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); }
-.dash { display: grid; gap: 12px; }
-.dash-bar { justify-content: flex-end; min-height: 32px; }
-.dash-tip { margin: 0; }
-.dash-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 16px; align-items: start; }
-.dash-w { position: relative; min-width: 0; display: grid; gap: 8px; }
+/* Dashboard: a 3-column grid of cards; stat groups span the width. */
+.dash { display: grid; gap: 16px; }
+.dash-head { margin: 0 0 10px; }
+.dash-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+.dash-w { position: relative; min-width: 0; display: grid; gap: 8px; align-content: start; }
 .dash-w > .card { height: 100%; }
-/* 2.0 — Quick actions: one full-width button per job, the first one filled. */
-.dash-quick { display: grid; gap: 8px; }
-.dash-quick > .btn { justify-content: flex-start; width: 100%; min-height: 44px; }
+.dash-w[data-widget="today"], .dash-w[data-widget="usage"], .dash-w[data-widget="watch"] { margin-top: 4px; }
+.dash-attention .card-body { max-height: 300px; overflow-y: auto; padding-top: 4px; }
+/* Quick actions: one full-width row per job, the first one filled. */
+.dash-quick { display: grid; gap: 6px; }
+.dash-quick > .btn { justify-content: flex-start; width: 100%; height: 36px; }
+.dash-quick > .btn.ghost { border-color: var(--border); background: var(--surface); box-shadow: none; color: var(--text); }
+.dash-quick > .btn.ghost:hover:not(:disabled) { background: var(--surface-2); }
 .dash-w.size-normal { grid-column: span 1; }
 .dash-w.size-wide { grid-column: span 2; }
 .dash-w.size-full { grid-column: 1 / -1; }
 @media (max-width: 1100px) { .dash-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dash-w.size-wide { grid-column: 1 / -1; } }
 @media (max-width: 760px) { .dash-grid { grid-template-columns: minmax(0, 1fr); } .dash-w.size-normal, .dash-w.size-wide { grid-column: 1 / -1; } }
 /* Customise mode: a control bar on each card, the card itself can't be clicked. */
-.dash-grid.editing .dash-w { padding: 8px; border-radius: calc(var(--r-lg) + 6px); border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 5%, transparent); cursor: grab; }
+.dash-grid.editing .dash-w { padding: 8px; border-radius: var(--r-lg); border: 1px dashed var(--accent-line); background: var(--accent-soft); cursor: grab; }
 .dash-grid.editing .dash-w.dragging { opacity: .45; }
-.dash-grid.editing .dash-w.drop-before { box-shadow: -4px 0 0 var(--accent), 0 0 0 1px var(--accent); }
-.dash-ctl { position: relative; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 4px 4px 8px; border-radius: var(--r-md); background: var(--pop); border: 1px solid var(--border-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); cursor: default; }
+.dash-grid.editing .dash-w.drop-before { box-shadow: -3px 0 0 var(--accent); }
+.dash-ctl { position: relative; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 4px 4px 8px; border-radius: var(--r-sm); background: var(--pop); border: 1px solid var(--border-strong); cursor: default; }
 .dash-grip { color: var(--text-3); letter-spacing: -2px; cursor: grab; user-select: none; }
 .dash-ctl-title { font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dash-shield { position: absolute; inset: 56px 8px 8px; z-index: 1; border-radius: var(--r-lg); }
+.dash-shield { position: absolute; inset: 56px 8px 8px; z-index: 1; border-radius: var(--r-md); }
 @media (max-width: 560px) { .dash-ctl .seg { order: 5; } }
 .chart-card .card-actions .btn { white-space: nowrap; }
 
 /* Live Now */
 .live-bar { margin-bottom: 14px; align-items: center; }
 .live-dot { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--ok); font-size: 13px; }
-.live-dot .dot { width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--ok); animation: live-pulse 1.6s ease-in-out infinite; }
+.live-dot .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); animation: live-pulse 1.6s ease-in-out infinite; }
 @keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 .page-body .kpis.stats + .card, .page-body > div > .kpis.stats { margin-bottom: 16px; }
 

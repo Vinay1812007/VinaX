@@ -806,7 +806,7 @@
     var xAxis = h('div.chart-x', { 'aria-hidden': 'true' });
     for (var g = 0; g <= divs; g++) {
       var y = padT + ih - (g / divs) * ih;
-      svg.appendChild(s('line', { x1: 0, x2: W, y1: y, y2: y, class: 'grid-line' }));
+      svg.appendChild(s('line', { x1: 0, x2: W, y1: y, y2: y, class: g === 0 ? 'grid-line base' : 'grid-line' }));
       yAxis.appendChild(h('span', { style: { top: (y / H * 100).toFixed(2) + '%' } }, f(top * g / divs)));
     }
     var n = labels.length;
@@ -820,6 +820,7 @@
       xAxis.appendChild(h('span' + (pct < 4 ? '.first' : pct > 96 ? '.last' : '') + (shownIdx++ % 2 ? '.minor' : ''), { style: { left: pct.toFixed(2) + '%' } }, lf(l)));
     });
     var yAt = function (v) { return padT + ih - (Math.max(0, Number(v) || 0) / top) * ih; };
+    var barsAt = [];
     if (type === 'bar') {
       var bw = (iw / n) * (o.stacked ? 0.7 : 0.8 / series.length);
       labels.forEach(function (_, i) {
@@ -829,7 +830,7 @@
           var x = o.stacked ? xAt(i) - bw / 2 : xAt(i) - (bw * series.length) / 2 + si * bw;
           var y0 = yAt(acc + v), y1 = yAt(acc);
           var r = s('rect', { x: x, y: y0, width: Math.max(1, bw - 2), height: Math.max(0, y1 - y0), class: 'bar', fill: sr.color || PALETTE[si % PALETTE.length] });
-          var tt = s('title'); tt.textContent = lf(labels[i]) + ' · ' + sr.name + ': ' + f(v); r.appendChild(tt);
+          (barsAt[i] = barsAt[i] || []).push(r);
           svg.appendChild(r);
           if (o.stacked) acc += v;
         });
@@ -840,20 +841,83 @@
         var pts = sr.values.map(function (v, i) { return [xAt(i), yAt(v)]; });
         var d = pts.map(function (p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' ');
         if (type === 'area' && series.length <= 2) svg.appendChild(s('path', { d: d + ' L' + pts[pts.length - 1][0] + ' ' + (padT + ih) + ' L' + pts[0][0] + ' ' + (padT + ih) + ' Z', fill: color, class: 'area' }));
-        var line = s('path', { d: d, stroke: color, class: 'line' });
-        var tt = s('title'); tt.textContent = sr.name + ': ' + sr.values.map(function (v, i) { return lf(labels[i]) + ' ' + f(v); }).join(', '); line.appendChild(tt);
-        svg.appendChild(line);
+        svg.appendChild(s('path', { d: d, stroke: color, class: 'line' }));
       });
     }
     host.classList.add('has-axes');
     host.appendChild(yAxis);
     host.appendChild(xAxis);
     host.appendChild(svg);
+    host.appendChild(hoverLayer(host, {
+      n: n, labels: labels, series: series, lf: lf, f: f, type: type,
+      xPct: function (i) { return xAt(i) / W * 100; },
+      yPct: function (v) { return yAt(v) / H * 100; },
+      bars: barsAt
+    }));
     var legend = series.length > 1 ? h('div.legend', series.map(function (sr, si) {
       return h('span.legend-item', h('span.swatch', { style: { background: sr.color || PALETTE[si % PALETTE.length] } }), sr.name);
     })) : null;
     return h('div.chart-wrap', legend, host);
   };
+
+  /**
+   * The hover layer over a chart's plot: a crosshair, a dot on each line and
+   * one tooltip with the day and every series' value. The pointer picks the
+   * nearest day; with the plot focused, the arrow keys (and Home / End) move.
+   */
+  function hoverLayer(host, g) {
+    var hit = h('div.chart-hit', { tabindex: '0', role: 'group', 'aria-label': 'Values by day. Use the left and right arrow keys.' });
+    var cross = h('div.chart-cross', { hidden: true });
+    var tip = h('div.chart-tip', { hidden: true, role: 'status' });
+    var dots = g.type === 'bar' ? [] : g.series.map(function (sr, si) { return h('span.chart-pt', { hidden: true, style: { background: sr.color || PALETTE[si % PALETTE.length] } }); });
+    hit.appendChild(cross);
+    dots.forEach(function (d) { hit.appendChild(d); });
+    hit.appendChild(tip);
+    var at = -1;
+    function show(i) {
+      i = Math.max(0, Math.min(g.n - 1, i));
+      at = i;
+      var x = g.xPct(i);
+      cross.hidden = false; cross.style.left = x + '%';
+      dots.forEach(function (d, si) { d.hidden = false; d.style.left = x + '%'; d.style.top = g.yPct(g.series[si].values[i]) + '%'; });
+      if (g.bars.length) {
+        host.classList.add('is-hovering');
+        g.bars.forEach(function (list, bi) { (list || []).forEach(function (r) { r.classList.toggle('on', bi === i); }); });
+      }
+      VX.mount(tip, h('div.chart-tip-head', g.lf(g.labels[i])), g.series.map(function (sr, si) {
+        return h('div.chart-tip-row', h('span.swatch', { style: { background: sr.color || PALETTE[si % PALETTE.length] } }), h('span', sr.name || 'Value'), h('b', g.f(Number(sr.values[i]) || 0)));
+      }));
+      tip.hidden = false;
+      // Keep the tip inside the plot: right of the line on the left half, left of it on the right.
+      if (x > 55) { tip.style.left = ''; tip.style.right = (100 - x) + '%'; tip.style.marginRight = '10px'; tip.style.marginLeft = ''; }
+      else { tip.style.right = ''; tip.style.left = x + '%'; tip.style.marginLeft = '10px'; tip.style.marginRight = ''; }
+    }
+    function hide() {
+      at = -1;
+      cross.hidden = true; tip.hidden = true;
+      dots.forEach(function (d) { d.hidden = true; });
+      host.classList.remove('is-hovering');
+      g.bars.forEach(function (list) { (list || []).forEach(function (r) { r.classList.remove('on'); }); });
+    }
+    function indexAt(clientX) {
+      var r = hit.getBoundingClientRect();
+      var frac = r.width ? (clientX - r.left) / r.width : 0;
+      return g.type === 'bar' ? Math.floor(frac * g.n) : Math.round(frac * (g.n - 1));
+    }
+    hit.addEventListener('pointermove', function (e) { show(indexAt(e.clientX)); });
+    hit.addEventListener('pointerdown', function (e) { show(indexAt(e.clientX)); });
+    hit.addEventListener('pointerleave', function () { if (document.activeElement !== hit) hide(); });
+    hit.addEventListener('blur', hide);
+    hit.addEventListener('focus', function () { if (at < 0) show(g.n - 1); });
+    hit.addEventListener('keydown', function (e) {
+      var k = e.key;
+      if (k === 'ArrowLeft' || k === 'ArrowRight' || k === 'Home' || k === 'End') {
+        e.preventDefault();
+        show(k === 'Home' ? 0 : k === 'End' ? g.n - 1 : (at < 0 ? g.n - 1 : at) + (k === 'ArrowLeft' ? -1 : 1));
+      } else if (k === 'Escape') { hide(); }
+    });
+    return hit;
+  }
 
   /** Horizontal bars. items = [{ label, value, sub, href }] */
   ui.hbars = function (items, o) {
@@ -890,7 +954,8 @@
       svg.appendChild(s('circle', { cx: 50, cy: 50, r: R, class: 'donut-seg', stroke: PALETTE[i % PALETTE.length], 'stroke-dasharray': len.toFixed(2) + ' ' + (C - len).toFixed(2), 'stroke-dashoffset': (-off).toFixed(2), transform: 'rotate(-90 50 50)' }));
       off += len;
     });
-    return h('div.share', svg, h('ul.share-list', shown.map(function (it, i) {
+    var totalEl = h('div.donut-total', { 'aria-hidden': 'true' }, h('strong', fmt.compact(total)), h('span', o.totalLabel || 'Total'));
+    return h('div.share', h('div.donut-box', svg, totalEl), h('ul.share-list', shown.map(function (it, i) {
       return h('li', h('span.swatch', { style: { background: PALETTE[i % PALETTE.length] } }), h('span.share-label', it.label || '—'), h('span.share-val', fmt.num(it.value)), h('span.muted', fmt.pct(Number(it.value) / total * 100)));
     })));
   };

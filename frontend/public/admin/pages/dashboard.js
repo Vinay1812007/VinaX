@@ -1,9 +1,11 @@
 /* VinaX console — Dashboard (the landing page).
- * GET /api/admin/overview?days=: what needs attention, the headline numbers
- * (signed-in users only), and four charts that follow the date range in the
- * top bar; the world map card reads GET /api/admin/live. Every card and chart
- * opens the page behind it with the matching filter already applied.
- * "Customise" lets each admin move, resize and hide cards (kept per browser). */
+ * GET /api/admin/overview?days=: the headline numbers (signed-in users only)
+ * with a sparkline each, the big Plays chart beside what needs attention,
+ * three smaller charts, the world map (GET /api/admin/live), things to keep
+ * an eye on, the app versions people run, and quick actions. Charts follow
+ * the date range in the top bar. Every card and chart opens the page behind
+ * it with the matching filter already applied. "Customise" (in the page
+ * header) lets each admin move, resize and hide cards (kept per browser). */
 (function () {
   'use strict';
   var VX = window.VX, h = VX.h, ui = VX.ui, fmt = VX.fmt, arr = VX.arr, obj = VX.obj, num = VX.num;
@@ -30,15 +32,16 @@
      per admin email. Unknown or new cards fall back to the default order. */
   var WIDGETS = [
     { id: 'today', title: 'Right now and today', size: 'full', sizes: ['full'] },
-    { id: 'attention', title: 'Needs your attention', size: 'wide', sizes: ['full', 'wide'] },
-    { id: 'quick', title: 'Quick actions', size: 'normal', sizes: ['normal', 'wide', 'full'] },
-    { id: 'map', title: 'Where people are listening', size: 'full', sizes: ['full', 'wide'] },
-    { id: 'usage', title: 'How many people use the app', size: 'full', sizes: ['full'] },
-    { id: 'watch', title: 'Things to keep an eye on', size: 'full', sizes: ['full'] },
     { id: 'plays', title: 'Plays and active users per day', size: 'wide', sizes: ['normal', 'wide', 'full'] },
-    { id: 'platforms', title: 'Users by platform', size: 'normal', sizes: ['normal', 'wide'] },
+    { id: 'attention', title: 'Needs your attention', size: 'normal', sizes: ['normal', 'wide', 'full'] },
+    { id: 'usage', title: 'How many people use the app', size: 'full', sizes: ['full'] },
     { id: 'newUsers', title: 'New users per day', size: 'normal', sizes: ['normal', 'wide', 'full'] },
-    { id: 'searches', title: 'Searches and errors per day', size: 'wide', sizes: ['normal', 'wide', 'full'] }
+    { id: 'platforms', title: 'Users by platform', size: 'normal', sizes: ['normal', 'wide'] },
+    { id: 'searches', title: 'Searches and errors per day', size: 'normal', sizes: ['normal', 'wide', 'full'] },
+    { id: 'map', title: 'Where people are listening', size: 'full', sizes: ['full', 'wide'] },
+    { id: 'watch', title: 'Things to keep an eye on', size: 'full', sizes: ['full'] },
+    { id: 'versions', title: 'App versions in use', size: 'wide', sizes: ['normal', 'wide', 'full'] },
+    { id: 'quick', title: 'Quick actions', size: 'normal', sizes: ['normal', 'wide', 'full'] }
   ];
   var SIZE_TEXT = { normal: 'Small', wide: 'Wide', full: 'Full width' };
   var byWidget = {};
@@ -101,11 +104,11 @@
 
       function paint(focusId) {
         var shown = layout.order.filter(function (id) { return layout.hidden.indexOf(id) < 0; });
-        var bar = h('div.toolbar.dash-bar',
-          editing ? h('p.muted.small.dash-tip', 'Drag a card, or use the arrows, to move it. Your layout is saved in this browser.') : h('span.grow'),
-          h('span.grow'),
-          editing ? ui.button('Reset to default', { kind: 'ghost', small: true, icon: 'refresh', onClick: function () { layout = defaults(); saveLayout(layout); paint(); VX.toast('Dashboard reset ✓', 'ok'); } }) : null,
-          ui.button(editing ? 'Done' : 'Customise', { kind: editing ? 'primary' : 'ghost', small: true, icon: editing ? 'check' : 'layout', onClick: function () { editing = !editing; if (!editing && ctx.params.customise) ctx.setParam('customise', null); paint(); } }));
+        // Customise (and Reset while customising) sit in the page header.
+        ctx.actions(
+          editing ? ui.button('Reset to default', { kind: 'ghost', icon: 'refresh', onClick: function () { layout = defaults(); saveLayout(layout); paint(); VX.toast('Dashboard reset ✓', 'ok'); } }) : null,
+          ui.button(editing ? 'Done' : 'Customise', { kind: editing ? 'primary' : null, icon: editing ? 'check' : 'layout', onClick: function () { editing = !editing; if (!editing && ctx.params.customise) ctx.setParam('customise', null); paint(); } }));
+        var bar = editing ? ui.notice('Drag a card, or use the arrows, to move it. Your layout is saved in this browser.', 'info') : null;
         var grid = h('div.dash-grid' + (editing ? '.editing' : ''));
         shown.forEach(function (id, pos) {
           var w = byWidget[id];
@@ -161,9 +164,30 @@
     var attention = arr(d.attention).map(function (a) {
       return { id: a.id || a.text, level: a.level, text: a.text, action: a.page ? { label: a.action || 'Open', onClick: go(a.page, a.tab, a.params) } : null };
     });
-    var group = function (title, stats) { return h('div.dash-group', h('h3.subhead.dash-head', title), ui.stats(stats)); };
+    var group = function (title, stats) { return h('div.dash-group', h('h2.subhead.dash-head', title), ui.stats(stats)); };
+    // The last two weeks of a timeline column, for a stat card's sparkline.
+    var spark = function (key) { return series(key).slice(-14); };
     return {
-      attention: function () { return ui.card({ title: 'Needs your attention', body: ui.attention(attention) }); },
+      attention: function () {
+        var card = ui.card({ title: 'Needs your attention', sub: attention.length ? fmt.plural(attention.length, 'thing to look at', 'things to look at') : 'All clear', body: ui.attention(attention) });
+        card.classList.add('dash-attention');
+        return card;
+      },
+      // Which app builds people run, newest first, from the same answer.
+      versions: function () {
+        var by = {};
+        arr(d.versions).forEach(function (v) {
+          var key = String(v.appVersion || 'unknown');
+          var row = by[key] || (by[key] = { label: key === 'unknown' ? 'Unknown version' : 'Version ' + key, value: 0, plats: [] });
+          row.value += num(v.users != null ? v.users : v.listeners);
+          var p = VX.platformName(v.platform);
+          if (row.plats.indexOf(p) < 0) row.plats.push(p);
+        });
+        var items = Object.keys(by).map(function (key) { var r = by[key]; return { label: r.label, value: r.value, sub: r.plats.join(', '), key: key }; })
+          .sort(function (a, b) { return b.value - a.value; });
+        return chartCard('App versions in use', 'Everyone signed in, by the app version they last used', go('app-versions'),
+          ui.hbars(items, { limit: 6, empty: 'No versions reported yet' }));
+      },
       // 2.0 — the jobs an admin comes here for, one tap each. Changes are for
       // editors and owners: a viewer sees only the read-only ones.
       quick: function () {
@@ -184,12 +208,12 @@
         return group('Right now and today', [
           { label: 'Listening right now', value: fmt.num(k.activeNow), sub: fmt.num(k.playingNow) + ' playing a song', tone: num(k.activeNow) ? 'ok' : null,
             info: 'Signed-in people who had the app open in the last 90 seconds.', onClick: go('listening-now') },
-          { label: 'Plays today', value: fmt.num(k.playsToday), delta: VX.change(k.playsToday, k.playsYesterday), deltaLabel: 'vs yesterday',
+          { label: 'Plays today', value: fmt.num(k.playsToday), delta: VX.change(k.playsToday, k.playsYesterday), deltaLabel: 'vs yesterday', spark: spark('plays'),
             info: 'Songs played today (India time) by signed-in users.', onClick: go('top-songs', null, { range: '1' }) },
           { label: 'Total users', value: fmt.num(k.users != null ? k.users : k.accounts),
             info: 'Everyone who has ever signed in to VinaX with Google.', onClick: go('users') },
           { label: 'New users this week', value: fmt.num(k.newAccounts7d), delta: VX.change(k.newAccounts7d, k.newAccountsPrev7d), deltaLabel: 'vs last week',
-            info: 'People who signed in with Google for the first time in the last 7 days.', onClick: go('users', null, { joined: '7', sort: 'joined' }) }
+            spark: spark('newListeners'), info: 'People who signed in with Google for the first time in the last 7 days.', onClick: go('users', null, { joined: '7', sort: 'joined' }) }
         ]);
       },
       map: function () {
@@ -203,17 +227,19 @@
       },
       usage: function () {
         return group('How many people use the app', [
-          { label: 'Active today', value: fmt.num(k.dau), delta: VX.change(k.dau, k.dauPrev), deltaLabel: 'vs the day before',
+          { label: 'Active today', value: fmt.num(k.dau), delta: VX.change(k.dau, k.dauPrev), deltaLabel: 'vs the day before', spark: spark('listeners'),
             info: 'Signed-in people who used the app in the last 24 hours.', onClick: go('users', null, { active: '1' }) },
           { label: 'Active this week', value: fmt.num(k.wau), delta: VX.change(k.wau, k.wauPrev), deltaLabel: 'vs last week',
             info: 'Signed-in people who used the app in the last 7 days.', onClick: go('users', null, { active: '7' }) },
           { label: 'Active this month', value: fmt.num(k.mau), delta: VX.change(k.mau, k.mauPrev), deltaLabel: 'vs last month',
-            info: 'Signed-in people who used the app in the last 30 days.', onClick: go('users', null, { active: '30' }) }
+            info: 'Signed-in people who used the app in the last 30 days.', onClick: go('users', null, { active: '30' }) },
+          { label: 'Daily ÷ monthly', value: num(k.mau) ? fmt.pct(num(k.dau) / num(k.mau) * 100) : '—', sub: 'How sticky the app is',
+            info: 'Active today divided by active this month. The higher it is, the more of this month\'s people come back every day.' }
         ]);
       },
       watch: function () {
         return group('Things to keep an eye on', [
-          { label: 'App errors (24 h)', value: fmt.num(k.errors24h), delta: VX.change(k.errors24h, k.errorsPrev24h), deltaLabel: 'vs the day before', inverse: true,
+          { label: 'App errors (24 h)', value: fmt.num(k.errors24h), delta: VX.change(k.errors24h, k.errorsPrev24h), deltaLabel: 'vs the day before', inverse: true, spark: spark('errors'),
             tone: num(k.errors24h) > 20 ? 'bad' : num(k.errors24h) > 0 ? 'warn' : null,
             info: 'Problems the app reported in the last 24 hours, such as a song that would not download. Counts every report.', onClick: go('app-errors', null, { range: '1' }) },
           { label: 'New feedback', value: fmt.num(k.feedbackNew), tone: num(k.feedbackNew) ? 'warn' : null,
@@ -226,18 +252,18 @@
       },
       plays: function () {
         return chartCard('Plays and active users per day', span, go('top-songs', null, rangeParams(range)),
-          ui.chart({ labels: days, type: 'line', height: 240, title: 'Plays and active users per day',
+          ui.chart({ labels: days, type: 'area', height: 260, title: 'Plays and active users per day',
             series: [{ name: 'Plays', values: series('plays') }, { name: 'Active users', values: series('listeners'), color: 'var(--c3)' }],
             empty: 'No plays in this period', emptyHint: 'Plays by signed-in users show up here.' }));
       },
       platforms: function () {
         return chartCard('Users by platform', 'Everyone signed in', go('users'),
-          ui.share(platforms.map(function (p) { return { label: VX.platformName(p.platform), value: num(p.users != null ? p.users : p.listeners) }; }), { title: 'Users by platform', empty: 'No users yet' }));
+          ui.share(platforms.map(function (p) { return { label: VX.platformName(p.platform), value: num(p.users != null ? p.users : p.listeners) }; }), { title: 'Users by platform', empty: 'No users yet', totalLabel: 'users' }));
       },
       newUsers: function () {
         return chartCard('New users per day', span, go('users', null, { sort: 'joined' }),
           ui.chart({ labels: days, type: 'bar', height: 200, title: 'New users per day',
-            series: [{ name: 'New users', values: series('newListeners'), color: 'var(--c3)' }], empty: 'Nobody new in this period' }));
+            series: [{ name: 'New users', values: series('newListeners') }], empty: 'Nobody new in this period' }));
       },
       searches: function () {
         return chartCard('Searches and errors per day', span, go('app-errors', null, rangeParams(range)),
@@ -254,7 +280,7 @@
 
   function chartCard(title, sub, onOpen, body) {
     var card = ui.card({ title: title, sub: sub,
-      actions: [ui.button('See details', { kind: 'ghost', small: true, icon: 'chevron', onClick: onOpen })], body: body });
+      actions: [h('button.icon-btn.sm', { type: 'button', 'aria-label': 'See details: ' + title, title: 'See details', onclick: onOpen }, VX.icon('chevron'))], body: body });
     card.classList.add('chart-card');
     return card;
   }

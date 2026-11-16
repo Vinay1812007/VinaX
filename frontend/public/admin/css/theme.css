@@ -1,0 +1,126 @@
+/* VinaX owner console — colours (the pro admin look, 2026-11-16).
+
+   The ONLY console stylesheet allowed to hold colour literals
+   (src/__tests__/adminStyle.test.ts guards it). Dark is the default; `html.light`
+   is the light theme. Every token is defined in both blocks, except the
+   phone-preview inks at the end, which stay dark in both themes because they
+   draw the listener app as it looks on a phone.
+
+   Text tokens meet WCAG AA (4.5:1) on --surface and --surface-2 in both themes.
+   Chart colours --c1…--c6 are the dataviz reference palette's first six slots
+   (blue, orange, aqua, yellow, magenta, green), each stepped for its theme and
+   checked with the dataviz validator against --surface. */
+
+:root {
+  color-scheme: dark;
+
+  /* Ground and panels */
+  --bg: #0a0a0b;
+  --sidebar: #0d0d0f;
+  --surface: #111113;
+  --surface-solid: #111113;
+  --surface-2: #18181b;
+  --surface-3: #222226;
+  --pop: #151517;
+  --border: #232327;
+  --border-strong: #34343a;
+
+  /* Ink */
+  --text: #ededef;
+  --text-2: #a1a1aa;
+  --text-3: #8b8b94;
+
+  /* The one accent: --accent for text, icons and lines; --accent-fill behind
+     white text (primary buttons, switches, selected steps). */
+  --accent: #5b9cf8;
+  --accent-hover: #7db1fa;
+  --accent-fill: #2563eb;
+  --accent-fill-hover: #3b74f0;
+  --accent-soft: rgb(59 130 246 / 0.16);
+  --accent-line: rgb(91 156 248 / 0.45);
+  --on-accent: #ffffff;
+
+  /* Status (never used as a chart series) */
+  --ok: #4ade80;   --ok-soft: rgb(74 222 128 / 0.13);
+  --warn: #fbbf24; --warn-soft: rgb(251 191 36 / 0.13);
+  --bad: #f87171;  --bad-soft: rgb(248 113 113 / 0.14);
+  --info: #38bdf8; --info-soft: rgb(56 189 248 / 0.13);
+  --on-status: #0a0a0b;
+
+  /* Charts */
+  --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500; --c5: #d55181; --c6: #0ca30c;
+
+  /* Depth: flat panels; only floating layers get a shadow. */
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+  --shadow-float: 0 16px 48px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --shadow-edge: -8px 0 8px -8px rgb(0 0 0 / 0.6);
+  --scrim: rgb(0 0 0 / 0.62);
+  --hover: rgb(255 255 255 / 0.04);
+  --theme-color: #0a0a0b;
+}
+
+html.light {
+  color-scheme: light;
+
+  --bg: #fafafa;
+  --sidebar: #f6f6f7;
+  --surface: #ffffff;
+  --surface-solid: #ffffff;
+  --surface-2: #f4f4f5;
+  --surface-3: #e9e9ec;
+  --pop: #ffffff;
+  --border: #e4e4e7;
+  --border-strong: #d0d0d6;
+
+  --text: #18181b;
+  --text-2: #52525b;
+  --text-3: #66666f;
+
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-fill: #2563eb;
+  --accent-fill-hover: #1d4ed8;
+  --accent-soft: rgb(37 99 235 / 0.08);
+  --accent-line: rgb(37 99 235 / 0.4);
+  --on-accent: #ffffff;
+
+  --ok: #13773a;   --ok-soft: rgb(21 128 61 / 0.09);
+  --warn: #8f5400; --warn-soft: rgb(202 138 4 / 0.12);
+  --bad: #c42121;  --bad-soft: rgb(220 38 38 / 0.08);
+  --info: #0369a1; --info-soft: rgb(3 105 161 / 0.08);
+  --on-status: #ffffff;
+
+  --c1: #2a78d6; --c2: #eb6834; --c3: #1baf7a; --c4: #eda100; --c5: #e87ba4; --c6: #008300;
+
+  --shadow: 0 1px 2px rgb(9 9 11 / 0.06);
+  --shadow-float: 0 12px 32px rgb(9 9 11 / 0.12), 0 0 0 1px rgb(9 9 11 / 0.04);
+  --shadow-edge: -8px 0 8px -8px rgb(9 9 11 / 0.18);
+  --scrim: rgb(9 9 11 / 0.32);
+  --hover: rgb(9 9 11 / 0.03);
+  --theme-color: #fafafa;
+}
+
+/* Phone previews: the listener app as it looks on a phone (always dark,
+   black and green since 1.15.0). */
+:root {
+  --ph-frame: #050505;
+  --ph-notch: #1f1f1f;
+  --ph-screen: #121212;
+  --ph-tile: #1f1f1f;
+  --ph-tile-2: #2a2a2a;
+  --ph-pop: #282828;
+  --ph-text: #ffffff;
+  --ph-note: #cfcfcf;
+  --ph-sub: #b3b3b3;
+  --ph-muted: #8f8f8f;
+  --ph-line: #2a2a2a;
+  --ph-brand: #1ed760;
+  --ph-on-brand: #000000;
+  --ph-info: #3b82f6;
+  --ph-glass: rgb(255 255 255 / 0.12);
+  --ph-shadow: 0 10px 30px rgb(0 0 0 / 0.5);
+  --ph-warn-bg: rgb(251 191 36 / 0.18);
+  --ph-warn-text: #fcd679;
+  --ph-info-bg: rgb(59 130 246 / 0.2);
+  --ph-info-text: #a9c9fb;
+}

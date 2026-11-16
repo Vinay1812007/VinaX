@@ -101,7 +101,9 @@
       if (k.delta != null && isFinite(k.delta)) {
         var d = Math.round(k.delta);
         var good = k.inverse ? d < 0 : d > 0;
-        delta = h('span.delta' + (d === 0 ? '' : good ? '.up' : '.down'), (d > 0 ? '▲ ' : d < 0 ? '▼ ' : '') + Math.abs(d) + '%' + (k.deltaLabel ? ' ' + k.deltaLabel : ''));
+        // The change in a tinted chip; what it is compared with beside it, in plain ink.
+        delta = [h('span.delta' + (d === 0 ? '' : good ? '.up' : '.down'), (d > 0 ? '▲ ' : d < 0 ? '▼ ' : '') + Math.abs(d) + '%'),
+          k.deltaLabel ? h('span.delta-label', k.deltaLabel) : null];
       }
       var tag = k.onClick ? 'button' : 'div';
       var card = h(tag + '.kpi.stat' + (k.tone ? '.tone-' + k.tone : '') + (k.onClick ? '.clickable' : ''), k.onClick ? { type: 'button', onclick: k.onClick, title: 'Open details' } : {},
@@ -456,7 +458,7 @@
 
   /** Colour picker. value "#rrggbb". */
   ui.colorPicker = function (label, value, onChange, o) {
-    var inp = h('input.color', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(value || '') ? value : '#f2a33a', 'aria-label': label, disabled: o && o.disabled });
+    var inp = h('input.color', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(value || '') ? value : '#1ed760', 'aria-label': label, disabled: o && o.disabled });
     var code = h('span.muted.small', inp.value);
     inp.addEventListener('input', function () { code.textContent = inp.value; onChange(inp.value); });
     return h('label.color-field', h('span.dd-label', label), h('span.color-box', inp, code));

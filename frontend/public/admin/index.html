@@ -10,12 +10,14 @@
          console script builds DOM through VX.h (text nodes), never innerHTML.
          style-src keeps 'unsafe-inline' for style="" on chart bars. -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: https:; media-src 'self' blob: https:; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/ https://challenges.cloudflare.com" />
-    <meta name="theme-color" content="#0d090f" />
+    <meta name="theme-color" content="#0a0a0b" />
     <title>VinaX · Console</title>
     <link rel="icon" href="/favicon.ico?v=14" />
     <script src="/admin/theme-boot.js"></script>
     <!-- The app's colour-free design tokens (generated: npm run gen:admin-tokens). -->
     <link rel="stylesheet" href="/admin/css/tokens.css" />
+    <!-- Every console colour, dark and light (the only sheet with colour literals). -->
+    <link rel="stylesheet" href="/admin/css/theme.css" />
     <link rel="stylesheet" href="/admin/console.css" />
     <link rel="stylesheet" href="/admin/css/people.css" />
     <link rel="stylesheet" href="/admin/css/music.css" />
@@ -23,7 +25,6 @@
     <link rel="stylesheet" href="/admin/css/system.css" />
     <link rel="stylesheet" href="/admin/css/settings-a.css" />
     <link rel="stylesheet" href="/admin/css/settings-b.css" />
-    <link rel="stylesheet" href="/admin/css/glass.css" />
     <link rel="stylesheet" href="/admin/css/phone.css" />
   </head>
   <body>
@@ -81,8 +82,6 @@
       <symbol id="i-rail" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M9 4v16M15 10l-2 2 2 2"/></symbol>
     </svg>
 
-    <div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
-
     <!-- Sign-in -->
     <main id="login" class="login" hidden>
       <div class="login-card">
@@ -126,31 +125,50 @@
       <div class="main-col">
         <header class="topbar">
           <button id="menuBtn" class="icon-btn menu-btn" type="button" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></button>
-          <nav id="crumbs" class="crumbs" aria-label="You are here"><h1 id="pageTitle">Dashboard</h1></nav>
+          <nav id="crumbs" class="crumbs" aria-label="You are here"><span class="crumb-cur">Dashboard</span></nav>
           <span class="grow"></span>
-          <button id="searchBtn" class="icon-btn" type="button" aria-label="Search (Ctrl K)" title="Search (Ctrl K)"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg></button>
           <span id="rangeHost" class="range-host" hidden></span>
-          <div class="auto-box">
-            <label class="switch compact" title="Refresh this page by itself">
-              <input id="autoRefresh" type="checkbox" role="switch" /><span class="track" aria-hidden="true"></span><span class="switch-label">Auto-refresh</span>
-            </label>
-            <select id="autoMs" class="input compact" aria-label="Auto-refresh every">
-              <option value="15000">15 s</option><option value="30000">30 s</option><option value="60000">1 min</option><option value="300000">5 min</option>
-            </select>
+          <button id="searchBtn" class="icon-btn" type="button" aria-label="Search (Ctrl K)" title="Search (Ctrl K)"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg></button>
+          <span id="updated" class="updated" aria-live="polite"></span>
+          <div id="refreshGroup" class="refresh-group">
+            <button id="refreshBtn" class="icon-btn" type="button" aria-label="Refresh now" title="Refresh now (R)"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+            <button id="autoBtn" class="icon-btn" type="button" aria-label="Auto-refresh" aria-haspopup="dialog" aria-expanded="false" aria-controls="autoPop" title="Auto-refresh"><span class="auto-on" aria-hidden="true"></span><svg class="ic" aria-hidden="true"><use href="#i-down"/></svg></button>
+            <div id="autoPop" class="auto-pop" role="dialog" aria-label="Auto-refresh" hidden>
+              <p class="pop-title">Auto-refresh</p>
+              <div class="auto-box">
+                <label class="switch compact" title="Refresh this page by itself">
+                  <input id="autoRefresh" type="checkbox" role="switch" /><span class="track" aria-hidden="true"></span><span class="switch-label">Refresh this page by itself</span>
+                </label>
+                <label class="dd"><span class="dd-label">Every</span>
+                  <select id="autoMs" class="input compact" aria-label="Auto-refresh every">
+                    <option value="15000">15 seconds</option><option value="30000">30 seconds</option><option value="60000">1 minute</option><option value="300000">5 minutes</option>
+                  </select>
+                </label>
+              </div>
+            </div>
           </div>
-          <span id="updated" class="muted small updated" aria-live="polite"></span>
-          <button id="refreshBtn" class="icon-btn" type="button" aria-label="Refresh now" title="Refresh now (R)"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button>
-          <select id="themeSel" class="input compact theme-sel" aria-label="Theme">
-            <option value="light">Light</option><option value="dark">Dark</option><option value="system">Match my device</option>
-          </select>
           <div class="profile">
             <button id="profileBtn" class="profile-btn" type="button" aria-label="Profile" aria-haspopup="dialog"><span class="avatar">A</span></button>
             <div id="profilePop" class="profile-pop" role="dialog" aria-label="Your profile" hidden></div>
           </div>
+          <!-- Theme lives in the profile menu; app.js moves this box into it. -->
+          <div id="themeBox" hidden>
+            <label class="dd"><span class="dd-label">Theme</span>
+              <select id="themeSel" class="input compact theme-sel" aria-label="Theme">
+                <option value="light">Light</option><option value="dark">Dark</option><option value="system">Match my device</option>
+              </select>
+            </label>
+          </div>
         </header>
         <main id="main" class="page" tabindex="-1">
           <div id="dbBanner" class="db-banner" hidden></div>
-          <p id="pageDesc" class="page-desc muted"></p>
+          <div class="page-head">
+            <div class="page-titles">
+              <h1 id="pageTitle">Dashboard</h1>
+              <p id="pageDesc" class="page-desc"></p>
+            </div>
+            <div id="pageActions" class="page-actions"></div>
+          </div>
           <div id="pageTabs"></div>
           <div id="pageBody" class="page-body"></div>
         </main>

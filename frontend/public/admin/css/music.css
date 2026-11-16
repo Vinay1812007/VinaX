@@ -16,30 +16,30 @@
 .funnel { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
 .funnel-step { display: grid; gap: 6px; }
 .funnel-top { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.funnel-track { height: 14px; border-radius: var(--radius-pill); background: var(--surface-2); overflow: hidden; }
-.funnel-fill { height: 100%; border-radius: var(--radius-pill); background: var(--accent); }
+.funnel-track { height: 10px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.funnel-fill { height: 100%; border-radius: 3px; background: var(--accent); }
 
 /* Music Library */
 .lib-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 14px; }
 .lib-bar .grow { flex: 1 1 260px; min-width: 0; }
 .lib-bar .search-box { width: 100%; }
 .lib-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
-.lib-card { display: flex; align-items: center; gap: 12px; padding: 10px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); min-width: 0; }
+.lib-card { display: flex; align-items: center; gap: 12px; padding: 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); min-width: 0; }
 .lib-art-wrap { position: relative; flex: none; }
 .lib-art { width: 64px; height: 64px; border-radius: var(--r-md); object-fit: cover; display: block; background: var(--surface-2); }
-.lib-art.round { border-radius: var(--radius-pill); }
+.lib-art.round { border-radius: 50%; }
 .lib-art.blank { display: grid; place-items: center; color: var(--text-3); }
 .lib-text { flex: 1; min-width: 0; }
 .lib-text .cell-main, .lib-text .cell-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.preview-btn { position: absolute; right: -6px; bottom: -6px; width: 30px; height: 30px; border-radius: var(--radius-pill); background: var(--accent); color: var(--on-accent); border: 2px solid var(--surface); }
-.preview-btn:hover { background: var(--accent-hover); }
+.preview-btn { position: absolute; right: -6px; bottom: -6px; width: 30px; height: 30px; border-radius: 50%; background: var(--accent-fill); color: var(--on-accent); border: 2px solid var(--surface); }
+.preview-btn:hover { background: var(--accent-fill-hover); }
 .preview-btn.playing { background: var(--ok); }
 .preview-btn .ic { width: 14px; height: 14px; }
 
 /* Feedback */
 .fb-tabs { margin-bottom: 12px; }
 .fb-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-.fb-card { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--r-lg); background: var(--surface); }
+.fb-card { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--r-md); background: var(--surface); }
 .fb-card.status-read { border-left-color: var(--info); }
 .fb-card.status-resolved { border-left-color: var(--ok); }
 .fb-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
@@ -57,8 +57,8 @@
 
 /* Trending (schema 11) */
 .tr-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.tr-row { display: grid; grid-template-columns: 26px 40px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; width: 100%; padding: 8px 6px; border: 0; border-radius: var(--r-md); background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.tr-row:hover, .tr-row:focus-visible { background: var(--surface-2); }
+.tr-row { display: grid; grid-template-columns: 26px 40px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; width: 100%; padding: 8px 6px; border: 0; border-radius: var(--r-sm); background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.tr-row:hover, .tr-row:focus-visible { background: var(--hover); }
 .tr-rank { font-weight: 700; color: var(--text-3); text-align: right; font-variant-numeric: tabular-nums; }
 .tr-move { font-size: 12px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .tr-move.up { color: var(--ok); }

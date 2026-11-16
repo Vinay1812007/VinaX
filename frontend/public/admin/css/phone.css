@@ -18,10 +18,8 @@
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
     display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
     padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
-    background: color-mix(in srgb, var(--surface-solid) 96%, transparent);
-    -webkit-backdrop-filter: var(--glass-blur-strong); backdrop-filter: var(--glass-blur-strong);
-    border-top: 1px solid var(--border-strong);
-    box-shadow: 0 -6px 18px rgb(0 0 0 / .18);
+    background: var(--sidebar);
+    border-top: 1px solid var(--border);
   }
   .bb-link {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
@@ -30,7 +28,7 @@
   }
   .bb-link .ic { width: 22px; height: 22px; }
   .bb-link span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .bb-link[aria-current="page"], .bb-link.on, .bb-link[aria-expanded="true"] { color: var(--text); background: var(--accent-soft); }
+  .bb-link[aria-current="page"], .bb-link.on, .bb-link[aria-expanded="true"] { color: var(--accent); background: var(--accent-soft); }
   .bb-link:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   /* Room for the bar under the last thing on the page and the toasts. */
   .page { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
@@ -46,6 +44,11 @@
   /* ------------------------------------------------------- stat cards */
   .kpis, .kpis.stats, .users-stats .kpis.stats, .profile-panel .kpis.stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .kpi-value { font-size: 22px; overflow-wrap: anywhere; }
+  /* Two cards a row leave no room for a sparkline beside the change. */
+  .kpi .spark { display: none; }
+  .kpi-foot { padding-right: 0; }
+  /* The page header already names the page. */
+  .topbar .crumbs { display: none; }
 
   /* ------------------------------------------------- tables → cards */
   .dt:not(.no-cards) .tbl-scroll { overflow: visible; }
@@ -55,10 +58,10 @@
   .dt:not(.no-cards) .tbl tr {
     position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px;
     margin: 0 0 10px; padding: 12px 14px;
-    border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface);
   }
   .dt:not(.no-cards) .tbl tr:last-child { margin-bottom: 0; }
-  .dt:not(.no-cards) .tbl tbody tr:hover { background: var(--surface-3); }
+  .dt:not(.no-cards) .tbl tbody tr:hover { background: var(--surface-2); }
   .dt:not(.no-cards) .tbl td {
     display: block; min-width: 0; padding: 0; border: 0; text-align: left;
     overflow-wrap: anywhere; white-space: normal;
