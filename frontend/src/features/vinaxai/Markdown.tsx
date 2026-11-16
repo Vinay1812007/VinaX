@@ -14,6 +14,7 @@ import ReactMarkdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CodeBlock } from './CodeBlock';
 import { PlaylistCard } from './PlaylistCard';
+import { QuestionsBlock, QuizBlock } from './ChoiceBlocks';
 import { escapeCurrency } from './mathText';
 import { remarkCitations } from './citations';
 import { CitationChip } from './Sources';
@@ -106,6 +107,9 @@ const components: Components = {
     const lang = (Array.isArray(cls) ? cls.map(String) : []).find((c) => c.startsWith('language-'))?.slice(9) ?? '';
     // 2.0 — a playlist VinaX AI wrote becomes a card you can play or save (PlaylistCard.tsx).
     if (lang.toLowerCase() === 'vinax-playlist') return <PlaylistCard text={textOf(code)} />;
+    // 2026-11-16 — clarifying questions and quizzes become cards you click (ChoiceBlocks.tsx).
+    if (lang.toLowerCase() === 'questions') return <QuestionsBlock text={textOf(code)} />;
+    if (lang.toLowerCase() === 'quiz') return <QuizBlock text={textOf(code)} />;
     return <CodeBlock code={textOf(code).replace(/\n$/, '')} lang={lang.toLowerCase()} />;
   },
   table: ({ children }) => (

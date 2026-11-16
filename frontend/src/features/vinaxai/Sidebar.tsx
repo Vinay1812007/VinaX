@@ -3,7 +3,8 @@
  * Starred, then Recents by day, each with a ⋯ menu (Star, Rename, Move to
  * project, Delete), and the
  * account with links to Settings and back to VinaX. On a wide screen it is
- * a column that can be collapsed; below 1024px it is a slide-over drawer.
+ * a column that collapses to a slim rail of icons (SideRail), the way
+ * Claude's does; below 1024px it is a slide-over drawer.
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
@@ -16,7 +17,7 @@ import { groupConversations } from './sidebarGroups';
 import { ListSkeleton } from './Skeleton';
 import { resetChat, useChatStore } from './store';
 import { moveFocus, useDismiss } from './useDismiss';
-import { ArrowLeftIcon, ArtifactsIcon, CloseIcon, DotsIcon, FolderIcon, NewChatIcon, PencilIcon, SearchSmallIcon, SidebarIcon, StarIcon, TrashIcon } from './icons';
+import { ArrowLeftIcon, ArtifactsIcon, CloseIcon, DotsIcon, FolderIcon, PencilIcon, PlusSmallIcon, SearchSmallIcon, SidebarIcon, StarIcon, TrashIcon } from './icons';
 import type { ConversationSummary } from './types';
 
 export const LIST_KEY = ['vinaxai', 'conversations'] as const;
@@ -176,8 +177,8 @@ export function Sidebar({ onNavigate, onNewChat, onCollapse, drawer, onSettings 
           </button>
         )}
       </div>
-      <button type="button" className="vx-ai-side-new" onClick={onNewChat}>
-        <NewChatIcon className="w-5 h-5" />
+      <button type="button" className="vx-ai-side-new vx-ai-side-start" onClick={onNewChat}>
+        <span className="vx-ai-plus-dot" aria-hidden><PlusSmallIcon className="w-4 h-4" /></span>
         <span>New chat</span>
       </button>
       <Link to="/vinaxai/projects" className={`vx-ai-side-new vx-ai-side-projects${onProjects ? ' is-active' : ''}`} aria-current={onProjects ? 'page' : undefined} onClick={onNavigate}>
@@ -242,5 +243,39 @@ export function Sidebar({ onNavigate, onNewChat, onCollapse, drawer, onSettings 
         />
       )}
     </div>
+  );
+}
+
+/**
+ * The collapsed sidebar on a wide screen: a slim column of icons (open the
+ * sidebar, New chat, Projects, Artifacts, back to music, the account), so
+ * the main places stay one click away.
+ */
+export function SideRail({ onExpand, onNewChat, onSettings }: { onExpand(): void; onNewChat(): void; onSettings?(): void }): ReactNode {
+  const account = useAccount();
+  const name = account?.user.name ?? 'You';
+  const where = useLocation().pathname;
+  return (
+    <nav className="vx-ai-rail" aria-label="VinaX AI">
+      <button type="button" className="vx-ai-icon-btn" onClick={onExpand} aria-label="Open sidebar" title="Open sidebar">
+        <SidebarIcon className="w-5 h-5" />
+      </button>
+      <button type="button" className="vx-ai-rail-new" onClick={onNewChat} aria-label="New chat" title="New chat">
+        <span className="vx-ai-plus-dot" aria-hidden><PlusSmallIcon className="w-4 h-4" /></span>
+      </button>
+      <Link to="/vinaxai/projects" className={`vx-ai-icon-btn${where.startsWith('/vinaxai/project') ? ' is-on' : ''}`} aria-label="Projects" title="Projects">
+        <FolderIcon className="w-5 h-5" />
+      </Link>
+      <Link to="/vinaxai/artifacts" className={`vx-ai-icon-btn${where === '/vinaxai/artifacts' ? ' is-on' : ''}`} aria-label="Artifacts" title="Artifacts">
+        <ArtifactsIcon className="w-5 h-5" />
+      </Link>
+      <span className="vx-ai-rail-gap" />
+      <Link to="/" className="vx-ai-icon-btn" aria-label="Back to music" title="Back to music">
+        <ArrowLeftIcon className="w-5 h-5" />
+      </Link>
+      <button type="button" className="vx-ai-rail-me" onClick={onSettings ?? onExpand} aria-label={`Account: ${name}`} title={name}>
+        {account?.user.picture ? <img src={account.user.picture} alt="" width={32} height={32} referrerPolicy="no-referrer" /> : <span className="vx-ai-me-initial" aria-hidden>{name.slice(0, 1).toUpperCase()}</span>}
+      </button>
+    </nav>
   );
 }

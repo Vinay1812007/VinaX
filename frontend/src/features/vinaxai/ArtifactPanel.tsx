@@ -11,9 +11,10 @@ import { Markdown } from './Markdown';
 import { openInNewTab, RunnerFrame } from './RunnerFrame';
 import { codeLanguage, downloadName, hasPreview, runsInSandbox, type Artifact } from './artifacts';
 import { usePanel } from './artifactStore';
-import { ChevronIcon, CloseIcon, CopyIcon, DownloadIcon, OpenExternalIcon } from './icons';
+import { ChevronIcon, CloseIcon, CodeIcon, ComponentIcon, CopyIcon, DiagramIcon, DownloadIcon, FileIcon, ImageIcon, OpenExternalIcon, PageIcon } from './icons';
 
 const TYPE_LABEL: Record<Artifact['type'], string> = { code: 'Code', html: 'HTML', svg: 'SVG', mermaid: 'Diagram', markdown: 'Document', react: 'React' };
+export const TYPE_ICON: Record<Artifact['type'], (p: { className?: string }) => ReactNode> = { code: CodeIcon, html: PageIcon, svg: ImageIcon, mermaid: DiagramIcon, markdown: FileIcon, react: ComponentIcon };
 
 export function download(a: Artifact): void {
   const { name, mime } = downloadName(a);
@@ -49,7 +50,8 @@ export function ArtifactPanel({ versions, live, sheet, onFix, from, onOpenChat }
   const isWriting = !!current && live && current === versions[versions.length - 1] && current.artifact.incomplete;
   const content = current?.artifact.content;
   useEffect(() => {
-    const el = body.current;
+    // Code view scrolls inside the code box; anything else scrolls the body.
+    const el = body.current?.querySelector<HTMLElement>('.vx-ai-code-body') ?? body.current;
     if (el && isWriting && follow.current) el.scrollTop = el.scrollHeight;
   }, [content, isWriting]);
   useEffect(() => { if (!isWriting) follow.current = true; }, [isWriting]);
@@ -153,9 +155,9 @@ export function ArtifactPanel({ versions, live, sheet, onFix, from, onOpenChat }
           ref={body}
           className="vx-ai-artifact-body"
           role={previewable ? 'tabpanel' : undefined}
-          onScroll={(e) => {
+          onScrollCapture={(e) => {
             if (!writing) return;
-            const el = e.currentTarget;
+            const el = e.target as HTMLElement;
             follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
           }}
         >
@@ -176,7 +178,7 @@ export function ArtifactCard({ artifact, version, live, onOpen }: { artifact: Ar
   return (
     // Its visible text is its name (title, kind, version), so speech and sight agree.
     <button type="button" className="vx-ai-artifact-card" onClick={onOpen}>
-      <span className="vx-ai-artifact-icon" aria-hidden>{TYPE_LABEL[artifact.type].slice(0, 1)}</span>
+      <span className="vx-ai-artifact-icon" aria-hidden>{(() => { const Icon = TYPE_ICON[artifact.type]; return <Icon className="w-5 h-5" />; })()}</span>
       <span className="vx-ai-file-text">
         <span className="vx-ai-file-name">{writing ? <span className="vx-ai-shimmer">Creating {artifact.title || 'an artifact'}…</span> : artifact.title}</span>
         <span className="vx-ai-file-meta">

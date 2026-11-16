@@ -180,3 +180,24 @@ test('a preview that fails offers Fix it, which asks VinaX AI for a corrected ve
   expect(text).toContain('Could not load mermaid');
   expect(text).toMatch(/send the complete corrected artifact\.$/);
 });
+
+test('Code view: a long, wide artifact scrolls inside the panel both ways, with line numbers that stay put', async ({ page }) => {
+  // Reported 2026-11-16: the code box was clipped to the panel's height, so long code could not be read or scrolled.
+  const long = 'Here.\n```html\n<!DOCTYPE html>\n<title>Big page</title>\n' + Array.from({ length: 120 }, (_, i) => `<p>line ${i} ${'x'.repeat(i % 3 ? 20 : 260)}</p>`).join('\n') + '\n```';
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await setup(page, [long]);
+  await page.goto('/vinaxai');
+  await ask(page, 'Make me a long page');
+  const panel = page.getByRole('complementary', { name: 'Artifact: Big page' });
+  if (!(await panel.isVisible())) await page.getByRole('button', { name: /^Big page/ }).last().click();
+  await panel.getByRole('tab', { name: 'Code' }).click();
+  const box = panel.locator('.vx-ai-code-body');
+  const size = await box.evaluate((e) => ({ h: e.clientHeight, sh: e.scrollHeight, w: e.clientWidth, sw: e.scrollWidth, bottom: e.getBoundingClientRect().bottom }));
+  expect(size.sh).toBeGreaterThan(size.h);
+  expect(size.sw).toBeGreaterThan(size.w);
+  expect(size.bottom).toBeLessThanOrEqual(900);
+  await box.evaluate((e) => { e.scrollTop = e.scrollHeight; e.scrollLeft = 200; });
+  await expect(panel.locator('pre')).toContainText('line 119');
+  const gutterLeft = await panel.locator('.vx-ai-code-gutter').evaluate((g) => Math.round(g.getBoundingClientRect().left - g.parentElement!.getBoundingClientRect().left));
+  expect(gutterLeft).toBe(0);
+});

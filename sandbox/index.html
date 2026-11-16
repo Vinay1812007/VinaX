@@ -1199,14 +1199,28 @@
   }
 
   /** Sent first in an HTML preview: its errors, failed scripts and blocked loads come back here, so the panel can say so (and offer Fix it). */
-  var HTML_REPORTER = '<script>(function(){var sent=0;function send(m){if(sent++>2)return;try{parent.postMessage({source:"vinax-html",type:"error",message:String(m).slice(0,500)},"*")}catch(x){}}' +
+  var REPORTER = '<script>(function(){var sent=0;function send(m){if(sent++>2)return;try{parent.postMessage({source:"vinax-html",type:"error",message:String(m).slice(0,500)},"*")}catch(x){}}' +
     'window.addEventListener("error",function(e){var t=e.target;if(t&&t!==window&&(t.src||t.href)){send("Could not load "+(t.src||t.href))}else{send((e.message||"Error")+(e.lineno?" (line "+e.lineno+")":""))}},true);' +
     'window.addEventListener("unhandledrejection",function(e){var r=e.reason;send((r&&r.message)||r||"A promise failed")});' +
     'document.addEventListener("securitypolicyviolation",function(e){send("Blocked by the preview: "+(e.blockedURI||e.violatedDirective))});})();<\/script>';
 
+  /**
+   * HD for three.js pages (2026-11-16): whatever the page asks for, its
+   * WebGLRenderer is antialiased, prefers the fast GPU and draws at the
+   * screen's own pixel ratio (up to 2), so 3-D scenes are sharp on Retina and
+   * phone screens instead of jagged and blurry. three's UMD build sets
+   * window.THREE and fills it in through its own reference, so the renderer
+   * is wrapped the first time the page itself reads THREE.
+   */
+  var THREE_HD = '<script>(function(){var T;function hd(t){try{if(!t||!t.WebGLRenderer||t.WebGLRenderer.__vxHd)return;var R=t.WebGLRenderer;' +
+    'var W=function(o){o=Object.assign({antialias:true,powerPreference:"high-performance"},o||{});var r=new R(o);var d=Math.min(window.devicePixelRatio||1,2);var sp=r.setPixelRatio.bind(r);' +
+    'r.setPixelRatio=function(v){sp(Math.max(+v||1,d))};sp(d);return r};W.prototype=R.prototype;W.__vxHd=1;t.WebGLRenderer=W}catch(x){}}' +
+    'try{Object.defineProperty(window,"THREE",{configurable:true,enumerable:true,get:function(){hd(T);return T},set:function(v){T=v}})}catch(x){}})();<\/script>';
+
   /** The reporter goes right after <head> (or <html>), never before the doctype (that would change how the page lays out). */
   function withReporter(html) {
     var h = String(html);
+    var HTML_REPORTER = REPORTER + THREE_HD;
     var m = /<head\b[^>]*>/i.exec(h) || /<html\b[^>]*>/i.exec(h);
     if (m) return h.slice(0, m.index + m[0].length) + HTML_REPORTER + h.slice(m.index + m[0].length);
     var d = /^\s*<!doctype[^>]*>/i.exec(h);

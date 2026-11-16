@@ -12,7 +12,7 @@
  * same frame (Projects.tsx, lazy); a project's page uses this composer to
  * start a chat in the project. See README.md (VinaX AI).
  */
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAccount } from '@/components/useAccount';
@@ -27,7 +27,7 @@ import { Composer, type ComposerHandle } from './Composer';
 import { AssistantMessage, UserMessage } from './Message';
 import { NowPlayingPill } from './NowPlayingPill';
 import { usePrefs } from './prefs';
-import { Sidebar } from './Sidebar';
+import { SideRail, Sidebar } from './Sidebar';
 import { continueReply, resetChat, retryReply, selectBranch, sendMessage, setIncognito, stopReply, useChatStore } from './store';
 import { useDismiss } from './useDismiss';
 import { usePendingFiles } from './usePendingFiles';
@@ -35,8 +35,8 @@ import { PendingChips } from './FileChips';
 import type { FileRef } from './types';
 import { ArtifactPanel } from './ArtifactPanel';
 import { usePanel } from './artifactStore';
-import { artifactsOf, collectVersions, hasPreview, type Artifact } from './artifacts';
-import { ArrowDownIcon, FolderIcon, IncognitoIcon, MenuIcon, NewChatIcon, SettingsIcon, ShareIcon, SidebarIcon, SparkIcon } from './icons';
+import { artifactsOf, collectVersions, hasPreview, type Artifact, mayHaveArtifacts } from './artifacts';
+import { ArrowDownIcon, CodeIcon, DiagramIcon, FolderIcon, IncognitoIcon, MenuIcon, NewChatIcon, PencilIcon, SettingsIcon, ShareIcon, SparkIcon, ThinkIcon, WaveIcon } from './icons';
 import { useVoiceDictation } from './useVoiceDictation';
 import { dismissReadNotice, stopReading, useReadAloud } from './readAloud';
 import { SettingsPanel, type SettingsSection } from './SettingsPanel';
@@ -58,11 +58,13 @@ export function greeting(hour: number, name: string | null): string {
 }
 
 /** The empty state's chips: each fills the composer with a starter, never sends. */
-export const STARTERS: Array<{ label: string; text: string }> = [
-  { label: 'Write', text: 'Help me write ' },
-  { label: 'Learn', text: 'Explain in simple terms how ' },
-  { label: 'Code', text: 'Help me write code that ' },
-  { label: 'Music', text: 'Recommend songs like ' },
+export const STARTERS: Array<{ label: string; text: string; icon: (p: { className?: string }) => ReactNode }> = [
+  { label: 'Write', text: 'Help me write ', icon: PencilIcon },
+  { label: 'Learn', text: 'Explain in simple terms how ', icon: ThinkIcon },
+  { label: 'Code', text: 'Help me write code that ', icon: CodeIcon },
+  { label: 'Visualise', text: 'Show me an animated 3D visual that explains ', icon: DiagramIcon },
+  { label: 'Quiz me', text: 'Quiz me on ', icon: SparkIcon },
+  { label: 'Music', text: 'Recommend songs like ', icon: WaveIcon },
 ];
 
 function Calm({ title, body, action }: { title: string; body: string; action?: ReactNode }): ReactNode {
@@ -130,7 +132,7 @@ export function ChatView(): ReactNode {
   // turns to Preview.
   const autoOpened = useRef(new Set<string>());
   const liveReply = streaming && replyId ? messages[replyId] : undefined;
-  const liveArtifact = liveReply?.text.includes('<artifact') ? artifactsOf(liveReply.text).pop() : undefined;
+  const liveArtifact = (liveReply && mayHaveArtifacts(liveReply.text)) ? artifactsOf(liveReply.text).pop() : undefined;
   useEffect(() => {
     if (!liveArtifact || !replyId) return;
     const key = `${replyId}:${liveArtifact.id}`;
@@ -237,6 +239,12 @@ export function ChatView(): ReactNode {
     const what = a.type === 'mermaid' ? 'diagram' : a.type === 'svg' ? 'picture' : a.type === 'react' ? 'component' : 'page';
     void sendMessage(`The ${what} "${a.title || 'artifact'}" didn't work. The preview said:\n\n${error.slice(0, 600)}\n\nPlease fix it and send the complete corrected artifact.`);
   };
+  // A questions block's choices: sent as the listener's next message.
+  const answerQuestions = useCallback((text: string) => {
+    if (useChatStore.getState().streaming) return;
+    stick.current = true;
+    void sendMessage(text);
+  }, []);
   const edit = (parentId: string | null, files?: FileRef[]) => (text: string) => {
     stick.current = true;
     void sendMessage(text, { parentId, files });
@@ -412,8 +420,10 @@ export function ChatView(): ReactNode {
       <div className="vx-ai-scroll">
         <div className="vx-ai-column vx-ai-welcome">
           <div className="vx-ai-empty">
-            {incognito ? <IncognitoIcon className="w-8 h-8" /> : <SparkIcon className="w-8 h-8" />}
-            <h2>{incognito ? 'Incognito chat' : greeting(new Date().getHours(), firstName)}</h2>
+            <h2 className="vx-ai-hello">
+              {incognito ? <IncognitoIcon className="vx-ai-hello-mark w-8 h-8" /> : <img className="vx-ai-hello-mark" src="/icons/icon.svg" alt="" width={36} height={36} />}
+              <span>{incognito ? 'Incognito chat' : greeting(new Date().getHours(), firstName)}</span>
+            </h2>
             {incognito && <p className="vx-ai-incognito-note">VinaX AI won’t use or add to its memory of you in this chat. The chat is still saved in your chats.</p>}
           </div>
           {noticeEl}
@@ -423,7 +433,8 @@ export function ChatView(): ReactNode {
           {composerEl}
           <div className="vx-ai-starters" role="group" aria-label="Start with">
             {STARTERS.map((s) => (
-              <button key={s.label} type="button" className="vx-ai-chip" onClick={() => { setDraft(s.text); requestAnimationFrame(() => composer.current?.focus()); }}>
+              <button key={s.label} type="button" className="vx-ai-chip vx-ai-starter" onClick={() => { setDraft(s.text); requestAnimationFrame(() => composer.current?.focus()); }}>
+                <s.icon className="w-4 h-4" />
                 {s.label}
               </button>
             ))}
@@ -453,6 +464,7 @@ export function ChatView(): ReactNode {
                     onRetry={m.parentId && conversationId ? (choice) => void retryReply(m.parentId!, choice) : undefined}
                     onContinue={conversationId && !m.local ? () => void continueReply(m.id) : undefined}
                     canReadAloud={!!voice?.readAloud}
+                    onAnswer={conversationId && !streaming && m.id === thread[thread.length - 1]?.id ? answerQuestions : undefined}
                   />
                 ),
               )}
@@ -486,6 +498,9 @@ export function ChatView(): ReactNode {
       onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }}
       onDrop={onDrop}
     >
+      {wide && !sideOpen && (
+        <SideRail onExpand={() => prefs.set({ sidebarCollapsed: false })} onNewChat={newChat} onSettings={() => setSettings('general')} />
+      )}
       {sideOpen && (
         <>
           {!wide && <div className="vx-ai-scrim vx-ai-drawer-scrim" aria-hidden onClick={() => setDrawer(false)} />}
@@ -501,20 +516,20 @@ export function ChatView(): ReactNode {
       )}
       <div className="vx-ai-pane">
         <header className="vx-ai-header">
-          {!(wide && sideOpen) && (
+          {!wide && (
             <button
               ref={menuButton}
               type="button"
               className="vx-ai-icon-btn"
-              onClick={() => (wide ? prefs.set({ sidebarCollapsed: false }) : setDrawer(true))}
-              aria-label={wide ? 'Open sidebar' : 'Open chats'}
-              aria-expanded={wide ? undefined : drawer}
+              onClick={() => setDrawer(true)}
+              aria-label="Open chats"
+              aria-expanded={drawer}
             >
-              {wide ? <SidebarIcon className="w-5 h-5" /> : <MenuIcon className="w-5 h-5" />}
+              <MenuIcon className="w-5 h-5" />
             </button>
           )}
           <div className="vx-ai-brand">
-            <h1 className={`vx-ai-wordmark${wide && sideOpen ? ' sr-only' : ''}`}>VinaX AI</h1>
+            <h1 className={`vx-ai-wordmark${wide ? ' sr-only' : ''}`}>VinaX AI</h1>
             {inProject && (
               <Link to={`/vinaxai/project/${inProject.id}`} className="vx-ai-proj-chip" title={`Project: ${inProject.name}`}>
                 <FolderIcon className="w-3.5 h-3.5" />
@@ -527,8 +542,9 @@ export function ChatView(): ReactNode {
           <div className="vx-ai-header-end">
             <NowPlayingPill />
             {canShare && (
-              <button type="button" className="vx-ai-icon-btn" onClick={() => setSharing(true)} disabled={streaming} aria-label="Share chat" title="Share chat" aria-haspopup="dialog">
-                <ShareIcon className="w-5 h-5" />
+              <button type="button" className="vx-ai-share-btn" onClick={() => setSharing(true)} disabled={streaming} aria-label="Share chat" title="Share chat" aria-haspopup="dialog">
+                <ShareIcon className="w-4 h-4" />
+                <span aria-hidden>Share</span>
               </button>
             )}
             {empty && !conversationId && !needLoad && (
@@ -546,7 +562,7 @@ export function ChatView(): ReactNode {
             <button type="button" className="vx-ai-icon-btn" onClick={() => setSettings('general')} aria-label="VinaX AI settings" title="Settings">
               <SettingsIcon className="w-5 h-5" />
             </button>
-            {!(wide && sideOpen) && (
+            {!wide && (
               <button type="button" className="vx-ai-icon-btn" onClick={newChat} aria-label="New chat" title="New chat">
                 <NewChatIcon className="w-5 h-5" />
               </button>

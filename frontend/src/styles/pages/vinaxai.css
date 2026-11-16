@@ -329,7 +329,8 @@
 }
 .vx-ai-code.is-numbered pre { padding-left: 12px; }
 .vx-ai-code.is-wrapped code { white-space: pre-wrap; overflow-wrap: anywhere; }
-.vx-ai-code pre { margin: 0; padding: 12px 14px; overflow-x: auto; }
+/* The pre carries the code's own size and line height: an inline code in a bigger pre gets taller lines than the gutter's. */
+.vx-ai-code pre { margin: 0; padding: 12px 14px; overflow-x: auto; font-size: 0.8125rem; line-height: 1.6; }
 .vx-ai-code code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.8125rem;
@@ -738,10 +739,15 @@
 .vx-ai-tabs button[aria-selected='true'] { background: rgb(var(--ink-700)); color: rgb(var(--ink-100)); font-weight: 600; }
 .vx-ai-tabs button:disabled { opacity: 0.45; }
 .vx-ai-artifact-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
-.vx-ai-artifact-body > .vx-ai-code { margin: 0; border: 0; border-radius: 0; flex: 1; }
-.vx-ai-artifact-body > .vx-ai-code { display: flex; flex-direction: column; }
-.vx-ai-artifact-body > .vx-ai-code .vx-ai-code-body { flex: 1; }
-.vx-ai-artifact-body > .vx-ai-code pre { min-height: 100%; }
+/* Code view: the code itself is the scroller (both ways), so long and wide
+   files can be read to the end; the bar stays on top and the line numbers
+   stay on the left. (Before, the box was clipped to the panel's height.) */
+.vx-ai-artifact-body > .vx-ai-code { margin: 0; border: 0; border-radius: 0; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.vx-ai-artifact-body > .vx-ai-code .vx-ai-code-bar { flex: none; }
+.vx-ai-artifact-body > .vx-ai-code .vx-ai-code-body { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; align-items: flex-start; }
+.vx-ai-artifact-body > .vx-ai-code pre { overflow: visible; flex: 1 0 auto; min-width: max-content; min-height: 100%; }
+.vx-ai-artifact-body > .vx-ai-code.is-wrapped pre { min-width: 0; flex-shrink: 1; }
+.vx-ai-artifact-body > .vx-ai-code .vx-ai-code-gutter { position: sticky; left: 0; z-index: 1; background: rgb(var(--ink-950)); align-self: stretch; }
 .vx-ai-artifact-doc { padding: 20px 24px; }
 .vx-ai-runner { position: relative; flex: 1; display: flex; flex-direction: column; min-height: 320px; }
 .vx-ai-runner-frame { flex: 1; width: 100%; border: 0; background: #fff; }

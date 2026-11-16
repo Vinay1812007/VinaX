@@ -15,8 +15,9 @@ import { moveFocus, useDismiss } from './useDismiss';
 import { ProgressLine, SearchStatusLine, SourcesRow } from './Sources';
 import { MessageFiles } from './FileChips';
 import { ArtifactCard } from './ArtifactPanel';
-import { parseArtifacts, runsInSandbox, type Artifact } from './artifacts';
+import { parseArtifacts, runsInSandbox, type Artifact, mayHaveArtifacts } from './artifacts';
 import { InlinePreview } from './InlinePreview';
+import { ReplyActionsContext } from './ChoiceBlocks';
 import { usePrefs } from './prefs';
 import { ChevronDownSmallIcon, ChevronIcon, ContinueIcon, CopyIcon, PencilIcon, RetryIcon, SpeakerIcon, StopIcon, ThinkIcon } from './icons';
 import { readAloud, stopReading, useReadAloud } from './readAloud';
@@ -231,6 +232,8 @@ interface ReplyProps {
   onContinue?(): void;
   /** Read aloud is offered. */
   canReadAloud?: boolean;
+  /** The latest reply: a questions block's answers are sent as the next message. */
+  onAnswer?(text: string): void;
 }
 
 /** Read aloud: the speaker under a reply; Stop while this reply is being read. */
@@ -287,25 +290,27 @@ export function RouteInfo({ message }: { message: ChatMessage }): ReactNode {
   );
 }
 
-export function AssistantMessage({ message, live, models, onRetry, onContinue, versionOf, onOpenArtifact, onFixArtifact, canReadAloud }: ReplyProps): ReactNode {
+export function AssistantMessage({ message, live, models, onRetry, onContinue, versionOf, onOpenArtifact, onFixArtifact, canReadAloud, onAnswer }: ReplyProps): ReactNode {
   const { text, error, stopReason, model } = message;
   const waiting = live && !text && !message.thinking && !error && !message.status && !message.progress;
   const cutOff = !live && !!text && (stopReason === 'length' || stopReason === 'error');
   const previews = usePrefs((p) => p.inlinePreviews && p.artifacts);
+  const actions = useMemo(() => ({ live, answer: onAnswer }), [live, onAnswer]);
   return (
+    <ReplyActionsContext.Provider value={actions}>
     <div className="vx-ai-turn vx-ai-turn-reply" data-message-id={message.id} aria-busy={live || undefined}>
       <h2 className="sr-only">VinaX AI said</h2>
       {live && !text && message.status && <SearchStatusLine status={message.status} />}
       {live && !text && !message.thinking && !message.status && message.progress && <ProgressLine progress={message.progress} />}
       <ThinkingFold message={message} live={live} waiting={waiting} />
       {waiting && <span className="sr-only" role="status">VinaX AI is thinking</span>}
-      {text && (text.includes('<artifact')
+      {text && (mayHaveArtifacts(text)
         ? parseArtifacts(text).map((seg, i) => (seg.kind === 'text'
           ? <Markdown key={i} text={seg.text} sources={message.sources?.items} />
           : (
             <div key={i} className="vx-ai-artifact-slot">
               <ArtifactCard artifact={seg.artifact} live={live} version={versionOf?.(seg.artifact.id, message.id) ?? 1} onOpen={() => onOpenArtifact?.(seg.artifact, message.id)} />
-              {previews && !live && !seg.artifact.incomplete && runsInSandbox(seg.artifact.type) && <InlinePreview artifact={seg.artifact} onFix={onFixArtifact ? (error) => onFixArtifact(seg.artifact, error) : undefined} />}
+              {previews && !live && !seg.artifact.incomplete && runsInSandbox(seg.artifact.type) && <InlinePreview artifact={seg.artifact} onFix={onFixArtifact ? (error) => onFixArtifact(seg.artifact, error) : undefined} onOpen={onOpenArtifact ? () => onOpenArtifact(seg.artifact, message.id) : undefined} />}
             </div>
           )))
         : <Markdown text={text} sources={message.sources?.items} />)}
@@ -359,5 +364,6 @@ export function AssistantMessage({ message, live, models, onRetry, onContinue, v
         </div>
       )}
     </div>
+    </ReplyActionsContext.Provider>
   );
 }

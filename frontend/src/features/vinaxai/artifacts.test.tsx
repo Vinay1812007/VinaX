@@ -17,6 +17,18 @@ describe('artifacts on the page', () => {
     expect(parseArtifacts('```\n<artifact id="x" type="html">\n```')).toHaveLength(1);
   });
 
+  it('parses fenced visual blocks like the server, and versions them by title', () => {
+    const page = (t: string, body: string) => `\`\`\`html\n<!DOCTYPE html>\n<title>${t}</title>\n<body>${body}</body>\n\`\`\``;
+    const v = collectVersions([
+      reply('m1', `A scene:\n${page('Galaxy', 'v1')}`),
+      { ...reply('u', 'brighter'), role: 'user' },
+      reply('m2', `Brighter:\n${page('Galaxy', 'v2')}\n\`\`\`html\n<b>tiny</b>\n\`\`\``),
+    ]);
+    expect(v.get('galaxy')!.map((x) => x.messageId)).toEqual(['m1', 'm2']);
+    expect([...v.keys()]).toEqual(['galaxy']);
+    expect(parseArtifacts('Draw:\n```svg\n<svg><title>Logo</title></svg>\n```').map((s) => s.kind)).toEqual(['text', 'artifact']);
+  });
+
   it('collects versions by id across the replies, oldest first', () => {
     const v = collectVersions([
       reply('m1', '<artifact id="page" type="html" title="Page">v1</artifact>'),

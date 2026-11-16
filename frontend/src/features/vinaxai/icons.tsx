@@ -42,6 +42,7 @@ export const FlipIcon = ({ className }: P) => (<svg {...base(className)}><path d
 export const MinimizeIcon = ({ className }: P) => (<svg {...base(className)}><path d="m6 9.5 6 6 6-6" /></svg>);
 export const CaptionsIcon = ({ className }: P) => (<svg {...base(className)}><rect x="3.5" y="5.5" width="17" height="13" rx="2.5" /><path d="M10.5 10.2a2.2 2.2 0 1 0 0 3.6M16.5 10.2a2.2 2.2 0 1 0 0 3.6" /></svg>);
 export const SpeakerIcon = ({ className }: P) => (<svg {...base(className)}><path d="M4.5 9.5h3l4.5-4v13l-4.5-4h-3zM15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" /></svg>);
+export const ExpandIcon = ({ className }: P) => (<svg {...base(className)}><path d="M4.5 9.5v-5h5M19.5 9.5v-5h-5M4.5 14.5v5h5M19.5 14.5v5h-5" /></svg>);
 export const CheckIcon = ({ className }: P) => (<svg {...base(className)}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>);
 export const ShareIcon = ({ className }: P) => (<svg {...base(className)}><path d="M12 15V4.5M7.5 9 12 4.5 16.5 9M5.5 13v4.5a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V13" /></svg>);
 export const FolderIcon = ({ className }: P) => (<svg {...base(className)}><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg>);

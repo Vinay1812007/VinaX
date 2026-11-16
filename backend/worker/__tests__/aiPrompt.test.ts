@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { MODELS, modelById } from '../functions/_lib/ai/models';
-import { ARTIFACTS_BLOCK, artifactsOffered, buildSystemPrompt, CITATION_RULES, COMPACT_PROMPT, FULL_PROMPT, firstNameOf, formatNow, promptFor, safeLocale, safeTimezone, sanitizePersonal, type PromptVars } from '../functions/_lib/ai/prompt';
+import { ARTIFACTS_BLOCK, VISUALS_OWNER_TEXT, artifactsOffered, buildSystemPrompt, CITATION_RULES, COMPACT_PROMPT, FULL_PROMPT, firstNameOf, formatNow, promptFor, safeLocale, safeTimezone, sanitizePersonal, type PromptVars } from '../functions/_lib/ai/prompt';
 import { wireMessages } from '../functions/_lib/ai/wire';
 
 const vars: PromptVars = { now: new Date(Date.UTC(2026, 9, 30, 13, 5)), timezone: 'Asia/Kolkata', locale: 'en-IN', firstName: 'Asha', modelName: 'GPT-OSS 120B', providerName: 'Groq' };
@@ -22,7 +22,7 @@ describe('buildSystemPrompt', () => {
   it('compact prompt only for a very small window, without artifacts', () => {
     const p = buildSystemPrompt({ spec: tiny, vars: { ...vars, modelName: 'ALLaM 2 7B' }, artifacts: true });
     expect(p).toMatchSnapshot();
-    expect(p).not.toContain('# Artifacts');
+    expect(p).not.toContain('# Visuals');
   });
 
   it('every model with room gets the full prompt and artifacts, fast ones included; specialists never get artifacts', () => {
@@ -40,9 +40,15 @@ describe('buildSystemPrompt', () => {
     expect(COMPACT_PROMPT.length).toBeLessThan(1_000);
   });
 
-  it('artifacts come with the visualisation guide', () => {
-    expect(ARTIFACTS_BLOCK).toContain('# Visualisations');
-    expect(ARTIFACTS_BLOCK).toMatch(/mermaid diagram/);
+  it('artifacts come with the owner\'s visuals prompt, verbatim, then the sandbox\'s rules', () => {
+    expect(ARTIFACTS_BLOCK.startsWith(`# Visuals\n${VISUALS_OWNER_TEXT}\n\n# Making visuals work in VinaX AI`)).toBe(true);
+    expect(VISUALS_OWNER_TEXT).toContain('render HTML, SVG and Mermaid code blocks live');
+    expect(VISUALS_OWNER_TEXT).toContain('Format them as a ```questions block containing JSON');
+    expect(VISUALS_OWNER_TEXT).toContain('For quizzes, output a ```quiz block');
+    expect(VISUALS_OWNER_TEXT).toContain('never describe the code itself.');
+    expect(ARTIFACTS_BLOCK).toMatch(/three\.js r128/);
+    expect(ARTIFACTS_BLOCK).toMatch(/setPixelRatio/);
+    expect(ARTIFACTS_BLOCK).not.toContain('<artifact');
   });
 
   it('adds the listener’s preferences after the rules, marked as theirs, and uses their chosen name', () => {
@@ -68,7 +74,7 @@ describe('buildSystemPrompt', () => {
 
   it('artifacts block on and off', () => {
     expect(buildSystemPrompt({ spec: full, vars, artifacts: true })).toContain(ARTIFACTS_BLOCK);
-    expect(buildSystemPrompt({ spec: full, vars, artifacts: false })).not.toContain('# Artifacts');
+    expect(buildSystemPrompt({ spec: full, vars, artifacts: false })).not.toContain('# Visuals');
   });
 
   it('search block', () => {

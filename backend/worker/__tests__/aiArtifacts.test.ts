@@ -1,6 +1,6 @@
 /** VinaX AI — the artifact parser, the prompt switch, and artifacts saved with a reply. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { artifactsOf, parseArtifacts } from '../functions/_lib/ai/artifacts';
+import { artifactsOf, mayHaveArtifacts, parseArtifacts } from '../functions/_lib/ai/artifacts';
 import { onRequestPost } from '../functions/api/ai/chat';
 import { issueSession } from '../functions/_lib/googleAuth';
 import { resetSettingsMemo } from '../functions/_lib/settings';
@@ -37,6 +37,44 @@ describe('parseArtifacts', () => {
   });
 });
 
+describe('fenced visual blocks', () => {
+  const PAGE = '<!DOCTYPE html>\n<html><head><title>Ohm&#39;s Law 3D</title></head><body><script>1</script></body></html>';
+  it('an html page, an svg and a mermaid diagram become artifacts named by their titles', () => {
+    const text = `A 3D scene:\n\`\`\`html\n${PAGE}\n\`\`\`\nA picture:\n\`\`\`svg\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><title>Sun</title><circle r="4"/></svg>\n\`\`\`\n\`\`\`mermaid\n---\ntitle: Request flow\n---\nflowchart TD\n  A --> B\n\`\`\`\nDone.`;
+    const segs = parseArtifacts(text);
+    expect(segs.map((s) => s.kind)).toEqual(['text', 'artifact', 'text', 'artifact', 'artifact', 'text']);
+    expect(artifactsOf(text).map((a) => [a.id, a.type, a.title, a.incomplete])).toEqual([
+      ['ohm-s-law-3d', 'html', "Ohm's Law 3D", false],
+      ['sun', 'svg', 'Sun', false],
+      ['request-flow', 'mermaid', 'Request flow', false],
+    ]);
+    expect(artifactsOf(text)[0].content).toBe(PAGE);
+  });
+
+  it('a short html snippet and other languages stay code; untitled visuals get a kind name', () => {
+    const text = 'Markup:\n```html\n<div class="card">Hi</div>\n```\n```js\nconsole.log(1)\n```\n```mermaid\ngraph TD\n  A-->B\n```';
+    expect(artifactsOf(text).map((a) => [a.id, a.title])).toEqual([['diagram', 'Diagram']]);
+    expect(parseArtifacts(text)[0]).toEqual({ kind: 'text', text: 'Markup:\n```html\n<div class="card">Hi</div>\n```\n```js\nconsole.log(1)\n```\n' });
+  });
+
+  it('a block still being written is an incomplete artifact; the same title makes a new version', () => {
+    expect(artifactsOf('Here:\n```html\n<!DOCTYPE html>\n<title>Galaxy</title>\n<canv')).toEqual([{ id: 'galaxy', type: 'html', title: 'Galaxy', language: null, content: '<!DOCTYPE html>\n<title>Galaxy</title>\n<canv', incomplete: true }]);
+    expect(artifactsOf('```html\n<!DOC')[0]).toMatchObject({ type: 'html', incomplete: true, title: 'Page' });
+    expect(artifactsOf('```html\n<p')).toEqual([]);
+  });
+
+  it('a fence inside another fence is left alone; tags and blocks mix in order', () => {
+    expect(artifactsOf('````md\n```svg\n<svg/>\n```\n````')).toEqual([]);
+    const mixed = artifactsOf('<artifact id="a" type="code" title="A">x</artifact>\n```svg\n<svg><title>B</title></svg>\n```');
+    expect(mixed.map((a) => a.id)).toEqual(['a', 'b']);
+  });
+
+  it('mayHaveArtifacts spots a visual block, not other code', () => {
+    expect(mayHaveArtifacts('```mermaid\ngraph TD\n```')).toBe(true);
+    expect(mayHaveArtifacts('```python\nprint(1)\n```')).toBe(false);
+  });
+});
+
 describe('artifacts in the chat', () => {
   const ENV = { GOOGLE_CLIENT_ID: 'x.apps.googleusercontent.com', AUTH_SECRET: 'auth-secret', GROQ_API_KEY: 'gsk', ...DB_ENV };
   let ip = 0;
@@ -66,8 +104,13 @@ describe('artifacts in the chat', () => {
   }
 
   it('capable models get the artifacts contract; the page can turn it off', async () => {
-    expect((await send({}, 'ok')).system).toContain('# Artifacts');
-    expect((await send({ artifacts: false }, 'ok')).system).not.toContain('# Artifacts');
+    expect((await send({}, 'ok')).system).toContain('# Visuals');
+    expect((await send({ artifacts: false }, 'ok')).system).not.toContain('# Visuals');
+  });
+
+  it('a reply\'s fenced diagram is saved as an artifact', async () => {
+    const { fake } = await send({}, 'The flow:\n```mermaid\ngraph TD\n  A-->B\n```');
+    expect(fake.rows('ai_messages')[1].artifacts).toEqual([{ id: 'diagram', type: 'mermaid', title: 'Diagram', language: null, content: 'graph TD\n  A-->B', incomplete: false }]);
   });
 
   it('a reply\'s artifacts are saved with it', async () => {

@@ -9,7 +9,7 @@ import { queryClient } from '@/services/queryClient';
 import { AiError, keepReply, noticeFor, patchConversation, streamChat, type ChatRequestBody } from './api';
 import { chatReducer, initialChat, leafUnder, parentForNext, unansweredQuestion, type ChatAction, type ChatState } from './chatState';
 import { personalOf, usePrefs } from './prefs';
-import { parseArtifacts } from './artifacts';
+import { parseArtifacts, mayHaveArtifacts } from './artifacts';
 import type { FileRef, StreamEvent } from './types';
 
 interface Store extends ChatState {
@@ -102,7 +102,7 @@ export const AUTO_CONTINUES = 3;
 /** The reply stopped inside an artifact that is still open. */
 const cutInsideArtifact = (id: string): boolean => {
   const text = useChatStore.getState().messages[id]?.text ?? '';
-  return text.includes('<artifact') && parseArtifacts(text).some((seg) => seg.kind === 'artifact' && seg.artifact.incomplete);
+  return mayHaveArtifacts(text) && parseArtifacts(text).some((seg) => seg.kind === 'artifact' && seg.artifact.incomplete);
 };
 
 async function run(body: ChatRequestBody, attempt = 0, autoLeft = AUTO_CONTINUES): Promise<RunOutcome> {

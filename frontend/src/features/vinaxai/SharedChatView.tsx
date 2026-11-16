@@ -15,7 +15,7 @@ import { toast } from '@/store/toastStore';
 import { AiError, continueSharedChat, getSharedChat, noticeFor, shareUrl } from './api';
 import { ArtifactCard, ArtifactPanel } from './ArtifactPanel';
 import { usePanel } from './artifactStore';
-import { collectVersions, hasPreview, parseArtifacts, type Artifact } from './artifacts';
+import { collectVersions, hasPreview, parseArtifacts, type Artifact, mayHaveArtifacts } from './artifacts';
 import { copyText } from './CodeBlock';
 import { Markdown } from './Markdown';
 import { SourcesRow } from './Sources';
@@ -67,7 +67,7 @@ function Reply({ message, versionOf, onOpen }: { message: ChatMessage; versionOf
   return (
     <div className="vx-ai-turn vx-ai-turn-reply">
       <h2 className="sr-only">VinaX AI said</h2>
-      {text.includes('<artifact')
+      {mayHaveArtifacts(text)
         ? parseArtifacts(text).map((seg, i) => (seg.kind === 'text'
           ? <Markdown key={i} text={seg.text} sources={message.sources?.items} />
           : <ArtifactCard key={i} artifact={seg.artifact} live={false} version={versionOf(seg.artifact.id, message.id)} onOpen={() => onOpen(seg.artifact, message.id)} />))

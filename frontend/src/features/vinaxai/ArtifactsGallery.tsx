@@ -19,10 +19,10 @@ import { usePanel } from './artifactStore';
 import { hasPreview } from './artifacts';
 import { chatLink, galleryDate, KIND_FILTERS, kindLabel, panelVersions, useGallery, useGalleryArtifact, type GalleryKind } from './gallery';
 import { usePrefs } from './prefs';
-import { Sidebar } from './Sidebar';
+import { SideRail, Sidebar } from './Sidebar';
 import { resetChat } from './store';
 import {
-  ArrowLeftIcon, ArtifactsIcon, CloseIcon, CodeIcon, ComponentIcon, DiagramIcon, FileIcon, ImageIcon, NewChatIcon, PageIcon, SearchSmallIcon, SidebarIcon,
+  ArrowLeftIcon, ArtifactsIcon, CloseIcon, CodeIcon, ComponentIcon, DiagramIcon, FileIcon, ImageIcon, NewChatIcon, PageIcon, SearchSmallIcon,
 } from './icons';
 import type { GalleryItem } from './types';
 
@@ -178,15 +178,10 @@ export function ArtifactsGallery(): ReactNode {
           <Sidebar onNavigate={() => undefined} onNewChat={newChat} onCollapse={() => prefs.set({ sidebarCollapsed: true })} />
         </div>
       )}
+      {wide && !sideOpen && <SideRail onExpand={() => prefs.set({ sidebarCollapsed: false })} onNewChat={newChat} />}
       <div className="vx-ai-pane">
         <header className="vx-ai-header">
-          {wide ? (
-            !sideOpen && (
-              <button type="button" className="vx-ai-icon-btn" onClick={() => prefs.set({ sidebarCollapsed: false })} aria-label="Open sidebar">
-                <SidebarIcon className="w-5 h-5" />
-              </button>
-            )
-          ) : (
+          {wide ? null : (
             <Link to="/vinaxai" className="vx-ai-icon-btn" aria-label="Back to chats" title="Back to chats">
               <ArrowLeftIcon className="w-5 h-5" />
             </Link>
@@ -195,7 +190,7 @@ export function ArtifactsGallery(): ReactNode {
             <h1 className="vx-ai-wordmark">Artifacts</h1>
           </div>
           <div className="vx-ai-header-end">
-            {!sideOpen && (
+            {!wide && (
               <button type="button" className="vx-ai-icon-btn" onClick={newChat} aria-label="New chat" title="New chat">
                 <NewChatIcon className="w-5 h-5" />
               </button>
