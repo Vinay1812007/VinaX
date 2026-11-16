@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DiscoRenderer, FLASH_GAP_MS, hueOfTriplet, mixHue, paletteHues, type LightOptions } from './lights';
+import { DiscoRenderer, FLASH_GAP_MS, MAX_BRIGHTNESS, hueOfTriplet, mixHue, paletteHues, type LightOptions } from './lights';
 
 /** A canvas context that accepts every call and draws nothing. */
 function fakeCtx(): CanvasRenderingContext2D {
@@ -42,6 +42,9 @@ describe('colours', () => {
     expect(paletteHues('artwork', null).length).toBeGreaterThan(1);
     expect(paletteHues('neon').length).toBeGreaterThan(1);
   });
+  it('RGB is pure red, green and blue', () => {
+    expect(paletteHues('rgb')).toEqual([0, 120, 240]);
+  });
   it('mixes hues the short way round', () => {
     expect(mixHue(350, 10, 0.5)).toBeCloseTo(0, 5);
     expect(mixHue(10, 350, 1)).toBeCloseTo(350, 5);
@@ -70,9 +73,16 @@ describe('flash safety', () => {
     run(r, opts(), 500, 3000);
     expect(r.flashCount).toBeGreaterThanOrEqual(5);
   });
-  it('draws every style without throwing', () => {
+  it('draws every style without throwing, up to the brightest setting', () => {
     for (const style of ['party', 'spotlights', 'lasers', 'wash'] as const) {
-      expect(() => run(new DiscoRenderer(), opts({ style }), 400, 1000)).not.toThrow();
+      for (const brightness of [0.2, 1, MAX_BRIGHTNESS]) {
+        expect(() => run(new DiscoRenderer(), opts({ style, brightness }), 400, 1000)).not.toThrow();
+      }
     }
+  });
+  it('the brightest setting still flashes no more than three times a second', () => {
+    const r = new DiscoRenderer(() => 0.5);
+    run(r, opts({ style: 'wash', brightness: MAX_BRIGHTNESS }), 100, 3000);
+    expect(r.flashCount).toBeLessThanOrEqual(9);
   });
 });

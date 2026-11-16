@@ -18,7 +18,7 @@ import { Slider, Switch } from '@/components/ui';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { cn } from '@/utils/cn';
 import { BeatDetector, tapTempo, type BeatFrame } from '@/features/disco/beat';
-import { DiscoRenderer, paletteHues, type LightInput } from '@/features/disco/lights';
+import { DiscoRenderer, MAX_BRIGHTNESS, paletteHues, type LightInput } from '@/features/disco/lights';
 import { DISCO_PALETTES, DISCO_STYLES, useDiscoStore } from '@/features/disco/discoStore';
 import '@/styles/pages/player.css';
 
@@ -53,6 +53,40 @@ export default function DiscoPage() {
   const [adjustOpen, setAdjustOpen] = useState(false);
   useFocusTrap(dialogRef, !!song && !adjustOpen, () => navigate(-1));
   const [chrome, setChrome] = useState(true);
+  // Hiding the controls also hides the phone's status and navigation bars, so
+  // the lights fill the whole screen; showing them (or leaving) gives the bars back.
+  const fsRequested = useRef(false);
+  const leaveFullscreen = () => {
+    if (fsRequested.current && document.fullscreenElement && typeof document.exitFullscreen === 'function') void document.exitFullscreen().catch(() => undefined);
+    fsRequested.current = false;
+  };
+  const toggleChrome = () => {
+    const hide = chrome;
+    setChrome(!hide);
+    const root = document.documentElement;
+    if (hide && !document.fullscreenElement && typeof root.requestFullscreen === 'function') {
+      fsRequested.current = true;
+      root.requestFullscreen().catch(() => {
+        fsRequested.current = false;
+      });
+    } else if (!hide) {
+      leaveFullscreen();
+    }
+  };
+  // The system back gesture can leave full screen on its own: bring the controls back with it.
+  useEffect(() => {
+    const onChange = () => {
+      if (!document.fullscreenElement && fsRequested.current) {
+        fsRequested.current = false;
+        setChrome(true);
+      }
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      if (fsRequested.current && document.fullscreenElement) void document.exitFullscreen?.().catch(() => undefined);
+    };
+  }, []);
   const [source, setSource] = useState<BeatSource>('starting');
   const [bpm, setBpm] = useState<number | null>(null);
   const [art, setArt] = useState<string | null>(null);
@@ -225,7 +259,7 @@ export default function DiscoPage() {
 
   return createPortal(
     <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Disco lights" className={cn('vx-disco', !chrome && 'is-bare')}>
-      <canvas ref={canvasRef} className="vx-disco-canvas" aria-hidden onClick={() => setChrome((c) => !c)} />
+      <canvas ref={canvasRef} className="vx-disco-canvas" aria-hidden onClick={toggleChrome} />
 
       <div className="vx-disco-top">
         <button type="button" onClick={() => navigate(-1)} aria-label="Exit disco lights" className="vx-disco-btn">
@@ -299,7 +333,7 @@ function DiscoAdjustSheet({ open, onClose, calm }: { open: boolean; onClose: () 
             ))}
           </div>
         </section>
-        <Slider label="Brightness" value={s.brightness} min={0.2} max={1} step={0.05} format={pct} onChange={(brightness) => s.set({ brightness })} />
+        <Slider label="Brightness" value={s.brightness} min={0.2} max={MAX_BRIGHTNESS} step={0.05} format={pct} onChange={(brightness) => s.set({ brightness })} />
         <Slider label="Beat sensitivity" value={s.sensitivity} min={0} max={1} step={0.05} format={sensitivityLabel} onChange={(sensitivity) => s.set({ sensitivity })} />
         <Slider label="Motion speed" value={s.speed} min={0.25} max={2} step={0.05} format={pct} onChange={(speed) => s.set({ speed })} />
         <Switch

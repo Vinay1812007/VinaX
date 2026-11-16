@@ -8,17 +8,18 @@ import { persist } from 'zustand/middleware';
 import { KEYS } from '@/constants/storage-keys';
 
 export type DiscoStyle = 'party' | 'spotlights' | 'lasers' | 'wash';
-export type DiscoPalette = 'artwork' | 'rainbow' | 'neon' | 'warm' | 'cool';
+export type DiscoPalette = 'artwork' | 'rgb' | 'rainbow' | 'neon' | 'warm' | 'cool';
 
 export const DISCO_STYLES: Array<{ id: DiscoStyle; label: string; hint: string }> = [
   { id: 'party', label: 'Party', hint: 'Sweeping beams and a mirror ball' },
   { id: 'spotlights', label: 'Spotlights', hint: 'Round spots that jump on the beat' },
   { id: 'lasers', label: 'Lasers', hint: 'Thin beams fanning from the floor' },
-  { id: 'wash', label: 'Wash', hint: 'The whole screen changes colour, gently' },
+  { id: 'wash', label: 'Wash', hint: 'The whole screen glows in full colour, brighter on the beat' },
 ];
 
 export const DISCO_PALETTES: Array<{ id: DiscoPalette; label: string }> = [
   { id: 'artwork', label: 'Song colours' },
+  { id: 'rgb', label: 'RGB' },
   { id: 'rainbow', label: 'Rainbow' },
   { id: 'neon', label: 'Neon' },
   { id: 'warm', label: 'Warm' },
@@ -28,7 +29,7 @@ export const DISCO_PALETTES: Array<{ id: DiscoPalette; label: string }> = [
 export interface DiscoSettings {
   style: DiscoStyle;
   palette: DiscoPalette;
-  /** Overall light, 0.2-1. */
+  /** Overall light, 0.2-1.5 (past 1 the lights get bolder). */
   brightness: number;
   /** Beat sensitivity, 0 (only the hardest hits) to 1 (nearly every bump). */
   sensitivity: number;
@@ -61,7 +62,7 @@ export function sanitizeDisco(raw: unknown): DiscoSettings {
   return {
     style: DISCO_STYLES.some((s) => s.id === r.style) ? (r.style as DiscoStyle) : DISCO_DEFAULTS.style,
     palette: DISCO_PALETTES.some((p) => p.id === r.palette) ? (r.palette as DiscoPalette) : DISCO_DEFAULTS.palette,
-    brightness: clamp(r.brightness, 0.2, 1, DISCO_DEFAULTS.brightness),
+    brightness: clamp(r.brightness, 0.2, 1.5, DISCO_DEFAULTS.brightness),
     sensitivity: clamp(r.sensitivity, 0, 1, DISCO_DEFAULTS.sensitivity),
     speed: clamp(r.speed, 0.25, 2, DISCO_DEFAULTS.speed),
     flash: typeof r.flash === 'boolean' ? r.flash : DISCO_DEFAULTS.flash,

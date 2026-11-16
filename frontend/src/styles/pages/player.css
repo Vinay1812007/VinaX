@@ -1447,11 +1447,11 @@ html.light .vx-rail-lyrics-card p { color: rgb(var(--ink-100) / 0.55); }
   align-items: center;
   gap: 12px;
   padding: max(12px, var(--safe-top)) max(12px, var(--safe-right)) 24px max(12px, var(--safe-left));
-  background: linear-gradient(rgb(0 0 0 / 0.55), transparent);
+  background: linear-gradient(rgb(0 0 0 / 0.3), transparent);
   pointer-events: none;
 }
 .vx-disco-top > * { pointer-events: auto; }
-.vx-disco-head { min-width: 0; text-align: center; text-shadow: 0 1px 8px rgb(0 0 0 / 0.6); }
+.vx-disco-head { min-width: 0; text-align: center; text-shadow: 0 1px 8px rgb(0 0 0 / 0.75); }
 .vx-disco-name { font-family: var(--vx-font-display); font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
 .vx-disco-status { margin-top: 2px; overflow: hidden; color: rgb(var(--disco-light) / 0.78); font-size: 13px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
 .vx-disco-btn {
@@ -1474,7 +1474,7 @@ html.light .vx-rail-lyrics-card p { color: rgb(var(--ink-100) / 0.55); }
   align-items: center;
   gap: 16px;
   padding: 32px max(16px, var(--safe-right)) max(20px, var(--safe-bottom)) max(16px, var(--safe-left));
-  background: linear-gradient(transparent, rgb(0 0 0 / 0.6));
+  background: linear-gradient(transparent, rgb(0 0 0 / 0.35));
   pointer-events: none;
 }
 .vx-disco-bottom > * { pointer-events: auto; }

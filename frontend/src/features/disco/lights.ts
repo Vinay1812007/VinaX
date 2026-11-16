@@ -18,6 +18,8 @@ import type { DiscoPalette, DiscoStyle } from './discoStore';
 export const FLASH_GAP_MS = 340;
 /** The wash changes colour at most twice a second. */
 export const WASH_STEP_MS = 500;
+/** The Brightness slider's top (150%). */
+export const MAX_BRIGHTNESS = 1.5;
 /** How quickly the beat pulse fades (ms time constant). */
 const PULSE_TAU = 220;
 const FLASH_TAU = 70;
@@ -44,8 +46,11 @@ export interface LightOptions {
 }
 
 const PALETTE_HUES: Record<Exclude<DiscoPalette, 'artwork'>, number[]> = {
+  /** Pure red, green and blue, like an RGB light strip. */
+  rgb: [0, 120, 240],
   rainbow: [0, 40, 120, 190, 250, 300],
-  neon: [320, 185, 95, 275],
+  /** Electric magenta, cyan, green and blue. */
+  neon: [300, 180, 120, 240],
   warm: [8, 35, 330, 48],
   cool: [200, 172, 250, 222],
 };
@@ -95,7 +100,8 @@ export class DiscoRenderer {
   private lastFlash = -Infinity;
   private step = 0;
   private lastStep = -Infinity;
-  private washHue: number | null = null;
+  /** The wash's three colours as they fade toward the palette's. */
+  private washHues: number[] | null = null;
   private dots: Dot[];
   private spots = Array.from({ length: 4 }, (_, i) => ({ x: 0.3 + 0.13 * i, y: 0.5, tx: 0.5, ty: 0.5 }));
   private readonly rand: () => number;
@@ -147,7 +153,8 @@ export class DiscoRenderer {
 
     const hues = o.hues.length ? o.hues : FALLBACK_HUES;
     const hue = (i: number) => hues[(((i + this.step) % hues.length) + hues.length) % hues.length];
-    const b = Math.max(0.2, Math.min(1, o.brightness));
+    // Up to 1.5: past 1 the lights get bolder and fill more of the screen (alphas cap at 1).
+    const b = Math.max(0.2, Math.min(MAX_BRIGHTNESS, o.brightness));
 
     // The room: near-black, with a trail so moving light lingers a moment.
     ctx.globalCompositeOperation = 'source-over';
@@ -159,11 +166,11 @@ export class DiscoRenderer {
     if (o.style === 'party') this.party(ctx, w, h, b, hue, input.sparkle);
     else if (o.style === 'spotlights') this.spotlights(ctx, w, h, b, hue, d);
     else if (o.style === 'lasers') this.lasers(ctx, w, h, b, hue, input.sparkle);
-    else this.wash(ctx, w, h, b, hue(0), d);
+    else this.wash(ctx, w, h, b, [hue(0), hue(1), hue(2)], d);
 
     if (this.flashA > 0.02) {
       ctx.globalCompositeOperation = 'source-over';
-      ctx.fillStyle = `rgba(255, 255, 255, ${this.flashA * 0.7 * b})`;
+      ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.85, this.flashA * 0.7 * b)})`;
       ctx.fillRect(0, 0, w, h);
     }
     ctx.globalCompositeOperation = 'source-over';
@@ -260,17 +267,39 @@ export class DiscoRenderer {
     ctx.fillRect(0, 0, w, h);
   }
 
-  private wash(ctx: CanvasRenderingContext2D, w: number, h: number, b: number, target: number, d: number): void {
-    this.washHue = this.washHue == null ? target : mixHue(this.washHue, target, Math.min(1, d / 260));
-    const a = b * (0.32 + 0.3 * this.glow + 0.22 * this.pulse);
+  /**
+   * The whole screen in full-strength colour: the palette's colour as the
+   * base, two more as big glowing clouds drifting across it, so red, green
+   * and blue (or the chosen set) all fill the screen at once. Colours fade
+   * into each other (never cut) and change at most every WASH_STEP_MS; the
+   * beat lifts the brightness of the colour already showing.
+   */
+  private wash(ctx: CanvasRenderingContext2D, w: number, h: number, b: number, targets: number[], d: number): void {
+    const k = Math.min(1, d / 260);
+    this.washHues = this.washHues ? this.washHues.map((cur, i) => mixHue(cur, targets[i], k)) : [...targets];
+    const [base, c1, c2] = this.washHues;
+    const a = (x: number) => Math.min(1, x);
     ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = `hsla(${this.washHue}, 85%, 45%, ${a})`;
+    ctx.fillStyle = `hsla(${base}, 100%, 50%, ${a(b * (0.88 + 0.15 * this.glow))})`;
     ctx.fillRect(0, 0, w, h);
-    // Darker corners keep it a room, not a flat card.
-    const v = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.2, w / 2, h / 2, Math.hypot(w, h) * 0.6);
-    v.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    v.addColorStop(1, 'rgba(0, 0, 0, 0.55)');
-    ctx.fillStyle = v;
+    const big = Math.max(w, h) * (0.55 + 0.1 * this.glow);
+    const clouds: Array<[number, number, number]> = [
+      [c1, 0.5 + 0.42 * Math.sin(this.t * 0.0004), 0.3 + 0.25 * Math.cos(this.t * 0.0005)],
+      [c2, 0.5 + 0.42 * Math.cos(this.t * 0.00035 + 2), 0.72 + 0.22 * Math.sin(this.t * 0.00045 + 1)],
+    ];
+    for (const [c, cx, cy] of clouds) {
+      const x = cx * w;
+      const y = cy * h;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, big);
+      g.addColorStop(0, `hsla(${c}, 100%, 52%, ${a(b * 0.95)})`);
+      g.addColorStop(0.55, `hsla(${c}, 100%, 50%, ${a(b * 0.45)})`);
+      g.addColorStop(1, `hsla(${c}, 100%, 50%, 0)`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+    }
+    // The beat: the same colours glow brighter for a moment (no white, no cut).
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = `hsla(${base}, 100%, 55%, ${a(b * (0.08 + 0.2 * this.pulse))})`;
     ctx.fillRect(0, 0, w, h);
   }
 }
