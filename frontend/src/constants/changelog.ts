@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.15.2': {
+    title: 'Charts shows the top charts in your languages, the app has Light, Dark and System…',
+    changes: [
+      { type: 'improved', text: 'Charts opens on Top Charts: the real chart playlists (Most Searched, Most Streamed Love Songs, Trending Today and the decade charts) in a grid, for your languages or any language you pick.' },
+      { type: 'improved', text: 'Under the charts, Trending Today\'s songs are ranked in order, and a tap plays from that place in the chart.' },
+      { type: 'improved', text: 'The Charts lists and the Home pick that were empty now load: the catalogue only answers up to 24 items at a time, and VinaX asked for 50.' },
+      { type: 'improved', text: 'Settings > Appearance > Theme brings back Light and Dark, and System follows your phone or computer; VinaX AI\'s settings have the same choice.' },
+    ],
+  },
   '1.15.1': {
     title: 'Owner console rebuilt as a clean pro admin: flat dark and light panels, one blue accent,…',
     changes: [
