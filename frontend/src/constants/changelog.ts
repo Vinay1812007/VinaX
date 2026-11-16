@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.16.0': {
+    title: 'Disco lights that follow the beat #minor',
+    changes: [
+      { type: 'improved', text: 'Disco lights: open the ⋯ menu in the full-screen player and the screen becomes a light show that pulses on the song\'s beat, showing its tempo.' },
+      { type: 'improved', text: 'Adjust the style (Party, Spotlights, Lasers, Wash), the colours (from the song\'s cover, Rainbow, Neon, Warm, Cool), brightness, beat sensitivity and motion speed.' },
+      { type: 'improved', text: 'Flash on strong beats is off until you turn it on, never flashes more than three times a second, and stays off with reduced motion.' },
+      { type: 'improved', text: 'On an iPhone in Safari or while casting, the lights keep a steady rhythm; Tap the beat matches it to the song.' },
+    ],
+  },
   '1.15.2': {
     title: 'Charts shows the top charts in your languages, the app has Light, Dark and System…',
     changes: [
