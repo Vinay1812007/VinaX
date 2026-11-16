@@ -159,24 +159,50 @@ class AudioEngine {
   // The graph lives in ./effects (lazy). The element only gets
   // crossOrigin='anonymous' while effects are on — a CORS-mode load is what
   // lets createMediaElementSource hear the stream instead of silence.
+  /** The chain is running (for the listener's sound effects, disco lights, or both). */
   private effectsOn = false;
+  /** Settings > Sound > Sound effects. */
+  private userEffects = false;
+  /** Disco lights are open and want to hear the music (the chain's analyser). */
+  private analysisWanted = false;
   private effectsMod: typeof import('./effects') | null = null;
   private elAbort: AbortController | null = null;
 
-  /** Master switch. Mid-play toggles keep position and play state: ON reloads
-   *  the same element in CORS mode; OFF swaps in a fresh element because the
-   *  Web Audio API binds an element to its context for good. */
+  /** Master switch for the listener's sound effects. */
   setEffectsEnabled(on: boolean): void {
+    this.userEffects = on;
+    this.syncChain('user');
+  }
+
+  /**
+   * Disco lights read the beat from the chain's analyser, so they need the
+   * chain even with Sound effects off. The chain then runs flat (no EQ,
+   * balance, mono or loudness), so the song sounds exactly as before.
+   * Turning it off leaves a flat chain in place until the next song loads,
+   * so closing the lights never interrupts the song.
+   */
+  setAnalysisEnabled(on: boolean): void {
+    this.analysisWanted = on;
+    this.syncChain('analysis');
+  }
+
+  /** Mid-play changes keep position and play state: ON reloads the same
+   *  element in CORS mode; OFF swaps in a fresh element because the Web
+   *  Audio API binds an element to its context for good. */
+  private syncChain(changed: 'user' | 'analysis'): void {
     // 1.12 — an iPhone or iPad in Safari: audio routed through Web Audio
     // goes quiet when the screen locks or the app goes to the background.
     // The song plays straight from the element there; the equaliser, balance,
-    // mono and loudness wait for the Android app or a desktop browser.
-    if (on && iosWeb()) on = false;
+    // mono, loudness and live disco beat wait for the Android app or a
+    // desktop browser.
+    const on = (this.userEffects || this.analysisWanted) && !iosWeb();
+    this.effectsMod?.setProcessing(this.userEffects);
     if (on === this.effectsOn) return;
     this.effectsOn = on;
     if (on) {
       void Promise.all([import('./effects'), import('./effectsBridge')])
         .then(([mod, bridge]) => {
+          mod.setProcessing(this.userEffects);
           bridge.initSoundEffects();
           if (!this.effectsOn) return; // toggled back off while loading
           this.effectsMod = mod;
@@ -194,11 +220,31 @@ class AudioEngine {
     const el = this.el;
     if (!el) return;
     if (this.effectsMod?.isAttached(el)) {
-      this.effectsMod.detachEffects();
-      this.rebuildElement();
+      // Only the listener's own switch interrupts the song to take the chain
+      // off; after disco lights the flat chain stays until the next load.
+      if (changed === 'user') {
+        this.effectsMod.detachEffects();
+        this.rebuildElement();
+      }
     } else {
       el.crossOrigin = null; // takes effect on the next load; nothing to redo now
     }
+  }
+
+  /** A flat chain left behind by disco lights comes off before a new song
+   *  loads, on a fresh element, so the next song plays straight again. */
+  private dropIdleChain(): void {
+    const old = this.el;
+    if (this.effectsOn || !old || !this.effectsMod?.isAttached(old)) return;
+    this.effectsMod.detachEffects();
+    const el = this.createElement(); // aborts the old element's listeners
+    old.pause();
+    old.removeAttribute('src');
+    old.load();
+    el.volume = old.volume;
+    el.muted = old.muted;
+    el.playbackRate = old.playbackRate;
+    this.el = el;
   }
 
   private watchingVisibility = false;
@@ -364,6 +410,7 @@ class AudioEngine {
     }
     // v5.19.0 — a new song gets a fresh go at the chain (a bypass rebuilt the
     // element without CORS mode; put it back before the load).
+    this.dropIdleChain();
     if (this.effectsOn) {
       this.el.crossOrigin = 'anonymous';
       this.effectsMod?.clearBypass();

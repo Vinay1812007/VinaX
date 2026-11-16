@@ -346,6 +346,45 @@ describe('AudioEngine', () => {
       expect(el.currentTime).toBe(75);
     });
   });
+
+  describe('disco lights and the sound chain', () => {
+    afterEach(() => {
+      audioEngine.setAnalysisEnabled(false);
+      audioEngine.setEffectsEnabled(false);
+    });
+
+    it('opening the lights reloads the song in CORS mode at the same spot', () => {
+      const { el } = boot();
+      audioEngine.load(track('a', ['u1']), 'high', true);
+      el.currentTime = 42;
+      const loads = el.loads;
+      audioEngine.setAnalysisEnabled(true);
+      expect(el.crossOrigin).toBe('anonymous');
+      expect(el.loads).toBe(loads + 1);
+      el.currentTime = 0; // the fresh load starts at 0:00 until the seek lands
+      el.emit('loadeddata');
+      expect(el.currentTime).toBe(42);
+    });
+
+    it('the Sound effects switch going off does not take the chain from open lights', () => {
+      const { el } = boot();
+      audioEngine.load(track('a', ['u1']), 'high', true);
+      audioEngine.setAnalysisEnabled(true);
+      audioEngine.setEffectsEnabled(false);
+      expect(el.crossOrigin).toBe('anonymous');
+    });
+
+    it('closing the lights never interrupts the song', () => {
+      const { el } = boot();
+      audioEngine.load(track('a', ['u1']), 'high', true);
+      audioEngine.setAnalysisEnabled(true);
+      const loads = el.loads;
+      audioEngine.setAnalysisEnabled(false);
+      expect(el.loads).toBe(loads);
+      expect(FakeAudio.instances).toHaveLength(1);
+      expect(el.paused).toBe(false);
+    });
+  });
 });
 
 describe('mediaErrorDetail', () => {

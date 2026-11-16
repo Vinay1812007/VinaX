@@ -57,6 +57,7 @@ const PodcastsPage = lazy(() => import('@/pages/PodcastsPage'));
 const PodcastPage = lazy(() => import('@/pages/PodcastPage'));
 const DownloadPage = lazy(() => import('@/pages/DownloadPage'));
 const DriveModePage = lazy(() => import('@/pages/DriveModePage'));
+const DiscoPage = lazy(() => import('@/pages/DiscoPage'));
 const MadeForYouPage = lazy(() => import('@/pages/MadeForYouPage'));
 const WeeklyMixPage = lazy(() => import('@/pages/WeeklyMixPage'));
 const MixesPage = lazy(() => import('@/pages/MixesPage'));
@@ -225,6 +226,7 @@ export const router = createBrowserRouter([
       { path: 'quiz', element: <Navigate to="/discover" replace /> },
       { path: 'download', element: <DownloadPage /> },
       { path: 'drive', element: <DriveModePage /> },
+      { path: 'disco', element: <DiscoPage /> },
       { path: 'design', element: <DesignPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],

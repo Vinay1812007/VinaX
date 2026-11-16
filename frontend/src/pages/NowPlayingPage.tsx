@@ -573,6 +573,7 @@ export default function NowPlayingPage() {
   // The ⋯ menu carries the player's secondary destinations above the song actions.
   const menuItems: TrackMenuItem[] = [
     { label: 'Drive mode', action: () => navigate('/drive') },
+    { label: 'Disco lights', action: () => navigate('/disco') },
     ...(lyrics.data?.synced ? [{ label: 'Karaoke', action: () => navigate('/karaoke') }] : []),
     { label: 'Listen together', action: () => navigate('/together') },
     {

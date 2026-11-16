@@ -123,6 +123,9 @@ interface Graph {
 let ctx: AudioContext | null = null;
 let graph: Graph | null = null;
 let current: EffectSettings = { eqGains: [0, 0, 0, 0, 0], balance: 0, mono: false, normalize: false };
+/** False while the chain runs only so disco lights can hear the beat: every stage stays flat. */
+let processing = true;
+const FLAT: EffectSettings = { eqGains: [0, 0, 0, 0, 0], balance: 0, mono: false, normalize: false };
 
 function getContext(): AudioContext | null {
   if (ctx) return ctx;
@@ -152,7 +155,8 @@ export function isAttached(el: HTMLAudioElement): boolean {
   return graph?.el === el;
 }
 
-function applyTo(g: Graph, s: EffectSettings): void {
+function applyTo(g: Graph, wanted: EffectSettings): void {
+  const s = processing ? wanted : FLAT;
   const gains = normalizeGains(s.eqGains);
   g.eq.forEach((f, i) => {
     f.gain.value = gains[i];
@@ -285,6 +289,33 @@ export function attachEffects(el: HTMLAudioElement, opts: { onBypass?: () => voi
   useEffectsStatus.setState({ active: true, bypassed: false });
   return true;
 }
+
+/** Sound effects on (the listener's settings apply) or off (a flat chain, kept for disco lights). */
+export function setProcessing(on: boolean): void {
+  if (processing === on) return;
+  processing = on;
+  if (graph) applyTo(graph, current);
+}
+
+/** Frequency-data smoothing for the beat reader. The probe reads time-domain
+ *  data, which smoothing does not touch, so the two share one analyser. */
+const SPECTRUM_SMOOTHING = 0.35;
+
+/**
+ * Fill `out` with the playing song's spectrum (0-255 per bin, low to high)
+ * and return the width of one bin in Hz; 0 when no chain is attached or the
+ * context is not running (nothing to read: the caller falls back).
+ */
+export function readSpectrum(out: Uint8Array<ArrayBuffer>): number {
+  const g = graph;
+  if (!g || !ctx || ctx.state !== 'running') return 0;
+  if (g.analyser.smoothingTimeConstant !== SPECTRUM_SMOOTHING) g.analyser.smoothingTimeConstant = SPECTRUM_SMOOTHING;
+  g.analyser.getByteFrequencyData(out);
+  return ctx.sampleRate / g.analyser.fftSize;
+}
+
+/** Bins `readSpectrum` fills (half the analyser's FFT size). */
+export const SPECTRUM_BINS = 512;
 
 /** Update the live chain (and remember the values for the next attach). */
 export function applyEffects(s: Partial<EffectSettings>): void {

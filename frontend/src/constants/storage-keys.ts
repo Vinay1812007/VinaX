@@ -60,6 +60,9 @@ export const KEYS = {
   /** 1.13 — where the listener dragged the Listen Together pill: { x, y },
    *  each 0…1 across the screen. Per device, so it is in no backup. */
   togetherPill: `${STORAGE_PREFIX}.together-pill.v1`,
+  /** 1.16 — disco lights: style, colours, brightness, beat sensitivity,
+   *  motion, flash. Per device, so it is in no backup. */
+  disco: `${STORAGE_PREFIX}.disco.v1`,
   /** Last in-app-update install attempt {build, ts} — the dialog reappearing
    *  for the SAME build after an attempt means the install didn't take
    *  (cancelled, or Android's signature-conflict block on legacy installs),

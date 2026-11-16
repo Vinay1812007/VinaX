@@ -1416,3 +1416,97 @@ html.light .vx-lyrics-page [data-line].vx-lyric-passed { color: rgb(var(--ink-10
 html.light .vx-lyrics-page .vx-np-tabs { background: rgb(255 255 255 / 0.45); }
 html.light .vx-rail-card.is-lyrics { background: linear-gradient(rgb(255 255 255 / 0.55), rgb(255 255 255 / 0.55)), rgb(var(--art)); }
 html.light .vx-rail-lyrics-card p { color: rgb(var(--ink-100) / 0.55); }
+
+/* 1.16 — Disco lights (/disco): a full-screen light show on a canvas, with
+   the controls floating over it. Tap the lights to hide the controls; any
+   focus inside brings them back, so the keyboard never loses them. */
+.vx-disco {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: rgb(4 2 10);
+  color: #fff;
+}
+.vx-disco-canvas { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; display: block; cursor: pointer; touch-action: manipulation; }
+.vx-disco-top, .vx-disco-bottom {
+  position: relative;
+  z-index: 1;
+  transition: opacity var(--dur-base) var(--ease-standard);
+}
+.vx-disco.is-bare .vx-disco-top, .vx-disco.is-bare .vx-disco-bottom { opacity: 0; pointer-events: none; }
+.vx-disco.is-bare:focus-within .vx-disco-top, .vx-disco.is-bare:focus-within .vx-disco-bottom { opacity: 1; pointer-events: auto; }
+.vx-disco-top {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 12px;
+  padding: max(12px, var(--safe-top)) max(12px, var(--safe-right)) 24px max(12px, var(--safe-left));
+  background: linear-gradient(rgb(0 0 0 / 0.55), transparent);
+  pointer-events: none;
+}
+.vx-disco-top > * { pointer-events: auto; }
+.vx-disco-head { min-width: 0; text-align: center; text-shadow: 0 1px 8px rgb(0 0 0 / 0.6); }
+.vx-disco-name { font-family: var(--vx-font-display); font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
+.vx-disco-status { margin-top: 2px; overflow: hidden; color: rgb(255 255 255 / 0.78); font-size: 13px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.vx-disco-btn {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-pill);
+  background: rgb(0 0 0 / 0.35);
+  color: #fff;
+  backdrop-filter: blur(8px);
+  transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
+}
+.vx-disco-btn:hover { background: rgb(0 0 0 / 0.55); }
+.vx-disco-btn:active, .vx-disco-play:active, .vx-disco-tap:active { transform: scale(0.95); }
+.vx-disco-btn svg { width: 26px; height: 26px; }
+.vx-disco-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 32px max(16px, var(--safe-right)) max(20px, var(--safe-bottom)) max(16px, var(--safe-left));
+  background: linear-gradient(transparent, rgb(0 0 0 / 0.6));
+  pointer-events: none;
+}
+.vx-disco-bottom > * { pointer-events: auto; }
+.vx-disco-song { max-width: min(100%, 520px); text-align: center; text-shadow: 0 1px 8px rgb(0 0 0 / 0.6); }
+.vx-disco-title { font-family: var(--vx-font-display); font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+.vx-disco-artist { margin-top: 2px; color: rgb(255 255 255 / 0.75); font-size: 14px; font-weight: 550; }
+.vx-disco-transport { display: flex; align-items: center; gap: 28px; }
+.vx-disco-play {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-pill);
+  background: #fff;
+  color: rgb(4 2 10);
+  box-shadow: 0 12px 32px -10px rgb(0 0 0 / 0.6);
+  transition: transform var(--dur-quick) var(--ease-standard);
+}
+.vx-disco-play svg { width: 30px; height: 30px; }
+.vx-disco-tap {
+  min-height: 44px;
+  padding: 10px 22px;
+  border: 1px solid rgb(255 255 255 / 0.4);
+  border-radius: var(--radius-pill);
+  background: rgb(0 0 0 / 0.35);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  backdrop-filter: blur(8px);
+  transition: transform 90ms var(--ease-standard);
+}
+/* The Adjust sheet. */
+.vx-disco-adjust { display: flex; flex-direction: column; gap: 20px; padding-top: 4px; }
+.vx-disco-label { margin-bottom: 10px; color: rgb(var(--ink-300)); font-size: 13px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
+.vx-disco-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.vx-disco-hint { margin-top: 8px; color: rgb(var(--ink-300)); font-size: 13px; }
+.vx-disco-reset { align-self: flex-start; min-height: 44px; color: rgb(var(--ink-300)); font-size: 14px; font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
