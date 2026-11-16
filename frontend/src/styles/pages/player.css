@@ -1428,8 +1428,10 @@ html.light .vx-rail-lyrics-card p { color: rgb(var(--ink-100) / 0.55); }
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  /* Always a dark room, whatever the app theme: the lights' own white. */
+  --disco-light: 255 255 255;
   background: rgb(4 2 10);
-  color: #fff;
+  color: rgb(var(--disco-light));
 }
 .vx-disco-canvas { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; display: block; cursor: pointer; touch-action: manipulation; }
 .vx-disco-top, .vx-disco-bottom {
@@ -1451,7 +1453,7 @@ html.light .vx-rail-lyrics-card p { color: rgb(var(--ink-100) / 0.55); }
 .vx-disco-top > * { pointer-events: auto; }
 .vx-disco-head { min-width: 0; text-align: center; text-shadow: 0 1px 8px rgb(0 0 0 / 0.6); }
 .vx-disco-name { font-family: var(--vx-font-display); font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
-.vx-disco-status { margin-top: 2px; overflow: hidden; color: rgb(255 255 255 / 0.78); font-size: 13px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.vx-disco-status { margin-top: 2px; overflow: hidden; color: rgb(var(--disco-light) / 0.78); font-size: 13px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
 .vx-disco-btn {
   display: grid;
   place-items: center;
@@ -1459,7 +1461,7 @@ html.light .vx-rail-lyrics-card p { color: rgb(var(--ink-100) / 0.55); }
   height: 48px;
   border-radius: var(--radius-pill);
   background: rgb(0 0 0 / 0.35);
-  color: #fff;
+  color: rgb(var(--disco-light));
   backdrop-filter: blur(8px);
   transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
@@ -1478,7 +1480,7 @@ html.light .vx-rail-lyrics-card p { color: rgb(var(--ink-100) / 0.55); }
 .vx-disco-bottom > * { pointer-events: auto; }
 .vx-disco-song { max-width: min(100%, 520px); text-align: center; text-shadow: 0 1px 8px rgb(0 0 0 / 0.6); }
 .vx-disco-title { font-family: var(--vx-font-display); font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
-.vx-disco-artist { margin-top: 2px; color: rgb(255 255 255 / 0.75); font-size: 14px; font-weight: 550; }
+.vx-disco-artist { margin-top: 2px; color: rgb(var(--disco-light) / 0.75); font-size: 14px; font-weight: 550; }
 .vx-disco-transport { display: flex; align-items: center; gap: 28px; }
 .vx-disco-play {
   display: grid;
@@ -1486,7 +1488,7 @@ html.light .vx-rail-lyrics-card p { color: rgb(var(--ink-100) / 0.55); }
   width: 72px;
   height: 72px;
   border-radius: var(--radius-pill);
-  background: #fff;
+  background: rgb(var(--disco-light));
   color: rgb(4 2 10);
   box-shadow: 0 12px 32px -10px rgb(0 0 0 / 0.6);
   transition: transform var(--dur-quick) var(--ease-standard);
@@ -1495,14 +1497,14 @@ html.light .vx-rail-lyrics-card p { color: rgb(var(--ink-100) / 0.55); }
 .vx-disco-tap {
   min-height: 44px;
   padding: 10px 22px;
-  border: 1px solid rgb(255 255 255 / 0.4);
+  border: 1px solid rgb(var(--disco-light) / 0.4);
   border-radius: var(--radius-pill);
   background: rgb(0 0 0 / 0.35);
-  color: #fff;
+  color: rgb(var(--disco-light));
   font-size: 14px;
   font-weight: 700;
   backdrop-filter: blur(8px);
-  transition: transform 90ms var(--ease-standard);
+  transition: transform var(--dur-instant) var(--ease-standard);
 }
 /* The Adjust sheet. */
 .vx-disco-adjust { display: flex; flex-direction: column; gap: 20px; padding-top: 4px; }
