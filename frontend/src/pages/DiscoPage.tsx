@@ -10,7 +10,8 @@ import { extractVibrantColor } from '@/utils/color';
 import { acquireWakeLock, releaseWakeLock } from '@/utils/wakeLock';
 import { reducedMotion } from '@/utils/motion';
 import { iosWeb } from '@/utils/platform';
-import { ChevronDownIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon, SettingsIcon } from '@/components/Icons';
+import { ChevronDownIcon, FlashlightIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon, SettingsIcon } from '@/components/Icons';
+import { toast } from '@/store/toastStore';
 import { EmptyState } from '@/components/States';
 import { Chip } from '@/components/Chip';
 import { Sheet, SheetHeader } from '@/components/Sheet';
@@ -20,6 +21,7 @@ import { cn } from '@/utils/cn';
 import { BeatDetector, tapTempo, type BeatFrame } from '@/features/disco/beat';
 import { DiscoRenderer, MAX_BRIGHTNESS, paletteHues, type LightInput } from '@/features/disco/lights';
 import { DISCO_PALETTES, DISCO_STYLES, useDiscoStore } from '@/features/disco/discoStore';
+import { openTorch, setMaxBrightness, setSystemBarsHidden, TorchPulser, type Torch } from '@/features/disco/phone';
 import '@/styles/pages/player.css';
 
 /** Where the beat comes from: the music itself, or a steady rhythm (tap to set it). */
@@ -63,6 +65,8 @@ export default function DiscoPage() {
   const toggleChrome = () => {
     const hide = chrome;
     setChrome(!hide);
+    // The Android app hides the bars itself (its web view ignores the browser's full screen).
+    if (setSystemBarsHidden(hide)) return;
     const root = document.documentElement;
     if (hide && !document.fullscreenElement && typeof root.requestFullscreen === 'function') {
       fsRequested.current = true;
@@ -85,6 +89,7 @@ export default function DiscoPage() {
     return () => {
       document.removeEventListener('fullscreenchange', onChange);
       if (fsRequested.current && document.fullscreenElement) void document.exitFullscreen?.().catch(() => undefined);
+      setSystemBarsHidden(false);
     };
   }, []);
   const [source, setSource] = useState<BeatSource>('starting');
@@ -95,12 +100,59 @@ export default function DiscoPage() {
   const canHear = !iosWeb() && !casting;
 
   // Ask the engine for the analyser while the lights are open; keep the screen on.
+  // In the Android app the screen also goes to full brightness until the lights close.
   useEffect(() => {
     audioEngine.setAnalysisEnabled(true);
     void acquireWakeLock();
+    setMaxBrightness(true);
     return () => {
       audioEngine.setAnalysisEnabled(false);
       releaseWakeLock();
+      setMaxBrightness(false);
+    };
+  }, []);
+
+  // The phone's flashlight, flashed on the beat while it is switched on here.
+  const torch = useRef<{ torch: Torch; pulser: TorchPulser } | null>(null);
+  const [torchOn, setTorchOn] = useState(false);
+  const [torchOpening, setTorchOpening] = useState(false);
+  const closeTorch = () => {
+    const t = torch.current;
+    torch.current = null;
+    if (t) {
+      t.pulser.stop();
+      t.torch.close();
+    }
+    setTorchOn(false);
+  };
+  const toggleTorch = async () => {
+    if (torch.current) {
+      closeTorch();
+      return;
+    }
+    if (torchOpening) return;
+    setTorchOpening(true);
+    const t = await openTorch();
+    setTorchOpening(false);
+    if (!t) {
+      toast('This phone’s flashlight can’t be used here');
+      return;
+    }
+    torch.current = { torch: t, pulser: new TorchPulser((on) => t.set(on)) };
+    setTorchOn(true);
+  };
+  // Off when the lights close, and dark while the app is in the background.
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') torch.current?.pulser.stop();
+    };
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onHide);
+      const t = torch.current;
+      torch.current = null;
+      t?.pulser.stop();
+      t?.torch.close();
     };
   }, []);
 
@@ -217,6 +269,8 @@ export default function DiscoPage() {
         silentFor = 0;
       }
 
+      if (input.beat && L.isPlaying) torch.current?.pulser.beat(now);
+
       const s = L.settings;
       renderer.frame(ctx, w, h, dt, input, {
         style: s.style,
@@ -269,9 +323,21 @@ export default function DiscoPage() {
           <p className="vx-disco-name">Disco lights</p>
           <p className="vx-disco-status" role="status" aria-live="polite">{status}</p>
         </div>
-        <button type="button" onClick={() => setAdjustOpen(true)} aria-label="Adjust lights" className="vx-disco-btn">
-          <SettingsIcon />
-        </button>
+        <div className="vx-disco-actions">
+          <button
+            type="button"
+            onClick={() => void toggleTorch()}
+            aria-pressed={torchOn}
+            aria-label="Phone flashlight on the beat"
+            disabled={torchOpening}
+            className={cn('vx-disco-btn', torchOn && 'is-on')}
+          >
+            <FlashlightIcon filled={torchOn} />
+          </button>
+          <button type="button" onClick={() => setAdjustOpen(true)} aria-label="Adjust lights" className="vx-disco-btn">
+            <SettingsIcon />
+          </button>
+        </div>
       </div>
 
       <div className="vx-disco-bottom">
@@ -297,7 +363,7 @@ export default function DiscoPage() {
         )}
       </div>
 
-      <DiscoAdjustSheet open={adjustOpen} onClose={() => setAdjustOpen(false)} calm={calm} />
+      <DiscoAdjustSheet open={adjustOpen} onClose={() => setAdjustOpen(false)} calm={calm} torchOn={torchOn} onTorch={() => void toggleTorch()} />
     </div>,
     document.body,
   );
@@ -306,7 +372,7 @@ export default function DiscoPage() {
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 const sensitivityLabel = (v: number) => (v < 0.34 ? 'Low' : v < 0.67 ? 'Medium' : 'High');
 
-function DiscoAdjustSheet({ open, onClose, calm }: { open: boolean; onClose: () => void; calm: boolean }) {
+function DiscoAdjustSheet({ open, onClose, calm, torchOn, onTorch }: { open: boolean; onClose: () => void; calm: boolean; torchOn: boolean; onTorch: () => void }) {
   const s = useDiscoStore();
   return (
     <Sheet open={open} onClose={onClose} labelledBy="vx-disco-adjust" size="sm" backdropClassName="bg-black/30">
@@ -346,6 +412,12 @@ function DiscoAdjustSheet({ open, onClose, calm }: { open: boolean; onClose: () 
               ? 'Off while your device asks for reduced motion.'
               : 'Bright white flashes, never more than three a second. Leave this off if flashing light affects you.'
           }
+        />
+        <Switch
+          checked={torchOn}
+          onChange={onTorch}
+          label="Phone flashlight on the beat"
+          description="Flashes the phone’s flashlight with the beat, never more than three times a second. The first time, a browser may ask to use the camera: that is how it reaches the flashlight, and nothing is recorded."
         />
         <button type="button" onClick={s.resetAll} className="vx-disco-reset">
           Reset to default

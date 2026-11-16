@@ -1443,7 +1443,7 @@ html.light .vx-rail-lyrics-card p { color: rgb(var(--ink-100) / 0.55); }
 .vx-disco.is-bare:focus-within .vx-disco-top, .vx-disco.is-bare:focus-within .vx-disco-bottom { opacity: 1; pointer-events: auto; }
 .vx-disco-top {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) 48px;
+  grid-template-columns: 104px minmax(0, 1fr) 104px;
   align-items: center;
   gap: 12px;
   padding: max(12px, var(--safe-top)) max(12px, var(--safe-right)) 24px max(12px, var(--safe-left));
@@ -1466,6 +1466,10 @@ html.light .vx-rail-lyrics-card p { color: rgb(var(--ink-100) / 0.55); }
   transition: background-color var(--dur-quick) var(--ease-standard), transform var(--dur-quick) var(--ease-standard);
 }
 .vx-disco-btn:hover { background: rgb(0 0 0 / 0.55); }
+.vx-disco-actions { display: flex; justify-self: end; gap: 8px; }
+/* The flashlight switched on: a lit button, so it reads as on from across the room. */
+.vx-disco-btn.is-on { background: rgb(var(--disco-light)); color: rgb(4 2 10); }
+.vx-disco-btn:disabled { opacity: 0.6; }
 .vx-disco-btn:active, .vx-disco-play:active, .vx-disco-tap:active { transform: scale(0.95); }
 .vx-disco-btn svg { width: 26px; height: 26px; }
 .vx-disco-bottom {

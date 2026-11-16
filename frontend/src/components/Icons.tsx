@@ -252,6 +252,14 @@ export const ChevronDownIcon = ({ className }: IconProps) => (
     <path d="M6 9l6 6 6-6" />
   </svg>
 );
+/** 1.16 — the phone's flashlight (disco lights); `filled` while it is on. */
+export const FlashlightIcon = ({ className, filled }: IconProps) => (
+  <svg {...base(className)}>
+    <path d="M7 3h10v4l-3 4v9a1 1 0 01-1 1h-2a1 1 0 01-1-1v-9L7 7z" fill={filled ? 'currentColor' : 'none'} />
+    <path d="M7 7h10" />
+    {!filled && <path d="M12 13v2" />}
+  </svg>
+);
 export const WaveIcon = ({ className }: IconProps) => (
   <svg {...base(className)}>
     <path d="M2 14q2.5-4 5 0t5 0 5 0 5 0" />

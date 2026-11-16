@@ -86,6 +86,9 @@ public class MainActivity extends BridgeActivity {
         // 1.12 — push done natively (native-android/VinaxPushService.java): the
         // phone registers its token itself; the page links it to the account.
         registerPlugin(VinaxPushPlugin.class);
+        // 1.16 — disco lights: the flashlight on the beat, full brightness and
+        // no system bars while the lights are open (native-android/DiscoPlugin.java).
+        registerPlugin(DiscoPlugin.class);
         super.onCreate(savedInstanceState);
         allowSignInCheck();
         maybeOpenPlayer(getIntent());
@@ -198,7 +201,7 @@ public class MainActivity extends BridgeActivity {
 }
 `;
   fs.writeFileSync(path.join(javaRoot, 'MainActivity.java'), mainActivity);
-  console.log('[native] Wrote MainActivity.java registering VinaxMediaPlugin, AudioRoutePlugin and VinaxPushPlugin, with the sign-in check allowed');
+  console.log('[native] Wrote MainActivity.java registering VinaxMediaPlugin, AudioRoutePlugin, VinaxPushPlugin and DiscoPlugin, with the sign-in check allowed');
 } else {
   console.error('[native] java root missing — cannot register plugin');
 }
@@ -228,7 +231,9 @@ if (fs.existsSync(manifestPath)) {
     // phones and tablets without a camera able to install the app.
     '<uses-permission android:name="android.permission.CAMERA" />',
     '<uses-feature android:name="android.hardware.camera" android:required="false" />',
-    '<uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />'
+    '<uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />',
+    // 1.16 — disco lights' flashlight (DiscoPlugin.java); optional, so phones without one still install.
+    '<uses-feature android:name="android.hardware.camera.flash" android:required="false" />'
   ];
   // REQUEST_INSTALL_PACKAGES is restricted by Google Play policy (only
   // installer / updater apps qualify) and would cause a Play Store listing
