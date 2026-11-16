@@ -18,6 +18,15 @@ export interface VersionInfo {
  * sheet, Help and the notifications read the top of it.
  */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '1.15.0': {
+    title: 'A new look for VinaX: black and green, with your library, the page and Now playing side…',
+    changes: [
+      { type: 'improved', text: 'VinaX is now black and green: a true-black window, dark panels, white text and one green for play, the playing song and everything that is switched on.' },
+      { type: 'improved', text: 'On a computer the top bar has Home, a big search pill and Radio, Flow and VinaX AI; Your Library is its own panel on the left, with filters, a search and a Recents or A to Z sort.' },
+      { type: 'improved', text: 'Wide screens show a Now playing panel on the right with the cover, a lyrics card and what plays next; the queue button opens the queue right there, and a switch hides the panel.' },
+      { type: 'improved', text: 'The player bar sits under the panels with a white play button, a thin seek bar that turns green on hover, and a plus that turns into a green tick when a song is liked.' },
+    ],
+  },
   '1.14.7': {
     title: 'VinaX AI settings, projects, artifacts gallery and dialogs get the Claude look too',
     changes: [
